@@ -277,32 +277,33 @@ if "agrupar" in cfg:
 else:
     cols_agrupar = [c for c in cat_cols if c]
 
-c_grp, c_cols = st.columns([1, 3])
+c_grp, c_cols = st.columns([2, 3])
 with c_grp:
-    if cols_agrupar:
-        etiqueta = "Agrupar (" + " › ".join(cols_agrupar) + ")"
-        agrupar_on = st.checkbox(etiqueta, value=False, key=f"grp_{reporte}",
-                                 help="Crea una jerarquía expandible con +/- "
-                                      "como una tabla dinámica de Excel.")
-    else:
-        agrupar_on = False
+    grupos_sel = st.multiselect(
+        "Agrupar por", cols_agrupar, default=[], key=f"grp_{reporte}",
+        placeholder="Sin agrupar",
+        help="Elige una o varias columnas. Cada una tendrá su propio +/- "
+             "(como agrupar en Excel). Vacío = tabla plana.",
+    )
 with c_cols:
     cols_mostrar = st.multiselect("Columnas a mostrar", todas_cols, default=sugeridas,
                                   key=f"cols_{reporte}", placeholder="Selecciona columnas")
 if not cols_mostrar:
     cols_mostrar = sugeridas
 
+agrupar_on = bool(grupos_sel)
+
 # Asegura que las columnas de agrupacion esten presentes para poder agrupar
 cols_finales = list(cols_mostrar)
 if agrupar_on:
-    for c in cols_agrupar:
+    for c in grupos_sel:
         if c not in cols_finales:
             cols_finales.append(c)
 
 df_grid = df_f[cols_finales]
 
-st.caption("💡 Activa “Agrupar” para la vista con +/-, o usa el panel derecho "
-           "(Columns / Filters) para pivotear y sumar manualmente.")
+st.caption("💡 Elige columnas en “Agrupar por” para la vista con +/-, o usa el panel "
+           "derecho (Columns / Filters) para pivotear y sumar manualmente.")
 
 # ---------------------------------------------------------------------------
 # AgGrid
@@ -322,7 +323,7 @@ for c in df_grid.columns:
 opciones_grid = {"autoGroupColumnDef": {"minWidth": 200}}
 
 if agrupar_on:
-    for c in cols_agrupar:
+    for c in grupos_sel:
         if c in df_grid.columns:
             gb.configure_column(c, rowGroup=True, hide=True)
     # Una columna por cada campo agrupado, cada una con su propio +/- (estilo Excel)
@@ -357,7 +358,7 @@ custom_css = {
 }
 
 # Ajusta al ancho si hay pocas columnas visibles
-visibles = len(cols_mostrar) - (len([c for c in cols_agrupar if c in cols_mostrar]) if agrupar_on else 0)
+visibles = len(cols_mostrar) - (len([c for c in grupos_sel if c in cols_mostrar]) if agrupar_on else 0)
 ajustar = visibles <= 8
 
 AgGrid(
