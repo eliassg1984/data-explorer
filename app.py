@@ -535,9 +535,8 @@ REPORTES = {
         "archivo": "inventariovalorizado.parquet",
         "icono": "boxes",
         "columnas": [
-            "Nombre Area", "Nombre Familia", "Nombre Subfamilia",
-            "Codigo Producto", "Nombre Producto", "Unidad Kardex",
-            "Stock al dia", "Precio Promedio", "Valorizado total",
+            "Nombre Familia", "Nombre Subfamilia", "Nombre Producto",
+            "Unidad Kardex", "Codigo Producto", "Nombre Area",
         ],
         "filtros_cat": ["Nombre Area", "Nombre Familia"],
         "buscador": "Nombre Producto",
@@ -573,7 +572,7 @@ def cargar(archivo):
 # ---------------------------------------------------------------------------
 # Función: AgGrid Desktop
 # ---------------------------------------------------------------------------
-def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte):
+def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14):
     gb = GridOptionsBuilder.from_dataframe(df_grid)
     gb.configure_default_column(
         resizable=True, filter=True, sortable=True,
@@ -592,6 +591,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte):
     opciones_grid = {
         "autoGroupColumnDef": {"minWidth": 200},
         "localeText": LOCALE_ES,
+        "rowHeight": font_px + 16,
+        "headerHeight": font_px + 18,
     }
     
     agrupar_on = bool(grupos_sel)
@@ -613,12 +614,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte):
     custom_css = {
         ".ag-root-wrapper": {"background-color": "#ffffff", "border": "1px solid #e2e8f0", "border-radius": "8px"},
         ".ag-header": {"background-color": "#f1f5f9", "border-bottom": "2px solid #3b82f6"},
-        ".ag-header-cell-text": {"color": "#1e293b", "font-weight": "700"},
+        ".ag-header-cell-text": {"color": "#1e293b", "font-weight": "700", "font-size": f"{font_px}px"},
         ".ag-row": {"color": "#334155", "border-color": "#e2e8f0"},
         ".ag-row-even": {"background-color": "#ffffff"},
         ".ag-row-odd": {"background-color": "#f8fafc"},
         ".ag-row-hover": {"background-color": "#eff6ff !important"},
-        ".ag-cell": {"color": "#334155"},
+        ".ag-cell": {"color": "#334155", "font-size": f"{font_px}px"},
         ".ag-paging-panel": {"color": "#64748b", "background-color": "#f8fafc", "border-top": "1px solid #e2e8f0"},
         ".ag-side-bar": {"background-color": "#f8fafc", "border-color": "#e2e8f0"},
         ".ag-menu": {"background-color": "#ffffff", "color": "#1e293b", "border": "1px solid #e2e8f0"},
@@ -638,7 +639,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte):
 # ---------------------------------------------------------------------------
 # Función: AgGrid Móvil
 # ---------------------------------------------------------------------------
-def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte):
+def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
     gb = GridOptionsBuilder.from_dataframe(df_grid)
     gb.configure_default_column(
         resizable=True, sortable=True, filter=True,
@@ -1128,6 +1129,13 @@ with st.sidebar:
             help="Activar para probar la vista optimizada para celular",
         )
 
+        st.session_state.tabla_tam = st.select_slider(
+            "Tamaño de texto de la tabla",
+            options=["Pequeño", "Mediano", "Grande", "Muy grande"],
+            value=st.session_state.get("tabla_tam", "Mediano"),
+            help="Cambia el tamaño de letras y números de la tabla",
+        )
+
 cfg = REPORTES[reporte]
 
 # ---------------------------------------------------------------------------
@@ -1292,11 +1300,14 @@ if df_f.empty:
 # ---------------------------------------------------------------------------
 # RENDERIZAR TABLA
 # ---------------------------------------------------------------------------
+TAM_FUENTE = {"Pequeño": 12, "Mediano": 14, "Grande": 17, "Muy grande": 20}
+font_px = TAM_FUENTE.get(st.session_state.get("tabla_tam", "Mediano"), 14)
+
 if usa_vista_movil and tiene_config_movil:
     st.caption("📱 Vista móvil • Desliza para más columnas • Mantén presionado para menú")
     columnas_fijas = cfg.get("columnas_fijas_movil", 2)
     df_grid_movil = df_f[cols_mostrar]
-    renderizar_aggrid_movil(df_grid_movil, columnas_fijas, reporte)
+    renderizar_aggrid_movil(df_grid_movil, columnas_fijas, reporte, font_px)
 else:
     cols_finales = list(cols_mostrar)
     agrupar_on = bool(grupos_sel)
@@ -1305,7 +1316,7 @@ else:
             if c not in cols_finales:
                 cols_finales.append(c)
     df_grid = df_f[cols_finales]
-    renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte)
+    renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px)
 
 # ---------------------------------------------------------------------------
 # DASHBOARD DE GRÁFICOS
