@@ -203,8 +203,21 @@ button[kind="primary"]:hover {
         display: none !important;
     }
     
+    /* ELIMINAR ESPACIOS EN BLANCO */
     [data-testid="stAppViewContainer"] {
         padding-top: 0 !important;
+        margin-top: 0 !important;
+    }
+    
+    [data-testid="stMain"] {
+        padding: 0.5rem 0.5rem !important;
+        margin-top: 0 !important;
+    }
+    
+    .block-container {
+        padding: 0.5rem !important;
+        margin-top: 0 !important;
+        gap: 0 !important;
     }
     
     /* HACER SIDEBAR SCROLLEABLE - VER TODAS LAS OPCIONES */
@@ -213,18 +226,53 @@ button[kind="primary"]:hover {
         overflow-y: auto !important;
         overflow-x: hidden !important;
         -webkit-overflow-scrolling: touch;
+        background: var(--bg-sidebar) !important;
+    }
+    
+    /* Mejorar contenido del sidebar */
+    [data-testid="stSidebarUserContent"] {
+        padding: 12px 8px !important;
+    }
+    
+    /* BOTÓN TOGGLE SIDEBAR - VISIBLE Y FUNCIONAL */
+    button[aria-label="Toggle sidebar"],
+    [data-testid="collapseSideBarButton"] {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        z-index: 100 !important;
+        width: 44px !important;
+        height: 44px !important;
+        background: white !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 8px !important;
+        cursor: pointer !important;
+        align-items: center !important;
+        justify-content: center !important;
+        color: #3b82f6 !important;
+        padding: 8px !important;
+        min-height: auto !important;
+    }
+    
+    button[aria-label="Toggle sidebar"]:hover,
+    [data-testid="collapseSideBarButton"]:hover {
+        background: #eff6ff !important;
+        border-color: #3b82f6 !important;
     }
     
     /* Ajustes de tamaño en móvil */
-    h1 { font-size: 1.3rem !important; }
+    h1 { 
+        font-size: 1.3rem !important;
+        margin-top: 0 !important;
+        padding-top: 0.5rem !important;
+    }
     h2 { font-size: 1.1rem !important; }
     h3 { font-size: 1rem !important; }
     label { font-size: 0.7rem !important; }
     
-    .stApp { padding: 0.5rem !important; }
-    .block-container { padding: 1rem 0.5rem !important; }
+    .stApp { padding: 0 !important; }
     
-    button { 
+    button:not([aria-label="Toggle sidebar"]):not([data-testid="collapseSideBarButton"]) { 
         min-height: 44px !important; 
         padding: 10px 16px !important;
         font-size: 0.9rem !important;
@@ -1077,23 +1125,23 @@ if controles:
                     rango = st.date_input(
                         "📅 Fecha", value=(fmin, fmax),
                         min_value=fmin, max_value=fmax,
-                        format="DD/MM/YYYY", key=f"fch_{reporte}_{i}_{j}",
+                        format="DD/MM/YYYY", key=f"fch_{reporte}{i}{j}",
                     )
                     if isinstance(rango, (tuple, list)) and len(rango) == 2:
                         ini, fin = rango
                         df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
                 elif tipo == "cat":
                     opts = sorted(df_f[col].dropna().unique().tolist(), key=lambda x: str(x))
-                    sel = st.multiselect(f"📂 {col}", opts, placeholder="Todos", key=f"cat_{reporte}_{col}_{i}_{j}")
+                    sel = st.multiselect(f"📂 {col}", opts, placeholder="Todos", key=f"cat_{reporte}{col}{i}_{j}")
                     if sel:
                         df_f = df_f[df_f[col].isin(sel)]
                 elif tipo == "busc":
                     opts_prod = sorted(df_f[col].dropna().astype(str).unique().tolist(), key=lambda x: x.lower())
-                    sel_prod = st.multiselect(f"🔎 {col}", opts_prod, placeholder="Buscar…", key=f"busc_{reporte}_{i}_{j}")
+                    sel_prod = st.multiselect(f"🔎 {col}", opts_prod, placeholder="Buscar…", key=f"busc_{reporte}{i}{j}")
                     if sel_prod:
                         df_f = df_f[df_f[col].astype(str).isin(sel_prod)]
                 elif tipo == "grp":
-                    grupos_sel = st.multiselect("📊 Agrupar por", cols_agrupar, default=[], key=f"grp_{reporte}_{i}_{j}", placeholder="Sin agrupar")
+                    grupos_sel = st.multiselect("📊 Agrupar por", cols_agrupar, default=[], key=f"grp_{reporte}{i}{j}", placeholder="Sin agrupar")
 
 # ---------------------------------------------------------------------------
 # AVISOS
