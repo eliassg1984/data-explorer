@@ -60,6 +60,104 @@ def resolver_columnas(df, nombres):
     return encontradas, faltantes
 
 
+# ---------------------------------------------------------------------------
+# Traducción de la interfaz de AgGrid al español
+# ---------------------------------------------------------------------------
+LOCALE_ES = {
+    # Menú de columna
+    "sortAscending": "Ordenar ascendente",
+    "sortDescending": "Ordenar descendente",
+    "sortUnSort": "Quitar orden",
+    "pinColumn": "Fijar columna",
+    "pinLeft": "Fijar a la izquierda",
+    "pinRight": "Fijar a la derecha",
+    "noPin": "No fijar",
+    "valueAggregation": "Agregación de valores",
+    "autosizeThisColumn": "Autoajustar esta columna",
+    "autosizeAllColumns": "Autoajustar todas las columnas",
+    "groupBy": "Agrupar por",
+    "ungroupBy": "Desagrupar por",
+    "addToValues": "Agregar ${variable} a valores",
+    "removeFromValues": "Quitar ${variable} de valores",
+    "addToLabels": "Agregar ${variable} a etiquetas",
+    "removeFromLabels": "Quitar ${variable} de etiquetas",
+    "resetColumns": "Restablecer columnas",
+    "expandAll": "Expandir todos los grupos",
+    "collapseAll": "Colapsar todos los grupos",
+    "copy": "Copiar",
+    "copyWithHeaders": "Copiar con encabezados",
+    "copyWithGroupHeaders": "Copiar con encabezados de grupo",
+    "ctrlC": "Ctrl+C",
+    "paste": "Pegar",
+    "ctrlV": "Ctrl+V",
+    "export": "Exportar",
+    "csvExport": "Exportar a CSV",
+    "excelExport": "Exportar a Excel",
+    "chooseColumns": "Elegir columnas",
+    "columnChooser": "Elegir columnas",
+    # Panel lateral
+    "columns": "Columnas",
+    "filters": "Filtros",
+    "pivotMode": "Modo dinámico",
+    "groups": "Grupos de filas",
+    "rowGroupColumnsEmptyMessage": "Arrastra aquí para agrupar por filas",
+    "values": "Valores",
+    "valueColumnsEmptyMessage": "Arrastra aquí para agregar",
+    "pivots": "Etiquetas de columna",
+    "pivotColumnsEmptyMessage": "Arrastra aquí para etiquetas de columna",
+    # Filtros
+    "searchOoo": "Buscar…",
+    "filterOoo": "Filtrar…",
+    "blanks": "(En blanco)",
+    "selectAll": "(Seleccionar todo)",
+    "applyFilter": "Aplicar",
+    "resetFilter": "Restablecer",
+    "clearFilter": "Limpiar",
+    "cancelFilter": "Cancelar",
+    "equals": "Igual a",
+    "notEqual": "Distinto de",
+    "contains": "Contiene",
+    "notContains": "No contiene",
+    "startsWith": "Empieza con",
+    "endsWith": "Termina con",
+    "blank": "En blanco",
+    "notBlank": "No en blanco",
+    "lessThan": "Menor que",
+    "greaterThan": "Mayor que",
+    "lessThanOrEqual": "Menor o igual que",
+    "greaterThanOrEqual": "Mayor o igual que",
+    "inRange": "En rango",
+    "andCondition": "Y",
+    "orCondition": "O",
+    # Paginación
+    "page": "Página",
+    "to": "a",
+    "of": "de",
+    "more": "más",
+    "nextPage": "Página siguiente",
+    "lastPage": "Última página",
+    "firstPage": "Primera página",
+    "previousPage": "Página anterior",
+    "pageSizeSelectorLabel": "Tamaño de página:",
+    # Agregaciones
+    "sum": "Suma",
+    "min": "Mín",
+    "max": "Máx",
+    "none": "Ninguno",
+    "count": "Conteo",
+    "avg": "Promedio",
+    "average": "Promedio",
+    "first": "Primero",
+    "last": "Último",
+    "group": "Grupo",
+    # Estados
+    "loadingOoo": "Cargando…",
+    "noRowsToShow": "No hay datos para mostrar",
+    "totalRows": "Total de filas",
+    "totalAndFilteredRows": "Filas",
+}
+
+
 @st.cache_resource
 def get_conn():
     try:
@@ -320,7 +418,7 @@ for c in df_grid.columns:
         gb.configure_column(c, aggFunc=af, type=["numericColumn"],
                             valueFormatter="x == null ? '' : x.toLocaleString()")
 
-opciones_grid = {"autoGroupColumnDef": {"minWidth": 200}}
+opciones_grid = {"autoGroupColumnDef": {"minWidth": 200}, "localeText": LOCALE_ES}
 
 if agrupar_on:
     for c in grupos_sel:
