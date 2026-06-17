@@ -1,6 +1,7 @@
 import streamlit as st
 import duckdb
 import plotly.express as px
+from st_aggrid import AgGrid, GridOptionsBuilder
 
 st.set_page_config(page_title="Reportes", page_icon="📊", layout="wide")
 
@@ -15,6 +16,7 @@ h2, h3 { color: #cbd5e1 !important; font-weight: 600 !important; }
 label { color: #94a3b8 !important; font-size: 0.78rem !important; text-transform: uppercase; }
 </style>
 """, unsafe_allow_html=True)
+
 
 @st.cache_resource
 def get_conn():
@@ -33,6 +35,7 @@ def get_conn():
         st.error(f"Error de conexión: {str(e)}")
         st.stop()
 
+
 con = get_conn()
 BUCKET = st.secrets["R2_BUCKET"]
 
@@ -44,6 +47,7 @@ REPORTES = {
     "Receta Venta": "recetaventa.parquet",
 }
 
+
 @st.cache_data(ttl=3600)
 def cargar(archivo):
     try:
@@ -52,6 +56,7 @@ def cargar(archivo):
     except Exception as e:
         st.error(f"Error cargando {archivo}: {str(e)}")
         return None
+
 
 # Interfaz principal
 st.title("📊 Panel de Reportes")
@@ -64,7 +69,6 @@ with st.sidebar:
 
 # Cargar datos
 df = cargar(REPORTES[reporte])
-
 if df is None or df.empty:
     st.warning("No se pudieron cargar los datos o el archivo está vacío.")
     st.stop()
@@ -72,26 +76,67 @@ if df is None or df.empty:
 # Mostrar información del reporte
 st.subheader(reporte)
 st.caption(f"{len(df):,} filas · {len(df.columns)} columnas")
-st.dataframe(df.head(1000), use_container_width=True, height=400)
 
-# Visualización
+# ---------------------------------------------------------------------------
+# Tabla dinámica tipo Excel (AgGrid)
+# Arrastra columnas al panel lateral (Pivot Mode, Row Groups, Values) para
+# agrupar, pivotear y agregar. Filtra y ordena desde el encabezado de cada
+# columna. El botón "Columns / Filters" del lado derecho abre el panel.
+# ---------------------------------------------------------------------------
+st.caption("💡 Abre el panel lateral derecho de la tabla para agrupar, "
+           "pivotear y sumar. Filtra y ordena desde cada encabezado.")
+
+gb = GridOptionsBuilder.from_dataframe(df)
+gb.configure_default_column(
+    resizable=True,
+    filter=True,
+    sortable=True,
+    editable=False,
+    groupable=True,       # permite arrastrar a "Row Groups"
+    enableRowGroup=True,  # agrupar por filas (como filas de tabla dinámica)
+    enablePivot=True,     # pivotear (como columnas de tabla dinámica)
+    enableValue=True,     # usar como valor agregado
+    aggFunc="sum",        # función por defecto al agregar
+)
+gb.configure_side_bar()                 # panel lateral para arrastrar campos
+gb.configure_grid_options(
+    pivotMode=False,                    # arranca apagado; se activa en el panel
+    autoGroupColumnDef={"minWidth": 220},
+)
+gb.configure_pagination(enabled=True, paginationAutoPageSize=False,
+                        paginationPageSize=50)
+grid_options = gb.build()
+
+AgGrid(
+    df,
+    gridOptions=grid_options,
+    height=450,
+    theme="balham",               # prueba "alpine", "material" o "streamlit"
+    fit_columns_on_grid_load=False,
+    allow_unsafe_jscode=True,
+    enable_enterprise_modules=True,  # necesario para pivot/agrupar/agregar
+    key="grid_reportes",
+)
+
+# ---------------------------------------------------------------------------
+# Visualización (gráfico de barras, igual que antes)
+# ---------------------------------------------------------------------------
 cols_num = df.select_dtypes("number").columns.tolist()
 cols_txt = df.select_dtypes(["object", "string"]).columns.tolist()
-
 if cols_num and cols_txt:
     col1, col2 = st.columns(2)
     with col1:
         eje_x = st.selectbox("Agrupar por", cols_txt)
     with col2:
         eje_y = st.selectbox("Sumar", cols_num)
-    
+
     try:
         datos = (df.groupby(eje_x)[eje_y].sum()
                    .reset_index()
                    .sort_values(eje_y, ascending=False)
                    .head(20))
-        
-        fig = px.bar(datos, x=eje_x, y=eje_y, 
+
+        fig = px.bar(datos, x=eje_x, y=eje_y,
                      title=f"{eje_y} por {eje_x} (top 20)")
         fig.update_layout(
             paper_bgcolor="#0f1117",
