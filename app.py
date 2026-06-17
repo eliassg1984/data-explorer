@@ -628,7 +628,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte):
     ajustar = visibles <= 6
     
     AgGrid(
-        df_grid.head(5000), gridOptions=grid_options, height=470,
+        df_grid.head(5000), gridOptions=grid_options, height=600,
         theme="balham", custom_css=custom_css,
         fit_columns_on_grid_load=ajustar, allow_unsafe_jscode=True,
         enable_enterprise_modules=True, key=f"grid_{reporte}",
@@ -1258,7 +1258,9 @@ if "columnas" in cfg and faltan_cols:
 # ---------------------------------------------------------------------------
 usa_vista_movil = st.session_state.get('forzar_movil', False)
 tiene_config_movil = "columnas_movil" in cfg
-usa_vista_movil = usa_vista_movil or tiene_config_movil
+# La vista movil ya NO se fuerza solo por tener "columnas_movil".
+# En escritorio se usa la vista completa; la movil se activa con el
+# check "Forzar vista movil" del sidebar.
 
 if not usa_vista_movil:
     with st.expander("⚙️ Configuración de columnas"):
