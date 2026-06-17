@@ -9,6 +9,9 @@ import numpy as np
 from st_aggrid import AgGrid, GridOptionsBuilder
 from streamlit_option_menu import option_menu
 
+# ===========================================================================
+# CONFIGURACIÓN INICIAL
+# ===========================================================================
 st.set_page_config(
     page_title="Reportes",
     page_icon="📊",
@@ -21,9 +24,17 @@ st.set_page_config(
     }
 )
 
-# ---------------------------------------------------------------------------
-# CSS GLOBAL - Tema claro moderno (HEADER NATIVO PERSONALIZADO)
-# ---------------------------------------------------------------------------
+# Mapeo de tamaños de fuente
+TAM_FUENTE = {
+    "Pequeño": 12,
+    "Mediano": 14,
+    "Grande": 17,
+    "Muy grande": 20
+}
+
+# ===========================================================================
+# CSS GLOBAL
+# ===========================================================================
 st.markdown("""
 <style>
 /* ============ PALETA DE COLORES ============ */
@@ -48,8 +59,6 @@ st.markdown("""
 }
 
 /* ============ HEADER NATIVO PERSONALIZADO ============ */
-/* FIX 1: header transparente -> elimina la franja blanca de arriba.
-   No se oculta porque dentro del header vive el botón para abrir el sidebar. */
 header[data-testid="stHeader"] {
     background: transparent !important;
     border-bottom: none !important;
@@ -65,9 +74,6 @@ header[data-testid="stHeader"] {
 }
 
 /* ============ BOTÓN PARA EXPANDIR EL SIDEBAR ============ */
-/* Si el botón nativo existe en tu versión, se deja visible.
-   El control que realmente garantiza el acceso es el botón flotante
-   personalizado que se inyecta más abajo con components.html. */
 [data-testid*="SidebarCollaps"],
 [data-testid="collapsedControl"],
 [data-testid*="xpandSidebar"] {
@@ -81,8 +87,6 @@ header[data-testid="stHeader"] {
     background: var(--bg-primary); 
 }
 
-/* COMPACTAR ZONA SUPERIOR (solo escritorio): menos espacio muerto arriba
-   para que la tabla suba. En movil la media query de abajo manda. */
 .block-container {
     padding-top: 2.5rem !important;
 }
@@ -222,17 +226,20 @@ button[kind="primary"]:hover {
     border-color: #3b82f6 !important;
 }
 
+/* ============ CONTROL DE TAMAÑO EN SIDEBAR ============ */
+[data-testid="stSidebar"] .stSlider {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+}
+
 /* ============ MÓVIL ============ */
 @media screen and (max-width: 768px) {
-    /* FIX 3: NO ocultar el header (eso eliminaba el botón del sidebar).
-       Se hace transparente para que no se vea la franja blanca. */
     header[data-testid="stHeader"] {
         background: transparent !important;
         box-shadow: none !important;
         border-bottom: none !important;
     }
     
-    /* ELIMINAR ESPACIOS EN BLANCO */
     [data-testid="stAppViewContainer"] {
         padding-top: 0 !important;
         margin-top: 0 !important;
@@ -249,7 +256,6 @@ button[kind="primary"]:hover {
         gap: 0 !important;
     }
     
-    /* RED DE SEGURIDAD: apilar columnas (filtros, KPIs) en movil */
     [data-testid="stHorizontalBlock"] {
         flex-direction: column !important;
     }
@@ -260,7 +266,6 @@ button[kind="primary"]:hover {
         min-width: 100% !important;
     }
     
-    /* HACER SIDEBAR SCROLLEABLE - VER TODAS LAS OPCIONES */
     [data-testid="stSidebar"] {
         max-height: 100vh;
         overflow-y: auto !important;
@@ -269,12 +274,10 @@ button[kind="primary"]:hover {
         background: var(--bg-sidebar) !important;
     }
     
-    /* Mejorar contenido del sidebar */
     [data-testid="stSidebarUserContent"] {
         padding: 12px 8px !important;
     }
     
-    /* Botón para abrir el sidebar en móvil - tamaño adecuado para tocar */
     [data-testid="stSidebarCollapsedControl"] button,
     [data-testid="stExpandSidebarButton"] button,
     [data-testid="collapsedControl"] button {
@@ -287,7 +290,6 @@ button[kind="primary"]:hover {
         justify-content: center !important;
     }
     
-    /* Ajustes de tamaño en móvil */
     h1 { 
         font-size: 1.3rem !important;
         margin-top: 0 !important;
@@ -314,11 +316,9 @@ button[kind="primary"]:hover {
 """, unsafe_allow_html=True)
 
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
 # BOTÓN FLOTANTE PARA ABRIR/CERRAR EL SIDEBAR
-# Se inyecta en el documento real (no en el iframe) y funciona aunque el
-# botón nativo de Streamlit no aparezca. components.html SÍ ejecuta JS.
-# ---------------------------------------------------------------------------
+# ===========================================================================
 components.html("""
 <script>
 (function () {
@@ -341,11 +341,9 @@ components.html("""
     }
 
     function toggleSidebar() {
-        // 1) Intentar usar el control nativo (animación correcta)
         const nativo = buscarControlNativo();
         if (nativo) { nativo.click(); return; }
 
-        // 2) Fallback: forzar visibilidad por estilos
         const sb = doc.querySelector('section[data-testid="stSidebar"]');
         if (!sb) return;
         if (sb.dataset.abierto === '1') {
@@ -382,16 +380,15 @@ components.html("""
     }
 
     asegurarBoton();
-    // Por si Streamlit re-renderiza y lo quita, lo volvemos a poner
     setInterval(asegurarBoton, 1000);
 })();
 </script>
 """, height=0)
 
 
-# ---------------------------------------------------------------------------
-# Utilidades
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# UTILIDADES
+# ===========================================================================
 def _norm(s):
     s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode()
     return s.lower().replace(" ", "").replace("_", "").replace("-", "")
@@ -426,9 +423,9 @@ def resolver_columnas(df, nombres):
     return encontradas, faltantes
 
 
-# ---------------------------------------------------------------------------
-# Traducción AgGrid
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# TRADUCCIÓN AGGRID
+# ===========================================================================
 LOCALE_ES = {
     "sortAscending": "Ordenar ascendente",
     "sortDescending": "Ordenar descendente",
@@ -498,6 +495,9 @@ LOCALE_ES = {
 }
 
 
+# ===========================================================================
+# CONEXIÓN A DATOS
+# ===========================================================================
 @st.cache_resource
 def get_conn():
     try:
@@ -519,9 +519,9 @@ def get_conn():
 con = get_conn()
 BUCKET = st.secrets["R2_BUCKET"]
 
-# ---------------------------------------------------------------------------
-# Configuración por reporte
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# CONFIGURACIÓN POR REPORTE
+# ===========================================================================
 REPORTES = {
     "Ajuste de Inventario": {
         "archivo": "ajusteinventaria.parquet",
@@ -569,9 +569,9 @@ def cargar(archivo):
         return None
 
 
-# ---------------------------------------------------------------------------
-# Función: AgGrid Desktop
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# FUNCIÓN: AGGRID DESKTOP
+# ===========================================================================
 def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14):
     gb = GridOptionsBuilder.from_dataframe(df_grid)
     gb.configure_default_column(
@@ -636,9 +636,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     )
 
 
-# ---------------------------------------------------------------------------
-# Función: AgGrid Móvil
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# FUNCIÓN: AGGRID MÓVIL
+# ===========================================================================
 def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
     gb = GridOptionsBuilder.from_dataframe(df_grid)
     gb.configure_default_column(
@@ -658,8 +658,8 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
     opciones_grid = {
         "localeText": LOCALE_ES,
         "suppressColumnVirtualisation": True,
-        "rowHeight": 44,
-        "headerHeight": 40,
+        "rowHeight": font_px + 24,
+        "headerHeight": font_px + 20,
         "animateRows": False,
         "sideBar": False,
         "statusBar": {"statusPanels": [{"statusPanel": "agTotalRowCountComponent", "align": "left"}]},
@@ -675,12 +675,12 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
     custom_css = {
         ".ag-root-wrapper": {"background-color": "#ffffff", "border": "1px solid #e2e8f0", "border-radius": "8px"},
         ".ag-header": {"background-color": "#f1f5f9", "border-bottom": "2px solid #3b82f6"},
-        ".ag-header-cell-text": {"color": "#1e293b", "font-weight": "700"},
+        ".ag-header-cell-text": {"color": "#1e293b", "font-weight": "700", "font-size": f"{font_px}px"},
         ".ag-row": {"color": "#334155", "border-color": "#e2e8f0"},
         ".ag-row-even": {"background-color": "#ffffff"},
         ".ag-row-odd": {"background-color": "#f8fafc"},
         ".ag-row-hover": {"background-color": "#eff6ff !important"},
-        ".ag-cell": {"color": "#334155"},
+        ".ag-cell": {"color": "#334155", "font-size": f"{font_px}px"},
         ".ag-paging-panel": {"color": "#64748b", "background-color": "#f8fafc", "border-top": "1px solid #e2e8f0", "font-size": "0.75rem"},
         ".ag-menu": {"background-color": "#ffffff", "color": "#1e293b", "border": "1px solid #e2e8f0"},
         ".ag-pinned-left-header": {"box-shadow": "3px 0 8px rgba(0,0,0,0.08)"},
@@ -695,13 +695,12 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
     )
 
 
-# ---------------------------------------------------------------------------
-# Función: Dashboard de gráficos (CORREGIDA - scatter size fix)
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# FUNCIÓN: DASHBOARD DE GRÁFICOS
+# ===========================================================================
 def renderizar_graficos(df_f, es_movil=False):
     """Renderiza todos los gráficos del dashboard."""
     
-    # Columnas necesarias
     col_area = buscar_columna(df_f, "Nombre Area", "area")
     col_familia = buscar_columna(df_f, "Nombre Familia", "familia")
     col_producto = buscar_columna(df_f, "Nombre Producto", "producto")
@@ -709,12 +708,10 @@ def renderizar_graficos(df_f, es_movil=False):
     col_precio = buscar_columna(df_f, "Precio Promedio", "precio promedio")
     col_valorizado = buscar_columna(df_f, "Valorizado total", "valorizado")
     
-    # Validar columnas mínimas
     if not col_producto or not col_stock or not col_precio or not col_valorizado:
         st.warning("Faltan columnas esenciales (Producto, Stock, Precio, Valorizado). No se pueden generar gráficos.")
         return
     
-    # ============ KPIs ============
     total_val = df_f[col_valorizado].sum()
     total_prod = len(df_f[col_producto].unique())
     stock_bajo = len(df_f[df_f[col_stock] < 10])
@@ -722,7 +719,6 @@ def renderizar_graficos(df_f, es_movil=False):
     areas = len(df_f[col_area].unique()) if col_area else 0
     precio_prom = df_f[col_precio].mean()
     
-    # Mostrar KPIs
     if es_movil:
         cols_kpi = st.columns(2)
         with cols_kpi[0]:
@@ -749,12 +745,9 @@ def renderizar_graficos(df_f, es_movil=False):
             rotacion = total_val / total_prod if total_prod > 0 else 0
             st.metric("📊 Valor/Prod", f"S/ {rotacion:,.0f}")
     
-    # ============ FUNCIÓN AUXILIAR PARA SCATTER ============
     def crear_scatter(df, col_precio, col_stock, col_valorizado, col_producto, col_area=None, height=450):
-        """Crea un scatter plot seguro con tamaños normalizados."""
         fig = go.Figure()
         
-        # Calcular tamaños normalizados (evitar división por cero y negativos)
         valores = df[col_valorizado].fillna(0).values
         max_val = max(valores.max(), 1)
         
@@ -819,13 +812,10 @@ def renderizar_graficos(df_f, es_movil=False):
         
         return fig
     
-    # ============ GRÁFICOS ============
     if es_movil:
-        # MÓVIL: Tabs con gráficos
         tab1, tab2 = st.tabs(["🗺️ Mapa", "📊 Análisis"])
         
         with tab1:
-            # Treemap
             if col_area:
                 try:
                     path = [col_area]
@@ -844,7 +834,6 @@ def renderizar_graficos(df_f, es_movil=False):
             else:
                 st.info("Se necesita columna de Área para el treemap")
             
-            # Top 10
             with st.expander("🏆 Top 10 Productos"):
                 try:
                     top_10 = df_f.nlargest(10, col_valorizado)
@@ -862,7 +851,6 @@ def renderizar_graficos(df_f, es_movil=False):
                     st.warning(f"No se pudo generar el top 10: {str(e)}")
         
         with tab2:
-            # Scatter plot CORREGIDO
             try:
                 fig_scatter = crear_scatter(
                     df_f, col_precio, col_stock, col_valorizado, 
@@ -872,7 +860,6 @@ def renderizar_graficos(df_f, es_movil=False):
             except Exception as e:
                 st.warning(f"No se pudo generar el scatter plot: {str(e)}")
             
-            # Sunburst
             if col_area:
                 with st.expander("☀️ Distribución Jerárquica"):
                     try:
@@ -890,7 +877,6 @@ def renderizar_graficos(df_f, es_movil=False):
                     except Exception as e:
                         st.warning(f"No se pudo generar el sunburst: {str(e)}")
             
-            # Distribución de precios
             with st.expander("📈 Distribución de Precios"):
                 try:
                     fig_hist = px.histogram(
@@ -904,7 +890,6 @@ def renderizar_graficos(df_f, es_movil=False):
                     st.warning(f"No se pudo generar el histograma: {str(e)}")
     
     else:
-        # DESKTOP: Tabs con múltiples gráficos
         tab1, tab2, tab3, tab4 = st.tabs([
             "🗺️ Mapa de Valor", "📊 Análisis Precio/Stock",
             "🏆 Top Productos", "📈 Distribución"
@@ -950,7 +935,6 @@ def renderizar_graficos(df_f, es_movil=False):
                         st.warning(f"Error en sunburst: {str(e)}")
         
         with tab2:
-            # Scatter plot CORREGIDO
             try:
                 fig_scatter = crear_scatter(
                     df_f, col_precio, col_stock, col_valorizado, 
@@ -960,7 +944,6 @@ def renderizar_graficos(df_f, es_movil=False):
             except Exception as e:
                 st.warning(f"Error en scatter: {str(e)}")
             
-            # Outliers
             with st.expander("🔍 Productos con stock bajo y alto valor"):
                 try:
                     outliers = df_f[(df_f[col_stock] < 10) & 
@@ -1052,7 +1035,6 @@ def renderizar_graficos(df_f, es_movil=False):
                 except Exception as e:
                     st.warning(f"Error en histograma: {str(e)}")
             
-            # Resumen
             with st.expander("📋 Resumen por Área"):
                 if col_area:
                     try:
@@ -1082,9 +1064,9 @@ def renderizar_graficos(df_f, es_movil=False):
 # ===========================================================================
 st.title("📊 Panel de Reportes")
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
 # SIDEBAR
-# ---------------------------------------------------------------------------
+# ===========================================================================
 with st.sidebar:
     if st.button("🔄 Actualizar datos", use_container_width=True):
         st.cache_data.clear()
@@ -1120,27 +1102,53 @@ with st.sidebar:
     
     st.markdown("---")
     
-    with st.expander("🔧 Modo vista"):
-        if 'forzar_movil' not in st.session_state:
-            st.session_state.forzar_movil = False
+    # ============ INICIALIZAR ESTADOS ============
+    if 'forzar_movil' not in st.session_state:
+        st.session_state.forzar_movil = False
+    if 'tabla_tam' not in st.session_state:
+        st.session_state.tabla_tam = "Mediano"
+    
+    # ============ CONTROLES DE VISTA ============
+    with st.expander("🔧 Configuración de vista", expanded=False):
+        st.markdown("### 📱 Modo de visualización")
         st.session_state.forzar_movil = st.checkbox(
             "Forzar vista móvil",
             value=st.session_state.forzar_movil,
             help="Activar para probar la vista optimizada para celular",
         )
-
+        
+        st.markdown("### 🔤 Tamaño de texto")
         st.session_state.tabla_tam = st.select_slider(
-            "Tamaño de texto de la tabla",
-            options=["Pequeño", "Mediano", "Grande", "Muy grande"],
-            value=st.session_state.get("tabla_tam", "Mediano"),
-            help="Cambia el tamaño de letras y números de la tabla",
+            "Tamaño de letra en tablas",
+            options=list(TAM_FUENTE.keys()),
+            value=st.session_state.tabla_tam,
+            help="Ajusta el tamaño de fuente de la tabla de datos",
         )
+        
+        # Vista previa del tamaño seleccionado
+        px_size = TAM_FUENTE[st.session_state.tabla_tam]
+        
+        st.markdown(f"""
+        <div style="
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-top: 8px;
+            font-size: {px_size}px;
+            color: #334155;
+            text-align: center;
+            transition: all 0.3s ease;
+        ">
+            👁️ Texto de ejemplo a <b>{px_size}px</b>
+        </div>
+        """, unsafe_allow_html=True)
 
 cfg = REPORTES[reporte]
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
 # CARGAR DATOS
-# ---------------------------------------------------------------------------
+# ===========================================================================
 df = cargar(cfg["archivo"])
 if df is None or df.empty:
     st.warning("No se pudieron cargar los datos o el archivo está vacío.")
@@ -1148,9 +1156,9 @@ if df is None or df.empty:
 
 st.subheader(reporte)
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
 # DETERMINAR COLUMNAS
-# ---------------------------------------------------------------------------
+# ===========================================================================
 if "fecha" in cfg:
     col_fecha = buscar_columna(df, cfg["fecha"]) if cfg["fecha"] else None
 else:
@@ -1175,9 +1183,9 @@ faltantes_aviso = list(faltan_cat)
 if "buscador" in cfg and cfg["buscador"] and not col_busc:
     faltantes_aviso.append(cfg["buscador"])
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
 # PROCESAMIENTO
-# ---------------------------------------------------------------------------
+# ===========================================================================
 df_f = df.copy()
 if col_fecha:
     df_f[col_fecha] = pd.to_datetime(df_f[col_fecha], errors="coerce")
@@ -1206,9 +1214,9 @@ if "agrupar" in cfg:
 else:
     cols_agrupar = [c for c in cat_cols if c]
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
 # CONTROLES DE FILTRO
-# ---------------------------------------------------------------------------
+# ===========================================================================
 controles = []
 if col_fecha and df_f[col_fecha].notna().any():
     controles.append(("fecha", col_fecha))
@@ -1222,7 +1230,7 @@ if cols_agrupar:
 grupos_sel = []
 
 if controles:
-    MAX_COLS_POR_FILA = 4  # una sola fila en escritorio; en movil se apilan
+    MAX_COLS_POR_FILA = 4
     for i in range(0, len(controles), MAX_COLS_POR_FILA):
         fila_controles = controles[i:i+MAX_COLS_POR_FILA]
         cols_ui = st.columns(len(fila_controles))
@@ -1253,22 +1261,19 @@ if controles:
                 elif tipo == "grp":
                     grupos_sel = st.multiselect("📊 Agrupar por", cols_agrupar, default=[], key=f"grp_{reporte}{i}{j}", placeholder="Sin agrupar")
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
 # AVISOS
-# ---------------------------------------------------------------------------
+# ===========================================================================
 if faltantes_aviso:
     st.caption("⚠️ No se encontraron: " + ", ".join(faltantes_aviso))
 if "columnas" in cfg and faltan_cols:
     st.caption("⚠️ Columnas no encontradas: " + ", ".join(faltan_cols))
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
 # SELECTOR DE COLUMNAS
-# ---------------------------------------------------------------------------
+# ===========================================================================
 usa_vista_movil = st.session_state.get('forzar_movil', False)
 tiene_config_movil = "columnas_movil" in cfg
-# La vista movil ya NO se fuerza solo por tener "columnas_movil".
-# En escritorio se usa la vista completa; la movil se activa con el
-# check "Forzar vista movil" del sidebar.
 
 if not usa_vista_movil:
     with st.expander("⚙️ Configuración de columnas"):
@@ -1285,9 +1290,9 @@ else:
         cols_mostrar_movil = sugeridas[:5]
     cols_mostrar = cols_mostrar_movil
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
 # CONTADOR
-# ---------------------------------------------------------------------------
+# ===========================================================================
 if len(df_f) != len(df):
     st.caption(f"📊 Mostrando {len(df_f):,} de {len(df):,} filas (filtrado)")
 else:
@@ -1297,10 +1302,9 @@ if df_f.empty:
     st.warning("Ningún registro coincide con los filtros.")
     st.stop()
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
 # RENDERIZAR TABLA
-# ---------------------------------------------------------------------------
-TAM_FUENTE = {"Pequeño": 12, "Mediano": 14, "Grande": 17, "Muy grande": 20}
+# ===========================================================================
 font_px = TAM_FUENTE.get(st.session_state.get("tabla_tam", "Mediano"), 14)
 
 if usa_vista_movil and tiene_config_movil:
@@ -1318,9 +1322,9 @@ else:
     df_grid = df_f[cols_finales]
     renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px)
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
 # DASHBOARD DE GRÁFICOS
-# ---------------------------------------------------------------------------
+# ===========================================================================
 st.markdown("---")
 
 if reporte == "Inventario Valorizado":
