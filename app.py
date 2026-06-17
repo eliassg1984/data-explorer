@@ -12,7 +12,7 @@ st.set_page_config(
     page_title="Reportes",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="auto",  # ← CAMBIADO de "expanded" a "auto"
+    initial_sidebar_state="expanded",
     menu_items={
         'Get Help': None,
         'Report a bug': None,
@@ -47,6 +47,8 @@ st.markdown("""
 }
 
 /* ============ HEADER NATIVO PERSONALIZADO ============ */
+/* FIX 1: header transparente -> elimina la franja blanca de arriba.
+   No se oculta porque dentro del header vive el botón para abrir el sidebar. */
 header[data-testid="stHeader"] {
     background: transparent !important;
     border-bottom: none !important;
@@ -61,7 +63,9 @@ header[data-testid="stHeader"] {
     display: none !important;
 }
 
-/* ============ BOTÓN PARA EXPANDIR/COLAPSAR EL SIDEBAR ============ */
+/* ============ BOTÓN PARA EXPANDIR EL SIDEBAR ============ */
+/* FIX 2: forzar visibilidad y dar contraste al botón que abre el sidebar.
+   Se apunta a varios testid porque cambian segun la version de Streamlit. */
 [data-testid="stSidebarCollapsedControl"],
 [data-testid="stExpandSidebarButton"],
 [data-testid="collapsedControl"],
@@ -69,17 +73,29 @@ header[data-testid="stHeader"] {
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
-    z-index: 999 !important;
+    z-index: 999999 !important;
 }
 
+/* Botón bien visible: pastilla azul con flecha blanca (antes era blanco
+   sobre fondo casi blanco, por eso parecia que no existia). */
 [data-testid="stSidebarCollapsedControl"] button,
 [data-testid="stExpandSidebarButton"] button,
 [data-testid="collapsedControl"] button,
 button[kind="headerNoPadding"] {
-    background: #ffffff !important;
-    border: 1px solid #e2e8f0 !important;
+    background: #3b82f6 !important;
+    border: 1px solid #3b82f6 !important;
     border-radius: 8px !important;
-    color: #3b82f6 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Asegurar que el ícono (flecha) tambien sea blanco */
+[data-testid="stSidebarCollapsedControl"] button svg,
+[data-testid="stExpandSidebarButton"] button svg,
+[data-testid="collapsedControl"] button svg,
+button[kind="headerNoPadding"] svg {
+    color: #ffffff !important;
+    fill: #ffffff !important;
 }
 
 /* ============ ESTILOS BASE ============ */
@@ -219,6 +235,8 @@ button[kind="primary"]:hover {
 
 /* ============ MÓVIL ============ */
 @media screen and (max-width: 768px) {
+    /* FIX 3: NO ocultar el header (eso eliminaba el botón del sidebar).
+       Se hace transparente para que no se vea la franja blanca. */
     header[data-testid="stHeader"] {
         background: transparent !important;
         box-shadow: none !important;
