@@ -319,13 +319,16 @@ for c in df_grid.columns:
         gb.configure_column(c, aggFunc=af, type=["numericColumn"],
                             valueFormatter="x == null ? '' : x.toLocaleString()")
 
-opciones_grid = {"autoGroupColumnDef": {"minWidth": 260, "pinned": "left"}}
+opciones_grid = {"autoGroupColumnDef": {"minWidth": 200}}
 
 if agrupar_on:
     for c in cols_agrupar:
         if c in df_grid.columns:
             gb.configure_column(c, rowGroup=True, hide=True)
+    # Una columna por cada campo agrupado, cada una con su propio +/- (estilo Excel)
+    opciones_grid["groupDisplayType"] = "multipleColumns"
     opciones_grid["groupDefaultExpanded"] = 0      # arranca colapsado -> expandir con +
+    opciones_grid["groupMultiAutoColumn"] = True   # respaldo si la version es antigua
     opciones_grid["pivotMode"] = False
 else:
     opciones_grid["pivotMode"] = False
