@@ -221,37 +221,6 @@ button[kind="primary"]:hover {
     border-radius: 8px !important;
 }
 
-/* ============ METRIC CARDS ============ */
-.metric-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 16px;
-    box-shadow: var(--shadow);
-}
-
-.metric-card .metric-value {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #1e293b;
-}
-
-.metric-card .metric-label {
-    font-size: 0.75rem;
-    color: #64748b;
-    text-transform: uppercase;
-    font-weight: 600;
-}
-
-.metric-card .metric-delta {
-    font-size: 0.8rem;
-    margin-top: 4px;
-}
-
-.metric-card .metric-delta.positive { color: #10b981; }
-.metric-card .metric-delta.negative { color: #ef4444; }
-.metric-card .metric-delta.warning { color: #f59e0b; }
-
 /* ============ SIDEBAR ============ */
 [data-testid="stSidebar"] .nav-link {
     background: #ffffff !important;
@@ -290,10 +259,6 @@ button[kind="primary"]:hover {
     [data-testid="stSidebar"] { 
         width: 100% !important;
         max-width: 100% !important;
-    }
-    
-    .metric-card .metric-value {
-        font-size: 1.2rem;
     }
 }
 </style>
@@ -616,7 +581,7 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte):
 
 
 # ---------------------------------------------------------------------------
-# Función: Dashboard de gráficos
+# Función: Dashboard de gráficos (CORREGIDA)
 # ---------------------------------------------------------------------------
 def renderizar_graficos(df_f, es_movil=False):
     """Renderiza todos los gráficos del dashboard."""
@@ -629,8 +594,9 @@ def renderizar_graficos(df_f, es_movil=False):
     col_precio = buscar_columna(df_f, "Precio Promedio", "precio promedio")
     col_valorizado = buscar_columna(df_f, "Valorizado total", "valorizado")
     
-    if not all([col_area, col_producto, col_stock, col_precio, col_valorizado]):
-        st.info("Faltan columnas necesarias para los gráficos.")
+    # Validar columnas mínimas
+    if not col_producto or not col_stock or not col_precio or not col_valorizado:
+        st.warning("Faltan columnas esenciales (Producto, Stock, Precio, Valorizado). No se pueden generar gráficos.")
         return
     
     # ============ KPIs ============
@@ -659,7 +625,7 @@ def renderizar_graficos(df_f, es_movil=False):
         with col1:
             st.metric("💰 Total Valorizado", f"S/ {total_val:,.0f}")
         with col2:
-            st.metric("📦 Productos", total_prod, delta=f"{areas} áreas")
+            st.metric("📦 Productos", total_prod, delta=f"{areas} áreas" if areas else None)
         with col3:
             st.metric("⚠️ Stock Bajo (<10)", stock_bajo, delta=f"{stock_cero} sin stock", delta_color="inverse")
         with col4:
@@ -670,76 +636,127 @@ def renderizar_graficos(df_f, es_movil=False):
     
     # ============ GRÁFICOS ============
     if es_movil:
-        # MÓVIL: Mostrar en tabs + expanders para no saturar
+        # MÓVIL: Tabs con gráficos
         tab1, tab2 = st.tabs(["🗺️ Mapa", "📊 Análisis"])
         
         with tab1:
-            # Treemap (más visual)
-            if col_area and col_familia:
-                fig_tree = px.treemap(
-                    df_f,
-                    path=[col_area, col_familia],
-                    values=col_valorizado,
-                    color=col_valorizado,
-                    color_continuous_scale='blues',
-                    title='Valorización por Área y Familia'
-                )
-                fig_tree.update_layout(margin=dict(l=10, r=10, t=30, b=10), height=350)
-                st.plotly_chart(fig_tree, use_container_width=True)
+            # Treemap
+            if col_area:
+                try:
+                    path = [col_area]
+                    if col_familia:
+                        path.append(col_familia)
+                    
+                    fig_tree = px.treemap(
+                        df_f, path=path, values=col_valorizado,
+                        color=col_valorizado, color_continuous_scale='blues',
+                        title='Valorización por Área y Familia'
+                    )
+                    fig_tree.update_layout(margin=dict(l=10, r=10, t=30, b=10), height=350)
+                    st.plotly_chart(fig_tree, use_container_width=True)
+                except Exception as e:
+                    st.warning(f"No se pudo generar el treemap: {str(e)}")
             else:
-                st.info("Se necesita Área y Familia para el treemap")
+                st.info("Se necesita columna de Área para el treemap")
             
-            # Top 10 en expander
+            # Top 10
             with st.expander("🏆 Top 10 Productos"):
-                top_10 = df_f.nlargest(10, col_valorizado)
-                fig_top = px.bar(
-                    top_10, x=col_valorizado, y=col_producto,
-                    orientation='h', color=col_stock,
-                    color_continuous_scale=['#ef4444', '#f59e0b', '#10b981'],
-                    title='Top 10 por Valorización',
-                    text=col_valorizado
-                )
-                fig_top.update_traces(texttemplate='S/ %{text:,.0f}', textposition='outside')
-                fig_top.update_layout(height=350)
-                st.plotly_chart(fig_top, use_container_width=True)
+                try:
+                    top_10 = df_f.nlargest(10, col_valorizado)
+                    fig_top = px.bar(
+                        top_10, x=col_valorizado, y=col_producto,
+                        orientation='h',
+                        title='Top 10 por Valorización',
+                        text=col_valorizado,
+                        color_discrete_sequence=['#3b82f6']
+                    )
+                    fig_top.update_traces(texttemplate='S/ %{text:,.0f}', textposition='outside')
+                    fig_top.update_layout(height=350)
+                    st.plotly_chart(fig_top, use_container_width=True)
+                except Exception as e:
+                    st.warning(f"No se pudo generar el top 10: {str(e)}")
         
         with tab2:
-            # Scatter plot
-            fig_scatter = px.scatter(
-                df_f, x=col_precio, y=col_stock,
-                size=col_valorizado, color=col_area if col_area else None,
-                hover_name=col_producto,
-                title='Precio vs Stock (tamaño = valorizado)',
-                color_discrete_sequence=px.colors.qualitative.Set2
-            )
-            fig_scatter.add_hline(y=10, line_dash="dash", line_color="red", annotation_text="Stock mínimo")
-            fig_scatter.update_layout(height=350)
-            st.plotly_chart(fig_scatter, use_container_width=True)
+            # Scatter plot (CORREGIDO con go.Figure)
+            try:
+                fig_scatter = go.Figure()
+                
+                if col_area:
+                    for area in df_f[col_area].unique():
+                        df_area = df_f[df_f[col_area] == area]
+                        fig_scatter.add_trace(go.Scatter(
+                            x=df_area[col_precio],
+                            y=df_area[col_stock],
+                            mode='markers',
+                            name=str(area),
+                            marker=dict(
+                                size=df_area[col_valorizado] / df_area[col_valorizado].max() * 30 + 5,
+                                opacity=0.7
+                            ),
+                            text=df_area[col_producto],
+                            hovertemplate='<b>%{text}</b><br>Precio: S/ %{x:,.2f}<br>Stock: %{y:,.0f}<extra></extra>'
+                        ))
+                else:
+                    fig_scatter.add_trace(go.Scatter(
+                        x=df_f[col_precio],
+                        y=df_f[col_stock],
+                        mode='markers',
+                        name='Productos',
+                        marker=dict(
+                            size=df_f[col_valorizado] / df_f[col_valorizado].max() * 30 + 5,
+                            opacity=0.7,
+                            color='#3b82f6'
+                        ),
+                        text=df_f[col_producto],
+                        hovertemplate='<b>%{text}</b><br>Precio: S/ %{x:,.2f}<br>Stock: %{y:,.0f}<extra></extra>'
+                    ))
+                
+                fig_scatter.add_hline(y=10, line_dash="dash", line_color="red", 
+                                     annotation_text="Stock mínimo")
+                
+                fig_scatter.update_layout(
+                    title='Precio vs Stock (tamaño = valorizado)',
+                    xaxis_title='Precio Promedio (S/)',
+                    yaxis_title='Stock',
+                    height=350,
+                    paper_bgcolor='#f8fafc',
+                    plot_bgcolor='#ffffff',
+                    showlegend=True if col_area else False
+                )
+                st.plotly_chart(fig_scatter, use_container_width=True)
+            except Exception as e:
+                st.warning(f"No se pudo generar el scatter plot: {str(e)}")
             
-            # Sunburst en expander
+            # Sunburst
             if col_area:
                 with st.expander("☀️ Distribución Jerárquica"):
-                    fig_sun = px.sunburst(
-                        df_f,
-                        path=[col_area, col_familia] if col_familia else [col_area],
-                        values=col_valorizado,
-                        color=col_valorizado,
-                        color_continuous_scale='blues',
-                        title='Distribución Jerárquica del Valor'
-                    )
-                    fig_sun.update_layout(height=350)
-                    st.plotly_chart(fig_sun, use_container_width=True)
+                    try:
+                        path = [col_area]
+                        if col_familia:
+                            path.append(col_familia)
+                        
+                        fig_sun = px.sunburst(
+                            df_f, path=path, values=col_valorizado,
+                            color=col_valorizado, color_continuous_scale='blues',
+                            title='Distribución Jerárquica del Valor'
+                        )
+                        fig_sun.update_layout(height=350)
+                        st.plotly_chart(fig_sun, use_container_width=True)
+                    except Exception as e:
+                        st.warning(f"No se pudo generar el sunburst: {str(e)}")
             
             # Distribución de precios
             with st.expander("📈 Distribución de Precios"):
-                fig_hist = px.histogram(
-                    df_f, x=col_precio,
-                    nbins=20,
-                    title='Distribución de Precios Promedio',
-                    color_discrete_sequence=['#3b82f6']
-                )
-                fig_hist.update_layout(height=300)
-                st.plotly_chart(fig_hist, use_container_width=True)
+                try:
+                    fig_hist = px.histogram(
+                        df_f, x=col_precio, nbins=20,
+                        title='Distribución de Precios Promedio',
+                        color_discrete_sequence=['#3b82f6']
+                    )
+                    fig_hist.update_layout(height=300)
+                    st.plotly_chart(fig_hist, use_container_width=True)
+                except Exception as e:
+                    st.warning(f"No se pudo generar el histograma: {str(e)}")
     
     else:
         # DESKTOP: Tabs con múltiples gráficos
@@ -752,134 +769,209 @@ def renderizar_graficos(df_f, es_movil=False):
             col_a, col_b = st.columns(2)
             
             with col_a:
-                if col_area and col_familia:
-                    fig_tree = px.treemap(
-                        df_f,
-                        path=[col_area, col_familia],
-                        values=col_valorizado,
-                        color=col_valorizado,
-                        color_continuous_scale='blues',
-                        title='Valorización por Área y Familia'
-                    )
-                    fig_tree.update_layout(margin=dict(l=10, r=10, t=30, b=10))
-                    st.plotly_chart(fig_tree, use_container_width=True)
+                if col_area:
+                    try:
+                        path = [col_area]
+                        if col_familia:
+                            path.append(col_familia)
+                        
+                        fig_tree = px.treemap(
+                            df_f, path=path, values=col_valorizado,
+                            color=col_valorizado, color_continuous_scale='blues',
+                            title='Valorización por Área y Familia'
+                        )
+                        fig_tree.update_layout(margin=dict(l=10, r=10, t=30, b=10))
+                        st.plotly_chart(fig_tree, use_container_width=True)
+                    except Exception as e:
+                        st.warning(f"Error en treemap: {str(e)}")
                 else:
-                    st.info("Se necesita Área y Familia")
+                    st.info("Se necesita columna de Área")
             
             with col_b:
                 if col_area:
-                    fig_sun = px.sunburst(
-                        df_f,
-                        path=[col_area, col_familia] if col_familia else [col_area],
-                        values=col_valorizado,
-                        color=col_valorizado,
-                        color_continuous_scale='blues',
-                        title='Distribución Jerárquica'
-                    )
-                    fig_sun.update_layout(margin=dict(l=10, r=10, t=30, b=10))
-                    st.plotly_chart(fig_sun, use_container_width=True)
+                    try:
+                        path = [col_area]
+                        if col_familia:
+                            path.append(col_familia)
+                        
+                        fig_sun = px.sunburst(
+                            df_f, path=path, values=col_valorizado,
+                            color=col_valorizado, color_continuous_scale='blues',
+                            title='Distribución Jerárquica'
+                        )
+                        fig_sun.update_layout(margin=dict(l=10, r=10, t=30, b=10))
+                        st.plotly_chart(fig_sun, use_container_width=True)
+                    except Exception as e:
+                        st.warning(f"Error en sunburst: {str(e)}")
         
         with tab2:
-            fig_scatter = px.scatter(
-                df_f, x=col_precio, y=col_stock,
-                size=col_valorizado, color=col_area if col_area else None,
-                hover_name=col_producto,
-                title='Relación Precio vs Stock (tamaño = valorizado)',
-                color_discrete_sequence=px.colors.qualitative.Set2
-            )
-            fig_scatter.add_hline(y=10, line_dash="dash", line_color="red", annotation_text="Stock mínimo (10)")
-            fig_scatter.add_vline(x=df_f[col_precio].mean(), line_dash="dash", line_color="blue",
-                                  annotation_text=f"Precio prom. (S/ {df_f[col_precio].mean():.2f})")
-            fig_scatter.update_layout(height=450)
-            st.plotly_chart(fig_scatter, use_container_width=True)
+            # Scatter plot CORREGIDO
+            try:
+                fig_scatter = go.Figure()
+                
+                if col_area:
+                    for area in df_f[col_area].unique():
+                        df_area = df_f[df_f[col_area] == area]
+                        fig_scatter.add_trace(go.Scatter(
+                            x=df_area[col_precio],
+                            y=df_area[col_stock],
+                            mode='markers',
+                            name=str(area),
+                            marker=dict(
+                                size=df_area[col_valorizado] / df_area[col_valorizado].max() * 40 + 8,
+                                opacity=0.7
+                            ),
+                            text=df_area[col_producto],
+                            hovertemplate='<b>%{text}</b><br>Precio: S/ %{x:,.2f}<br>Stock: %{y:,.0f}<extra></extra>'
+                        ))
+                else:
+                    fig_scatter.add_trace(go.Scatter(
+                        x=df_f[col_precio],
+                        y=df_f[col_stock],
+                        mode='markers',
+                        name='Productos',
+                        marker=dict(
+                            size=df_f[col_valorizado] / df_f[col_valorizado].max() * 40 + 8,
+                            opacity=0.7,
+                            color='#3b82f6'
+                        ),
+                        text=df_f[col_producto],
+                        hovertemplate='<b>%{text}</b><br>Precio: S/ %{x:,.2f}<br>Stock: %{y:,.0f}<extra></extra>'
+                    ))
+                
+                fig_scatter.add_hline(y=10, line_dash="dash", line_color="red",
+                                     annotation_text="Stock mínimo (10)")
+                fig_scatter.add_vline(x=df_f[col_precio].mean(), line_dash="dash", 
+                                     line_color="blue",
+                                     annotation_text=f"Precio prom. (S/ {df_f[col_precio].mean():.2f})")
+                
+                fig_scatter.update_layout(
+                    title='Relación Precio vs Stock (tamaño = valorizado)',
+                    xaxis_title='Precio Promedio (S/)',
+                    yaxis_title='Stock',
+                    height=450,
+                    paper_bgcolor='#f8fafc',
+                    plot_bgcolor='#ffffff'
+                )
+                st.plotly_chart(fig_scatter, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Error en scatter: {str(e)}")
             
-            # Tabla de outliers
+            # Outliers
             with st.expander("🔍 Productos con stock bajo y alto valor"):
-                outliers = df_f[(df_f[col_stock] < 10) & (df_f[col_valorizado] > df_f[col_valorizado].median())]
-                if not outliers.empty:
-                    st.warning(f"⚠️ {len(outliers)} productos con stock bajo y alto valor")
-                    st.dataframe(
-                        outliers[[col_producto, col_area, col_stock, col_valorizado]]
-                        .sort_values(col_valorizado, ascending=False)
-                        .head(10),
-                        use_container_width=True
-                    )
+                try:
+                    outliers = df_f[(df_f[col_stock] < 10) & 
+                                   (df_f[col_valorizado] > df_f[col_valorizado].median())]
+                    if not outliers.empty:
+                        st.warning(f"⚠️ {len(outliers)} productos con stock bajo y alto valor")
+                        cols_out = [col_producto, col_stock, col_valorizado]
+                        if col_area:
+                            cols_out.insert(1, col_area)
+                        st.dataframe(
+                            outliers[cols_out].sort_values(col_valorizado, ascending=False).head(10),
+                            use_container_width=True
+                        )
+                    else:
+                        st.success("✅ No hay productos críticos")
+                except Exception as e:
+                    st.warning(f"Error en outliers: {str(e)}")
         
         with tab3:
             col_a, col_b = st.columns(2)
             
             with col_a:
-                top_15 = df_f.nlargest(15, col_valorizado)
-                fig_top = px.bar(
-                    top_15, x=col_valorizado, y=col_producto,
-                    orientation='h', color=col_stock,
-                    color_continuous_scale=['#ef4444', '#f59e0b', '#10b981'],
-                    title='Top 15 Productos (color = stock)',
-                    text=col_valorizado
-                )
-                fig_top.update_traces(texttemplate='S/ %{text:,.0f}', textposition='outside')
-                fig_top.update_layout(height=400)
-                st.plotly_chart(fig_top, use_container_width=True)
-            
-            with col_b:
-                # Ranking por área
-                if col_area:
-                    area_val = df_f.groupby(col_area)[col_valorizado].sum().reset_index()
-                    area_val = area_val.sort_values(col_valorizado, ascending=True)
-                    
-                    fig_area = px.bar(
-                        area_val, x=col_valorizado, y=col_area,
-                        orientation='h', color=col_valorizado,
-                        color_continuous_scale='blues',
-                        title='Ranking por Área',
+                try:
+                    top_15 = df_f.nlargest(15, col_valorizado)
+                    fig_top = px.bar(
+                        top_15, x=col_valorizado, y=col_producto,
+                        orientation='h', color=col_stock,
+                        color_continuous_scale=['#ef4444', '#f59e0b', '#10b981'],
+                        title='Top 15 Productos (color = stock)',
                         text=col_valorizado
                     )
-                    fig_area.update_traces(texttemplate='S/ %{text:,.0f}', textposition='outside')
-                    fig_area.update_layout(height=400)
-                    st.plotly_chart(fig_area, use_container_width=True)
+                    fig_top.update_traces(texttemplate='S/ %{text:,.0f}', textposition='outside')
+                    fig_top.update_layout(height=400)
+                    st.plotly_chart(fig_top, use_container_width=True)
+                except Exception as e:
+                    st.warning(f"Error en top 15: {str(e)}")
+            
+            with col_b:
+                if col_area:
+                    try:
+                        area_val = df_f.groupby(col_area)[col_valorizado].sum().reset_index()
+                        area_val = area_val.sort_values(col_valorizado, ascending=True)
+                        
+                        fig_area = px.bar(
+                            area_val, x=col_valorizado, y=col_area,
+                            orientation='h', color=col_valorizado,
+                            color_continuous_scale='blues',
+                            title='Ranking por Área',
+                            text=col_valorizado
+                        )
+                        fig_area.update_traces(texttemplate='S/ %{text:,.0f}', textposition='outside')
+                        fig_area.update_layout(height=400)
+                        st.plotly_chart(fig_area, use_container_width=True)
+                    except Exception as e:
+                        st.warning(f"Error en ranking: {str(e)}")
         
         with tab4:
             col_a, col_b = st.columns(2)
             
             with col_a:
-                fig_box = px.box(
-                    df_f, x=col_area if col_area else None, y=col_precio,
-                    color=col_area if col_area else None,
-                    title='Distribución de Precios por Área',
-                    color_discrete_sequence=px.colors.qualitative.Set2
-                )
-                fig_box.update_layout(height=400)
-                st.plotly_chart(fig_box, use_container_width=True)
+                try:
+                    if col_area:
+                        fig_box = px.box(
+                            df_f, x=col_area, y=col_precio,
+                            color=col_area,
+                            title='Distribución de Precios por Área',
+                            color_discrete_sequence=px.colors.qualitative.Set2
+                        )
+                    else:
+                        fig_box = px.box(
+                            df_f, y=col_precio,
+                            title='Distribución de Precios',
+                            color_discrete_sequence=['#3b82f6']
+                        )
+                    fig_box.update_layout(height=400)
+                    st.plotly_chart(fig_box, use_container_width=True)
+                except Exception as e:
+                    st.warning(f"Error en box plot: {str(e)}")
             
             with col_b:
-                fig_hist = px.histogram(
-                    df_f, x=col_precio, nbins=30,
-                    title='Distribución de Precios',
-                    color_discrete_sequence=['#3b82f6']
-                )
-                fig_hist.update_layout(height=400)
-                st.plotly_chart(fig_hist, use_container_width=True)
+                try:
+                    fig_hist = px.histogram(
+                        df_f, x=col_precio, nbins=30,
+                        title='Distribución de Precios',
+                        color_discrete_sequence=['#3b82f6']
+                    )
+                    fig_hist.update_layout(height=400)
+                    st.plotly_chart(fig_hist, use_container_width=True)
+                except Exception as e:
+                    st.warning(f"Error en histograma: {str(e)}")
             
-            # Tabla de resumen
+            # Resumen
             with st.expander("📋 Resumen por Área"):
                 if col_area:
-                    resumen = df_f.groupby(col_area).agg(
-                        Productos=(col_producto, 'nunique'),
-                        Stock_Promedio=(col_stock, 'mean'),
-                        Precio_Promedio=(col_precio, 'mean'),
-                        Valorizado_Total=(col_valorizado, 'sum')
-                    ).reset_index()
-                    resumen['% del Total'] = (resumen['Valorizado_Total'] / total_val * 100).round(1)
-                    
-                    st.dataframe(
-                        resumen.style.format({
-                            'Stock_Promedio': '{:,.0f}',
-                            'Precio_Promedio': 'S/ {:.2f}',
-                            'Valorizado_Total': 'S/ {:,.0f}',
-                            '% del Total': '{:.1f}%'
-                        }).background_gradient(subset=['Valorizado_Total'], cmap='Blues'),
-                        use_container_width=True
-                    )
+                    try:
+                        resumen = df_f.groupby(col_area).agg(
+                            Productos=(col_producto, 'nunique'),
+                            Stock_Promedio=(col_stock, 'mean'),
+                            Precio_Promedio=(col_precio, 'mean'),
+                            Valorizado_Total=(col_valorizado, 'sum')
+                        ).reset_index()
+                        resumen['% del Total'] = (resumen['Valorizado_Total'] / total_val * 100).round(1)
+                        
+                        st.dataframe(
+                            resumen.style.format({
+                                'Stock_Promedio': '{:,.0f}',
+                                'Precio_Promedio': 'S/ {:.2f}',
+                                'Valorizado_Total': 'S/ {:,.0f}',
+                                '% del Total': '{:.1f}%'
+                            }).background_gradient(subset=['Valorizado_Total'], cmap='Blues'),
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.warning(f"Error en resumen: {str(e)}")
 
 
 # ===========================================================================
@@ -902,7 +994,7 @@ with st.sidebar:
         options=list(REPORTES.keys()),
         icons=[v["icono"] for v in REPORTES.values()],
         menu_icon="bar-chart-fill",
-        default_index=2,  # Inventario Valorizado por defecto
+        default_index=2,
         styles={
             "container": {"padding": "4px", "background-color": "#f1f5f9"},
             "menu-title": {
