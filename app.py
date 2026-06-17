@@ -133,7 +133,7 @@ gb.configure_pagination(enabled=True, paginationAutoPageSize=False,
 grid_options = gb.build()
 
 AgGrid(
-    df,
+    df.head(5000),   # limite para no saturar el WebSocket (evita el error de conexion)
     gridOptions=grid_options,
     height=450,
     theme="balham",
