@@ -47,10 +47,12 @@ st.markdown("""
 }
 
 /* ============ HEADER NATIVO PERSONALIZADO ============ */
+/* FIX 1: header transparente -> elimina la franja blanca de arriba.
+   No se oculta porque dentro del header vive el botón para abrir el sidebar. */
 header[data-testid="stHeader"] {
-    background: #ffffff !important;
-    border-bottom: 1px solid #e2e8f0 !important;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+    background: transparent !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
 }
 
 [data-testid="stDecoration"] {
@@ -59,6 +61,27 @@ header[data-testid="stHeader"] {
 
 [data-testid="stToolbar"] {
     display: none !important;
+}
+
+/* ============ BOTÓN PARA EXPANDIR EL SIDEBAR ============ */
+/* FIX 2: forzar visibilidad y dar contraste al botón que abre el sidebar.
+   Se apunta a varios testid porque cambian segun la version de Streamlit. */
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="stExpandSidebarButton"],
+[data-testid="collapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 999 !important;
+}
+
+[data-testid="stSidebarCollapsedControl"] button,
+[data-testid="stExpandSidebarButton"] button,
+[data-testid="collapsedControl"] button {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+    color: #3b82f6 !important;
 }
 
 /* ============ ESTILOS BASE ============ */
@@ -198,9 +221,12 @@ button[kind="primary"]:hover {
 
 /* ============ MÓVIL ============ */
 @media screen and (max-width: 768px) {
-    /* OCULTAR HEADER EN MÓVIL - QUITA LA FRANJA BLANCA */
+    /* FIX 3: NO ocultar el header (eso eliminaba el botón del sidebar).
+       Se hace transparente para que no se vea la franja blanca. */
     header[data-testid="stHeader"] {
-        display: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        border-bottom: none !important;
     }
     
     /* ELIMINAR ESPACIOS EN BLANCO */
@@ -234,30 +260,17 @@ button[kind="primary"]:hover {
         padding: 12px 8px !important;
     }
     
-    /* BOTÓN TOGGLE SIDEBAR - VISIBLE Y FUNCIONAL */
-    button[aria-label="Toggle sidebar"],
-    [data-testid="collapseSideBarButton"] {
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        z-index: 100 !important;
+    /* Botón para abrir el sidebar en móvil - tamaño adecuado para tocar */
+    [data-testid="stSidebarCollapsedControl"] button,
+    [data-testid="stExpandSidebarButton"] button,
+    [data-testid="collapsedControl"] button {
         width: 44px !important;
         height: 44px !important;
-        background: white !important;
-        border: 1px solid #e2e8f0 !important;
-        border-radius: 8px !important;
-        cursor: pointer !important;
+        min-height: 44px !important;
+        padding: 8px !important;
+        display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        color: #3b82f6 !important;
-        padding: 8px !important;
-        min-height: auto !important;
-    }
-    
-    button[aria-label="Toggle sidebar"]:hover,
-    [data-testid="collapseSideBarButton"]:hover {
-        background: #eff6ff !important;
-        border-color: #3b82f6 !important;
     }
     
     /* Ajustes de tamaño en móvil */
@@ -272,7 +285,7 @@ button[kind="primary"]:hover {
     
     .stApp { padding: 0 !important; }
     
-    button:not([aria-label="Toggle sidebar"]):not([data-testid="collapseSideBarButton"]) { 
+    button { 
         min-height: 44px !important; 
         padding: 10px 16px !important;
         font-size: 0.9rem !important;
