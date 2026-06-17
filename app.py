@@ -4,6 +4,7 @@ import streamlit as st
 import duckdb
 import plotly.express as px
 import plotly.graph_objects as go
+import numpy as np
 from st_aggrid import AgGrid, GridOptionsBuilder
 from streamlit_option_menu import option_menu
 
@@ -20,7 +21,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
-# CSS GLOBAL - Tema claro moderno + Header personalizado
+# CSS GLOBAL - Tema claro moderno (HEADER NATIVO PERSONALIZADO)
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -45,9 +46,11 @@ st.markdown("""
     --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.03);
 }
 
-/* ============ OCULTAR HEADER NATIVO ============ */
+/* ============ HEADER NATIVO PERSONALIZADO ============ */
 header[data-testid="stHeader"] {
-    display: none !important;
+    background: #ffffff !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
 }
 
 [data-testid="stDecoration"] {
@@ -56,53 +59,6 @@ header[data-testid="stHeader"] {
 
 [data-testid="stToolbar"] {
     display: none !important;
-}
-
-/* ============ BARRA SUPERIOR PERSONALIZADA ============ */
-.custom-top-bar {
-    background: #ffffff;
-    padding: 12px 20px;
-    border-bottom: 1px solid #e2e8f0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    box-shadow: var(--shadow);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-}
-
-.custom-top-bar .brand {
-    font-size: 1.2rem;
-    font-weight: 700;
-    color: #1e293b;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.custom-top-bar .menu-btn {
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 8px 12px;
-    cursor: pointer;
-    font-size: 1.2rem;
-    color: #475569;
-    transition: all 0.2s;
-}
-
-.custom-top-bar .menu-btn:hover {
-    background: #e2e8f0;
-    color: #1e293b;
-}
-
-.custom-top-bar .version {
-    font-size: 0.75rem;
-    color: #94a3b8;
-    background: #f1f5f9;
-    padding: 4px 10px;
-    border-radius: 20px;
 }
 
 /* ============ ESTILOS BASE ============ */
@@ -262,16 +218,6 @@ button[kind="primary"]:hover {
     }
 }
 </style>
-
-<!-- BARRA SUPERIOR PERSONALIZADA -->
-<div class="custom-top-bar">
-    <button class="menu-btn" onclick="
-        const sidebar = parent.document.querySelector('[data-testid=stSidebar]');
-        if(sidebar) sidebar.style.display = sidebar.style.display === 'none' ? 'flex' : 'none';
-    ">☰</button>
-    <div class="brand">📊 Panel de Reportes</div>
-    <div class="version">v2.0</div>
-</div>
 """, unsafe_allow_html=True)
 
 
@@ -581,7 +527,7 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte):
 
 
 # ---------------------------------------------------------------------------
-# Función: Dashboard de gráficos (CORREGIDA)
+# Función: Dashboard de gráficos (CORREGIDA - scatter size fix)
 # ---------------------------------------------------------------------------
 def renderizar_graficos(df_f, es_movil=False):
     """Renderiza todos los gráficos del dashboard."""
@@ -634,6 +580,76 @@ def renderizar_graficos(df_f, es_movil=False):
             rotacion = total_val / total_prod if total_prod > 0 else 0
             st.metric("📊 Valor/Prod", f"S/ {rotacion:,.0f}")
     
+    # ============ FUNCIÓN AUXILIAR PARA SCATTER ============
+    def crear_scatter(df, col_precio, col_stock, col_valorizado, col_producto, col_area=None, height=450):
+        """Crea un scatter plot seguro con tamaños normalizados."""
+        fig = go.Figure()
+        
+        # Calcular tamaños normalizados (evitar división por cero y negativos)
+        valores = df[col_valorizado].fillna(0).values
+        max_val = max(valores.max(), 1)
+        
+        if col_area:
+            for area in df[col_area].unique():
+                df_area = df[df[col_area] == area].copy()
+                if df_area.empty:
+                    continue
+                
+                sizes = df_area[col_valorizado].fillna(0).values
+                sizes_norm = np.clip((sizes / max_val) * 35 + 5, 5, 40)
+                
+                fig.add_trace(go.Scatter(
+                    x=df_area[col_precio],
+                    y=df_area[col_stock],
+                    mode='markers',
+                    name=str(area),
+                    marker=dict(
+                        size=sizes_norm,
+                        opacity=0.7,
+                        sizemode='diameter'
+                    ),
+                    text=df_area[col_producto],
+                    hovertemplate='<b>%{text}</b><br>Precio: S/ %{x:,.2f}<br>Stock: %{y:,.0f}<extra></extra>'
+                ))
+        else:
+            sizes = df[col_valorizado].fillna(0).values
+            sizes_norm = np.clip((sizes / max_val) * 35 + 5, 5, 40)
+            
+            fig.add_trace(go.Scatter(
+                x=df[col_precio],
+                y=df[col_stock],
+                mode='markers',
+                name='Productos',
+                marker=dict(
+                    size=sizes_norm,
+                    opacity=0.7,
+                    color='#3b82f6',
+                    sizemode='diameter'
+                ),
+                text=df[col_producto],
+                hovertemplate='<b>%{text}</b><br>Precio: S/ %{x:,.2f}<br>Stock: %{y:,.0f}<extra></extra>'
+            ))
+        
+        fig.add_hline(y=10, line_dash="dash", line_color="red", 
+                     annotation_text="Stock mínimo")
+        
+        if not col_area and height >= 400:
+            fig.add_vline(x=df[col_precio].mean(), line_dash="dash", 
+                         line_color="blue",
+                         annotation_text=f"Precio prom. (S/ {df[col_precio].mean():.2f})")
+        
+        fig.update_layout(
+            title='Relación Precio vs Stock (tamaño = valorizado)',
+            xaxis_title='Precio Promedio (S/)',
+            yaxis_title='Stock',
+            height=height,
+            paper_bgcolor='#f8fafc',
+            plot_bgcolor='#ffffff',
+            showlegend=True if col_area else False
+        )
+        
+        return fig
+    
     # ============ GRÁFICOS ============
     if es_movil:
         # MÓVIL: Tabs con gráficos
@@ -677,51 +693,11 @@ def renderizar_graficos(df_f, es_movil=False):
                     st.warning(f"No se pudo generar el top 10: {str(e)}")
         
         with tab2:
-            # Scatter plot (CORREGIDO con go.Figure)
+            # Scatter plot CORREGIDO
             try:
-                fig_scatter = go.Figure()
-                
-                if col_area:
-                    for area in df_f[col_area].unique():
-                        df_area = df_f[df_f[col_area] == area]
-                        fig_scatter.add_trace(go.Scatter(
-                            x=df_area[col_precio],
-                            y=df_area[col_stock],
-                            mode='markers',
-                            name=str(area),
-                            marker=dict(
-                                size=df_area[col_valorizado] / df_area[col_valorizado].max() * 30 + 5,
-                                opacity=0.7
-                            ),
-                            text=df_area[col_producto],
-                            hovertemplate='<b>%{text}</b><br>Precio: S/ %{x:,.2f}<br>Stock: %{y:,.0f}<extra></extra>'
-                        ))
-                else:
-                    fig_scatter.add_trace(go.Scatter(
-                        x=df_f[col_precio],
-                        y=df_f[col_stock],
-                        mode='markers',
-                        name='Productos',
-                        marker=dict(
-                            size=df_f[col_valorizado] / df_f[col_valorizado].max() * 30 + 5,
-                            opacity=0.7,
-                            color='#3b82f6'
-                        ),
-                        text=df_f[col_producto],
-                        hovertemplate='<b>%{text}</b><br>Precio: S/ %{x:,.2f}<br>Stock: %{y:,.0f}<extra></extra>'
-                    ))
-                
-                fig_scatter.add_hline(y=10, line_dash="dash", line_color="red", 
-                                     annotation_text="Stock mínimo")
-                
-                fig_scatter.update_layout(
-                    title='Precio vs Stock (tamaño = valorizado)',
-                    xaxis_title='Precio Promedio (S/)',
-                    yaxis_title='Stock',
-                    height=350,
-                    paper_bgcolor='#f8fafc',
-                    plot_bgcolor='#ffffff',
-                    showlegend=True if col_area else False
+                fig_scatter = crear_scatter(
+                    df_f, col_precio, col_stock, col_valorizado, 
+                    col_producto, col_area, height=350
                 )
                 st.plotly_chart(fig_scatter, use_container_width=True)
             except Exception as e:
@@ -807,51 +783,9 @@ def renderizar_graficos(df_f, es_movil=False):
         with tab2:
             # Scatter plot CORREGIDO
             try:
-                fig_scatter = go.Figure()
-                
-                if col_area:
-                    for area in df_f[col_area].unique():
-                        df_area = df_f[df_f[col_area] == area]
-                        fig_scatter.add_trace(go.Scatter(
-                            x=df_area[col_precio],
-                            y=df_area[col_stock],
-                            mode='markers',
-                            name=str(area),
-                            marker=dict(
-                                size=df_area[col_valorizado] / df_area[col_valorizado].max() * 40 + 8,
-                                opacity=0.7
-                            ),
-                            text=df_area[col_producto],
-                            hovertemplate='<b>%{text}</b><br>Precio: S/ %{x:,.2f}<br>Stock: %{y:,.0f}<extra></extra>'
-                        ))
-                else:
-                    fig_scatter.add_trace(go.Scatter(
-                        x=df_f[col_precio],
-                        y=df_f[col_stock],
-                        mode='markers',
-                        name='Productos',
-                        marker=dict(
-                            size=df_f[col_valorizado] / df_f[col_valorizado].max() * 40 + 8,
-                            opacity=0.7,
-                            color='#3b82f6'
-                        ),
-                        text=df_f[col_producto],
-                        hovertemplate='<b>%{text}</b><br>Precio: S/ %{x:,.2f}<br>Stock: %{y:,.0f}<extra></extra>'
-                    ))
-                
-                fig_scatter.add_hline(y=10, line_dash="dash", line_color="red",
-                                     annotation_text="Stock mínimo (10)")
-                fig_scatter.add_vline(x=df_f[col_precio].mean(), line_dash="dash", 
-                                     line_color="blue",
-                                     annotation_text=f"Precio prom. (S/ {df_f[col_precio].mean():.2f})")
-                
-                fig_scatter.update_layout(
-                    title='Relación Precio vs Stock (tamaño = valorizado)',
-                    xaxis_title='Precio Promedio (S/)',
-                    yaxis_title='Stock',
-                    height=450,
-                    paper_bgcolor='#f8fafc',
-                    plot_bgcolor='#ffffff'
+                fig_scatter = crear_scatter(
+                    df_f, col_precio, col_stock, col_valorizado, 
+                    col_producto, col_area, height=450
                 )
                 st.plotly_chart(fig_scatter, use_container_width=True)
             except Exception as e:
@@ -1208,12 +1142,10 @@ else:
 # ---------------------------------------------------------------------------
 st.markdown("---")
 
-# Solo mostrar gráficos avanzados para Inventario Valorizado
 if reporte == "Inventario Valorizado":
     st.subheader("📊 Dashboard de Análisis")
     renderizar_graficos(df_f, es_movil=usa_vista_movil)
 else:
-    # Gráfico simple para otros reportes
     st.subheader("📈 Visualización")
     cols_num = df_f.select_dtypes("number").columns.tolist()
     cols_txt = df_f.select_dtypes(["object", "string"]).columns.tolist()
