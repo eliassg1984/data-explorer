@@ -2,6 +2,7 @@ import streamlit as st
 import duckdb
 import plotly.express as px
 from st_aggrid import AgGrid, GridOptionsBuilder
+from streamlit_option_menu import option_menu
 
 st.set_page_config(page_title="Reportes", page_icon="📊", layout="wide")
 
@@ -9,10 +10,10 @@ st.set_page_config(page_title="Reportes", page_icon="📊", layout="wide")
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] { background: #0f1117; }
-[data-testid="stSidebar"] { background: #161b27; border-right: 1px solid #1e2535; }
+[data-testid="stSidebar"] { background: #0d1424; border-right: 1px solid #1e3a5f; }
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #e2e8f0; }
 h1 { color: #f8fafc !important; font-size: 1.6rem !important; font-weight: 700 !important; }
-h2, h3 { color: #cbd5e1 !important; font-weight: 600 !important; }
+h2, h3 { color: #93c5fd !important; font-weight: 600 !important; }
 label { color: #94a3b8 !important; font-size: 0.78rem !important; text-transform: uppercase; }
 </style>
 """, unsafe_allow_html=True)
@@ -39,12 +40,13 @@ def get_conn():
 con = get_conn()
 BUCKET = st.secrets["R2_BUCKET"]
 
+# Cada reporte: archivo parquet + icono (nombres de Bootstrap Icons)
 REPORTES = {
-    "Ajuste de Inventario": "ajusteinventario.parquet",
-    "Compras": "compras.parquet",
-    "Inventario Valorizado": "inventariovalorizado.parquet",
-    "Receta Base": "recetabase.parquet",
-    "Receta Venta": "recetaventa.parquet",
+    "Ajuste de Inventario":  {"archivo": "ajusteinventario.parquet",     "icono": "sliders"},
+    "Compras":               {"archivo": "compras.parquet",              "icono": "cart"},
+    "Inventario Valorizado": {"archivo": "inventariovalorizado.parquet", "icono": "boxes"},
+    "Receta Base":           {"archivo": "recetabase.parquet",           "icono": "clipboard-data"},
+    "Receta Venta":          {"archivo": "recetaventa.parquet",          "icono": "receipt"},
 }
 
 
@@ -61,27 +63,50 @@ def cargar(archivo):
 # Interfaz principal
 st.title("📊 Panel de Reportes")
 
+# --- Barra lateral: botonera con iconos y tema azul ---
 with st.sidebar:
-    reporte = st.selectbox("Reporte", list(REPORTES.keys()))
+    reporte = option_menu(
+        menu_title="Reporte",
+        options=list(REPORTES.keys()),
+        icons=[v["icono"] for v in REPORTES.values()],
+        menu_icon="bar-chart-fill",
+        default_index=0,
+        styles={
+            "container": {"padding": "4px", "background-color": "#0d1424"},
+            "menu-title": {
+                "color": "#60a5fa", "font-size": "13px",
+                "text-transform": "uppercase", "letter-spacing": "1px",
+            },
+            "icon": {"color": "#60a5fa", "font-size": "18px"},
+            "nav-link": {
+                "font-size": "14px", "color": "#cbd5e1",
+                "background-color": "#111c33", "margin": "5px 0",
+                "border-radius": "8px", "--hover-color": "#1e3a5f",
+            },
+            "nav-link-selected": {
+                "background-color": "#2563eb", "color": "#ffffff",
+            },
+        },
+    )
+
     if st.button("🔄 Actualizar datos", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
 # Cargar datos
-df = cargar(REPORTES[reporte])
+df = cargar(REPORTES[reporte]["archivo"])
 if df is None or df.empty:
     st.warning("No se pudieron cargar los datos o el archivo está vacío.")
     st.stop()
 
-# Mostrar información del reporte
+# Mostrar informacion del reporte
 st.subheader(reporte)
 st.caption(f"{len(df):,} filas · {len(df.columns)} columnas")
 
 # ---------------------------------------------------------------------------
-# Tabla dinámica tipo Excel (AgGrid)
-# Arrastra columnas al panel lateral (Pivot Mode, Row Groups, Values) para
-# agrupar, pivotear y agregar. Filtra y ordena desde el encabezado de cada
-# columna. El botón "Columns / Filters" del lado derecho abre el panel.
+# Tabla dinamica tipo Excel (AgGrid)
+# Abre el panel lateral derecho de la tabla para agrupar, pivotear y sumar.
+# Filtra y ordena desde el encabezado de cada columna.
 # ---------------------------------------------------------------------------
 st.caption("💡 Abre el panel lateral derecho de la tabla para agrupar, "
            "pivotear y sumar. Filtra y ordena desde cada encabezado.")
@@ -92,15 +117,15 @@ gb.configure_default_column(
     filter=True,
     sortable=True,
     editable=False,
-    groupable=True,       # permite arrastrar a "Row Groups"
-    enableRowGroup=True,  # agrupar por filas (como filas de tabla dinámica)
-    enablePivot=True,     # pivotear (como columnas de tabla dinámica)
-    enableValue=True,     # usar como valor agregado
-    aggFunc="sum",        # función por defecto al agregar
+    groupable=True,
+    enableRowGroup=True,
+    enablePivot=True,
+    enableValue=True,
+    aggFunc="sum",
 )
-gb.configure_side_bar()                 # panel lateral para arrastrar campos
+gb.configure_side_bar()
 gb.configure_grid_options(
-    pivotMode=False,                    # arranca apagado; se activa en el panel
+    pivotMode=False,
     autoGroupColumnDef={"minWidth": 220},
 )
 gb.configure_pagination(enabled=True, paginationAutoPageSize=False,
@@ -111,15 +136,15 @@ AgGrid(
     df,
     gridOptions=grid_options,
     height=450,
-    theme="balham",               # prueba "alpine", "material" o "streamlit"
+    theme="balham",
     fit_columns_on_grid_load=False,
     allow_unsafe_jscode=True,
-    enable_enterprise_modules=True,  # necesario para pivot/agrupar/agregar
+    enable_enterprise_modules=True,
     key="grid_reportes",
 )
 
 # ---------------------------------------------------------------------------
-# Visualización (gráfico de barras, igual que antes)
+# Visualizacion (grafico de barras)
 # ---------------------------------------------------------------------------
 cols_num = df.select_dtypes("number").columns.tolist()
 cols_txt = df.select_dtypes(["object", "string"]).columns.tolist()
@@ -137,7 +162,8 @@ if cols_num and cols_txt:
                    .head(20))
 
         fig = px.bar(datos, x=eje_x, y=eje_y,
-                     title=f"{eje_y} por {eje_x} (top 20)")
+                     title=f"{eje_y} por {eje_x} (top 20)",
+                     color_discrete_sequence=["#2563eb"])
         fig.update_layout(
             paper_bgcolor="#0f1117",
             plot_bgcolor="#0f1117",
@@ -145,6 +171,6 @@ if cols_num and cols_txt:
         )
         st.plotly_chart(fig, use_container_width=True)
     except Exception as e:
-        st.error(f"Error generando gráfico: {str(e)}")
+        st.error(f"Error generando grafico: {str(e)}")
 else:
-    st.info("No hay suficientes columnas numéricas y de texto para generar gráficos.")
+    st.info("No hay suficientes columnas numericas y de texto para generar graficos.")
