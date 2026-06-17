@@ -397,7 +397,7 @@ def inject_sidebar_toggle():
 
 
 # ===========================================================================
-# FUNCIÓN: AGGRID DESKTOP
+# FUNCIÓN: AGGRID DESKTOP (CORREGIDA - tamaño de texto controla font-size)
 # ===========================================================================
 
 def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14):
@@ -417,11 +417,15 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 valueFormatter="x == null ? '' : x.toLocaleString()",
             )
     
+    # Altura de fila proporcional al texto pero con límites
+    row_h = max(28, min(60, font_px + 12))
+    header_h = max(30, min(62, font_px + 14))
+    
     opciones_grid = {
         "autoGroupColumnDef": {"minWidth": 200},
         "localeText": LOCALE_ES,
-        "rowHeight": font_px + 16,
-        "headerHeight": font_px + 18,
+        "rowHeight": row_h,
+        "headerHeight": header_h,
     }
     
     agrupar_on = bool(grupos_sel)
@@ -466,7 +470,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
 
 # ===========================================================================
-# FUNCIÓN: AGGRID MÓVIL
+# FUNCIÓN: AGGRID MÓVIL (CORREGIDA - tamaño de texto controla font-size)
 # ===========================================================================
 
 def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
@@ -486,11 +490,15 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
             gb.configure_column(col, aggFunc=af, type=["numericColumn"],
                                 valueFormatter="x == null ? '' : x.toLocaleString()")
     
+    # Altura de fila proporcional al texto pero con límites
+    row_h = max(28, min(60, font_px + 12))
+    header_h = max(30, min(62, font_px + 14))
+    
     opciones_grid = {
         "localeText": LOCALE_ES,
         "suppressColumnVirtualisation": True,
-        "rowHeight": font_px + 24,
-        "headerHeight": font_px + 20,
+        "rowHeight": row_h,
+        "headerHeight": header_h,
         "animateRows": False,
         "sideBar": False,
         "statusBar": {"statusPanels": [{"statusPanel": "agTotalRowCountComponent", "align": "left"}]},
@@ -828,63 +836,4 @@ def renderizar_graficos(df_f, es_movil=False):
                         )
                         fig_area.update_traces(texttemplate='S/ %{text:,.0f}', textposition='outside')
                         fig_area.update_layout(height=400)
-                        st.plotly_chart(fig_area, use_container_width=True)
-                    except Exception as e:
-                        st.warning(f"Error en ranking: {str(e)}")
-        
-        with tab4:
-            col_a, col_b = st.columns(2)
-            
-            with col_a:
-                try:
-                    if col_area:
-                        fig_box = px.box(
-                            df_f, x=col_area, y=col_precio,
-                            color=col_area,
-                            title='Distribución de Precios por Área',
-                            color_discrete_sequence=px.colors.qualitative.Set2                        )
-                    else:
-                        fig_box = px.box(
-                            df_f, y=col_precio,
-                            title='Distribución de Precios',
-                            color_discrete_sequence=['#3b82f6']
-                        )
-                    fig_box.update_layout(height=400)
-                    st.plotly_chart(fig_box, use_container_width=True)
-                except Exception as e:
-                    st.warning(f"Error en box plot: {str(e)}")
-            
-            with col_b:
-                try:
-                    fig_hist = px.histogram(
-                        df_f, x=col_precio, nbins=30,
-                        title='Distribución de Precios',
-                        color_discrete_sequence=['#3b82f6']
-                    )
-                    fig_hist.update_layout(height=400)
-                    st.plotly_chart(fig_hist, use_container_width=True)
-                except Exception as e:
-                    st.warning(f"Error en histograma: {str(e)}")
-            
-            with st.expander("📋 Resumen por Área"):
-                if col_area:
-                    try:
-                        resumen = df_f.groupby(col_area).agg(
-                            Productos=(col_producto, 'nunique'),
-                            Stock_Promedio=(col_stock, 'mean'),
-                            Precio_Promedio=(col_precio, 'mean'),
-                            Valorizado_Total=(col_valorizado, 'sum')
-                        ).reset_index()
-                        resumen['% del Total'] = (resumen['Valorizado_Total'] / total_val * 100).round(1)
-                        
-                        st.dataframe(
-                            resumen.style.format({
-                                'Stock_Promedio': '{:,.0f}',
-                                'Precio_Promedio': 'S/ {:.2f}',
-                                'Valorizado_Total': 'S/ {:,.0f}',
-                                '% del Total': '{:.1f}%'
-                            }).background_gradient(subset=['Valorizado_Total'], cmap='Blues'),
-                            use_container_width=True
-                        )
-                    except Exception as e:
-                        st.warning(f"Error en resumen: {str(e)}")
+                        st.plotly_chart(fig_area,
