@@ -1,5 +1,5 @@
 """
-Interfaz de usuario: CSS, botón flotante, tablas AgGrid y gráficos.
+Interfaz de usuario: CSS, botón flotante, tablas AgGrid y gráficos (OPTIMIZADO).
 """
 
 import streamlit as st
@@ -25,12 +25,13 @@ TAM_FUENTE = {
 
 
 # ===========================================================================
-# CSS GLOBAL
+# CSS GLOBAL (CACHEADO)
 # ===========================================================================
 
-def inject_css():
-    """Inyecta todo el CSS personalizado en la app."""
-    st.markdown("""
+@st.cache_data
+def get_css():
+    """Retorna el CSS como string (cacheado para no reinyectar)."""
+    return """
     <style>
     /* ============ PALETA DE COLORES ============ */
     :root {
@@ -308,16 +309,22 @@ def inject_css():
         }
     }
     </style>
-    """, unsafe_allow_html=True)
+    """
+
+
+def inject_css():
+    """Inyecta el CSS cacheado en la app."""
+    st.markdown(get_css(), unsafe_allow_html=True)
 
 
 # ===========================================================================
-# BOTÓN FLOTANTE PARA ABRIR/CERRAR EL SIDEBAR
+# BOTÓN FLOTANTE PARA ABRIR/CERRAR EL SIDEBAR (CACHEADO)
 # ===========================================================================
 
-def inject_sidebar_toggle():
-    """Inyecta un botón flotante para abrir/cerrar el sidebar."""
-    components.html("""
+@st.cache_data
+def get_sidebar_toggle_html():
+    """Retorna el HTML del botón flotante (cacheado)."""
+    return """
     <script>
     (function () {
         const doc = window.parent.document;
@@ -381,7 +388,12 @@ def inject_sidebar_toggle():
         setInterval(asegurarBoton, 1000);
     })();
     </script>
-    """, height=0)
+    """
+
+
+def inject_sidebar_toggle():
+    """Inyecta el botón flotante cacheado."""
+    components.html(get_sidebar_toggle_html(), height=0)
 
 
 # ===========================================================================
@@ -830,8 +842,7 @@ def renderizar_graficos(df_f, es_movil=False):
                             df_f, x=col_area, y=col_precio,
                             color=col_area,
                             title='Distribución de Precios por Área',
-                            color_discrete_sequence=px.colors.qualitative.Set2
-                        )
+                            color_discrete_sequence=px.colors.qualitative.Set2                        )
                     else:
                         fig_box = px.box(
                             df_f, y=col_precio,
