@@ -290,72 +290,13 @@ df_f = df.copy()
 if col_fecha:
     df_f[col_fecha] = pd.to_datetime(df_f[col_fecha], errors="coerce")
 
-st.markdown("#### Filtros")
-
-# Fila 1: fecha + categoricos en cascada
-fila1 = [c for c in ([col_fecha] if col_fecha else []) + cat_cols]
-if fila1:
-    columnas = st.columns(len(fila1))
-    idx = 0
-
-    if col_fecha and df_f[col_fecha].notna().any():
-        with columnas[idx]:
-            fmin = df_f[col_fecha].min().date()
-            fmax = df_f[col_fecha].max().date()
-            rango = st.date_input("📅 Fecha", value=(fmin, fmax),
-                                  min_value=fmin, max_value=fmax,
-                                  format="DD/MM/YYYY", key=f"fch_{reporte}")
-            if isinstance(rango, (tuple, list)) and len(rango) == 2:
-                ini, fin = rango
-                df_f = df_f[(df_f[col_fecha].dt.date >= ini) &
-                            (df_f[col_fecha].dt.date <= fin)]
-        idx += 1
-
-    for cc in cat_cols:
-        with columnas[idx]:
-            opts = sorted(df_f[cc].dropna().unique().tolist(), key=lambda x: str(x))
-            sel = st.multiselect(cc, opts, placeholder="Todos", key=f"cat_{reporte}_{cc}")
-            if sel:
-                df_f = df_f[df_f[cc].isin(sel)]
-        idx += 1
-
-# Buscador de producto (multiple, tipo Excel). El multiselect ya filtra
-# las sugerencias a medida que escribes, sin distinguir mayus/minus.
-if col_busc:
-    opts_prod = sorted(df_f[col_busc].dropna().astype(str).unique().tolist(),
-                       key=lambda x: x.lower())
-    sel_prod = st.multiselect(f"🔎 {col_busc}", opts_prod,
-                              placeholder="Escribe para buscar… (vacío = todos)",
-                              key=f"busc_{reporte}")
-    if sel_prod:
-        df_f = df_f[df_f[col_busc].astype(str).isin(sel_prod)]
-
-if faltantes_aviso:
-    st.caption("⚠️ No se encontraron estas columnas en el archivo: "
-               + ", ".join(faltantes_aviso) + ". Revisa el nombre exacto.")
-
-# Contador
-if len(df_f) != len(df):
-    st.caption(f"{len(df_f):,} de {len(df):,} filas (filtrado) · {len(df_f.columns)} columnas")
-else:
-    st.caption(f"{len(df_f):,} filas · {len(df_f.columns)} columnas")
-
-if df_f.empty:
-    st.warning("Ningún registro coincide con los filtros seleccionados.")
-    st.stop()
-
-# ---------------------------------------------------------------------------
-# Columnas a mostrar (default por config) + opcion de agrupar con +/-
-# ---------------------------------------------------------------------------
-st.markdown("#### Tabla")
-
 todas_cols = df_f.columns.tolist()
 
+# Columnas por defecto a mostrar
 if "columnas" in cfg:
     sugeridas, faltan_cols = resolver_columnas(df_f, cfg["columnas"])
-    if faltan_cols:
-        st.caption("⚠️ Columnas configuradas no encontradas: " + ", ".join(faltan_cols))
 else:
+    faltan_cols = []
     sugeridas = []
     for c in [col_fecha] + cat_cols + ([col_busc] if col_busc else []):
         if c and c not in sugeridas:
@@ -369,25 +310,84 @@ else:
         sugeridas = todas_cols[:8]
     sugeridas = sugeridas[:8]
 
-# Columnas para agrupar (jerarquia)
+# Columnas disponibles para agrupar
 if "agrupar" in cfg:
     cols_agrupar, _ = resolver_columnas(df_f, cfg["agrupar"])
 else:
     cols_agrupar = [c for c in cat_cols if c]
 
-c_grp, c_cols = st.columns([2, 3])
-with c_grp:
-    grupos_sel = st.multiselect(
-        "Agrupar por", cols_agrupar, default=[], key=f"grp_{reporte}",
-        placeholder="Sin agrupar",
-        help="Elige una o varias columnas. Cada una tendrá su propio +/- "
-             "(como agrupar en Excel). Vacío = tabla plana.",
-    )
-with c_cols:
-    cols_mostrar = st.multiselect("Columnas a mostrar", todas_cols, default=sugeridas,
-                                  key=f"cols_{reporte}", placeholder="Selecciona columnas")
+# --- Una sola fila de controles: fecha + filtros + buscador + agrupar por ---
+controles = []
+if col_fecha and df_f[col_fecha].notna().any():
+    controles.append(("fecha", col_fecha))
+for cc in cat_cols:
+    controles.append(("cat", cc))
+if col_busc:
+    controles.append(("busc", col_busc))
+if cols_agrupar:
+    controles.append(("grp", None))
+
+grupos_sel = []
+if controles:
+    cols_ui = st.columns(len(controles))
+    for i, (tipo, col) in enumerate(controles):
+        with cols_ui[i]:
+            if tipo == "fecha":
+                fmin = df_f[col].min().date()
+                fmax = df_f[col].max().date()
+                rango = st.date_input("📅 Fecha", value=(fmin, fmax),
+                                      min_value=fmin, max_value=fmax,
+                                      format="DD/MM/YYYY", key=f"fch_{reporte}")
+                if isinstance(rango, (tuple, list)) and len(rango) == 2:
+                    ini, fin = rango
+                    df_f = df_f[(df_f[col].dt.date >= ini) &
+                                (df_f[col].dt.date <= fin)]
+            elif tipo == "cat":
+                opts = sorted(df_f[col].dropna().unique().tolist(), key=lambda x: str(x))
+                sel = st.multiselect(col, opts, placeholder="Todos",
+                                     key=f"cat_{reporte}_{col}")
+                if sel:
+                    df_f = df_f[df_f[col].isin(sel)]
+            elif tipo == "busc":
+                opts_prod = sorted(df_f[col].dropna().astype(str).unique().tolist(),
+                                   key=lambda x: x.lower())
+                sel_prod = st.multiselect(f"🔎 {col}", opts_prod,
+                                          placeholder="Buscar… (vacío = todos)",
+                                          key=f"busc_{reporte}")
+                if sel_prod:
+                    df_f = df_f[df_f[col].astype(str).isin(sel_prod)]
+            elif tipo == "grp":
+                grupos_sel = st.multiselect(
+                    "Agrupar por", cols_agrupar, default=[], key=f"grp_{reporte}",
+                    placeholder="Sin agrupar",
+                    help="Una o varias columnas; cada una tendrá su propio +/- "
+                         "(como agrupar en Excel). Vacío = tabla plana.",
+                )
+
+# Avisos de columnas no encontradas
+if faltantes_aviso:
+    st.caption("⚠️ No se encontraron estas columnas en el archivo: "
+               + ", ".join(faltantes_aviso) + ".")
+if "columnas" in cfg and faltan_cols:
+    st.caption("⚠️ Columnas configuradas no encontradas: " + ", ".join(faltan_cols))
+
+# Selector de columnas: oculto en un desplegable para no empujar la tabla
+with st.expander("⚙️ Columnas a mostrar"):
+    cols_mostrar = st.multiselect("Columnas", todas_cols, default=sugeridas,
+                                  key=f"cols_{reporte}", label_visibility="collapsed",
+                                  placeholder="Selecciona columnas")
 if not cols_mostrar:
     cols_mostrar = sugeridas
+
+# Contador
+if len(df_f) != len(df):
+    st.caption(f"{len(df_f):,} de {len(df):,} filas (filtrado)")
+else:
+    st.caption(f"{len(df_f):,} filas")
+
+if df_f.empty:
+    st.warning("Ningún registro coincide con los filtros seleccionados.")
+    st.stop()
 
 agrupar_on = bool(grupos_sel)
 
@@ -399,9 +399,6 @@ if agrupar_on:
             cols_finales.append(c)
 
 df_grid = df_f[cols_finales]
-
-st.caption("💡 Elige columnas en “Agrupar por” para la vista con +/-, o usa el panel "
-           "derecho (Columns / Filters) para pivotear y sumar manualmente.")
 
 # ---------------------------------------------------------------------------
 # AgGrid
