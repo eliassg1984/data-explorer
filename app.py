@@ -12,7 +12,7 @@ st.set_page_config(
     page_title="Reportes",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",  # ← CAMBIADO de "expanded" a "auto"
     menu_items={
         'Get Help': None,
         'Report a bug': None,
@@ -47,8 +47,6 @@ st.markdown("""
 }
 
 /* ============ HEADER NATIVO PERSONALIZADO ============ */
-/* FIX 1: header transparente -> elimina la franja blanca de arriba.
-   No se oculta porque dentro del header vive el botón para abrir el sidebar. */
 header[data-testid="stHeader"] {
     background: transparent !important;
     border-bottom: none !important;
@@ -63,9 +61,7 @@ header[data-testid="stHeader"] {
     display: none !important;
 }
 
-/* ============ BOTÓN PARA EXPANDIR EL SIDEBAR ============ */
-/* FIX 2: forzar visibilidad y dar contraste al botón que abre el sidebar.
-   Se apunta a varios testid porque cambian segun la version de Streamlit. */
+/* ============ BOTÓN PARA EXPANDIR/COLAPSAR EL SIDEBAR ============ */
 [data-testid="stSidebarCollapsedControl"],
 [data-testid="stExpandSidebarButton"],
 [data-testid="collapsedControl"],
@@ -223,8 +219,6 @@ button[kind="primary"]:hover {
 
 /* ============ MÓVIL ============ */
 @media screen and (max-width: 768px) {
-    /* FIX 3: NO ocultar el header (eso eliminaba el botón del sidebar).
-       Se hace transparente para que no se vea la franja blanca. */
     header[data-testid="stHeader"] {
         background: transparent !important;
         box-shadow: none !important;
