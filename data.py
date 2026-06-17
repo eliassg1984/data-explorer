@@ -24,7 +24,7 @@ REPORTES = {
         "icono": "boxes",
         "columnas": [
             "Nombre Familia", "Nombre Subfamilia", "Nombre Producto",
-            "Unidad Kardex", "Codigo Producto", "Nombre Area",
+            "Unidad Kardex", "Codigo Producto", "Nombre Area", "Codigo Area", "Stock al Cierre", "Stock Declarado", "Ajuste"
         ],
         "filtros_cat": ["Nombre Area", "Nombre Familia"],
         "buscador": "Nombre Producto",
