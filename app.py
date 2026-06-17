@@ -81,6 +81,17 @@ header[data-testid="stHeader"] {
     background: var(--bg-primary); 
 }
 
+/* COMPACTAR ZONA SUPERIOR (solo escritorio): menos espacio muerto arriba
+   para que la tabla suba. En movil la media query de abajo manda. */
+.block-container {
+    padding-top: 2.5rem !important;
+}
+
+h1 { 
+    margin-bottom: 0.2rem !important; 
+    padding-top: 0 !important; 
+}
+
 [data-testid="stSidebar"] { 
     background: var(--bg-sidebar); 
     border-right: 1px solid var(--border); 
@@ -236,6 +247,17 @@ button[kind="primary"]:hover {
         padding: 0.5rem !important;
         margin-top: 0 !important;
         gap: 0 !important;
+    }
+    
+    /* RED DE SEGURIDAD: apilar columnas (filtros, KPIs) en movil */
+    [data-testid="stHorizontalBlock"] {
+        flex-direction: column !important;
+    }
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+    [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
     }
     
     /* HACER SIDEBAR SCROLLEABLE - VER TODAS LAS OPCIONES */
@@ -1192,7 +1214,7 @@ if cols_agrupar:
 grupos_sel = []
 
 if controles:
-    MAX_COLS_POR_FILA = 2
+    MAX_COLS_POR_FILA = 4  # una sola fila en escritorio; en movil se apilan
     for i in range(0, len(controles), MAX_COLS_POR_FILA):
         fila_controles = controles[i:i+MAX_COLS_POR_FILA]
         cols_ui = st.columns(len(fila_controles))
