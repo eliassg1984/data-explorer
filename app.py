@@ -68,7 +68,8 @@ header[data-testid="stHeader"] {
    Se apunta a varios testid porque cambian segun la version de Streamlit. */
 [data-testid="stSidebarCollapsedControl"],
 [data-testid="stExpandSidebarButton"],
-[data-testid="collapsedControl"] {
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapseButton"] {
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
@@ -77,7 +78,8 @@ header[data-testid="stHeader"] {
 
 [data-testid="stSidebarCollapsedControl"] button,
 [data-testid="stExpandSidebarButton"] button,
-[data-testid="collapsedControl"] button {
+[data-testid="collapsedControl"] button,
+button[kind="headerNoPadding"] {
     background: #ffffff !important;
     border: 1px solid #e2e8f0 !important;
     border-radius: 8px !important;
