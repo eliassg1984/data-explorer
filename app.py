@@ -1,6 +1,7 @@
 import unicodedata
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 import duckdb
 import plotly.express as px
 import plotly.graph_objects as go
@@ -64,40 +65,15 @@ header[data-testid="stHeader"] {
 }
 
 /* ============ BOTÓN PARA EXPANDIR EL SIDEBAR ============ */
-/* FIX 2: forzar visibilidad y dar contraste al botón que abre el sidebar.
-   Se usa coincidencia parcial (*=) para cubrir cualquier nombre de testid
-   segun la version de Streamlit, sin afectar a los expanders normales. */
+/* Si el botón nativo existe en tu versión, se deja visible.
+   El control que realmente garantiza el acceso es el botón flotante
+   personalizado que se inyecta más abajo con components.html. */
 [data-testid*="SidebarCollaps"],
 [data-testid="collapsedControl"],
 [data-testid*="xpandSidebar"] {
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
-    z-index: 999999 !important;
-}
-
-/* Botón bien visible: pastilla azul con flecha blanca (antes era blanco
-   sobre fondo casi blanco, por eso parecia que no existia).
-   Se pinta tanto el contenedor como el boton interno, por si acaso. */
-[data-testid*="SidebarCollaps"],
-[data-testid="collapsedControl"],
-[data-testid*="xpandSidebar"],
-[data-testid*="SidebarCollaps"] button,
-[data-testid="collapsedControl"] button,
-[data-testid*="xpandSidebar"] button {
-    background: #3b82f6 !important;
-    border: 1px solid #3b82f6 !important;
-    border-radius: 8px !important;
-    color: #ffffff !important;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15) !important;
-}
-
-/* Asegurar que el ícono (flecha) tambien sea blanco */
-[data-testid*="SidebarCollaps"] svg,
-[data-testid="collapsedControl"] svg,
-[data-testid*="xpandSidebar"] svg {
-    color: #ffffff !important;
-    fill: #ffffff !important;
 }
 
 /* ============ ESTILOS BASE ============ */
@@ -314,6 +290,81 @@ button[kind="primary"]:hover {
 }
 </style>
 """, unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------------------
+# BOTÓN FLOTANTE PARA ABRIR/CERRAR EL SIDEBAR
+# Se inyecta en el documento real (no en el iframe) y funciona aunque el
+# botón nativo de Streamlit no aparezca. components.html SÍ ejecuta JS.
+# ---------------------------------------------------------------------------
+components.html("""
+<script>
+(function () {
+    const doc = window.parent.document;
+    const BTN_ID = 'mi-toggle-sidebar';
+
+    function buscarControlNativo() {
+        const sels = [
+            '[data-testid="stSidebarCollapseButton"] button',
+            '[data-testid="stSidebarCollapseButton"]',
+            '[data-testid="stExpandSidebarButton"]',
+            '[data-testid="collapsedControl"]',
+            '[data-testid="stSidebarCollapsedControl"]'
+        ];
+        for (const s of sels) {
+            const el = doc.querySelector(s);
+            if (el) return el;
+        }
+        return null;
+    }
+
+    function toggleSidebar() {
+        // 1) Intentar usar el control nativo (animación correcta)
+        const nativo = buscarControlNativo();
+        if (nativo) { nativo.click(); return; }
+
+        // 2) Fallback: forzar visibilidad por estilos
+        const sb = doc.querySelector('section[data-testid="stSidebar"]');
+        if (!sb) return;
+        if (sb.dataset.abierto === '1') {
+            sb.dataset.abierto = '';
+            sb.style.transform = 'translateX(-110%)';
+            sb.style.width = '0';
+            sb.style.minWidth = '0';
+        } else {
+            sb.dataset.abierto = '1';
+            sb.style.transform = 'none';
+            sb.style.width = '21rem';
+            sb.style.minWidth = '21rem';
+            sb.style.visibility = 'visible';
+            sb.style.zIndex = '1000';
+        }
+    }
+
+    function asegurarBoton() {
+        if (doc.getElementById(BTN_ID)) return;
+        const b = doc.createElement('button');
+        b.id = BTN_ID;
+        b.innerHTML = '☰';
+        b.title = 'Abrir / cerrar menú';
+        b.style.cssText = [
+            'position:fixed', 'top:12px', 'left:12px', 'z-index:1000000',
+            'width:44px', 'height:44px', 'border-radius:10px',
+            'border:1px solid #2563eb', 'background:#3b82f6', 'color:#ffffff',
+            'font-size:20px', 'line-height:1', 'cursor:pointer',
+            'box-shadow:0 2px 8px rgba(0,0,0,0.2)', 'display:flex',
+            'align-items:center', 'justify-content:center', 'padding:0'
+        ].join(';');
+        b.onclick = toggleSidebar;
+        doc.body.appendChild(b);
+    }
+
+    asegurarBoton();
+    // Por si Streamlit re-renderiza y lo quita, lo volvemos a poner
+    setInterval(asegurarBoton, 1000);
+})();
+</script>
+""", height=0)
 
 
 # ---------------------------------------------------------------------------
