@@ -9,7 +9,7 @@ from streamlit_option_menu import option_menu
 st.set_page_config(page_title="Reportes", page_icon="📊", layout="wide")
 
 # ---------------------------------------------------------------------------
-# CSS GLOBAL - TEMA CLARO MODERNO
+# CSS GLOBAL - Tema claro moderno
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -154,7 +154,26 @@ button[kind="primary"]:hover {
     border-radius: 8px !important;
 }
 
-/* ============ ESTILOS MÓVIL (pantallas ≤ 768px) ============ */
+/* Sidebar option_menu */
+[data-testid="stSidebar"] .nav-link {
+    background: #ffffff !important;
+    color: #475569 !important;
+    border: 1px solid #e2e8f0 !important;
+}
+
+[data-testid="stSidebar"] .nav-link:hover {
+    background: #eff6ff !important;
+    color: #2563eb !important;
+    border-color: #93c5fd !important;
+}
+
+[data-testid="stSidebar"] .nav-link-selected {
+    background: #3b82f6 !important;
+    color: #ffffff !important;
+    border-color: #3b82f6 !important;
+}
+
+/* ============ ESTILOS MÓVIL ============ */
 @media screen and (max-width: 768px) {
     h1 { font-size: 1.3rem !important; }
     h2 { font-size: 1.1rem !important; }
@@ -177,223 +196,12 @@ button[kind="primary"]:hover {
     
     .js-plotly-plot { max-height: 300px !important; }
 }
-
-/* ============ TABLA MÓVIL CON SCROLL - TEMA CLARO ============ */
-.tabla-scroll-container {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    max-width: 100%;
-    border-radius: 12px;
-    border: 1px solid var(--border);
-    position: relative;
-    margin: 12px 0;
-    box-shadow: var(--shadow-md);
-    background: var(--bg-card);
-}
-
-.tabla-scroll-wrapper {
-    min-width: 100%;
-    display: inline-block;
-}
-
-.tabla-scroll-indicator {
-    position: absolute;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    background: linear-gradient(90deg, transparent, rgba(248, 250, 252, 0.9));
-    padding: 20px 15px;
-    pointer-events: none;
-    z-index: 10;
-    transition: opacity 0.3s;
-}
-
-.tabla-scroll-indicator::after {
-    content: "👉";
-    font-size: 1.5rem;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 0.4; }
-    50% { opacity: 1; }
-}
-
-.tabla-movil {
-    border-collapse: collapse;
-    width: auto;
-    min-width: 100%;
-    font-size: 0.85rem;
-}
-
-.tabla-movil th {
-    background: #f1f5f9;
-    color: #1e293b;
-    font-weight: 700;
-    padding: 14px 18px;
-    text-align: left;
-    border-bottom: 2px solid #3b82f6;
-    white-space: nowrap;
-    position: sticky;
-    top: 0;
-    z-index: 5;
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.tabla-movil th.col-fija {
-    position: sticky;
-    left: 0;
-    background: #f1f5f9;
-    z-index: 10;
-    box-shadow: 3px 0 8px rgba(0, 0, 0, 0.06);
-}
-
-.tabla-movil td.col-fija {
-    position: sticky;
-    left: 0;
-    background: inherit;
-    z-index: 5;
-    box-shadow: 3px 0 8px rgba(0, 0, 0, 0.06);
-    font-weight: 500;
-}
-
-.tabla-movil td {
-    padding: 14px 18px;
-    border-bottom: 1px solid #e2e8f0;
-    white-space: nowrap;
-    color: #334155;
-}
-
-.tabla-movil tr {
-    transition: background-color 0.15s;
-}
-
-.tabla-movil tr:hover td {
-    background-color: #eff6ff !important;
-}
-
-.tabla-movil tr:nth-child(even) td {
-    background-color: #ffffff;
-}
-
-.tabla-movil tr:nth-child(odd) td {
-    background-color: #f8fafc;
-}
-
-.tabla-movil .num-col {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-}
-
-/* Badges */
-.badge-area {
-    display: inline-block;
-    background: #dbeafe;
-    color: #1e40af;
-    padding: 3px 12px;
-    border-radius: 20px;
-    font-size: 0.75rem;
-    white-space: nowrap;
-    font-weight: 500;
-}
-
-.badge-familia {
-    display: inline-block;
-    background: #e0e7ff;
-    color: #3730a3;
-    padding: 3px 12px;
-    border-radius: 20px;
-    font-size: 0.75rem;
-    white-space: nowrap;
-    font-weight: 500;
-}
-
-.badge-subfamilia {
-    display: inline-block;
-    background: #f1f5f9;
-    color: #475569;
-    padding: 3px 12px;
-    border-radius: 20px;
-    font-size: 0.75rem;
-    white-space: nowrap;
-}
-
-/* Estados de stock */
-.stock-bajo {
-    color: #dc2626 !important;
-    font-weight: 700;
-    background: #fef2f2;
-    padding: 2px 8px;
-    border-radius: 6px;
-}
-
-.stock-normal {
-    color: #059669 !important;
-    font-weight: 600;
-}
-
-.stock-alto {
-    color: #0891b2 !important;
-    font-weight: 600;
-}
-
-/* Valorizado */
-.valor-destacado {
-    color: #059669 !important;
-    font-weight: 700;
-}
-
-/* Swipe hint */
-.swipe-hint {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    padding: 10px;
-    color: #64748b;
-    font-size: 0.8rem;
-    background: #f1f5f9;
-    border-radius: 10px;
-    margin-bottom: 12px;
-    border: 1px solid #e2e8f0;
-}
-
-@keyframes swipe-animation {
-    0%, 100% { transform: translateX(0); }
-    50% { transform: translateX(10px); }
-}
-
-.swipe-icon {
-    animation: swipe-animation 1.5s infinite;
-    font-size: 1.2rem;
-}
-
-/* Estilos para el sidebar option_menu */
-[data-testid="stSidebar"] .nav-link {
-    background: #ffffff !important;
-    color: #475569 !important;
-    border: 1px solid #e2e8f0 !important;
-}
-
-[data-testid="stSidebar"] .nav-link:hover {
-    background: #eff6ff !important;
-    color: #2563eb !important;
-    border-color: #93c5fd !important;
-}
-
-[data-testid="stSidebar"] .nav-link-selected {
-    background: #3b82f6 !important;
-    color: #ffffff !important;
-    border-color: #3b82f6 !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
-# Utilidades: detectar columnas sin importar mayusculas/acentos/espacios
+# Utilidades
 # ---------------------------------------------------------------------------
 def _norm(s):
     s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode()
@@ -419,7 +227,6 @@ def buscar_columna_fecha(df):
 
 
 def resolver_columnas(df, nombres):
-    """Devuelve (encontradas_reales, faltantes) a partir de una lista de nombres."""
     encontradas, faltantes = [], []
     for n in nombres:
         real = buscar_columna(df, n)
@@ -431,10 +238,9 @@ def resolver_columnas(df, nombres):
 
 
 # ---------------------------------------------------------------------------
-# Traducción de la interfaz de AgGrid al español
+# Traducción AgGrid al español
 # ---------------------------------------------------------------------------
 LOCALE_ES = {
-    # Menú de columna
     "sortAscending": "Ordenar ascendente",
     "sortDescending": "Ordenar descendente",
     "sortUnSort": "Quitar orden",
@@ -465,7 +271,6 @@ LOCALE_ES = {
     "excelExport": "Exportar a Excel",
     "chooseColumns": "Elegir columnas",
     "columnChooser": "Elegir columnas",
-    # Panel lateral
     "columns": "Columnas",
     "filters": "Filtros",
     "pivotMode": "Modo dinámico",
@@ -475,7 +280,6 @@ LOCALE_ES = {
     "valueColumnsEmptyMessage": "Arrastra aquí para agregar",
     "pivots": "Etiquetas de columna",
     "pivotColumnsEmptyMessage": "Arrastra aquí para etiquetas de columna",
-    # Filtros
     "searchOoo": "Buscar…",
     "filterOoo": "Filtrar…",
     "blanks": "(En blanco)",
@@ -499,7 +303,6 @@ LOCALE_ES = {
     "inRange": "En rango",
     "andCondition": "Y",
     "orCondition": "O",
-    # Paginación
     "page": "Página",
     "to": "a",
     "of": "de",
@@ -509,7 +312,6 @@ LOCALE_ES = {
     "firstPage": "Primera página",
     "previousPage": "Página anterior",
     "pageSizeSelectorLabel": "Tamaño de página:",
-    # Agregaciones
     "sum": "Suma",
     "min": "Mín",
     "max": "Máx",
@@ -520,7 +322,6 @@ LOCALE_ES = {
     "first": "Primero",
     "last": "Último",
     "group": "Grupo",
-    # Estados
     "loadingOoo": "Cargando…",
     "noRowsToShow": "No hay datos para mostrar",
     "totalRows": "Total de filas",
@@ -550,7 +351,7 @@ con = get_conn()
 BUCKET = st.secrets["R2_BUCKET"]
 
 # ---------------------------------------------------------------------------
-# Configuracion por reporte.
+# Configuración por reporte
 # ---------------------------------------------------------------------------
 REPORTES = {
     "Ajuste de Inventario": {
@@ -573,19 +374,15 @@ REPORTES = {
         "buscador": "Nombre Producto",
         "fecha": None,
         "agrupar": ["Nombre Area", "Nombre Familia", "Nombre Subfamilia"],
-        "columnas_fijas_movil": [
+        # Configuración para móvil
+        "columnas_movil": [
             "Nombre Producto",
             "Stock al dia",
             "Precio Promedio",
             "Valorizado total",
-        ],
-        "columnas_scroll_movil": [
-            "Codigo Producto",
             "Nombre Area",
-            "Nombre Familia",
-            "Nombre Subfamilia",
-            "Unidad Kardex",
         ],
+        "columnas_fijas_movil": 2,  # Número de columnas fijas a la izquierda
     },
     "Receta Base": {
         "archivo": "recetabase.parquet",
@@ -609,156 +406,10 @@ def cargar(archivo):
 
 
 # ---------------------------------------------------------------------------
-# FUNCIÓN PARA RENDERIZAR TABLA MÓVIL CON SCROLL
+# FUNCIÓN: Renderizar AgGrid DESKTOP (tu configuración original)
 # ---------------------------------------------------------------------------
-def renderizar_tabla_movil(df_f, columnas_ordenadas, columnas_fijas_reales):
-    """Renderiza tabla optimizada para móvil con columnas fijas y scroll horizontal."""
-    
-    FILAS_POR_PAGINA = 20
-    total_filas = len(df_f)
-    total_paginas = max(1, (total_filas + FILAS_POR_PAGINA - 1) // FILAS_POR_PAGINA)
-    
-    # Control de paginación
-    if 'pagina_actual' not in st.session_state:
-        st.session_state.pagina_actual = 1
-    
-    if 'reporte_anterior' not in st.session_state:
-        st.session_state.reporte_anterior = None
-    if st.session_state.reporte_anterior != reporte:
-        st.session_state.pagina_actual = 1
-        st.session_state.reporte_anterior = reporte
-    
-    # Indicador de swipe
-    st.markdown("""
-    <div class="swipe-hint">
-        <span>👈 Desliza para ver más columnas</span>
-        <span class="swipe-icon">👆</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Controles de paginación
-    col1, col2, col3, col4 = st.columns([1, 1, 2, 1])
-    with col1:
-        if st.button("◀", disabled=st.session_state.pagina_actual == 1, key="btn_prev"):
-            st.session_state.pagina_actual -= 1
-            st.rerun()
-    with col2:
-        if st.button("▶", disabled=st.session_state.pagina_actual == total_paginas, key="btn_next"):
-            st.session_state.pagina_actual += 1
-            st.rerun()
-    with col3:
-        st.caption(f"Pág. {st.session_state.pagina_actual} de {total_paginas} • {total_filas} productos")
-    with col4:
-        st.caption(f"{FILAS_POR_PAGINA} por pág.")
-    
-    # Obtener datos de la página actual
-    inicio = (st.session_state.pagina_actual - 1) * FILAS_POR_PAGINA
-    fin = min(inicio + FILAS_POR_PAGINA, total_filas)
-    df_pagina = df_f.iloc[inicio:fin]
-    
-    # Construir HTML de la tabla
-    html_tabla = '<div class="tabla-scroll-container"><div class="tabla-scroll-wrapper"><table class="tabla-movil">'
-    
-    # Encabezados
-    html_tabla += '<thead><tr>'
-    for col in columnas_ordenadas:
-        es_fija = col in columnas_fijas_reales
-        clase_fija = 'col-fija' if es_fija else ''
-        clase_num = 'num-col' if pd.api.types.is_numeric_dtype(df_pagina[col]) else ''
-        html_tabla += f'<th class="{clase_fija} {clase_num}">{col}</th>'
-    html_tabla += '</tr></thead><tbody>'
-    
-    # Filas de datos
-    for idx, row in df_pagina.iterrows():
-        html_tabla += '<tr>'
-        for col in columnas_ordenadas:
-            valor = row[col]
-            es_fija = col in columnas_fijas_reales
-            clase_fija = 'col-fija' if es_fija else ''
-            
-            # Formatear según tipo de columna
-            if pd.isna(valor):
-                valor_str = '<span style="color: #94a3b8;">—</span>'
-                clase_extra = ''
-            elif "valorizado" in _norm(col):
-                valor_str = f'S/ <strong>{valor:,.2f}</strong>'
-                clase_extra = 'num-col valor-destacado'
-            elif "precio" in _norm(col) or "promedio" in _norm(col):
-                valor_str = f'S/ {valor:,.2f}'
-                clase_extra = 'num-col'
-            elif "stock" in _norm(col):
-                if isinstance(valor, (int, float)):
-                    if valor < 10:
-                        valor_str = f'<span class="stock-bajo">{valor:,.0f}</span>'
-                    elif valor > 100:
-                        valor_str = f'<span class="stock-alto">{valor:,.0f}</span>'
-                    else:
-                        valor_str = f'<span class="stock-normal">{valor:,.0f}</span>'
-                else:
-                    valor_str = str(valor)
-                clase_extra = 'num-col'
-            elif "area" in _norm(col):
-                valor_str = f'<span class="badge-area">{valor}</span>'
-                clase_extra = ''
-            elif "familia" in _norm(col):
-                valor_str = f'<span class="badge-familia">{valor}</span>'
-                clase_extra = ''
-            elif "subfamilia" in _norm(col):
-                valor_str = f'<span class="badge-subfamilia">{valor}</span>'
-                clase_extra = ''
-            elif "fecha" in _norm(col) and pd.api.types.is_datetime64_any_dtype(df_pagina[col]):
-                valor_str = valor.strftime('%d/%m/%Y')
-                clase_extra = ''
-            elif pd.api.types.is_numeric_dtype(df_pagina[col]):
-                if valor == int(valor):
-                    valor_str = f'{valor:,.0f}'
-                else:
-                    valor_str = f'{valor:,.2f}'
-                clase_extra = 'num-col'
-            else:
-                valor_str = str(valor)
-                clase_extra = ''
-            
-            html_tabla += f'<td class="{clase_fija} {clase_extra}">{valor_str}</td>'
-        html_tabla += '</tr>'
-    
-    html_tabla += '</tbody></table>'
-    html_tabla += '<div class="tabla-scroll-indicator" id="scroll-indicator"></div>'
-    html_tabla += '</div></div>'
-    
-    # Renderizar
-    st.markdown(html_tabla, unsafe_allow_html=True)
-    
-    # Script para ocultar indicador al llegar al final del scroll
-    st.markdown("""
-    <script>
-    (function() {
-        const container = document.querySelector('.tabla-scroll-container');
-        const indicator = document.getElementById('scroll-indicator');
-        
-        if (container && indicator) {
-            function checkScroll() {
-                const maxScroll = container.scrollWidth - container.clientWidth;
-                if (container.scrollLeft >= maxScroll - 10) {
-                    indicator.style.opacity = '0';
-                } else {
-                    indicator.style.opacity = '1';
-                }
-            }
-            
-            container.addEventListener('scroll', checkScroll);
-            setTimeout(checkScroll, 500);
-        }
-    })();
-    </script>
-    """, unsafe_allow_html=True)
-
-
-# ---------------------------------------------------------------------------
-# FUNCIÓN PARA RENDERIZAR TABLA DESKTOP (AgGrid) - Tema claro
-# ---------------------------------------------------------------------------
-def renderizar_tabla_desktop(df_grid, grupos_sel, cols_mostrar):
-    """Renderiza tabla AgGrid para escritorio con tema claro."""
+def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte):
+    """Tu AgGrid original con todas las funcionalidades."""
     
     gb = GridOptionsBuilder.from_dataframe(df_grid)
     gb.configure_default_column(
@@ -805,7 +456,7 @@ def renderizar_tabla_desktop(df_grid, grupos_sel, cols_mostrar):
     gb.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
     grid_options = gb.build()
     
-    # Tema claro para AgGrid
+    # Tema claro
     custom_css = {
         ".ag-root-wrapper": {
             "background-color": "#ffffff",
@@ -841,7 +492,9 @@ def renderizar_tabla_desktop(df_grid, grupos_sel, cols_mostrar):
         ".ag-tabs-header": {"background-color": "#f1f5f9"},
     }
     
-    visibles = len(cols_mostrar) - (len([c for c in grupos_sel if c in cols_mostrar]) if agrupar_on else 0)
+    visibles = len(cols_mostrar) - (
+        len([c for c in grupos_sel if c in cols_mostrar]) if agrupar_on else 0
+    )
     ajustar = visibles <= 6
     
     AgGrid(
@@ -854,6 +507,140 @@ def renderizar_tabla_desktop(df_grid, grupos_sel, cols_mostrar):
         allow_unsafe_jscode=True,
         enable_enterprise_modules=True,
         key=f"grid_{reporte}",
+    )
+
+
+# ---------------------------------------------------------------------------
+# FUNCIÓN: Renderizar AgGrid MÓVIL (optimizado para pantallas pequeñas)
+# ---------------------------------------------------------------------------
+def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte):
+    """
+    AgGrid optimizado para móvil que mantiene:
+    - Arrastrar columnas (touch)
+    - Menú contextual (long press)
+    - Ordenar (tap en header)
+    - Filtrar (ícono de filtro)
+    - Columnas fijas (primeras N columnas)
+    - Scroll horizontal nativo
+    """
+    
+    gb = GridOptionsBuilder.from_dataframe(df_grid)
+    
+    # Configuración base para todas las columnas
+    gb.configure_default_column(
+        resizable=True,
+        sortable=True,
+        filter=True,
+        editable=False,
+        groupable=False,          # Sin agrupación en móvil
+        enableRowGroup=False,
+        enablePivot=False,
+        enableValue=False,
+        menuTabs=["filterMenuTab", "generalMenuTab", "columnsMenuTab"],
+    )
+    
+    # Fijar las primeras columnas (típicamente Nombre Producto y Stock)
+    for i, col in enumerate(df_grid.columns):
+        if i < columnas_fijas:
+            gb.configure_column(col, pinned="left")
+        
+        # Formatear columnas numéricas
+        if pd.api.types.is_numeric_dtype(df_grid[col]):
+            af = "avg" if ("precio" in _norm(col) or "promedio" in _norm(col)) else "sum"
+            gb.configure_column(
+                col,
+                aggFunc=af,
+                type=["numericColumn"],
+                valueFormatter="x == null ? '' : x.toLocaleString()",
+            )
+    
+    # Opciones de grid optimizadas para móvil
+    opciones_grid = {
+        "localeText": LOCALE_ES,
+        # Columnas
+        "enableCellTextSelection": False,
+        "ensureDomOrder": True,
+        "suppressColumnVirtualisation": True,
+        "suppressDragLeaveHidesColumns": True,
+        # Filas
+        "suppressRowVirtualisation": False,
+        "rowHeight": 44,                      # Altura cómoda para dedos
+        "headerHeight": 40,
+        # Interacción táctil
+        "enableRangeSelection": False,
+        "enableCellChangeFlash": False,
+        "animateRows": False,                 # Mejor rendimiento
+        "suppressClickEdit": True,
+        # Scroll
+        "suppressScrollOnNewData": True,
+        "enableBrowserTooltips": False,       # Sin tooltips en móvil
+        # Panel lateral deshabilitado
+        "sideBar": False,
+        "statusBar": {
+            "statusPanels": [
+                {"statusPanel": "agTotalRowCountComponent", "align": "left"},
+            ],
+        },
+        # Menú contextual
+        "allowContextMenuWithControlKey": False,
+        "suppressContextMenu": False,
+        # Paginación
+        "pagination": True,
+        "paginationAutoPageSize": False,
+        "paginationPageSize": 25,
+    }
+    
+    gb.configure_grid_options(**opciones_grid)
+    gb.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=25)
+    grid_options = gb.build()
+    
+    # Tema claro para móvil
+    custom_css = {
+        ".ag-root-wrapper": {
+            "background-color": "#ffffff",
+            "border": "1px solid #e2e8f0",
+            "border-radius": "8px",
+        },
+        ".ag-header": {
+            "background-color": "#f1f5f9",
+            "border-bottom": "2px solid #3b82f6",
+        },
+        ".ag-header-cell-text": {"color": "#1e293b", "font-weight": "700"},
+        ".ag-row": {"color": "#334155", "border-color": "#e2e8f0"},
+        ".ag-row-even": {"background-color": "#ffffff"},
+        ".ag-row-odd": {"background-color": "#f8fafc"},
+        ".ag-row-hover": {"background-color": "#eff6ff !important"},
+        ".ag-cell": {"color": "#334155"},
+        ".ag-paging-panel": {
+            "color": "#64748b",
+            "background-color": "#f8fafc",
+            "border-top": "1px solid #e2e8f0",
+            "font-size": "0.75rem",
+        },
+        ".ag-menu": {
+            "background-color": "#ffffff",
+            "color": "#1e293b",
+            "border": "1px solid #e2e8f0",
+        },
+        ".ag-tabs-header": {"background-color": "#f1f5f9"},
+        ".ag-pinned-left-header": {
+            "box-shadow": "3px 0 8px rgba(0,0,0,0.08)",
+        },
+        ".ag-pinned-left-cols-container": {
+            "box-shadow": "3px 0 8px rgba(0,0,0,0.08)",
+        },
+    }
+    
+    AgGrid(
+        df_grid.head(3000),
+        gridOptions=grid_options,
+        height=380,
+        theme="balham",
+        custom_css=custom_css,
+        fit_columns_on_grid_load=False,  # Permitir scroll horizontal
+        allow_unsafe_jscode=True,
+        enable_enterprise_modules=True,
+        key=f"grid_movil_{reporte}",
     )
 
 
@@ -907,7 +694,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Toggle para vista móvil
+    # Toggle para forzar vista móvil
     with st.expander("🔧 Modo vista"):
         if 'forzar_movil' not in st.session_state:
             st.session_state.forzar_movil = False
@@ -930,7 +717,7 @@ if df is None or df.empty:
 st.subheader(reporte)
 
 # ---------------------------------------------------------------------------
-# DETERMINAR COLUMNAS DE FILTRO
+# DETERMINAR COLUMNAS
 # ---------------------------------------------------------------------------
 if "fecha" in cfg:
     col_fecha = buscar_columna(df, cfg["fecha"]) if cfg["fecha"] else None
@@ -957,7 +744,7 @@ if "buscador" in cfg and cfg["buscador"] and not col_busc:
     faltantes_aviso.append(cfg["buscador"])
 
 # ---------------------------------------------------------------------------
-# PROCESAMIENTO DE DATOS
+# PROCESAMIENTO
 # ---------------------------------------------------------------------------
 df_f = df.copy()
 if col_fecha:
@@ -965,6 +752,7 @@ if col_fecha:
 
 todas_cols = df_f.columns.tolist()
 
+# Columnas por defecto
 if "columnas" in cfg:
     sugeridas, faltan_cols = resolver_columnas(df_f, cfg["columnas"])
 else:
@@ -982,6 +770,7 @@ else:
         sugeridas = todas_cols[:8]
     sugeridas = sugeridas[:8]
 
+# Columnas para agrupar
 if "agrupar" in cfg:
     cols_agrupar, _ = resolver_columnas(df_f, cfg["agrupar"])
 else:
@@ -1060,25 +849,38 @@ if controles:
                     )
 
 # ---------------------------------------------------------------------------
-# AVISOS Y SELECTOR DE COLUMNAS
+# AVISOS
 # ---------------------------------------------------------------------------
 if faltantes_aviso:
     st.caption("⚠️ No se encontraron estas columnas: " + ", ".join(faltantes_aviso) + ".")
 if "columnas" in cfg and faltan_cols:
     st.caption("⚠️ Columnas no encontradas: " + ", ".join(faltan_cols))
 
-with st.expander("⚙️ Configuración de columnas"):
-    cols_mostrar = st.multiselect(
-        "Seleccionar columnas visibles",
-        todas_cols,
-        default=sugeridas,
-        key=f"cols_{reporte}",
-        label_visibility="collapsed",
-        placeholder="Selecciona columnas",
-    )
+# ---------------------------------------------------------------------------
+# SELECTOR DE COLUMNAS (solo en desktop)
+# ---------------------------------------------------------------------------
+usa_vista_movil = st.session_state.get('forzar_movil', False)
+tiene_config_movil = "columnas_movil" in cfg
+usa_vista_movil = usa_vista_movil or tiene_config_movil
 
-if not cols_mostrar:
-    cols_mostrar = sugeridas
+if not usa_vista_movil:
+    with st.expander("⚙️ Configuración de columnas"):
+        cols_mostrar = st.multiselect(
+            "Seleccionar columnas visibles",
+            todas_cols,
+            default=sugeridas,
+            key=f"cols_{reporte}",
+            label_visibility="collapsed",
+            placeholder="Selecciona columnas",
+        )
+    if not cols_mostrar:
+        cols_mostrar = sugeridas
+else:
+    # En móvil, usar columnas predefinidas
+    cols_mostrar_movil, _ = resolver_columnas(df_f, cfg["columnas_movil"])
+    if not cols_mostrar_movil:
+        cols_mostrar_movil = sugeridas[:5]
+    cols_mostrar = cols_mostrar_movil
 
 # ---------------------------------------------------------------------------
 # CONTADOR
@@ -1093,43 +895,19 @@ if df_f.empty:
     st.stop()
 
 # ---------------------------------------------------------------------------
-# MODO VISTA
-# ---------------------------------------------------------------------------
-usa_vista_movil = st.session_state.get('forzar_movil', False)
-tiene_config_movil = (
-    "columnas_fijas_movil" in cfg and 
-    "columnas_scroll_movil" in cfg
-)
-usa_vista_movil = usa_vista_movil or tiene_config_movil
-
-# ---------------------------------------------------------------------------
-# RENDERIZAR TABLA
+# RENDERIZAR TABLA SEGÚN MODO
 # ---------------------------------------------------------------------------
 if usa_vista_movil and tiene_config_movil:
-    # VISTA MÓVIL
-    columnas_fijas_reales = []
-    for col in cfg["columnas_fijas_movil"]:
-        real = buscar_columna(df_f, col)
-        if real and real not in columnas_fijas_reales:
-            columnas_fijas_reales.append(real)
+    # ============ MÓVIL: AgGrid optimizado ============
+    st.caption("📱 Vista móvil: Desliza para ver más columnas • Mantén presionado para menú")
     
-    columnas_scroll_reales = []
-    for col in cfg["columnas_scroll_movil"]:
-        real = buscar_columna(df_f, col)
-        if real and real not in columnas_scroll_reales:
-            columnas_scroll_reales.append(real)
+    columnas_fijas = cfg.get("columnas_fijas_movil", 2)
+    df_grid_movil = df_f[cols_mostrar]
     
-    columnas_ordenadas = columnas_fijas_reales + columnas_scroll_reales
-    
-    if not columnas_ordenadas:
-        columnas_ordenadas = todas_cols
-        columnas_fijas_reales = todas_cols[:min(3, len(todas_cols))]
-    
-    df_tabla = df_f[columnas_ordenadas]
-    renderizar_tabla_movil(df_tabla, columnas_ordenadas, columnas_fijas_reales)
+    renderizar_aggrid_movil(df_grid_movil, columnas_fijas, reporte)
 
 else:
-    # VISTA DESKTOP
+    # ============ DESKTOP: AgGrid completo ============
     cols_finales = list(cols_mostrar)
     agrupar_on = bool(grupos_sel)
     if agrupar_on:
@@ -1138,10 +916,10 @@ else:
                 cols_finales.append(c)
     
     df_grid = df_f[cols_finales]
-    renderizar_tabla_desktop(df_grid, grupos_sel, cols_mostrar)
+    renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte)
 
 # ---------------------------------------------------------------------------
-# GRÁFICO DE BARRAS - Tema claro
+# GRÁFICO
 # ---------------------------------------------------------------------------
 st.markdown("---")
 st.subheader("📈 Visualización")
