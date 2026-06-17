@@ -9,25 +9,157 @@ from streamlit_option_menu import option_menu
 st.set_page_config(page_title="Reportes", page_icon="📊", layout="wide")
 
 # ---------------------------------------------------------------------------
-# CSS GLOBAL - Incluye media queries para móvil
+# CSS GLOBAL - TEMA CLARO MODERNO
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
-/* ============ ESTILOS BASE (ESCRITORIO) ============ */
-[data-testid="stAppViewContainer"] { background: #0f1117; }
-[data-testid="stSidebar"] { background: #0d1424; border-right: 1px solid #1e3a5f; }
-html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #e2e8f0; }
-h1 { color: #f8fafc !important; font-size: 1.6rem !important; font-weight: 700 !important; }
-h2, h3 { color: #93c5fd !important; font-weight: 600 !important; }
-h4 { color: #60a5fa !important; font-weight: 600 !important; }
-label { color: #94a3b8 !important; font-size: 0.78rem !important; text-transform: uppercase; }
+/* ============ PALETA DE COLORES ============ */
+:root {
+    --bg-primary: #f8fafc;
+    --bg-secondary: #ffffff;
+    --bg-sidebar: #f1f5f9;
+    --bg-card: #ffffff;
+    --bg-hover: #e2e8f0;
+    --text-primary: #1e293b;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --accent-light: #dbeafe;
+    --border: #e2e8f0;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.03);
+}
+
+/* ============ ESTILOS BASE ============ */
+[data-testid="stAppViewContainer"] { 
+    background: var(--bg-primary); 
+}
+
+[data-testid="stSidebar"] { 
+    background: var(--bg-sidebar); 
+    border-right: 1px solid var(--border); 
+}
+
+html, body, [class*="css"] { 
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; 
+    color: var(--text-primary); 
+}
+
+h1 { 
+    color: var(--text-primary) !important; 
+    font-size: 1.6rem !important; 
+    font-weight: 700 !important; 
+}
+
+h2, h3 { 
+    color: var(--text-primary) !important; 
+    font-weight: 600 !important; 
+}
+
+h4 { 
+    color: var(--accent) !important; 
+    font-weight: 600 !important; 
+}
+
+label { 
+    color: var(--text-secondary) !important; 
+    font-size: 0.78rem !important; 
+    text-transform: uppercase; 
+    font-weight: 600 !important;
+}
+
+/* Inputs y selectores */
+.stSelectbox > div > div, 
+.stMultiSelect > div > div,
+.stDateInput > div > div {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+}
+
+.stSelectbox > div > div:hover,
+.stMultiSelect > div > div:hover {
+    border-color: var(--accent) !important;
+}
+
+/* Botones */
+button[kind="secondary"] {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text-primary) !important;
+    border-radius: 8px !important;
+}
+
+button[kind="secondary"]:hover {
+    background: var(--bg-hover) !important;
+    border-color: var(--accent) !important;
+}
+
+button[kind="primary"] {
+    background: var(--accent) !important;
+    border: none !important;
+    color: white !important;
+    border-radius: 8px !important;
+}
+
+button[kind="primary"]:hover {
+    background: var(--accent-hover) !important;
+}
+
+/* Expander */
+.streamlit-expanderHeader {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    color: var(--text-primary) !important;
+}
+
+.streamlit-expanderContent {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-top: none !important;
+    border-radius: 0 0 8px 8px !important;
+}
+
+/* Caption */
+.stCaption {
+    color: var(--text-muted) !important;
+}
+
+/* Warning */
+.stWarning {
+    background: #fef3c7 !important;
+    border: 1px solid #fcd34d !important;
+    color: #92400e !important;
+    border-radius: 8px !important;
+}
+
+/* Info */
+.stInfo {
+    background: var(--accent-light) !important;
+    border: 1px solid #93c5fd !important;
+    color: #1e40af !important;
+    border-radius: 8px !important;
+}
+
+/* Error */
+.stError {
+    background: #fee2e2 !important;
+    border: 1px solid #fca5a5 !important;
+    color: #991b1b !important;
+    border-radius: 8px !important;
+}
 
 /* ============ ESTILOS MÓVIL (pantallas ≤ 768px) ============ */
 @media screen and (max-width: 768px) {
     h1 { font-size: 1.3rem !important; }
     h2 { font-size: 1.1rem !important; }
     h3 { font-size: 1rem !important; }
-    label { font-size: 0.75rem !important; }
+    label { font-size: 0.7rem !important; }
     
     .stApp { padding: 0.5rem !important; }
     .block-container { padding: 1rem 0.5rem !important; }
@@ -38,34 +170,25 @@ label { color: #94a3b8 !important; font-size: 0.78rem !important; text-transform
         font-size: 0.9rem !important;
     }
     
-    .stSelectbox, .stMultiselect { font-size: 0.9rem !important; }
-    
     [data-testid="stSidebar"] { 
         width: 100% !important;
         max-width: 100% !important;
     }
     
     .js-plotly-plot { max-height: 300px !important; }
-    
-    .stDateInput, .stMultiSelect { margin-bottom: 0.3rem !important; }
-    
-    .streamlit-expanderHeader { font-size: 0.9rem !important; padding: 0.5rem !important; }
 }
 
-@media screen and (max-width: 480px) {
-    h1 { font-size: 1.2rem !important; }
-    .optional-desktop { display: none !important; }
-}
-
-/* ============ ESTILOS PARA TABLA MÓVIL CON SCROLL ============ */
+/* ============ TABLA MÓVIL CON SCROLL - TEMA CLARO ============ */
 .tabla-scroll-container {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     max-width: 100%;
-    border-radius: 8px;
-    border: 1px solid #1e3a5f;
+    border-radius: 12px;
+    border: 1px solid var(--border);
     position: relative;
-    margin: 8px 0;
+    margin: 12px 0;
+    box-shadow: var(--shadow-md);
+    background: var(--bg-card);
 }
 
 .tabla-scroll-wrapper {
@@ -78,7 +201,7 @@ label { color: #94a3b8 !important; font-size: 0.78rem !important; text-transform
     right: 0;
     top: 50%;
     transform: translateY(-50%);
-    background: linear-gradient(90deg, transparent, #0f1117);
+    background: linear-gradient(90deg, transparent, rgba(248, 250, 252, 0.9));
     padding: 20px 15px;
     pointer-events: none;
     z-index: 10;
@@ -92,7 +215,7 @@ label { color: #94a3b8 !important; font-size: 0.78rem !important; text-transform
 }
 
 @keyframes pulse {
-    0%, 100% { opacity: 0.5; }
+    0%, 100% { opacity: 0.4; }
     50% { opacity: 1; }
 }
 
@@ -104,24 +227,27 @@ label { color: #94a3b8 !important; font-size: 0.78rem !important; text-transform
 }
 
 .tabla-movil th {
-    background: #111c33;
-    color: #93c5fd;
-    font-weight: 600;
-    padding: 12px 16px;
+    background: #f1f5f9;
+    color: #1e293b;
+    font-weight: 700;
+    padding: 14px 18px;
     text-align: left;
-    border-bottom: 2px solid #2563eb;
+    border-bottom: 2px solid #3b82f6;
     white-space: nowrap;
     position: sticky;
     top: 0;
     z-index: 5;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .tabla-movil th.col-fija {
     position: sticky;
     left: 0;
-    background: #111c33;
+    background: #f1f5f9;
     z-index: 10;
-    box-shadow: 2px 0 5px rgba(0,0,0,0.3);
+    box-shadow: 3px 0 8px rgba(0, 0, 0, 0.06);
 }
 
 .tabla-movil td.col-fija {
@@ -129,30 +255,31 @@ label { color: #94a3b8 !important; font-size: 0.78rem !important; text-transform
     left: 0;
     background: inherit;
     z-index: 5;
-    box-shadow: 2px 0 5px rgba(0,0,0,0.3);
+    box-shadow: 3px 0 8px rgba(0, 0, 0, 0.06);
+    font-weight: 500;
 }
 
 .tabla-movil td {
-    padding: 12px 16px;
-    border-bottom: 1px solid #1e2535;
+    padding: 14px 18px;
+    border-bottom: 1px solid #e2e8f0;
     white-space: nowrap;
-    color: #e2e8f0;
+    color: #334155;
 }
 
 .tabla-movil tr {
-    transition: background-color 0.2s;
+    transition: background-color 0.15s;
 }
 
 .tabla-movil tr:hover td {
-    background-color: #1e3a5f !important;
+    background-color: #eff6ff !important;
 }
 
 .tabla-movil tr:nth-child(even) td {
-    background-color: #0f1117;
+    background-color: #ffffff;
 }
 
 .tabla-movil tr:nth-child(odd) td {
-    background-color: #0d1424;
+    background-color: #f8fafc;
 }
 
 .tabla-movil .num-col {
@@ -160,47 +287,77 @@ label { color: #94a3b8 !important; font-size: 0.78rem !important; text-transform
     font-variant-numeric: tabular-nums;
 }
 
+/* Badges */
 .badge-area {
     display: inline-block;
-    background: #1e3a5f;
-    color: #60a5fa;
-    padding: 2px 10px;
+    background: #dbeafe;
+    color: #1e40af;
+    padding: 3px 12px;
     border-radius: 20px;
     font-size: 0.75rem;
     white-space: nowrap;
+    font-weight: 500;
 }
 
 .badge-familia {
     display: inline-block;
-    background: #1e293b;
-    color: #94a3b8;
-    padding: 2px 10px;
+    background: #e0e7ff;
+    color: #3730a3;
+    padding: 3px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.badge-subfamilia {
+    display: inline-block;
+    background: #f1f5f9;
+    color: #475569;
+    padding: 3px 12px;
     border-radius: 20px;
     font-size: 0.75rem;
     white-space: nowrap;
 }
 
+/* Estados de stock */
 .stock-bajo {
-    color: #ef4444 !important;
+    color: #dc2626 !important;
+    font-weight: 700;
+    background: #fef2f2;
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+.stock-normal {
+    color: #059669 !important;
     font-weight: 600;
 }
 
+.stock-alto {
+    color: #0891b2 !important;
+    font-weight: 600;
+}
+
+/* Valorizado */
 .valor-destacado {
-    color: #22c55e !important;
-    font-weight: 600;
+    color: #059669 !important;
+    font-weight: 700;
 }
 
+/* Swipe hint */
 .swipe-hint {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 8px;
+    gap: 10px;
+    padding: 10px;
     color: #64748b;
-    font-size: 0.75rem;
-    background: #111c33;
-    border-radius: 8px;
-    margin-bottom: 8px;
+    font-size: 0.8rem;
+    background: #f1f5f9;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    border: 1px solid #e2e8f0;
 }
 
 @keyframes swipe-animation {
@@ -211,6 +368,25 @@ label { color: #94a3b8 !important; font-size: 0.78rem !important; text-transform
 .swipe-icon {
     animation: swipe-animation 1.5s infinite;
     font-size: 1.2rem;
+}
+
+/* Estilos para el sidebar option_menu */
+[data-testid="stSidebar"] .nav-link {
+    background: #ffffff !important;
+    color: #475569 !important;
+    border: 1px solid #e2e8f0 !important;
+}
+
+[data-testid="stSidebar"] .nav-link:hover {
+    background: #eff6ff !important;
+    color: #2563eb !important;
+    border-color: #93c5fd !important;
+}
+
+[data-testid="stSidebar"] .nav-link-selected {
+    background: #3b82f6 !important;
+    color: #ffffff !important;
+    border-color: #3b82f6 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -375,14 +551,6 @@ BUCKET = st.secrets["R2_BUCKET"]
 
 # ---------------------------------------------------------------------------
 # Configuracion por reporte.
-#   archivo / icono  -> obligatorios
-#   columnas         -> columnas a mostrar por defecto (en ese orden)
-#   filtros_cat      -> multiselects en cascada en la parte superior
-#   buscador         -> columna con buscador multiple (tipo Excel)
-#   fecha            -> columna de fecha (None = sin filtro de fecha)
-#   agrupar          -> jerarquia para agrupar con +/- (tabla dinamica)
-#   columnas_fijas_movil  -> columnas que quedan fijas en vista movil
-#   columnas_scroll_movil -> columnas que se ven al deslizar en movil
 # ---------------------------------------------------------------------------
 REPORTES = {
     "Ajuste de Inventario": {
@@ -454,7 +622,6 @@ def renderizar_tabla_movil(df_f, columnas_ordenadas, columnas_fijas_reales):
     if 'pagina_actual' not in st.session_state:
         st.session_state.pagina_actual = 1
     
-    # Resetear página si cambia el reporte
     if 'reporte_anterior' not in st.session_state:
         st.session_state.reporte_anterior = None
     if st.session_state.reporte_anterior != reporte:
@@ -464,7 +631,7 @@ def renderizar_tabla_movil(df_f, columnas_ordenadas, columnas_fijas_reales):
     # Indicador de swipe
     st.markdown("""
     <div class="swipe-hint">
-        <span>Desliza para ver más columnas</span>
+        <span>👈 Desliza para ver más columnas</span>
         <span class="swipe-icon">👆</span>
     </div>
     """, unsafe_allow_html=True)
@@ -472,15 +639,15 @@ def renderizar_tabla_movil(df_f, columnas_ordenadas, columnas_fijas_reales):
     # Controles de paginación
     col1, col2, col3, col4 = st.columns([1, 1, 2, 1])
     with col1:
-        if st.button("⬅️", disabled=st.session_state.pagina_actual == 1, key="btn_prev"):
+        if st.button("◀", disabled=st.session_state.pagina_actual == 1, key="btn_prev"):
             st.session_state.pagina_actual -= 1
             st.rerun()
     with col2:
-        if st.button("➡️", disabled=st.session_state.pagina_actual == total_paginas, key="btn_next"):
+        if st.button("▶", disabled=st.session_state.pagina_actual == total_paginas, key="btn_next"):
             st.session_state.pagina_actual += 1
             st.rerun()
     with col3:
-        st.caption(f"Pág. {st.session_state.pagina_actual} de {total_paginas} • {total_filas} filas")
+        st.caption(f"Pág. {st.session_state.pagina_actual} de {total_paginas} • {total_filas} productos")
     with col4:
         st.caption(f"{FILAS_POR_PAGINA} por pág.")
     
@@ -511,24 +678,33 @@ def renderizar_tabla_movil(df_f, columnas_ordenadas, columnas_fijas_reales):
             
             # Formatear según tipo de columna
             if pd.isna(valor):
-                valor_str = '-'
+                valor_str = '<span style="color: #94a3b8;">—</span>'
                 clase_extra = ''
             elif "valorizado" in _norm(col):
-                valor_str = f'S/ {valor:,.2f}'
+                valor_str = f'S/ <strong>{valor:,.2f}</strong>'
                 clase_extra = 'num-col valor-destacado'
             elif "precio" in _norm(col) or "promedio" in _norm(col):
                 valor_str = f'S/ {valor:,.2f}'
                 clase_extra = 'num-col'
             elif "stock" in _norm(col):
-                valor_str = f'{valor:,.0f}'
+                if isinstance(valor, (int, float)):
+                    if valor < 10:
+                        valor_str = f'<span class="stock-bajo">{valor:,.0f}</span>'
+                    elif valor > 100:
+                        valor_str = f'<span class="stock-alto">{valor:,.0f}</span>'
+                    else:
+                        valor_str = f'<span class="stock-normal">{valor:,.0f}</span>'
+                else:
+                    valor_str = str(valor)
                 clase_extra = 'num-col'
-                if isinstance(valor, (int, float)) and valor < 10:
-                    clase_extra += ' stock-bajo'
             elif "area" in _norm(col):
                 valor_str = f'<span class="badge-area">{valor}</span>'
                 clase_extra = ''
             elif "familia" in _norm(col):
                 valor_str = f'<span class="badge-familia">{valor}</span>'
+                clase_extra = ''
+            elif "subfamilia" in _norm(col):
+                valor_str = f'<span class="badge-subfamilia">{valor}</span>'
                 clase_extra = ''
             elif "fecha" in _norm(col) and pd.api.types.is_datetime64_any_dtype(df_pagina[col]):
                 valor_str = valor.strftime('%d/%m/%Y')
@@ -571,7 +747,6 @@ def renderizar_tabla_movil(df_f, columnas_ordenadas, columnas_fijas_reales):
             }
             
             container.addEventListener('scroll', checkScroll);
-            // Verificar estado inicial
             setTimeout(checkScroll, 500);
         }
     })();
@@ -580,10 +755,10 @@ def renderizar_tabla_movil(df_f, columnas_ordenadas, columnas_fijas_reales):
 
 
 # ---------------------------------------------------------------------------
-# FUNCIÓN PARA RENDERIZAR TABLA DESKTOP (AgGrid)
+# FUNCIÓN PARA RENDERIZAR TABLA DESKTOP (AgGrid) - Tema claro
 # ---------------------------------------------------------------------------
 def renderizar_tabla_desktop(df_grid, grupos_sel, cols_mostrar):
-    """Renderiza tabla AgGrid para escritorio."""
+    """Renderiza tabla AgGrid para escritorio con tema claro."""
     
     gb = GridOptionsBuilder.from_dataframe(df_grid)
     gb.configure_default_column(
@@ -597,7 +772,7 @@ def renderizar_tabla_desktop(df_grid, grupos_sel, cols_mostrar):
         enableValue=True,
     )
     
-    # Agregaciones: promedio para "precio/promedio", suma para el resto
+    # Agregaciones
     for c in df_grid.columns:
         if pd.api.types.is_numeric_dtype(df_grid[c]):
             af = "avg" if ("precio" in _norm(c) or "promedio" in _norm(c)) else "sum"
@@ -630,25 +805,40 @@ def renderizar_tabla_desktop(df_grid, grupos_sel, cols_mostrar):
     gb.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
     grid_options = gb.build()
     
-    # Tema oscuro
+    # Tema claro para AgGrid
     custom_css = {
-        ".ag-root-wrapper": {"background-color": "#0d1424", "border": "1px solid #1e3a5f"},
-        ".ag-header": {"background-color": "#111c33", "border-bottom": "1px solid #1e3a5f"},
-        ".ag-header-cell-text": {"color": "#93c5fd", "font-weight": "600"},
-        ".ag-row": {"color": "#e2e8f0", "border-color": "#1e2535"},
-        ".ag-row-even": {"background-color": "#0f1117"},
-        ".ag-row-odd": {"background-color": "#0d1424"},
-        ".ag-row-hover": {"background-color": "#1e3a5f !important"},
-        ".ag-cell": {"color": "#e2e8f0"},
-        ".ag-group-value": {"color": "#e2e8f0"},
-        ".ag-paging-panel": {
-            "color": "#cbd5e1",
-            "background-color": "#0d1424",
-            "border-top": "1px solid #1e3a5f",
+        ".ag-root-wrapper": {
+            "background-color": "#ffffff",
+            "border": "1px solid #e2e8f0",
+            "border-radius": "8px",
         },
-        ".ag-side-bar": {"background-color": "#0d1424", "border-color": "#1e3a5f"},
-        ".ag-status-bar": {"background-color": "#0d1424"},
-        ".ag-menu": {"background-color": "#111c33", "color": "#e2e8f0"},
+        ".ag-header": {
+            "background-color": "#f1f5f9",
+            "border-bottom": "2px solid #3b82f6",
+        },
+        ".ag-header-cell-text": {"color": "#1e293b", "font-weight": "700"},
+        ".ag-row": {"color": "#334155", "border-color": "#e2e8f0"},
+        ".ag-row-even": {"background-color": "#ffffff"},
+        ".ag-row-odd": {"background-color": "#f8fafc"},
+        ".ag-row-hover": {"background-color": "#eff6ff !important"},
+        ".ag-cell": {"color": "#334155"},
+        ".ag-group-value": {"color": "#1e293b", "font-weight": "600"},
+        ".ag-paging-panel": {
+            "color": "#64748b",
+            "background-color": "#f8fafc",
+            "border-top": "1px solid #e2e8f0",
+        },
+        ".ag-side-bar": {
+            "background-color": "#f8fafc",
+            "border-color": "#e2e8f0",
+        },
+        ".ag-status-bar": {"background-color": "#f8fafc"},
+        ".ag-menu": {
+            "background-color": "#ffffff",
+            "color": "#1e293b",
+            "border": "1px solid #e2e8f0",
+        },
+        ".ag-tabs-header": {"background-color": "#f1f5f9"},
     }
     
     visibles = len(cols_mostrar) - (len([c for c in grupos_sel if c in cols_mostrar]) if agrupar_on else 0)
@@ -673,7 +863,7 @@ def renderizar_tabla_desktop(df_grid, grupos_sel, cols_mostrar):
 st.title("📊 Panel de Reportes")
 
 # ---------------------------------------------------------------------------
-# SIDEBAR - Menú de navegación
+# SIDEBAR
 # ---------------------------------------------------------------------------
 with st.sidebar:
     if st.button("🔄 Actualizar datos", use_container_width=True):
@@ -689,29 +879,35 @@ with st.sidebar:
         menu_icon="bar-chart-fill",
         default_index=0,
         styles={
-            "container": {"padding": "4px", "background-color": "#0d1424"},
+            "container": {"padding": "4px", "background-color": "#f1f5f9"},
             "menu-title": {
-                "color": "#60a5fa",
+                "color": "#475569",
                 "font-size": "13px",
                 "text-transform": "uppercase",
                 "letter-spacing": "1px",
+                "font-weight": "700",
             },
-            "icon": {"color": "#60a5fa", "font-size": "18px"},
+            "icon": {"color": "#3b82f6", "font-size": "18px"},
             "nav-link": {
                 "font-size": "14px",
-                "color": "#cbd5e1",
-                "background-color": "#111c33",
+                "color": "#475569",
+                "background-color": "#ffffff",
                 "margin": "5px 0",
                 "border-radius": "8px",
-                "--hover-color": "#1e3a5f",
+                "--hover-color": "#eff6ff",
+                "border": "1px solid #e2e8f0",
             },
-            "nav-link-selected": {"background-color": "#2563eb", "color": "#ffffff"},
+            "nav-link-selected": {
+                "background-color": "#3b82f6",
+                "color": "#ffffff",
+                "border": "1px solid #3b82f6",
+            },
         },
     )
     
     st.markdown("---")
     
-    # Toggle para forzar vista móvil (solo en desarrollo)
+    # Toggle para vista móvil
     with st.expander("🔧 Modo vista"):
         if 'forzar_movil' not in st.session_state:
             st.session_state.forzar_movil = False
@@ -769,7 +965,6 @@ if col_fecha:
 
 todas_cols = df_f.columns.tolist()
 
-# Columnas por defecto a mostrar
 if "columnas" in cfg:
     sugeridas, faltan_cols = resolver_columnas(df_f, cfg["columnas"])
 else:
@@ -787,14 +982,13 @@ else:
         sugeridas = todas_cols[:8]
     sugeridas = sugeridas[:8]
 
-# Columnas disponibles para agrupar
 if "agrupar" in cfg:
     cols_agrupar, _ = resolver_columnas(df_f, cfg["agrupar"])
 else:
     cols_agrupar = [c for c in cat_cols if c]
 
 # ---------------------------------------------------------------------------
-# CONTROLES DE FILTRO (organizados en filas de máximo 2)
+# CONTROLES DE FILTRO
 # ---------------------------------------------------------------------------
 controles = []
 if col_fecha and df_f[col_fecha].notna().any():
@@ -863,16 +1057,15 @@ if controles:
                         default=[],
                         key=f"grp_{reporte}_{i}_{j}",
                         placeholder="Sin agrupar",
-                        help="Una o varias columnas; cada una tendrá su propio +/-",
                     )
 
 # ---------------------------------------------------------------------------
 # AVISOS Y SELECTOR DE COLUMNAS
 # ---------------------------------------------------------------------------
 if faltantes_aviso:
-    st.caption("⚠️ No se encontraron estas columnas en el archivo: " + ", ".join(faltantes_aviso) + ".")
+    st.caption("⚠️ No se encontraron estas columnas: " + ", ".join(faltantes_aviso) + ".")
 if "columnas" in cfg and faltan_cols:
-    st.caption("⚠️ Columnas configuradas no encontradas: " + ", ".join(faltan_cols))
+    st.caption("⚠️ Columnas no encontradas: " + ", ".join(faltan_cols))
 
 with st.expander("⚙️ Configuración de columnas"):
     cols_mostrar = st.multiselect(
@@ -888,7 +1081,7 @@ if not cols_mostrar:
     cols_mostrar = sugeridas
 
 # ---------------------------------------------------------------------------
-# CONTADOR DE FILAS
+# CONTADOR
 # ---------------------------------------------------------------------------
 if len(df_f) != len(df):
     st.caption(f"📊 Mostrando {len(df_f):,} de {len(df):,} filas (filtrado)")
@@ -900,27 +1093,20 @@ if df_f.empty:
     st.stop()
 
 # ---------------------------------------------------------------------------
-# DETERMINAR QUÉ VISTA USAR (MÓVIL O DESKTOP)
+# MODO VISTA
 # ---------------------------------------------------------------------------
 usa_vista_movil = st.session_state.get('forzar_movil', False)
-
-# También se puede activar automáticamente para reportes con config móvil
 tiene_config_movil = (
     "columnas_fijas_movil" in cfg and 
     "columnas_scroll_movil" in cfg
 )
-
-# Para este ejemplo, usamos vista móvil si está forzado O si tiene config
-# En producción, podrías detectar el viewport con JavaScript
 usa_vista_movil = usa_vista_movil or tiene_config_movil
 
 # ---------------------------------------------------------------------------
-# RENDERIZAR TABLA SEGÚN MODO
+# RENDERIZAR TABLA
 # ---------------------------------------------------------------------------
 if usa_vista_movil and tiene_config_movil:
-    # --- VISTA MÓVIL: Tabla con scroll horizontal ---
-    
-    # Resolver columnas fijas y scroll
+    # VISTA MÓVIL
     columnas_fijas_reales = []
     for col in cfg["columnas_fijas_movil"]:
         real = buscar_columna(df_f, col)
@@ -933,22 +1119,17 @@ if usa_vista_movil and tiene_config_movil:
         if real and real not in columnas_scroll_reales:
             columnas_scroll_reales.append(real)
     
-    # Unir todas las columnas en orden: fijas + scroll
     columnas_ordenadas = columnas_fijas_reales + columnas_scroll_reales
     
-    # Si no se encontró ninguna columna, usar todas las disponibles
     if not columnas_ordenadas:
         columnas_ordenadas = todas_cols
         columnas_fijas_reales = todas_cols[:min(3, len(todas_cols))]
     
-    # Ordenar df según columnas_ordenadas
     df_tabla = df_f[columnas_ordenadas]
-    
     renderizar_tabla_movil(df_tabla, columnas_ordenadas, columnas_fijas_reales)
 
 else:
-    # --- VISTA DESKTOP: AgGrid ---
-    
+    # VISTA DESKTOP
     cols_finales = list(cols_mostrar)
     agrupar_on = bool(grupos_sel)
     if agrupar_on:
@@ -960,7 +1141,7 @@ else:
     renderizar_tabla_desktop(df_grid, grupos_sel, cols_mostrar)
 
 # ---------------------------------------------------------------------------
-# GRÁFICO DE BARRAS
+# GRÁFICO DE BARRAS - Tema claro
 # ---------------------------------------------------------------------------
 st.markdown("---")
 st.subheader("📈 Visualización")
@@ -988,18 +1169,22 @@ if cols_num and cols_txt:
             x=eje_x,
             y=eje_y,
             title=f"{eje_y} por {eje_x} (top 20)",
-            color_discrete_sequence=["#2563eb"],
+            color_discrete_sequence=["#3b82f6"],
         )
         
         fig.update_layout(
-            paper_bgcolor="#0f1117",
-            plot_bgcolor="#0f1117",
-            font_color="#e2e8f0",
+            paper_bgcolor="#f8fafc",
+            plot_bgcolor="#ffffff",
+            font_color="#1e293b",
             margin=dict(l=20, r=20, t=40, b=20),
             xaxis_tickangle=-45,
             height=400,
             dragmode=False,
+            xaxis=dict(gridcolor="#e2e8f0"),
+            yaxis=dict(gridcolor="#e2e8f0"),
         )
+        
+        fig.update_traces(marker_line_color="#2563eb", marker_line_width=1)
         
         st.plotly_chart(fig, use_container_width=True)
         
