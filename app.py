@@ -65,11 +65,11 @@ header[data-testid="stHeader"] {
 
 /* ============ BOTÓN PARA EXPANDIR EL SIDEBAR ============ */
 /* FIX 2: forzar visibilidad y dar contraste al botón que abre el sidebar.
-   Se apunta a varios testid porque cambian segun la version de Streamlit. */
-[data-testid="stSidebarCollapsedControl"],
-[data-testid="stExpandSidebarButton"],
+   Se usa coincidencia parcial (*=) para cubrir cualquier nombre de testid
+   segun la version de Streamlit, sin afectar a los expanders normales. */
+[data-testid*="SidebarCollaps"],
 [data-testid="collapsedControl"],
-[data-testid="stSidebarCollapseButton"] {
+[data-testid*="xpandSidebar"] {
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
@@ -77,11 +77,14 @@ header[data-testid="stHeader"] {
 }
 
 /* Botón bien visible: pastilla azul con flecha blanca (antes era blanco
-   sobre fondo casi blanco, por eso parecia que no existia). */
-[data-testid="stSidebarCollapsedControl"] button,
-[data-testid="stExpandSidebarButton"] button,
+   sobre fondo casi blanco, por eso parecia que no existia).
+   Se pinta tanto el contenedor como el boton interno, por si acaso. */
+[data-testid*="SidebarCollaps"],
+[data-testid="collapsedControl"],
+[data-testid*="xpandSidebar"],
+[data-testid*="SidebarCollaps"] button,
 [data-testid="collapsedControl"] button,
-button[kind="headerNoPadding"] {
+[data-testid*="xpandSidebar"] button {
     background: #3b82f6 !important;
     border: 1px solid #3b82f6 !important;
     border-radius: 8px !important;
@@ -90,10 +93,9 @@ button[kind="headerNoPadding"] {
 }
 
 /* Asegurar que el ícono (flecha) tambien sea blanco */
-[data-testid="stSidebarCollapsedControl"] button svg,
-[data-testid="stExpandSidebarButton"] button svg,
-[data-testid="collapsedControl"] button svg,
-button[kind="headerNoPadding"] svg {
+[data-testid*="SidebarCollaps"] svg,
+[data-testid="collapsedControl"] svg,
+[data-testid*="xpandSidebar"] svg {
     color: #ffffff !important;
     fill: #ffffff !important;
 }
