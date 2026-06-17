@@ -1,9 +1,10 @@
 """
-Panel de Reportes v2.0 - Punto de entrada principal.
+Panel de Reportes v2.0 - Punto de entrada principal (OPTIMIZADO).
 """
 
 import pandas as pd
 import streamlit as st
+import plotly.express as px
 from streamlit_option_menu import option_menu
 
 from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
@@ -16,23 +17,68 @@ from ui import (
 
 
 # ===========================================================================
-# CONFIGURACIÓN INICIAL
+# CONFIGURACIÓN INICIAL (cacheada - solo se ejecuta una vez)
 # ===========================================================================
-st.set_page_config(
-    page_title="Reportes",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded",
-    menu_items={
-        'Get Help': None,
-        'Report a bug': None,
-        'About': "Panel de Reportes v2.0 - Inventario & Compras"
-    }
-)
 
-# Inyectar CSS y botón flotante
-inject_css()
-inject_sidebar_toggle()
+@st.cache_data
+def init_app():
+    """Inicializa la configuración de la app (cacheado)."""
+    st.set_page_config(
+        page_title="Reportes",
+        page_icon="📊",
+        layout="wide",
+        initial_sidebar_state="expanded",
+        menu_items={
+            'Get Help': None,
+            'Report a bug': None,
+            'About': "Panel de Reportes v2.0 - Inventario & Compras"
+        }
+    )
+    # Inyectar CSS y botón flotante (solo una vez)
+    inject_css()
+    inject_sidebar_toggle()
+
+# Ejecutar inicialización
+init_app()
+
+
+# ===========================================================================
+# FUNCIONES AUXILIARES CACHEABLES
+# ===========================================================================
+
+@st.cache_data
+def get_columnas_sugeridas(df_f, col_fecha, cat_cols, col_busc, cfg):
+    """Calcula las columnas sugeridas (cacheado)."""
+    todas_cols = df_f.columns.tolist()
+    
+    if "columnas" in cfg:
+        sugeridas, faltan_cols = resolver_columnas(df_f, cfg["columnas"])
+    else:
+        faltan_cols = []
+        sugeridas = []
+        for c in [col_fecha] + cat_cols + ([col_busc] if col_busc else []):
+            if c and c not in sugeridas:
+                sugeridas.append(c)
+        for c in df_f.select_dtypes("number").columns.tolist():
+            if c not in sugeridas:
+                sugeridas.append(c)
+            if len(sugeridas) >= 8:
+                break
+        if not sugeridas:
+            sugeridas = todas_cols[:8]
+        sugeridas = sugeridas[:8]
+    
+    return sugeridas, faltan_cols, todas_cols
+
+
+@st.cache_data
+def get_opciones_filtro(df_f, col, tipo="cat"):
+    """Obtiene opciones de filtro (cacheado)."""
+    if tipo == "cat":
+        return sorted(df_f[col].dropna().unique().tolist(), key=lambda x: str(x))
+    elif tipo == "busc":
+        return sorted(df_f[col].dropna().astype(str).unique().tolist(), key=lambda x: x.lower())
+    return []
 
 
 # ===========================================================================
@@ -79,7 +125,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # ============ INICIALIZAR ESTADOS ============
+    # ============ INICIALIZAR ESTADOS (solo si no existen) ============
     if 'forzar_movil' not in st.session_state:
         st.session_state.forzar_movil = False
     if 'tabla_tam' not in st.session_state:
@@ -104,7 +150,6 @@ with st.sidebar:
         
         # Vista previa del tamaño seleccionado
         px_size = TAM_FUENTE[st.session_state.tabla_tam]
-        
         st.markdown(f"""
         <div style="
             background: #ffffff;
@@ -125,7 +170,7 @@ cfg = REPORTES[reporte]
 
 
 # ===========================================================================
-# CARGAR DATOS
+# CARGAR DATOS (ya usa @st.cache_data en data.py)
 # ===========================================================================
 df = cargar(cfg["archivo"])
 if df is None or df.empty:
@@ -170,24 +215,10 @@ df_f = df.copy()
 if col_fecha:
     df_f[col_fecha] = pd.to_datetime(df_f[col_fecha], errors="coerce")
 
-todas_cols = df_f.columns.tolist()
-
-if "columnas" in cfg:
-    sugeridas, faltan_cols = resolver_columnas(df_f, cfg["columnas"])
-else:
-    faltan_cols = []
-    sugeridas = []
-    for c in [col_fecha] + cat_cols + ([col_busc] if col_busc else []):
-        if c and c not in sugeridas:
-            sugeridas.append(c)
-    for c in df_f.select_dtypes("number").columns.tolist():
-        if c not in sugeridas:
-            sugeridas.append(c)
-        if len(sugeridas) >= 8:
-            break
-    if not sugeridas:
-        sugeridas = todas_cols[:8]
-    sugeridas = sugeridas[:8]
+# Usar función cacheada para columnas sugeridas
+sugeridas, faltan_cols, todas_cols = get_columnas_sugeridas(
+    df_f, col_fecha, cat_cols, col_busc, cfg
+)
 
 if "agrupar" in cfg:
     cols_agrupar, _ = resolver_columnas(df_f, cfg["agrupar"])
@@ -196,7 +227,7 @@ else:
 
 
 # ===========================================================================
-# CONTROLES DE FILTRO
+# CONTROLES DE FILTRO (optimizado con opciones cacheadas)
 # ===========================================================================
 controles = []
 if col_fecha and df_f[col_fecha].notna().any():
@@ -229,18 +260,30 @@ if controles:
                     if isinstance(rango, (tuple, list)) and len(rango) == 2:
                         ini, fin = rango
                         df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
+                
                 elif tipo == "cat":
-                    opts = sorted(df_f[col].dropna().unique().tolist(), key=lambda x: str(x))
-                    sel = st.multiselect(f"📂 {col}", opts, placeholder="Todos", key=f"cat_{reporte}{col}{i}_{j}")
+                    opts = get_opciones_filtro(df_f, col, "cat")
+                    sel = st.multiselect(
+                        f"📂 {col}", opts, placeholder="Todos",
+                        key=f"cat_{reporte}{col}{i}_{j}"
+                    )
                     if sel:
                         df_f = df_f[df_f[col].isin(sel)]
+                
                 elif tipo == "busc":
-                    opts_prod = sorted(df_f[col].dropna().astype(str).unique().tolist(), key=lambda x: x.lower())
-                    sel_prod = st.multiselect(f"🔎 {col}", opts_prod, placeholder="Buscar…", key=f"busc_{reporte}{i}{j}")
+                    opts_prod = get_opciones_filtro(df_f, col, "busc")
+                    sel_prod = st.multiselect(
+                        f"🔎 {col}", opts_prod, placeholder="Buscar…",
+                        key=f"busc_{reporte}{i}{j}"
+                    )
                     if sel_prod:
                         df_f = df_f[df_f[col].astype(str).isin(sel_prod)]
+                
                 elif tipo == "grp":
-                    grupos_sel = st.multiselect("📊 Agrupar por", cols_agrupar, default=[], key=f"grp_{reporte}{i}{j}", placeholder="Sin agrupar")
+                    grupos_sel = st.multiselect(
+                        "📊 Agrupar por", cols_agrupar, default=[],
+                        key=f"grp_{reporte}{i}{j}", placeholder="Sin agrupar"
+                    )
 
 
 # ===========================================================================
@@ -329,7 +372,6 @@ else:
             eje_y = st.selectbox("Métrica (suma)", cols_num, key=f"ejey_{reporte}")
         
         try:
-            import plotly.express as px
             datos = df_f.groupby(eje_x)[eje_y].sum().reset_index().sort_values(eje_y, ascending=False).head(20)
             fig = px.bar(datos, x=eje_x, y=eje_y,
                          title=f"{eje_y} por {eje_x} (top 20)",
