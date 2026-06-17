@@ -8,7 +8,7 @@ from streamlit_option_menu import option_menu
 
 st.set_page_config(page_title="Reportes", page_icon="📊", layout="wide")
 
-# CSS mejorado sin saltos de línea problemáticos
+# CSS
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] { background: #0f1117; }
@@ -23,7 +23,7 @@ label { color: #94a3b8 !important; font-size: 0.78rem !important; text-transform
 
 
 # ---------------------------------------------------------------------------
-# Utilidades para detectar columnas sin importar mayusculas/acentos/espacios
+# Utilidades: detectar columnas sin importar mayusculas/acentos/espacios
 # ---------------------------------------------------------------------------
 def _norm(s):
     s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode()
@@ -48,6 +48,18 @@ def buscar_columna_fecha(df):
     return None
 
 
+def resolver_columnas(df, nombres):
+    """Devuelve (encontradas_reales, faltantes) a partir de una lista de nombres."""
+    encontradas, faltantes = [], []
+    for n in nombres:
+        real = buscar_columna(df, n)
+        if real and real not in encontradas:
+            encontradas.append(real)
+        elif not real:
+            faltantes.append(n)
+    return encontradas, faltantes
+
+
 @st.cache_resource
 def get_conn():
     try:
@@ -69,11 +81,32 @@ def get_conn():
 con = get_conn()
 BUCKET = st.secrets["R2_BUCKET"]
 
-# Cada reporte: archivo parquet + icono (nombres de Bootstrap Icons)
+# ---------------------------------------------------------------------------
+# Configuracion por reporte.
+#   archivo / icono  -> obligatorios
+#   columnas         -> columnas a mostrar por defecto (en ese orden)
+#   filtros_cat      -> multiselects en cascada en la parte superior
+#   buscador         -> columna con buscador multiple (tipo Excel)
+#   fecha            -> columna de fecha (None = sin filtro de fecha)
+#   agrupar          -> jerarquia para agrupar con +/- (tabla dinamica)
+# Los reportes sin estas claves usan deteccion automatica.
+# ---------------------------------------------------------------------------
 REPORTES = {
     "Ajuste de Inventario":  {"archivo": "ajusteinventario.parquet",     "icono": "sliders"},
     "Compras":               {"archivo": "compras.parquet",              "icono": "cart"},
-    "Inventario Valorizado": {"archivo": "inventariovalorizado.parquet", "icono": "boxes"},
+    "Inventario Valorizado": {
+        "archivo": "inventariovalorizado.parquet",
+        "icono": "boxes",
+        "columnas": [
+            "Nombre Area", "Nombre Familia", "Nombre Subfamilia",
+            "Codigo Producto", "Nombre Producto", "Unidad Kardex",
+            "Stock al dia", "Precio Promedio", "Valorizado total",
+        ],
+        "filtros_cat": ["Nombre Area", "Nombre Familia"],
+        "buscador": "Nombre Producto",
+        "fecha": None,
+        "agrupar": ["Nombre Area", "Nombre Familia", "Nombre Subfamilia"],
+    },
     "Receta Base":           {"archivo": "recetabase.parquet",           "icono": "clipboard-data"},
     "Receta Venta":          {"archivo": "recetaventa.parquet",          "icono": "receipt"},
 }
@@ -92,7 +125,6 @@ def cargar(archivo):
 # Interfaz principal
 st.title("📊 Panel de Reportes")
 
-# --- Barra lateral: botonera con iconos y tema azul ---
 with st.sidebar:
     reporte = option_menu(
         menu_title="Reporte",
@@ -102,28 +134,23 @@ with st.sidebar:
         default_index=0,
         styles={
             "container": {"padding": "4px", "background-color": "#0d1424"},
-            "menu-title": {
-                "color": "#60a5fa", "font-size": "13px",
-                "text-transform": "uppercase", "letter-spacing": "1px",
-            },
+            "menu-title": {"color": "#60a5fa", "font-size": "13px",
+                           "text-transform": "uppercase", "letter-spacing": "1px"},
             "icon": {"color": "#60a5fa", "font-size": "18px"},
-            "nav-link": {
-                "font-size": "14px", "color": "#cbd5e1",
-                "background-color": "#111c33", "margin": "5px 0",
-                "border-radius": "8px", "--hover-color": "#1e3a5f",
-            },
-            "nav-link-selected": {
-                "background-color": "#2563eb", "color": "#ffffff",
-            },
+            "nav-link": {"font-size": "14px", "color": "#cbd5e1",
+                         "background-color": "#111c33", "margin": "5px 0",
+                         "border-radius": "8px", "--hover-color": "#1e3a5f"},
+            "nav-link-selected": {"background-color": "#2563eb", "color": "#ffffff"},
         },
     )
-
     if st.button("🔄 Actualizar datos", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
+cfg = REPORTES[reporte]
+
 # Cargar datos
-df = cargar(REPORTES[reporte]["archivo"])
+df = cargar(cfg["archivo"])
 if df is None or df.empty:
     st.warning("No se pudieron cargar los datos o el archivo está vacío.")
     st.stop()
@@ -131,79 +158,85 @@ if df is None or df.empty:
 st.subheader(reporte)
 
 # ---------------------------------------------------------------------------
-# Filtros superiores (se muestran solo los que existan en el reporte)
+# Determinar columnas de filtro (config explicita o deteccion automatica)
+# ---------------------------------------------------------------------------
+if "fecha" in cfg:
+    col_fecha = buscar_columna(df, cfg["fecha"]) if cfg["fecha"] else None
+else:
+    col_fecha = buscar_columna_fecha(df)
+
+if "filtros_cat" in cfg:
+    cat_cols, faltan_cat = resolver_columnas(df, cfg["filtros_cat"])
+else:
+    cat_cols = [c for c in [
+        buscar_columna(df, "area", "área"),
+        buscar_columna(df, "familia"),
+        buscar_columna(df, "subfamilia", "sub familia"),
+    ] if c]
+    faltan_cat = []
+
+if "buscador" in cfg and cfg["buscador"]:
+    col_busc = buscar_columna(df, cfg["buscador"])
+else:
+    col_busc = None
+
+# Aviso si algun nombre configurado no se encontro
+faltantes_aviso = list(faltan_cat)
+if "buscador" in cfg and cfg["buscador"] and not col_busc:
+    faltantes_aviso.append(cfg["buscador"])
+
+# ---------------------------------------------------------------------------
+# Filtros superiores
 # ---------------------------------------------------------------------------
 df_f = df.copy()
-
-col_fecha = buscar_columna_fecha(df_f)
-col_familia = buscar_columna(df_f, "familia")
-col_subfamilia = buscar_columna(df_f, "subfamilia", "sub familia")
-col_area = buscar_columna(df_f, "area", "área")
-
-# Si hay columna de fecha, la convertimos una sola vez
-serie_fecha = None
 if col_fecha:
     df_f[col_fecha] = pd.to_datetime(df_f[col_fecha], errors="coerce")
-    serie_fecha = df_f[col_fecha]
 
-filtros_presentes = [c for c in [col_fecha, col_familia, col_subfamilia, col_area] if c]
+st.markdown("#### Filtros")
 
-if filtros_presentes:
-    st.markdown("#### Filtros")
-    columnas = st.columns(len(filtros_presentes))
+# Fila 1: fecha + categoricos en cascada
+fila1 = [c for c in ([col_fecha] if col_fecha else []) + cat_cols]
+if fila1:
+    columnas = st.columns(len(fila1))
     idx = 0
 
-    # --- Fecha ---
-    if col_fecha and serie_fecha is not None and serie_fecha.notna().any():
+    if col_fecha and df_f[col_fecha].notna().any():
         with columnas[idx]:
-            fmin = serie_fecha.min().date()
-            fmax = serie_fecha.max().date()
-            rango = st.date_input(
-                "📅 Fecha",
-                value=(fmin, fmax),
-                min_value=fmin,
-                max_value=fmax,
-                format="DD/MM/YYYY",
-            )
+            fmin = df_f[col_fecha].min().date()
+            fmax = df_f[col_fecha].max().date()
+            rango = st.date_input("📅 Fecha", value=(fmin, fmax),
+                                  min_value=fmin, max_value=fmax,
+                                  format="DD/MM/YYYY", key=f"fch_{reporte}")
             if isinstance(rango, (tuple, list)) and len(rango) == 2:
                 ini, fin = rango
                 df_f = df_f[(df_f[col_fecha].dt.date >= ini) &
                             (df_f[col_fecha].dt.date <= fin)]
         idx += 1
 
-    # --- Familia ---
-    if col_familia:
+    for cc in cat_cols:
         with columnas[idx]:
-            opts = sorted(df_f[col_familia].dropna().unique().tolist(),
-                          key=lambda x: str(x))
-            sel = st.multiselect("Familia", opts, placeholder="Todas")
+            opts = sorted(df_f[cc].dropna().unique().tolist(), key=lambda x: str(x))
+            sel = st.multiselect(cc, opts, placeholder="Todos", key=f"cat_{reporte}_{cc}")
             if sel:
-                df_f = df_f[df_f[col_familia].isin(sel)]
+                df_f = df_f[df_f[cc].isin(sel)]
         idx += 1
 
-    # --- Subfamilia (opciones dependen de la familia elegida) ---
-    if col_subfamilia:
-        with columnas[idx]:
-            opts = sorted(df_f[col_subfamilia].dropna().unique().tolist(),
-                          key=lambda x: str(x))
-            sel = st.multiselect("Subfamilia", opts, placeholder="Todas")
-            if sel:
-                df_f = df_f[df_f[col_subfamilia].isin(sel)]
-        idx += 1
+# Buscador de producto (multiple, tipo Excel). El multiselect ya filtra
+# las sugerencias a medida que escribes, sin distinguir mayus/minus.
+if col_busc:
+    opts_prod = sorted(df_f[col_busc].dropna().astype(str).unique().tolist(),
+                       key=lambda x: x.lower())
+    sel_prod = st.multiselect(f"🔎 {col_busc}", opts_prod,
+                              placeholder="Escribe para buscar… (vacío = todos)",
+                              key=f"busc_{reporte}")
+    if sel_prod:
+        df_f = df_f[df_f[col_busc].astype(str).isin(sel_prod)]
 
-    # --- Área ---
-    if col_area:
-        with columnas[idx]:
-            opts = sorted(df_f[col_area].dropna().unique().tolist(),
-                          key=lambda x: str(x))
-            sel = st.multiselect("Área", opts, placeholder="Todas")
-            if sel:
-                df_f = df_f[df_f[col_area].isin(sel)]
-        idx += 1
-else:
-    st.caption("Este reporte no tiene columnas de fecha, familia, subfamilia o área para filtrar.")
+if faltantes_aviso:
+    st.caption("⚠️ No se encontraron estas columnas en el archivo: "
+               + ", ".join(faltantes_aviso) + ". Revisa el nombre exacto.")
 
-# Información del reporte (ya filtrado)
+# Contador
 if len(df_f) != len(df):
     st.caption(f"{len(df_f):,} de {len(df):,} filas (filtrado) · {len(df_f.columns)} columnas")
 else:
@@ -214,71 +247,146 @@ if df_f.empty:
     st.stop()
 
 # ---------------------------------------------------------------------------
-# Tabla dinámica tipo Excel (AgGrid)
-# Abre el panel lateral derecho de la tabla para agrupar, pivotear y sumar.
-# Filtra y ordena desde el encabezado de cada columna.
+# Columnas a mostrar (default por config) + opcion de agrupar con +/-
 # ---------------------------------------------------------------------------
-st.caption("💡 Abre el panel lateral derecho de la tabla para agrupar, "
-           "pivotear y sumar. Filtra y ordena desde cada encabezado.")
+st.markdown("#### Tabla")
 
-gb = GridOptionsBuilder.from_dataframe(df_f)
-gb.configure_default_column(
-    resizable=True,
-    filter=True,
-    sortable=True,
-    editable=False,
-    groupable=True,
-    enableRowGroup=True,
-    enablePivot=True,
-    enableValue=True,
-    aggFunc="sum",
-)
+todas_cols = df_f.columns.tolist()
+
+if "columnas" in cfg:
+    sugeridas, faltan_cols = resolver_columnas(df_f, cfg["columnas"])
+    if faltan_cols:
+        st.caption("⚠️ Columnas configuradas no encontradas: " + ", ".join(faltan_cols))
+else:
+    sugeridas = []
+    for c in [col_fecha] + cat_cols + ([col_busc] if col_busc else []):
+        if c and c not in sugeridas:
+            sugeridas.append(c)
+    for c in df_f.select_dtypes("number").columns.tolist():
+        if c not in sugeridas:
+            sugeridas.append(c)
+        if len(sugeridas) >= 8:
+            break
+    if not sugeridas:
+        sugeridas = todas_cols[:8]
+    sugeridas = sugeridas[:8]
+
+# Columnas para agrupar (jerarquia)
+if "agrupar" in cfg:
+    cols_agrupar, _ = resolver_columnas(df_f, cfg["agrupar"])
+else:
+    cols_agrupar = [c for c in cat_cols if c]
+
+c_grp, c_cols = st.columns([1, 3])
+with c_grp:
+    if cols_agrupar:
+        etiqueta = "Agrupar (" + " › ".join(cols_agrupar) + ")"
+        agrupar_on = st.checkbox(etiqueta, value=False, key=f"grp_{reporte}",
+                                 help="Crea una jerarquía expandible con +/- "
+                                      "como una tabla dinámica de Excel.")
+    else:
+        agrupar_on = False
+with c_cols:
+    cols_mostrar = st.multiselect("Columnas a mostrar", todas_cols, default=sugeridas,
+                                  key=f"cols_{reporte}", placeholder="Selecciona columnas")
+if not cols_mostrar:
+    cols_mostrar = sugeridas
+
+# Asegura que las columnas de agrupacion esten presentes para poder agrupar
+cols_finales = list(cols_mostrar)
+if agrupar_on:
+    for c in cols_agrupar:
+        if c not in cols_finales:
+            cols_finales.append(c)
+
+df_grid = df_f[cols_finales]
+
+st.caption("💡 Activa “Agrupar” para la vista con +/-, o usa el panel derecho "
+           "(Columns / Filters) para pivotear y sumar manualmente.")
+
+# ---------------------------------------------------------------------------
+# AgGrid
+# ---------------------------------------------------------------------------
+gb = GridOptionsBuilder.from_dataframe(df_grid)
+gb.configure_default_column(resizable=True, filter=True, sortable=True,
+                            editable=False, groupable=True, enableRowGroup=True,
+                            enablePivot=True, enableValue=True)
+
+# Agregaciones: promedio para "precio/promedio", suma para el resto de numericos
+for c in df_grid.columns:
+    if pd.api.types.is_numeric_dtype(df_grid[c]):
+        af = "avg" if ("precio" in _norm(c) or "promedio" in _norm(c)) else "sum"
+        gb.configure_column(c, aggFunc=af, type=["numericColumn"],
+                            valueFormatter="x == null ? '' : x.toLocaleString()")
+
+opciones_grid = {"autoGroupColumnDef": {"minWidth": 260, "pinned": "left"}}
+
+if agrupar_on:
+    for c in cols_agrupar:
+        if c in df_grid.columns:
+            gb.configure_column(c, rowGroup=True, hide=True)
+    opciones_grid["groupDefaultExpanded"] = 0      # arranca colapsado -> expandir con +
+    opciones_grid["pivotMode"] = False
+else:
+    opciones_grid["pivotMode"] = False
+
 gb.configure_side_bar()
-gb.configure_grid_options(
-    pivotMode=False,
-    autoGroupColumnDef={"minWidth": 220},
-)
-gb.configure_pagination(enabled=True, paginationAutoPageSize=False,
-                        paginationPageSize=50)
+gb.configure_grid_options(**opciones_grid)
+gb.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
 grid_options = gb.build()
 
+# Tema oscuro para la grilla (combina con el panel)
+custom_css = {
+    ".ag-root-wrapper": {"background-color": "#0d1424", "border": "1px solid #1e3a5f"},
+    ".ag-header": {"background-color": "#111c33", "border-bottom": "1px solid #1e3a5f"},
+    ".ag-header-cell-text": {"color": "#93c5fd", "font-weight": "600"},
+    ".ag-row": {"color": "#e2e8f0", "border-color": "#1e2535"},
+    ".ag-row-even": {"background-color": "#0f1117"},
+    ".ag-row-odd": {"background-color": "#0d1424"},
+    ".ag-row-hover": {"background-color": "#1e3a5f !important"},
+    ".ag-cell": {"color": "#e2e8f0"},
+    ".ag-group-value": {"color": "#e2e8f0"},
+    ".ag-paging-panel": {"color": "#cbd5e1", "background-color": "#0d1424",
+                         "border-top": "1px solid #1e3a5f"},
+    ".ag-side-bar": {"background-color": "#0d1424", "border-color": "#1e3a5f"},
+    ".ag-status-bar": {"background-color": "#0d1424"},
+    ".ag-menu": {"background-color": "#111c33", "color": "#e2e8f0"},
+}
+
+# Ajusta al ancho si hay pocas columnas visibles
+visibles = len(cols_mostrar) - (len([c for c in cols_agrupar if c in cols_mostrar]) if agrupar_on else 0)
+ajustar = visibles <= 8
+
 AgGrid(
-    df_f.head(5000),   # limite para no saturar el WebSocket (evita el error de conexion)
+    df_grid.head(5000),
     gridOptions=grid_options,
-    height=450,
+    height=470,
     theme="balham",
-    fit_columns_on_grid_load=False,
+    custom_css=custom_css,
+    fit_columns_on_grid_load=ajustar,
     allow_unsafe_jscode=True,
     enable_enterprise_modules=True,
-    key="grid_reportes",
+    key=f"grid_{reporte}",
 )
 
 # ---------------------------------------------------------------------------
-# Visualización (gráfico de barras) sobre los datos filtrados
+# Grafico de barras sobre los datos filtrados
 # ---------------------------------------------------------------------------
 cols_num = df_f.select_dtypes("number").columns.tolist()
 cols_txt = df_f.select_dtypes(["object", "string"]).columns.tolist()
 if cols_num and cols_txt:
     col1, col2 = st.columns(2)
     with col1:
-        eje_x = st.selectbox("Agrupar por", cols_txt)
+        eje_x = st.selectbox("Agrupar por", cols_txt, key=f"ejex_{reporte}")
     with col2:
-        eje_y = st.selectbox("Sumar", cols_num)
-
+        eje_y = st.selectbox("Sumar", cols_num, key=f"ejey_{reporte}")
     try:
         datos = (df_f.groupby(eje_x)[eje_y].sum()
-                     .reset_index()
-                     .sort_values(eje_y, ascending=False)
-                     .head(20))
-
-        fig = px.bar(datos, x=eje_x, y=eje_y,
-                     title=f"{eje_y} por {eje_x} (top 20)",
+                     .reset_index().sort_values(eje_y, ascending=False).head(20))
+        fig = px.bar(datos, x=eje_x, y=eje_y, title=f"{eje_y} por {eje_x} (top 20)",
                      color_discrete_sequence=["#2563eb"])
-        fig.update_layout(
-            paper_bgcolor="#0f1117",
-            plot_bgcolor="#0f1117",
-            font_color="#e2e8f0"
-        )
+        fig.update_layout(paper_bgcolor="#0f1117", plot_bgcolor="#0f1117",
+                          font_color="#e2e8f0")
         st.plotly_chart(fig, use_container_width=True)
     except Exception as e:
         st.error(f"Error generando gráfico: {str(e)}")
