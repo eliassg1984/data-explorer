@@ -198,6 +198,24 @@ button[kind="primary"]:hover {
 
 /* ============ MÓVIL ============ */
 @media screen and (max-width: 768px) {
+    /* OCULTAR HEADER EN MÓVIL - QUITA LA FRANJA BLANCA */
+    header[data-testid="stHeader"] {
+        display: none !important;
+    }
+    
+    [data-testid="stAppViewContainer"] {
+        padding-top: 0 !important;
+    }
+    
+    /* HACER SIDEBAR SCROLLEABLE - VER TODAS LAS OPCIONES */
+    [data-testid="stSidebar"] {
+        max-height: 100vh;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Ajustes de tamaño en móvil */
     h1 { font-size: 1.3rem !important; }
     h2 { font-size: 1.1rem !important; }
     h3 { font-size: 1rem !important; }
@@ -356,7 +374,7 @@ BUCKET = st.secrets["R2_BUCKET"]
 # ---------------------------------------------------------------------------
 REPORTES = {
     "Ajuste de Inventario": {
-        "archivo": "ajusteinventario.parquet",
+        "archivo": "ajusteinventaria.parquet",
         "icono": "sliders",
     },
     "Compras": {
