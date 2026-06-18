@@ -470,6 +470,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         resizable=True, filter=True, sortable=True,
         editable=False, groupable=True, enableRowGroup=True,
         enablePivot=True, enableValue=True,
+        flex=1, minWidth=100,
     )
     
     for c in df_grid.columns:
@@ -520,12 +521,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         ".ag-menu": {"background-color": "#ffffff", "color": "#1e293b", "border": "1px solid #e2e8f0"},
     }
     
-    ajustar = False
-    
     AgGrid(
         df_grid.head(5000), gridOptions=grid_options, height=600,
         theme="balham", custom_css=custom_css,
-        fit_columns_on_grid_load=ajustar, allow_unsafe_jscode=True,
+        fit_columns_on_grid_load=False, allow_unsafe_jscode=True,
         enable_enterprise_modules=True, key=f"grid_{reporte}",
     )
 
