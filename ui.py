@@ -81,6 +81,25 @@ def get_css():
         padding-bottom: 0 !important;
     }
 
+    /* ============ COLAPSAR IFRAME VACÍO DEL BOTÓN FLOTANTE ============
+       El botón ☰ se inyecta con components.html(height=0). Por el bug de
+       Streamlit #12454, ese iframe (data-testid="stIFrame") reserva ~150px y
+       deja una franja vacía arriba del contenido. Lo colapsamos a 0 SIN usar
+       display:none, para que el script del botón siga ejecutándose.
+       (AgGrid usa stCustomComponentV1, por eso la tabla NO se ve afectada.) */
+    [data-testid="stIFrame"] {
+        height: 0 !important;
+        min-height: 0 !important;
+        display: block !important;
+    }
+    [data-testid="stElementContainer"]:has(> [data-testid="stIFrame"]) {
+        height: 0 !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+
     [data-testid="stDecoration"] {
         display: none !important;
     }
