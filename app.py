@@ -17,28 +17,27 @@ from ui import (
 
 
 # ===========================================================================
-# CONFIGURACIÓN INICIAL (cacheada - solo se ejecuta una vez)
+# CONFIGURACIÓN INICIAL
 # ===========================================================================
+
+st.set_page_config(
+    page_title="Reportes",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': "Panel de Reportes v2.0 - Inventario & Compras"
+    }
+)
 
 @st.cache_data
 def init_app():
-    """Inicializa la configuración de la app (cacheado)."""
-    st.set_page_config(
-        page_title="Reportes",
-        page_icon="📊",
-        layout="wide",
-        initial_sidebar_state="expanded",
-        menu_items={
-            'Get Help': None,
-            'Report a bug': None,
-            'About': "Panel de Reportes v2.0 - Inventario & Compras"
-        }
-    )
-    # Inyectar CSS y botón flotante (solo una vez)
+    """Inicializa CSS y botón flotante (cacheado)."""
     inject_css()
     inject_sidebar_toggle()
 
-# Ejecutar inicialización
 init_app()
 
 
