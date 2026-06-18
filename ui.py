@@ -382,7 +382,9 @@ def get_sidebar_toggle_html():
                 '[data-testid="stSidebarCollapseButton"]',
                 '[data-testid="stExpandSidebarButton"]',
                 '[data-testid="collapsedControl"]',
-                '[data-testid="stSidebarCollapsedControl"]'
+                '[data-testid="stSidebarCollapsedControl"]',
+                'button[kind="header"]',
+                'section[data-testid="stSidebar"] button'
             ];
             for (const s of sels) {
                 const el = doc.querySelector(s);
@@ -391,24 +393,39 @@ def get_sidebar_toggle_html():
             return null;
         }
 
+        function sidebarEstaAbierto() {
+            const sb = doc.querySelector('section[data-testid="stSidebar"]');
+            if (!sb) return false;
+            const rect = sb.getBoundingClientRect();
+            // Si el sidebar está fuera de la pantalla hacia la izquierda, está colapsado
+            return rect.left > -100;
+        }
+
         function toggleSidebar() {
+            // Primero intentar con el botón nativo (funciona en ambos estados)
             const nativo = buscarControlNativo();
             if (nativo) { nativo.click(); return; }
 
+            // Fallback manual: manipular el sidebar directamente
             const sb = doc.querySelector('section[data-testid="stSidebar"]');
             if (!sb) return;
-            if (sb.dataset.abierto === '1') {
-                sb.dataset.abierto = '';
+
+            if (sidebarEstaAbierto()) {
+                // Cerrar
                 sb.style.transform = 'translateX(-110%)';
                 sb.style.width = '0';
                 sb.style.minWidth = '0';
+                sb.style.overflow = 'hidden';
+                sb.dataset.abierto = '';
             } else {
-                sb.dataset.abierto = '1';
+                // Abrir
                 sb.style.transform = 'none';
                 sb.style.width = '21rem';
                 sb.style.minWidth = '21rem';
                 sb.style.visibility = 'visible';
+                sb.style.overflow = 'visible';
                 sb.style.zIndex = '1000';
+                sb.dataset.abierto = '1';
             }
         }
 
