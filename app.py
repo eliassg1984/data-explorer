@@ -168,7 +168,10 @@ cfg = REPORTES[reporte]
 df = cargar(cfg["archivo"])
 if df is None or df.empty:
     st.warning("No se pudieron cargar los datos o el archivo está vacío.")
-    st.stop()
+st.stop()
+
+       st.write(f"**Columnas de '{reporte}':**", df.columns.tolist())  # TEMPORAL
+       st.stop()  # TEMPORAL
 
 st.subheader(reporte)
 
