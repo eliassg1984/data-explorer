@@ -12,7 +12,7 @@ import duckdb
 
 REPORTES = {
     "Ajuste de Inventario": {
-        "archivo": "ajusteinventaria.parquet",
+        "archivo": "ajusteinventario.parquet",
         "icono": "sliders",
     },
     "Compras": {
@@ -47,6 +47,14 @@ REPORTES = {
     "Ventas": {
         "archivo": "ventas.parquet",
         "icono": "cash-coin",
+    },
+    "Salidas": {
+        "archivo": "salidas.parquet",
+        "icono": "box-arrow-up",
+    },
+    "Requerimientos": {
+        "archivo": "requerimientos.parquet",
+        "icono": "card-checklist",
     },
 }
 
