@@ -92,7 +92,7 @@ def get_css():
         min-height: 0 !important;
         display: block !important;
     }
-    [data-testid="stElementContainer"]:has(> [data-testid="stIFrame"]) {
+    [data-testid="stElementContainer"]:has([data-testid="stIFrame"]) {
         height: 0 !important;
         min-height: 0 !important;
         margin: 0 !important;
