@@ -261,7 +261,7 @@ if controles:
                         df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
 
                 elif tipo == "cat":
-                    opts = get_opciones_filtro(df_f, col, "cat")
+                    opts = get_opciones_filtro(df, col, "cat")
                     sel = st.multiselect(
                         f"📂 {col}", opts, placeholder="Todos",
                         key=f"cat_{reporte}{col}{i}_{j}"
