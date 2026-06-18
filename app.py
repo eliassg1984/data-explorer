@@ -49,24 +49,21 @@ init_app()
 def get_columnas_sugeridas(df_f, col_fecha, cat_cols, col_busc, cfg):
     """Calcula las columnas sugeridas (cacheado)."""
     todas_cols = df_f.columns.tolist()
-    
+
     if "columnas" in cfg:
         sugeridas, faltan_cols = resolver_columnas(df_f, cfg["columnas"])
     else:
         faltan_cols = []
         sugeridas = []
+        # 1) primero las columnas "clave" detectadas (fecha, categorías, buscador)
         for c in [col_fecha] + cat_cols + ([col_busc] if col_busc else []):
             if c and c not in sugeridas:
                 sugeridas.append(c)
-        for c in df_f.select_dtypes("number").columns.tolist():
+        # 2) luego TODAS las demás columnas (sin límite y sin filtrar por tipo)
+        for c in todas_cols:
             if c not in sugeridas:
                 sugeridas.append(c)
-            if len(sugeridas) >= 8:
-                break
-        if not sugeridas:
-            sugeridas = todas_cols[:8]
-        sugeridas = sugeridas[:8]
-    
+
     return sugeridas, faltan_cols, todas_cols
 
 
@@ -87,9 +84,9 @@ with st.sidebar:
     if st.button("🔄 Actualizar datos", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
-    
+
     st.markdown("---")
-    
+
     reporte = option_menu(
         menu_title="Seleccionar Reporte",
         options=list(REPORTES.keys()),
@@ -115,15 +112,15 @@ with st.sidebar:
             },
         },
     )
-    
+
     st.markdown("---")
-    
+
     # ============ INICIALIZAR ESTADOS (solo si no existen) ============
     if 'forzar_movil' not in st.session_state:
         st.session_state.forzar_movil = False
     if 'tabla_tam' not in st.session_state:
         st.session_state.tabla_tam = "Mediano"
-    
+
     # ============ CONTROLES DE VISTA ============
     with st.expander("🔧 Configuración de vista", expanded=False):
         st.markdown("### 📱 Modo de visualización")
@@ -132,7 +129,7 @@ with st.sidebar:
             value=st.session_state.forzar_movil,
             help="Activar para probar la vista optimizada para celular",
         )
-        
+
         st.markdown("### 🔤 Tamaño de texto")
         st.session_state.tabla_tam = st.select_slider(
             "Tamaño de letra en tablas",
@@ -140,7 +137,7 @@ with st.sidebar:
             value=st.session_state.tabla_tam,
             help="Ajusta el tamaño de fuente de la tabla de datos",
         )
-        
+
         # Vista previa del tamaño seleccionado
         px_size = TAM_FUENTE[st.session_state.tabla_tam]
         st.markdown(f"""
@@ -168,10 +165,11 @@ cfg = REPORTES[reporte]
 df = cargar(cfg["archivo"])
 if df is None or df.empty:
     st.warning("No se pudieron cargar los datos o el archivo está vacío.")
-st.stop()
+    st.stop()
 
-    st.write(f"**Columnas de '{reporte}':**", df.columns.tolist())  # TEMPORAL
-    st.stop()  # TEMPORAL
+# --- DEBUG: descomenta estas 2 líneas para ver los nombres REALES de las columnas ---
+# st.write(f"**Columnas de '{reporte}':**", df.columns.tolist())
+# st.stop()
 
 st.subheader(reporte)
 
@@ -241,7 +239,7 @@ if controles:
     for i in range(0, len(controles), MAX_COLS_POR_FILA):
         fila_controles = controles[i:i+MAX_COLS_POR_FILA]
         cols_ui = st.columns(len(fila_controles))
-        
+
         for j, (tipo, col) in enumerate(fila_controles):
             with cols_ui[j]:
                 if tipo == "fecha":
@@ -255,7 +253,7 @@ if controles:
                     if isinstance(rango, (tuple, list)) and len(rango) == 2:
                         ini, fin = rango
                         df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
-                
+
                 elif tipo == "cat":
                     opts = get_opciones_filtro(df_f, col, "cat")
                     sel = st.multiselect(
@@ -264,7 +262,7 @@ if controles:
                     )
                     if sel:
                         df_f = df_f[df_f[col].isin(sel)]
-                
+
                 elif tipo == "busc":
                     opts_prod = get_opciones_filtro(df_f, col, "busc")
                     sel_prod = st.multiselect(
@@ -273,7 +271,7 @@ if controles:
                     )
                     if sel_prod:
                         df_f = df_f[df_f[col].astype(str).isin(sel_prod)]
-                
+
                 elif tipo == "grp":
                     grupos_sel = st.multiselect(
                         "📊 Agrupar por", cols_agrupar, default=[],
@@ -358,14 +356,14 @@ else:
     st.subheader("📈 Visualización")
     cols_num = df_f.select_dtypes("number").columns.tolist()
     cols_txt = df_f.select_dtypes(["object", "string"]).columns.tolist()
-    
+
     if cols_num and cols_txt:
         col1, col2 = st.columns(2)
         with col1:
             eje_x = st.selectbox("Agrupar por", cols_txt, key=f"ejex_{reporte}")
         with col2:
             eje_y = st.selectbox("Métrica (suma)", cols_num, key=f"ejey_{reporte}")
-        
+
         try:
             datos = df_f.groupby(eje_x)[eje_y].sum().reset_index().sort_values(eje_y, ascending=False).head(20)
             fig = px.bar(datos, x=eje_x, y=eje_y,
