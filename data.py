@@ -44,6 +44,10 @@ REPORTES = {
         "archivo": "recetaventa.parquet",
         "icono": "receipt",
     },
+    "Ventas": {
+        "archivo": "ventas.parquet",
+        "icono": "cash-coin",
+    },
 }
 
 
