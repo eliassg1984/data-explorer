@@ -54,13 +54,31 @@ def get_css():
         --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.03);
     }
 
-    /* ============ HEADER NATIVO PERSONALIZADO ============ */
-    header[data-testid="stHeader"] {
+    /* ============ HEADER NATIVO + ESPACIO SUPERIOR ============ */
+    header[data-testid="stHeader"],
+    .stAppHeader {
         background: transparent !important;
         border-bottom: none !important;
         box-shadow: none !important;
-        height: 0 !important;          /* quita el alto de la barra superior */
-        min-height: 0 !important;      /* para que el contenido suba */
+        height: 0 !important;
+        min-height: 0 !important;
+    }
+
+    /* >>> ESTE es el arreglo clave <<<
+       El espacio vacío de arriba es el padding-top del contenedor principal.
+       En Streamlit reciente el selector correcto es .stMainBlockContainer;
+       el viejo .block-container ya no aplica, por eso no veías ningún cambio. */
+    .stMainBlockContainer,
+    [data-testid="stMainBlockContainer"],
+    .block-container {
+        padding-top: 1.5rem !important;
+    }
+
+    /* Sube también el contenido del sidebar (recorta la franja de la flecha «). */
+    [data-testid="stSidebarHeader"] {
+        height: 2rem !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
     }
 
     [data-testid="stDecoration"] {
@@ -83,10 +101,6 @@ def get_css():
     /* ============ ESTILOS BASE ============ */
     [data-testid="stAppViewContainer"] { 
         background: var(--bg-primary); 
-    }
-
-    .block-container {
-        padding-top: 0.5rem !important;
     }
 
     h1 { 
@@ -258,7 +272,8 @@ def get_css():
             margin-top: 0 !important;
         }
         
-        .block-container {
+        .block-container,
+        .stMainBlockContainer {
             padding: 0.5rem !important;
             margin-top: 0 !important;
             gap: 0 !important;
