@@ -59,6 +59,8 @@ def get_css():
         background: transparent !important;
         border-bottom: none !important;
         box-shadow: none !important;
+        height: 0 !important;          /* quita el alto de la barra superior */
+        min-height: 0 !important;      /* para que el contenido suba */
     }
 
     [data-testid="stDecoration"] {
