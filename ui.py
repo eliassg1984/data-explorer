@@ -222,6 +222,16 @@ def get_css():
         border-color: #3b82f6 !important;
     }
 
+    /* ============ AGGRID - ANCHO COMPLETO ============ */
+    .ag-root-wrapper {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    .ag-body-viewport {
+        overflow-x: auto !important;
+    }
+
     /* ============ CONTROL DE TAMAÑO EN SIDEBAR ============ */
     [data-testid="stSidebar"] .stSlider {
         padding-top: 0.5rem !important;
@@ -397,7 +407,7 @@ def inject_sidebar_toggle():
 
 
 # ===========================================================================
-# FUNCIÓN: AGGRID DESKTOP
+# FUNCIÓN: AGGRID DESKTOP (ANCHO COMPLETO)
 # ===========================================================================
 
 def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14):
@@ -417,7 +427,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 valueFormatter="x == null ? '' : x.toLocaleString()",
             )
     
-    # Altura de fila con límites para que no crezca desproporcionadamente
     row_h = max(28, min(60, font_px + 12))
     header_h = max(30, min(62, font_px + 14))
     
@@ -445,7 +454,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     grid_options = gb.build()
     
     custom_css = {
-        ".ag-root-wrapper": {"background-color": "#ffffff", "border": "1px solid #e2e8f0", "border-radius": "8px"},
+        ".ag-root-wrapper": {"background-color": "#ffffff", "border": "1px solid #e2e8f0", "border-radius": "8px", "width": "100% !important"},
         ".ag-header": {"background-color": "#f1f5f9", "border-bottom": "2px solid #3b82f6"},
         ".ag-header-cell-text": {"color": "#1e293b", "font-weight": "700", "font-size": f"{font_px}px"},
         ".ag-row": {"color": "#334155", "border-color": "#e2e8f0"},
@@ -458,8 +467,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         ".ag-menu": {"background-color": "#ffffff", "color": "#1e293b", "border": "1px solid #e2e8f0"},
     }
     
-    visibles = len(cols_mostrar) - (len([c for c in grupos_sel if c in cols_mostrar]) if agrupar_on else 0)
-    ajustar = visibles <= 6
+    # Siempre usar ancho completo
+    ajustar = False
     
     AgGrid(
         df_grid.head(5000), gridOptions=grid_options, height=600,
@@ -470,7 +479,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
 
 # ===========================================================================
-# FUNCIÓN: AGGRID MÓVIL
+# FUNCIÓN: AGGRID MÓVIL (ANCHO COMPLETO)
 # ===========================================================================
 
 def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
@@ -490,7 +499,6 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
             gb.configure_column(col, aggFunc=af, type=["numericColumn"],
                                 valueFormatter="x == null ? '' : x.toLocaleString()")
     
-    # Altura de fila con límites para que no crezca desproporcionadamente
     row_h = max(28, min(60, font_px + 12))
     header_h = max(30, min(62, font_px + 14))
     
@@ -512,7 +520,7 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
     grid_options = gb.build()
     
     custom_css = {
-        ".ag-root-wrapper": {"background-color": "#ffffff", "border": "1px solid #e2e8f0", "border-radius": "8px"},
+        ".ag-root-wrapper": {"background-color": "#ffffff", "border": "1px solid #e2e8f0", "border-radius": "8px", "width": "100% !important"},
         ".ag-header": {"background-color": "#f1f5f9", "border-bottom": "2px solid #3b82f6"},
         ".ag-header-cell-text": {"color": "#1e293b", "font-weight": "700", "font-size": f"{font_px}px"},
         ".ag-row": {"color": "#334155", "border-color": "#e2e8f0"},
