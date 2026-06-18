@@ -81,12 +81,6 @@ def get_opciones_filtro(df_f, col, tipo="cat"):
 
 
 # ===========================================================================
-# INTERFAZ PRINCIPAL
-# ===========================================================================
-st.title("📊 Panel de Reportes")
-
-
-# ===========================================================================
 # SIDEBAR
 # ===========================================================================
 with st.sidebar:
@@ -169,7 +163,7 @@ cfg = REPORTES[reporte]
 
 
 # ===========================================================================
-# CARGAR DATOS (ya usa @st.cache_data en data.py)
+# CARGAR DATOS
 # ===========================================================================
 df = cargar(cfg["archivo"])
 if df is None or df.empty:
@@ -214,7 +208,6 @@ df_f = df.copy()
 if col_fecha:
     df_f[col_fecha] = pd.to_datetime(df_f[col_fecha], errors="coerce")
 
-# Usar función cacheada para columnas sugeridas
 sugeridas, faltan_cols, todas_cols = get_columnas_sugeridas(
     df_f, col_fecha, cat_cols, col_busc, cfg
 )
@@ -226,7 +219,7 @@ else:
 
 
 # ===========================================================================
-# CONTROLES DE FILTRO (optimizado con opciones cacheadas)
+# CONTROLES DE FILTRO
 # ===========================================================================
 controles = []
 if col_fecha and df_f[col_fecha].notna().any():
