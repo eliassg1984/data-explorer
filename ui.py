@@ -84,7 +84,7 @@ def get_css():
     }
 
     .block-container {
-        padding-top: 2.5rem !important;
+        padding-top: 0.5rem !important;
     }
 
     h1 { 
@@ -467,7 +467,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         ".ag-menu": {"background-color": "#ffffff", "color": "#1e293b", "border": "1px solid #e2e8f0"},
     }
     
-    # Siempre usar ancho completo
     ajustar = False
     
     AgGrid(
