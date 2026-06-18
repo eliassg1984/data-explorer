@@ -34,9 +34,8 @@ st.set_page_config(
 
 @st.cache_data
 def init_app():
-    """Inicializa CSS y botón flotante (cacheado)."""
+    """Inicializa el CSS global (cacheado)."""
     inject_css()
-    inject_sidebar_toggle()
 
 init_app()
 
@@ -155,6 +154,13 @@ with st.sidebar:
             👁️ Texto de ejemplo a <b>{px_size}px</b>
         </div>
         """, unsafe_allow_html=True)
+
+    # Botón flotante ☰: se inyecta AQUÍ, al final del sidebar, en vez de arriba.
+    # Así el iframe vacío de components.html(height=0) reserva su ~150px al pie
+    # del sidebar (inofensivo), en lugar de empujar el contenido principal hacia
+    # abajo. El sidebar siempre se ejecuta antes de cualquier st.stop(), por lo
+    # que el botón se renderiza siempre.
+    inject_sidebar_toggle()
 
 cfg = REPORTES[reporte]
 
