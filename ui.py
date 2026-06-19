@@ -489,10 +489,19 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         "localeText": LOCALE_ES,
         "rowHeight": row_h,
         "headerHeight": header_h,
-        "onGridSizeChanged": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 50); }"),
         "onColumnVisible": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 50); }"),
         "onDisplayedColumnsChanged": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 50); }"),
-        "onFirstDataRendered": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 100); }"),
+        "onGridSizeChanged": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 50); }"),
+        "onFirstDataRendered": JsCode("""
+            function(params) {
+                setTimeout(function(){ params.api.sizeColumnsToFit(); }, 100);
+                var ro = new ResizeObserver(function() {
+                    setTimeout(function(){ params.api.sizeColumnsToFit(); }, 30);
+                });
+                var wrapper = document.querySelector('.ag-root-wrapper');
+                if (wrapper) ro.observe(wrapper);
+            }
+        """),
     }
     
     agrupar_on = bool(grupos_sel)
