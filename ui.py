@@ -470,7 +470,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         resizable=True, filter=True, sortable=True,
         editable=False, groupable=True, enableRowGroup=True,
         enablePivot=True, enableValue=True,
-        flex=1, minWidth=100,
+        minWidth=100,
     )
     
     for c in df_grid.columns:
@@ -489,9 +489,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         "localeText": LOCALE_ES,
         "rowHeight": row_h,
         "headerHeight": header_h,
-        "onGridSizeChanged": JsCode("function(params) { params.api.sizeColumnsToFit(); }"),
-        "onColumnVisible": JsCode("function(params) { params.api.sizeColumnsToFit(); }"),
-        "onFirstDataRendered": JsCode("function(params) { params.api.sizeColumnsToFit(); }"),
+        "onGridSizeChanged": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 50); }"),
+        "onColumnVisible": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 50); }"),
+        "onDisplayedColumnsChanged": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 50); }"),
+        "onFirstDataRendered": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 100); }"),
     }
     
     agrupar_on = bool(grupos_sel)
