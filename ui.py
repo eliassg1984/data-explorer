@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from st_aggrid import AgGrid, GridOptionsBuilder
+from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from utils import _norm, buscar_columna, LOCALE_ES
 
@@ -489,6 +489,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         "localeText": LOCALE_ES,
         "rowHeight": row_h,
         "headerHeight": header_h,
+        "onGridSizeChanged": JsCode("function(params) { params.api.sizeColumnsToFit(); }"),
+        "onColumnVisible": JsCode("function(params) { params.api.sizeColumnsToFit(); }"),
+        "onFirstDataRendered": JsCode("function(params) { params.api.sizeColumnsToFit(); }"),
     }
     
     agrupar_on = bool(grupos_sel)
