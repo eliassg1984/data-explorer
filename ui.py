@@ -64,29 +64,18 @@ def get_css():
         min-height: 0 !important;
     }
 
-    /* >>> ESTE es el arreglo clave <<<
-       El espacio vacío de arriba es el padding-top del contenedor principal.
-       En Streamlit reciente el selector correcto es .stMainBlockContainer;
-       el viejo .block-container ya no aplica, por eso no veías ningún cambio. */
     .stMainBlockContainer,
     [data-testid="stMainBlockContainer"],
     .block-container {
         padding-top: 1.5rem !important;
     }
 
-    /* Sube también el contenido del sidebar (recorta la franja de la flecha «). */
     [data-testid="stSidebarHeader"] {
         height: 2rem !important;
         padding-top: 0 !important;
         padding-bottom: 0 !important;
     }
 
-    /* ============ COLAPSAR IFRAME VACÍO DEL BOTÓN FLOTANTE ============
-       El botón ☰ se inyecta con components.html(height=0). Por el bug de
-       Streamlit #12454, ese iframe (data-testid="stIFrame") reserva ~150px y
-       deja una franja vacía arriba del contenido. Lo colapsamos a 0 SIN usar
-       display:none, para que el script del botón siga ejecutándose.
-       (AgGrid usa stCustomComponentV1, por eso la tabla NO se ve afectada.) */
     [data-testid="stIFrame"] {
         height: 0 !important;
         min-height: 0 !important;
@@ -397,28 +386,23 @@ def get_sidebar_toggle_html():
             const sb = doc.querySelector('section[data-testid="stSidebar"]');
             if (!sb) return false;
             const rect = sb.getBoundingClientRect();
-            // Si el sidebar está fuera de la pantalla hacia la izquierda, está colapsado
             return rect.left > -100;
         }
 
         function toggleSidebar() {
-            // Primero intentar con el botón nativo (funciona en ambos estados)
             const nativo = buscarControlNativo();
             if (nativo) { nativo.click(); return; }
 
-            // Fallback manual: manipular el sidebar directamente
             const sb = doc.querySelector('section[data-testid="stSidebar"]');
             if (!sb) return;
 
             if (sidebarEstaAbierto()) {
-                // Cerrar
                 sb.style.transform = 'translateX(-110%)';
                 sb.style.width = '0';
                 sb.style.minWidth = '0';
                 sb.style.overflow = 'hidden';
                 sb.dataset.abierto = '';
             } else {
-                // Abrir
                 sb.style.transform = 'none';
                 sb.style.width = '21rem';
                 sb.style.minWidth = '21rem';
@@ -460,11 +444,18 @@ def inject_sidebar_toggle():
 
 
 # ===========================================================================
-# FUNCIÓN: AGGRID DESKTOP (ANCHO COMPLETO)
+# FUNCIÓN: AGGRID DESKTOP — con formato financiero
+# Cambios aplicados:
+#   1. S/ + separador de miles en precio y valorizado
+#   2. 2 decimales fijos en precios
+#   3. Semáforo rojo/naranja/verde en columnas de stock
+#   4. Encabezado azul oscuro #1e3a5f estilo financiero
+#   5. Fila de totales al pie (pinnedBottomRowData)
+#   6. Fuente monoespaciada en todas las columnas numéricas
 # ===========================================================================
 
 def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14):
-    """Renderiza la tabla AgGrid en vista desktop."""
+    """Renderiza la tabla AgGrid en vista desktop con formato financiero."""
     gb = GridOptionsBuilder.from_dataframe(df_grid)
     gb.configure_default_column(
         resizable=True, filter=True, sortable=True,
@@ -472,23 +463,162 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         enablePivot=True, enableValue=True,
         minWidth=100,
     )
-    
+
+    # ── CAMBIO 6: fuente mono para columnas numéricas genéricas ──
+    mono_style = JsCode("""
+        function(params) {
+            return { fontFamily: "'Courier New', Courier, monospace" };
+        }
+    """)
+
+    # ── CAMBIO 3: semáforo de colores para stock ──
+    stock_cell_style = JsCode("""
+        function(params) {
+            if (params.value === null || params.value === undefined) return {};
+            var v = Number(params.value);
+            var base = {
+                fontFamily: "'Courier New', Courier, monospace",
+                fontWeight: '600',
+                textAlign: 'right'
+            };
+            if (v === 0)
+                return Object.assign({}, base,
+                    { color: '#991b1b', backgroundColor: '#fee2e2' });
+            if (v < 10)
+                return Object.assign({}, base,
+                    { color: '#92400e', backgroundColor: '#fef3c7' });
+            return Object.assign({}, base,
+                { color: '#065f46', backgroundColor: '#d1fae5' });
+        }
+    """)
+
+    # ── CAMBIOS 1, 2 y 6: formateo por tipo de columna ──
     for c in df_grid.columns:
-        if pd.api.types.is_numeric_dtype(df_grid[c]):
-            af = "avg" if ("precio" in _norm(c) or "promedio" in _norm(c)) else "sum"
+        if not pd.api.types.is_numeric_dtype(df_grid[c]):
+            continue
+
+        norm_c   = _norm(c)
+        es_precio = any(k in norm_c for k in ("precio", "promedio", "unitario", "costo"))
+        es_valor  = any(k in norm_c for k in ("valorizado", "total", "importe", "monto"))
+        es_stock  = "stock" in norm_c
+
+        if es_stock:
+            # Cambio 3 + 6: semáforo, entero con separador de miles
             gb.configure_column(
-                c, aggFunc=af, type=["numericColumn"],
-                valueFormatter="x == null ? '' : x.toLocaleString()",
+                c,
+                aggFunc="sum",
+                type=["numericColumn"],
+                cellStyle=stock_cell_style,
+                valueFormatter=JsCode("""
+                    function(params) {
+                        if (params.value == null) return '';
+                        return Number(params.value).toLocaleString('es-PE', {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0
+                        });
+                    }
+                """),
             )
-    
-    row_h = max(28, min(60, font_px + 12))
+        elif es_precio:
+            # Cambios 1+2+6: S/ + 2 decimales fijos + mono
+            gb.configure_column(
+                c,
+                aggFunc="avg",
+                type=["numericColumn"],
+                cellStyle=mono_style,
+                valueFormatter=JsCode("""
+                    function(params) {
+                        if (params.value == null) return '';
+                        return 'S/ ' + Number(params.value).toLocaleString('es-PE', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        });
+                    }
+                """),
+            )
+        elif es_valor:
+            # Cambios 1+2+6: S/ + 2 decimales + mono
+            gb.configure_column(
+                c,
+                aggFunc="sum",
+                type=["numericColumn"],
+                cellStyle=mono_style,
+                valueFormatter=JsCode("""
+                    function(params) {
+                        if (params.value == null) return '';
+                        return 'S/ ' + Number(params.value).toLocaleString('es-PE', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        });
+                    }
+                """),
+            )
+        else:
+            # Resto numéricas: separador de miles, sin prefijo, mono
+            gb.configure_column(
+                c,
+                aggFunc="sum",
+                type=["numericColumn"],
+                cellStyle=mono_style,
+                valueFormatter=JsCode("""
+                    function(params) {
+                        if (params.value == null) return '';
+                        return Number(params.value).toLocaleString('es-PE', {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 2
+                        });
+                    }
+                """),
+            )
+
+    row_h    = max(28, min(60, font_px + 12))
     header_h = max(30, min(62, font_px + 14))
-    
+
+    # ── CAMBIO 5: fila de totales al pie ──
+    cols_valor  = [c for c in df_grid.columns
+                   if pd.api.types.is_numeric_dtype(df_grid[c]) and
+                   any(k in _norm(c) for k in ("valorizado", "total", "importe", "monto"))]
+    cols_precio = [c for c in df_grid.columns
+                   if pd.api.types.is_numeric_dtype(df_grid[c]) and
+                   any(k in _norm(c) for k in ("precio", "promedio", "unitario", "costo"))]
+    cols_stock  = [c for c in df_grid.columns
+                   if pd.api.types.is_numeric_dtype(df_grid[c]) and "stock" in _norm(c)]
+
+    primera_col = list(df_grid.columns)[0] if len(df_grid.columns) > 0 else None
+    fila_totales = {}
+    for c in df_grid.columns:
+        if c in cols_valor:
+            fila_totales[c] = round(float(df_grid[c].sum()), 2)
+        elif c in cols_precio:
+            fila_totales[c] = round(float(df_grid[c].mean()), 2)
+        elif c in cols_stock:
+            fila_totales[c] = round(float(df_grid[c].sum()), 0)
+        elif c == primera_col:
+            fila_totales[c] = "▶ TOTAL"
+        else:
+            fila_totales[c] = None
+
     opciones_grid = {
         "autoGroupColumnDef": {"minWidth": 200},
         "localeText": LOCALE_ES,
         "rowHeight": row_h,
         "headerHeight": header_h,
+        # Cambio 5: totales al pie
+        "pinnedBottomRowData": [fila_totales],
+        # Estilo especial de la fila pinned (refuerza el CSS)
+        "getRowStyle": JsCode("""
+            function(params) {
+                if (params.node.rowPinned === 'bottom') {
+                    return {
+                        fontWeight: '700',
+                        backgroundColor: '#dbeafe',
+                        color: '#1e3a5f',
+                        borderTop: '2px solid #3b82f6',
+                        fontSize: '13px'
+                    };
+                }
+            }
+        """),
         "onColumnVisible": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 50); }"),
         "onDisplayedColumnsChanged": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 50); }"),
         "onGridSizeChanged": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 50); }"),
@@ -503,7 +633,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             }
         """),
     }
-    
+
     agrupar_on = bool(grupos_sel)
     if agrupar_on:
         for c in grupos_sel:
@@ -514,26 +644,68 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         opciones_grid["pivotMode"] = False
     else:
         opciones_grid["pivotMode"] = False
-    
+
     gb.configure_side_bar()
     gb.configure_grid_options(**opciones_grid)
     gb.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
     grid_options = gb.build()
-    
+
+    # ── CAMBIO 4: encabezado azul oscuro #1e3a5f estilo financiero ──
     custom_css = {
-        ".ag-root-wrapper": {"background-color": "#ffffff", "border": "1px solid #e2e8f0", "border-radius": "8px", "width": "100% !important"},
-        ".ag-header": {"background-color": "#f1f5f9", "border-bottom": "2px solid #3b82f6"},
-        ".ag-header-cell-text": {"color": "#1e293b", "font-weight": "700", "font-size": f"{font_px}px"},
+        ".ag-root-wrapper": {
+            "background-color": "#ffffff",
+            "border": "1px solid #1e3a5f",
+            "border-radius": "8px",
+            "width": "100% !important",
+        },
+        ".ag-header": {
+            "background-color": "#1e3a5f !important",
+            "border-bottom": "3px solid #3b82f6",
+        },
+        ".ag-header-cell": {
+            "background-color": "#1e3a5f !important",
+        },
+        ".ag-header-group-cell": {
+            "background-color": "#1e3a5f !important",
+        },
+        ".ag-header-cell-text": {
+            "color": "#ffffff !important",
+            "font-weight": "700",
+            "font-size": f"{font_px}px",
+            "letter-spacing": "0.03em",
+            "text-transform": "uppercase",
+        },
+        ".ag-header-icon": {
+            "color": "#93c5fd !important",
+        },
+        ".ag-header-cell-resize::after": {
+            "background-color": "#3b82f6 !important",
+        },
         ".ag-row": {"color": "#334155", "border-color": "#e2e8f0"},
         ".ag-row-even": {"background-color": "#ffffff"},
         ".ag-row-odd": {"background-color": "#f8fafc"},
         ".ag-row-hover": {"background-color": "#eff6ff !important"},
         ".ag-cell": {"color": "#334155", "font-size": f"{font_px}px"},
-        ".ag-paging-panel": {"color": "#64748b", "background-color": "#f8fafc", "border-top": "1px solid #e2e8f0"},
+        # Cambio 5: fila de totales al pie
+        ".ag-row-pinned": {
+            "background-color": "#dbeafe !important",
+            "font-weight": "700 !important",
+            "border-top": "2px solid #3b82f6 !important",
+            "color": "#1e3a5f !important",
+        },
+        ".ag-paging-panel": {
+            "color": "#64748b",
+            "background-color": "#f8fafc",
+            "border-top": "1px solid #e2e8f0",
+        },
         ".ag-side-bar": {"background-color": "#f8fafc", "border-color": "#e2e8f0"},
-        ".ag-menu": {"background-color": "#ffffff", "color": "#1e293b", "border": "1px solid #e2e8f0"},
+        ".ag-menu": {
+            "background-color": "#ffffff",
+            "color": "#1e293b",
+            "border": "1px solid #e2e8f0",
+        },
     }
-    
+
     AgGrid(
         df_grid.head(5000), gridOptions=grid_options, height=600,
         theme="balham", custom_css=custom_css,
