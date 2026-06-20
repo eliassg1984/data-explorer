@@ -353,6 +353,93 @@ def inject_css():
 
 
 # ===========================================================================
+# OVERLAY DE ERRORES EN PANTALLA (para diagnóstico sin F12)
+# ===========================================================================
+
+def inject_error_overlay():
+    """Captura los errores de JavaScript de la ventana principal y los muestra
+    en un panel rojo fijo en pantalla. Así los errores quedan VISIBLES (también
+    en capturas de pantalla), sin necesidad de abrir la consola del navegador.
+
+    Otros scripts inyectados pueden reportar manualmente con:
+        window.__logErr('mi mensaje')
+    """
+    components.html("""
+    <script>
+    (function(){
+      var win = window.parent, doc = win.document;
+      if (win.__errOverlayInit) return;
+      win.__errOverlayInit = true;
+      win.__errLog = [];
+      function render(){
+        var box = doc.getElementById('err-overlay');
+        if (!win.__errLog.length){ if (box) box.remove(); return; }
+        if (!box){
+          box = doc.createElement('div');
+          box.id = 'err-overlay';
+          box.style.cssText = 'position:fixed;bottom:8px;right:8px;max-width:540px;'
+            + 'max-height:42vh;overflow:auto;z-index:2147483647;background:#7f1d1d;'
+            + 'color:#fff;font:12px/1.45 monospace;padding:10px 12px;border-radius:8px;'
+            + 'box-shadow:0 4px 16px rgba(0,0,0,.4)';
+          doc.body.appendChild(box);
+        }
+        var items = win.__errLog.slice(-12).map(function(e){
+          return String(e).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+        }).join('<br>──<br>');
+        box.innerHTML = '<b>⚠️ Errores JS (' + win.__errLog.length + ')</b>'
+          + '<span style="float:right;cursor:pointer;opacity:.7" '
+          + 'onclick="this.parentNode.remove()">✕</span><br>' + items;
+      }
+      function log(m){ win.__errLog.push(String(m).slice(0,400)); render(); }
+      win.addEventListener('error', function(ev){
+        log('[error] ' + (ev.message || ev.error) + (ev.filename ? ' @ ' + ev.filename : ''));
+      });
+      win.addEventListener('unhandledrejection', function(ev){
+        log('[promise] ' + ((ev.reason && ev.reason.message) || ev.reason));
+      });
+      win.__logErr = log;
+    })();
+    </script>
+    """, height=0)
+
+
+def inject_grid_health_check():
+    """Comprueba que el grid de AgGrid se haya montado de verdad. Los errores
+    de render DENTRO del iframe de AgGrid (p.ej. un cellRenderer/JsCode que
+    devuelve un nodo DOM → React #31) no llegan a la ventana principal, así que
+    aquí inspeccionamos el iframe del componente: si existe pero no aparece
+    '.ag-root-wrapper' tras unos segundos, lo reportamos al overlay de errores.
+    (No revisa el nº de filas: un grid vacío legítimo SÍ monta el wrapper.)"""
+    components.html("""
+    <script>
+    (function(){
+      var win = window.parent, doc = win.document;
+      var tries = 0, MAX = 14;  // ~14 * 500ms = 7s de gracia
+      function check(){
+        tries++;
+        var frames = doc.querySelectorAll('iframe[src*="st_aggrid"]');
+        if (frames.length === 0){
+          if (tries < MAX) setTimeout(check, 500);
+          return;  // el iframe del grid aún no aparece
+        }
+        var montado = false;
+        for (var i=0;i<frames.length;i++){
+          var d = null;
+          try { d = frames[i].contentDocument; } catch(e){}
+          if (d && d.querySelector('.ag-root-wrapper')){ montado = true; break; }
+        }
+        if (montado) return;                          // grid OK → silencio
+        if (tries < MAX){ setTimeout(check, 500); return; }
+        if (win.__logErr) win.__logErr('Tabla no renderizada: el grid de AgGrid '
+          + 'no se montó (posible cellRenderer/JsCode que devuelve un nodo DOM → React #31).');
+      }
+      setTimeout(check, 800);
+    })();
+    </script>
+    """, height=0)
+
+
+# ===========================================================================
 # BOTÓN FLOTANTE PARA ABRIR/CERRAR EL SIDEBAR (CACHEADO)
 # ===========================================================================
 
@@ -858,6 +945,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         enable_enterprise_modules=True, key=f"grid_{reporte}",
     )
 
+    # Verifica que el grid se haya montado y, si no, avisa en el overlay.
+    inject_grid_health_check()
+
 
 # ===========================================================================
 # FUNCIÓN: AGGRID MÓVIL (ANCHO COMPLETO)
@@ -921,6 +1011,9 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
         fit_columns_on_grid_load=False, allow_unsafe_jscode=True,
         enable_enterprise_modules=True, key=f"grid_movil_{reporte}",
     )
+
+    # Verifica que el grid se haya montado y, si no, avisa en el overlay.
+    inject_grid_health_check()
 
 
 # ===========================================================================
