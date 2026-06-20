@@ -480,16 +480,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         resto = [c for c in df_grid.columns if c not in prioridad]
         df_grid = df_grid[prioridad + resto]
 
-    # ─────────────────────────────────────────────────────────────────
-    # MEJORA 4: buscador global rápido (filtra TODAS las columnas a la vez)
-    # ─────────────────────────────────────────────────────────────────
-    buscar_txt = st.text_input(
-        "Buscar en la tabla",
-        key=f"qf_{reporte}",
-        placeholder="🔎 Buscar en todas las columnas…",
-        label_visibility="collapsed",
-    )
-
     # Máximo del valorizado para escalar las barras de datos (MEJORA 2)
     max_valorizado = 1.0
     if col_valorizado and col_valorizado in df_grid.columns:
@@ -597,6 +587,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 c, aggFunc="sum", type=["numericColumn"],
                 minWidth=170,
                 cellRenderer=valorizado_bar_renderer,
+                suppressHtmlEscaping=True,
                 valueFormatter=JsCode("""
                     function(params) {
                         if (params.value == null) return '';
@@ -746,16 +737,13 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                     "toolPanel": "agFiltersToolPanel",
                 },
             ],
-            "defaultToolPanel": "",   # "" = arranca colapsada; "columns" = abierta
+            "defaultToolPanel": "columns",   # arranca abierta en el panel de Columnas
             "position": "right",
         },
         "rowHeight": row_h,
         "headerHeight": header_h,
         # Fila de totales al pie
         "pinnedBottomRowData": [fila_totales],
-        # MEJORA 4: buscador global
-        "quickFilterText": buscar_txt,
-        "cacheQuickFilter": True,
         # MEJORA 5: selección de rango para totales en vivo al seleccionar celdas
         "enableRangeSelection": True,
         # MEJORA 6: retraso de tooltips
