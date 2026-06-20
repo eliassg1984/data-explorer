@@ -65,7 +65,6 @@ def inject_icon_rail(reportes, reporte_activo):
     Inyecta una barra lateral fija con emojis como iconos.
     Oculta el sidebar nativo y ajusta el margen del contenido.
     """
-    # Convertimos el dict de reportes a {nombre: emoji} para JS
     reportes_emoji = {}
     for nombre, info in reportes.items():
         icono_txt = info.get("icono", "❓")
@@ -77,174 +76,178 @@ def inject_icon_rail(reportes, reporte_activo):
     html = f"""
     <script>
     (function() {{
-        var doc = window.parent.document;  // escapar del iframe hacia la página principal
+        var doc = window.parent.document;
+        var win = window.parent;
 
-        // ── Estilos CSS inyectados en el <head> ──
-        var estilos = doc.createElement('style');
-        estilos.textContent = `
-            /* Ocultar sidebar nativo */
-            section[data-testid="stSidebar"] {{
-                display: none !important;
-            }}
-            /* Espacio para la barra */
-            .stApp {{
-                margin-left: 64px !important;
-            }}
-            /* Barra de iconos */
-            #icon-rail {{
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 64px;
-                height: 100vh;
-                background: #1e3a5f;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                padding-top: 1rem;
-                z-index: 999999;
-                box-shadow: 2px 0 8px rgba(0,0,0,0.15);
-                font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            }}
-            .rail-icon {{
-                width: 48px;
-                height: 48px;
-                margin: 6px 0;
-                border-radius: 12px;
-                background: transparent;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 24px;
-                color: #cbd5e1;
-                cursor: pointer;
-                transition: background 0.2s, color 0.2s;
-                position: relative;
-                overflow: hidden;  /* por si acaso */
-                white-space: nowrap;
-            }}
-            .rail-icon:hover {{
-                background: #2563eb;
-                color: white;
-            }}
-            .rail-icon.active {{
-                background: #3b82f6;
-                color: white;
-                box-shadow: 0 0 0 2px #93c5fd;
-            }}
-            /* Tooltip con el nombre del reporte */
-            .rail-icon::after {{
-                content: attr(data-tooltip);
-                position: absolute;
-                left: 100%;
-                top: 50%;
-                transform: translateY(-50%);
-                background: #1e293b;
-                color: white;
-                padding: 4px 8px;
-                border-radius: 6px;
-                white-space: nowrap;
-                font-size: 13px;
-                margin-left: 10px;
-                opacity: 0;
-                pointer-events: none;
-                transition: opacity 0.2s;
-                z-index: 100;
-            }}
-            .rail-icon:hover::after {{
-                opacity: 1;
-            }}
-            .rail-spacer {{
-                flex: 1;
-            }}
-            .rail-btn {{
-                width: 48px;
-                height: 48px;
-                margin: 6px 0;
-                border-radius: 12px;
-                background: transparent;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 22px;
-                color: #cbd5e1;
-                cursor: pointer;
-                transition: background 0.2s, color 0.2s;
-            }}
-            .rail-btn:hover {{
-                background: #2563eb;
-                color: white;
-            }}
-            /* Responsive: en móvil ocultar la barra y restaurar margen */
-            @media (max-width: 768px) {{
-                #icon-rail {{
+        // ── Inyectar estilos solo una vez (evitar duplicados) ──
+        if (!doc.getElementById('icon-rail-styles')) {{
+            var estilos = doc.createElement('style');
+            estilos.id = 'icon-rail-styles';
+            estilos.textContent = `
+                section[data-testid="stSidebar"] {{
                     display: none !important;
                 }}
                 .stApp {{
-                    margin-left: 0 !important;
+                    margin-left: 64px !important;
                 }}
-            }}
-        `;
-        doc.head.appendChild(estilos);
-
-        // ── Crear la barra en el <body> ──
-        var rail = doc.createElement('div');
-        rail.id = 'icon-rail';
-
-        // Contenedor de iconos
-        var iconsContainer = doc.createElement('div');
-        iconsContainer.id = 'rail-icons';
-        rail.appendChild(iconsContainer);
-
-        // Espaciador flexible
-        var spacer = doc.createElement('div');
-        spacer.className = 'rail-spacer';
-        rail.appendChild(spacer);
-
-        // Botón de actualizar
-        var refreshBtn = doc.createElement('div');
-        refreshBtn.className = 'rail-btn';
-        refreshBtn.title = 'Actualizar datos';
-        refreshBtn.innerHTML = '🔄';
-        refreshBtn.onclick = function() {{
-            // Recargar con parámetro refresh=1
-            var url = new URL(window.location.href);
-            url.searchParams.set('refresh', '1');
-            window.location.href = url.toString();
-        }};
-        rail.appendChild(refreshBtn);
-
-        doc.body.appendChild(rail);
-
-        // ── Llenar los iconos de reportes ──
-        var reportes = {reportes_js};
-        var activo = {activo_js};
-        var container = doc.getElementById('rail-icons');
-        for (var nombre in reportes) {{
-            var emoji = reportes[nombre];
-            var div = doc.createElement('div');
-            div.className = 'rail-icon' + (nombre === activo ? ' active' : '');
-            div.setAttribute('data-tooltip', nombre);
-            div.innerHTML = emoji;
-            // Manejar clic para cambiar de reporte
-            div.onclick = (function(nombre) {{
-                return function() {{
-                    var url = new URL(window.location.href);
-                    url.searchParams.set('reporte', encodeURIComponent(nombre));
-                    // Eliminar el parámetro refresh si existe
-                    url.searchParams.delete('refresh');
-                    window.location.href = url.toString();
-                }};
-            }})(nombre);
-            container.appendChild(div);
+                #icon-rail {{
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 64px;
+                    height: 100vh;
+                    background: #1e3a5f;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    padding-top: 1rem;
+                    z-index: 999999;
+                    box-shadow: 2px 0 8px rgba(0,0,0,0.15);
+                    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                    overflow: visible;
+                }}
+                .rail-icon {{
+                    width: 48px;
+                    height: 48px;
+                    margin: 6px 0;
+                    border-radius: 12px;
+                    background: transparent;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 24px;
+                    color: #cbd5e1;
+                    cursor: pointer;
+                    transition: background 0.2s, color 0.2s;
+                    position: relative;
+                    overflow: visible;
+                }}
+                .rail-icon:hover {{
+                    background: #2563eb;
+                    color: white;
+                }}
+                .rail-icon.active {{
+                    background: #3b82f6;
+                    color: white;
+                    box-shadow: 0 0 0 2px #93c5fd;
+                }}
+                .rail-icon::after {{
+                    content: attr(data-tooltip);
+                    position: fixed;
+                    left: 72px;
+                    background: #1e293b;
+                    color: white;
+                    padding: 4px 10px;
+                    border-radius: 6px;
+                    white-space: nowrap;
+                    font-size: 13px;
+                    opacity: 0;
+                    pointer-events: none;
+                    transition: opacity 0.15s;
+                    z-index: 9999999;
+                    transform: translateY(-50%);
+                    margin-top: 0;
+                }}
+                .rail-icon:hover::after {{
+                    opacity: 1;
+                }}
+                .rail-spacer {{
+                    flex: 1;
+                }}
+                .rail-btn {{
+                    width: 48px;
+                    height: 48px;
+                    margin: 6px 0;
+                    border-radius: 12px;
+                    background: transparent;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 22px;
+                    color: #cbd5e1;
+                    cursor: pointer;
+                    transition: background 0.2s, color 0.2s;
+                }}
+                .rail-btn:hover {{
+                    background: #2563eb;
+                    color: white;
+                }}
+                @media (max-width: 768px) {{
+                    #icon-rail {{ display: none !important; }}
+                    .stApp {{ margin-left: 0 !important; }}
+                }}
+            `;
+            doc.head.appendChild(estilos);
         }}
 
-        // Asegurarse de que el rail se mantenga visible (por si Streamlit lo pisa)
-        setInterval(function() {{
-            if (!doc.getElementById('icon-rail')) {{
-                doc.body.appendChild(rail);
+        // ── Construir el rail DOM (una sola vez; guardado en win.__iconRail) ──
+        function construirRail() {{
+            var rail = doc.createElement('div');
+            rail.id = 'icon-rail';
+
+            var iconsContainer = doc.createElement('div');
+            iconsContainer.id = 'rail-icons';
+            rail.appendChild(iconsContainer);
+
+            var spacer = doc.createElement('div');
+            spacer.className = 'rail-spacer';
+            rail.appendChild(spacer);
+
+            var refreshBtn = doc.createElement('div');
+            refreshBtn.className = 'rail-btn';
+            refreshBtn.title = 'Actualizar datos';
+            refreshBtn.innerHTML = '🔄';
+            refreshBtn.onclick = function() {{
+                var url = new URL(win.location.href);
+                url.searchParams.set('refresh', '1');
+                win.location.assign(url.toString());
+            }};
+            rail.appendChild(refreshBtn);
+
+            // Llenar iconos
+            var reportes = {reportes_js};
+            var activo = {activo_js};
+            for (var nombre in reportes) {{
+                var emoji = reportes[nombre];
+                var div = doc.createElement('div');
+                div.className = 'rail-icon' + (nombre === activo ? ' active' : '');
+                div.setAttribute('data-tooltip', nombre);
+                div.innerHTML = emoji;
+                div.onclick = (function(n) {{
+                    return function(e) {{
+                        e.stopPropagation();
+                        var url = new URL(win.location.href);
+                        url.searchParams.set('reporte', encodeURIComponent(n));
+                        url.searchParams.delete('refresh');
+                        win.location.assign(url.toString());
+                    }};
+                }})(nombre);
+                iconsContainer.appendChild(div);
             }}
-        }}, 2000);
+
+            win.__iconRail = rail;
+            return rail;
+        }}
+
+        // ── Anclar el rail al body; re-anclarlo si Streamlit lo desconecta ──
+        function anclarRail() {{
+            var existente = doc.getElementById('icon-rail');
+            if (existente && existente.parentNode === doc.body) {{
+                return; // ya está bien anclado
+            }}
+            if (existente) {{
+                existente.parentNode.removeChild(existente);
+            }}
+            var rail = win.__iconRail || construirRail();
+            doc.body.appendChild(rail);
+        }}
+
+        anclarRail();
+
+        // Intervalo corto (500 ms) para sobrevivir rerenders de Streamlit
+        if (!win.__iconRailInterval) {{
+            win.__iconRailInterval = setInterval(anclarRail, 500);
+        }}
     }})();
     </script>
     """
@@ -267,6 +270,7 @@ def inject_top_bar(reporte_activo):
     <script>
     (function() {{
         var doc = window.parent.document;
+        var win = window.parent;
 
         var estilos = doc.createElement('style');
         estilos.textContent = `
@@ -355,9 +359,9 @@ def inject_top_bar(reporte_activo):
             refreshBtn.title = 'Actualizar datos';
             refreshBtn.innerHTML = '&#x21bb;';
             refreshBtn.onclick = function() {{
-                var url = new URL(window.location.href);
+                var url = new URL(win.location.href);
                 url.searchParams.set('refresh', '1');
-                window.location.href = url.toString();
+                win.location.assign(url.toString());
             }};
             bar.appendChild(refreshBtn);
 
@@ -477,23 +481,55 @@ else:
 
 
 # ===========================================================================
-# CONTROLES DE FILTRO (AHORA EN LA PÁGINA PRINCIPAL)
+# CONTROLES DE FILTRO — st.popover (panel flotante, no empuja el contenido)
 # ===========================================================================
-with st.expander("🔍 Filtros", expanded=True):
-    controles = []
-    if col_fecha and df_f[col_fecha].notna().any():
-        controles.append(("fecha", col_fecha))
-    for cc in cat_cols:
-        controles.append(("cat", cc))
-    if col_busc:
-        controles.append(("busc", col_busc))
-    if cols_agrupar:
-        controles.append(("grp", None))
 
-    grupos_sel = []
+# Acumular selecciones ANTES de filtrar (para poder contarlas en el label)
+controles = []
+if col_fecha and df_f[col_fecha].notna().any():
+    controles.append(("fecha", col_fecha))
+for cc in cat_cols:
+    controles.append(("cat", cc))
+if col_busc:
+    controles.append(("busc", col_busc))
+if cols_agrupar:
+    controles.append(("grp", None))
 
+grupos_sel = []
+
+# Leer valores actuales del session_state para mostrar badge en el botón
+def _contar_filtros_activos():
+    n = 0
+    for i in range(0, len(controles), 4):
+        fila = controles[i:i+4]
+        for j, (tipo, col) in enumerate(fila):
+            k_fecha = f"fch_{reporte}{i}{j}"
+            k_cat   = f"cat_{reporte}{col}{i}_{j}" if col else None
+            k_busc  = f"busc_{reporte}{i}{j}"
+            if tipo == "fecha":
+                val = st.session_state.get(k_fecha)
+                if isinstance(val, (tuple, list)) and len(val) == 2:
+                    try:
+                        fmin2 = df_f[col].min().date()
+                        fmax2 = df_f[col].max().date()
+                        if val[0] != fmin2 or val[1] != fmax2:
+                            n += 1
+                    except Exception:
+                        pass
+            elif tipo == "cat" and k_cat:
+                if st.session_state.get(k_cat):
+                    n += 1
+            elif tipo == "busc":
+                if st.session_state.get(k_busc):
+                    n += 1
+    return n
+
+n_activos = _contar_filtros_activos()
+label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_activos != 1 else '') if n_activos else ''}"
+
+with st.popover(label_btn, use_container_width=False):
     if controles:
-        MAX_COLS_POR_FILA = 4
+        MAX_COLS_POR_FILA = 2   # panel más estrecho → 2 columnas caben mejor
         for i in range(0, len(controles), MAX_COLS_POR_FILA):
             fila_controles = controles[i:i+MAX_COLS_POR_FILA]
             cols_ui = st.columns(len(fila_controles))
