@@ -9,9 +9,9 @@ import streamlit.components.v1 as components
 import plotly.express as px
 
 from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
-from data import REPORTES, cargar
+from data import REPORTES, cargar, secrets_disponibles
 from ui import (
-    TAM_FUENTE, inject_css,
+    TAM_FUENTE, inject_css, inject_error_overlay,
     renderizar_aggrid_desktop, renderizar_aggrid_movil,
     renderizar_graficos
 )
@@ -55,6 +55,9 @@ def init_app():
 
 init_app()
 
+# Overlay de errores JS en pantalla (diagnóstico sin abrir la consola/F12).
+inject_error_overlay()
+
 
 # ===========================================================================
 # BARRA LATERAL DE ICONOS (RAIL) – INYECTADA DIRECTAMENTE EN LA PÁGINA
@@ -90,8 +93,8 @@ def inject_icon_rail(reportes, reporte_activo):
             var navScript = doc.createElement('script');
             navScript.id = 'rail-nav-fns';
             navScript.textContent =
-                "window.__navReporte=function(n){{var u=new URL(window.location.href);u.searchParams.set('reporte',n);u.searchParams.delete('refresh');window.location.assign(u.toString());}};" +
-                "window.__refreshReporte=function(){{var u=new URL(window.location.href);u.searchParams.set('refresh','1');window.location.assign(u.toString());}};";
+                "window.__navReporte=function(n){{try{{var u=new URL(window.location.href);u.searchParams.set('reporte',n);u.searchParams.delete('refresh');window.location.assign(u.toString());}}catch(e){{if(window.__logErr)window.__logErr('Navegacion bloqueada (sandbox?): '+e.message);}}}};" +
+                "window.__refreshReporte=function(){{try{{var u=new URL(window.location.href);u.searchParams.set('refresh','1');window.location.assign(u.toString());}}catch(e){{if(window.__logErr)window.__logErr('Refresco bloqueado (sandbox?): '+e.message);}}}};";
             doc.head.appendChild(navScript);
         }}
 
@@ -292,8 +295,8 @@ def inject_top_bar(reporte_activo):
             var navScript = doc.createElement('script');
             navScript.id = 'rail-nav-fns';
             navScript.textContent =
-                "window.__navReporte=function(n){{var u=new URL(window.location.href);u.searchParams.set('reporte',n);u.searchParams.delete('refresh');window.location.assign(u.toString());}};" +
-                "window.__refreshReporte=function(){{var u=new URL(window.location.href);u.searchParams.set('refresh','1');window.location.assign(u.toString());}};";
+                "window.__navReporte=function(n){{try{{var u=new URL(window.location.href);u.searchParams.set('reporte',n);u.searchParams.delete('refresh');window.location.assign(u.toString());}}catch(e){{if(window.__logErr)window.__logErr('Navegacion bloqueada (sandbox?): '+e.message);}}}};" +
+                "window.__refreshReporte=function(){{try{{var u=new URL(window.location.href);u.searchParams.set('refresh','1');window.location.assign(u.toString());}}catch(e){{if(window.__logErr)window.__logErr('Refresco bloqueado (sandbox?): '+e.message);}}}};";
             doc.head.appendChild(navScript);
         }}
 
@@ -425,6 +428,37 @@ inject_icon_rail(REPORTES, reporte)
 inject_top_bar(reporte)
 
 cfg = REPORTES[reporte]
+
+
+# ===========================================================================
+# AVISO DE MODO DEMO + PANEL DE DIAGNÓSTICO (?debug=1)
+# ===========================================================================
+modo_demo = not secrets_disponibles()
+if modo_demo:
+    st.caption("🧪 MODO DEMO — datos de ejemplo (no hay conexión a R2). "
+               "Configura los secrets R2_* para usar datos reales.")
+
+if st.query_params.get("debug"):
+    import sys
+    from importlib.metadata import version, PackageNotFoundError
+
+    def _ver(paquete):
+        try:
+            return version(paquete)
+        except PackageNotFoundError:
+            return "?"
+
+    with st.expander("🔧 Diagnóstico de entorno", expanded=True):
+        st.json({
+            "python": sys.version.split()[0],
+            "streamlit": _ver("streamlit"),
+            "streamlit-aggrid": _ver("streamlit-aggrid"),
+            "pandas": _ver("pandas"),
+            "plotly": _ver("plotly"),
+            "duckdb": _ver("duckdb"),
+            "modo_demo": modo_demo,
+            "reporte": reporte,
+        })
 
 
 # ===========================================================================
