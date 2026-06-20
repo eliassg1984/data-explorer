@@ -77,7 +77,7 @@ def inject_icon_rail(reportes, reporte_activo):
     html = f"""
     <script>
     (function() {{
-        var doc = window.document;  // documento principal (no iframe)
+        var doc = window.parent.document;  // escapar del iframe hacia la página principal
 
         // ── Estilos CSS inyectados en el <head> ──
         var estilos = doc.createElement('style');
