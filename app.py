@@ -2,15 +2,17 @@
 Panel de Reportes v2.0 - Punto de entrada principal (OPTIMIZADO).
 """
 
+import json
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 import plotly.express as px
 from streamlit_option_menu import option_menu
 
 from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
 from data import REPORTES, cargar
 from ui import (
-    TAM_FUENTE, inject_css, inject_sidebar_toggle,
+    TAM_FUENTE, inject_css,
     renderizar_aggrid_desktop, renderizar_aggrid_movil,
     renderizar_graficos
 )
@@ -41,128 +43,187 @@ init_app()
 
 
 # ===========================================================================
-# FUNCIONES AUXILIARES CACHEABLES
+# BARRA LATERAL DE ICONOS (RAIL)
 # ===========================================================================
 
-@st.cache_data
-def get_columnas_sugeridas(df_f, col_fecha, cat_cols, col_busc, cfg):
-    """Calcula las columnas sugeridas (cacheado)."""
-    todas_cols = df_f.columns.tolist()
+def inject_icon_rail(reportes, reporte_activo):
+    """
+    Inyecta una barra lateral estrecha con iconos de navegación.
+    Oculta el sidebar nativo de Streamlit.
+    """
+    reportes_js = json.dumps({k: v["icono"] for k, v in reportes.items()})
+    activo_js = json.dumps(reporte_activo)
 
-    if "columnas" in cfg:
-        sugeridas, faltan_cols = resolver_columnas(df_f, cfg["columnas"])
-    else:
-        faltan_cols = []
-        sugeridas = []
-        # 1) primero las columnas "clave" detectadas (fecha, categorías, buscador)
-        for c in [col_fecha] + cat_cols + ([col_busc] if col_busc else []):
-            if c and c not in sugeridas:
-                sugeridas.append(c)
-        # 2) luego TODAS las demás columnas (sin límite y sin filtrar por tipo)
-        for c in todas_cols:
-            if c not in sugeridas:
-                sugeridas.append(c)
+    html = f"""
+    <style>
+    /* Ocultar el sidebar nativo de Streamlit */
+    section[data-testid="stSidebar"] {{
+        display: none !important;
+    }}
+    /* Ajustar el área principal para que empiece después de la barra */
+    .stApp {{
+        margin-left: 64px !important;
+    }}
+    /* Nuestra barra personalizada */
+    #icon-rail {{
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 64px;
+        height: 100vh;
+        background: #1e3a5f;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 1rem;
+        z-index: 999999;
+        box-shadow: 2px 0 8px rgba(0,0,0,0.15);
+    }}
+    .rail-icon {{
+        width: 48px;
+        height: 48px;
+        margin: 6px 0;
+        border-radius: 12px;
+        background: transparent;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        color: #cbd5e1;
+        cursor: pointer;
+        transition: background 0.2s, color 0.2s;
+        position: relative;
+    }}
+    .rail-icon:hover {{
+        background: #2563eb;
+        color: white;
+    }}
+    .rail-icon.active {{
+        background: #3b82f6;
+        color: white;
+        box-shadow: 0 0 0 2px #93c5fd;
+    }}
+    /* Tooltip que aparece al pasar el ratón */
+    .rail-icon::after {{
+        content: attr(data-tooltip);
+        position: absolute;
+        left: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        background: #1e293b;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 6px;
+        white-space: nowrap;
+        font-size: 13px;
+        margin-left: 10px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
+        z-index: 100;
+    }}
+    .rail-icon:hover::after {{
+        opacity: 1;
+    }}
+    /* Espacio flexible para empujar los botones inferiores */
+    .rail-spacer {{
+        flex: 1;
+    }}
+    .rail-btn {{
+        width: 48px;
+        height: 48px;
+        margin: 6px 0;
+        border-radius: 12px;
+        background: transparent;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        color: #cbd5e1;
+        cursor: pointer;
+        transition: background 0.2s, color 0.2s;
+    }}
+    .rail-btn:hover {{
+        background: #2563eb;
+        color: white;
+    }}
+    /* Responsive: en móvil ocultar la barra y restaurar el margen */
+    @media (max-width: 768px) {{
+        #icon-rail {{
+            display: none !important;
+        }}
+        .stApp {{
+            margin-left: 0 !important;
+        }}
+    }}
+    </style>
+    <div id="icon-rail">
+        <div id="rail-icons"></div>
+        <div class="rail-spacer"></div>
+        <div class="rail-btn" id="refresh-btn" title="Actualizar datos">🔄</div>
+    </div>
+    <script>
+    const reportes = {reportes_js};
+    const activo = {activo_js};
+    const container = document.getElementById('rail-icons');
 
-    return sugeridas, faltan_cols, todas_cols
+    for (const [nombre, icono] of Object.entries(reportes)) {{
+        const div = document.createElement('div');
+        div.className = 'rail-icon' + (nombre === activo ? ' active' : '');
+        div.setAttribute('data-tooltip', nombre);
+        div.innerHTML = icono;
+        div.onclick = () => {{
+            const url = new URL(window.parent.location.href);
+            url.searchParams.set('reporte', encodeURIComponent(nombre));
+            // Eliminar el parámetro de refresco para no activarlo de nuevo
+            url.searchParams.delete('refresh');
+            window.parent.location.href = url.toString();
+        }};
+        container.appendChild(div);
+    }}
 
-
-@st.cache_data
-def get_opciones_filtro(df_f, col, tipo="cat"):
-    """Obtiene opciones de filtro (cacheado)."""
-    if tipo == "cat":
-        return sorted(df_f[col].dropna().unique().tolist(), key=lambda x: str(x))
-    elif tipo == "busc":
-        return sorted(df_f[col].dropna().astype(str).unique().tolist(), key=lambda x: x.lower())
-    return []
+    // Botón de actualizar: añade ?refresh=1 y recarga
+    document.getElementById('refresh-btn').onclick = () => {{
+        const url = new URL(window.parent.location.href);
+        url.searchParams.set('refresh', '1');
+        window.parent.location.href = url.toString();
+    }};
+    </script>
+    """
+    components.html(html, height=0, scrolling=False)
 
 
 # ===========================================================================
-# SIDEBAR
+# LEER REPORTE DESDE LA URL Y APLICAR REFRESCO
 # ===========================================================================
-with st.sidebar:
-    if st.button("🔄 Actualizar datos", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
 
-    st.markdown("---")
+params = st.query_params
+reporte_url = params.get("reporte", None)
+if reporte_url:
+    reporte = reporte_url
+else:
+    reporte = list(REPORTES.keys())[0]   # primer reporte como defecto
 
-    reporte = option_menu(
-        menu_title="Seleccionar Reporte",
-        options=list(REPORTES.keys()),
-        icons=[v["icono"] for v in REPORTES.values()],
-        menu_icon="bar-chart-fill",
-        default_index=2,
-        styles={
-            "container": {"padding": "4px", "background-color": "#f1f5f9"},
-            "menu-title": {
-                "color": "#475569", "font-size": "13px",
-                "text-transform": "uppercase", "letter-spacing": "1px", "font-weight": "700",
-            },
-            "icon": {"color": "#3b82f6", "font-size": "18px"},
-            "nav-link": {
-                "font-size": "14px", "color": "#475569",
-                "background-color": "#ffffff", "margin": "5px 0",
-                "border-radius": "8px", "--hover-color": "#eff6ff",
-                "border": "1px solid #e2e8f0",
-            },
-            "nav-link-selected": {
-                "background-color": "#3b82f6", "color": "#ffffff",
-                "border": "1px solid #3b82f6",
-            },
-        },
-    )
+# Si se pulsó el botón de actualizar (refresh=1), limpiar caché y recargar
+if params.get("refresh"):
+    st.cache_data.clear()
+    # Limpiar el parámetro para evitar bucle y recargar
+    st.query_params.clear()
+    st.rerun()
 
-    st.markdown("---")
-
-    # ============ INICIALIZAR ESTADOS (solo si no existen) ============
-    if 'forzar_movil' not in st.session_state:
-        st.session_state.forzar_movil = False
-    if 'tabla_tam' not in st.session_state:
-        st.session_state.tabla_tam = "Mediano"
-
-    # ============ CONTROLES DE VISTA ============
-    with st.expander("🔧 Configuración de vista", expanded=False):
-        st.markdown("### 📱 Modo de visualización")
-        st.session_state.forzar_movil = st.checkbox(
-            "Forzar vista móvil",
-            value=st.session_state.forzar_movil,
-            help="Activar para probar la vista optimizada para celular",
-        )
-
-        st.markdown("### 🔤 Tamaño de texto")
-        st.session_state.tabla_tam = st.select_slider(
-            "Tamaño de letra en tablas",
-            options=list(TAM_FUENTE.keys()),
-            value=st.session_state.tabla_tam,
-            help="Ajusta el tamaño de fuente de la tabla de datos",
-        )
-
-        # Vista previa del tamaño seleccionado
-        px_size = TAM_FUENTE[st.session_state.tabla_tam]
-        st.markdown(f"""
-        <div style="
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 10px 14px;
-            margin-top: 8px;
-            font-size: {px_size}px;
-            color: #334155;
-            text-align: center;
-            transition: all 0.3s ease;
-        ">
-            👁️ Texto de ejemplo a <b>{px_size}px</b>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # Botón flotante ☰: se inyecta AQUÍ, al final del sidebar, en vez de arriba.
-    # Así el iframe vacío de components.html(height=0) reserva su ~150px al pie
-    # del sidebar (inofensivo), en lugar de empujar el contenido principal hacia
-    # abajo. El sidebar siempre se ejecuta antes de cualquier st.stop(), por lo
-    # que el botón se renderiza siempre.
-    inject_sidebar_toggle()
+# Inyectar la barra de iconos (después de leer los params, antes de dibujar nada)
+inject_icon_rail(REPORTES, reporte)
 
 cfg = REPORTES[reporte]
+
+
+# ===========================================================================
+# INICIALIZAR ESTADOS DE CONFIGURACIÓN DE VISTA
+# ===========================================================================
+if 'forzar_movil' not in st.session_state:
+    st.session_state.forzar_movil = False
+if 'tabla_tam' not in st.session_state:
+    st.session_state.tabla_tam = "Mediano"
 
 
 # ===========================================================================
@@ -172,10 +233,6 @@ df = cargar(cfg["archivo"])
 if df is None or df.empty:
     st.warning("No se pudieron cargar los datos o el archivo está vacío.")
     st.stop()
-
-# --- DEBUG: descomenta estas 2 líneas para ver los nombres REALES de las columnas ---
-# st.write(f"**Columnas de '{reporte}':**", df.columns.tolist())
-# st.stop()
 
 st.subheader(reporte)
 
@@ -215,6 +272,22 @@ df_f = df.copy()
 if col_fecha:
     df_f[col_fecha] = pd.to_datetime(df_f[col_fecha], errors="coerce")
 
+@st.cache_data
+def get_columnas_sugeridas(df_f, col_fecha, cat_cols, col_busc, cfg):
+    todas_cols = df_f.columns.tolist()
+    if "columnas" in cfg:
+        sugeridas, faltan_cols = resolver_columnas(df_f, cfg["columnas"])
+    else:
+        faltan_cols = []
+        sugeridas = []
+        for c in [col_fecha] + cat_cols + ([col_busc] if col_busc else []):
+            if c and c not in sugeridas:
+                sugeridas.append(c)
+        for c in todas_cols:
+            if c not in sugeridas:
+                sugeridas.append(c)
+    return sugeridas, faltan_cols, todas_cols
+
 sugeridas, faltan_cols, todas_cols = get_columnas_sugeridas(
     df_f, col_fecha, cat_cols, col_busc, cfg
 )
@@ -226,67 +299,96 @@ else:
 
 
 # ===========================================================================
-# CONTROLES DE FILTRO
+# CONTROLES DE FILTRO (AHORA EN LA PÁGINA PRINCIPAL)
 # ===========================================================================
-controles = []
-if col_fecha and df_f[col_fecha].notna().any():
-    controles.append(("fecha", col_fecha))
-for cc in cat_cols:
-    controles.append(("cat", cc))
-if col_busc:
-    controles.append(("busc", col_busc))
-if cols_agrupar:
-    controles.append(("grp", None))
+with st.expander("🔍 Filtros", expanded=True):
+    controles = []
+    if col_fecha and df_f[col_fecha].notna().any():
+        controles.append(("fecha", col_fecha))
+    for cc in cat_cols:
+        controles.append(("cat", cc))
+    if col_busc:
+        controles.append(("busc", col_busc))
+    if cols_agrupar:
+        controles.append(("grp", None))
 
-grupos_sel = []
+    grupos_sel = []
 
-if controles:
-    MAX_COLS_POR_FILA = 4
-    for i in range(0, len(controles), MAX_COLS_POR_FILA):
-        fila_controles = controles[i:i+MAX_COLS_POR_FILA]
-        cols_ui = st.columns(len(fila_controles))
+    if controles:
+        MAX_COLS_POR_FILA = 4
+        for i in range(0, len(controles), MAX_COLS_POR_FILA):
+            fila_controles = controles[i:i+MAX_COLS_POR_FILA]
+            cols_ui = st.columns(len(fila_controles))
 
-        for j, (tipo, col) in enumerate(fila_controles):
-            with cols_ui[j]:
-                if tipo == "fecha":
-                    fmin = df_f[col].min().date()
-                    fmax = df_f[col].max().date()
-                    rango = st.date_input(
-                        "📅 Fecha", value=(fmin, fmax),
-                        min_value=fmin, max_value=fmax,
-                        format="DD/MM/YYYY", key=f"fch_{reporte}{i}{j}",
-                    )
-                    if isinstance(rango, (tuple, list)) and len(rango) == 2:
-                        ini, fin = rango
-                        df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
+            for j, (tipo, col) in enumerate(fila_controles):
+                with cols_ui[j]:
+                    if tipo == "fecha":
+                        fmin = df_f[col].min().date()
+                        fmax = df_f[col].max().date()
+                        rango = st.date_input(
+                            "📅 Fecha", value=(fmin, fmax),
+                            min_value=fmin, max_value=fmax,
+                            format="DD/MM/YYYY", key=f"fch_{reporte}{i}{j}",
+                        )
+                        if isinstance(rango, (tuple, list)) and len(rango) == 2:
+                            ini, fin = rango
+                            df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
 
-                elif tipo == "cat":
-                    opts = get_opciones_filtro(df, col, "cat")
-                    sel = st.multiselect(
-                        f"📂 {col}", opts, placeholder="Todos",
-                        key=f"cat_{reporte}{col}{i}_{j}"
-                    )
-                    if sel:
-                        df_f = df_f[df_f[col].isin(sel)]
+                    elif tipo == "cat":
+                        @st.cache_data
+                        def get_opciones_cat(df, col):
+                            return sorted(df[col].dropna().unique().tolist(), key=lambda x: str(x))
 
-                elif tipo == "busc":
-                    opts_prod = get_opciones_filtro(df_f, col, "busc")
-                    sel_prod = st.multiselect(
-                        f"🔎 {col}", opts_prod, placeholder="Buscar…",
-                        key=f"busc_{reporte}{i}{j}"
-                    )
-                    if sel_prod:
-                        df_f = df_f[df_f[col].astype(str).isin(sel_prod)]
+                        opts = get_opciones_cat(df, col)
+                        sel = st.multiselect(
+                            f"📂 {col}", opts, placeholder="Todos",
+                            key=f"cat_{reporte}{col}{i}_{j}"
+                        )
+                        if sel:
+                            df_f = df_f[df_f[col].isin(sel)]
 
-                elif tipo == "grp":
-                    grupos_sel = st.multiselect(
-                        "📊 Agrupar por", cols_agrupar, default=[],
-                        key=f"grp_{reporte}{i}{j}", placeholder="Sin agrupar"
-                    )
+                    elif tipo == "busc":
+                        @st.cache_data
+                        def get_opciones_busc(df, col):
+                            return sorted(df[col].dropna().astype(str).unique().tolist(), key=lambda x: x.lower())
+
+                        opts_prod = get_opciones_busc(df_f, col)
+                        sel_prod = st.multiselect(
+                            f"🔎 {col}", opts_prod, placeholder="Buscar…",
+                            key=f"busc_{reporte}{i}{j}"
+                        )
+                        if sel_prod:
+                            df_f = df_f[df_f[col].astype(str).isin(sel_prod)]
+
+                    elif tipo == "grp":
+                        grupos_sel = st.multiselect(
+                            "📊 Agrupar por", cols_agrupar, default=[],
+                            key=f"grp_{reporte}{i}{j}", placeholder="Sin agrupar"
+                        )
 
 
 # ===========================================================================
-# AVISOS
+# CONFIGURACIÓN DE VISTA
+# ===========================================================================
+with st.expander("⚙️ Configuración de vista", expanded=False):
+    col1, col2 = st.columns(2)
+    with col1:
+        st.session_state.forzar_movil = st.checkbox(
+            "Forzar vista móvil",
+            value=st.session_state.forzar_movil,
+            help="Activar para probar la vista optimizada para celular",
+        )
+    with col2:
+        st.session_state.tabla_tam = st.select_slider(
+            "Tamaño de letra",
+            options=list(TAM_FUENTE.keys()),
+            value=st.session_state.tabla_tam,
+            help="Ajusta el tamaño de fuente de la tabla",
+        )
+
+
+# ===========================================================================
+# AVISOS DE COLUMNAS FALTANTES
 # ===========================================================================
 if faltantes_aviso:
     st.caption("⚠️ No se encontraron: " + ", ".join(faltantes_aviso))
@@ -297,13 +399,13 @@ if "columnas" in cfg and faltan_cols:
 # ===========================================================================
 # SELECTOR DE COLUMNAS
 # ===========================================================================
-usa_vista_movil = st.session_state.get('forzar_movil', False)
+usa_vista_movil = st.session_state.forzar_movil
 tiene_config_movil = "columnas_movil" in cfg
 
 if not usa_vista_movil:
-    with st.expander("⚙️ Configuración de columnas"):
+    with st.expander("⚙️ Columnas visibles"):
         cols_mostrar = st.multiselect(
-            "Seleccionar columnas visibles", todas_cols,
+            "Seleccionar columnas", todas_cols,
             default=sugeridas, key=f"cols_{reporte}",
             label_visibility="collapsed", placeholder="Selecciona columnas",
         )
@@ -332,7 +434,7 @@ if df_f.empty:
 # ===========================================================================
 # RENDERIZAR TABLA
 # ===========================================================================
-font_px = TAM_FUENTE.get(st.session_state.get("tabla_tam", "Mediano"), 14)
+font_px = TAM_FUENTE.get(st.session_state.tabla_tam, 14)
 
 if usa_vista_movil and tiene_config_movil:
     st.caption("📱 Vista móvil • Desliza para más columnas • Mantén presionado para menú")
