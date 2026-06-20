@@ -444,43 +444,87 @@ def inject_sidebar_toggle():
 
 
 # ===========================================================================
-# FUNCIÓN: AGGRID DESKTOP — con formato financiero
-# Cambios aplicados:
-#   1. S/ + separador de miles en precio y valorizado
-#   2. 2 decimales fijos en precios
-#   3. Semáforo rojo/naranja/verde en columnas de stock
-#   4. Encabezado azul oscuro #1e3a5f estilo financiero
-#   5. Fila de totales al pie (pinnedBottomRowData)
-#   6. Fuente monoespaciada en todas las columnas numéricas
+# FUNCIÓN: AGGRID DESKTOP — con formato financiero (MEJORADO)
+# Mejoras aplicadas:
+#   1. Reordenar + FIJAR columna Producto (Stock/Precio/Valorizado al frente)
+#   2. Barras de datos dentro de la columna Valorizado
+#   3. Semáforo de FILA completa según el stock (no solo la celda)
+#   4. Buscador global rápido (filtra todas las columnas a la vez)
+#   5. Barra de estado al pie con totales en vivo (selecciona celdas)
+#   6. Tooltips para ver el nombre completo de productos largos
+#   + Se conserva: S/ con miles, 2 decimales, encabezado azul, fila de totales
 # ===========================================================================
 
 def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14):
     """Renderiza la tabla AgGrid en vista desktop con formato financiero."""
+
+    # ─────────────────────────────────────────────────────────────────
+    # MEJORA 1: reordenar columnas → Producto, Stock, Precio, Valorizado
+    #           aparecen primero; el resto de columnas queda detrás.
+    # ─────────────────────────────────────────────────────────────────
+    col_producto   = buscar_columna(df_grid, "Nombre Producto", "producto", "descripcion")
+    col_stock      = buscar_columna(df_grid, "Stock al dia", "Stock al Dia", "stock")
+    col_precio_ord = buscar_columna(df_grid, "Precio Promedio", "precio promedio", "precio")
+    col_valorizado = buscar_columna(df_grid, "Valorizado total", "valorizado")
+
+    prioridad = []
+    for c in (col_producto, col_stock, col_precio_ord, col_valorizado):
+        if c and c in df_grid.columns and c not in prioridad:
+            prioridad.append(c)
+    if prioridad:
+        resto = [c for c in df_grid.columns if c not in prioridad]
+        df_grid = df_grid[prioridad + resto]
+
+    # ─────────────────────────────────────────────────────────────────
+    # MEJORA 4: buscador global rápido (filtra TODAS las columnas a la vez)
+    # ─────────────────────────────────────────────────────────────────
+    buscar_txt = st.text_input(
+        "Buscar en la tabla",
+        key=f"qf_{reporte}",
+        placeholder="🔎 Buscar en todas las columnas…",
+        label_visibility="collapsed",
+    )
+
+    # Máximo del valorizado para escalar las barras de datos (MEJORA 2)
+    max_valorizado = 1.0
+    if col_valorizado and col_valorizado in df_grid.columns:
+        try:
+            m = float(df_grid[col_valorizado].max())
+            if m > 0:
+                max_valorizado = m
+        except Exception:
+            pass
+
     gb = GridOptionsBuilder.from_dataframe(df_grid)
     gb.configure_default_column(
         resizable=True, filter=True, sortable=True,
         editable=False, groupable=True, enableRowGroup=True,
         enablePivot=True, enableValue=True,
         minWidth=100,
+        # MEJORA 6: tooltip con el valor completo (nombres largos ya no se pierden)
+        tooltipValueGetter=JsCode("function(params){ return params.value; }"),
     )
 
-    # ── CAMBIO 6: fuente mono para columnas numéricas genéricas ──
+    # ── fuente mono para columnas numéricas genéricas ──
     mono_style = JsCode("""
         function(params) {
             return { fontFamily: "'Courier New', Courier, monospace" };
         }
     """)
 
-    # ── CAMBIO 3: semáforo de colores para stock ──
+    # ── semáforo de la celda de stock (respeta la fila de totales) ──
     stock_cell_style = JsCode("""
         function(params) {
             if (params.value === null || params.value === undefined) return {};
-            var v = Number(params.value);
             var base = {
                 fontFamily: "'Courier New', Courier, monospace",
                 fontWeight: '600',
                 textAlign: 'right'
             };
+            if (params.node && params.node.rowPinned) {
+                return Object.assign({}, base, { color: '#1e3a5f' });
+            }
+            var v = Number(params.value);
             if (v === 0)
                 return Object.assign({}, base,
                     { color: '#991b1b', backgroundColor: '#fee2e2' });
@@ -492,89 +536,114 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         }
     """)
 
-    # ── CAMBIOS 1, 2 y 6: formateo por tipo de columna ──
+    # ── MEJORA 2: barras de datos para la columna Valorizado ──
+    valorizado_bar_renderer = JsCode(f"""
+        function(params) {{
+            if (params.value === null || params.value === undefined || params.value === '') return '';
+            var txt = (params.valueFormatted != null && params.valueFormatted !== '')
+                ? params.valueFormatted
+                : ('S/ ' + Number(params.value).toLocaleString('es-PE',
+                    {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}));
+            if (params.node && (params.node.group || params.node.rowPinned)) {{
+                return '<span style="font-family:Courier New,monospace;font-weight:700;color:#1e3a5f">' + txt + '</span>';
+            }}
+            var maxv = {max_valorizado};
+            var num = Number(params.value);
+            var pct = maxv > 0 ? Math.max(0, Math.min(100, (num / maxv) * 100)) : 0;
+            return ''
+              + '<div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:flex-end">'
+              +   '<div style="position:absolute;left:0;top:50%;transform:translateY(-50%);height:62%;width:' + pct + '%;background:#bfdbfe;border-radius:3px"></div>'
+              +   '<span style="position:relative;font-family:Courier New,monospace;color:#1e3a5f;padding-right:4px">' + txt + '</span>'
+              + '</div>';
+        }}
+    """)
+
+    # ── formateo por tipo de columna ──
     for c in df_grid.columns:
         if not pd.api.types.is_numeric_dtype(df_grid[c]):
             continue
 
-        norm_c   = _norm(c)
-        es_precio = any(k in norm_c for k in ("precio", "promedio", "unitario", "costo"))
-        es_valor  = any(k in norm_c for k in ("valorizado", "total", "importe", "monto"))
-        es_stock  = "stock" in norm_c
+        norm_c        = _norm(c)
+        es_stock      = "stock" in norm_c
+        es_valorizado = "valorizado" in norm_c
+        es_precio     = any(k in norm_c for k in ("precio", "promedio", "unitario", "costo"))
+        es_valor      = any(k in norm_c for k in ("valorizado", "total", "importe", "monto"))
 
         if es_stock:
-            # Cambio 3 + 6: semáforo, entero con separador de miles
+            # Semáforo + entero con separador de miles
             gb.configure_column(
-                c,
-                aggFunc="sum",
-                type=["numericColumn"],
+                c, aggFunc="sum", type=["numericColumn"],
                 cellStyle=stock_cell_style,
                 valueFormatter=JsCode("""
                     function(params) {
                         if (params.value == null) return '';
                         return Number(params.value).toLocaleString('es-PE', {
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 0
-                        });
+                            minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                    }
+                """),
+            )
+        elif es_valorizado:
+            # Valorizado: S/ + 2 decimales + BARRA DE DATOS
+            gb.configure_column(
+                c, aggFunc="sum", type=["numericColumn"],
+                minWidth=170,
+                cellRenderer=valorizado_bar_renderer,
+                valueFormatter=JsCode("""
+                    function(params) {
+                        if (params.value == null) return '';
+                        return 'S/ ' + Number(params.value).toLocaleString('es-PE', {
+                            minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                 """),
             )
         elif es_precio:
-            # Cambios 1+2+6: S/ + 2 decimales fijos + mono
+            # S/ + 2 decimales fijos + mono
             gb.configure_column(
-                c,
-                aggFunc="avg",
-                type=["numericColumn"],
+                c, aggFunc="avg", type=["numericColumn"],
                 cellStyle=mono_style,
                 valueFormatter=JsCode("""
                     function(params) {
                         if (params.value == null) return '';
                         return 'S/ ' + Number(params.value).toLocaleString('es-PE', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                        });
+                            minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                 """),
             )
         elif es_valor:
-            # Cambios 1+2+6: S/ + 2 decimales + mono
+            # Otros montos: S/ + 2 decimales + mono
             gb.configure_column(
-                c,
-                aggFunc="sum",
-                type=["numericColumn"],
+                c, aggFunc="sum", type=["numericColumn"],
                 cellStyle=mono_style,
                 valueFormatter=JsCode("""
                     function(params) {
                         if (params.value == null) return '';
                         return 'S/ ' + Number(params.value).toLocaleString('es-PE', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                        });
+                            minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                 """),
             )
         else:
             # Resto numéricas: separador de miles, sin prefijo, mono
             gb.configure_column(
-                c,
-                aggFunc="sum",
-                type=["numericColumn"],
+                c, aggFunc="sum", type=["numericColumn"],
                 cellStyle=mono_style,
                 valueFormatter=JsCode("""
                     function(params) {
                         if (params.value == null) return '';
                         return Number(params.value).toLocaleString('es-PE', {
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 2
-                        });
+                            minimumFractionDigits: 0, maximumFractionDigits: 2 });
                     }
                 """),
             )
 
+    # ── MEJORA 1: fijar la columna Producto a la izquierda ──
+    if col_producto and col_producto in df_grid.columns and col_producto not in grupos_sel:
+        gb.configure_column(col_producto, pinned="left", minWidth=200)
+
     row_h    = max(28, min(60, font_px + 12))
     header_h = max(30, min(62, font_px + 14))
 
-    # ── CAMBIO 5: fila de totales al pie ──
+    # ── fila de totales al pie ──
     cols_valor  = [c for c in df_grid.columns
                    if pd.api.types.is_numeric_dtype(df_grid[c]) and
                    any(k in _norm(c) for k in ("valorizado", "total", "importe", "monto"))]
@@ -598,27 +667,61 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         else:
             fila_totales[c] = None
 
+    # ── MEJORA 3: semáforo de FILA completa según el stock ──
+    if col_stock and col_stock in df_grid.columns:
+        _sf = str(col_stock).replace("\\", "\\\\").replace('"', '\\"')
+        get_row_style = JsCode(f"""
+            function(params) {{
+                if (params.node.rowPinned === 'bottom') {{
+                    return {{ fontWeight:'700', backgroundColor:'#dbeafe', color:'#1e3a5f',
+                              borderTop:'2px solid #3b82f6', fontSize:'13px' }};
+                }}
+                if (params.node.group || !params.data) return null;
+                var s = params.data["{_sf}"];
+                if (s === null || s === undefined || s === '') return null;
+                var v = Number(s);
+                if (isNaN(v)) return null;
+                if (v === 0) return {{ backgroundColor:'#fef2f2' }};
+                if (v < 10)  return {{ backgroundColor:'#fffbeb' }};
+                return null;
+            }}
+        """)
+    else:
+        get_row_style = JsCode("""
+            function(params) {
+                if (params.node.rowPinned === 'bottom') {
+                    return { fontWeight:'700', backgroundColor:'#dbeafe', color:'#1e3a5f',
+                             borderTop:'2px solid #3b82f6', fontSize:'13px' };
+                }
+            }
+        """)
+
     opciones_grid = {
         "autoGroupColumnDef": {"minWidth": 200},
         "localeText": LOCALE_ES,
         "rowHeight": row_h,
         "headerHeight": header_h,
-        # Cambio 5: totales al pie
+        # Fila de totales al pie
         "pinnedBottomRowData": [fila_totales],
-        # Estilo especial de la fila pinned (refuerza el CSS)
-        "getRowStyle": JsCode("""
-            function(params) {
-                if (params.node.rowPinned === 'bottom') {
-                    return {
-                        fontWeight: '700',
-                        backgroundColor: '#dbeafe',
-                        color: '#1e3a5f',
-                        borderTop: '2px solid #3b82f6',
-                        fontSize: '13px'
-                    };
-                }
-            }
-        """),
+        # MEJORA 4: buscador global
+        "quickFilterText": buscar_txt,
+        "cacheQuickFilter": True,
+        # MEJORA 5: selección de rango para totales en vivo al seleccionar celdas
+        "enableRangeSelection": True,
+        # MEJORA 6: retraso de tooltips
+        "tooltipShowDelay": 300,
+        # MEJORA 5: barra de estado al pie con conteo + sum/avg/min/max en vivo
+        "statusBar": {
+            "statusPanels": [
+                {"statusPanel": "agTotalAndFilteredRowCountComponent", "align": "left"},
+                {"statusPanel": "agFilteredRowCountComponent"},
+                {"statusPanel": "agSelectedRowCountComponent"},
+                {"statusPanel": "agAggregationComponent",
+                 "statusPanelParams": {"aggFuncs": ["count", "sum", "avg", "min", "max"]}},
+            ]
+        },
+        # MEJORA 3: semáforo de fila + estilo de la fila de totales
+        "getRowStyle": get_row_style,
         "onColumnVisible": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 50); }"),
         "onDisplayedColumnsChanged": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 50); }"),
         "onGridSizeChanged": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 50); }"),
@@ -650,7 +753,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     gb.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
     grid_options = gb.build()
 
-    # ── CAMBIO 4: encabezado azul oscuro #1e3a5f estilo financiero ──
+    # ── encabezado azul oscuro #1e3a5f + estilos de barras / semáforo / status bar ──
     custom_css = {
         ".ag-root-wrapper": {
             "background-color": "#ffffff",
@@ -686,17 +789,27 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         ".ag-row-odd": {"background-color": "#f8fafc"},
         ".ag-row-hover": {"background-color": "#eff6ff !important"},
         ".ag-cell": {"color": "#334155", "font-size": f"{font_px}px"},
-        # Cambio 5: fila de totales al pie
+        # Fila de totales al pie
         ".ag-row-pinned": {
             "background-color": "#dbeafe !important",
             "font-weight": "700 !important",
             "border-top": "2px solid #3b82f6 !important",
             "color": "#1e3a5f !important",
         },
+        # MEJORA 1: columna Producto fija con sombra sutil
+        ".ag-pinned-left-cols-container": {"box-shadow": "3px 0 8px rgba(0,0,0,0.06)"},
+        ".ag-pinned-left-header": {"box-shadow": "3px 0 8px rgba(0,0,0,0.06)"},
         ".ag-paging-panel": {
             "color": "#64748b",
             "background-color": "#f8fafc",
             "border-top": "1px solid #e2e8f0",
+        },
+        # MEJORA 5: barra de estado al pie
+        ".ag-status-bar": {
+            "background-color": "#f8fafc",
+            "border-top": "1px solid #e2e8f0",
+            "color": "#475569",
+            "font-size": "0.8rem",
         },
         ".ag-side-bar": {"background-color": "#f8fafc", "border-color": "#e2e8f0"},
         ".ag-menu": {
