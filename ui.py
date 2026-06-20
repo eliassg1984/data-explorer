@@ -869,7 +869,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     gb.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
     grid_options = gb.build()
 
-    # ── CSS personalizado para un marco CERRADO y estilo premium ──
+    # ── CSS personalizado (CON EL PANEL LATERAL ESTILIZADO) ──
     custom_css = {
         ".ag-root-wrapper": {
             "background-color": "#ffffff",
@@ -925,12 +925,55 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "color": "#475569",
             "padding": "4px 12px",
         },
-        ".ag-side-bar": {"background-color": "#f8fafc", "border-color": "#e2e8f0"},
-        ".ag-menu": {
+        # ========== ESTILOS PARA EL PANEL LATERAL DE COLUMNAS (CORREGIDO) ==========
+        ".ag-side-bar": {
             "background-color": "#ffffff",
-            "color": "#1e293b",
-            "border": "1px solid #e2e8f0",
+            "border-left": "1px solid #e2e8f0 !important",
+            "border-top-right-radius": "10px !important",
+            "border-bottom-right-radius": "10px !important",
+            "border-bottom": "1px solid #0f172a !important",
         },
+        ".ag-side-bar .ag-side-buttons": {
+            "border-right": "1px solid #e2e8f0 !important",
+        },
+        ".ag-side-button": {
+            "background-color": "#f8fafc !important",
+            "border": "none !important",
+            "border-bottom": "1px solid #e2e8f0 !important",
+            "color": "#475569 !important",
+        },
+        ".ag-side-button:hover": {
+            "background-color": "#dbeafe !important",
+            "color": "#2563eb !important",
+        },
+        ".ag-side-button.ag-selected": {
+            "background-color": "#2563eb !important",
+            "color": "#ffffff !important",
+            "box-shadow": "inset 0 0 0 1px #3b82f6",
+        },
+        ".ag-tool-panel-wrapper": {
+            "background-color": "#ffffff !important",
+            "border": "none !important",
+        },
+        ".ag-column-select-panel": {
+            "padding": "10px !important",
+            "background-color": "#ffffff !important",
+        },
+        ".ag-column-tool-panel .ag-column-panel": {
+            "border": "none !important",
+        },
+        ".ag-column-tool-panel .ag-column-select-all": {
+            "padding": "10px 0 !important",
+            "border-bottom": "1px solid #e2e8f0 !important",
+        },
+        ".ag-column-panel .ag-header-cell-text": {
+            "color": "#1e293b !important", 
+            "font-weight": "600 !important",
+        },
+        ".ag-filter-toolpanel-body": {
+            "padding": "10px !important",
+            "background-color": "#ffffff !important",
+        }
     }
 
     AgGrid(
