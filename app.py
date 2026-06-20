@@ -659,17 +659,29 @@ if "columnas" in cfg and faltan_cols:
 
 
 # ===========================================================================
-# SELECTOR DE COLUMNAS
+# SELECTOR DE COLUMNAS (MODIFICADO PARA MOSTRAR 4 COLUMNAS AL INICIO)
 # ===========================================================================
 usa_vista_movil = st.session_state.forzar_movil
 tiene_config_movil = "columnas_movil" in cfg
 
 if not usa_vista_movil:
-    # Sin selector externo: TODAS las columnas van al grid y se eligen
-    # desde la barra lateral nativa de AgGrid (panel "Columnas").
-    cols_mostrar  = todas_cols   # universo completo disponible en la tabla
-    cols_visibles = sugeridas    # las que arrancan visibles
+    # ── ENVIAMOS TODAS LAS COLUMNAS, PERO MOSTRAMOS SOLO 4 EN EL INVENTARIO ──
+    cols_mostrar = todas_cols  # Envía TODAS las columnas al backend de AgGrid
+    
+    if reporte == "Inventario Valorizado":
+        # Definimos las columnas que queremos que arranquen visibles
+        columnas_iniciales = ["Nombre Producto", "Stock al dia", "Nombre Area", "Valorizado Total"]
+        # Filtramos para asegurarnos de que existan en el DataFrame (así no falla si el nombre varía)
+        cols_visibles = [c for c in columnas_iniciales if c in df_f.columns]
+        
+        # Aviso opcional si alguna no coincide exactamente (no afecta al funcionamiento)
+        if len(cols_visibles) < len(columnas_iniciales):
+            st.caption("⚠️ Algunas columnas iniciales no se encontraron con ese nombre exacto. El resto están ocultas.")
+    else:
+        # Para el resto de reportes, usa la lógica automática de columnas sugeridas
+        cols_visibles = sugeridas
 else:
+    # (Esto solo aplica para móvil)
     cols_mostrar_movil, _ = resolver_columnas(df_f, cfg["columnas_movil"])
     if not cols_mostrar_movil:
         cols_mostrar_movil = sugeridas[:5]
