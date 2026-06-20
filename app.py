@@ -577,25 +577,14 @@ with st.popover(label_btn, use_container_width=False):
                 ini, fin = rango
                 df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
  
- 
-# ===========================================================================
-# CONFIGURACIÓN DE VISTA
-# ===========================================================================
-with st.expander("⚙️ Configuración de vista", expanded=False):
-    col1, col2 = st.columns(2)
-    with col1:
-        st.session_state.forzar_movil = st.checkbox(
-            "Forzar vista móvil",
-            value=st.session_state.forzar_movil,
-            help="Activar para probar la vista optimizada para celular",
-        )
-    with col2:
-        st.session_state.tabla_tam = st.select_slider(
-            "Tamaño de letra",
-            options=list(TAM_FUENTE.keys()),
-            value=st.session_state.tabla_tam,
-            help="Ajusta el tamaño de fuente de la tabla",
-        )
+    # ── Tamaño de letra de la tabla (integrado en Filtros) ──
+    st.divider()
+    st.session_state.tabla_tam = st.select_slider(
+        "🔠 Tamaño de letra",
+        options=list(TAM_FUENTE.keys()),
+        value=st.session_state.tabla_tam,
+        help="Ajusta el tamaño de fuente de la tabla",
+    )
  
  
 # ===========================================================================
