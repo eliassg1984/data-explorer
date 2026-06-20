@@ -1,4 +1,3 @@
-"""
 Interfaz de usuario: CSS, botón flotante, tablas AgGrid y gráficos (OPTIMIZADO).
 """
 
@@ -445,14 +444,6 @@ def inject_sidebar_toggle():
 
 # ===========================================================================
 # FUNCIÓN: AGGRID DESKTOP — con formato financiero (MEJORADO)
-# Mejoras aplicadas:
-#   1. Reordenar + FIJAR columna Producto (Stock/Precio/Valorizado al frente)
-#   2. Barras de datos dentro de la columna Valorizado
-#   3. Semáforo de FILA completa según el stock (no solo la celda)
-#   4. Buscador global rápido (filtra todas las columnas a la vez)
-#   5. Barra de estado al pie con totales en vivo (selecciona celdas)
-#   6. Tooltips para ver el nombre completo de productos largos
-#   + Se conserva: S/ con miles, 2 decimales, encabezado azul, fila de totales
 # ===========================================================================
 
 def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14, cols_visibles=None):
@@ -465,7 +456,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     # ─────────────────────────────────────────────────────────────────
     # MEJORA 1: reordenar columnas → Producto, Stock, Precio, Valorizado
-    #           aparecen primero; el resto de columnas queda detrás.
     # ─────────────────────────────────────────────────────────────────
     col_producto   = buscar_columna(df_grid, "Nombre Producto", "producto", "descripcion")
     col_stock      = buscar_columna(df_grid, "Stock al dia", "Stock al Dia", "stock")
@@ -532,24 +522,31 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     """)
 
     # ── MEJORA 2: barras de datos para la columna Valorizado ──
+    # IMPORTANTE: en AG Grid 32+/34 un cellRenderer que devuelve un STRING de
+    # HTML se muestra como TEXTO PLANO (se escapa). Por eso ahora el renderer
+    # crea y devuelve un ELEMENTO DOM real, que sí se pinta como HTML.
     valorizado_bar_renderer = JsCode(f"""
         function(params) {{
-            if (params.value === null || params.value === undefined || params.value === '') return '';
+            var eDiv = document.createElement('div');
+            if (params.value === null || params.value === undefined || params.value === '') {{
+                return eDiv;
+            }}
             var txt = (params.valueFormatted != null && params.valueFormatted !== '')
                 ? params.valueFormatted
                 : ('S/ ' + Number(params.value).toLocaleString('es-PE',
                     {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}));
             if (params.node && (params.node.group || params.node.rowPinned)) {{
-                return '<span style="font-family:Courier New,monospace;font-weight:700;color:#1e3a5f">' + txt + '</span>';
+                eDiv.innerHTML = '<span style="font-family:Courier New,monospace;font-weight:700;color:#1e3a5f">' + txt + '</span>';
+                return eDiv;
             }}
             var maxv = {max_valorizado};
             var num = Number(params.value);
             var pct = maxv > 0 ? Math.max(0, Math.min(100, (num / maxv) * 100)) : 0;
-            return ''
-              + '<div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:flex-end">'
-              +   '<div style="position:absolute;left:0;top:50%;transform:translateY(-50%);height:62%;width:' + pct + '%;background:#bfdbfe;border-radius:3px"></div>'
-              +   '<span style="position:relative;font-family:Courier New,monospace;color:#1e3a5f;padding-right:4px">' + txt + '</span>'
-              + '</div>';
+            eDiv.style.cssText = 'position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:flex-end';
+            eDiv.innerHTML = ''
+              + '<div style="position:absolute;left:0;top:50%;transform:translateY(-50%);height:62%;width:' + pct + '%;background:#bfdbfe;border-radius:3px"></div>'
+              + '<span style="position:relative;font-family:Courier New,monospace;color:#1e3a5f;padding-right:4px">' + txt + '</span>';
+            return eDiv;
         }}
     """)
 
@@ -559,7 +556,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             continue
 
         # Filtro numérico → habilita "mayor que / menor que / en rango (entre)"
-        # en el panel lateral. Se fusiona con el formato definido más abajo.
         gb.configure_column(c, filter="agNumberColumnFilter")
 
         norm_c        = _norm(c)
@@ -582,12 +578,11 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 """),
             )
         elif es_valorizado:
-            # Valorizado: S/ + 2 decimales + BARRA DE DATOS
+            # Valorizado: S/ + 2 decimales + BARRA DE DATOS (renderer DOM)
             gb.configure_column(
                 c, aggFunc="sum", type=["numericColumn"],
                 minWidth=170,
                 cellRenderer=valorizado_bar_renderer,
-                suppressHtmlEscaping=True,
                 valueFormatter=JsCode("""
                     function(params) {
                         if (params.value == null) return '';
@@ -641,8 +636,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         gb.configure_column(col_producto, pinned="left", minWidth=200)
 
     # ── Columnas ocultas por defecto: el usuario las activa desde la barra
-    #    lateral (panel "Columnas"). Reemplaza al antiguo multiselect externo.
-    #    Las columnas siguen en el grid (con su formato), solo arrancan ocultas.
+    #    lateral (panel "Columnas"). ──
     if cols_visibles is not None:
         visibles_norm = {_norm(c) for c in cols_visibles}
         for c in df_grid.columns:
@@ -720,11 +714,11 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                     "iconKey": "columns",
                     "toolPanel": "agColumnsToolPanel",
                     "toolPanelParams": {
-                        "suppressRowGroups": True,       # oculta zona "agrupar"
-                        "suppressValues": True,          # oculta zona "valores"
-                        "suppressPivots": True,          # oculta zona "pivotar"
-                        "suppressPivotMode": True,       # oculta switch de pivot
-                        "suppressColumnFilter": False,   # deja el buscador de columnas
+                        "suppressRowGroups": True,
+                        "suppressValues": True,
+                        "suppressPivots": True,
+                        "suppressPivotMode": True,
+                        "suppressColumnFilter": False,
                         "suppressColumnSelectAll": False,
                         "suppressColumnExpandAll": True,
                     },
@@ -737,18 +731,18 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                     "toolPanel": "agFiltersToolPanel",
                 },
             ],
-            "defaultToolPanel": "columns",   # arranca abierta en el panel de Columnas
+            "defaultToolPanel": "columns",
             "position": "right",
         },
         "rowHeight": row_h,
         "headerHeight": header_h,
         # Fila de totales al pie
         "pinnedBottomRowData": [fila_totales],
-        # MEJORA 5: selección de rango para totales en vivo al seleccionar celdas
-        "enableRangeSelection": True,
-        # MEJORA 6: retraso de tooltips
+        # Selección de rango para totales en vivo (AG Grid 32+/34: cellSelection)
+        "cellSelection": True,
+        # Retraso de tooltips
         "tooltipShowDelay": 300,
-        # MEJORA 5: barra de estado al pie con conteo + sum/avg/min/max en vivo
+        # Barra de estado al pie con conteo + sum/avg/min/max en vivo
         "statusBar": {
             "statusPanels": [
                 {"statusPanel": "agTotalAndFilteredRowCountComponent", "align": "left"},
@@ -758,7 +752,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                  "statusPanelParams": {"aggFuncs": ["count", "sum", "avg", "min", "max"]}},
             ]
         },
-        # MEJORA 3: semáforo de fila + estilo de la fila de totales
+        # Semáforo de fila + estilo de la fila de totales
         "getRowStyle": get_row_style,
         "onColumnVisible": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 50); }"),
         "onDisplayedColumnsChanged": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 50); }"),
@@ -786,8 +780,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     else:
         opciones_grid["pivotMode"] = False
 
-    # La barra lateral se configura vía "sideBar" en opciones_grid (arriba),
-    # por eso ya NO se llama a gb.configure_side_bar() aquí (se pisarían).
     gb.configure_grid_options(**opciones_grid)
     gb.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
     grid_options = gb.build()
@@ -828,14 +820,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         ".ag-row-odd": {"background-color": "#f8fafc"},
         ".ag-row-hover": {"background-color": "#eff6ff !important"},
         ".ag-cell": {"color": "#334155", "font-size": f"{font_px}px"},
-        # Fila de totales al pie
         ".ag-row-pinned": {
             "background-color": "#dbeafe !important",
             "font-weight": "700 !important",
             "border-top": "2px solid #3b82f6 !important",
             "color": "#1e3a5f !important",
         },
-        # MEJORA 1: columna Producto fija con sombra sutil
         ".ag-pinned-left-cols-container": {"box-shadow": "3px 0 8px rgba(0,0,0,0.06)"},
         ".ag-pinned-left-header": {"box-shadow": "3px 0 8px rgba(0,0,0,0.06)"},
         ".ag-paging-panel": {
@@ -843,7 +833,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "background-color": "#f8fafc",
             "border-top": "1px solid #e2e8f0",
         },
-        # MEJORA 5: barra de estado al pie
         ".ag-status-bar": {
             "background-color": "#f8fafc",
             "border-top": "1px solid #e2e8f0",
