@@ -79,19 +79,8 @@ def inject_icon_rail(reportes, reporte_activo):
     (function() {{
         var doc = window.parent.document;  // escapar del iframe hacia la página principal
 
-        // ── Limpiar cualquier rail/estilo de una ejecución anterior ──
-        // (este script corre en CADA rerun de Streamlit, no solo al navegar,
-        // así que sin esto se acumulan rails duplicados con ids repetidos)
-        doc.querySelectorAll('#icon-rail').forEach(function(el) {{ el.remove(); }});
-        var estiloPrevio = doc.getElementById('icon-rail-style');
-        if (estiloPrevio) estiloPrevio.remove();
-        if (window.parent.__railObserver) {{
-            window.parent.__railObserver.disconnect();
-        }}
-
         // ── Estilos CSS inyectados en el <head> ──
         var estilos = doc.createElement('style');
-        estilos.id = 'icon-rail-style';
         estilos.textContent = `
             /* Ocultar sidebar nativo */
             section[data-testid="stSidebar"] {{
@@ -230,6 +219,7 @@ def inject_icon_rail(reportes, reporte_activo):
         // ── Llenar los iconos de reportes ──
         var reportes = {reportes_js};
         var activo = {activo_js};
+        var container = doc.getElementById('rail-icons');
         for (var nombre in reportes) {{
             var emoji = reportes[nombre];
             var div = doc.createElement('div');
@@ -246,18 +236,136 @@ def inject_icon_rail(reportes, reporte_activo):
                     window.location.href = url.toString();
                 }};
             }})(nombre);
-            iconsContainer.appendChild(div);
+            container.appendChild(div);
         }}
 
         // Asegurarse de que el rail se mantenga visible (por si Streamlit lo pisa)
-        // Un solo observer global (se reemplaza en cada rerun, no se acumula)
-        var observer = new MutationObserver(function() {{
-            if (!doc.body.contains(rail)) {{
+        setInterval(function() {{
+            if (!doc.getElementById('icon-rail')) {{
                 doc.body.appendChild(rail);
             }}
-        }});
-        observer.observe(doc.body, {{ childList: true }});
-        window.parent.__railObserver = observer;
+        }}, 2000);
+    }})();
+    </script>
+    """
+    components.html(html, height=0, scrolling=False)
+
+
+# ===========================================================================
+# FRANJA SUPERIOR DELGADA — se inyecta JUNTO al rail de iconos, no lo reemplaza
+# ===========================================================================
+
+def inject_top_bar(reporte_activo):
+    """
+    Inyecta una franja superior delgada y fija.
+    Convive con el rail vertical de iconos (deja 64px libres a la izquierda
+    en desktop; en móvil ocupa todo el ancho porque el rail se oculta).
+    """
+    titulo_js = json.dumps(reporte_activo)
+
+    html = f"""
+    <script>
+    (function() {{
+        var doc = window.parent.document;
+
+        var estilos = doc.createElement('style');
+        estilos.textContent = `
+            /* Deja espacio para la franja superior (además del rail) */
+            .stApp {{
+                padding-top: 48px !important;
+            }}
+            #top-bar {{
+                position: fixed;
+                top: 0;
+                left: 64px;
+                right: 0;
+                height: 48px;
+                background: #eff6ff;
+                border-bottom: 1px solid #bfdbfe;
+                display: flex;
+                align-items: center;
+                gap: 14px;
+                padding: 0 18px;
+                z-index: 999998;
+                font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            }}
+            #top-bar .tb-titulo {{
+                font-weight: 600;
+                font-size: 14px;
+                color: #1e3a5f;
+                white-space: nowrap;
+            }}
+            #top-bar .tb-sep {{
+                width: 1px;
+                height: 18px;
+                background: #bfdbfe;
+            }}
+            #top-bar .tb-spacer {{
+                flex: 1;
+            }}
+            #top-bar .tb-btn {{
+                width: 30px;
+                height: 30px;
+                border-radius: 8px;
+                border: none;
+                background: transparent;
+                color: #2563eb;
+                font-size: 16px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background 0.15s;
+            }}
+            #top-bar .tb-btn:hover {{
+                background: #dbeafe;
+            }}
+            @media (max-width: 768px) {{
+                #top-bar {{
+                    left: 0 !important;
+                }}
+            }}
+        `;
+        doc.head.appendChild(estilos);
+
+        function crearBarra() {{
+            if (doc.getElementById('top-bar')) {{
+                var t = doc.querySelector('#top-bar .tb-titulo');
+                if (t) t.textContent = {titulo_js};
+                return;
+            }}
+            var bar = doc.createElement('div');
+            bar.id = 'top-bar';
+
+            var titulo = doc.createElement('span');
+            titulo.className = 'tb-titulo';
+            titulo.textContent = {titulo_js};
+            bar.appendChild(titulo);
+
+            var sep = doc.createElement('div');
+            sep.className = 'tb-sep';
+            bar.appendChild(sep);
+
+            var spacer = doc.createElement('div');
+            spacer.className = 'tb-spacer';
+            bar.appendChild(spacer);
+
+            var refreshBtn = doc.createElement('button');
+            refreshBtn.className = 'tb-btn';
+            refreshBtn.title = 'Actualizar datos';
+            refreshBtn.innerHTML = '&#x21bb;';
+            refreshBtn.onclick = function() {{
+                var url = new URL(window.location.href);
+                url.searchParams.set('refresh', '1');
+                window.location.href = url.toString();
+            }};
+            bar.appendChild(refreshBtn);
+
+            doc.body.appendChild(bar);
+        }}
+
+        crearBarra();
+        setInterval(crearBarra, 2000);
     }})();
     </script>
     """
@@ -280,8 +388,9 @@ if params.get("refresh"):
     st.query_params.clear()
     st.rerun()
 
-# Inyectar la barra (después de leer params, antes de dibujar contenido)
+# Inyectar el rail de iconos (igual que antes) + la franja superior delgada
 inject_icon_rail(REPORTES, reporte)
+inject_top_bar(reporte)
 
 cfg = REPORTES[reporte]
 
@@ -303,7 +412,7 @@ if df is None or df.empty:
     st.warning("No se pudieron cargar los datos o el archivo está vacío.")
     st.stop()
 
-st.subheader(reporte)
+# El título del reporte ya se muestra en la franja superior (top-bar)
 
 
 # ===========================================================================
@@ -501,59 +610,55 @@ if df_f.empty:
 
 
 # ===========================================================================
-# RENDERIZAR TABLA
+# CONTENIDO PRINCIPAL EN PESTAÑAS — tabla y gráficos sin necesidad de scroll
 # ===========================================================================
 font_px = TAM_FUENTE.get(st.session_state.tabla_tam, 14)
 
-if usa_vista_movil and tiene_config_movil:
-    st.caption("📱 Vista móvil • Desliza para más columnas • Mantén presionado para menú")
-    columnas_fijas = cfg.get("columnas_fijas_movil", 2)
-    df_grid_movil = df_f[cols_mostrar]
-    renderizar_aggrid_movil(df_grid_movil, columnas_fijas, reporte, font_px)
-else:
-    cols_finales = list(cols_mostrar)
-    agrupar_on = bool(grupos_sel)
-    if agrupar_on:
-        for c in grupos_sel:
-            if c not in cols_finales:
-                cols_finales.append(c)
-    df_grid = df_f[cols_finales]
-    renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px)
+tab_tabla, tab_graficos = st.tabs(["📋 Tabla", "📊 Gráficos"])
 
-
-# ===========================================================================
-# DASHBOARD DE GRÁFICOS
-# ===========================================================================
-st.markdown("---")
-
-if reporte == "Inventario Valorizado":
-    st.subheader("📊 Dashboard de Análisis")
-    renderizar_graficos(df_f, es_movil=usa_vista_movil)
-else:
-    st.subheader("📈 Visualización")
-    cols_num = df_f.select_dtypes("number").columns.tolist()
-    cols_txt = df_f.select_dtypes(["object", "string"]).columns.tolist()
-
-    if cols_num and cols_txt:
-        col1, col2 = st.columns(2)
-        with col1:
-            eje_x = st.selectbox("Agrupar por", cols_txt, key=f"ejex_{reporte}")
-        with col2:
-            eje_y = st.selectbox("Métrica (suma)", cols_num, key=f"ejey_{reporte}")
-
-        try:
-            datos = df_f.groupby(eje_x)[eje_y].sum().reset_index().sort_values(eje_y, ascending=False).head(20)
-            fig = px.bar(datos, x=eje_x, y=eje_y,
-                         title=f"{eje_y} por {eje_x} (top 20)",
-                         color_discrete_sequence=["#3b82f6"])
-            fig.update_layout(
-                paper_bgcolor="#f8fafc", plot_bgcolor="#ffffff",
-                font_color="#1e293b", margin=dict(l=20, r=20, t=40, b=20),
-                xaxis_tickangle=-45, height=400,
-                xaxis=dict(gridcolor="#e2e8f0"), yaxis=dict(gridcolor="#e2e8f0"),
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.error(f"Error: {str(e)}")
+with tab_tabla:
+    if usa_vista_movil and tiene_config_movil:
+        st.caption("📱 Vista móvil • Desliza para más columnas • Mantén presionado para menú")
+        columnas_fijas = cfg.get("columnas_fijas_movil", 2)
+        df_grid_movil = df_f[cols_mostrar]
+        renderizar_aggrid_movil(df_grid_movil, columnas_fijas, reporte, font_px)
     else:
-        st.info("No hay suficientes columnas para generar gráficos.")
+        cols_finales = list(cols_mostrar)
+        agrupar_on = bool(grupos_sel)
+        if agrupar_on:
+            for c in grupos_sel:
+                if c not in cols_finales:
+                    cols_finales.append(c)
+        df_grid = df_f[cols_finales]
+        renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px)
+
+with tab_graficos:
+    if reporte == "Inventario Valorizado":
+        renderizar_graficos(df_f, es_movil=usa_vista_movil)
+    else:
+        cols_num = df_f.select_dtypes("number").columns.tolist()
+        cols_txt = df_f.select_dtypes(["object", "string"]).columns.tolist()
+
+        if cols_num and cols_txt:
+            col1, col2 = st.columns(2)
+            with col1:
+                eje_x = st.selectbox("Agrupar por", cols_txt, key=f"ejex_{reporte}")
+            with col2:
+                eje_y = st.selectbox("Métrica (suma)", cols_num, key=f"ejey_{reporte}")
+
+            try:
+                datos = df_f.groupby(eje_x)[eje_y].sum().reset_index().sort_values(eje_y, ascending=False).head(20)
+                fig = px.bar(datos, x=eje_x, y=eje_y,
+                             title=f"{eje_y} por {eje_x} (top 20)",
+                             color_discrete_sequence=["#3b82f6"])
+                fig.update_layout(
+                    paper_bgcolor="#f8fafc", plot_bgcolor="#ffffff",
+                    font_color="#1e293b", margin=dict(l=20, r=20, t=40, b=20),
+                    xaxis_tickangle=-45, height=400,
+                    xaxis=dict(gridcolor="#e2e8f0"), yaxis=dict(gridcolor="#e2e8f0"),
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+        else:
+            st.info("No hay suficientes columnas para generar gráficos.")
