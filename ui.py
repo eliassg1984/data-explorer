@@ -484,7 +484,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     gb = GridOptionsBuilder.from_dataframe(df_grid)
     gb.configure_default_column(
         resizable=True, filter=True, sortable=True,
-        editable=False, groupable=True, enableRowGroup=True,
+        editable=False, enableRowGroup=True,
         enablePivot=True, enableValue=True,
         minWidth=100,
         # MEJORA 6: tooltip con el valor completo (nombres largos ya no se pierden)
@@ -523,31 +523,34 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     """)
 
     # ── MEJORA 2: barras de datos para la columna Valorizado ──
-    # IMPORTANTE: en AG Grid 32+/34 un cellRenderer que devuelve un STRING de
-    # HTML se muestra como TEXTO PLANO (se escapa). Por eso ahora el renderer
-    # crea y devuelve un ELEMENTO DOM real, que sí se pinta como HTML.
-    valorizado_bar_renderer = JsCode(f"""
+    # NOTA: el AG Grid de streamlit-aggrid es la versión REACT. Un cellRenderer
+    # que devuelve un ELEMENTO DOM lanza el error de React #31 ("Objects are not
+    # valid as a React child") y tumba TODO el grid. Por eso la barra de datos
+    # se dibuja con un gradiente CSS dentro de cellStyle (sin DOM, sin HTML),
+    # y el texto "S/ ..." lo pone el valueFormatter. Esto es 100% compatible.
+    valorizado_bar_style = JsCode(f"""
         function(params) {{
-            var eDiv = document.createElement('div');
+            var base = {{
+                fontFamily: "'Courier New', Courier, monospace",
+                color: '#1e3a5f',
+                fontWeight: '600'
+            }};
             if (params.value === null || params.value === undefined || params.value === '') {{
-                return eDiv;
+                return base;
             }}
-            var txt = (params.valueFormatted != null && params.valueFormatted !== '')
-                ? params.valueFormatted
-                : ('S/ ' + Number(params.value).toLocaleString('es-PE',
-                    {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}));
             if (params.node && (params.node.group || params.node.rowPinned)) {{
-                eDiv.innerHTML = '<span style="font-family:Courier New,monospace;font-weight:700;color:#1e3a5f">' + txt + '</span>';
-                return eDiv;
+                return Object.assign({{}}, base, {{ fontWeight: '700' }});
             }}
             var maxv = {max_valorizado};
             var num = Number(params.value);
+            if (isNaN(num)) return base;
             var pct = maxv > 0 ? Math.max(0, Math.min(100, (num / maxv) * 100)) : 0;
-            eDiv.style.cssText = 'position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:flex-end';
-            eDiv.innerHTML = ''
-              + '<div style="position:absolute;left:0;top:50%;transform:translateY(-50%);height:62%;width:' + pct + '%;background:#bfdbfe;border-radius:3px"></div>'
-              + '<span style="position:relative;font-family:Courier New,monospace;color:#1e3a5f;padding-right:4px">' + txt + '</span>';
-            return eDiv;
+            return Object.assign({{}}, base, {{
+                backgroundImage: 'linear-gradient(to right, #bfdbfe 0%, #bfdbfe ' + pct + '%, rgba(0,0,0,0) ' + pct + '%, rgba(0,0,0,0) 100%)',
+                backgroundRepeat: 'no-repeat',
+                backgroundSize: '100% 62%',
+                backgroundPosition: 'left center'
+            }});
         }}
     """)
 
@@ -579,11 +582,11 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 """),
             )
         elif es_valorizado:
-            # Valorizado: S/ + 2 decimales + BARRA DE DATOS (renderer DOM)
+            # Valorizado: S/ + 2 decimales + BARRA DE DATOS (gradiente en cellStyle)
             gb.configure_column(
                 c, aggFunc="sum", type=["numericColumn"],
                 minWidth=170,
-                cellRenderer=valorizado_bar_renderer,
+                cellStyle=valorizado_bar_style,
                 valueFormatter=JsCode("""
                     function(params) {
                         if (params.value == null) return '';
