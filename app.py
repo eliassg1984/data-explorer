@@ -79,6 +79,22 @@ def inject_icon_rail(reportes, reporte_activo):
         var doc = window.parent.document;
         var win = window.parent;
 
+        // ── Navegación a prueba de sandbox ──────────────────────────────
+        // El iframe de components.html está en un sandbox SIN
+        // 'allow-top-navigation', así que llamar win.location.assign() desde
+        // aquí lo BLOQUEA el navegador (ese era el motivo real de que los
+        // iconos no cambiaran de reporte). Solución: inyectar un <script> en
+        // el documento padre para definir las funciones de navegación EN SU
+        // PROPIO realm (no sandboxed); desde los handlers solo las llamamos.
+        if (!doc.getElementById('rail-nav-fns')) {{
+            var navScript = doc.createElement('script');
+            navScript.id = 'rail-nav-fns';
+            navScript.textContent =
+                "window.__navReporte=function(n){{var u=new URL(window.location.href);u.searchParams.set('reporte',n);u.searchParams.delete('refresh');window.location.assign(u.toString());}};" +
+                "window.__refreshReporte=function(){{var u=new URL(window.location.href);u.searchParams.set('refresh','1');window.location.assign(u.toString());}};";
+            doc.head.appendChild(navScript);
+        }}
+
         // ── Inyectar estilos solo una vez (evitar duplicados) ──
         if (!doc.getElementById('icon-rail-styles')) {{
             var estilos = doc.createElement('style');
@@ -198,9 +214,7 @@ def inject_icon_rail(reportes, reporte_activo):
             refreshBtn.title = 'Actualizar datos';
             refreshBtn.innerHTML = '🔄';
             refreshBtn.onclick = function() {{
-                var url = new URL(win.location.href);
-                url.searchParams.set('refresh', '1');
-                win.location.assign(url.toString());
+                win.__refreshReporte();
             }};
             rail.appendChild(refreshBtn);
 
@@ -216,10 +230,11 @@ def inject_icon_rail(reportes, reporte_activo):
                 div.onclick = (function(n) {{
                     return function(e) {{
                         e.stopPropagation();
-                        var url = new URL(win.location.href);
-                        url.searchParams.set('reporte', encodeURIComponent(n));
-                        url.searchParams.delete('refresh');
-                        win.location.assign(url.toString());
+                        // Navega vía la función del realm padre (esquiva el
+                        // sandbox). El nombre del reporte se pasa tal cual:
+                        // URLSearchParams ya lo codifica una vez (sin esto, el
+                        // doble-encode rompía los nombres con espacios).
+                        win.__navReporte(n);
                     }};
                 }})(nombre);
                 iconsContainer.appendChild(div);
@@ -271,6 +286,16 @@ def inject_top_bar(reporte_activo):
     (function() {{
         var doc = window.parent.document;
         var win = window.parent;
+
+        // ── Navegación a prueba de sandbox (mismo motivo que en el rail) ──
+        if (!doc.getElementById('rail-nav-fns')) {{
+            var navScript = doc.createElement('script');
+            navScript.id = 'rail-nav-fns';
+            navScript.textContent =
+                "window.__navReporte=function(n){{var u=new URL(window.location.href);u.searchParams.set('reporte',n);u.searchParams.delete('refresh');window.location.assign(u.toString());}};" +
+                "window.__refreshReporte=function(){{var u=new URL(window.location.href);u.searchParams.set('refresh','1');window.location.assign(u.toString());}};";
+            doc.head.appendChild(navScript);
+        }}
 
         var estilos = doc.createElement('style');
         estilos.textContent = `
@@ -359,9 +384,7 @@ def inject_top_bar(reporte_activo):
             refreshBtn.title = 'Actualizar datos';
             refreshBtn.innerHTML = '&#x21bb;';
             refreshBtn.onclick = function() {{
-                var url = new URL(win.location.href);
-                url.searchParams.set('refresh', '1');
-                win.location.assign(url.toString());
+                win.__refreshReporte();
             }};
             bar.appendChild(refreshBtn);
 
@@ -381,15 +404,20 @@ def inject_top_bar(reporte_activo):
 # ===========================================================================
 
 params = st.query_params
-reporte_url = params.get("reporte", None)
-if reporte_url:
-    reporte = reporte_url
-else:
+reporte = params.get("reporte", None)
+# Validación: si el reporte de la URL no existe en REPORTES (por ejemplo, una
+# URL antigua mal codificada o un nombre escrito a mano), usar el primero por
+# defecto en lugar de provocar un KeyError más abajo en `REPORTES[reporte]`.
+if not reporte or reporte not in REPORTES:
     reporte = list(REPORTES.keys())[0]   # primer reporte como defecto
 
 if params.get("refresh"):
     st.cache_data.clear()
-    st.query_params.clear()
+    # Quitar SOLO el flag de refresco y conservar el reporte seleccionado.
+    # (Antes se hacía st.query_params.clear(), que borraba también `reporte`
+    #  y siempre devolvía al usuario al primer reporte tras refrescar.)
+    if "refresh" in st.query_params:
+        del st.query_params["refresh"]
     st.rerun()
 
 # Inyectar el rail de iconos (igual que antes) + la franja superior delgada
