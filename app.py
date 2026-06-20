@@ -18,6 +18,21 @@ from ui import (
 
 
 # ===========================================================================
+# MAPEO DE ICONOS A EMOJIS (para la barra lateral)
+# ===========================================================================
+ICONO_A_EMOJI = {
+    "sliders": "🎚️",
+    "cart": "🛒",
+    "boxes": "📦",
+    "clipboard-data": "📋",
+    "receipt": "🧾",
+    "cash-coin": "💰",
+    "box-arrow-up": "📤",
+    "card-checklist": "📝",
+}
+
+
+# ===========================================================================
 # CONFIGURACIÓN INICIAL
 # ===========================================================================
 
@@ -42,23 +57,29 @@ init_app()
 
 
 # ===========================================================================
-# BARRA LATERAL DE ICONOS (RAIL) – INYECTADA EN EL DOCUMENTO PRINCIPAL
+# BARRA LATERAL DE ICONOS (RAIL) – INYECTADA DIRECTAMENTE EN LA PÁGINA
 # ===========================================================================
 
 def inject_icon_rail(reportes, reporte_activo):
     """
-    Inyecta una barra lateral fija con iconos directamente en la página principal,
-    ocultando el sidebar nativo.
+    Inyecta una barra lateral fija con emojis como iconos.
+    Oculta el sidebar nativo y ajusta el margen del contenido.
     """
-    reportes_js = json.dumps({k: v["icono"] for k, v in reportes.items()})
+    # Convertimos el dict de reportes a {nombre: emoji} para JS
+    reportes_emoji = {}
+    for nombre, info in reportes.items():
+        icono_txt = info.get("icono", "❓")
+        reportes_emoji[nombre] = ICONO_A_EMOJI.get(icono_txt, "❓")
+
+    reportes_js = json.dumps(reportes_emoji)
     activo_js = json.dumps(reporte_activo)
 
     html = f"""
     <script>
     (function() {{
-        var doc = window.parent.document;  // documento principal de Streamlit
+        var doc = window.document;  // documento principal (no iframe)
 
-        // ── Estilos CSS inyectados en el <head> de la página principal ──
+        // ── Estilos CSS inyectados en el <head> ──
         var estilos = doc.createElement('style');
         estilos.textContent = `
             /* Ocultar sidebar nativo */
@@ -99,6 +120,8 @@ def inject_icon_rail(reportes, reporte_activo):
                 cursor: pointer;
                 transition: background 0.2s, color 0.2s;
                 position: relative;
+                overflow: hidden;  /* por si acaso */
+                white-space: nowrap;
             }}
             .rail-icon:hover {{
                 background: #2563eb;
@@ -109,6 +132,7 @@ def inject_icon_rail(reportes, reporte_activo):
                 color: white;
                 box-shadow: 0 0 0 2px #93c5fd;
             }}
+            /* Tooltip con el nombre del reporte */
             .rail-icon::after {{
                 content: attr(data-tooltip);
                 position: absolute;
@@ -183,9 +207,10 @@ def inject_icon_rail(reportes, reporte_activo):
         refreshBtn.title = 'Actualizar datos';
         refreshBtn.innerHTML = '🔄';
         refreshBtn.onclick = function() {{
-            var url = new URL(window.parent.location.href);
+            // Recargar con parámetro refresh=1
+            var url = new URL(window.location.href);
             url.searchParams.set('refresh', '1');
-            window.parent.location.href = url.toString();
+            window.location.href = url.toString();
         }};
         rail.appendChild(refreshBtn);
 
@@ -196,23 +221,30 @@ def inject_icon_rail(reportes, reporte_activo):
         var activo = {activo_js};
         var container = doc.getElementById('rail-icons');
         for (var nombre in reportes) {{
-            var icono = reportes[nombre];
+            var emoji = reportes[nombre];
             var div = doc.createElement('div');
             div.className = 'rail-icon' + (nombre === activo ? ' active' : '');
             div.setAttribute('data-tooltip', nombre);
-            div.innerHTML = icono;
+            div.innerHTML = emoji;
+            // Manejar clic para cambiar de reporte
             div.onclick = (function(nombre) {{
                 return function() {{
-                    var url = new URL(window.parent.location.href);
+                    var url = new URL(window.location.href);
                     url.searchParams.set('reporte', encodeURIComponent(nombre));
+                    // Eliminar el parámetro refresh si existe
                     url.searchParams.delete('refresh');
-                    window.parent.location.href = url.toString();
+                    window.location.href = url.toString();
                 }};
             }})(nombre);
             container.appendChild(div);
         }}
 
-        // Limpiar el iframe (opcional, ya que height=0 lo hace invisible)
+        // Asegurarse de que el rail se mantenga visible (por si Streamlit lo pisa)
+        setInterval(function() {{
+            if (!doc.getElementById('icon-rail')) {{
+                doc.body.appendChild(rail);
+            }}
+        }}, 2000);
     }})();
     </script>
     """
