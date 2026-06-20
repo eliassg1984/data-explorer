@@ -1,21 +1,21 @@
 """
 Utilidades generales: normalización, búsqueda de columnas y traducciones.
 """
-
+ 
 import unicodedata
 import pandas as pd
-
-
+ 
+ 
 # ===========================================================================
 # NORMALIZACIÓN Y BÚSQUEDA DE COLUMNAS
 # ===========================================================================
-
+ 
 def _norm(s):
     """Normaliza texto: quita acentos, espacios, guiones y pasa a minúsculas."""
     s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode()
     return s.lower().replace(" ", "").replace("_", "").replace("-", "")
-
-
+ 
+ 
 def buscar_columna(df, *candidatos):
     """
     Busca una columna en el DataFrame por múltiples nombres candidatos.
@@ -26,8 +26,8 @@ def buscar_columna(df, *candidatos):
         if _norm(cand) in norm_map:
             return norm_map[_norm(cand)]
     return None
-
-
+ 
+ 
 def buscar_columna_fecha(df):
     """
     Encuentra automáticamente la columna de fecha en un DataFrame.
@@ -40,8 +40,8 @@ def buscar_columna_fecha(df):
         if "fecha" in _norm(c) or "date" in _norm(c):
             return c
     return None
-
-
+ 
+ 
 def resolver_columnas(df, nombres):
     """
     Resuelve nombres de columnas y reporta las no encontradas.
@@ -55,12 +55,12 @@ def resolver_columnas(df, nombres):
         elif not real:
             faltantes.append(n)
     return encontradas, faltantes
-
-
+ 
+ 
 # ===========================================================================
 # TRADUCCIÓN AGGRID
 # ===========================================================================
-
+ 
 LOCALE_ES = {
     "sortAscending": "Ordenar ascendente",
     "sortDescending": "Ordenar descendente",
@@ -106,7 +106,9 @@ LOCALE_ES = {
     "blank": "En blanco",
     "notBlank": "No en blanco",
     "lessThan": "Menor que",
+    "lessThanOrEqual": "Menor o igual que",
     "greaterThan": "Mayor que",
+    "greaterThanOrEqual": "Mayor o igual que",
     "inRange": "En rango",
     "page": "Página",
     "to": "a",
