@@ -1,7 +1,7 @@
 """
 Interfaz de usuario: CSS, botón flotante, tablas AgGrid y gráficos (OPTIMIZADO).
 """
- 
+
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
@@ -9,25 +9,25 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
- 
+
 from utils import _norm, buscar_columna, LOCALE_ES
- 
+
 # ===========================================================================
 # MAPEO DE TAMAÑOS DE FUENTE
 # ===========================================================================
- 
+
 TAM_FUENTE = {
     "Pequeño": 12,
     "Mediano": 14,
     "Grande": 17,
     "Muy grande": 20
 }
- 
- 
+
+
 # ===========================================================================
 # CSS GLOBAL (CACHEADO)
 # ===========================================================================
- 
+
 @st.cache_data
 def get_css():
     """Retorna el CSS como string (cacheado para no reinyectar)."""
@@ -53,7 +53,7 @@ def get_css():
         --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
         --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.03);
     }
- 
+
     /* ============ HEADER NATIVO + ESPACIO SUPERIOR ============ */
     header[data-testid="stHeader"],
     .stAppHeader {
@@ -63,19 +63,19 @@ def get_css():
         height: 0 !important;
         min-height: 0 !important;
     }
- 
+
     .stMainBlockContainer,
     [data-testid="stMainBlockContainer"],
     .block-container {
         padding-top: 1.5rem !important;
     }
- 
+
     [data-testid="stSidebarHeader"] {
         height: 2rem !important;
         padding-top: 0 !important;
         padding-bottom: 0 !important;
     }
- 
+
     [data-testid="stIFrame"] {
         height: 0 !important;
         min-height: 0 !important;
@@ -88,15 +88,15 @@ def get_css():
         padding: 0 !important;
         overflow: hidden !important;
     }
- 
+
     [data-testid="stDecoration"] {
         display: none !important;
     }
- 
+
     [data-testid="stToolbar"] {
         display: none !important;
     }
- 
+
     /* ============ BOTÓN PARA EXPANDIR EL SIDEBAR ============ */
     [data-testid*="SidebarCollaps"],
     [data-testid="collapsedControl"],
@@ -105,50 +105,50 @@ def get_css():
         visibility: visible !important;
         opacity: 1 !important;
     }
- 
+
     /* ============ ESTILOS BASE ============ */
     [data-testid="stAppViewContainer"] { 
         background: var(--bg-primary); 
     }
- 
+
     h1 { 
         margin-bottom: 0.2rem !important; 
         padding-top: 0 !important; 
     }
- 
+
     [data-testid="stSidebar"] { 
         background: var(--bg-sidebar); 
         border-right: 1px solid var(--border); 
     }
- 
+
     html, body, [class*="css"] { 
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; 
         color: var(--text-primary); 
     }
- 
+
     h1 { 
         color: var(--text-primary) !important; 
         font-size: 1.6rem !important; 
         font-weight: 700 !important; 
     }
- 
+
     h2, h3 { 
         color: var(--text-primary) !important; 
         font-weight: 600 !important; 
     }
- 
+
     h4 { 
         color: var(--accent) !important; 
         font-weight: 600 !important; 
     }
- 
+
     label { 
         color: var(--text-secondary) !important; 
         font-size: 0.78rem !important; 
         text-transform: uppercase; 
         font-weight: 600 !important;
     }
- 
+
     /* ============ INPUTS Y BOTONES ============ */
     .stSelectbox > div > div, 
     .stMultiSelect > div > div,
@@ -157,35 +157,35 @@ def get_css():
         border: 1px solid var(--border) !important;
         border-radius: 8px !important;
     }
- 
+
     .stSelectbox > div > div:hover,
     .stMultiSelect > div > div:hover {
         border-color: var(--accent) !important;
     }
- 
+
     button[kind="secondary"] {
         background: var(--bg-card) !important;
         border: 1px solid var(--border) !important;
         color: var(--text-primary) !important;
         border-radius: 8px !important;
     }
- 
+
     button[kind="secondary"]:hover {
         background: var(--bg-hover) !important;
         border-color: var(--accent) !important;
     }
- 
+
     button[kind="primary"] {
         background: var(--accent) !important;
         border: none !important;
         color: white !important;
         border-radius: 8px !important;
     }
- 
+
     button[kind="primary"]:hover {
         background: var(--accent-hover) !important;
     }
- 
+
     /* ============ EXPANDER ============ */
     .streamlit-expanderHeader {
         background: var(--bg-card) !important;
@@ -193,59 +193,59 @@ def get_css():
         border-radius: 8px !important;
         color: var(--text-primary) !important;
     }
- 
+
     .streamlit-expanderContent {
         background: var(--bg-card) !important;
         border: 1px solid var(--border) !important;
         border-top: none !important;
         border-radius: 0 0 8px 8px !important;
     }
- 
+
     /* ============ CAPTION Y ALERTAS ============ */
     .stCaption {
         color: var(--text-muted) !important;
     }
- 
+
     .stWarning {
         background: #fef3c7 !important;
         border: 1px solid #fcd34d !important;
         color: #92400e !important;
         border-radius: 8px !important;
     }
- 
+
     .stInfo {
         background: var(--accent-light) !important;
         border: 1px solid #93c5fd !important;
         color: #1e40af !important;
         border-radius: 8px !important;
     }
- 
+
     .stError {
         background: #fee2e2 !important;
         border: 1px solid #fca5a5 !important;
         color: #991b1b !important;
         border-radius: 8px !important;
     }
- 
+
     /* ============ SIDEBAR ============ */
     [data-testid="stSidebar"] .nav-link {
         background: #ffffff !important;
         color: #475569 !important;
         border: 1px solid #e2e8f0 !important;
     }
- 
+
     [data-testid="stSidebar"] .nav-link:hover {
         background: #eff6ff !important;
         color: #2563eb !important;
         border-color: #93c5fd !important;
     }
- 
+
     [data-testid="stSidebar"] .nav-link-selected {
         background: #3b82f6 !important;
         color: #ffffff !important;
         border-color: #3b82f6 !important;
     }
- 
+
     /* ============ AGGRID - ANCHO COMPLETO ============ */
     .ag-root-wrapper {
         width: 100% !important;
@@ -255,13 +255,13 @@ def get_css():
     .ag-body-viewport {
         overflow-x: auto !important;
     }
- 
+
     /* ============ CONTROL DE TAMAÑO EN SIDEBAR ============ */
     [data-testid="stSidebar"] .stSlider {
         padding-top: 0.5rem !important;
         padding-bottom: 0.5rem !important;
     }
- 
+
     /* ============ MÓVIL ============ */
     @media screen and (max-width: 768px) {
         header[data-testid="stHeader"] {
@@ -345,17 +345,17 @@ def get_css():
     }
     </style>
     """
- 
- 
+
+
 def inject_css():
     """Inyecta el CSS cacheado en la app."""
     st.markdown(get_css(), unsafe_allow_html=True)
- 
- 
+
+
 # ===========================================================================
 # BOTÓN FLOTANTE PARA ABRIR/CERRAR EL SIDEBAR (CACHEADO)
 # ===========================================================================
- 
+
 @st.cache_data
 def get_sidebar_toggle_html():
     """Retorna el HTML del botón flotante (cacheado)."""
@@ -364,7 +364,7 @@ def get_sidebar_toggle_html():
     (function () {
         const doc = window.parent.document;
         const BTN_ID = 'mi-toggle-sidebar';
- 
+
         function buscarControlNativo() {
             const sels = [
                 '[data-testid="stSidebarCollapseButton"] button',
@@ -381,21 +381,21 @@ def get_sidebar_toggle_html():
             }
             return null;
         }
- 
+
         function sidebarEstaAbierto() {
             const sb = doc.querySelector('section[data-testid="stSidebar"]');
             if (!sb) return false;
             const rect = sb.getBoundingClientRect();
             return rect.left > -100;
         }
- 
+
         function toggleSidebar() {
             const nativo = buscarControlNativo();
             if (nativo) { nativo.click(); return; }
- 
+
             const sb = doc.querySelector('section[data-testid="stSidebar"]');
             if (!sb) return;
- 
+
             if (sidebarEstaAbierto()) {
                 sb.style.transform = 'translateX(-110%)';
                 sb.style.width = '0';
@@ -412,7 +412,7 @@ def get_sidebar_toggle_html():
                 sb.dataset.abierto = '1';
             }
         }
- 
+
         function asegurarBoton() {
             if (doc.getElementById(BTN_ID)) return;
             const b = doc.createElement('button');
@@ -430,48 +430,39 @@ def get_sidebar_toggle_html():
             b.onclick = toggleSidebar;
             doc.body.appendChild(b);
         }
- 
+
         asegurarBoton();
         setInterval(asegurarBoton, 1000);
     })();
     </script>
     """
- 
- 
+
+
 def inject_sidebar_toggle():
     """Inyecta el botón flotante cacheado."""
     components.html(get_sidebar_toggle_html(), height=0)
- 
- 
+
+
 # ===========================================================================
 # FUNCIÓN: AGGRID DESKTOP — con formato financiero (MEJORADO)
-# Mejoras aplicadas:
-#   1. Reordenar + FIJAR columna Producto (Stock/Precio/Valorizado al frente)
-#   2. Barras de datos dentro de la columna Valorizado
-#   3. Semáforo de FILA completa según el stock (no solo la celda)
-#   4. Buscador global rápido (filtra todas las columnas a la vez)
-#   5. Barra de estado al pie con totales en vivo (selecciona celdas)
-#   6. Tooltips para ver el nombre completo de productos largos
-#   + Se conserva: S/ con miles, 2 decimales, encabezado azul, fila de totales
 # ===========================================================================
- 
+
 def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14, cols_visibles=None):
     """Renderiza la tabla AgGrid en vista desktop con formato financiero.
- 
+
     cols_visibles: lista de columnas que arrancan VISIBLES. El resto se oculta
     por defecto y el usuario las activa desde la barra lateral (panel "Columnas").
     Si es None, se muestran todas.
     """
- 
+
     # ─────────────────────────────────────────────────────────────────
     # MEJORA 1: reordenar columnas → Producto, Stock, Precio, Valorizado
-    #           aparecen primero; el resto de columnas queda detrás.
     # ─────────────────────────────────────────────────────────────────
     col_producto   = buscar_columna(df_grid, "Nombre Producto", "producto", "descripcion")
     col_stock      = buscar_columna(df_grid, "Stock al dia", "Stock al Dia", "stock")
     col_precio_ord = buscar_columna(df_grid, "Precio Promedio", "precio promedio", "precio")
     col_valorizado = buscar_columna(df_grid, "Valorizado total", "valorizado")
- 
+
     prioridad = []
     for c in (col_producto, col_stock, col_precio_ord, col_valorizado):
         if c and c in df_grid.columns and c not in prioridad:
@@ -479,7 +470,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     if prioridad:
         resto = [c for c in df_grid.columns if c not in prioridad]
         df_grid = df_grid[prioridad + resto]
- 
+
     # Máximo del valorizado para escalar las barras de datos (MEJORA 2)
     max_valorizado = 1.0
     if col_valorizado and col_valorizado in df_grid.columns:
@@ -489,7 +480,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 max_valorizado = m
         except Exception:
             pass
- 
+
     gb = GridOptionsBuilder.from_dataframe(df_grid)
     gb.configure_default_column(
         resizable=True, filter=True, sortable=True,
@@ -499,14 +490,14 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         # MEJORA 6: tooltip con el valor completo (nombres largos ya no se pierden)
         tooltipValueGetter=JsCode("function(params){ return params.value; }"),
     )
- 
+
     # ── fuente mono para columnas numéricas genéricas ──
     mono_style = JsCode("""
         function(params) {
             return { fontFamily: "'Courier New', Courier, monospace" };
         }
     """)
- 
+
     # ── semáforo de la celda de stock (respeta la fila de totales) ──
     stock_cell_style = JsCode("""
         function(params) {
@@ -530,44 +521,50 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 { color: '#065f46', backgroundColor: '#d1fae5' });
         }
     """)
- 
+
     # ── MEJORA 2: barras de datos para la columna Valorizado ──
+    # IMPORTANTE: en AG Grid 32+/34 un cellRenderer que devuelve un STRING de
+    # HTML se muestra como TEXTO PLANO (se escapa). Por eso ahora el renderer
+    # crea y devuelve un ELEMENTO DOM real, que sí se pinta como HTML.
     valorizado_bar_renderer = JsCode(f"""
         function(params) {{
-            if (params.value === null || params.value === undefined || params.value === '') return '';
+            var eDiv = document.createElement('div');
+            if (params.value === null || params.value === undefined || params.value === '') {{
+                return eDiv;
+            }}
             var txt = (params.valueFormatted != null && params.valueFormatted !== '')
                 ? params.valueFormatted
                 : ('S/ ' + Number(params.value).toLocaleString('es-PE',
                     {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}));
             if (params.node && (params.node.group || params.node.rowPinned)) {{
-                return '<span style="font-family:Courier New,monospace;font-weight:700;color:#1e3a5f">' + txt + '</span>';
+                eDiv.innerHTML = '<span style="font-family:Courier New,monospace;font-weight:700;color:#1e3a5f">' + txt + '</span>';
+                return eDiv;
             }}
             var maxv = {max_valorizado};
             var num = Number(params.value);
             var pct = maxv > 0 ? Math.max(0, Math.min(100, (num / maxv) * 100)) : 0;
-            return ''
-              + '<div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:flex-end">'
-              +   '<div style="position:absolute;left:0;top:50%;transform:translateY(-50%);height:62%;width:' + pct + '%;background:#bfdbfe;border-radius:3px"></div>'
-              +   '<span style="position:relative;font-family:Courier New,monospace;color:#1e3a5f;padding-right:4px">' + txt + '</span>'
-              + '</div>';
+            eDiv.style.cssText = 'position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:flex-end';
+            eDiv.innerHTML = ''
+              + '<div style="position:absolute;left:0;top:50%;transform:translateY(-50%);height:62%;width:' + pct + '%;background:#bfdbfe;border-radius:3px"></div>'
+              + '<span style="position:relative;font-family:Courier New,monospace;color:#1e3a5f;padding-right:4px">' + txt + '</span>';
+            return eDiv;
         }}
     """)
- 
+
     # ── formateo por tipo de columna ──
     for c in df_grid.columns:
         if not pd.api.types.is_numeric_dtype(df_grid[c]):
             continue
- 
+
         # Filtro numérico → habilita "mayor que / menor que / en rango (entre)"
-        # en el panel lateral. Se fusiona con el formato definido más abajo.
         gb.configure_column(c, filter="agNumberColumnFilter")
- 
+
         norm_c        = _norm(c)
         es_stock      = "stock" in norm_c
         es_valorizado = "valorizado" in norm_c
         es_precio     = any(k in norm_c for k in ("precio", "promedio", "unitario", "costo"))
         es_valor      = any(k in norm_c for k in ("valorizado", "total", "importe", "monto"))
- 
+
         if es_stock:
             # Semáforo + entero con separador de miles
             gb.configure_column(
@@ -582,12 +579,11 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 """),
             )
         elif es_valorizado:
-            # Valorizado: S/ + 2 decimales + BARRA DE DATOS
+            # Valorizado: S/ + 2 decimales + BARRA DE DATOS (renderer DOM)
             gb.configure_column(
                 c, aggFunc="sum", type=["numericColumn"],
                 minWidth=170,
                 cellRenderer=valorizado_bar_renderer,
-                suppressHtmlEscaping=True,
                 valueFormatter=JsCode("""
                     function(params) {
                         if (params.value == null) return '';
@@ -635,14 +631,13 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                     }
                 """),
             )
- 
+
     # ── MEJORA 1: fijar la columna Producto a la izquierda ──
     if col_producto and col_producto in df_grid.columns and col_producto not in grupos_sel:
         gb.configure_column(col_producto, pinned="left", minWidth=200)
- 
+
     # ── Columnas ocultas por defecto: el usuario las activa desde la barra
-    #    lateral (panel "Columnas"). Reemplaza al antiguo multiselect externo.
-    #    Las columnas siguen en el grid (con su formato), solo arrancan ocultas.
+    #    lateral (panel "Columnas"). ──
     if cols_visibles is not None:
         visibles_norm = {_norm(c) for c in cols_visibles}
         for c in df_grid.columns:
@@ -650,10 +645,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 continue
             if _norm(c) not in visibles_norm:
                 gb.configure_column(c, hide=True)
- 
+
     row_h    = max(28, min(60, font_px + 12))
     header_h = max(30, min(62, font_px + 14))
- 
+
     # ── fila de totales al pie ──
     cols_valor  = [c for c in df_grid.columns
                    if pd.api.types.is_numeric_dtype(df_grid[c]) and
@@ -663,7 +658,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                    any(k in _norm(c) for k in ("precio", "promedio", "unitario", "costo"))]
     cols_stock  = [c for c in df_grid.columns
                    if pd.api.types.is_numeric_dtype(df_grid[c]) and "stock" in _norm(c)]
- 
+
     primera_col = list(df_grid.columns)[0] if len(df_grid.columns) > 0 else None
     fila_totales = {}
     for c in df_grid.columns:
@@ -677,7 +672,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             fila_totales[c] = "▶ TOTAL"
         else:
             fila_totales[c] = None
- 
+
     # ── MEJORA 3: semáforo de FILA completa según el stock ──
     if col_stock and col_stock in df_grid.columns:
         _sf = str(col_stock).replace("\\", "\\\\").replace('"', '\\"')
@@ -706,7 +701,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 }
             }
         """)
- 
+
     opciones_grid = {
         "autoGroupColumnDef": {"minWidth": 200},
         "localeText": LOCALE_ES,
@@ -720,11 +715,11 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                     "iconKey": "columns",
                     "toolPanel": "agColumnsToolPanel",
                     "toolPanelParams": {
-                        "suppressRowGroups": True,       # oculta zona "agrupar"
-                        "suppressValues": True,          # oculta zona "valores"
-                        "suppressPivots": True,          # oculta zona "pivotar"
-                        "suppressPivotMode": True,       # oculta switch de pivot
-                        "suppressColumnFilter": False,   # deja el buscador de columnas
+                        "suppressRowGroups": True,
+                        "suppressValues": True,
+                        "suppressPivots": True,
+                        "suppressPivotMode": True,
+                        "suppressColumnFilter": False,
                         "suppressColumnSelectAll": False,
                         "suppressColumnExpandAll": True,
                     },
@@ -737,18 +732,18 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                     "toolPanel": "agFiltersToolPanel",
                 },
             ],
-            "defaultToolPanel": "columns",   # arranca abierta en el panel de Columnas
+            "defaultToolPanel": "columns",
             "position": "right",
         },
         "rowHeight": row_h,
         "headerHeight": header_h,
         # Fila de totales al pie
         "pinnedBottomRowData": [fila_totales],
-        # MEJORA 5: selección de rango para totales en vivo al seleccionar celdas
-        "enableRangeSelection": True,
-        # MEJORA 6: retraso de tooltips
+        # Selección de rango para totales en vivo (AG Grid 32+/34: cellSelection)
+        "cellSelection": True,
+        # Retraso de tooltips
         "tooltipShowDelay": 300,
-        # MEJORA 5: barra de estado al pie con conteo + sum/avg/min/max en vivo
+        # Barra de estado al pie con conteo + sum/avg/min/max en vivo
         "statusBar": {
             "statusPanels": [
                 {"statusPanel": "agTotalAndFilteredRowCountComponent", "align": "left"},
@@ -758,7 +753,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                  "statusPanelParams": {"aggFuncs": ["count", "sum", "avg", "min", "max"]}},
             ]
         },
-        # MEJORA 3: semáforo de fila + estilo de la fila de totales
+        # Semáforo de fila + estilo de la fila de totales
         "getRowStyle": get_row_style,
         "onColumnVisible": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 50); }"),
         "onDisplayedColumnsChanged": JsCode("function(params) { setTimeout(function(){ params.api.sizeColumnsToFit(); }, 50); }"),
@@ -774,7 +769,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             }
         """),
     }
- 
+
     agrupar_on = bool(grupos_sel)
     if agrupar_on:
         for c in grupos_sel:
@@ -785,13 +780,11 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         opciones_grid["pivotMode"] = False
     else:
         opciones_grid["pivotMode"] = False
- 
-    # La barra lateral se configura vía "sideBar" en opciones_grid (arriba),
-    # por eso ya NO se llama a gb.configure_side_bar() aquí (se pisarían).
+
     gb.configure_grid_options(**opciones_grid)
     gb.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
     grid_options = gb.build()
- 
+
     # ── encabezado azul oscuro #1e3a5f + estilos de barras / semáforo / status bar ──
     custom_css = {
         ".ag-root-wrapper": {
@@ -828,14 +821,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         ".ag-row-odd": {"background-color": "#f8fafc"},
         ".ag-row-hover": {"background-color": "#eff6ff !important"},
         ".ag-cell": {"color": "#334155", "font-size": f"{font_px}px"},
-        # Fila de totales al pie
         ".ag-row-pinned": {
             "background-color": "#dbeafe !important",
             "font-weight": "700 !important",
             "border-top": "2px solid #3b82f6 !important",
             "color": "#1e3a5f !important",
         },
-        # MEJORA 1: columna Producto fija con sombra sutil
         ".ag-pinned-left-cols-container": {"box-shadow": "3px 0 8px rgba(0,0,0,0.06)"},
         ".ag-pinned-left-header": {"box-shadow": "3px 0 8px rgba(0,0,0,0.06)"},
         ".ag-paging-panel": {
@@ -843,7 +834,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "background-color": "#f8fafc",
             "border-top": "1px solid #e2e8f0",
         },
-        # MEJORA 5: barra de estado al pie
         ".ag-status-bar": {
             "background-color": "#f8fafc",
             "border-top": "1px solid #e2e8f0",
@@ -857,19 +847,19 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "border": "1px solid #e2e8f0",
         },
     }
- 
+
     AgGrid(
         df_grid.head(5000), gridOptions=grid_options, height=600,
         theme="balham", custom_css=custom_css,
         fit_columns_on_grid_load=False, allow_unsafe_jscode=True,
         enable_enterprise_modules=True, key=f"grid_{reporte}",
     )
- 
- 
+
+
 # ===========================================================================
 # FUNCIÓN: AGGRID MÓVIL (ANCHO COMPLETO)
 # ===========================================================================
- 
+
 def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
     """Renderiza la tabla AgGrid optimizada para vista móvil."""
     gb = GridOptionsBuilder.from_dataframe(df_grid)
@@ -928,12 +918,12 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
         fit_columns_on_grid_load=False, allow_unsafe_jscode=True,
         enable_enterprise_modules=True, key=f"grid_movil_{reporte}",
     )
- 
- 
+
+
 # ===========================================================================
 # FUNCIÓN: DASHBOARD DE GRÁFICOS
 # ===========================================================================
- 
+
 def renderizar_graficos(df_f, es_movil=False):
     """Renderiza todos los gráficos del dashboard."""
     
