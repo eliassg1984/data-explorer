@@ -1282,3 +1282,5 @@ def renderizar_graficos(df_f, es_movil=False):
                         )
                     except Exception as e:
                         st.warning(f"Error en resumen: {str(e)}")
+PYEOF
+cd /home/claude && python -m py_compile ui.py && echo "OK: ui.py compila correctamente"
