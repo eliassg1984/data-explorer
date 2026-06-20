@@ -603,19 +603,16 @@ usa_vista_movil = st.session_state.forzar_movil
 tiene_config_movil = "columnas_movil" in cfg
  
 if not usa_vista_movil:
-    with st.expander("⚙️ Columnas visibles"):
-        cols_mostrar = st.multiselect(
-            "Seleccionar columnas", todas_cols,
-            default=sugeridas, key=f"cols_{reporte}",
-            label_visibility="collapsed", placeholder="Selecciona columnas",
-        )
-    if not cols_mostrar:
-        cols_mostrar = sugeridas
+    # Sin selector externo: TODAS las columnas van al grid y se eligen
+    # desde la barra lateral nativa de AgGrid (panel "Columnas").
+    cols_mostrar  = todas_cols   # universo completo disponible en la tabla
+    cols_visibles = sugeridas    # las que arrancan visibles
 else:
     cols_mostrar_movil, _ = resolver_columnas(df_f, cfg["columnas_movil"])
     if not cols_mostrar_movil:
         cols_mostrar_movil = sugeridas[:5]
-    cols_mostrar = cols_mostrar_movil
+    cols_mostrar  = cols_mostrar_movil
+    cols_visibles = cols_mostrar_movil
  
  
 # ===========================================================================
@@ -652,7 +649,10 @@ with tab_tabla:
                 if c not in cols_finales:
                     cols_finales.append(c)
         df_grid = df_f[cols_finales]
-        renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px)
+        renderizar_aggrid_desktop(
+            df_grid, grupos_sel, cols_mostrar, reporte, font_px,
+            cols_visibles=cols_visibles,
+        )
  
 with tab_graficos:
     if reporte == "Inventario Valorizado":
