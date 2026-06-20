@@ -79,8 +79,19 @@ def inject_icon_rail(reportes, reporte_activo):
     (function() {{
         var doc = window.parent.document;  // escapar del iframe hacia la página principal
 
+        // ── Limpiar cualquier rail/estilo de una ejecución anterior ──
+        // (este script corre en CADA rerun de Streamlit, no solo al navegar,
+        // así que sin esto se acumulan rails duplicados con ids repetidos)
+        doc.querySelectorAll('#icon-rail').forEach(function(el) {{ el.remove(); }});
+        var estiloPrevio = doc.getElementById('icon-rail-style');
+        if (estiloPrevio) estiloPrevio.remove();
+        if (window.parent.__railObserver) {{
+            window.parent.__railObserver.disconnect();
+        }}
+
         // ── Estilos CSS inyectados en el <head> ──
         var estilos = doc.createElement('style');
+        estilos.id = 'icon-rail-style';
         estilos.textContent = `
             /* Ocultar sidebar nativo */
             section[data-testid="stSidebar"] {{
@@ -219,7 +230,6 @@ def inject_icon_rail(reportes, reporte_activo):
         // ── Llenar los iconos de reportes ──
         var reportes = {reportes_js};
         var activo = {activo_js};
-        var container = doc.getElementById('rail-icons');
         for (var nombre in reportes) {{
             var emoji = reportes[nombre];
             var div = doc.createElement('div');
@@ -236,15 +246,18 @@ def inject_icon_rail(reportes, reporte_activo):
                     window.location.href = url.toString();
                 }};
             }})(nombre);
-            container.appendChild(div);
+            iconsContainer.appendChild(div);
         }}
 
         // Asegurarse de que el rail se mantenga visible (por si Streamlit lo pisa)
-        setInterval(function() {{
-            if (!doc.getElementById('icon-rail')) {{
+        // Un solo observer global (se reemplaza en cada rerun, no se acumula)
+        var observer = new MutationObserver(function() {{
+            if (!doc.body.contains(rail)) {{
                 doc.body.appendChild(rail);
             }}
-        }}, 2000);
+        }});
+        observer.observe(doc.body, {{ childList: true }});
+        window.parent.__railObserver = observer;
     }})();
     </script>
     """
