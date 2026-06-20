@@ -7,7 +7,6 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 import plotly.express as px
-from streamlit_option_menu import option_menu
 
 from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
 from data import REPORTES, cargar
@@ -43,151 +42,178 @@ init_app()
 
 
 # ===========================================================================
-# BARRA LATERAL DE ICONOS (RAIL)
+# BARRA LATERAL DE ICONOS (RAIL) – INYECTADA EN EL DOCUMENTO PRINCIPAL
 # ===========================================================================
 
 def inject_icon_rail(reportes, reporte_activo):
     """
-    Inyecta una barra lateral estrecha con iconos de navegación.
-    Oculta el sidebar nativo de Streamlit.
+    Inyecta una barra lateral fija con iconos directamente en la página principal,
+    ocultando el sidebar nativo.
     """
     reportes_js = json.dumps({k: v["icono"] for k, v in reportes.items()})
     activo_js = json.dumps(reporte_activo)
 
     html = f"""
-    <style>
-    /* Ocultar el sidebar nativo de Streamlit */
-    section[data-testid="stSidebar"] {{
-        display: none !important;
-    }}
-    /* Ajustar el área principal para que empiece después de la barra */
-    .stApp {{
-        margin-left: 64px !important;
-    }}
-    /* Nuestra barra personalizada */
-    #icon-rail {{
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 64px;
-        height: 100vh;
-        background: #1e3a5f;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding-top: 1rem;
-        z-index: 999999;
-        box-shadow: 2px 0 8px rgba(0,0,0,0.15);
-    }}
-    .rail-icon {{
-        width: 48px;
-        height: 48px;
-        margin: 6px 0;
-        border-radius: 12px;
-        background: transparent;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 24px;
-        color: #cbd5e1;
-        cursor: pointer;
-        transition: background 0.2s, color 0.2s;
-        position: relative;
-    }}
-    .rail-icon:hover {{
-        background: #2563eb;
-        color: white;
-    }}
-    .rail-icon.active {{
-        background: #3b82f6;
-        color: white;
-        box-shadow: 0 0 0 2px #93c5fd;
-    }}
-    /* Tooltip que aparece al pasar el ratón */
-    .rail-icon::after {{
-        content: attr(data-tooltip);
-        position: absolute;
-        left: 100%;
-        top: 50%;
-        transform: translateY(-50%);
-        background: #1e293b;
-        color: white;
-        padding: 4px 8px;
-        border-radius: 6px;
-        white-space: nowrap;
-        font-size: 13px;
-        margin-left: 10px;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.2s;
-        z-index: 100;
-    }}
-    .rail-icon:hover::after {{
-        opacity: 1;
-    }}
-    /* Espacio flexible para empujar los botones inferiores */
-    .rail-spacer {{
-        flex: 1;
-    }}
-    .rail-btn {{
-        width: 48px;
-        height: 48px;
-        margin: 6px 0;
-        border-radius: 12px;
-        background: transparent;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 22px;
-        color: #cbd5e1;
-        cursor: pointer;
-        transition: background 0.2s, color 0.2s;
-    }}
-    .rail-btn:hover {{
-        background: #2563eb;
-        color: white;
-    }}
-    /* Responsive: en móvil ocultar la barra y restaurar el margen */
-    @media (max-width: 768px) {{
-        #icon-rail {{
-            display: none !important;
-        }}
-        .stApp {{
-            margin-left: 0 !important;
-        }}
-    }}
-    </style>
-    <div id="icon-rail">
-        <div id="rail-icons"></div>
-        <div class="rail-spacer"></div>
-        <div class="rail-btn" id="refresh-btn" title="Actualizar datos">🔄</div>
-    </div>
     <script>
-    const reportes = {reportes_js};
-    const activo = {activo_js};
-    const container = document.getElementById('rail-icons');
+    (function() {{
+        var doc = window.parent.document;  // documento principal de Streamlit
 
-    for (const [nombre, icono] of Object.entries(reportes)) {{
-        const div = document.createElement('div');
-        div.className = 'rail-icon' + (nombre === activo ? ' active' : '');
-        div.setAttribute('data-tooltip', nombre);
-        div.innerHTML = icono;
-        div.onclick = () => {{
-            const url = new URL(window.parent.location.href);
-            url.searchParams.set('reporte', encodeURIComponent(nombre));
-            // Eliminar el parámetro de refresco para no activarlo de nuevo
-            url.searchParams.delete('refresh');
+        // ── Estilos CSS inyectados en el <head> de la página principal ──
+        var estilos = doc.createElement('style');
+        estilos.textContent = `
+            /* Ocultar sidebar nativo */
+            section[data-testid="stSidebar"] {{
+                display: none !important;
+            }}
+            /* Espacio para la barra */
+            .stApp {{
+                margin-left: 64px !important;
+            }}
+            /* Barra de iconos */
+            #icon-rail {{
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 64px;
+                height: 100vh;
+                background: #1e3a5f;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                padding-top: 1rem;
+                z-index: 999999;
+                box-shadow: 2px 0 8px rgba(0,0,0,0.15);
+                font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            }}
+            .rail-icon {{
+                width: 48px;
+                height: 48px;
+                margin: 6px 0;
+                border-radius: 12px;
+                background: transparent;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 24px;
+                color: #cbd5e1;
+                cursor: pointer;
+                transition: background 0.2s, color 0.2s;
+                position: relative;
+            }}
+            .rail-icon:hover {{
+                background: #2563eb;
+                color: white;
+            }}
+            .rail-icon.active {{
+                background: #3b82f6;
+                color: white;
+                box-shadow: 0 0 0 2px #93c5fd;
+            }}
+            .rail-icon::after {{
+                content: attr(data-tooltip);
+                position: absolute;
+                left: 100%;
+                top: 50%;
+                transform: translateY(-50%);
+                background: #1e293b;
+                color: white;
+                padding: 4px 8px;
+                border-radius: 6px;
+                white-space: nowrap;
+                font-size: 13px;
+                margin-left: 10px;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.2s;
+                z-index: 100;
+            }}
+            .rail-icon:hover::after {{
+                opacity: 1;
+            }}
+            .rail-spacer {{
+                flex: 1;
+            }}
+            .rail-btn {{
+                width: 48px;
+                height: 48px;
+                margin: 6px 0;
+                border-radius: 12px;
+                background: transparent;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 22px;
+                color: #cbd5e1;
+                cursor: pointer;
+                transition: background 0.2s, color 0.2s;
+            }}
+            .rail-btn:hover {{
+                background: #2563eb;
+                color: white;
+            }}
+            /* Responsive: en móvil ocultar la barra y restaurar margen */
+            @media (max-width: 768px) {{
+                #icon-rail {{
+                    display: none !important;
+                }}
+                .stApp {{
+                    margin-left: 0 !important;
+                }}
+            }}
+        `;
+        doc.head.appendChild(estilos);
+
+        // ── Crear la barra en el <body> ──
+        var rail = doc.createElement('div');
+        rail.id = 'icon-rail';
+
+        // Contenedor de iconos
+        var iconsContainer = doc.createElement('div');
+        iconsContainer.id = 'rail-icons';
+        rail.appendChild(iconsContainer);
+
+        // Espaciador flexible
+        var spacer = doc.createElement('div');
+        spacer.className = 'rail-spacer';
+        rail.appendChild(spacer);
+
+        // Botón de actualizar
+        var refreshBtn = doc.createElement('div');
+        refreshBtn.className = 'rail-btn';
+        refreshBtn.title = 'Actualizar datos';
+        refreshBtn.innerHTML = '🔄';
+        refreshBtn.onclick = function() {{
+            var url = new URL(window.parent.location.href);
+            url.searchParams.set('refresh', '1');
             window.parent.location.href = url.toString();
         }};
-        container.appendChild(div);
-    }}
+        rail.appendChild(refreshBtn);
 
-    // Botón de actualizar: añade ?refresh=1 y recarga
-    document.getElementById('refresh-btn').onclick = () => {{
-        const url = new URL(window.parent.location.href);
-        url.searchParams.set('refresh', '1');
-        window.parent.location.href = url.toString();
-    }};
+        doc.body.appendChild(rail);
+
+        // ── Llenar los iconos de reportes ──
+        var reportes = {reportes_js};
+        var activo = {activo_js};
+        var container = doc.getElementById('rail-icons');
+        for (var nombre in reportes) {{
+            var icono = reportes[nombre];
+            var div = doc.createElement('div');
+            div.className = 'rail-icon' + (nombre === activo ? ' active' : '');
+            div.setAttribute('data-tooltip', nombre);
+            div.innerHTML = icono;
+            div.onclick = (function(nombre) {{
+                return function() {{
+                    var url = new URL(window.parent.location.href);
+                    url.searchParams.set('reporte', encodeURIComponent(nombre));
+                    url.searchParams.delete('refresh');
+                    window.parent.location.href = url.toString();
+                }};
+            }})(nombre);
+            container.appendChild(div);
+        }}
+
+        // Limpiar el iframe (opcional, ya que height=0 lo hace invisible)
+    }})();
     </script>
     """
     components.html(html, height=0, scrolling=False)
@@ -204,14 +230,12 @@ if reporte_url:
 else:
     reporte = list(REPORTES.keys())[0]   # primer reporte como defecto
 
-# Si se pulsó el botón de actualizar (refresh=1), limpiar caché y recargar
 if params.get("refresh"):
     st.cache_data.clear()
-    # Limpiar el parámetro para evitar bucle y recargar
     st.query_params.clear()
     st.rerun()
 
-# Inyectar la barra de iconos (después de leer los params, antes de dibujar nada)
+# Inyectar la barra (después de leer params, antes de dibujar contenido)
 inject_icon_rail(REPORTES, reporte)
 
 cfg = REPORTES[reporte]
