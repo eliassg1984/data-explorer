@@ -13,7 +13,7 @@ from data import REPORTES, cargar, secrets_disponibles
 from ui import (
     TAM_FUENTE, inject_css, inject_error_overlay,
     renderizar_aggrid_desktop, renderizar_aggrid_movil,
-    renderizar_graficos
+    renderizar_graficos, inject_element_inspector
 )
 
 
@@ -57,6 +57,9 @@ init_app()
 
 # Overlay de errores JS en pantalla (diagnóstico sin abrir la consola/F12).
 inject_error_overlay()
+
+# Inspector de elementos — muestra nombre/key al pasar el cursor (?inspector=1 o Alt+I).
+inject_element_inspector()
 
 
 # ===========================================================================
