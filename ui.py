@@ -531,6 +531,263 @@ def inject_sidebar_toggle():
 
 
 # ===========================================================================
+# INSPECTOR DE ELEMENTOS — tooltips de identificación para capturas de pantalla
+# ===========================================================================
+
+def inject_element_inspector():
+    """
+    Inyecta un inspector que muestra el nombre/key de cada elemento interactivo
+    de Streamlit al pasar el cursor. Útil para enviar capturas a la IA con los
+    elementos ya etiquetados.
+
+    Activación: añade ?inspector=1 a la URL (o pulsa Alt+I).
+    Desactivación: quita el parámetro o vuelve a pulsar Alt+I.
+
+    Elementos reconocidos y su etiqueta:
+        • Botones            → data-testid + texto visible
+        • Inputs de texto    → label asociado
+        • Selectbox          → label asociado
+        • Multiselect        → label asociado
+        • Slider / select-slider → label asociado
+        • Date input         → label asociado
+        • Checkbox           → label asociado
+        • Tabs               → texto de la pestaña
+        • Expander           → texto del expander
+        • Popover            → texto del botón popover
+        • Métricas (st.metric) → label de la métrica
+        • Gráficos Plotly    → título del gráfico
+        • AgGrid             → "Tabla AgGrid"
+    """
+    components.html("""
+    <script>
+    (function() {
+        var win = window.parent;
+        var doc = win.document;
+
+        // ── Evitar doble-inicialización ──────────────────────────────────
+        if (win.__inspectorInit) return;
+        win.__inspectorInit = true;
+
+        // ── Leer parámetro de URL ────────────────────────────────────────
+        function inspectorActivo() {
+            return new URL(win.location.href).searchParams.get('inspector') === '1';
+        }
+
+        // ── Crear el tooltip DOM (único, reciclado) ──────────────────────
+        var tip = doc.createElement('div');
+        tip.id = 'el-inspector-tip';
+        tip.style.cssText = [
+            'position:fixed',
+            'pointer-events:none',
+            'z-index:2147483647',
+            'background:#0f172a',
+            'color:#e2e8f0',
+            'font:700 11px/1.4 "Courier New",monospace',
+            'padding:4px 9px',
+            'border-radius:5px',
+            'border:1px solid #3b82f6',
+            'white-space:nowrap',
+            'opacity:0',
+            'transition:opacity 0.1s',
+            'max-width:320px',
+            'overflow:hidden',
+            'text-overflow:ellipsis',
+            'box-shadow:0 2px 8px rgba(0,0,0,0.4)'
+        ].join(';');
+        doc.body.appendChild(tip);
+
+        // ── Badge de estado (esquina inferior izquierda) ─────────────────
+        var badge = doc.createElement('div');
+        badge.id = 'el-inspector-badge';
+        badge.style.cssText = [
+            'position:fixed',
+            'bottom:10px',
+            'left:72px',
+            'z-index:2147483646',
+            'background:#1e40af',
+            'color:#fff',
+            'font:600 11px/1 -apple-system,sans-serif',
+            'padding:5px 10px',
+            'border-radius:20px',
+            'display:none',
+            'align-items:center',
+            'gap:6px',
+            'box-shadow:0 2px 8px rgba(0,0,0,0.3)'
+        ].join(';');
+        badge.innerHTML = '🔍 Inspector ON &nbsp;<span style="opacity:.6;font-weight:400">Alt+I para desactivar</span>';
+        doc.body.appendChild(badge);
+
+        function actualizarBadge() {
+            badge.style.display = inspectorActivo() ? 'flex' : 'none';
+        }
+        actualizarBadge();
+
+        // ── Funciones para obtener la etiqueta de un elemento ────────────
+
+        function labelDe(el) {
+            // 1. label de Streamlit asociado al widget
+            var container = el.closest(
+                '[data-testid="stTextInput"], [data-testid="stSelectbox"],' +
+                '[data-testid="stMultiSelect"], [data-testid="stSlider"],' +
+                '[data-testid="stDateInput"], [data-testid="stCheckbox"],' +
+                '[data-testid="stNumberInput"], [data-testid="stTextArea"],' +
+                '[data-testid="stSelectSlider"], [data-testid="stTimeInput"]'
+            );
+            if (container) {
+                var lbl = container.querySelector('label p, label');
+                if (lbl && lbl.textContent.trim()) {
+                    return '🏷 ' + lbl.textContent.trim();
+                }
+            }
+
+            // 2. Botón de Streamlit
+            var btn = el.closest('button[kind], [data-testid="baseButton-secondary"], [data-testid="baseButton-primary"]');
+            if (btn) {
+                var txt = btn.innerText.trim().replace(/\\n/g, ' ');
+                var tid = btn.getAttribute('data-testid') || '';
+                return '🔘 btn: ' + (txt || tid);
+            }
+
+            // 3. Popover
+            var popover = el.closest('[data-testid="stPopover"]');
+            if (popover) {
+                var pbtn = popover.querySelector('button');
+                return '🔽 popover: ' + (pbtn ? pbtn.innerText.trim() : '?');
+            }
+
+            // 4. Tab
+            var tabBtn = el.closest('[data-baseweb="tab"]');
+            if (tabBtn) {
+                return '📑 tab: ' + tabBtn.innerText.trim();
+            }
+
+            // 5. Expander
+            var expander = el.closest('[data-testid="stExpander"]');
+            if (expander) {
+                var etxt = expander.querySelector('[data-testid="stExpanderToggleIcon"] + *, summary, .streamlit-expanderHeader p');
+                return '📂 expander: ' + (etxt ? etxt.innerText.trim() : expander.querySelector('summary,button') ? expander.querySelector('summary,button').innerText.trim() : '?');
+            }
+
+            // 6. Métrica
+            var metric = el.closest('[data-testid="stMetric"]');
+            if (metric) {
+                var mlbl = metric.querySelector('[data-testid="stMetricLabel"] p, [data-testid="stMetricLabel"]');
+                return '📊 metric: ' + (mlbl ? mlbl.innerText.trim() : '?');
+            }
+
+            // 7. Gráfico Plotly
+            var plotly = el.closest('.js-plotly-plot, [data-testid="stPlotlyChart"]');
+            if (plotly) {
+                var ptitle = plotly.querySelector('.gtitle, .g-gtitle');
+                return '📈 plotly: ' + (ptitle ? ptitle.textContent.trim() : 'gráfico');
+            }
+
+            // 8. AgGrid
+            if (el.closest('.ag-root-wrapper, [data-testid="stAgGrid"], iframe[src*="st_aggrid"]')) {
+                return '📋 AgGrid tabla';
+            }
+
+            // 9. Sidebar icon rail
+            var railIcon = el.closest('.rail-icon');
+            if (railIcon) {
+                return '🧭 nav: ' + (railIcon.getAttribute('data-tooltip') || railIcon.innerText.trim());
+            }
+
+            return null;
+        }
+
+        // ── Resaltado del elemento bajo el cursor ────────────────────────
+        var elActual = null;
+
+        function resaltarEl(el, etiqueta) {
+            if (elActual) {
+                elActual.style.outline = '';
+                elActual.style.outlineOffset = '';
+            }
+            if (el && etiqueta) {
+                el.style.outline = '2px solid #3b82f6';
+                el.style.outlineOffset = '2px';
+                elActual = el;
+            } else {
+                elActual = null;
+            }
+        }
+
+        // ── Mousemove principal ──────────────────────────────────────────
+        doc.addEventListener('mousemove', function(e) {
+            if (!inspectorActivo()) {
+                tip.style.opacity = '0';
+                resaltarEl(null, null);
+                return;
+            }
+
+            var el = e.target;
+            var etiqueta = null;
+
+            // Recorrer hasta encontrar un elemento reconocido (máx 10 niveles)
+            var cursor = el;
+            for (var i = 0; i < 10 && cursor && cursor !== doc.body; i++) {
+                etiqueta = labelDe(cursor);
+                if (etiqueta) { el = cursor; break; }
+                cursor = cursor.parentElement;
+            }
+
+            if (etiqueta) {
+                tip.textContent = etiqueta;
+                tip.style.opacity = '1';
+                // Posición: evitar que se salga de pantalla
+                var x = e.clientX + 14;
+                var y = e.clientY - 32;
+                var tw = tip.offsetWidth || 200;
+                if (x + tw > win.innerWidth - 8) x = e.clientX - tw - 14;
+                if (y < 6) y = e.clientY + 16;
+                tip.style.left = x + 'px';
+                tip.style.top  = y + 'px';
+                resaltarEl(el, etiqueta);
+            } else {
+                tip.style.opacity = '0';
+                resaltarEl(null, null);
+            }
+        }, true);
+
+        // Ocultar al salir de la ventana
+        doc.addEventListener('mouseleave', function() {
+            tip.style.opacity = '0';
+            resaltarEl(null, null);
+        });
+
+        // ── Atajo de teclado Alt+I ───────────────────────────────────────
+        doc.addEventListener('keydown', function(e) {
+            if (e.altKey && (e.key === 'i' || e.key === 'I')) {
+                var url = new URL(win.location.href);
+                if (url.searchParams.get('inspector') === '1') {
+                    url.searchParams.delete('inspector');
+                } else {
+                    url.searchParams.set('inspector', '1');
+                }
+                win.history.replaceState({}, '', url.toString());
+                actualizarBadge();
+                if (!inspectorActivo()) {
+                    tip.style.opacity = '0';
+                    resaltarEl(null, null);
+                }
+            }
+        });
+
+        // Actualizar badge si cambia la URL (p.ej. navegación de reporte)
+        var _pushState = win.history.pushState.bind(win.history);
+        win.history.pushState = function() {
+            _pushState.apply(win.history, arguments);
+            actualizarBadge();
+        };
+        win.addEventListener('popstate', actualizarBadge);
+
+    })();
+    </script>
+    """, height=0, scrolling=False)
+
+
+# ===========================================================================
 # FUNCIÓN: AGGRID DESKTOP — con formato financiero y diseño mejorado
 # ===========================================================================
 
