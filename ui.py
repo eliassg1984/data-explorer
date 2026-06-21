@@ -1015,6 +1015,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     Si es None, se muestran todas.
     """
 
+    # Envolver cabeceras en varias líneas (white-space: normal) SOLO para este
+    # reporte. El resto de tablas mantiene la cabecera en una sola línea.
+    envolver_cabeceras = (reporte == "Inventario Valorizado")
+
     # ─────────────────────────────────────────────────────────────────
     # REORDENAR COLUMNAS (Producto, Stock, Precio, Valorizado)
     # ─────────────────────────────────────────────────────────────────
@@ -1042,13 +1046,19 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             pass
 
     gb = GridOptionsBuilder.from_dataframe(df_grid)
-    gb.configure_default_column(
+    _opciones_col_def = dict(
         resizable=True, filter=True, sortable=True,
         editable=False, enableRowGroup=True,
         enablePivot=True, enableValue=True,
         minWidth=100,
         tooltipValueGetter=JsCode("function(params){ return params.value; }"),
     )
+    if envolver_cabeceras:
+        # wrapHeaderText  → el texto de la cabecera salta de línea.
+        # autoHeaderHeight → el alto de la cabecera se ajusta automáticamente.
+        _opciones_col_def["wrapHeaderText"] = True
+        _opciones_col_def["autoHeaderHeight"] = True
+    gb.configure_default_column(**_opciones_col_def)
 
     # ── Fuente mono para columnas numéricas genéricas ──
     mono_style = JsCode("""
@@ -1338,6 +1348,11 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     else:
         opciones_grid["pivotMode"] = False
 
+    if envolver_cabeceras:
+        # Con autoHeaderHeight el alto se calcula solo; quitamos el alto fijo
+        # para que la cabecera pueda crecer y mostrar todas las líneas.
+        opciones_grid.pop("headerHeight", None)
+
     gb.configure_grid_options(**opciones_grid)
     gb.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
     grid_options = gb.build()
@@ -1449,6 +1464,18 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         }
     }
 
+    # ── Cabeceras envueltas en varias líneas (solo Inventario Valorizado) ──
+    if envolver_cabeceras:
+        custom_css[".ag-header-cell-text"].update({
+            "white-space": "normal",          # permite el salto de línea
+            "line-height": "1.25",
+            "overflow": "visible",
+            "text-overflow": "clip",
+            "word-break": "break-word",
+        })
+        # El texto se alinea arriba cuando la cabecera ocupa varias líneas.
+        custom_css[".ag-header-cell-label"] = {"align-items": "flex-start"}
+
     AgGrid(
         df_grid.head(5000), gridOptions=grid_options, height=600,
         theme="balham", custom_css=custom_css,
@@ -1465,12 +1492,18 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
 def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
     """Renderiza la tabla AgGrid optimizada para vista móvil."""
+    envolver_cabeceras = (reporte == "Inventario Valorizado")
+
     gb = GridOptionsBuilder.from_dataframe(df_grid)
-    gb.configure_default_column(
+    _opciones_col_def = dict(
         resizable=True, sortable=True, filter=True,
         editable=False, groupable=False, enableRowGroup=False,
         enablePivot=False, menuTabs=["filterMenuTab", "generalMenuTab", "columnsMenuTab"],
     )
+    if envolver_cabeceras:
+        _opciones_col_def["wrapHeaderText"] = True
+        _opciones_col_def["autoHeaderHeight"] = True
+    gb.configure_default_column(**_opciones_col_def)
     
     for i, col in enumerate(df_grid.columns):
         if i < columnas_fijas:
@@ -1497,6 +1530,9 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
         "paginationPageSize": 25,
     }
     
+    if envolver_cabeceras:
+        opciones_grid.pop("headerHeight", None)
+
     gb.configure_grid_options(**opciones_grid)
     grid_options = gb.build()
     
@@ -1514,7 +1550,17 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
         ".ag-pinned-left-header": {"box-shadow": "3px 0 8px rgba(0,0,0,0.08)"},
         ".ag-pinned-left-cols-container": {"box-shadow": "3px 0 8px rgba(0,0,0,0.08)"},
     }
-    
+
+    if envolver_cabeceras:
+        custom_css[".ag-header-cell-text"].update({
+            "white-space": "normal",
+            "line-height": "1.25",
+            "overflow": "visible",
+            "text-overflow": "clip",
+            "word-break": "break-word",
+        })
+        custom_css[".ag-header-cell-label"] = {"align-items": "flex-start"}
+
     AgGrid(
         df_grid.head(3000), gridOptions=grid_options, height=380,
         theme="balham", custom_css=custom_css,
