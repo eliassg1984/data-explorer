@@ -1349,9 +1349,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         opciones_grid["pivotMode"] = False
 
     if envolver_cabeceras:
-        # Con autoHeaderHeight el alto se calcula solo; quitamos el alto fijo
-        # para que la cabecera pueda crecer y mostrar todas las líneas.
-        opciones_grid.pop("headerHeight", None)
+        # Reservamos altura para 2 líneas de cabecera. (autoHeaderHeight la
+        # ajusta sola si el navegador lo soporta; si no, este alto fijo basta.)
+        opciones_grid["headerHeight"] = int(font_px * 2.5 + 20)
 
     gb.configure_grid_options(**opciones_grid)
     gb.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
@@ -1466,15 +1466,21 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     # ── Cabeceras envueltas en varias líneas (solo Inventario Valorizado) ──
     if envolver_cabeceras:
+        # OJO: el tema Balham trae 'white-space: nowrap' con más especificidad,
+        # por eso aquí va con !important; si no, gana el tema y sale «…».
         custom_css[".ag-header-cell-text"].update({
-            "white-space": "normal",          # permite el salto de línea
-            "line-height": "1.25",
-            "overflow": "visible",
-            "text-overflow": "clip",
+            "white-space": "normal !important",   # fuerza el salto de línea
+            "overflow": "visible !important",     # quita el recorte
+            "text-overflow": "clip !important",   # elimina los puntos «…»
+            "line-height": "1.2 !important",
             "word-break": "break-word",
         })
-        # El texto se alinea arriba cuando la cabecera ocupa varias líneas.
-        custom_css[".ag-header-cell-label"] = {"align-items": "flex-start"}
+        # El contenedor del texto también debe permitir varias líneas.
+        custom_css[".ag-header-cell-label"] = {
+            "white-space": "normal !important",
+            "overflow": "visible !important",
+            "align-items": "center",
+        }
 
     AgGrid(
         df_grid.head(5000), gridOptions=grid_options, height=600,
@@ -1531,7 +1537,7 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
     }
     
     if envolver_cabeceras:
-        opciones_grid.pop("headerHeight", None)
+        opciones_grid["headerHeight"] = int(font_px * 2.5 + 20)
 
     gb.configure_grid_options(**opciones_grid)
     grid_options = gb.build()
@@ -1553,13 +1559,17 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
 
     if envolver_cabeceras:
         custom_css[".ag-header-cell-text"].update({
-            "white-space": "normal",
-            "line-height": "1.25",
-            "overflow": "visible",
-            "text-overflow": "clip",
+            "white-space": "normal !important",
+            "overflow": "visible !important",
+            "text-overflow": "clip !important",
+            "line-height": "1.2 !important",
             "word-break": "break-word",
         })
-        custom_css[".ag-header-cell-label"] = {"align-items": "flex-start"}
+        custom_css[".ag-header-cell-label"] = {
+            "white-space": "normal !important",
+            "overflow": "visible !important",
+            "align-items": "center",
+        }
 
     AgGrid(
         df_grid.head(3000), gridOptions=grid_options, height=380,
