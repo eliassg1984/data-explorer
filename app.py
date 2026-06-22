@@ -315,25 +315,26 @@ def inject_top_bar(reporte_activo):
                 left: 64px;
                 right: 0;
                 height: 48px;
-                background: #eff6ff;
-                border-bottom: 1px solid #bfdbfe;
+                background: transparent;       /* franja invisible: sin fondo */
+                border-bottom: none;           /* y sin borde inferior */
                 display: flex;
                 align-items: center;
                 gap: 14px;
                 padding: 0 18px;
                 z-index: 999998;
                 font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                pointer-events: none;          /* deja pasar el clic al contenido */
             }}
             #top-bar .tb-titulo {{
                 font-weight: 600;
                 font-size: 14px;
                 color: #1e3a5f;
                 white-space: nowrap;
+                transform: translateY(8px);    /* el título, un poco más abajo */
             }}
+            /* Separador oculto: sin la franja no tiene sentido que flote */
             #top-bar .tb-sep {{
-                width: 1px;
-                height: 18px;
-                background: #bfdbfe;
+                display: none;
             }}
             #top-bar .tb-spacer {{
                 flex: 1;
@@ -351,6 +352,7 @@ def inject_top_bar(reporte_activo):
                 align-items: center;
                 justify-content: center;
                 transition: background 0.15s;
+                pointer-events: auto;   /* el botón sí recibe clics */
             }}
             #top-bar .tb-btn:hover {{
                 background: #dbeafe;
