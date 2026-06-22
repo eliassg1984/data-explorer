@@ -1568,19 +1568,92 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "color": "#1e3a5f !important",
             "font-size": f"{font_px + 1}px !important",
         },
+        # ── Opción A Minimalista: paginación limpia en una sola franja ──
         ".ag-paging-panel": {
+            "display": "flex !important",
+            "align-items": "center !important",
+            "justify-content": "space-between !important",
             "color": "#64748b",
             "background-color": "#f8fafc",
             "border-top": "1px solid #e2e8f0",
-            "padding": "8px 12px",
+            "padding": "8px 16px !important",
             "border-bottom-left-radius": "10px !important",
             "border-bottom-right-radius": "10px !important",
+            "font-size": "12px !important",
+            "min-height": "44px !important",
         },
+        # Selector de tamaño de página
+        ".ag-paging-panel .ag-paging-page-size": {
+            "order": "-1 !important",
+            "margin-right": "auto !important",
+        },
+        ".ag-paging-panel .ag-paging-page-size .ag-label": {
+            "color": "#64748b !important",
+            "font-size": "12px !important",
+            "margin-right": "6px !important",
+        },
+        ".ag-paging-panel .ag-paging-page-size select, "
+        ".ag-paging-panel .ag-paging-page-size .ag-select": {
+            "border": "1px solid #e2e8f0 !important",
+            "border-radius": "6px !important",
+            "background": "#ffffff !important",
+            "color": "#1e293b !important",
+            "font-size": "12px !important",
+            "padding": "2px 6px !important",
+        },
+        # Botones de navegación: estilo pill
+        ".ag-paging-button": {
+            "width": "28px !important",
+            "height": "28px !important",
+            "border": "1px solid #e2e8f0 !important",
+            "background": "#ffffff !important",
+            "border-radius": "6px !important",
+            "color": "#475569 !important",
+            "font-size": "13px !important",
+            "cursor": "pointer !important",
+            "display": "flex !important",
+            "align-items": "center !important",
+            "justify-content": "center !important",
+            "margin": "0 2px !important",
+            "transition": "all 0.15s ease !important",
+        },
+        ".ag-paging-button:hover:not(.ag-disabled)": {
+            "background": "#eff6ff !important",
+            "border-color": "#93c5fd !important",
+            "color": "#2563eb !important",
+        },
+        ".ag-paging-button.ag-disabled": {
+            "color": "#cbd5e1 !important",
+            "border-color": "#f1f5f9 !important",
+            "background": "#f8fafc !important",
+            "cursor": "default !important",
+        },
+        # Texto "X a Y de Z"
+        ".ag-paging-row-summary-panel": {
+            "color": "#64748b !important",
+            "font-size": "12px !important",
+            "margin-left": "auto !important",
+        },
+        ".ag-paging-row-summary-panel-number": {
+            "color": "#1e293b !important",
+            "font-weight": "600 !important",
+        },
+        # Status bar limpia, sin el fondo morado/rayado de AgGrid
         ".ag-status-bar": {
-            "background-color": "#f8fafc",
-            "border-top": "1px solid #e2e8f0",
-            "color": "#475569",
-            "padding": "4px 12px",
+            "background-color": "#f8fafc !important",
+            "border-top": "1px solid #e2e8f0 !important",
+            "color": "#475569 !important",
+            "padding": "4px 16px !important",
+            "font-size": "12px !important",
+            "min-height": "0 !important",
+        },
+        ".ag-status-name-value": {
+            "color": "#475569 !important",
+            "font-size": "12px !important",
+        },
+        ".ag-status-name-value-value": {
+            "color": "#1e293b !important",
+            "font-weight": "600 !important",
         },
         # ========== ESTILOS PARA EL PANEL LATERAL DE COLUMNAS (CORREGIDO) ==========
         ".ag-side-bar": {
