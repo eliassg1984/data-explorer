@@ -343,6 +343,58 @@ def get_css():
             max-width: 100% !important;
         }
     }
+
+    /* =================================================================== */
+    /* BOTONES TABLA / GRÁFICOS (segmented_control) — Opción 2 GRANDE azul  */
+    /* =================================================================== */
+    [data-testid="stSegmentedControl"] [role="radiogroup"],
+    [data-testid="stSegmentedControl"] > div {
+        gap: 16px !important;                 /* separación entre botones */
+    }
+    [data-testid="stSegmentedControl"] button {
+        min-width: 190px !important;          /* MÁS GRANDE: ancho */
+        padding: 14px 30px !important;        /* MÁS GRANDE: alto */
+        font-size: 15px !important;
+        font-weight: 600 !important;
+        border: 1.5px solid var(--border) !important;
+        border-radius: 999px !important;
+        transition: all .15s ease !important;
+    }
+    /* Icono Material un poco más grande dentro del botón */
+    [data-testid="stSegmentedControl"] button [data-testid="stIconMaterial"],
+    [data-testid="stSegmentedControl"] button span {
+        font-size: 20px !important;
+    }
+    /* Estado activo: contorno azul + fondo azul claro */
+    [data-testid="stSegmentedControl"] button[aria-checked="true"] {
+        background: #eff6ff !important;
+        color: #1e40af !important;
+        border-color: #2563eb !important;
+    }
+    [data-testid="stSegmentedControl"] button[aria-checked="true"] span {
+        color: #1e40af !important;
+    }
+    [data-testid="stSegmentedControl"] button:hover {
+        border-color: #93c5fd !important;
+    }
+
+    /* =================================================================== */
+    /* BOTÓN FILTROS (popover) — a juego, grande y con contorno azul        */
+    /* =================================================================== */
+    [data-testid="stPopover"] > div > button {
+        min-width: 180px !important;
+        padding: 14px 26px !important;
+        font-size: 15px !important;
+        font-weight: 600 !important;
+        border: 1.5px solid var(--border) !important;
+        border-radius: 999px !important;
+        transition: all .15s ease !important;
+    }
+    [data-testid="stPopover"] > div > button:hover {
+        border-color: #2563eb !important;
+        background: #eff6ff !important;
+        color: #1e40af !important;
+    }
     </style>
     """
 
@@ -1563,7 +1615,74 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         ".ag-filter-toolpanel-body": {
             "padding": "10px !important",
             "background-color": "#ffffff !important",
-        }
+        },
+
+        # ================================================================
+        # PANEL DE COLUMNAS COMO INTERRUPTORES (Opción B)
+        # Cada columna es una fila con: etiqueta a la izquierda + toggle a
+        # la derecha. El checkbox nativo de AgGrid se "disfraza" de switch.
+        # ================================================================
+        # Fila de cada columna: aire, divisor fino y etiqueta a la izquierda.
+        ".ag-column-select-column": {
+            "display": "flex !important",
+            "align-items": "center !important",
+            "padding": "10px 12px !important",
+            "border-bottom": "0.5px solid #f1f5f9 !important",
+        },
+        # La etiqueta va primero (order -1) y empuja el toggle a la derecha.
+        ".ag-column-select-column-label": {
+            "order": "-1 !important",
+            "margin-right": "auto !important",
+            "color": "#475569 !important",
+            "font-size": "12.5px !important",
+        },
+        # Resaltar la columna activa (navegadores con :has()).
+        ".ag-column-select-column:has(.ag-checked) .ag-column-select-column-label": {
+            "color": "#1e293b !important",
+            "font-weight": "500 !important",
+        },
+        # Ocultamos la manijita de arrastre para un look limpio
+        # (igual puedes reordenar arrastrando las cabeceras de la tabla).
+        ".ag-column-select-column .ag-drag-handle": {
+            "display": "none !important",
+        },
+        # ── El checkbox convertido en riel del interruptor ──
+        ".ag-column-select-column .ag-checkbox-input-wrapper": {
+            "width": "36px !important",
+            "height": "20px !important",
+            "border-radius": "999px !important",
+            "background": "#e2e8f0 !important",
+            "border": "none !important",
+            "box-shadow": "none !important",
+            "position": "relative !important",
+            "transition": "background .15s ease !important",
+        },
+        # ── La perilla blanca (reemplaza el check del icono) ──
+        ".ag-column-select-column .ag-checkbox-input-wrapper::after": {
+            "content": "'' !important",
+            "position": "absolute !important",
+            "top": "2px !important",
+            "left": "2px !important",
+            "width": "16px !important",
+            "height": "16px !important",
+            "border-radius": "50% !important",
+            "background": "#ffffff !important",
+            "color": "transparent !important",
+            "box-shadow": "0 1px 2px rgba(0,0,0,0.25) !important",
+            "transition": "left .15s ease !important",
+        },
+        # ── Estado encendido: riel azul + perilla a la derecha ──
+        ".ag-column-select-column .ag-checkbox-input-wrapper.ag-checked": {
+            "background": "#2563eb !important",
+        },
+        ".ag-column-select-column .ag-checkbox-input-wrapper.ag-checked::after": {
+            "content": "'' !important",
+            "left": "18px !important",
+        },
+        # El input transparente sigue cubriendo el switch para poder clicar.
+        ".ag-column-select-column .ag-checkbox-input": {
+            "cursor": "pointer !important",
+        },
     }
 
     # ── Cabeceras envueltas en varias líneas (solo Inventario Valorizado) ──
