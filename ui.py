@@ -351,14 +351,19 @@ def get_css():
     [data-testid="stSegmentedControl"] [data-baseweb="button-group"],
     [data-testid="stSegmentedControl"] [role="radiogroup"],
     [data-testid="stSegmentedControl"] [role="group"],
-    [data-testid="stSegmentedControl"] > div {
+    [data-testid="stSegmentedControl"] > div,
+    [data-testid="stButtonGroup"] > div {
         gap: 16px !important;
     }
-    /* Base de cada botón: más grande, redondeado y con contorno */
-    [data-testid="stSegmentedControl"] button {
+    /* Base de cada botón — apuntamos por contenedor Y por kind del botón,    */
+    /* así cae en alguna combinación según tu versión de Streamlit.          */
+    [data-testid="stSegmentedControl"] button,
+    [data-testid="stButtonGroup"] button,
+    button[data-testid^="stBaseButton-segmented_control"],
+    button[kind^="segmented_control"] {
         min-width: 190px !important;          /* MÁS GRANDE: ancho */
         padding: 14px 30px !important;        /* MÁS GRANDE: alto */
-        margin: 0 !important;                 /* quita el "pegado" del grupo */
+        margin: 0 !important;                 /* quita el -1px que los pega */
         font-size: 15px !important;
         font-weight: 600 !important;
         border: 1.5px solid var(--border) !important;
@@ -367,24 +372,25 @@ def get_css():
     }
     /* Icono Material un poco más grande dentro del botón */
     [data-testid="stSegmentedControl"] button [data-testid="stIconMaterial"],
-    [data-testid="stSegmentedControl"] button p {
+    [data-testid="stSegmentedControl"] button p,
+    button[kind^="segmented_control"] [data-testid="stIconMaterial"] {
         font-size: 20px !important;
     }
     /* ESTADO ACTIVO — Streamlit lo marca con kind="...Active"               */
-    /* (incluimos aria-checked y data-testid$=Active por compatibilidad)     */
     [data-testid="stSegmentedControl"] button[kind*="Active"],
-    [data-testid="stSegmentedControl"] button[data-testid$="Active"],
+    button[data-testid$="segmented_controlActive"],
+    button[kind="segmented_controlActive"],
     [data-testid="stSegmentedControl"] button[aria-checked="true"] {
         background: #eff6ff !important;
         color: #1e40af !important;
         border-color: #2563eb !important;
     }
     [data-testid="stSegmentedControl"] button[kind*="Active"] p,
-    [data-testid="stSegmentedControl"] button[data-testid$="Active"] p,
-    [data-testid="stSegmentedControl"] button[aria-checked="true"] p {
+    button[kind="segmented_controlActive"] p {
         color: #1e40af !important;
     }
-    [data-testid="stSegmentedControl"] button:hover {
+    [data-testid="stSegmentedControl"] button:hover,
+    button[kind^="segmented_control"]:hover {
         border-color: #93c5fd !important;
     }
 
