@@ -673,13 +673,9 @@ if not usa_vista_movil:
     
     if reporte == "Inventario Valorizado":
         # Definimos las columnas que queremos que arranquen visibles
-        columnas_iniciales = ["Nombre Producto", "Stock al dia", "Nombre Area", "Valorizado Total"]
+        columnas_iniciales = ["Nombre Producto", "Stock al dia", "Nombre Area", "Valorizado total"]
         # Filtramos para asegurarnos de que existan en el DataFrame (así no falla si el nombre varía)
         cols_visibles = [c for c in columnas_iniciales if c in df_f.columns]
-        
-        # Aviso opcional si alguna no coincide exactamente (no afecta al funcionamiento)
-        if len(cols_visibles) < len(columnas_iniciales):
-            st.caption("⚠️ Algunas columnas iniciales no se encontraron con ese nombre exacto. El resto están ocultas.")
     else:
         # Para el resto de reportes, usa la lógica automática de columnas sugeridas
         cols_visibles = sugeridas
@@ -702,13 +698,14 @@ if df_f.empty:
 
 
 # ===========================================================================
-# CONTENIDO PRINCIPAL EN PESTAÑAS — tabla y gráficos sin necesidad de scroll
+# CONTENIDO PRINCIPAL — segmented_control para Inventario Valorizado,
+#                       tabs clásicas para el resto de reportes
 # ===========================================================================
 font_px = TAM_FUENTE.get(st.session_state.tabla_tam, 14)
 
-tab_tabla, tab_graficos = st.tabs(["📋 Tabla", "📊 Gráficos"])
 
-with tab_tabla:
+def _render_tabla():
+    """Renderiza la tabla AgGrid (desktop o móvil) con los parámetros actuales."""
     if usa_vista_movil and tiene_config_movil:
         st.caption("📱 Vista móvil • Desliza para más columnas • Mantén presionado para menú")
         columnas_fijas = cfg.get("columnas_fijas_movil", 2)
@@ -716,8 +713,7 @@ with tab_tabla:
         renderizar_aggrid_movil(df_grid_movil, columnas_fijas, reporte, font_px)
     else:
         cols_finales = list(cols_mostrar)
-        agrupar_on = bool(grupos_sel)
-        if agrupar_on:
+        if grupos_sel:
             for c in grupos_sel:
                 if c not in cols_finales:
                     cols_finales.append(c)
@@ -727,10 +723,34 @@ with tab_tabla:
             cols_visibles=cols_visibles,
         )
 
-with tab_graficos:
-    if reporte == "Inventario Valorizado":
-        renderizar_graficos(df_f, es_movil=usa_vista_movil)
+
+if reporte == "Inventario Valorizado":
+    # ── Botones segmentados (acento rojo via config.toml primaryColor) ──
+    _OPCIONES_VISTA = {"Tabla": ":material/table_chart:", "Gráficos": ":material/bar_chart:"}
+    vista = st.segmented_control(
+        "Vista",
+        options=list(_OPCIONES_VISTA.keys()),
+        format_func=lambda o: f"{_OPCIONES_VISTA[o]} {o}",
+        default="Tabla",
+        label_visibility="collapsed",
+        key=f"vista_seg_{reporte}",
+    )
+    if vista is None:
+        vista = "Tabla"
+
+    if vista == "Tabla":
+        _render_tabla()
     else:
+        renderizar_graficos(df_f, es_movil=usa_vista_movil)
+
+else:
+    # ── Tabs clásicas para todos los demás reportes ──
+    tab_tabla, tab_graficos = st.tabs(["📋 Tabla", "📊 Gráficos"])
+
+    with tab_tabla:
+        _render_tabla()
+
+    with tab_graficos:
         cols_num = df_f.select_dtypes("number").columns.tolist()
         cols_txt = df_f.select_dtypes(["object", "string"]).columns.tolist()
 
