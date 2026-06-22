@@ -367,18 +367,14 @@ def inject_top_bar(reporte_activo):
 
         function crearBarra() {{
             if (doc.getElementById('top-bar')) {{
-                var t = doc.querySelector('#top-bar .tb-titulo');
-                if (t) t.textContent = {titulo_js};
                 return;
             }}
             var bar = doc.createElement('div');
             bar.id = 'top-bar';
 
-            var titulo = doc.createElement('span');
-            titulo.className = 'tb-titulo';
-            titulo.textContent = {titulo_js};
-            bar.appendChild(titulo);
-
+            // El título superior se eliminó a pedido. La franja se conserva
+            // únicamente para alojar el botón de actualizar (importante en
+            // móvil, donde el rail de iconos está oculto).
             var sep = doc.createElement('div');
             sep.className = 'tb-sep';
             bar.appendChild(sep);
