@@ -347,31 +347,41 @@ def get_css():
     /* =================================================================== */
     /* BOTONES TABLA / GRÁFICOS (segmented_control) — Opción 2 GRANDE azul  */
     /* =================================================================== */
+    /* Separación entre los dos botones (cubrimos las variantes de Streamlit) */
+    [data-testid="stSegmentedControl"] [data-baseweb="button-group"],
     [data-testid="stSegmentedControl"] [role="radiogroup"],
+    [data-testid="stSegmentedControl"] [role="group"],
     [data-testid="stSegmentedControl"] > div {
-        gap: 16px !important;                 /* separación entre botones */
+        gap: 16px !important;
     }
+    /* Base de cada botón: más grande, redondeado y con contorno */
     [data-testid="stSegmentedControl"] button {
         min-width: 190px !important;          /* MÁS GRANDE: ancho */
         padding: 14px 30px !important;        /* MÁS GRANDE: alto */
+        margin: 0 !important;                 /* quita el "pegado" del grupo */
         font-size: 15px !important;
         font-weight: 600 !important;
         border: 1.5px solid var(--border) !important;
-        border-radius: 999px !important;
+        border-radius: 999px !important;      /* pill completo en ambos */
         transition: all .15s ease !important;
     }
     /* Icono Material un poco más grande dentro del botón */
     [data-testid="stSegmentedControl"] button [data-testid="stIconMaterial"],
-    [data-testid="stSegmentedControl"] button span {
+    [data-testid="stSegmentedControl"] button p {
         font-size: 20px !important;
     }
-    /* Estado activo: contorno azul + fondo azul claro */
+    /* ESTADO ACTIVO — Streamlit lo marca con kind="...Active"               */
+    /* (incluimos aria-checked y data-testid$=Active por compatibilidad)     */
+    [data-testid="stSegmentedControl"] button[kind*="Active"],
+    [data-testid="stSegmentedControl"] button[data-testid$="Active"],
     [data-testid="stSegmentedControl"] button[aria-checked="true"] {
         background: #eff6ff !important;
         color: #1e40af !important;
         border-color: #2563eb !important;
     }
-    [data-testid="stSegmentedControl"] button[aria-checked="true"] span {
+    [data-testid="stSegmentedControl"] button[kind*="Active"] p,
+    [data-testid="stSegmentedControl"] button[data-testid$="Active"] p,
+    [data-testid="stSegmentedControl"] button[aria-checked="true"] p {
         color: #1e40af !important;
     }
     [data-testid="stSegmentedControl"] button:hover {
@@ -381,7 +391,7 @@ def get_css():
     /* =================================================================== */
     /* BOTÓN FILTROS (popover) — a juego, grande y con contorno azul        */
     /* =================================================================== */
-    [data-testid="stPopover"] > div > button {
+    [data-testid="stPopover"] button {
         min-width: 180px !important;
         padding: 14px 26px !important;
         font-size: 15px !important;
@@ -390,7 +400,7 @@ def get_css():
         border-radius: 999px !important;
         transition: all .15s ease !important;
     }
-    [data-testid="stPopover"] > div > button:hover {
+    [data-testid="stPopover"] button:hover {
         border-color: #2563eb !important;
         background: #eff6ff !important;
         color: #1e40af !important;
