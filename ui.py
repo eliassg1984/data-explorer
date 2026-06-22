@@ -472,31 +472,130 @@ def inject_error_overlay():
 
 
 def inject_grid_health_check():
-    """Comprueba que el grid de AgGrid se haya montado de verdad. Los errores
-    de render DENTRO del iframe de AgGrid (p.ej. un cellRenderer/JsCode que
-    devuelve un nodo DOM → React #31) no llegan a la ventana principal, así que
-    aquí inspeccionamos el iframe del componente: si existe pero no aparece
+    """Comprueba que el grid de AgGrid se haya montado de verdad e inyecta
+    CSS de paginación directamente dentro del iframe para garantizar que los
+    estilos pisen los del tema nativo (balham/material).
+
+    Los errores de render DENTRO del iframe de AgGrid (p.ej. un cellRenderer/
+    JsCode que devuelve un nodo DOM → React #31) no llegan a la ventana
+    principal, así que aquí inspeccionamos el iframe: si existe pero no aparece
     '.ag-root-wrapper' tras unos segundos, lo reportamos al overlay de errores.
     (No revisa el nº de filas: un grid vacío legítimo SÍ monta el wrapper.)"""
     components.html("""
     <script>
     (function(){
       var win = window.parent, doc = win.document;
-      var tries = 0, MAX = 14;  // ~14 * 500ms = 7s de gracia
+      var tries = 0, MAX = 20;
+
+      // ── CSS de paginación Opción A (Minimalista) ─────────────────────
+      // Se inyecta dentro del iframe de AgGrid para garantizar que pisa
+      // los estilos del tema. El custom_css del componente no siempre tiene
+      // suficiente especificidad frente a los estilos del tema balham/material.
+      var PAG_CSS = [
+        /* Quitar fondo morado/rayado de la status bar */
+        '.ag-status-bar {',
+        '  background: #f8fafc !important;',
+        '  border-top: 1px solid #e2e8f0 !important;',
+        '  color: #475569 !important;',
+        '  padding: 4px 16px !important;',
+        '  font-size: 12px !important;',
+        '  background-image: none !important;',
+        '  background-color: #f8fafc !important;',
+        '}',
+        '.ag-status-bar * {',
+        '  background-image: none !important;',
+        '}',
+        '.ag-status-name-value { color: #475569 !important; font-size: 12px !important; }',
+        '.ag-status-name-value-value { color: #1e293b !important; font-weight: 600 !important; }',
+
+        /* Franja de paginación limpia */
+        '.ag-paging-panel {',
+        '  display: flex !important;',
+        '  align-items: center !important;',
+        '  justify-content: space-between !important;',
+        '  background: #f8fafc !important;',
+        '  background-image: none !important;',
+        '  border-top: 1px solid #e2e8f0 !important;',
+        '  padding: 8px 16px !important;',
+        '  min-height: 44px !important;',
+        '  font-size: 12px !important;',
+        '  color: #64748b !important;',
+        '}',
+
+        /* Selector de tamaño a la izquierda */
+        '.ag-paging-page-size { order: -1 !important; margin-right: auto !important; }',
+        '.ag-paging-page-size .ag-label { color: #64748b !important; font-size: 12px !important; margin-right: 6px !important; }',
+        '.ag-paging-page-size .ag-select, .ag-paging-page-size select {',
+        '  border: 1px solid #e2e8f0 !important;',
+        '  border-radius: 6px !important;',
+        '  background: #fff !important;',
+        '  color: #1e293b !important;',
+        '  font-size: 12px !important;',
+        '  padding: 2px 6px !important;',
+        '}',
+
+        /* Resumen "1 a 50 de 5,000" */
+        '.ag-paging-row-summary-panel { color: #64748b !important; font-size: 12px !important; }',
+        '.ag-paging-row-summary-panel-number { color: #1e293b !important; font-weight: 600 !important; }',
+
+        /* Descripción de página "Página X de Y" */
+        '.ag-paging-description { color: #64748b !important; font-size: 12px !important; }',
+
+        /* Botones de navegación */
+        '.ag-paging-button {',
+        '  width: 28px !important; height: 28px !important;',
+        '  border: 1px solid #e2e8f0 !important;',
+        '  border-radius: 6px !important;',
+        '  background: #fff !important;',
+        '  color: #475569 !important;',
+        '  font-size: 13px !important;',
+        '  margin: 0 2px !important;',
+        '  cursor: pointer !important;',
+        '  display: inline-flex !important;',
+        '  align-items: center !important;',
+        '  justify-content: center !important;',
+        '  transition: all 0.15s ease !important;',
+        '}',
+        '.ag-paging-button:hover:not(.ag-disabled) {',
+        '  background: #eff6ff !important;',
+        '  border-color: #93c5fd !important;',
+        '  color: #2563eb !important;',
+        '}',
+        '.ag-paging-button.ag-disabled {',
+        '  color: #cbd5e1 !important;',
+        '  border-color: #f1f5f9 !important;',
+        '  background: #f8fafc !important;',
+        '  cursor: default !important;',
+        '  opacity: 0.5 !important;',
+        '}',
+      ].join('\\n');
+
+      function inyectarCSS(fdoc) {
+        if (fdoc.getElementById('pag-custom-css')) return;
+        var s = fdoc.createElement('style');
+        s.id = 'pag-custom-css';
+        s.textContent = PAG_CSS;
+        fdoc.head.appendChild(s);
+      }
+
       function check(){
         tries++;
         var frames = doc.querySelectorAll('iframe[src*="st_aggrid"]');
         if (frames.length === 0){
           if (tries < MAX) setTimeout(check, 500);
-          return;  // el iframe del grid aún no aparece
+          return;
         }
         var montado = false;
-        for (var i=0;i<frames.length;i++){
+        for (var i = 0; i < frames.length; i++){
           var d = null;
           try { d = frames[i].contentDocument; } catch(e){}
-          if (d && d.querySelector('.ag-root-wrapper')){ montado = true; break; }
+          if (!d) continue;
+          if (d.querySelector('.ag-root-wrapper')) {
+            montado = true;
+            inyectarCSS(d);   // <── inyección directa dentro del iframe
+          }
         }
-        if (montado) return;                          // grid OK → silencio
+        if (montado) return;
         if (tries < MAX){ setTimeout(check, 500); return; }
         if (win.__logErr) win.__logErr('Tabla no renderizada: el grid de AgGrid '
           + 'no se montó (posible cellRenderer/JsCode que devuelve un nodo DOM → React #31).');
