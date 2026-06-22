@@ -670,10 +670,17 @@ if not usa_vista_movil:
     cols_mostrar = todas_cols  # Envía TODAS las columnas al backend de AgGrid
     
     if reporte == "Inventario Valorizado":
-        # Definimos las columnas que queremos que arranquen visibles
-        columnas_iniciales = ["Nombre Producto", "Stock al dia", "Nombre Area", "Valorizado total"]
-        # Filtramos para asegurarnos de que existan en el DataFrame (así no falla si el nombre varía)
-        cols_visibles = [c for c in columnas_iniciales if c in df_f.columns]
+        # Columnas que arrancan visibles. Usamos buscar_columna (coincidencia
+        # flexible: ignora mayúsculas, espacios y acentos) en lugar de comparar
+        # el texto EXACTO. Antes, si el nombre real difería aunque fuera en una
+        # mayúscula (p. ej. "Stock al Dia" vs "Stock al dia"), la coincidencia
+        # exacta fallaba, cols_visibles quedaba vacío y la tabla salía en blanco.
+        columnas_iniciales = ["Nombre Producto", "Stock al Dia", "Nombre Area", "Valorizado total"]
+        cols_visibles = []
+        for _c in columnas_iniciales:
+            _real = buscar_columna(df_f, _c)
+            if _real and _real not in cols_visibles:
+                cols_visibles.append(_real)
     else:
         # Para el resto de reportes, usa la lógica automática de columnas sugeridas
         cols_visibles = sugeridas
