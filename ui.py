@@ -2001,6 +2001,30 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "color": "#1e3a5f !important",                     # azul oscuro en lugar de rojo oscuro
         })
 
+        # ── Opción 3: panel lateral como TARJETA DESPEGADA (solo Inventario) ──
+        # En vez de una franja pegada al borde de la tabla, el panel se separa
+        # con un espacio a la izquierda y tiene su propio borde redondeado,
+        # un tono claro y una sombra suave. `overflow: hidden` en el panel hace
+        # que el contenido (pestañas y lista) se recorte a las esquinas
+        # redondeadas. Los márgenes lo despegan de la tabla y de la paginación.
+        custom_css[".ag-side-bar"].update({
+            "background-color": "#f6f8fb !important",
+            "border": "1px solid #dbe2ec !important",
+            "border-left": "1px solid #dbe2ec !important",
+            "border-bottom": "1px solid #dbe2ec !important",
+            "border-radius": "10px !important",
+            "border-top-right-radius": "10px !important",
+            "border-bottom-right-radius": "10px !important",
+            "box-shadow": "0 4px 14px rgba(15,23,42,0.08) !important",
+            "margin": "4px 6px 6px 12px !important",
+            "overflow": "hidden !important",
+        })
+        # Franja de pestañas con un tono un poco más marcado que el cuerpo.
+        custom_css[".ag-side-bar .ag-side-buttons"].update({
+            "background-color": "#eef2f7 !important",
+            "border-bottom": "1px solid #dbe2ec !important",
+        })
+
     AgGrid(
         df_grid.head(5000), gridOptions=grid_options, height=600,
         theme=tema_grid, custom_css=custom_css,
