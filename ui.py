@@ -1984,7 +1984,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         custom_css[".ag-header"].update({
             "background-color": "#ffffff !important",
             "border-bottom": "2px solid #3b82f6 !important",   # azul en lugar de rojo
-        })
+        })   
+        custom_css[".ag-tool-panel-horizontal-resize"] = {
+            "width": "8px !important",
+            "background-color": "#e2e8f0",
+            "cursor": "col-resize",
+        }
         custom_css[".ag-header-cell"].update({
             "background-color": "#ffffff !important",
         })
