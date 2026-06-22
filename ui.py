@@ -1395,13 +1395,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             }}
         """)
     elif es_inventario:
-        # Variación F: la fila de totales usa el acento rojo Material (#e0392f)
-        # en lugar del azul, para que combine con la cabecera clara del tema.
+        # Fila de totales en paleta azul (igual que el resto de reportes).
         get_row_style = JsCode("""
             function(params) {
                 if (params.node.rowPinned === 'bottom') {
-                    return { fontWeight:'700', backgroundColor:'#fdecea', color:'#7f1d1d',
-                             borderTop:'2px solid #e0392f', fontSize:'13px' };
+                    return { fontWeight:'700', backgroundColor:'#dbeafe', color:'#1e3a5f',
+                             borderTop:'2px solid #3b82f6', fontSize:'13px' };
                 }
             }
         """)
@@ -1719,12 +1718,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "align-items": "center",
         }
 
-    # ── Variación F (SOLO Inventario Valorizado): tema Material + cabecera clara ──
-    # El tema base pasa a "material"; la cabecera oscura (#0f172a) se reemplaza
-    # por el look Material: fondo blanco, texto gris en mayúsculas y un subrayado
-    # de 2px en el rojo de marca (#e0392f, el primaryColor del config.toml).
-    # Solo cambia la ESTÉTICA: el formato S/, los totales, el panel lateral y la
-    # barra de estado siguen exactamente igual.
+    # ── Inventario Valorizado: tema Material con cabecera clara y acento AZUL ──
+    # Reemplaza el subrayado rojo de marca por el azul de la paleta principal,
+    # manteniendo todo el formato S/, totales, panel lateral y barra de estado.
     tema_grid = "balham"
     if es_inventario:
         tema_grid = "material"
@@ -1734,7 +1730,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         })
         custom_css[".ag-header"].update({
             "background-color": "#ffffff !important",
-            "border-bottom": "2px solid #e0392f !important",
+            "border-bottom": "2px solid #3b82f6 !important",   # azul en lugar de rojo
         })
         custom_css[".ag-header-cell"].update({
             "background-color": "#ffffff !important",
@@ -1749,9 +1745,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "color": "#9aa0a6 !important",
         })
         custom_css[".ag-row-pinned"].update({
-            "background-color": "#fdecea !important",
-            "border-top": "2px solid #e0392f !important",
-            "color": "#7f1d1d !important",
+            "background-color": "#dbeafe !important",          # azul claro en lugar de rosado
+            "border-top": "2px solid #3b82f6 !important",      # azul en lugar de rojo
+            "color": "#1e3a5f !important",                     # azul oscuro en lugar de rojo oscuro
         })
 
     AgGrid(
