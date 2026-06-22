@@ -1023,6 +1023,13 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     # valorizado) SOLO en este reporte. Se conserva todo el formato y la función.
     quitar_fondos = (reporte == "Inventario Valorizado")
 
+    # Variaciones E y F SOLO para este reporte:
+    #   E → agrupación en fila completa (groupDisplayType="groupRows")
+    #   F → tema Material (Google design) con cabecera clara y acento rojo
+    # Ambas son puramente visuales/de disposición: NO tocan totales, formato S/,
+    # panel lateral, barra de estado, ni ninguna otra funcionalidad del grid.
+    es_inventario = (reporte == "Inventario Valorizado")
+
     # ─────────────────────────────────────────────────────────────────
     # REORDENAR COLUMNAS (Producto, Stock, Precio, Valorizado)
     # ─────────────────────────────────────────────────────────────────
@@ -1319,6 +1326,17 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 return null;
             }}
         """)
+    elif es_inventario:
+        # Variación F: la fila de totales usa el acento rojo Material (#e0392f)
+        # en lugar del azul, para que combine con la cabecera clara del tema.
+        get_row_style = JsCode("""
+            function(params) {
+                if (params.node.rowPinned === 'bottom') {
+                    return { fontWeight:'700', backgroundColor:'#fdecea', color:'#7f1d1d',
+                             borderTop:'2px solid #e0392f', fontSize:'13px' };
+                }
+            }
+        """)
     else:
         get_row_style = JsCode("""
             function(params) {
@@ -1388,7 +1406,45 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         for c in grupos_sel:
             if c in df_grid.columns:
                 gb.configure_column(c, rowGroup=True, hide=True)
-        opciones_grid["groupDisplayType"] = "multipleColumns"
+
+        if es_inventario:
+            # ── Variación E: grupos en FILA COMPLETA (groupRows) ──
+            # En vez de columnas de grupo, cada grupo es una fila ancha con su
+            # nombre, el conteo de hijos y el subtotal del valorizado.
+            # La fila de totales (pinnedBottom) y las agregaciones del resto de
+            # columnas siguen funcionando igual.
+            opciones_grid["groupDisplayType"] = "groupRows"
+
+            _col_val_js = ""
+            if col_valorizado and col_valorizado in df_grid.columns:
+                _col_val_js = str(col_valorizado).replace("\\", "\\\\").replace('"', '\\"')
+
+            opciones_grid["groupRowRendererParams"] = {
+                "innerRenderer": JsCode(f"""
+                    function(params) {{
+                        if (!params.node || !params.node.group) return params.value;
+                        var nombre = (params.value == null ? '' : params.value);
+                        var n = params.node.allChildrenCount;
+                        var extra = '';
+                        var colVal = "{_col_val_js}";
+                        if (colVal && params.node.aggData &&
+                            params.node.aggData[colVal] !== null &&
+                            params.node.aggData[colVal] !== undefined) {{
+                            var v = Number(params.node.aggData[colVal]);
+                            if (!isNaN(v)) {{
+                                extra = ' · S/ ' + v.toLocaleString('es-PE', {{
+                                    minimumFractionDigits: 2, maximumFractionDigits: 2 }});
+                            }}
+                        }}
+                        return '<span style="font-weight:600;color:#1e293b">' + nombre +
+                               '</span> <span style="color:#64748b;font-weight:400">(' +
+                               n + ')' + extra + '</span>';
+                    }}
+                """)
+            }
+        else:
+            opciones_grid["groupDisplayType"] = "multipleColumns"
+
         opciones_grid["groupDefaultExpanded"] = 0
         opciones_grid["pivotMode"] = False
     else:
@@ -1528,9 +1584,44 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "align-items": "center",
         }
 
+    # ── Variación F (SOLO Inventario Valorizado): tema Material + cabecera clara ──
+    # El tema base pasa a "material"; la cabecera oscura (#0f172a) se reemplaza
+    # por el look Material: fondo blanco, texto gris en mayúsculas y un subrayado
+    # de 2px en el rojo de marca (#e0392f, el primaryColor del config.toml).
+    # Solo cambia la ESTÉTICA: el formato S/, los totales, el panel lateral y la
+    # barra de estado siguen exactamente igual.
+    tema_grid = "balham"
+    if es_inventario:
+        tema_grid = "material"
+        custom_css[".ag-root-wrapper"].update({
+            "border": "1px solid #e0e0e0 !important",
+            "border-radius": "4px !important",
+        })
+        custom_css[".ag-header"].update({
+            "background-color": "#ffffff !important",
+            "border-bottom": "2px solid #e0392f !important",
+        })
+        custom_css[".ag-header-cell"].update({
+            "background-color": "#ffffff !important",
+        })
+        custom_css[".ag-header-cell-text"].update({
+            "color": "#5f6368 !important",
+            "font-weight": "600",
+            "letter-spacing": "0.05em",
+            "text-transform": "uppercase",
+        })
+        custom_css[".ag-header-icon"].update({
+            "color": "#9aa0a6 !important",
+        })
+        custom_css[".ag-row-pinned"].update({
+            "background-color": "#fdecea !important",
+            "border-top": "2px solid #e0392f !important",
+            "color": "#7f1d1d !important",
+        })
+
     AgGrid(
         df_grid.head(5000), gridOptions=grid_options, height=600,
-        theme="balham", custom_css=custom_css,
+        theme=tema_grid, custom_css=custom_css,
         fit_columns_on_grid_load=False, allow_unsafe_jscode=True,
         enable_enterprise_modules=True, key=f"grid_{reporte}",
     )
