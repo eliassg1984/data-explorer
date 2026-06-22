@@ -1019,6 +1019,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     # reporte. El resto de tablas mantiene la cabecera en una sola línea.
     envolver_cabeceras = (reporte == "Inventario Valorizado")
 
+    # Quitar fondos de color (píldoras de stock, filas teñidas y barra del
+    # valorizado) SOLO en este reporte. Se conserva todo el formato y la función.
+    quitar_fondos = (reporte == "Inventario Valorizado")
+
     # ─────────────────────────────────────────────────────────────────
     # REORDENAR COLUMNAS (Producto, Stock, Precio, Valorizado)
     # ─────────────────────────────────────────────────────────────────
@@ -1110,6 +1114,24 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         }
     """)
 
+    # ── Versión PLANA del stock: sin fondos de color, conserva mono/negrita/
+    #    alineación a la derecha (solo cambia el color → texto oscuro neutro). ──
+    stock_cell_style_plano = JsCode("""
+        function(params) {
+            if (params.value === null || params.value === undefined) return {};
+            if (params.node && params.node.rowPinned) {
+                return { fontWeight: '700', color: '#1e3a5f' };
+            }
+            return {
+                fontFamily: "'Courier New', Courier, monospace",
+                fontWeight: '700',
+                textAlign: 'right',
+                padding: '2px 10px',
+                color: '#1e293b'
+            };
+        }
+    """)
+
     # ── BARRA DE DATOS GRUESA PARA EL VALORIZADO ──
     valorizado_bar_style = JsCode(f"""
         function(params) {{
@@ -1139,6 +1161,28 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         }}
     """)
 
+    # ── Versión PLANA del valorizado: sin barra de datos, conserva mono/negrita/
+    #    alineación a la derecha y el formato S/ (solo se quita el fondo). ──
+    valorizado_plano = JsCode("""
+        function(params) {
+            var base = {
+                fontFamily: "'Courier New', Courier, monospace",
+                color: '#1e3a5f',
+                fontWeight: '600',
+                textAlign: 'right',
+                paddingRight: '12px'
+            };
+            if (params.node && (params.node.group || params.node.rowPinned)) {
+                return Object.assign({}, base, { fontWeight: '800' });
+            }
+            return base;
+        }
+    """)
+
+    # Elegimos el estilo con o sin fondos de color según el reporte.
+    _stock_style = stock_cell_style_plano if quitar_fondos else stock_cell_style
+    _valor_style = valorizado_plano       if quitar_fondos else valorizado_bar_style
+
     # ── Formateo por tipo de columna ──
     for c in df_grid.columns:
         if not pd.api.types.is_numeric_dtype(df_grid[c]):
@@ -1155,7 +1199,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         if es_stock:
             gb.configure_column(
                 c, aggFunc="sum", type=["numericColumn"],
-                cellStyle=stock_cell_style,
+                cellStyle=_stock_style,
                 valueFormatter=JsCode("""
                     function(params) {
                         if (params.value == null) return '';
@@ -1168,7 +1212,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             gb.configure_column(
                 c, aggFunc="sum", type=["numericColumn"],
                 minWidth=170,
-                cellStyle=valorizado_bar_style,
+                cellStyle=_valor_style,
                 valueFormatter=JsCode("""
                     function(params) {
                         if (params.value == null) return '';
@@ -1255,7 +1299,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             fila_totales[c] = None
 
     # ── Estilo de fila para el semáforo (totales y alertas) ──
-    if col_stock and col_stock in df_grid.columns:
+    # Si quitar_fondos está activo, NO se aplican los tintes por fila (rosa/
+    # crema); se usa la rama de abajo, que solo estiliza la fila de totales.
+    if col_stock and col_stock in df_grid.columns and not quitar_fondos:
         _sf = str(col_stock).replace("\\", "\\\\").replace('"', '\\"')
         get_row_style = JsCode(f"""
             function(params) {{
