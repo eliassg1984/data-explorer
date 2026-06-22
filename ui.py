@@ -1976,8 +1976,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     if es_inventario:
         tema_grid = "material"
         custom_css[".ag-root-wrapper"].update({
-            "border": "1px solid #e0e0e0 !important",
-            "border-radius": "4px !important",
+            "background-color": "#f8fafc !important",   # mismo fondo que la página
+            "border": "none !important",                # sin borde
+            "box-shadow": "none !important",            # sin sombra
+            "border-radius": "4px !important",          # conserva el redondeo suave (opcional, si lo quieres quitar pon 0px)
         })
         custom_css[".ag-header"].update({
             "background-color": "#ffffff !important",
