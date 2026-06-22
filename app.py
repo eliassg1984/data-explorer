@@ -284,21 +284,14 @@ def inject_top_bar(reporte_activo):
     Inyecta una franja superior delgada y fija.
     Convive con el rail vertical de iconos (deja 64px libres a la izquierda
     en desktop; en móvil ocupa todo el ancho porque el rail se oculta).
-
-    Para el reporte "Inventario Valorizado" el título se muestra un 60 % más
-    grande (22 px en lugar de 14 px) y alineado con el borde izquierdo de la
-    tabla (padding-left equivalente al del bloque de contenido de Streamlit).
     """
     titulo_js = json.dumps(reporte_activo)
-    # 14 px × 1.6 = 22.4 px → redondeado a 22 px
-    es_inventario_js = json.dumps(reporte_activo == "Inventario Valorizado")
 
     html = f"""
     <script>
     (function() {{
         var doc = window.parent.document;
         var win = window.parent;
-        var esInventario = {es_inventario_js};
 
         // ── Navegación a prueba de sandbox (mismo motivo que en el rail) ──
         if (!doc.getElementById('rail-nav-fns')) {{
@@ -338,13 +331,6 @@ def inject_top_bar(reporte_activo):
                 color: #1e3a5f;
                 white-space: nowrap;
                 transform: translateY(8px);    /* el título, un poco más abajo */
-            }}
-            /* Título ampliado para Inventario Valorizado:
-               60 % más grande (22 px) y centrado verticalmente sin desplazamiento */
-            #top-bar .tb-titulo.tb-titulo--inventario {{
-                font-size: 22px;
-                transform: none;
-                line-height: 48px;
             }}
             /* Separador oculto: sin la franja no tiene sentido que flote */
             #top-bar .tb-sep {{
@@ -388,16 +374,8 @@ def inject_top_bar(reporte_activo):
             var bar = doc.createElement('div');
             bar.id = 'top-bar';
 
-            // Alinear el padding izquierdo del bar con el contenido de Streamlit.
-            // En layout="wide" Streamlit usa min(4%, 2.5rem) ≈ 40 px en desktop;
-            // para Inventario Valorizado igualamos ese valor para que el título
-            // quede justo encima del borde izquierdo de la tabla.
-            if (esInventario) {{
-                bar.style.paddingLeft = '2.5rem';
-            }}
-
             var titulo = doc.createElement('span');
-            titulo.className = 'tb-titulo' + (esInventario ? ' tb-titulo--inventario' : '');
+            titulo.className = 'tb-titulo';
             titulo.textContent = {titulo_js};
             bar.appendChild(titulo);
 
@@ -749,6 +727,13 @@ def _render_tabla():
 
 
 if reporte == "Inventario Valorizado":
+    # ── Título grande alineado con la tabla (elemento Streamlit nativo,
+    #    visible con F12 y perfectamente alineado con el contenido) ──
+    st.markdown(
+        '<p style="font-size:22px;font-weight:700;color:#1e293b;'
+        'margin:0 0 0.6rem 0;line-height:1.2;">Inventario Valorizado</p>',
+        unsafe_allow_html=True,
+    )
     # ── Botones segmentados (acento rojo via config.toml primaryColor) ──
     _OPCIONES_VISTA = {"Tabla": ":material/table_chart:", "Gráficos": ":material/bar_chart:"}
     vista = st.segmented_control(
