@@ -1976,14 +1976,14 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     if es_inventario:
         tema_grid = "material"
         custom_css[".ag-root-wrapper"].update({
-            "background-color": "#f8fafc !important",
-            "border": "none !important",
-            "box-shadow": "none !important",
-            "border-radius": "4px !important",
+            "background-color": "#f8fafc !important",   # mismo fondo que la página
+            "border": "none !important",                # sin borde
+            "box-shadow": "none !important",            # sin sombra
+            "border-radius": "4px !important",          # conserva el redondeo suave (opcional, si lo quieres quitar pon 0px)
         })
         custom_css[".ag-header"].update({
             "background-color": "#ffffff !important",
-            "border-bottom": "2px solid #3b82f6 !important",
+            "border-bottom": "2px solid #3b82f6 !important",   # azul en lugar de rojo
         })   
         custom_css[".ag-tool-panel-horizontal-resize"] = {
             "width": "8px !important",
@@ -2003,9 +2003,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "color": "#9aa0a6 !important",
         })
         custom_css[".ag-row-pinned"].update({
-            "background-color": "#dbeafe !important",
-            "border-top": "2px solid #3b82f6 !important",
-            "color": "#1e3a5f !important",
+            "background-color": "#dbeafe !important",          # azul claro en lugar de rosado
+            "border-top": "2px solid #3b82f6 !important",      # azul en lugar de rojo
+            "color": "#1e3a5f !important",                     # azul oscuro en lugar de rojo oscuro
         })
 
         # ── Scrollbar azul personalizada (solo Inventario Valorizado) ──
@@ -2024,7 +2024,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "background": "#2563eb",
         }
 
-        # ── Panel lateral como tarjeta despegada ──
+        # ── Opción 3: panel lateral como TARJETA DESPEGADA (solo Inventario) ──
+        # En vez de una franja pegada al borde de la tabla, el panel se separa
+        # con un espacio a la izquierda y tiene su propio borde redondeado,
+        # un tono claro y una sombra suave. `overflow: hidden` en el panel hace
+        # que el contenido (pestañas y lista) se recorte a las esquinas
+        # redondeadas. Los márgenes lo despegan de la tabla y de la paginación.
         custom_css[".ag-side-bar"].update({
             "background-color": "#f6f8fb !important",
             "border": "1px solid #dbe2ec !important",
@@ -2037,10 +2042,17 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "margin": "4px 6px 6px 12px !important",
             "overflow": "hidden !important",
         })
+        # Franja de pestañas con un tono un poco más marcado que el cuerpo.
         custom_css[".ag-side-bar .ag-side-buttons"].update({
             "background-color": "#eef2f7 !important",
             "border-bottom": "1px solid #dbe2ec !important",
         })
+
+        # ── Borde azul para el área de datos (solo Inventario Valorizado) ──
+        custom_css[".ag-root"] = {
+            "border": "2px solid #3b82f6",
+            "border-radius": "6px",
+        }
 
     AgGrid(
         df_grid.head(5000), gridOptions=grid_options, height=600,
@@ -2050,6 +2062,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     )
 
     inject_grid_health_check()
+
 
 # ===========================================================================
 # FUNCIÓN: AGGRID MÓVIL (ANCHO COMPLETO)
