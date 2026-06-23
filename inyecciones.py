@@ -836,3 +836,184 @@ def inject_element_inspector():
     })();
     </script>
     """, height=0, scrolling=False)
+
+
+# ===========================================================================
+# BARRA DE PAGINACIÓN v2 (NÚMEROS + SALTO) — SOLO INVENTARIO VALORIZADO
+# ===========================================================================
+
+def inject_pagination_v2():
+    """Barra de paginación personalizada (Opción 2: números + salto de página).
+
+    Pensada para llamarse SOLO en el reporte Inventario Valorizado.
+
+    No toca la lógica de AgGrid: el grid sigue gestionando las 5.000 filas, los
+    filtros, el orden y los totales. Esta función solo OCULTA la barra nativa
+    (resumen de filas + flechas) y dibuja una barra propia que CONDUCE los
+    botones nativos (btFirst/btPrevious/btNext/btLast), leyendo el estado real
+    desde [ref=lbCurrent] y [ref=lbTotal]. Por eso nunca se desincroniza del
+    grid (cambio de página, de tamaño de página o aplicar un filtro).
+
+    El selector "Tamaño de página" nativo se conserva a la izquierda (ya lo
+    estiliza inject_grid_health_check); aquí solo se añade la navegación a la
+    derecha.
+    """
+    components.html("""
+    <script>
+    (function(){
+      var win = window.parent, doc = win.document;
+      var tries = 0, MAX = 40;
+
+      // Documento DENTRO del iframe de st_aggrid (mismo origen, accesible).
+      function agDocument(){
+        var frames = doc.querySelectorAll('iframe');
+        for (var i=0;i<frames.length;i++){
+          try{
+            var d = frames[i].contentDocument;
+            if (d && d.querySelector('.ag-paging-panel')) return d;
+          }catch(e){}
+        }
+        return null;
+      }
+
+      function num(el){
+        return el ? parseInt((el.textContent||'').replace(/[^0-9]/g,''),10) : NaN;
+      }
+
+      function build(agDoc){
+        var panel = agDoc.querySelector('.ag-paging-panel');
+        if (!panel) return false;
+        var lbCur = panel.querySelector('[ref=lbCurrent]');
+        var lbTot = panel.querySelector('[ref=lbTotal]');
+        if (!lbCur || !lbTot) return false;
+
+        // -- Estilos de la barra v2 (una sola vez) ----------------------
+        if (!agDoc.getElementById('pgv2-css')){
+          var stl = agDoc.createElement('style');
+          stl.id = 'pgv2-css';
+          stl.textContent =
+            '.ag-paging-panel .ag-paging-row-summary-panel,'+
+            '.ag-paging-panel .ag-paging-description,'+
+            '.ag-paging-panel [ref=btFirst],.ag-paging-panel [ref=btPrevious],'+
+            '.ag-paging-panel [ref=btNext],.ag-paging-panel [ref=btLast]{'+
+            'position:absolute!important;left:-9999px!important;width:1px!important;'+
+            'height:1px!important;overflow:hidden!important;}'+
+            '#pgv2{display:inline-flex;align-items:center;gap:14px;margin-left:auto;'+
+            'font:13px -apple-system,BlinkMacSystemFont,sans-serif;color:#64748b;}'+
+            '#pgv2 .pgv2-pages{display:inline-flex;align-items:center;gap:6px;}'+
+            '#pgv2 button{min-width:30px;height:30px;padding:0 8px;border:1px solid #e2e8f0;'+
+            'border-radius:8px;background:#fff;color:#475569;font-size:13px;cursor:pointer;'+
+            'display:inline-flex;align-items:center;justify-content:center;transition:all .15s;}'+
+            '#pgv2 button:hover:not(:disabled){background:#eff6ff;border-color:#93c5fd;color:#2563eb;}'+
+            '#pgv2 button:disabled{opacity:.4;cursor:default;}'+
+            '#pgv2 button.pgv2-on{background:#2563eb;border-color:#2563eb;color:#fff;font-weight:500;}'+
+            '#pgv2 .pgv2-dots{color:#94a3b8;padding:0 2px;}'+
+            '#pgv2 .pgv2-jump{display:inline-flex;align-items:center;gap:7px;color:#475569;}'+
+            '#pgv2 .pgv2-jump input{width:48px;height:30px;border:1px solid #e2e8f0;'+
+            'border-radius:8px;text-align:center;color:#1e293b;font-size:13px;background:#fff;'+
+            'outline:none;-moz-appearance:textfield;}'+
+            '#pgv2 .pgv2-jump input:focus{border-color:#2563eb;box-shadow:0 0 0 2px #dbeafe;}'+
+            '#pgv2 .pgv2-jump input::-webkit-outer-spin-button,'+
+            '#pgv2 .pgv2-jump input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}';
+          agDoc.head.appendChild(stl);
+        }
+
+        function curr(){ return num(lbCur); }   // 1-indexado (como lo muestra AgGrid)
+        function total(){ return num(lbTot); }
+
+        // Ir a la pagina p clicando las flechas nativas las veces necesarias.
+        function go(p){
+          var c = curr(), t = total();
+          if (isNaN(c) || isNaN(t)) return;
+          p = Math.max(1, Math.min(t, p));
+          if (p === c){ return; }
+          win.__pgv2busy = true;
+          var btn, n;
+          if (p > c){ btn = panel.querySelector('[ref=btNext]');     n = p - c; }
+          else      { btn = panel.querySelector('[ref=btPrevious]'); n = c - p; }
+          for (var k=0; k<n && btn; k++){ btn.click(); }
+          win.__pgv2busy = false;
+          render();
+        }
+
+        // Que numeros mostrar: 1 ... (c-2 c-1 c c+1 c+2) ... t
+        function pagesToShow(c, t){
+          var want = [1, t, c, c-1, c+1, c-2, c+2];
+          var seen = {}, arr = [];
+          for (var i=0;i<want.length;i++){
+            var v = want[i];
+            if (v>=1 && v<=t && !seen[v]){ seen[v]=1; arr.push(v); }
+          }
+          arr.sort(function(a,b){ return a-b; });
+          var out = [];
+          for (var j=0;j<arr.length;j++){
+            if (j>0 && arr[j]-arr[j-1] > 1) out.push('...');
+            out.push(arr[j]);
+          }
+          return out;
+        }
+
+        function render(){
+          var c = curr(), t = total();
+          if (isNaN(c) || isNaN(t) || t < 1) return;
+          var bar = agDoc.getElementById('pgv2');
+          if (!bar){
+            bar = agDoc.createElement('div'); bar.id = 'pgv2';
+            panel.appendChild(bar);
+          }
+          var html = '<span class="pgv2-pages">';
+          html += '<button data-go="'+(c-1)+'" '+(c<=1?'disabled':'')+' aria-label="Anterior">\u2039</button>';
+          var ps = pagesToShow(c, t);
+          for (var i=0;i<ps.length;i++){
+            if (ps[i]==='...') html += '<span class="pgv2-dots">\u2026</span>';
+            else html += '<button data-go="'+ps[i]+'" class="'+(ps[i]===c?'pgv2-on':'')+'">'+ps[i]+'</button>';
+          }
+          html += '<button data-go="'+(c+1)+'" '+(c>=t?'disabled':'')+' aria-label="Siguiente">\u203a</button>';
+          html += '</span>';
+          html += '<span class="pgv2-jump">Ir a '+
+                  '<input type="number" min="1" max="'+t+'" value="'+c+'" id="pgv2-in" aria-label="Ir a pagina">'+
+                  '<button id="pgv2-goin" aria-label="Ir">\u2192</button></span>';
+          bar.innerHTML = html;
+
+          var btns = bar.querySelectorAll('button[data-go]');
+          for (var b=0;b<btns.length;b++){
+            btns[b].addEventListener('click', function(){
+              var v = parseInt(this.getAttribute('data-go'),10);
+              if (!isNaN(v)) go(v);
+            });
+          }
+          var inp  = bar.querySelector('#pgv2-in');
+          var goin = bar.querySelector('#pgv2-goin');
+          function jump(){ var v = parseInt(inp.value,10); if (!isNaN(v)) go(v); }
+          goin.addEventListener('click', jump);
+          inp.addEventListener('keydown', function(e){
+            if (e.key === 'Enter'){ e.preventDefault(); jump(); }
+          });
+        }
+
+        // Mantener la barra sincronizada con cualquier cambio del grid.
+        // El observer se crea UNA vez y llama siempre al render mas reciente.
+        win.__pgv2render = render;
+        if (!panel.__pgv2obs){
+          var obs = new win.MutationObserver(function(){
+            if (!win.__pgv2busy && win.__pgv2render) win.__pgv2render();
+          });
+          obs.observe(lbCur, {childList:true, characterData:true, subtree:true});
+          obs.observe(lbTot, {childList:true, characterData:true, subtree:true});
+          panel.__pgv2obs = obs;
+        }
+
+        render();
+        return true;
+      }
+
+      function tick(){
+        tries++;
+        var agDoc = agDocument();
+        if (agDoc && build(agDoc)) return;
+        if (tries < MAX) win.setTimeout(tick, 250);
+      }
+      tick();
+    })();
+    </script>
+    """, height=0)
