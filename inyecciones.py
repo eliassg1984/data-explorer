@@ -861,7 +861,7 @@ def inject_pagination_v2():
     <script>
     (function(){
       var win = window.parent, doc = win.document;
-      var tries = 0, MAX = 30;
+      var tries = 0, MAX = 60;
 
       function intDe(txt){
         var m = (txt||'').match(/\\d[\\d.,]*/g);
@@ -999,19 +999,28 @@ def inject_pagination_v2():
         return 'ok';
       }
 
+      function buscarFrames(){
+        // Preferimos el iframe de st_aggrid; si su src no lo contiene
+        // (cambia entre versiones), caemos a revisar TODOS los iframes.
+        var f = doc.querySelectorAll('iframe[src*="st_aggrid"]');
+        if (f.length) return f;
+        return doc.querySelectorAll('iframe');
+      }
+
       function check(){
         tries++;
-        var frames = doc.querySelectorAll('iframe[src*="st_aggrid"]');
+        var frames = buscarFrames();
         var ultimo = 'sin-iframe';
         for (var i=0;i<frames.length;i++){
           var d = null;
           try { d = frames[i].contentDocument; } catch(e){}
-          if (!d || !d.querySelector('.ag-root-wrapper')) continue;
+          if (!d || !d.querySelector('.ag-paging-panel')) continue;
           var r = montar(d);
           if (r === 'ok') return;
           ultimo = r;
         }
-        if (tries < MAX){ win.setTimeout(check, 400); return; }
+        // Ventana amplia (la carga desde R2 puede tardar): ~30 s.
+        if (tries < MAX){ win.setTimeout(check, 500); return; }
         if (win.__logErr) win.__logErr('Paginacion v2 no se pudo montar (' + ultimo + ').');
       }
       win.setTimeout(check, 800);
