@@ -850,44 +850,46 @@ def inject_pagination_v2():
     No toca la lógica de AgGrid: el grid sigue gestionando las 5.000 filas, los
     filtros, el orden y los totales. Esta función solo OCULTA la barra nativa
     (resumen de filas + flechas) y dibuja una barra propia que CONDUCE los
-    botones nativos (btFirst/btPrevious/btNext/btLast), leyendo el estado real
-    desde [ref=lbCurrent] y [ref=lbTotal]. Por eso nunca se desincroniza del
-    grid (cambio de página, de tamaño de página o aplicar un filtro).
+    botones nativos (btPrevious/btNext), leyendo el estado real del TEXTO
+    "Página X de Y". Así nunca se desincroniza del grid.
 
-    El selector "Tamaño de página" nativo se conserva a la izquierda (ya lo
-    estiliza inject_grid_health_check); aquí solo se añade la navegación a la
-    derecha.
+    Localiza el iframe igual que inject_grid_health_check (iframe[src*=st_aggrid])
+    e inyecta dentro de su contentDocument. Si tras varios intentos no encuentra
+    el grid o la barra, lo reporta en el overlay de errores (win.__logErr).
     """
     components.html("""
     <script>
     (function(){
       var win = window.parent, doc = win.document;
-      var tries = 0, MAX = 40;
+      var tries = 0, MAX = 30;
 
-      // Documento DENTRO del iframe de st_aggrid (mismo origen, accesible).
-      function agDocument(){
-        var frames = doc.querySelectorAll('iframe');
-        for (var i=0;i<frames.length;i++){
-          try{
-            var d = frames[i].contentDocument;
-            if (d && d.querySelector('.ag-paging-panel')) return d;
-          }catch(e){}
+      function intDe(txt){
+        var m = (txt||'').match(/\\d[\\d.,]*/g);
+        if (!m) return [];
+        return m.map(function(s){ return parseInt(s.replace(/[^0-9]/g,''),10); })
+                .filter(function(n){ return !isNaN(n); });
+      }
+
+      // Lee {cur, tot} desde el texto "Página X de Y"; si no, desde refs.
+      function leerEstado(panel){
+        var desc = panel.querySelector('.ag-paging-description');
+        var nums = desc ? intDe(desc.textContent) : [];
+        if (nums.length >= 2) return { cur: nums[0], tot: nums[nums.length-1] };
+        var c = panel.querySelector('[ref=lbCurrent]');
+        var t = panel.querySelector('[ref=lbTotal]');
+        if (c && t){
+          var cc = intDe(c.textContent)[0], tt = intDe(t.textContent)[0];
+          if (!isNaN(cc) && !isNaN(tt)) return { cur: cc, tot: tt };
         }
         return null;
       }
 
-      function num(el){
-        return el ? parseInt((el.textContent||'').replace(/[^0-9]/g,''),10) : NaN;
-      }
-
-      function build(agDoc){
+      function montar(agDoc){
         var panel = agDoc.querySelector('.ag-paging-panel');
-        if (!panel) return false;
-        var lbCur = panel.querySelector('[ref=lbCurrent]');
-        var lbTot = panel.querySelector('[ref=lbTotal]');
-        if (!lbCur || !lbTot) return false;
+        if (!panel) return 'sin-panel';
+        var est = leerEstado(panel);
+        if (!est) return 'sin-estado';
 
-        // -- Estilos de la barra v2 (una sola vez) ----------------------
         if (!agDoc.getElementById('pgv2-css')){
           var stl = agDoc.createElement('style');
           stl.id = 'pgv2-css';
@@ -918,28 +920,21 @@ def inject_pagination_v2():
           agDoc.head.appendChild(stl);
         }
 
-        function curr(){ return num(lbCur); }   // 1-indexado (como lo muestra AgGrid)
-        function total(){ return num(lbTot); }
-
-        // Ir a la pagina p clicando las flechas nativas las veces necesarias.
         function go(p){
-          var c = curr(), t = total();
-          if (isNaN(c) || isNaN(t)) return;
-          p = Math.max(1, Math.min(t, p));
-          if (p === c){ return; }
+          var e = leerEstado(panel); if (!e) return;
+          p = Math.max(1, Math.min(e.tot, p));
+          if (p === e.cur) return;
           win.__pgv2busy = true;
-          var btn, n;
-          if (p > c){ btn = panel.querySelector('[ref=btNext]');     n = p - c; }
-          else      { btn = panel.querySelector('[ref=btPrevious]'); n = c - p; }
+          var btn = (p > e.cur) ? panel.querySelector('[ref=btNext]')
+                                : panel.querySelector('[ref=btPrevious]');
+          var n = Math.abs(p - e.cur);
           for (var k=0; k<n && btn; k++){ btn.click(); }
           win.__pgv2busy = false;
           render();
         }
 
-        // Que numeros mostrar: 1 ... (c-2 c-1 c c+1 c+2) ... t
-        function pagesToShow(c, t){
-          var want = [1, t, c, c-1, c+1, c-2, c+2];
-          var seen = {}, arr = [];
+        function paginas(c, t){
+          var want = [1, t, c, c-1, c+1, c-2, c+2], seen = {}, arr = [];
           for (var i=0;i<want.length;i++){
             var v = want[i];
             if (v>=1 && v<=t && !seen[v]){ seen[v]=1; arr.push(v); }
@@ -954,16 +949,13 @@ def inject_pagination_v2():
         }
 
         function render(){
-          var c = curr(), t = total();
-          if (isNaN(c) || isNaN(t) || t < 1) return;
+          var e = leerEstado(panel); if (!e) return;
+          var c = e.cur, t = e.tot;
           var bar = agDoc.getElementById('pgv2');
-          if (!bar){
-            bar = agDoc.createElement('div'); bar.id = 'pgv2';
-            panel.appendChild(bar);
-          }
+          if (!bar){ bar = agDoc.createElement('div'); bar.id = 'pgv2'; panel.appendChild(bar); }
           var html = '<span class="pgv2-pages">';
           html += '<button data-go="'+(c-1)+'" '+(c<=1?'disabled':'')+' aria-label="Anterior">\u2039</button>';
-          var ps = pagesToShow(c, t);
+          var ps = paginas(c, t);
           for (var i=0;i<ps.length;i++){
             if (ps[i]==='...') html += '<span class="pgv2-dots">\u2026</span>';
             else html += '<button data-go="'+ps[i]+'" class="'+(ps[i]===c?'pgv2-on':'')+'">'+ps[i]+'</button>';
@@ -982,38 +974,45 @@ def inject_pagination_v2():
               if (!isNaN(v)) go(v);
             });
           }
-          var inp  = bar.querySelector('#pgv2-in');
+          var inp = bar.querySelector('#pgv2-in');
           var goin = bar.querySelector('#pgv2-goin');
           function jump(){ var v = parseInt(inp.value,10); if (!isNaN(v)) go(v); }
           goin.addEventListener('click', jump);
-          inp.addEventListener('keydown', function(e){
-            if (e.key === 'Enter'){ e.preventDefault(); jump(); }
+          inp.addEventListener('keydown', function(ev){
+            if (ev.key === 'Enter'){ ev.preventDefault(); jump(); }
           });
         }
 
-        // Mantener la barra sincronizada con cualquier cambio del grid.
-        // El observer se crea UNA vez y llama siempre al render mas reciente.
         win.__pgv2render = render;
         if (!panel.__pgv2obs){
+          var diana = panel.querySelector('.ag-paging-description') || panel;
           var obs = new win.MutationObserver(function(){
             if (!win.__pgv2busy && win.__pgv2render) win.__pgv2render();
           });
-          obs.observe(lbCur, {childList:true, characterData:true, subtree:true});
-          obs.observe(lbTot, {childList:true, characterData:true, subtree:true});
+          obs.observe(diana, {childList:true, characterData:true, subtree:true});
           panel.__pgv2obs = obs;
         }
 
         render();
-        return true;
+        return 'ok';
       }
 
-      function tick(){
+      function check(){
         tries++;
-        var agDoc = agDocument();
-        if (agDoc && build(agDoc)) return;
-        if (tries < MAX) win.setTimeout(tick, 250);
+        var frames = doc.querySelectorAll('iframe[src*="st_aggrid"]');
+        var ultimo = 'sin-iframe';
+        for (var i=0;i<frames.length;i++){
+          var d = null;
+          try { d = frames[i].contentDocument; } catch(e){}
+          if (!d || !d.querySelector('.ag-root-wrapper')) continue;
+          var r = montar(d);
+          if (r === 'ok') return;
+          ultimo = r;
+        }
+        if (tries < MAX){ win.setTimeout(check, 400); return; }
+        if (win.__logErr) win.__logErr('Paginacion v2 no se pudo montar (' + ultimo + ').');
       }
-      tick();
+      win.setTimeout(check, 800);
     })();
     </script>
     """, height=0)
