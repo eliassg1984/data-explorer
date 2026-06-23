@@ -27,6 +27,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     envolver_cabeceras = (reporte == "Inventario Valorizado")
     quitar_fondos = (reporte == "Inventario Valorizado")
     es_inventario = (reporte == "Inventario Valorizado")
+    es_salidas = (reporte == "Salidas")
 
     # ─────────────────────────────────────────────────────────────────
     # REORDENAR COLUMNAS (Producto, Stock, Precio, Valorizado)
@@ -404,8 +405,15 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     if envolver_cabeceras:
         opciones_grid["headerHeight"] = int(font_px * 2.5 + 20)
 
+    # ── Salidas: sin panel lateral y sin paginación (tabla completa) ──
+    if es_salidas:
+        opciones_grid["sideBar"] = False
+
     gb.configure_grid_options(**opciones_grid)
-    gb.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
+    if es_salidas:
+        gb.configure_pagination(enabled=False)
+    else:
+        gb.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
     grid_options = gb.build()
 
     custom_css = {
@@ -726,7 +734,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         })
 
     AgGrid(
-        df_grid.head(5000), gridOptions=grid_options, height=600,
+        (df_grid if es_salidas else df_grid.head(5000)), gridOptions=grid_options, height=600,
         theme=tema_grid, custom_css=custom_css,
         fit_columns_on_grid_load=False, allow_unsafe_jscode=True,
         enable_enterprise_modules=True, key=f"grid_{reporte}",
