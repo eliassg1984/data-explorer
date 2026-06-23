@@ -236,6 +236,14 @@ def inject_grid_health_check():
         '  margin: 0 !important;',
         '  padding: 0 !important;',
         '}',
+
+        '/* Borde del panel de filtros — inyectado dentro del iframe */',
+        '.ag-filter-toolpanel {',
+        '  border: 1px solid #3b82f6 !important;',
+        '  border-radius: 8px !important;',
+        '  margin: 8px !important;',
+        '  overflow: hidden !important;',
+        '}',
       ].join('\\n');
 
       function inyectarCSS(fdoc) {
