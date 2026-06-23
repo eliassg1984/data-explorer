@@ -261,7 +261,8 @@ with st.popover(label_btn, use_container_width=False):
                 df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
 
     # El slider de tamaño de letra solo aplica en reportes con AgGrid
-    if reporte != "Compras":
+    # (Salidas usa su propio control de zoom arriba de la tabla)
+    if reporte not in ("Compras", "Salidas"):
         st.divider()
         st.session_state.tabla_tam = st.select_slider(
             "🔠 Tamaño de letra",
@@ -398,6 +399,125 @@ elif reporte == "Inventario Valorizado":
         _render_tabla()
     else:
         renderizar_graficos(df_f, es_movil=usa_vista_movil)
+
+
+# ── SALIDAS: tabla completa, sin paginación ni panel lateral ─────────────────
+elif reporte == "Salidas":
+    tab_tabla, tab_graficos = st.tabs(["📋 Tabla", "📊 Gráficos"])
+
+    with tab_tabla:
+        # Vista móvil: usa el render móvil estándar
+        if usa_vista_movil and tiene_config_movil:
+            st.caption("📱 Vista móvil • Desliza para más columnas")
+            renderizar_aggrid_movil(
+                df_f[cols_mostrar], cfg.get("columnas_fijas_movil", 2), reporte, font_px,
+            )
+        else:
+            # ── Barra de herramientas superior: Columnas · Zoom · Exportar ──
+            _k_cols = f"colsel_{reporte}"
+            if _k_cols not in st.session_state:
+                st.session_state[_k_cols] = list(todas_cols)
+            # Descartar columnas que ya no existan (datos cambiados)
+            _vigentes = [c for c in st.session_state[_k_cols] if c in todas_cols]
+            st.session_state[_k_cols] = _vigentes or list(todas_cols)
+
+            _k_zoom = f"zoom_{reporte}"
+            if _k_zoom not in st.session_state:
+                st.session_state[_k_zoom] = 14
+
+            barra = st.columns([3, 3, 1.4])
+            with barra[0]:
+                with st.popover("🧰 Columnas", use_container_width=True):
+                    st.caption("Mostrar u ocultar columnas")
+                    cols_sel = st.multiselect(
+                        "Columnas visibles", todas_cols,
+                        key=_k_cols, label_visibility="collapsed",
+                    )
+            with barra[1]:
+                zoom = st.select_slider(
+                    "🔍 Zoom", options=[12, 14, 16, 18, 20, 22], key=_k_zoom,
+                )
+            with barra[2]:
+                st.download_button(
+                    "⬇️ CSV",
+                    data=df_f.to_csv(index=False).encode("utf-8-sig"),
+                    file_name="salidas_export.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    key=f"export_{reporte}",
+                )
+
+            if not cols_sel:
+                cols_sel = list(todas_cols)
+
+            # ── KPIs rápidos ────────────────────────────────────────────────
+            def _es_moneda_kpi(n):
+                n = str(n).lower()
+                return any(k in n for k in ("importe", "total", "monto", "precio", "costo"))
+
+            def _es_cant_kpi(n):
+                n = str(n).lower()
+                return any(k in n for k in ("cantidad", "unidades", "qty"))
+
+            cols_imp = [c for c in df_f.columns
+                        if pd.api.types.is_numeric_dtype(df_f[c]) and _es_moneda_kpi(c)]
+            cols_cnt = [c for c in df_f.columns
+                        if pd.api.types.is_numeric_dtype(df_f[c]) and _es_cant_kpi(c)]
+            n_kpi = min(4, 1 + len(cols_imp[:2]) + len(cols_cnt[:1]))
+            kpis = st.columns(n_kpi)
+            kpis[0].metric("📄 Registros", f"{len(df_f):,}")
+            ki = 1
+            for c in cols_imp[:2]:
+                if ki >= n_kpi:
+                    break
+                kpis[ki].metric(f"💰 {c}", f"S/ {df_f[c].sum():,.2f}")
+                ki += 1
+            for c in cols_cnt[:1]:
+                if ki >= n_kpi:
+                    break
+                kpis[ki].metric(f"📦 {c}", f"{int(df_f[c].sum()):,}")
+                ki += 1
+
+            # ── Tabla (zoom = tamaño de fuente, columnas elegidas) ───────────
+            cols_finales = list(cols_sel)
+            if grupos_sel:
+                for c in grupos_sel:
+                    if c not in cols_finales:
+                        cols_finales.append(c)
+            renderizar_aggrid_desktop(
+                df_f[cols_finales], grupos_sel, cols_sel, reporte, int(zoom),
+                cols_visibles=None,
+            )
+
+    with tab_graficos:
+        cols_num = df_f.select_dtypes("number").columns.tolist()
+        cols_txt = df_f.select_dtypes(["object", "string"]).columns.tolist()
+        if cols_num and cols_txt:
+            col1, col2 = st.columns(2)
+            with col1:
+                eje_x = st.selectbox("Agrupar por", cols_txt, key=f"ejex_{reporte}")
+            with col2:
+                eje_y = st.selectbox("Métrica (suma)", cols_num, key=f"ejey_{reporte}")
+            try:
+                datos = (df_f.groupby(eje_x)[eje_y].sum()
+                             .reset_index()
+                             .sort_values(eje_y, ascending=False)
+                             .head(20))
+                fig = px.bar(datos, x=eje_x, y=eje_y,
+                             title=f"{eje_y} por {eje_x} (top 20)",
+                             color_discrete_sequence=["#3b82f6"])
+                fig.update_layout(
+                    paper_bgcolor="#f8fafc", plot_bgcolor="#ffffff",
+                    font_color="#1e293b", margin=dict(l=20, r=20, t=40, b=20),
+                    xaxis_tickangle=-45, height=400,
+                    xaxis=dict(gridcolor="#e2e8f0"),
+                    yaxis=dict(gridcolor="#e2e8f0"),
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+        else:
+            st.info("No hay suficientes columnas para generar gráficos.")
 
 
 # ── RESTO DE REPORTES: AgGrid ────────────────────────────────────────────────
