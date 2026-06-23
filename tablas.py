@@ -641,6 +641,14 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "padding": "10px !important",
             "background-color": "#ffffff !important",
         },
+        # ── Borde del panel de filtros — igual que la tabla (balham) ──
+        # Para Inventario Valorizado se sobreescribe más abajo con azul.
+        ".ag-filter-toolpanel": {
+            "border": "1px solid #0f172a !important",
+            "border-radius": "8px !important",
+            "margin": "8px !important",
+            "overflow": "hidden !important",
+        },
 
         # ================================================================
         # PANEL DE COLUMNAS COMO INTERRUPTORES (Opción B)
@@ -812,6 +820,14 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "border": "2px solid #3b82f6",
             "border-radius": "6px",
         }
+
+        # ── Borde del panel de filtros en azul (a juego con la tabla) ──
+        custom_css[".ag-filter-toolpanel"].update({
+            "border": "1px solid #3b82f6 !important",
+            "border-radius": "8px !important",
+            "margin": "8px !important",
+            "overflow": "hidden !important",
+        })
 
     AgGrid(
         df_grid.head(5000), gridOptions=grid_options, height=600,
