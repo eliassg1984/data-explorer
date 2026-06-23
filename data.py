@@ -53,6 +53,16 @@ REPORTES = {
     "Salidas": {
         "archivo": "salidas.parquet",
         "icono": "box-arrow-up",
+        # NOTA: estos nombres deben coincidir con las columnas reales de
+        # salidas.parquet. Si alguno no existe, la app solo muestra un aviso
+        # (no se rompe) y puedes ajustarlo aquí.
+        "filtros_cat": ["Nombre Area", "Nombre Familia"],
+        "buscador": "Nombre Producto",
+        "agrupar": ["Nombre Area", "Nombre Familia"],
+        "columnas_movil": [
+            "Nombre Producto", "Cantidad", "Importe Total", "Nombre Area",
+        ],
+        "columnas_fijas_movil": 2,
     },
     "Requerimientos": {
         "archivo": "requerimientos.parquet",
