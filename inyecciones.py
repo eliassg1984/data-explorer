@@ -894,13 +894,15 @@ def inject_pagination_v2():
           var stl = agDoc.createElement('style');
           stl.id = 'pgv2-css';
           stl.textContent =
+            '.ag-paging-panel{position:relative!important;justify-content:center!important;}'+
+            '.ag-paging-panel .ag-paging-page-size{position:absolute!important;left:16px!important;'+
+            'top:50%!important;transform:translateY(-50%)!important;margin:0!important;}'+
             '.ag-paging-panel .ag-paging-row-summary-panel,'+
             '.ag-paging-panel .ag-paging-description,'+
-            '.ag-paging-panel [ref=btFirst],.ag-paging-panel [ref=btPrevious],'+
-            '.ag-paging-panel [ref=btNext],.ag-paging-panel [ref=btLast]{'+
+            '.ag-paging-panel .ag-paging-button{'+
             'position:absolute!important;left:-9999px!important;width:1px!important;'+
             'height:1px!important;overflow:hidden!important;}'+
-            '#pgv2{display:inline-flex;align-items:center;gap:14px;margin-left:auto;'+
+            '#pgv2{display:inline-flex;align-items:center;gap:14px;margin:0 auto;'+
             'font:13px -apple-system,BlinkMacSystemFont,sans-serif;color:#64748b;}'+
             '#pgv2 .pgv2-pages{display:inline-flex;align-items:center;gap:6px;}'+
             '#pgv2 button{min-width:30px;height:30px;padding:0 8px;border:1px solid #e2e8f0;'+
