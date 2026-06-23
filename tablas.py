@@ -7,7 +7,7 @@ import pandas as pd
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from utils import _norm, buscar_columna, LOCALE_ES
-from inyecciones import inject_grid_health_check
+from inyecciones import inject_grid_health_check, inject_pagination_v2
 
 
 # ===========================================================================
@@ -821,6 +821,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     )
 
     inject_grid_health_check()
+
+    # Barra de paginación v2 (números + salto) SOLO para Inventario Valorizado.
+    if reporte == "Inventario Valorizado":
+        inject_pagination_v2()
 
 
 # ===========================================================================
