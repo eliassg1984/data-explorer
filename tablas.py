@@ -740,6 +740,43 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "overflow": "hidden !important",
         })
 
+    # ── Requerimientos: paleta "Pizarra" (slate) para que el panel lateral
+    #    combine con el header oscuro (reemplaza el azul brillante por gris
+    #    pizarra). Solo afecta a este reporte; el resto conserva el azul. ──
+    if es_requerimientos:
+        # Acento de la pestaña seleccionada del sidebar
+        custom_css[".ag-side-button.ag-selected"] = {
+            "background-color": "#334155 !important",
+            "color": "#f8fafc !important",
+            "box-shadow": "inset 0 0 0 1px #475569",
+        }
+        custom_css[".ag-side-button:hover"] = {
+            "background-color": "#e2e8f0 !important",
+            "color": "#1e293b !important",
+        }
+        # Íconos del header (antes azul claro) → gris pizarra claro
+        custom_css[".ag-header-icon"] = {"color": "#94a3b8 !important"}
+        # Switches on/off de columnas (antes azul) → gris acero
+        custom_css[".ag-column-select-column .ag-checkbox-input-wrapper.ag-checked"] = {
+            "background": "#475569 !important",
+        }
+        # Fila de total / gran total (antes azul claro) → gris pizarra
+        custom_css[".ag-row-pinned"] = {
+            "background-color": "#e2e8f0 !important",
+            "font-weight": "700 !important",
+            "border-top": "2px solid #475569 !important",
+            "color": "#0f172a !important",
+            "font-size": f"{font_px + 1}px !important",
+        }
+        # Hover de fila (antes azul muy claro) → gris neutro
+        custom_css[".ag-row-hover"] = {"background-color": "#f1f5f9 !important"}
+        # Botones de paginación: hover en gris pizarra en vez de azul
+        custom_css[".ag-paging-button:hover:not(.ag-disabled)"] = {
+            "background": "#e2e8f0 !important",
+            "border-color": "#94a3b8 !important",
+            "color": "#334155 !important",
+        }
+
     AgGrid(
         (df_grid if es_salidas else df_grid.head(5000)), gridOptions=grid_options, height=600,
         theme=tema_grid, custom_css=custom_css,
