@@ -529,25 +529,32 @@ elif reporte == "Requerimientos":
     )
     st.caption(
         "🧮 Tabla dinámica estilo Excel. En el panel derecho (pestaña "
-        "**Columnas**) arrastra campos a **Grupos de filas**, **Etiquetas de "
-        "columnas** y **Valores** para armar tu pivote. El interruptor "
-        "**Modo pivote** ya viene activado. Los datos llegan filtrados por los "
-        "controles de arriba."
+        "**Columnas**) arrastra campos a **Grupos de filas**, **Valores** y "
+        "**Etiquetas de columnas**. Para columnas por periodo legibles, usa los "
+        "campos **Mes** o **Año** (ya calculados) en *Etiquetas de columnas* — "
+        "no la fecha cruda, que crea una columna por segundo. Los datos llegan "
+        "filtrados por los controles de arriba."
     )
+
+    # ── Derivar periodo (Mes / Año) desde la fecha de registro ──────────────
+    # AgGrid usa el valor exacto de la celda como clave de pivote, así que una
+    # fecha con hora genera una columna por segundo. Con estos campos agrupados
+    # las columnas quedan legibles: "2023-01" (Mes) o "2023" (Año).
+    df_piv = df_f.copy()
+    _col_freg = buscar_columna(df_piv, "Fecha Registro", "fecha registro") or col_fecha
+    if _col_freg and _col_freg in df_piv.columns:
+        _fechas = pd.to_datetime(df_piv[_col_freg], errors="coerce")
+        df_piv["Mes"] = _fechas.dt.to_period("M").astype(str).replace("NaT", "")
+        df_piv["Año"] = _fechas.dt.year.astype("Int64").astype(str).replace("<NA>", "")
 
     if usa_vista_movil and tiene_config_movil:
         st.caption("📱 Vista móvil")
         renderizar_aggrid_movil(
-            df_f[cols_mostrar], cfg.get("columnas_fijas_movil", 2), reporte, font_px,
+            df_piv[cols_mostrar], cfg.get("columnas_fijas_movil", 2), reporte, font_px,
         )
     else:
-        cols_finales = list(cols_mostrar)
-        if grupos_sel:
-            for c in grupos_sel:
-                if c not in cols_finales:
-                    cols_finales.append(c)
         renderizar_aggrid_desktop(
-            df_f[cols_finales], grupos_sel, cols_mostrar, reporte, font_px,
+            df_piv, grupos_sel, list(df_piv.columns), reporte, font_px,
             cols_visibles=None,
         )
 
