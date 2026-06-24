@@ -104,6 +104,15 @@ if 'tabla_tam' not in st.session_state:
 
 
 # ===========================================================================
+# INSPECTOR: herramienta de verificación de datos crudos
+# ===========================================================================
+if reporte == "Inspector" or cfg.get("tool"):
+    from inspector import render_inspector
+    render_inspector()
+    st.stop()
+
+
+# ===========================================================================
 # CARGAR DATOS
 # ===========================================================================
 df = cargar(cfg["archivo"])
