@@ -544,9 +544,9 @@ elif reporte == "Requerimientos":
         "🧮 Tabla dinámica estilo Excel. En el panel derecho (pestaña "
         "**Columnas**) arrastra campos a **Grupos de filas**, **Valores** y "
         "**Etiquetas de columnas**. Para columnas por periodo legibles, usa los "
-        "campos **Mes** o **Año** (ya calculados) en *Etiquetas de columnas* — "
-        "no la fecha cruda, que crea una columna por segundo. Los datos llegan "
-        "filtrados por los controles de arriba."
+        "campos **Mes** o **Año** (ya calculados) en *Etiquetas de columnas*. "
+        "Para filtrar por fecha, usa la pestaña **Filtros** del panel (la fecha "
+        "tiene el modo *En rango*)."
     )
 
     # ── Derivar periodo (Mes / Año) desde la fecha de registro ──────────────
@@ -556,63 +556,11 @@ elif reporte == "Requerimientos":
     df_piv = df_f.copy()
     _col_freg = buscar_columna(df_piv, "Fecha Registro", "fecha registro") or col_fecha
 
-    # ── Filtro de rango por arrastre sobre un calendario (estilo Airbnb) ─────
+    # El filtro de fecha ahora vive DENTRO de la tabla (filtro de columna "En
+    # rango"), por eso aquí ya no hay calendario externo. Solo aseguramos que la
+    # columna sea de tipo fecha para que el filtro y los campos Mes/Año funcionen.
     if _col_freg and _col_freg in df_piv.columns:
         df_piv[_col_freg] = pd.to_datetime(df_piv[_col_freg], errors="coerce")
-        validos = df_piv[_col_freg].dropna()
-        if not validos.empty:
-            from streamlit_calendar import calendar as st_calendar
-
-            fmin, fmax = validos.min(), validos.max()
-            fin_excl = (fmax + pd.Timedelta(days=1)).date().isoformat()
-
-            st.caption(
-                "🗓️ Haz clic en un día y **arrastra** hasta otro para elegir el "
-                "rango. La zona sombreada marca dónde hay datos."
-            )
-            cal_css = """
-                .fc .fc-highlight { background: rgba(71,85,105,0.28); }
-                .fc .fc-button-primary { background:#334155; border-color:#334155; }
-                .fc .fc-button-primary:hover { background:#1e293b; border-color:#1e293b; }
-                .fc .fc-button-primary:not(:disabled).fc-button-active { background:#0f172a; border-color:#0f172a; }
-                .fc .fc-daygrid-day.fc-day-today { background: rgba(71,85,105,0.10); }
-                .fc .fc-toolbar-title { font-size:15px; font-weight:500; }
-            """
-            cal_opts = {
-                "initialView": "dayGridMonth",
-                "selectable": True,
-                "selectMirror": True,
-                "initialDate": fmax.date().isoformat(),
-                "firstDay": 1,
-                "locale": "es",
-                "height": 420,
-                "headerToolbar": {"left": "prev,next today", "center": "title", "right": ""},
-                "validRange": {"start": fmin.date().isoformat(), "end": fin_excl},
-            }
-            cal_eventos = [{
-                "start": fmin.date().isoformat(),
-                "end": fin_excl,
-                "display": "background",
-                "color": "#cbd5e1",
-            }]
-            estado = st_calendar(
-                events=cal_eventos, options=cal_opts, custom_css=cal_css,
-                callbacks=["select"], key="cal_req",
-            )
-
-            sel = estado.get("select") if isinstance(estado, dict) else None
-            if sel and sel.get("start") and sel.get("end"):
-                # FullCalendar entrega 'end' exclusivo (día siguiente al último).
-                ini = pd.to_datetime(str(sel["start"])[:10]).date()
-                fin = (pd.to_datetime(str(sel["end"])[:10]) - pd.Timedelta(days=1)).date()
-                df_piv = df_piv[
-                    (df_piv[_col_freg].dt.date >= ini)
-                    & (df_piv[_col_freg].dt.date <= fin)
-                ]
-                st.caption(
-                    f"📅 Rango: {ini:%d/%m/%Y} — {fin:%d/%m/%Y} · "
-                    f"{len(df_piv):,} filas"
-                )
 
     if _col_freg and _col_freg in df_piv.columns:
         _fechas = pd.to_datetime(df_piv[_col_freg], errors="coerce")
