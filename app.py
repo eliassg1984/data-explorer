@@ -520,6 +520,37 @@ elif reporte == "Salidas":
             st.info("No hay suficientes columnas para generar gráficos.")
 
 
+# ── REQUERIMIENTOS: hoja dinámica estilo Excel (Mito) ────────────────────────
+elif reporte == "Requerimientos":
+    st.markdown(
+        '<p style="font-size:22px;font-weight:700;color:#1e293b;'
+        'margin:0 0 0.6rem 0;line-height:1.2;">Requerimientos</p>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "🧮 Hoja dinámica: usa el botón **Pivot** de la barra de Mito para crear "
+        "tablas dinámicas, y **Graph** para gráficos. Los datos ya vienen "
+        "filtrados por los controles de arriba."
+    )
+
+    try:
+        from mitosheet.streamlit.v1 import spreadsheet
+    except ModuleNotFoundError:
+        st.error(
+            "El componente **Mito** no está instalado. Agrega `mitosheet` a "
+            "`requirements.txt` y vuelve a desplegar la app."
+        )
+        st.stop()
+
+    # df_f ya viene filtrado por el popover (área, familia, fecha, buscador…).
+    # La clave depende del reporte para que el estado de la hoja no se mezcle
+    # con otros, y del nº de filas para refrescar si cambian los filtros.
+    spreadsheet(
+        df_f,
+        key=f"mito_{reporte}_{len(df_f)}",
+    )
+
+
 # ── RESTO DE REPORTES: AgGrid ────────────────────────────────────────────────
 else:
     tab_tabla, tab_graficos = st.tabs(["📋 Tabla", "📊 Gráficos"])
