@@ -252,49 +252,19 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     if col_producto and col_producto in df_grid.columns and col_producto not in grupos_sel:
         gb.configure_column(col_producto, pinned="left", minWidth=300)
 
-    # ── Requerimientos: filtro de fecha por columna en modo "En rango" y
-    #    comparando solo por día (ignora la hora). ──
+    # ── Requerimientos: el filtro de fecha de AgGrid no funciona de forma
+    #    fiable con estas columnas, así que se DESACTIVA en la tabla (no
+    #    aparece en la pestaña Filtros). El filtro de fecha real está arriba
+    #    de la tabla, hecho en Python. Las columnas de fecha siguen visibles
+    #    y se pueden arrastrar al pivote, solo que sin filtro propio. ──
     if es_requerimientos:
-        _cmp_fecha = JsCode("""
-            function(filterLocalDateAtMidnight, cellValue) {
-                if (cellValue == null || cellValue === '') { return -1; }
-                var s = String(cellValue);
-                var celda = null;
-                // Caso ISO 'YYYY-MM-DD...' (lo más común desde pandas)
-                if (s.length >= 10 && s.charAt(4) === '-' && s.charAt(7) === '-') {
-                    var y  = parseInt(s.substring(0, 4), 10);
-                    var mo = parseInt(s.substring(5, 7), 10);
-                    var da = parseInt(s.substring(8, 10), 10);
-                    if (!isNaN(y) && !isNaN(mo) && !isNaN(da)) {
-                        celda = new Date(y, mo - 1, da);
-                    }
-                }
-                if (celda === null) {
-                    var d = new Date(s);
-                    if (isNaN(d.getTime())) { return 0; }  // no se pudo leer: no excluir
-                    celda = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-                }
-                if (celda < filterLocalDateAtMidnight) { return -1; }
-                if (celda > filterLocalDateAtMidnight) { return 1; }
-                return 0;
-            }
-        """)
         for c in df_grid.columns:
             _n = _norm(c)
             es_fecha = (pd.api.types.is_datetime64_any_dtype(df_grid[c])
                         or "fecha" in _n or "date" in _n)
-            # 'Mes'/'Año' son textos derivados: se quedan con su filtro de texto
+            # 'Mes'/'Año' son textos derivados: conservan su filtro de texto
             if es_fecha and _n not in ("mes", "ano", "anio"):
-                gb.configure_column(
-                    c,
-                    filter="agDateColumnFilter",
-                    filterParams={
-                        "defaultOption": "inRange",
-                        "inRangeInclusive": True,
-                        "browserDatePicker": True,
-                        "comparator": _cmp_fecha,
-                    },
-                )
+                gb.configure_column(c, filter=False, suppressFiltersToolPanel=True)
 
     if cols_visibles is not None:
         visibles_norm = {_norm(c) for c in cols_visibles}
