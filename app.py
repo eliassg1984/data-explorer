@@ -340,44 +340,7 @@ def _render_tabla():
 
 
 def _leer_rango_brush(evento, campo="_periodo"):
-    """Extrae (inicio, fin) como Timestamps de la selección interval de Altair.
-    Tolera distintas estructuras devueltas por st.altair_chart(on_select)."""
-    try:
-        seldict = evento.get("selection", {}) if hasattr(evento, "get") \
-            else getattr(evento, "selection", {}) or {}
-    except Exception:
-        return None
-    if not isinstance(seldict, dict):
-        return None
-
-    def _par_a_rango(par):
-        try:
-            a, b = par
-        except Exception:
-            return None
-        ta = pd.to_datetime(a, unit="ms") if isinstance(a, (int, float)) else pd.to_datetime(a)
-        tb = pd.to_datetime(b, unit="ms") if isinstance(b, (int, float)) else pd.to_datetime(b)
-        if pd.isna(ta) or pd.isna(tb):
-            return None
-        lo, hi = sorted([ta, tb])
-        # Ajustar a meses completos (la brocha cae en límites de barra)
-        lo = lo.to_period("M").to_timestamp()
-        hi = (hi.to_period("M") + 1).to_timestamp() - pd.Timedelta(seconds=1)
-        return lo, hi
-
-    for v in seldict.values():
-        if isinstance(v, dict):
-            if campo in v and isinstance(v[campo], (list, tuple)) and len(v[campo]) == 2:
-                r = _par_a_rango(v[campo])
-                if r:
-                    return r
-            for vv in v.values():
-                if isinstance(vv, (list, tuple)) and len(vv) == 2 \
-                        and all(isinstance(x, (int, float)) for x in vv):
-                    r = _par_a_rango(vv)
-                    if r:
-                        return r
-    return None
+    return None  # (sin uso: el filtro de fechas de Requerimientos ahora es un calendario)
 
 
 # ── COMPRAS: st.data_editor ──────────────────────────────────────────────────
@@ -584,45 +547,58 @@ elif reporte == "Requerimientos":
     df_piv = df_f.copy()
     _col_freg = buscar_columna(df_piv, "Fecha Registro", "fecha registro") or col_fecha
 
-    # ── Filtro de rango por arrastre (brocha sobre línea de tiempo) ──────────
+    # ── Filtro de rango por arrastre sobre un calendario (estilo Airbnb) ─────
     if _col_freg and _col_freg in df_piv.columns:
         df_piv[_col_freg] = pd.to_datetime(df_piv[_col_freg], errors="coerce")
-        serie = df_piv.dropna(subset=[_col_freg])
-        if not serie.empty:
-            import altair as alt
-            base = serie.assign(
-                _periodo=serie[_col_freg].dt.to_period("M").dt.to_timestamp()
-            )
-            conteo = base.groupby("_periodo").size().reset_index(name="registros")
+        validos = df_piv[_col_freg].dropna()
+        if not validos.empty:
+            from streamlit_calendar import calendar as st_calendar
+
+            fmin, fmax = validos.min(), validos.max()
+            fin_excl = (fmax + pd.Timedelta(days=1)).date().isoformat()
 
             st.caption(
-                "🖱️ Arrastra sobre las barras para fijar el rango de fechas "
-                "(doble clic para limpiar y ver todo)."
+                "🗓️ Haz clic en un día y **arrastra** hasta otro para elegir el "
+                "rango. La zona sombreada marca dónde hay datos."
             )
-            brush = alt.selection_interval(encodings=["x"], name="rango")
-            chart = (
-                alt.Chart(conteo)
-                .mark_bar(color="#475569", cornerRadiusTopLeft=2, cornerRadiusTopRight=2)
-                .encode(
-                    x=alt.X("_periodo:T", title=None, axis=alt.Axis(format="%b %Y")),
-                    y=alt.Y("registros:Q", title=None, axis=None),
-                    opacity=alt.condition(brush, alt.value(1.0), alt.value(0.32)),
-                    tooltip=[
-                        alt.Tooltip("_periodo:T", title="Mes", format="%b %Y"),
-                        alt.Tooltip("registros:Q", title="Registros"),
-                    ],
-                )
-                .add_params(brush)
-                .properties(height=90)
+            cal_css = """
+                .fc .fc-highlight { background: rgba(71,85,105,0.28); }
+                .fc .fc-button-primary { background:#334155; border-color:#334155; }
+                .fc .fc-button-primary:hover { background:#1e293b; border-color:#1e293b; }
+                .fc .fc-button-primary:not(:disabled).fc-button-active { background:#0f172a; border-color:#0f172a; }
+                .fc .fc-daygrid-day.fc-day-today { background: rgba(71,85,105,0.10); }
+                .fc .fc-toolbar-title { font-size:15px; font-weight:500; }
+            """
+            cal_opts = {
+                "initialView": "dayGridMonth",
+                "selectable": True,
+                "selectMirror": True,
+                "initialDate": fmax.date().isoformat(),
+                "firstDay": 1,
+                "locale": "es",
+                "height": 420,
+                "headerToolbar": {"left": "prev,next today", "center": "title", "right": ""},
+                "validRange": {"start": fmin.date().isoformat(), "end": fin_excl},
+            }
+            cal_eventos = [{
+                "start": fmin.date().isoformat(),
+                "end": fin_excl,
+                "display": "background",
+                "color": "#cbd5e1",
+            }]
+            estado = st_calendar(
+                events=cal_eventos, options=cal_opts, custom_css=cal_css,
+                callbacks=["select"], key="cal_req",
             )
-            evento = st.altair_chart(
-                chart, use_container_width=True, on_select="rerun", key="brush_req",
-            )
-            rango = _leer_rango_brush(evento)
-            if rango:
-                ini, fin = rango
+
+            sel = estado.get("select") if isinstance(estado, dict) else None
+            if sel and sel.get("start") and sel.get("end"):
+                # FullCalendar entrega 'end' exclusivo (día siguiente al último).
+                ini = pd.to_datetime(str(sel["start"])[:10]).date()
+                fin = (pd.to_datetime(str(sel["end"])[:10]) - pd.Timedelta(days=1)).date()
                 df_piv = df_piv[
-                    (df_piv[_col_freg] >= ini) & (df_piv[_col_freg] <= fin)
+                    (df_piv[_col_freg].dt.date >= ini)
+                    & (df_piv[_col_freg].dt.date <= fin)
                 ]
                 st.caption(
                     f"📅 Rango: {ini:%d/%m/%Y} — {fin:%d/%m/%Y} · "
