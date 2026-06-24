@@ -554,13 +554,16 @@ elif reporte == "Requerimientos":
     # fecha con hora genera una columna por segundo. Con estos campos agrupados
     # las columnas quedan legibles: "2023-01" (Mes) o "2023" (Año).
     df_piv = df_f.copy()
-    _col_freg = buscar_columna(df_piv, "Fecha Registro", "fecha registro") or col_fecha
 
-    # El filtro de fecha ahora vive DENTRO de la tabla (filtro de columna "En
-    # rango"), por eso aquí ya no hay calendario externo. Solo aseguramos que la
-    # columna sea de tipo fecha para que el filtro y los campos Mes/Año funcionen.
-    if _col_freg and _col_freg in df_piv.columns:
-        df_piv[_col_freg] = pd.to_datetime(df_piv[_col_freg], errors="coerce")
+    # Asegurar que TODAS las columnas de fecha sean datetime real. Si alguna
+    # llega como texto u objeto, el filtro de fecha de la tabla (que corre en
+    # JavaScript) no la interpreta bien y puede esconder todas las filas.
+    for _c in df_piv.columns:
+        _n = str(_c).lower()
+        if "fecha" in _n or "date" in _n or pd.api.types.is_datetime64_any_dtype(df_piv[_c]):
+            df_piv[_c] = pd.to_datetime(df_piv[_c], errors="coerce")
+
+    _col_freg = buscar_columna(df_piv, "Fecha Registro", "fecha registro") or col_fecha
 
     if _col_freg and _col_freg in df_piv.columns:
         _fechas = pd.to_datetime(df_piv[_col_freg], errors="coerce")
