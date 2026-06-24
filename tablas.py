@@ -252,14 +252,51 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     if col_producto and col_producto in df_grid.columns and col_producto not in grupos_sel:
         gb.configure_column(col_producto, pinned="left", minWidth=300)
 
-    # ── Requerimientos: filtro de fecha desactivado en AgGrid ──
+    # ── Requerimientos: configuración especial de columnas de fecha y periodo ──
     if es_requerimientos:
+        # Desactivar filtro en columnas de fecha crudas (datetime)
         for c in df_grid.columns:
             _n = _norm(c)
             es_fecha = (pd.api.types.is_datetime64_any_dtype(df_grid[c])
                         or "fecha" in _n or "date" in _n)
             if es_fecha and _n not in ("mes", "ano", "anio"):
                 gb.configure_column(c, filter=False, suppressFiltersToolPanel=True)
+
+        # ── FIX: forzar lista completa de valores en Mes y Año ──────────────
+        # AgGrid por defecto infiere los valores del set filter leyendo las filas
+        # ya renderizadas. Si el grid virtualiza o pagina, solo ve las primeras
+        # y corta la lista. Pasarle los valores explícitamente desde Python
+        # garantiza que el panel de filtros muestre TODOS los periodos.
+        col_mes = buscar_columna(df_grid, "Mes")
+        col_ano = buscar_columna(df_grid, "Año", "Ano", "Anio")
+
+        if col_mes and col_mes in df_grid.columns:
+            valores_mes = sorted(
+                [v for v in df_grid[col_mes].dropna().astype(str).unique().tolist() if v != ""]
+            )
+            gb.configure_column(
+                col_mes,
+                filter="agSetColumnFilter",
+                filterParams={
+                    "values": valores_mes,
+                    "suppressSorting": False,
+                    "suppressMiniFilter": False,
+                },
+            )
+
+        if col_ano and col_ano in df_grid.columns:
+            valores_ano = sorted(
+                [v for v in df_grid[col_ano].dropna().astype(str).unique().tolist() if v != ""]
+            )
+            gb.configure_column(
+                col_ano,
+                filter="agSetColumnFilter",
+                filterParams={
+                    "values": valores_ano,
+                    "suppressSorting": False,
+                    "suppressMiniFilter": False,
+                },
+            )
 
     if cols_visibles is not None:
         visibles_norm = {_norm(c) for c in cols_visibles}
