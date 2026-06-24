@@ -28,6 +28,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     quitar_fondos = (reporte == "Inventario Valorizado")
     es_inventario = (reporte == "Inventario Valorizado")
     es_salidas = (reporte == "Salidas")
+    es_requerimientos = (reporte == "Requerimientos")
 
     # ─────────────────────────────────────────────────────────────────
     # REORDENAR COLUMNAS (Producto, Stock, Precio, Valorizado)
@@ -328,10 +329,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                     "iconKey": "columns",
                     "toolPanel": "agColumnsToolPanel",
                     "toolPanelParams": {
-                        "suppressRowGroups": True,
-                        "suppressValues": True,
-                        "suppressPivots": True,
-                        "suppressPivotMode": True,
+                        "suppressRowGroups": not es_requerimientos,
+                        "suppressValues": not es_requerimientos,
+                        "suppressPivots": not es_requerimientos,
+                        "suppressPivotMode": not es_requerimientos,
                         "suppressColumnFilter": False,
                         "suppressColumnSelectAll": False,
                         "suppressColumnExpandAll": True,
@@ -350,13 +351,19 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         },
         "rowHeight": row_h,
         "headerHeight": header_h,
-        "pinnedBottomRowData": [fila_totales],
         "cellSelection": True,
         "tooltipShowDelay": 300,
         "getRowStyle": get_row_style,
         "onGridSizeChanged": JsCode("function(params) { /* No auto-fit */ }"),
         "onFirstDataRendered": JsCode("function(params) { /* No auto-fit */ }"),
     }
+
+    # Totales al pie: fila fija normal, salvo en modo pivote (Requerimientos),
+    # donde las columnas cambian y se usa la fila de gran total de AgGrid.
+    if not es_requerimientos:
+        opciones_grid["pinnedBottomRowData"] = [fila_totales]
+    else:
+        opciones_grid["grandTotalRow"] = "bottom"
 
     agrupar_on = bool(grupos_sel)
     if agrupar_on:
@@ -398,9 +405,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             opciones_grid["groupDisplayType"] = "multipleColumns"
 
         opciones_grid["groupDefaultExpanded"] = 0
-        opciones_grid["pivotMode"] = False
+        opciones_grid["pivotMode"] = es_requerimientos
     else:
-        opciones_grid["pivotMode"] = False
+        opciones_grid["pivotMode"] = es_requerimientos
 
     if envolver_cabeceras:
         opciones_grid["headerHeight"] = int(font_px * 2.5 + 20)
