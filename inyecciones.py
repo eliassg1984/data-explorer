@@ -74,12 +74,7 @@ def inject_grid_health_check():
       var win = window.parent, doc = win.document;
       var tries = 0, MAX = 20;
 
-      // ── CSS de paginación Opción A (Minimalista) ─────────────────────
-      // Se inyecta dentro del iframe de AgGrid para garantizar que pisa
-      // los estilos del tema. El custom_css del componente no siempre tiene
-      // suficiente especificidad frente a los estilos del tema balham/material.
       var PAG_CSS = [
-        /* Quitar fondo morado/rayado de la status bar */
         '.ag-status-bar {',
         '  background: #f8fafc !important;',
         '  border-top: 1px solid #e2e8f0 !important;',
@@ -95,7 +90,6 @@ def inject_grid_health_check():
         '.ag-status-name-value { color: #475569 !important; font-size: 12px !important; }',
         '.ag-status-name-value-value { color: #1e293b !important; font-weight: 600 !important; }',
 
-        /* Franja de paginación limpia */
         '.ag-paging-panel {',
         '  display: flex !important;',
         '  align-items: center !important;',
@@ -109,7 +103,6 @@ def inject_grid_health_check():
         '  color: #64748b !important;',
         '}',
 
-        /* Selector de tamaño a la izquierda */
         '.ag-paging-page-size { order: -1 !important; margin-right: auto !important; }',
         '.ag-paging-page-size .ag-label { color: #64748b !important; font-size: 12px !important; margin-right: 6px !important; }',
         '.ag-paging-page-size .ag-select, .ag-paging-page-size select {',
@@ -121,14 +114,11 @@ def inject_grid_health_check():
         '  padding: 2px 6px !important;',
         '}',
 
-        /* Resumen "1 a 50 de 5,000" */
         '.ag-paging-row-summary-panel { color: #64748b !important; font-size: 12px !important; }',
         '.ag-paging-row-summary-panel-number { color: #1e293b !important; font-weight: 600 !important; }',
 
-        /* Descripción de página "Página X de Y" */
         '.ag-paging-description { color: #64748b !important; font-size: 12px !important; }',
 
-        /* Botones de navegación — base */
         '.ag-paging-button {',
         '  width: 28px !important; height: 28px !important;',
         '  border: 1px solid #e2e8f0 !important;',
@@ -144,11 +134,9 @@ def inject_grid_health_check():
         '  transition: all 0.15s ease !important;',
         '  position: relative !important;',
         '}',
-        /* Ocultar el icono SVG interno que no carga en el iframe */
         '.ag-paging-button span, .ag-paging-button .ag-icon {',
         '  display: none !important;',
         '}',
-        /* Reemplazar con caracteres Unicode visibles via ::after */
         '.ag-paging-button[ref="btFirst"]::after  { content: "«" !important; }',
         '.ag-paging-button[ref="btPrevious"]::after { content: "‹" !important; }',
         '.ag-paging-button[ref="btNext"]::after   { content: "›" !important; }',
@@ -172,10 +160,6 @@ def inject_grid_health_check():
         '  opacity: 0.4 !important;',
         '}',
 
-        /* ── Pestañas del panel lateral (Columnas/Filtros) ARRIBA y en  ── */
-        /*    horizontal, en vez de verticales al costado.                  */
-        /*    Se usa `order` para que los botones queden arriba sin         */
-        /*    depender del orden del DOM (varía entre versiones de AgGrid). */
         '.ag-side-bar {',
         '  flex-direction: column !important;',
         '}',
@@ -237,7 +221,6 @@ def inject_grid_health_check():
         '  padding: 0 !important;',
         '}',
 
-        '/* Borde del panel de filtros — inyectado dentro del iframe */',
         '.ag-filter-toolpanel {',
         '  border: 1px solid #3b82f6 !important;',
         '  border-radius: 8px !important;',
@@ -268,7 +251,7 @@ def inject_grid_health_check():
           if (!d) continue;
           if (d.querySelector('.ag-root-wrapper')) {
             montado = true;
-            inyectarCSS(d);   // <── inyección directa dentro del iframe
+            inyectarCSS(d);
           }
         }
         if (montado) return;
@@ -380,26 +363,7 @@ def inject_sidebar_toggle():
 def inject_element_inspector():
     """
     Inspector de elementos v2 — tooltip enriquecido al pasar el cursor.
-
-    Muestra: tipo de widget, label, key Python, valor actual, y para AgGrid:
-    nombre de columna, valor de celda, fila, tipo de zona (header/cell/panel).
-
     Activación : ?inspector=1 en la URL  o  Alt+I
-    Desactivación: quitar parámetro     o  Alt+I de nuevo
-
-    Elementos reconocidos:
-        • Widgets Streamlit  → tipo | label | key | valor actual
-        • Botones / Popover  → tipo | texto visible
-        • Tabs / Expander    → tipo | título
-        • Métricas           → label | valor | delta
-        • Plotly             → título | ejes X e Y
-        • AgGrid celda       → columna | valor | fila nº
-        • AgGrid header      → columna | tipo de ordenación activa
-        • AgGrid panel cols  → columna listada | si está visible o no
-        • AgGrid panel filtros → nombre del filtro
-        • AgGrid paginación  → página actual / total
-        • AgGrid status bar  → texto del panel de estado
-        • Rail de navegación → nombre del reporte
     """
     components.html("""
     <script>
@@ -410,12 +374,10 @@ def inject_element_inspector():
         if (win.__inspectorInit) return;
         win.__inspectorInit = true;
 
-        // ── Activación ───────────────────────────────────────────────────
         function inspectorActivo() {
             return new URL(win.location.href).searchParams.get('inspector') === '1';
         }
 
-        // ── Tooltip multilínea ───────────────────────────────────────────
         var tip = doc.createElement('div');
         tip.id = 'el-inspector-tip';
         tip.style.cssText = [
@@ -437,7 +399,6 @@ def inject_element_inspector():
         ].join(';');
         doc.body.appendChild(tip);
 
-        // ── Badge ON/OFF ─────────────────────────────────────────────────
         var badge = doc.createElement('div');
         badge.id = 'el-inspector-badge';
         badge.style.cssText = [
@@ -455,7 +416,6 @@ def inject_element_inspector():
         }
         actualizarBadge();
 
-        // ── Helpers ──────────────────────────────────────────────────────
         function txt(el) { return el ? el.textContent.trim() : ''; }
 
         function labelWidget(container) {
@@ -481,8 +441,7 @@ def inject_element_inspector():
                             .filter(Boolean).join(', ');
             }
             if (tipo === 'stSlider' || tipo === 'stSelectSlider') {
-                var thumb = container.querySelector('[data-testid="stThumbValue"], ' +
-                                                   '[aria-valuenow]');
+                var thumb = container.querySelector('[data-testid="stThumbValue"], [aria-valuenow]');
                 if (thumb) return thumb.getAttribute('aria-valuenow') || thumb.textContent.trim();
             }
             if (tipo === 'stDateInput') {
@@ -496,123 +455,86 @@ def inject_element_inspector():
             return '';
         }
 
-        // ── Intentar leer DOM interno del iframe de AgGrid ───────────────
-        // (funciona mientras el iframe y el padre compartan origen o no haya
-        //  bloqueo CORS estricto — en Streamlit local/cloud suele funcionar)
         function agGridInfo(mouseX, mouseY) {
             var frames = doc.querySelectorAll('iframe[src*="st_aggrid"], iframe[title*="aggrid"], iframe[title*="AgGrid"]');
-            if (!frames.length) {
-                // Buscar por posición si no hay atributo reconocible
-                frames = doc.querySelectorAll('iframe');
-            }
+            if (!frames.length) { frames = doc.querySelectorAll('iframe'); }
             for (var fi = 0; fi < frames.length; fi++) {
                 var fr = frames[fi];
                 var rect = fr.getBoundingClientRect();
-                // ¿El cursor está dentro de este iframe?
                 if (mouseX < rect.left || mouseX > rect.right ||
                     mouseY < rect.top  || mouseY > rect.bottom) continue;
-
                 var fdoc = null;
                 try { fdoc = fr.contentDocument; } catch(e) { continue; }
                 if (!fdoc) continue;
-
-                // Coordenadas relativas al iframe
                 var rx = mouseX - rect.left;
                 var ry = mouseY - rect.top;
                 var inner = fdoc.elementFromPoint(rx, ry);
                 if (!inner) continue;
 
-                // ── Zona: celda de datos ──────────────────────────────────
                 var cell = inner.closest('.ag-cell');
                 if (cell) {
                     var colId   = cell.getAttribute('col-id') || '?';
                     var cellVal = cell.textContent.trim();
-                    // Número de fila
                     var row = cell.closest('.ag-row');
                     var rowIdx = row ? (row.getAttribute('row-index') || '?') : '?';
-                    // Tipo de fila (group, pinned-bottom = totales, normal)
                     var rowTipo = '';
                     if (row) {
                         if (row.classList.contains('ag-row-pinned')) rowTipo = ' [TOTAL]';
                         else if (row.classList.contains('ag-row-group')) rowTipo = ' [grupo]';
                     }
-                    var lines = [
-                        '📋 AgGrid › celda',
+                    return ['📋 AgGrid › celda',
                         '  columna : ' + colId,
                         '  valor   : ' + (cellVal.length > 60 ? cellVal.slice(0,57)+'…' : cellVal),
-                        '  fila nº : ' + rowIdx + rowTipo
-                    ];
-                    return lines.join('\n');
+                        '  fila nº : ' + rowIdx + rowTipo].join('\n');
                 }
 
-                // ── Zona: header de columna ───────────────────────────────
                 var hcell = inner.closest('.ag-header-cell');
                 if (hcell) {
                     var hColId = hcell.getAttribute('col-id') || '?';
                     var hLabel = txt(hcell.querySelector('.ag-header-cell-text')) || hColId;
-                    // Ordenación activa
                     var sortIcon = hcell.querySelector('.ag-sort-ascending-icon:not(.ag-hidden)');
                     var sortDesc = hcell.querySelector('.ag-sort-descending-icon:not(.ag-hidden)');
                     var sortInfo = sortIcon ? ' ↑ ascendente' : sortDesc ? ' ↓ descendente' : ' sin orden';
-                    // ¿Tiene filtro activo?
                     var filtroActivo = hcell.querySelector('.ag-filter-active') ? ' 🔎 filtro activo' : '';
-                    return [
-                        '📋 AgGrid › encabezado',
+                    return ['📋 AgGrid › encabezado',
                         '  col-id  : ' + hColId,
                         '  nombre  : ' + hLabel,
-                        '  orden   :' + sortInfo + filtroActivo
-                    ].join('\n');
+                        '  orden   :' + sortInfo + filtroActivo].join('\n');
                 }
 
-                // ── Zona: panel lateral — lista de columnas ───────────────
                 var colItem = inner.closest('.ag-column-select-column');
                 if (colItem) {
                     var colName = txt(colItem.querySelector('.ag-column-select-column-label')) || '?';
                     var visible = colItem.querySelector('input[type="checkbox"]');
                     var visStr  = visible ? (visible.checked ? 'visible ✓' : 'oculta') : '?';
-                    return [
-                        '📋 AgGrid › panel columnas',
+                    return ['📋 AgGrid › panel columnas',
                         '  columna : ' + colName,
-                        '  estado  : ' + visStr
-                    ].join('\n');
+                        '  estado  : ' + visStr].join('\n');
                 }
 
-                // ── Zona: panel lateral — filtros ─────────────────────────
                 var filtItem = inner.closest('.ag-filter-toolpanel-instance');
                 if (filtItem) {
                     var filtName = txt(filtItem.querySelector('.ag-filter-toolpanel-instance-header-text')) || '?';
-                    return [
-                        '📋 AgGrid › panel filtros',
-                        '  filtro  : ' + filtName
-                    ].join('\n');
+                    return ['📋 AgGrid › panel filtros', '  filtro  : ' + filtName].join('\n');
                 }
 
-                // ── Zona: barra de paginación ─────────────────────────────
                 var pag = inner.closest('.ag-paging-panel');
                 if (pag) {
                     var pagTxt = pag.textContent.replace(/\s+/g, ' ').trim();
-                    return [
-                        '📋 AgGrid › paginación',
-                        '  ' + pagTxt.slice(0, 80)
-                    ].join('\n');
+                    return ['📋 AgGrid › paginación', '  ' + pagTxt.slice(0, 80)].join('\n');
                 }
 
-                // ── Zona: status bar ──────────────────────────────────────
                 var status = inner.closest('.ag-status-bar');
                 if (status) {
-                    return [
-                        '📋 AgGrid › barra de estado',
-                        '  ' + status.textContent.replace(/\s+/g, ' ').trim().slice(0, 80)
-                    ].join('\n');
+                    return ['📋 AgGrid › barra de estado',
+                        '  ' + status.textContent.replace(/\s+/g, ' ').trim().slice(0, 80)].join('\n');
                 }
 
-                // ── Zona: botones del menú de columna (pin, sort, etc.) ───
                 var menuItem = inner.closest('.ag-menu-option');
                 if (menuItem) {
                     return '📋 AgGrid › menú: ' + txt(menuItem.querySelector('.ag-menu-option-text'));
                 }
 
-                // ── Fallback: dentro del iframe pero zona desconocida ─────
                 if (fdoc.querySelector('.ag-root-wrapper')) {
                     return '📋 AgGrid › zona: ' + (inner.className || inner.tagName).toString().slice(0, 60);
                 }
@@ -620,7 +542,6 @@ def inject_element_inspector():
             return null;
         }
 
-        // ── Detección de elementos Streamlit ─────────────────────────────
         var WIDGET_MAP = {
             'stTextInput':    { ico: '✏️',  tipo: 'text_input'    },
             'stNumberInput':  { ico: '🔢',  tipo: 'number_input'  },
@@ -635,18 +556,14 @@ def inject_element_inspector():
         };
 
         function labelDe(el, mouseX, mouseY) {
-
-            // 1. Widgets con label, key y valor
             for (var testid in WIDGET_MAP) {
                 var container = el.closest('[data-testid="' + testid + '"]');
                 if (!container) continue;
                 var meta  = WIDGET_MAP[testid];
                 var lbl   = labelWidget(container);
                 var val   = valorWidget(container, testid);
-                // Intentar extraer el key de Streamlit del atributo aria o del id del input
                 var inp   = container.querySelector('input, select, textarea');
                 var keyAt = inp ? (inp.getAttribute('aria-label') || inp.id || '') : '';
-                // Filtrar keys internos de Streamlit (tienen formato "st-xx…")
                 if (/^st-[a-z0-9]+$/i.test(keyAt)) keyAt = '';
                 var lines = [meta.ico + ' ' + meta.tipo];
                 if (lbl)   lines.push('  label : ' + lbl);
@@ -655,7 +572,6 @@ def inject_element_inspector():
                 return lines.join('\n');
             }
 
-            // 2. Botón de Streamlit (con data-testid en el key si existe)
             var btn = el.closest('[data-testid="baseButton-secondary"], [data-testid="baseButton-primary"], button[kind]');
             if (btn) {
                 var btxt = btn.innerText.trim().replace(/\n/g, ' ');
@@ -667,7 +583,6 @@ def inject_element_inspector():
                 return blines.join('\n');
             }
 
-            // 3. Popover
             var popover = el.closest('[data-testid="stPopover"]');
             if (popover) {
                 var pbtn = popover.querySelector('button');
@@ -676,7 +591,6 @@ def inject_element_inspector():
                 return '🔽 popover\n  texto : ' + ptxt + '\n  estado: ' + popen.trim();
             }
 
-            // 4. Tab activa / inactiva
             var tabBtn = el.closest('[data-baseweb="tab"]');
             if (tabBtn) {
                 var isActive = tabBtn.getAttribute('aria-selected') === 'true';
@@ -684,7 +598,6 @@ def inject_element_inspector():
                        '\n  estado: ' + (isActive ? 'activa ✓' : 'inactiva');
             }
 
-            // 5. Expander
             var expander = el.closest('[data-testid="stExpander"]');
             if (expander) {
                 var etxt2 = expander.querySelector('summary p, summary span, .streamlit-expanderHeader p');
@@ -694,7 +607,6 @@ def inject_element_inspector():
                        '\n  estado: ' + (eIsOpen ? 'abierto' : 'cerrado');
             }
 
-            // 6. Métrica — label, valor y delta
             var metric = el.closest('[data-testid="stMetric"]');
             if (metric) {
                 var mlbl2  = metric.querySelector('[data-testid="stMetricLabel"] p, [data-testid="stMetricLabel"]');
@@ -707,7 +619,6 @@ def inject_element_inspector():
                 return mlines.join('\n');
             }
 
-            // 7. Plotly — título + ejes
             var plotly = el.closest('.js-plotly-plot, [data-testid="stPlotlyChart"]');
             if (plotly) {
                 var ptitle2 = plotly.querySelector('.gtitle, .g-gtitle');
@@ -720,7 +631,6 @@ def inject_element_inspector():
                 return plines.join('\n');
             }
 
-            // 8. AgGrid — delegamos al lector de iframe
             var agEl = el.closest('[data-testid="stAgGrid"], .ag-root-wrapper');
             if (agEl || el.tagName === 'IFRAME') {
                 var agInfo = agGridInfo(mouseX, mouseY);
@@ -728,7 +638,6 @@ def inject_element_inspector():
                 return '📋 AgGrid tabla';
             }
 
-            // 9. Rail de navegación
             var railIcon = el.closest('.rail-icon');
             if (railIcon) {
                 var rname   = railIcon.getAttribute('data-tooltip') || railIcon.innerText.trim();
@@ -736,7 +645,6 @@ def inject_element_inspector():
                 return '🧭 nav\n  reporte: ' + rname + '\n  estado : ' + (rActive ? 'activo ✓' : 'inactivo');
             }
 
-            // 10. Caption / aviso
             var caption = el.closest('[data-testid="stCaptionContainer"]');
             if (caption) {
                 return 'ℹ️ caption\n  ' + caption.textContent.trim().slice(0, 80);
@@ -745,7 +653,6 @@ def inject_element_inspector():
             return null;
         }
 
-        // ── Resaltado ────────────────────────────────────────────────────
         var elActual = null;
         function resaltarEl(el, etiqueta) {
             if (elActual) { elActual.style.outline = ''; elActual.style.outlineOffset = ''; }
@@ -756,7 +663,6 @@ def inject_element_inspector():
             } else { elActual = null; }
         }
 
-        // ── Mousemove sobre el documento padre ───────────────────────────
         doc.addEventListener('mousemove', function(e) {
             if (!inspectorActivo()) {
                 tip.style.opacity = '0';
@@ -768,11 +674,9 @@ def inject_element_inspector():
             var etiqueta = null;
             var cursor = el;
 
-            // Intentar primero AgGrid (iframe) con las coordenadas del mouse
             var agInfo = agGridInfo(e.clientX, e.clientY);
             if (agInfo) {
                 etiqueta = agInfo;
-                // Resaltar el iframe como bloque
                 var agFrame = doc.querySelector('iframe[src*="st_aggrid"], [data-testid="stAgGrid"] iframe');
                 if (!agFrame) {
                     var iframes = doc.querySelectorAll('iframe');
@@ -786,7 +690,6 @@ def inject_element_inspector():
                 }
                 if (agFrame) resaltarEl(agFrame, etiqueta);
             } else {
-                // Recorrer DOM hasta encontrar widget (máx 12 niveles)
                 for (var i = 0; i < 12 && cursor && cursor !== doc.body; i++) {
                     etiqueta = labelDe(cursor, e.clientX, e.clientY);
                     if (etiqueta) { el = cursor; break; }
@@ -801,7 +704,6 @@ def inject_element_inspector():
                 tip.style.opacity = '1';
                 var x = e.clientX + 16;
                 var y = e.clientY - 10;
-                // Calcular alto real del tooltip (multilínea)
                 var tw = tip.offsetWidth  || 260;
                 var th = tip.offsetHeight || 80;
                 if (x + tw > win.innerWidth  - 8) x = e.clientX - tw - 16;
@@ -819,7 +721,6 @@ def inject_element_inspector():
             resaltarEl(null, null);
         });
 
-        // ── Alt+I para activar/desactivar ────────────────────────────────
         doc.addEventListener('keydown', function(e) {
             if (e.altKey && (e.key === 'i' || e.key === 'I')) {
                 var url = new URL(win.location.href);
@@ -852,18 +753,7 @@ def inject_element_inspector():
 
 def inject_pagination_v2():
     """Barra de paginación personalizada (Opción 2: números + salto de página).
-
     Pensada para llamarse SOLO en el reporte Inventario Valorizado.
-
-    No toca la lógica de AgGrid: el grid sigue gestionando las 5.000 filas, los
-    filtros, el orden y los totales. Esta función solo OCULTA la barra nativa
-    (resumen de filas + flechas) y dibuja una barra propia que CONDUCE los
-    botones nativos (btPrevious/btNext), leyendo el estado real del TEXTO
-    "Página X de Y". Así nunca se desincroniza del grid.
-
-    Localiza el iframe igual que inject_grid_health_check (iframe[src*=st_aggrid])
-    e inyecta dentro de su contentDocument. Si tras varios intentos no encuentra
-    el grid o la barra, lo reporta en el overlay de errores (win.__logErr).
     """
     components.html("""
     <script>
@@ -878,7 +768,6 @@ def inject_pagination_v2():
                 .filter(function(n){ return !isNaN(n); });
       }
 
-      // Lee {cur, tot} desde el texto "Página X de Y"; si no, desde refs.
       function leerEstado(panel){
         var desc = panel.querySelector('.ag-paging-description');
         var nums = desc ? intDe(desc.textContent) : [];
@@ -1008,8 +897,6 @@ def inject_pagination_v2():
       }
 
       function buscarFrames(){
-        // Preferimos el iframe de st_aggrid; si su src no lo contiene
-        // (cambia entre versiones), caemos a revisar TODOS los iframes.
         var f = doc.querySelectorAll('iframe[src*="st_aggrid"]');
         if (f.length) return f;
         return doc.querySelectorAll('iframe');
@@ -1027,11 +914,194 @@ def inject_pagination_v2():
           if (r === 'ok') return;
           ultimo = r;
         }
-        // Ventana amplia (la carga desde R2 puede tardar): ~30 s.
         if (tries < MAX){ win.setTimeout(check, 500); return; }
         if (win.__logErr) win.__logErr('Paginacion v2 no se pudo montar (' + ultimo + ').');
       }
       win.setTimeout(check, 800);
+    })();
+    </script>
+    """, height=0)
+
+
+# ===========================================================================
+# BOTÓN MAXIMIZAR AGGRID — SOLO REQUERIMIENTOS
+# ===========================================================================
+
+def inject_maximize_aggrid():
+    """
+    Inyecta un botón ⛶ / ✕ en la esquina superior derecha del iframe de AgGrid
+    que pone la tabla en pantalla completa (posición fija, z-index alto).
+    Solo debe llamarse en el reporte Requerimientos.
+
+    El botón se ancla al CONTENEDOR del iframe (en el DOM de la ventana padre),
+    no dentro del iframe, para evitar problemas de sandbox. Al maximizar:
+      • El iframe ocupa toda la ventana (position:fixed, inset:0).
+      • El rail de iconos y la franja superior quedan por debajo (z-index menor).
+      • Un segundo clic (✕) restaura el tamaño original.
+    """
+    components.html("""
+    <script>
+    (function(){
+        var win = window.parent;
+        var doc = win.document;
+        var BTN_ID = 'req-maximize-btn';
+        var maximizado = false;
+        var estilosOriginales = {};
+        var tries = 0;
+        var MAX = 40;
+
+        // ── Estilos del botón ────────────────────────────────────────────
+        var CSS = [
+            '#' + BTN_ID + ' {',
+            '  position: absolute;',
+            '  top: 6px;',
+            '  right: 6px;',
+            '  z-index: 99999;',
+            '  width: 30px;',
+            '  height: 30px;',
+            '  border: 1px solid #e2e8f0;',
+            '  border-radius: 6px;',
+            '  background: #ffffff;',
+            '  color: #475569;',
+            '  font-size: 15px;',
+            '  cursor: pointer;',
+            '  display: flex;',
+            '  align-items: center;',
+            '  justify-content: center;',
+            '  box-shadow: 0 1px 4px rgba(0,0,0,0.10);',
+            '  transition: background 0.15s, color 0.15s, border-color 0.15s;',
+            '  line-height: 1;',
+            '}',
+            '#' + BTN_ID + ':hover {',
+            '  background: #eff6ff;',
+            '  border-color: #93c5fd;',
+            '  color: #2563eb;',
+            '}',
+            // Contenedor relativo para anclar el botón
+            '.req-grid-wrapper {',
+            '  position: relative;',
+            '  width: 100%;',
+            '}',
+            // Estado maximizado: iframe ocupa toda la pantalla
+            '.req-grid-wrapper.maximizado iframe {',
+            '  position: fixed !important;',
+            '  inset: 0 !important;',
+            '  width: 100vw !important;',
+            '  height: 100vh !important;',
+            '  z-index: 99998 !important;',
+            '  border-radius: 0 !important;',
+            '  box-shadow: none !important;',
+            '}',
+            // El botón sigue visible encima del iframe maximizado
+            '.req-grid-wrapper.maximizado #' + BTN_ID + ' {',
+            '  position: fixed !important;',
+            '  top: 12px !important;',
+            '  right: 12px !important;',
+            '  z-index: 99999 !important;',
+            '  background: #1e293b !important;',
+            '  color: #f8fafc !important;',
+            '  border-color: #475569 !important;',
+            '}',
+        ].join('\\n');
+
+        function inyectarCSS() {
+            if (doc.getElementById('req-max-css')) return;
+            var s = doc.createElement('style');
+            s.id = 'req-max-css';
+            s.textContent = CSS;
+            doc.head.appendChild(s);
+        }
+
+        function buscarIframe() {
+            // Preferimos el iframe de st_aggrid; si no, todos los iframes
+            var frames = doc.querySelectorAll('iframe[src*="st_aggrid"]');
+            if (!frames.length) frames = doc.querySelectorAll('iframe');
+            for (var i = 0; i < frames.length; i++) {
+                try {
+                    var d = frames[i].contentDocument;
+                    if (d && d.querySelector('.ag-root-wrapper')) return frames[i];
+                } catch(e) {}
+            }
+            return null;
+        }
+
+        function toggle() {
+            var wrapper = doc.querySelector('.req-grid-wrapper');
+            if (!wrapper) return;
+            maximizado = !maximizado;
+            if (maximizado) {
+                wrapper.classList.add('maximizado');
+                btn.innerHTML = '✕';
+                btn.title = 'Restaurar';
+                // Ocultar el rail y la top-bar para no interferir
+                var rail = doc.getElementById('icon-rail');
+                var topbar = doc.getElementById('top-bar');
+                if (rail)   { estilosOriginales.railZI = rail.style.zIndex;   rail.style.zIndex = '1'; }
+                if (topbar) { estilosOriginales.topbarZI = topbar.style.zIndex; topbar.style.zIndex = '1'; }
+            } else {
+                wrapper.classList.remove('maximizado');
+                btn.innerHTML = '&#x26F6;';
+                btn.title = 'Maximizar tabla';
+                var rail = doc.getElementById('icon-rail');
+                var topbar = doc.getElementById('top-bar');
+                if (rail)   rail.style.zIndex   = estilosOriginales.railZI   || '';
+                if (topbar) topbar.style.zIndex  = estilosOriginales.topbarZI || '';
+            }
+        }
+
+        // Crear el botón una sola vez
+        var btn = doc.createElement('button');
+        btn.id = BTN_ID;
+        btn.innerHTML = '&#x26F6;';
+        btn.title = 'Maximizar tabla';
+        btn.addEventListener('click', toggle);
+
+        function montar() {
+            tries++;
+
+            // Si ya está montado, no hacer nada
+            if (doc.getElementById(BTN_ID) && doc.querySelector('.req-grid-wrapper')) return;
+
+            var iframe = buscarIframe();
+            if (!iframe) {
+                if (tries < MAX) { win.setTimeout(montar, 500); }
+                return;
+            }
+
+            inyectarCSS();
+
+            // Envolver el iframe en un div relativo (solo si aún no lo está)
+            var padre = iframe.parentNode;
+            if (!padre || padre.classList.contains('req-grid-wrapper')) {
+                // ya envuelto: solo asegurar el botón
+                if (!doc.getElementById(BTN_ID)) padre.appendChild(btn);
+                return;
+            }
+
+            var wrapper = doc.createElement('div');
+            wrapper.className = 'req-grid-wrapper';
+            padre.insertBefore(wrapper, iframe);
+            wrapper.appendChild(iframe);
+            wrapper.appendChild(btn);
+        }
+
+        win.setTimeout(montar, 900);
+
+        // Re-intentar si Streamlit rerenderiza y desconecta el wrapper
+        win.setInterval(function(){
+            var iframe = buscarIframe();
+            if (!iframe) return;
+            var padre = iframe.parentNode;
+            if (padre && !padre.classList.contains('req-grid-wrapper')) {
+                // Se desconectó: volver a envolver
+                tries = 0;
+                maximizado = false;
+                montar();
+            } else if (!doc.getElementById(BTN_ID) && padre) {
+                padre.appendChild(btn);
+            }
+        }, 1500);
+
     })();
     </script>
     """, height=0)
