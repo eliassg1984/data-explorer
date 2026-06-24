@@ -776,6 +776,15 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "border-color": "#94a3b8 !important",
             "color": "#334155 !important",
         }
+        # Encabezados de GRUPO del pivote (las claves: meses/años) — el texto
+        # venía oscuro sobre el header oscuro y no se leía. Forzar texto claro.
+        custom_css[".ag-header-group-cell"] = {"background-color": "#0f172a !important"}
+        custom_css[".ag-header-group-cell-label"] = {"color": "#f8fafc !important"}
+        custom_css[".ag-header-group-text"] = {
+            "color": "#f8fafc !important",
+            "font-weight": "500 !important",
+        }
+        custom_css[".ag-header-group-cell .ag-icon"] = {"color": "#94a3b8 !important"}
 
     AgGrid(
         (df_grid if es_salidas else df_grid.head(5000)), gridOptions=grid_options, height=600,
