@@ -550,6 +550,19 @@ elif reporte == "Requerimientos":
     # Así el panel de filtros de AgGrid siempre ve TODOS los valores posibles,
     # no solo los del rango elegido por el usuario.
     _col_freg = buscar_columna(df_piv, "Fecha Registro", "fecha registro") or col_fecha
+
+    # ──────────────────────────────────────────────────────────────────────
+    # 🔧 DIAGNÓSTICO TEMPORAL — borrar este bloque una vez identificado el problema
+    with st.expander("🔧 Debug Mes/Año (temporal)", expanded=True):
+        st.write("Filas totales en df_piv:", len(df_piv))
+        st.write("Columna usada para calcular Mes/Año:", _col_freg)
+        if _col_freg and _col_freg in df_piv.columns:
+            _chk = pd.to_datetime(df_piv[_col_freg], errors="coerce")
+            st.write("Nulos en esa columna:", int(_chk.isna().sum()), "de", len(_chk))
+            st.write("Meses distintos detectados:",
+                     sorted(_chk.dt.to_period("M").astype(str).replace("NaT", pd.NA).dropna().unique().tolist()))
+    # ──────────────────────────────────────────────────────────────────────
+
     if _col_freg and _col_freg in df_piv.columns:
         _fechas_full = pd.to_datetime(df_piv[_col_freg], errors="coerce")
         df_piv["Mes"] = (
