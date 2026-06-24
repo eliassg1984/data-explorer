@@ -545,26 +545,51 @@ elif reporte == "Requerimientos":
         "**Columnas**) arrastra campos a **Grupos de filas**, **Valores** y "
         "**Etiquetas de columnas**. Para columnas por periodo legibles, usa los "
         "campos **Mes** o **Año** (ya calculados) en *Etiquetas de columnas*. "
-        "Para filtrar por fecha, usa la pestaña **Filtros** del panel (la fecha "
-        "tiene el modo *En rango*)."
+        "El **filtro de fecha** está arriba de la tabla (rango desde / hasta)."
     )
 
-    # ── Derivar periodo (Mes / Año) desde la fecha de registro ──────────────
-    # AgGrid usa el valor exacto de la celda como clave de pivote, así que una
-    # fecha con hora genera una columna por segundo. Con estos campos agrupados
-    # las columnas quedan legibles: "2023-01" (Mes) o "2023" (Año).
     df_piv = df_f.copy()
 
-    # Asegurar que TODAS las columnas de fecha sean datetime real. Si alguna
-    # llega como texto u objeto, el filtro de fecha de la tabla (que corre en
-    # JavaScript) no la interpreta bien y puede esconder todas las filas.
+    # Asegurar que las columnas de fecha sean datetime real.
     for _c in df_piv.columns:
         _n = str(_c).lower()
         if "fecha" in _n or "date" in _n or pd.api.types.is_datetime64_any_dtype(df_piv[_c]):
             df_piv[_c] = pd.to_datetime(df_piv[_c], errors="coerce")
 
-    _col_freg = buscar_columna(df_piv, "Fecha Registro", "fecha registro") or col_fecha
+    # ── Filtro de fecha en Python (rango desde / hasta) ─────────────────────
+    # Se hace en pandas (no en AgGrid) porque el filtro de fecha nativo de
+    # AgGrid no funciona de forma fiable con estas columnas. Aquí es 100%
+    # confiable, igual que en el Inspector.
+    cols_fecha = [c for c in df_piv.columns
+                  if pd.api.types.is_datetime64_any_dtype(df_piv[c])]
+    if cols_fecha:
+        fc1, fc2 = st.columns([1, 2])
+        with fc1:
+            col_fecha_sel = st.selectbox(
+                "📅 Filtrar por", cols_fecha, key="req_fcol",
+            )
+        validos = df_piv[col_fecha_sel].dropna()
+        if not validos.empty:
+            fmin, fmax = validos.min().date(), validos.max().date()
+            with fc2:
+                rango = st.date_input(
+                    "Rango (desde / hasta)",
+                    value=(fmin, fmax),
+                    min_value=fmin, max_value=fmax,
+                    format="DD/MM/YYYY", key="req_frango",
+                )
+            if isinstance(rango, (tuple, list)) and len(rango) == 2:
+                ini, fin = rango
+                _m = (df_piv[col_fecha_sel].dt.date >= ini) & \
+                     (df_piv[col_fecha_sel].dt.date <= fin)
+                df_piv = df_piv[_m]
+                st.caption(
+                    f"Mostrando **{col_fecha_sel}** entre {ini:%d/%m/%Y} y "
+                    f"{fin:%d/%m/%Y} · {len(df_piv):,} filas"
+                )
 
+    # ── Campos derivados Mes / Año (sobre el df ya filtrado) ────────────────
+    _col_freg = buscar_columna(df_piv, "Fecha Registro", "fecha registro") or col_fecha
     if _col_freg and _col_freg in df_piv.columns:
         _fechas = pd.to_datetime(df_piv[_col_freg], errors="coerce")
         df_piv["Mes"] = _fechas.dt.to_period("M").astype(str).replace("NaT", "")
