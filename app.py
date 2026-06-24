@@ -520,35 +520,36 @@ elif reporte == "Salidas":
             st.info("No hay suficientes columnas para generar gráficos.")
 
 
-# ── REQUERIMIENTOS: hoja dinámica estilo Excel (Mito) ────────────────────────
+# ── REQUERIMIENTOS: tabla dinámica (pivote) con AgGrid ───────────────────────
 elif reporte == "Requerimientos":
     st.markdown(
         '<p style="font-size:22px;font-weight:700;color:#1e293b;'
-        'margin:0 0 0.6rem 0;line-height:1.2;">Requerimientos</p>',
+        'margin:0 0 0.6rem 0;line-height:1.2;">Requerimientos · Tabla dinámica</p>',
         unsafe_allow_html=True,
     )
     st.caption(
-        "🧮 Hoja dinámica: usa el botón **Pivot** de la barra de Mito para crear "
-        "tablas dinámicas, y **Graph** para gráficos. Los datos ya vienen "
-        "filtrados por los controles de arriba."
+        "🧮 Tabla dinámica estilo Excel. En el panel derecho (pestaña "
+        "**Columnas**) arrastra campos a **Grupos de filas**, **Etiquetas de "
+        "columnas** y **Valores** para armar tu pivote. El interruptor "
+        "**Modo pivote** ya viene activado. Los datos llegan filtrados por los "
+        "controles de arriba."
     )
 
-    try:
-        from mitosheet.streamlit.v1 import spreadsheet
-    except ModuleNotFoundError:
-        st.error(
-            "El componente **Mito** no está instalado. Agrega `mitosheet` a "
-            "`requirements.txt` y vuelve a desplegar la app."
+    if usa_vista_movil and tiene_config_movil:
+        st.caption("📱 Vista móvil")
+        renderizar_aggrid_movil(
+            df_f[cols_mostrar], cfg.get("columnas_fijas_movil", 2), reporte, font_px,
         )
-        st.stop()
-
-    # df_f ya viene filtrado por el popover (área, familia, fecha, buscador…).
-    # La clave depende del reporte para que el estado de la hoja no se mezcle
-    # con otros, y del nº de filas para refrescar si cambian los filtros.
-    spreadsheet(
-        df_f,
-        key=f"mito_{reporte}_{len(df_f)}",
-    )
+    else:
+        cols_finales = list(cols_mostrar)
+        if grupos_sel:
+            for c in grupos_sel:
+                if c not in cols_finales:
+                    cols_finales.append(c)
+        renderizar_aggrid_desktop(
+            df_f[cols_finales], grupos_sel, cols_mostrar, reporte, font_px,
+            cols_visibles=None,
+        )
 
 
 # ── RESTO DE REPORTES: AgGrid ────────────────────────────────────────────────
