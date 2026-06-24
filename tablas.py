@@ -9,7 +9,7 @@ import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from utils import _norm, buscar_columna, buscar_columna_fecha, LOCALE_ES
-from inyecciones import inject_grid_health_check, inject_pagination_v2
+from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid
 
 
 # ===========================================================================
@@ -252,17 +252,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     if col_producto and col_producto in df_grid.columns and col_producto not in grupos_sel:
         gb.configure_column(col_producto, pinned="left", minWidth=300)
 
-    # ── Requerimientos: el filtro de fecha de AgGrid no funciona de forma
-    #    fiable con estas columnas, así que se DESACTIVA en la tabla (no
-    #    aparece en la pestaña Filtros). El filtro de fecha real está arriba
-    #    de la tabla, hecho en Python. Las columnas de fecha siguen visibles
-    #    y se pueden arrastrar al pivote, solo que sin filtro propio. ──
+    # ── Requerimientos: filtro de fecha desactivado en AgGrid ──
     if es_requerimientos:
         for c in df_grid.columns:
             _n = _norm(c)
             es_fecha = (pd.api.types.is_datetime64_any_dtype(df_grid[c])
                         or "fecha" in _n or "date" in _n)
-            # 'Mes'/'Año' son textos derivados: conservan su filtro de texto
             if es_fecha and _n not in ("mes", "ano", "anio"):
                 gb.configure_column(c, filter=False, suppressFiltersToolPanel=True)
 
@@ -279,7 +274,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     row_h    = max(28, min(60, font_px + 12))
     header_h = max(30, min(62, font_px + 14))
     if es_requerimientos:
-        row_h = 22  # filas más bajas → más filas visibles en el pivote
+        row_h = 22
 
     cols_valor  = [c for c in df_grid.columns
                    if pd.api.types.is_numeric_dtype(df_grid[c]) and
@@ -374,8 +369,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         "onFirstDataRendered": JsCode("function(params) { /* No auto-fit */ }"),
     }
 
-    # Totales al pie: fila fija normal, salvo en modo pivote (Requerimientos),
-    # donde las columnas cambian y se usa la fila de gran total de AgGrid.
     if not es_requerimientos:
         opciones_grid["pinnedBottomRowData"] = [fila_totales]
     else:
@@ -428,7 +421,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     if envolver_cabeceras:
         opciones_grid["headerHeight"] = int(font_px * 2.5 + 20)
 
-    # ── Salidas: sin panel lateral y sin paginación (tabla completa) ──
     if es_salidas:
         opciones_grid["sideBar"] = False
 
@@ -756,11 +748,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "overflow": "hidden !important",
         })
 
-    # ── Requerimientos: paleta "Pizarra" (slate) para que el panel lateral
-    #    combine con el header oscuro (reemplaza el azul brillante por gris
-    #    pizarra). Solo afecta a este reporte; el resto conserva el azul. ──
+    # ── Requerimientos: paleta "Pizarra" (slate) ──────────────────────────
     if es_requerimientos:
-        # Acento de la pestaña seleccionada del sidebar
         custom_css[".ag-side-button.ag-selected"] = {
             "background-color": "#334155 !important",
             "color": "#f8fafc !important",
@@ -770,13 +759,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "background-color": "#e2e8f0 !important",
             "color": "#1e293b !important",
         }
-        # Íconos del header (antes azul claro) → gris pizarra claro
         custom_css[".ag-header-icon"] = {"color": "#94a3b8 !important"}
-        # Switches on/off de columnas (antes azul) → gris acero
         custom_css[".ag-column-select-column .ag-checkbox-input-wrapper.ag-checked"] = {
             "background": "#475569 !important",
         }
-        # Fila de total / gran total (antes azul claro) → gris pizarra
         custom_css[".ag-row-pinned"] = {
             "background-color": "#e2e8f0 !important",
             "font-weight": "700 !important",
@@ -784,16 +770,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "color": "#0f172a !important",
             "font-size": f"{font_px + 1}px !important",
         }
-        # Hover de fila (antes azul muy claro) → gris neutro
         custom_css[".ag-row-hover"] = {"background-color": "#f1f5f9 !important"}
-        # Botones de paginación: hover en gris pizarra en vez de azul
         custom_css[".ag-paging-button:hover:not(.ag-disabled)"] = {
             "background": "#e2e8f0 !important",
             "border-color": "#94a3b8 !important",
             "color": "#334155 !important",
         }
-        # Encabezados de GRUPO del pivote (las claves: meses/años) — el texto
-        # venía oscuro sobre el header oscuro y no se leía. Forzar texto claro.
         custom_css[".ag-header-group-cell"] = {"background-color": "#0f172a !important"}
         custom_css[".ag-header-group-cell-label"] = {"color": "#f8fafc !important"}
         custom_css[".ag-header-group-text"] = {
@@ -801,24 +783,17 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "font-weight": "500 !important",
         }
         custom_css[".ag-header-group-cell .ag-icon"] = {"color": "#94a3b8 !important"}
-
-        # ── Más etiquetas visibles en el panel (sin tocar el ancho) ──
-        # Filas de la lista de columnas más bajas (la variable la lee AgGrid,
-        # así no se rompe el posicionamiento de la lista virtual).
         custom_css[".ag-theme-balham"] = {"--ag-list-item-height": "22px !important"}
-        # Etiquetas un poco más chicas y compactas
         custom_css[".ag-column-select-column-label"] = {
             "font-size": f"{max(11, font_px - 1)}px !important",
             "line-height": "1.15 !important",
         }
-        # Switches de visibilidad un poco más pequeños
         custom_css[".ag-column-select-column .ag-checkbox-input-wrapper"] = {
             "transform": "scale(0.85)",
         }
         custom_css[".ag-column-select-column .ag-toggle-button-input-wrapper"] = {
             "transform": "scale(0.85)",
         }
-        # Compactar las zonas de pivote para dejarle más alto a la lista
         custom_css[".ag-column-drop-vertical"] = {
             "min-height": "38px !important",
             "padding-top": "2px !important",
@@ -834,7 +809,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         custom_css[".ag-column-drop-vertical-cell"] = {
             "margin": "2px 4px !important",
         }
-        # Cabecera del panel (buscar / seleccionar todo) más compacta
         custom_css[".ag-column-select-header"] = {
             "padding-top": "4px !important",
             "padding-bottom": "4px !important",
@@ -850,8 +824,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     inject_grid_health_check()
 
+    # ── Post-render: inyecciones específicas por reporte ──────────────────
     if reporte == "Inventario Valorizado":
         inject_pagination_v2()
+
+    if es_requerimientos:
+        inject_maximize_aggrid()
 
 
 # ===========================================================================
@@ -1007,11 +985,6 @@ def _totales_html_compras(df: pd.DataFrame) -> str:
 def renderizar_tabla_compras(df: pd.DataFrame, grupos_sel: list = None):
     """
     Renderiza la tabla del reporte de Compras usando st.data_editor.
-
-    Parámetros
-    ----------
-    df          : DataFrame ya filtrado listo para mostrar.
-    grupos_sel  : columnas por las que agrupar (opcional).
     """
     if df.empty:
         st.warning("No hay datos para mostrar con los filtros actuales.")
@@ -1019,7 +992,6 @@ def renderizar_tabla_compras(df: pd.DataFrame, grupos_sel: list = None):
 
     grupos_sel = grupos_sel or []
 
-    # ── Agrupación opcional ────────────────────────────────────────────────
     if grupos_sel:
         cols_num = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
         if cols_num:
@@ -1032,7 +1004,6 @@ def renderizar_tabla_compras(df: pd.DataFrame, grupos_sel: list = None):
     else:
         df_view = df.copy()
 
-    # ── Métricas rápidas ───────────────────────────────────────────────────
     cols_importe = [c for c in df_view.columns
                     if pd.api.types.is_numeric_dtype(df_view[c]) and _es_moneda(c)]
     cols_cant    = [c for c in df_view.columns
@@ -1054,7 +1025,6 @@ def renderizar_tabla_compras(df: pd.DataFrame, grupos_sel: list = None):
         kpi_cols[idx].metric(f"📦 {c}", f"{int(df_view[c].sum()):,}")
         idx += 1
 
-    # ── Tabla editable ─────────────────────────────────────────────────────
     st.markdown("#### 📋 Detalle de Compras")
 
     df_editado = st.data_editor(
@@ -1067,7 +1037,6 @@ def renderizar_tabla_compras(df: pd.DataFrame, grupos_sel: list = None):
         key="data_editor_compras",
     )
 
-    # ── Fila de totales ────────────────────────────────────────────────────
     cols_num_view = [c for c in df_view.columns if pd.api.types.is_numeric_dtype(df_view[c])]
     if cols_num_view:
         st.markdown(
@@ -1079,7 +1048,6 @@ def renderizar_tabla_compras(df: pd.DataFrame, grupos_sel: list = None):
             unsafe_allow_html=True,
         )
 
-    # ── Exportar CSV ───────────────────────────────────────────────────────
     st.download_button(
         label="⬇️ Exportar a CSV",
         data=df_editado.to_csv(index=False).encode("utf-8-sig"),
