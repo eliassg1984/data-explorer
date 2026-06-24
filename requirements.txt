@@ -4,4 +4,3 @@ pandas>=2.0.0
 plotly>=5.0.0
 streamlit-aggrid==1.2.1.post2
 streamlit-option-menu>=0.3.6
-streamlit-calendar>=1.4.0
