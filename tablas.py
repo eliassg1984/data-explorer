@@ -252,6 +252,37 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     if col_producto and col_producto in df_grid.columns and col_producto not in grupos_sel:
         gb.configure_column(col_producto, pinned="left", minWidth=300)
 
+    # ── Requerimientos: filtro de fecha por columna en modo "En rango" y
+    #    comparando solo por día (ignora la hora). ──
+    if es_requerimientos:
+        _cmp_fecha = JsCode("""
+            function(filterLocalDateAtMidnight, cellValue) {
+                if (cellValue == null || cellValue === '') { return -1; }
+                var d = new Date(cellValue);
+                if (isNaN(d.getTime())) { return -1; }
+                var celda = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                if (celda < filterLocalDateAtMidnight) { return -1; }
+                if (celda > filterLocalDateAtMidnight) { return 1; }
+                return 0;
+            }
+        """)
+        for c in df_grid.columns:
+            _n = _norm(c)
+            es_fecha = (pd.api.types.is_datetime64_any_dtype(df_grid[c])
+                        or "fecha" in _n or "date" in _n)
+            # 'Mes'/'Año' son textos derivados: se quedan con su filtro de texto
+            if es_fecha and _n not in ("mes", "ano", "anio"):
+                gb.configure_column(
+                    c,
+                    filter="agDateColumnFilter",
+                    filterParams={
+                        "defaultOption": "inRange",
+                        "inRangeInclusive": True,
+                        "browserDatePicker": True,
+                        "comparator": _cmp_fecha,
+                    },
+                )
+
     if cols_visibles is not None:
         visibles_norm = {_norm(c) for c in cols_visibles}
         hay_match = any(_norm(c) in visibles_norm for c in df_grid.columns)
