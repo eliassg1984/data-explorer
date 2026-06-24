@@ -786,6 +786,44 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         }
         custom_css[".ag-header-group-cell .ag-icon"] = {"color": "#94a3b8 !important"}
 
+        # ── Más etiquetas visibles en el panel (sin tocar el ancho) ──
+        # Filas de la lista de columnas más bajas (la variable la lee AgGrid,
+        # así no se rompe el posicionamiento de la lista virtual).
+        custom_css[".ag-theme-balham"] = {"--ag-list-item-height": "22px !important"}
+        # Etiquetas un poco más chicas y compactas
+        custom_css[".ag-column-select-column-label"] = {
+            "font-size": f"{max(11, font_px - 1)}px !important",
+            "line-height": "1.15 !important",
+        }
+        # Switches de visibilidad un poco más pequeños
+        custom_css[".ag-column-select-column .ag-checkbox-input-wrapper"] = {
+            "transform": "scale(0.85)",
+        }
+        custom_css[".ag-column-select-column .ag-toggle-button-input-wrapper"] = {
+            "transform": "scale(0.85)",
+        }
+        # Compactar las zonas de pivote para dejarle más alto a la lista
+        custom_css[".ag-column-drop-vertical"] = {
+            "min-height": "38px !important",
+            "padding-top": "2px !important",
+            "padding-bottom": "2px !important",
+        }
+        custom_css[".ag-column-drop-vertical-title-bar"] = {
+            "padding": "4px 6px !important",
+        }
+        custom_css[".ag-column-drop-vertical-empty-message"] = {
+            "padding": "4px 8px !important",
+            "font-size": "11px !important",
+        }
+        custom_css[".ag-column-drop-vertical-cell"] = {
+            "margin": "2px 4px !important",
+        }
+        # Cabecera del panel (buscar / seleccionar todo) más compacta
+        custom_css[".ag-column-select-header"] = {
+            "padding-top": "4px !important",
+            "padding-bottom": "4px !important",
+        }
+
     AgGrid(
         (df_grid if es_salidas else df_grid.head(5000)), gridOptions=grid_options, height=600,
         theme=tema_grid, custom_css=custom_css,
