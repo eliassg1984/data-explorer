@@ -19,6 +19,7 @@ ICONO_A_EMOJI = {
     "cash-coin": "💰",
     "box-arrow-up": "📤",
     "card-checklist": "📝",
+    "search": "🔍",
 }
 
 
