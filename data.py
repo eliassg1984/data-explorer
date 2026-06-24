@@ -68,6 +68,12 @@ REPORTES = {
         "archivo": "requerimientos.parquet",
         "icono": "card-checklist",
     },
+    "Inspector": {
+        # Herramienta de verificación de datos crudos (no es un parquet propio):
+        # permite inspeccionar cualquiera de los archivos de arriba.
+        "icono": "search",
+        "tool": True,
+    },
 }
  
  
