@@ -264,6 +264,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     row_h    = max(28, min(60, font_px + 12))
     header_h = max(30, min(62, font_px + 14))
+    if es_requerimientos:
+        row_h = 22  # filas más bajas → más filas visibles en el pivote
 
     cols_valor  = [c for c in df_grid.columns
                    if pd.api.types.is_numeric_dtype(df_grid[c]) and
@@ -825,7 +827,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         }
 
     AgGrid(
-        (df_grid if es_salidas else df_grid.head(5000)), gridOptions=grid_options, height=600,
+        (df_grid if es_salidas else df_grid.head(5000)), gridOptions=grid_options,
+        height=(850 if es_requerimientos else 600),
         theme=tema_grid, custom_css=custom_css,
         fit_columns_on_grid_load=False, allow_unsafe_jscode=True,
         enable_enterprise_modules=True, key=f"grid_{reporte}",
