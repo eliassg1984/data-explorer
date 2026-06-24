@@ -270,7 +270,6 @@ with st.popover(label_btn, use_container_width=False):
                 df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
 
     # El slider de tamaño de letra solo aplica en reportes con AgGrid
-    # (Salidas usa su propio control de zoom arriba de la tabla)
     if reporte not in ("Compras", "Salidas"):
         st.divider()
         st.session_state.tabla_tam = st.select_slider(
@@ -349,7 +348,7 @@ def _render_tabla():
 
 
 def _leer_rango_brush(evento, campo="_periodo"):
-    return None  # (sin uso: el filtro de fechas de Requerimientos ahora es un calendario)
+    return None
 
 
 # ── COMPRAS: st.data_editor ──────────────────────────────────────────────────
@@ -414,23 +413,20 @@ elif reporte == "Inventario Valorizado":
         renderizar_graficos(df_f, es_movil=usa_vista_movil)
 
 
-# ── SALIDAS: tabla completa, sin paginación ni panel lateral ─────────────────
+# ── SALIDAS ──────────────────────────────────────────────────────────────────
 elif reporte == "Salidas":
     tab_tabla, tab_graficos = st.tabs(["📋 Tabla", "📊 Gráficos"])
 
     with tab_tabla:
-        # Vista móvil: usa el render móvil estándar
         if usa_vista_movil and tiene_config_movil:
             st.caption("📱 Vista móvil • Desliza para más columnas")
             renderizar_aggrid_movil(
                 df_f[cols_mostrar], cfg.get("columnas_fijas_movil", 2), reporte, font_px,
             )
         else:
-            # ── Barra de herramientas superior: Columnas · Zoom · Exportar ──
             _k_cols = f"colsel_{reporte}"
             if _k_cols not in st.session_state:
                 st.session_state[_k_cols] = list(todas_cols)
-            # Descartar columnas que ya no existan (datos cambiados)
             _vigentes = [c for c in st.session_state[_k_cols] if c in todas_cols]
             st.session_state[_k_cols] = _vigentes or list(todas_cols)
 
@@ -463,7 +459,6 @@ elif reporte == "Salidas":
             if not cols_sel:
                 cols_sel = list(todas_cols)
 
-            # ── KPIs rápidos ────────────────────────────────────────────────
             def _es_moneda_kpi(n):
                 n = str(n).lower()
                 return any(k in n for k in ("importe", "total", "monto", "precio", "costo"))
@@ -491,7 +486,6 @@ elif reporte == "Salidas":
                 kpis[ki].metric(f"📦 {c}", f"{int(df_f[c].sum()):,}")
                 ki += 1
 
-            # ── Tabla (zoom = tamaño de fuente, columnas elegidas) ───────────
             cols_finales = list(cols_sel)
             if grupos_sel:
                 for c in grupos_sel:
@@ -533,7 +527,7 @@ elif reporte == "Salidas":
             st.info("No hay suficientes columnas para generar gráficos.")
 
 
-# ── REQUERIMIENTOS: tabla dinámica (pivote) con AgGrid ───────────────────────
+# ── REQUERIMIENTOS ───────────────────────────────────────────────────────────
 elif reporte == "Requerimientos":
     st.markdown(
         '<p style="font-size:22px;font-weight:700;color:#1e293b;'
@@ -548,52 +542,107 @@ elif reporte == "Requerimientos":
         "El **filtro de fecha** está arriba de la tabla (rango desde / hasta)."
     )
 
+    # ══════════════════════════════════════════════════════════════════════
+    # NIVEL 1 — df_f ya llegó filtrado por el POPOVER
+    # En Requerimientos el popover está casi vacío (sin filtros_cat
+    # configurados en data.py), así que df_f llega con todos los datos.
+    # ══════════════════════════════════════════════════════════════════════
     df_piv = df_f.copy()
+    # df_piv tiene en este punto TODOS los registros del parquet
 
-    # Asegurar que las columnas de fecha sean datetime real.
+    # DEBUG ── ¿Cuántas filas llegaron del popover? ──────────────────────
+    st.caption(f"🔵 NIVEL 1 — df_f del popover: **{len(df_piv):,} filas** "
+               f"| columnas: {df_piv.shape[1]}")
+
+    # Convierte a datetime todas las columnas que parezcan fechas
     for _c in df_piv.columns:
         _n = str(_c).lower()
         if "fecha" in _n or "date" in _n or pd.api.types.is_datetime64_any_dtype(df_piv[_c]):
             df_piv[_c] = pd.to_datetime(df_piv[_c], errors="coerce")
 
-    # ── Filtro de fecha en Python (rango desde / hasta) ─────────────────────
-    # Se hace en pandas (no en AgGrid) porque el filtro de fecha nativo de
-    # AgGrid no funciona de forma fiable con estas columnas. Aquí es 100%
-    # confiable, igual que en el Inspector.
+    # DEBUG ── ¿Qué años y meses existen ANTES del filtro de fecha? ──────
+    _col_debug = buscar_columna(df_piv, "Fecha Registro", "fecha registro") or col_fecha
+    if _col_debug and _col_debug in df_piv.columns:
+        _fechas_debug  = pd.to_datetime(df_piv[_col_debug], errors="coerce")
+        _años_antes    = sorted(_fechas_debug.dt.year.dropna().unique().astype(int).tolist())
+        _meses_antes   = sorted(_fechas_debug.dt.to_period("M").dropna().unique().astype(str).tolist())
+        st.caption(f"🔵 NIVEL 1.5 — Años disponibles **ANTES** del filtro fecha: `{_años_antes}`")
+        st.caption(f"🔵 NIVEL 1.5 — Meses disponibles **ANTES** del filtro fecha: `{_meses_antes}`")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # NIVEL 2 — FILTRO DE FECHA (el calendario en la página)
+    # Recorta df_piv según el rango que elige el usuario.
+    # ⚠️ A partir de aquí df_piv solo tiene las filas del rango elegido.
+    # ══════════════════════════════════════════════════════════════════════
     cols_fecha = [c for c in df_piv.columns
                   if pd.api.types.is_datetime64_any_dtype(df_piv[c])]
+    # Busca columnas de tipo datetime en df_piv
+
     if cols_fecha:
         fc1, fc2 = st.columns([1, 2])
         with fc1:
             col_fecha_sel = st.selectbox(
                 "📅 Filtrar por", cols_fecha, key="req_fcol",
             )
+            # El usuario elige qué columna de fecha usar para el filtro
+
         validos = df_piv[col_fecha_sel].dropna()
         if not validos.empty:
             fmin, fmax = validos.min().date(), validos.max().date()
+            # fmin y fmax son el mínimo y máximo de TODOS los datos
+            # (antes del recorte, así el calendario muestra el rango completo)
+
             with fc2:
                 rango = st.date_input(
                     "Rango (desde / hasta)",
-                    value=(fmin, fmax),
-                    min_value=fmin, max_value=fmax,
-                    format="DD/MM/YYYY", key="req_frango",
+                    value=(fmin, fmax),       # por defecto: todo el rango
+                    min_value=fmin,
+                    max_value=fmax,
+                    format="DD/MM/YYYY",
+                    key="req_frango",
                 )
+                # El usuario elige el rango con este calendario
+
             if isinstance(rango, (tuple, list)) and len(rango) == 2:
                 ini, fin = rango
                 _m = (df_piv[col_fecha_sel].dt.date >= ini) & \
                      (df_piv[col_fecha_sel].dt.date <= fin)
                 df_piv = df_piv[_m]
-                st.caption(
-                    f"Mostrando **{col_fecha_sel}** entre {ini:%d/%m/%Y} y "
-                    f"{fin:%d/%m/%Y} · {len(df_piv):,} filas"
-                )
+                # ⚠️ df_piv queda recortado al rango elegido
+                # Los datos fuera del rango desaparecen de df_piv
 
-    # ── Campos derivados Mes / Año (sobre el df ya filtrado) ────────────────
+                # DEBUG ── ¿Cuántas filas quedaron DESPUÉS del filtro fecha? ──
+                st.caption(f"🟡 NIVEL 2 — df_piv después del filtro fecha: **{len(df_piv):,} filas**")
+                st.caption(f"🟡 NIVEL 2 — Rango elegido: `{ini}` → `{fin}`")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # NIVEL 2.5 — CALCULA Mes y Año
+    # ⚠️ Se calcula SOBRE df_piv ya recortado por fecha.
+    # Por eso Mes y Año solo tienen los valores del rango elegido,
+    # no todos los valores del parquet.
+    # ══════════════════════════════════════════════════════════════════════
     _col_freg = buscar_columna(df_piv, "Fecha Registro", "fecha registro") or col_fecha
     if _col_freg and _col_freg in df_piv.columns:
         _fechas = pd.to_datetime(df_piv[_col_freg], errors="coerce")
         df_piv["Mes"] = _fechas.dt.to_period("M").astype(str).replace("NaT", "")
         df_piv["Año"] = _fechas.dt.year.astype("Int64").astype(str).replace("<NA>", "")
+
+        # DEBUG ── ¿Qué valores tienen Mes y Año después del cálculo? ────
+        _años_calc  = sorted(df_piv["Año"].unique().tolist())
+        _meses_calc = sorted(df_piv["Mes"].unique().tolist())
+        st.caption(f"🟠 NIVEL 2.5 — Años calculados en df_piv (sobre datos recortados): `{_años_calc}`")
+        st.caption(f"🟠 NIVEL 2.5 — Meses calculados en df_piv (sobre datos recortados): `{_meses_calc}`")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # NIVEL 3 — AGGRID
+    # Recibe df_piv ya recortado por fecha y con Mes/Año calculados.
+    # El panel de filtros de AgGrid solo puede mostrar los valores
+    # que existen en las columnas del df que recibe.
+    # ══════════════════════════════════════════════════════════════════════
+
+    # DEBUG ── ¿Qué llega exactamente a AgGrid? ──────────────────────────
+    st.caption(f"🔴 NIVEL 3 — Filas que llegan a AgGrid: **{len(df_piv):,}** "
+               f"| Columnas: `{list(df_piv.columns)}`")
 
     if usa_vista_movil and tiene_config_movil:
         st.caption("📱 Vista móvil")
@@ -602,12 +651,16 @@ elif reporte == "Requerimientos":
         )
     else:
         renderizar_aggrid_desktop(
-            df_piv, grupos_sel, list(df_piv.columns), reporte, font_px,
+            df_piv,                    # ← el df ya recortado llega aquí
+            grupos_sel,
+            list(df_piv.columns),
+            reporte,
+            font_px,
             cols_visibles=None,
         )
 
 
-# ── RESTO DE REPORTES: AgGrid ────────────────────────────────────────────────
+# ── RESTO DE REPORTES ────────────────────────────────────────────────────────
 else:
     tab_tabla, tab_graficos = st.tabs(["📋 Tabla", "📊 Gráficos"])
 
