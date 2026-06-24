@@ -258,9 +258,22 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         _cmp_fecha = JsCode("""
             function(filterLocalDateAtMidnight, cellValue) {
                 if (cellValue == null || cellValue === '') { return -1; }
-                var d = new Date(cellValue);
-                if (isNaN(d.getTime())) { return -1; }
-                var celda = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                var s = String(cellValue);
+                var celda = null;
+                // Caso ISO 'YYYY-MM-DD...' (lo más común desde pandas)
+                if (s.length >= 10 && s.charAt(4) === '-' && s.charAt(7) === '-') {
+                    var y  = parseInt(s.substring(0, 4), 10);
+                    var mo = parseInt(s.substring(5, 7), 10);
+                    var da = parseInt(s.substring(8, 10), 10);
+                    if (!isNaN(y) && !isNaN(mo) && !isNaN(da)) {
+                        celda = new Date(y, mo - 1, da);
+                    }
+                }
+                if (celda === null) {
+                    var d = new Date(s);
+                    if (isNaN(d.getTime())) { return 0; }  // no se pudo leer: no excluir
+                    celda = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                }
                 if (celda < filterLocalDateAtMidnight) { return -1; }
                 if (celda > filterLocalDateAtMidnight) { return 1; }
                 return 0;
