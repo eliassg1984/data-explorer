@@ -189,7 +189,7 @@ if col_busc:
     controles.append(("busc", col_busc))
 if cols_agrupar:
     controles.append(("grp", None))
-if fecha_min_full is not None:
+if fecha_min_full is not None and reporte != "Requerimientos":
     controles.append(("fecha", col_fecha))
 
 grupos_sel = []
@@ -337,6 +337,47 @@ def _render_tabla():
             df_f[cols_finales], grupos_sel, cols_mostrar, reporte, font_px,
             cols_visibles=cols_visibles,
         )
+
+
+def _leer_rango_brush(evento, campo="_periodo"):
+    """Extrae (inicio, fin) como Timestamps de la selección interval de Altair.
+    Tolera distintas estructuras devueltas por st.altair_chart(on_select)."""
+    try:
+        seldict = evento.get("selection", {}) if hasattr(evento, "get") \
+            else getattr(evento, "selection", {}) or {}
+    except Exception:
+        return None
+    if not isinstance(seldict, dict):
+        return None
+
+    def _par_a_rango(par):
+        try:
+            a, b = par
+        except Exception:
+            return None
+        ta = pd.to_datetime(a, unit="ms") if isinstance(a, (int, float)) else pd.to_datetime(a)
+        tb = pd.to_datetime(b, unit="ms") if isinstance(b, (int, float)) else pd.to_datetime(b)
+        if pd.isna(ta) or pd.isna(tb):
+            return None
+        lo, hi = sorted([ta, tb])
+        # Ajustar a meses completos (la brocha cae en límites de barra)
+        lo = lo.to_period("M").to_timestamp()
+        hi = (hi.to_period("M") + 1).to_timestamp() - pd.Timedelta(seconds=1)
+        return lo, hi
+
+    for v in seldict.values():
+        if isinstance(v, dict):
+            if campo in v and isinstance(v[campo], (list, tuple)) and len(v[campo]) == 2:
+                r = _par_a_rango(v[campo])
+                if r:
+                    return r
+            for vv in v.values():
+                if isinstance(vv, (list, tuple)) and len(vv) == 2 \
+                        and all(isinstance(x, (int, float)) for x in vv):
+                    r = _par_a_rango(vv)
+                    if r:
+                        return r
+    return None
 
 
 # ── COMPRAS: st.data_editor ──────────────────────────────────────────────────
@@ -542,6 +583,52 @@ elif reporte == "Requerimientos":
     # las columnas quedan legibles: "2023-01" (Mes) o "2023" (Año).
     df_piv = df_f.copy()
     _col_freg = buscar_columna(df_piv, "Fecha Registro", "fecha registro") or col_fecha
+
+    # ── Filtro de rango por arrastre (brocha sobre línea de tiempo) ──────────
+    if _col_freg and _col_freg in df_piv.columns:
+        df_piv[_col_freg] = pd.to_datetime(df_piv[_col_freg], errors="coerce")
+        serie = df_piv.dropna(subset=[_col_freg])
+        if not serie.empty:
+            import altair as alt
+            base = serie.assign(
+                _periodo=serie[_col_freg].dt.to_period("M").dt.to_timestamp()
+            )
+            conteo = base.groupby("_periodo").size().reset_index(name="registros")
+
+            st.caption(
+                "🖱️ Arrastra sobre las barras para fijar el rango de fechas "
+                "(doble clic para limpiar y ver todo)."
+            )
+            brush = alt.selection_interval(encodings=["x"], name="rango")
+            chart = (
+                alt.Chart(conteo)
+                .mark_bar(color="#475569", cornerRadiusTopLeft=2, cornerRadiusTopRight=2)
+                .encode(
+                    x=alt.X("_periodo:T", title=None, axis=alt.Axis(format="%b %Y")),
+                    y=alt.Y("registros:Q", title=None, axis=None),
+                    opacity=alt.condition(brush, alt.value(1.0), alt.value(0.32)),
+                    tooltip=[
+                        alt.Tooltip("_periodo:T", title="Mes", format="%b %Y"),
+                        alt.Tooltip("registros:Q", title="Registros"),
+                    ],
+                )
+                .add_params(brush)
+                .properties(height=90)
+            )
+            evento = st.altair_chart(
+                chart, use_container_width=True, on_select="rerun", key="brush_req",
+            )
+            rango = _leer_rango_brush(evento)
+            if rango:
+                ini, fin = rango
+                df_piv = df_piv[
+                    (df_piv[_col_freg] >= ini) & (df_piv[_col_freg] <= fin)
+                ]
+                st.caption(
+                    f"📅 Rango: {ini:%d/%m/%Y} — {fin:%d/%m/%Y} · "
+                    f"{len(df_piv):,} filas"
+                )
+
     if _col_freg and _col_freg in df_piv.columns:
         _fechas = pd.to_datetime(df_piv[_col_freg], errors="coerce")
         df_piv["Mes"] = _fechas.dt.to_period("M").astype(str).replace("NaT", "")
