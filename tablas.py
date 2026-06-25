@@ -30,9 +30,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     es_salidas = (reporte == "Salidas")
     es_requerimientos = (reporte == "Requerimientos")
 
-    # ─────────────────────────────────────────────────────────────────
+    # ───────────────────────────────────────────────────────────────────
     # REORDENAR COLUMNAS (Producto, Stock, Precio, Valorizado)
-    # ─────────────────────────────────────────────────────────────────
+    # ───────────────────────────────────────────────────────────────────
     col_producto   = buscar_columna(df_grid, "Nombre Producto", "producto", "descripcion")
     col_stock      = buscar_columna(df_grid, "Stock al dia", "Stock al Dia", "stock")
     col_precio_ord = buscar_columna(df_grid, "Precio Promedio", "precio promedio", "precio")
@@ -441,9 +441,27 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                                     minimumFractionDigits: 2, maximumFractionDigits: 2 }});
                             }}
                         }}
-                        return '<span style="font-weight:600;color:#1e293b">' + nombre +
-                               '</span> <span style="color:#64748b;font-weight:400">(' +
-                               n + ')' + extra + '</span>';
+                        
+                        // ✅ CREAR ELEMENTOS DOM EN LUGAR DE RETORNAR HTML STRING
+                        var container = document.createElement('div');
+                        container.style.display = 'flex';
+                        container.style.alignItems = 'center';
+                        container.style.gap = '4px';
+                        
+                        var spanNombre = document.createElement('span');
+                        spanNombre.textContent = nombre;
+                        spanNombre.style.fontWeight = '600';
+                        spanNombre.style.color = '#1e293b';
+                        
+                        var spanExtra = document.createElement('span');
+                        spanExtra.textContent = '(' + n + ')' + extra;
+                        spanExtra.style.color = '#64748b';
+                        spanExtra.style.fontWeight = '400';
+                        
+                        container.appendChild(spanNombre);
+                        container.appendChild(spanExtra);
+                        
+                        return container;
                     }}
                 """)
             }
