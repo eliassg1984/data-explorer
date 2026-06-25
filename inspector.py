@@ -6,6 +6,7 @@ Funciones para el usuario:
 - Elegir cualquier archivo de datos y ver sus filas tal como vienen del parquet.
 - Conteo de control: cuántas filas tiene en total y cuántas coinciden.
 - Radiografía de columnas: tipo, nulos y rango de fechas.
+- Aviso de posibles problemas para la tabla (AgGrid): columnas repetidas, de fecha, etc.
 - Búsqueda por columna (exacta o contiene, ignorando mayúsculas y espacios).
 - Filtro por fecha (rango desde / hasta) sobre una columna de fecha.
 - Descargar las coincidencias a CSV.
@@ -15,6 +16,7 @@ import pandas as pd
 import streamlit as st
 
 from data import REPORTES, cargar
+import diagnostico
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +95,20 @@ def render_inspector():
             serie = pd.to_datetime(df[c], errors="coerce").dropna()
             if not serie.empty:
                 st.caption(f"📅 {c}: {serie.min():%d/%m/%Y} → {serie.max():%d/%m/%Y}")
+
+    # ── ¿Esto puede romper la tabla (AgGrid)? ───────────────────────────────
+    # Revisa el archivo y avisa de lo que típicamente deja la tabla en blanco
+    # (columnas repetidas, de fecha, 100% vacías, o texto que parece número).
+    hallazgos = diagnostico.revisar_datos(df)
+    with st.expander("🚦 ¿Esto puede romper la tabla?", expanded=bool(hallazgos)):
+        if not hallazgos:
+            st.success("No se detectaron problemas para AgGrid. ✅")
+        else:
+            for h in hallazgos:
+                if h["nivel"] == "alerta":
+                    st.warning(h["mensaje"])
+                else:
+                    st.info(h["mensaje"])
 
     st.divider()
 
