@@ -2055,7 +2055,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         }
 
     AgGrid(
-        df_grid.head(5000), gridOptions=grid_options, height=600,
+        df_grid, gridOptions=grid_options, height=600,
         theme=tema_grid, custom_css=custom_css,
         fit_columns_on_grid_load=False, allow_unsafe_jscode=True,
         enable_enterprise_modules=True, key=f"grid_{reporte}",
