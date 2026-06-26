@@ -883,9 +883,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     # ── Post-render: inyecciones específicas por reporte ──────────────────
     inject_pagination_v2()
-
-    if es_requerimientos:
-        inject_maximize_aggrid()
+    inject_maximize_aggrid()
 
 
 # ===========================================================================
