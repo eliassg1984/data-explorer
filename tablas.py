@@ -254,7 +254,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     # ── Requerimientos: configuración especial de columnas de fecha y periodo ──
     if es_requerimientos:
-        # Desactivar filtro en columnas de fecha crudas (datetime)
         for c in df_grid.columns:
             _n = _norm(c)
             es_fecha = (pd.api.types.is_datetime64_any_dtype(df_grid[c])
@@ -262,11 +261,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             if es_fecha and _n not in ("mes", "ano", "anio"):
                 gb.configure_column(c, filter=False, suppressFiltersToolPanel=True)
 
-        # ── FIX: forzar lista completa de valores en Mes y Año ──────────────
-        # AgGrid por defecto infiere los valores del set filter leyendo las filas
-        # ya renderizadas. Si el grid virtualiza o pagina, solo ve las primeras
-        # y corta la lista. Pasarle los valores explícitamente desde Python
-        # garantiza que el panel de filtros muestre TODOS los periodos.
         col_mes = buscar_columna(df_grid, "Mes")
         col_ano = buscar_columna(df_grid, "Año", "Ano", "Anio")
 
@@ -441,26 +435,25 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                                     minimumFractionDigits: 2, maximumFractionDigits: 2 }});
                             }}
                         }}
-                        
-                        // ✅ CREAR ELEMENTOS DOM EN LUGAR DE RETORNAR HTML STRING
+
                         var container = document.createElement('div');
                         container.style.display = 'flex';
                         container.style.alignItems = 'center';
                         container.style.gap = '4px';
-                        
+
                         var spanNombre = document.createElement('span');
                         spanNombre.textContent = nombre;
                         spanNombre.style.fontWeight = '600';
                         spanNombre.style.color = '#1e293b';
-                        
+
                         var spanExtra = document.createElement('span');
                         spanExtra.textContent = '(' + n + ')' + extra;
                         spanExtra.style.color = '#64748b';
                         spanExtra.style.fontWeight = '400';
-                        
+
                         container.appendChild(spanNombre);
                         container.appendChild(spanExtra);
-                        
+
                         return container;
                     }}
                 """)
@@ -869,6 +862,15 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "padding-bottom": "4px !important",
         }
 
+    # ── Límite de filas con aviso al usuario ──────────────────────────────
+    LIMITE_FILAS = 50_000
+    if len(df_grid) > LIMITE_FILAS:
+        st.warning(
+            f"⚠️ Mostrando {LIMITE_FILAS:,} de {len(df_grid):,} filas. "
+            "Usa los filtros para acotar los resultados y ver todos los datos."
+        )
+        df_grid = df_grid.head(LIMITE_FILAS)
+
     AgGrid(
         df_grid, gridOptions=grid_options,
         height=(850 if es_requerimientos else 600),
@@ -880,7 +882,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     inject_grid_health_check()
 
     # ── Post-render: inyecciones específicas por reporte ──────────────────
-        inject_pagination_v2()
+    inject_pagination_v2()
 
     if es_requerimientos:
         inject_maximize_aggrid()
@@ -963,6 +965,15 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
             "overflow": "visible !important",
             "align-items": "center",
         }
+
+    # ── Límite de filas con aviso al usuario (móvil) ──────────────────────
+    LIMITE_FILAS = 20_000
+    if len(df_grid) > LIMITE_FILAS:
+        st.warning(
+            f"⚠️ Mostrando {LIMITE_FILAS:,} de {len(df_grid):,} filas. "
+            "Usa los filtros para ver todos los datos."
+        )
+        df_grid = df_grid.head(LIMITE_FILAS)
 
     AgGrid(
         df_grid, gridOptions=grid_options, height=380,
