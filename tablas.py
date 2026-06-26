@@ -870,7 +870,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         }
 
     AgGrid(
-        (df_grid if es_salidas else df_grid.head(20000)), gridOptions=grid_options,
+        df_grid, gridOptions=grid_options,
         height=(850 if es_requerimientos else 600),
         theme=tema_grid, custom_css=custom_css,
         fit_columns_on_grid_load=False, allow_unsafe_jscode=True,
@@ -880,7 +880,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     inject_grid_health_check()
 
     # ── Post-render: inyecciones específicas por reporte ──────────────────
-    if reporte == "Inventario Valorizado":
         inject_pagination_v2()
 
     if es_requerimientos:
@@ -966,7 +965,7 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
         }
 
     AgGrid(
-        df_grid.head(3000), gridOptions=grid_options, height=380,
+        df_grid, gridOptions=grid_options, height=380,
         theme="balham", custom_css=custom_css,
         fit_columns_on_grid_load=False, allow_unsafe_jscode=True,
         enable_enterprise_modules=True, key=f"grid_movil_{reporte}",
