@@ -870,7 +870,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         }
 
     AgGrid(
-        (df_grid if es_salidas else df_grid.head(5000)), gridOptions=grid_options,
+        (df_grid if es_salidas else df_grid.head(20000)), gridOptions=grid_options,
         height=(850 if es_requerimientos else 600),
         theme=tema_grid, custom_css=custom_css,
         fit_columns_on_grid_load=False, allow_unsafe_jscode=True,
