@@ -363,7 +363,10 @@ def inject_sidebar_toggle():
 def inject_element_inspector():
     """
     Inspector de elementos v2 — tooltip enriquecido al pasar el cursor.
-    Activación : ?inspector=1 en la URL  o  Alt+I
+    Activación : ?debug=1 en la URL  o  Alt+I
+
+    Unificado con el resto de herramientas de desarrollo: el mismo ?debug=1
+    que muestra el panel de diagnóstico activa también este inspector.
     """
     components.html("""
     <script>
@@ -371,45 +374,56 @@ def inject_element_inspector():
         var win = window.parent;
         var doc = win.document;
 
-        if (win.__inspectorInit) return;
-        win.__inspectorInit = true;
+        // NOTA: NO salimos temprano con un guard global. Si lo hiciéramos, en
+        // un rerender de Streamlit (que recrea el body) el tooltip se perdería
+        // y no se volvería a crear → el inspector "dejaba de funcionar". En su
+        // lugar: el tip/badge se recrean si faltan (abajo), y los listeners se
+        // registran una sola vez con su propia bandera (__inspectorListeners).
 
         function inspectorActivo() {
-            return new URL(win.location.href).searchParams.get('inspector') === '1';
+            return new URL(win.location.href).searchParams.get('debug') === '1';
         }
 
-        var tip = doc.createElement('div');
-        tip.id = 'el-inspector-tip';
-        tip.style.cssText = [
-            'position:fixed',
-            'pointer-events:none',
-            'z-index:2147483647',
-            'background:#0f172a',
-            'color:#e2e8f0',
-            'font:12px/1.55 "Courier New",monospace',
-            'padding:7px 11px',
-            'border-radius:6px',
-            'border:1px solid #3b82f6',
-            'white-space:pre',
-            'opacity:0',
-            'transition:opacity 0.1s',
-            'max-width:420px',
-            'overflow:hidden',
-            'box-shadow:0 3px 12px rgba(0,0,0,0.5)'
-        ].join(';');
-        doc.body.appendChild(tip);
+        // Reutiliza el tooltip si ya existe (un rerender de Streamlit puede
+        // recrear el body); si no, lo crea. Así nunca se pierde.
+        var tip = doc.getElementById('el-inspector-tip');
+        if (!tip) {
+            tip = doc.createElement('div');
+            tip.id = 'el-inspector-tip';
+            tip.style.cssText = [
+                'position:fixed',
+                'pointer-events:none',
+                'z-index:2147483647',
+                'background:#0f172a',
+                'color:#e2e8f0',
+                'font:12px/1.55 "Courier New",monospace',
+                'padding:7px 11px',
+                'border-radius:6px',
+                'border:1px solid #3b82f6',
+                'white-space:pre',
+                'opacity:0',
+                'transition:opacity 0.1s',
+                'max-width:420px',
+                'overflow:hidden',
+                'box-shadow:0 3px 12px rgba(0,0,0,0.5)'
+            ].join(';');
+            doc.body.appendChild(tip);
+        }
 
-        var badge = doc.createElement('div');
-        badge.id = 'el-inspector-badge';
-        badge.style.cssText = [
-            'position:fixed','bottom:10px','left:72px','z-index:2147483646',
-            'background:#1e40af','color:#fff',
-            'font:600 11px/1 -apple-system,sans-serif',
-            'padding:5px 10px','border-radius:20px','display:none',
-            'align-items:center','gap:6px','box-shadow:0 2px 8px rgba(0,0,0,0.3)'
-        ].join(';');
-        badge.innerHTML = '🔍 Inspector ON &nbsp;<span style="opacity:.6;font-weight:400">Alt+I para desactivar</span>';
-        doc.body.appendChild(badge);
+        var badge = doc.getElementById('el-inspector-badge');
+        if (!badge) {
+            badge = doc.createElement('div');
+            badge.id = 'el-inspector-badge';
+            badge.style.cssText = [
+                'position:fixed','bottom:10px','left:72px','z-index:2147483646',
+                'background:#1e40af','color:#fff',
+                'font:600 11px/1 -apple-system,sans-serif',
+                'padding:5px 10px','border-radius:20px','display:none',
+                'align-items:center','gap:6px','box-shadow:0 2px 8px rgba(0,0,0,0.3)'
+            ].join(';');
+            badge.innerHTML = '🔍 Inspector ON &nbsp;<span style="opacity:.6;font-weight:400">Alt+I para desactivar</span>';
+            doc.body.appendChild(badge);
+        }
 
         function actualizarBadge() {
             badge.style.display = inspectorActivo() ? 'flex' : 'none';
@@ -663,7 +677,16 @@ def inject_element_inspector():
             } else { elActual = null; }
         }
 
+        // ── Registrar los listeners UNA SOLA VEZ ──────────────────────────
+        // Persisten en `doc`/`win` entre rerenders, así que con la bandera
+        // basta. (El tip/badge sí se recrean arriba en cada ejecución.)
+        if (!win.__inspectorListeners) {
+            win.__inspectorListeners = true;
+
         doc.addEventListener('mousemove', function(e) {
+            // Buscar el tooltip fresco (un rerender pudo recrearlo).
+            var tip = doc.getElementById('el-inspector-tip');
+            if (!tip) return;
             if (!inspectorActivo()) {
                 tip.style.opacity = '0';
                 resaltarEl(null, null);
@@ -717,22 +740,25 @@ def inject_element_inspector():
         }, true);
 
         doc.addEventListener('mouseleave', function() {
-            tip.style.opacity = '0';
+            var tip = doc.getElementById('el-inspector-tip');
+            if (tip) tip.style.opacity = '0';
             resaltarEl(null, null);
         });
 
         doc.addEventListener('keydown', function(e) {
             if (e.altKey && (e.key === 'i' || e.key === 'I')) {
                 var url = new URL(win.location.href);
-                if (url.searchParams.get('inspector') === '1') {
-                    url.searchParams.delete('inspector');
+                if (url.searchParams.get('debug') === '1') {
+                    url.searchParams.delete('debug');
                 } else {
-                    url.searchParams.set('inspector', '1');
+                    url.searchParams.set('debug', '1');
                 }
                 win.history.replaceState({}, '', url.toString());
-                actualizarBadge();
+                var badge = doc.getElementById('el-inspector-badge');
+                if (badge) badge.style.display = inspectorActivo() ? 'flex' : 'none';
                 if (!inspectorActivo()) {
-                    tip.style.opacity = '0';
+                    var tip = doc.getElementById('el-inspector-tip');
+                    if (tip) tip.style.opacity = '0';
                     resaltarEl(null, null);
                 }
             }
@@ -741,6 +767,8 @@ def inject_element_inspector():
         var _push = win.history.pushState.bind(win.history);
         win.history.pushState = function() { _push.apply(win.history, arguments); actualizarBadge(); };
         win.addEventListener('popstate', actualizarBadge);
+
+        }  // fin del guard __inspectorListeners
 
     })();
     </script>
