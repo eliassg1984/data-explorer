@@ -13,8 +13,14 @@ import streamlit.components.v1 as components
 
 def inject_error_overlay():
     """Captura los errores de JavaScript de la ventana principal y los muestra
-    en un panel rojo fijo en pantalla. Así los errores quedan VISIBLES (también
+    en un panel rojo fijo en pantalla. Asi los errores quedan VISIBLES (tambien
     en capturas de pantalla), sin necesidad de abrir la consola del navegador.
+
+    Mejoras:
+    - Filtra el ruido de las EXTENSIONES del navegador (content.js,
+      chrome-extension, giveFreely, etc.) para que solo veas errores de TU app.
+    - Solo texto ASCII (sin emojis) para no romper el propio script.
+    - Cada error muestra de donde viene, para ubicarlo mas facil.
 
     Otros scripts inyectados pueden reportar manualmente con:
         window.__logErr('mi mensaje')
@@ -26,6 +32,18 @@ def inject_error_overlay():
       if (win.__errOverlayInit) return;
       win.__errOverlayInit = true;
       win.__errLog = [];
+
+      // Origenes que NO son de tu app (extensiones del navegador). Sus errores
+      // se ignoran para que el panel quede limpio.
+      function esRuidoExterno(texto){
+        var t = String(texto || '').toLowerCase();
+        return (t.indexOf('content.js') !== -1
+             || t.indexOf('chrome-extension') !== -1
+             || t.indexOf('givefreely') !== -1
+             || t.indexOf('receiving end does not exist') !== -1
+             || t.indexOf('extension context') !== -1);
+      }
+
       function render(){
         var box = doc.getElementById('err-overlay');
         if (!win.__errLog.length){ if (box) box.remove(); return; }
@@ -40,17 +58,26 @@ def inject_error_overlay():
         }
         var items = win.__errLog.slice(-12).map(function(e){
           return String(e).replace(/&/g,'&amp;').replace(/</g,'&lt;');
-        }).join('<br>──<br>');
-        box.innerHTML = '<b>⚠️ Errores JS (' + win.__errLog.length + ')</b>'
+        }).join('<br>--<br>');
+        box.innerHTML = '<b>Errores JS de tu app (' + win.__errLog.length + ')</b>'
           + '<span style="float:right;cursor:pointer;opacity:.7" '
-          + 'onclick="this.parentNode.remove()">✕</span><br>' + items;
+          + 'onclick="this.parentNode.remove()">[x]</span><br>' + items;
       }
-      function log(m){ win.__errLog.push(String(m).slice(0,400)); render(); }
+
+      function log(m){
+        if (esRuidoExterno(m)) return;   // ignorar ruido de extensiones
+        win.__errLog.push(String(m).slice(0,400));
+        render();
+      }
+
       win.addEventListener('error', function(ev){
-        log('[error] ' + (ev.message || ev.error) + (ev.filename ? ' @ ' + ev.filename : ''));
+        var origen = ev.filename || '';
+        if (esRuidoExterno(origen)) return;
+        log('[error] ' + (ev.message || ev.error) + (origen ? ' @ ' + origen : ''));
       });
       win.addEventListener('unhandledrejection', function(ev){
-        log('[promise] ' + ((ev.reason && ev.reason.message) || ev.reason));
+        var msg = (ev.reason && ev.reason.message) || ev.reason;
+        log('[promise] ' + msg);
       });
       win.__logErr = log;
     })();
