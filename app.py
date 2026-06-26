@@ -57,7 +57,7 @@ if params.get("refresh"):
         del st.query_params["refresh"]
     st.rerun()
 
-inject_icon_rail(REPORTES, reporte)
+inject_icon_rail(REPORTES, reporte, mostrar_inspector=bool(st.query_params.get("debug")))
 inject_top_bar(reporte)
 
 cfg = REPORTES[reporte]
