@@ -27,13 +27,20 @@ ICONO_A_EMOJI = {
 # BARRA LATERAL DE ICONOS (RAIL) – INYECTADA DIRECTAMENTE EN LA PÁGINA
 # ===========================================================================
 
-def inject_icon_rail(reportes, reporte_activo):
+def inject_icon_rail(reportes, reporte_activo, mostrar_inspector=False):
     """
     Inyecta una barra lateral fija con emojis como iconos.
     Oculta el sidebar nativo y ajusta el margen del contenido.
+
+    mostrar_inspector: si es False (por defecto), el ícono del Inspector
+    se oculta para usuarios normales. Solo se muestra cuando se pasa
+    mostrar_inspector=True (por ejemplo cuando ?debug=1 está en la URL).
     """
     reportes_emoji = {}
     for nombre, info in reportes.items():
+        # Ocultar Inspector a usuarios normales
+        if nombre == "Inspector" and not mostrar_inspector:
+            continue
         icono_txt = info.get("icono", "❓")
         reportes_emoji[nombre] = ICONO_A_EMOJI.get(icono_txt, "❓")
 
@@ -47,12 +54,6 @@ def inject_icon_rail(reportes, reporte_activo):
         var win = window.parent;
 
         // ── Navegación a prueba de sandbox ──────────────────────────────
-        // El iframe de components.html está en un sandbox SIN
-        // 'allow-top-navigation', así que llamar win.location.assign() desde
-        // aquí lo BLOQUEA el navegador (ese era el motivo real de que los
-        // iconos no cambiaran de reporte). Solución: inyectar un <script> en
-        // el documento padre para definir las funciones de navegación EN SU
-        // PROPIO realm (no sandboxed); desde los handlers solo las llamamos.
         if (!doc.getElementById('rail-nav-fns')) {{
             var navScript = doc.createElement('script');
             navScript.id = 'rail-nav-fns';
@@ -197,10 +198,6 @@ def inject_icon_rail(reportes, reporte_activo):
                 div.onclick = (function(n) {{
                     return function(e) {{
                         e.stopPropagation();
-                        // Navega vía la función del realm padre (esquiva el
-                        // sandbox). El nombre del reporte se pasa tal cual:
-                        // URLSearchParams ya lo codifica una vez (sin esto, el
-                        // doble-encode rompía los nombres con espacios).
                         win.__navReporte(n);
                     }};
                 }})(nombre);
@@ -215,7 +212,7 @@ def inject_icon_rail(reportes, reporte_activo):
         function anclarRail() {{
             var existente = doc.getElementById('icon-rail');
             if (existente && existente.parentNode === doc.body) {{
-                return; // ya está bien anclado
+                return;
             }}
             if (existente) {{
                 existente.parentNode.removeChild(existente);
@@ -226,7 +223,6 @@ def inject_icon_rail(reportes, reporte_activo):
 
         anclarRail();
 
-        // Intervalo corto (500 ms) para sobrevivir rerenders de Streamlit
         if (!win.__iconRailInterval) {{
             win.__iconRailInterval = setInterval(anclarRail, 500);
         }}
@@ -237,7 +233,7 @@ def inject_icon_rail(reportes, reporte_activo):
 
 
 # ===========================================================================
-# FRANJA SUPERIOR DELGADA — se inyecta JUNTO al rail de iconos, no lo reemplaza
+# FRANJA SUPERIOR DELGADA
 # ===========================================================================
 
 def inject_top_bar(reporte_activo):
@@ -254,7 +250,6 @@ def inject_top_bar(reporte_activo):
         var doc = window.parent.document;
         var win = window.parent;
 
-        // ── Navegación a prueba de sandbox (mismo motivo que en el rail) ──
         if (!doc.getElementById('rail-nav-fns')) {{
             var navScript = doc.createElement('script');
             navScript.id = 'rail-nav-fns';
@@ -266,7 +261,6 @@ def inject_top_bar(reporte_activo):
 
         var estilos = doc.createElement('style');
         estilos.textContent = `
-            /* Deja espacio para la franja superior (además del rail) */
             .stApp {{
                 padding-top: 48px !important;
             }}
@@ -276,24 +270,23 @@ def inject_top_bar(reporte_activo):
                 left: 64px;
                 right: 0;
                 height: 48px;
-                background: transparent;       /* franja invisible: sin fondo */
-                border-bottom: none;           /* y sin borde inferior */
+                background: transparent;
+                border-bottom: none;
                 display: flex;
                 align-items: center;
                 gap: 14px;
                 padding: 0 18px;
                 z-index: 999998;
                 font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-                pointer-events: none;          /* deja pasar el clic al contenido */
+                pointer-events: none;
             }}
             #top-bar .tb-titulo {{
                 font-weight: 600;
                 font-size: 14px;
                 color: #1e3a5f;
                 white-space: nowrap;
-                transform: translateY(8px);    /* el título, un poco más abajo */
+                transform: translateY(8px);
             }}
-            /* Separador oculto: sin la franja no tiene sentido que flote */
             #top-bar .tb-sep {{
                 display: none;
             }}
@@ -313,7 +306,7 @@ def inject_top_bar(reporte_activo):
                 align-items: center;
                 justify-content: center;
                 transition: background 0.15s;
-                pointer-events: auto;   /* el botón sí recibe clics */
+                pointer-events: auto;
             }}
             #top-bar .tb-btn:hover {{
                 background: #dbeafe;
@@ -333,9 +326,6 @@ def inject_top_bar(reporte_activo):
             var bar = doc.createElement('div');
             bar.id = 'top-bar';
 
-            // El título superior se eliminó a pedido. La franja se conserva
-            // únicamente para alojar el botón de actualizar (importante en
-            // móvil, donde el rail de iconos está oculto).
             var sep = doc.createElement('div');
             sep.className = 'tb-sep';
             bar.appendChild(sep);
