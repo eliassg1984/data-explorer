@@ -371,10 +371,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                     "iconKey": "columns",
                     "toolPanel": "agColumnsToolPanel",
                     "toolPanelParams": {
-                        "suppressRowGroups": False,
-                        "suppressValues": False,
-                        "suppressPivots": False,
-                        "suppressPivotMode": False,
+                        "suppressRowGroups": not es_requerimientos,
+                        "suppressValues": not es_requerimientos,
+                        "suppressPivots": not es_requerimientos,
+                        "suppressPivotMode": not es_requerimientos,
                         "suppressColumnFilter": False,
                         "suppressColumnSelectAll": False,
                         "suppressColumnExpandAll": True,
@@ -873,7 +873,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     AgGrid(
         df_grid, gridOptions=grid_options,
-        height=(850 if es_requerimientos else 600),
+        height=900,
         theme=tema_grid, custom_css=custom_css,
         fit_columns_on_grid_load=False, allow_unsafe_jscode=True,
         enable_enterprise_modules=True, key=f"grid_{reporte}",
@@ -883,7 +883,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     # ── Post-render: inyecciones específicas por reporte ──────────────────
     inject_pagination_v2()
-    inject_maximize_aggrid()
+
+    if es_requerimientos:
+        inject_maximize_aggrid()
 
 
 # ===========================================================================
