@@ -362,11 +362,11 @@ def inject_sidebar_toggle():
 
 def inject_element_inspector():
     """
-    Inspector de elementos v2 — tooltip enriquecido al pasar el cursor.
-    Activación : ?debug=1 en la URL  o  Alt+I
+    Inspector de elementos v2 - tooltip enriquecido al pasar el cursor.
+    Activacion : ?debug=1 en la URL  o  Alt+I
 
     Unificado con el resto de herramientas de desarrollo: el mismo ?debug=1
-    que muestra el panel de diagnóstico activa también este inspector.
+    que muestra el panel de diagnostico activa tambien este inspector.
     """
     components.html("""
     <script>
@@ -374,9 +374,9 @@ def inject_element_inspector():
         var win = window.parent;
         var doc = win.document;
 
-        // NOTA: NO salimos temprano con un guard global. Si lo hiciéramos, en
-        // un rerender de Streamlit (que recrea el body) el tooltip se perdería
-        // y no se volvería a crear → el inspector "dejaba de funcionar". En su
+        // NOTA: NO salimos temprano con un guard global. Si lo hicieramos, en
+        // un rerender de Streamlit (que recrea el body) el tooltip se perderia
+        // y no se volveria a crear -> el inspector "dejaba de funcionar". En su
         // lugar: el tip/badge se recrean si faltan (abajo), y los listeners se
         // registran una sola vez con su propia bandera (__inspectorListeners).
 
@@ -385,7 +385,7 @@ def inject_element_inspector():
         }
 
         // Reutiliza el tooltip si ya existe (un rerender de Streamlit puede
-        // recrear el body); si no, lo crea. Así nunca se pierde.
+        // recrear el body); si no, lo crea. Asi nunca se pierde.
         var tip = doc.getElementById('el-inspector-tip');
         if (!tip) {
             tip = doc.createElement('div');
@@ -421,7 +421,7 @@ def inject_element_inspector():
                 'padding:5px 10px','border-radius:20px','display:none',
                 'align-items:center','gap:6px','box-shadow:0 2px 8px rgba(0,0,0,0.3)'
             ].join(';');
-            badge.innerHTML = '🔍 Inspector ON &nbsp;<span style="opacity:.6;font-weight:400">Alt+I para desactivar</span>';
+            badge.innerHTML = 'Inspector ON &nbsp;<span style="opacity:.6;font-weight:400">Alt+I para desactivar</span>';
             doc.body.appendChild(badge);
         }
 
@@ -464,7 +464,7 @@ def inject_element_inspector():
             }
             if (tipo === 'stCheckbox') {
                 var cb = container.querySelector('input[type="checkbox"]');
-                return cb ? (cb.checked ? 'marcado ✓' : 'desmarcado') : '';
+                return cb ? (cb.checked ? 'marcado OK' : 'desmarcado') : '';
             }
             return '';
         }
@@ -496,10 +496,10 @@ def inject_element_inspector():
                         if (row.classList.contains('ag-row-pinned')) rowTipo = ' [TOTAL]';
                         else if (row.classList.contains('ag-row-group')) rowTipo = ' [grupo]';
                     }
-                    return ['📋 AgGrid › celda',
+                    return ['[tabla] AgGrid > celda',
                         '  columna : ' + colId,
-                        '  valor   : ' + (cellVal.length > 60 ? cellVal.slice(0,57)+'…' : cellVal),
-                        '  fila nº : ' + rowIdx + rowTipo].join('\n');
+                        '  valor   : ' + (cellVal.length > 60 ? cellVal.slice(0,57)+'...' : cellVal),
+                        '  fila no : ' + rowIdx + rowTipo].join('\n');
                 }
 
                 var hcell = inner.closest('.ag-header-cell');
@@ -508,9 +508,9 @@ def inject_element_inspector():
                     var hLabel = txt(hcell.querySelector('.ag-header-cell-text')) || hColId;
                     var sortIcon = hcell.querySelector('.ag-sort-ascending-icon:not(.ag-hidden)');
                     var sortDesc = hcell.querySelector('.ag-sort-descending-icon:not(.ag-hidden)');
-                    var sortInfo = sortIcon ? ' ↑ ascendente' : sortDesc ? ' ↓ descendente' : ' sin orden';
-                    var filtroActivo = hcell.querySelector('.ag-filter-active') ? ' 🔎 filtro activo' : '';
-                    return ['📋 AgGrid › encabezado',
+                    var sortInfo = sortIcon ? ' ^ ascendente' : sortDesc ? ' v descendente' : ' sin orden';
+                    var filtroActivo = hcell.querySelector('.ag-filter-active') ? ' [filtro] filtro activo' : '';
+                    return ['[tabla] AgGrid > encabezado',
                         '  col-id  : ' + hColId,
                         '  nombre  : ' + hLabel,
                         '  orden   :' + sortInfo + filtroActivo].join('\n');
@@ -520,8 +520,8 @@ def inject_element_inspector():
                 if (colItem) {
                     var colName = txt(colItem.querySelector('.ag-column-select-column-label')) || '?';
                     var visible = colItem.querySelector('input[type="checkbox"]');
-                    var visStr  = visible ? (visible.checked ? 'visible ✓' : 'oculta') : '?';
-                    return ['📋 AgGrid › panel columnas',
+                    var visStr  = visible ? (visible.checked ? 'visible OK' : 'oculta') : '?';
+                    return ['[tabla] AgGrid > panel columnas',
                         '  columna : ' + colName,
                         '  estado  : ' + visStr].join('\n');
                 }
@@ -529,44 +529,44 @@ def inject_element_inspector():
                 var filtItem = inner.closest('.ag-filter-toolpanel-instance');
                 if (filtItem) {
                     var filtName = txt(filtItem.querySelector('.ag-filter-toolpanel-instance-header-text')) || '?';
-                    return ['📋 AgGrid › panel filtros', '  filtro  : ' + filtName].join('\n');
+                    return ['[tabla] AgGrid > panel filtros', '  filtro  : ' + filtName].join('\n');
                 }
 
                 var pag = inner.closest('.ag-paging-panel');
                 if (pag) {
                     var pagTxt = pag.textContent.replace(/\s+/g, ' ').trim();
-                    return ['📋 AgGrid › paginación', '  ' + pagTxt.slice(0, 80)].join('\n');
+                    return ['[tabla] AgGrid > paginacion', '  ' + pagTxt.slice(0, 80)].join('\n');
                 }
 
                 var status = inner.closest('.ag-status-bar');
                 if (status) {
-                    return ['📋 AgGrid › barra de estado',
+                    return ['[tabla] AgGrid > barra de estado',
                         '  ' + status.textContent.replace(/\s+/g, ' ').trim().slice(0, 80)].join('\n');
                 }
 
                 var menuItem = inner.closest('.ag-menu-option');
                 if (menuItem) {
-                    return '📋 AgGrid › menú: ' + txt(menuItem.querySelector('.ag-menu-option-text'));
+                    return '[tabla] AgGrid > menu: ' + txt(menuItem.querySelector('.ag-menu-option-text'));
                 }
 
                 if (fdoc.querySelector('.ag-root-wrapper')) {
-                    return '📋 AgGrid › zona: ' + (inner.className || inner.tagName).toString().slice(0, 60);
+                    return '[tabla] AgGrid > zona: ' + (inner.className || inner.tagName).toString().slice(0, 60);
                 }
             }
             return null;
         }
 
         var WIDGET_MAP = {
-            'stTextInput':    { ico: '✏️',  tipo: 'text_input'    },
-            'stNumberInput':  { ico: '🔢',  tipo: 'number_input'  },
-            'stTextArea':     { ico: '📝',  tipo: 'text_area'     },
-            'stSelectbox':    { ico: '📌',  tipo: 'selectbox'     },
-            'stMultiSelect':  { ico: '☑️',  tipo: 'multiselect'   },
-            'stSlider':       { ico: '🎚️',  tipo: 'slider'        },
-            'stSelectSlider': { ico: '🎚️',  tipo: 'select_slider' },
-            'stDateInput':    { ico: '📅',  tipo: 'date_input'    },
-            'stTimeInput':    { ico: '🕐',  tipo: 'time_input'    },
-            'stCheckbox':     { ico: '✅',  tipo: 'checkbox'      },
+            'stTextInput':    { ico: '[input]',  tipo: 'text_input'    },
+            'stNumberInput':  { ico: '[num]',  tipo: 'number_input'  },
+            'stTextArea':     { ico: '[texto]',  tipo: 'text_area'     },
+            'stSelectbox':    { ico: '[select]',  tipo: 'selectbox'     },
+            'stMultiSelect':  { ico: '[multi]',  tipo: 'multiselect'   },
+            'stSlider':       { ico: '[slider]',  tipo: 'slider'        },
+            'stSelectSlider': { ico: '[slider]',  tipo: 'select_slider' },
+            'stDateInput':    { ico: '[fecha]',  tipo: 'date_input'    },
+            'stTimeInput':    { ico: '[hora]',  tipo: 'time_input'    },
+            'stCheckbox':     { ico: '[check]',  tipo: 'checkbox'      },
         };
 
         function labelDe(el, mouseX, mouseY) {
@@ -582,7 +582,7 @@ def inject_element_inspector():
                 var lines = [meta.ico + ' ' + meta.tipo];
                 if (lbl)   lines.push('  label : ' + lbl);
                 if (keyAt) lines.push('  key   : ' + keyAt);
-                if (val)   lines.push('  valor : ' + (val.length > 55 ? val.slice(0,52)+'…' : val));
+                if (val)   lines.push('  valor : ' + (val.length > 55 ? val.slice(0,52)+'...' : val));
                 return lines.join('\n');
             }
 
@@ -590,7 +590,7 @@ def inject_element_inspector():
             if (btn) {
                 var btxt = btn.innerText.trim().replace(/\n/g, ' ');
                 var bkey = btn.getAttribute('data-testid') || '';
-                var blines = ['🔘 button'];
+                var blines = ['[btn] button'];
                 if (btxt) blines.push('  texto : ' + btxt);
                 if (bkey && bkey !== 'baseButton-secondary' && bkey !== 'baseButton-primary')
                     blines.push('  testid: ' + bkey);
@@ -602,14 +602,14 @@ def inject_element_inspector():
                 var pbtn = popover.querySelector('button');
                 var ptxt = pbtn ? pbtn.innerText.trim() : '?';
                 var popen = popover.querySelector('[data-testid="stPopoverBody"]') ? ' (abierto)' : ' (cerrado)';
-                return '🔽 popover\n  texto : ' + ptxt + '\n  estado: ' + popen.trim();
+                return '[pop] popover\n  texto : ' + ptxt + '\n  estado: ' + popen.trim();
             }
 
             var tabBtn = el.closest('[data-baseweb="tab"]');
             if (tabBtn) {
                 var isActive = tabBtn.getAttribute('aria-selected') === 'true';
-                return '📑 tab\n  nombre: ' + tabBtn.innerText.trim() +
-                       '\n  estado: ' + (isActive ? 'activa ✓' : 'inactiva');
+                return '[tab] tab\n  nombre: ' + tabBtn.innerText.trim() +
+                       '\n  estado: ' + (isActive ? 'activa OK' : 'inactiva');
             }
 
             var expander = el.closest('[data-testid="stExpander"]');
@@ -617,7 +617,7 @@ def inject_element_inspector():
                 var etxt2 = expander.querySelector('summary p, summary span, .streamlit-expanderHeader p');
                 var eopen = expander.querySelector('[data-testid="stExpanderDetails"]');
                 var eIsOpen = eopen ? (eopen.style.display !== 'none' && eopen.style.visibility !== 'hidden') : false;
-                return '📂 expander\n  título: ' + (etxt2 ? etxt2.textContent.trim() : '?') +
+                return '[exp] expander\n  titulo: ' + (etxt2 ? etxt2.textContent.trim() : '?') +
                        '\n  estado: ' + (eIsOpen ? 'abierto' : 'cerrado');
             }
 
@@ -626,7 +626,7 @@ def inject_element_inspector():
                 var mlbl2  = metric.querySelector('[data-testid="stMetricLabel"] p, [data-testid="stMetricLabel"]');
                 var mval   = metric.querySelector('[data-testid="stMetricValue"]');
                 var mdelta = metric.querySelector('[data-testid="stMetricDelta"]');
-                var mlines = ['📊 metric'];
+                var mlines = ['[metric] metric'];
                 if (mlbl2)  mlines.push('  label : ' + mlbl2.textContent.trim());
                 if (mval)   mlines.push('  valor : ' + mval.textContent.trim());
                 if (mdelta) mlines.push('  delta : ' + mdelta.textContent.trim());
@@ -638,8 +638,8 @@ def inject_element_inspector():
                 var ptitle2 = plotly.querySelector('.gtitle, .g-gtitle');
                 var xTitle  = plotly.querySelector('.g-xtitle');
                 var yTitle  = plotly.querySelector('.g-ytitle');
-                var plines  = ['📈 plotly'];
-                plines.push('  título: ' + (ptitle2 ? ptitle2.textContent.trim() : '(sin título)'));
+                var plines  = ['[chart] plotly'];
+                plines.push('  titulo: ' + (ptitle2 ? ptitle2.textContent.trim() : '(sin titulo)'));
                 if (xTitle) plines.push('  eje X : ' + xTitle.textContent.trim());
                 if (yTitle) plines.push('  eje Y : ' + yTitle.textContent.trim());
                 return plines.join('\n');
@@ -649,19 +649,19 @@ def inject_element_inspector():
             if (agEl || el.tagName === 'IFRAME') {
                 var agInfo = agGridInfo(mouseX, mouseY);
                 if (agInfo) return agInfo;
-                return '📋 AgGrid tabla';
+                return '[tabla] AgGrid tabla';
             }
 
             var railIcon = el.closest('.rail-icon');
             if (railIcon) {
                 var rname   = railIcon.getAttribute('data-tooltip') || railIcon.innerText.trim();
                 var rActive = railIcon.classList.contains('active');
-                return '🧭 nav\n  reporte: ' + rname + '\n  estado : ' + (rActive ? 'activo ✓' : 'inactivo');
+                return '[nav] nav\n  reporte: ' + rname + '\n  estado : ' + (rActive ? 'activo OK' : 'inactivo');
             }
 
             var caption = el.closest('[data-testid="stCaptionContainer"]');
             if (caption) {
-                return 'ℹ️ caption\n  ' + caption.textContent.trim().slice(0, 80);
+                return '[i] caption\n  ' + caption.textContent.trim().slice(0, 80);
             }
 
             return null;
@@ -677,13 +677,14 @@ def inject_element_inspector():
             } else { elActual = null; }
         }
 
-        // ── Registrar los listeners UNA SOLA VEZ ──────────────────────────
-        // Persisten en `doc`/`win` entre rerenders, así que con la bandera
-        // basta. (El tip/badge sí se recrean arriba en cada ejecución.)
+        // -- Registrar los listeners UNA SOLA VEZ --------------------------
+        // Persisten en `doc`/`win` entre rerenders, asi que con la bandera
+        // basta. (El tip/badge si se recrean arriba en cada ejecucion.)
         if (!win.__inspectorListeners) {
             win.__inspectorListeners = true;
 
         doc.addEventListener('mousemove', function(e) {
+          try {
             // Buscar el tooltip fresco (un rerender pudo recrearlo).
             var tip = doc.getElementById('el-inspector-tip');
             if (!tip) return;
@@ -697,7 +698,8 @@ def inject_element_inspector():
             var etiqueta = null;
             var cursor = el;
 
-            var agInfo = agGridInfo(e.clientX, e.clientY);
+            var agInfo = null;
+            try { agInfo = agGridInfo(e.clientX, e.clientY); } catch(err) { agInfo = null; }
             if (agInfo) {
                 etiqueta = agInfo;
                 var agFrame = doc.querySelector('iframe[src*="st_aggrid"], [data-testid="stAgGrid"] iframe');
@@ -714,7 +716,7 @@ def inject_element_inspector():
                 if (agFrame) resaltarEl(agFrame, etiqueta);
             } else {
                 for (var i = 0; i < 12 && cursor && cursor !== doc.body; i++) {
-                    etiqueta = labelDe(cursor, e.clientX, e.clientY);
+                    try { etiqueta = labelDe(cursor, e.clientX, e.clientY); } catch(err) { etiqueta = null; }
                     if (etiqueta) { el = cursor; break; }
                     cursor = cursor.parentElement;
                 }
@@ -737,6 +739,9 @@ def inject_element_inspector():
             } else {
                 tip.style.opacity = '0';
             }
+          } catch(err) {
+            if (win.__logErr) win.__logErr('Inspector mousemove: ' + err.message);
+          }
         }, true);
 
         doc.addEventListener('mouseleave', function() {
@@ -776,7 +781,7 @@ def inject_element_inspector():
 
 
 # ===========================================================================
-# BARRA DE PAGINACIÓN v2 (NÚMEROS + SALTO)
+# BARRA DE PAGINACION v2 (NUMEROS + SALTO)
 # ===========================================================================
 
 def inject_pagination_v2():
