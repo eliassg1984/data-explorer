@@ -748,13 +748,11 @@ def inject_element_inspector():
 
 
 # ===========================================================================
-# BARRA DE PAGINACIÓN v2 (NÚMEROS + SALTO) — SOLO INVENTARIO VALORIZADO
+# BARRA DE PAGINACIÓN v2 (NÚMEROS + SALTO)
 # ===========================================================================
 
 def inject_pagination_v2():
-    """Barra de paginación personalizada (Opción 2: números + salto de página).
-    Pensada para llamarse SOLO en el reporte Inventario Valorizado.
-    """
+    """Barra de paginación personalizada con números y salto de página."""
     components.html("""
     <script>
     (function(){
@@ -924,96 +922,70 @@ def inject_pagination_v2():
 
 
 # ===========================================================================
-# BOTÓN MAXIMIZAR AGGRID — SOLO REQUERIMIENTOS
+# BOTÓN MAXIMIZAR AGGRID — TODOS LOS REPORTES
 # ===========================================================================
 
 def inject_maximize_aggrid():
     """
-    Inyecta un botón ⛶ / ✕ en la esquina superior derecha del iframe de AgGrid
-    que pone la tabla en pantalla completa (posición fija, z-index alto).
-    Solo debe llamarse en el reporte Requerimientos.
+    Inyecta un botón ⛶ / ✕ flotante en posición fija (esquina superior derecha)
+    que pone la tabla AgGrid en pantalla completa.
 
-    El botón se ancla al CONTENEDOR del iframe (en el DOM de la ventana padre),
-    no dentro del iframe, para evitar problemas de sandbox. Al maximizar:
-      • El iframe ocupa toda la ventana (position:fixed, inset:0).
-      • El rail de iconos y la franja superior quedan por debajo (z-index menor).
-      • Un segundo clic (✕) restaura el tamaño original.
+    A diferencia de la versión anterior, el botón NO envuelve el iframe en un
+    contenedor extra (eso causaba el espacio blanco). En su lugar se posiciona
+    de forma fija sobre el iframe y opera directamente sobre él.
     """
     components.html("""
     <script>
     (function(){
         var win = window.parent;
         var doc = win.document;
-        var BTN_ID = 'req-maximize-btn';
+        var BTN_ID = 'aggrid-maximize-btn';
         var maximizado = false;
         var estilosOriginales = {};
         var tries = 0;
         var MAX = 40;
 
-        // ── Estilos del botón ────────────────────────────────────────────
-        var CSS = [
-            '#' + BTN_ID + ' {',
-            '  position: absolute;',
-            '  top: 6px;',
-            '  right: 6px;',
-            '  z-index: 99999;',
-            '  width: 30px;',
-            '  height: 30px;',
-            '  border: 1px solid #e2e8f0;',
-            '  border-radius: 6px;',
-            '  background: #ffffff;',
-            '  color: #475569;',
-            '  font-size: 15px;',
-            '  cursor: pointer;',
-            '  display: flex;',
-            '  align-items: center;',
-            '  justify-content: center;',
-            '  box-shadow: 0 1px 4px rgba(0,0,0,0.10);',
-            '  transition: background 0.15s, color 0.15s, border-color 0.15s;',
-            '  line-height: 1;',
-            '}',
-            '#' + BTN_ID + ':hover {',
-            '  background: #eff6ff;',
-            '  border-color: #93c5fd;',
-            '  color: #2563eb;',
-            '}',
-            // Contenedor relativo para anclar el botón
-            '.req-grid-wrapper {',
-            '  position: relative;',
-            '  width: 100%;',
-            '}',
-            // Estado maximizado: iframe ocupa toda la pantalla
-            '.req-grid-wrapper.maximizado iframe {',
-            '  position: fixed !important;',
-            '  inset: 0 !important;',
-            '  width: 100vw !important;',
-            '  height: 100vh !important;',
-            '  z-index: 99998 !important;',
-            '  border-radius: 0 !important;',
-            '  box-shadow: none !important;',
-            '}',
-            // El botón sigue visible encima del iframe maximizado
-            '.req-grid-wrapper.maximizado #' + BTN_ID + ' {',
-            '  position: fixed !important;',
-            '  top: 12px !important;',
-            '  right: 12px !important;',
-            '  z-index: 99999 !important;',
-            '  background: #1e293b !important;',
-            '  color: #f8fafc !important;',
-            '  border-color: #475569 !important;',
-            '}',
-        ].join('\\n');
-
+        // ── CSS del botón flotante ───────────────────────────────────────
         function inyectarCSS() {
-            if (doc.getElementById('req-max-css')) return;
+            if (doc.getElementById('aggrid-max-css')) return;
             var s = doc.createElement('style');
-            s.id = 'req-max-css';
-            s.textContent = CSS;
+            s.id = 'aggrid-max-css';
+            s.textContent = [
+                '#' + BTN_ID + ' {',
+                '  position: fixed;',
+                '  z-index: 99999;',
+                '  width: 30px;',
+                '  height: 30px;',
+                '  border: 1px solid #e2e8f0;',
+                '  border-radius: 6px;',
+                '  background: #ffffff;',
+                '  color: #475569;',
+                '  font-size: 15px;',
+                '  cursor: pointer;',
+                '  display: flex;',
+                '  align-items: center;',
+                '  justify-content: center;',
+                '  box-shadow: 0 1px 4px rgba(0,0,0,0.10);',
+                '  transition: background 0.15s, color 0.15s, border-color 0.15s;',
+                '  line-height: 1;',
+                '}',
+                '#' + BTN_ID + ':hover {',
+                '  background: #eff6ff;',
+                '  border-color: #93c5fd;',
+                '  color: #2563eb;',
+                '}',
+                '#' + BTN_ID + '.maximizado {',
+                '  top: 12px !important;',
+                '  right: 12px !important;',
+                '  background: #1e293b !important;',
+                '  color: #f8fafc !important;',
+                '  border-color: #475569 !important;',
+                '}',
+            ].join('\\n');
             doc.head.appendChild(s);
         }
 
         function buscarIframe() {
-            // Preferimos el iframe de st_aggrid; si no, todos los iframes
             var frames = doc.querySelectorAll('iframe[src*="st_aggrid"]');
             if (!frames.length) frames = doc.querySelectorAll('iframe');
             for (var i = 0; i < frames.length; i++) {
@@ -1025,31 +997,68 @@ def inject_maximize_aggrid():
             return null;
         }
 
+        function posicionarBoton(iframe) {
+            if (!iframe || maximizado) return;
+            var rect = iframe.getBoundingClientRect();
+            btn.style.top  = (rect.top  + 8) + 'px';
+            btn.style.right = (win.innerWidth - rect.right + 8) + 'px';
+        }
+
         function toggle() {
-            var wrapper = doc.querySelector('.req-grid-wrapper');
-            if (!wrapper) return;
+            var iframe = buscarIframe();
+            if (!iframe) return;
             maximizado = !maximizado;
+
             if (maximizado) {
-                wrapper.classList.add('maximizado');
-                btn.innerHTML = '✕';
-                btn.title = 'Restaurar';
-                // Ocultar el rail y la top-bar para no interferir
-                var rail = doc.getElementById('icon-rail');
+                // Guardar estilos originales
+                estilosOriginales = {
+                    position: iframe.style.position,
+                    inset:    iframe.style.inset,
+                    width:    iframe.style.width,
+                    height:   iframe.style.height,
+                    zIndex:   iframe.style.zIndex,
+                };
+                // Maximizar iframe
+                iframe.style.position = 'fixed';
+                iframe.style.inset    = '0';
+                iframe.style.width    = '100vw';
+                iframe.style.height   = '100vh';
+                iframe.style.zIndex   = '99998';
+
+                // Bajar rail y topbar
+                var rail   = doc.getElementById('icon-rail');
                 var topbar = doc.getElementById('top-bar');
-                if (rail)   { estilosOriginales.railZI = rail.style.zIndex;   rail.style.zIndex = '1'; }
+                if (rail)   { estilosOriginales.railZI   = rail.style.zIndex;   rail.style.zIndex   = '1'; }
                 if (topbar) { estilosOriginales.topbarZI = topbar.style.zIndex; topbar.style.zIndex = '1'; }
+
+                btn.innerHTML = '✕';
+                btn.title = 'Restaurar tabla';
+                btn.classList.add('maximizado');
+
             } else {
-                wrapper.classList.remove('maximizado');
-                btn.innerHTML = '&#x26F6;';
-                btn.title = 'Maximizar tabla';
-                var rail = doc.getElementById('icon-rail');
+                // Restaurar iframe
+                iframe.style.position = estilosOriginales.position || '';
+                iframe.style.inset    = estilosOriginales.inset    || '';
+                iframe.style.width    = estilosOriginales.width    || '';
+                iframe.style.height   = estilosOriginales.height   || '';
+                iframe.style.zIndex   = estilosOriginales.zIndex   || '';
+
+                // Restaurar rail y topbar
+                var rail   = doc.getElementById('icon-rail');
                 var topbar = doc.getElementById('top-bar');
                 if (rail)   rail.style.zIndex   = estilosOriginales.railZI   || '';
                 if (topbar) topbar.style.zIndex  = estilosOriginales.topbarZI || '';
+
+                btn.innerHTML = '&#x26F6;';
+                btn.title = 'Maximizar tabla';
+                btn.classList.remove('maximizado');
+
+                // Reposicionar botón sobre el iframe restaurado
+                win.setTimeout(function(){ posicionarBoton(buscarIframe()); }, 50);
             }
         }
 
-        // Crear el botón una sola vez
+        // Crear botón una sola vez
         var btn = doc.createElement('button');
         btn.id = BTN_ID;
         btn.innerHTML = '&#x26F6;';
@@ -1058,48 +1067,32 @@ def inject_maximize_aggrid():
 
         function montar() {
             tries++;
-
-            // Si ya está montado, no hacer nada
-            if (doc.getElementById(BTN_ID) && doc.querySelector('.req-grid-wrapper')) return;
-
+            if (doc.getElementById(BTN_ID)) {
+                // Ya existe: solo reposicionar
+                posicionarBoton(buscarIframe());
+                return;
+            }
             var iframe = buscarIframe();
             if (!iframe) {
                 if (tries < MAX) { win.setTimeout(montar, 500); }
                 return;
             }
-
             inyectarCSS();
-
-            // Envolver el iframe en un div relativo (solo si aún no lo está)
-            var padre = iframe.parentNode;
-            if (!padre || padre.classList.contains('req-grid-wrapper')) {
-                // ya envuelto: solo asegurar el botón
-                if (!doc.getElementById(BTN_ID)) padre.appendChild(btn);
-                return;
-            }
-
-            var wrapper = doc.createElement('div');
-            wrapper.className = 'req-grid-wrapper';
-            padre.insertBefore(wrapper, iframe);
-            wrapper.appendChild(iframe);
-            wrapper.appendChild(btn);
+            doc.body.appendChild(btn);
+            posicionarBoton(iframe);
         }
 
         win.setTimeout(montar, 900);
 
-        // Re-intentar si Streamlit rerenderiza y desconecta el wrapper
+        // Reposicionar si la ventana cambia de tamaño
+        win.addEventListener('resize', function(){
+            if (!maximizado) posicionarBoton(buscarIframe());
+        });
+
+        // Limpiar botón al salir de la página (evita duplicados en rerenders)
         win.setInterval(function(){
             var iframe = buscarIframe();
-            if (!iframe) return;
-            var padre = iframe.parentNode;
-            if (padre && !padre.classList.contains('req-grid-wrapper')) {
-                // Se desconectó: volver a envolver
-                tries = 0;
-                maximizado = false;
-                montar();
-            } else if (!doc.getElementById(BTN_ID) && padre) {
-                padre.appendChild(btn);
-            }
+            if (!maximizado) posicionarBoton(iframe);
         }, 1500);
 
     })();
