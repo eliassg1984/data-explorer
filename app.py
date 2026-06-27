@@ -203,6 +203,17 @@ if fecha_min_full is not None and reporte != "Requerimientos":
 
 grupos_sel = []
 
+
+# ── PASO 1: función cacheada FUERA del loop ────────────────────────────
+@st.cache_data
+def get_opciones_filtro(_df, _col):
+    """Retorna las opciones únicas de una columna, ordenadas.
+    Se usa tanto para filtros de categoría como para el buscador.
+    El guion bajo al inicio evita que Streamlit la muestre en la UI del cache."""
+    return sorted(_df[_col].dropna().unique().tolist(), key=lambda x: str(x))
+# ── FIN PASO 1 ──────────────────────────────────────────────────────────
+
+
 def _key(prefijo, idx):
     return f"{prefijo}_{reporte}_{idx}"
 
@@ -228,11 +239,7 @@ label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_act
 with st.popover(label_btn, use_container_width=False):
     for idx, (tipo, col) in enumerate(controles):
         if tipo == "cat":
-            @st.cache_data
-            def get_opciones_cat(df, col):
-                return sorted(df[col].dropna().unique().tolist(), key=lambda x: str(x))
-
-            opts = get_opciones_cat(df, col)
+            opts = get_opciones_filtro(df, col)
             sel = st.multiselect(
                 f"📂 {col}", opts, placeholder="Todos",
                 key=_key("cat", idx),
@@ -241,11 +248,7 @@ with st.popover(label_btn, use_container_width=False):
                 df_f = df_f[df_f[col].isin(sel)]
 
         elif tipo == "busc":
-            @st.cache_data
-            def get_opciones_busc(df, col):
-                return sorted(df[col].dropna().astype(str).unique().tolist(), key=lambda x: x.lower())
-
-            opts_prod = get_opciones_busc(df_f, col)
+            opts_prod = get_opciones_filtro(df_f, col)
             sel_prod = st.multiselect(
                 f"🔎 {col}", opts_prod, placeholder="Buscar…",
                 key=_key("busc", idx),
