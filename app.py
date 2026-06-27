@@ -332,8 +332,7 @@ font_px = TAM_FUENTE.get(st.session_state.tabla_tam, 14)
 
 # ── PASO 3: gráficos genéricos en una sola función ──────────────────────
 def _render_graficos_genericos(df_data, nombre_reporte):
-    """Renderiza selectores + gráfico de barras top 20.
-    Reemplaza el bloque que estaba copiado en Compras, Salidas y resto."""
+    """Renderiza selectores + gráfico de barras top 20."""
     cols_num = df_data.select_dtypes("number").columns.tolist()
     cols_txt = df_data.select_dtypes(["object", "string"]).columns.tolist()
 
@@ -368,6 +367,97 @@ def _render_graficos_genericos(df_data, nombre_reporte):
 # ── FIN PASO 3 ──────────────────────────────────────────────────────────
 
 
+# ── PASO 4: Requerimientos en su propia función ─────────────────────────
+def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, font_px, cfg):
+    """Renderiza el reporte de Requerimientos con tabla dinámica."""
+    st.markdown(
+        '<p style="font-size:22px;font-weight:700;color:#1e293b;'
+        'margin:0 0 0.6rem 0;line-height:1.2;">Requerimientos · Tabla dinámica</p>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "🧮 Tabla dinámica estilo Excel. En el panel derecho (pestaña "
+        "**Columnas**) arrastra campos a **Grupos de filas**, **Valores** y "
+        "**Etiquetas de columnas**. Para columnas por periodo legibles, usa los "
+        "campos **Mes** o **Año** (ya calculados) en *Etiquetas de columnas*. "
+        "El **filtro de fecha** está arriba de la tabla (rango desde / hasta)."
+    )
+
+    df_piv = df_data.copy()
+
+    # Convierte a datetime todas las columnas que parezcan fechas
+    for _c in df_piv.columns:
+        _n = str(_c).lower()
+        if "fecha" in _n or "date" in _n or pd.api.types.is_datetime64_any_dtype(df_piv[_c]):
+            df_piv[_c] = pd.to_datetime(df_piv[_c], errors="coerce")
+
+    # Calcular Mes y Año ANTES del filtro de fecha
+    _col_freg = buscar_columna(df_piv, "Fecha Registro", "fecha registro") or col_fecha_ref
+
+    if _col_freg and _col_freg in df_piv.columns:
+        _fechas_full = pd.to_datetime(df_piv[_col_freg], errors="coerce")
+        df_piv["Mes"] = (
+            _fechas_full.dt.to_period("M")
+            .astype(str)
+            .str.replace("NaT", "", regex=False)
+        )
+        df_piv["Año"] = (
+            _fechas_full.dt.year
+            .astype("Int64")
+            .astype(str)
+            .str.replace("<NA>", "", regex=False)
+        )
+
+    # Filtro de fecha
+    cols_fecha_piv = [c for c in df_piv.columns
+                      if pd.api.types.is_datetime64_any_dtype(df_piv[c])]
+
+    if cols_fecha_piv:
+        fc1, fc2 = st.columns([1, 2])
+        with fc1:
+            col_fecha_sel = st.selectbox(
+                "📅 Filtrar por", cols_fecha_piv, key="req_fcol",
+            )
+
+        validos = df_piv[col_fecha_sel].dropna()
+        if not validos.empty:
+            fmin, fmax = validos.min().date(), validos.max().date()
+
+            with fc2:
+                rango = st.date_input(
+                    "Rango (desde / hasta)",
+                    value=(fmin, fmax),
+                    min_value=fmin,
+                    max_value=fmax,
+                    format="DD/MM/YYYY",
+                    key="req_frango",
+                )
+
+            if isinstance(rango, (tuple, list)) and len(rango) == 2:
+                ini, fin = rango
+                _m = (df_piv[col_fecha_sel].dt.date >= ini) & \
+                     (df_piv[col_fecha_sel].dt.date <= fin)
+                df_piv = df_piv[_m]
+
+    # AgGrid
+    tiene_config_movil = "columnas_movil" in cfg
+    if usa_vista_movil and tiene_config_movil:
+        st.caption("📱 Vista móvil")
+        renderizar_aggrid_movil(
+            df_piv[cols_mostrar], cfg.get("columnas_fijas_movil", 2), "Requerimientos", font_px,
+        )
+    else:
+        renderizar_aggrid_desktop(
+            df_piv,
+            grupos_sel,
+            list(df_piv.columns),
+            "Requerimientos",
+            font_px,
+            cols_visibles=None,
+        )
+# ── FIN PASO 4 ──────────────────────────────────────────────────────────
+
+
 def _render_tabla():
     """Renderiza la tabla AgGrid (desktop o móvil)."""
     if usa_vista_movil and tiene_config_movil:
@@ -386,7 +476,7 @@ def _render_tabla():
         )
 
 
-# ── COMPRAS: st.data_editor ──────────────────────────────────────────────────
+# ── COMPRAS ─────────────────────────────────────────────────────────────────
 if reporte == "Compras":
     tab_tabla, tab_graficos = st.tabs(["📋 Tabla", "📊 Gráficos"])
 
@@ -510,90 +600,7 @@ elif reporte == "Salidas":
 
 # ── REQUERIMIENTOS ───────────────────────────────────────────────────────────
 elif reporte == "Requerimientos":
-    st.markdown(
-        '<p style="font-size:22px;font-weight:700;color:#1e293b;'
-        'margin:0 0 0.6rem 0;line-height:1.2;">Requerimientos · Tabla dinámica</p>',
-        unsafe_allow_html=True,
-    )
-    st.caption(
-        "🧮 Tabla dinámica estilo Excel. En el panel derecho (pestaña "
-        "**Columnas**) arrastra campos a **Grupos de filas**, **Valores** y "
-        "**Etiquetas de columnas**. Para columnas por periodo legibles, usa los "
-        "campos **Mes** o **Año** (ya calculados) en *Etiquetas de columnas*. "
-        "El **filtro de fecha** está arriba de la tabla (rango desde / hasta)."
-    )
-
-    df_piv = df_f.copy()
-
-    # Convierte a datetime todas las columnas que parezcan fechas
-    for _c in df_piv.columns:
-        _n = str(_c).lower()
-        if "fecha" in _n or "date" in _n or pd.api.types.is_datetime64_any_dtype(df_piv[_c]):
-            df_piv[_c] = pd.to_datetime(df_piv[_c], errors="coerce")
-
-    # ── FIX: calcular Mes y Año ANTES del filtro de fecha ─────────────────
-    _col_freg = buscar_columna(df_piv, "Fecha Registro", "fecha registro") or col_fecha
-
-    if _col_freg and _col_freg in df_piv.columns:
-        _fechas_full = pd.to_datetime(df_piv[_col_freg], errors="coerce")
-        df_piv["Mes"] = (
-            _fechas_full.dt.to_period("M")
-            .astype(str)
-            .str.replace("NaT", "", regex=False)
-        )
-        df_piv["Año"] = (
-            _fechas_full.dt.year
-            .astype("Int64")
-            .astype(str)
-            .str.replace("<NA>", "", regex=False)
-        )
-
-    # ── Filtro de fecha (recorta filas pero Mes/Año ya están calculados) ──
-    cols_fecha_piv = [c for c in df_piv.columns
-                      if pd.api.types.is_datetime64_any_dtype(df_piv[c])]
-
-    if cols_fecha_piv:
-        fc1, fc2 = st.columns([1, 2])
-        with fc1:
-            col_fecha_sel = st.selectbox(
-                "📅 Filtrar por", cols_fecha_piv, key="req_fcol",
-            )
-
-        validos = df_piv[col_fecha_sel].dropna()
-        if not validos.empty:
-            fmin, fmax = validos.min().date(), validos.max().date()
-
-            with fc2:
-                rango = st.date_input(
-                    "Rango (desde / hasta)",
-                    value=(fmin, fmax),
-                    min_value=fmin,
-                    max_value=fmax,
-                    format="DD/MM/YYYY",
-                    key="req_frango",
-                )
-
-            if isinstance(rango, (tuple, list)) and len(rango) == 2:
-                ini, fin = rango
-                _m = (df_piv[col_fecha_sel].dt.date >= ini) & \
-                     (df_piv[col_fecha_sel].dt.date <= fin)
-                df_piv = df_piv[_m]
-
-    # ── AgGrid ────────────────────────────────────────────────────────────
-    if usa_vista_movil and tiene_config_movil:
-        st.caption("📱 Vista móvil")
-        renderizar_aggrid_movil(
-            df_piv[cols_mostrar], cfg.get("columnas_fijas_movil", 2), reporte, font_px,
-        )
-    else:
-        renderizar_aggrid_desktop(
-            df_piv,
-            grupos_sel,
-            list(df_piv.columns),
-            reporte,
-            font_px,
-            cols_visibles=None,
-        )
+    _render_requerimientos(df_f, col_fecha, grupos_sel, cols_mostrar, font_px, cfg)
 
 
 # ── RESTO DE REPORTES ────────────────────────────────────────────────────────
