@@ -23,7 +23,7 @@ st.set_page_config(
     page_title="Reportes",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
     menu_items={
         'Get Help': None,
         'Report a bug': None,
@@ -207,9 +207,7 @@ grupos_sel = []
 # ── PASO 1: función cacheada FUERA del loop ────────────────────────────
 @st.cache_data
 def get_opciones_filtro(_df, _col):
-    """Retorna las opciones únicas de una columna, ordenadas.
-    Se usa tanto para filtros de categoría como para el buscador.
-    El guion bajo al inicio evita que Streamlit la muestre en la UI del cache."""
+    """Retorna las opciones únicas de una columna, ordenadas."""
     return sorted(_df[_col].dropna().unique().tolist(), key=lambda x: str(x))
 # ── FIN PASO 1 ──────────────────────────────────────────────────────────
 
@@ -550,8 +548,6 @@ elif reporte == "Requerimientos":
             df_piv[_c] = pd.to_datetime(df_piv[_c], errors="coerce")
 
     # ── FIX: calcular Mes y Año ANTES del filtro de fecha ─────────────────
-    # Así el panel de filtros de AgGrid siempre ve TODOS los valores posibles,
-    # no solo los del rango elegido por el usuario.
     _col_freg = buscar_columna(df_piv, "Fecha Registro", "fecha registro") or col_fecha
 
     if _col_freg and _col_freg in df_piv.columns:
