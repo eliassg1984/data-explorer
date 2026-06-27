@@ -22,7 +22,7 @@ ICONO_A_EMOJI = {
 
 def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     """Inyecta rail + top bar en una sola llamada."""
-    
+
     visibles = {
         nombre: ICONO_A_EMOJI.get(info.get("icono", ""), "❓")
         for nombre, info in reportes.items()
@@ -35,33 +35,23 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
         var doc = window.parent.document;
         var win = window.parent;
 
-        // Una sola inicialización
+        // ── Funciones de navegacion: inyectar como <script> en el head
+        //    (misma tecnica del codigo original que SI funcionaba) ─────
+        if (!doc.getElementById('rail-nav-fns')) {{
+            var navScript = doc.createElement('script');
+            navScript.id = 'rail-nav-fns';
+            navScript.textContent =
+                "window.__navReporte=function(n){{try{{var u=new URL(window.location.href);u.searchParams.set('reporte',n);u.searchParams.delete('refresh');window.location.assign(u.toString());}}catch(e){{if(window.__logErr)window.__logErr('Nav: '+e.message);}}}};" +
+                "window.__refreshReporte=function(){{try{{var u=new URL(window.location.href);u.searchParams.set('refresh','1');window.location.assign(u.toString());}}catch(e){{if(window.__logErr)window.__logErr('Refresh: '+e.message);}}}};";
+            doc.head.appendChild(navScript);
+        }}
+
+        // ── Una sola inicializacion del DOM ────────────────────────────
         if (win.__navInit) return;
         win.__navInit = true;
 
         var REPORTES = {json.dumps(visibles)};
         var ACTIVO = {json.dumps(reporte_activo)};
-
-        // ── Funciones de navegación (un solo lugar) ────────────────────
-        win.__navReporte = function(n) {{
-            try {{
-                var u = new URL(window.location.href);
-                u.searchParams.set('reporte', n);
-                u.searchParams.delete('refresh');
-                window.location.assign(u.toString());
-            }} catch(e) {{
-                if (win.__logErr) win.__logErr('Nav: ' + e.message);
-            }}
-        }};
-        win.__refreshReporte = function() {{
-            try {{
-                var u = new URL(window.location.href);
-                u.searchParams.set('refresh', '1');
-                window.location.assign(u.toString());
-            }} catch(e) {{
-                if (win.__logErr) win.__logErr('Refresh: ' + e.message);
-            }}
-        }};
 
         // ── Estilos: un solo <style> ───────────────────────────────────
         var style = doc.createElement('style');
@@ -151,7 +141,7 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
         refreshBtn.onclick = function() {{ win.__refreshReporte(); }};
         rail.appendChild(refreshBtn);
 
-        // ── Construir top bar (con título) ────────────────────────────
+        // ── Construir top bar (con titulo) ────────────────────────────
         var bar = doc.createElement('div');
         bar.id = 'top-bar';
 
@@ -180,7 +170,6 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
 
         anclar();
 
-        // Solo se ejecuta cuando el DOM cambia, no cada X milisegundos
         var obs = new MutationObserver(function() {{
             var r = doc.getElementById('icon-rail');
             var b = doc.getElementById('top-bar');
@@ -190,8 +179,6 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
         }});
         obs.observe(doc.body, {{ childList: false, subtree: false }});
 
-        // Fallback: verificar una vez después de 2s por si el primer
-        // rerender de Streamlit pasa por alto al Observer
         setTimeout(anclar, 2000);
 
     }})();
