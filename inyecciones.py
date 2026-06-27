@@ -987,12 +987,8 @@ def inject_pagination_v2():
 
 def inject_maximize_aggrid():
     """
-    Inyecta un botón ⛶ / ✕ flotante en posición fija (esquina superior derecha)
+    Inyecta un botón flotante en posición fija (esquina superior derecha)
     que pone la tabla AgGrid en pantalla completa.
-
-    A diferencia de la versión anterior, el botón NO envuelve el iframe en un
-    contenedor extra (eso causaba el espacio blanco). En su lugar se posiciona
-    de forma fija sobre el iframe y opera directamente sobre él.
     """
     components.html("""
     <script>
@@ -1070,7 +1066,6 @@ def inject_maximize_aggrid():
             maximizado = !maximizado;
 
             if (maximizado) {
-                // Guardar estilos originales
                 estilosOriginales = {
                     position: iframe.style.position,
                     inset:    iframe.style.inset,
@@ -1078,32 +1073,28 @@ def inject_maximize_aggrid():
                     height:   iframe.style.height,
                     zIndex:   iframe.style.zIndex,
                 };
-                // Maximizar iframe
                 iframe.style.position = 'fixed';
                 iframe.style.inset    = '0';
                 iframe.style.width    = '100vw';
                 iframe.style.height   = '100vh';
                 iframe.style.zIndex   = '99998';
 
-                // Bajar rail y topbar
                 var rail   = doc.getElementById('icon-rail');
                 var topbar = doc.getElementById('top-bar');
                 if (rail)   { estilosOriginales.railZI   = rail.style.zIndex;   rail.style.zIndex   = '1'; }
                 if (topbar) { estilosOriginales.topbarZI = topbar.style.zIndex; topbar.style.zIndex = '1'; }
 
-                btn.innerHTML = '✕';
+                btn.innerHTML = '&#x2715;';
                 btn.title = 'Restaurar tabla';
                 btn.classList.add('maximizado');
 
             } else {
-                // Restaurar iframe
                 iframe.style.position = estilosOriginales.position || '';
                 iframe.style.inset    = estilosOriginales.inset    || '';
                 iframe.style.width    = estilosOriginales.width    || '';
                 iframe.style.height   = estilosOriginales.height   || '';
                 iframe.style.zIndex   = estilosOriginales.zIndex   || '';
 
-                // Restaurar rail y topbar
                 var rail   = doc.getElementById('icon-rail');
                 var topbar = doc.getElementById('top-bar');
                 if (rail)   rail.style.zIndex   = estilosOriginales.railZI   || '';
@@ -1114,47 +1105,42 @@ def inject_maximize_aggrid():
                 btn.classList.remove('maximizado');
 
                 // Reposicionar botón sobre el iframe restaurado
-                win.setTimeout(function(){ posicionarBoton(buscarIframe()); }, 50);
+                win.setTimeout(function() {
+                    posicionarBoton(iframe);
+                }, 100);
             }
         }
 
-        // Crear botón una sola vez
+        // ── Crear botón ────────────────────────────────────────────────
         var btn = doc.createElement('button');
         btn.id = BTN_ID;
         btn.innerHTML = '&#x26F6;';
         btn.title = 'Maximizar tabla';
-        btn.addEventListener('click', toggle);
+        btn.onclick = toggle;
 
-        function montar() {
+        // ── Buscar iframe y posicionar ──────────────────────────────────
+        function check() {
             tries++;
-            if (doc.getElementById(BTN_ID)) {
-                // Ya existe: solo reposicionar
-                posicionarBoton(buscarIframe());
-                return;
-            }
-            var iframe = buscarIframe();
-            if (!iframe) {
-                if (tries < MAX) { win.setTimeout(montar, 500); }
-                return;
-            }
             inyectarCSS();
-            doc.body.appendChild(btn);
-            posicionarBoton(iframe);
-        }
 
-        win.setTimeout(montar, 900);
+            // Re-anclar botón si Streamlit lo desconectó
+            if (doc.getElementById(BTN_ID) !== btn) {
+                if (btn.parentNode) btn.parentNode.removeChild(btn);
+                doc.body.appendChild(btn);
+            }
 
-        // Reposicionar si la ventana cambia de tamaño
-        win.addEventListener('resize', function(){
-            if (!maximizado) posicionarBoton(buscarIframe());
-        });
-
-        // Limpiar botón al salir de la página (evita duplicados en rerenders)
-        win.setInterval(function(){
             var iframe = buscarIframe();
-            if (!maximizado) posicionarBoton(iframe);
-        }, 1500);
-
+            if (iframe) {
+                posicionarBoton(iframe);
+                return;
+            }
+            if (tries < MAX) {
+                win.setTimeout(check, 500);
+            }
+        }
+        win.setTimeout(check, 800);
     })();
+    </script>
+    """, height=0)
     </script>
     """, height=0)
