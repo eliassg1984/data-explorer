@@ -12,7 +12,7 @@ from estilos import TAM_FUENTE, inject_css
 from inyecciones import inject_error_overlay, inject_element_inspector
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras
 from graficos import renderizar_graficos
-from navegacion import inject_icon_rail, inject_top_bar
+from navegacion import inject_navegacion
 
 
 # ===========================================================================
@@ -57,8 +57,7 @@ if params.get("refresh"):
         del st.query_params["refresh"]
     st.rerun()
 
-inject_icon_rail(REPORTES, reporte, mostrar_inspector=bool(st.query_params.get("debug")))
-inject_top_bar(reporte)
+inject_navegacion(REPORTES, reporte, mostrar_inspector=bool(st.query_params.get("debug")))
 
 cfg = REPORTES[reporte]
 
