@@ -330,6 +330,44 @@ if df_f.empty:
 font_px = TAM_FUENTE.get(st.session_state.tabla_tam, 14)
 
 
+# ── PASO 3: gráficos genéricos en una sola función ──────────────────────
+def _render_graficos_genericos(df_data, nombre_reporte):
+    """Renderiza selectores + gráfico de barras top 20.
+    Reemplaza el bloque que estaba copiado en Compras, Salidas y resto."""
+    cols_num = df_data.select_dtypes("number").columns.tolist()
+    cols_txt = df_data.select_dtypes(["object", "string"]).columns.tolist()
+
+    if not cols_num or not cols_txt:
+        st.info("No hay suficientes columnas para generar gráficos.")
+        return
+
+    col1, col2 = st.columns(2)
+    with col1:
+        eje_x = st.selectbox("Agrupar por", cols_txt, key=f"ejex_{nombre_reporte}")
+    with col2:
+        eje_y = st.selectbox("Métrica (suma)", cols_num, key=f"ejey_{nombre_reporte}")
+
+    try:
+        datos = (df_data.groupby(eje_x)[eje_y].sum()
+                     .reset_index()
+                     .sort_values(eje_y, ascending=False)
+                     .head(20))
+        fig = px.bar(datos, x=eje_x, y=eje_y,
+                     title=f"{eje_y} por {eje_x} (top 20)",
+                     color_discrete_sequence=["#3b82f6"])
+        fig.update_layout(
+            paper_bgcolor="#f8fafc", plot_bgcolor="#ffffff",
+            font_color="#1e293b", margin=dict(l=20, r=20, t=40, b=20),
+            xaxis_tickangle=-45, height=400,
+            xaxis=dict(gridcolor="#e2e8f0"),
+            yaxis=dict(gridcolor="#e2e8f0"),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
+# ── FIN PASO 3 ──────────────────────────────────────────────────────────
+
+
 def _render_tabla():
     """Renderiza la tabla AgGrid (desktop o móvil)."""
     if usa_vista_movil and tiene_config_movil:
@@ -356,34 +394,7 @@ if reporte == "Compras":
         renderizar_tabla_compras(df_f, grupos_sel=grupos_sel)
 
     with tab_graficos:
-        cols_num = df_f.select_dtypes("number").columns.tolist()
-        cols_txt = df_f.select_dtypes(["object", "string"]).columns.tolist()
-        if cols_num and cols_txt:
-            col1, col2 = st.columns(2)
-            with col1:
-                eje_x = st.selectbox("Agrupar por", cols_txt, key=f"ejex_{reporte}")
-            with col2:
-                eje_y = st.selectbox("Métrica (suma)", cols_num, key=f"ejey_{reporte}")
-            try:
-                datos = (df_f.groupby(eje_x)[eje_y].sum()
-                             .reset_index()
-                             .sort_values(eje_y, ascending=False)
-                             .head(20))
-                fig = px.bar(datos, x=eje_x, y=eje_y,
-                             title=f"{eje_y} por {eje_x} (top 20)",
-                             color_discrete_sequence=["#3b82f6"])
-                fig.update_layout(
-                    paper_bgcolor="#f8fafc", plot_bgcolor="#ffffff",
-                    font_color="#1e293b", margin=dict(l=20, r=20, t=40, b=20),
-                    xaxis_tickangle=-45, height=400,
-                    xaxis=dict(gridcolor="#e2e8f0"),
-                    yaxis=dict(gridcolor="#e2e8f0"),
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-        else:
-            st.info("No hay suficientes columnas para generar gráficos.")
+        _render_graficos_genericos(df_f, reporte)
 
 
 # ── INVENTARIO VALORIZADO ────────────────────────────────────────────────────
@@ -494,34 +505,7 @@ elif reporte == "Salidas":
             )
 
     with tab_graficos:
-        cols_num = df_f.select_dtypes("number").columns.tolist()
-        cols_txt = df_f.select_dtypes(["object", "string"]).columns.tolist()
-        if cols_num and cols_txt:
-            col1, col2 = st.columns(2)
-            with col1:
-                eje_x = st.selectbox("Agrupar por", cols_txt, key=f"ejex_{reporte}")
-            with col2:
-                eje_y = st.selectbox("Métrica (suma)", cols_num, key=f"ejey_{reporte}")
-            try:
-                datos = (df_f.groupby(eje_x)[eje_y].sum()
-                             .reset_index()
-                             .sort_values(eje_y, ascending=False)
-                             .head(20))
-                fig = px.bar(datos, x=eje_x, y=eje_y,
-                             title=f"{eje_y} por {eje_x} (top 20)",
-                             color_discrete_sequence=["#3b82f6"])
-                fig.update_layout(
-                    paper_bgcolor="#f8fafc", plot_bgcolor="#ffffff",
-                    font_color="#1e293b", margin=dict(l=20, r=20, t=40, b=20),
-                    xaxis_tickangle=-45, height=400,
-                    xaxis=dict(gridcolor="#e2e8f0"),
-                    yaxis=dict(gridcolor="#e2e8f0"),
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-        else:
-            st.info("No hay suficientes columnas para generar gráficos.")
+        _render_graficos_genericos(df_f, reporte)
 
 
 # ── REQUERIMIENTOS ───────────────────────────────────────────────────────────
@@ -620,31 +604,4 @@ else:
         _render_tabla()
 
     with tab_graficos:
-        cols_num = df_f.select_dtypes("number").columns.tolist()
-        cols_txt = df_f.select_dtypes(["object", "string"]).columns.tolist()
-        if cols_num and cols_txt:
-            col1, col2 = st.columns(2)
-            with col1:
-                eje_x = st.selectbox("Agrupar por", cols_txt, key=f"ejex_{reporte}")
-            with col2:
-                eje_y = st.selectbox("Métrica (suma)", cols_num, key=f"ejey_{reporte}")
-            try:
-                datos = (df_f.groupby(eje_x)[eje_y].sum()
-                             .reset_index()
-                             .sort_values(eje_y, ascending=False)
-                             .head(20))
-                fig = px.bar(datos, x=eje_x, y=eje_y,
-                             title=f"{eje_y} por {eje_x} (top 20)",
-                             color_discrete_sequence=["#3b82f6"])
-                fig.update_layout(
-                    paper_bgcolor="#f8fafc", plot_bgcolor="#ffffff",
-                    font_color="#1e293b", margin=dict(l=20, r=20, t=40, b=20),
-                    xaxis_tickangle=-45, height=400,
-                    xaxis=dict(gridcolor="#e2e8f0"),
-                    yaxis=dict(gridcolor="#e2e8f0"),
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-        else:
-            st.info("No hay suficientes columnas para generar gráficos.")
+        _render_graficos_genericos(df_f, reporte)
