@@ -65,7 +65,7 @@ def inject_error_overlay():
       }
 
       function log(m){
-        if (esRuidoExterno(m)) return;   // ignorar ruido de extensiones
+        if (esRuidoExterno(m)) return;
         win.__errLog.push(String(m).slice(0,400));
         render();
       }
@@ -401,18 +401,10 @@ def inject_element_inspector():
         var win = window.parent;
         var doc = win.document;
 
-        // NOTA: NO salimos temprano con un guard global. Si lo hicieramos, en
-        // un rerender de Streamlit (que recrea el body) el tooltip se perderia
-        // y no se volveria a crear -> el inspector "dejaba de funcionar". En su
-        // lugar: el tip/badge se recrean si faltan (abajo), y los listeners se
-        // registran una sola vez con su propia bandera (__inspectorListeners).
-
         function inspectorActivo() {
             return new URL(win.location.href).searchParams.get('debug') === '1';
         }
 
-        // Reutiliza el tooltip si ya existe (un rerender de Streamlit puede
-        // recrear el body); si no, lo crea. Asi nunca se pierde.
         var tip = doc.getElementById('el-inspector-tip');
         if (!tip) {
             tip = doc.createElement('div');
@@ -642,7 +634,7 @@ def inject_element_inspector():
             var expander = el.closest('[data-testid="stExpander"]');
             if (expander) {
                 var etxt2 = expander.querySelector('summary p, summary span, .streamlit-expanderHeader p');
-                var eopen = expander.querySelector('[data-testid="stExpanderDetails"]');
+                var eopen = expander.querySelector('[data-testid="stExpanderDetails"]')
                 var eIsOpen = eopen ? (eopen.style.display !== 'none' && eopen.style.visibility !== 'hidden') : false;
                 return '[exp] expander\n  titulo: ' + (etxt2 ? etxt2.textContent.trim() : '?') +
                        '\n  estado: ' + (eIsOpen ? 'abierto' : 'cerrado');
@@ -704,39 +696,36 @@ def inject_element_inspector():
             } else { elActual = null; }
         }
 
-        // -- Registrar los listeners UNA SOLA VEZ --------------------------
-        // Persisten en `doc`/`win` entre rerenders, asi que con la bandera
-        // basta. (El tip/badge si se recrean arriba en cada ejecucion.)
         if (!win.__inspectorListeners) {
             win.__inspectorListeners = true;
 
-        doc.addEventListener('mousemove', function(e) {
-          try {
-            // Buscar el tooltip fresco (un rerender pudo recrearlo).
-            var tip = doc.getElementById('el-inspector-tip');
-            if (!tip) return;
-            if (!inspectorActivo()) {
-                tip.style.opacity = '0';
-                resaltarEl(null, null);
-                return;
-            }
+            doc.addEventListener('mousemove', function(e) {
+              try {
+                var tip = doc.getElementById('el-inspector-tip');
+                if (!tip) return;
+                if (!inspectorActivo()) {
+                    tip.style.opacity = '0';
+                    resaltarEl(null, null);
+                    return;
+                }
 
-            var el = e.target;
-            var etiqueta = null;
-            var cursor = el;
+                var el = e.target;
+                var etiqueta = null;
+                var cursor = el;
 
-            var agInfo = null;
-            try { agInfo = agGridInfo(e.clientX, e.clientY); } catch(err) { agInfo = null; }
-            if (agInfo) {
-                etiqueta = agInfo;
-                var agFrame = doc.querySelector('iframe[src*="st_aggrid"], [data-testid="stAgGrid"] iframe');
-                if (!agFrame) {
-                    var iframes = doc.querySelectorAll('iframe');
-                    for (var fi=0; fi<iframes.length; fi++) {
-                        var r = iframes[fi].getBoundingClientRect();
-                        if (e.clientX >= r.left && e.clientX <= r.right &&
-                            e.clientY >= r.top  && e.clientY <= r.bottom) {
-                            agFrame = iframes[fi]; break;
+                var agInfo = null;
+                try { agInfo = agGridInfo(e.clientX, e.clientY); } catch(err) { agInfo = null; }
+                if (agInfo) {
+                    etiqueta = agInfo;
+                    var agFrame = doc.querySelector('iframe[src*="st_aggrid"], [data-testid="stAgGrid"] iframe');
+                    if (!agFrame) {
+                        var iframes = doc.querySelectorAll('iframe');
+                        for (var fi=0; fi<iframes.length; fi++) {
+                            var r = iframes[fi].getBoundingClientRect();
+                            if (e.clientX >= r.left && e.clientX <= r.right &&
+                                e.clientY >= r.top  && e.clientY <= r.bottom) {
+                                agFrame = iframes[fi]; break;
+                            }
                         }
                     }
                 }
@@ -766,41 +755,41 @@ def inject_element_inspector():
             } else {
                 tip.style.opacity = '0';
             }
-          } catch(err) {
-            if (win.__logErr) win.__logErr('Inspector mousemove: ' + err.message);
-          }
-        }, true);
+              } catch(err) {
+                if (win.__logErr) win.__logErr('Inspector mousemove: ' + err.message);
+              }
+            }, true);
 
-        doc.addEventListener('mouseleave', function() {
-            var tip = doc.getElementById('el-inspector-tip');
-            if (tip) tip.style.opacity = '0';
-            resaltarEl(null, null);
-        });
+            doc.addEventListener('mouseleave', function() {
+                var tip = doc.getElementById('el-inspector-tip');
+                if (tip) tip.style.opacity = '0';
+                resaltarEl(null, null);
+            });
 
-        doc.addEventListener('keydown', function(e) {
-            if (e.altKey && (e.key === 'i' || e.key === 'I')) {
-                var url = new URL(win.location.href);
-                if (url.searchParams.get('debug') === '1') {
-                    url.searchParams.delete('debug');
-                } else {
-                    url.searchParams.set('debug', '1');
+            doc.addEventListener('keydown', function(e) {
+                if (e.altKey && (e.key === 'i' || e.key === 'I')) {
+                    var url = new URL(win.location.href);
+                    if (url.searchParams.get('debug') === '1') {
+                        url.searchParams.delete('debug');
+                    } else {
+                        url.searchParams.set('debug', '1');
+                    }
+                    win.history.replaceState({}, '', url.toString());
+                    var badge = doc.getElementById('el-inspector-badge');
+                    if (badge) badge.style.display = inspectorActivo() ? 'flex' : 'none';
+                    if (!inspectorActivo()) {
+                        var tip = doc.getElementById('el-inspector-tip');
+                        if (tip) tip.style.opacity = '0';
+                        resaltarEl(null, null);
+                    }
                 }
-                win.history.replaceState({}, '', url.toString());
-                var badge = doc.getElementById('el-inspector-badge');
-                if (badge) badge.style.display = inspectorActivo() ? 'flex' : 'none';
-                if (!inspectorActivo()) {
-                    var tip = doc.getElementById('el-inspector-tip');
-                    if (tip) tip.style.opacity = '0';
-                    resaltarEl(null, null);
-                }
-            }
-        });
+            });
 
-        var _push = win.history.pushState.bind(win.history);
-        win.history.pushState = function() { _push.apply(win.history, arguments); actualizarBadge(); };
-        win.addEventListener('popstate', actualizarBadge);
+            var _push = win.history.pushState.bind(win.history);
+            win.history.pushState = function() { _push.apply(win.history, arguments); actualizarBadge(); };
+            win.addEventListener('popstate', actualizarBadge);
 
-        }  // fin del guard __inspectorListeners
+        }
 
     })();
     </script>
@@ -853,8 +842,8 @@ def inject_pagination_v2():
             '.ag-paging-panel .ag-paging-page-size{position:absolute!important;left:16px!important;'+
             'top:50%!important;transform:translateY(-50%)!important;margin:0!important;}'+
             '.ag-paging-panel .ag-paging-row-summary-panel,'+
-            '.ag-paging-panel .ag-paging-description,'+
-            '.ag-paging-panel .ag-paging-button{'+
+            '.ag-paging-description,'+
+            '.ag-paging-button{'+
             'position:absolute!important;left:-9999px!important;width:1px!important;'+
             'height:1px!important;overflow:hidden!important;}'+
             '#pgv2{display:inline-flex;align-items:center;gap:14px;margin:0 auto;'+
@@ -1001,7 +990,6 @@ def inject_maximize_aggrid():
         var tries = 0;
         var MAX = 40;
 
-        // ── CSS del botón flotante ───────────────────────────────────────
         function inyectarCSS() {
             if (doc.getElementById('aggrid-max-css')) return;
             var s = doc.createElement('style');
@@ -1104,26 +1092,22 @@ def inject_maximize_aggrid():
                 btn.title = 'Maximizar tabla';
                 btn.classList.remove('maximizado');
 
-                // Reposicionar botón sobre el iframe restaurado
                 win.setTimeout(function() {
                     posicionarBoton(iframe);
                 }, 100);
             }
         }
 
-        // ── Crear botón ────────────────────────────────────────────────
         var btn = doc.createElement('button');
         btn.id = BTN_ID;
         btn.innerHTML = '&#x26F6;';
         btn.title = 'Maximizar tabla';
         btn.onclick = toggle;
 
-        // ── Buscar iframe y posicionar ──────────────────────────────────
         function check() {
             tries++;
             inyectarCSS();
 
-            // Re-anclar botón si Streamlit lo desconectó
             if (doc.getElementById(BTN_ID) !== btn) {
                 if (btn.parentNode) btn.parentNode.removeChild(btn);
                 doc.body.appendChild(btn);
@@ -1140,7 +1124,5 @@ def inject_maximize_aggrid():
         }
         win.setTimeout(check, 800);
     })();
-    </script>
-    """, height=0)
     </script>
     """, height=0)
