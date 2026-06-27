@@ -204,12 +204,10 @@ if fecha_min_full is not None and reporte != "Requerimientos":
 grupos_sel = []
 
 
-# ── PASO 1: función cacheada FUERA del loop ────────────────────────────
 @st.cache_data
 def get_opciones_filtro(_df, _col):
     """Retorna las opciones únicas de una columna, ordenadas."""
     return sorted(_df[_col].dropna().unique().tolist(), key=lambda x: str(x))
-# ── FIN PASO 1 ──────────────────────────────────────────────────────────
 
 
 def _key(prefijo, idx):
@@ -270,7 +268,6 @@ with st.popover(label_btn, use_container_width=False):
                 ini, fin = rango
                 df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
 
-    # El slider de tamaño de letra solo aplica en reportes con AgGrid
     if reporte not in ("Compras", "Salidas"):
         st.divider()
         st.session_state.tabla_tam = st.select_slider(
@@ -330,7 +327,20 @@ if df_f.empty:
 font_px = TAM_FUENTE.get(st.session_state.tabla_tam, 14)
 
 
-# ── PASO 3: gráficos genéricos en una sola función ──────────────────────
+# ── PASO 6: aviso rápido antes de AgGrid (lo útil de diagnostico.py) ────
+def _aviso_rapido_aggrid(df_data):
+    """Si hay columnas duplicadas, muestra un aviso corto.
+    Si todo está bien, no muestra nada. Se llama antes de cada tabla."""
+    duplicadas = df_data.columns[df_data.columns.duplicated()].unique().tolist()
+    if duplicadas:
+        nombres = ", ".join(f"«{d}»" for d in duplicadas)
+        st.warning(
+            f"⚠️ Columnas duplicadas: {nombres}. "
+            "Esto puede dejar la tabla en blanco."
+        )
+# ── FIN PASO 6 ──────────────────────────────────────────────────────────
+
+
 def _render_graficos_genericos(df_data, nombre_reporte):
     """Renderiza selectores + gráfico de barras top 20."""
     cols_num = df_data.select_dtypes("number").columns.tolist()
@@ -364,10 +374,8 @@ def _render_graficos_genericos(df_data, nombre_reporte):
         st.plotly_chart(fig, use_container_width=True)
     except Exception as e:
         st.error(f"Error: {str(e)}")
-# ── FIN PASO 3 ──────────────────────────────────────────────────────────
 
 
-# ── PASO 4: Requerimientos en su propia función ─────────────────────────
 def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, font_px, cfg):
     """Renderiza el reporte de Requerimientos con tabla dinámica."""
     st.markdown(
@@ -385,13 +393,11 @@ def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, fon
 
     df_piv = df_data.copy()
 
-    # Convierte a datetime todas las columnas que parezcan fechas
     for _c in df_piv.columns:
         _n = str(_c).lower()
         if "fecha" in _n or "date" in _n or pd.api.types.is_datetime64_any_dtype(df_piv[_c]):
             df_piv[_c] = pd.to_datetime(df_piv[_c], errors="coerce")
 
-    # Calcular Mes y Año ANTES del filtro de fecha
     _col_freg = buscar_columna(df_piv, "Fecha Registro", "fecha registro") or col_fecha_ref
 
     if _col_freg and _col_freg in df_piv.columns:
@@ -408,7 +414,6 @@ def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, fon
             .str.replace("<NA>", "", regex=False)
         )
 
-    # Filtro de fecha
     cols_fecha_piv = [c for c in df_piv.columns
                       if pd.api.types.is_datetime64_any_dtype(df_piv[c])]
 
@@ -439,7 +444,6 @@ def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, fon
                      (df_piv[col_fecha_sel].dt.date <= fin)
                 df_piv = df_piv[_m]
 
-    # AgGrid
     tiene_config_movil = "columnas_movil" in cfg
     if usa_vista_movil and tiene_config_movil:
         st.caption("📱 Vista móvil")
@@ -447,6 +451,7 @@ def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, fon
             df_piv[cols_mostrar], cfg.get("columnas_fijas_movil", 2), "Requerimientos", font_px,
         )
     else:
+        _aviso_rapido_aggrid(df_piv)
         renderizar_aggrid_desktop(
             df_piv,
             grupos_sel,
@@ -455,10 +460,8 @@ def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, fon
             font_px,
             cols_visibles=None,
         )
-# ── FIN PASO 4 ──────────────────────────────────────────────────────────
 
 
-# ── PASO 5: funciones de clasificación de columnas FUERA del bloque ─────
 def _es_moneda(nombre):
     """True si el nombre de columna parece un importe en soles."""
     n = str(nombre).lower()
@@ -468,7 +471,6 @@ def _es_cantidad(nombre):
     """True si el nombre de columna parece una cantidad."""
     n = str(nombre).lower()
     return any(k in n for k in ("cantidad", "unidades", "qty", "stock"))
-# ── FIN PASO 5 ──────────────────────────────────────────────────────────
 
 
 def _render_tabla():
@@ -478,6 +480,7 @@ def _render_tabla():
         columnas_fijas = cfg.get("columnas_fijas_movil", 2)
         renderizar_aggrid_movil(df_f[cols_mostrar], columnas_fijas, reporte, font_px)
     else:
+        _aviso_rapido_aggrid(df_f[cols_mostrar])
         cols_finales = list(cols_mostrar)
         if grupos_sel:
             for c in grupos_sel:
@@ -599,6 +602,8 @@ elif reporte == "Salidas":
                 for c in grupos_sel:
                     if c not in cols_finales:
                         cols_finales.append(c)
+
+            _aviso_rapido_aggrid(df_f[cols_finales])
             renderizar_aggrid_desktop(
                 df_f[cols_finales], grupos_sel, cols_sel, reporte, int(zoom),
                 cols_visibles=None,
