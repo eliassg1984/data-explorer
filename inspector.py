@@ -2,48 +2,73 @@
 Inspector de datos: herramienta para verificar el contenido CRUDO de los
 archivos parquet (sin pivote ni agregación).
 
-Funciones para el usuario:
-- Elegir cualquier archivo de datos y ver sus filas tal como vienen del parquet.
-- Conteo de control: cuántas filas tiene en total y cuántas coinciden.
-- Radiografía de columnas: tipo, nulos y rango de fechas.
-- Aviso de posibles problemas para la tabla (AgGrid): columnas repetidas, de fecha, etc.
-- Búsqueda por columna (exacta o contiene, ignorando mayúsculas y espacios).
-- Filtro por fecha (rango desde / hasta) sobre una columna de fecha.
-- Descargar las coincidencias a CSV.
+Funciones:
+- Elegir cualquier archivo y ver sus filas tal como vienen del parquet.
+- Vista previa rápida (primeras filas sin filtros).
+- Conteo de control: cuántas filas totales y cuántas coinciden.
+- Radiografía de columnas: tipo, nulos, ejemplo y nombre normalizado.
+- Detección de columnas duplicadas (rompen AgGrid).
+- Valores únicos de cualquier columna con su conteo.
+- Búsqueda por columna (exacta o contiene).
+- Filtro por fecha (rango).
+- Descargar coincidencias a CSV.
 """
 
 import pandas as pd
 import streamlit as st
 
+from utils import _norm, buscar_columna, buscar_columna_fecha
 from data import REPORTES, cargar
-import diagnostico
+
+
+# ---------------------------------------------------------------------------
+# Constantes
+# ---------------------------------------------------------------------------
+LIMITE_FILAS = 10_000
+VISTA_PREVIA_N = 10
 
 
 # ---------------------------------------------------------------------------
 # Utilidades internas
 # ---------------------------------------------------------------------------
 def _reportes_datos():
-    """Reportes que son archivos de datos (excluye herramientas como este)."""
+    """Reportes que son archivos de datos (excluye herramientas)."""
     return {
         n: c for n, c in REPORTES.items()
         if c.get("archivo") and not c.get("tool")
     }
 
 
-def _columnas_fecha(df):
-    """Columnas que parecen de fecha (por tipo datetime o por nombre)."""
+def _todas_fechas(df):
+    """Columnas que parecen de fecha (usa _norm de utils para consistencia)."""
     cols = []
     for c in df.columns:
         if pd.api.types.is_datetime64_any_dtype(df[c]):
             cols.append(c)
-        elif "fecha" in str(c).lower() or "date" in str(c).lower():
+        elif "fecha" in _norm(c) or "date" in _norm(c):
             cols.append(c)
-    return list(dict.fromkeys(cols))  # sin duplicados, manteniendo orden
+    return list(dict.fromkeys(cols))
 
 
-def _primer_valor(serie):
-    s = serie.dropna()
-    return "" if s.empty else str(s.iloc[0])[:40]
+def _ejemplos(serie, n=3):
+    """Retorna hasta n valores no nulos de una serie, como texto corto."""
+    vals = serie.dropna().astype(str).head(n).tolist()
+    return " | ".join(v[:30] for v in vals) if vals else "(vacía)"
+
+
+def _columnas_duplicadas(df):
+    """Detecta columnas con el mismo nombre (rompen AgGrid)."""
+    duplicadas = df.columns[df.columns.duplicated()].unique().tolist()
+    resultado = []
+    for nombre in duplicadas:
+        veces = int((df.columns == nombre).sum())
+        posiciones = [i for i, c in enumerate(df.columns) if c == nombre]
+        resultado.append({
+            "nombre": nombre,
+            "veces": veces,
+            "posiciones": posiciones,
+        })
+    return resultado
 
 
 # ---------------------------------------------------------------------------
@@ -76,43 +101,73 @@ def render_inspector():
 
     total = len(df)
 
-    # ── Conteo de control ───────────────────────────────────────────────────
-    c1, c2 = st.columns(2)
+    # ── Métricas de control ────────────────────────────────────────────────
+    c1, c2, c3 = st.columns(3)
     c1.metric("📄 Filas totales", f"{total:,}")
     c2.metric("🧱 Columnas", f"{df.shape[1]}")
+    c3.metric("📍 Columnas de fecha", f"{len(_todas_fechas(df))}")
 
-    # ── Radiografía de columnas ─────────────────────────────────────────────
-    with st.expander("🩺 Radiografía de columnas (tipos, nulos, rango de fechas)"):
+    # ── Alerta: columnas duplicadas ────────────────────────────────────────
+    duplicadas = _columnas_duplicadas(df)
+    if duplicadas:
+        for d in duplicadas:
+            st.warning(
+                f"⚠️ Columna repetida: «{d['nombre']}» aparece {d['veces']} veces "
+                f"en posiciones {d['posiciones']}. AgGrid muestra la tabla vacía "
+                f"cuando hay columnas duplicadas."
+            )
+
+    # ── Vista previa (sin filtros) ───────────────────────────────────────
+    with st.expander("👁️ Vista previa (primeras filas sin filtros)", expanded=False):
+        st.caption(f"Mostrando las primeras {VISTA_PREVIA_N} filas tal como vienen del parquet:")
+        vista = df.head(VISTA_PREVIA_N).reset_index()
+        vista.rename(columns={"index": "fila"}, inplace=True)
+        vista["fila"] = vista["fila"] + 1
+        st.dataframe(vista, use_container_width=True, hide_index=True, height=320)
+
+    # ── Radiografía de columnas ──────────────────────────────────────────
+    with st.expander("🩺 Radiografía de columnas"):
         info = pd.DataFrame({
             "Columna": list(df.columns),
+            "Normalizado": [_norm(c) for c in df.columns],
             "Tipo": [str(df[c].dtype) for c in df.columns],
             "Nulos": [int(df[c].isna().sum()) for c in df.columns],
             "% Nulos": [round(float(df[c].isna().mean()) * 100, 1) for c in df.columns],
-            "Ejemplo": [_primer_valor(df[c]) for c in df.columns],
+            "Ejemplos": [_ejemplos(df[c], 3) for c in df.columns],
         })
         st.dataframe(info, use_container_width=True, hide_index=True)
-        for c in _columnas_fecha(df):
-            serie = pd.to_datetime(df[c], errors="coerce").dropna()
-            if not serie.empty:
-                st.caption(f"📅 {c}: {serie.min():%d/%m/%Y} → {serie.max():%d/%m/%Y}")
 
-    # ── ¿Esto puede romper la tabla (AgGrid)? ───────────────────────────────
-    # Revisa el archivo y avisa de lo que típicamente deja la tabla en blanco
-    # (columnas repetidas, de fecha, 100% vacías, o texto que parece número).
-    hallazgos = diagnostico.revisar_datos(df)
-    with st.expander("🚦 ¿Esto puede romper la tabla?", expanded=bool(hallazgos)):
-        if not hallazgos:
-            st.success("No se detectaron problemas para AgGrid. ✅")
-        else:
-            for h in hallazgos:
-                if h["nivel"] == "alerta":
-                    st.warning(h["mensaje"])
+        fechas = _todas_fechas(df)
+        if fechas:
+            st.markdown("**Rango de fechas:**")
+            for c in fechas:
+                serie = pd.to_datetime(df[c], errors="coerce").dropna()
+                if not serie.empty:
+                    st.caption(f"  📅 {c}: {serie.min():%d/%m/%Y} → {serie.max():%d/%m/%Y}")
                 else:
-                    st.info(h["mensaje"])
+                    st.caption(f"  📅 {c}: sin fechas válidas")
+
+    # ── Valores únicos de una columna ────────────────────────────────────
+    with st.expander("📋 Valores únicos por columna"):
+        col_unique = st.selectbox("Selecciona columna", list(df.columns), key="insp_unique")
+        unicos = df[col_unique].value_counts(dropna=False)
+        st.caption(f"{len(unicos):,} valores distintos en «{col_unique}»")
+
+        if len(unicos) > LIMITE_FILAS:
+            st.warning(
+                f"Esta columna tiene {len(unicos):,} valores distintos. "
+                f"Mostrando los primeros {LIMITE_FILAS:,}."
+            )
+            unicos = unicos.head(LIMITE_FILAS)
+
+        df_unicos = unicos.reset_index()
+        df_unicos.columns = [col_unique, "conteo"]
+        df_unicos.insert(0, "fila", range(1, len(df_unicos) + 1))
+        st.dataframe(df_unicos, use_container_width=True, hide_index=True, height=400)
 
     st.divider()
 
-    # ── Filtros ─────────────────────────────────────────────────────────────
+    # ── Filtros ───────────────────────────────────────────────────────────
     df_f = df
     fcol1, fcol2 = st.columns(2)
 
@@ -127,7 +182,7 @@ def render_inspector():
 
     with fcol2:
         st.markdown("**📅 Filtro por fecha**")
-        cols_fecha = _columnas_fecha(df)
+        cols_fecha = _todas_fechas(df)
         if cols_fecha:
             col_fecha = st.selectbox(
                 "Columna de fecha", ["(ninguna)"] + cols_fecha, key="insp_fcol",
@@ -151,7 +206,7 @@ def render_inspector():
         else:
             st.caption("Este archivo no tiene columnas de fecha detectables.")
 
-    # Aplicar búsqueda por columna sobre lo que quede tras el filtro de fecha
+    # Aplicar búsqueda
     if texto.strip():
         objetivo = texto.strip()
         serie_txt = df_f[col_busc].astype(str).str.strip()
@@ -161,7 +216,7 @@ def render_inspector():
             mask = serie_txt.str.contains(objetivo, case=False, na=False, regex=False)
         df_f = df_f[mask.values]
 
-    # ── Resultados ──────────────────────────────────────────────────────────
+    # ── Resultados ───────────────────────────────────────────────────────
     st.divider()
     coincidencias = len(df_f)
     pct = (coincidencias / total * 100) if total else 0
@@ -176,7 +231,31 @@ def render_inspector():
             "del rango de fechas elegido."
         )
     else:
-        st.dataframe(df_f, use_container_width=True, height=480)
+        # Límite de filas para no colgar el navegador
+        mostrar = df_f
+        if len(df_f) > LIMITE_FILAS:
+            st.warning(
+                f"⚠️ Mostrando {LIMITE_FILAS:,} de {len(df_f):,} filas. "
+                f"Descarga el CSV para ver todas."
+            )
+            mostrar = df_f.head(LIMITE_FILAS)
+
+        resultado = mostrar.reset_index()
+        resultado.rename(columns={"index": "fila"}, inplace=True)
+        # Para filas que ya tenían índice numérico del reset anterior,
+        # mostrar el índice original del DataFrame
+        if "fila" in resultado.columns and resultado["fila"].dtype == object:
+            try:
+                resultado["fila"] = resultado["fila"].apply(
+                    lambda x: int(x.split("(")[1].replace(")", "")) + 1
+                    if "(" in str(x) else x
+                )
+            except Exception:
+                pass
+        else:
+            resultado["fila"] = resultado["fila"] + 1
+
+        st.dataframe(resultado, use_container_width=True, hide_index=True, height=480)
         st.download_button(
             "⬇️ Descargar coincidencias (CSV)",
             data=df_f.to_csv(index=False).encode("utf-8-sig"),
