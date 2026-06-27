@@ -458,6 +458,19 @@ def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, fon
 # ── FIN PASO 4 ──────────────────────────────────────────────────────────
 
 
+# ── PASO 5: funciones de clasificación de columnas FUERA del bloque ─────
+def _es_moneda(nombre):
+    """True si el nombre de columna parece un importe en soles."""
+    n = str(nombre).lower()
+    return any(k in n for k in ("importe", "total", "monto", "precio", "costo", "unitario"))
+
+def _es_cantidad(nombre):
+    """True si el nombre de columna parece una cantidad."""
+    n = str(nombre).lower()
+    return any(k in n for k in ("cantidad", "unidades", "qty", "stock"))
+# ── FIN PASO 5 ──────────────────────────────────────────────────────────
+
+
 def _render_tabla():
     """Renderiza la tabla AgGrid (desktop o móvil)."""
     if usa_vista_movil and tiene_config_movil:
@@ -474,6 +487,28 @@ def _render_tabla():
             df_f[cols_finales], grupos_sel, cols_mostrar, reporte, font_px,
             cols_visibles=cols_visibles,
         )
+
+
+def _render_kpis_salidas(df_data):
+    """Renderiza las métricas KPI para el reporte de Salidas."""
+    cols_imp = [c for c in df_data.columns
+                if pd.api.types.is_numeric_dtype(df_data[c]) and _es_moneda(c)]
+    cols_cnt = [c for c in df_data.columns
+                if pd.api.types.is_numeric_dtype(df_data[c]) and _es_cantidad(c)]
+    n_kpi = min(4, 1 + len(cols_imp[:2]) + len(cols_cnt[:1]))
+    kpis = st.columns(n_kpi)
+    kpis[0].metric("📄 Registros", f"{len(df_data):,}")
+    ki = 1
+    for c in cols_imp[:2]:
+        if ki >= n_kpi:
+            break
+        kpis[ki].metric(f"💰 {c}", f"S/ {df_data[c].sum():,.2f}")
+        ki += 1
+    for c in cols_cnt[:1]:
+        if ki >= n_kpi:
+            break
+        kpis[ki].metric(f"📦 {c}", f"{int(df_data[c].sum()):,}")
+        ki += 1
 
 
 # ── COMPRAS ─────────────────────────────────────────────────────────────────
@@ -557,32 +592,7 @@ elif reporte == "Salidas":
             if not cols_sel:
                 cols_sel = list(todas_cols)
 
-            def _es_moneda_kpi(n):
-                n = str(n).lower()
-                return any(k in n for k in ("importe", "total", "monto", "precio", "costo"))
-
-            def _es_cant_kpi(n):
-                n = str(n).lower()
-                return any(k in n for k in ("cantidad", "unidades", "qty"))
-
-            cols_imp = [c for c in df_f.columns
-                        if pd.api.types.is_numeric_dtype(df_f[c]) and _es_moneda_kpi(c)]
-            cols_cnt = [c for c in df_f.columns
-                        if pd.api.types.is_numeric_dtype(df_f[c]) and _es_cant_kpi(c)]
-            n_kpi = min(4, 1 + len(cols_imp[:2]) + len(cols_cnt[:1]))
-            kpis = st.columns(n_kpi)
-            kpis[0].metric("📄 Registros", f"{len(df_f):,}")
-            ki = 1
-            for c in cols_imp[:2]:
-                if ki >= n_kpi:
-                    break
-                kpis[ki].metric(f"💰 {c}", f"S/ {df_f[c].sum():,.2f}")
-                ki += 1
-            for c in cols_cnt[:1]:
-                if ki >= n_kpi:
-                    break
-                kpis[ki].metric(f"📦 {c}", f"{int(df_f[c].sum()):,}")
-                ki += 1
+            _render_kpis_salidas(df_f)
 
             cols_finales = list(cols_sel)
             if grupos_sel:
