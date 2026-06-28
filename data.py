@@ -17,6 +17,7 @@ REPORTES = {
         "archivo": "ajusteinventario.parquet",
         "icono": "sliders",
         "filtros_cat": [],  # Sin filtros de Área/Familia/Subfamilia en el popover
+        "agrupar": [],      # Sin opción de "Agrupar por" en el popover
     },
     "Compras": {
         "archivo": "compras.parquet",
