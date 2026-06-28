@@ -24,13 +24,18 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     Si es None, se muestran todas.
     """
 
-    envolver_cabeceras = (reporte == "Inventario Valorizado")
-    quitar_fondos = (reporte == "Inventario Valorizado")
-    es_inventario = (reporte == "Inventario Valorizado")
+    # ── Reportes que comparten el diseño "estilo inventario" (tema material,
+    # estilos de celda planos, panel de pivot completo) ───────────────────
+    REPORTES_ESTILO_INVENTARIO = ("Inventario Valorizado", "Ajuste de Inventario")
+
+    envolver_cabeceras = reporte in REPORTES_ESTILO_INVENTARIO
+    quitar_fondos = reporte in REPORTES_ESTILO_INVENTARIO
+    es_inventario = reporte in REPORTES_ESTILO_INVENTARIO
     es_salidas = (reporte == "Salidas")
     es_requerimientos = (reporte == "Requerimientos")
 
-    # ── Inventario Valorizado y Requerimientos muestran el panel pivot completo
+    # ── Inventario Valorizado, Ajuste de Inventario y Requerimientos muestran
+    # el panel pivot completo (Grupos de filas / Valores / Etiquetas de columnas)
     mostrar_pivot = es_requerimientos or es_inventario
 
     # ─────────────────────────────────────────────────────────────────
@@ -452,8 +457,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         opciones_grid["groupDefaultExpanded"] = 0
         opciones_grid["pivotMode"] = es_requerimientos
     else:
-        # ── CAMBIO: Inventario Valorizado siempre arranca sin pivot activo;
-        # el usuario lo activa con el toggle del panel lateral.
+        # ── CAMBIO: Inventario Valorizado y Ajuste de Inventario siempre
+        # arrancan sin pivot activo; el usuario lo activa con el toggle
+        # del panel lateral.
         opciones_grid["pivotMode"] = False
 
     if envolver_cabeceras:
@@ -863,7 +869,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     inject_grid_health_check()
 
     # ── Post-render: inyecciones específicas por reporte ──────────────────
-    if reporte == "Inventario Valorizado":
+    if reporte in REPORTES_ESTILO_INVENTARIO:
         inject_pagination_v2()
 
     if es_requerimientos:
