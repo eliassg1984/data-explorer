@@ -2,6 +2,7 @@
 Panel de Reportes v2.0 - Punto de entrada principal (OPTIMIZADO).
 """
 
+import datetime
 import pandas as pd
 import streamlit as st
 import plotly.express as px
@@ -178,10 +179,6 @@ sugeridas, faltan_cols, todas_cols = get_columnas_sugeridas(
 if "agrupar" in cfg:
     cols_agrupar, _ = resolver_columnas(df_f, cfg["agrupar"])
 else:
-    # NOTA: "Agrupar por" se detecta de forma independiente de cat_cols
-    # (filtros del popover), para que reportes con "filtros_cat": []
-    # (p.ej. Ajuste de Inventario, sin filtros de Área/Familia/Subfamilia)
-    # sigan pudiendo agrupar por esas mismas columnas si existen.
     cols_agrupar = [c for c in [
         buscar_columna(df_f, "area", "área"),
         buscar_columna(df_f, "familia"),
@@ -198,6 +195,13 @@ if col_fecha and df_f[col_fecha].notna().any():
     fecha_min_full = df_f[col_fecha].min().date()
     fecha_max_full = df_f[col_fecha].max().date()
 
+# ── Default inicio de año para Ajuste de Inventario ──────────────────────
+anio_actual = datetime.date.today().year
+fecha_ini_default = datetime.date(anio_actual, 1, 1)
+fecha_fin_default = datetime.date(anio_actual, 12, 31)
+
+es_ajuste = (reporte == "Ajuste de Inventario")
+
 controles = []
 for cc in cat_cols:
     controles.append(("cat", cc))
@@ -206,7 +210,10 @@ if col_busc:
 if cols_agrupar:
     controles.append(("grp", None))
 if fecha_min_full is not None and reporte != "Requerimientos":
-    controles.append(("fecha", col_fecha))
+    if es_ajuste:
+        controles.append(("fecha_doble", col_fecha))
+    else:
+        controles.append(("fecha", col_fecha))
 
 grupos_sel = []
 
@@ -227,6 +234,15 @@ def _contar_filtros_activos():
             val = st.session_state.get(_key("fch", idx))
             if isinstance(val, (tuple, list)) and len(val) == 2:
                 if val[0] != fecha_min_full or val[1] != fecha_max_full:
+                    n += 1
+        elif tipo == "fecha_doble":
+            ini = st.session_state.get(_key("fch_ini", idx))
+            fin = st.session_state.get(_key("fch_fin", idx))
+            if ini and fin:
+                if ini != fecha_ini_default or fin != fecha_fin_default:
+                    n += 1
+                else:
+                    # Si está en el default (año actual), igual cuenta como filtro activo
                     n += 1
         elif tipo == "cat":
             if st.session_state.get(_key("cat", idx)):
@@ -274,6 +290,48 @@ with st.popover(label_btn, use_container_width=False):
             if isinstance(rango, (tuple, list)) and len(rango) == 2:
                 ini, fin = rango
                 df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
+
+        elif tipo == "fecha_doble":
+            # ── Dos calendarios separados para Ajuste de Inventario ──
+            # Por defecto muestran solo el año actual; el usuario puede ampliar.
+            st.caption("📅 Rango de fechas")
+
+            # Calcular defaults seguros (dentro del rango del parquet)
+            _ini_def = max(fecha_ini_default, fecha_min_full) if fecha_min_full else fecha_ini_default
+            _fin_def = min(fecha_fin_default, fecha_max_full) if fecha_max_full else fecha_fin_default
+            # Si el año actual no tiene datos, usar el rango completo
+            if fecha_max_full and fecha_max_full.year < anio_actual:
+                _ini_def = fecha_min_full
+                _fin_def = fecha_max_full
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                fecha_ini = st.date_input(
+                    "Desde",
+                    value=_ini_def,
+                    min_value=fecha_min_full,
+                    max_value=fecha_max_full,
+                    format="DD/MM/YYYY",
+                    key=_key("fch_ini", idx),
+                )
+            with col_b:
+                fecha_fin = st.date_input(
+                    "Hasta",
+                    value=_fin_def,
+                    min_value=fecha_min_full,
+                    max_value=fecha_max_full,
+                    format="DD/MM/YYYY",
+                    key=_key("fch_fin", idx),
+                )
+
+            if fecha_ini and fecha_fin:
+                if fecha_ini > fecha_fin:
+                    st.warning("⚠️ La fecha de inicio es posterior a la fecha fin.")
+                else:
+                    df_f = df_f[
+                        (df_f[col].dt.date >= fecha_ini) &
+                        (df_f[col].dt.date <= fecha_fin)
+                    ]
 
     if reporte not in ("Compras", "Salidas", "Ajuste de Inventario"):
         st.divider()
@@ -334,10 +392,8 @@ if df_f.empty:
 font_px = TAM_FUENTE.get(st.session_state.tabla_tam, 14)
 
 
-# ── PASO 6: aviso rápido antes de AgGrid (lo útil de diagnostico.py) ────
 def _aviso_rapido_aggrid(df_data):
-    """Si hay columnas duplicadas, muestra un aviso corto.
-    Si todo está bien, no muestra nada. Se llama antes de cada tabla."""
+    """Si hay columnas duplicadas, muestra un aviso corto."""
     duplicadas = df_data.columns[df_data.columns.duplicated()].unique().tolist()
     if duplicadas:
         nombres = ", ".join(f"«{d}»" for d in duplicadas)
@@ -345,7 +401,6 @@ def _aviso_rapido_aggrid(df_data):
             f"⚠️ Columnas duplicadas: {nombres}. "
             "Esto puede dejar la tabla en blanco."
         )
-# ── FIN PASO 6 ──────────────────────────────────────────────────────────
 
 
 def _render_graficos_genericos(df_data, nombre_reporte):
@@ -470,12 +525,10 @@ def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, fon
 
 
 def _es_moneda(nombre):
-    """True si el nombre de columna parece un importe en soles."""
     n = str(nombre).lower()
     return any(k in n for k in ("importe", "total", "monto", "precio", "costo", "unitario"))
 
 def _es_cantidad(nombre):
-    """True si el nombre de columna parece una cantidad."""
     n = str(nombre).lower()
     return any(k in n for k in ("cantidad", "unidades", "qty", "stock"))
 
@@ -625,7 +678,7 @@ elif reporte == "Requerimientos":
     _render_requerimientos(df_f, col_fecha, grupos_sel, cols_mostrar, font_px, cfg)
 
 
-# ── RESTO DE REPORTES ────────────────────────────────────────────────────────
+# ── RESTO DE REPORTES (incluye Ajuste de Inventario) ────────────────────────
 else:
     tab_tabla, tab_graficos = st.tabs(["📋 Tabla", "📊 Gráficos"])
 
