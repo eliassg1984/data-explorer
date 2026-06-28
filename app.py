@@ -245,6 +245,17 @@ def _contar_filtros_activos():
 n_activos = _contar_filtros_activos()
 label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_activos != 1 else '') if n_activos else ''}"
 
+# ── TÍTULO GRANDE ARRIBA (solo Ajuste de Inventario) ──────────────────────
+# Se muestra aquí, ANTES del rango de fechas, para que el orden sea:
+#   Título grande  ->  Rango de fechas  ->  Tabla / Gráficos
+if es_ajuste:
+    st.markdown(
+        f'<p style="font-size:22px;font-weight:700;color:#1e293b;'
+        f'margin:0 0 0.2rem 0;line-height:1.2;">{reporte}</p>'
+        f'<hr style="border:none;border-top:2px solid #3b82f6;margin:0 0 0.8rem 0;">',
+        unsafe_allow_html=True,
+    )
+
 # ── FILTRO DE FECHA INLINE para Ajuste de Inventario (fuera del popover) ──
 if es_ajuste and fecha_min_full is not None:
     _ini_def = max(fecha_ini_default, fecha_min_full)
@@ -657,12 +668,15 @@ elif reporte == "Requerimientos":
 # ── RESTO DE REPORTES (incluye Ajuste de Inventario) ────────────────────────
 else:
     # ── Título grande con línea azul debajo ──────────────────────────────
-    st.markdown(
-        f'<p style="font-size:22px;font-weight:700;color:#1e293b;'
-        f'margin:0 0 0.2rem 0;line-height:1.2;">{reporte}</p>'
-        f'<hr style="border:none;border-top:2px solid #3b82f6;margin:0 0 0.8rem 0;">',
-        unsafe_allow_html=True,
-    )
+    # En "Ajuste de Inventario" el título ya se mostró arriba, sobre el rango
+    # de fechas, así que aquí no se vuelve a dibujar (evita el título doble).
+    if not es_ajuste:
+        st.markdown(
+            f'<p style="font-size:22px;font-weight:700;color:#1e293b;'
+            f'margin:0 0 0.2rem 0;line-height:1.2;">{reporte}</p>'
+            f'<hr style="border:none;border-top:2px solid #3b82f6;margin:0 0 0.8rem 0;">',
+            unsafe_allow_html=True,
+        )
 
     tab_tabla, tab_graficos = st.tabs(["📋 Tabla", "📊 Gráficos"])
 
