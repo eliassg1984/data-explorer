@@ -32,12 +32,10 @@ st.set_page_config(
     }
 )
 
-@st.cache_data
-def init_app():
-    """Inicializa el CSS global (cacheado)."""
-    inject_css()
-
-init_app()
+# El CSS es barato y es un efecto secundario (st.markdown). cache_data solo
+# "reproduce" elementos estáticos y es frágil para esto; lo llamamos directo
+# en cada rerun.
+inject_css()
 
 inject_error_overlay()
 inject_element_inspector()
@@ -49,8 +47,19 @@ inject_element_inspector()
 
 params = st.query_params
 reporte = params.get("reporte", None)
+
+# La selección del rail (botón puente, vía on_click) tiene prioridad sobre la
+# URL y se aplica en un solo rerun, sin recargar la página.
+if st.session_state.get("_nav_reporte"):
+    reporte = st.session_state.pop("_nav_reporte")
+    st.query_params["reporte"] = reporte   # sincroniza la URL (sin recarga)
+
 if not reporte or reporte not in REPORTES:
     reporte = list(REPORTES.keys())[0]
+
+# Refresco pedido desde el rail (botón 🔄).
+if st.session_state.pop("_nav_refresh", False):
+    st.cache_data.clear()
 
 if params.get("refresh"):
     st.cache_data.clear()
