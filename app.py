@@ -178,7 +178,15 @@ sugeridas, faltan_cols, todas_cols = get_columnas_sugeridas(
 if "agrupar" in cfg:
     cols_agrupar, _ = resolver_columnas(df_f, cfg["agrupar"])
 else:
-    cols_agrupar = [c for c in cat_cols if c]
+    # NOTA: "Agrupar por" se detecta de forma independiente de cat_cols
+    # (filtros del popover), para que reportes con "filtros_cat": []
+    # (p.ej. Ajuste de Inventario, sin filtros de Área/Familia/Subfamilia)
+    # sigan pudiendo agrupar por esas mismas columnas si existen.
+    cols_agrupar = [c for c in [
+        buscar_columna(df_f, "area", "área"),
+        buscar_columna(df_f, "familia"),
+        buscar_columna(df_f, "subfamilia", "sub familia"),
+    ] if c]
 
 
 # ===========================================================================
