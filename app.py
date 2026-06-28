@@ -32,9 +32,6 @@ st.set_page_config(
     }
 )
 
-# El CSS es barato y es un efecto secundario (st.markdown). cache_data solo
-# "reproduce" elementos estáticos y es frágil para esto; lo llamamos directo
-# en cada rerun.
 inject_css()
 
 inject_error_overlay()
@@ -48,16 +45,13 @@ inject_element_inspector()
 params = st.query_params
 reporte = params.get("reporte", None)
 
-# La selección del rail (botón puente, vía on_click) tiene prioridad sobre la
-# URL y se aplica en un solo rerun, sin recargar la página.
 if st.session_state.get("_nav_reporte"):
     reporte = st.session_state.pop("_nav_reporte")
-    st.query_params["reporte"] = reporte   # sincroniza la URL (sin recarga)
+    st.query_params["reporte"] = reporte
 
 if not reporte or reporte not in REPORTES:
     reporte = list(REPORTES.keys())[0]
 
-# Refresco pedido desde el rail (botón 🔄).
 if st.session_state.pop("_nav_refresh", False):
     st.cache_data.clear()
 
@@ -204,7 +198,6 @@ if col_fecha and df_f[col_fecha].notna().any():
     fecha_min_full = df_f[col_fecha].min().date()
     fecha_max_full = df_f[col_fecha].max().date()
 
-# ── Default inicio de año para Ajuste de Inventario ──────────────────────
 anio_actual = datetime.date.today().year
 fecha_ini_default = datetime.date(anio_actual, 1, 1)
 fecha_fin_default = datetime.date(anio_actual, 12, 31)
@@ -245,14 +238,9 @@ def _contar_filtros_activos():
                 if val[0] != fecha_min_full or val[1] != fecha_max_full:
                     n += 1
         elif tipo == "fecha_doble":
-            ini = st.session_state.get(_key("fch_ini", idx))
-            fin = st.session_state.get(_key("fch_fin", idx))
-            if ini and fin:
-                if ini != fecha_ini_default or fin != fecha_fin_default:
-                    n += 1
-                else:
-                    # Si está en el default (año actual), igual cuenta como filtro activo
-                    n += 1
+            val = st.session_state.get(_key("fch", idx))
+            if isinstance(val, (tuple, list)) and len(val) == 2:
+                n += 1
         elif tipo == "cat":
             if st.session_state.get(_key("cat", idx)):
                 n += 1
@@ -301,39 +289,24 @@ with st.popover(label_btn, use_container_width=False):
                 df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
 
         elif tipo == "fecha_doble":
-            # ── Dos calendarios separados para Ajuste de Inventario ──
-            # Por defecto muestran solo el año actual; el usuario puede ampliar.
-            st.caption("📅 Rango de fechas")
-
-            # Calcular defaults seguros (dentro del rango del parquet)
+            # ── Un único date_input de rango para Ajuste de Inventario ──
+            # Evita que el calendario flotante se desborde fuera del popover.
             _ini_def = max(fecha_ini_default, fecha_min_full) if fecha_min_full else fecha_ini_default
             _fin_def = min(fecha_fin_default, fecha_max_full) if fecha_max_full else fecha_fin_default
-            # Si el año actual no tiene datos, usar el rango completo
             if fecha_max_full and fecha_max_full.year < anio_actual:
                 _ini_def = fecha_min_full
                 _fin_def = fecha_max_full
 
-            col_a, col_b = st.columns(2)
-            with col_a:
-                fecha_ini = st.date_input(
-                    "Desde",
-                    value=_ini_def,
-                    min_value=fecha_min_full,
-                    max_value=fecha_max_full,
-                    format="DD/MM/YYYY",
-                    key=_key("fch_ini", idx),
-                )
-            with col_b:
-                fecha_fin = st.date_input(
-                    "Hasta",
-                    value=_fin_def,
-                    min_value=fecha_min_full,
-                    max_value=fecha_max_full,
-                    format="DD/MM/YYYY",
-                    key=_key("fch_fin", idx),
-                )
-
-            if fecha_ini and fecha_fin:
+            rango = st.date_input(
+                "📅 Rango de fechas",
+                value=(_ini_def, _fin_def),
+                min_value=fecha_min_full,
+                max_value=fecha_max_full,
+                format="DD/MM/YYYY",
+                key=_key("fch", idx),
+            )
+            if isinstance(rango, (tuple, list)) and len(rango) == 2:
+                fecha_ini, fecha_fin = rango
                 if fecha_ini > fecha_fin:
                     st.warning("⚠️ La fecha de inicio es posterior a la fecha fin.")
                 else:
