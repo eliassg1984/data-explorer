@@ -23,10 +23,21 @@ def _slug(s):
     return re.sub(r'[^a-zA-Z0-9]+', '_', s)
 
 
+def _on_nav_click(nombre):
+    """Callback del boton puente: guarda el reporte elegido. Corre ANTES de que
+    el script se ejecute, asi que app.py ya lo ve desde arriba => un solo
+    rerun, sin bucles ni doble ejecucion."""
+    st.session_state["_nav_reporte"] = nombre
+
+
+def _on_refresh_click():
+    st.session_state["_nav_refresh"] = True
+
+
 def _render_bridge(nombres):
-    """Botones nativos OCULTOS. El rail los 'clickea' para forzar un rerun por
-    websocket (sin recargar la página). Se posicionan fuera de pantalla pero
-    siguen siendo clicables."""
+    """Botones nativos OCULTOS. El rail los 'clickea' para provocar un rerun de
+    Streamlit por websocket (sin recargar la pagina). Usan on_click para evitar
+    cualquier doble-rerun o bucle de re-ejecucion."""
     st.markdown(
         "<style>"
         "[class*='st-key-navbtn_'],.st-key-navrefresh{"
@@ -36,17 +47,13 @@ def _render_bridge(nombres):
         unsafe_allow_html=True,
     )
     for nombre in nombres:
-        if st.button(nombre, key=f"navbtn_{_slug(nombre)}"):
-            st.query_params["reporte"] = nombre
-            if "refresh" in st.query_params:
-                del st.query_params["refresh"]
-            st.rerun()
-    if st.button("__nav_refresh__", key="navrefresh"):
-        st.cache_data.clear()
-        if "refresh" in st.query_params:
-            del st.query_params["refresh"]
-        st.rerun()
-
+        st.button(
+            nombre,
+            key=f"navbtn_{_slug(nombre)}",
+            on_click=_on_nav_click,
+            args=(nombre,),
+        )
+    st.button("__nav_refresh__", key="navrefresh", on_click=_on_refresh_click)
 
 def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     """Inyecta rail + top bar en una sola llamada."""
