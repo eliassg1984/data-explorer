@@ -29,6 +29,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     es_inventario = (reporte == "Inventario Valorizado")
     es_salidas = (reporte == "Salidas")
     es_requerimientos = (reporte == "Requerimientos")
+    es_pivotable = reporte in ("Requerimientos", "Ajuste de Inventario")
 
     # ───────────────────────────────────────────────────────────────────
     # REORDENAR COLUMNAS (Producto, Stock, Precio, Valorizado)
@@ -371,10 +372,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                     "iconKey": "columns",
                     "toolPanel": "agColumnsToolPanel",
                     "toolPanelParams": {
-                        "suppressRowGroups": not es_requerimientos,
-                        "suppressValues": not es_requerimientos,
-                        "suppressPivots": not es_requerimientos,
-                        "suppressPivotMode": not es_requerimientos,
+                        "suppressRowGroups": not es_pivotable,
+                        "suppressValues": not es_pivotable,
+                        "suppressPivots": not es_pivotable,
+                        "suppressPivotMode": not es_pivotable,
                         "suppressColumnFilter": False,
                         "suppressColumnSelectAll": False,
                         "suppressColumnExpandAll": True,
@@ -400,7 +401,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         "onFirstDataRendered": JsCode("function(params) { /* No auto-fit */ }"),
     }
 
-    if not es_requerimientos:
+    if not es_pivotable:
         opciones_grid["pinnedBottomRowData"] = [fila_totales]
     else:
         opciones_grid["grandTotalRow"] = "bottom"
