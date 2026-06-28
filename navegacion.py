@@ -41,7 +41,7 @@ def _render_bridge(nombres):
             if "refresh" in st.query_params:
                 del st.query_params["refresh"]
             st.rerun()
-    if st.button("refresh", key="navrefresh"):
+    if st.button("__nav_refresh__", key="navrefresh"):
         st.cache_data.clear()
         if "refresh" in st.query_params:
             del st.query_params["refresh"]
@@ -66,17 +66,41 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
         var doc = window.parent.document;
         var win = window.parent;
 
-        // ── Funciones de navegacion: inyectar como <script> en el head ──
-        //    Ahora clickean los botones puente (rerun por websocket), en
-        //    lugar de hacer window.location.assign (recarga completa).
-        if (!doc.getElementById('rail-nav-fns')) {{
-            var navScript = doc.createElement('script');
-            navScript.id = 'rail-nav-fns';
-            navScript.textContent =
-                "window.__navReporte=function(n){{try{{var slug=n.replace(/[^a-zA-Z0-9]+/g,'_');var w=document.querySelector('.st-key-navbtn_'+slug);var b=w?w.querySelector('button'):null;if(!b){{var a=document.querySelectorAll('button');for(var i=0;i<a.length;i++){{if((a[i].innerText||'').trim()===n){{b=a[i];break;}}}}}}if(b)b.click();}}catch(e){{if(window.__logErr)window.__logErr('Nav: '+e.message);}}}};" +
-                "window.__refreshReporte=function(){{try{{var w=document.querySelector('.st-key-navrefresh');var b=w?w.querySelector('button'):null;if(b)b.click();}}catch(e){{if(window.__logErr)window.__logErr('Refresh: '+e.message);}}}};";
-            doc.head.appendChild(navScript);
-        }}
+        // ── Funciones de navegacion (asignadas en window.parent en CADA
+        //    inyeccion -> nunca queda una version vieja pegada). Clickean los
+        //    botones puente => rerun por websocket, sin recargar la pagina.
+        //    Usamos textContent (no innerText): funciona aunque el boton este
+        //    oculto/colapsado.
+        win.__navReporte = function(n) {{
+            try {{
+                var b = null;
+                var slug = n.replace(/[^a-zA-Z0-9]+/g, '_');
+                var w = doc.querySelector('.st-key-navbtn_' + slug);
+                if (w) b = w.querySelector('button');
+                if (!b) {{
+                    var a = doc.querySelectorAll('button');
+                    for (var i = 0; i < a.length; i++) {{
+                        if ((a[i].textContent || '').trim() === n) {{ b = a[i]; break; }}
+                    }}
+                }}
+                if (b) {{ b.click(); }}
+                else if (win.__logErr) {{ win.__logErr('Nav: boton no hallado para ' + n); }}
+            }} catch (e) {{ if (win.__logErr) win.__logErr('Nav: ' + e.message); }}
+        }};
+        win.__refreshReporte = function() {{
+            try {{
+                var b = null;
+                var w = doc.querySelector('.st-key-navrefresh');
+                if (w) b = w.querySelector('button');
+                if (!b) {{
+                    var a = doc.querySelectorAll('button');
+                    for (var i = 0; i < a.length; i++) {{
+                        if ((a[i].textContent || '').trim() === '__nav_refresh__') {{ b = a[i]; break; }}
+                    }}
+                }}
+                if (b) {{ b.click(); }}
+            }} catch (e) {{ if (win.__logErr) win.__logErr('Refresh: ' + e.message); }}
+        }};
 
         // ── Fuente de iconos (Bootstrap Icons), una sola vez ───────────
         if (!doc.getElementById('bi-icons-css')) {{
