@@ -561,14 +561,32 @@ def _render_kpis_salidas(df_data):
         ki += 1
 
 
+# ===========================================================================
+# SELECTOR DE VISTA (Tabla / Gráficos) — píldoras azules
+# Mismo patrón visual que Inventario Valorizado. El CSS vive en estilos.py
+# apuntando a [data-testid="stSegmentedControl"].
+# ===========================================================================
+def _selector_vista():
+    """Muestra el segmented_control Tabla/Gráficos y devuelve la opción elegida."""
+    _opciones = {"Tabla": ":material/table_chart:", "Gráficos": ":material/bar_chart:"}
+    vista = st.segmented_control(
+        "Vista",
+        options=list(_opciones.keys()),
+        format_func=lambda o: f"{_opciones[o]} {o}",
+        default="Tabla",
+        label_visibility="collapsed",
+        key=f"vista_seg_{reporte}",
+    )
+    return vista or "Tabla"
+
+
 # ── COMPRAS ─────────────────────────────────────────────────────────────────
 if reporte == "Compras":
-    tab_tabla, tab_graficos = st.tabs(["📋 Tabla", "📊 Gráficos"])
+    vista = _selector_vista()
 
-    with tab_tabla:
+    if vista == "Tabla":
         renderizar_tabla_compras(df_f, grupos_sel=grupos_sel)
-
-    with tab_graficos:
+    else:
         _render_graficos_genericos(df_f, reporte)
 
 
@@ -579,17 +597,8 @@ elif reporte == "Inventario Valorizado":
         'margin:0 0 0.6rem 0;line-height:1.2;">Inventario Valorizado</p>',
         unsafe_allow_html=True,
     )
-    _OPCIONES_VISTA = {"Tabla": ":material/table_chart:", "Gráficos": ":material/bar_chart:"}
-    vista = st.segmented_control(
-        "Vista",
-        options=list(_OPCIONES_VISTA.keys()),
-        format_func=lambda o: f"{_OPCIONES_VISTA[o]} {o}",
-        default="Tabla",
-        label_visibility="collapsed",
-        key=f"vista_seg_{reporte}",
-    )
-    if vista is None:
-        vista = "Tabla"
+    vista = _selector_vista()
+
     if vista == "Tabla":
         _render_tabla()
     else:
@@ -598,9 +607,9 @@ elif reporte == "Inventario Valorizado":
 
 # ── SALIDAS ──────────────────────────────────────────────────────────────────
 elif reporte == "Salidas":
-    tab_tabla, tab_graficos = st.tabs(["📋 Tabla", "📊 Gráficos"])
+    vista = _selector_vista()
 
-    with tab_tabla:
+    if vista == "Tabla":
         if usa_vista_movil and tiene_config_movil:
             st.caption("📱 Vista móvil • Desliza para más columnas")
             renderizar_aggrid_movil(
@@ -655,8 +664,7 @@ elif reporte == "Salidas":
                 df_f[cols_finales], grupos_sel, cols_sel, reporte, int(zoom),
                 cols_visibles=None,
             )
-
-    with tab_graficos:
+    else:
         _render_graficos_genericos(df_f, reporte)
 
 
@@ -678,10 +686,9 @@ else:
             unsafe_allow_html=True,
         )
 
-    tab_tabla, tab_graficos = st.tabs(["📋 Tabla", "📊 Gráficos"])
+    vista = _selector_vista()
 
-    with tab_tabla:
+    if vista == "Tabla":
         _render_tabla()
-
-    with tab_graficos:
+    else:
         _render_graficos_genericos(df_f, reporte)
