@@ -211,11 +211,8 @@ if col_busc:
     controles.append(("busc", col_busc))
 if cols_agrupar:
     controles.append(("grp", None))
-if fecha_min_full is not None and reporte != "Requerimientos":
-    if es_ajuste:
-        controles.append(("fecha_doble", col_fecha))
-    else:
-        controles.append(("fecha", col_fecha))
+if fecha_min_full is not None and reporte != "Requerimientos" and not es_ajuste:
+    controles.append(("fecha", col_fecha))
 
 grupos_sel = []
 
@@ -237,10 +234,6 @@ def _contar_filtros_activos():
             if isinstance(val, (tuple, list)) and len(val) == 2:
                 if val[0] != fecha_min_full or val[1] != fecha_max_full:
                     n += 1
-        elif tipo == "fecha_doble":
-            val = st.session_state.get(_key("fch", idx))
-            if isinstance(val, (tuple, list)) and len(val) == 2:
-                n += 1
         elif tipo == "cat":
             if st.session_state.get(_key("cat", idx)):
                 n += 1
@@ -252,72 +245,73 @@ def _contar_filtros_activos():
 n_activos = _contar_filtros_activos()
 label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_activos != 1 else '') if n_activos else ''}"
 
-with st.popover(label_btn, use_container_width=False):
-    for idx, (tipo, col) in enumerate(controles):
-        if tipo == "cat":
-            opts = get_opciones_filtro(df, col)
-            sel = st.multiselect(
-                f"📂 {col}", opts, placeholder="Todos",
-                key=_key("cat", idx),
-            )
-            if sel:
-                df_f = df_f[df_f[col].isin(sel)]
+# ── FILTRO DE FECHA INLINE para Ajuste de Inventario (fuera del popover) ──
+if es_ajuste and fecha_min_full is not None:
+    _ini_def = max(fecha_ini_default, fecha_min_full)
+    _fin_def = min(fecha_fin_default, fecha_max_full)
+    if fecha_max_full.year < anio_actual:
+        _ini_def = fecha_min_full
+        _fin_def = fecha_max_full
 
-        elif tipo == "busc":
-            opts_prod = get_opciones_filtro(df_f, col)
-            sel_prod = st.multiselect(
-                f"🔎 {col}", opts_prod, placeholder="Buscar…",
-                key=_key("busc", idx),
-            )
-            if sel_prod:
-                df_f = df_f[df_f[col].astype(str).isin(sel_prod)]
+    rango_ajuste = st.date_input(
+        "📅 Rango de fechas",
+        value=(_ini_def, _fin_def),
+        min_value=fecha_min_full,
+        max_value=fecha_max_full,
+        format="DD/MM/YYYY",
+        key="fch_ajuste_inline",
+    )
+    if isinstance(rango_ajuste, (tuple, list)) and len(rango_ajuste) == 2:
+        fecha_ini, fecha_fin = rango_ajuste
+        if fecha_ini > fecha_fin:
+            st.warning("⚠️ La fecha de inicio es posterior a la fecha fin.")
+        else:
+            df_f = df_f[
+                (df_f[col_fecha].dt.date >= fecha_ini) &
+                (df_f[col_fecha].dt.date <= fecha_fin)
+            ]
 
-        elif tipo == "grp":
-            grupos_sel = st.multiselect(
-                "📊 Agrupar por", cols_agrupar, default=[],
-                key=_key("grp", idx), placeholder="Sin agrupar",
-            )
+# ── POPOVER (solo se muestra si hay controles que mostrar) ──
+if controles:
+    with st.popover(label_btn, use_container_width=False):
+        for idx, (tipo, col) in enumerate(controles):
+            if tipo == "cat":
+                opts = get_opciones_filtro(df, col)
+                sel = st.multiselect(
+                    f"📂 {col}", opts, placeholder="Todos",
+                    key=_key("cat", idx),
+                )
+                if sel:
+                    df_f = df_f[df_f[col].isin(sel)]
 
-        elif tipo == "fecha":
-            rango = st.date_input(
-                "📅 Fecha", value=(fecha_min_full, fecha_max_full),
-                min_value=fecha_min_full, max_value=fecha_max_full,
-                format="DD/MM/YYYY", key=_key("fch", idx),
-            )
-            if isinstance(rango, (tuple, list)) and len(rango) == 2:
-                ini, fin = rango
-                df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
+            elif tipo == "busc":
+                opts_prod = get_opciones_filtro(df_f, col)
+                sel_prod = st.multiselect(
+                    f"🔎 {col}", opts_prod, placeholder="Buscar…",
+                    key=_key("busc", idx),
+                )
+                if sel_prod:
+                    df_f = df_f[df_f[col].astype(str).isin(sel_prod)]
 
-        elif tipo == "fecha_doble":
-            # ── Un único date_input de rango para Ajuste de Inventario ──
-            # Evita que el calendario flotante se desborde fuera del popover.
-            _ini_def = max(fecha_ini_default, fecha_min_full) if fecha_min_full else fecha_ini_default
-            _fin_def = min(fecha_fin_default, fecha_max_full) if fecha_max_full else fecha_fin_default
-            if fecha_max_full and fecha_max_full.year < anio_actual:
-                _ini_def = fecha_min_full
-                _fin_def = fecha_max_full
+            elif tipo == "grp":
+                grupos_sel = st.multiselect(
+                    "📊 Agrupar por", cols_agrupar, default=[],
+                    key=_key("grp", idx), placeholder="Sin agrupar",
+                )
 
-            rango = st.date_input(
-                "📅 Rango de fechas",
-                value=(_ini_def, _fin_def),
-                min_value=fecha_min_full,
-                max_value=fecha_max_full,
-                format="DD/MM/YYYY",
-                key=_key("fch", idx),
-            )
-            if isinstance(rango, (tuple, list)) and len(rango) == 2:
-                fecha_ini, fecha_fin = rango
-                if fecha_ini > fecha_fin:
-                    st.warning("⚠️ La fecha de inicio es posterior a la fecha fin.")
-                else:
-                    df_f = df_f[
-                        (df_f[col].dt.date >= fecha_ini) &
-                        (df_f[col].dt.date <= fecha_fin)
-                    ]
+            elif tipo == "fecha":
+                rango = st.date_input(
+                    "📅 Fecha", value=(fecha_min_full, fecha_max_full),
+                    min_value=fecha_min_full, max_value=fecha_max_full,
+                    format="DD/MM/YYYY", key=_key("fch", idx),
+                )
+                if isinstance(rango, (tuple, list)) and len(rango) == 2:
+                    ini, fin = rango
+                    df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
 
-    if reporte not in ("Compras", "Salidas", "Ajuste de Inventario"):
-        st.divider()
-        st.session_state.tabla_tam = st.select_slider(
+        if reporte not in ("Compras", "Salidas", "Ajuste de Inventario"):
+            st.divider()
+            st.session_state.tabla_tam = st.select_slider(
             "🔠 Tamaño de letra",
             options=list(TAM_FUENTE.keys()),
             value=st.session_state.tabla_tam,
