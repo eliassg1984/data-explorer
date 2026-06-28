@@ -275,7 +275,7 @@ with st.popover(label_btn, use_container_width=False):
                 ini, fin = rango
                 df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
 
-    if reporte not in ("Compras", "Salidas"):
+    if reporte not in ("Compras", "Salidas", "Ajuste de Inventario"):
         st.divider()
         st.session_state.tabla_tam = st.select_slider(
             "🔠 Tamaño de letra",
