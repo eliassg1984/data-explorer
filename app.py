@@ -245,31 +245,69 @@ def _contar_filtros_activos():
 n_activos = _contar_filtros_activos()
 label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_activos != 1 else '') if n_activos else ''}"
 
-# ── FILTRO DE FECHA INLINE para Ajuste de Inventario (fuera del popover) ──
+# ── FILTRO DE FECHA INLINE para Ajuste de Inventario — Opción B ──
+# Selector segmentado (Semana / Mes / Año / Personalizado) + date_input
+# que solo aparece cuando el usuario elige "Personalizado".
 if es_ajuste and fecha_min_full is not None:
+    _hoy = datetime.date.today()
+
+    # Fecha por defecto según el rango disponible en el parquet
     _ini_def = max(fecha_ini_default, fecha_min_full)
     _fin_def = min(fecha_fin_default, fecha_max_full)
     if fecha_max_full.year < anio_actual:
         _ini_def = fecha_min_full
         _fin_def = fecha_max_full
 
-    rango_ajuste = st.date_input(
-        "📅 Rango de fechas",
-        value=(_ini_def, _fin_def),
-        min_value=fecha_min_full,
-        max_value=fecha_max_full,
-        format="DD/MM/YYYY",
-        key="fch_ajuste_inline",
+    # Opciones del segmentado
+    _PERIODOS = ["Semana", "Mes", "Año", "Personalizado"]
+
+    periodo_sel = st.segmented_control(
+        "Periodo",
+        options=_PERIODOS,
+        default="Mes",
+        label_visibility="collapsed",
+        key="ajuste_periodo_seg",
     )
-    if isinstance(rango_ajuste, (tuple, list)) and len(rango_ajuste) == 2:
-        fecha_ini, fecha_fin = rango_ajuste
-        if fecha_ini > fecha_fin:
-            st.warning("⚠️ La fecha de inicio es posterior a la fecha fin.")
+    if periodo_sel is None:
+        periodo_sel = "Mes"
+
+    # Calcular el rango según la opción elegida
+    if periodo_sel == "Semana":
+        # Lunes de la semana actual → hoy
+        _lunes = _hoy - datetime.timedelta(days=_hoy.weekday())
+        fecha_ini = max(_lunes, fecha_min_full)
+        fecha_fin = min(_hoy, fecha_max_full)
+
+    elif periodo_sel == "Mes":
+        fecha_ini = max(datetime.date(_hoy.year, _hoy.month, 1), fecha_min_full)
+        fecha_fin = min(_hoy, fecha_max_full)
+
+    elif periodo_sel == "Año":
+        fecha_ini = max(datetime.date(_hoy.year, 1, 1), fecha_min_full)
+        fecha_fin = min(_hoy, fecha_max_full)
+
+    else:  # Personalizado → mostrar date_input
+        rango_ajuste = st.date_input(
+            "Rango de fechas",
+            value=(_ini_def, _fin_def),
+            min_value=fecha_min_full,
+            max_value=fecha_max_full,
+            format="DD/MM/YYYY",
+            key="fch_ajuste_custom",
+            label_visibility="collapsed",
+        )
+        if isinstance(rango_ajuste, (tuple, list)) and len(rango_ajuste) == 2:
+            fecha_ini, fecha_fin = rango_ajuste
+            if fecha_ini > fecha_fin:
+                st.warning("⚠️ La fecha de inicio es posterior a la fecha fin.")
+                fecha_ini, fecha_fin = _ini_def, _fin_def
         else:
-            df_f = df_f[
-                (df_f[col_fecha].dt.date >= fecha_ini) &
-                (df_f[col_fecha].dt.date <= fecha_fin)
-            ]
+            fecha_ini, fecha_fin = _ini_def, _fin_def
+
+    df_f = df_f[
+        (df_f[col_fecha].dt.date >= fecha_ini) &
+        (df_f[col_fecha].dt.date <= fecha_fin)
+    ]
 
 # ── POPOVER (solo se muestra si hay controles que mostrar) ──
 if controles:
