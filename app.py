@@ -265,7 +265,7 @@ if es_ajuste and fecha_min_full is not None:
         _fin_def = fecha_max_full
 
     rango_ajuste = st.date_input(
-        "📅 Rango de fechas",
+        "Rango de Tiempo",
         value=(_ini_def, _fin_def),
         min_value=fecha_min_full,
         max_value=fecha_max_full,
