@@ -7,24 +7,16 @@ import json
 import streamlit.components.v1 as components
 
 
-ICONO_A_EMOJI = {
-    "sliders": "🎚️",
-    "cart": "🛒",
-    "boxes": "📦",
-    "clipboard-data": "📋",
-    "receipt": "🧾",
-    "cash-coin": "💰",
-    "box-arrow-up": "📤",
-    "card-checklist": "📝",
-    "search": "🔍",
-}
+# Nombre del icono "por defecto" si algún reporte no trae 'icono' en data.py
+# (debe ser un nombre válido de Bootstrap Icons, sin el prefijo "bi-").
+ICONO_DEFECTO = "question-circle"
 
 
 def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     """Inyecta rail + top bar en una sola llamada."""
 
     visibles = {
-        nombre: ICONO_A_EMOJI.get(info.get("icono", ""), "❓")
+        nombre: info.get("icono") or ICONO_DEFECTO
         for nombre, info in reportes.items()
         if not (nombre == "Inspector" and not mostrar_inspector)
     }
@@ -44,6 +36,15 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
                 "window.__navReporte=function(n){{try{{var u=new URL(window.location.href);u.searchParams.set('reporte',n);u.searchParams.delete('refresh');window.location.assign(u.toString());}}catch(e){{if(window.__logErr)window.__logErr('Nav: '+e.message);}}}};" +
                 "window.__refreshReporte=function(){{try{{var u=new URL(window.location.href);u.searchParams.set('refresh','1');window.location.assign(u.toString());}}catch(e){{if(window.__logErr)window.__logErr('Refresh: '+e.message);}}}};";
             doc.head.appendChild(navScript);
+        }}
+
+        // ── Fuente de iconos (Bootstrap Icons), una sola vez ───────────
+        if (!doc.getElementById('bi-icons-css')) {{
+            var biLink = doc.createElement('link');
+            biLink.id = 'bi-icons-css';
+            biLink.rel = 'stylesheet';
+            biLink.href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css';
+            doc.head.appendChild(biLink);
         }}
 
         // ── Una sola inicializacion del DOM ────────────────────────────
@@ -123,7 +124,7 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
             var div = doc.createElement('div');
             div.className = 'rail-icon' + (nombre === ACTIVO ? ' active' : '');
             div.setAttribute('data-tooltip', nombre);
-            div.innerHTML = REPORTES[nombre];
+            div.innerHTML = '<i class="bi bi-' + REPORTES[nombre] + '"></i>';
             div.onclick = (function(n) {{
                 return function(e) {{ e.stopPropagation(); win.__navReporte(n); }};
             }})(nombre);
