@@ -404,6 +404,49 @@ def get_css():
         background: #eff6ff !important;
         color: #1e40af !important;
     }
+
+    /* =================================================================== */
+    /* FILTRO DE FECHA — AJUSTE DE INVENTARIO (Opción A: tarjeta + acento)  */
+    /* Solo afecta al date_input con key="fch_ajuste_inline"                */
+    /* =================================================================== */
+
+    /* Ancho contenido: ya no ocupa todo el ancho de la pantalla */
+    .st-key-fch_ajuste_inline {
+        max-width: 360px !important;
+    }
+
+    /* Etiqueta como mini-badge en mayúsculas (📅 RANGO DE FECHAS) */
+    .st-key-fch_ajuste_inline label {
+        font-size: 0.7rem !important;
+        letter-spacing: 0.04em !important;
+        font-weight: 600 !important;
+        color: var(--text-muted) !important;
+        margin-bottom: 5px !important;
+    }
+
+    /* La caja del input = tarjeta con borde de acento a la izquierda */
+    .st-key-fch_ajuste_inline .stDateInput > div > div {
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border) !important;
+        border-left: 3px solid var(--accent) !important;
+        border-radius: 10px !important;
+        box-shadow: var(--shadow) !important;
+        transition: border-color .15s ease, box-shadow .15s ease !important;
+    }
+
+    /* Hover / foco: acento más vivo y sombra algo más marcada */
+    .st-key-fch_ajuste_inline .stDateInput > div > div:hover,
+    .st-key-fch_ajuste_inline .stDateInput > div > div:focus-within {
+        border-color: var(--accent) !important;
+        border-left-color: var(--accent-hover) !important;
+        box-shadow: var(--shadow-md) !important;
+    }
+
+    /* Ícono de calendario nativo en azul */
+    .st-key-fch_ajuste_inline .stDateInput svg {
+        color: var(--accent) !important;
+        fill: var(--accent) !important;
+    }
     </style>
     """
 
