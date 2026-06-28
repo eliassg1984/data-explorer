@@ -114,8 +114,10 @@ section[data-testid="stSidebar"] { display:none !important; }
 def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     """Dibuja el rail (botones nativos) + el título superior."""
     st.markdown(_CSS, unsafe_allow_html=True)
+    # El título superior queda vacío en "Ajuste de Inventario"
+    _titulo_topbar = "" if reporte_activo == "Ajuste de Inventario" else reporte_activo
     st.markdown(
-        f'<div id="nav-topbar">{reporte_activo}</div>',
+        f'<div id="nav-topbar">{_titulo_topbar}</div>',
         unsafe_allow_html=True,
     )
 
