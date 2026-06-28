@@ -1,2 +1,4 @@
 [theme]
-primaryColor = "#e0392f"
+# Color primario azul de tu app -> recolorea el calendario nativo
+# (día seleccionado, relleno del rango y marcador de hoy) de rojo a azul.
+primaryColor = "#3b82f6"
