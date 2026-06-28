@@ -415,10 +415,12 @@ def get_css():
         max-width: 360px !important;
     }
 
-    /* Etiqueta como mini-badge en mayúsculas (📅 RANGO DE FECHAS) */
+    /* Etiqueta — texto tal cual ("Rango de Tiempo"), sin mayúsculas         */
+    /* forzadas del estilo global de label.                                  */
     .st-key-fch_ajuste_inline label {
-        font-size: 0.7rem !important;
-        letter-spacing: 0.04em !important;
+        font-size: 0.72rem !important;
+        letter-spacing: 0.02em !important;
+        text-transform: none !important;
         font-weight: 600 !important;
         color: var(--text-muted) !important;
         margin-bottom: 5px !important;
@@ -446,6 +448,38 @@ def get_css():
     .st-key-fch_ajuste_inline .stDateInput svg {
         color: var(--accent) !important;
         fill: var(--accent) !important;
+    }
+
+    /* =================================================================== */
+    /* CALENDARIO DESPLEGABLE (BaseWeb) — Opción 1: marco suave, sin presets */
+    /* IMPORTANTE: el color azul de los días y del relleno del rango lo da   */
+    /* primaryColor en .streamlit/config.toml. Aquí solo pulimos el marco y  */
+    /* ocultamos el bloque "CHOOSE A DATE RANGE / None".                     */
+    /* =================================================================== */
+
+    /* Marco del calendario: redondeado, con sombra y tipografía de la app */
+    div[data-baseweb="calendar"] {
+        border-radius: 12px !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10) !important;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    }
+
+    /* Esquinas redondeadas en cada día */
+    div[data-baseweb="calendar"] [role="gridcell"] > div {
+        border-radius: 8px !important;
+    }
+
+    /* Flechas de navegación (‹ ›) en azul */
+    div[data-baseweb="calendar"] button svg {
+        fill: var(--accent) !important;
+    }
+
+    /* Ocultar el selector de presets "CHOOSE A DATE RANGE / None" */
+    div[data-baseweb="popover"]:has(div[data-baseweb="calendar"]) [data-baseweb="select"] {
+        display: none !important;
+    }
+    div[data-baseweb="popover"]:has(div[data-baseweb="calendar"]) div[data-baseweb="calendar"] + div {
+        display: none !important;
     }
     </style>
     """
