@@ -29,11 +29,13 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     es_inventario = (reporte == "Inventario Valorizado")
     es_salidas = (reporte == "Salidas")
     es_requerimientos = (reporte == "Requerimientos")
-    es_pivotable = reporte in ("Requerimientos", "Ajuste de Inventario")
 
-    # ───────────────────────────────────────────────────────────────────
+    # ── Inventario Valorizado y Requerimientos muestran el panel pivot completo
+    mostrar_pivot = es_requerimientos or es_inventario
+
+    # ─────────────────────────────────────────────────────────────────
     # REORDENAR COLUMNAS (Producto, Stock, Precio, Valorizado)
-    # ───────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────────
     col_producto   = buscar_columna(df_grid, "Nombre Producto", "producto", "descripcion")
     col_stock      = buscar_columna(df_grid, "Stock al dia", "Stock al Dia", "stock")
     col_precio_ord = buscar_columna(df_grid, "Precio Promedio", "precio promedio", "precio")
@@ -372,10 +374,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                     "iconKey": "columns",
                     "toolPanel": "agColumnsToolPanel",
                     "toolPanelParams": {
-                        "suppressRowGroups": not es_pivotable,
-                        "suppressValues": not es_pivotable,
-                        "suppressPivots": not es_pivotable,
-                        "suppressPivotMode": not es_pivotable,
+                        # ── CAMBIO: mostrar_pivot habilita el toggle y los
+                        # paneles de pivot para Inventario Valorizado y Requerimientos
+                        "suppressRowGroups": not mostrar_pivot,
+                        "suppressValues": not mostrar_pivot,
+                        "suppressPivots": not mostrar_pivot,
+                        "suppressPivotMode": not mostrar_pivot,
                         "suppressColumnFilter": False,
                         "suppressColumnSelectAll": False,
                         "suppressColumnExpandAll": True,
@@ -401,7 +405,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         "onFirstDataRendered": JsCode("function(params) { /* No auto-fit */ }"),
     }
 
-    if not es_pivotable:
+    if not es_requerimientos:
         opciones_grid["pinnedBottomRowData"] = [fila_totales]
     else:
         opciones_grid["grandTotalRow"] = "bottom"
@@ -436,26 +440,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                                     minimumFractionDigits: 2, maximumFractionDigits: 2 }});
                             }}
                         }}
-
-                        var container = document.createElement('div');
-                        container.style.display = 'flex';
-                        container.style.alignItems = 'center';
-                        container.style.gap = '4px';
-
-                        var spanNombre = document.createElement('span');
-                        spanNombre.textContent = nombre;
-                        spanNombre.style.fontWeight = '600';
-                        spanNombre.style.color = '#1e293b';
-
-                        var spanExtra = document.createElement('span');
-                        spanExtra.textContent = '(' + n + ')' + extra;
-                        spanExtra.style.color = '#64748b';
-                        spanExtra.style.fontWeight = '400';
-
-                        container.appendChild(spanNombre);
-                        container.appendChild(spanExtra);
-
-                        return container;
+                        return '<span style="font-weight:600;color:#1e293b">' + nombre +
+                               '</span> <span style="color:#64748b;font-weight:400">(' +
+                               n + ')' + extra + '</span>';
                     }}
                 """)
             }
@@ -465,7 +452,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         opciones_grid["groupDefaultExpanded"] = 0
         opciones_grid["pivotMode"] = es_requerimientos
     else:
-        opciones_grid["pivotMode"] = es_requerimientos
+        # ── CAMBIO: Inventario Valorizado siempre arranca sin pivot activo;
+        # el usuario lo activa con el toggle del panel lateral.
+        opciones_grid["pivotMode"] = False
 
     if envolver_cabeceras:
         opciones_grid["headerHeight"] = int(font_px * 2.5 + 20)
@@ -863,18 +852,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "padding-bottom": "4px !important",
         }
 
-    # ── Límite de filas con aviso al usuario ──────────────────────────────
-    LIMITE_FILAS = 50_000
-    if len(df_grid) > LIMITE_FILAS:
-        st.warning(
-            f"⚠️ Mostrando {LIMITE_FILAS:,} de {len(df_grid):,} filas. "
-            "Usa los filtros para acotar los resultados y ver todos los datos."
-        )
-        df_grid = df_grid.head(LIMITE_FILAS)
-
     AgGrid(
-        df_grid, gridOptions=grid_options,
-        height=900,
+        (df_grid if es_salidas else df_grid.head(5000)), gridOptions=grid_options,
+        height=(850 if es_requerimientos else 600),
         theme=tema_grid, custom_css=custom_css,
         fit_columns_on_grid_load=False, allow_unsafe_jscode=True,
         enable_enterprise_modules=True, key=f"grid_{reporte}",
@@ -883,7 +863,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     inject_grid_health_check()
 
     # ── Post-render: inyecciones específicas por reporte ──────────────────
-    inject_pagination_v2()
+    if reporte == "Inventario Valorizado":
+        inject_pagination_v2()
 
     if es_requerimientos:
         inject_maximize_aggrid()
@@ -967,17 +948,8 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
             "align-items": "center",
         }
 
-    # ── Límite de filas con aviso al usuario (móvil) ──────────────────────
-    LIMITE_FILAS = 20_000
-    if len(df_grid) > LIMITE_FILAS:
-        st.warning(
-            f"⚠️ Mostrando {LIMITE_FILAS:,} de {len(df_grid):,} filas. "
-            "Usa los filtros para ver todos los datos."
-        )
-        df_grid = df_grid.head(LIMITE_FILAS)
-
     AgGrid(
-        df_grid, gridOptions=grid_options, height=380,
+        df_grid.head(3000), gridOptions=grid_options, height=380,
         theme="balham", custom_css=custom_css,
         fit_columns_on_grid_load=False, allow_unsafe_jscode=True,
         enable_enterprise_modules=True, key=f"grid_movil_{reporte}",
