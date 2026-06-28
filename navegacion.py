@@ -1,15 +1,51 @@
 """
 Navegación de la app: rail vertical de iconos y franja superior.
 Una sola inyección, un solo MutationObserver, un solo bloque de estilos.
+
+Cambio clave: al pulsar un icono NO se recarga la página. El rail "clickea"
+botones nativos ocultos (puente) y eso provoca un rerun de Streamlit por
+websocket, conservando el shell, el rail y el scroll (sensación de SPA).
 """
 
+import re
 import json
+import streamlit as st
 import streamlit.components.v1 as components
 
 
 # Nombre del icono "por defecto" si algún reporte no trae 'icono' en data.py
 # (debe ser un nombre válido de Bootstrap Icons, sin el prefijo "bi-").
 ICONO_DEFECTO = "question-circle"
+
+
+def _slug(s):
+    """Convierte un nombre de reporte en un sufijo de key seguro."""
+    return re.sub(r'[^a-zA-Z0-9]+', '_', s)
+
+
+def _render_bridge(nombres):
+    """Botones nativos OCULTOS. El rail los 'clickea' para forzar un rerun por
+    websocket (sin recargar la página). Se posicionan fuera de pantalla pero
+    siguen siendo clicables."""
+    st.markdown(
+        "<style>"
+        "[class*='st-key-navbtn_'],.st-key-navrefresh{"
+        "position:absolute!important;left:-9999px!important;top:0!important;"
+        "width:1px!important;height:1px!important;overflow:hidden!important;}"
+        "</style>",
+        unsafe_allow_html=True,
+    )
+    for nombre in nombres:
+        if st.button(nombre, key=f"navbtn_{_slug(nombre)}"):
+            st.query_params["reporte"] = nombre
+            if "refresh" in st.query_params:
+                del st.query_params["refresh"]
+            st.rerun()
+    if st.button("refresh", key="navrefresh"):
+        st.cache_data.clear()
+        if "refresh" in st.query_params:
+            del st.query_params["refresh"]
+        st.rerun()
 
 
 def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
@@ -21,20 +57,24 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
         if not (nombre == "Inspector" and not mostrar_inspector)
     }
 
+    # Botones puente (ocultos) que el rail clickea para navegar sin recargar.
+    _render_bridge(list(visibles.keys()))
+
     components.html(f"""
     <script>
     (function() {{
         var doc = window.parent.document;
         var win = window.parent;
 
-        // ── Funciones de navegacion: inyectar como <script> en el head
-        //    (misma tecnica del codigo original que SI funcionaba) ─────
+        // ── Funciones de navegacion: inyectar como <script> en el head ──
+        //    Ahora clickean los botones puente (rerun por websocket), en
+        //    lugar de hacer window.location.assign (recarga completa).
         if (!doc.getElementById('rail-nav-fns')) {{
             var navScript = doc.createElement('script');
             navScript.id = 'rail-nav-fns';
             navScript.textContent =
-                "window.__navReporte=function(n){{try{{var u=new URL(window.location.href);u.searchParams.set('reporte',n);u.searchParams.delete('refresh');window.location.assign(u.toString());}}catch(e){{if(window.__logErr)window.__logErr('Nav: '+e.message);}}}};" +
-                "window.__refreshReporte=function(){{try{{var u=new URL(window.location.href);u.searchParams.set('refresh','1');window.location.assign(u.toString());}}catch(e){{if(window.__logErr)window.__logErr('Refresh: '+e.message);}}}};";
+                "window.__navReporte=function(n){{try{{var slug=n.replace(/[^a-zA-Z0-9]+/g,'_');var w=document.querySelector('.st-key-navbtn_'+slug);var b=w?w.querySelector('button'):null;if(!b){{var a=document.querySelectorAll('button');for(var i=0;i<a.length;i++){{if((a[i].innerText||'').trim()===n){{b=a[i];break;}}}}}}if(b)b.click();}}catch(e){{if(window.__logErr)window.__logErr('Nav: '+e.message);}}}};" +
+                "window.__refreshReporte=function(){{try{{var w=document.querySelector('.st-key-navrefresh');var b=w?w.querySelector('button'):null;if(b)b.click();}}catch(e){{if(window.__logErr)window.__logErr('Refresh: '+e.message);}}}};";
             doc.head.appendChild(navScript);
         }}
 
@@ -47,12 +87,21 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
             doc.head.appendChild(biLink);
         }}
 
-        // ── Una sola inicializacion del DOM ────────────────────────────
-        if (win.__navInit) return;
-        win.__navInit = true;
-
         var REPORTES = {json.dumps(visibles)};
         var ACTIVO = {json.dumps(reporte_activo)};
+
+        // ── Actualizar resaltado + titulo EN CADA rerun (sin reconstruir) ──
+        var icons = doc.querySelectorAll('#icon-rail .rail-icon');
+        for (var k = 0; k < icons.length; k++) {{
+            if (icons[k].getAttribute('data-tooltip') === ACTIVO) icons[k].classList.add('active');
+            else icons[k].classList.remove('active');
+        }}
+        var _tit = doc.querySelector('#top-bar .tb-titulo');
+        if (_tit) _tit.textContent = ACTIVO;
+
+        // ── Una sola construccion del DOM ──────────────────────────────
+        if (win.__navInit) return;
+        win.__navInit = true;
 
         // ── Estilos: un solo <style> ───────────────────────────────────
         var style = doc.createElement('style');
@@ -60,7 +109,6 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
         style.textContent = [
             'section[data-testid="stSidebar"] {{ display: none !important; }}',
             '.stApp {{ margin-left: 64px !important; padding-top: 48px !important; }}',
-
             '#icon-rail {{',
             '  position:fixed; top:0; left:0; width:64px; height:100vh;',
             '  background:#1e3a5f; display:flex; flex-direction:column;',
@@ -92,7 +140,6 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
             '  cursor:pointer; transition:background .2s,color .2s;',
             '}}',
             '.rail-btn:hover {{ background:#2563eb; color:#fff; }}',
-
             '#top-bar {{',
             '  position:fixed; top:0; left:64px; right:0; height:48px;',
             '  display:flex; align-items:center; gap:14px; padding:0 18px;',
@@ -104,7 +151,6 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
             '  white-space:nowrap;',
             '}}',
             '#top-bar .tb-spacer {{ flex:1; }}',
-
             '@media(max-width:768px) {{',
             '  #icon-rail {{ display:none !important; }}',
             '  .stApp {{ margin-left:0 !important; }}',
@@ -122,7 +168,8 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
 
         for (var nombre in REPORTES) {{
             var div = doc.createElement('div');
-            div.className = 'rail-icon' + (nombre === ACTIVO ? ' active' : '');
+            div.className = 'rail-icon';
+            if (nombre === ACTIVO) div.classList.add('active');
             div.setAttribute('data-tooltip', nombre);
             div.innerHTML = '<i class="bi bi-' + REPORTES[nombre] + '"></i>';
             div.onclick = (function(n) {{
