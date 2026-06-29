@@ -379,16 +379,11 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         "iconKey": "columns",
         "toolPanel": "agColumnsToolPanel",
         "toolPanelParams": {
-            # ── mostrar_pivot habilita el toggle y los paneles de pivot
-            # para Inventario Valorizado y Requerimientos
             "suppressRowGroups": not mostrar_pivot,
             "suppressValues": not mostrar_pivot,
             "suppressPivots": not mostrar_pivot,
-            # En Ajuste de Inventario ocultamos el toggle de pivote nativo
-            # (se mueve a su propia pestaña) y la franja "Buscar…".
             "suppressPivotMode": (not mostrar_pivot) or es_ajuste,
             "suppressColumnFilter": es_ajuste,
-            # En Ajuste de Inventario ocultamos la casilla "(Seleccionar todo)".
             "suppressColumnSelectAll": es_ajuste,
             "suppressColumnExpandAll": True,
         },
@@ -403,7 +398,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     _tool_panels = [_columns_panel, _filters_panel]
 
     if es_ajuste:
-        # "Modo pivote" como tercera pestaña del sidebar (panel propio)
         _tool_panels.append({
             "id": "pivotePanel",
             "labelDefault": "Modo pivote",
@@ -414,8 +408,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     _sidebar_cfg = {
         "toolPanels": _tool_panels,
-        # Ajuste de Inventario arranca con el panel colapsado (ocultable);
-        # se abre/oculta con la pestaña lateral.
         "defaultToolPanel": "" if es_ajuste else "columns",
         "position": "right",
     }
@@ -423,7 +415,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     opciones_grid = {
         "autoGroupColumnDef": {"minWidth": 200},
         "localeText": LOCALE_ES,
-        "suppressSizeToFit": True,
+        # FIX 1: eliminado "suppressSizeToFit" (propiedad inválida en AgGrid v34,
+        # generaba warning en consola). fit_columns_on_grid_load=False ya cubre esto.
         "sideBar": _sidebar_cfg,
         "rowHeight": row_h,
         "headerHeight": header_h,
@@ -481,25 +474,25 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         opciones_grid["groupDefaultExpanded"] = 0
         opciones_grid["pivotMode"] = es_requerimientos
     else:
-        # ── CAMBIO: Inventario Valorizado y Ajuste de Inventario siempre
-        # arrancan sin pivot activo; el usuario lo activa con el toggle
-        # del panel lateral.
         opciones_grid["pivotMode"] = False
 
-    if envolver_cabeceras and not es_ajuste:
+    # FIX 3: este bloque estaba desindentado fuera de la función en el original.
+    # Ahora está correctamente dentro de renderizar_aggrid_desktop.
+    if envolver_cabeceras:
         opciones_grid["headerHeight"] = int(font_px * 2.5 + 20)
 
     if es_salidas:
         opciones_grid["sideBar"] = False
 
-    # ── Ajuste de Inventario: componente del panel "Modo pivote" ──────────
-    # Toggle autónomo que cambia el modo pivote llamando directo a la API de
-    # AgGrid (sin rerun de Streamlit). Cubre setGridOption y setPivotMode.
+    # FIX 2: reemplazada la ES6 class syntax por función constructora ES5.
+    # La class syntax causaba "Uncaught SyntaxError: Invalid or unexpected token"
+    # en el parser de streamlit-aggrid==1.2.1, provocando el freeze/reboot en loop.
     if es_ajuste:
         opciones_grid["components"] = {
             "pivoteToolPanel": JsCode("""
-            (class {
-                init(params) {
+            (function() {
+                function PivoteToolPanel() {}
+                PivoteToolPanel.prototype.init = function(params) {
                     var api = params.api;
                     var eGui = document.createElement('div');
                     eGui.style.cssText = 'padding:14px 12px;display:flex;flex-direction:column;gap:10px;';
@@ -520,18 +513,18 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                     etiqueta.style.cssText = 'font-size:13px;color:#1e293b;';
 
                     function leer() {
-                        try { return api.isPivotMode(); } catch (e) { return false; }
+                        try { return api.isPivotMode(); } catch(e) { return false; }
                     }
                     function escribir(v) {
                         try {
                             if (api.setGridOption) { api.setGridOption('pivotMode', v); }
                             else if (api.setPivotMode) { api.setPivotMode(v); }
-                        } catch (e) {}
+                        } catch(e) {}
                     }
 
                     input.checked = leer();
                     etiqueta.textContent = input.checked ? 'Activado' : 'Desactivado';
-                    input.addEventListener('change', function () {
+                    input.addEventListener('change', function() {
                         escribir(input.checked);
                         etiqueta.textContent = input.checked ? 'Activado' : 'Desactivado';
                     });
@@ -546,10 +539,11 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                     eGui.appendChild(ayuda);
 
                     this.eGui = eGui;
-                }
-                getGui() { return this.eGui; }
-                refresh() { return false; }
-            })
+                };
+                PivoteToolPanel.prototype.getGui = function() { return this.eGui; };
+                PivoteToolPanel.prototype.refresh = function() { return false; };
+                return PivoteToolPanel;
+            }())
             """)
         }
 
