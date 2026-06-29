@@ -251,7 +251,7 @@ label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_act
 if es_ajuste:
     st.markdown(
         f'<p style="font-size:34px;font-weight:800;color:#1e293b;'
-        f'margin:-3.2rem 0 0.15rem 0;line-height:1.1;">{reporte}</p>'
+        f'margin:-4rem 0 0.15rem 0;line-height:1.1;">{reporte}</p>'
         f'<hr style="border:none;border-top:3px solid #3b82f6;margin:0 0 0.8rem 0;">',
         unsafe_allow_html=True,
     )
