@@ -388,7 +388,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             # (se mueve a su propia pestaña) y la franja "Buscar…".
             "suppressPivotMode": (not mostrar_pivot) or es_ajuste,
             "suppressColumnFilter": es_ajuste,
-            "suppressColumnSelectAll": False,
+            # En Ajuste de Inventario ocultamos la casilla "(Seleccionar todo)".
+            "suppressColumnSelectAll": es_ajuste,
             "suppressColumnExpandAll": True,
         },
     }
