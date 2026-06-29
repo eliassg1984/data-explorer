@@ -191,8 +191,12 @@ def inject_grid_health_check():
         '  border: 1px solid #3b82f6 !important;',
         '  border-radius: 8px !important;',
         '  margin: 8px !important;',
-        '  overflow: hidden !important;',
+        '  overflow-y: auto !important;',
+        '  overflow-x: hidden !important;',
         '}',
+        '.ag-filter-toolpanel::-webkit-scrollbar { width: 8px; }',
+        '.ag-filter-toolpanel::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 4px; }',
+        '.ag-filter-toolpanel::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 4px; }',
       ].join('\\n');
 
       function inyectarCSS(fdoc) {
