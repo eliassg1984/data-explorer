@@ -33,6 +33,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     es_inventario = reporte in REPORTES_ESTILO_INVENTARIO
     es_salidas = (reporte == "Salidas")
     es_requerimientos = (reporte == "Requerimientos")
+    es_ajuste = (reporte == "Ajuste de Inventario")
 
     # ── Inventario Valorizado, Ajuste de Inventario y Requerimientos muestran
     # el panel pivot completo (Grupos de filas / Valores / Etiquetas de columnas)
@@ -366,41 +367,63 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             }
         """)
 
+    # ═══════════════════════════════════════════════════════════════════
+    # SIDEBAR (panel lateral)
+    #   Ajuste de Inventario: arranca COLAPSADO (ocultable), sin franja
+    #   "Buscar…", y con "Modo pivote" como pestaña lateral propia.
+    # ═══════════════════════════════════════════════════════════════════
+    _columns_panel = {
+        "id": "columns",
+        "labelDefault": "Columnas",
+        "labelKey": "columns",
+        "iconKey": "columns",
+        "toolPanel": "agColumnsToolPanel",
+        "toolPanelParams": {
+            # ── mostrar_pivot habilita el toggle y los paneles de pivot
+            # para Inventario Valorizado y Requerimientos
+            "suppressRowGroups": not mostrar_pivot,
+            "suppressValues": not mostrar_pivot,
+            "suppressPivots": not mostrar_pivot,
+            # En Ajuste de Inventario ocultamos el toggle de pivote nativo
+            # (se mueve a su propia pestaña) y la franja "Buscar…".
+            "suppressPivotMode": (not mostrar_pivot) or es_ajuste,
+            "suppressColumnFilter": es_ajuste,
+            "suppressColumnSelectAll": False,
+            "suppressColumnExpandAll": True,
+        },
+    }
+    _filters_panel = {
+        "id": "filters",
+        "labelDefault": "Filtros",
+        "labelKey": "filters",
+        "iconKey": "filter",
+        "toolPanel": "agFiltersToolPanel",
+    }
+    _tool_panels = [_columns_panel, _filters_panel]
+
+    if es_ajuste:
+        # "Modo pivote" como tercera pestaña del sidebar (panel propio)
+        _tool_panels.append({
+            "id": "pivotePanel",
+            "labelDefault": "Modo pivote",
+            "labelKey": "pivotePanel",
+            "iconKey": "pivot",
+            "toolPanel": "pivoteToolPanel",
+        })
+
+    _sidebar_cfg = {
+        "toolPanels": _tool_panels,
+        # Ajuste de Inventario arranca con el panel colapsado (ocultable);
+        # se abre/oculta con la pestaña lateral.
+        "defaultToolPanel": "" if es_ajuste else "columns",
+        "position": "right",
+    }
+
     opciones_grid = {
         "autoGroupColumnDef": {"minWidth": 200},
         "localeText": LOCALE_ES,
         "suppressSizeToFit": True,
-        "sideBar": {
-            "toolPanels": [
-                {
-                    "id": "columns",
-                    "labelDefault": "Columnas",
-                    "labelKey": "columns",
-                    "iconKey": "columns",
-                    "toolPanel": "agColumnsToolPanel",
-                    "toolPanelParams": {
-                        # ── CAMBIO: mostrar_pivot habilita el toggle y los
-                        # paneles de pivot para Inventario Valorizado y Requerimientos
-                        "suppressRowGroups": not mostrar_pivot,
-                        "suppressValues": not mostrar_pivot,
-                        "suppressPivots": not mostrar_pivot,
-                        "suppressPivotMode": not mostrar_pivot,
-                        "suppressColumnFilter": False,
-                        "suppressColumnSelectAll": False,
-                        "suppressColumnExpandAll": True,
-                    },
-                },
-                {
-                    "id": "filters",
-                    "labelDefault": "Filtros",
-                    "labelKey": "filters",
-                    "iconKey": "filter",
-                    "toolPanel": "agFiltersToolPanel",
-                },
-            ],
-            "defaultToolPanel": "columns",
-            "position": "right",
-        },
+        "sideBar": _sidebar_cfg,
         "rowHeight": row_h,
         "headerHeight": header_h,
         "cellSelection": True,
@@ -467,6 +490,67 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     if es_salidas:
         opciones_grid["sideBar"] = False
+
+    # ── Ajuste de Inventario: componente del panel "Modo pivote" ──────────
+    # Toggle autónomo que cambia el modo pivote llamando directo a la API de
+    # AgGrid (sin rerun de Streamlit). Cubre setGridOption y setPivotMode.
+    if es_ajuste:
+        opciones_grid["components"] = {
+            "pivoteToolPanel": JsCode("""
+            (class {
+                init(params) {
+                    var api = params.api;
+                    var eGui = document.createElement('div');
+                    eGui.style.cssText = 'padding:14px 12px;display:flex;flex-direction:column;gap:10px;';
+
+                    var titulo = document.createElement('div');
+                    titulo.textContent = 'Modo pivote';
+                    titulo.style.cssText = 'font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;';
+                    eGui.appendChild(titulo);
+
+                    var fila = document.createElement('label');
+                    fila.style.cssText = 'display:flex;align-items:center;gap:10px;cursor:pointer;';
+
+                    var input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.style.cssText = 'width:18px;height:18px;cursor:pointer;accent-color:#2563eb;';
+
+                    var etiqueta = document.createElement('span');
+                    etiqueta.style.cssText = 'font-size:13px;color:#1e293b;';
+
+                    function leer() {
+                        try { return api.isPivotMode(); } catch (e) { return false; }
+                    }
+                    function escribir(v) {
+                        try {
+                            if (api.setGridOption) { api.setGridOption('pivotMode', v); }
+                            else if (api.setPivotMode) { api.setPivotMode(v); }
+                        } catch (e) {}
+                    }
+
+                    input.checked = leer();
+                    etiqueta.textContent = input.checked ? 'Activado' : 'Desactivado';
+                    input.addEventListener('change', function () {
+                        escribir(input.checked);
+                        etiqueta.textContent = input.checked ? 'Activado' : 'Desactivado';
+                    });
+
+                    fila.appendChild(input);
+                    fila.appendChild(etiqueta);
+                    eGui.appendChild(fila);
+
+                    var ayuda = document.createElement('div');
+                    ayuda.textContent = 'Pivotea filas y columnas para resumir los datos.';
+                    ayuda.style.cssText = 'font-size:11.5px;color:#94a3b8;line-height:1.5;';
+                    eGui.appendChild(ayuda);
+
+                    this.eGui = eGui;
+                }
+                getGui() { return this.eGui; }
+                refresh() { return false; }
+            })
+            """)
+        }
 
     gb.configure_grid_options(**opciones_grid)
     if es_salidas:
