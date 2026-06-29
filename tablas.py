@@ -423,6 +423,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         "cellSelection": True,
         "tooltipShowDelay": 300,
         "getRowStyle": get_row_style,
+        # Oculta el texto "Suma(...)" / "Promedio(...)" en los encabezados
+        # cuando hay agregaciones o modo pivote activo.
+        "suppressAggFuncInHeader": True,
         "onGridSizeChanged": JsCode("function(params) { /* No auto-fit */ }"),
         "onFirstDataRendered": JsCode("function(params) { /* No auto-fit */ }"),
     }
