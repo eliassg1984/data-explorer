@@ -407,7 +407,21 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "labelDefault": "Modo pivote",
             "labelKey": "pivotePanel",
             "iconKey": "pivot",
-            "toolPanel": "pivoteToolPanel",
+            # Reutilizamos el panel nativo de AgGrid: trae el toggle de modo
+            # pivote y los tres cuadrantes (Grupos de filas / Valores /
+            # Etiquetas de columnas) con drag-and-drop incluido. El listado
+            # de columnas se oculta vía CSS (selector data-active-panel)
+            # para que solo se vea desde la pestaña "Columnas".
+            "toolPanel": "agColumnsToolPanel",
+            "toolPanelParams": {
+                "suppressRowGroups": False,
+                "suppressValues": False,
+                "suppressPivots": False,
+                "suppressPivotMode": False,
+                "suppressColumnFilter": True,
+                "suppressColumnSelectAll": True,
+                "suppressColumnExpandAll": True,
+            },
         })
 
     _sidebar_cfg = {
@@ -491,234 +505,20 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     if es_salidas:
         opciones_grid["sideBar"] = False
 
-    # FIX 2: reemplazada la ES6 class syntax por función constructora ES5.
-    # La class syntax causaba "Uncaught SyntaxError: Invalid or unexpected token"
-    # en el parser de streamlit-aggrid==1.2.1, provocando el freeze/reboot en loop.
+    # En Ajuste de Inventario, marcamos en el sidebar cuál tool panel está
+    # abierto. El CSS usa ese atributo para ocultar el listado de columnas
+    # cuando estamos en "Modo pivote" (que reutiliza agColumnsToolPanel).
     if es_ajuste:
-        opciones_grid["components"] = {
-            "pivoteToolPanel": JsCode("""
-            (function() {
-                function PivoteToolPanel() {}
-
-                PivoteToolPanel.prototype.init = function(params) {
-                    var api = params.api;
-
-                    // ───────── helpers ─────────
-                    function tryCall(fn, fallback) {
-                        try { return fn(); } catch(e) { return fallback; }
-                    }
-                    function leerPivot()  { return tryCall(function(){ return api.isPivotMode(); }, false); }
-                    function escribirPivot(v) {
-                        tryCall(function() {
-                            if (api.setGridOption) api.setGridOption('pivotMode', v);
-                            else if (api.setPivotMode) api.setPivotMode(v);
-                        });
-                    }
-                    function obtenerColumnas() {
-                        return tryCall(function(){ return api.getColumns() || []; }, []);
-                    }
-                    function obtenerActuales(tipo) {
-                        if (tipo === 'rowGroup') return tryCall(function(){ return api.getRowGroupColumns() || []; }, []);
-                        if (tipo === 'value')    return tryCall(function(){ return api.getValueColumns()    || []; }, []);
-                        if (tipo === 'pivot')    return tryCall(function(){ return api.getPivotColumns()    || []; }, []);
-                        return [];
-                    }
-                    function quitar(tipo, col) {
-                        tryCall(function() {
-                            if (tipo === 'rowGroup') api.removeRowGroupColumn(col);
-                            else if (tipo === 'value') api.removeValueColumn(col);
-                            else if (tipo === 'pivot') api.removePivotColumn(col);
-                        });
-                    }
-                    function agregar(tipo, colId) {
-                        tryCall(function() {
-                            if (tipo === 'rowGroup') api.addRowGroupColumn(colId);
-                            else if (tipo === 'value') api.addValueColumn(colId);
-                            else if (tipo === 'pivot') api.addPivotColumn(colId);
-                        });
-                    }
-                    function nombreCol(c) {
-                        var def = tryCall(function(){ return c.getColDef(); }, {}) || {};
-                        return def.headerName || def.field || tryCall(function(){ return c.getColId(); }, '');
-                    }
-                    function idCol(c) { return tryCall(function(){ return c.getColId(); }, ''); }
-
-                    // ───────── DOM raíz ─────────
-                    var eGui = document.createElement('div');
-                    eGui.style.cssText = 'padding:14px 12px;display:flex;flex-direction:column;gap:14px;';
-
-                    // ───────── Bloque 1: toggle Modo pivote ─────────
-                    var blkToggle = document.createElement('div');
-
-                    var titToggle = document.createElement('div');
-                    titToggle.textContent = 'Modo pivote';
-                    titToggle.style.cssText = 'font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;margin-bottom:8px;';
-                    blkToggle.appendChild(titToggle);
-
-                    var labToggle = document.createElement('label');
-                    labToggle.style.cssText = 'display:flex;align-items:center;gap:10px;cursor:pointer;';
-
-                    var inpToggle = document.createElement('input');
-                    inpToggle.type = 'checkbox';
-                    inpToggle.style.cssText = 'width:18px;height:18px;cursor:pointer;accent-color:#2563eb;';
-
-                    var etqToggle = document.createElement('span');
-                    etqToggle.style.cssText = 'font-size:13px;color:#1e293b;';
-
-                    inpToggle.checked = leerPivot();
-                    etqToggle.textContent = inpToggle.checked ? 'Activado' : 'Desactivado';
-                    inpToggle.addEventListener('change', function() {
-                        escribirPivot(inpToggle.checked);
-                        etqToggle.textContent = inpToggle.checked ? 'Activado' : 'Desactivado';
-                    });
-
-                    labToggle.appendChild(inpToggle);
-                    labToggle.appendChild(etqToggle);
-                    blkToggle.appendChild(labToggle);
-                    eGui.appendChild(blkToggle);
-
-                    // Separador
-                    var sep = document.createElement('div');
-                    sep.style.cssText = 'height:1px;background:#e2e8f0;margin:2px 0;';
-                    eGui.appendChild(sep);
-
-                    // ───────── Bloque 2: cuadrantes ─────────
-                    var holder = document.createElement('div');
-                    holder.style.cssText = 'display:flex;flex-direction:column;gap:14px;';
-                    eGui.appendChild(holder);
-
-                    // Menú flotante para "agregar campo"
-                    var menuActivo = null;
-                    function cerrarMenu() {
-                        if (menuActivo && menuActivo.parentNode) menuActivo.parentNode.removeChild(menuActivo);
-                        menuActivo = null;
-                    }
-                    function mostrarMenu(ancla, tipo) {
-                        cerrarMenu();
-                        var todas = obtenerColumnas();
-                        var usadas = {};
-                        var actuales = obtenerActuales(tipo);
-                        for (var k = 0; k < actuales.length; k++) usadas[idCol(actuales[k])] = true;
-
-                        var menu = document.createElement('div');
-                        menu.style.cssText = 'position:absolute;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 4px 14px rgba(15,23,42,0.12);padding:4px;max-height:240px;overflow-y:auto;z-index:9999;font-size:12px;min-width:180px;';
-
-                        var hay = false;
-                        for (var j = 0; j < todas.length; j++) {
-                            (function(c) {
-                                var id = idCol(c);
-                                if (!id || usadas[id]) return;
-                                hay = true;
-                                var it = document.createElement('div');
-                                it.textContent = nombreCol(c);
-                                it.style.cssText = 'padding:6px 10px;cursor:pointer;border-radius:4px;color:#1e293b;';
-                                it.addEventListener('mouseenter', function(){ it.style.background = '#eff6ff'; });
-                                it.addEventListener('mouseleave', function(){ it.style.background = 'transparent'; });
-                                it.addEventListener('click', function(){ agregar(tipo, id); cerrarMenu(); });
-                                menu.appendChild(it);
-                            })(todas[j]);
-                        }
-                        if (!hay) {
-                            var na = document.createElement('div');
-                            na.textContent = '(sin campos disponibles)';
-                            na.style.cssText = 'padding:6px 10px;color:#94a3b8;';
-                            menu.appendChild(na);
-                        }
-
-                        var r = ancla.getBoundingClientRect();
-                        menu.style.left = r.left + 'px';
-                        menu.style.top  = (r.bottom + 4) + 'px';
-                        document.body.appendChild(menu);
-                        menuActivo = menu;
-                        setTimeout(function(){ document.addEventListener('click', cerrarMenu, true); }, 50);
-                    }
-
-                    // Crear una sección (Grupos de filas / Valores / Etiquetas)
-                    function crearSeccion(titulo, tipo) {
-                        var sec = document.createElement('div');
-
-                        var lab = document.createElement('div');
-                        lab.textContent = titulo;
-                        lab.style.cssText = 'font-size:12px;color:#64748b;margin-bottom:6px;';
-                        sec.appendChild(lab);
-
-                        var chips = document.createElement('div');
-                        chips.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
-                        sec.appendChild(chips);
-
-                        var actuales = obtenerActuales(tipo);
-
-                        if (actuales.length === 0) {
-                            var vac = document.createElement('div');
-                            vac.textContent = 'Sin campos asignados';
-                            vac.style.cssText = 'border:1px dashed #cbd5e1;border-radius:6px;padding:8px;color:#94a3b8;font-size:11.5px;text-align:center;';
-                            chips.appendChild(vac);
-                        } else {
-                            for (var i = 0; i < actuales.length; i++) {
-                                (function(c) {
-                                    var chip = document.createElement('div');
-                                    chip.style.cssText = 'background:#eff6ff;border:1px solid #dbeafe;border-radius:6px;padding:5px 8px;font-size:11.5px;color:#1e3a8a;display:flex;justify-content:space-between;align-items:center;gap:6px;';
-                                    var nom = document.createElement('span');
-                                    nom.textContent = nombreCol(c);
-                                    nom.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-                                    var btn = document.createElement('button');
-                                    btn.type = 'button';
-                                    btn.textContent = '\u00d7';
-                                    btn.title = 'Quitar';
-                                    btn.style.cssText = 'background:none;border:none;color:#1e3a8a;cursor:pointer;font-size:14px;line-height:1;padding:0;width:18px;flex:0 0 auto;';
-                                    btn.addEventListener('click', function(){ quitar(tipo, c); });
-                                    chip.appendChild(nom);
-                                    chip.appendChild(btn);
-                                    chips.appendChild(chip);
-                                })(actuales[i]);
-                            }
-                        }
-
-                        var btnAdd = document.createElement('button');
-                        btnAdd.type = 'button';
-                        btnAdd.textContent = '+ agregar campo';
-                        btnAdd.style.cssText = 'margin-top:6px;background:#fff;border:1px dashed #cbd5e1;border-radius:6px;padding:5px 8px;font-size:11.5px;color:#64748b;cursor:pointer;width:100%;text-align:center;';
-                        btnAdd.addEventListener('click', function(ev){
-                            ev.stopPropagation();
-                            mostrarMenu(btnAdd, tipo);
-                        });
-                        sec.appendChild(btnAdd);
-
-                        return sec;
-                    }
-
-                    function pintar() {
-                        holder.innerHTML = '';
-                        holder.appendChild(crearSeccion('Grupos de filas', 'rowGroup'));
-                        holder.appendChild(crearSeccion('\u03a3 Valores', 'value'));
-                        holder.appendChild(crearSeccion('Etiquetas de columnas', 'pivot'));
-                    }
-                    pintar();
-
-                    // Re-render cuando cambie el estado del grid
-                    var eventos = [
-                        'columnRowGroupChanged',
-                        'columnValueChanged',
-                        'columnPivotChanged',
-                        'columnPivotModeChanged',
-                        'newColumnsLoaded'
-                    ];
-                    for (var ei = 0; ei < eventos.length; ei++) {
-                        (function(name){
-                            tryCall(function(){ api.addEventListener(name, pintar); });
-                        })(eventos[ei]);
-                    }
-
-                    this.eGui = eGui;
-                };
-
-                PivoteToolPanel.prototype.getGui = function() { return this.eGui; };
-                PivoteToolPanel.prototype.refresh = function() { return false; };
-
-                return PivoteToolPanel;
-            }())
-            """)
-        }
+        opciones_grid["onToolPanelVisibleChanged"] = JsCode("""
+            function(params) {
+                try {
+                    var open = (params.api && params.api.getOpenedToolPanel)
+                        ? params.api.getOpenedToolPanel() : null;
+                    var sb = document.querySelector('.ag-side-bar');
+                    if (sb) sb.setAttribute('data-active-panel', open || '');
+                } catch(e) {}
+            }
+        """)
 
     gb.configure_grid_options(**opciones_grid)
     if es_salidas:
@@ -955,6 +755,13 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         },
         ".ag-column-select-column .ag-checkbox-input": {
             "cursor": "pointer !important",
+        },
+        # Cuando la pestaña activa del sidebar es "Modo pivote", ocultamos el
+        # árbol de columnas para dejar visibles solo el toggle de pivote y los
+        # cuadrantes (Grupos de filas / Valores / Etiquetas de columnas).
+        # En la pestaña "Columnas" el árbol vuelve a ser visible solo.
+        ".ag-side-bar[data-active-panel='pivotePanel'] .ag-column-select": {
+            "display": "none !important",
         },
     }
 
