@@ -486,8 +486,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         # del panel lateral.
         opciones_grid["pivotMode"] = False
 
-if envolver_cabeceras:
-    opciones_grid["headerHeight"] = int(font_px * 2.5 + 20)
+    if envolver_cabeceras and not es_ajuste:
+        opciones_grid["headerHeight"] = int(font_px * 2.5 + 20)
 
     if es_salidas:
         opciones_grid["sideBar"] = False
