@@ -33,7 +33,6 @@ st.set_page_config(
 )
 
 inject_css()
-
 inject_error_overlay()
 inject_element_inspector()
 
@@ -245,42 +244,47 @@ def _contar_filtros_activos():
 n_activos = _contar_filtros_activos()
 label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_activos != 1 else '') if n_activos else ''}"
 
-# ── TÍTULO GRANDE ARRIBA (solo Ajuste de Inventario) ──────────────────────
-# Se muestra aquí, ANTES del rango de fechas, para que el orden sea:
-#   Título grande  ->  Rango de fechas  ->  Tabla / Gráficos
+# ── TÍTULO Y SELECTOR DE FECHA EN LA MISMA LÍNEA (solo Ajuste de Inventario) ──
 if es_ajuste:
+    col_titulo, col_fecha_selector = st.columns([2, 1])
+    
+    with col_titulo:
+        st.markdown(
+            f'<p style="font-size:34px;font-weight:800;color:#1e293b;'
+            f'margin:0 0 0 0;line-height:1.1;">{reporte}</p>',
+            unsafe_allow_html=True,
+        )
+    
+    with col_fecha_selector:
+        if fecha_min_full is not None:
+            _ini_def = max(fecha_ini_default, fecha_min_full)
+            _fin_def = min(fecha_fin_default, fecha_max_full)
+            if fecha_max_full.year < anio_actual:
+                _ini_def = fecha_min_full
+                _fin_def = fecha_max_full
+
+            rango_ajuste = st.date_input(
+                "Rango a Evaluar",
+                value=(_ini_def, _fin_def),
+                min_value=fecha_min_full,
+                max_value=fecha_max_full,
+                format="DD/MM/YYYY",
+                key="fch_ajuste_inline",
+            )
+            if isinstance(rango_ajuste, (tuple, list)) and len(rango_ajuste) == 2:
+                fecha_ini, fecha_fin = rango_ajuste
+                if fecha_ini > fecha_fin:
+                    st.warning("⚠️ La fecha de inicio es posterior a la fecha fin.")
+                else:
+                    df_f = df_f[
+                        (df_f[col_fecha].dt.date >= fecha_ini) &
+                        (df_f[col_fecha].dt.date <= fecha_fin)
+                    ]
+    
     st.markdown(
-        f'<p style="font-size:34px;font-weight:800;color:#1e293b;'
-        f'margin:-6.8rem 0 0.15rem 0;line-height:1.1;">{reporte}</p>'
-        f'<hr style="border:none;border-top:3px solid #3b82f6;margin:0 0 0.8rem 0;">',
+        '<hr style="border:none;border-top:3px solid #3b82f6;margin:0.5rem 0 0.8rem 0;">',
         unsafe_allow_html=True,
     )
-
-# ── FILTRO DE FECHA INLINE para Ajuste de Inventario (fuera del popover) ──
-if es_ajuste and fecha_min_full is not None:
-    _ini_def = max(fecha_ini_default, fecha_min_full)
-    _fin_def = min(fecha_fin_default, fecha_max_full)
-    if fecha_max_full.year < anio_actual:
-        _ini_def = fecha_min_full
-        _fin_def = fecha_max_full
-
-    rango_ajuste = st.date_input(
-        "Rango de Tiempo",
-        value=(_ini_def, _fin_def),
-        min_value=fecha_min_full,
-        max_value=fecha_max_full,
-        format="DD/MM/YYYY",
-        key="fch_ajuste_inline",
-    )
-    if isinstance(rango_ajuste, (tuple, list)) and len(rango_ajuste) == 2:
-        fecha_ini, fecha_fin = rango_ajuste
-        if fecha_ini > fecha_fin:
-            st.warning("⚠️ La fecha de inicio es posterior a la fecha fin.")
-        else:
-            df_f = df_f[
-                (df_f[col_fecha].dt.date >= fecha_ini) &
-                (df_f[col_fecha].dt.date <= fecha_fin)
-            ]
 
 # ── POPOVER (solo se muestra si hay controles que mostrar) ──
 if controles:
