@@ -79,7 +79,7 @@ section[data-testid="stSidebar"] { display:none !important; }
 
 /* Cada botón -> tile de icono */
 .st-key-nav_rail [class*="st-key-navbtn_"] button {
-    width:84px !important; height:56px !important; min-height:56px !important;
+    width:94px !important; height:66px !important; min-height:66px !important;
     padding:0 !important; margin:0 !important;
     border:none !important; border-radius:12px !important;
     background:transparent !important; color:#cbd5e1 !important;
