@@ -248,6 +248,9 @@ label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_act
 if es_ajuste:
     # El CSS que sube el contenido al tope vive ahora en navegacion.py
     # (_CSS_AJUSTE), centralizado y reforzado. Aquí ya no se inyecta nada.
+    # El CSS de estilos.py (key fch_ajuste_inline) pone el label "Rango a
+    # Evaluar" al costado del campo de fechas (en vez de encima) y angosta
+    # el contenedor del date_input al ancho real del texto.
     col_titulo, col_fecha_selector, col_boton = st.columns([2, 1, 0.55])
 
     with col_titulo:
@@ -277,11 +280,13 @@ if es_ajuste:
             )
 
     # ── Botón "Extraer datos" alineado con el date_input ──
+    # Ahora el label "Rango a Evaluar" va al costado del input (no encima),
+    # así que el date_input ya no tiene una fila extra de ~28px arriba.
+    # El spacer se reduce a un valor mínimo para mantener la alineación
+    # vertical con la altura del input.
     with col_boton:
-        # Spacer para alinear el botón con el bottom del date_input
-        # (la etiqueta "Rango a Evaluar" ocupa ~28px de alto).
         st.markdown(
-            "<div style='height:28px'></div>",
+            "<div style='height:2px'></div>",
             unsafe_allow_html=True,
         )
         if st.button(
