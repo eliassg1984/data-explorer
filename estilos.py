@@ -172,7 +172,7 @@ def get_css():
         background: var(--accent) !important;
         border: none !important;
         color: white !important;
-        border-radius: 8px !important;
+        border-radius: 12px !important;
     }
 
     button[kind="primary"]:hover {
