@@ -248,18 +248,17 @@ label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_act
 if es_ajuste:
     # El CSS que sube el contenido al tope vive ahora en navegacion.py
     # (_CSS_AJUSTE), centralizado y reforzado. Aquí ya no se inyecta nada.
-    # El CSS de estilos.py (key fch_ajuste_inline) pone el label "Rango a
-    # Evaluar" al costado del campo de fechas (en vez de encima) y angosta
-    # el contenedor del date_input al ancho real del texto.
-    # Orden lógico: Título — botón "Extraer datos" — selector de fecha
-    # (el botón de acción queda junto al título, y el widget de fecha al
-    # extremo derecho, más cerca de donde el usuario termina de leer).
+    # El CSS de estilos.py (key fch_ajuste_inline) angosta el contenedor
+    # del date_input al ancho real del texto.
+    # Orden lógico: Título — botón "Obtener datos a evaluar" — selector de
+    # fecha (el botón de acción queda junto al título, y el widget de fecha
+    # al extremo derecho, más cerca de donde el usuario termina de leer).
     # Se envuelve en un container con key fija para que el CSS de
     # estilos.py (.st-key-fila_ajuste_top) alinee verticalmente los 3
     # bloques al mismo nivel, sin importar su altura natural.
     _fila_top = st.container(key="fila_ajuste_top")
     with _fila_top:
-        col_titulo, col_boton, col_fecha_selector = st.columns([2, 0.55, 1])
+        col_titulo, col_boton, col_fecha_selector = st.columns([2, 0.7, 1])
 
     with col_titulo:
         st.markdown(
@@ -270,6 +269,10 @@ if es_ajuste:
         )
 
     # El date_input solo CAPTURA la selección; el filtro NO se aplica aquí.
+    # AJUSTE: label_visibility="collapsed" oculta el texto "Rango a Evaluar"
+    # que aparecía encima del campo de fechas. El campo sigue siendo
+    # accesible (el label queda para lectores de pantalla), solo no se
+    # dibuja visualmente.
     rango_ajuste = None
     with col_fecha_selector:
         if fecha_min_full is not None:
@@ -286,14 +289,18 @@ if es_ajuste:
                 max_value=fecha_max_full,
                 format="DD/MM/YYYY",
                 key="fch_ajuste_inline",
+                label_visibility="collapsed",
             )
 
-    # ── Botón "Extraer datos" — mismo nivel vertical que el título y el
-    # selector de fecha (sin spacer: el CSS de estilos.py alinea la fila
-    # completa con align-items:center).
+    # ── Botón — mismo nivel vertical que el título y el selector de fecha
+    # (sin spacer: el CSS de estilos.py alinea la fila completa con
+    # align-items:center).
+    # AJUSTE: texto cambiado de "🔄 Extraer datos" a "Obtener datos a
+    # evaluar". La key se mantiene igual (btn_extraer_ajuste) para que el
+    # CSS de estilos.py siga aplicando sin cambios.
     with col_boton:
         if st.button(
-            "🔄 Extraer datos",
+            "Obtener datos a evaluar",
             type="primary",
             use_container_width=True,
             key="btn_extraer_ajuste",
@@ -330,7 +337,7 @@ if es_ajuste:
                     and (rango_ajuste[0] != _ini_apl or rango_ajuste[1] != _fin_apl)):
                 st.caption(
                     f"ℹ️ Mostrando datos del rango **{_ini_apl:%d/%m/%Y} – {_fin_apl:%d/%m/%Y}**. "
-                    f"Pulsa **🔄 Extraer datos** para aplicar el nuevo rango."
+                    f"Pulsa **Obtener datos a evaluar** para aplicar el nuevo rango."
                 )
 
 # ── POPOVER (solo se muestra si hay controles que mostrar) ──
@@ -418,7 +425,7 @@ else:
 
 # ===========================================================================
 # VERIFICACIÓN DE DATOS VACÍOS
-# (En Ajuste de Inventario, si aún no se ha pulsado "Extraer datos",
+# (En Ajuste de Inventario, si aún no se ha pulsado el botón de extracción,
 #  no avisamos de "vacío" porque mostraremos el placeholder más abajo)
 # ===========================================================================
 _esperando_extraccion = es_ajuste and not st.session_state.get("ajuste_extraido")
@@ -742,12 +749,12 @@ else:
         )
 
     # ── Ajuste de Inventario: gate de extracción ──────────────────────────
-    # Si aún no se ha pulsado "🔄 Extraer datos", mostramos un placeholder
-    # en lugar de la tabla.
+    # Si aún no se ha pulsado el botón, mostramos un placeholder en lugar
+    # de la tabla.
     if es_ajuste and not st.session_state.get("ajuste_extraido"):
         st.info(
             "📅 Selecciona un rango de fechas arriba y pulsa "
-            "**🔄 Extraer datos** para generar el reporte."
+            "**Obtener datos a evaluar** para generar el reporte."
         )
     else:
         vista = _selector_vista()
