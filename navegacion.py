@@ -121,11 +121,29 @@ section[data-testid="stSidebar"] { display:none !important; }
 # lo que el resto de reportes conservan su título y su espacio superior.
 _CSS_AJUSTE = """
 <style>
+/* ── AJUSTE DE INVENTARIO: subir todo el contenido al tope ───────────── */
+
+/* 1) Topbar vacío en este reporte: oculto por completo. */
 #nav-topbar { display: none !important; }
+
+/* 2) Quitar el padding-top de 48px que el rail reserva para el topbar. */
 html body .stApp { padding-top: 0 !important; }
+
+/* 3) Padding superior mínimo del contenedor principal. */
 html body [data-testid="stMainBlockContainer"],
 html body .stMainBlockContainer,
-html body .block-container { padding-top: 0.6rem !important; }
+html body .block-container { padding-top: 0.4rem !important; }
+
+/* 4) CLAVE: colapsar los contenedores "invisibles" que se apilan arriba
+   (st.markdown que solo inyectan <style>, los iframes de overlay/inspector
+   y el wrapper del topbar). Cada uno aporta un "gap" del bloque vertical y,
+   sumados, forman la franja blanca. Ocultar su wrapper elimina ese gap SIN
+   desactivar el CSS (un <style> aplica igual aunque esté en display:none). */
+html body [data-testid="stElementContainer"]:has([data-testid="stMarkdown"] style),
+html body [data-testid="stElementContainer"]:has([data-testid="stIFrame"]),
+html body [data-testid="stElementContainer"]:has(#nav-topbar) {
+    display: none !important;
+}
 </style>
 """
 
