@@ -251,12 +251,21 @@ if es_ajuste:
     # El CSS de estilos.py (key fch_ajuste_inline) pone el label "Rango a
     # Evaluar" al costado del campo de fechas (en vez de encima) y angosta
     # el contenedor del date_input al ancho real del texto.
-    col_titulo, col_fecha_selector, col_boton = st.columns([2, 1, 0.55])
+    # Orden lógico: Título — botón "Extraer datos" — selector de fecha
+    # (el botón de acción queda junto al título, y el widget de fecha al
+    # extremo derecho, más cerca de donde el usuario termina de leer).
+    # Se envuelve en un container con key fija para que el CSS de
+    # estilos.py (.st-key-fila_ajuste_top) alinee verticalmente los 3
+    # bloques al mismo nivel, sin importar su altura natural.
+    _fila_top = st.container(key="fila_ajuste_top")
+    with _fila_top:
+        col_titulo, col_boton, col_fecha_selector = st.columns([2, 0.55, 1])
 
     with col_titulo:
         st.markdown(
             f'<p style="font-size:34px;font-weight:800;color:#1e293b;'
-            f'margin:0 0 0 0;line-height:1.1;">{reporte}</p>',
+            f'margin:0;line-height:1.1;display:flex;align-items:center;'
+            f'height:38px;">{reporte}</p>',
             unsafe_allow_html=True,
         )
 
@@ -279,16 +288,10 @@ if es_ajuste:
                 key="fch_ajuste_inline",
             )
 
-    # ── Botón "Extraer datos" alineado con el date_input ──
-    # Ahora el label "Rango a Evaluar" va al costado del input (no encima),
-    # así que el date_input ya no tiene una fila extra de ~28px arriba.
-    # El spacer se reduce a un valor mínimo para mantener la alineación
-    # vertical con la altura del input.
+    # ── Botón "Extraer datos" — mismo nivel vertical que el título y el
+    # selector de fecha (sin spacer: el CSS de estilos.py alinea la fila
+    # completa con align-items:center).
     with col_boton:
-        st.markdown(
-            "<div style='height:2px'></div>",
-            unsafe_allow_html=True,
-        )
         if st.button(
             "🔄 Extraer datos",
             type="primary",
@@ -309,7 +312,7 @@ if es_ajuste:
                 st.warning("⚠️ Selecciona un rango de fechas válido.")
 
     st.markdown(
-        '<hr style="border:none;border-top:3px solid #3b82f6;margin:0.5rem 0 0.8rem 0;">',
+        '<hr style="border:none;border-top:3px solid #3b82f6;margin:0.5rem 0 1.6rem 0;">',
         unsafe_allow_html=True,
     )
 
