@@ -69,15 +69,20 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     width:{RAIL_ANCHO}px !important; height:100vh !important;
     background:#1e3a5f !important; z-index:999999 !important;
     padding:0 !important;
-    box-shadow:2px 0 8px rgba(0,0,0,.15) !important;
     display:flex !important;
     flex-direction:column !important;
 }}
 
 /* Bloque arriba del rail, reservado para el logo.
-   AJUSTE: antes era celeste (#bfe3ec), ahora se funde con el fondo del
-   canvas (--bg-primary de estilos.py = #f8fafc) para que la esquina no
-   "salte" visualmente respecto al resto de la página. */
+   AJUSTE (punto color): antes era celeste (#bfe3ec), ahora se funde con el
+   fondo del canvas (--bg-primary de estilos.py = #f8fafc) para que la
+   esquina no "salte" visualmente respecto al resto de la página.
+   AJUSTE (punto separación): se quitó el box-shadow que tenía
+   .st-key-nav_rail (2px 0 8px rgba(0,0,0,.15)), que dibujaba una sombra a
+   lo largo de TODO el borde derecho del rail, incluida esta franja
+   superior — eso es lo que se veía como una línea/raya horizontal donde
+   la franja se encuentra con la parte oscura del rail. Sin esa sombra, la
+   transición entre ambos bloques queda continua. */
 .st-key-nav_rail::before {{
     content: "";
     display: block;
