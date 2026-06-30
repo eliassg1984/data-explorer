@@ -406,10 +406,18 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* BOTÓN "EXTRAER DATOS" — Ajuste de Inventario: esquinas cuadradas     */
+    /* BOTÓN "EXTRAER DATOS" — Ajuste de Inventario: forma de chip/pill,    */
+    /* con efecto de "apretado" al hacer click.                            */
+    /* AJUSTE: antes border-radius: 4px (esquinas cuadradas). Ahora 999px   */
+    /* (pill completo) + transform scale al :active para dar feedback      */
+    /* táctil de que el botón fue presionado.                              */
     /* =================================================================== */
     .st-key-btn_extraer_ajuste button {
-        border-radius: 4px !important;
+        border-radius: 999px !important;
+        transition: transform .1s ease, background-color .15s ease !important;
+    }
+    .st-key-btn_extraer_ajuste button:active {
+        transform: scale(0.94) !important;
     }
 
     /* =================================================================== */
