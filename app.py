@@ -10,11 +10,7 @@ import plotly.express as px
 from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
 from data import REPORTES, cargar, secrets_disponibles
 from estilos import TAM_FUENTE, inject_css
-from inyecciones import (
-    inject_error_overlay,
-    inject_element_inspector,
-    inject_boton_calendario_ajuste,
-)
+from inyecciones import inject_error_overlay, inject_element_inspector
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras
 from graficos import renderizar_graficos
 from navegacion import inject_navegacion
@@ -248,7 +244,7 @@ def _contar_filtros_activos():
 n_activos = _contar_filtros_activos()
 label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_activos != 1 else '') if n_activos else ''}"
 
-# ── TÍTULO Y SELECTOR DE FECHA EN LA MISMA LÍNEA (solo Ajuste de Inventario) ──
+# ── TÍTULO, SELECTOR DE FECHA Y BOTÓN EXTRAER (solo Ajuste de Inventario) ──
 if es_ajuste:
     # ── Sube el título y la línea azul (reduce el espacio superior) ──
     st.markdown(
@@ -263,15 +259,17 @@ if es_ajuste:
         unsafe_allow_html=True,
     )
 
-    col_titulo, col_fecha_selector = st.columns([2, 1])
-    
+    col_titulo, col_fecha_selector, col_boton = st.columns([2, 1, 0.55])
+
     with col_titulo:
         st.markdown(
             f'<p style="font-size:34px;font-weight:800;color:#1e293b;'
             f'margin:0 0 0 0;line-height:1.1;">{reporte}</p>',
             unsafe_allow_html=True,
         )
-    
+
+    # El date_input solo CAPTURA la selección; el filtro NO se aplica aquí.
+    rango_ajuste = None
     with col_fecha_selector:
         if fecha_min_full is not None:
             _ini_def = max(fecha_ini_default, fecha_min_full)
@@ -288,23 +286,55 @@ if es_ajuste:
                 format="DD/MM/YYYY",
                 key="fch_ajuste_inline",
             )
+
+    # ── Botón "Extraer datos" alineado con el date_input ──
+    with col_boton:
+        # Spacer para alinear el botón con el bottom del date_input
+        # (la etiqueta "Rango a Evaluar" ocupa ~28px de alto).
+        st.markdown(
+            "<div style='height:28px'></div>",
+            unsafe_allow_html=True,
+        )
+        if st.button(
+            "🔄 Extraer datos",
+            type="primary",
+            use_container_width=True,
+            key="btn_extraer_ajuste",
+            help="Limpia la caché, relee desde R2 y aplica el rango seleccionado",
+        ):
             if isinstance(rango_ajuste, (tuple, list)) and len(rango_ajuste) == 2:
-                fecha_ini, fecha_fin = rango_ajuste
-                if fecha_ini > fecha_fin:
+                _ini, _fin = rango_ajuste
+                if _ini > _fin:
                     st.warning("⚠️ La fecha de inicio es posterior a la fecha fin.")
                 else:
-                    df_f = df_f[
-                        (df_f[col_fecha].dt.date >= fecha_ini) &
-                        (df_f[col_fecha].dt.date <= fecha_fin)
-                    ]
-    
+                    st.session_state["ajuste_rango_aplicado"] = (_ini, _fin)
+                    st.session_state["ajuste_extraido"] = True
+                    st.cache_data.clear()
+                    st.rerun()
+            else:
+                st.warning("⚠️ Selecciona un rango de fechas válido.")
+
     st.markdown(
         '<hr style="border:none;border-top:3px solid #3b82f6;margin:0.5rem 0 0.8rem 0;">',
         unsafe_allow_html=True,
     )
 
-    # ── Botón flotante para abrir el calendario del date_input ──
-    inject_boton_calendario_ajuste()
+    # ── Aplicar el filtro SOLO con el rango ya "comprometido" por el botón ──
+    if st.session_state.get("ajuste_extraido"):
+        _rango_aplicado = st.session_state.get("ajuste_rango_aplicado")
+        if _rango_aplicado and col_fecha:
+            _ini_apl, _fin_apl = _rango_aplicado
+            df_f = df_f[
+                (df_f[col_fecha].dt.date >= _ini_apl) &
+                (df_f[col_fecha].dt.date <= _fin_apl)
+            ]
+            # Aviso si el rango del date_input ya no coincide con el aplicado
+            if (isinstance(rango_ajuste, (tuple, list)) and len(rango_ajuste) == 2
+                    and (rango_ajuste[0] != _ini_apl or rango_ajuste[1] != _fin_apl)):
+                st.caption(
+                    f"ℹ️ Mostrando datos del rango **{_ini_apl:%d/%m/%Y} – {_fin_apl:%d/%m/%Y}**. "
+                    f"Pulsa **🔄 Extraer datos** para aplicar el nuevo rango."
+                )
 
 # ── POPOVER (solo se muestra si hay controles que mostrar) ──
 if controles:
@@ -391,8 +421,12 @@ else:
 
 # ===========================================================================
 # VERIFICACIÓN DE DATOS VACÍOS
+# (En Ajuste de Inventario, si aún no se ha pulsado "Extraer datos",
+#  no avisamos de "vacío" porque mostraremos el placeholder más abajo)
 # ===========================================================================
-if df_f.empty:
+_esperando_extraccion = es_ajuste and not st.session_state.get("ajuste_extraido")
+
+if df_f.empty and not _esperando_extraccion:
     st.warning("Ningún registro coincide con los filtros.")
     st.stop()
 
@@ -710,9 +744,18 @@ else:
             unsafe_allow_html=True,
         )
 
-    vista = _selector_vista()
-
-    if vista == "Tabla":
-        _render_tabla()
+    # ── Ajuste de Inventario: gate de extracción ──────────────────────────
+    # Si aún no se ha pulsado "🔄 Extraer datos", mostramos un placeholder
+    # en lugar de la tabla.
+    if es_ajuste and not st.session_state.get("ajuste_extraido"):
+        st.info(
+            "📅 Selecciona un rango de fechas arriba y pulsa "
+            "**🔄 Extraer datos** para generar el reporte."
+        )
     else:
-        _render_graficos_genericos(df_f, reporte)
+        vista = _selector_vista()
+
+        if vista == "Tabla":
+            _render_tabla()
+        else:
+            _render_graficos_genericos(df_f, reporte)
