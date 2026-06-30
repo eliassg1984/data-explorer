@@ -45,68 +45,87 @@ def _on_refresh_click():
 
 
 # ── CSS: convierte el contenedor de botones en una barra fija vertical ──────
-_CSS = """
+# RAIL_ANCHO: ancho de la barra lateral, 40% más grande que el original (64px).
+RAIL_ANCHO = 90  # 64 * 1.4 ≈ 90
+LOGO_ALTO = 64   # bloque celeste reservado arriba, para el logo
+
+_CSS = f"""
 <style>
-section[data-testid="stSidebar"] { display:none !important; }
-.stApp { margin-left:64px !important; padding-top:48px !important; }
+section[data-testid="stSidebar"] {{ display:none !important; }}
+.stApp {{ margin-left:{RAIL_ANCHO}px !important; padding-top:48px !important; }}
 
 /* Título superior fijo */
-#nav-topbar {
-    position:fixed; top:0; left:64px; right:0; height:48px;
+#nav-topbar {{
+    position:fixed; top:0; left:{RAIL_ANCHO}px; right:0; height:48px;
     display:flex; align-items:center; padding:0 18px;
     font-family:-apple-system,BlinkMacSystemFont,sans-serif;
     font-weight:600; font-size:14px; color:#1e3a5f;
     z-index:999998; pointer-events:none;
-}
+}}
 
 /* Contenedor del rail -> barra vertical fija a la izquierda */
-.st-key-nav_rail {
+.st-key-nav_rail {{
     position:fixed !important; top:0 !important; left:0 !important;
-    width:64px !important; height:100vh !important;
+    width:{RAIL_ANCHO}px !important; height:100vh !important;
     background:#1e3a5f !important; z-index:999999 !important;
-    padding:14px 0 14px 0 !important;
+    padding:0 !important;
     box-shadow:2px 0 8px rgba(0,0,0,.15) !important;
-}
-.st-key-nav_rail [data-testid="stVerticalBlock"] {
+    display:flex !important;
+    flex-direction:column !important;
+}}
+
+/* Bloque celeste arriba del rail, reservado para el logo */
+.st-key-nav_rail::before {{
+    content: "";
+    display: block;
+    width: 100%;
+    height: {LOGO_ALTO}px;
+    background: #bfe3ec;
+    flex-shrink: 0;
+}}
+
+.st-key-nav_rail [data-testid="stVerticalBlock"] {{
     display:flex !important; flex-direction:column !important;
     align-items:center !important; gap:6px !important;
-    height:100% !important; width:100% !important;
-}
+    width:100% !important;
+    flex:1 1 auto !important;
+    padding:14px 0 14px 0 !important;
+}}
 .st-key-nav_rail [data-testid="stElementContainer"],
-.st-key-nav_rail [class*="st-key-navbtn_"] {
+.st-key-nav_rail [class*="st-key-navbtn_"] {{
     width:auto !important; min-width:0 !important;
-}
+}}
 
 /* Cada botón -> tile de icono */
-.st-key-nav_rail [class*="st-key-navbtn_"] button {
-    width:104px !important; height:66px !important; min-height:66px !important;
+.st-key-nav_rail [class*="st-key-navbtn_"] button {{
+    width:{RAIL_ANCHO - 16}px !important; height:62px !important; min-height:62px !important;
     padding:0 !important; margin:0 !important;
     border:none !important; border-radius:12px !important;
     background:transparent !important; color:#cbd5e1 !important;
     display:flex !important; align-items:center !important; justify-content:center !important;
     transition:background .2s, color .2s !important;
-}
-.st-key-nav_rail [class*="st-key-navbtn_"] button:hover {
+}}
+.st-key-nav_rail [class*="st-key-navbtn_"] button:hover {{
     background:#2563eb !important; color:#fff !important;
-}
-.st-key-nav_rail [class*="st-key-navbtn_"] button[kind="primary"] {
+}}
+.st-key-nav_rail [class*="st-key-navbtn_"] button[kind="primary"] {{
     background:#3b82f6 !important; color:#fff !important;
     box-shadow:0 0 0 2px #93c5fd !important;
-}
+}}
 .st-key-nav_rail [class*="st-key-navbtn_"] button p,
 .st-key-nav_rail [class*="st-key-navbtn_"] button span,
-.st-key-nav_rail [class*="st-key-navbtn_"] button [data-testid="stIconMaterial"] {
-    font-size:24px !important; line-height:1 !important;
-}
+.st-key-nav_rail [class*="st-key-navbtn_"] button [data-testid="stIconMaterial"] {{
+    font-size:26px !important; line-height:1 !important;
+}}
 
 /* Botón de refresco, al fondo del rail */
-.st-key-navbtn_refresh { margin-top:auto !important; }
+.st-key-navbtn_refresh {{ margin-top:auto !important; }}
 
-@media (max-width:768px) {
-    .st-key-nav_rail { display:none !important; }
-    .stApp { margin-left:0 !important; }
-    #nav-topbar { left:0 !important; }
-}
+@media (max-width:768px) {{
+    .st-key-nav_rail {{ display:none !important; }}
+    .stApp {{ margin-left:0 !important; }}
+    #nav-topbar {{ left:0 !important; }}
+}}
 </style>
 """
 
