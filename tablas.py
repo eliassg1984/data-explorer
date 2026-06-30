@@ -24,8 +24,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     Si es None, se muestran todas.
     """
 
-    # ── Reportes que comparten el diseño "estilo inventario" (tema material,
-    # estilos de celda planos, panel de pivot completo) ───────────────────
     REPORTES_ESTILO_INVENTARIO = ("Inventario Valorizado", "Ajuste de Inventario")
 
     envolver_cabeceras = reporte in REPORTES_ESTILO_INVENTARIO
@@ -35,13 +33,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     es_requerimientos = (reporte == "Requerimientos")
     es_ajuste = (reporte == "Ajuste de Inventario")
 
-    # ── Inventario Valorizado, Ajuste de Inventario y Requerimientos muestran
-    # el panel pivot completo (Grupos de filas / Valores / Etiquetas de columnas)
     mostrar_pivot = es_requerimientos or es_inventario
 
-    # ─────────────────────────────────────────────────────────────────
-    # REORDENAR COLUMNAS (Producto, Stock, Precio, Valorizado)
-    # ─────────────────────────────────────────────────────────────────
     col_producto   = buscar_columna(df_grid, "Nombre Producto", "producto", "descripcion")
     col_stock      = buscar_columna(df_grid, "Stock al dia", "Stock al Dia", "stock")
     col_precio_ord = buscar_columna(df_grid, "Precio Promedio", "precio promedio", "precio")
@@ -197,11 +190,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         es_valor      = any(k in norm_c for k in ("valorizado", "total", "importe", "monto"))
 
         if es_stock:
-            # AJUSTE: 2 decimales fijos en todas las columnas de stock, en
-            # todos los reportes (Ajuste de Inventario e Inventario
-            # Valorizado). Antes mostraban 0 decimales (enteros); ahora
-            # columnas como "Stock al cierre", "Stock declarado" y "Ajuste"
-            # se leen como 18.00 / -2.20 / 16.00 en vez de 18 / -2 / 16.
             gb.configure_column(
                 c, aggFunc="sum", type=["numericColumn"],
                 cellStyle=_stock_style,
@@ -251,9 +239,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 """),
             )
         else:
-            # AJUSTE: en "Ajuste de Inventario" la columna "Ajuste" (cae aquí
-            # por no contener "stock"/"valorizado"/"precio"/"total") también
-            # debe mostrar siempre 2 decimales fijos, en vez de 0-2 variables.
             _decimales_generico = 2 if es_ajuste else 0
             gb.configure_column(
                 c, aggFunc="sum", type=["numericColumn"],
@@ -270,7 +255,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     if col_producto and col_producto in df_grid.columns and col_producto not in grupos_sel:
         gb.configure_column(col_producto, pinned="left", minWidth=300)
 
-    # ── Requerimientos: configuración especial de columnas de fecha y periodo ──
     if es_requerimientos:
         for c in df_grid.columns:
             _n = _norm(c)
@@ -342,20 +326,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         elif c in cols_precio:
             fila_totales[c] = round(float(df_grid[c].mean()), 2)
         elif c in cols_stock:
-            # AJUSTE: 2 decimales (antes 0), consistente con el formato de
-            # celda de columnas de stock.
             fila_totales[c] = round(float(df_grid[c].sum()), 2)
         elif c == primera_col:
             fila_totales[c] = "▶ TOTAL"
         else:
             fila_totales[c] = None
 
-    # AJUSTE: en los reportes con árbol (Ajuste de Inventario e Inventario
-    # Valorizado) las filas de subtotal (grupo) se colorean por NIVEL de
-    # profundidad — más oscuro cuanto más alto el grupo (nivel 0 = familia),
-    # más claro al bajar, y blanco puro para las filas de detalle (producto,
-    # sin hijos). Reemplaza la alternancia fila par/impar, que no comunicaba
-    # la jerarquía.
     if col_stock and col_stock in df_grid.columns and es_inventario:
         get_row_style = JsCode("""
             function(params) {
@@ -400,11 +376,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             }
         """)
 
-    # ═══════════════════════════════════════════════════════════════════
-    # SIDEBAR (panel lateral)
-    #   Ajuste de Inventario: arranca COLAPSADO (ocultable), sin franja
-    #   "Buscar…", y con "Modo pivote" como pestaña lateral propia.
-    # ═══════════════════════════════════════════════════════════════════
     _columns_panel = {
         "id": "columns",
         "labelDefault": "Columnas",
@@ -412,10 +383,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         "iconKey": "columns",
         "toolPanel": "agColumnsToolPanel",
         "toolPanelParams": {
-            # En Ajuste de Inventario la pestaña "Columnas" solo muestra los
-            # toggles de visibilidad. Los cuadrantes (Grupos de filas, Valores,
-            # Etiquetas de columnas) viven dentro de la pestaña "Modo pivote",
-            # junto al toggle Activado/Desactivado.
             "suppressRowGroups": (not mostrar_pivot) or es_ajuste,
             "suppressValues":    (not mostrar_pivot) or es_ajuste,
             "suppressPivots":    (not mostrar_pivot) or es_ajuste,
@@ -440,11 +407,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "labelDefault": "Modo pivote",
             "labelKey": "pivotePanel",
             "iconKey": "pivot",
-            # Reutilizamos el panel nativo de AgGrid: trae el toggle de modo
-            # pivote y los tres cuadrantes (Grupos de filas / Valores /
-            # Etiquetas de columnas) con drag-and-drop incluido. El listado
-            # de columnas se oculta vía CSS (selector data-active-panel)
-            # para que solo se vea desde la pestaña "Columnas".
             "toolPanel": "agColumnsToolPanel",
             "toolPanelParams": {
                 "suppressRowGroups": False,
@@ -466,19 +428,18 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     opciones_grid = {
         "autoGroupColumnDef": {"minWidth": 200},
         "localeText": LOCALE_ES,
-        # FIX 1: eliminado "suppressSizeToFit" (propiedad inválida en AgGrid v34,
-        # generaba warning en consola). fit_columns_on_grid_load=False ya cubre esto.
         "sideBar": _sidebar_cfg,
         "rowHeight": row_h,
         "headerHeight": header_h,
         "cellSelection": True,
         "tooltipShowDelay": 300,
         "getRowStyle": get_row_style,
-        # Oculta el texto "Suma(...)" / "Promedio(...)" en los encabezados
-        # cuando hay agregaciones o modo pivote activo.
         "suppressAggFuncInHeader": True,
+        # FIX columnas: onFirstDataRendered autoajusta cada columna a su
+        # contenido real (no comprime en pantallas angostas). onGridSizeChanged
+        # redistribuye si el usuario redimensiona la ventana.
         "onGridSizeChanged": JsCode("function(params) { params.api.sizeColumnsToFit(); }"),
-        "onFirstDataRendered": JsCode("function(params) { params.api.sizeColumnsToFit(); }"),
+        "onFirstDataRendered": JsCode("function(params) { params.api.autoSizeAllColumns(); }"),
     }
 
     if not es_requerimientos:
@@ -530,23 +491,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     else:
         opciones_grid["pivotMode"] = False
 
-    # FIX 3: este bloque estaba desindentado fuera de la función en el original.
-    # Ahora está correctamente dentro de renderizar_aggrid_desktop.
-    #
-    # AJUSTE: la altura de cabecera ahora se calcula a partir de 2 líneas
-    # reales de texto a font_px (en vez de la fórmula font_px*2.5+20, que
-    # dejaba mucho espacio vacío en columnas con texto corto). autoHeaderHeight
-    # ya está activo más arriba, así que AgGrid igual crece automáticamente
-    # si una cabecera concreta necesita 3+ líneas.
     if envolver_cabeceras:
         opciones_grid["headerHeight"] = int(font_px * 2 + 14)
 
     if es_salidas:
         opciones_grid["sideBar"] = False
 
-    # En Ajuste de Inventario, marcamos en el sidebar cuál tool panel está
-    # abierto. El CSS usa ese atributo para ocultar el listado de columnas
-    # cuando estamos en "Modo pivote" (que reutiliza agColumnsToolPanel).
     if es_ajuste:
         opciones_grid["onToolPanelVisibleChanged"] = JsCode("""
             function(params) {
@@ -795,20 +745,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         ".ag-column-select-column .ag-checkbox-input": {
             "cursor": "pointer !important",
         },
-        # Cuando la pestaña activa del sidebar es "Modo pivote", ocultamos el
-        # árbol de columnas para dejar visibles solo el toggle de pivote y los
-        # cuadrantes (Grupos de filas / Valores / Etiquetas de columnas).
-        # En la pestaña "Columnas" el árbol vuelve a ser visible solo.
         ".ag-side-bar[data-active-panel='pivotePanel'] .ag-column-select": {
             "display": "none !important",
         },
     }
 
     if envolver_cabeceras:
-        # AJUSTE: overflow-wrap (no word-break) para que el texto rompa solo
-        # en los espacios entre palabras, no dentro de una palabra. word-break
-        # se deja en "normal" explícitamente para anular cualquier valor
-        # heredado del tema de AgGrid.
         custom_css[".ag-header-cell-text"].update({
             "white-space": "normal !important",
             "overflow": "visible !important",
@@ -829,10 +771,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     tema_grid = "balham"
     if es_inventario:
         tema_grid = "material"
-        # AJUSTE: las filas ya no alternan blanco/gris (ag-row-even/odd);
-        # el color ahora lo da getRowStyle según nivel de jerarquía. Se
-        # neutralizan ambas clases a blanco para que no compitan visualmente
-        # con el color de nivel en las filas de detalle.
         custom_css[".ag-row-even"] = {"background-color": "#ffffff !important"}
         custom_css[".ag-row-odd"] = {"background-color": "#ffffff !important"}
         custom_css[".ag-root-wrapper"].update({
@@ -904,7 +842,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "overflow": "hidden !important",
         })
 
-    # ── Requerimientos: paleta "Pizarra" (slate) ──────────────────────────
     if es_requerimientos:
         custom_css[".ag-side-button.ag-selected"] = {
             "background-color": "#334155 !important",
@@ -980,7 +917,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     inject_grid_health_check()
 
-    # ── Post-render: inyecciones específicas por reporte ──────────────────
     if reporte in REPORTES_ESTILO_INVENTARIO:
         inject_pagination_v2()
 
@@ -1031,8 +967,6 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
         "paginationPageSize": 25,
     }
 
-    # AJUSTE: misma fórmula compacta que en renderizar_aggrid_desktop, en vez
-    # de font_px*2.5+20 (dejaba demasiado espacio vacío en la cabecera).
     if envolver_cabeceras:
         opciones_grid["headerHeight"] = int(font_px * 2 + 14)
 
@@ -1055,7 +989,6 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
     }
 
     if envolver_cabeceras:
-        # AJUSTE: mismo cambio overflow-wrap / word-break que en desktop.
         custom_css[".ag-header-cell-text"].update({
             "white-space": "normal !important",
             "overflow": "visible !important",
