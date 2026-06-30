@@ -47,7 +47,7 @@ def _on_refresh_click():
 # ── CSS: convierte el contenedor de botones en una barra fija vertical ──────
 # RAIL_ANCHO: ancho de la barra lateral, 40% más grande que el original (64px).
 RAIL_ANCHO = 90  # 64 * 1.4 ≈ 90
-LOGO_ALTO = 64   # bloque celeste reservado arriba, para el logo
+LOGO_ALTO = 64   # bloque reservado arriba, para el logo
 
 _CSS = f"""
 <style>
@@ -74,13 +74,16 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     flex-direction:column !important;
 }}
 
-/* Bloque celeste arriba del rail, reservado para el logo */
+/* Bloque arriba del rail, reservado para el logo.
+   AJUSTE: antes era celeste (#bfe3ec), ahora se funde con el fondo del
+   canvas (--bg-primary de estilos.py = #f8fafc) para que la esquina no
+   "salte" visualmente respecto al resto de la página. */
 .st-key-nav_rail::before {{
     content: "";
     display: block;
     width: 100%;
     height: {LOGO_ALTO}px;
-    background: #bfe3ec;
+    background: #f8fafc;
     flex-shrink: 0;
 }}
 
