@@ -172,7 +172,7 @@ def get_css():
         background: var(--accent) !important;
         border: none !important;
         color: white !important;
-        border-radius: 12px !important;
+        border-radius: 4px !important;
     }
 
     button[kind="primary"]:hover {
@@ -406,24 +406,54 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* FILTRO DE FECHA — AJUSTE DE INVENTARIO (Opción A: tarjeta + acento)  */
+    /* BOTÓN "EXTRAER DATOS" — Ajuste de Inventario: esquinas cuadradas     */
+    /* =================================================================== */
+    .st-key-btn_extraer_ajuste button {
+        border-radius: 4px !important;
+    }
+
+    /* =================================================================== */
+    /* FILTRO DE FECHA — AJUSTE DE INVENTARIO (label al costado, contenedor */
+    /* angosto en lugar de uno largo y la etiqueta encima)                  */
     /* Solo afecta al date_input con key="fch_ajuste_inline"                */
     /* =================================================================== */
 
-    /* Ancho contenido: ya no ocupa todo el ancho de la pantalla */
+    /* Contenedor: label + input en fila, alineados al centro */
     .st-key-fch_ajuste_inline {
-        max-width: 360px !important;
+        max-width: none !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 10px !important;
     }
 
-    /* Etiqueta — texto tal cual ("Rango de Tiempo"), sin mayúsculas         */
-    /* forzadas del estilo global de label.                                  */
+    /* Etiqueta — "Rango a Evaluar" al costado, sin mayúsculas forzadas,
+       sin ocupar una fila propia arriba del input. */
     .st-key-fch_ajuste_inline label {
         font-size: 0.72rem !important;
         letter-spacing: 0.02em !important;
         text-transform: none !important;
         font-weight: 600 !important;
         color: var(--text-muted) !important;
-        margin-bottom: 5px !important;
+        margin-bottom: 0 !important;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
+    }
+
+    /* El bloque que Streamlit genera para label+widget también en fila */
+    .st-key-fch_ajuste_inline > div {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 10px !important;
+        width: auto !important;
+    }
+
+    /* Contenedor del widget en sí: ancho ajustado al texto de la fecha,
+       ya no ocupa todo el ancho disponible de la columna. */
+    .st-key-fch_ajuste_inline [data-baseweb="input"] {
+        width: 190px !important;
+        min-width: 190px !important;
     }
 
     /* La caja del input = tarjeta con borde de acento a la izquierda */
@@ -434,6 +464,8 @@ def get_css():
         border-radius: 10px !important;
         box-shadow: var(--shadow) !important;
         transition: border-color .15s ease, box-shadow .15s ease !important;
+        width: 190px !important;
+        min-width: 190px !important;
     }
 
     /* Hover / foco: acento más vivo y sombra algo más marcada */
