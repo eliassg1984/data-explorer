@@ -671,7 +671,7 @@ def inject_element_inspector():
                             }
                         }
                     }
-                }
+
                 if (agFrame) resaltarEl(agFrame, etiqueta);
             } else {
                 for (var i = 0; i < 12 && cursor && cursor !== doc.body; i++) {
