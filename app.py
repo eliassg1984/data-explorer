@@ -250,10 +250,14 @@ if es_ajuste:
     st.markdown(
         """
         <style>
-        .stApp { padding-top: 8px !important; }
-        [data-testid="stMainBlockContainer"],
-        .stMainBlockContainer,
-        .block-container { padding-top: 0.4rem !important; }
+        /* En Ajuste de Inventario el topbar va vacío: lo colapsamos */
+        #nav-topbar { height: 0 !important; }
+        /* html body ... -> mayor especificidad para ganar al padding-top:48px
+           que reserva navegacion.py y eliminar la franja superior */
+        html body .stApp { padding-top: 0 !important; }
+        html body [data-testid="stMainBlockContainer"],
+        html body .stMainBlockContainer,
+        html body .block-container { padding-top: 0.4rem !important; }
         </style>
         """,
         unsafe_allow_html=True,
