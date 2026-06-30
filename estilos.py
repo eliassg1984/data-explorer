@@ -413,6 +413,23 @@ def get_css():
     }
 
     /* =================================================================== */
+    /* FILA SUPERIOR DE AJUSTE DE INVENTARIO — alinea verticalmente al      */
+    /* mismo nivel el título, el botón "Extraer datos" y el selector de     */
+    /* fecha (sin importar la altura natural de cada bloque).               */
+    /* =================================================================== */
+    .st-key-fila_ajuste_top [data-testid="stHorizontalBlock"] {
+        align-items: center !important;
+    }
+    .st-key-fila_ajuste_top [data-testid="stColumn"],
+    .st-key-fila_ajuste_top [data-testid="column"] {
+        display: flex !important;
+        align-items: center !important;
+    }
+    .st-key-btn_extraer_ajuste {
+        width: 100% !important;
+    }
+
+    /* =================================================================== */
     /* FILTRO DE FECHA — AJUSTE DE INVENTARIO (label al costado, contenedor */
     /* angosto en lugar de uno largo y la etiqueta encima)                  */
     /* Solo afecta al date_input con key="fch_ajuste_inline"                */
