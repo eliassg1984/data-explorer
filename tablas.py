@@ -499,8 +499,14 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     # FIX 3: este bloque estaba desindentado fuera de la función en el original.
     # Ahora está correctamente dentro de renderizar_aggrid_desktop.
+    #
+    # AJUSTE: la altura de cabecera ahora se calcula a partir de 2 líneas
+    # reales de texto a font_px (en vez de la fórmula font_px*2.5+20, que
+    # dejaba mucho espacio vacío en columnas con texto corto). autoHeaderHeight
+    # ya está activo más arriba, así que AgGrid igual crece automáticamente
+    # si una cabecera concreta necesita 3+ líneas.
     if envolver_cabeceras:
-        opciones_grid["headerHeight"] = int(font_px * 2.5 + 20)
+        opciones_grid["headerHeight"] = int(font_px * 2 + 14)
 
     if es_salidas:
         opciones_grid["sideBar"] = False
@@ -766,12 +772,20 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     }
 
     if envolver_cabeceras:
+        # AJUSTE: overflow-wrap (no word-break) para que el texto rompa solo
+        # en los espacios entre palabras, no dentro de una palabra. word-break
+        # se deja en "normal" explícitamente para anular cualquier valor
+        # heredado del tema de AgGrid.
         custom_css[".ag-header-cell-text"].update({
             "white-space": "normal !important",
             "overflow": "visible !important",
             "text-overflow": "clip !important",
-            "line-height": "1.2 !important",
-            "word-break": "break-word",
+            "line-height": "1.25 !important",
+            "overflow-wrap": "break-word",
+            "word-break": "normal",
+            "display": "flex",
+            "align-items": "center",
+            "text-align": "center",
         })
         custom_css[".ag-header-cell-label"] = {
             "white-space": "normal !important",
@@ -978,8 +992,10 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
         "paginationPageSize": 25,
     }
 
+    # AJUSTE: misma fórmula compacta que en renderizar_aggrid_desktop, en vez
+    # de font_px*2.5+20 (dejaba demasiado espacio vacío en la cabecera).
     if envolver_cabeceras:
-        opciones_grid["headerHeight"] = int(font_px * 2.5 + 20)
+        opciones_grid["headerHeight"] = int(font_px * 2 + 14)
 
     gb.configure_grid_options(**opciones_grid)
     grid_options = gb.build()
@@ -1000,12 +1016,17 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
     }
 
     if envolver_cabeceras:
+        # AJUSTE: mismo cambio overflow-wrap / word-break que en desktop.
         custom_css[".ag-header-cell-text"].update({
             "white-space": "normal !important",
             "overflow": "visible !important",
             "text-overflow": "clip !important",
-            "line-height": "1.2 !important",
-            "word-break": "break-word",
+            "line-height": "1.25 !important",
+            "overflow-wrap": "break-word",
+            "word-break": "normal",
+            "display": "flex",
+            "align-items": "center",
+            "text-align": "center",
         })
         custom_css[".ag-header-cell-label"] = {
             "white-space": "normal !important",
