@@ -197,6 +197,11 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         es_valor      = any(k in norm_c for k in ("valorizado", "total", "importe", "monto"))
 
         if es_stock:
+            # AJUSTE: 2 decimales fijos en todas las columnas de stock, en
+            # todos los reportes (Ajuste de Inventario e Inventario
+            # Valorizado). Antes mostraban 0 decimales (enteros); ahora
+            # columnas como "Stock al cierre", "Stock declarado" y "Ajuste"
+            # se leen como 18.00 / -2.20 / 16.00 en vez de 18 / -2 / 16.
             gb.configure_column(
                 c, aggFunc="sum", type=["numericColumn"],
                 cellStyle=_stock_style,
@@ -204,7 +209,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                     function(params) {
                         if (params.value == null) return '';
                         return Number(params.value).toLocaleString('es-PE', {
-                            minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                            minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                 """),
             )
@@ -246,15 +251,19 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 """),
             )
         else:
+            # AJUSTE: en "Ajuste de Inventario" la columna "Ajuste" (cae aquí
+            # por no contener "stock"/"valorizado"/"precio"/"total") también
+            # debe mostrar siempre 2 decimales fijos, en vez de 0-2 variables.
+            _decimales_generico = 2 if es_ajuste else 0
             gb.configure_column(
                 c, aggFunc="sum", type=["numericColumn"],
                 cellStyle=mono_style,
-                valueFormatter=JsCode("""
-                    function(params) {
+                valueFormatter=JsCode(f"""
+                    function(params) {{
                         if (params.value == null) return '';
-                        return Number(params.value).toLocaleString('es-PE', {
-                            minimumFractionDigits: 0, maximumFractionDigits: 2 });
-                    }
+                        return Number(params.value).toLocaleString('es-PE', {{
+                            minimumFractionDigits: {_decimales_generico}, maximumFractionDigits: 2 }});
+                    }}
                 """),
             )
 
@@ -333,13 +342,37 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         elif c in cols_precio:
             fila_totales[c] = round(float(df_grid[c].mean()), 2)
         elif c in cols_stock:
-            fila_totales[c] = round(float(df_grid[c].sum()), 0)
+            # AJUSTE: 2 decimales (antes 0), consistente con el formato de
+            # celda de columnas de stock.
+            fila_totales[c] = round(float(df_grid[c].sum()), 2)
         elif c == primera_col:
             fila_totales[c] = "▶ TOTAL"
         else:
             fila_totales[c] = None
 
-    if col_stock and col_stock in df_grid.columns and not quitar_fondos:
+    # AJUSTE: en los reportes con árbol (Ajuste de Inventario e Inventario
+    # Valorizado) las filas de subtotal (grupo) se colorean por NIVEL de
+    # profundidad — más oscuro cuanto más alto el grupo (nivel 0 = familia),
+    # más claro al bajar, y blanco puro para las filas de detalle (producto,
+    # sin hijos). Reemplaza la alternancia fila par/impar, que no comunicaba
+    # la jerarquía.
+    if col_stock and col_stock in df_grid.columns and es_inventario:
+        get_row_style = JsCode("""
+            function(params) {
+                if (params.node.rowPinned === 'bottom') {
+                    return { fontWeight:'700', backgroundColor:'#dbeafe', color:'#1e3a5f',
+                             borderTop:'2px solid #3b82f6', fontSize:'13px' };
+                }
+                if (params.node.group) {
+                    var nivel = params.node.level;
+                    if (nivel === 0) return { backgroundColor:'#bfdbfe', fontWeight:'600' };
+                    if (nivel === 1) return { backgroundColor:'#dbeafe', fontWeight:'600' };
+                    return { backgroundColor:'#eff6ff', fontWeight:'500' };
+                }
+                return { backgroundColor:'#ffffff' };
+            }
+        """)
+    elif col_stock and col_stock in df_grid.columns and not quitar_fondos:
         _sf = str(col_stock).replace("\\", "\\\\").replace('"', '\\"')
         get_row_style = JsCode(f"""
             function(params) {{
@@ -796,6 +829,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     tema_grid = "balham"
     if es_inventario:
         tema_grid = "material"
+        # AJUSTE: las filas ya no alternan blanco/gris (ag-row-even/odd);
+        # el color ahora lo da getRowStyle según nivel de jerarquía. Se
+        # neutralizan ambas clases a blanco para que no compitan visualmente
+        # con el color de nivel en las filas de detalle.
+        custom_css[".ag-row-even"] = {"background-color": "#ffffff !important"}
+        custom_css[".ag-row-odd"] = {"background-color": "#ffffff !important"}
         custom_css[".ag-root-wrapper"].update({
             "background-color": "#f8fafc !important",
             "border": "none !important",
