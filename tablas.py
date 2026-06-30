@@ -477,8 +477,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         # Oculta el texto "Suma(...)" / "Promedio(...)" en los encabezados
         # cuando hay agregaciones o modo pivote activo.
         "suppressAggFuncInHeader": True,
-        "onGridSizeChanged": JsCode("function(params) { /* No auto-fit */ }"),
-        "onFirstDataRendered": JsCode("function(params) { /* No auto-fit */ }"),
+        "onGridSizeChanged": JsCode("function(params) { params.api.sizeColumnsToFit(); }"),
+        "onFirstDataRendered": JsCode("function(params) { params.api.sizeColumnsToFit(); }"),
     }
 
     if not es_requerimientos:
@@ -974,7 +974,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         df_grid, gridOptions=grid_options,
         height=(850 if es_requerimientos else 600),
         theme=tema_grid, custom_css=custom_css,
-        fit_columns_on_grid_load=False, allow_unsafe_jscode=True,
+        fit_columns_on_grid_load=True, allow_unsafe_jscode=True,
         enable_enterprise_modules=True, key=f"grid_{reporte}",
     )
 
