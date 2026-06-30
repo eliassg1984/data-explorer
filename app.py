@@ -10,7 +10,11 @@ import plotly.express as px
 from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
 from data import REPORTES, cargar, secrets_disponibles
 from estilos import TAM_FUENTE, inject_css
-from inyecciones import inject_error_overlay, inject_element_inspector
+from inyecciones import (
+    inject_error_overlay,
+    inject_element_inspector,
+    inject_boton_calendario_ajuste,
+)
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras
 from graficos import renderizar_graficos
 from navegacion import inject_navegacion
@@ -246,6 +250,19 @@ label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_act
 
 # ── TÍTULO Y SELECTOR DE FECHA EN LA MISMA LÍNEA (solo Ajuste de Inventario) ──
 if es_ajuste:
+    # ── Sube el título y la línea azul (reduce el espacio superior) ──
+    st.markdown(
+        """
+        <style>
+        .stApp { padding-top: 8px !important; }
+        [data-testid="stMainBlockContainer"],
+        .stMainBlockContainer,
+        .block-container { padding-top: 0.4rem !important; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     col_titulo, col_fecha_selector = st.columns([2, 1])
     
     with col_titulo:
@@ -285,6 +302,9 @@ if es_ajuste:
         '<hr style="border:none;border-top:3px solid #3b82f6;margin:0.5rem 0 0.8rem 0;">',
         unsafe_allow_html=True,
     )
+
+    # ── Botón flotante para abrir el calendario del date_input ──
+    inject_boton_calendario_ajuste()
 
 # ── POPOVER (solo se muestra si hay controles que mostrar) ──
 if controles:
