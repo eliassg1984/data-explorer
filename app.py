@@ -246,23 +246,8 @@ label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_act
 
 # ── TÍTULO, SELECTOR DE FECHA Y BOTÓN EXTRAER (solo Ajuste de Inventario) ──
 if es_ajuste:
-    # ── Sube el título y la línea azul (reduce el espacio superior) ──
-    st.markdown(
-        """
-        <style>
-        /* En Ajuste de Inventario el topbar va vacío: lo colapsamos */
-        #nav-topbar { height: 0 !important; }
-        /* html body ... -> mayor especificidad para ganar al padding-top:48px
-           que reserva navegacion.py y eliminar la franja superior */
-        html body .stApp { padding-top: 0 !important; }
-        html body [data-testid="stMainBlockContainer"],
-        html body .stMainBlockContainer,
-        html body .block-container { padding-top: 0.4rem !important; }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
+    # El CSS que sube el contenido al tope vive ahora en navegacion.py
+    # (_CSS_AJUSTE), centralizado y reforzado. Aquí ya no se inyecta nada.
     col_titulo, col_fecha_selector, col_boton = st.columns([2, 1, 0.55])
 
     with col_titulo:
