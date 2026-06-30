@@ -111,9 +111,33 @@ section[data-testid="stSidebar"] { display:none !important; }
 """
 
 
+# ── CSS extra SOLO para "Ajuste de Inventario" ──────────────────────────────
+# En este reporte el topbar va vacío, así que el padding-top:48px que reserva
+# _CSS queda como una franja en blanco arriba. Aquí lo anulamos:
+#   - Ocultamos el #nav-topbar (no muestra nada en este reporte).
+#   - Usamos "html body ..." para tener MAYOR especificidad que el ".stApp"
+#     de _CSS y ganar siempre, sin depender del orden de inyección.
+# Esto solo se inyecta cuando el reporte activo es Ajuste de Inventario, por
+# lo que el resto de reportes conservan su título y su espacio superior.
+_CSS_AJUSTE = """
+<style>
+#nav-topbar { display: none !important; }
+html body .stApp { padding-top: 0 !important; }
+html body [data-testid="stMainBlockContainer"],
+html body .stMainBlockContainer,
+html body .block-container { padding-top: 0.6rem !important; }
+</style>
+"""
+
+
 def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     """Dibuja el rail (botones nativos) + el título superior."""
     st.markdown(_CSS, unsafe_allow_html=True)
+
+    # Ajuste de Inventario: sube el encabezado al tope (elimina la franja).
+    if reporte_activo == "Ajuste de Inventario":
+        st.markdown(_CSS_AJUSTE, unsafe_allow_html=True)
+
     # El título superior queda vacío en "Ajuste de Inventario"
     _titulo_topbar = "" if reporte_activo == "Ajuste de Inventario" else reporte_activo
     st.markdown(
