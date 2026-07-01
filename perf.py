@@ -33,6 +33,10 @@ Uso mínimo en app.py:
         AgGrid(...)
 
     perf.end()                                     # al final del script
+
+    # OPCIONAL: panel de tiempos del NAVEGADOR (JS de AgGrid).
+    # Se llama junto al render_panel() de arriba.
+    perf.render_browser_panel()
 """
 
 from __future__ import annotations
@@ -357,7 +361,102 @@ class PerfTracker:
                 st.dataframe(pd.DataFrame(rows),
                              use_container_width=True, hide_index=True)
 
-    # ---------- Internos -------------------------------------------------
+    # ---------- Panel de tiempos del NAVEGADOR (JS de AgGrid) ------------
+
+    def render_browser_panel(self):
+        """Panel que muestra los tiempos medidos DENTRO del navegador.
+
+        Depende de que en tablas.py, en las `opciones_grid` del AgGrid,
+        se emitan mensajes de BroadcastChannel('_perf_aggrid') desde los
+        callbacks `onGridReady` y `onFirstDataRendered`.
+
+        Los tiempos se actualizan en tiempo real via JavaScript, no depende
+        de reruns de Streamlit.
+        """
+        if not self.enabled:
+            return
+
+        html_code = """
+<div id="_perf_browser_wrap" style="border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;margin:8px 0 4px 0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+    <div style="font-size:14px;font-weight:600;color:#1e293b;margin-bottom:10px;">
+        🌐 Tiempos del navegador (JavaScript de AgGrid)
+    </div>
+    <div style="font-size:13px;color:#475569;display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;">
+        <div>AgGrid instalado <code style="font-size:11px;color:#64748b;">(onGridReady)</code>:</div>
+        <div id="_perf_ready" style="font-family:monospace;color:#1e3a5f;font-weight:600;text-align:right;">esperando…</div>
+
+        <div>Filas dibujadas <code style="font-size:11px;color:#64748b;">(onFirstDataRendered)</code>:</div>
+        <div id="_perf_render" style="font-family:monospace;color:#1e3a5f;font-weight:600;text-align:right;">esperando…</div>
+
+        <div style="border-top:1px solid #e2e8f0;padding-top:8px;font-weight:600;color:#0f172a;">
+            ⏱️ Tiempo dibujando la tabla (diferencia):
+        </div>
+        <div id="_perf_diff" style="font-family:monospace;font-weight:700;text-align:right;border-top:1px solid #e2e8f0;padding-top:8px;font-size:15px;color:#1e293b;">—</div>
+
+        <div style="font-size:11px;color:#64748b;">Filas renderizadas:</div>
+        <div id="_perf_rows" style="font-family:monospace;font-size:11px;color:#64748b;text-align:right;">—</div>
+    </div>
+    <div id="_perf_hint" style="font-size:11px;color:#64748b;margin-top:8px;font-style:italic;">
+        (Se actualiza automáticamente cada vez que AgGrid termina de dibujar. Interactúa con un widget para ver los tiempos del próximo render.)
+    </div>
+</div>
+<script>
+(function() {
+    try {
+        if (window._perfBcInit) return;
+        window._perfBcInit = true;
+
+        var bc = new BroadcastChannel('_perf_aggrid');
+        var readyTime = null;
+
+        bc.onmessage = function(event) {
+            var d = event.data;
+            if (!d || !d.event) return;
+
+            if (d.event === 'gridReady') {
+                readyTime = d.time;
+                var el = document.getElementById('_perf_ready');
+                if (el) el.textContent = readyTime.toFixed(0) + ' ms';
+            }
+
+            if (d.event === 'firstDataRendered') {
+                var renderTime = d.time;
+                var elR = document.getElementById('_perf_render');
+                if (elR) elR.textContent = renderTime.toFixed(0) + ' ms';
+
+                if (readyTime != null) {
+                    var diff = renderTime - readyTime;
+                    var elD = document.getElementById('_perf_diff');
+                    if (elD) {
+                        var label = diff.toFixed(0) + ' ms';
+                        if (diff >= 1000) label = (diff / 1000).toFixed(1) + ' s (' + diff.toFixed(0) + ' ms)';
+                        elD.textContent = label;
+                        if (diff > 10000) elD.style.color = '#dc2626';
+                        else if (diff > 3000) elD.style.color = '#ea580c';
+                        else if (diff > 1000) elD.style.color = '#ca8a04';
+                        else elD.style.color = '#16a34a';
+                    }
+                }
+
+                if (d.rowCount != null) {
+                    var elRC = document.getElementById('_perf_rows');
+                    if (elRC) elRC.textContent = Number(d.rowCount).toLocaleString();
+                }
+
+                var hint = document.getElementById('_perf_hint');
+                if (hint) hint.textContent = '✓ Última medida: acabas de ver el tiempo real del navegador. Toca otro widget para volver a medir.';
+            }
+        };
+    } catch(e) {
+        var wrap = document.getElementById('_perf_browser_wrap');
+        if (wrap) wrap.innerHTML += '<div style="color:#dc2626;font-size:12px;margin-top:6px;">⚠️ BroadcastChannel no disponible: ' + e.message + '</div>';
+    }
+})();
+</script>
+        """
+        st.components.v1.html(html_code, height=230)
+
+
 
     def _snapshot(self) -> dict:
         snap = {}
