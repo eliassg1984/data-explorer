@@ -110,6 +110,7 @@ if st.query_params.get("debug"):
         })
 
     perf.render_panel(expanded=True)                                        # ⚡ PERF
+    perf.render_browser_panel()                                             # ⚡ PERF browser
 
 
 # ===========================================================================
@@ -642,12 +643,6 @@ def _selector_vista():
 
 # ===========================================================================
 # FRAGMENT GENÉRICO — aisla el contenido principal de cada reporte
-# Al interactuar con cualquier widget DENTRO del fragment (selector de vista,
-# agrupadores, zoom, columnas en Salidas), solo se re-ejecuta este bloque,
-# no toda la app (navegación, CSS, carga de datos, otros reportes).
-# El popover de filtros y el bloque de Ajuste de Inventario quedan FUERA
-# del fragment a propósito: necesitan actualizar df_f antes de entrar.
-# Requiere Streamlit >= 1.33.
 # ===========================================================================
 @st.fragment
 def _render_contenido():
