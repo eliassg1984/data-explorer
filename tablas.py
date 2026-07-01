@@ -426,6 +426,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         "position": "right",
     }
 
+    # =======================================================================
+    # CONFIGURACIÓN DE OPCIONES DE AGGRID CON MEDICIÓN DE RENDIMIENTO
+    # =======================================================================
     opciones_grid = {
         "autoGroupColumnDef": {"minWidth": 200},
         "localeText": LOCALE_ES,
@@ -440,7 +443,28 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         # contenido real (no comprime en pantallas angostas). onGridSizeChanged
         # redistribuye si el usuario redimensiona la ventana.
         "onGridSizeChanged": JsCode("function(params) { params.api.sizeColumnsToFit(); }"),
-        "onFirstDataRendered": JsCode("function(params) { params.api.autoSizeAllColumns(); }"),
+        "onGridReady": JsCode("""
+            function(params) {
+                try {
+                    window._perfAggReadyAt = performance.now();
+                    var bc = new BroadcastChannel('_perf_aggrid');
+                    bc.postMessage({event:'gridReady', time: window._perfAggReadyAt, ts: Date.now()});
+                    bc.close();
+                } catch(e) {}
+            }
+        """),
+        "onFirstDataRendered": JsCode("""
+            function(params) {
+                params.api.autoSizeAllColumns();
+                try {
+                    var t = performance.now();
+                    var rc = (params.api.getDisplayedRowCount) ? params.api.getDisplayedRowCount() : null;
+                    var bc = new BroadcastChannel('_perf_aggrid');
+                    bc.postMessage({event:'firstDataRendered', time: t, rowCount: rc, ts: Date.now()});
+                    bc.close();
+                } catch(e) {}
+            }
+        """),
     }
 
     if not es_requerimientos:
