@@ -10,6 +10,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from utils import _norm, buscar_columna, buscar_columna_fecha, LOCALE_ES
 from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid
+from perf import perf  # <--- NUEVO IMPORT PARA MEDICIÓN DE RENDIMIENTO
 
 
 # ===========================================================================
@@ -907,13 +908,18 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "padding-bottom": "4px !important",
         }
 
-    AgGrid(
-        df_grid, gridOptions=grid_options,
-        height=(850 if es_requerimientos else 600),
-        theme=tema_grid, custom_css=custom_css,
-        fit_columns_on_grid_load=True, allow_unsafe_jscode=True,
-        enable_enterprise_modules=True, key=f"grid_{reporte}",
-    )
+    # =======================================================================
+    # MEDICIÓN DE RENDIMIENTO CON PERF
+    # =======================================================================
+    perf.set_df_info(df_grid, label=f"AgGrid ({reporte})")
+    with perf.phase("AgGrid render"):
+        AgGrid(
+            df_grid, gridOptions=grid_options,
+            height=(850 if es_requerimientos else 600),
+            theme=tema_grid, custom_css=custom_css,
+            fit_columns_on_grid_load=True, allow_unsafe_jscode=True,
+            enable_enterprise_modules=True, key=f"grid_{reporte}",
+        )
 
     inject_grid_health_check()
 
