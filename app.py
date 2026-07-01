@@ -14,6 +14,7 @@ from inyecciones import inject_error_overlay, inject_element_inspector
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras
 from graficos import renderizar_graficos
 from navegacion import inject_navegacion
+from perf import perf                                                       # ⚡ PERF
 
 
 # ===========================================================================
@@ -35,6 +36,8 @@ st.set_page_config(
 inject_css()
 inject_error_overlay()
 inject_element_inspector()
+
+perf.start()                                                                # ⚡ PERF
 
 
 # ===========================================================================
@@ -106,6 +109,8 @@ if st.query_params.get("debug"):
             "reporte": reporte,
         })
 
+    perf.render_panel(expanded=True)                                        # ⚡ PERF
+
 
 # ===========================================================================
 # INICIALIZAR ESTADOS DE CONFIGURACIÓN DE VISTA
@@ -122,15 +127,18 @@ if 'tabla_tam' not in st.session_state:
 if reporte == "Inspector" or cfg.get("tool"):
     from inspector import render_inspector
     render_inspector()
+    perf.end()                                                              # ⚡ PERF
     st.stop()
 
 
 # ===========================================================================
 # CARGAR DATOS
 # ===========================================================================
-df = cargar(cfg["archivo"])
+with perf.phase("cargar()"):                                                # ⚡ PERF
+    df = cargar(cfg["archivo"])
 if df is None or df.empty:
     st.warning("No se pudieron cargar los datos o el archivo está vacío.")
+    perf.end()                                                              # ⚡ PERF
     st.stop()
 
 
@@ -165,9 +173,10 @@ if "buscador" in cfg and cfg["buscador"] and not col_busc:
 # ===========================================================================
 # PROCESAMIENTO
 # ===========================================================================
-df_f = df.copy()
-if col_fecha:
-    df_f[col_fecha] = pd.to_datetime(df_f[col_fecha], errors="coerce")
+with perf.phase("df.copy() + to_datetime"):                                 # ⚡ PERF
+    df_f = df.copy()
+    if col_fecha:
+        df_f[col_fecha] = pd.to_datetime(df_f[col_fecha], errors="coerce")
 
 @st.cache_data
 def get_columnas_sugeridas(df_f, col_fecha, cat_cols, col_busc, cfg):
@@ -256,6 +265,7 @@ n_activos = _contar_filtros_activos()
 label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_activos != 1 else '') if n_activos else ''}"
 
 # ── TÍTULO, SELECTOR DE FECHA Y BOTÓN EXTRAER (solo Ajuste de Inventario) ──
+perf.start_phase("Ajuste top row")                                          # ⚡ PERF
 if es_ajuste:
     _fila_top = st.container(key="fila_ajuste_top")
     with _fila_top:
@@ -327,8 +337,10 @@ if es_ajuste:
                     f"ℹ️ Mostrando datos del rango **{_ini_apl:%d/%m/%Y} – {_fin_apl:%d/%m/%Y}**. "
                     f"Pulsa **Obtener datos a evaluar** para aplicar el nuevo rango."
                 )
+perf.end_phase("Ajuste top row")                                            # ⚡ PERF
 
 # ── POPOVER (solo se muestra si hay controles que mostrar) ──
+perf.start_phase("Popover + filtros")                                       # ⚡ PERF
 if controles:
     with st.popover(label_btn, use_container_width=False):
         for idx, (tipo, col) in enumerate(controles):
@@ -374,6 +386,7 @@ if controles:
             value=st.session_state.tabla_tam,
             help="Ajusta el tamaño de fuente de la tabla",
         )
+perf.end_phase("Popover + filtros")                                         # ⚡ PERF
 
 
 # ===========================================================================
@@ -418,6 +431,7 @@ _esperando_extraccion = es_ajuste and not st.session_state.get("ajuste_extraido"
 
 if df_f.empty and not _esperando_extraccion:
     st.warning("Ningún registro coincide con los filtros.")
+    perf.end()                                                              # ⚡ PERF
     st.stop()
 
 
@@ -637,6 +651,7 @@ def _selector_vista():
 # ===========================================================================
 @st.fragment
 def _render_contenido():
+    perf.fragment_start("_render_contenido")                                # ⚡ PERF
 
     # ── COMPRAS ─────────────────────────────────────────────────────────────
     if reporte == "Compras":
@@ -747,6 +762,10 @@ def _render_contenido():
             else:
                 _render_graficos_genericos(df_f, reporte)
 
+    perf.fragment_end("_render_contenido")                                  # ⚡ PERF
+
 
 # ── Llamada al fragment ──────────────────────────────────────────────────────
 _render_contenido()
+
+perf.end()                                                                  # ⚡ PERF
