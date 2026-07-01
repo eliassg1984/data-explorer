@@ -379,30 +379,36 @@ class PerfTracker:
         html_code = """
 <div id="_perf_browser_wrap" style="border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;margin:8px 0 4px 0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
     <div style="font-size:14px;font-weight:600;color:#1e293b;margin-bottom:10px;">
-        🌐 Tiempos del navegador (JavaScript de AgGrid)
+        Tiempos del navegador (JavaScript de AgGrid)
     </div>
     <div style="font-size:13px;color:#475569;display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;">
         <div>AgGrid instalado <code style="font-size:11px;color:#64748b;">(onGridReady)</code>:</div>
-        <div id="_perf_ready" style="font-family:monospace;color:#1e3a5f;font-weight:600;text-align:right;">esperando…</div>
-
+        <div id="_perf_ready" style="font-family:monospace;color:#1e3a5f;font-weight:600;text-align:right;">esperando...</div>
         <div>Filas dibujadas <code style="font-size:11px;color:#64748b;">(onFirstDataRendered)</code>:</div>
-        <div id="_perf_render" style="font-family:monospace;color:#1e3a5f;font-weight:600;text-align:right;">esperando…</div>
-
+        <div id="_perf_render" style="font-family:monospace;color:#1e3a5f;font-weight:600;text-align:right;">esperando...</div>
         <div style="border-top:1px solid #e2e8f0;padding-top:8px;font-weight:600;color:#0f172a;">
-            ⏱️ Tiempo dibujando la tabla (diferencia):
+            Tiempo dibujando la tabla (diferencia):
         </div>
-        <div id="_perf_diff" style="font-family:monospace;font-weight:700;text-align:right;border-top:1px solid #e2e8f0;padding-top:8px;font-size:15px;color:#1e293b;">—</div>
-
+        <div id="_perf_diff" style="font-family:monospace;font-weight:700;text-align:right;border-top:1px solid #e2e8f0;padding-top:8px;font-size:15px;color:#1e293b;">-</div>
         <div style="font-size:11px;color:#64748b;">Filas renderizadas:</div>
-        <div id="_perf_rows" style="font-family:monospace;font-size:11px;color:#64748b;text-align:right;">—</div>
+        <div id="_perf_rows" style="font-family:monospace;font-size:11px;color:#64748b;text-align:right;">-</div>
     </div>
     <div id="_perf_hint" style="font-size:11px;color:#64748b;margin-top:8px;font-style:italic;">
-        (Se actualiza automáticamente cada vez que AgGrid termina de dibujar. Interactúa con un widget para ver los tiempos del próximo render.)
+        Se actualiza cada vez que AgGrid termina de dibujar. Interactua con un widget para ver los tiempos.
     </div>
+    <div id="_perf_err" style="font-size:11px;color:#dc2626;margin-top:6px;"></div>
 </div>
 <script>
 (function() {
+    var setErr = function(msg) {
+        var el = document.getElementById('_perf_err');
+        if (el) el.textContent = 'Error: ' + msg;
+    };
     try {
+        if (typeof BroadcastChannel === 'undefined') {
+            setErr('BroadcastChannel no soportado en este navegador');
+            return;
+        }
         if (window._perfBcInit) return;
         window._perfBcInit = true;
 
@@ -424,12 +430,14 @@ class PerfTracker:
                 var elR = document.getElementById('_perf_render');
                 if (elR) elR.textContent = renderTime.toFixed(0) + ' ms';
 
-                if (readyTime != null) {
+                if (readyTime !== null) {
                     var diff = renderTime - readyTime;
                     var elD = document.getElementById('_perf_diff');
                     if (elD) {
                         var label = diff.toFixed(0) + ' ms';
-                        if (diff >= 1000) label = (diff / 1000).toFixed(1) + ' s (' + diff.toFixed(0) + ' ms)';
+                        if (diff >= 1000) {
+                            label = (diff / 1000).toFixed(1) + ' s (' + diff.toFixed(0) + ' ms)';
+                        }
                         elD.textContent = label;
                         if (diff > 10000) elD.style.color = '#dc2626';
                         else if (diff > 3000) elD.style.color = '#ea580c';
@@ -444,17 +452,16 @@ class PerfTracker:
                 }
 
                 var hint = document.getElementById('_perf_hint');
-                if (hint) hint.textContent = '✓ Última medida: acabas de ver el tiempo real del navegador. Toca otro widget para volver a medir.';
+                if (hint) hint.textContent = 'Ultima medida OK. Toca otro widget para volver a medir.';
             }
         };
     } catch(e) {
-        var wrap = document.getElementById('_perf_browser_wrap');
-        if (wrap) wrap.innerHTML += '<div style="color:#dc2626;font-size:12px;margin-top:6px;">⚠️ BroadcastChannel no disponible: ' + e.message + '</div>';
+        setErr(e.message || String(e));
     }
 })();
 </script>
         """
-        st.components.v1.html(html_code, height=230)
+        st.components.v1.html(html_code, height=260)
 
 
 
