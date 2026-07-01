@@ -66,6 +66,17 @@ cfg = REPORTES[reporte]
 
 
 # ===========================================================================
+# LIMPIAR ESTADO AL CAMBIAR DE REPORTE
+# Evita que session_state de un reporte anterior (ej: ajuste_extraido)
+# siga corriendo trabajo innecesario cuando se navega a otro reporte.
+# ===========================================================================
+if st.session_state.get("_reporte_anterior") != reporte:
+    st.session_state["_reporte_anterior"] = reporte
+    st.session_state.pop("ajuste_extraido", None)
+    st.session_state.pop("ajuste_rango_aplicado", None)
+
+
+# ===========================================================================
 # AVISO DE MODO DEMO + PANEL DE DIAGNÓSTICO (?debug=1)
 # ===========================================================================
 modo_demo = not secrets_disponibles()
@@ -246,16 +257,6 @@ label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_act
 
 # ── TÍTULO, SELECTOR DE FECHA Y BOTÓN EXTRAER (solo Ajuste de Inventario) ──
 if es_ajuste:
-    # El CSS que sube el contenido al tope vive ahora en navegacion.py
-    # (_CSS_AJUSTE), centralizado y reforzado. Aquí ya no se inyecta nada.
-    # El CSS de estilos.py (key fch_ajuste_inline) angosta el contenedor
-    # del date_input al ancho real del texto.
-    # Orden lógico: Título — botón "Obtener datos a evaluar" — selector de
-    # fecha (el botón de acción queda junto al título, y el widget de fecha
-    # al extremo derecho, más cerca de donde el usuario termina de leer).
-    # Se envuelve en un container con key fija para que el CSS de
-    # estilos.py (.st-key-fila_ajuste_top) alinee verticalmente los 3
-    # bloques al mismo nivel, sin importar su altura natural.
     _fila_top = st.container(key="fila_ajuste_top")
     with _fila_top:
         col_titulo, col_boton, col_fecha_selector = st.columns([2, 0.7, 1])
@@ -268,11 +269,6 @@ if es_ajuste:
             unsafe_allow_html=True,
         )
 
-    # El date_input solo CAPTURA la selección; el filtro NO se aplica aquí.
-    # AJUSTE: label_visibility="collapsed" oculta el texto "Rango a Evaluar"
-    # que aparecía encima del campo de fechas. El campo sigue siendo
-    # accesible (el label queda para lectores de pantalla), solo no se
-    # dibuja visualmente.
     rango_ajuste = None
     with col_fecha_selector:
         if fecha_min_full is not None:
@@ -292,12 +288,6 @@ if es_ajuste:
                 label_visibility="collapsed",
             )
 
-    # ── Botón — mismo nivel vertical que el título y el selector de fecha
-    # (sin spacer: el CSS de estilos.py alinea la fila completa con
-    # align-items:center).
-    # AJUSTE: texto cambiado de "🔄 Extraer datos" a "Obtener datos a
-    # evaluar". La key se mantiene igual (btn_extraer_ajuste) para que el
-    # CSS de estilos.py siga aplicando sin cambios.
     with col_boton:
         if st.button(
             "Obtener datos a evaluar",
@@ -323,7 +313,6 @@ if es_ajuste:
         unsafe_allow_html=True,
     )
 
-    # ── Aplicar el filtro SOLO con el rango ya "comprometido" por el botón ──
     if st.session_state.get("ajuste_extraido"):
         _rango_aplicado = st.session_state.get("ajuste_rango_aplicado")
         if _rango_aplicado and col_fecha:
@@ -332,7 +321,6 @@ if es_ajuste:
                 (df_f[col_fecha].dt.date >= _ini_apl) &
                 (df_f[col_fecha].dt.date <= _fin_apl)
             ]
-            # Aviso si el rango del date_input ya no coincide con el aplicado
             if (isinstance(rango_ajuste, (tuple, list)) and len(rango_ajuste) == 2
                     and (rango_ajuste[0] != _ini_apl or rango_ajuste[1] != _fin_apl)):
                 st.caption(
@@ -425,8 +413,6 @@ else:
 
 # ===========================================================================
 # VERIFICACIÓN DE DATOS VACÍOS
-# (En Ajuste de Inventario, si aún no se ha pulsado el botón de extracción,
-#  no avisamos de "vacío" porque mostraremos el placeholder más abajo)
 # ===========================================================================
 _esperando_extraccion = es_ajuste and not st.session_state.get("ajuste_extraido")
 
@@ -625,8 +611,6 @@ def _render_kpis_salidas(df_data):
 
 # ===========================================================================
 # SELECTOR DE VISTA (Tabla / Gráficos) — píldoras azules
-# Mismo patrón visual que Inventario Valorizado. El CSS vive en estilos.py
-# apuntando a [data-testid="stSegmentedControl"].
 # ===========================================================================
 def _selector_vista():
     """Muestra el segmented_control Tabla/Gráficos y devuelve la opción elegida."""
@@ -642,124 +626,127 @@ def _selector_vista():
     return vista or "Tabla"
 
 
-# ── COMPRAS ─────────────────────────────────────────────────────────────────
-if reporte == "Compras":
-    vista = _selector_vista()
+# ===========================================================================
+# FRAGMENT GENÉRICO — aisla el contenido principal de cada reporte
+# Al interactuar con cualquier widget DENTRO del fragment (selector de vista,
+# agrupadores, zoom, columnas en Salidas), solo se re-ejecuta este bloque,
+# no toda la app (navegación, CSS, carga de datos, otros reportes).
+# El popover de filtros y el bloque de Ajuste de Inventario quedan FUERA
+# del fragment a propósito: necesitan actualizar df_f antes de entrar.
+# Requiere Streamlit >= 1.33.
+# ===========================================================================
+@st.fragment
+def _render_contenido():
 
-    if vista == "Tabla":
-        renderizar_tabla_compras(df_f, grupos_sel=grupos_sel)
-    else:
-        _render_graficos_genericos(df_f, reporte)
-
-
-# ── INVENTARIO VALORIZADO ────────────────────────────────────────────────────
-elif reporte == "Inventario Valorizado":
-    st.markdown(
-        '<p style="font-size:22px;font-weight:700;color:#1e293b;'
-        'margin:0 0 0.6rem 0;line-height:1.2;">Inventario Valorizado</p>',
-        unsafe_allow_html=True,
-    )
-    vista = _selector_vista()
-
-    if vista == "Tabla":
-        _render_tabla()
-    else:
-        renderizar_graficos(df_f, es_movil=usa_vista_movil)
-
-
-# ── SALIDAS ──────────────────────────────────────────────────────────────────
-elif reporte == "Salidas":
-    vista = _selector_vista()
-
-    if vista == "Tabla":
-        if usa_vista_movil and tiene_config_movil:
-            st.caption("📱 Vista móvil • Desliza para más columnas")
-            renderizar_aggrid_movil(
-                df_f[cols_mostrar], cfg.get("columnas_fijas_movil", 2), reporte, font_px,
-            )
+    # ── COMPRAS ─────────────────────────────────────────────────────────────
+    if reporte == "Compras":
+        vista = _selector_vista()
+        if vista == "Tabla":
+            renderizar_tabla_compras(df_f, grupos_sel=grupos_sel)
         else:
-            _k_cols = f"colsel_{reporte}"
-            if _k_cols not in st.session_state:
-                st.session_state[_k_cols] = list(todas_cols)
-            _vigentes = [c for c in st.session_state[_k_cols] if c in todas_cols]
-            st.session_state[_k_cols] = _vigentes or list(todas_cols)
+            _render_graficos_genericos(df_f, reporte)
 
-            _k_zoom = f"zoom_{reporte}"
-            if _k_zoom not in st.session_state:
-                st.session_state[_k_zoom] = 14
-
-            barra = st.columns([3, 3, 1.4])
-            with barra[0]:
-                with st.popover("🧰 Columnas", use_container_width=True):
-                    st.caption("Mostrar u ocultar columnas")
-                    cols_sel = st.multiselect(
-                        "Columnas visibles", todas_cols,
-                        key=_k_cols, label_visibility="collapsed",
-                    )
-            with barra[1]:
-                zoom = st.select_slider(
-                    "🔍 Zoom", options=[12, 14, 16, 18, 20, 22], key=_k_zoom,
-                )
-            with barra[2]:
-                st.download_button(
-                    "⬇️ CSV",
-                    data=df_f.to_csv(index=False).encode("utf-8-sig"),
-                    file_name="salidas_export.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                    key=f"export_{reporte}",
-                )
-
-            if not cols_sel:
-                cols_sel = list(todas_cols)
-
-            _render_kpis_salidas(df_f)
-
-            cols_finales = list(cols_sel)
-            if grupos_sel:
-                for c in grupos_sel:
-                    if c not in cols_finales:
-                        cols_finales.append(c)
-
-            _aviso_rapido_aggrid(df_f[cols_finales])
-            renderizar_aggrid_desktop(
-                df_f[cols_finales], grupos_sel, cols_sel, reporte, int(zoom),
-                cols_visibles=None,
-            )
-    else:
-        _render_graficos_genericos(df_f, reporte)
-
-
-# ── REQUERIMIENTOS ───────────────────────────────────────────────────────────
-elif reporte == "Requerimientos":
-    _render_requerimientos(df_f, col_fecha, grupos_sel, cols_mostrar, font_px, cfg)
-
-
-# ── RESTO DE REPORTES (incluye Ajuste de Inventario) ────────────────────────
-else:
-    # ── Título grande con línea azul debajo ──────────────────────────────
-    # En "Ajuste de Inventario" el título ya se mostró arriba, sobre el rango
-    # de fechas, así que aquí no se vuelve a dibujar (evita el título doble).
-    if not es_ajuste:
+    # ── INVENTARIO VALORIZADO ────────────────────────────────────────────────
+    elif reporte == "Inventario Valorizado":
         st.markdown(
-            f'<p style="font-size:22px;font-weight:700;color:#1e293b;'
-            f'margin:0 0 0.2rem 0;line-height:1.2;">{reporte}</p>'
-            f'<hr style="border:none;border-top:2px solid #3b82f6;margin:0 0 0.8rem 0;">',
+            '<p style="font-size:22px;font-weight:700;color:#1e293b;'
+            'margin:0 0 0.6rem 0;line-height:1.2;">Inventario Valorizado</p>',
             unsafe_allow_html=True,
         )
-
-    # ── Ajuste de Inventario: gate de extracción ──────────────────────────
-    # Si aún no se ha pulsado el botón, mostramos un placeholder en lugar
-    # de la tabla.
-    if es_ajuste and not st.session_state.get("ajuste_extraido"):
-        st.info(
-            "📅 Selecciona un rango de fechas arriba y pulsa "
-            "**Obtener datos a evaluar** para generar el reporte."
-        )
-    else:
         vista = _selector_vista()
-
         if vista == "Tabla":
             _render_tabla()
         else:
+            renderizar_graficos(df_f, es_movil=usa_vista_movil)
+
+    # ── SALIDAS ──────────────────────────────────────────────────────────────
+    elif reporte == "Salidas":
+        vista = _selector_vista()
+
+        if vista == "Tabla":
+            if usa_vista_movil and tiene_config_movil:
+                st.caption("📱 Vista móvil • Desliza para más columnas")
+                renderizar_aggrid_movil(
+                    df_f[cols_mostrar], cfg.get("columnas_fijas_movil", 2), reporte, font_px,
+                )
+            else:
+                _k_cols = f"colsel_{reporte}"
+                if _k_cols not in st.session_state:
+                    st.session_state[_k_cols] = list(todas_cols)
+                _vigentes = [c for c in st.session_state[_k_cols] if c in todas_cols]
+                st.session_state[_k_cols] = _vigentes or list(todas_cols)
+
+                _k_zoom = f"zoom_{reporte}"
+                if _k_zoom not in st.session_state:
+                    st.session_state[_k_zoom] = 14
+
+                barra = st.columns([3, 3, 1.4])
+                with barra[0]:
+                    with st.popover("🧰 Columnas", use_container_width=True):
+                        st.caption("Mostrar u ocultar columnas")
+                        cols_sel = st.multiselect(
+                            "Columnas visibles", todas_cols,
+                            key=_k_cols, label_visibility="collapsed",
+                        )
+                with barra[1]:
+                    zoom = st.select_slider(
+                        "🔍 Zoom", options=[12, 14, 16, 18, 20, 22], key=_k_zoom,
+                    )
+                with barra[2]:
+                    st.download_button(
+                        "⬇️ CSV",
+                        data=df_f.to_csv(index=False).encode("utf-8-sig"),
+                        file_name="salidas_export.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                        key=f"export_{reporte}",
+                    )
+
+                if not cols_sel:
+                    cols_sel = list(todas_cols)
+
+                _render_kpis_salidas(df_f)
+
+                cols_finales = list(cols_sel)
+                if grupos_sel:
+                    for c in grupos_sel:
+                        if c not in cols_finales:
+                            cols_finales.append(c)
+
+                _aviso_rapido_aggrid(df_f[cols_finales])
+                renderizar_aggrid_desktop(
+                    df_f[cols_finales], grupos_sel, cols_sel, reporte, int(zoom),
+                    cols_visibles=None,
+                )
+        else:
             _render_graficos_genericos(df_f, reporte)
+
+    # ── REQUERIMIENTOS ───────────────────────────────────────────────────────
+    elif reporte == "Requerimientos":
+        _render_requerimientos(df_f, col_fecha, grupos_sel, cols_mostrar, font_px, cfg)
+
+    # ── RESTO DE REPORTES (incluye Ajuste de Inventario) ────────────────────
+    else:
+        if not es_ajuste:
+            st.markdown(
+                f'<p style="font-size:22px;font-weight:700;color:#1e293b;'
+                f'margin:0 0 0.2rem 0;line-height:1.2;">{reporte}</p>'
+                f'<hr style="border:none;border-top:2px solid #3b82f6;margin:0 0 0.8rem 0;">',
+                unsafe_allow_html=True,
+            )
+
+        if es_ajuste and not st.session_state.get("ajuste_extraido"):
+            st.info(
+                "📅 Selecciona un rango de fechas arriba y pulsa "
+                "**Obtener datos a evaluar** para generar el reporte."
+            )
+        else:
+            vista = _selector_vista()
+            if vista == "Tabla":
+                _render_tabla()
+            else:
+                _render_graficos_genericos(df_f, reporte)
+
+
+# ── Llamada al fragment ──────────────────────────────────────────────────────
+_render_contenido()
