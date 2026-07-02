@@ -359,8 +359,6 @@ class PerfTracker:
 
     # ---------- Panel del navegador (BroadcastChannel) --------------------
 
-    # ---------- Panel del navegador (BroadcastChannel) --------------------
-
     def render_browser_panel(self, expanded: bool = True):
         """Muestra un panel HTML/JS que escucha los eventos de rendimiento
         enviados desde AgGrid a través de BroadcastChannel.
@@ -370,16 +368,12 @@ class PerfTracker:
         if not self.enabled:
             return
 
-        # Contenedor donde se pintará el panel
         with st.expander("🌐 Rendimiento en el navegador (?debug=1)", expanded=expanded):
             st.caption(
                 "Tiempos medidos **dentro del navegador** cuando AgGrid "
                 "termina de inicializarse y de pintar los datos."
             )
 
-            # Inyectamos un bloque HTML + JavaScript que:
-            # 1. Escucha el BroadcastChannel '_perf_aggrid'
-            # 2. Muestra los eventos recibidos en un formato legible
             html_code = """
             <div id="perf-browser-panel" style="font-family:monospace;font-size:13px;background:#f8fafc;padding:12px;border-radius:6px;border:1px solid #e2e8f0;min-height:60px;">
                 <div style="color:#64748b;margin-bottom:8px;">⏳ Esperando eventos de AgGrid...</div>
@@ -430,16 +424,18 @@ class PerfTracker:
             </script>
             """
 
-            # Contenedor con key propia: nos permite excepcionar este iframe
-            # de la regla global que aplasta a height:0 en estilos.py
+            # Contenedor con key propia: permite excepcionar este iframe en CSS
             with st.container(key="perf_browser_iframe"):
-                # Migración: st.components.v1.html → st.iframe (deprecado desde 1.56)
-                st.html(html_code)
+                # Usamos st.components.v1.html (aunque deprecado, es compatible)
+                # El iframe generado será seleccionado por el CSS:
+                # .st-key-perf_browser_iframe [data-testid="stIFrame"]
+                st.components.v1.html(html_code, height=300, scrolling=True)
 
             st.caption(
                 "📡 Los eventos también se ven en la consola del navegador "
                 "(F12 → pestaña Console). Busca mensajes del BroadcastChannel."
             )
+
     # ---------- Internos -------------------------------------------------
 
     def _snapshot(self) -> dict:
