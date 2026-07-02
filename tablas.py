@@ -1000,7 +1000,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     if reporte in REPORTES_ESTILO_INVENTARIO:
         inject_pagination_v2()
 
-    if es_requerimientos:
+    # === CAMBIO APLICADO: ahora también se inyecta para Ajuste de Inventario ===
+    if es_requerimientos or es_ajuste:
         inject_maximize_aggrid()
 
 
