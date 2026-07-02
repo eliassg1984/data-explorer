@@ -434,7 +434,7 @@ class PerfTracker:
             # de la regla global que aplasta a height:0 en estilos.py
             with st.container(key="perf_browser_iframe"):
                 # Migración: st.components.v1.html → st.iframe (deprecado desde 1.56)
-                st.iframe(html_code.strip(), height=300)
+                st.iframe(srcdoc=html_code, height=300, scrolling=True)
 
             st.caption(
                 "📡 Los eventos también se ven en la consola del navegador "
