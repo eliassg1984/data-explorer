@@ -424,12 +424,9 @@ class PerfTracker:
             </script>
             """
 
-            # Contenedor con key propia: permite excepcionar este iframe en CSS
-            with st.container(key="perf_browser_iframe"):
-                # Usamos st.components.v1.html (aunque deprecado, es compatible)
-                # El iframe generado será seleccionado por el CSS:
-                # .st-key-perf_browser_iframe [data-testid="stIFrame"]
-                st.components.v1.html(html_code, height=300, scrolling=True)
+            # Inyectamos el HTML directamente en el DOM (sin iframe)
+            # Esto evita problemas de sandbox y de comunicación entre contextos.
+            st.markdown(html_code, unsafe_allow_html=True)
 
             st.caption(
                 "📡 Los eventos también se ven en la consola del navegador "
