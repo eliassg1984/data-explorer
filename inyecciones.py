@@ -1001,25 +1001,44 @@ def inject_maximize_aggrid():
                 s.id = 'aggrid-fs-css';
                 /* ✅ PATCH 1: CSS con height: 100% (heredada) en lugar de 100vh */
                 s.textContent = [
-                    /* Cadena de alturas al 100% (heredada, NO 100vh) para que
-                       el grid llene el iframe sin pelear con la medición que
-                       hace streamlit-aggrid → evita la oscilación/parpadeo. */
-                    'html.fs-activo { height: 100%; overflow: hidden; }',
-                    'html.fs-activo body {',
-                    '  height: 100%; margin: 0; overflow: hidden;',
+                    /* CLAVE anti-parpadeo: 100vh (viewport del iframe = pantalla,
+                       CONSTANTE en fullscreen) en vez de height:100% encadenado.
+                       Así el ResizeObserver de Streamlit mide siempre lo mismo y
+                       no entra en bucle (que colapsaba el cuerpo a 0). */
+                    'html.fs-activo, html.fs-activo body {',
+                    '  margin: 0 !important;',
+                    '  height: 100vh !important;',
+                    '  min-height: 100vh !important;',
+                    '  max-height: 100vh !important;',
+                    '  overflow: hidden !important;',
                     '}',
                     'html.fs-activo #root {',
-                    '  height: 100% !important; overflow: hidden !important;',
+                    '  height: 100vh !important;',
+                    '  overflow: hidden !important;',
                     '}',
                     'html.fs-activo #root > div {',
-                    '  height: 100% !important;',
+                    '  height: 100vh !important;',
                     '}',
                     'html.fs-activo [class*="ag-theme-"] {',
-                    '  height: 100% !important;',
+                    '  height: 100vh !important;',
                     '}',
                     'html.fs-activo .ag-root-wrapper {',
                     '  height: 100% !important; border-radius: 0 !important;',
                     '}',
+                    /* Panel Columnas/Filtros/Pivote: permite scroll interno si el
+                       contenido supera la pantalla, en vez de estirarse. */
+                    'html.fs-activo .ag-column-panel,',
+                    'html.fs-activo .ag-filter-toolpanel {',
+                    '  height: 100% !important; overflow-y: auto !important;',
+                    '}',
+                    /* FIX panel pivote alargado: las zonas "Grupos de filas" y
+                       "Valores" NO deben crecer para llenar el alto; se ajustan a
+                       su contenido. min-height mantiene un objetivo de arrastre. */
+                    'html.fs-activo .ag-column-drop-vertical {',
+                    '  flex: 0 0 auto !important;',
+                    '  min-height: 3.2em !important;',
+                    '}',
+                    /* Botón de salida (dentro del iframe) */
                     '#' + EXIT_ID + ' {',
                     '  position: fixed;',
                     '  top: 12px;',
