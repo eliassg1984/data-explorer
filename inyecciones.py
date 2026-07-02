@@ -1019,8 +1019,19 @@ def inject_maximize_aggrid():
                     'html.fs-activo #root > div {',
                     '  height: 100vh !important;',
                     '}',
-                    'html.fs-activo [class*="ag-theme-"] {',
+                    /* SOLO el contenedor real del grid (vive dentro de #root).
+                       El fantasma de arrastre (.ag-dnd-ghost) y los popups de
+                       AG Grid llevan la misma clase de tema pero cuelgan de
+                       <body>, fuera de #root: quedan excluidos. */
+                    'html.fs-activo #root [class*="ag-theme-"]:not(.ag-dnd-ghost) {',
                     '  height: 100vh !important;',
+                    '}',
+                    /* Cinturón y tirantes: nada de tamaños forzados en el
+                       fantasma de arrastre ni en popups del tema. */
+                    'html.fs-activo .ag-dnd-ghost,',
+                    'html.fs-activo body > [class*="ag-theme-"]:not(#gridContainer) {',
+                    '  height: auto !important;',
+                    '  min-height: 0 !important;',
                     '}',
                     'html.fs-activo .ag-root-wrapper {',
                     '  height: 100% !important; border-radius: 0 !important;',
