@@ -69,6 +69,10 @@ def get_css():
         padding-bottom: 0 !important;
     }
 
+    /* ============ IFRAMES INVISIBLES (por defecto) ============ */
+    /* Estos iframes son para componentes auxiliares (overlay de errores,
+       inspector de elementos, toggle del sidebar, etc.) y deben
+       permanecer ocultos. */
     [data-testid="stIFrame"] {
         height: 0 !important;
         min-height: 0 !important;
@@ -82,12 +86,22 @@ def get_css():
         overflow: hidden !important;
     }
 
-    [data-testid="stDecoration"] {
-        display: none !important;
+    /* ============ EXCEPCIÓN: PANEL DE RENDIMIENTO DEL NAVEGADOR ============ */
+    /* Este iframe SÍ debe mostrarse (perf.render_browser_panel).
+       La key "perf_browser_panel" se pasa en st.components.v1.html(...).
+       La combinación de atributos da mayor especificidad que la regla
+       genérica de arriba. */
+    [data-testid="stIFrame"][src*="perf_browser_panel"] {
+        height: 260px !important;
+        min-height: 260px !important;
+        display: block !important;
     }
-
-    [data-testid="stToolbar"] {
-        display: none !important;
+    [data-testid="stElementContainer"]:has([data-testid="stIFrame"][src*="perf_browser_panel"]) {
+        height: auto !important;
+        min-height: 260px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
     }
 
     /* ============ BOTÓN PARA EXPANDIR EL SIDEBAR ============ */
