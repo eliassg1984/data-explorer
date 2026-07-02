@@ -433,8 +433,13 @@ class PerfTracker:
             </script>
             """
 
-            # Inyectamos el HTML
-            st.components.v1.html(html_code, height=300, scrolling=True)
+            # Inyectamos el HTML con la key para que el CSS lo identifique
+            st.components.v1.html(
+                html_code,
+                height=300,
+                scrolling=True,
+                key="perf_browser_panel"   # <--- CLAVE OBLIGATORIA para que el CSS lo muestre
+            )
 
             # También podemos mostrar los eventos en la consola del navegador
             # (útil para depurar)
