@@ -398,6 +398,12 @@ class PerfTracker:
                                ' · filas: <b>' + (data.rowCount ?? '?') + '</b>' +
                                ' (ts: ' + new Date(data.ts).toLocaleTimeString() + ')' +
                                '</div>';
+                    } else if (data.event === 'modelUpdated') {
+                        html = '<div style="background:#ede9fe;padding:6px 10px;border-radius:4px;margin-bottom:4px;">' +
+                               '🔄 <b>modelUpdated</b> — tiempo: <b>' + data.time.toFixed(1) + ' ms</b>' +
+                               ' · filas: <b>' + (data.rowCount ?? '?') + '</b>' +
+                               ' (ts: ' + new Date(data.ts).toLocaleTimeString() + ')' +
+                               '</div>';
                     } else {
                         html = '<div style="background:#fef3c7;padding:6px 10px;border-radius:4px;margin-bottom:4px;">' +
                                '⚠️ Evento desconocido: ' + JSON.stringify(data) +
