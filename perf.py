@@ -43,6 +43,7 @@ from contextlib import contextmanager
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 
 STATE_KEY = "_perf_state"
@@ -368,7 +369,8 @@ class PerfTracker:
         if not self.enabled:
             return
 
-        with st.expander("🌐 Rendimiento en el navegador (?debug=1)", expanded=expanded):
+        with st.expander("🌐 Rendimiento en el navegador (?debug=1)", expanded=expanded,
+                          key="perf_browser_expander"):
             st.caption(
                 "Tiempos medidos **dentro del navegador** cuando AgGrid "
                 "termina de inicializarse y de pintar los datos."
@@ -430,9 +432,16 @@ class PerfTracker:
             </script>
             """
 
-            # Inyectamos el HTML directamente en el DOM (sin iframe)
-            # Esto evita problemas de sandbox y de comunicación entre contextos.
-            st.markdown(html_code, unsafe_allow_html=True)
+            # Inyectamos vía components.html (crea un iframe real con srcdoc).
+            # A diferencia de st.markdown(unsafe_allow_html=True) -que inserta
+            # el HTML por innerHTML y NUNCA ejecuta los <script> que trae
+            # embebidos, por especificación del propio HTML/DOM-, un iframe
+            # con srcdoc sí ejecuta su <script>. Sin esto, el listener del
+            # BroadcastChannel jamás se creaba y el panel se quedaba
+            # esperando eventos para siempre, sin importar qué pasara en
+            # AgGrid. El iframe resultante lo hace visible el CSS de
+            # estilos.py vía la key "perf_browser_expander" del expander.
+            components.html(html_code, height=300, scrolling=True)
 
             st.caption(
                 "📡 Los eventos también se ven en la consola del navegador "
