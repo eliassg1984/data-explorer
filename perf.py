@@ -369,16 +369,12 @@ class PerfTracker:
             return
 
         # Contenedor donde se pintará el panel
-        with st.expander("🌐 Rendimiento en el navegador (?debug=1)", expanded=expanded, key="perf_browser_expander"):
+        with st.expander("🌐 Rendimiento en el navegador (?debug=1)", expanded=expanded):
             st.caption(
                 "Tiempos medidos **dentro del navegador** cuando AgGrid "
                 "termina de inicializarse y de pintar los datos."
             )
 
-            # Inyectamos un bloque HTML + JavaScript que:
-            # 1. Escucha el BroadcastChannel '_perf_aggrid'
-            # 2. Muestra los eventos recibidos en un formato legible
-            # 3. Se comunica con el contenedor de Streamlit para actualizarlo
             html_code = """
             <div id="perf-browser-panel" style="font-family:monospace;font-size:13px;background:#f8fafc;padding:12px;border-radius:6px;border:1px solid #e2e8f0;min-height:60px;">
                 <div style="color:#64748b;margin-bottom:8px;">⏳ Esperando eventos de AgGrid...</div>
@@ -390,7 +386,6 @@ class PerfTracker:
                 var container = document.getElementById('perf-browser-events');
                 if (!container) return;
 
-                // Función para formatear los eventos
                 function renderEvent(data) {
                     var html = '';
                     if (data.event === 'gridReady') {
@@ -417,15 +412,12 @@ class PerfTracker:
                     bc.onmessage = function(event) {
                         var data = event.data;
                         var html = renderEvent(data);
-                        // Insertar al principio (para mostrar el más reciente arriba)
                         container.innerHTML = html + container.innerHTML;
-                        // Limitar a 10 eventos para no saturar
                         var items = container.children;
                         while (items.length > 10) {
                             container.removeChild(items[items.length - 1]);
                         }
                     };
-                    // Opcional: cerrar el canal al recargar (se cierra automáticamente)
                 } catch(e) {
                     container.innerHTML = '<div style="color:#dc2626;">❌ Error: ' + e.message + '</div>';
                 }
@@ -433,16 +425,15 @@ class PerfTracker:
             </script>
             """
 
-            # Inyectamos el HTML (sin key, porque st.components.v1.html no lo admite)
-            st.components.v1.html(html_code, height=300, scrolling=True)
+            # Contenedor con key propia: nos permite excepcionar este iframe
+            # de la regla global que aplasta a height:0 en estilos.py
+            with st.container(key="perf_browser_iframe"):
+                st.components.v1.html(html_code, height=300, scrolling=True)
 
-            # También podemos mostrar los eventos en la consola del navegador
-            # (útil para depurar)
             st.caption(
                 "📡 Los eventos también se ven en la consola del navegador "
                 "(F12 → pestaña Console). Busca mensajes del BroadcastChannel."
             )
-
     # ---------- Internos -------------------------------------------------
 
     def _snapshot(self) -> dict:
