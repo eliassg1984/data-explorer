@@ -999,15 +999,24 @@ def inject_maximize_aggrid():
             if (!fdoc.getElementById('aggrid-fs-css')) {
                 var s = fdoc.createElement('style');
                 s.id = 'aggrid-fs-css';
+                /* ✅ PATCH 1: CSS con height: 100% (heredada) en lugar de 100vh */
                 s.textContent = [
-                    'html.fs-activo, html.fs-activo body {',
+                    /* Cadena de alturas al 100% (heredada, NO 100vh) para que
+                       el grid llene el iframe sin pelear con la medición que
+                       hace streamlit-aggrid → evita la oscilación/parpadeo. */
+                    'html.fs-activo { height: 100%; overflow: hidden; }',
+                    'html.fs-activo body {',
                     '  height: 100%; margin: 0; overflow: hidden;',
                     '}',
-                    'html.fs-activo #root,',
-                    'html.fs-activo #root > div {',
-                    '  height: 100vh !important; max-height: 100vh !important;',
+                    'html.fs-activo #root {',
+                    '  height: 100% !important; overflow: hidden !important;',
                     '}',
-                    'html.fs-activo [class*="ag-theme-"] { height: 100vh !important; }',
+                    'html.fs-activo #root > div {',
+                    '  height: 100% !important;',
+                    '}',
+                    'html.fs-activo [class*="ag-theme-"] {',
+                    '  height: 100% !important;',
+                    '}',
                     'html.fs-activo .ag-root-wrapper {',
                     '  height: 100% !important; border-radius: 0 !important;',
                     '}',
@@ -1077,7 +1086,7 @@ def inject_maximize_aggrid():
         btn.title = 'Maximizar tabla';
         btn.onclick = toggle;
 
-        /* Se dispara al entrar Y al salir (incluida la salida con Esc). */
+        /* ✅ PATCH 2: onFSChange con resize diferido y sin realimentación */
         function onFSChange() {
             var activo = (elementoFS() === iframeFS) && iframeFS !== null;
             var fdoc = null, fwin = null;
@@ -1088,8 +1097,13 @@ def inject_maximize_aggrid():
             if (fdoc && fdoc.documentElement) {
                 fdoc.documentElement.classList.toggle('fs-activo', activo);
             }
-            /* AgGrid recalcula el alto del viewport de filas con este resize */
-            if (fwin) { try { fwin.dispatchEvent(new Event('resize')); } catch(e) {} }
+            /* Un ÚNICO resize diferido: AgGrid recalcula el viewport de filas
+               una sola vez, sin realimentar el bucle de medición. */
+            if (activo && fwin) {
+                win.setTimeout(function() {
+                    try { fwin.dispatchEvent(new Event('resize')); } catch(e) {}
+                }, 250);
+            }
 
             btn.style.display = activo ? 'none' : 'flex';
             if (!activo) {
