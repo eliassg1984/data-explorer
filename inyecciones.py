@@ -914,24 +914,37 @@ def inject_pagination_v2():
 
 
 # ===========================================================================
-# BOTÓN MAXIMIZAR AGGRID — TODOS LOS REPORTES
+# BOTÓN MAXIMIZAR AGGRID — TODOS LOS REPORTES (NUEVA VERSIÓN CON FULLSCREEN API)
 # ===========================================================================
 
 def inject_maximize_aggrid():
     """
-    Inyecta un botón flotante en posición fija (esquina superior derecha)
-    que pone la tabla AgGrid en pantalla completa.
+    Botón flotante ⛶ que pone la tabla AgGrid en PANTALLA COMPLETA NATIVA
+    (Fullscreen API) en lugar del truco position:fixed.
+
+    Claves de esta versión:
+    - El fullscreen se pide desde el documento padre sobre el ELEMENTO iframe
+      (iframe.requestFullscreen()), así que no hace falta allow="fullscreen".
+    - En fullscreen el navegador SOLO renderiza el iframe: el botón del padre
+      deja de verse. Por eso el botón de salida (✕) se inyecta DENTRO del
+      iframe, junto con el CSS que estira el grid (renderizado a 600/850px)
+      hasta 100vh mientras dura el fullscreen.
+    - Esc sale de forma nativa; escuchamos 'fullscreenchange' para restaurar
+      la altura del grid y reposicionar el ⛶ (también cubre la salida con Esc).
+    - Ya no hace falta tocar z-index del rail/topbar: en fullscreen nativo el
+      documento padre ni se renderiza.
+    - Safari usa la variante webkit* (fallback incluido).
     """
     components.html("""
     <script>
     (function(){
         var win = window.parent;
         var doc = win.document;
-        var BTN_ID = 'aggrid-maximize-btn';
-        var maximizado = false;
-        var estilosOriginales = {};
+        var BTN_ID  = 'aggrid-maximize-btn';
+        var EXIT_ID = 'aggrid-exit-fs-btn';
         var tries = 0;
         var MAX = 40;
+        var iframeFS = null;
 
         function inyectarCSS() {
             if (doc.getElementById('aggrid-max-css')) return;
@@ -961,13 +974,6 @@ def inject_maximize_aggrid():
                 '  border-color: #93c5fd;',
                 '  color: #2563eb;',
                 '}',
-                '#' + BTN_ID + '.maximizado {',
-                '  top: 12px !important;',
-                '  right: 12px !important;',
-                '  background: #1e293b !important;',
-                '  color: #f8fafc !important;',
-                '  border-color: #475569 !important;',
-                '}',
             ].join('\\n');
             doc.head.appendChild(s);
         }
@@ -984,61 +990,85 @@ def inject_maximize_aggrid():
             return null;
         }
 
-        function posicionarBoton(iframe) {
-            if (!iframe || maximizado) return;
-            var rect = iframe.getBoundingClientRect();
-            btn.style.top  = (rect.top  + 8) + 'px';
-            btn.style.right = (win.innerWidth - rect.right + 8) + 'px';
+        /* CSS + botón ✕ DENTRO del iframe: es lo único visible en fullscreen. */
+        function prepararIframe(iframe) {
+            var fdoc = null;
+            try { fdoc = iframe.contentDocument; } catch(e) {}
+            if (!fdoc || !fdoc.body) return;
+
+            if (!fdoc.getElementById('aggrid-fs-css')) {
+                var s = fdoc.createElement('style');
+                s.id = 'aggrid-fs-css';
+                s.textContent = [
+                    'html.fs-activo, html.fs-activo body {',
+                    '  height: 100%; margin: 0; overflow: hidden;',
+                    '}',
+                    'html.fs-activo #root,',
+                    'html.fs-activo #root > div {',
+                    '  height: 100vh !important; max-height: 100vh !important;',
+                    '}',
+                    'html.fs-activo [class*="ag-theme-"] { height: 100vh !important; }',
+                    'html.fs-activo .ag-root-wrapper {',
+                    '  height: 100% !important; border-radius: 0 !important;',
+                    '}',
+                    '#' + EXIT_ID + ' {',
+                    '  position: fixed;',
+                    '  top: 12px;',
+                    '  right: 44px;',
+                    '  z-index: 99999;',
+                    '  width: 30px;',
+                    '  height: 30px;',
+                    '  border: 1px solid #475569;',
+                    '  border-radius: 6px;',
+                    '  background: #1e293b;',
+                    '  color: #f8fafc;',
+                    '  font-size: 14px;',
+                    '  cursor: pointer;',
+                    '  display: none;',
+                    '  align-items: center;',
+                    '  justify-content: center;',
+                    '  line-height: 1;',
+                    '}',
+                    'html.fs-activo #' + EXIT_ID + ' { display: flex; }',
+                    '#' + EXIT_ID + ':hover { background: #334155; }',
+                ].join('\\n');
+                fdoc.head.appendChild(s);
+            }
+
+            if (!fdoc.getElementById(EXIT_ID)) {
+                var b = fdoc.createElement('button');
+                b.id = EXIT_ID;
+                b.innerHTML = '&#x2715;';
+                b.title = 'Restaurar tabla (Esc)';
+                b.onclick = salirFS;
+                fdoc.body.appendChild(b);
+            }
+        }
+
+        function elementoFS() {
+            return doc.fullscreenElement || doc.webkitFullscreenElement || null;
+        }
+
+        function salirFS() {
+            if (doc.exitFullscreen)            doc.exitFullscreen();
+            else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen();
         }
 
         function toggle() {
+            if (elementoFS()) { salirFS(); return; }
             var iframe = buscarIframe();
             if (!iframe) return;
-            maximizado = !maximizado;
+            iframeFS = iframe;
+            prepararIframe(iframe);
+            if (iframe.requestFullscreen)            iframe.requestFullscreen();
+            else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen();
+        }
 
-            if (maximizado) {
-                estilosOriginales = {
-                    position: iframe.style.position,
-                    inset:    iframe.style.inset,
-                    width:    iframe.style.width,
-                    height:   iframe.style.height,
-                    zIndex:   iframe.style.zIndex,
-                };
-                iframe.style.position = 'fixed';
-                iframe.style.inset    = '0';
-                iframe.style.width    = '100vw';
-                iframe.style.height   = '100vh';
-                iframe.style.zIndex   = '99998';
-
-                var rail   = doc.getElementById('icon-rail');
-                var topbar = doc.getElementById('top-bar');
-                if (rail)   { estilosOriginales.railZI   = rail.style.zIndex;   rail.style.zIndex   = '1'; }
-                if (topbar) { estilosOriginales.topbarZI = topbar.style.zIndex; topbar.style.zIndex = '1'; }
-
-                btn.innerHTML = '&#x2715;';
-                btn.title = 'Restaurar tabla';
-                btn.classList.add('maximizado');
-
-            } else {
-                iframe.style.position = estilosOriginales.position || '';
-                iframe.style.inset    = estilosOriginales.inset    || '';
-                iframe.style.width    = estilosOriginales.width    || '';
-                iframe.style.height   = estilosOriginales.height   || '';
-                iframe.style.zIndex   = estilosOriginales.zIndex   || '';
-
-                var rail   = doc.getElementById('icon-rail');
-                var topbar = doc.getElementById('top-bar');
-                if (rail)   rail.style.zIndex   = estilosOriginales.railZI   || '';
-                if (topbar) topbar.style.zIndex  = estilosOriginales.topbarZI || '';
-
-                btn.innerHTML = '&#x26F6;';
-                btn.title = 'Maximizar tabla';
-                btn.classList.remove('maximizado');
-
-                win.setTimeout(function() {
-                    posicionarBoton(iframe);
-                }, 100);
-            }
+        function posicionarBoton(iframe) {
+            if (!iframe || elementoFS()) return;
+            var rect = iframe.getBoundingClientRect();
+            btn.style.top   = (rect.top + 8) + 'px';
+            btn.style.right = (win.innerWidth - rect.right + 8) + 'px';
         }
 
         var btn = doc.createElement('button');
@@ -1046,6 +1076,30 @@ def inject_maximize_aggrid():
         btn.innerHTML = '&#x26F6;';
         btn.title = 'Maximizar tabla';
         btn.onclick = toggle;
+
+        /* Se dispara al entrar Y al salir (incluida la salida con Esc). */
+        function onFSChange() {
+            var activo = (elementoFS() === iframeFS) && iframeFS !== null;
+            var fdoc = null, fwin = null;
+            if (iframeFS) {
+                try { fdoc = iframeFS.contentDocument; } catch(e) {}
+                fwin = iframeFS.contentWindow;
+            }
+            if (fdoc && fdoc.documentElement) {
+                fdoc.documentElement.classList.toggle('fs-activo', activo);
+            }
+            /* AgGrid recalcula el alto del viewport de filas con este resize */
+            if (fwin) { try { fwin.dispatchEvent(new Event('resize')); } catch(e) {} }
+
+            btn.style.display = activo ? 'none' : 'flex';
+            if (!activo) {
+                win.setTimeout(function() {
+                    posicionarBoton(iframeFS || buscarIframe());
+                }, 100);
+            }
+        }
+        doc.addEventListener('fullscreenchange', onFSChange);
+        doc.addEventListener('webkitfullscreenchange', onFSChange);
 
         function check() {
             tries++;
@@ -1059,6 +1113,7 @@ def inject_maximize_aggrid():
             var iframe = buscarIframe();
             if (iframe) {
                 posicionarBoton(iframe);
+                prepararIframe(iframe);
                 return;
             }
             if (tries < MAX) {
@@ -1069,6 +1124,8 @@ def inject_maximize_aggrid():
     })();
     </script>
     """, height=0)
+
+
 # ===========================================================================
 # BOTÓN "ABRIR CALENDARIO" — Ajuste de Inventario
 # ===========================================================================
