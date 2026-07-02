@@ -88,17 +88,17 @@ def get_css():
 
     /* ============ EXCEPCIÓN: PANEL DE RENDIMIENTO DEL NAVEGADOR ============ */
     /* Este iframe SÍ debe mostrarse (perf.render_browser_panel).
-       La key "perf_browser_panel" se pasa en st.components.v1.html(...).
-       La combinación de atributos da mayor especificidad que la regla
-       genérica de arriba. */
-    [data-testid="stIFrame"][src*="perf_browser_panel"] {
-        height: 260px !important;
-        min-height: 260px !important;
+       El expander tiene la key "perf_browser_expander", que genera una clase
+       .st-key-perf_browser_expander en el contenedor padre.
+       Usamos esa clase para seleccionar el iframe dentro de él. */
+    .st-key-perf_browser_expander [data-testid="stIFrame"] {
+        height: 300px !important;
+        min-height: 300px !important;
         display: block !important;
     }
-    [data-testid="stElementContainer"]:has([data-testid="stIFrame"][src*="perf_browser_panel"]) {
+    .st-key-perf_browser_expander [data-testid="stElementContainer"]:has([data-testid="stIFrame"]) {
         height: auto !important;
-        min-height: 260px !important;
+        min-height: 300px !important;
         margin: 0 !important;
         padding: 0 !important;
         overflow: visible !important;
