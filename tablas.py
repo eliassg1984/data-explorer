@@ -426,6 +426,33 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         "position": "right",
     }
 
+    # Nombre del reporte, sanitizado para insertarlo como string literal JS.
+    _reporte_js = str(reporte).replace("\\", "\\\\").replace('"', '\\"')
+
+    # NOTA SOBRE EL RELOJ USADO EN LOS EVENTOS DE PERFORMANCE:
+    # Antes se usaba performance.now() a secas, que mide "ms desde que ESTE
+    # iframe empezó a existir". Eso es inútil para comparar eventos entre
+    # sí: si el iframe de AgGrid se recrea (cambias de reporte y vuelves,
+    # etc.) el contador se reinicia, y si conviven varios grids (distintos
+    # reportes) cada uno tiene su propio origen, así que mezclarlos en una
+    # sola línea de tiempo da saltos sin sentido (ej. 4,542,776 ms seguido
+    # de 244,370 ms).
+    # Ahora usamos Date.now() - window.parent.performance.timeOrigin: el
+    # timeOrigin de la ventana PRINCIPAL (la pestaña del navegador) es el
+    # mismo sin importar cuántos iframes de AgGrid se creen o destruyan, así
+    # que el número resultante es "ms desde que cargó la página" y es
+    # comparable entre reportes y a través de remounts del grid.
+    _js_ms_desde_carga = """
+        (function() {
+            try {
+                var origen = (window.parent && window.parent.performance)
+                    ? window.parent.performance.timeOrigin
+                    : performance.timeOrigin;
+                return Math.round(Date.now() - origen);
+            } catch(e) { return Math.round(performance.now()); }
+        })()
+    """
+
     # =======================================================================
     # CONFIGURACIÓN DE OPCIONES DE AGGRID CON MEDICIÓN DE RENDIMIENTO
     # =======================================================================
@@ -443,27 +470,27 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         # contenido real (no comprime en pantallas angostas). onGridSizeChanged
         # redistribuye si el usuario redimensiona la ventana.
         "onGridSizeChanged": JsCode("function(params) { params.api.sizeColumnsToFit(); }"),
-        "onGridReady": JsCode("""
-            function(params) {
-                try {
-                    window._perfAggReadyAt = performance.now();
+        "onGridReady": JsCode(f"""
+            function(params) {{
+                try {{
+                    var ms = {_js_ms_desde_carga};
                     var bc = new BroadcastChannel('_perf_aggrid');
-                    bc.postMessage({event:'gridReady', time: window._perfAggReadyAt, ts: Date.now()});
+                    bc.postMessage({{event:'gridReady', ms: ms, ts: Date.now(), reporte: "{_reporte_js}"}});
                     bc.close();
-                } catch(e) {}
-            }
+                }} catch(e) {{}}
+            }}
         """),
-        "onFirstDataRendered": JsCode("""
-            function(params) {
+        "onFirstDataRendered": JsCode(f"""
+            function(params) {{
                 params.api.autoSizeAllColumns();
-                try {
-                    var t = performance.now();
+                try {{
+                    var ms = {_js_ms_desde_carga};
                     var rc = (params.api.getDisplayedRowCount) ? params.api.getDisplayedRowCount() : null;
                     var bc = new BroadcastChannel('_perf_aggrid');
-                    bc.postMessage({event:'firstDataRendered', time: t, rowCount: rc, ts: Date.now()});
+                    bc.postMessage({{event:'firstDataRendered', ms: ms, rowCount: rc, ts: Date.now(), reporte: "{_reporte_js}"}});
                     bc.close();
-                } catch(e) {}
-            }
+                }} catch(e) {{}}
+            }}
         """),
         # NUEVO: a diferencia de onGridReady/onFirstDataRendered (que solo
         # ocurren en el MONTAJE inicial del iframe), onModelUpdated se
@@ -474,19 +501,19 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         # Se aplica un pequeño debounce para no saturar el canal cuando
         # ag-grid dispara varios onModelUpdated seguidos por el mismo
         # cambio (p.ej. set rowData + auto-size + sort interno).
-        "onModelUpdated": JsCode("""
-            function(params) {
-                try {
+        "onModelUpdated": JsCode(f"""
+            function(params) {{
+                try {{
                     window.clearTimeout(window.__pgv2ModelUpdTimer);
-                    window.__pgv2ModelUpdTimer = window.setTimeout(function() {
-                        var t = performance.now();
+                    window.__pgv2ModelUpdTimer = window.setTimeout(function() {{
+                        var ms = {_js_ms_desde_carga};
                         var rc = (params.api.getDisplayedRowCount) ? params.api.getDisplayedRowCount() : null;
                         var bc = new BroadcastChannel('_perf_aggrid');
-                        bc.postMessage({event:'modelUpdated', time: t, rowCount: rc, ts: Date.now()});
+                        bc.postMessage({{event:'modelUpdated', ms: ms, rowCount: rc, ts: Date.now(), reporte: "{_reporte_js}"}});
                         bc.close();
-                    }, 120);
-                } catch(e) {}
-            }
+                    }}, 120);
+                }} catch(e) {{}}
+            }}
         """),
     }
 
