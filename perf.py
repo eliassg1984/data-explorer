@@ -369,7 +369,7 @@ class PerfTracker:
             return
 
         # Contenedor donde se pintará el panel
-        with st.expander("🌐 Rendimiento en el navegador (?debug=1)", expanded=expanded):
+        with st.expander("🌐 Rendimiento en el navegador (?debug=1)", expanded=expanded, key="perf_browser_expander"):
             st.caption(
                 "Tiempos medidos **dentro del navegador** cuando AgGrid "
                 "termina de inicializarse y de pintar los datos."
@@ -433,13 +433,8 @@ class PerfTracker:
             </script>
             """
 
-            # Inyectamos el HTML con la key para que el CSS lo identifique
-            st.components.v1.html(
-                html_code,
-                height=300,
-                scrolling=True,
-                key="perf_browser_panel"   # <--- CLAVE OBLIGATORIA para que el CSS lo muestre
-            )
+            # Inyectamos el HTML (sin key, porque st.components.v1.html no lo admite)
+            st.components.v1.html(html_code, height=300, scrolling=True)
 
             # También podemos mostrar los eventos en la consola del navegador
             # (útil para depurar)
