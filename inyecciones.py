@@ -1163,6 +1163,22 @@ def inject_maximize_aggrid():
         doc.addEventListener('fullscreenchange', onFSChange);
         doc.addEventListener('webkitfullscreenchange', onFSChange);
 
+        /* Congelar la negociacion de altura Streamlit<->componente durante
+           fullscreen. El componente AgGrid re-mide y re-reporta su altura en
+           bucle (setFrameHeight -> resize del iframe -> re-medicion...), lo
+           que tras un rato excede el limite de React (error #185) y crashea
+           el componente. En fullscreen el navegador ya renderiza el iframe a
+           pantalla completa, asi que estos mensajes no aportan nada: se
+           bloquean en fase de captura solo mientras dura el fullscreen. */
+        win.addEventListener('message', function(ev){
+            if (!iframeFS || elementoFS() !== iframeFS) return;
+            var d = ev.data;
+            if (d && d.type === 'streamlit:setFrameHeight'
+                  && ev.source === iframeFS.contentWindow){
+                ev.stopImmediatePropagation();
+            }
+        }, true);
+
         function check() {
             tries++;
             inyectarCSS();
