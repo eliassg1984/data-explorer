@@ -58,16 +58,18 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
 #nav-topbar {{
     position:fixed; top:0; left:{RAIL_ANCHO}px; right:0; height:48px;
     display:flex; align-items:center; padding:0 18px;
-    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
-    font-weight:600; font-size:14px; color:#1e3a5f;
+    font-family:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif;
+    font-weight:600; font-size:14px; color:#18181d;
     z-index:999998; pointer-events:none;
 }}
 
-/* Contenedor del rail -> barra vertical fija a la izquierda */
+/* Contenedor del rail -> barra vertical fija a la izquierda.
+   TEMA CALLAI: sidebar blanco con borde sutil (antes rail oscuro). */
 .st-key-nav_rail {{
     position:fixed !important; top:0 !important; left:0 !important;
     width:{RAIL_ANCHO}px !important; height:100vh !important;
-    background:#1e3a5f !important; z-index:999999 !important;
+    background:#ffffff !important; z-index:999999 !important;
+    border-right:1px solid #e6e6eb !important;
     padding:0 !important;
     display:flex !important;
     flex-direction:column !important;
@@ -75,7 +77,7 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
 
 /* Bloque arriba del rail, reservado para el logo.
    AJUSTE (punto color): antes era celeste (#bfe3ec), ahora se funde con el
-   fondo del canvas (--bg-primary de estilos.py = #f8fafc) para que la
+   fondo del canvas (--bg-primary de estilos.py = #f6f6f8) para que la
    esquina no "salte" visualmente respecto al resto de la página.
    AJUSTE (punto separación): se quitó el box-shadow que tenía
    .st-key-nav_rail (2px 0 8px rgba(0,0,0,.15)), que dibujaba una sombra a
@@ -88,7 +90,7 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     display: block;
     width: 100%;
     height: {LOGO_ALTO}px;
-    background: #f8fafc;
+    background: #ffffff;
     flex-shrink: 0;
 }}
 
@@ -104,21 +106,23 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     width:auto !important; min-width:0 !important;
 }}
 
-/* Cada botón -> tile de icono */
+/* Cada botón -> tile de icono.
+   Reposo: icono gris. Hover: tinte lavanda. Activo: píldora lavanda con
+   icono índigo, como el ítem activo del sidebar de CallAI. */
 .st-key-nav_rail [class*="st-key-navbtn_"] button {{
     width:{RAIL_ANCHO - 16}px !important; height:62px !important; min-height:62px !important;
     padding:0 !important; margin:0 !important;
     border:none !important; border-radius:12px !important;
-    background:transparent !important; color:#cbd5e1 !important;
+    background:transparent !important; color:#85858f !important;
     display:flex !important; align-items:center !important; justify-content:center !important;
     transition:background .2s, color .2s !important;
 }}
 .st-key-nav_rail [class*="st-key-navbtn_"] button:hover {{
-    background:#2563eb !important; color:#fff !important;
+    background:#f0edfe !important; color:#6c5ce7 !important;
 }}
 .st-key-nav_rail [class*="st-key-navbtn_"] button[kind="primary"] {{
-    background:#3b82f6 !important; color:#fff !important;
-    box-shadow:0 0 0 2px #93c5fd !important;
+    background:#e7e3fb !important; color:#6c5ce7 !important;
+    box-shadow:inset 0 0 0 1px #d4cdf7 !important;
 }}
 .st-key-nav_rail [class*="st-key-navbtn_"] button p,
 .st-key-nav_rail [class*="st-key-navbtn_"] button span,
