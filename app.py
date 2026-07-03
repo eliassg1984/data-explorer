@@ -273,7 +273,7 @@ if es_ajuste:
 
     with col_titulo:
         st.markdown(
-            f'<p style="font-size:34px;font-weight:800;color:#1e293b;'
+            f'<p style="font-size:34px;font-weight:800;color:#18181d;'
             f'margin:0;line-height:1.1;display:flex;align-items:center;'
             f'height:38px;">{reporte}</p>',
             unsafe_allow_html=True,
@@ -319,7 +319,7 @@ if es_ajuste:
                 st.warning("⚠️ Selecciona un rango de fechas válido.")
 
     st.markdown(
-        '<hr style="border:none;border-top:3px solid #3b82f6;margin:0.5rem 0 1.6rem 0;">',
+        '<hr style="border:none;border-top:3px solid #6c5ce7;margin:0.5rem 0 1.6rem 0;">',
         unsafe_allow_html=True,
     )
 
@@ -455,7 +455,7 @@ def _aviso_rapido_aggrid(df_data):
 def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, font_px, cfg):
     """Renderiza el reporte de Requerimientos con tabla dinámica."""
     st.markdown(
-        '<p style="font-size:22px;font-weight:700;color:#1e293b;'
+        '<p style="font-size:22px;font-weight:700;color:#18181d;'
         'margin:0 0 0.6rem 0;line-height:1.2;">Requerimientos · Tabla dinámica</p>',
         unsafe_allow_html=True,
     )
@@ -623,7 +623,7 @@ def _render_contenido():
     # ── INVENTARIO VALORIZADO ────────────────────────────────────────────────
     elif reporte == "Inventario Valorizado":
         st.markdown(
-            '<p style="font-size:22px;font-weight:700;color:#1e293b;'
+            '<p style="font-size:22px;font-weight:700;color:#18181d;'
             'margin:0 0 0.6rem 0;line-height:1.2;">Inventario Valorizado</p>',
             unsafe_allow_html=True,
         )
@@ -703,9 +703,9 @@ def _render_contenido():
     else:
         if not es_ajuste:
             st.markdown(
-                f'<p style="font-size:22px;font-weight:700;color:#1e293b;'
+                f'<p style="font-size:22px;font-weight:700;color:#18181d;'
                 f'margin:0 0 0.2rem 0;line-height:1.2;">{reporte}</p>'
-                f'<hr style="border:none;border-top:2px solid #3b82f6;margin:0 0 0.8rem 0;">',
+                f'<hr style="border:none;border-top:2px solid #6c5ce7;margin:0 0 0.8rem 0;">',
                 unsafe_allow_html=True,
             )
 
