@@ -1040,12 +1040,13 @@ def inject_maximize_aggrid():
                        El fantasma de arrastre (.ag-dnd-ghost) y los popups de
                        AG Grid llevan la misma clase de tema pero cuelgan de
                        <body>, fuera de #root: quedan excluidos. */
-                    'html.fs-activo #root [class*="ag-theme-"]:not(.ag-dnd-ghost) {',
+                    'html.fs-activo #root [class*="ag-theme-"]:not(.ag-dnd-ghost):not(.ag-popup) {',
                     '  height: 100vh !important;',
                     '}',
                     /* Cinturón y tirantes: nada de tamaños forzados en el
                        fantasma de arrastre ni en popups del tema. */
                     'html.fs-activo .ag-dnd-ghost,',
+                    'html.fs-activo .ag-popup,',
                     'html.fs-activo body > [class*="ag-theme-"]:not(#gridContainer) {',
                     '  height: auto !important;',
                     '  min-height: 0 !important;',
