@@ -18,6 +18,24 @@ REPORTES = {
         "icono": "sliders",
         "filtros_cat": [],  # Sin filtros de Área/Familia/Subfamilia en el popover
         "agrupar": [],      # Sin opción de "Agrupar por" en el popover
+        "graficos": [
+            {"tipo": "line",
+             "x": ["FECHA APERTURA INVENTARIO", "MES"],
+             "y": ["VALORIZADO TOTAL"],
+             "color": ["FAMILIA"],
+             "titulo": "Evolución del valorizado total por familia"},
+            {"tipo": "line",
+             "x": ["FECHA APERTURA INVENTARIO", "MES"],
+             "y": ["AJUSTE VALORIZADO"],
+             "color": ["FAMILIA"],
+             "titulo": "Evolución del ajuste valorizado por familia"},
+            {"tipo": "bar",
+             "x": ["FAMILIA"],
+             "y": ["AJUSTE VALORIZADO"],
+             "color": ["AREA"],
+             "titulo": "Ajuste valorizado por familia y área",
+             "tickangle": -45},
+        ],
     },
     "Compras": {
         "archivo": "compras.parquet",
