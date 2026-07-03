@@ -76,7 +76,7 @@ def _columnas_duplicadas(df):
 # ---------------------------------------------------------------------------
 def render_inspector():
     st.markdown(
-        '<p style="font-size:22px;font-weight:700;color:#1e293b;'
+        '<p style="font-size:22px;font-weight:700;color:#18181d;'
         'margin:0 0 0.4rem 0;">🔍 Inspector de datos</p>',
         unsafe_allow_html=True,
     )
