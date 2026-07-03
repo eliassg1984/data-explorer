@@ -377,9 +377,9 @@ class PerfTracker:
             )
 
             html_code = """
-            <div id="perf-browser-panel" style="font-family:monospace;font-size:13px;background:#f8fafc;padding:12px;border-radius:6px;border:1px solid #e2e8f0;min-height:60px;">
-                <div style="color:#64748b;margin-bottom:8px;">⏳ Esperando eventos de AgGrid...</div>
-                <div id="perf-browser-events" style="color:#1e293b;"></div>
+            <div id="perf-browser-panel" style="font-family:monospace;font-size:13px;background:#f6f6f8;padding:12px;border-radius:6px;border:1px solid #e6e6eb;min-height:60px;">
+                <div style="color:#85858f;margin-bottom:8px;">⏳ Esperando eventos de AgGrid...</div>
+                <div id="perf-browser-events" style="color:#18181d;"></div>
             </div>
 
             <script>
@@ -390,12 +390,12 @@ class PerfTracker:
                 function renderEvent(data) {
                     var html = '';
                     if (data.event === 'gridReady') {
-                        html = '<div style="background:#dbeafe;padding:6px 10px;border-radius:4px;margin-bottom:4px;">' +
+                        html = '<div style="background:#e7e3fb;padding:6px 10px;border-radius:4px;margin-bottom:4px;">' +
                                '✅ <b>gridReady</b> — tiempo: <b>' + data.time.toFixed(1) + ' ms</b>' +
                                ' (ts: ' + new Date(data.ts).toLocaleTimeString() + ')' +
                                '</div>';
                     } else if (data.event === 'firstDataRendered') {
-                        html = '<div style="background:#bbf7d0;padding:6px 10px;border-radius:4px;margin-bottom:4px;">' +
+                        html = '<div style="background:#dcfce7;padding:6px 10px;border-radius:4px;margin-bottom:4px;">' +
                                '✅ <b>firstDataRendered</b> — tiempo: <b>' + data.time.toFixed(1) + ' ms</b>' +
                                ' · filas: <b>' + (data.rowCount ?? '?') + '</b>' +
                                ' (ts: ' + new Date(data.ts).toLocaleTimeString() + ')' +
@@ -407,7 +407,7 @@ class PerfTracker:
                                ' (ts: ' + new Date(data.ts).toLocaleTimeString() + ')' +
                                '</div>';
                     } else {
-                        html = '<div style="background:#fef3c7;padding:6px 10px;border-radius:4px;margin-bottom:4px;">' +
+                        html = '<div style="background:#fff7ed;padding:6px 10px;border-radius:4px;margin-bottom:4px;">' +
                                '⚠️ Evento desconocido: ' + JSON.stringify(data) +
                                '</div>';
                     }
