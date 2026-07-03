@@ -26,25 +26,31 @@ def get_css():
     """Retorna el CSS como string (cacheado para no reinyectar)."""
     return """
     <style>
-    /* ============ PALETA DE COLORES ============ */
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
+
+    /* ============ PALETA DE COLORES — TEMA CALLAI (Lavender Indigo) ============ */
     :root {
-        --bg-primary: #f8fafc;
+        --bg-primary: #f6f6f8;      /* lienzo general */
         --bg-secondary: #ffffff;
-        --bg-sidebar: #f1f5f9;
+        --bg-sidebar: #ffffff;      /* sidebar blanco estilo CallAI */
         --bg-card: #ffffff;
-        --bg-hover: #e2e8f0;
-        --text-primary: #1e293b;
-        --text-secondary: #475569;
-        --text-muted: #94a3b8;
-        --accent: #3b82f6;
-        --accent-hover: #2563eb;
-        --accent-light: #dbeafe;
-        --border: #e2e8f0;
-        --success: #10b981;
-        --warning: #f59e0b;
+        --bg-hover: #f0edfe;        /* hover lavanda suave */
+        --text-primary: #18181d;    /* casi negro */
+        --text-secondary: #71717a;
+        --text-muted: #a2a2ad;
+        --accent: #6c5ce7;          /* Lavender Indigo */
+        --accent-hover: #5a4ad9;
+        --accent-deep: #4938b8;
+        --accent-light: #e7e3fb;    /* lavanda 100 */
+        --accent-tint: #f0edfe;     /* lavanda 50 */
+        --border: #e6e6eb;
+        --success: #16a34a;         /* verde tipo badge "Outbound" */
+        --success-bg: #f0fdf4;
+        --warning: #f97316;         /* naranja tipo badge "Inbound" */
+        --warning-bg: #fff7ed;
         --danger: #ef4444;
-        --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-        --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.03);
+        --shadow: 0 1px 3px rgba(16, 16, 20, 0.05), 0 1px 2px rgba(16, 16, 20, 0.04);
+        --shadow-md: 0 4px 6px rgba(16, 16, 20, 0.05), 0 2px 4px rgba(16, 16, 20, 0.03);
     }
 
     /* ============ HEADER NATIVO + ESPACIO SUPERIOR ============ */
@@ -129,7 +135,7 @@ def get_css():
     }
 
     html, body, [class*="css"] { 
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; 
+        font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; 
         color: var(--text-primary); 
     }
 
@@ -186,7 +192,9 @@ def get_css():
         background: var(--accent) !important;
         border: none !important;
         color: white !important;
-        border-radius: 4px !important;
+        border-radius: 10px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 1px 2px rgba(108, 92, 231, 0.28) !important;
     }
 
     button[kind="primary"]:hover {
@@ -214,16 +222,16 @@ def get_css():
     }
 
     .stWarning {
-        background: #fef3c7 !important;
-        border: 1px solid #fcd34d !important;
-        color: #92400e !important;
+        background: #fff7ed !important;
+        border: 1px solid #fdba74 !important;
+        color: #c2410c !important;
         border-radius: 8px !important;
     }
 
     .stInfo {
         background: var(--accent-light) !important;
-        border: 1px solid #93c5fd !important;
-        color: #1e40af !important;
+        border: 1px solid #b9aff2 !important;
+        color: #4938b8 !important;
         border-radius: 8px !important;
     }
 
@@ -237,20 +245,20 @@ def get_css():
     /* ============ SIDEBAR ============ */
     [data-testid="stSidebar"] .nav-link {
         background: #ffffff !important;
-        color: #475569 !important;
-        border: 1px solid #e2e8f0 !important;
+        color: #71717a !important;
+        border: 1px solid #e6e6eb !important;
     }
 
     [data-testid="stSidebar"] .nav-link:hover {
-        background: #eff6ff !important;
-        color: #2563eb !important;
-        border-color: #93c5fd !important;
+        background: #f0edfe !important;
+        color: #5a4ad9 !important;
+        border-color: #b9aff2 !important;
     }
 
     [data-testid="stSidebar"] .nav-link-selected {
-        background: #3b82f6 !important;
+        background: #6c5ce7 !important;
         color: #ffffff !important;
-        border-color: #3b82f6 !important;
+        border-color: #6c5ce7 !important;
     }
 
     /* ============ AGGRID - ANCHO COMPLETO ============ */
@@ -352,7 +360,7 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* BOTONES TABLA / GRÁFICOS (segmented_control) — Opción 2 GRANDE azul  */
+    /* BOTONES TABLA / GRÁFICOS (segmented_control) — Opción 2 GRANDE índigo  */
     /* =================================================================== */
     /* Separación entre los dos botones (cubrimos las variantes de Streamlit) */
     [data-testid="stSegmentedControl"] [data-baseweb="button-group"],
@@ -388,21 +396,21 @@ def get_css():
     button[data-testid$="segmented_controlActive"],
     button[kind="segmented_controlActive"],
     [data-testid="stSegmentedControl"] button[aria-checked="true"] {
-        background: #eff6ff !important;
-        color: #1e40af !important;
-        border-color: #2563eb !important;
+        background: #f0edfe !important;
+        color: #4938b8 !important;
+        border-color: #5a4ad9 !important;
     }
     [data-testid="stSegmentedControl"] button[kind*="Active"] p,
     button[kind="segmented_controlActive"] p {
-        color: #1e40af !important;
+        color: #4938b8 !important;
     }
     [data-testid="stSegmentedControl"] button:hover,
     button[kind^="segmented_control"]:hover {
-        border-color: #93c5fd !important;
+        border-color: #b9aff2 !important;
     }
 
     /* =================================================================== */
-    /* BOTÓN FILTROS (popover) — a juego, grande y con contorno azul        */
+    /* BOTÓN FILTROS (popover) — a juego, grande y con contorno índigo        */
     /* =================================================================== */
     [data-testid="stPopover"] button {
         min-width: 180px !important;
@@ -414,9 +422,9 @@ def get_css():
         transition: all .15s ease !important;
     }
     [data-testid="stPopover"] button:hover {
-        border-color: #2563eb !important;
-        background: #eff6ff !important;
-        color: #1e40af !important;
+        border-color: #5a4ad9 !important;
+        background: #f0edfe !important;
+        color: #4938b8 !important;
     }
 
     /* =================================================================== */
@@ -515,7 +523,7 @@ def get_css():
         box-shadow: var(--shadow-md) !important;
     }
 
-    /* Ícono de calendario nativo en azul */
+    /* Ícono de calendario nativo en índigo */
     .st-key-fch_ajuste_inline .stDateInput svg {
         color: var(--accent) !important;
         fill: var(--accent) !important;
@@ -523,7 +531,7 @@ def get_css():
 
     /* =================================================================== */
     /* CALENDARIO DESPLEGABLE (BaseWeb) — Opción 1: marco suave, sin presets */
-    /* IMPORTANTE: el color azul de los días y del relleno del rango lo da   */
+    /* IMPORTANTE: el color índigo de los días y del relleno del rango lo da   */
     /* primaryColor en .streamlit/config.toml. Aquí solo pulimos el marco y  */
     /* ocultamos el bloque "CHOOSE A DATE RANGE / None".                     */
     /* =================================================================== */
@@ -532,7 +540,7 @@ def get_css():
     div[data-baseweb="calendar"] {
         border-radius: 12px !important;
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10) !important;
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
     }
 
     /* Esquinas redondeadas en cada día */
@@ -540,7 +548,7 @@ def get_css():
         border-radius: 8px !important;
     }
 
-    /* Flechas de navegación (‹ ›) en azul */
+    /* Flechas de navegación (‹ ›) en índigo */
     div[data-baseweb="calendar"] button svg {
         fill: var(--accent) !important;
     }
