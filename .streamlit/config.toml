@@ -1,4 +1,4 @@
 [theme]
-# Color primario azul de tu app -> recolorea el calendario nativo
-# (día seleccionado, relleno del rango y marcador de hoy) de rojo a azul.
-primaryColor = "#3b82f6"
+# Color primario indigo (tema CallAI) -> recolorea el calendario nativo
+# (día seleccionado, relleno del rango y marcador de hoy).
+primaryColor = "#6c5ce7"
