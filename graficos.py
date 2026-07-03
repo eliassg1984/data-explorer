@@ -4,6 +4,7 @@ rankings y distribución de precios.
 """
 
 import numpy as np
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
@@ -12,7 +13,7 @@ from utils import buscar_columna
 
 
 # ===========================================================================
-# FUNCIÓN: DASHBOARD DE GRÁFICOS
+# FUNCIÓN: DASHBOARD DE GRÁFICOS (Inventario Valorizado - NO TOCAR)
 # ===========================================================================
 
 def renderizar_graficos(df_f, es_movil=False):
@@ -374,3 +375,160 @@ def renderizar_graficos(df_f, es_movil=False):
                         )
                     except Exception as e:
                         st.warning(f"Error en resumen: {str(e)}")
+
+
+# ===========================================================================
+# MINI-FÁBRICA DE GRÁFICOS (config-driven)
+# Cada eje en la config es una LISTA de candidatos que se resuelve con
+# buscar_columna(), igual que el resto de la app. Si una columna no existe
+# en el parquet, el gráfico se omite con un aviso (no se rompe).
+# ===========================================================================
+
+_LAYOUT_BASE = dict(
+    paper_bgcolor="#f8fafc", plot_bgcolor="#ffffff",
+    font_color="#1e293b", margin=dict(l=20, r=20, t=50, b=20),
+    height=420,
+    xaxis=dict(gridcolor="#e2e8f0"), yaxis=dict(gridcolor="#e2e8f0"),
+)
+
+
+def _resolver(df, candidatos):
+    """Resuelve una lista de candidatos (o un string) a la columna real."""
+    if candidatos is None:
+        return None
+    if isinstance(candidatos, str):
+        candidatos = [candidatos]
+    return buscar_columna(df, *candidatos)
+
+
+def _preparar_datos(df, x, y, color, tipo):
+    """Agrupa los datos según el tipo de gráfico. Si x es fecha, agrupa por mes."""
+    if pd.api.types.is_datetime64_any_dtype(df[x]):
+        df = df.copy()
+        df["_mes"] = df[x].dt.to_period("M").astype(str)
+        x = "_mes"
+
+    if tipo in ("bar", "line", "area") and y:
+        grupo = [x] + ([color] if color else [])
+        df = df.groupby(grupo, as_index=False)[y].sum()
+
+    return df, x
+
+
+def crear_grafico(df, conf):
+    """Crea una figura Plotly desde una configuración.
+    Retorna (fig, None) o (None, motivo) si falta alguna columna."""
+    tipo = conf.get("tipo", "bar")
+
+    x = _resolver(df, conf.get("x"))
+    y = _resolver(df, conf.get("y"))
+    color = _resolver(df, conf.get("color"))
+    size = _resolver(df, conf.get("size"))
+
+    if conf.get("x") and not x:
+        return None, f"columna X no encontrada ({conf['x']})"
+    if conf.get("y") and not y:
+        return None, f"columna Y no encontrada ({conf['y']})"
+
+    titulo = conf.get("titulo", f"{y} por {x}")
+
+    try:
+        if tipo == "treemap":
+            path = [_resolver(df, c) for c in conf.get("path", [])]
+            path = [p for p in path if p]
+            if not path or not y:
+                return None, "faltan columnas para el treemap"
+            df_agg = df.groupby(path, as_index=False)[y].sum()
+            fig = px.treemap(df_agg, path=path, values=y,
+                             color=y, color_continuous_scale="blues", title=titulo)
+
+        elif tipo == "scatter":
+            fig = px.scatter(df, x=x, y=y, color=color, size=size, title=titulo)
+
+        elif tipo == "histogram":
+            fig = px.histogram(df, x=x, nbins=conf.get("nbins", 20), title=titulo,
+                               color_discrete_sequence=["#3b82f6"])
+
+        elif tipo == "box":
+            fig = px.box(df, x=x, y=y, color=x if x else None, title=titulo)
+
+        else:  # bar, line, area (con agrupación automática)
+            df_p, x_p = _preparar_datos(df, x, y, color, tipo)
+            fn = {"bar": px.bar, "line": px.line, "area": px.area}[tipo]
+            kwargs = dict(x=x_p, y=y, color=color, title=titulo)
+            if tipo == "bar":
+                kwargs["barmode"] = conf.get("barmode", "group" if color else "relative")
+                kwargs["color_discrete_sequence"] = None if color else ["#3b82f6"]
+            if tipo == "line":
+                kwargs["markers"] = True
+            fig = fn(df_p, **kwargs)
+
+        fig.update_layout(**_LAYOUT_BASE)
+        if conf.get("tickangle"):
+            fig.update_layout(xaxis_tickangle=conf["tickangle"])
+        return fig, None
+
+    except Exception as e:
+        return None, str(e)
+
+
+def renderizar_graficos_genericos(df_data, nombre_reporte):
+    """Explorador dinámico: el usuario elige ejes X/Y y tipo de gráfico.
+    (Antes vivía en app.py como _render_graficos_genericos)."""
+    cols_num = df_data.select_dtypes("number").columns.tolist()
+    cols_txt = df_data.select_dtypes(["object", "string"]).columns.tolist()
+
+    if not cols_num or not cols_txt:
+        st.info("No hay suficientes columnas para generar gráficos.")
+        return
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        eje_x = st.selectbox("Agrupar por", cols_txt, key=f"ejex_{nombre_reporte}")
+    with col2:
+        eje_y = st.selectbox("Métrica (suma)", cols_num, key=f"ejey_{nombre_reporte}")
+    with col3:
+        tipo_sel = st.selectbox("Tipo", ["Barras", "Líneas", "Área"],
+                                key=f"tipo_{nombre_reporte}")
+
+    tipo_map = {"Barras": "bar", "Líneas": "line", "Área": "area"}
+    try:
+        datos = (df_data.groupby(eje_x)[eje_y].sum()
+                        .reset_index()
+                        .sort_values(eje_y, ascending=False)
+                        .head(20))
+        fig, err = crear_grafico(datos, {
+            "tipo": tipo_map[tipo_sel], "x": eje_x, "y": eje_y,
+            "titulo": f"{eje_y} por {eje_x} (top 20)", "tickangle": -45,
+        })
+        if fig:
+            fig.update_layout(height=400)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.warning(f"No se pudo generar el gráfico: {err}")
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
+
+
+def renderizar_graficos_reporte(df_f, reporte, cfg):
+    """Punto de entrada de la vista Gráficos para reportes genéricos.
+    Muestra los gráficos definidos en REPORTES[reporte]['graficos'] (si hay)
+    y siempre ofrece el explorador dinámico."""
+    graficos_conf = cfg.get("graficos", [])
+
+    if graficos_conf:
+        omitidos = []
+        for conf in graficos_conf:
+            fig, err = crear_grafico(df_f, conf)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                omitidos.append(f"«{conf.get('titulo', conf.get('tipo'))}» ({err})")
+        if omitidos:
+            st.caption("⚠️ Gráficos omitidos: " + "; ".join(omitidos))
+
+        with st.expander("🎛️ Explorador de gráficos"):
+            renderizar_graficos_genericos(df_f, reporte)
+    else:
+        # Sin config: el explorador es la vista principal (comportamiento actual)
+        renderizar_graficos_genericos(df_f, reporte)
