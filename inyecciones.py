@@ -80,6 +80,7 @@ def inject_error_overlay():
         log('[promise] ' + msg);
       });
       win.__logErr = log;
+      win.__errRender = render;
     })();
     </script>
     """, height=0)
@@ -99,7 +100,7 @@ def inject_grid_health_check():
     <script>
     (function(){
       var win = window.parent, doc = win.document;
-      var tries = 0, MAX = 20;
+      var tries = 0, MAX = 50;
 
       var PAG_CSS = [
         '.ag-status-bar {',
@@ -224,10 +225,26 @@ def inject_grid_health_check():
             inyectarCSS(d);
           }
         }
-        if (montado) return;
+        if (montado){
+          // Auto-correccion: si el aviso ya se mostro (grid lento) y el grid
+          // termino montando bien, retirarlo del panel.
+          if (win.__gridErrReported && win.__errLog){
+            win.__errLog = win.__errLog.filter(function(m){
+              return String(m).indexOf('Tabla no renderizada') === -1;
+            });
+            win.__gridErrReported = false;
+            if (win.__errRender) win.__errRender();
+          }
+          return;
+        }
         if (tries < MAX){ setTimeout(check, 500); return; }
-        if (win.__logErr) win.__logErr('Tabla no renderizada: el grid de AgGrid '
-          + 'no se montó (posible cellRenderer/JsCode que devuelve un nodo DOM → React #31).');
+        if (win.__logErr && !win.__gridErrReported){
+          win.__gridErrReported = true;
+          win.__logErr('Tabla no renderizada: el grid de AgGrid no se monto '
+            + 'tras 25s (carga lenta o cellRenderer/JsCode invalido - React #31).');
+          tries = 0;  // seguir vigilando: si monta tarde, se auto-retira el aviso
+          setTimeout(check, 500);
+        }
       }
       setTimeout(check, 800);
     })();
