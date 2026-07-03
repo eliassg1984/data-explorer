@@ -466,6 +466,16 @@ def crear_grafico(df, conf):
         fig.update_layout(**_LAYOUT_BASE)
         if conf.get("tickangle"):
             fig.update_layout(xaxis_tickangle=conf["tickangle"])
+
+        # ── Etiquetas de datos ────────────────────────────────────────────
+        if conf.get("etiquetas"):
+            if tipo == "bar":
+                fig.update_traces(texttemplate="%{y:,.0f}", textposition="outside")
+            elif tipo in ("line", "area"):
+                fig.update_traces(mode="lines+markers+text",
+                                  texttemplate="%{y:,.0f}",
+                                  textposition="top center")
+
         return fig, None
 
     except Exception as e:
@@ -473,41 +483,68 @@ def crear_grafico(df, conf):
 
 
 def renderizar_graficos_genericos(df_data, nombre_reporte):
-    """Explorador dinámico: el usuario elige ejes X/Y y tipo de gráfico.
-    (Antes vivía en app.py como _render_graficos_genericos)."""
+    """Explorador dinámico estilo tabla dinámica: el usuario elige eje X
+    (incluye fechas agrupadas por mes), métrica, serie de color, tipo de
+    gráfico y etiquetas de datos."""
     cols_num = df_data.select_dtypes("number").columns.tolist()
     cols_txt = df_data.select_dtypes(["object", "string"]).columns.tolist()
+    cols_fecha = [c for c in df_data.columns
+                  if pd.api.types.is_datetime64_any_dtype(df_data[c])]
 
-    if not cols_num or not cols_txt:
+    opciones_x = cols_fecha + cols_txt
+    if not cols_num or not opciones_x:
         st.info("No hay suficientes columnas para generar gráficos.")
         return
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        eje_x = st.selectbox("Agrupar por", cols_txt, key=f"ejex_{nombre_reporte}")
-    with col2:
-        eje_y = st.selectbox("Métrica (suma)", cols_num, key=f"ejey_{nombre_reporte}")
-    with col3:
-        tipo_sel = st.selectbox("Tipo", ["Barras", "Líneas", "Área"],
-                                key=f"tipo_{nombre_reporte}")
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        eje_x = st.selectbox(
+            "📅 Eje X", opciones_x,
+            format_func=lambda c: f"{c} (por mes)" if c in cols_fecha else c,
+            key=f"ejex_{nombre_reporte}",
+        )
+    with c2:
+        eje_y = st.selectbox("📊 Métrica (suma)", cols_num,
+                             key=f"ejey_{nombre_reporte}")
+    with c3:
+        ops_color = ["(ninguna)"] + [c for c in cols_txt if c != eje_x]
+        color_sel = st.selectbox("🎨 Serie (color)", ops_color,
+                                 key=f"color_{nombre_reporte}")
+    with c4:
+        tipo_sel = st.selectbox(
+            "📈 Tipo", ["Barras", "Barras apiladas", "Líneas", "Área"],
+            key=f"tipo_{nombre_reporte}",
+        )
 
-    tipo_map = {"Barras": "bar", "Líneas": "line", "Área": "area"}
-    try:
-        datos = (df_data.groupby(eje_x)[eje_y].sum()
-                        .reset_index()
-                        .sort_values(eje_y, ascending=False)
-                        .head(20))
-        fig, err = crear_grafico(datos, {
-            "tipo": tipo_map[tipo_sel], "x": eje_x, "y": eje_y,
-            "titulo": f"{eje_y} por {eje_x} (top 20)", "tickangle": -45,
-        })
-        if fig:
-            fig.update_layout(height=400)
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.warning(f"No se pudo generar el gráfico: {err}")
-    except Exception as e:
-        st.error(f"Error: {str(e)}")
+    etiquetas = st.toggle("🏷️ Etiquetas de datos", key=f"etq_{nombre_reporte}")
+
+    color = None if color_sel == "(ninguna)" else color_sel
+    tipo_map = {"Barras": "bar", "Barras apiladas": "bar",
+                "Líneas": "line", "Área": "area"}
+
+    # Si X es texto, limitar a las 20 categorías con mayor suma
+    df_plot = df_data
+    if eje_x in cols_txt:
+        top_cats = (df_data.groupby(eje_x)[eje_y].sum()
+                           .sort_values(ascending=False).head(20).index)
+        df_plot = df_data[df_data[eje_x].isin(top_cats)]
+
+    conf = {
+        "tipo": tipo_map[tipo_sel], "x": eje_x, "y": eje_y, "color": color,
+        "titulo": f"{eje_y} por {eje_x}" + (f" y {color}" if color else ""),
+        "etiquetas": etiquetas,
+    }
+    if eje_x in cols_txt:
+        conf["tickangle"] = -45
+    if tipo_sel == "Barras apiladas":
+        conf["barmode"] = "stack"
+
+    fig, err = crear_grafico(df_plot, conf)
+    if fig:
+        fig.update_layout(height=450)
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning(f"No se pudo generar el gráfico: {err}")
 
 
 def renderizar_graficos_reporte(df_f, reporte, cfg):
