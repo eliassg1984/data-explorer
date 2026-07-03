@@ -13,6 +13,17 @@ from utils import buscar_columna
 
 
 # ===========================================================================
+# TEMA CALLAI — paleta categórica para series múltiples
+# (índigo primario + tonos de los "orbes": cian, magenta, naranja, verde)
+# ===========================================================================
+
+PALETA_CALLAI = [
+    "#6c5ce7", "#22b8d4", "#e85ba8", "#f97316",
+    "#16a34a", "#9385ec", "#f4b740", "#3b2e93",
+]
+
+
+# ===========================================================================
 # FUNCIÓN: DASHBOARD DE GRÁFICOS (Inventario Valorizado - NO TOCAR)
 # ===========================================================================
 
@@ -103,7 +114,7 @@ def renderizar_graficos(df_f, es_movil=False):
                 marker=dict(
                     size=sizes_norm,
                     opacity=0.7,
-                    color='#3b82f6',
+                    color='#6c5ce7',
                     sizemode='diameter'
                 ),
                 text=df[col_producto],
@@ -115,7 +126,7 @@ def renderizar_graficos(df_f, es_movil=False):
         
         if not col_area and height >= 400:
             fig.add_vline(x=df[col_precio].mean(), line_dash="dash", 
-                         line_color="blue",
+                         line_color="#6c5ce7",
                          annotation_text=f"Precio prom. (S/ {df[col_precio].mean():.2f})")
         
         fig.update_layout(
@@ -123,7 +134,7 @@ def renderizar_graficos(df_f, es_movil=False):
             xaxis_title='Precio Promedio (S/)',
             yaxis_title='Stock',
             height=height,
-            paper_bgcolor='#f8fafc',
+            paper_bgcolor='#f6f6f8',
             plot_bgcolor='#ffffff',
             showlegend=True if col_area else False
         )
@@ -160,7 +171,7 @@ def renderizar_graficos(df_f, es_movil=False):
                         orientation='h',
                         title='Top 10 por Valorización',
                         text=col_valorizado,
-                        color_discrete_sequence=['#3b82f6']
+                        color_discrete_sequence=['#6c5ce7']
                     )
                     fig_top.update_traces(texttemplate='S/ %{text:,.0f}', textposition='outside')
                     fig_top.update_layout(height=350)
@@ -200,7 +211,7 @@ def renderizar_graficos(df_f, es_movil=False):
                     fig_hist = px.histogram(
                         df_f, x=col_precio, nbins=20,
                         title='Distribución de Precios Promedio',
-                        color_discrete_sequence=['#3b82f6']
+                        color_discrete_sequence=['#6c5ce7']
                     )
                     fig_hist.update_layout(height=300)
                     st.plotly_chart(fig_hist, use_container_width=True)
@@ -289,7 +300,7 @@ def renderizar_graficos(df_f, es_movil=False):
                     fig_top = px.bar(
                         top_15, x=col_valorizado, y=col_producto,
                         orientation='h', color=col_stock,
-                        color_continuous_scale=['#ef4444', '#f59e0b', '#10b981'],
+                        color_continuous_scale=['#ef4444', '#f97316', '#16a34a'],
                         title='Top 15 Productos (color = stock)',
                         text=col_valorizado
                     )
@@ -328,13 +339,13 @@ def renderizar_graficos(df_f, es_movil=False):
                             df_f, x=col_area, y=col_precio,
                             color=col_area,
                             title='Distribución de Precios por Área',
-                            color_discrete_sequence=px.colors.qualitative.Set2
+                            color_discrete_sequence=PALETA_CALLAI
                         )
                     else:
                         fig_box = px.box(
                             df_f, y=col_precio,
                             title='Distribución de Precios',
-                            color_discrete_sequence=['#3b82f6']
+                            color_discrete_sequence=['#6c5ce7']
                         )
                     fig_box.update_layout(height=400)
                     st.plotly_chart(fig_box, use_container_width=True)
@@ -346,7 +357,7 @@ def renderizar_graficos(df_f, es_movil=False):
                     fig_hist = px.histogram(
                         df_f, x=col_precio, nbins=30,
                         title='Distribución de Precios',
-                        color_discrete_sequence=['#3b82f6']
+                        color_discrete_sequence=['#6c5ce7']
                     )
                     fig_hist.update_layout(height=400)
                     st.plotly_chart(fig_hist, use_container_width=True)
@@ -385,10 +396,12 @@ def renderizar_graficos(df_f, es_movil=False):
 # ===========================================================================
 
 _LAYOUT_BASE = dict(
-    paper_bgcolor="#f8fafc", plot_bgcolor="#ffffff",
-    font_color="#1e293b", margin=dict(l=20, r=20, t=50, b=20),
+    paper_bgcolor="#f6f6f8", plot_bgcolor="#ffffff",
+    font_color="#18181d",
+    font_family="DM Sans, Inter, -apple-system, sans-serif",
+    margin=dict(l=20, r=20, t=50, b=20),
     height=420,
-    xaxis=dict(gridcolor="#e2e8f0"), yaxis=dict(gridcolor="#e2e8f0"),
+    xaxis=dict(gridcolor="#e6e6eb"), yaxis=dict(gridcolor="#e6e6eb"),
 )
 
 
@@ -447,7 +460,7 @@ def crear_grafico(df, conf):
 
         elif tipo == "histogram":
             fig = px.histogram(df, x=x, nbins=conf.get("nbins", 20), title=titulo,
-                               color_discrete_sequence=["#3b82f6"])
+                               color_discrete_sequence=["#6c5ce7"])
 
         elif tipo == "box":
             fig = px.box(df, x=x, y=y, color=x if x else None, title=titulo)
@@ -458,7 +471,7 @@ def crear_grafico(df, conf):
             kwargs = dict(x=x_p, y=y, color=color, title=titulo)
             if tipo == "bar":
                 kwargs["barmode"] = conf.get("barmode", "group" if color else "relative")
-                kwargs["color_discrete_sequence"] = None if color else ["#3b82f6"]
+                kwargs["color_discrete_sequence"] = None if color else ["#6c5ce7"]
             if tipo == "line":
                 kwargs["markers"] = True
             fig = fn(df_p, **kwargs)
