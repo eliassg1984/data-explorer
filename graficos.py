@@ -467,6 +467,10 @@ def crear_grafico(df, conf):
         if conf.get("tickangle"):
             fig.update_layout(xaxis_tickangle=conf["tickangle"])
 
+        # 🔧 NUEVO: asegurar que el eje X sea categórico cuando se solicita
+        if conf.get("x_categorico"):
+            fig.update_xaxes(type="category")
+
         # ── Etiquetas de datos ────────────────────────────────────────────
         if conf.get("etiquetas"):
             if tipo == "bar":
@@ -534,8 +538,11 @@ def renderizar_graficos_genericos(df_data, nombre_reporte):
         "titulo": f"{eje_y} por {eje_x}" + (f" y {color}" if color else ""),
         "etiquetas": etiquetas,
     }
+    # 🔧 NUEVO: para X de texto, forzar eje categórico y rotar etiquetas
     if eje_x in cols_txt:
         conf["tickangle"] = -45
+        conf["x_categorico"] = True
+
     if tipo_sel == "Barras apiladas":
         conf["barmode"] = "stack"
 
