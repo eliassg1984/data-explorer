@@ -81,7 +81,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         function(params) {
             if (params.value === null || params.value === undefined) return {};
             if (params.node && params.node.rowPinned) {
-                return { fontWeight: '700', color: '#1e3a5f' };
+                return { fontWeight: '700', color: '#3b2e93' };
             }
             var v = Number(params.value);
             var base = {
@@ -99,8 +99,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             }
             if (v === 0) {
                 return Object.assign({}, base, {
-                    backgroundColor: '#fef3c7',
-                    color: '#92400e',
+                    backgroundColor: '#fff7ed',
+                    color: '#c2410c',
                     borderRadius: '20px'
                 });
             }
@@ -119,14 +119,14 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         function(params) {
             if (params.value === null || params.value === undefined) return {};
             if (params.node && params.node.rowPinned) {
-                return { fontWeight: '700', color: '#1e3a5f' };
+                return { fontWeight: '700', color: '#3b2e93' };
             }
             return {
                 fontFamily: "'Courier New', Courier, monospace",
                 fontWeight: '700',
                 textAlign: 'right',
                 padding: '2px 10px',
-                color: '#1e293b'
+                color: '#18181d'
             };
         }
     """)
@@ -135,7 +135,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         function(params) {{
             var base = {{
                 fontFamily: "'Courier New', Courier, monospace",
-                color: '#1e3a5f',
+                color: '#3b2e93',
                 fontWeight: '600',
                 textAlign: 'right',
                 paddingRight: '12px'
@@ -151,7 +151,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             if (isNaN(num)) return base;
             var pct = maxv > 0 ? Math.max(0, Math.min(100, (num / maxv) * 100)) : 0;
             return Object.assign({{}}, base, {{
-                backgroundImage: 'linear-gradient(to right, #bfdbfe 0%, #bfdbfe ' + pct + '%, transparent ' + pct + '%, transparent 100%)',
+                backgroundImage: 'linear-gradient(to right, #d4cdf7 0%, #d4cdf7 ' + pct + '%, transparent ' + pct + '%, transparent 100%)',
                 backgroundRepeat: 'no-repeat',
                 backgroundSize: '100% 80%',
                 backgroundPosition: 'left center'
@@ -163,7 +163,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         function(params) {
             var base = {
                 fontFamily: "'Courier New', Courier, monospace",
-                color: '#1e3a5f',
+                color: '#3b2e93',
                 fontWeight: '600',
                 textAlign: 'right',
                 paddingRight: '12px'
@@ -337,14 +337,14 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         get_row_style = JsCode("""
             function(params) {
                 if (params.node.rowPinned === 'bottom') {
-                    return { fontWeight:'700', backgroundColor:'#dbeafe', color:'#1e3a5f',
-                             borderTop:'2px solid #3b82f6', fontSize:'13px' };
+                    return { fontWeight:'700', backgroundColor:'#e7e3fb', color:'#3b2e93',
+                             borderTop:'2px solid #6c5ce7', fontSize:'13px' };
                 }
                 if (params.node.group) {
                     var nivel = params.node.level;
-                    if (nivel === 0) return { backgroundColor:'#bfdbfe', fontWeight:'600' };
-                    if (nivel === 1) return { backgroundColor:'#dbeafe', fontWeight:'600' };
-                    return { backgroundColor:'#eff6ff', fontWeight:'500' };
+                    if (nivel === 0) return { backgroundColor:'#d4cdf7', fontWeight:'600' };
+                    if (nivel === 1) return { backgroundColor:'#e7e3fb', fontWeight:'600' };
+                    return { backgroundColor:'#f0edfe', fontWeight:'500' };
                 }
                 return { backgroundColor:'#ffffff' };
             }
@@ -354,8 +354,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         get_row_style = JsCode(f"""
             function(params) {{
                 if (params.node.rowPinned === 'bottom') {{
-                    return {{ fontWeight:'700', backgroundColor:'#dbeafe', color:'#1e3a5f',
-                              borderTop:'2px solid #3b82f6', fontSize:'13px' }};
+                    return {{ fontWeight:'700', backgroundColor:'#e7e3fb', color:'#3b2e93',
+                              borderTop:'2px solid #6c5ce7', fontSize:'13px' }};
                 }}
                 if (params.node.group || !params.data) return null;
                 var s = params.data["{_sf}"];
@@ -363,7 +363,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 var v = Number(s);
                 if (isNaN(v)) return null;
                 if (v === 0) return {{ backgroundColor:'#fef2f2' }};
-                if (v < 10)  return {{ backgroundColor:'#fffbeb' }};
+                if (v < 10)  return {{ backgroundColor:'#fff7ed' }};
                 return null;
             }}
         """)
@@ -371,8 +371,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         get_row_style = JsCode("""
             function(params) {
                 if (params.node.rowPinned === 'bottom') {
-                    return { fontWeight:'700', backgroundColor:'#dbeafe', color:'#1e3a5f',
-                             borderTop:'2px solid #3b82f6', fontSize:'13px' };
+                    return { fontWeight:'700', backgroundColor:'#e7e3fb', color:'#3b2e93',
+                             borderTop:'2px solid #6c5ce7', fontSize:'13px' };
                 }
             }
         """)
@@ -552,8 +552,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                                     minimumFractionDigits: 2, maximumFractionDigits: 2 }});
                             }}
                         }}
-                        return '<span style="font-weight:600;color:#1e293b">' + nombre +
-                               '</span> <span style="color:#64748b;font-weight:400">(' +
+                        return '<span style="font-weight:600;color:#18181d">' + nombre +
+                               '</span> <span style="color:#85858f;font-weight:400">(' +
                                n + ')' + extra + '</span>';
                     }}
                 """)
@@ -594,51 +594,52 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     custom_css = {
         ".ag-root-wrapper": {
             "background-color": "#ffffff",
-            "border": "1px solid #0f172a",
-            "border-radius": "10px !important",
+            "border": "1px solid #e6e6eb",
+            "border-radius": "12px !important",
             "overflow": "hidden !important",
-            "box-shadow": "0 4px 12px rgba(0,0,0,0.06)",
+            "box-shadow": "0 1px 3px rgba(16,16,20,0.05)",
             "width": "100% !important",
         },
+        # Cabecera clara estilo CallAI: banda gris suave con texto gris medio
         ".ag-header": {
-            "background-color": "#0f172a !important",
-            "border-bottom": "none !important",
+            "background-color": "#f4f4f6 !important",
+            "border-bottom": "1px solid #e6e6eb !important",
         },
         ".ag-header-cell": {
-            "background-color": "#0f172a !important",
+            "background-color": "#f4f4f6 !important",
         },
         ".ag-header-cell-text": {
-            "color": "#f8fafc !important",
-            "font-weight": "700",
+            "color": "#71717a !important",
+            "font-weight": "600",
             "font-size": f"{font_px}px",
             "letter-spacing": "0.03em",
             "text-transform": "uppercase",
         },
         ".ag-header-icon": {
-            "color": "#93c5fd !important",
+            "color": "#a2a2ad !important",
         },
         ".ag-row": {
-            "border-bottom": "1px solid #f1f5f9",
-            "color": "#1e293b",
+            "border-bottom": "1px solid #f1f1f4",
+            "color": "#18181d",
         },
         ".ag-row-even": {"background-color": "#ffffff"},
-        ".ag-row-odd": {"background-color": "#f8fafc"},
-        ".ag-row-hover": {"background-color": "#eff6ff !important"},
-        ".ag-cell": {"color": "#334155", "font-size": f"{font_px}px"},
+        ".ag-row-odd": {"background-color": "#f6f6f8"},
+        ".ag-row-hover": {"background-color": "#f0edfe !important"},
+        ".ag-cell": {"color": "#52525c", "font-size": f"{font_px}px"},
         ".ag-row-pinned": {
-            "background-color": "#dbeafe !important",
+            "background-color": "#e7e3fb !important",
             "font-weight": "700 !important",
-            "border-top": "2px solid #3b82f6 !important",
-            "color": "#1e3a5f !important",
+            "border-top": "2px solid #6c5ce7 !important",
+            "color": "#3b2e93 !important",
             "font-size": f"{font_px + 1}px !important",
         },
         ".ag-paging-panel": {
             "display": "flex !important",
             "align-items": "center !important",
             "justify-content": "space-between !important",
-            "color": "#64748b",
-            "background-color": "#f8fafc",
-            "border-top": "1px solid #e2e8f0",
+            "color": "#85858f",
+            "background-color": "#f6f6f8",
+            "border-top": "1px solid #e6e6eb",
             "padding": "8px 16px !important",
             "border-bottom-left-radius": "10px !important",
             "border-bottom-right-radius": "10px !important",
@@ -650,26 +651,26 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "margin-right": "auto !important",
         },
         ".ag-paging-panel .ag-paging-page-size .ag-label": {
-            "color": "#64748b !important",
+            "color": "#85858f !important",
             "font-size": "12px !important",
             "margin-right": "6px !important",
         },
         ".ag-paging-panel .ag-paging-page-size select, "
         ".ag-paging-panel .ag-paging-page-size .ag-select": {
-            "border": "1px solid #e2e8f0 !important",
+            "border": "1px solid #e6e6eb !important",
             "border-radius": "6px !important",
             "background": "#ffffff !important",
-            "color": "#1e293b !important",
+            "color": "#18181d !important",
             "font-size": "12px !important",
             "padding": "2px 6px !important",
         },
         ".ag-paging-button": {
             "width": "28px !important",
             "height": "28px !important",
-            "border": "1px solid #e2e8f0 !important",
+            "border": "1px solid #e6e6eb !important",
             "background": "#ffffff !important",
             "border-radius": "6px !important",
-            "color": "#475569 !important",
+            "color": "#71717a !important",
             "font-size": "13px !important",
             "cursor": "pointer !important",
             "display": "flex !important",
@@ -679,65 +680,65 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "transition": "all 0.15s ease !important",
         },
         ".ag-paging-button:hover:not(.ag-disabled)": {
-            "background": "#eff6ff !important",
-            "border-color": "#93c5fd !important",
-            "color": "#2563eb !important",
+            "background": "#f0edfe !important",
+            "border-color": "#b9aff2 !important",
+            "color": "#5a4ad9 !important",
         },
         ".ag-paging-button.ag-disabled": {
-            "color": "#cbd5e1 !important",
-            "border-color": "#f1f5f9 !important",
-            "background": "#f8fafc !important",
+            "color": "#d6d6dd !important",
+            "border-color": "#f1f1f4 !important",
+            "background": "#f6f6f8 !important",
             "cursor": "default !important",
         },
         ".ag-paging-row-summary-panel": {
-            "color": "#64748b !important",
+            "color": "#85858f !important",
             "font-size": "12px !important",
             "margin-left": "auto !important",
         },
         ".ag-paging-row-summary-panel-number": {
-            "color": "#1e293b !important",
+            "color": "#18181d !important",
             "font-weight": "600 !important",
         },
         ".ag-status-bar": {
-            "background-color": "#f8fafc !important",
-            "border-top": "1px solid #e2e8f0 !important",
-            "color": "#475569 !important",
+            "background-color": "#f6f6f8 !important",
+            "border-top": "1px solid #e6e6eb !important",
+            "color": "#71717a !important",
             "padding": "4px 16px !important",
             "font-size": "12px !important",
             "min-height": "0 !important",
         },
         ".ag-status-name-value": {
-            "color": "#475569 !important",
+            "color": "#71717a !important",
             "font-size": "12px !important",
         },
         ".ag-status-name-value-value": {
-            "color": "#1e293b !important",
+            "color": "#18181d !important",
             "font-weight": "600 !important",
         },
         ".ag-side-bar": {
             "background-color": "#ffffff",
-            "border-left": "1px solid #e2e8f0 !important",
+            "border-left": "1px solid #e6e6eb !important",
             "border-top-right-radius": "10px !important",
             "border-bottom-right-radius": "10px !important",
-            "border-bottom": "1px solid #0f172a !important",
+            "border-bottom": "1px solid #e6e6eb !important",
         },
         ".ag-side-bar .ag-side-buttons": {
-            "border-right": "1px solid #e2e8f0 !important",
+            "border-right": "1px solid #e6e6eb !important",
         },
         ".ag-side-button": {
-            "background-color": "#f8fafc !important",
+            "background-color": "#f6f6f8 !important",
             "border": "none !important",
-            "border-bottom": "1px solid #e2e8f0 !important",
-            "color": "#475569 !important",
+            "border-bottom": "1px solid #e6e6eb !important",
+            "color": "#71717a !important",
         },
         ".ag-side-button:hover": {
-            "background-color": "#dbeafe !important",
-            "color": "#2563eb !important",
+            "background-color": "#e7e3fb !important",
+            "color": "#5a4ad9 !important",
         },
         ".ag-side-button.ag-selected": {
-            "background-color": "#2563eb !important",
+            "background-color": "#5a4ad9 !important",
             "color": "#ffffff !important",
-            "box-shadow": "inset 0 0 0 1px #3b82f6",
+            "box-shadow": "inset 0 0 0 1px #6c5ce7",
         },
         ".ag-tool-panel-wrapper": {
             "background-color": "#ffffff !important",
@@ -752,10 +753,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         },
         ".ag-column-tool-panel .ag-column-select-all": {
             "padding": "10px 0 !important",
-            "border-bottom": "1px solid #e2e8f0 !important",
+            "border-bottom": "1px solid #e6e6eb !important",
         },
         ".ag-column-panel .ag-header-cell-text": {
-            "color": "#1e293b !important",
+            "color": "#18181d !important",
             "font-weight": "600 !important",
         },
         ".ag-filter-toolpanel-body": {
@@ -763,7 +764,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "background-color": "#ffffff !important",
         },
         ".ag-filter-toolpanel": {
-            "border": "1px solid #0f172a !important",
+            "border": "1px solid #e6e6eb !important",
             "border-radius": "8px !important",
             "margin": "8px !important",
             "overflow": "hidden !important",
@@ -772,16 +773,16 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "display": "flex !important",
             "align-items": "center !important",
             "padding": "10px 12px !important",
-            "border-bottom": "0.5px solid #f1f5f9 !important",
+            "border-bottom": "0.5px solid #f1f1f4 !important",
         },
         ".ag-column-select-column-label": {
             "order": "-1 !important",
             "margin-right": "auto !important",
-            "color": "#475569 !important",
+            "color": "#71717a !important",
             "font-size": "12.5px !important",
         },
         ".ag-column-select-column:has(.ag-checked) .ag-column-select-column-label": {
-            "color": "#1e293b !important",
+            "color": "#18181d !important",
             "font-weight": "500 !important",
         },
         ".ag-column-select-column .ag-drag-handle": {
@@ -791,7 +792,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "width": "36px !important",
             "height": "20px !important",
             "border-radius": "999px !important",
-            "background": "#e2e8f0 !important",
+            "background": "#e6e6eb !important",
             "border": "none !important",
             "box-shadow": "none !important",
             "position": "relative !important",
@@ -811,7 +812,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "transition": "left .15s ease !important",
         },
         ".ag-column-select-column .ag-checkbox-input-wrapper.ag-checked": {
-            "background": "#2563eb !important",
+            "background": "#5a4ad9 !important",
         },
         ".ag-column-select-column .ag-checkbox-input-wrapper.ag-checked::after": {
             "content": "'' !important",
@@ -849,52 +850,52 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         custom_css[".ag-row-even"] = {"background-color": "#ffffff !important"}
         custom_css[".ag-row-odd"] = {"background-color": "#ffffff !important"}
         custom_css[".ag-root-wrapper"].update({
-            "background-color": "#f8fafc !important",
+            "background-color": "#f6f6f8 !important",
             "border": "none !important",
             "box-shadow": "none !important",
             "border-radius": "4px !important",
         })
         custom_css[".ag-header"].update({
             "background-color": "#ffffff !important",
-            "border-bottom": "2px solid #3b82f6 !important",
+            "border-bottom": "2px solid #6c5ce7 !important",
         })
         custom_css[".ag-tool-panel-horizontal-resize"] = {
             "width": "8px !important",
-            "background-color": "#e2e8f0",
+            "background-color": "#e6e6eb",
             "cursor": "col-resize",
         }
         custom_css[".ag-header-cell"].update({
             "background-color": "#ffffff !important",
         })
         custom_css[".ag-header-cell-text"].update({
-            "color": "#5f6368 !important",
+            "color": "#71717a !important",
             "font-weight": "600",
             "letter-spacing": "0.05em",
             "text-transform": "uppercase",
         })
         custom_css[".ag-header-icon"].update({
-            "color": "#9aa0a6 !important",
+            "color": "#a2a2ad !important",
         })
         custom_css[".ag-row-pinned"].update({
-            "background-color": "#dbeafe !important",
-            "border-top": "2px solid #3b82f6 !important",
-            "color": "#1e3a5f !important",
+            "background-color": "#e7e3fb !important",
+            "border-top": "2px solid #6c5ce7 !important",
+            "color": "#3b2e93 !important",
         })
         custom_css[".ag-body-vertical-scroll::-webkit-scrollbar"] = {"width": "8px"}
         custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-track"] = {
-            "background": "#e2e8f0", "border-radius": "4px",
+            "background": "#e6e6eb", "border-radius": "4px",
         }
         custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-thumb"] = {
-            "background": "#3b82f6", "border-radius": "4px",
+            "background": "#6c5ce7", "border-radius": "4px",
         }
         custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-thumb:hover"] = {
-            "background": "#2563eb",
+            "background": "#5a4ad9",
         }
         custom_css[".ag-side-bar"].update({
-            "background-color": "#f6f8fb !important",
-            "border": "1px solid #dbe2ec !important",
-            "border-left": "1px solid #dbe2ec !important",
-            "border-bottom": "1px solid #dbe2ec !important",
+            "background-color": "#f7f6fb !important",
+            "border": "1px solid #e6e6eb !important",
+            "border-left": "1px solid #e6e6eb !important",
+            "border-bottom": "1px solid #e6e6eb !important",
             "border-radius": "10px !important",
             "border-top-right-radius": "10px !important",
             "border-bottom-right-radius": "10px !important",
@@ -903,15 +904,15 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "overflow": "hidden !important",
         })
         custom_css[".ag-side-bar .ag-side-buttons"].update({
-            "background-color": "#eef2f7 !important",
-            "border-bottom": "1px solid #dbe2ec !important",
+            "background-color": "#f2f0fb !important",
+            "border-bottom": "1px solid #e6e6eb !important",
         })
         custom_css[".ag-root"] = {
-            "border": "2px solid #3b82f6",
+            "border": "2px solid #6c5ce7",
             "border-radius": "6px",
         }
         custom_css[".ag-filter-toolpanel"].update({
-            "border": "1px solid #3b82f6 !important",
+            "border": "1px solid #6c5ce7 !important",
             "border-radius": "8px !important",
             "margin": "8px !important",
             "overflow": "hidden !important",
@@ -919,38 +920,39 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     if es_requerimientos:
         custom_css[".ag-side-button.ag-selected"] = {
-            "background-color": "#334155 !important",
-            "color": "#f8fafc !important",
-            "box-shadow": "inset 0 0 0 1px #475569",
+            "background-color": "#52525c !important",
+            "color": "#f6f6f8 !important",
+            "box-shadow": "inset 0 0 0 1px #71717a",
         }
         custom_css[".ag-side-button:hover"] = {
-            "background-color": "#e2e8f0 !important",
-            "color": "#1e293b !important",
+            "background-color": "#e6e6eb !important",
+            "color": "#18181d !important",
         }
-        custom_css[".ag-header-icon"] = {"color": "#94a3b8 !important"}
+        custom_css[".ag-header-icon"] = {"color": "#a2a2ad !important"}
         custom_css[".ag-column-select-column .ag-checkbox-input-wrapper.ag-checked"] = {
-            "background": "#475569 !important",
+            "background": "#71717a !important",
         }
         custom_css[".ag-row-pinned"] = {
-            "background-color": "#e2e8f0 !important",
+            "background-color": "#e6e6eb !important",
             "font-weight": "700 !important",
-            "border-top": "2px solid #475569 !important",
-            "color": "#0f172a !important",
+            "border-top": "2px solid #71717a !important",
+            "color": "#101014 !important",
             "font-size": f"{font_px + 1}px !important",
         }
-        custom_css[".ag-row-hover"] = {"background-color": "#f1f5f9 !important"}
+        custom_css[".ag-row-hover"] = {"background-color": "#f1f1f4 !important"}
         custom_css[".ag-paging-button:hover:not(.ag-disabled)"] = {
-            "background": "#e2e8f0 !important",
-            "border-color": "#94a3b8 !important",
-            "color": "#334155 !important",
+            "background": "#e6e6eb !important",
+            "border-color": "#a2a2ad !important",
+            "color": "#52525c !important",
         }
-        custom_css[".ag-header-group-cell"] = {"background-color": "#0f172a !important"}
-        custom_css[".ag-header-group-cell-label"] = {"color": "#f8fafc !important"}
+        # Cabecera de grupos: banda lavanda con texto índigo profundo (CallAI)
+        custom_css[".ag-header-group-cell"] = {"background-color": "#e7e3fb !important"}
+        custom_css[".ag-header-group-cell-label"] = {"color": "#3b2e93 !important"}
         custom_css[".ag-header-group-text"] = {
-            "color": "#f8fafc !important",
-            "font-weight": "500 !important",
+            "color": "#3b2e93 !important",
+            "font-weight": "600 !important",
         }
-        custom_css[".ag-header-group-cell .ag-icon"] = {"color": "#94a3b8 !important"}
+        custom_css[".ag-header-group-cell .ag-icon"] = {"color": "#6c5ce7 !important"}
         custom_css[".ag-theme-balham"] = {"--ag-list-item-height": "22px !important"}
         custom_css[".ag-column-select-column-label"] = {
             "font-size": f"{max(11, font_px - 1)}px !important",
@@ -1055,16 +1057,16 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
     grid_options = gb.build()
 
     custom_css = {
-        ".ag-root-wrapper": {"background-color": "#ffffff", "border": "1px solid #e2e8f0", "border-radius": "8px", "width": "100% !important"},
-        ".ag-header": {"background-color": "#f1f5f9", "border-bottom": "2px solid #3b82f6"},
-        ".ag-header-cell-text": {"color": "#1e293b", "font-weight": "700", "font-size": f"{font_px}px"},
-        ".ag-row": {"color": "#334155", "border-color": "#e2e8f0"},
+        ".ag-root-wrapper": {"background-color": "#ffffff", "border": "1px solid #e6e6eb", "border-radius": "8px", "width": "100% !important"},
+        ".ag-header": {"background-color": "#f1f1f4", "border-bottom": "2px solid #6c5ce7"},
+        ".ag-header-cell-text": {"color": "#18181d", "font-weight": "700", "font-size": f"{font_px}px"},
+        ".ag-row": {"color": "#52525c", "border-color": "#e6e6eb"},
         ".ag-row-even": {"background-color": "#ffffff"},
-        ".ag-row-odd": {"background-color": "#f8fafc"},
-        ".ag-row-hover": {"background-color": "#eff6ff !important"},
-        ".ag-cell": {"color": "#334155", "font-size": f"{font_px}px"},
-        ".ag-paging-panel": {"color": "#64748b", "background-color": "#f8fafc", "border-top": "1px solid #e2e8f0", "font-size": "0.75rem"},
-        ".ag-menu": {"background-color": "#ffffff", "color": "#1e293b", "border": "1px solid #e2e8f0"},
+        ".ag-row-odd": {"background-color": "#f6f6f8"},
+        ".ag-row-hover": {"background-color": "#f0edfe !important"},
+        ".ag-cell": {"color": "#52525c", "font-size": f"{font_px}px"},
+        ".ag-paging-panel": {"color": "#85858f", "background-color": "#f6f6f8", "border-top": "1px solid #e6e6eb", "font-size": "0.75rem"},
+        ".ag-menu": {"background-color": "#ffffff", "color": "#18181d", "border": "1px solid #e6e6eb"},
         ".ag-pinned-left-header": {"box-shadow": "3px 0 8px rgba(0,0,0,0.08)"},
         ".ag-pinned-left-cols-container": {"box-shadow": "3px 0 8px rgba(0,0,0,0.08)"},
     }
@@ -1217,9 +1219,9 @@ def renderizar_tabla_compras(df: pd.DataFrame, grupos_sel: list = None):
     cols_num_view = [c for c in df_view.columns if pd.api.types.is_numeric_dtype(df_view[c])]
     if cols_num_view:
         st.markdown(
-            "<div style='background:#dbeafe;border-top:2px solid #3b82f6;"
+            "<div style='background:#e7e3fb;border-top:2px solid #6c5ce7;"
             "border-radius:0 0 8px 8px;padding:6px 12px;"
-            "font-size:13px;font-weight:700;color:#1e3a5f;'>"
+            "font-size:13px;font-weight:700;color:#3b2e93;'>"
             + _totales_html_compras(df_editado)
             + "</div>",
             unsafe_allow_html=True,
