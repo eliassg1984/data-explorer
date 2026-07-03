@@ -5,14 +5,13 @@ Panel de Reportes v2.0 - Punto de entrada principal (OPTIMIZADO).
 import datetime
 import pandas as pd
 import streamlit as st
-import plotly.express as px
 
 from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
 from data import REPORTES, cargar, secrets_disponibles
 from estilos import TAM_FUENTE, inject_css
 from inyecciones import inject_error_overlay, inject_element_inspector
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras
-from graficos import renderizar_graficos
+from graficos import renderizar_graficos, renderizar_graficos_reporte
 from navegacion import inject_navegacion
 from perf import perf                                                       # ⚡ PERF
 
@@ -453,41 +452,6 @@ def _aviso_rapido_aggrid(df_data):
         )
 
 
-def _render_graficos_genericos(df_data, nombre_reporte):
-    """Renderiza selectores + gráfico de barras top 20."""
-    cols_num = df_data.select_dtypes("number").columns.tolist()
-    cols_txt = df_data.select_dtypes(["object", "string"]).columns.tolist()
-
-    if not cols_num or not cols_txt:
-        st.info("No hay suficientes columnas para generar gráficos.")
-        return
-
-    col1, col2 = st.columns(2)
-    with col1:
-        eje_x = st.selectbox("Agrupar por", cols_txt, key=f"ejex_{nombre_reporte}")
-    with col2:
-        eje_y = st.selectbox("Métrica (suma)", cols_num, key=f"ejey_{nombre_reporte}")
-
-    try:
-        datos = (df_data.groupby(eje_x)[eje_y].sum()
-                     .reset_index()
-                     .sort_values(eje_y, ascending=False)
-                     .head(20))
-        fig = px.bar(datos, x=eje_x, y=eje_y,
-                     title=f"{eje_y} por {eje_x} (top 20)",
-                     color_discrete_sequence=["#3b82f6"])
-        fig.update_layout(
-            paper_bgcolor="#f8fafc", plot_bgcolor="#ffffff",
-            font_color="#1e293b", margin=dict(l=20, r=20, t=40, b=20),
-            xaxis_tickangle=-45, height=400,
-            xaxis=dict(gridcolor="#e2e8f0"),
-            yaxis=dict(gridcolor="#e2e8f0"),
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    except Exception as e:
-        st.error(f"Error: {str(e)}")
-
-
 def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, font_px, cfg):
     """Renderiza el reporte de Requerimientos con tabla dinámica."""
     st.markdown(
@@ -654,7 +618,7 @@ def _render_contenido():
         if vista == "Tabla":
             renderizar_tabla_compras(df_f, grupos_sel=grupos_sel)
         else:
-            _render_graficos_genericos(df_f, reporte)
+            renderizar_graficos_reporte(df_f, reporte, cfg)
 
     # ── INVENTARIO VALORIZADO ────────────────────────────────────────────────
     elif reporte == "Inventario Valorizado":
@@ -729,7 +693,7 @@ def _render_contenido():
                     cols_visibles=None,
                 )
         else:
-            _render_graficos_genericos(df_f, reporte)
+            renderizar_graficos_reporte(df_f, reporte, cfg)
 
     # ── REQUERIMIENTOS ───────────────────────────────────────────────────────
     elif reporte == "Requerimientos":
@@ -755,7 +719,7 @@ def _render_contenido():
             if vista == "Tabla":
                 _render_tabla()
             else:
-                _render_graficos_genericos(df_f, reporte)
+                renderizar_graficos_reporte(df_f, reporte, cfg)
 
     perf.fragment_end("_render_contenido")                                  # ⚡ PERF
 
