@@ -360,53 +360,57 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* BOTONES TABLA / GRÁFICOS (segmented_control) — Opción 2 GRANDE índigo  */
+    /* SELECTOR DE VISTA — tabs subrayados (underline), Estilo 1.           */
+    /* Se aplica al st.radio horizontal envuelto en un contenedor con key   */
+    /* "vistatabs_<reporte>" (clase .st-key-vistatabs_...).                 */
     /* =================================================================== */
-    /* Separación entre los dos botones (cubrimos las variantes de Streamlit) */
-    [data-testid="stSegmentedControl"] [data-baseweb="button-group"],
-    [data-testid="stSegmentedControl"] [role="radiogroup"],
-    [data-testid="stSegmentedControl"] [role="group"],
-    [data-testid="stSegmentedControl"] > div,
-    [data-testid="stButtonGroup"] > div {
-        gap: 16px !important;
+
+    /* Fila de opciones: separación entre tabs + línea inferior guía */
+    [class*="st-key-vistatabs_"] [role="radiogroup"] {
+        gap: 26px !important;
+        border-bottom: 1px solid var(--border) !important;
+        margin-bottom: 0.4rem !important;
+        padding: 0 !important;
     }
-    /* Base de cada botón — apuntamos por contenedor Y por kind del botón,    */
-    /* así cae en alguna combinación según tu versión de Streamlit.          */
-    [data-testid="stSegmentedControl"] button,
-    [data-testid="stButtonGroup"] button,
-    button[data-testid^="stBaseButton-segmented_control"],
-    button[kind^="segmented_control"] {
-        min-width: 190px !important;          /* MÁS GRANDE: ancho */
-        padding: 14px 30px !important;        /* MÁS GRANDE: alto */
-        margin: 0 !important;                 /* quita el -1px que los pega */
-        font-size: 15px !important;
+
+    /* Ocultar el círculo del radio nativo */
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label > div:first-child {
+        display: none !important;
+    }
+
+    /* Cada opción = un tab (texto + subrayado en hover/activo) */
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label {
+        padding: 9px 2px !important;
+        margin: 0 !important;
+        cursor: pointer !important;
+        border-bottom: 2px solid transparent !important;
+        margin-bottom: -1px !important;   /* solapa la línea guía */
+        transition: color .15s ease, border-color .15s ease !important;
+    }
+
+    /* Texto del tab en reposo (inactivo) */
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label p {
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        color: var(--text-secondary) !important;
+        margin: 0 !important;
+    }
+
+    /* Hover: insinúa el subrayado */
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label:hover {
+        border-bottom-color: #b9aff2 !important;
+    }
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label:hover p {
+        color: #4938b8 !important;
+    }
+
+    /* Tab ACTIVO — Streamlit marca el label seleccionado con aria-checked */
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label:has(input:checked) {
+        border-bottom-color: #6c5ce7 !important;
+    }
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label:has(input:checked) p {
+        color: #4938b8 !important;
         font-weight: 600 !important;
-        border: 1.5px solid var(--border) !important;
-        border-radius: 999px !important;      /* pill completo en ambos */
-        transition: all .15s ease !important;
-    }
-    /* Icono Material un poco más grande dentro del botón */
-    [data-testid="stSegmentedControl"] button [data-testid="stIconMaterial"],
-    [data-testid="stSegmentedControl"] button p,
-    button[kind^="segmented_control"] [data-testid="stIconMaterial"] {
-        font-size: 20px !important;
-    }
-    /* ESTADO ACTIVO — Streamlit lo marca con kind="...Active"               */
-    [data-testid="stSegmentedControl"] button[kind*="Active"],
-    button[data-testid$="segmented_controlActive"],
-    button[kind="segmented_controlActive"],
-    [data-testid="stSegmentedControl"] button[aria-checked="true"] {
-        background: #f0edfe !important;
-        color: #4938b8 !important;
-        border-color: #5a4ad9 !important;
-    }
-    [data-testid="stSegmentedControl"] button[kind*="Active"] p,
-    button[kind="segmented_controlActive"] p {
-        color: #4938b8 !important;
-    }
-    [data-testid="stSegmentedControl"] button:hover,
-    button[kind^="segmented_control"]:hover {
-        border-color: #b9aff2 !important;
     }
 
     /* =================================================================== */
