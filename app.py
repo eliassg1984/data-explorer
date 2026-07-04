@@ -596,7 +596,8 @@ def _selector_vista():
     """Muestra un radio horizontal estilizado como tabs subrayados y devuelve
     la opción elegida ('Tabla' o 'Gráficos'). El CSS que lo convierte en tabs
     vive en estilos.py (bloque '.st-key-vistatabs_...')."""
-    _opciones = {"Tabla": "📋  Tabla", "Gráficos": "📈  Gráficos"}
+    _opciones = {"Tabla": ":material/table_rows: Tabla",
+             "Gráficos": ":material/monitoring: Gráficos"}
     with st.container(key=f"vistatabs_{reporte}"):
         vista = st.radio(
             "Vista",
