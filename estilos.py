@@ -460,7 +460,7 @@ def get_css():
     /* botón y fecha pegados a la derecha.                                  */
     /* =================================================================== */
     .st-key-fila_ajuste_top {
-        margin-top: -6px !important;          /* NUEVO: reduce el espacio superior */
+        margin-top: -16px !important;          /* NUEVO: reduce el espacio superior */
     }
     .st-key-fila_ajuste_top [data-testid="stHorizontalBlock"] {
         align-items: center !important;
