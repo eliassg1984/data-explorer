@@ -101,9 +101,13 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     flex:1 1 auto !important;
     padding:14px 0 14px 0 !important;
 }}
+
+/* CONTENEDORES DE BOTONES: ahora ocupan el 100% del ancho y centran su contenido */
 .st-key-nav_rail [data-testid="stElementContainer"],
 .st-key-nav_rail [class*="st-key-navbtn_"] {{
-    width:auto !important; min-width:0 !important;
+    width:100% !important; min-width:0 !important;
+    display:flex !important;
+    justify-content:center !important;
 }}
 
 /* Cada botón -> tile de icono.
@@ -160,10 +164,11 @@ _CSS_AJUSTE = """
 /* 2) Quitar el padding-top de 48px que el rail reserva para el topbar. */
 html body .stApp { padding-top: 0 !important; }
 
-/* 3) Padding superior mínimo del contenedor principal. */
+/* 3) Padding superior mínimo del contenedor principal.
+   CAMBIADO: de 0.4rem a 0.15rem para subir el chip "Ajuste de Inventario". */
 html body [data-testid="stMainBlockContainer"],
 html body .stMainBlockContainer,
-html body .block-container { padding-top: 0.4rem !important; }
+html body .block-container { padding-top: 0.15rem !important; }
 
 /* 4) CLAVE: colapsar los contenedores "invisibles" que se apilan arriba
    (st.markdown que solo inyectan <style>, los iframes de overlay/inspector
