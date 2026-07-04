@@ -269,13 +269,11 @@ perf.start_phase("Ajuste top row")                                          # �
 if es_ajuste:
     _fila_top = st.container(key="fila_ajuste_top")
     with _fila_top:
-        col_titulo, col_boton, col_fecha_selector = st.columns([2, 0.7, 1])
+        col_titulo, col_boton, col_fecha_selector = st.columns([3, 0.9, 0.9])
 
     with col_titulo:
         st.markdown(
-            f'<p style="font-size:34px;font-weight:800;color:#18181d;'
-            f'margin:0;line-height:1.1;display:flex;align-items:center;'
-            f'height:38px;">{reporte}</p>',
+            f'<div class="chip-titulo-reporte">{reporte}</div>',
             unsafe_allow_html=True,
         )
 
@@ -318,10 +316,7 @@ if es_ajuste:
             else:
                 st.warning("⚠️ Selecciona un rango de fechas válido.")
 
-    st.markdown(
-        '<hr style="border:none;border-top:3px solid #6c5ce7;margin:0.5rem 0 1.6rem 0;">',
-        unsafe_allow_html=True,
-    )
+    # Se ha eliminado el <hr> morado que estaba aquí
 
     if st.session_state.get("ajuste_extraido"):
         _rango_aplicado = st.session_state.get("ajuste_rango_aplicado")
