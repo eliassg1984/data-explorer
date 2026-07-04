@@ -824,6 +824,69 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         ".ag-side-bar[data-active-panel='pivotePanel'] .ag-column-select": {
             "display": "none !important",
         },
+
+        # ── Panel modo pivote / drop zones (NUEVO ESTILIZADO) ──
+        ".ag-pivot-mode-panel": {
+            "padding": "10px 12px !important",
+            "border-bottom": "1px solid #e6e6eb !important",
+            "min-height": "0 !important",
+        },
+        ".ag-pivot-mode-select": {
+            "color": "#4938b8 !important",
+            "font-size": "13px !important",
+            "font-weight": "600 !important",
+        },
+        # Títulos de sección (Grupos de filas / Valores)
+        ".ag-column-drop-vertical-title-bar": {
+            "padding": "10px 12px 4px !important",
+        },
+        ".ag-column-drop-vertical-title": {
+            "color": "#a2a2ad !important",
+            "font-size": "11px !important",
+            "font-weight": "600 !important",
+            "text-transform": "uppercase !important",
+            "letter-spacing": "0.06em !important",
+        },
+        # Zona de arrastre (drop zone)
+        ".ag-column-drop-vertical": {
+            "background": "transparent !important",
+        },
+        ".ag-column-drop-vertical-list": {
+            "margin": "4px 10px 10px !important",
+            "border": "1.5px dashed #d4cdf7 !important",
+            "border-radius": "10px !important",
+            "background": "#f5f3fe !important",
+            "padding": "8px !important",
+        },
+        ".ag-column-drop-empty-message": {
+            "color": "#7a6de0 !important",
+            "font-size": "12px !important",
+            "text-align": "center !important",
+        },
+        # Pastillas de campos (Suma(...), Promedio(...))
+        ".ag-column-drop-vertical-cell": {
+            "background": "#f6f6f8 !important",
+            "border": "1px solid #e6e6eb !important",
+            "border-radius": "999px !important",
+            "padding": "5px 12px !important",
+            "margin": "3px 0 !important",
+            "font-size": "12px !important",
+            "color": "#3f3f46 !important",
+        },
+        ".ag-column-drop-vertical-cell:hover": {
+            "background": "#f0edfe !important",
+            "border-color": "#d4cdf7 !important",
+        },
+        ".ag-column-drop-vertical-cell-text": {
+            "font-size": "12px !important",
+        },
+        ".ag-column-drop-cell-button": {
+            "color": "#a2a2ad !important",
+        },
+        ".ag-column-drop-cell-button:hover": {
+            "color": "#5a4ad9 !important",
+        },
+        # ── Fin del nuevo bloque ──
     }
 
     if envolver_cabeceras:
