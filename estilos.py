@@ -443,12 +443,12 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* FILA SUPERIOR DE AJUSTE DE INVENTARIO — alinea verticalmente al      */
-    /* mismo nivel el título, el botón "Extraer datos" y el selector de     */
-    /* fecha (sin importar la altura natural de cada bloque).               */
+    /* FILA SUPERIOR DE AJUSTE DE INVENTARIO — chip a la izquierda +        */
+    /* botón y fecha pegados a la derecha.                                  */
     /* =================================================================== */
     .st-key-fila_ajuste_top [data-testid="stHorizontalBlock"] {
         align-items: center !important;
+        gap: 8px !important;               /* reduce el gap entre botón y fecha */
     }
     .st-key-fila_ajuste_top [data-testid="stColumn"],
     .st-key-fila_ajuste_top [data-testid="column"] {
@@ -457,6 +457,21 @@ def get_css():
     }
     .st-key-btn_extraer_ajuste {
         width: 100% !important;
+    }
+
+    /* Chip pill del título del reporte */
+    .chip-titulo-reporte {
+        display: inline-flex;
+        align-items: center;
+        background: var(--accent-tint);      /* lavanda muy suave */
+        color: var(--accent-deep);           /* índigo profundo para contraste */
+        border-radius: 999px;
+        padding: 8px 18px;
+        font-size: 15px;
+        font-weight: 500;
+        line-height: 1;
+        white-space: nowrap;
+        letter-spacing: 0.01em;
     }
 
     /* =================================================================== */
