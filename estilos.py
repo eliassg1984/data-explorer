@@ -479,73 +479,52 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* FILTRO DE FECHA — AJUSTE DE INVENTARIO (label al costado, contenedor */
-    /* angosto en lugar de uno largo y la etiqueta encima)                  */
-    /* Solo afecta al date_input con key="fch_ajuste_inline"                */
+    /* PILL LAVANDA (Opción A) — el date_input se ve como una pastilla      */
+    /* lavanda a juego con el chip del título y el botón. Sigue siendo el   */
+    /* date_input nativo (mismo calendario), solo cambia su apariencia.     */
     /* =================================================================== */
 
-    /* Contenedor: label + input en fila, alineados al centro */
-    .st-key-fch_ajuste_inline {
-        max-width: none !important;
-        display: flex !important;
-        flex-direction: row !important;
-        align-items: center !important;
-        gap: 10px !important;
-    }
-
-    /* Etiqueta — "Rango a Evaluar" al costado, sin mayúsculas forzadas,
-       sin ocupar una fila propia arriba del input. */
-    .st-key-fch_ajuste_inline label {
-        font-size: 0.72rem !important;
-        letter-spacing: 0.02em !important;
-        text-transform: none !important;
-        font-weight: 600 !important;
-        color: var(--text-muted) !important;
-        margin-bottom: 0 !important;
-        white-space: nowrap !important;
-        flex-shrink: 0 !important;
-    }
-
-    /* El bloque que Streamlit genera para label+widget también en fila */
-    .st-key-fch_ajuste_inline > div {
-        display: flex !important;
-        flex-direction: row !important;
-        align-items: center !important;
-        gap: 10px !important;
-        width: auto !important;
-    }
-
-    /* Contenedor del widget en sí: ancho ajustado al texto de la fecha,
-       ya no ocupa todo el ancho disponible de la columna. */
+    /* Ancho ajustado al texto de la fecha */
     .st-key-fch_ajuste_inline [data-baseweb="input"] {
-        width: 190px !important;
-        min-width: 190px !important;
+        width: auto !important;
+        min-width: 0 !important;
     }
 
-    /* La caja del input = tarjeta con borde de acento a la izquierda */
+    /* La caja del input = PILL lavanda */
     .st-key-fch_ajuste_inline .stDateInput > div > div {
-        background: var(--bg-card) !important;
-        border: 1px solid var(--border) !important;
-        border-left: 3px solid var(--accent) !important;
-        border-radius: 10px !important;
-        box-shadow: var(--shadow) !important;
-        transition: border-color .15s ease, box-shadow .15s ease !important;
-        width: 190px !important;
-        min-width: 190px !important;
+        background: var(--accent-tint) !important;     /* lavanda muy suave */
+        border: 1px solid #d4cdf7 !important;          /* borde lavanda */
+        border-radius: 999px !important;               /* pill completo */
+        box-shadow: none !important;
+        padding: 2px 6px !important;
+        transition: background .15s ease, border-color .15s ease !important;
+        width: auto !important;
+        min-width: 0 !important;
     }
 
-    /* Hover / foco: acento más vivo y sombra algo más marcada */
+    /* Texto de la fecha en índigo profundo, a juego con el chip */
+    .st-key-fch_ajuste_inline .stDateInput input {
+        color: var(--accent-deep) !important;
+        font-weight: 500 !important;
+        font-size: 13px !important;
+        background: transparent !important;
+    }
+    .st-key-fch_ajuste_inline .stDateInput input::placeholder {
+        color: var(--accent) !important;
+        opacity: 0.7 !important;
+    }
+
+    /* Hover: lavanda un punto más vivo */
     .st-key-fch_ajuste_inline .stDateInput > div > div:hover,
     .st-key-fch_ajuste_inline .stDateInput > div > div:focus-within {
+        background: var(--accent-light) !important;    /* lavanda 100 */
         border-color: var(--accent) !important;
-        border-left-color: var(--accent-hover) !important;
-        box-shadow: var(--shadow-md) !important;
     }
 
-    /* Ícono de calendario nativo en índigo */
+    /* Ícono de calendario en índigo */
     .st-key-fch_ajuste_inline .stDateInput svg {
-        color: var(--accent) !important;
-        fill: var(--accent) !important;
+        color: var(--accent-deep) !important;
+        fill: var(--accent-deep) !important;
     }
 
     /* =================================================================== */
