@@ -1,589 +1,734 @@
 """
-Estilos globales de la app: CSS, tamaños de fuente e inyección del tema.
+Panel de Reportes v2.0 - Punto de entrada principal (OPTIMIZADO).
 """
 
+import datetime
+import pandas as pd
 import streamlit as st
 
-
-# ===========================================================================
-# MAPEO DE TAMAÑOS DE FUENTE
-# ===========================================================================
-
-TAM_FUENTE = {
-    "Pequeño": 12,
-    "Mediano": 14,
-    "Grande": 17,
-    "Muy grande": 20
-}
+from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
+from data import REPORTES, cargar, secrets_disponibles
+from estilos import TAM_FUENTE, inject_css
+from inyecciones import inject_error_overlay, inject_element_inspector
+from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras
+from graficos import renderizar_graficos, renderizar_graficos_reporte
+from navegacion import inject_navegacion
+from perf import perf                                                       # ⚡ PERF
 
 
 # ===========================================================================
-# CSS GLOBAL (CACHEADO)
+# CONFIGURACIÓN INICIAL
 # ===========================================================================
+
+st.set_page_config(
+    page_title="Reportes",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': "Panel de Reportes v2.0 - Inventario & Compras"
+    }
+)
+
+inject_css()
+inject_error_overlay()
+inject_element_inspector()
+
+perf.start()                                                                # ⚡ PERF
+
+
+# ===========================================================================
+# LEER REPORTE DESDE LA URL Y APLICAR REFRESCO
+# ===========================================================================
+
+params = st.query_params
+reporte = params.get("reporte", None)
+
+if st.session_state.get("_nav_reporte"):
+    reporte = st.session_state.pop("_nav_reporte")
+    st.query_params["reporte"] = reporte
+
+if not reporte or reporte not in REPORTES:
+    reporte = list(REPORTES.keys())[0]
+
+if st.session_state.pop("_nav_refresh", False):
+    st.cache_data.clear()
+
+if params.get("refresh"):
+    st.cache_data.clear()
+    if "refresh" in st.query_params:
+        del st.query_params["refresh"]
+    st.rerun()
+
+inject_navegacion(REPORTES, reporte, mostrar_inspector=bool(st.query_params.get("debug")))
+
+cfg = REPORTES[reporte]
+
+
+# ===========================================================================
+# LIMPIAR ESTADO AL CAMBIAR DE REPORTE
+# Evita que session_state de un reporte anterior (ej: ajuste_extraido)
+# siga corriendo trabajo innecesario cuando se navega a otro reporte.
+# ===========================================================================
+if st.session_state.get("_reporte_anterior") != reporte:
+    st.session_state["_reporte_anterior"] = reporte
+    st.session_state.pop("ajuste_extraido", None)
+    st.session_state.pop("ajuste_rango_aplicado", None)
+
+
+# ===========================================================================
+# AVISO DE MODO DEMO + PANEL DE DIAGNÓSTICO (?debug=1)
+# ===========================================================================
+modo_demo = not secrets_disponibles()
+if modo_demo:
+    st.caption("🧪 MODO DEMO — datos de ejemplo (no hay conexión a R2). "
+               "Configura los secrets R2_* para usar datos reales.")
+
+if st.query_params.get("debug"):
+    import sys
+    from importlib.metadata import version, PackageNotFoundError
+
+    def _ver(paquete):
+        try:
+            return version(paquete)
+        except PackageNotFoundError:
+            return "?"
+
+    with st.expander("🔧 Diagnóstico de entorno", expanded=True):
+        st.json({
+            "python": sys.version.split()[0],
+            "streamlit": _ver("streamlit"),
+            "streamlit-aggrid": _ver("streamlit-aggrid"),
+            "pandas": _ver("pandas"),
+            "plotly": _ver("plotly"),
+            "duckdb": _ver("duckdb"),
+            "modo_demo": modo_demo,
+            "reporte": reporte,
+        })
+
+    perf.render_panel(expanded=True)                                        # ⚡ PERF
+    perf.render_browser_panel()                                             # ⚡ PERF browser
+
+
+# ===========================================================================
+# INICIALIZAR ESTADOS DE CONFIGURACIÓN DE VISTA
+# ===========================================================================
+if 'forzar_movil' not in st.session_state:
+    st.session_state.forzar_movil = False
+if 'tabla_tam' not in st.session_state:
+    st.session_state.tabla_tam = "Mediano"
+
+
+# ===========================================================================
+# INSPECTOR: herramienta de verificación de datos crudos
+# ===========================================================================
+if reporte == "Inspector" or cfg.get("tool"):
+    from inspector import render_inspector
+    render_inspector()
+    perf.end()                                                              # ⚡ PERF
+    st.stop()
+
+
+# ===========================================================================
+# CARGAR DATOS
+# ===========================================================================
+with perf.phase("cargar()"):                                                # ⚡ PERF
+    df = cargar(cfg["archivo"])
+if df is None or df.empty:
+    st.warning("No se pudieron cargar los datos o el archivo está vacío.")
+    perf.end()                                                              # ⚡ PERF
+    st.stop()
+
+
+# ===========================================================================
+# DETERMINAR COLUMNAS
+# ===========================================================================
+if "fecha" in cfg:
+    col_fecha = buscar_columna(df, cfg["fecha"]) if cfg["fecha"] else None
+else:
+    col_fecha = buscar_columna_fecha(df)
+
+if "filtros_cat" in cfg:
+    cat_cols, faltan_cat = resolver_columnas(df, cfg["filtros_cat"])
+else:
+    cat_cols = [c for c in [
+        buscar_columna(df, "area", "área"),
+        buscar_columna(df, "familia"),
+        buscar_columna(df, "subfamilia", "sub familia"),
+    ] if c]
+    faltan_cat = []
+
+if "buscador" in cfg and cfg["buscador"]:
+    col_busc = buscar_columna(df, cfg["buscador"])
+else:
+    col_busc = None
+
+faltantes_aviso = list(faltan_cat)
+if "buscador" in cfg and cfg["buscador"] and not col_busc:
+    faltantes_aviso.append(cfg["buscador"])
+
+
+# ===========================================================================
+# PROCESAMIENTO
+# ===========================================================================
+with perf.phase("df.copy() + to_datetime"):                                 # ⚡ PERF
+    df_f = df.copy()
+    if col_fecha:
+        df_f[col_fecha] = pd.to_datetime(df_f[col_fecha], errors="coerce")
 
 @st.cache_data
-def get_css():
-    """Retorna el CSS como string (cacheado para no reinyectar)."""
-    return """
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
+def get_columnas_sugeridas(df_f, col_fecha, cat_cols, col_busc, cfg):
+    todas_cols = df_f.columns.tolist()
+    if "columnas" in cfg:
+        sugeridas, faltan_cols = resolver_columnas(df_f, cfg["columnas"])
+    else:
+        faltan_cols = []
+        sugeridas = []
+        for c in [col_fecha] + cat_cols + ([col_busc] if col_busc else []):
+            if c and c not in sugeridas:
+                sugeridas.append(c)
+        for c in todas_cols:
+            if c not in sugeridas:
+                sugeridas.append(c)
+    return sugeridas, faltan_cols, todas_cols
 
-    /* ============ PALETA DE COLORES — TEMA CALLAI (Lavender Indigo) ============ */
-    :root {
-        --bg-primary: #f6f6f8;      /* lienzo general */
-        --bg-secondary: #ffffff;
-        --bg-sidebar: #ffffff;      /* sidebar blanco estilo CallAI */
-        --bg-card: #ffffff;
-        --bg-hover: #f0edfe;        /* hover lavanda suave */
-        --text-primary: #18181d;    /* casi negro */
-        --text-secondary: #71717a;
-        --text-muted: #a2a2ad;
-        --accent: #6c5ce7;          /* Lavender Indigo */
-        --accent-hover: #5a4ad9;
-        --accent-deep: #4938b8;
-        --accent-light: #e7e3fb;    /* lavanda 100 */
-        --accent-tint: #f0edfe;     /* lavanda 50 */
-        --border: #e6e6eb;
-        --success: #16a34a;         /* verde tipo badge "Outbound" */
-        --success-bg: #f0fdf4;
-        --warning: #f97316;         /* naranja tipo badge "Inbound" */
-        --warning-bg: #fff7ed;
-        --danger: #ef4444;
-        --shadow: 0 1px 3px rgba(16, 16, 20, 0.05), 0 1px 2px rgba(16, 16, 20, 0.04);
-        --shadow-md: 0 4px 6px rgba(16, 16, 20, 0.05), 0 2px 4px rgba(16, 16, 20, 0.03);
-    }
+sugeridas, faltan_cols, todas_cols = get_columnas_sugeridas(
+    df_f, col_fecha, cat_cols, col_busc, cfg
+)
 
-    /* ============ HEADER NATIVO + ESPACIO SUPERIOR ============ */
-    header[data-testid="stHeader"],
-    .stAppHeader {
-        background: transparent !important;
-        border-bottom: none !important;
-        box-shadow: none !important;
-        height: 0 !important;
-        min-height: 0 !important;
-    }
-
-    .stMainBlockContainer,
-    [data-testid="stMainBlockContainer"],
-    .block-container {
-        padding-top: 1.5rem !important;
-    }
-
-    [data-testid="stSidebarHeader"] {
-        height: 2rem !important;
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
-    }
-
-    /* ============ IFRAMES INVISIBLES (por defecto) ============ */
-    /* Estos iframes son para componentes auxiliares (overlay de errores,
-       inspector de elementos, toggle del sidebar, etc.) y deben
-       permanecer ocultos. */
-    [data-testid="stIFrame"] {
-        height: 0 !important;
-        min-height: 0 !important;
-        display: block !important;
-    }
-    [data-testid="stElementContainer"]:has([data-testid="stIFrame"]) {
-        height: 0 !important;
-        min-height: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        overflow: hidden !important;
-    }
-
-    /* ============ EXCEPCIÓN: PANEL DE RENDIMIENTO DEL NAVEGADOR ============ */
-    /* Este iframe SÍ debe mostrarse (perf.render_browser_panel).
-       El expander tiene la key "perf_browser_expander", que genera una clase
-       .st-key-perf_browser_expander en el contenedor padre.
-       Usamos esa clase para seleccionar el iframe dentro de él. */
-    .st-key-perf_browser_expander [data-testid="stIFrame"] {
-        height: 300px !important;
-        min-height: 300px !important;
-        display: block !important;
-    }
-    .st-key-perf_browser_expander [data-testid="stElementContainer"]:has([data-testid="stIFrame"]) {
-        height: auto !important;
-        min-height: 300px !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        overflow: visible !important;
-    }
-
-    /* ============ BOTÓN PARA EXPANDIR EL SIDEBAR ============ */
-    [data-testid*="SidebarCollaps"],
-    [data-testid="collapsedControl"],
-    [data-testid*="xpandSidebar"] {
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-    }
-
-    /* ============ ESTILOS BASE ============ */
-    [data-testid="stAppViewContainer"] { 
-        background: var(--bg-primary); 
-    }
-
-    h1 { 
-        margin-bottom: 0.2rem !important; 
-        padding-top: 0 !important; 
-    }
-
-    [data-testid="stSidebar"] { 
-        background: var(--bg-sidebar); 
-        border-right: 1px solid var(--border); 
-    }
-
-    html, body, [class*="css"] { 
-        font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; 
-        color: var(--text-primary); 
-    }
-
-    h1 { 
-        color: var(--text-primary) !important; 
-        font-size: 1.6rem !important; 
-        font-weight: 700 !important; 
-    }
-
-    h2, h3 { 
-        color: var(--text-primary) !important; 
-        font-weight: 600 !important; 
-    }
-
-    h4 { 
-        color: var(--accent) !important; 
-        font-weight: 600 !important; 
-    }
-
-    label { 
-        color: var(--text-secondary) !important; 
-        font-size: 0.78rem !important; 
-        text-transform: uppercase; 
-        font-weight: 600 !important;
-    }
-
-    /* ============ INPUTS Y BOTONES ============ */
-    .stSelectbox > div > div, 
-    .stMultiSelect > div > div,
-    .stDateInput > div > div {
-        background: var(--bg-card) !important;
-        border: 1px solid var(--border) !important;
-        border-radius: 8px !important;
-    }
-
-    .stSelectbox > div > div:hover,
-    .stMultiSelect > div > div:hover {
-        border-color: var(--accent) !important;
-    }
-
-    button[kind="secondary"] {
-        background: var(--bg-card) !important;
-        border: 1px solid var(--border) !important;
-        color: var(--text-primary) !important;
-        border-radius: 8px !important;
-    }
-
-    button[kind="secondary"]:hover {
-        background: var(--bg-hover) !important;
-        border-color: var(--accent) !important;
-    }
-
-    button[kind="primary"] {
-        background: var(--accent) !important;
-        border: none !important;
-        color: white !important;
-        border-radius: 10px !important;
-        font-weight: 600 !important;
-        box-shadow: 0 1px 2px rgba(108, 92, 231, 0.28) !important;
-    }
-
-    button[kind="primary"]:hover {
-        background: var(--accent-hover) !important;
-    }
-
-    /* ============ EXPANDER ============ */
-    .streamlit-expanderHeader {
-        background: var(--bg-card) !important;
-        border: 1px solid var(--border) !important;
-        border-radius: 8px !important;
-        color: var(--text-primary) !important;
-    }
-
-    .streamlit-expanderContent {
-        background: var(--bg-card) !important;
-        border: 1px solid var(--border) !important;
-        border-top: none !important;
-        border-radius: 0 0 8px 8px !important;
-    }
-
-    /* ============ CAPTION Y ALERTAS ============ */
-    .stCaption {
-        color: var(--text-muted) !important;
-    }
-
-    .stWarning {
-        background: #fff7ed !important;
-        border: 1px solid #fdba74 !important;
-        color: #c2410c !important;
-        border-radius: 8px !important;
-    }
-
-    .stInfo {
-        background: var(--accent-light) !important;
-        border: 1px solid #b9aff2 !important;
-        color: #4938b8 !important;
-        border-radius: 8px !important;
-    }
-
-    .stError {
-        background: #fee2e2 !important;
-        border: 1px solid #fca5a5 !important;
-        color: #991b1b !important;
-        border-radius: 8px !important;
-    }
-
-    /* ============ SIDEBAR ============ */
-    [data-testid="stSidebar"] .nav-link {
-        background: #ffffff !important;
-        color: #71717a !important;
-        border: 1px solid #e6e6eb !important;
-    }
-
-    [data-testid="stSidebar"] .nav-link:hover {
-        background: #f0edfe !important;
-        color: #5a4ad9 !important;
-        border-color: #b9aff2 !important;
-    }
-
-    [data-testid="stSidebar"] .nav-link-selected {
-        background: #6c5ce7 !important;
-        color: #ffffff !important;
-        border-color: #6c5ce7 !important;
-    }
-
-    /* ============ AGGRID - ANCHO COMPLETO ============ */
-    .ag-root-wrapper {
-        width: 100% !important;
-        max-width: 100% !important;
-    }
-    
-    .ag-body-viewport {
-        overflow-x: auto !important;
-    }
-
-    /* ============ CONTROL DE TAMAÑO EN SIDEBAR ============ */
-    [data-testid="stSidebar"] .stSlider {
-        padding-top: 0.5rem !important;
-        padding-bottom: 0.5rem !important;
-    }
-
-    /* ============ MÓVIL ============ */
-    @media screen and (max-width: 768px) {
-        header[data-testid="stHeader"] {
-            background: transparent !important;
-            box-shadow: none !important;
-            border-bottom: none !important;
-        }
-        
-        [data-testid="stAppViewContainer"] {
-            padding-top: 0 !important;
-            margin-top: 0 !important;
-        }
-        
-        [data-testid="stMain"] {
-            padding: 0.5rem 0.5rem !important;
-            margin-top: 0 !important;
-        }
-        
-        .block-container,
-        .stMainBlockContainer {
-            padding: 0.5rem !important;
-            margin-top: 0 !important;
-            gap: 0 !important;
-        }
-        
-        [data-testid="stHorizontalBlock"] {
-            flex-direction: column !important;
-        }
-        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
-        [data-testid="stHorizontalBlock"] > [data-testid="column"] {
-            width: 100% !important;
-            flex: 1 1 100% !important;
-            min-width: 100% !important;
-        }
-        
-        [data-testid="stSidebar"] {
-            max-height: 100vh;
-            overflow-y: auto !important;
-            overflow-x: hidden !important;
-            -webkit-overflow-scrolling: touch;
-            background: var(--bg-sidebar) !important;
-        }
-        
-        [data-testid="stSidebarUserContent"] {
-            padding: 12px 8px !important;
-        }
-        
-        [data-testid="stSidebarCollapsedControl"] button,
-        [data-testid="stExpandSidebarButton"] button,
-        [data-testid="collapsedControl"] button {
-            width: 44px !important;
-            height: 44px !important;
-            min-height: 44px !important;
-            padding: 8px !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-        }
-        
-        h1 { 
-            font-size: 1.3rem !important;
-            margin-top: 0 !important;
-            padding-top: 0.5rem !important;
-        }
-        h2 { font-size: 1.1rem !important; }
-        h3 { font-size: 1rem !important; }
-        label { font-size: 0.7rem !important; }
-        
-        .stApp { padding: 0 !important; }
-        
-        button { 
-            min-height: 44px !important; 
-            padding: 10px 16px !important;
-            font-size: 0.9rem !important;
-        }
-        
-        [data-testid="stSidebar"] { 
-            width: 100% !important;
-            max-width: 100% !important;
-        }
-    }
-
-    /* =================================================================== */
-    /* SELECTOR DE VISTA — tabs subrayados (underline), Estilo 1.           */
-    /* Se aplica al st.radio horizontal envuelto en un contenedor con key   */
-    /* "vistatabs_<reporte>" (clase .st-key-vistatabs_...).                 */
-    /* =================================================================== */
-
-    /* Fila de opciones: separación entre tabs + línea inferior guía */
-    [class*="st-key-vistatabs_"] [role="radiogroup"] {
-        gap: 26px !important;
-        border-bottom: 1px solid var(--border) !important;
-        margin-bottom: 0.4rem !important;
-        padding: 0 !important;
-    }
-
-    /* Ocultar el círculo del radio nativo */
-    [class*="st-key-vistatabs_"] [role="radiogroup"] label > div:first-child {
-        display: none !important;
-    }
-
-    /* Cada opción = un tab (texto + subrayado en hover/activo) */
-    [class*="st-key-vistatabs_"] [role="radiogroup"] label {
-        padding: 9px 2px !important;
-        margin: 0 !important;
-        cursor: pointer !important;
-        border-bottom: 2px solid transparent !important;
-        margin-bottom: -1px !important;   /* solapa la línea guía */
-        transition: color .15s ease, border-color .15s ease !important;
-    }
-
-    /* Texto del tab en reposo (inactivo) */
-    [class*="st-key-vistatabs_"] [role="radiogroup"] label p {
-        font-size: 14px !important;
-        font-weight: 500 !important;
-        color: var(--text-secondary) !important;
-        margin: 0 !important;
-        text-transform: none !important;   /* NUEVO: anula el uppercase global */
-        letter-spacing: 0 !important;      /* NUEVO: sin espaciado extra */
-    }
-
-    /* Hover: insinúa el subrayado */
-    [class*="st-key-vistatabs_"] [role="radiogroup"] label:hover {
-        border-bottom-color: #b9aff2 !important;
-    }
-    [class*="st-key-vistatabs_"] [role="radiogroup"] label:hover p {
-        color: #4938b8 !important;
-    }
-
-    /* Tab ACTIVO — Streamlit marca el label seleccionado con aria-checked */
-    [class*="st-key-vistatabs_"] [role="radiogroup"] label:has(input:checked) {
-        border-bottom-color: #6c5ce7 !important;
-    }
-    [class*="st-key-vistatabs_"] [role="radiogroup"] label:has(input:checked) p {
-        color: #4938b8 !important;
-        font-weight: 600 !important;
-    }
-
-    /* Icono Material hereda el color del tab (gris inactivo / índigo activo) */
-    [class*="st-key-vistatabs_"] [role="radiogroup"] label [data-testid="stIconMaterial"] {
-        font-size: 17px !important;
-        color: inherit !important;
-        vertical-align: -3px;
-    }
-
-    /* =================================================================== */
-    /* BOTÓN FILTROS (popover) — a juego, grande y con contorno índigo        */
-    /* =================================================================== */
-    [data-testid="stPopover"] button {
-        min-width: 180px !important;
-        padding: 14px 26px !important;
-        font-size: 15px !important;
-        font-weight: 600 !important;
-        border: 1.5px solid var(--border) !important;
-        border-radius: 999px !important;
-        transition: all .15s ease !important;
-    }
-    [data-testid="stPopover"] button:hover {
-        border-color: #5a4ad9 !important;
-        background: #f0edfe !important;
-        color: #4938b8 !important;
-    }
-
-    /* =================================================================== */
-    /* BOTÓN "EXTRAER DATOS" — ghost con borde lavanda                      */
-    /* =================================================================== */
-    .st-key-btn_extraer_ajuste button {
-        background: transparent !important;
-        border: 1.5px solid #d4cdf7 !important;
-        color: var(--accent-deep) !important;
-        border-radius: 999px !important;
-        font-weight: 500 !important;
-        box-shadow: none !important;
-        transition: all .15s ease !important;
-    }
-    .st-key-btn_extraer_ajuste button:hover {
-        background: var(--accent-tint) !important;
-        border-color: var(--accent) !important;
-    }
-    .st-key-btn_extraer_ajuste button:active {
-        transform: scale(0.96) !important;
-    }
-
-    /* =================================================================== */
-    /* FILA SUPERIOR DE AJUSTE DE INVENTARIO — chip a la izquierda +        */
-    /* botón y fecha pegados a la derecha.                                  */
-    /* =================================================================== */
-    .st-key-fila_ajuste_top {
-        margin-top: -6px !important;          /* NUEVO: reduce el espacio superior */
-    }
-    .st-key-fila_ajuste_top [data-testid="stHorizontalBlock"] {
-        align-items: center !important;
-        gap: 8px !important;               /* reduce el gap entre botón y fecha */
-    }
-    .st-key-fila_ajuste_top [data-testid="stColumn"],
-    .st-key-fila_ajuste_top [data-testid="column"] {
-        display: flex !important;
-        align-items: center !important;
-    }
-    .st-key-btn_extraer_ajuste {
-        width: 100% !important;
-    }
-
-    /* Chip pill del título del reporte */
-    .chip-titulo-reporte {
-        display: inline-flex;
-        align-items: center;
-        background: var(--accent-tint);      /* lavanda muy suave */
-        color: var(--accent-deep);           /* índigo profundo para contraste */
-        border-radius: 999px;
-        padding: 8px 18px;
-        font-size: 15px;
-        font-weight: 500;
-        line-height: 1;
-        white-space: nowrap;
-        letter-spacing: 0.01em;
-    }
-
-    /* =================================================================== */
-    /* PILL LAVANDA (Opción A) — el date_input se ve como una pastilla      */
-    /* lavanda a juego con el chip del título y el botón. Sigue siendo el   */
-    /* date_input nativo (mismo calendario), solo cambia su apariencia.     */
-    /* =================================================================== */
-
-    /* Ancho ajustado al texto de la fecha */
-    .st-key-fch_ajuste_inline [data-baseweb="input"] {
-        width: auto !important;
-        min-width: 0 !important;
-    }
-
-    /* La caja del input = PILL lavanda (más compacta) */
-    .st-key-fch_ajuste_inline .stDateInput > div > div {
-        background: var(--accent-tint) !important;     /* lavanda muy suave */
-        border: 1px solid #d4cdf7 !important;          /* borde lavanda */
-        border-radius: 999px !important;               /* pill completo */
-        box-shadow: none !important;
-        padding: 0 10px !important;                    /* más ceñido */
-        min-height: 34px !important;
-        height: 34px !important;
-        width: fit-content !important;
-        margin: 0 auto !important;                     /* centra la pill en su columna */
-        transition: background .15s ease, border-color .15s ease !important;
-    }
-
-    /* Texto de la fecha centrado y con tamaño justo */
-    .st-key-fch_ajuste_inline .stDateInput input {
-        color: var(--accent-deep) !important;
-        font-weight: 500 !important;
-        font-size: 12.5px !important;
-        background: transparent !important;
-        text-align: center !important;                 /* centrado */
-        padding: 0 !important;
-        width: 155px !important;                       /* ancho justo para el rango */
-    }
-    .st-key-fch_ajuste_inline .stDateInput input::placeholder {
-        color: var(--accent) !important;
-        opacity: 0.7 !important;
-    }
-
-    /* Hover: lavanda un punto más vivo */
-    .st-key-fch_ajuste_inline .stDateInput > div > div:hover,
-    .st-key-fch_ajuste_inline .stDateInput > div > div:focus-within {
-        background: var(--accent-light) !important;    /* lavanda 100 */
-        border-color: var(--accent) !important;
-    }
-
-    /* Ícono de calendario en índigo */
-    .st-key-fch_ajuste_inline .stDateInput svg {
-        color: var(--accent-deep) !important;
-        fill: var(--accent-deep) !important;
-    }
-
-    /* =================================================================== */
-    /* CALENDARIO DESPLEGABLE (BaseWeb) — Opción 1: marco suave, sin presets */
-    /* IMPORTANTE: el color índigo de los días y del relleno del rango lo da   */
-    /* primaryColor en .streamlit/config.toml. Aquí solo pulimos el marco y  */
-    /* ocultamos el bloque "CHOOSE A DATE RANGE / None".                     */
-    /* =================================================================== */
-
-    /* Marco del calendario: redondeado, con sombra y tipografía de la app */
-    div[data-baseweb="calendar"] {
-        border-radius: 12px !important;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10) !important;
-        font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
-    }
-
-    /* Esquinas redondeadas en cada día */
-    div[data-baseweb="calendar"] [role="gridcell"] > div {
-        border-radius: 8px !important;
-    }
-
-    /* Flechas de navegación (‹ ›) en índigo */
-    div[data-baseweb="calendar"] button svg {
-        fill: var(--accent) !important;
-    }
-
-    /* Ocultar el selector de presets "CHOOSE A DATE RANGE / None" */
-    div[data-baseweb="popover"]:has(div[data-baseweb="calendar"]) [data-baseweb="select"] {
-        display: none !important;
-    }
-    div[data-baseweb="popover"]:has(div[data-baseweb="calendar"]) div[data-baseweb="calendar"] + div {
-        display: none !important;
-    }
-    </style>
-    """
+if "agrupar" in cfg:
+    cols_agrupar, _ = resolver_columnas(df_f, cfg["agrupar"])
+else:
+    cols_agrupar = [c for c in [
+        buscar_columna(df_f, "area", "área"),
+        buscar_columna(df_f, "familia"),
+        buscar_columna(df_f, "subfamilia", "sub familia"),
+    ] if c]
 
 
-def inject_css():
-    """Inyecta el CSS cacheado en la app."""
-    st.markdown(get_css(), unsafe_allow_html=True)
+# ===========================================================================
+# CONTROLES DE FILTRO — st.popover
+# ===========================================================================
+
+fecha_min_full = fecha_max_full = None
+if col_fecha and df_f[col_fecha].notna().any():
+    fecha_min_full = df_f[col_fecha].min().date()
+    fecha_max_full = df_f[col_fecha].max().date()
+
+anio_actual = datetime.date.today().year
+fecha_ini_default = datetime.date(anio_actual, 1, 1)
+fecha_fin_default = datetime.date(anio_actual, 12, 31)
+
+es_ajuste = (reporte == "Ajuste de Inventario")
+
+controles = []
+for cc in cat_cols:
+    controles.append(("cat", cc))
+if col_busc:
+    controles.append(("busc", col_busc))
+if cols_agrupar:
+    controles.append(("grp", None))
+if fecha_min_full is not None and reporte != "Requerimientos" and not es_ajuste:
+    controles.append(("fecha", col_fecha))
+
+grupos_sel = []
+
+
+@st.cache_data
+def get_opciones_filtro(_df, _col):
+    """Retorna las opciones únicas de una columna, ordenadas."""
+    return sorted(_df[_col].dropna().unique().tolist(), key=lambda x: str(x))
+
+
+def _key(prefijo, idx):
+    return f"{prefijo}_{reporte}_{idx}"
+
+def _contar_filtros_activos():
+    n = 0
+    for idx, (tipo, col) in enumerate(controles):
+        if tipo == "fecha":
+            val = st.session_state.get(_key("fch", idx))
+            if isinstance(val, (tuple, list)) and len(val) == 2:
+                if val[0] != fecha_min_full or val[1] != fecha_max_full:
+                    n += 1
+        elif tipo == "cat":
+            if st.session_state.get(_key("cat", idx)):
+                n += 1
+        elif tipo == "busc":
+            if st.session_state.get(_key("busc", idx)):
+                n += 1
+    return n
+
+n_activos = _contar_filtros_activos()
+label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_activos != 1 else '') if n_activos else ''}"
+
+# ── TÍTULO, SELECTOR DE FECHA Y BOTÓN EXTRAER (solo Ajuste de Inventario) ──
+perf.start_phase("Ajuste top row")                                          # ⚡ PERF
+if es_ajuste:
+    _fila_top = st.container(key="fila_ajuste_top")
+    with _fila_top:
+        col_titulo, col_boton, col_fecha_selector = st.columns([3, 0.9, 0.9])
+
+    with col_titulo:
+        st.markdown(
+            f'<div class="chip-titulo-reporte">{reporte}</div>',
+            unsafe_allow_html=True,
+        )
+
+    rango_ajuste = None
+    with col_fecha_selector:
+        if fecha_min_full is not None:
+            _ini_def = max(fecha_ini_default, fecha_min_full)
+            _fin_def = min(fecha_fin_default, fecha_max_full)
+            if fecha_max_full.year < anio_actual:
+                _ini_def = fecha_min_full
+                _fin_def = fecha_max_full
+
+            rango_ajuste = st.date_input(
+                "Rango a Evaluar",
+                value=(_ini_def, _fin_def),
+                min_value=fecha_min_full,
+                max_value=fecha_max_full,
+                format="DD/MM/YYYY",
+                key="fch_ajuste_inline",
+                label_visibility="collapsed",
+            )
+
+    with col_boton:
+        if st.button(
+            "Obtener datos a evaluar",
+            type="secondary",  # 🔹 CAMBIADO DE "primary" A "secondary"
+            use_container_width=True,
+            key="btn_extraer_ajuste",
+            help="Limpia la caché, relee desde R2 y aplica el rango seleccionado",
+        ):
+            if isinstance(rango_ajuste, (tuple, list)) and len(rango_ajuste) == 2:
+                _ini, _fin = rango_ajuste
+                if _ini > _fin:
+                    st.warning("⚠️ La fecha de inicio es posterior a la fecha fin.")
+                else:
+                    st.session_state["ajuste_rango_aplicado"] = (_ini, _fin)
+                    st.session_state["ajuste_extraido"] = True
+                    st.cache_data.clear()
+                    st.rerun()
+            else:
+                st.warning("⚠️ Selecciona un rango de fechas válido.")
+
+    # Se ha eliminado el <hr> morado que estaba aquí
+
+    if st.session_state.get("ajuste_extraido"):
+        _rango_aplicado = st.session_state.get("ajuste_rango_aplicado")
+        if _rango_aplicado and col_fecha:
+            _ini_apl, _fin_apl = _rango_aplicado
+            df_f = df_f[
+                (df_f[col_fecha].dt.date >= _ini_apl) &
+                (df_f[col_fecha].dt.date <= _fin_apl)
+            ]
+            if (isinstance(rango_ajuste, (tuple, list)) and len(rango_ajuste) == 2
+                    and (rango_ajuste[0] != _ini_apl or rango_ajuste[1] != _fin_apl)):
+                st.caption(
+                    f"ℹ️ Mostrando datos del rango **{_ini_apl:%d/%m/%Y} – {_fin_apl:%d/%m/%Y}**. "
+                    f"Pulsa **Obtener datos a evaluar** para aplicar el nuevo rango."
+                )
+perf.end_phase("Ajuste top row")                                            # ⚡ PERF
+
+# ── POPOVER (solo se muestra si hay controles que mostrar) ──
+perf.start_phase("Popover + filtros")                                       # ⚡ PERF
+if controles:
+    with st.popover(label_btn, use_container_width=False):
+        for idx, (tipo, col) in enumerate(controles):
+            if tipo == "cat":
+                opts = get_opciones_filtro(df, col)
+                sel = st.multiselect(
+                    f"📂 {col}", opts, placeholder="Todos",
+                    key=_key("cat", idx),
+                )
+                if sel:
+                    df_f = df_f[df_f[col].isin(sel)]
+
+            elif tipo == "busc":
+                opts_prod = get_opciones_filtro(df_f, col)
+                sel_prod = st.multiselect(
+                    f"🔎 {col}", opts_prod, placeholder="Buscar…",
+                    key=_key("busc", idx),
+                )
+                if sel_prod:
+                    df_f = df_f[df_f[col].astype(str).isin(sel_prod)]
+
+            elif tipo == "grp":
+                grupos_sel = st.multiselect(
+                    "📊 Agrupar por", cols_agrupar, default=[],
+                    key=_key("grp", idx), placeholder="Sin agrupar",
+                )
+
+            elif tipo == "fecha":
+                rango = st.date_input(
+                    "📅 Fecha", value=(fecha_min_full, fecha_max_full),
+                    min_value=fecha_min_full, max_value=fecha_max_full,
+                    format="DD/MM/YYYY", key=_key("fch", idx),
+                )
+                if isinstance(rango, (tuple, list)) and len(rango) == 2:
+                    ini, fin = rango
+                    df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
+
+        if reporte not in ("Compras", "Salidas", "Ajuste de Inventario"):
+            st.divider()
+            st.session_state.tabla_tam = st.select_slider(
+            "🔠 Tamaño de letra",
+            options=list(TAM_FUENTE.keys()),
+            value=st.session_state.tabla_tam,
+            help="Ajusta el tamaño de fuente de la tabla",
+        )
+perf.end_phase("Popover + filtros")                                         # ⚡ PERF
+
+
+# ===========================================================================
+# AVISOS DE COLUMNAS FALTANTES
+# ===========================================================================
+if faltantes_aviso:
+    st.caption("⚠️ No se encontraron: " + ", ".join(faltantes_aviso))
+if "columnas" in cfg and faltan_cols:
+    st.caption("⚠️ Columnas no encontradas: " + ", ".join(faltan_cols))
+
+
+# ===========================================================================
+# SELECTOR DE COLUMNAS (solo para reportes con AgGrid)
+# ===========================================================================
+usa_vista_movil = st.session_state.forzar_movil
+tiene_config_movil = "columnas_movil" in cfg
+if not usa_vista_movil:
+    cols_mostrar = todas_cols
+    if reporte == "Inventario Valorizado":
+        columnas_iniciales = ["Nombre Producto", "Stock al Dia", "Nombre Area", "Valorizado total"]
+        cols_visibles = []
+        for _c in columnas_iniciales:
+            _real = buscar_columna(df_f, _c)
+            if _real and _real not in cols_visibles:
+                cols_visibles.append(_real)
+    elif reporte == "Ajuste de Inventario":
+        columnas_iniciales = ["Producto", "Precio Promedio", "Stock al Cierre",
+                              "Stock Declarado", "Ajuste", "Ajuste Valorizado"]
+        cols_visibles = []
+        for _c in columnas_iniciales:
+            _real = buscar_columna(df_f, _c)
+            if _real and _real not in cols_visibles:
+                cols_visibles.append(_real)
+    else:
+        cols_visibles = sugeridas
+else:
+    cols_mostrar_movil, _ = resolver_columnas(df_f, cfg.get("columnas_movil", []))
+    if not cols_mostrar_movil:
+        cols_mostrar_movil = sugeridas[:5]
+    cols_mostrar  = cols_mostrar_movil
+    cols_visibles = cols_mostrar_movil
+
+
+# ===========================================================================
+# VERIFICACIÓN DE DATOS VACÍOS
+# ===========================================================================
+_esperando_extraccion = es_ajuste and not st.session_state.get("ajuste_extraido")
+
+if df_f.empty and not _esperando_extraccion:
+    st.warning("Ningún registro coincide con los filtros.")
+    perf.end()                                                              # ⚡ PERF
+    st.stop()
+
+
+# ===========================================================================
+# CONTENIDO PRINCIPAL
+# ===========================================================================
+font_px = TAM_FUENTE.get(st.session_state.tabla_tam, 14)
+
+
+def _aviso_rapido_aggrid(df_data):
+    """Si hay columnas duplicadas, muestra un aviso corto."""
+    duplicadas = df_data.columns[df_data.columns.duplicated()].unique().tolist()
+    if duplicadas:
+        nombres = ", ".join(f"«{d}»" for d in duplicadas)
+        st.warning(
+            f"⚠️ Columnas duplicadas: {nombres}. "
+            "Esto puede dejar la tabla en blanco."
+        )
+
+
+def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, font_px, cfg):
+    """Renderiza el reporte de Requerimientos con tabla dinámica."""
+    st.markdown(
+        '<p style="font-size:22px;font-weight:700;color:#18181d;'
+        'margin:0 0 0.6rem 0;line-height:1.2;">Requerimientos · Tabla dinámica</p>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "🧮 Tabla dinámica estilo Excel. En el panel derecho (pestaña "
+        "**Columnas**) arrastra campos a **Grupos de filas**, **Valores** y "
+        "**Etiquetas de columnas**. Para columnas por periodo legibles, usa los "
+        "campos **Mes** o **Año** (ya calculados) en *Etiquetas de columnas*. "
+        "El **filtro de fecha** está arriba de la tabla (rango desde / hasta)."
+    )
+
+    df_piv = df_data.copy()
+
+    for _c in df_piv.columns:
+        _n = str(_c).lower()
+        if "fecha" in _n or "date" in _n or pd.api.types.is_datetime64_any_dtype(df_piv[_c]):
+            df_piv[_c] = pd.to_datetime(df_piv[_c], errors="coerce")
+
+    _col_freg = buscar_columna(df_piv, "Fecha Registro", "fecha registro") or col_fecha_ref
+
+    if _col_freg and _col_freg in df_piv.columns:
+        _fechas_full = pd.to_datetime(df_piv[_col_freg], errors="coerce")
+        df_piv["Mes"] = (
+            _fechas_full.dt.to_period("M")
+            .astype(str)
+            .str.replace("NaT", "", regex=False)
+        )
+        df_piv["Año"] = (
+            _fechas_full.dt.year
+            .astype("Int64")
+            .astype(str)
+            .str.replace("<NA>", "", regex=False)
+        )
+
+    cols_fecha_piv = [c for c in df_piv.columns
+                      if pd.api.types.is_datetime64_any_dtype(df_piv[c])]
+
+    if cols_fecha_piv:
+        fc1, fc2 = st.columns([1, 2])
+        with fc1:
+            col_fecha_sel = st.selectbox(
+                "📅 Filtrar por", cols_fecha_piv, key="req_fcol",
+            )
+
+        validos = df_piv[col_fecha_sel].dropna()
+        if not validos.empty:
+            fmin, fmax = validos.min().date(), validos.max().date()
+
+            with fc2:
+                rango = st.date_input(
+                    "Rango (desde / hasta)",
+                    value=(fmin, fmax),
+                    min_value=fmin,
+                    max_value=fmax,
+                    format="DD/MM/YYYY",
+                    key="req_frango",
+                )
+
+            if isinstance(rango, (tuple, list)) and len(rango) == 2:
+                ini, fin = rango
+                _m = (df_piv[col_fecha_sel].dt.date >= ini) & \
+                     (df_piv[col_fecha_sel].dt.date <= fin)
+                df_piv = df_piv[_m]
+
+    tiene_config_movil = "columnas_movil" in cfg
+    if usa_vista_movil and tiene_config_movil:
+        st.caption("📱 Vista móvil")
+        renderizar_aggrid_movil(
+            df_piv[cols_mostrar], cfg.get("columnas_fijas_movil", 2), "Requerimientos", font_px,
+        )
+    else:
+        _aviso_rapido_aggrid(df_piv)
+        renderizar_aggrid_desktop(
+            df_piv,
+            grupos_sel,
+            list(df_piv.columns),
+            "Requerimientos",
+            font_px,
+            cols_visibles=None,
+        )
+
+
+def _es_moneda(nombre):
+    n = str(nombre).lower()
+    return any(k in n for k in ("importe", "total", "monto", "precio", "costo", "unitario"))
+
+def _es_cantidad(nombre):
+    n = str(nombre).lower()
+    return any(k in n for k in ("cantidad", "unidades", "qty", "stock"))
+
+
+def _render_tabla():
+    """Renderiza la tabla AgGrid (desktop o móvil)."""
+    if usa_vista_movil and tiene_config_movil:
+        st.caption("📱 Vista móvil • Desliza para más columnas • Mantén presionado para menú")
+        columnas_fijas = cfg.get("columnas_fijas_movil", 2)
+        renderizar_aggrid_movil(df_f[cols_mostrar], columnas_fijas, reporte, font_px)
+    else:
+        _aviso_rapido_aggrid(df_f[cols_mostrar])
+        cols_finales = list(cols_mostrar)
+        if grupos_sel:
+            for c in grupos_sel:
+                if c not in cols_finales:
+                    cols_finales.append(c)
+        renderizar_aggrid_desktop(
+            df_f[cols_finales], grupos_sel, cols_mostrar, reporte, font_px,
+            cols_visibles=cols_visibles,
+        )
+
+
+def _render_kpis_salidas(df_data):
+    """Renderiza las métricas KPI para el reporte de Salidas."""
+    cols_imp = [c for c in df_data.columns
+                if pd.api.types.is_numeric_dtype(df_data[c]) and _es_moneda(c)]
+    cols_cnt = [c for c in df_data.columns
+                if pd.api.types.is_numeric_dtype(df_data[c]) and _es_cantidad(c)]
+    n_kpi = min(4, 1 + len(cols_imp[:2]) + len(cols_cnt[:1]))
+    kpis = st.columns(n_kpi)
+    kpis[0].metric("📄 Registros", f"{len(df_data):,}")
+    ki = 1
+    for c in cols_imp[:2]:
+        if ki >= n_kpi:
+            break
+        kpis[ki].metric(f"💰 {c}", f"S/ {df_data[c].sum():,.2f}")
+        ki += 1
+    for c in cols_cnt[:1]:
+        if ki >= n_kpi:
+            break
+        kpis[ki].metric(f"📦 {c}", f"{int(df_data[c].sum()):,}")
+        ki += 1
+
+
+# ===========================================================================
+# SELECTOR DE VISTA (Tabla / Gráficos) — tabs subrayados (underline)
+# ===========================================================================
+def _selector_vista():
+    """Muestra un radio horizontal estilizado como tabs subrayados y devuelve
+    la opción elegida ('Tabla' o 'Gráficos'). El CSS que lo convierte en tabs
+    vive en estilos.py (bloque '.st-key-vistatabs_...')."""
+    _opciones = {"Tabla": "📋  Tabla", "Gráficos": "📈  Gráficos"}
+    with st.container(key=f"vistatabs_{reporte}"):
+        vista = st.radio(
+            "Vista",
+            options=list(_opciones.keys()),
+            format_func=lambda o: _opciones[o],
+            horizontal=True,
+            label_visibility="collapsed",
+            key=f"vista_seg_{reporte}",
+        )
+    return vista or "Tabla"
+
+
+# ===========================================================================
+# FRAGMENT GENÉRICO — aisla el contenido principal de cada reporte
+# ===========================================================================
+@st.fragment
+def _render_contenido():
+    perf.fragment_start("_render_contenido")                                # ⚡ PERF
+
+    # ── COMPRAS ─────────────────────────────────────────────────────────────
+    if reporte == "Compras":
+        vista = _selector_vista()
+        if vista == "Tabla":
+            renderizar_tabla_compras(df_f, grupos_sel=grupos_sel)
+        else:
+            renderizar_graficos_reporte(df_f, reporte, cfg)
+
+    # ── INVENTARIO VALORIZADO ────────────────────────────────────────────────
+    elif reporte == "Inventario Valorizado":
+        st.markdown(
+            '<p style="font-size:22px;font-weight:700;color:#18181d;'
+            'margin:0 0 0.6rem 0;line-height:1.2;">Inventario Valorizado</p>',
+            unsafe_allow_html=True,
+        )
+        vista = _selector_vista()
+        if vista == "Tabla":
+            _render_tabla()
+        else:
+            renderizar_graficos(df_f, es_movil=usa_vista_movil)
+
+    # ── SALIDAS ──────────────────────────────────────────────────────────────
+    elif reporte == "Salidas":
+        vista = _selector_vista()
+
+        if vista == "Tabla":
+            if usa_vista_movil and tiene_config_movil:
+                st.caption("📱 Vista móvil • Desliza para más columnas")
+                renderizar_aggrid_movil(
+                    df_f[cols_mostrar], cfg.get("columnas_fijas_movil", 2), reporte, font_px,
+                )
+            else:
+                _k_cols = f"colsel_{reporte}"
+                if _k_cols not in st.session_state:
+                    st.session_state[_k_cols] = list(todas_cols)
+                _vigentes = [c for c in st.session_state[_k_cols] if c in todas_cols]
+                st.session_state[_k_cols] = _vigentes or list(todas_cols)
+
+                _k_zoom = f"zoom_{reporte}"
+                if _k_zoom not in st.session_state:
+                    st.session_state[_k_zoom] = 14
+
+                barra = st.columns([3, 3, 1.4])
+                with barra[0]:
+                    with st.popover("🧰 Columnas", use_container_width=True):
+                        st.caption("Mostrar u ocultar columnas")
+                        cols_sel = st.multiselect(
+                            "Columnas visibles", todas_cols,
+                            key=_k_cols, label_visibility="collapsed",
+                        )
+                with barra[1]:
+                    zoom = st.select_slider(
+                        "🔍 Zoom", options=[12, 14, 16, 18, 20, 22], key=_k_zoom,
+                    )
+                with barra[2]:
+                    st.download_button(
+                        "⬇️ CSV",
+                        data=df_f.to_csv(index=False).encode("utf-8-sig"),
+                        file_name="salidas_export.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                        key=f"export_{reporte}",
+                    )
+
+                if not cols_sel:
+                    cols_sel = list(todas_cols)
+
+                _render_kpis_salidas(df_f)
+
+                cols_finales = list(cols_sel)
+                if grupos_sel:
+                    for c in grupos_sel:
+                        if c not in cols_finales:
+                            cols_finales.append(c)
+
+                _aviso_rapido_aggrid(df_f[cols_finales])
+                renderizar_aggrid_desktop(
+                    df_f[cols_finales], grupos_sel, cols_sel, reporte, int(zoom),
+                    cols_visibles=None,
+                )
+        else:
+            renderizar_graficos_reporte(df_f, reporte, cfg)
+
+    # ── REQUERIMIENTOS ───────────────────────────────────────────────────────
+    elif reporte == "Requerimientos":
+        _render_requerimientos(df_f, col_fecha, grupos_sel, cols_mostrar, font_px, cfg)
+
+    # ── RESTO DE REPORTES (incluye Ajuste de Inventario) ────────────────────
+    else:
+        if not es_ajuste:
+            st.markdown(
+                f'<p style="font-size:22px;font-weight:700;color:#18181d;'
+                f'margin:0 0 0.2rem 0;line-height:1.2;">{reporte}</p>'
+                f'<hr style="border:none;border-top:2px solid #6c5ce7;margin:0 0 0.8rem 0;">',
+                unsafe_allow_html=True,
+            )
+
+        if es_ajuste and not st.session_state.get("ajuste_extraido"):
+            st.info(
+                "📅 Selecciona un rango de fechas arriba y pulsa "
+                "**Obtener datos a evaluar** para generar el reporte."
+            )
+        else:
+            vista = _selector_vista()
+            if vista == "Tabla":
+                _render_tabla()
+            else:
+                renderizar_graficos_reporte(df_f, reporte, cfg)
+
+    perf.fragment_end("_render_contenido")                                  # ⚡ PERF
+
+
+# ── Llamada al fragment ──────────────────────────────────────────────────────
+_render_contenido()
+
+perf.end()                                                                  # ⚡ PERF
