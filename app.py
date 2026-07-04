@@ -403,12 +403,18 @@ if "columnas" in cfg and faltan_cols:
 # ===========================================================================
 usa_vista_movil = st.session_state.forzar_movil
 tiene_config_movil = "columnas_movil" in cfg
-
 if not usa_vista_movil:
     cols_mostrar = todas_cols
-
     if reporte == "Inventario Valorizado":
         columnas_iniciales = ["Nombre Producto", "Stock al Dia", "Nombre Area", "Valorizado total"]
+        cols_visibles = []
+        for _c in columnas_iniciales:
+            _real = buscar_columna(df_f, _c)
+            if _real and _real not in cols_visibles:
+                cols_visibles.append(_real)
+    elif reporte == "Ajuste de Inventario":
+        columnas_iniciales = ["Producto", "Precio Promedio", "Stock al Cierre",
+                              "Stock Declarado", "Ajuste", "Ajuste Valorizado"]
         cols_visibles = []
         for _c in columnas_iniciales:
             _real = buscar_columna(df_f, _c)
