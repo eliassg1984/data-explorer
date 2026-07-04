@@ -763,12 +763,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "padding": "10px !important",
             "background-color": "#ffffff !important",
         },
-        ".ag-filter-toolpanel": {
-            "border": "1px solid #e6e6eb !important",
-            "border-radius": "8px !important",
-            "margin": "8px !important",
-            "overflow": "hidden !important",
-        },
+        # Este bloque se reemplaza por el nuevo más abajo
+        # ".ag-filter-toolpanel": { ... },  <--- eliminado y reemplazado por el bloque unificado.
         ".ag-column-select-column": {
             "display": "flex !important",
             "align-items": "center !important",
@@ -886,7 +882,65 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         ".ag-column-drop-cell-button:hover": {
             "color": "#5a4ad9 !important",
         },
-        # ── Fin del nuevo bloque ──
+
+        # ── Panel FILTROS — a juego con el modo pivote ──
+        ".ag-filter-toolpanel": {
+            "border": "none !important",
+            "margin": "0 !important",
+        },
+        ".ag-filter-toolpanel-search": {
+            "padding": "10px 12px !important",
+            "border-bottom": "1px solid #e6e6eb !important",
+        },
+        ".ag-filter-toolpanel-search .ag-input-field-input": {
+            "border": "1px solid #e6e6eb !important",
+            "border-radius": "8px !important",
+            "font-size": "12.5px !important",
+            "padding": "6px 10px !important",
+            "color": "#3f3f46 !important",
+        },
+        ".ag-filter-toolpanel-search .ag-input-field-input:focus": {
+            "border-color": "#b9aff2 !important",
+            "box-shadow": "0 0 0 2px #f0edfe !important",
+            "outline": "none !important",
+        },
+        ".ag-filter-toolpanel-instance-header": {
+            "padding": "9px 12px !important",
+            "border-bottom": "0.5px solid #f1f1f4 !important",
+        },
+        ".ag-filter-toolpanel-instance-header:hover": {
+            "background": "#f0edfe !important",
+        },
+        ".ag-filter-toolpanel-instance-header-text": {
+            "color": "#71717a !important",
+            "font-size": "12.5px !important",
+            "font-weight": "500 !important",
+        },
+        ".ag-filter-toolpanel-instance-header .ag-icon": {
+            "color": "#a2a2ad !important",
+        },
+        ".ag-filter-toolpanel-instance-body": {
+            "background": "#fafafa !important",
+            "padding": "8px 12px !important",
+        },
+
+        # ── Panel COLUMNAS — tipografía y buscador a juego ──
+        ".ag-column-select-header": {
+            "padding": "10px 12px !important",
+            "border-bottom": "1px solid #e6e6eb !important",
+        },
+        ".ag-column-select-header-filter-wrapper .ag-input-field-input": {
+            "border": "1px solid #e6e6eb !important",
+            "border-radius": "8px !important",
+            "font-size": "12.5px !important",
+            "padding": "6px 10px !important",
+        },
+        ".ag-column-select-header-filter-wrapper .ag-input-field-input:focus": {
+            "border-color": "#b9aff2 !important",
+            "box-shadow": "0 0 0 2px #f0edfe !important",
+            "outline": "none !important",
+        },
+        # ── Fin de los nuevos bloques ──
     }
 
     if envolver_cabeceras:
@@ -973,12 +1027,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "border-bottom": "1px solid #e6e6eb !important",
         })
         # ── ELIMINADO: custom_css[".ag-root"] = {...}  (ya no se usa) ──
-        custom_css[".ag-filter-toolpanel"].update({
-            "border": "1px solid #6c5ce7 !important",
-            "border-radius": "8px !important",
-            "margin": "8px !important",
-            "overflow": "hidden !important",
-        })
+        # ── ELIMINADO: custom_css[".ag-filter-toolpanel"].update({...}) (se movió al base) ──
 
     if es_requerimientos:
         custom_css[".ag-side-button.ag-selected"] = {
