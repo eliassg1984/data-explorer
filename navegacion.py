@@ -9,6 +9,8 @@ caso"). app.py lee la selección desde st.session_state["_nav_reporte"].
 
 import re
 import streamlit as st
+import base64
+import os
 
 
 # Icono Material por defecto si un reporte no trae 'icono' válido en data.py.
@@ -44,6 +46,21 @@ def _on_refresh_click():
     st.session_state["_nav_refresh"] = True
 
 
+# ── Logo del rail (embebido en base64, leído desde assets/logo.png) ──
+_LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo.png")
+
+def _logo_data_uri():
+    """Lee assets/logo.png y lo devuelve como data URI. Si no existe, vacío."""
+    try:
+        with open(_LOGO_PATH, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+        return f"data:image/png;base64,{b64}"
+    except Exception:
+        return ""
+
+_LOGO_URI = _logo_data_uri()
+
+
 # ── CSS: convierte el contenedor de botones en una barra fija vertical ──────
 # RAIL_ANCHO: ancho de la barra lateral, 40% más grande que el original (64px).
 RAIL_ANCHO = 90  # 64 * 1.4 ≈ 90
@@ -76,21 +93,13 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
 }}
 
 /* Bloque arriba del rail, reservado para el logo.
-   AJUSTE (punto color): antes era celeste (#bfe3ec), ahora se funde con el
-   fondo del canvas (--bg-primary de estilos.py = #f6f6f8) para que la
-   esquina no "salte" visualmente respecto al resto de la página.
-   AJUSTE (punto separación): se quitó el box-shadow que tenía
-   .st-key-nav_rail (2px 0 8px rgba(0,0,0,.15)), que dibujaba una sombra a
-   lo largo de TODO el borde derecho del rail, incluida esta franja
-   superior — eso es lo que se veía como una línea/raya horizontal donde
-   la franja se encuentra con la parte oscura del rail. Sin esa sombra, la
-   transición entre ambos bloques queda continua. */
+   AHORA usa el logo embebido en base64 desde assets/logo.png */
 .st-key-nav_rail::before {{
     content: "";
     display: block;
     width: 100%;
     height: {LOGO_ALTO}px;
-    background: #18181d url('https://jaimepesaque.com/wp-content/uploads/2025/09/image-5-300x201.png') center / 70% auto no-repeat;
+    background: #18181d url('{_LOGO_URI}') center / 72% auto no-repeat;
     flex-shrink: 0;
 }}
 
