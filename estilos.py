@@ -394,6 +394,8 @@ def get_css():
         font-weight: 500 !important;
         color: var(--text-secondary) !important;
         margin: 0 !important;
+        text-transform: none !important;   /* NUEVO: anula el uppercase global */
+        letter-spacing: 0 !important;      /* NUEVO: sin espaciado extra */
     }
 
     /* Hover: insinúa el subrayado */
@@ -411,6 +413,13 @@ def get_css():
     [class*="st-key-vistatabs_"] [role="radiogroup"] label:has(input:checked) p {
         color: #4938b8 !important;
         font-weight: 600 !important;
+    }
+
+    /* Icono Material hereda el color del tab (gris inactivo / índigo activo) */
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label [data-testid="stIconMaterial"] {
+        font-size: 17px !important;
+        color: inherit !important;
+        vertical-align: -3px;
     }
 
     /* =================================================================== */
@@ -450,6 +459,9 @@ def get_css():
     /* FILA SUPERIOR DE AJUSTE DE INVENTARIO — chip a la izquierda +        */
     /* botón y fecha pegados a la derecha.                                  */
     /* =================================================================== */
+    .st-key-fila_ajuste_top {
+        margin-top: -6px !important;          /* NUEVO: reduce el espacio superior */
+    }
     .st-key-fila_ajuste_top [data-testid="stHorizontalBlock"] {
         align-items: center !important;
         gap: 8px !important;               /* reduce el gap entre botón y fecha */
@@ -490,24 +502,29 @@ def get_css():
         min-width: 0 !important;
     }
 
-    /* La caja del input = PILL lavanda */
+    /* La caja del input = PILL lavanda (más compacta) */
     .st-key-fch_ajuste_inline .stDateInput > div > div {
         background: var(--accent-tint) !important;     /* lavanda muy suave */
         border: 1px solid #d4cdf7 !important;          /* borde lavanda */
         border-radius: 999px !important;               /* pill completo */
         box-shadow: none !important;
-        padding: 2px 6px !important;
+        padding: 0 10px !important;                    /* más ceñido */
+        min-height: 34px !important;
+        height: 34px !important;
+        width: fit-content !important;
+        margin: 0 auto !important;                     /* centra la pill en su columna */
         transition: background .15s ease, border-color .15s ease !important;
-        width: auto !important;
-        min-width: 0 !important;
     }
 
-    /* Texto de la fecha en índigo profundo, a juego con el chip */
+    /* Texto de la fecha centrado y con tamaño justo */
     .st-key-fch_ajuste_inline .stDateInput input {
         color: var(--accent-deep) !important;
         font-weight: 500 !important;
-        font-size: 13px !important;
+        font-size: 12.5px !important;
         background: transparent !important;
+        text-align: center !important;                 /* centrado */
+        padding: 0 !important;
+        width: 155px !important;                       /* ancho justo para el rango */
     }
     .st-key-fch_ajuste_inline .stDateInput input::placeholder {
         color: var(--accent) !important;
