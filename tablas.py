@@ -971,8 +971,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "border-bottom": "1px solid #e6e6eb !important",
         })
         custom_css[".ag-root"] = {
-            "border": "2px solid #6c5ce7",
-            "border-radius": "6px",
+            "border": "1px solid #e6e6eb",
+            "border-radius": "10px",
         }
         custom_css[".ag-filter-toolpanel"].update({
             "border": "1px solid #6c5ce7 !important",
