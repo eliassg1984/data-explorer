@@ -912,11 +912,13 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         tema_grid = "material"
         custom_css[".ag-row-even"] = {"background-color": "#ffffff !important"}
         custom_css[".ag-row-odd"] = {"background-color": "#ffffff !important"}
+        # ── NUEVO: reemplazo del wrapper ──
         custom_css[".ag-root-wrapper"].update({
-            "background-color": "#f6f6f8 !important",
-            "border": "none !important",
-            "box-shadow": "none !important",
-            "border-radius": "4px !important",
+            "background-color": "#ffffff !important",
+            "border": "1px solid #e6e6eb !important",
+            "border-radius": "12px !important",
+            "box-shadow": ("0 1px 2px rgba(16,16,20,0.05), "
+                           "0 4px 14px rgba(16,16,20,0.07) !important"),
         })
         custom_css[".ag-header"].update({
             "background-color": "#ffffff !important",
@@ -970,10 +972,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "background-color": "#f2f0fb !important",
             "border-bottom": "1px solid #e6e6eb !important",
         })
-        custom_css[".ag-root"] = {
-            "border": "1px solid #e6e6eb",
-            "border-radius": "10px",
-        }
+        # ── ELIMINADO: custom_css[".ag-root"] = {...}  (ya no se usa) ──
         custom_css[".ag-filter-toolpanel"].update({
             "border": "1px solid #6c5ce7 !important",
             "border-radius": "8px !important",
