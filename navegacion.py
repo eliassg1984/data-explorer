@@ -90,7 +90,7 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     display: block;
     width: 100%;
     height: {LOGO_ALTO}px;
-    background: #ffffff;
+    background: #18181d url('https://jaimepesaque.com/wp-content/uploads/2025/09/image-5-300x201.png') center / 70% auto no-repeat;
     flex-shrink: 0;
 }}
 
