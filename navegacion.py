@@ -102,9 +102,10 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     padding:14px 0 14px 0 !important;
 }}
 
-/* CONTENEDORES DE BOTONES: ahora ocupan el 100% del ancho y centran su contenido */
+/* CONTENEDORES DE BOTONES: los 3 niveles centran su contenido */
 .st-key-nav_rail [data-testid="stElementContainer"],
-.st-key-nav_rail [class*="st-key-navbtn_"] {{
+.st-key-nav_rail [class*="st-key-navbtn_"],
+.st-key-nav_rail [data-testid="stButton"] {{
     width:100% !important; min-width:0 !important;
     display:flex !important;
     justify-content:center !important;
@@ -115,7 +116,8 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
    icono índigo, como el ítem activo del sidebar de CallAI. */
 .st-key-nav_rail [class*="st-key-navbtn_"] button {{
     width:{RAIL_ANCHO - 16}px !important; height:62px !important; min-height:62px !important;
-    padding:0 !important; margin:0 !important;
+    margin:0 auto !important;
+    padding:0 !important;
     border:none !important; border-radius:12px !important;
     background:transparent !important; color:#85858f !important;
     display:flex !important; align-items:center !important; justify-content:center !important;
