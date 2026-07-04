@@ -715,10 +715,7 @@ def _render_contenido():
             )
 
         if es_ajuste and not st.session_state.get("ajuste_extraido"):
-            st.info(
-                "📅 Selecciona un rango de fechas arriba y pulsa "
-                "**Obtener datos a evaluar** para generar el reporte."
-            )
+            pass  # Sin mensaje: la pantalla queda limpia hasta que se pulse el botón
         else:
             vista = _selector_vista()
             if vista == "Tabla":
