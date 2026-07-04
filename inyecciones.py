@@ -189,15 +189,15 @@ def inject_grid_health_check():
         '}',
 
         '.ag-filter-toolpanel {',
-        '  border: 1px solid #6c5ce7 !important;',
-        '  border-radius: 8px !important;',
-        '  margin: 8px !important;',
+        '  border: none !important;',
+        '  border-radius: 0 !important;',
+        '  margin: 0 !important;',
         '  overflow-y: auto !important;',
         '  overflow-x: hidden !important;',
         '}',
         '.ag-filter-toolpanel::-webkit-scrollbar { width: 8px; }',
-        '.ag-filter-toolpanel::-webkit-scrollbar-track { background: #e6e6eb; border-radius: 4px; }',
-        '.ag-filter-toolpanel::-webkit-scrollbar-thumb { background: #6c5ce7; border-radius: 4px; }',
+        '.ag-filter-toolpanel::-webkit-scrollbar-track { background: transparent; }',
+        '.ag-filter-toolpanel::-webkit-scrollbar-thumb { background: #d6d6dd; border-radius: 4px; }',
       ].join('\\n');
 
       function inyectarCSS(fdoc) {
