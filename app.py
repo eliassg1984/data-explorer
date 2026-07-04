@@ -590,19 +590,22 @@ def _render_kpis_salidas(df_data):
 
 
 # ===========================================================================
-# SELECTOR DE VISTA (Tabla / Gráficos) — píldoras azules
+# SELECTOR DE VISTA (Tabla / Gráficos) — tabs subrayados (underline)
 # ===========================================================================
 def _selector_vista():
-    """Muestra el segmented_control Tabla/Gráficos y devuelve la opción elegida."""
-    _opciones = {"Tabla": ":material/table_chart:", "Gráficos": ":material/bar_chart:"}
-    vista = st.segmented_control(
-        "Vista",
-        options=list(_opciones.keys()),
-        format_func=lambda o: f"{_opciones[o]} {o}",
-        default="Tabla",
-        label_visibility="collapsed",
-        key=f"vista_seg_{reporte}",
-    )
+    """Muestra un radio horizontal estilizado como tabs subrayados y devuelve
+    la opción elegida ('Tabla' o 'Gráficos'). El CSS que lo convierte en tabs
+    vive en estilos.py (bloque '.st-key-vistatabs_...')."""
+    _opciones = {"Tabla": "📋  Tabla", "Gráficos": "📈  Gráficos"}
+    with st.container(key=f"vistatabs_{reporte}"):
+        vista = st.radio(
+            "Vista",
+            options=list(_opciones.keys()),
+            format_func=lambda o: _opciones[o],
+            horizontal=True,
+            label_visibility="collapsed",
+            key=f"vista_seg_{reporte}",
+        )
     return vista or "Tabla"
 
 
