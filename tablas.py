@@ -763,6 +763,63 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "padding": "10px !important",
             "background-color": "#ffffff !important",
         },
+        # Este bloque se reemplaza por el nuevo más abajo
+        # ".ag-filter-toolpanel": { ... },  <--- eliminado y reemplazado por el bloque unificado.
+        ".ag-column-select-column": {
+            "display": "flex !important",
+            "align-items": "center !important",
+            "padding": "10px 12px !important",
+            "border-bottom": "0.5px solid #f1f1f4 !important",
+        },
+        ".ag-column-select-column-label": {
+            "order": "-1 !important",
+            "margin-right": "auto !important",
+            "color": "#71717a !important",
+            "font-size": "12.5px !important",
+        },
+        ".ag-column-select-column:has(.ag-checked) .ag-column-select-column-label": {
+            "color": "#18181d !important",
+            "font-weight": "500 !important",
+        },
+        ".ag-column-select-column .ag-drag-handle": {
+            "display": "none !important",
+        },
+        ".ag-column-select-column .ag-checkbox-input-wrapper": {
+            "width": "36px !important",
+            "height": "20px !important",
+            "border-radius": "999px !important",
+            "background": "#e6e6eb !important",
+            "border": "none !important",
+            "box-shadow": "none !important",
+            "position": "relative !important",
+            "transition": "background .15s ease !important",
+        },
+        ".ag-column-select-column .ag-checkbox-input-wrapper::after": {
+            "content": "'' !important",
+            "position": "absolute !important",
+            "top": "2px !important",
+            "left": "2px !important",
+            "width": "16px !important",
+            "height": "16px !important",
+            "border-radius": "50% !important",
+            "background": "#ffffff !important",
+            "color": "transparent !important",
+            "box-shadow": "0 1px 2px rgba(0,0,0,0.25) !important",
+            "transition": "left .15s ease !important",
+        },
+        ".ag-column-select-column .ag-checkbox-input-wrapper.ag-checked": {
+            "background": "#5a4ad9 !important",
+        },
+        ".ag-column-select-column .ag-checkbox-input-wrapper.ag-checked::after": {
+            "content": "'' !important",
+            "left": "18px !important",
+        },
+        ".ag-column-select-column .ag-checkbox-input": {
+            "cursor": "pointer !important",
+        },
+        ".ag-side-bar[data-active-panel='pivotePanel'] .ag-column-select": {
+            "display": "none !important",
+        },
 
         # ── Panel modo pivote / drop zones (NUEVO ESTILIZADO) ──
         ".ag-pivot-mode-panel": {
@@ -848,16 +905,19 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "outline": "none !important",
         },
         ".ag-filter-toolpanel-instance-header": {
-            "background": "#f6f6f8 !important",
-            "border": "1px solid #e6e6eb !important",
-            "border-radius": "999px !important",
-            "padding": "7px 12px !important",
-            "margin": "3px 10px !important",
-            "transition": "background .15s ease, border-color .15s ease !important",
+            "padding": "9px 12px !important",
+            "border-bottom": "0.5px solid #f1f1f4 !important",
         },
         ".ag-filter-toolpanel-instance-header:hover": {
             "background": "#f0edfe !important",
-            "border-color": "#d4cdf7 !important",
+        },
+        ".ag-filter-toolpanel-instance-header-text": {
+            "color": "#71717a !important",
+            "font-size": "12.5px !important",
+            "font-weight": "500 !important",
+        },
+        ".ag-filter-toolpanel-instance-header .ag-icon": {
+            "color": "#a2a2ad !important",
         },
         ".ag-filter-toolpanel-instance-body": {
             "background": "#fafafa !important",
@@ -880,37 +940,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "box-shadow": "0 0 0 2px #f0edfe !important",
             "outline": "none !important",
         },
-
-        # ══════════════════════════════════════════════════════════════════
-        # ARMONÍA DE PANELES: Columnas y Filtros "en juego" con Modo pivote.
-        # Convierte cada fila en un chip redondeado igual que las pastillas
-        # del panel pivote (.ag-column-drop-vertical-cell). Solo estético.
-        # ══════════════════════════════════════════════════════════════════
-
-        # ── COLUMNAS: cada fila como chip ──
-        ".ag-column-select-column": {
-            "display": "flex !important",
-            "align-items": "center !important",
-            "background": "#f6f6f8 !important",
-            "border": "1px solid #e6e6eb !important",
-            "border-radius": "999px !important",
-            "padding": "6px 12px !important",
-            "margin": "3px 10px !important",
-            "transition": "background .15s ease, border-color .15s ease !important",
-        },
-        ".ag-column-select-column:hover": {
-            "background": "#f0edfe !important",
-            "border-color": "#d4cdf7 !important",
-        },
-        # Columna ACTIVA (checked) resaltada en lavanda, como los chips de Valores
-        ".ag-column-select-column:has(.ag-checked)": {
-            "background": "#f0edfe !important",
-            "border-color": "#d4cdf7 !important",
-        },
-
-        # ── FILTROS: cada campo como chip (ya definido arriba, pero dejamos el bloque para consistencia) ──
-        # Nota: el bloque anterior de .ag-filter-toolpanel-instance-header ya tiene los estilos chip.
-        # ── Fin del bloque de armonía ──
+        # ── Fin de los nuevos bloques ──
     }
 
     if envolver_cabeceras:
@@ -936,6 +966,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         tema_grid = "material"
         custom_css[".ag-row-even"] = {"background-color": "#ffffff !important"}
         custom_css[".ag-row-odd"] = {"background-color": "#ffffff !important"}
+        # ── NUEVO: reemplazo del wrapper ──
         custom_css[".ag-root-wrapper"].update({
             "background-color": "#ffffff !important",
             "border": "1px solid #e6e6eb !important",
