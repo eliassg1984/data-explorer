@@ -370,7 +370,7 @@ def get_css():
         gap: 26px !important;
         border-bottom: 1px solid var(--border) !important;
         margin-bottom: 0.4rem !important;
-        padding: 0 0 0 16px !important;
+        padding: 0 0 0 16px !important;   /* ← antes: padding: 0 */
     }
 
     /* Ocultar el círculo del radio nativo */
@@ -384,13 +384,13 @@ def get_css():
         margin: 0 !important;
         cursor: pointer !important;
         border-bottom: 2px solid transparent !important;
-        margin-bottom: -1px !important;
+        margin-bottom: -1px !important;   /* solapa la línea guía */
         transition: color .15s ease, border-color .15s ease !important;
     }
 
-    /* Texto del tab en reposo (inactivo) — más grande */
+    /* Texto del tab en reposo (inactivo) */
     [class*="st-key-vistatabs_"] [role="radiogroup"] label p {
-        font-size: 16px !important;        /* antes: 14px */
+        font-size: 16px !important;          /* antes: 14px */
         font-weight: 500 !important;
         color: var(--text-secondary) !important;
         margin: 0 !important;
@@ -415,7 +415,7 @@ def get_css():
         font-weight: 600 !important;
     }
 
-    /* Icono Material hereda el color del tab — más grande para acompañar */
+    /* Icono Material hereda el color del tab (gris inactivo / índigo activo) */
     [class*="st-key-vistatabs_"] [role="radiogroup"] label [data-testid="stIconMaterial"] {
         font-size: 19px !important;        /* antes: 17px */
         color: inherit !important;
@@ -441,12 +441,10 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* FILA SUPERIOR DE AJUSTE DE INVENTARIO — chip a la izquierda +        */
-    /* botón y fecha pegados a la derecha.                                  */
+    /* FILA SUPERIOR DE AJUSTE DE INVENTARIO — chip a la izquierda          */
     /* =================================================================== */
     .st-key-fila_ajuste_top {
-        margin-top: -16px !important;      /* igual que antes: el chip NO se mueve */
-        margin-bottom: 18px !important;    /* NUEVO: empuja hacia abajo tabs + fecha + tabla */
+        margin-top: -16px !important;          /* NUEVO: reduce el espacio superior */
     }
     .st-key-fila_ajuste_top [data-testid="stHorizontalBlock"] {
         align-items: center !important;
@@ -474,7 +472,7 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* PILL LAVANDA — fecha del Ajuste, alineada a la derecha con icono    */
+    /* PILL LAVANDA — date_input de Ajuste de Inventario                   */
     /* =================================================================== */
 
     /* Ancho ajustado al texto de la fecha */
@@ -489,17 +487,17 @@ def get_css():
         border: 1px solid #d4cdf7 !important;
         border-radius: 999px !important;
         box-shadow: none !important;
-        padding: 0 12px !important;              /* simétrico, sin hueco del icono */
+        padding: 0 12px !important;              /* ← simétrico, sin hueco del icono */
         min-height: 34px !important;
         height: 34px !important;
         width: fit-content !important;
-        margin: 0 0 0 auto !important;           /* alineada a la DERECHA */
-        overflow: visible !important;            /* permite que el icono viva fuera del borde */
+        margin: 0 0 0 auto !important;           /* ← alineada a la DERECHA */
+        overflow: visible !important;            /* permite que el icono viva fuera */
         position: relative !important;
         transition: background .15s ease, border-color .15s ease !important;
     }
 
-    /* Texto de la fecha centrado */
+    /* Texto de la fecha centrado y con tamaño justo */
     .st-key-fch_ajuste_inline .stDateInput input {
         color: var(--accent-deep) !important;
         font-weight: 500 !important;
@@ -507,7 +505,7 @@ def get_css():
         background: transparent !important;
         text-align: center !important;
         padding: 0 !important;
-        width: 155px !important;
+        width: 155px !important;                       /* ancho justo para el rango */
     }
     .st-key-fch_ajuste_inline .stDateInput input::placeholder {
         color: var(--accent) !important;
@@ -521,14 +519,14 @@ def get_css():
         border-color: var(--accent) !important;
     }
 
-    /* Icono calendario gris pegado a la píldora por la izquierda */
+    /* ── Icono calendario gris pegado a la PÍLDORA (izquierda) ── */
     .st-key-fch_ajuste_inline .stDateInput::before {
         display: none !important;                /* desactiva el anterior */
     }
     .st-key-fch_ajuste_inline .stDateInput > div > div::before {
         content: "";
         position: absolute;
-        left: -25px; top: 50%;                   /* 25px = 18px icono + 7px aire */
+        left: -25px; top: 50%;                   /* 25px = 18px de icono + 7px de aire */
         width: 18px; height: 18px;
         transform: translateY(-50%);
         background-color: #85858f;
@@ -538,23 +536,27 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* CALENDARIO DESPLEGABLE (BaseWeb) — marco suave, sin presets          */
+    /* CALENDARIO DESPLEGABLE (BaseWeb) — marco suave, sin presets         */
     /* =================================================================== */
 
+    /* Marco del calendario: redondeado, con sombra y tipografía de la app */
     div[data-baseweb="calendar"] {
         border-radius: 12px !important;
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10) !important;
         font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
     }
 
+    /* Esquinas redondeadas en cada día */
     div[data-baseweb="calendar"] [role="gridcell"] > div {
         border-radius: 8px !important;
     }
 
+    /* Flechas de navegación (‹ ›) en índigo */
     div[data-baseweb="calendar"] button svg {
         fill: var(--accent) !important;
     }
 
+    /* Ocultar el selector de presets "CHOOSE A DATE RANGE / None" */
     div[data-baseweb="popover"]:has(div[data-baseweb="calendar"]) [data-baseweb="select"] {
         display: none !important;
     }
@@ -563,12 +565,18 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* OCULTAR TOOLBAR NATIVO DE STREAMLIT                                  */
+    /* OCULTAR TOOLBARS NATIVAS DE STREAMLIT                               */
     /* =================================================================== */
+    /* Toolbar general (lápiz, GitHub, menú ⋮) */
     [data-testid="stToolbar"],
     [data-testid="stMainMenu"],
     [data-testid="stAppDeployButton"],
     [data-testid="stStatusWidget"] {
+        display: none !important;
+    }
+
+    /* Toolbar flotante sobre AgGrid (fullscreen nativo de Streamlit) */
+    [class*="st-key-grid_"] [data-testid="stElementToolbar"] {
         display: none !important;
     }
     </style>
