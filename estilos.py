@@ -370,7 +370,7 @@ def get_css():
         gap: 26px !important;
         border-bottom: 1px solid var(--border) !important;
         margin-bottom: 0.4rem !important;
-        padding: 0 !important;
+        padding: 0 0 0 16px !important;   /* ← antes: padding: 0 */
     }
 
     /* Ocultar el círculo del radio nativo */
@@ -441,21 +441,6 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* BOTÓN "EXTRAER DATOS" — Ajuste de Inventario: forma de chip/pill,    */
-    /* con efecto de "apretado" al hacer click.                            */
-    /* AJUSTE: antes border-radius: 4px (esquinas cuadradas). Ahora 999px   */
-    /* (pill completo) + transform scale al :active para dar feedback      */
-    /* táctil de que el botón fue presionado.                              */
-    /* =================================================================== */
-    .st-key-btn_extraer_ajuste button {
-        border-radius: 999px !important;
-        transition: transform .1s ease, background-color .15s ease !important;
-    }
-    .st-key-btn_extraer_ajuste button:active {
-        transform: scale(0.94) !important;
-    }
-
-    /* =================================================================== */
     /* FILA SUPERIOR DE AJUSTE DE INVENTARIO — chip a la izquierda +        */
     /* botón y fecha pegados a la derecha.                                  */
     /* =================================================================== */
@@ -470,9 +455,6 @@ def get_css():
     .st-key-fila_ajuste_top [data-testid="column"] {
         display: flex !important;
         align-items: center !important;
-    }
-    .st-key-btn_extraer_ajuste {
-        width: 100% !important;
     }
 
     /* Chip pill del título del reporte */
@@ -514,6 +496,8 @@ def get_css():
         width: fit-content !important;
         margin: 0 auto !important;                     /* centra la pill en su columna */
         transition: background .15s ease, border-color .15s ease !important;
+        position: relative !important;
+        padding-left: 30px !important;                 /* espacio para el icono */
     }
 
     /* Texto de la fecha centrado y con tamaño justo */
@@ -538,10 +522,17 @@ def get_css():
         border-color: var(--accent) !important;
     }
 
-    /* Ícono de calendario en índigo */
-    .st-key-fch_ajuste_inline .stDateInput svg {
-        color: var(--accent-deep) !important;
-        fill: var(--accent-deep) !important;
+    /* ── Icono calendario gris integrado (reemplaza el SVG nativo) ── */
+    .st-key-fch_ajuste_inline .stDateInput::before {
+        content: "";
+        position: absolute;
+        left: 6px; top: 50%;
+        width: 18px; height: 18px;
+        transform: translateY(-50%);
+        background-color: #85858f;   /* gris neutro, "sin color" */
+        -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M16 3v4M8 3v4M4 11h16"/></svg>') center / contain no-repeat;
+                mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M16 3v4M8 3v4M4 11h16"/></svg>') center / contain no-repeat;
+        pointer-events: none;
     }
 
     /* =================================================================== */
@@ -573,6 +564,16 @@ def get_css():
         display: none !important;
     }
     div[data-baseweb="popover"]:has(div[data-baseweb="calendar"]) div[data-baseweb="calendar"] + div {
+        display: none !important;
+    }
+
+    /* =================================================================== */
+    /* OCULTAR TOOLBAR NATIVO DE STREAMLIT (lápiz, GitHub, menú ⋮)         */
+    /* =================================================================== */
+    [data-testid="stToolbar"],
+    [data-testid="stMainMenu"],
+    [data-testid="stAppDeployButton"],
+    [data-testid="stStatusWidget"] {
         display: none !important;
     }
     </style>
