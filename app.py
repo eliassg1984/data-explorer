@@ -69,12 +69,9 @@ cfg = REPORTES[reporte]
 
 # ===========================================================================
 # LIMPIAR ESTADO AL CAMBIAR DE REPORTE
-# Evita que session_state de un reporte anterior (ej: ajuste_extraido)
-# siga corriendo trabajo innecesario cuando se navega a otro reporte.
 # ===========================================================================
 if st.session_state.get("_reporte_anterior") != reporte:
     st.session_state["_reporte_anterior"] = reporte
-    st.session_state.pop("ajuste_extraido", None)
     st.session_state.pop("ajuste_rango_aplicado", None)
 
 
@@ -217,9 +214,9 @@ if col_fecha and df_f[col_fecha].notna().any():
     fecha_min_full = df_f[col_fecha].min().date()
     fecha_max_full = df_f[col_fecha].max().date()
 
-anio_actual = datetime.date.today().year
-fecha_ini_default = datetime.date(anio_actual, 1, 1)
-fecha_fin_default = datetime.date(anio_actual, 12, 31)
+_hoy = datetime.date.today()
+fecha_ini_default = _hoy.replace(day=1)   # 01 del mes actual
+fecha_fin_default = _hoy                  # hoy
 
 es_ajuste = (reporte == "Ajuste de Inventario")
 
@@ -265,73 +262,30 @@ n_activos = _contar_filtros_activos()
 label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_activos != 1 else '') if n_activos else ''}"
 
 # ── TÍTULO, SELECTOR DE FECHA Y BOTÓN EXTRAER (solo Ajuste de Inventario) ──
+# Cambio 2: eliminamos el botón y el date_input de aquí, solo dejamos el chip
 perf.start_phase("Ajuste top row")                                          # ⚡ PERF
 if es_ajuste:
     _fila_top = st.container(key="fila_ajuste_top")
     with _fila_top:
-        col_titulo, col_boton, col_fecha_selector = st.columns([3, 0.9, 0.9])
-
-    with col_titulo:
         st.markdown(
             f'<div class="chip-titulo-reporte">{reporte}</div>',
             unsafe_allow_html=True,
         )
 
-    rango_ajuste = None
-    with col_fecha_selector:
-        if fecha_min_full is not None:
+    # Rango aplicado (auto): al primer acceso usa 01-del-mes → hoy
+    if col_fecha and fecha_min_full is not None:
+        if "ajuste_rango_aplicado" not in st.session_state:
             _ini_def = max(fecha_ini_default, fecha_min_full)
             _fin_def = min(fecha_fin_default, fecha_max_full)
-            if fecha_max_full.year < anio_actual:
-                _ini_def = fecha_min_full
-                _fin_def = fecha_max_full
+            if _ini_def > _fin_def:
+                _ini_def, _fin_def = fecha_min_full, fecha_max_full
+            st.session_state["ajuste_rango_aplicado"] = (_ini_def, _fin_def)
 
-            rango_ajuste = st.date_input(
-                "Rango a Evaluar",
-                value=(_ini_def, _fin_def),
-                min_value=fecha_min_full,
-                max_value=fecha_max_full,
-                format="DD/MM/YYYY",
-                key="fch_ajuste_inline",
-                label_visibility="collapsed",
-            )
-
-    with col_boton:
-        if st.button(
-            "Obtener datos a evaluar",
-            type="secondary",  # 🔹 CAMBIADO DE "primary" A "secondary"
-            use_container_width=True,
-            key="btn_extraer_ajuste",
-            help="Limpia la caché, relee desde R2 y aplica el rango seleccionado",
-        ):
-            if isinstance(rango_ajuste, (tuple, list)) and len(rango_ajuste) == 2:
-                _ini, _fin = rango_ajuste
-                if _ini > _fin:
-                    st.warning("⚠️ La fecha de inicio es posterior a la fecha fin.")
-                else:
-                    st.session_state["ajuste_rango_aplicado"] = (_ini, _fin)
-                    st.session_state["ajuste_extraido"] = True
-                    st.cache_data.clear()
-                    st.rerun()
-            else:
-                st.warning("⚠️ Selecciona un rango de fechas válido.")
-
-    # Se ha eliminado el <hr> morado que estaba aquí
-
-    if st.session_state.get("ajuste_extraido"):
-        _rango_aplicado = st.session_state.get("ajuste_rango_aplicado")
-        if _rango_aplicado and col_fecha:
-            _ini_apl, _fin_apl = _rango_aplicado
-            df_f = df_f[
-                (df_f[col_fecha].dt.date >= _ini_apl) &
-                (df_f[col_fecha].dt.date <= _fin_apl)
-            ]
-            if (isinstance(rango_ajuste, (tuple, list)) and len(rango_ajuste) == 2
-                    and (rango_ajuste[0] != _ini_apl or rango_ajuste[1] != _fin_apl)):
-                st.caption(
-                    f"ℹ️ Mostrando datos del rango **{_ini_apl:%d/%m/%Y} – {_fin_apl:%d/%m/%Y}**. "
-                    f"Pulsa **Obtener datos a evaluar** para aplicar el nuevo rango."
-                )
+        _ini_apl, _fin_apl = st.session_state["ajuste_rango_aplicado"]
+        df_f = df_f[
+            (df_f[col_fecha].dt.date >= _ini_apl) &
+            (df_f[col_fecha].dt.date <= _fin_apl)
+        ]
 perf.end_phase("Ajuste top row")                                            # ⚡ PERF
 
 # ── POPOVER (solo se muestra si hay controles que mostrar) ──
@@ -426,11 +380,9 @@ else:
 
 
 # ===========================================================================
-# VERIFICACIÓN DE DATOS VACÍOS
+# VERIFICACIÓN DE DATOS VACÍOS (sin _esperando_extraccion)
 # ===========================================================================
-_esperando_extraccion = es_ajuste and not st.session_state.get("ajuste_extraido")
-
-if df_f.empty and not _esperando_extraccion:
+if df_f.empty:
     st.warning("Ningún registro coincide con los filtros.")
     perf.end()                                                              # ⚡ PERF
     st.stop()
@@ -713,15 +665,33 @@ def _render_contenido():
                 f'<hr style="border:none;border-top:2px solid #6c5ce7;margin:0 0 0.8rem 0;">',
                 unsafe_allow_html=True,
             )
-
-        if es_ajuste and not st.session_state.get("ajuste_extraido"):
-            pass  # Sin mensaje: la pantalla queda limpia hasta que se pulse el botón
-        else:
             vista = _selector_vista()
-            if vista == "Tabla":
-                _render_tabla()
-            else:
-                renderizar_graficos_reporte(df_f, reporte, cfg)
+        else:
+            # Cambio 3: fila con tabs a la izquierda y calendario a la derecha
+            col_tabs, col_fecha_sel = st.columns([3, 1.15], vertical_alignment="bottom")
+            with col_tabs:
+                vista = _selector_vista()
+            with col_fecha_sel:
+                with st.container(key="fecha_ajuste_pill"):
+                    _ini_apl, _fin_apl = st.session_state["ajuste_rango_aplicado"]
+                    rango_aj = st.date_input(
+                        "Rango a Evaluar",
+                        value=(_ini_apl, _fin_apl),
+                        min_value=fecha_min_full,
+                        max_value=fecha_max_full,
+                        format="DD/MM/YYYY",
+                        key="fch_ajuste_inline",
+                        label_visibility="collapsed",
+                    )
+            if (isinstance(rango_aj, (tuple, list)) and len(rango_aj) == 2
+                    and tuple(rango_aj) != st.session_state["ajuste_rango_aplicado"]):
+                st.session_state["ajuste_rango_aplicado"] = tuple(rango_aj)
+                st.rerun(scope="app")   # refiltra df_f en el flujo principal
+
+        if vista == "Tabla":
+            _render_tabla()
+        else:
+            renderizar_graficos_reporte(df_f, reporte, cfg)
 
     perf.fragment_end("_render_contenido")                                  # ⚡ PERF
 
