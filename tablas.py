@@ -770,21 +770,36 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         # interno (agColumnsToolPanel) y comparte la clase
         # .ag-column-select-column.
         # ══════════════════════════════════════════════════════════════════
+        # Cambio 1: filas como pastillas
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column": {
             "display": "flex !important",
             "align-items": "center !important",
-            "padding": "10px 12px !important",
-            "border-bottom": "0.5px solid #f1f1f4 !important",
+            "background": "#f6f6f8 !important",
+            "border": "1px solid #e6e6eb !important",
+            "border-radius": "999px !important",
+            "padding": "6px 12px !important",
+            "margin": "3px 10px !important",
+            "transition": "background .15s ease, border-color .15s ease !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:hover": {
+            "background": "#f0edfe !important",
+            "border-color": "#d4cdf7 !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:has(.ag-checked)": {
+            "background": "#f0edfe !important",
+            "border-color": "#d4cdf7 !important",
+        },
+
+        # Cambio 2: etiqueta activa con color índigo
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:has(.ag-checked) .ag-column-select-column-label": {
+            "color": "#4938b8 !important",
+            "font-weight": "500 !important",
         },
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column-label": {
             "order": "-1 !important",
             "margin-right": "auto !important",
             "color": "#71717a !important",
             "font-size": "12.5px !important",
-        },
-        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:has(.ag-checked) .ag-column-select-column-label": {
-            "color": "#18181d !important",
-            "font-weight": "500 !important",
         },
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-drag-handle": {
             "display": "none !important",
@@ -911,12 +926,18 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "box-shadow": "0 0 0 2px #f0edfe !important",
             "outline": "none !important",
         },
+        # Cambio 3: filtros como pastillas
         ".ag-filter-toolpanel-instance-header": {
-            "padding": "9px 12px !important",
-            "border-bottom": "0.5px solid #f1f1f4 !important",
+            "background": "#f6f6f8 !important",
+            "border": "1px solid #e6e6eb !important",
+            "border-radius": "999px !important",
+            "padding": "8px 12px !important",
+            "margin": "3px 10px !important",
+            "transition": "background .15s ease, border-color .15s ease !important",
         },
         ".ag-filter-toolpanel-instance-header:hover": {
             "background": "#f0edfe !important",
+            "border-color": "#d4cdf7 !important",
         },
         ".ag-filter-toolpanel-instance-header-text": {
             "color": "#71717a !important",
