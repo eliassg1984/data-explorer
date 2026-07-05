@@ -370,7 +370,7 @@ def get_css():
         gap: 26px !important;
         border-bottom: 1px solid var(--border) !important;
         margin-bottom: 0.4rem !important;
-        padding: 0 0 0 16px !important;   /* ← antes: padding: 0 */
+        padding: 0 0 0 16px !important;
     }
 
     /* Ocultar el círculo del radio nativo */
@@ -384,18 +384,18 @@ def get_css():
         margin: 0 !important;
         cursor: pointer !important;
         border-bottom: 2px solid transparent !important;
-        margin-bottom: -1px !important;   /* solapa la línea guía */
+        margin-bottom: -1px !important;
         transition: color .15s ease, border-color .15s ease !important;
     }
 
-    /* Texto del tab en reposo (inactivo) */
+    /* Texto del tab en reposo (inactivo) — más grande */
     [class*="st-key-vistatabs_"] [role="radiogroup"] label p {
-        font-size: 14px !important;
+        font-size: 16px !important;        /* antes: 14px */
         font-weight: 500 !important;
         color: var(--text-secondary) !important;
         margin: 0 !important;
-        text-transform: none !important;   /* NUEVO: anula el uppercase global */
-        letter-spacing: 0 !important;      /* NUEVO: sin espaciado extra */
+        text-transform: none !important;
+        letter-spacing: 0 !important;
     }
 
     /* Hover: insinúa el subrayado */
@@ -415,9 +415,9 @@ def get_css():
         font-weight: 600 !important;
     }
 
-    /* Icono Material hereda el color del tab (gris inactivo / índigo activo) */
+    /* Icono Material hereda el color del tab — más grande para acompañar */
     [class*="st-key-vistatabs_"] [role="radiogroup"] label [data-testid="stIconMaterial"] {
-        font-size: 17px !important;
+        font-size: 19px !important;        /* antes: 17px */
         color: inherit !important;
         vertical-align: -3px;
     }
@@ -445,11 +445,11 @@ def get_css():
     /* botón y fecha pegados a la derecha.                                  */
     /* =================================================================== */
     .st-key-fila_ajuste_top {
-        margin-top: -16px !important;          /* NUEVO: reduce el espacio superior */
+        margin-top: -16px !important;
     }
     .st-key-fila_ajuste_top [data-testid="stHorizontalBlock"] {
         align-items: center !important;
-        gap: 8px !important;               /* reduce el gap entre botón y fecha */
+        gap: 8px !important;
     }
     .st-key-fila_ajuste_top [data-testid="stColumn"],
     .st-key-fila_ajuste_top [data-testid="column"] {
@@ -461,8 +461,8 @@ def get_css():
     .chip-titulo-reporte {
         display: inline-flex;
         align-items: center;
-        background: var(--accent-tint);      /* lavanda muy suave */
-        color: var(--accent-deep);           /* índigo profundo para contraste */
+        background: var(--accent-tint);
+        color: var(--accent-deep);
         border-radius: 999px;
         padding: 8px 18px;
         font-size: 15px;
@@ -473,9 +473,7 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* PILL LAVANDA (Opción A) — el date_input se ve como una pastilla      */
-    /* lavanda a juego con el chip del título y el botón. Sigue siendo el   */
-    /* date_input nativo (mismo calendario), solo cambia su apariencia.     */
+    /* PILL LAVANDA — fecha del Ajuste, alineada a la derecha con icono    */
     /* =================================================================== */
 
     /* Ancho ajustado al texto de la fecha */
@@ -484,31 +482,31 @@ def get_css():
         min-width: 0 !important;
     }
 
-    /* La caja del input = PILL lavanda (más compacta) */
+    /* La caja del input = PILL lavanda, alineada a la derecha */
     .st-key-fch_ajuste_inline .stDateInput > div > div {
-        background: var(--accent-tint) !important;     /* lavanda muy suave */
-        border: 1px solid #d4cdf7 !important;          /* borde lavanda */
-        border-radius: 999px !important;               /* pill completo */
+        background: var(--accent-tint) !important;
+        border: 1px solid #d4cdf7 !important;
+        border-radius: 999px !important;
         box-shadow: none !important;
-        padding: 0 10px !important;                    /* más ceñido */
+        padding: 0 12px !important;              /* simétrico, sin hueco del icono */
         min-height: 34px !important;
         height: 34px !important;
         width: fit-content !important;
-        margin: 0 auto !important;                     /* centra la pill en su columna */
-        transition: background .15s ease, border-color .15s ease !important;
+        margin: 0 0 0 auto !important;           /* alineada a la DERECHA */
+        overflow: visible !important;            /* permite que el icono viva fuera del borde */
         position: relative !important;
-        padding-left: 30px !important;                 /* espacio para el icono */
+        transition: background .15s ease, border-color .15s ease !important;
     }
 
-    /* Texto de la fecha centrado y con tamaño justo */
+    /* Texto de la fecha centrado */
     .st-key-fch_ajuste_inline .stDateInput input {
         color: var(--accent-deep) !important;
         font-weight: 500 !important;
         font-size: 12.5px !important;
         background: transparent !important;
-        text-align: center !important;                 /* centrado */
+        text-align: center !important;
         padding: 0 !important;
-        width: 155px !important;                       /* ancho justo para el rango */
+        width: 155px !important;
     }
     .st-key-fch_ajuste_inline .stDateInput input::placeholder {
         color: var(--accent) !important;
@@ -518,48 +516,44 @@ def get_css():
     /* Hover: lavanda un punto más vivo */
     .st-key-fch_ajuste_inline .stDateInput > div > div:hover,
     .st-key-fch_ajuste_inline .stDateInput > div > div:focus-within {
-        background: var(--accent-light) !important;    /* lavanda 100 */
+        background: var(--accent-light) !important;
         border-color: var(--accent) !important;
     }
 
-    /* ── Icono calendario gris integrado (reemplaza el SVG nativo) ── */
+    /* Icono calendario gris pegado a la píldora por la izquierda */
     .st-key-fch_ajuste_inline .stDateInput::before {
+        display: none !important;                /* desactiva el anterior */
+    }
+    .st-key-fch_ajuste_inline .stDateInput > div > div::before {
         content: "";
         position: absolute;
-        left: 6px; top: 50%;
+        left: -25px; top: 50%;                   /* 25px = 18px icono + 7px aire */
         width: 18px; height: 18px;
         transform: translateY(-50%);
-        background-color: #85858f;   /* gris neutro, "sin color" */
+        background-color: #85858f;
         -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M16 3v4M8 3v4M4 11h16"/></svg>') center / contain no-repeat;
                 mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M16 3v4M8 3v4M4 11h16"/></svg>') center / contain no-repeat;
         pointer-events: none;
     }
 
     /* =================================================================== */
-    /* CALENDARIO DESPLEGABLE (BaseWeb) — Opción 1: marco suave, sin presets */
-    /* IMPORTANTE: el color índigo de los días y del relleno del rango lo da   */
-    /* primaryColor en .streamlit/config.toml. Aquí solo pulimos el marco y  */
-    /* ocultamos el bloque "CHOOSE A DATE RANGE / None".                     */
+    /* CALENDARIO DESPLEGABLE (BaseWeb) — marco suave, sin presets          */
     /* =================================================================== */
 
-    /* Marco del calendario: redondeado, con sombra y tipografía de la app */
     div[data-baseweb="calendar"] {
         border-radius: 12px !important;
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10) !important;
         font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
     }
 
-    /* Esquinas redondeadas en cada día */
     div[data-baseweb="calendar"] [role="gridcell"] > div {
         border-radius: 8px !important;
     }
 
-    /* Flechas de navegación (‹ ›) en índigo */
     div[data-baseweb="calendar"] button svg {
         fill: var(--accent) !important;
     }
 
-    /* Ocultar el selector de presets "CHOOSE A DATE RANGE / None" */
     div[data-baseweb="popover"]:has(div[data-baseweb="calendar"]) [data-baseweb="select"] {
         display: none !important;
     }
@@ -568,7 +562,7 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* OCULTAR TOOLBAR NATIVO DE STREAMLIT (lápiz, GitHub, menú ⋮)         */
+    /* OCULTAR TOOLBAR NATIVO DE STREAMLIT                                  */
     /* =================================================================== */
     [data-testid="stToolbar"],
     [data-testid="stMainMenu"],
