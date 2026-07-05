@@ -445,7 +445,8 @@ def get_css():
     /* botón y fecha pegados a la derecha.                                  */
     /* =================================================================== */
     .st-key-fila_ajuste_top {
-        margin-top: -16px !important;
+        margin-top: -16px !important;      /* igual que antes: el chip NO se mueve */
+        margin-bottom: 18px !important;    /* NUEVO: empuja hacia abajo tabs + fecha + tabla */
     }
     .st-key-fila_ajuste_top [data-testid="stHorizontalBlock"] {
         align-items: center !important;
