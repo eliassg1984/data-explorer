@@ -763,28 +763,33 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "padding": "10px !important",
             "background-color": "#ffffff !important",
         },
-        # Este bloque se reemplaza por el nuevo más abajo
-        # ".ag-filter-toolpanel": { ... },  <--- eliminado y reemplazado por el bloque unificado.
-        ".ag-column-select-column": {
+
+        # ══════════════════════════════════════════════════════════════════
+        # PANEL COLUMNS — estilos ACOTADOS con [data-active-panel='columns']
+        # para que NO afecten al panel Pivote, que usa el mismo componente
+        # interno (agColumnsToolPanel) y comparte la clase
+        # .ag-column-select-column.
+        # ══════════════════════════════════════════════════════════════════
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column": {
             "display": "flex !important",
             "align-items": "center !important",
             "padding": "10px 12px !important",
             "border-bottom": "0.5px solid #f1f1f4 !important",
         },
-        ".ag-column-select-column-label": {
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column-label": {
             "order": "-1 !important",
             "margin-right": "auto !important",
             "color": "#71717a !important",
             "font-size": "12.5px !important",
         },
-        ".ag-column-select-column:has(.ag-checked) .ag-column-select-column-label": {
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:has(.ag-checked) .ag-column-select-column-label": {
             "color": "#18181d !important",
             "font-weight": "500 !important",
         },
-        ".ag-column-select-column .ag-drag-handle": {
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-drag-handle": {
             "display": "none !important",
         },
-        ".ag-column-select-column .ag-checkbox-input-wrapper": {
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper": {
             "width": "36px !important",
             "height": "20px !important",
             "border-radius": "999px !important",
@@ -794,7 +799,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "position": "relative !important",
             "transition": "background .15s ease !important",
         },
-        ".ag-column-select-column .ag-checkbox-input-wrapper::after": {
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper::after": {
             "content": "'' !important",
             "position": "absolute !important",
             "top": "2px !important",
@@ -807,16 +812,18 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "box-shadow": "0 1px 2px rgba(0,0,0,0.25) !important",
             "transition": "left .15s ease !important",
         },
-        ".ag-column-select-column .ag-checkbox-input-wrapper.ag-checked": {
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper.ag-checked": {
             "background": "#5a4ad9 !important",
         },
-        ".ag-column-select-column .ag-checkbox-input-wrapper.ag-checked::after": {
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper.ag-checked::after": {
             "content": "'' !important",
             "left": "18px !important",
         },
-        ".ag-column-select-column .ag-checkbox-input": {
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input": {
             "cursor": "pointer !important",
         },
+        # En el panel Pivote ocultamos la lista superior de selección de
+        # columnas: ahí solo queremos ver Grupos de filas / Valores.
         ".ag-side-bar[data-active-panel='pivotePanel'] .ag-column-select": {
             "display": "none !important",
         },
