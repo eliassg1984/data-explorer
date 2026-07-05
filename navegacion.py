@@ -179,7 +179,7 @@ html body .stApp { padding-top: 0 !important; }
    CAMBIADO: de 0.4rem a 0.15rem para subir el chip "Ajuste de Inventario". */
 html body [data-testid="stMainBlockContainer"],
 html body .stMainBlockContainer,
-html body .block-container { padding-top: 0.15rem !important; }
+html body .block-container { padding-top: 0.85rem !important; }
 
 /* 4) CLAVE: colapsar los contenedores "invisibles" que se apilan arriba
    (st.markdown que solo inyectan <style>, los iframes de overlay/inspector
