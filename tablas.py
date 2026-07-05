@@ -926,8 +926,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "box-shadow": "0 0 0 2px #f0edfe !important",
             "outline": "none !important",
         },
-        # Cambio 3: filtros como pastillas
-        ".ag-filter-toolpanel-instance-header": {
+        # Cambio 3 (corregido): filtros como pastillas.
+        # En AG Grid 33 la fila visible del panel de filtros es el GRUPO
+        # (.ag-filter-toolpanel-group-title-bar), no la instance-header.
+        ".ag-filter-toolpanel-group-title-bar": {
             "background": "#f6f6f8 !important",
             "border": "1px solid #e6e6eb !important",
             "border-radius": "999px !important",
@@ -935,21 +937,31 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "margin": "3px 10px !important",
             "transition": "background .15s ease, border-color .15s ease !important",
         },
-        ".ag-filter-toolpanel-instance-header:hover": {
+        ".ag-filter-toolpanel-group-title-bar:hover": {
             "background": "#f0edfe !important",
             "border-color": "#d4cdf7 !important",
+        },
+        ".ag-filter-toolpanel-group-title": {
+            "color": "#71717a !important",
+            "font-size": "12.5px !important",
+            "font-weight": "500 !important",
+        },
+        ".ag-filter-toolpanel-group-title-bar-icon .ag-icon, "
+        ".ag-filter-toolpanel-group-title-bar .ag-icon": {
+            "color": "#a2a2ad !important",
+        },
+        # La instance-header (sub-encabezado que aparece al expandir un filtro)
+        # se mantiene plana para no duplicar pastillas dentro de la pastilla.
+        ".ag-filter-toolpanel-instance-header": {
+            "background": "transparent !important",
+            "border": "none !important",
+            "padding": "6px 12px !important",
+            "margin": "0 !important",
         },
         ".ag-filter-toolpanel-instance-header-text": {
             "color": "#71717a !important",
             "font-size": "12.5px !important",
             "font-weight": "500 !important",
-        },
-        ".ag-filter-toolpanel-instance-header .ag-icon": {
-            "color": "#a2a2ad !important",
-        },
-        ".ag-filter-toolpanel-instance-body": {
-            "background": "#fafafa !important",
-            "padding": "8px 12px !important",
         },
 
         # ── Panel COLUMNAS — tipografía y buscador a juego ──
