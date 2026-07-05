@@ -10,7 +10,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from utils import _norm, buscar_columna, buscar_columna_fecha, LOCALE_ES
 from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid
-from perf import perf  # <--- NUEVO IMPORT PARA MEDICIÓN DE RENDIMIENTO
+from perf import perf
 
 
 # ===========================================================================
@@ -770,15 +770,15 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         # interno (agColumnsToolPanel) y comparte la clase
         # .ag-column-select-column.
         # ══════════════════════════════════════════════════════════════════
-        # Cambio 1: filas como pastillas
+        # Cambio 1: filas como pastillas (más espaciado)
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column": {
             "display": "flex !important",
             "align-items": "center !important",
             "background": "#f6f6f8 !important",
             "border": "1px solid #e6e6eb !important",
             "border-radius": "999px !important",
-            "padding": "6px 12px !important",
-            "margin": "3px 10px !important",
+            "padding": "8px 12px !important",
+            "margin": "5px 10px !important",
             "transition": "background .15s ease, border-color .15s ease !important",
         },
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:hover": {
@@ -927,8 +927,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "outline": "none !important",
         },
         # Cambio 3 (corregido): filtros como pastillas.
-        # En AG Grid 33 la fila visible del panel de filtros es el GRUPO
-        # (.ag-filter-toolpanel-group-title-bar), no la instance-header.
         ".ag-filter-toolpanel-group-title-bar": {
             "background": "#f6f6f8 !important",
             "border": "1px solid #e6e6eb !important",
@@ -950,8 +948,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         ".ag-filter-toolpanel-group-title-bar .ag-icon": {
             "color": "#a2a2ad !important",
         },
-        # La instance-header (sub-encabezado que aparece al expandir un filtro)
-        # se mantiene plana para no duplicar pastillas dentro de la pastilla.
         ".ag-filter-toolpanel-instance-header": {
             "background": "transparent !important",
             "border": "none !important",
