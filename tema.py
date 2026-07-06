@@ -70,6 +70,48 @@ BLANCO = "#ffffff"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ESTADOS SEMÁNTICOS (éxito / advertencia / error)
+# Cada estado tiene 3 tonos: base (fuerte), fondo (claro) y — cuando aplica —
+# borde/texto intermedio. Nombres alineados con las variables --success/
+# --warning/--danger que ya existen en estilos.py.
+# ═══════════════════════════════════════════════════════════════════════════
+
+EXITO = "#16a34a"
+"""Verde base: badges de éxito, ajustes positivos."""
+
+EXITO_FONDO = "#f0fdf4"
+"""Verde muy claro: fondo de badge/alerta de éxito."""
+
+ADVERTENCIA = "#f97316"
+"""Naranja base: badges de advertencia."""
+
+ADVERTENCIA_FONDO = "#fff7ed"
+"""Naranja muy claro: fondo de alerta de advertencia."""
+
+ADVERTENCIA_BORDE = "#fdba74"
+"""Naranja medio: borde de alerta de advertencia."""
+
+ADVERTENCIA_TEXTO = "#c2410c"
+"""Naranja oscuro: texto sobre fondo de advertencia."""
+
+ERROR = "#ef4444"
+"""Rojo base: badges/estados de error."""
+
+ERROR_FONDO = "#fee2e2"
+"""Rojo muy claro: fondo de alerta de error."""
+
+ERROR_BORDE = "#fca5a5"
+"""Rojo medio: borde de alerta de error."""
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LAVANDA DE FOCO
+# ═══════════════════════════════════════════════════════════════════════════
+
+LAVANDA_FOCO = "#b9aff2"
+"""Lavanda claro para bordes de foco/selección (inputs, tabs activos)."""
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # NOTAS DE USO
 # ═══════════════════════════════════════════════════════════════════════════
 # - En diccionarios de CSS (custom_css de AgGrid) se usan con f-string:
