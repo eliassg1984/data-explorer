@@ -1288,14 +1288,27 @@ def inject_dynamic_grid_height(offset_px: int = 220, min_px: int = 480):
                la barra. */
             try {
                 var idoc = iframe.contentDocument;
-                if (idoc && idoc.head && !idoc.getElementById('dynh-css')) {
-                    var stl = idoc.createElement('style');
-                    stl.id = 'dynh-css';
-                    stl.textContent =
-                        'html, body { height: 100%; margin: 0; }' +
-                        '[class*="ag-theme-"] { height: 100% !important; }' +
-                        '.ag-root-wrapper { height: 100% !important; }';
-                    idoc.head.appendChild(stl);
+                var hInner = h;  /* misma altura en PX que el iframe */
+                if (idoc && idoc.head) {
+                    var prev = idoc.getElementById('dynh-css');
+                    /* CSS con altura FIJA en px (no 100% encadenado).
+                       Motivo: html/body/tema/wrapper todos a 100% forman una
+                       cadena relativa que se recalcula entre sí; al hacer hover
+                       AgGrid dispara reflow, el 100% se re-mide en bucle y la
+                       tabla PARPADEA o colapsa a 0 (queda en blanco). Fijar el
+                       wrapper a un px concreto rompe la cadena: no hay nada que
+                       recalcular. Se actualiza el px en cada aplicarAltura. */
+                    var css =
+                        'html, body { margin: 0; }' +
+                        '.ag-root-wrapper { height: ' + hInner + 'px !important; }';
+                    if (prev) {
+                        prev.textContent = css;
+                    } else {
+                        var stl = idoc.createElement('style');
+                        stl.id = 'dynh-css';
+                        stl.textContent = css;
+                        idoc.head.appendChild(stl);
+                    }
                 }
                 /* Un ÚNICO resize diferido para que AgGrid recalcule las filas
                    visibles con la nueva altura. Puntual, no en bucle. */
