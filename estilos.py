@@ -63,6 +63,14 @@ def get_css():
         min-height: 0 !important;
     }
 
+    /* PADDING SUPERIOR — DEFAULT GLOBAL (nivel 1 de 3).
+       Jerarquía documentada en ARQUITECTURA.md:
+         1) Este default global (1.5rem).
+         2) Override POR SECCIÓN en navegacion.py (p.ej. _CSS_AJUSTE, 0.85rem),
+            que gana a propósito vía prefijo `html body`.
+         3) Override MÓVIL en el @media (max-width: 768px) de este fichero.
+       Si quieres cambiar el espacio de UNA sección, NO toques esto:
+       edita su bloque en navegacion.py. */
     .stMainBlockContainer,
     [data-testid="stMainBlockContainer"],
     .block-container {
