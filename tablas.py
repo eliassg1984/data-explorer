@@ -770,6 +770,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         # interno (agColumnsToolPanel) y comparte la clase
         # .ag-column-select-column.
         # ══════════════════════════════════════════════════════════════════
+
+        # Respiro inferior: evita que la última pastilla toque el borde del panel
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-list": {
+            "padding-bottom": "8px !important",
+        },
+
         # Cambio 1: filas como pastillas (más espaciado)
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column": {
             "display": "flex !important",
