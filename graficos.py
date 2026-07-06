@@ -10,6 +10,10 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from utils import buscar_columna
+from tema import (
+    GRIS_FONDO, GRIS_BORDE, TEXTO_PRINCIPAL, BLANCO,
+    SERIE_PRINCIPAL, PALETA_SERIES, ESCALA_CONTINUA, ESCALA_SEMAFORO,
+)
 
 
 # ===========================================================================
@@ -17,10 +21,7 @@ from utils import buscar_columna
 # (índigo primario + tonos de los "orbes": cian, magenta, naranja, verde)
 # ===========================================================================
 
-PALETA_CALLAI = [
-    "#6c5ce7", "#22b8d4", "#e85ba8", "#f97316",
-    "#16a34a", "#9385ec", "#f4b740", "#3b2e93",
-]
+PALETA_CALLAI = PALETA_SERIES  # alias retrocompatible; fuente en tema.py
 
 
 # ===========================================================================
@@ -114,7 +115,7 @@ def renderizar_graficos(df_f, es_movil=False):
                 marker=dict(
                     size=sizes_norm,
                     opacity=0.7,
-                    color='#6c5ce7',
+                    color=SERIE_PRINCIPAL,
                     sizemode='diameter'
                 ),
                 text=df[col_producto],
@@ -126,7 +127,7 @@ def renderizar_graficos(df_f, es_movil=False):
         
         if not col_area and height >= 400:
             fig.add_vline(x=df[col_precio].mean(), line_dash="dash", 
-                         line_color="#6c5ce7",
+                         line_color=SERIE_PRINCIPAL,
                          annotation_text=f"Precio prom. (S/ {df[col_precio].mean():.2f})")
         
         fig.update_layout(
@@ -134,8 +135,8 @@ def renderizar_graficos(df_f, es_movil=False):
             xaxis_title='Precio Promedio (S/)',
             yaxis_title='Stock',
             height=height,
-            paper_bgcolor='#f6f6f8',
-            plot_bgcolor='#ffffff',
+            paper_bgcolor=GRIS_FONDO,
+            plot_bgcolor=BLANCO,
             showlegend=True if col_area else False
         )
         
@@ -153,7 +154,7 @@ def renderizar_graficos(df_f, es_movil=False):
                     
                     fig_tree = px.treemap(
                         df_f, path=path, values=col_valorizado,
-                        color=col_valorizado, color_continuous_scale='blues',
+                        color=col_valorizado, color_continuous_scale=ESCALA_CONTINUA,
                         title='Valorización por Área y Familia'
                     )
                     fig_tree.update_layout(margin=dict(l=10, r=10, t=30, b=10), height=350)
@@ -171,7 +172,7 @@ def renderizar_graficos(df_f, es_movil=False):
                         orientation='h',
                         title='Top 10 por Valorización',
                         text=col_valorizado,
-                        color_discrete_sequence=['#6c5ce7']
+                        color_discrete_sequence=[SERIE_PRINCIPAL]
                     )
                     fig_top.update_traces(texttemplate='S/ %{text:,.0f}', textposition='outside')
                     fig_top.update_layout(height=350)
@@ -198,7 +199,7 @@ def renderizar_graficos(df_f, es_movil=False):
                         
                         fig_sun = px.sunburst(
                             df_f, path=path, values=col_valorizado,
-                            color=col_valorizado, color_continuous_scale='blues',
+                            color=col_valorizado, color_continuous_scale=ESCALA_CONTINUA,
                             title='Distribución Jerárquica del Valor'
                         )
                         fig_sun.update_layout(height=350)
@@ -211,7 +212,7 @@ def renderizar_graficos(df_f, es_movil=False):
                     fig_hist = px.histogram(
                         df_f, x=col_precio, nbins=20,
                         title='Distribución de Precios Promedio',
-                        color_discrete_sequence=['#6c5ce7']
+                        color_discrete_sequence=[SERIE_PRINCIPAL]
                     )
                     fig_hist.update_layout(height=300)
                     st.plotly_chart(fig_hist, use_container_width=True)
@@ -236,7 +237,7 @@ def renderizar_graficos(df_f, es_movil=False):
                         
                         fig_tree = px.treemap(
                             df_f, path=path, values=col_valorizado,
-                            color=col_valorizado, color_continuous_scale='blues',
+                            color=col_valorizado, color_continuous_scale=ESCALA_CONTINUA,
                             title='Valorización por Área y Familia'
                         )
                         fig_tree.update_layout(margin=dict(l=10, r=10, t=30, b=10))
@@ -255,7 +256,7 @@ def renderizar_graficos(df_f, es_movil=False):
                         
                         fig_sun = px.sunburst(
                             df_f, path=path, values=col_valorizado,
-                            color=col_valorizado, color_continuous_scale='blues',
+                            color=col_valorizado, color_continuous_scale=ESCALA_CONTINUA,
                             title='Distribución Jerárquica'
                         )
                         fig_sun.update_layout(margin=dict(l=10, r=10, t=30, b=10))
@@ -300,7 +301,7 @@ def renderizar_graficos(df_f, es_movil=False):
                     fig_top = px.bar(
                         top_15, x=col_valorizado, y=col_producto,
                         orientation='h', color=col_stock,
-                        color_continuous_scale=['#ef4444', '#f97316', '#16a34a'],
+                        color_continuous_scale=ESCALA_SEMAFORO,
                         title='Top 15 Productos (color = stock)',
                         text=col_valorizado
                     )
@@ -319,7 +320,7 @@ def renderizar_graficos(df_f, es_movil=False):
                         fig_area = px.bar(
                             area_val, x=col_valorizado, y=col_area,
                             orientation='h', color=col_valorizado,
-                            color_continuous_scale='blues',
+                            color_continuous_scale=ESCALA_CONTINUA,
                             title='Ranking por Área',
                             text=col_valorizado
                         )
@@ -345,7 +346,7 @@ def renderizar_graficos(df_f, es_movil=False):
                         fig_box = px.box(
                             df_f, y=col_precio,
                             title='Distribución de Precios',
-                            color_discrete_sequence=['#6c5ce7']
+                            color_discrete_sequence=[SERIE_PRINCIPAL]
                         )
                     fig_box.update_layout(height=400)
                     st.plotly_chart(fig_box, use_container_width=True)
@@ -357,7 +358,7 @@ def renderizar_graficos(df_f, es_movil=False):
                     fig_hist = px.histogram(
                         df_f, x=col_precio, nbins=30,
                         title='Distribución de Precios',
-                        color_discrete_sequence=['#6c5ce7']
+                        color_discrete_sequence=[SERIE_PRINCIPAL]
                     )
                     fig_hist.update_layout(height=400)
                     st.plotly_chart(fig_hist, use_container_width=True)
@@ -396,12 +397,12 @@ def renderizar_graficos(df_f, es_movil=False):
 # ===========================================================================
 
 _LAYOUT_BASE = dict(
-    paper_bgcolor="#f6f6f8", plot_bgcolor="#ffffff",
-    font_color="#18181d",
+    paper_bgcolor=GRIS_FONDO, plot_bgcolor=BLANCO,
+    font_color=TEXTO_PRINCIPAL,
     font_family="DM Sans, Inter, -apple-system, sans-serif",
     margin=dict(l=20, r=20, t=50, b=20),
     height=420,
-    xaxis=dict(gridcolor="#e6e6eb"), yaxis=dict(gridcolor="#e6e6eb"),
+    xaxis=dict(gridcolor=GRIS_BORDE), yaxis=dict(gridcolor=GRIS_BORDE),
 )
 
 
@@ -453,14 +454,14 @@ def crear_grafico(df, conf):
                 return None, "faltan columnas para el treemap"
             df_agg = df.groupby(path, as_index=False)[y].sum()
             fig = px.treemap(df_agg, path=path, values=y,
-                             color=y, color_continuous_scale="blues", title=titulo)
+                             color=y, color_continuous_scale=ESCALA_CONTINUA, title=titulo)
 
         elif tipo == "scatter":
             fig = px.scatter(df, x=x, y=y, color=color, size=size, title=titulo)
 
         elif tipo == "histogram":
             fig = px.histogram(df, x=x, nbins=conf.get("nbins", 20), title=titulo,
-                               color_discrete_sequence=["#6c5ce7"])
+                               color_discrete_sequence=[SERIE_PRINCIPAL])
 
         elif tipo == "box":
             fig = px.box(df, x=x, y=y, color=x if x else None, title=titulo)
@@ -471,7 +472,7 @@ def crear_grafico(df, conf):
             kwargs = dict(x=x_p, y=y, color=color, title=titulo)
             if tipo == "bar":
                 kwargs["barmode"] = conf.get("barmode", "group" if color else "relative")
-                kwargs["color_discrete_sequence"] = None if color else ["#6c5ce7"]
+                kwargs["color_discrete_sequence"] = None if color else [SERIE_PRINCIPAL]
             if tipo == "line":
                 kwargs["markers"] = True
             fig = fn(df_p, **kwargs)
