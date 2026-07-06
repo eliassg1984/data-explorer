@@ -57,6 +57,9 @@ def get_css():
         --border-lavender: #d4cdf7; /* borde lavanda de pastillas/inputs */
         --icon-muted: #85858f;      /* gris neutro de iconos (calendario) */
         --focus-lavender: #b9aff2;  /* borde de foco/selección */
+        --line-soft: #f1f1f4;       /* línea divisoria muy suave (= GRIS_LINEA) */
+        --exit-hover: #52525c;      /* hover del botón salir de pantalla completa */
+        --scroll-thumb: #d6d6dd;    /* pulgar de scrollbar en paneles */
         --shadow: 0 1px 3px rgba(16, 16, 20, 0.05), 0 1px 2px rgba(16, 16, 20, 0.04);
         --shadow-md: 0 4px 6px rgba(16, 16, 20, 0.05), 0 2px 4px rgba(16, 16, 20, 0.03);
     }
