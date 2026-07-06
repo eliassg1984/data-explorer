@@ -112,6 +112,31 @@ LAVANDA_FOCO = "#b9aff2"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# COLORES DE DATO / SERIE (gráficos)
+# Concepto DISTINTO a los de interfaz: aquí el color representa un dato, no
+# un elemento de UI. Por eso viven en su propia sección.
+# ═══════════════════════════════════════════════════════════════════════════
+
+SERIE_PRINCIPAL = "#6c5ce7"
+"""Color de una serie única (barras/histogramas de un solo grupo).
+Coincide con ACENTO a propósito: la marca también tiñe el dato principal."""
+
+PALETA_SERIES = [
+    "#6c5ce7", "#22b8d4", "#e85ba8", "#f97316",
+    "#16a34a", "#9385ec", "#f4b740", "#3b2e93",
+]
+"""Secuencia de colores para múltiples series (antes PALETA_CALLAI).
+Se recorre en orden cuando un gráfico agrupa por una columna de color."""
+
+ESCALA_CONTINUA = "blues"
+"""Escala continua de Plotly para treemaps/mapas de calor (valor → intensidad)."""
+
+ESCALA_SEMAFORO = ["#ef4444", "#f97316", "#16a34a"]
+"""Escala divergente rojo→naranja→verde: negativo→neutro→positivo
+(p.ej. ajuste de inventario, donde el signo importa)."""
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # NOTAS DE USO
 # ═══════════════════════════════════════════════════════════════════════════
 # - En diccionarios de CSS (custom_css de AgGrid) se usan con f-string:
