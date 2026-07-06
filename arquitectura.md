@@ -23,9 +23,21 @@ actualiza este documento en el mismo commit.
 
 ## Reglas del proyecto (aprendidas de bugs reales)
 
-1. **Colores solo desde `tema.py`.** Nunca pegar `#xxxxxx` en otro fichero.
-   Motivo: había 100+ colores repetidos a mano; cambiar la marca era
-   imposible sin desentonar algo.
+1. **Colores desde la paleta central — DOS fuentes coordinadas.** Nunca pegar
+   `#xxxxxx` suelto en el código. Hay dos "caras" de la MISMA paleta, según
+   el mundo (Python o CSS):
+   - **`tema.py`** (Python) — para colores usados desde código Python:
+     `navegacion.py` (f-strings), `graficos.py` (Plotly), diccionarios
+     `custom_css` de AgGrid. Se importa: `from tema import ACENTO, ...`.
+   - **`:root` de `estilos.py`** (CSS) — para el CSS global inyectado como
+     string. Ese bloque define variables (`--accent`, `--border`...) y el
+     resto del fichero las usa con `var(--...)`. Es la fuente única del CSS.
+   Ambas tienen los MISMOS valores a propósito. No se pueden fusionar en una
+   sola (Python y CSS son mundos distintos; el CSS de `estilos.py` no es
+   f-string y meter Python exigiría escapar todas las llaves `{}`).
+   **Regla al cambiar un color:** actualizarlo en las DOS caras si aplica a
+   ambas. Motivo del refactor: había 100+ colores repetidos a mano; cambiar
+   la marca era imposible sin desentonar algo.
 
 2. **Estilos de paneles AgGrid siempre ACOTADOS por panel.** Los paneles
    Columnas y Modo pivote comparten el componente interno
