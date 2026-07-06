@@ -175,7 +175,11 @@ _CSS_AJUSTE = """
 /* 2) Quitar el padding-top de 48px que el rail reserva para el topbar. */
 html body .stApp { padding-top: 0 !important; }
 
-/* 3) Padding superior mínimo del contenedor principal.
+/* 3) Padding superior mínimo del contenedor principal — OVERRIDE POR SECCIÓN
+   (nivel 2 de 3; jerarquía en ARQUITECTURA.md). El prefijo `html body` NO es
+   decorativo: le da más especificidad que el default global de estilos.py
+   (1.5rem) para ganar SIEMPRE, sin depender del orden de inyección. Es el
+   mecanismo estándar para overrides por sección en este proyecto.
    CAMBIADO: de 0.4rem a 0.15rem para subir el chip "Ajuste de Inventario". */
 html body [data-testid="stMainBlockContainer"],
 html body .stMainBlockContainer,
