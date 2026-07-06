@@ -1205,55 +1205,6 @@ def inject_maximize_aggrid():
 
 
 # ===========================================================================
-# BOTÓN "ABRIR CALENDARIO" — Ajuste de Inventario
-# ===========================================================================
-
-def inject_boton_calendario_ajuste():
-    """Inserta un botón 📅 junto al campo 'Rango a Evaluar' del Ajuste de
-    Inventario. Al pulsarlo abre el calendario del date_input
-    (key='fch_ajuste_inline') sin recargar la app."""
-    components.html(
-        """
-        <script>
-        (function () {
-            var doc = window.parent.document;
-            var intentos = 0;
-            var t = setInterval(function () {
-                intentos++;
-                var cont = doc.querySelector('.st-key-fch_ajuste_inline');
-                if (cont) {
-                    clearInterval(t);
-                    if (cont.querySelector('.btn-cal-ajuste')) return;
-                    var btn = doc.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'btn-cal-ajuste';
-                    btn.innerHTML = '📅 Calendario';
-                    btn.title = 'Abrir calendario';
-                    btn.style.cssText =
-                        'margin-top:8px;padding:8px 16px;border:1.5px solid #6c5ce7;' +
-                        'background:#f0edfe;color:#4938b8;border-radius:999px;' +
-                        'font-size:14px;font-weight:600;cursor:pointer;' +
-                        'font-family:"DM Sans",Inter,-apple-system,sans-serif;' +
-                        'transition:all .15s ease;';
-                    btn.onmouseenter = function () { btn.style.background = '#e7e3fb'; };
-                    btn.onmouseleave = function () { btn.style.background = '#f0edfe'; };
-                    btn.onclick = function (e) {
-                        e.preventDefault();
-                        var inp = cont.querySelector('input');
-                        if (inp) { inp.focus(); inp.click(); }
-                    };
-                    cont.appendChild(btn);
-                }
-                if (intentos > 40) clearInterval(t);
-            }, 150);
-        })();
-        </script>
-        """,
-        height=0,
-    )
-
-
-# ===========================================================================
 # ALTURA DINÁMICA DEL GRID — llena el alto de pantalla disponible
 # ===========================================================================
 
