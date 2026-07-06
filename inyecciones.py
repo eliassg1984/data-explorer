@@ -1251,3 +1251,99 @@ def inject_boton_calendario_ajuste():
         """,
         height=0,
     )
+
+
+# ===========================================================================
+# ALTURA DINÁMICA DEL GRID — llena el alto de pantalla disponible
+# ===========================================================================
+
+def inject_dynamic_grid_height(offset_px: int = 220, min_px: int = 480):
+    """
+    Estira la tabla AgGrid para que ocupe el alto de pantalla disponible,
+    en lugar del height=... fijo con el que se renderiza.
+
+    DISEÑO SEGURO (mismo espíritu que inject_maximize_aggrid):
+    - El grid se sigue creando con su height fijo en tablas.py. Esta función
+      solo lo AGRANDA por CSS/JS después. Si algo falla, el fijo queda como
+      red de seguridad: comenta la llamada y vuelves al estado anterior.
+    - Mide window.innerHeight UNA sola vez (con reintentos hasta que el iframe
+      exista). NO instala listener de resize continuo, que es justo lo que
+      provoca el bucle de re-medición (setFrameHeight -> resize -> re-mide...)
+      y el error React #185. Es una medición puntual, no reactiva.
+    - Reutiliza el mismo buscarIframe() que el fullscreen: localiza el iframe
+      del componente por su .ag-root-wrapper.
+
+    Parámetros:
+    - offset_px: píxeles reservados para lo que hay ARRIBA de la tabla
+      (chip de título, tabs, fecha) más un margen inferior. Súbelo si la
+      tabla tapa algo de abajo; bájalo si queda blanco.
+    - min_px: altura mínima; en pantallas muy bajas no baja de aquí.
+    """
+    components.html("""
+    <script>
+    (function(){
+        var win = window.parent;
+        var doc = win.document;
+        var OFFSET = %d;
+        var MINPX  = %d;
+        var tries = 0;
+        var MAX = 40;
+
+        function buscarIframe() {
+            var frames = doc.querySelectorAll('iframe[src*="st_aggrid"]');
+            if (!frames.length) frames = doc.querySelectorAll('iframe');
+            for (var i = 0; i < frames.length; i++) {
+                try {
+                    var d = frames[i].contentDocument;
+                    if (d && d.querySelector('.ag-root-wrapper')) return frames[i];
+                } catch(e) {}
+            }
+            return null;
+        }
+
+        function aplicarAltura() {
+            var iframe = buscarIframe();
+            if (!iframe) return false;
+
+            /* Alto disponible = ventana - lo que va arriba/abajo (offset). */
+            var h = Math.max(MINPX, win.innerHeight - OFFSET);
+
+            /* 1) El iframe del componente. */
+            iframe.style.height = h + 'px';
+
+            /* 2) El contenedor que Streamlit envuelve alrededor del iframe,
+                  para que no lo recorte a su altura reportada. */
+            var cont = iframe.parentElement;
+            for (var k = 0; k < 3 && cont; k++) {
+                cont.style.height = h + 'px';
+                cont = cont.parentElement;
+            }
+
+            /* 3) El grid interno: que ocupe el 100% del iframe ya agrandado. */
+            try {
+                var idoc = iframe.contentDocument;
+                var wrap = idoc && idoc.querySelector('.ag-root-wrapper');
+                if (wrap) {
+                    wrap.style.height = '100%';
+                }
+                /* Un ÚNICO resize diferido para que AgGrid recalcule las filas
+                   visibles con la nueva altura. Puntual, no en bucle. */
+                if (iframe.contentWindow) {
+                    win.setTimeout(function(){
+                        try { iframe.contentWindow.dispatchEvent(new Event('resize')); } catch(e) {}
+                    }, 200);
+                }
+            } catch(e) {}
+
+            return true;
+        }
+
+        function check() {
+            tries++;
+            if (aplicarAltura()) return;
+            if (tries < MAX) win.setTimeout(check, 500);
+        }
+        win.setTimeout(check, 800);
+    })();
+    </script>
+    """ % (offset_px, min_px), height=0)
