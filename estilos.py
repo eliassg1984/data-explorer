@@ -48,7 +48,15 @@ def get_css():
         --success-bg: #f0fdf4;
         --warning: #f97316;         /* naranja tipo badge "Inbound" */
         --warning-bg: #fff7ed;
+        --warning-border: #fdba74;  /* borde de alerta de advertencia */
+        --warning-text: #c2410c;    /* texto sobre fondo de advertencia */
         --danger: #ef4444;
+        --danger-bg: #fee2e2;       /* fondo de alerta de error */
+        --danger-border: #fca5a5;   /* borde de alerta de error */
+        --danger-text: #991b1b;     /* texto rojo oscuro de error */
+        --border-lavender: #d4cdf7; /* borde lavanda de pastillas/inputs */
+        --icon-muted: #85858f;      /* gris neutro de iconos (calendario) */
+        --focus-lavender: #b9aff2;  /* borde de foco/selección */
         --shadow: 0 1px 3px rgba(16, 16, 20, 0.05), 0 1px 2px rgba(16, 16, 20, 0.04);
         --shadow-md: 0 4px 6px rgba(16, 16, 20, 0.05), 0 2px 4px rgba(16, 16, 20, 0.03);
     }
@@ -230,43 +238,43 @@ def get_css():
     }
 
     .stWarning {
-        background: #fff7ed !important;
-        border: 1px solid #fdba74 !important;
-        color: #c2410c !important;
+        background: var(--warning-bg) !important;
+        border: 1px solid var(--warning-border) !important;
+        color: var(--warning-text) !important;
         border-radius: 8px !important;
     }
 
     .stInfo {
         background: var(--accent-light) !important;
-        border: 1px solid #b9aff2 !important;
-        color: #4938b8 !important;
+        border: 1px solid var(--focus-lavender) !important;
+        color: var(--accent-deep) !important;
         border-radius: 8px !important;
     }
 
     .stError {
-        background: #fee2e2 !important;
-        border: 1px solid #fca5a5 !important;
-        color: #991b1b !important;
+        background: var(--danger-bg) !important;
+        border: 1px solid var(--danger-border) !important;
+        color: var(--danger-text) !important;
         border-radius: 8px !important;
     }
 
     /* ============ SIDEBAR ============ */
     [data-testid="stSidebar"] .nav-link {
-        background: #ffffff !important;
-        color: #71717a !important;
-        border: 1px solid #e6e6eb !important;
+        background: var(--bg-secondary) !important;
+        color: var(--text-secondary) !important;
+        border: 1px solid var(--border) !important;
     }
 
     [data-testid="stSidebar"] .nav-link:hover {
-        background: #f0edfe !important;
-        color: #5a4ad9 !important;
-        border-color: #b9aff2 !important;
+        background: var(--bg-hover) !important;
+        color: var(--accent-hover) !important;
+        border-color: var(--focus-lavender) !important;
     }
 
     [data-testid="stSidebar"] .nav-link-selected {
-        background: #6c5ce7 !important;
-        color: #ffffff !important;
-        border-color: #6c5ce7 !important;
+        background: var(--accent) !important;
+        color: var(--bg-secondary) !important;
+        border-color: var(--accent) !important;
     }
 
     /* ============ AGGRID - ANCHO COMPLETO ============ */
@@ -408,18 +416,18 @@ def get_css():
 
     /* Hover: insinúa el subrayado */
     [class*="st-key-vistatabs_"] [role="radiogroup"] label:hover {
-        border-bottom-color: #b9aff2 !important;
+        border-bottom-color: var(--focus-lavender) !important;
     }
     [class*="st-key-vistatabs_"] [role="radiogroup"] label:hover p {
-        color: #4938b8 !important;
+        color: var(--accent-deep) !important;
     }
 
     /* Tab ACTIVO — Streamlit marca el label seleccionado con aria-checked */
     [class*="st-key-vistatabs_"] [role="radiogroup"] label:has(input:checked) {
-        border-bottom-color: #6c5ce7 !important;
+        border-bottom-color: var(--accent) !important;
     }
     [class*="st-key-vistatabs_"] [role="radiogroup"] label:has(input:checked) p {
-        color: #4938b8 !important;
+        color: var(--accent-deep) !important;
         font-weight: 600 !important;
     }
 
@@ -443,9 +451,9 @@ def get_css():
         transition: all .15s ease !important;
     }
     [data-testid="stPopover"] button:hover {
-        border-color: #5a4ad9 !important;
-        background: #f0edfe !important;
-        color: #4938b8 !important;
+        border-color: var(--accent-hover) !important;
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
     }
 
     /* =================================================================== */
@@ -492,7 +500,7 @@ def get_css():
     /* La caja del input = PILL lavanda, alineada a la derecha */
     .st-key-fch_ajuste_inline .stDateInput > div > div {
         background: var(--accent-tint) !important;
-        border: 1px solid #d4cdf7 !important;
+        border: 1px solid var(--border-lavender) !important;
         border-radius: 999px !important;
         box-shadow: none !important;
         padding: 0 12px !important;              /* ← simétrico, sin hueco del icono */
@@ -537,7 +545,7 @@ def get_css():
         left: -25px; top: 50%;                   /* 25px = 18px de icono + 7px de aire */
         width: 18px; height: 18px;
         transform: translateY(-50%);
-        background-color: #85858f;
+        background-color: var(--icon-muted);
         -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M16 3v4M8 3v4M4 11h16"/></svg>') center / contain no-repeat;
                 mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M16 3v4M8 3v4M4 11h16"/></svg>') center / contain no-repeat;
         pointer-events: none;
