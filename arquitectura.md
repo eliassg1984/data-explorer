@@ -25,7 +25,8 @@ actualiza este documento en el mismo commit.
 
 1. **Colores solo desde `tema.py`.** Nunca pegar `#xxxxxx` en otro fichero.
    Motivo: había 100+ colores repetidos a mano; cambiar la marca era
-   imposible sin desentonar algo.
+   imposible sin desentonar algo. (Conectar la paleta a los demás ficheros
+   es la Fase 2, aún pendiente.)
 
 2. **Estilos de paneles AgGrid siempre ACOTADOS por panel.** Los paneles
    Columnas y Modo pivote comparten el componente interno
@@ -46,6 +47,13 @@ actualiza este documento en el mismo commit.
    con UNA medición (sin listener de resize continuo, que provoca el bucle
    setFrameHeight→resize→re-medición y el error React #185). Para revertir:
    comentar la llamada en `tablas.py`.
+   **Interacción documentada:** dentro del iframe se fija la cadena COMPLETA
+   (`html, body {margin:0}`, contenedor de tema y `.ag-root-wrapper` al 100%,
+   vía `<style id="dynh-css">`). Motivo: `inject_pagination_v2()` agranda la
+   barra de paginación y el body trae margen por defecto; con solo el wrapper
+   al 100% el contenido excedía al iframe y la paginación se veía CORTADA.
+   Regla general: si dos `inject_*` comparten espacio o elemento, la
+   interacción se documenta en ambas (comentario en el código + aquí).
 
 5. **Un cambio a la vez, verificado.** Antes de subir:
    `python -m py_compile <ficheros tocados>`. Sin salida = bien.
@@ -64,15 +72,6 @@ actualiza este documento en el mismo commit.
   lavanda) — "en juego" con el panel Modo pivote.
 - Variantes por reporte (`es_requerimientos`, `es_ajuste`) se aplican DESPUÉS
   del CSS base, nunca mezcladas dentro de él.
-
-## Cómo verificar tras cualquier cambio
-
-```bash
-python -m py_compile app.py tablas.py estilos.py inyecciones.py navegacion.py tema.py
-```
-
-Luego recargar la app y revisar: tabla Ajuste de Inventario (desktop),
-paneles Columnas / Filtros / Modo pivote, botón maximizar y paginación.
 
 ## Jerarquía de layout — quién manda sobre cada contenedor
 
@@ -101,6 +100,15 @@ Para cambiar el espacio superior de UNA sección: editar su bloque en
 `navegacion.py`. Editar el default de `estilos.py` NO tendrá efecto en las
 secciones con override (el nivel 2 gana) — es el error clásico a evitar.
 
+## Cómo verificar tras cualquier cambio
+
+```bash
+python -m py_compile app.py tablas.py estilos.py inyecciones.py navegacion.py tema.py
+```
+
+Luego recargar la app y revisar: tabla Ajuste de Inventario (desktop),
+paneles Columnas / Filtros / Modo pivote, botón maximizar y paginación.
+
 ## Refactor en curso (fases)
 
 - [x] Fase 1 — `tema.py` + este documento (aditivo, riesgo cero).
@@ -108,9 +116,12 @@ secciones con override (el nivel 2 gana) — es el error clásico a evitar.
       comentarios cruzados en `estilos.py`/`navegacion.py`, y eliminado el
       código muerto `inject_boton_calendario_ajuste` (tercer "dueño" de la
       píldora de fecha).
+- [ ] **Pendiente de subir** — Arreglo de paginación cortada: cadena completa
+      de alturas (`<style id="dynh-css">`) en `inject_dynamic_grid_height`.
+      Ver regla 4. (Verificado; falta el commit.)
 - [ ] Fase 2 — Reemplazar colores pegados por constantes de `tema.py`
       (mecánico; verificar CSS resultante idéntico).
-- [ ] Fase 3 — Trocear `renderizar_aggrid_desktop` (1,146 líneas) en
+- [ ] Fase 3 — Trocear `renderizar_aggrid_desktop` (~1,146 líneas) en
       helpers: `_construir_opciones_grid()`, `_css_base()`,
       `_css_requerimientos()`, `_css_ajuste()`.
 - [ ] Fase 4 — Mover el CSS del grid a `estilos_grid.py`.
