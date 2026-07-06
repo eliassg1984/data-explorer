@@ -25,8 +25,7 @@ actualiza este documento en el mismo commit.
 
 1. **Colores solo desde `tema.py`.** Nunca pegar `#xxxxxx` en otro fichero.
    Motivo: había 100+ colores repetidos a mano; cambiar la marca era
-   imposible sin desentonar algo. (Conectar la paleta a los demás ficheros
-   es la Fase 2, aún pendiente.)
+   imposible sin desentonar algo.
 
 2. **Estilos de paneles AgGrid siempre ACOTADOS por panel.** Los paneles
    Columnas y Modo pivote comparten el componente interno
@@ -73,6 +72,15 @@ actualiza este documento en el mismo commit.
 - Variantes por reporte (`es_requerimientos`, `es_ajuste`) se aplican DESPUÉS
   del CSS base, nunca mezcladas dentro de él.
 
+## Cómo verificar tras cualquier cambio
+
+```bash
+python -m py_compile app.py tablas.py estilos.py inyecciones.py navegacion.py tema.py
+```
+
+Luego recargar la app y revisar: tabla Ajuste de Inventario (desktop),
+paneles Columnas / Filtros / Modo pivote, botón maximizar y paginación.
+
 ## Jerarquía de layout — quién manda sobre cada contenedor
 
 El `padding-top` del contenedor principal (`block-container`) tiene TRES
@@ -100,14 +108,24 @@ Para cambiar el espacio superior de UNA sección: editar su bloque en
 `navegacion.py`. Editar el default de `estilos.py` NO tendrá efecto en las
 secciones con override (el nivel 2 gana) — es el error clásico a evitar.
 
-## Cómo verificar tras cualquier cambio
+## Gráficos — estado y dirección
 
-```bash
-python -m py_compile app.py tablas.py estilos.py inyecciones.py navegacion.py tema.py
-```
+El motor de gráficos (`crear_grafico(df, conf)` + `_resolver()` en
+`graficos.py`) es la pieza más madura: genera figuras Plotly desde una
+CONFIGURACIÓN (dict con tipo/x/y/color), no con código repetido. Añadir un
+gráfico = añadir una config, no una función. Esto es lo que hace que mejorar
+los gráficos escale: se mejora el motor una vez y todos mejoran a la vez.
 
-Luego recargar la app y revisar: tabla Ajuste de Inventario (desktop),
-paneles Columnas / Filtros / Modo pivote, botón maximizar y paginación.
+Dos conceptos de color DISTINTOS (no mezclar):
+- **Color de interfaz** (fondos, grillas, texto) → `tema.py`, sección normal.
+- **Color de dato / serie** (barras, escalas, semáforos) → `tema.py`, sección
+  `PALETA_SERIES` aparte. Hoy están sueltos en `graficos.py` (`#6c5ce7` x8,
+  `"blues"` x6, la paleta `PALETA_CALLAI`, la escala semáforo
+  `['#ef4444','#f97316','#16a34a']`); se centralizan en la Fase 2 de gráficos.
+
+Techo actual: la estructura es potente, pero la superficie es convencional
+(tooltips de fábrica, sin formato de soles, casi sin interactividad). Subir
+el nivel NO requiere reescribir: se le añaden capacidades al motor (ver Fase 5).
 
 ## Refactor en curso (fases)
 
@@ -116,12 +134,16 @@ paneles Columnas / Filtros / Modo pivote, botón maximizar y paginación.
       comentarios cruzados en `estilos.py`/`navegacion.py`, y eliminado el
       código muerto `inject_boton_calendario_ajuste` (tercer "dueño" de la
       píldora de fecha).
-- [ ] **Pendiente de subir** — Arreglo de paginación cortada: cadena completa
-      de alturas (`<style id="dynh-css">`) en `inject_dynamic_grid_height`.
-      Ver regla 4. (Verificado; falta el commit.)
 - [ ] Fase 2 — Reemplazar colores pegados por constantes de `tema.py`
-      (mecánico; verificar CSS resultante idéntico).
+      (mecánico; verificar CSS/figuras resultantes idénticos). Se hace
+      fichero por fichero. En `graficos.py`, esta fase ADEMÁS mueve los
+      colores de serie a `PALETA_SERIES` en `tema.py` (una sola pasada,
+      no dos).
 - [ ] Fase 3 — Trocear `renderizar_aggrid_desktop` (~1,146 líneas) en
       helpers: `_construir_opciones_grid()`, `_css_base()`,
       `_css_requerimientos()`, `_css_ajuste()`.
 - [ ] Fase 4 — Mover el CSS del grid a `estilos_grid.py`.
+- [ ] Fase 5 — Profundidad de gráficos (se apoya en el motor por config):
+      `hovertemplate` con formato de soles (S/ y miles), hover unificado,
+      ejes con separador de miles, y `facet` opcional para comparativas.
+      Un solo lugar de definición del "look" de figura → mejora todos.
