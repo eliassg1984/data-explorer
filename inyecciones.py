@@ -1279,13 +1279,17 @@ def inject_dynamic_grid_height(offset_px: int = 220, min_px: int = 480):
       tabla tapa algo de abajo; bájalo si queda blanco.
     - min_px: altura mínima; en pantallas muy bajas no baja de aquí.
     """
+    # Config como línea JS separada (f-string sin % ni {} conflictivos),
+    # y el resto del script como literal puro: así ningún % del CSS/JS
+    # (p.ej. height:100%) choca con el formateo de Python.
+    config_js = f"var OFFSET = {int(offset_px)}; var MINPX = {int(min_px)};"
+
     components.html("""
     <script>
     (function(){
         var win = window.parent;
         var doc = win.document;
-        var OFFSET = %d;
-        var MINPX  = %d;
+        """ + config_js + """
         var tries = 0;
         var MAX = 40;
 
@@ -1346,4 +1350,4 @@ def inject_dynamic_grid_height(offset_px: int = 220, min_px: int = 480):
         win.setTimeout(check, 800);
     })();
     </script>
-    """ % (offset_px, min_px), height=0)
+    """, height=0)
