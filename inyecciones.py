@@ -1274,12 +1274,24 @@ def inject_dynamic_grid_height(offset_px: int = 220, min_px: int = 480):
                 cont = cont.parentElement;
             }
 
-            /* 3) El grid interno: que ocupe el 100% del iframe ya agrandado. */
+            /* 3) Cadena COMPLETA de alturas dentro del iframe.
+               No basta con el wrapper: el body trae margen por defecto
+               (~8px arriba/abajo) y la barra de paginación personalizada
+               (inject_pagination_v2) es más alta que la nativa; sin fijar
+               toda la cadena, el contenido excede al iframe y la paginación
+               se ve CORTADA abajo. Con html/body/tema/wrapper al 100% y
+               margin 0, contenido == iframe, siempre, mida lo que mida
+               la barra. */
             try {
                 var idoc = iframe.contentDocument;
-                var wrap = idoc && idoc.querySelector('.ag-root-wrapper');
-                if (wrap) {
-                    wrap.style.height = '100%';
+                if (idoc && idoc.head && !idoc.getElementById('dynh-css')) {
+                    var stl = idoc.createElement('style');
+                    stl.id = 'dynh-css';
+                    stl.textContent =
+                        'html, body { height: 100%; margin: 0; }' +
+                        '[class*="ag-theme-"] { height: 100% !important; }' +
+                        '.ag-root-wrapper { height: 100% !important; }';
+                    idoc.head.appendChild(stl);
                 }
                 /* Un ÚNICO resize diferido para que AgGrid recalcule las filas
                    visibles con la nueva altura. Puntual, no en bucle. */
