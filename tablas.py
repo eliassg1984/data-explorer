@@ -9,7 +9,7 @@ import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from utils import _norm, buscar_columna, buscar_columna_fecha, LOCALE_ES
-from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid
+from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid, inject_dynamic_grid_height  # <-- AÑADIDA
 from perf import perf
 
 
@@ -1158,6 +1158,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     # === CAMBIO APLICADO: ahora también se inyecta para Ajuste de Inventario ===
     if es_requerimientos or es_ajuste:
         inject_maximize_aggrid()
+        # Altura dinámica: la tabla llena el alto de pantalla disponible.
+        # Si diera problemas, comenta SOLO esta línea y vuelve al height fijo.
+        inject_dynamic_grid_height(offset_px=220)
 
 
 # ===========================================================================
