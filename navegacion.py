@@ -11,6 +11,10 @@ import re
 import streamlit as st
 import base64
 import os
+from tema import (
+    ACENTO, LAVANDA_FONDO, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO,
+    GRIS_BORDE, TEXTO_PRINCIPAL,
+)
 
 
 # Icono Material por defecto si un reporte no trae 'icono' válido en data.py.
@@ -76,7 +80,7 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     position:fixed; top:0; left:{RAIL_ANCHO}px; right:0; height:48px;
     display:flex; align-items:center; padding:0 18px;
     font-family:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif;
-    font-weight:600; font-size:14px; color:#18181d;
+    font-weight:600; font-size:14px; color:{TEXTO_PRINCIPAL};
     z-index:999998; pointer-events:none;
 }}
 
@@ -86,7 +90,7 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     position:fixed !important; top:0 !important; left:0 !important;
     width:{RAIL_ANCHO}px !important; height:100vh !important;
     background:#ffffff !important; z-index:999999 !important;
-    border-right:1px solid #e6e6eb !important;
+    border-right:1px solid {GRIS_BORDE} !important;
     padding:0 !important;
     display:flex !important;
     flex-direction:column !important;
@@ -99,7 +103,7 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     display: block;
     width: 100%;
     height: {LOGO_ALTO}px;
-    background: #18181d url('{_LOGO_URI}') center / 72% auto no-repeat;
+    background: {TEXTO_PRINCIPAL} url('{_LOGO_URI}') center / 72% auto no-repeat;
     flex-shrink: 0;
 }}
 
@@ -133,11 +137,11 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     transition:background .2s, color .2s !important;
 }}
 .st-key-nav_rail [class*="st-key-navbtn_"] button:hover {{
-    background:#f0edfe !important; color:#6c5ce7 !important;
+    background:{LAVANDA_FONDO} !important; color:{ACENTO} !important;
 }}
 .st-key-nav_rail [class*="st-key-navbtn_"] button[kind="primary"] {{
-    background:#e7e3fb !important; color:#6c5ce7 !important;
-    box-shadow:inset 0 0 0 1px #d4cdf7 !important;
+    background:{LAVANDA_CABECERA_GRUPO} !important; color:{ACENTO} !important;
+    box-shadow:inset 0 0 0 1px {LAVANDA_BORDE} !important;
 }}
 .st-key-nav_rail [class*="st-key-navbtn_"] button p,
 .st-key-nav_rail [class*="st-key-navbtn_"] button span,
