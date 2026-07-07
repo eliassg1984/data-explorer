@@ -80,65 +80,65 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         }
     """)
 
-    stock_cell_style = JsCode("""
-        function(params) {
-            if (params.value === null || params.value === undefined) return {};
-            if (params.node && params.node.rowPinned) {
-                return { fontWeight: '700', color: f'{ACENTO_TEXTO_OSCURO}' };
-            }
+    stock_cell_style = JsCode(f"""
+        function(params) {{
+            if (params.value === null || params.value === undefined) return {{}};
+            if (params.node && params.node.rowPinned) {{
+                return {{ fontWeight: '700', color: '{ACENTO_TEXTO_OSCURO}' }};
+            }}
             var v = Number(params.value);
-            var base = {
+            var base = {{
                 fontFamily: "'Courier New', Courier, monospace",
                 fontWeight: '700',
                 textAlign: 'right',
                 padding: '2px 10px'
-            };
-            if (v < 0) {
-                return Object.assign({}, base, {
-                    backgroundColor: f'{ERROR_FONDO}',
-                    color: f'{DANGER_TEXT}',
+            }};
+            if (v < 0) {{
+                return Object.assign({{}}, base, {{
+                    backgroundColor: '{ERROR_FONDO}',
+                    color: '{DANGER_TEXT}',
                     borderRadius: '20px'
-                });
-            }
-            if (v === 0) {
-                return Object.assign({}, base, {
-                    backgroundColor: f'{ADVERTENCIA_FONDO}',
-                    color: f'{ADVERTENCIA_TEXTO}',
+                }});
+            }}
+            if (v === 0) {{
+                return Object.assign({{}}, base, {{
+                    backgroundColor: '{ADVERTENCIA_FONDO}',
+                    color: '{ADVERTENCIA_TEXTO}',
                     borderRadius: '20px'
-                });
-            }
-            if (v < 10) {
-                return Object.assign({}, base, {
-                    backgroundColor: f'{CELDA_ALERTA_FONDO}',
-                    color: f'{CELDA_ALERTA_TEXTO}',
+                }});
+            }}
+            if (v < 10) {{
+                return Object.assign({{}}, base, {{
+                    backgroundColor: '{CELDA_ALERTA_FONDO}',
+                    color: '{CELDA_ALERTA_TEXTO}',
                     borderRadius: '20px'
-                });
-            }
-            return Object.assign({}, base, { color: f'{CELDA_POS_TEXTO}' });
-        }
+                }});
+            }}
+            return Object.assign({{}}, base, {{ color: '{CELDA_POS_TEXTO}' }});
+        }}
     """)
 
-    stock_cell_style_plano = JsCode("""
-        function(params) {
-            if (params.value === null || params.value === undefined) return {};
-            if (params.node && params.node.rowPinned) {
-                return { fontWeight: '700', color: f'{ACENTO_TEXTO_OSCURO}' };
-            }
-            return {
+    stock_cell_style_plano = JsCode(f"""
+        function(params) {{
+            if (params.value === null || params.value === undefined) return {{}};
+            if (params.node && params.node.rowPinned) {{
+                return {{ fontWeight: '700', color: '{ACENTO_TEXTO_OSCURO}' }};
+            }}
+            return {{
                 fontFamily: "'Courier New', Courier, monospace",
                 fontWeight: '700',
                 textAlign: 'right',
                 padding: '2px 10px',
-                color: f'{TEXTO_PRINCIPAL}'
-            };
-        }
+                color: '{TEXTO_PRINCIPAL}'
+            }};
+        }}
     """)
 
     valorizado_bar_style = JsCode(f"""
         function(params) {{
             var base = {{
                 fontFamily: "'Courier New', Courier, monospace",
-                color: f'{ACENTO_TEXTO_OSCURO}',
+                color: '{ACENTO_TEXTO_OSCURO}',
                 fontWeight: '600',
                 textAlign: 'right',
                 paddingRight: '12px'
@@ -154,7 +154,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             if (isNaN(num)) return base;
             var pct = maxv > 0 ? Math.max(0, Math.min(100, (num / maxv) * 100)) : 0;
             return Object.assign({{}}, base, {{
-                backgroundImage: f'linear-gradient(to right, {LAVANDA_BORDE} 0%, {LAVANDA_BORDE} ' + pct + '%, transparent ' + pct + '%, transparent 100%)',
+                backgroundImage: 'linear-gradient(to right, {LAVANDA_BORDE} 0%, {LAVANDA_BORDE} ' + pct + '%, transparent ' + pct + '%, transparent 100%)',
                 backgroundRepeat: 'no-repeat',
                 backgroundSize: '100% 80%',
                 backgroundPosition: 'left center'
@@ -162,20 +162,20 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         }}
     """)
 
-    valorizado_plano = JsCode("""
-        function(params) {
-            var base = {
+    valorizado_plano = JsCode(f"""
+        function(params) {{
+            var base = {{
                 fontFamily: "'Courier New', Courier, monospace",
-                color: f'{ACENTO_TEXTO_OSCURO}',
+                color: '{ACENTO_TEXTO_OSCURO}',
                 fontWeight: '600',
                 textAlign: 'right',
                 paddingRight: '12px'
-            };
-            if (params.node && (params.node.group || params.node.rowPinned)) {
-                return Object.assign({}, base, { fontWeight: '800' });
-            }
+            }};
+            if (params.node && (params.node.group || params.node.rowPinned)) {{
+                return Object.assign({{}}, base, {{ fontWeight: '800' }});
+            }}
             return base;
-        }
+        }}
     """)
 
     _stock_style = stock_cell_style_plano if quitar_fondos else stock_cell_style
@@ -337,47 +337,47 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             fila_totales[c] = None
 
     if col_stock and col_stock in df_grid.columns and es_inventario:
-        get_row_style = JsCode("""
-            function(params) {
-                if (params.node.rowPinned === 'bottom') {
-                    return { fontWeight:'700', backgroundColor:f'{LAVANDA_CABECERA_GRUPO}', color:f'{ACENTO_TEXTO_OSCURO}',
-                             borderTop:f'2px solid {ACENTO}', fontSize:'13px' };
-                }
-                if (params.node.group) {
+        get_row_style = JsCode(f"""
+            function(params) {{
+                if (params.node.rowPinned === 'bottom') {{
+                    return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}', color:'{ACENTO_TEXTO_OSCURO}',
+                             borderTop:'2px solid {ACENTO}', fontSize:'13px' }};
+                }}
+                if (params.node.group) {{
                     var nivel = params.node.level;
-                    if (nivel === 0) return { backgroundColor:f'{LAVANDA_BORDE}', fontWeight:'600' };
-                    if (nivel === 1) return { backgroundColor:f'{LAVANDA_CABECERA_GRUPO}', fontWeight:'600' };
-                    return { backgroundColor:f'{LAVANDA_FONDO}', fontWeight:'500' };
-                }
-                return { backgroundColor:f'{BLANCO}' };
-            }
+                    if (nivel === 0) return {{ backgroundColor:'{LAVANDA_BORDE}', fontWeight:'600' }};
+                    if (nivel === 1) return {{ backgroundColor:'{LAVANDA_CABECERA_GRUPO}', fontWeight:'600' }};
+                    return {{ backgroundColor:'{LAVANDA_FONDO}', fontWeight:'500' }};
+                }}
+                return {{ backgroundColor:'{BLANCO}' }};
+            }}
         """)
     elif col_stock and col_stock in df_grid.columns and not quitar_fondos:
         _sf = str(col_stock).replace("\\", "\\\\").replace('"', '\\"')
         get_row_style = JsCode(f"""
             function(params) {{
                 if (params.node.rowPinned === 'bottom') {{
-                    return {{ fontWeight:'700', backgroundColor:f'{LAVANDA_CABECERA_GRUPO}', color:f'{ACENTO_TEXTO_OSCURO}',
-                              borderTop:f'2px solid {ACENTO}', fontSize:'13px' }};
+                    return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}', color:'{ACENTO_TEXTO_OSCURO}',
+                              borderTop:'2px solid {ACENTO}', fontSize:'13px' }};
                 }}
                 if (params.node.group || !params.data) return null;
                 var s = params.data["{_sf}"];
                 if (s === null || s === undefined || s === '') return null;
                 var v = Number(s);
                 if (isNaN(v)) return null;
-                if (v === 0) return {{ backgroundColor:f'{CELDA_NEG_FONDO}' }};
-                if (v < 10)  return {{ backgroundColor:f'{ADVERTENCIA_FONDO}' }};
+                if (v === 0) return {{ backgroundColor:'{CELDA_NEG_FONDO}' }};
+                if (v < 10)  return {{ backgroundColor:'{ADVERTENCIA_FONDO}' }};
                 return null;
             }}
         """)
     else:
-        get_row_style = JsCode("""
-            function(params) {
-                if (params.node.rowPinned === 'bottom') {
-                    return { fontWeight:'700', backgroundColor:f'{LAVANDA_CABECERA_GRUPO}', color:f'{ACENTO_TEXTO_OSCURO}',
-                             borderTop:f'2px solid {ACENTO}', fontSize:'13px' };
-                }
-            }
+        get_row_style = JsCode(f"""
+            function(params) {{
+                if (params.node.rowPinned === 'bottom') {{
+                    return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}', color:'{ACENTO_TEXTO_OSCURO}',
+                             borderTop:'2px solid {ACENTO}', fontSize:'13px' }};
+                }}
+            }}
         """)
 
     _columns_panel = {
@@ -555,8 +555,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                                     minimumFractionDigits: 2, maximumFractionDigits: 2 }});
                             }}
                         }}
-                        return f'<span style=f"font-weight:600;color:{TEXTO_PRINCIPAL}">' + nombre +
-                               f'</span> <span style=f"color:{ICON_MUTED};font-weight:400">(' +
+                        return '<span style="font-weight:600;color:{TEXTO_PRINCIPAL}">' + nombre +
+                               '</span> <span style="color:{ICON_MUTED};font-weight:400">(' +
                                n + ')' + extra + '</span>';
                     }}
                 """)
