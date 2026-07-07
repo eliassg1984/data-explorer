@@ -63,6 +63,18 @@ GRIS_TEXTO_SUAVE = "#a2a2ad"
 GRIS_TOGGLE_APAGADO = "#e6e6eb"
 """Fondo del interruptor apagado (mismo tono que GRIS_BORDE, a propósito)."""
 
+ICON_MUTED = "#85858f"
+"""Gris neutro de iconos (calendario). = --icon-muted en estilos.py."""
+
+EXIT_HOVER = "#52525c"
+"""Hover del botón salir de pantalla completa. = --exit-hover."""
+
+SCROLL_THUMB = "#d6d6dd"
+"""Pulgar de scrollbar en paneles. = --scroll-thumb."""
+
+DANGER_TEXT = "#991b1b"
+"""Rojo oscuro: texto de error. = --danger-text."""
+
 TEXTO_PRINCIPAL = "#18181d"
 """Texto principal casi negro."""
 
@@ -134,6 +146,45 @@ ESCALA_CONTINUA = "blues"
 ESCALA_SEMAFORO = ["#ef4444", "#f97316", "#16a34a"]
 """Escala divergente rojo→naranja→verde: negativo→neutro→positivo
 (p.ej. ajuste de inventario, donde el signo importa)."""
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TONOS DE TABLA (grises y lavandas finos usados en el grid)
+# ═══════════════════════════════════════════════════════════════════════════
+
+GRIS_TEXTO_MEDIO = "#3f3f46"
+"""Gris de texto de celdas (más oscuro que GRIS_TEXTO)."""
+
+GRIS_FONDO_CABECERA = "#f4f4f6"
+"""Gris muy claro: fondo de cabecera de grupo/columna en el grid."""
+
+LAVANDA_FILA = "#f7f6fb"
+"""Lavanda casi blanco: fondo de fila (zebra suave)."""
+
+LAVANDA_FILA_ALT = "#f2f0fb"
+"""Lavanda casi blanco alterno: fondo de fila alterna."""
+
+LAVANDA_SELECCION = "#f5f3fe"
+"""Lavanda claro: fondo de fila seleccionada/hover en el grid."""
+
+LAVANDA_MEDIO = "#7a6de0"
+"""Lavanda medio: texto/acento secundario en cabeceras del grid."""
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SEMÁFORO DE CELDAS (colorea un valor según su signo; fondo + texto a juego)
+# ═══════════════════════════════════════════════════════════════════════════
+
+CELDA_POS_TEXTO = "#065f46"
+"""Verde oscuro: texto de valor positivo en celda."""
+
+CELDA_NEG_FONDO = "#fef2f2"
+"""Rojo muy claro: fondo de valor negativo/cero en celda."""
+
+CELDA_ALERTA_FONDO = "#ffedd5"
+"""Naranja muy claro: fondo de valor de alerta en celda."""
+
+CELDA_ALERTA_TEXTO = "#9a3412"
+"""Naranja oscuro: texto de valor de alerta en celda."""
 
 
 # ═══════════════════════════════════════════════════════════════════════════
