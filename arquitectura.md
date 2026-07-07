@@ -146,11 +146,16 @@ el nivel NO requiere reescribir: se le añaden capacidades al motor (ver Fase 5)
       comentarios cruzados en `estilos.py`/`navegacion.py`, y eliminado el
       código muerto `inject_boton_calendario_ajuste` (tercer "dueño" de la
       píldora de fecha).
-- [ ] Fase 2 — Reemplazar colores pegados por constantes de `tema.py`
-      (mecánico; verificar CSS/figuras resultantes idénticos). Se hace
-      fichero por fichero. En `graficos.py`, esta fase ADEMÁS mueve los
-      colores de serie a `PALETA_SERIES` en `tema.py` (una sola pasada,
-      no dos).
+- [x] Fase 2 — Colores centralizados en la paleta. Los 5 ficheros conectados.
+      PATRÓN CLAVE aprendido: DÓNDE vive el CSS decide CÓMO se centraliza.
+      - CSS del documento PADRE (estilos.py global, JS de inyecciones.py) →
+        usa `var(--x)` del `:root` (el iframe padre lo ve).
+      - CSS DENTRO del iframe de AgGrid (`custom_css` de tablas.py) → NO ve
+        el `:root`; usa constantes de `tema.py` resueltas en Python (f-strings),
+        para enviar el hex final ya resuelto al iframe.
+      - Python puro (graficos.py/Plotly, navegacion.py f-strings) → constantes.
+      Excepciones documentadas en el código: overlay de errores (#7f1d1d) e
+      inspector (#101014), herramientas de depuración con fondo oscuro.
 - [ ] Fase 3 — Trocear `renderizar_aggrid_desktop` (~1,146 líneas) en
       helpers: `_construir_opciones_grid()`, `_css_base()`,
       `_css_requerimientos()`, `_css_ajuste()`.
