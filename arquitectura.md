@@ -163,9 +163,22 @@ el nivel NO requiere reescribir: se le añaden capacidades al motor (ver Fase 5)
       NO usar `tokenize.untokenize` (reformatea todo el fichero). Verificar
       SIEMPRE: (1) compila, (2) ningún `{CONST}` en string no-f, (3) los colores
       resueltos son IDÉNTICOS al original — comparar recuentos hex antes/después.
-- [ ] Fase 3 — Trocear `renderizar_aggrid_desktop` (~1,146 líneas) en
-      helpers: `_construir_opciones_grid()`, `_css_base()`,
-      `_css_requerimientos()`, `_css_ajuste()`.
+- [x] Fase 3 — Trocear `renderizar_aggrid_desktop`. Bajó de 1,150 a 556
+      líneas extrayendo 5 helpers autocontenidos y verificados (cada uno
+      no cambia el comportamiento):
+      · `_css_base(font_px)` — dict CSS base del grid (~398 L).
+      · `_estilos_celda(max_valorizado)` — 5 JsCode de estilo de celda.
+      · `_estilo_fila(col_stock, df_grid, es_inventario, quitar_fondos)` —
+        getRowStyle (3 ramas: inventario, semáforo, simple).
+      · `_config_sidebar(mostrar_pivot, es_ajuste)` — paneles Columnas/
+        Filtros/pivote.
+      · `_fila_totales(df_grid, cols_valor, cols_precio, cols_stock, primera_col)`.
+      NO se extrajo el bloque de configuración de columnas (3× `for c in
+      df_grid.columns`, muta `gb`, 11 deps) ni el dict `opciones_grid`
+      (11 deps repartidas en condicionales por reporte): forzarlos daría
+      helpers de 11 parámetros MENOS legibles que el código actual. Parada
+      deliberada: el valor limpio ya está capturado; lo que queda es glue
+      legítimamente entrelazado con `gb` y los flags de reporte.
 - [ ] Fase 4 — Mover el CSS del grid a `estilos_grid.py`.
 - [ ] Fase 5 — Profundidad de gráficos (se apoya en el motor por config):
       `hovertemplate` con formato de soles (S/ y miles), hover unificado,
