@@ -11,6 +11,9 @@ from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 from utils import _norm, buscar_columna, buscar_columna_fecha, LOCALE_ES
 from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid, inject_dynamic_grid_height  # <-- AÑADIDA
 from perf import perf
+from tema import (
+    ACENTO, ACENTO_FUERTE, ACENTO_TEXTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA_FONDO, ADVERTENCIA_TEXTO, BLANCO, CELDA_ALERTA_FONDO, CELDA_ALERTA_TEXTO, CELDA_NEG_FONDO, CELDA_POS_TEXTO, DANGER_TEXT, ERROR_FONDO, EXIT_HOVER, GRIS_BORDE, GRIS_FONDO, GRIS_FONDO_CABECERA, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE, ICON_MUTED, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FILA, LAVANDA_FILA_ALT, LAVANDA_FOCO, LAVANDA_FONDO, LAVANDA_MEDIO, LAVANDA_SELECCION, SCROLL_THUMB, TEXTO_PRINCIPAL,
+)
 
 
 # ===========================================================================
@@ -81,7 +84,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         function(params) {
             if (params.value === null || params.value === undefined) return {};
             if (params.node && params.node.rowPinned) {
-                return { fontWeight: '700', color: '#3b2e93' };
+                return { fontWeight: '700', color: f'{ACENTO_TEXTO_OSCURO}' };
             }
             var v = Number(params.value);
             var base = {
@@ -92,26 +95,26 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             };
             if (v < 0) {
                 return Object.assign({}, base, {
-                    backgroundColor: '#fee2e2',
-                    color: '#991b1b',
+                    backgroundColor: f'{ERROR_FONDO}',
+                    color: f'{DANGER_TEXT}',
                     borderRadius: '20px'
                 });
             }
             if (v === 0) {
                 return Object.assign({}, base, {
-                    backgroundColor: '#fff7ed',
-                    color: '#c2410c',
+                    backgroundColor: f'{ADVERTENCIA_FONDO}',
+                    color: f'{ADVERTENCIA_TEXTO}',
                     borderRadius: '20px'
                 });
             }
             if (v < 10) {
                 return Object.assign({}, base, {
-                    backgroundColor: '#ffedd5',
-                    color: '#9a3412',
+                    backgroundColor: f'{CELDA_ALERTA_FONDO}',
+                    color: f'{CELDA_ALERTA_TEXTO}',
                     borderRadius: '20px'
                 });
             }
-            return Object.assign({}, base, { color: '#065f46' });
+            return Object.assign({}, base, { color: f'{CELDA_POS_TEXTO}' });
         }
     """)
 
@@ -119,14 +122,14 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         function(params) {
             if (params.value === null || params.value === undefined) return {};
             if (params.node && params.node.rowPinned) {
-                return { fontWeight: '700', color: '#3b2e93' };
+                return { fontWeight: '700', color: f'{ACENTO_TEXTO_OSCURO}' };
             }
             return {
                 fontFamily: "'Courier New', Courier, monospace",
                 fontWeight: '700',
                 textAlign: 'right',
                 padding: '2px 10px',
-                color: '#18181d'
+                color: f'{TEXTO_PRINCIPAL}'
             };
         }
     """)
@@ -135,7 +138,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         function(params) {{
             var base = {{
                 fontFamily: "'Courier New', Courier, monospace",
-                color: '#3b2e93',
+                color: f'{ACENTO_TEXTO_OSCURO}',
                 fontWeight: '600',
                 textAlign: 'right',
                 paddingRight: '12px'
@@ -151,7 +154,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             if (isNaN(num)) return base;
             var pct = maxv > 0 ? Math.max(0, Math.min(100, (num / maxv) * 100)) : 0;
             return Object.assign({{}}, base, {{
-                backgroundImage: 'linear-gradient(to right, #d4cdf7 0%, #d4cdf7 ' + pct + '%, transparent ' + pct + '%, transparent 100%)',
+                backgroundImage: f'linear-gradient(to right, {LAVANDA_BORDE} 0%, {LAVANDA_BORDE} ' + pct + '%, transparent ' + pct + '%, transparent 100%)',
                 backgroundRepeat: 'no-repeat',
                 backgroundSize: '100% 80%',
                 backgroundPosition: 'left center'
@@ -163,7 +166,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         function(params) {
             var base = {
                 fontFamily: "'Courier New', Courier, monospace",
-                color: '#3b2e93',
+                color: f'{ACENTO_TEXTO_OSCURO}',
                 fontWeight: '600',
                 textAlign: 'right',
                 paddingRight: '12px'
@@ -337,16 +340,16 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         get_row_style = JsCode("""
             function(params) {
                 if (params.node.rowPinned === 'bottom') {
-                    return { fontWeight:'700', backgroundColor:'#e7e3fb', color:'#3b2e93',
-                             borderTop:'2px solid #6c5ce7', fontSize:'13px' };
+                    return { fontWeight:'700', backgroundColor:f'{LAVANDA_CABECERA_GRUPO}', color:f'{ACENTO_TEXTO_OSCURO}',
+                             borderTop:f'2px solid {ACENTO}', fontSize:'13px' };
                 }
                 if (params.node.group) {
                     var nivel = params.node.level;
-                    if (nivel === 0) return { backgroundColor:'#d4cdf7', fontWeight:'600' };
-                    if (nivel === 1) return { backgroundColor:'#e7e3fb', fontWeight:'600' };
-                    return { backgroundColor:'#f0edfe', fontWeight:'500' };
+                    if (nivel === 0) return { backgroundColor:f'{LAVANDA_BORDE}', fontWeight:'600' };
+                    if (nivel === 1) return { backgroundColor:f'{LAVANDA_CABECERA_GRUPO}', fontWeight:'600' };
+                    return { backgroundColor:f'{LAVANDA_FONDO}', fontWeight:'500' };
                 }
-                return { backgroundColor:'#ffffff' };
+                return { backgroundColor:f'{BLANCO}' };
             }
         """)
     elif col_stock and col_stock in df_grid.columns and not quitar_fondos:
@@ -354,16 +357,16 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         get_row_style = JsCode(f"""
             function(params) {{
                 if (params.node.rowPinned === 'bottom') {{
-                    return {{ fontWeight:'700', backgroundColor:'#e7e3fb', color:'#3b2e93',
-                              borderTop:'2px solid #6c5ce7', fontSize:'13px' }};
+                    return {{ fontWeight:'700', backgroundColor:f'{LAVANDA_CABECERA_GRUPO}', color:f'{ACENTO_TEXTO_OSCURO}',
+                              borderTop:f'2px solid {ACENTO}', fontSize:'13px' }};
                 }}
                 if (params.node.group || !params.data) return null;
                 var s = params.data["{_sf}"];
                 if (s === null || s === undefined || s === '') return null;
                 var v = Number(s);
                 if (isNaN(v)) return null;
-                if (v === 0) return {{ backgroundColor:'#fef2f2' }};
-                if (v < 10)  return {{ backgroundColor:'#fff7ed' }};
+                if (v === 0) return {{ backgroundColor:f'{CELDA_NEG_FONDO}' }};
+                if (v < 10)  return {{ backgroundColor:f'{ADVERTENCIA_FONDO}' }};
                 return null;
             }}
         """)
@@ -371,8 +374,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         get_row_style = JsCode("""
             function(params) {
                 if (params.node.rowPinned === 'bottom') {
-                    return { fontWeight:'700', backgroundColor:'#e7e3fb', color:'#3b2e93',
-                             borderTop:'2px solid #6c5ce7', fontSize:'13px' };
+                    return { fontWeight:'700', backgroundColor:f'{LAVANDA_CABECERA_GRUPO}', color:f'{ACENTO_TEXTO_OSCURO}',
+                             borderTop:f'2px solid {ACENTO}', fontSize:'13px' };
                 }
             }
         """)
@@ -552,8 +555,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                                     minimumFractionDigits: 2, maximumFractionDigits: 2 }});
                             }}
                         }}
-                        return '<span style="font-weight:600;color:#18181d">' + nombre +
-                               '</span> <span style="color:#85858f;font-weight:400">(' +
+                        return f'<span style=f"font-weight:600;color:{TEXTO_PRINCIPAL}">' + nombre +
+                               f'</span> <span style=f"color:{ICON_MUTED};font-weight:400">(' +
                                n + ')' + extra + '</span>';
                     }}
                 """)
@@ -593,8 +596,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     custom_css = {
         ".ag-root-wrapper": {
-            "background-color": "#ffffff",
-            "border": "1px solid #e6e6eb",
+            "background-color": f"{BLANCO}",
+            "border": f"1px solid {GRIS_BORDE}",
             "border-radius": "12px !important",
             "overflow": "hidden !important",
             "box-shadow": "0 1px 3px rgba(16,16,20,0.05)",
@@ -602,44 +605,44 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         },
         # Cabecera clara estilo CallAI: banda gris suave con texto gris medio
         ".ag-header": {
-            "background-color": "#f4f4f6 !important",
-            "border-bottom": "1px solid #e6e6eb !important",
+            "background-color": f"{GRIS_FONDO_CABECERA} !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
         },
         ".ag-header-cell": {
-            "background-color": "#f4f4f6 !important",
+            "background-color": f"{GRIS_FONDO_CABECERA} !important",
         },
         ".ag-header-cell-text": {
-            "color": "#71717a !important",
+            "color": f"{GRIS_TEXTO} !important",
             "font-weight": "600",
             "font-size": f"{font_px}px",
             "letter-spacing": "0.03em",
             "text-transform": "uppercase",
         },
         ".ag-header-icon": {
-            "color": "#a2a2ad !important",
+            "color": f"{GRIS_TEXTO_SUAVE} !important",
         },
         ".ag-row": {
-            "border-bottom": "1px solid #f1f1f4",
-            "color": "#18181d",
+            "border-bottom": f"1px solid {GRIS_LINEA}",
+            "color": f"{TEXTO_PRINCIPAL}",
         },
-        ".ag-row-even": {"background-color": "#ffffff"},
-        ".ag-row-odd": {"background-color": "#f6f6f8"},
-        ".ag-row-hover": {"background-color": "#f0edfe !important"},
-        ".ag-cell": {"color": "#52525c", "font-size": f"{font_px}px"},
+        ".ag-row-even": {"background-color": f"{BLANCO}"},
+        ".ag-row-odd": {"background-color": f"{GRIS_FONDO}"},
+        ".ag-row-hover": {"background-color": f"{LAVANDA_FONDO} !important"},
+        ".ag-cell": {"color": f"{EXIT_HOVER}", "font-size": f"{font_px}px"},
         ".ag-row-pinned": {
-            "background-color": "#e7e3fb !important",
+            "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
             "font-weight": "700 !important",
-            "border-top": "2px solid #6c5ce7 !important",
-            "color": "#3b2e93 !important",
+            "border-top": f"2px solid {ACENTO} !important",
+            "color": f"{ACENTO_TEXTO_OSCURO} !important",
             "font-size": f"{font_px + 1}px !important",
         },
         ".ag-paging-panel": {
             "display": "flex !important",
             "align-items": "center !important",
             "justify-content": "space-between !important",
-            "color": "#85858f",
-            "background-color": "#f6f6f8",
-            "border-top": "1px solid #e6e6eb",
+            "color": f"{ICON_MUTED}",
+            "background-color": f"{GRIS_FONDO}",
+            "border-top": f"1px solid {GRIS_BORDE}",
             "padding": "8px 16px !important",
             "border-bottom-left-radius": "10px !important",
             "border-bottom-right-radius": "10px !important",
@@ -651,26 +654,26 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "margin-right": "auto !important",
         },
         ".ag-paging-panel .ag-paging-page-size .ag-label": {
-            "color": "#85858f !important",
+            "color": f"{ICON_MUTED} !important",
             "font-size": "12px !important",
             "margin-right": "6px !important",
         },
         ".ag-paging-panel .ag-paging-page-size select, "
         ".ag-paging-panel .ag-paging-page-size .ag-select": {
-            "border": "1px solid #e6e6eb !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
             "border-radius": "6px !important",
-            "background": "#ffffff !important",
-            "color": "#18181d !important",
+            "background": f"{BLANCO} !important",
+            "color": f"{TEXTO_PRINCIPAL} !important",
             "font-size": "12px !important",
             "padding": "2px 6px !important",
         },
         ".ag-paging-button": {
             "width": "28px !important",
             "height": "28px !important",
-            "border": "1px solid #e6e6eb !important",
-            "background": "#ffffff !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "background": f"{BLANCO} !important",
             "border-radius": "6px !important",
-            "color": "#71717a !important",
+            "color": f"{GRIS_TEXTO} !important",
             "font-size": "13px !important",
             "cursor": "pointer !important",
             "display": "flex !important",
@@ -680,88 +683,88 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "transition": "all 0.15s ease !important",
         },
         ".ag-paging-button:hover:not(.ag-disabled)": {
-            "background": "#f0edfe !important",
-            "border-color": "#b9aff2 !important",
-            "color": "#5a4ad9 !important",
+            "background": f"{LAVANDA_FONDO} !important",
+            "border-color": f"{LAVANDA_FOCO} !important",
+            "color": f"{ACENTO_FUERTE} !important",
         },
         ".ag-paging-button.ag-disabled": {
-            "color": "#d6d6dd !important",
-            "border-color": "#f1f1f4 !important",
-            "background": "#f6f6f8 !important",
+            "color": f"{SCROLL_THUMB} !important",
+            "border-color": f"{GRIS_LINEA} !important",
+            "background": f"{GRIS_FONDO} !important",
             "cursor": "default !important",
         },
         ".ag-paging-row-summary-panel": {
-            "color": "#85858f !important",
+            "color": f"{ICON_MUTED} !important",
             "font-size": "12px !important",
             "margin-left": "auto !important",
         },
         ".ag-paging-row-summary-panel-number": {
-            "color": "#18181d !important",
+            "color": f"{TEXTO_PRINCIPAL} !important",
             "font-weight": "600 !important",
         },
         ".ag-status-bar": {
-            "background-color": "#f6f6f8 !important",
-            "border-top": "1px solid #e6e6eb !important",
-            "color": "#71717a !important",
+            "background-color": f"{GRIS_FONDO} !important",
+            "border-top": f"1px solid {GRIS_BORDE} !important",
+            "color": f"{GRIS_TEXTO} !important",
             "padding": "4px 16px !important",
             "font-size": "12px !important",
             "min-height": "0 !important",
         },
         ".ag-status-name-value": {
-            "color": "#71717a !important",
+            "color": f"{GRIS_TEXTO} !important",
             "font-size": "12px !important",
         },
         ".ag-status-name-value-value": {
-            "color": "#18181d !important",
+            "color": f"{TEXTO_PRINCIPAL} !important",
             "font-weight": "600 !important",
         },
         ".ag-side-bar": {
-            "background-color": "#ffffff",
-            "border-left": "1px solid #e6e6eb !important",
+            "background-color": f"{BLANCO}",
+            "border-left": f"1px solid {GRIS_BORDE} !important",
             "border-top-right-radius": "10px !important",
             "border-bottom-right-radius": "10px !important",
-            "border-bottom": "1px solid #e6e6eb !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
         },
         ".ag-side-bar .ag-side-buttons": {
-            "border-right": "1px solid #e6e6eb !important",
+            "border-right": f"1px solid {GRIS_BORDE} !important",
         },
         ".ag-side-button": {
-            "background-color": "#f6f6f8 !important",
+            "background-color": f"{GRIS_FONDO} !important",
             "border": "none !important",
-            "border-bottom": "1px solid #e6e6eb !important",
-            "color": "#71717a !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
+            "color": f"{GRIS_TEXTO} !important",
         },
         ".ag-side-button:hover": {
-            "background-color": "#e7e3fb !important",
-            "color": "#5a4ad9 !important",
+            "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
+            "color": f"{ACENTO_FUERTE} !important",
         },
         ".ag-side-button.ag-selected": {
-            "background-color": "#5a4ad9 !important",
-            "color": "#ffffff !important",
-            "box-shadow": "inset 0 0 0 1px #6c5ce7",
+            "background-color": f"{ACENTO_FUERTE} !important",
+            "color": f"{BLANCO} !important",
+            "box-shadow": f"inset 0 0 0 1px {ACENTO}",
         },
         ".ag-tool-panel-wrapper": {
-            "background-color": "#ffffff !important",
+            "background-color": f"{BLANCO} !important",
             "border": "none !important",
         },
         ".ag-column-select-panel": {
             "padding": "10px !important",
-            "background-color": "#ffffff !important",
+            "background-color": f"{BLANCO} !important",
         },
         ".ag-column-tool-panel .ag-column-panel": {
             "border": "none !important",
         },
         ".ag-column-tool-panel .ag-column-select-all": {
             "padding": "10px 0 !important",
-            "border-bottom": "1px solid #e6e6eb !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
         },
         ".ag-column-panel .ag-header-cell-text": {
-            "color": "#18181d !important",
+            "color": f"{TEXTO_PRINCIPAL} !important",
             "font-weight": "600 !important",
         },
         ".ag-filter-toolpanel-body": {
             "padding": "10px !important",
-            "background-color": "#ffffff !important",
+            "background-color": f"{BLANCO} !important",
         },
 
         # ══════════════════════════════════════════════════════════════════
@@ -780,31 +783,31 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column": {
             "display": "flex !important",
             "align-items": "center !important",
-            "background": "#f6f6f8 !important",
-            "border": "1px solid #e6e6eb !important",
+            "background": f"{GRIS_FONDO} !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
             "border-radius": "999px !important",
             "padding": "8px 12px !important",
             "margin": "5px 10px !important",
             "transition": "background .15s ease, border-color .15s ease !important",
         },
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:hover": {
-            "background": "#f0edfe !important",
-            "border-color": "#d4cdf7 !important",
+            "background": f"{LAVANDA_FONDO} !important",
+            "border-color": f"{LAVANDA_BORDE} !important",
         },
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:has(.ag-checked)": {
-            "background": "#f0edfe !important",
-            "border-color": "#d4cdf7 !important",
+            "background": f"{LAVANDA_FONDO} !important",
+            "border-color": f"{LAVANDA_BORDE} !important",
         },
 
         # Cambio 2: etiqueta activa con color índigo
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:has(.ag-checked) .ag-column-select-column-label": {
-            "color": "#4938b8 !important",
+            "color": f"{ACENTO_TEXTO} !important",
             "font-weight": "500 !important",
         },
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column-label": {
             "order": "-1 !important",
             "margin-right": "auto !important",
-            "color": "#71717a !important",
+            "color": f"{GRIS_TEXTO} !important",
             "font-size": "12.5px !important",
         },
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-drag-handle": {
@@ -814,7 +817,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "width": "36px !important",
             "height": "20px !important",
             "border-radius": "999px !important",
-            "background": "#e6e6eb !important",
+            "background": f"{GRIS_BORDE} !important",
             "border": "none !important",
             "box-shadow": "none !important",
             "position": "relative !important",
@@ -828,13 +831,13 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "width": "16px !important",
             "height": "16px !important",
             "border-radius": "50% !important",
-            "background": "#ffffff !important",
+            "background": f"{BLANCO} !important",
             "color": "transparent !important",
             "box-shadow": "0 1px 2px rgba(0,0,0,0.25) !important",
             "transition": "left .15s ease !important",
         },
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper.ag-checked": {
-            "background": "#5a4ad9 !important",
+            "background": f"{ACENTO_FUERTE} !important",
         },
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper.ag-checked::after": {
             "content": "'' !important",
@@ -852,11 +855,11 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         # ── Panel modo pivote / drop zones (NUEVO ESTILIZADO) ──
         ".ag-pivot-mode-panel": {
             "padding": "10px 12px !important",
-            "border-bottom": "1px solid #e6e6eb !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
             "min-height": "0 !important",
         },
         ".ag-pivot-mode-select": {
-            "color": "#4938b8 !important",
+            "color": f"{ACENTO_TEXTO} !important",
             "font-size": "13px !important",
             "font-weight": "600 !important",
         },
@@ -865,7 +868,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "padding": "10px 12px 4px !important",
         },
         ".ag-column-drop-vertical-title": {
-            "color": "#a2a2ad !important",
+            "color": f"{GRIS_TEXTO_SUAVE} !important",
             "font-size": "11px !important",
             "font-weight": "600 !important",
             "text-transform": "uppercase !important",
@@ -877,38 +880,38 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         },
         ".ag-column-drop-vertical-list": {
             "margin": "4px 10px 10px !important",
-            "border": "1.5px dashed #d4cdf7 !important",
+            "border": f"1.5px dashed {LAVANDA_BORDE} !important",
             "border-radius": "10px !important",
-            "background": "#f5f3fe !important",
+            "background": f"{LAVANDA_SELECCION} !important",
             "padding": "8px !important",
         },
         ".ag-column-drop-empty-message": {
-            "color": "#7a6de0 !important",
+            "color": f"{LAVANDA_MEDIO} !important",
             "font-size": "12px !important",
             "text-align": "center !important",
         },
         # Pastillas de campos (Suma(...), Promedio(...))
         ".ag-column-drop-vertical-cell": {
-            "background": "#f6f6f8 !important",
-            "border": "1px solid #e6e6eb !important",
+            "background": f"{GRIS_FONDO} !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
             "border-radius": "999px !important",
             "padding": "5px 12px !important",
             "margin": "3px 0 !important",
             "font-size": "12px !important",
-            "color": "#3f3f46 !important",
+            "color": f"{GRIS_TEXTO_MEDIO} !important",
         },
         ".ag-column-drop-vertical-cell:hover": {
-            "background": "#f0edfe !important",
-            "border-color": "#d4cdf7 !important",
+            "background": f"{LAVANDA_FONDO} !important",
+            "border-color": f"{LAVANDA_BORDE} !important",
         },
         ".ag-column-drop-vertical-cell-text": {
             "font-size": "12px !important",
         },
         ".ag-column-drop-cell-button": {
-            "color": "#a2a2ad !important",
+            "color": f"{GRIS_TEXTO_SUAVE} !important",
         },
         ".ag-column-drop-cell-button:hover": {
-            "color": "#5a4ad9 !important",
+            "color": f"{ACENTO_FUERTE} !important",
         },
 
         # ── Panel FILTROS — a juego con el modo pivote ──
@@ -918,41 +921,41 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         },
         ".ag-filter-toolpanel-search": {
             "padding": "10px 12px !important",
-            "border-bottom": "1px solid #e6e6eb !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
         },
         ".ag-filter-toolpanel-search .ag-input-field-input": {
-            "border": "1px solid #e6e6eb !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
             "border-radius": "8px !important",
             "font-size": "12.5px !important",
             "padding": "6px 10px !important",
-            "color": "#3f3f46 !important",
+            "color": f"{GRIS_TEXTO_MEDIO} !important",
         },
         ".ag-filter-toolpanel-search .ag-input-field-input:focus": {
-            "border-color": "#b9aff2 !important",
-            "box-shadow": "0 0 0 2px #f0edfe !important",
+            "border-color": f"{LAVANDA_FOCO} !important",
+            "box-shadow": f"0 0 0 2px {LAVANDA_FONDO} !important",
             "outline": "none !important",
         },
         # Cambio 3 (corregido): filtros como pastillas.
         ".ag-filter-toolpanel-group-title-bar": {
-            "background": "#f6f6f8 !important",
-            "border": "1px solid #e6e6eb !important",
+            "background": f"{GRIS_FONDO} !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
             "border-radius": "999px !important",
             "padding": "8px 12px !important",
             "margin": "3px 10px !important",
             "transition": "background .15s ease, border-color .15s ease !important",
         },
         ".ag-filter-toolpanel-group-title-bar:hover": {
-            "background": "#f0edfe !important",
-            "border-color": "#d4cdf7 !important",
+            "background": f"{LAVANDA_FONDO} !important",
+            "border-color": f"{LAVANDA_BORDE} !important",
         },
         ".ag-filter-toolpanel-group-title": {
-            "color": "#71717a !important",
+            "color": f"{GRIS_TEXTO} !important",
             "font-size": "12.5px !important",
             "font-weight": "500 !important",
         },
         ".ag-filter-toolpanel-group-title-bar-icon .ag-icon, "
         ".ag-filter-toolpanel-group-title-bar .ag-icon": {
-            "color": "#a2a2ad !important",
+            "color": f"{GRIS_TEXTO_SUAVE} !important",
         },
         ".ag-filter-toolpanel-instance-header": {
             "background": "transparent !important",
@@ -961,7 +964,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "margin": "0 !important",
         },
         ".ag-filter-toolpanel-instance-header-text": {
-            "color": "#71717a !important",
+            "color": f"{GRIS_TEXTO} !important",
             "font-size": "12.5px !important",
             "font-weight": "500 !important",
         },
@@ -969,17 +972,17 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         # ── Panel COLUMNAS — tipografía y buscador a juego ──
         ".ag-column-select-header": {
             "padding": "10px 12px !important",
-            "border-bottom": "1px solid #e6e6eb !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
         },
         ".ag-column-select-header-filter-wrapper .ag-input-field-input": {
-            "border": "1px solid #e6e6eb !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
             "border-radius": "8px !important",
             "font-size": "12.5px !important",
             "padding": "6px 10px !important",
         },
         ".ag-column-select-header-filter-wrapper .ag-input-field-input:focus": {
-            "border-color": "#b9aff2 !important",
-            "box-shadow": "0 0 0 2px #f0edfe !important",
+            "border-color": f"{LAVANDA_FOCO} !important",
+            "box-shadow": f"0 0 0 2px {LAVANDA_FONDO} !important",
             "outline": "none !important",
         },
         # ── Fin de los nuevos bloques ──
@@ -1006,57 +1009,57 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     tema_grid = "balham"
     if es_inventario:
         tema_grid = "material"
-        custom_css[".ag-row-even"] = {"background-color": "#ffffff !important"}
-        custom_css[".ag-row-odd"] = {"background-color": "#ffffff !important"}
+        custom_css[".ag-row-even"] = {"background-color": f"{BLANCO} !important"}
+        custom_css[".ag-row-odd"] = {"background-color": f"{BLANCO} !important"}
         # ── NUEVO: reemplazo del wrapper ──
         custom_css[".ag-root-wrapper"].update({
-            "background-color": "#ffffff !important",
-            "border": "1px solid #e6e6eb !important",
+            "background-color": f"{BLANCO} !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
             "border-radius": "12px !important",
             "box-shadow": ("0 1px 2px rgba(16,16,20,0.05), "
                            "0 4px 14px rgba(16,16,20,0.07) !important"),
         })
         custom_css[".ag-header"].update({
-            "background-color": "#ffffff !important",
-            "border-bottom": "2px solid #6c5ce7 !important",
+            "background-color": f"{BLANCO} !important",
+            "border-bottom": f"2px solid {ACENTO} !important",
         })
         custom_css[".ag-tool-panel-horizontal-resize"] = {
             "width": "8px !important",
-            "background-color": "#e6e6eb",
+            "background-color": f"{GRIS_BORDE}",
             "cursor": "col-resize",
         }
         custom_css[".ag-header-cell"].update({
-            "background-color": "#ffffff !important",
+            "background-color": f"{BLANCO} !important",
         })
         custom_css[".ag-header-cell-text"].update({
-            "color": "#71717a !important",
+            "color": f"{GRIS_TEXTO} !important",
             "font-weight": "600",
             "letter-spacing": "0.05em",
             "text-transform": "uppercase",
         })
         custom_css[".ag-header-icon"].update({
-            "color": "#a2a2ad !important",
+            "color": f"{GRIS_TEXTO_SUAVE} !important",
         })
         custom_css[".ag-row-pinned"].update({
-            "background-color": "#e7e3fb !important",
-            "border-top": "2px solid #6c5ce7 !important",
-            "color": "#3b2e93 !important",
+            "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
+            "border-top": f"2px solid {ACENTO} !important",
+            "color": f"{ACENTO_TEXTO_OSCURO} !important",
         })
         custom_css[".ag-body-vertical-scroll::-webkit-scrollbar"] = {"width": "8px"}
         custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-track"] = {
-            "background": "#e6e6eb", "border-radius": "4px",
+            "background": f"{GRIS_BORDE}", "border-radius": "4px",
         }
         custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-thumb"] = {
-            "background": "#6c5ce7", "border-radius": "4px",
+            "background": f"{ACENTO}", "border-radius": "4px",
         }
         custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-thumb:hover"] = {
-            "background": "#5a4ad9",
+            "background": f"{ACENTO_FUERTE}",
         }
         custom_css[".ag-side-bar"].update({
-            "background-color": "#f7f6fb !important",
-            "border": "1px solid #e6e6eb !important",
-            "border-left": "1px solid #e6e6eb !important",
-            "border-bottom": "1px solid #e6e6eb !important",
+            "background-color": f"{LAVANDA_FILA} !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-left": f"1px solid {GRIS_BORDE} !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
             "border-radius": "10px !important",
             "border-top-right-radius": "10px !important",
             "border-bottom-right-radius": "10px !important",
@@ -1065,47 +1068,47 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "overflow": "hidden !important",
         })
         custom_css[".ag-side-bar .ag-side-buttons"].update({
-            "background-color": "#f2f0fb !important",
-            "border-bottom": "1px solid #e6e6eb !important",
+            "background-color": f"{LAVANDA_FILA_ALT} !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
         })
         # ── ELIMINADO: custom_css[".ag-root"] = {...}  (ya no se usa) ──
         # ── ELIMINADO: custom_css[".ag-filter-toolpanel"].update({...}) (se movió al base) ──
 
     if es_requerimientos:
         custom_css[".ag-side-button.ag-selected"] = {
-            "background-color": "#52525c !important",
-            "color": "#f6f6f8 !important",
-            "box-shadow": "inset 0 0 0 1px #71717a",
+            "background-color": f"{EXIT_HOVER} !important",
+            "color": f"{GRIS_FONDO} !important",
+            "box-shadow": f"inset 0 0 0 1px {GRIS_TEXTO}",
         }
         custom_css[".ag-side-button:hover"] = {
-            "background-color": "#e6e6eb !important",
-            "color": "#18181d !important",
+            "background-color": f"{GRIS_BORDE} !important",
+            "color": f"{TEXTO_PRINCIPAL} !important",
         }
-        custom_css[".ag-header-icon"] = {"color": "#a2a2ad !important"}
+        custom_css[".ag-header-icon"] = {"color": f"{GRIS_TEXTO_SUAVE} !important"}
         custom_css[".ag-column-select-column .ag-checkbox-input-wrapper.ag-checked"] = {
-            "background": "#71717a !important",
+            "background": f"{GRIS_TEXTO} !important",
         }
         custom_css[".ag-row-pinned"] = {
-            "background-color": "#e6e6eb !important",
+            "background-color": f"{GRIS_BORDE} !important",
             "font-weight": "700 !important",
-            "border-top": "2px solid #71717a !important",
+            "border-top": f"2px solid {GRIS_TEXTO} !important",
             "color": "#101014 !important",
             "font-size": f"{font_px + 1}px !important",
         }
-        custom_css[".ag-row-hover"] = {"background-color": "#f1f1f4 !important"}
+        custom_css[".ag-row-hover"] = {"background-color": f"{GRIS_LINEA} !important"}
         custom_css[".ag-paging-button:hover:not(.ag-disabled)"] = {
-            "background": "#e6e6eb !important",
-            "border-color": "#a2a2ad !important",
-            "color": "#52525c !important",
+            "background": f"{GRIS_BORDE} !important",
+            "border-color": f"{GRIS_TEXTO_SUAVE} !important",
+            "color": f"{EXIT_HOVER} !important",
         }
         # Cabecera de grupos: banda lavanda con texto índigo profundo (CallAI)
-        custom_css[".ag-header-group-cell"] = {"background-color": "#e7e3fb !important"}
-        custom_css[".ag-header-group-cell-label"] = {"color": "#3b2e93 !important"}
+        custom_css[".ag-header-group-cell"] = {"background-color": f"{LAVANDA_CABECERA_GRUPO} !important"}
+        custom_css[".ag-header-group-cell-label"] = {"color": f"{ACENTO_TEXTO_OSCURO} !important"}
         custom_css[".ag-header-group-text"] = {
-            "color": "#3b2e93 !important",
+            "color": f"{ACENTO_TEXTO_OSCURO} !important",
             "font-weight": "600 !important",
         }
-        custom_css[".ag-header-group-cell .ag-icon"] = {"color": "#6c5ce7 !important"}
+        custom_css[".ag-header-group-cell .ag-icon"] = {"color": f"{ACENTO} !important"}
         custom_css[".ag-theme-balham"] = {"--ag-list-item-height": "22px !important"}
         custom_css[".ag-column-select-column-label"] = {
             "font-size": f"{max(11, font_px - 1)}px !important",
@@ -1213,16 +1216,16 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
     grid_options = gb.build()
 
     custom_css = {
-        ".ag-root-wrapper": {"background-color": "#ffffff", "border": "1px solid #e6e6eb", "border-radius": "8px", "width": "100% !important"},
-        ".ag-header": {"background-color": "#f1f1f4", "border-bottom": "2px solid #6c5ce7"},
-        ".ag-header-cell-text": {"color": "#18181d", "font-weight": "700", "font-size": f"{font_px}px"},
-        ".ag-row": {"color": "#52525c", "border-color": "#e6e6eb"},
-        ".ag-row-even": {"background-color": "#ffffff"},
-        ".ag-row-odd": {"background-color": "#f6f6f8"},
-        ".ag-row-hover": {"background-color": "#f0edfe !important"},
-        ".ag-cell": {"color": "#52525c", "font-size": f"{font_px}px"},
-        ".ag-paging-panel": {"color": "#85858f", "background-color": "#f6f6f8", "border-top": "1px solid #e6e6eb", "font-size": "0.75rem"},
-        ".ag-menu": {"background-color": "#ffffff", "color": "#18181d", "border": "1px solid #e6e6eb"},
+        ".ag-root-wrapper": {"background-color": f"{BLANCO}", "border": f"1px solid {GRIS_BORDE}", "border-radius": "8px", "width": "100% !important"},
+        ".ag-header": {"background-color": f"{GRIS_LINEA}", "border-bottom": f"2px solid {ACENTO}"},
+        ".ag-header-cell-text": {"color": f"{TEXTO_PRINCIPAL}", "font-weight": "700", "font-size": f"{font_px}px"},
+        ".ag-row": {"color": f"{EXIT_HOVER}", "border-color": f"{GRIS_BORDE}"},
+        ".ag-row-even": {"background-color": f"{BLANCO}"},
+        ".ag-row-odd": {"background-color": f"{GRIS_FONDO}"},
+        ".ag-row-hover": {"background-color": f"{LAVANDA_FONDO} !important"},
+        ".ag-cell": {"color": f"{EXIT_HOVER}", "font-size": f"{font_px}px"},
+        ".ag-paging-panel": {"color": f"{ICON_MUTED}", "background-color": f"{GRIS_FONDO}", "border-top": f"1px solid {GRIS_BORDE}", "font-size": "0.75rem"},
+        ".ag-menu": {"background-color": f"{BLANCO}", "color": f"{TEXTO_PRINCIPAL}", "border": f"1px solid {GRIS_BORDE}"},
         ".ag-pinned-left-header": {"box-shadow": "3px 0 8px rgba(0,0,0,0.08)"},
         ".ag-pinned-left-cols-container": {"box-shadow": "3px 0 8px rgba(0,0,0,0.08)"},
     }
@@ -1375,9 +1378,9 @@ def renderizar_tabla_compras(df: pd.DataFrame, grupos_sel: list = None):
     cols_num_view = [c for c in df_view.columns if pd.api.types.is_numeric_dtype(df_view[c])]
     if cols_num_view:
         st.markdown(
-            "<div style='background:#e7e3fb;border-top:2px solid #6c5ce7;"
+            f"<div style='background:{LAVANDA_CABECERA_GRUPO};border-top:2px solid {ACENTO};"
             "border-radius:0 0 8px 8px;padding:6px 12px;"
-            "font-size:13px;font-weight:700;color:#3b2e93;'>"
+            f"font-size:13px;font-weight:700;color:{ACENTO_TEXTO_OSCURO};'>"
             + _totales_html_compras(df_editado)
             + "</div>",
             unsafe_allow_html=True,
