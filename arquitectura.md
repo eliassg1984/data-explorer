@@ -179,8 +179,17 @@ el nivel NO requiere reescribir: se le añaden capacidades al motor (ver Fase 5)
       helpers de 11 parámetros MENOS legibles que el código actual. Parada
       deliberada: el valor limpio ya está capturado; lo que queda es glue
       legítimamente entrelazado con `gb` y los flags de reporte.
-- [ ] Fase 4 — Mover el CSS del grid a `estilos_grid.py`.
-- [ ] Fase 5 — Profundidad de gráficos (se apoya en el motor por config):
-      `hovertemplate` con formato de soles (S/ y miles), hover unificado,
-      ejes con separador de miles, y `facet` opcional para comparativas.
-      Un solo lugar de definición del "look" de figura → mejora todos.
+- [~] Fase 5 — Profundidad de gráficos (parcial, lo de mayor impacto hecho).
+      HECHO en el motor `crear_grafico` (afecta a todos los gráficos de
+      barras/líneas/áreas de una vez):
+      · `_hover_fmt(col_y)` decide formato por nombre de columna (mismo
+        criterio que _es_moneda/_es_cantidad de tablas.py): valorizado/precio
+        → "S/ " con 2 decimales; stock/cantidad → miles sin decimales.
+      · `hovertemplate` con ese formato + `hovermode="x unified"` (una sola
+        caja de tooltip al pasar el mouse).
+      · Eje Y con `tickformat=",.0f"` en `_LAYOUT_BASE` (separador de miles).
+      OPCIONAL pendiente (menor retorno): hover propio para treemap/sunburst/
+      box (estructura distinta al eje X/Y), y `facet` para comparativas.
+- [ ] Fase 4 — Mover el CSS del grid a `estilos_grid.py`. OPCIONAL/cosmético:
+      el CSS ya está encapsulado en `_css_base()` tras la Fase 3; moverlo de
+      fichero aporta orden pero poco valor. Dejar para limpieza futura.
