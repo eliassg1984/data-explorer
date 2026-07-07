@@ -582,6 +582,62 @@ def _estilo_fila(col_stock, df_grid, es_inventario, quitar_fondos):
     return get_row_style
 
 
+
+def _config_sidebar(mostrar_pivot, es_ajuste):
+    """Arma la configuración del sidebar de AgGrid: paneles Columnas,
+    Filtros y (solo en Ajuste) Modo pivote. Devuelve el dict sideBar.
+    Extraído de renderizar_aggrid_desktop en la Fase 3."""
+    _columns_panel = {
+        "id": "columns",
+        "labelDefault": "Columnas",
+        "labelKey": "columns",
+        "iconKey": "columns",
+        "toolPanel": "agColumnsToolPanel",
+        "toolPanelParams": {
+            "suppressRowGroups": (not mostrar_pivot) or es_ajuste,
+            "suppressValues":    (not mostrar_pivot) or es_ajuste,
+            "suppressPivots":    (not mostrar_pivot) or es_ajuste,
+            "suppressPivotMode": (not mostrar_pivot) or es_ajuste,
+            "suppressColumnFilter": es_ajuste,
+            "suppressColumnSelectAll": es_ajuste,
+            "suppressColumnExpandAll": True,
+        },
+    }
+    _filters_panel = {
+        "id": "filters",
+        "labelDefault": "Filtros",
+        "labelKey": "filters",
+        "iconKey": "filter",
+        "toolPanel": "agFiltersToolPanel",
+    }
+    _tool_panels = [_columns_panel, _filters_panel]
+
+    if es_ajuste:
+        _tool_panels.append({
+            "id": "pivotePanel",
+            "labelDefault": "Modo pivote",
+            "labelKey": "pivotePanel",
+            "iconKey": "pivot",
+            "toolPanel": "agColumnsToolPanel",
+            "toolPanelParams": {
+                "suppressRowGroups": False,
+                "suppressValues": False,
+                "suppressPivots": False,
+                "suppressPivotMode": False,
+                "suppressColumnFilter": True,
+                "suppressColumnSelectAll": True,
+                "suppressColumnExpandAll": True,
+            },
+        })
+
+    _sidebar_cfg = {
+        "toolPanels": _tool_panels,
+        "defaultToolPanel": "" if es_ajuste else "columns",
+        "position": "right",
+    }
+    return _sidebar_cfg
+
+
 def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14, cols_visibles=None):
     """Renderiza la tabla AgGrid en vista desktop con formato financiero y diseño premium.
 
@@ -798,54 +854,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             fila_totales[c] = None
 
     get_row_style = _estilo_fila(col_stock, df_grid, es_inventario, quitar_fondos)
-    _columns_panel = {
-        "id": "columns",
-        "labelDefault": "Columnas",
-        "labelKey": "columns",
-        "iconKey": "columns",
-        "toolPanel": "agColumnsToolPanel",
-        "toolPanelParams": {
-            "suppressRowGroups": (not mostrar_pivot) or es_ajuste,
-            "suppressValues":    (not mostrar_pivot) or es_ajuste,
-            "suppressPivots":    (not mostrar_pivot) or es_ajuste,
-            "suppressPivotMode": (not mostrar_pivot) or es_ajuste,
-            "suppressColumnFilter": es_ajuste,
-            "suppressColumnSelectAll": es_ajuste,
-            "suppressColumnExpandAll": True,
-        },
-    }
-    _filters_panel = {
-        "id": "filters",
-        "labelDefault": "Filtros",
-        "labelKey": "filters",
-        "iconKey": "filter",
-        "toolPanel": "agFiltersToolPanel",
-    }
-    _tool_panels = [_columns_panel, _filters_panel]
-
-    if es_ajuste:
-        _tool_panels.append({
-            "id": "pivotePanel",
-            "labelDefault": "Modo pivote",
-            "labelKey": "pivotePanel",
-            "iconKey": "pivot",
-            "toolPanel": "agColumnsToolPanel",
-            "toolPanelParams": {
-                "suppressRowGroups": False,
-                "suppressValues": False,
-                "suppressPivots": False,
-                "suppressPivotMode": False,
-                "suppressColumnFilter": True,
-                "suppressColumnSelectAll": True,
-                "suppressColumnExpandAll": True,
-            },
-        })
-
-    _sidebar_cfg = {
-        "toolPanels": _tool_panels,
-        "defaultToolPanel": "" if es_ajuste else "columns",
-        "position": "right",
-    }
+    _sidebar_cfg = _config_sidebar(mostrar_pivot, es_ajuste)
 
     # Nombre del reporte, sanitizado para insertarlo como string literal JS.
     _reporte_js = str(reporte).replace("\\", "\\\\").replace('"', '\\"')
