@@ -531,6 +531,57 @@ def _estilos_celda(max_valorizado):
             valorizado_bar_style, valorizado_plano)
 
 
+
+def _estilo_fila(col_stock, df_grid, es_inventario, quitar_fondos):
+    """Devuelve el JsCode getRowStyle según el reporte: inventario (grupos
+    coloreados), stock con semáforo, o fila total simple. Extraído de
+    renderizar_aggrid_desktop en la Fase 3."""
+    if col_stock and col_stock in df_grid.columns and es_inventario:
+        get_row_style = JsCode(f"""
+            function(params) {{
+                if (params.node.rowPinned === 'bottom') {{
+                    return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}', color:'{ACENTO_TEXTO_OSCURO}',
+                             borderTop:'2px solid {ACENTO}', fontSize:'13px' }};
+                }}
+                if (params.node.group) {{
+                    var nivel = params.node.level;
+                    if (nivel === 0) return {{ backgroundColor:'{LAVANDA_BORDE}', fontWeight:'600' }};
+                    if (nivel === 1) return {{ backgroundColor:'{LAVANDA_CABECERA_GRUPO}', fontWeight:'600' }};
+                    return {{ backgroundColor:'{LAVANDA_FONDO}', fontWeight:'500' }};
+                }}
+                return {{ backgroundColor:'{BLANCO}' }};
+            }}
+        """)
+    elif col_stock and col_stock in df_grid.columns and not quitar_fondos:
+        _sf = str(col_stock).replace("\\", "\\\\").replace('"', '\\"')
+        get_row_style = JsCode(f"""
+            function(params) {{
+                if (params.node.rowPinned === 'bottom') {{
+                    return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}', color:'{ACENTO_TEXTO_OSCURO}',
+                              borderTop:'2px solid {ACENTO}', fontSize:'13px' }};
+                }}
+                if (params.node.group || !params.data) return null;
+                var s = params.data["{_sf}"];
+                if (s === null || s === undefined || s === '') return null;
+                var v = Number(s);
+                if (isNaN(v)) return null;
+                if (v === 0) return {{ backgroundColor:'{CELDA_NEG_FONDO}' }};
+                if (v < 10)  return {{ backgroundColor:'{ADVERTENCIA_FONDO}' }};
+                return null;
+            }}
+        """)
+    else:
+        get_row_style = JsCode(f"""
+            function(params) {{
+                if (params.node.rowPinned === 'bottom') {{
+                    return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}', color:'{ACENTO_TEXTO_OSCURO}',
+                             borderTop:'2px solid {ACENTO}', fontSize:'13px' }};
+                }}
+            }}
+        """)
+    return get_row_style
+
+
 def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14, cols_visibles=None):
     """Renderiza la tabla AgGrid en vista desktop con formato financiero y diseño premium.
 
@@ -746,50 +797,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         else:
             fila_totales[c] = None
 
-    if col_stock and col_stock in df_grid.columns and es_inventario:
-        get_row_style = JsCode(f"""
-            function(params) {{
-                if (params.node.rowPinned === 'bottom') {{
-                    return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}', color:'{ACENTO_TEXTO_OSCURO}',
-                             borderTop:'2px solid {ACENTO}', fontSize:'13px' }};
-                }}
-                if (params.node.group) {{
-                    var nivel = params.node.level;
-                    if (nivel === 0) return {{ backgroundColor:'{LAVANDA_BORDE}', fontWeight:'600' }};
-                    if (nivel === 1) return {{ backgroundColor:'{LAVANDA_CABECERA_GRUPO}', fontWeight:'600' }};
-                    return {{ backgroundColor:'{LAVANDA_FONDO}', fontWeight:'500' }};
-                }}
-                return {{ backgroundColor:'{BLANCO}' }};
-            }}
-        """)
-    elif col_stock and col_stock in df_grid.columns and not quitar_fondos:
-        _sf = str(col_stock).replace("\\", "\\\\").replace('"', '\\"')
-        get_row_style = JsCode(f"""
-            function(params) {{
-                if (params.node.rowPinned === 'bottom') {{
-                    return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}', color:'{ACENTO_TEXTO_OSCURO}',
-                              borderTop:'2px solid {ACENTO}', fontSize:'13px' }};
-                }}
-                if (params.node.group || !params.data) return null;
-                var s = params.data["{_sf}"];
-                if (s === null || s === undefined || s === '') return null;
-                var v = Number(s);
-                if (isNaN(v)) return null;
-                if (v === 0) return {{ backgroundColor:'{CELDA_NEG_FONDO}' }};
-                if (v < 10)  return {{ backgroundColor:'{ADVERTENCIA_FONDO}' }};
-                return null;
-            }}
-        """)
-    else:
-        get_row_style = JsCode(f"""
-            function(params) {{
-                if (params.node.rowPinned === 'bottom') {{
-                    return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}', color:'{ACENTO_TEXTO_OSCURO}',
-                             borderTop:'2px solid {ACENTO}', fontSize:'13px' }};
-                }}
-            }}
-        """)
-
+    get_row_style = _estilo_fila(col_stock, df_grid, es_inventario, quitar_fondos)
     _columns_panel = {
         "id": "columns",
         "labelDefault": "Columnas",
