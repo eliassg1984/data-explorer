@@ -156,6 +156,13 @@ el nivel NO requiere reescribir: se le añaden capacidades al motor (ver Fase 5)
       - Python puro (graficos.py/Plotly, navegacion.py f-strings) → constantes.
       Excepciones documentadas en el código: overlay de errores (#7f1d1d) e
       inspector (#101014), herramientas de depuración con fondo oscuro.
+      ⚠️ LECCIÓN (costó un bug real): al convertir a f-string un bloque que
+      contiene JavaScript (JsCode) o CSS con llaves, hay que ESCAPAR las llaves
+      del JS/CSS como `{{ }}`, dejando llaves simples SOLO para `{CONSTANTE}`.
+      Si no, los colores no interpolan y se rompen en silencio (compila igual).
+      NO usar `tokenize.untokenize` (reformatea todo el fichero). Verificar
+      SIEMPRE: (1) compila, (2) ningún `{CONST}` en string no-f, (3) los colores
+      resueltos son IDÉNTICOS al original — comparar recuentos hex antes/después.
 - [ ] Fase 3 — Trocear `renderizar_aggrid_desktop` (~1,146 líneas) en
       helpers: `_construir_opciones_grid()`, `_css_base()`,
       `_css_requerimientos()`, `_css_ajuste()`.
