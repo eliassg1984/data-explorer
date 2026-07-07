@@ -419,60 +419,11 @@ def _css_base(font_px):
         # ── Fin de los nuevos bloques ──
     }
 
-def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14, cols_visibles=None):
-    """Renderiza la tabla AgGrid en vista desktop con formato financiero y diseño premium.
 
-    cols_visibles: lista de columnas que arrancan VISIBLES. El resto se oculta
-    por defecto y el usuario las activa desde la barra lateral (panel "Columnas").
-    Si es None, se muestran todas.
-    """
-
-    REPORTES_ESTILO_INVENTARIO = ("Inventario Valorizado", "Ajuste de Inventario")
-
-    envolver_cabeceras = reporte in REPORTES_ESTILO_INVENTARIO
-    quitar_fondos = reporte in REPORTES_ESTILO_INVENTARIO
-    es_inventario = reporte in REPORTES_ESTILO_INVENTARIO
-    es_salidas = (reporte == "Salidas")
-    es_requerimientos = (reporte == "Requerimientos")
-    es_ajuste = (reporte == "Ajuste de Inventario")
-
-    mostrar_pivot = es_requerimientos or es_inventario
-
-    col_producto   = buscar_columna(df_grid, "Nombre Producto", "producto", "descripcion")
-    col_stock      = buscar_columna(df_grid, "Stock al dia", "Stock al Dia", "stock")
-    col_precio_ord = buscar_columna(df_grid, "Precio Promedio", "precio promedio", "precio")
-    col_valorizado = buscar_columna(df_grid, "Valorizado total", "valorizado")
-
-    prioridad = []
-    for c in (col_producto, col_stock, col_precio_ord, col_valorizado):
-        if c and c in df_grid.columns and c not in prioridad:
-            prioridad.append(c)
-    if prioridad:
-        resto = [c for c in df_grid.columns if c not in prioridad]
-        df_grid = df_grid[prioridad + resto]
-
-    max_valorizado = 1.0
-    if col_valorizado and col_valorizado in df_grid.columns:
-        try:
-            m = float(df_grid[col_valorizado].max())
-            if m > 0:
-                max_valorizado = m
-        except Exception:
-            pass
-
-    gb = GridOptionsBuilder.from_dataframe(df_grid)
-    _opciones_col_def = dict(
-        resizable=True, filter=True, sortable=True,
-        editable=False, enableRowGroup=True,
-        enablePivot=True, enableValue=True,
-        minWidth=100,
-        tooltipValueGetter=JsCode("function(params){ return params.value; }"),
-    )
-    if envolver_cabeceras:
-        _opciones_col_def["wrapHeaderText"] = True
-        _opciones_col_def["autoHeaderHeight"] = True
-    gb.configure_default_column(**_opciones_col_def)
-
+def _estilos_celda(max_valorizado):
+    """Estilos JsCode de celda del grid (mono, stock, valorizado y sus
+    variantes planas). Solo dependen de max_valorizado. Extraído de
+    renderizar_aggrid_desktop en la Fase 3."""
     mono_style = JsCode("""
         function(params) {
             return { fontFamily: "'Courier New', Courier, monospace" };
@@ -576,6 +527,66 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             return base;
         }}
     """)
+    return (mono_style, stock_cell_style, stock_cell_style_plano,
+            valorizado_bar_style, valorizado_plano)
+
+
+def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14, cols_visibles=None):
+    """Renderiza la tabla AgGrid en vista desktop con formato financiero y diseño premium.
+
+    cols_visibles: lista de columnas que arrancan VISIBLES. El resto se oculta
+    por defecto y el usuario las activa desde la barra lateral (panel "Columnas").
+    Si es None, se muestran todas.
+    """
+
+    REPORTES_ESTILO_INVENTARIO = ("Inventario Valorizado", "Ajuste de Inventario")
+
+    envolver_cabeceras = reporte in REPORTES_ESTILO_INVENTARIO
+    quitar_fondos = reporte in REPORTES_ESTILO_INVENTARIO
+    es_inventario = reporte in REPORTES_ESTILO_INVENTARIO
+    es_salidas = (reporte == "Salidas")
+    es_requerimientos = (reporte == "Requerimientos")
+    es_ajuste = (reporte == "Ajuste de Inventario")
+
+    mostrar_pivot = es_requerimientos or es_inventario
+
+    col_producto   = buscar_columna(df_grid, "Nombre Producto", "producto", "descripcion")
+    col_stock      = buscar_columna(df_grid, "Stock al dia", "Stock al Dia", "stock")
+    col_precio_ord = buscar_columna(df_grid, "Precio Promedio", "precio promedio", "precio")
+    col_valorizado = buscar_columna(df_grid, "Valorizado total", "valorizado")
+
+    prioridad = []
+    for c in (col_producto, col_stock, col_precio_ord, col_valorizado):
+        if c and c in df_grid.columns and c not in prioridad:
+            prioridad.append(c)
+    if prioridad:
+        resto = [c for c in df_grid.columns if c not in prioridad]
+        df_grid = df_grid[prioridad + resto]
+
+    max_valorizado = 1.0
+    if col_valorizado and col_valorizado in df_grid.columns:
+        try:
+            m = float(df_grid[col_valorizado].max())
+            if m > 0:
+                max_valorizado = m
+        except Exception:
+            pass
+
+    gb = GridOptionsBuilder.from_dataframe(df_grid)
+    _opciones_col_def = dict(
+        resizable=True, filter=True, sortable=True,
+        editable=False, enableRowGroup=True,
+        enablePivot=True, enableValue=True,
+        minWidth=100,
+        tooltipValueGetter=JsCode("function(params){ return params.value; }"),
+    )
+    if envolver_cabeceras:
+        _opciones_col_def["wrapHeaderText"] = True
+        _opciones_col_def["autoHeaderHeight"] = True
+    gb.configure_default_column(**_opciones_col_def)
+
+    (mono_style, stock_cell_style, stock_cell_style_plano,
+     valorizado_bar_style, valorizado_plano) = _estilos_celda(max_valorizado)
 
     _stock_style = stock_cell_style_plano if quitar_fondos else stock_cell_style
     _valor_style = valorizado_plano       if quitar_fondos else valorizado_bar_style
