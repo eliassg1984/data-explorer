@@ -638,6 +638,26 @@ def _config_sidebar(mostrar_pivot, es_ajuste):
     return _sidebar_cfg
 
 
+
+def _fila_totales(df_grid, cols_valor, cols_precio, cols_stock, primera_col):
+    """Calcula la fila de totales al pie: suma para valor/stock, promedio
+    para precio, "▶ TOTAL" en la primera columna. Devuelve el dict.
+    Extraído de renderizar_aggrid_desktop en la Fase 3."""
+    fila_totales = {}
+    for c in df_grid.columns:
+        if c in cols_valor:
+            fila_totales[c] = round(float(df_grid[c].sum()), 2)
+        elif c in cols_precio:
+            fila_totales[c] = round(float(df_grid[c].mean()), 2)
+        elif c in cols_stock:
+            fila_totales[c] = round(float(df_grid[c].sum()), 2)
+        elif c == primera_col:
+            fila_totales[c] = "▶ TOTAL"
+        else:
+            fila_totales[c] = None
+    return fila_totales
+
+
 def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14, cols_visibles=None):
     """Renderiza la tabla AgGrid en vista desktop con formato financiero y diseño premium.
 
@@ -840,18 +860,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                    if pd.api.types.is_numeric_dtype(df_grid[c]) and "stock" in _norm(c)]
 
     primera_col = list(df_grid.columns)[0] if len(df_grid.columns) > 0 else None
-    fila_totales = {}
-    for c in df_grid.columns:
-        if c in cols_valor:
-            fila_totales[c] = round(float(df_grid[c].sum()), 2)
-        elif c in cols_precio:
-            fila_totales[c] = round(float(df_grid[c].mean()), 2)
-        elif c in cols_stock:
-            fila_totales[c] = round(float(df_grid[c].sum()), 2)
-        elif c == primera_col:
-            fila_totales[c] = "▶ TOTAL"
-        else:
-            fila_totales[c] = None
+    fila_totales = _fila_totales(df_grid, cols_valor, cols_precio, cols_stock, primera_col)
 
     get_row_style = _estilo_fila(col_stock, df_grid, es_inventario, quitar_fondos)
     _sidebar_cfg = _config_sidebar(mostrar_pivot, es_ajuste)
