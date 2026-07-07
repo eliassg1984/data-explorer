@@ -9,7 +9,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from utils import buscar_columna
+from utils import buscar_columna, _norm
 from tema import (
     GRIS_FONDO, GRIS_BORDE, TEXTO_PRINCIPAL, BLANCO,
     SERIE_PRINCIPAL, PALETA_SERIES, ESCALA_CONTINUA, ESCALA_SEMAFORO,
@@ -429,6 +429,20 @@ def _preparar_datos(df, x, y, color, tipo):
     return df, x
 
 
+def _hover_fmt(col_y):
+    """Devuelve (prefijo, formato_numero) para el valor Y del tooltip, según
+    el nombre de la columna. Mismo criterio que _es_moneda/_es_cantidad de
+    tablas.py: valorizado/precio/total → soles con 2 decimales; stock/cantidad
+    → número con separador de miles sin decimales; resto → numérico genérico."""
+    n = _norm(col_y) if col_y else ""
+    if any(k in n for k in ("valorizado", "precio", "importe", "total",
+                            "monto", "costo", "unitario")):
+        return "S/ ", ",.2f"
+    if any(k in n for k in ("stock", "cantidad", "qty", "unidades")):
+        return "", ",.0f"
+    return "", ",.2f"
+
+
 def crear_grafico(df, conf):
     """Crea una figura Plotly desde una configuración.
     Retorna (fig, None) o (None, motivo) si falta alguna columna."""
@@ -480,6 +494,16 @@ def crear_grafico(df, conf):
         fig.update_layout(**_LAYOUT_BASE)
         if conf.get("tickangle"):
             fig.update_layout(xaxis_tickangle=conf["tickangle"])
+
+        # ── Tooltips con formato peruano (soles / miles) ──────────────────
+        # Se aplica a los gráficos con eje Y de valor (bar, line, area). El
+        # prefijo "S/ " y los decimales salen del nombre de la columna Y.
+        if tipo in ("bar", "line", "area") and y:
+            _pref, _num = _hover_fmt(y)
+            fig.update_traces(
+                hovertemplate=f"<b>%{{x}}</b><br>{y}: {_pref}%{{y:{_num}}}<extra></extra>"
+            )
+            fig.update_layout(hovermode="x unified")
 
         # 🔧 NUEVO: asegurar que el eje X sea categórico cuando se solicita
         if conf.get("x_categorico"):
