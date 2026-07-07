@@ -20,6 +20,405 @@ from tema import (
 # FUNCIÓN: AGGRID DESKTOP — con formato financiero y diseño mejorado
 # ===========================================================================
 
+
+def _css_base(font_px):
+    """CSS base del grid AgGrid (dict custom_css). Depende solo de font_px
+    y de las constantes de color de tema.py. Extraído de
+    renderizar_aggrid_desktop en la Fase 3."""
+    return {
+        ".ag-root-wrapper": {
+            "background-color": f"{BLANCO}",
+            "border": f"1px solid {GRIS_BORDE}",
+            "border-radius": "12px !important",
+            "overflow": "hidden !important",
+            "box-shadow": "0 1px 3px rgba(16,16,20,0.05)",
+            "width": "100% !important",
+        },
+        # Cabecera clara estilo CallAI: banda gris suave con texto gris medio
+        ".ag-header": {
+            "background-color": f"{GRIS_FONDO_CABECERA} !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
+        },
+        ".ag-header-cell": {
+            "background-color": f"{GRIS_FONDO_CABECERA} !important",
+        },
+        ".ag-header-cell-text": {
+            "color": f"{GRIS_TEXTO} !important",
+            "font-weight": "600",
+            "font-size": f"{font_px}px",
+            "letter-spacing": "0.03em",
+            "text-transform": "uppercase",
+        },
+        ".ag-header-icon": {
+            "color": f"{GRIS_TEXTO_SUAVE} !important",
+        },
+        ".ag-row": {
+            "border-bottom": f"1px solid {GRIS_LINEA}",
+            "color": f"{TEXTO_PRINCIPAL}",
+        },
+        ".ag-row-even": {"background-color": f"{BLANCO}"},
+        ".ag-row-odd": {"background-color": f"{GRIS_FONDO}"},
+        ".ag-row-hover": {"background-color": f"{LAVANDA_FONDO} !important"},
+        ".ag-cell": {"color": f"{EXIT_HOVER}", "font-size": f"{font_px}px"},
+        ".ag-row-pinned": {
+            "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
+            "font-weight": "700 !important",
+            "border-top": f"2px solid {ACENTO} !important",
+            "color": f"{ACENTO_TEXTO_OSCURO} !important",
+            "font-size": f"{font_px + 1}px !important",
+        },
+        ".ag-paging-panel": {
+            "display": "flex !important",
+            "align-items": "center !important",
+            "justify-content": "space-between !important",
+            "color": f"{ICON_MUTED}",
+            "background-color": f"{GRIS_FONDO}",
+            "border-top": f"1px solid {GRIS_BORDE}",
+            "padding": "8px 16px !important",
+            "border-bottom-left-radius": "10px !important",
+            "border-bottom-right-radius": "10px !important",
+            "font-size": "12px !important",
+            "min-height": "44px !important",
+        },
+        ".ag-paging-panel .ag-paging-page-size": {
+            "order": "-1 !important",
+            "margin-right": "auto !important",
+        },
+        ".ag-paging-panel .ag-paging-page-size .ag-label": {
+            "color": f"{ICON_MUTED} !important",
+            "font-size": "12px !important",
+            "margin-right": "6px !important",
+        },
+        ".ag-paging-panel .ag-paging-page-size select, "
+        ".ag-paging-panel .ag-paging-page-size .ag-select": {
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "6px !important",
+            "background": f"{BLANCO} !important",
+            "color": f"{TEXTO_PRINCIPAL} !important",
+            "font-size": "12px !important",
+            "padding": "2px 6px !important",
+        },
+        ".ag-paging-button": {
+            "width": "28px !important",
+            "height": "28px !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "background": f"{BLANCO} !important",
+            "border-radius": "6px !important",
+            "color": f"{GRIS_TEXTO} !important",
+            "font-size": "13px !important",
+            "cursor": "pointer !important",
+            "display": "flex !important",
+            "align-items": "center !important",
+            "justify-content": "center !important",
+            "margin": "0 2px !important",
+            "transition": "all 0.15s ease !important",
+        },
+        ".ag-paging-button:hover:not(.ag-disabled)": {
+            "background": f"{LAVANDA_FONDO} !important",
+            "border-color": f"{LAVANDA_FOCO} !important",
+            "color": f"{ACENTO_FUERTE} !important",
+        },
+        ".ag-paging-button.ag-disabled": {
+            "color": f"{SCROLL_THUMB} !important",
+            "border-color": f"{GRIS_LINEA} !important",
+            "background": f"{GRIS_FONDO} !important",
+            "cursor": "default !important",
+        },
+        ".ag-paging-row-summary-panel": {
+            "color": f"{ICON_MUTED} !important",
+            "font-size": "12px !important",
+            "margin-left": "auto !important",
+        },
+        ".ag-paging-row-summary-panel-number": {
+            "color": f"{TEXTO_PRINCIPAL} !important",
+            "font-weight": "600 !important",
+        },
+        ".ag-status-bar": {
+            "background-color": f"{GRIS_FONDO} !important",
+            "border-top": f"1px solid {GRIS_BORDE} !important",
+            "color": f"{GRIS_TEXTO} !important",
+            "padding": "4px 16px !important",
+            "font-size": "12px !important",
+            "min-height": "0 !important",
+        },
+        ".ag-status-name-value": {
+            "color": f"{GRIS_TEXTO} !important",
+            "font-size": "12px !important",
+        },
+        ".ag-status-name-value-value": {
+            "color": f"{TEXTO_PRINCIPAL} !important",
+            "font-weight": "600 !important",
+        },
+        ".ag-side-bar": {
+            "background-color": f"{BLANCO}",
+            "border-left": f"1px solid {GRIS_BORDE} !important",
+            "border-top-right-radius": "10px !important",
+            "border-bottom-right-radius": "10px !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
+        },
+        ".ag-side-bar .ag-side-buttons": {
+            "border-right": f"1px solid {GRIS_BORDE} !important",
+        },
+        ".ag-side-button": {
+            "background-color": f"{GRIS_FONDO} !important",
+            "border": "none !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
+            "color": f"{GRIS_TEXTO} !important",
+        },
+        ".ag-side-button:hover": {
+            "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
+            "color": f"{ACENTO_FUERTE} !important",
+        },
+        ".ag-side-button.ag-selected": {
+            "background-color": f"{ACENTO_FUERTE} !important",
+            "color": f"{BLANCO} !important",
+            "box-shadow": f"inset 0 0 0 1px {ACENTO}",
+        },
+        ".ag-tool-panel-wrapper": {
+            "background-color": f"{BLANCO} !important",
+            "border": "none !important",
+        },
+        ".ag-column-select-panel": {
+            "padding": "10px !important",
+            "background-color": f"{BLANCO} !important",
+        },
+        ".ag-column-tool-panel .ag-column-panel": {
+            "border": "none !important",
+        },
+        ".ag-column-tool-panel .ag-column-select-all": {
+            "padding": "10px 0 !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
+        },
+        ".ag-column-panel .ag-header-cell-text": {
+            "color": f"{TEXTO_PRINCIPAL} !important",
+            "font-weight": "600 !important",
+        },
+        ".ag-filter-toolpanel-body": {
+            "padding": "10px !important",
+            "background-color": f"{BLANCO} !important",
+        },
+
+        # ══════════════════════════════════════════════════════════════════
+        # PANEL COLUMNS — estilos ACOTADOS con [data-active-panel='columns']
+        # para que NO afecten al panel Pivote, que usa el mismo componente
+        # interno (agColumnsToolPanel) y comparte la clase
+        # .ag-column-select-column.
+        # ══════════════════════════════════════════════════════════════════
+
+        # Respiro inferior: evita que la última pastilla toque el borde del panel
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-list": {
+            "padding-bottom": "8px !important",
+        },
+
+        # Cambio 1: filas como pastillas (más espaciado)
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column": {
+            "display": "flex !important",
+            "align-items": "center !important",
+            "background": f"{GRIS_FONDO} !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "999px !important",
+            "padding": "8px 12px !important",
+            "margin": "5px 10px !important",
+            "transition": "background .15s ease, border-color .15s ease !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:hover": {
+            "background": f"{LAVANDA_FONDO} !important",
+            "border-color": f"{LAVANDA_BORDE} !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:has(.ag-checked)": {
+            "background": f"{LAVANDA_FONDO} !important",
+            "border-color": f"{LAVANDA_BORDE} !important",
+        },
+
+        # Cambio 2: etiqueta activa con color índigo
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:has(.ag-checked) .ag-column-select-column-label": {
+            "color": f"{ACENTO_TEXTO} !important",
+            "font-weight": "500 !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column-label": {
+            "order": "-1 !important",
+            "margin-right": "auto !important",
+            "color": f"{GRIS_TEXTO} !important",
+            "font-size": "12.5px !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-drag-handle": {
+            "display": "none !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper": {
+            "width": "36px !important",
+            "height": "20px !important",
+            "border-radius": "999px !important",
+            "background": f"{GRIS_BORDE} !important",
+            "border": "none !important",
+            "box-shadow": "none !important",
+            "position": "relative !important",
+            "transition": "background .15s ease !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper::after": {
+            "content": "'' !important",
+            "position": "absolute !important",
+            "top": "2px !important",
+            "left": "2px !important",
+            "width": "16px !important",
+            "height": "16px !important",
+            "border-radius": "50% !important",
+            "background": f"{BLANCO} !important",
+            "color": "transparent !important",
+            "box-shadow": "0 1px 2px rgba(0,0,0,0.25) !important",
+            "transition": "left .15s ease !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper.ag-checked": {
+            "background": f"{ACENTO_FUERTE} !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper.ag-checked::after": {
+            "content": "'' !important",
+            "left": "18px !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input": {
+            "cursor": "pointer !important",
+        },
+        # En el panel Pivote ocultamos la lista superior de selección de
+        # columnas: ahí solo queremos ver Grupos de filas / Valores.
+        ".ag-side-bar[data-active-panel='pivotePanel'] .ag-column-select": {
+            "display": "none !important",
+        },
+
+        # ── Panel modo pivote / drop zones (NUEVO ESTILIZADO) ──
+        ".ag-pivot-mode-panel": {
+            "padding": "10px 12px !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
+            "min-height": "0 !important",
+        },
+        ".ag-pivot-mode-select": {
+            "color": f"{ACENTO_TEXTO} !important",
+            "font-size": "13px !important",
+            "font-weight": "600 !important",
+        },
+        # Títulos de sección (Grupos de filas / Valores)
+        ".ag-column-drop-vertical-title-bar": {
+            "padding": "10px 12px 4px !important",
+        },
+        ".ag-column-drop-vertical-title": {
+            "color": f"{GRIS_TEXTO_SUAVE} !important",
+            "font-size": "11px !important",
+            "font-weight": "600 !important",
+            "text-transform": "uppercase !important",
+            "letter-spacing": "0.06em !important",
+        },
+        # Zona de arrastre (drop zone)
+        ".ag-column-drop-vertical": {
+            "background": "transparent !important",
+        },
+        ".ag-column-drop-vertical-list": {
+            "margin": "4px 10px 10px !important",
+            "border": f"1.5px dashed {LAVANDA_BORDE} !important",
+            "border-radius": "10px !important",
+            "background": f"{LAVANDA_SELECCION} !important",
+            "padding": "8px !important",
+        },
+        ".ag-column-drop-empty-message": {
+            "color": f"{LAVANDA_MEDIO} !important",
+            "font-size": "12px !important",
+            "text-align": "center !important",
+        },
+        # Pastillas de campos (Suma(...), Promedio(...))
+        ".ag-column-drop-vertical-cell": {
+            "background": f"{GRIS_FONDO} !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "999px !important",
+            "padding": "5px 12px !important",
+            "margin": "3px 0 !important",
+            "font-size": "12px !important",
+            "color": f"{GRIS_TEXTO_MEDIO} !important",
+        },
+        ".ag-column-drop-vertical-cell:hover": {
+            "background": f"{LAVANDA_FONDO} !important",
+            "border-color": f"{LAVANDA_BORDE} !important",
+        },
+        ".ag-column-drop-vertical-cell-text": {
+            "font-size": "12px !important",
+        },
+        ".ag-column-drop-cell-button": {
+            "color": f"{GRIS_TEXTO_SUAVE} !important",
+        },
+        ".ag-column-drop-cell-button:hover": {
+            "color": f"{ACENTO_FUERTE} !important",
+        },
+
+        # ── Panel FILTROS — a juego con el modo pivote ──
+        ".ag-filter-toolpanel": {
+            "border": "none !important",
+            "margin": "0 !important",
+        },
+        ".ag-filter-toolpanel-search": {
+            "padding": "10px 12px !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
+        },
+        ".ag-filter-toolpanel-search .ag-input-field-input": {
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "8px !important",
+            "font-size": "12.5px !important",
+            "padding": "6px 10px !important",
+            "color": f"{GRIS_TEXTO_MEDIO} !important",
+        },
+        ".ag-filter-toolpanel-search .ag-input-field-input:focus": {
+            "border-color": f"{LAVANDA_FOCO} !important",
+            "box-shadow": f"0 0 0 2px {LAVANDA_FONDO} !important",
+            "outline": "none !important",
+        },
+        # Cambio 3 (corregido): filtros como pastillas.
+        ".ag-filter-toolpanel-group-title-bar": {
+            "background": f"{GRIS_FONDO} !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "999px !important",
+            "padding": "8px 12px !important",
+            "margin": "3px 10px !important",
+            "transition": "background .15s ease, border-color .15s ease !important",
+        },
+        ".ag-filter-toolpanel-group-title-bar:hover": {
+            "background": f"{LAVANDA_FONDO} !important",
+            "border-color": f"{LAVANDA_BORDE} !important",
+        },
+        ".ag-filter-toolpanel-group-title": {
+            "color": f"{GRIS_TEXTO} !important",
+            "font-size": "12.5px !important",
+            "font-weight": "500 !important",
+        },
+        ".ag-filter-toolpanel-group-title-bar-icon .ag-icon, "
+        ".ag-filter-toolpanel-group-title-bar .ag-icon": {
+            "color": f"{GRIS_TEXTO_SUAVE} !important",
+        },
+        ".ag-filter-toolpanel-instance-header": {
+            "background": "transparent !important",
+            "border": "none !important",
+            "padding": "6px 12px !important",
+            "margin": "0 !important",
+        },
+        ".ag-filter-toolpanel-instance-header-text": {
+            "color": f"{GRIS_TEXTO} !important",
+            "font-size": "12.5px !important",
+            "font-weight": "500 !important",
+        },
+
+        # ── Panel COLUMNAS — tipografía y buscador a juego ──
+        ".ag-column-select-header": {
+            "padding": "10px 12px !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
+        },
+        ".ag-column-select-header-filter-wrapper .ag-input-field-input": {
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "8px !important",
+            "font-size": "12.5px !important",
+            "padding": "6px 10px !important",
+        },
+        ".ag-column-select-header-filter-wrapper .ag-input-field-input:focus": {
+            "border-color": f"{LAVANDA_FOCO} !important",
+            "box-shadow": f"0 0 0 2px {LAVANDA_FONDO} !important",
+            "outline": "none !important",
+        },
+        # ── Fin de los nuevos bloques ──
+    }
+
 def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14, cols_visibles=None):
     """Renderiza la tabla AgGrid en vista desktop con formato financiero y diseño premium.
 
@@ -594,399 +993,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         gb.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
     grid_options = gb.build()
 
-    custom_css = {
-        ".ag-root-wrapper": {
-            "background-color": f"{BLANCO}",
-            "border": f"1px solid {GRIS_BORDE}",
-            "border-radius": "12px !important",
-            "overflow": "hidden !important",
-            "box-shadow": "0 1px 3px rgba(16,16,20,0.05)",
-            "width": "100% !important",
-        },
-        # Cabecera clara estilo CallAI: banda gris suave con texto gris medio
-        ".ag-header": {
-            "background-color": f"{GRIS_FONDO_CABECERA} !important",
-            "border-bottom": f"1px solid {GRIS_BORDE} !important",
-        },
-        ".ag-header-cell": {
-            "background-color": f"{GRIS_FONDO_CABECERA} !important",
-        },
-        ".ag-header-cell-text": {
-            "color": f"{GRIS_TEXTO} !important",
-            "font-weight": "600",
-            "font-size": f"{font_px}px",
-            "letter-spacing": "0.03em",
-            "text-transform": "uppercase",
-        },
-        ".ag-header-icon": {
-            "color": f"{GRIS_TEXTO_SUAVE} !important",
-        },
-        ".ag-row": {
-            "border-bottom": f"1px solid {GRIS_LINEA}",
-            "color": f"{TEXTO_PRINCIPAL}",
-        },
-        ".ag-row-even": {"background-color": f"{BLANCO}"},
-        ".ag-row-odd": {"background-color": f"{GRIS_FONDO}"},
-        ".ag-row-hover": {"background-color": f"{LAVANDA_FONDO} !important"},
-        ".ag-cell": {"color": f"{EXIT_HOVER}", "font-size": f"{font_px}px"},
-        ".ag-row-pinned": {
-            "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
-            "font-weight": "700 !important",
-            "border-top": f"2px solid {ACENTO} !important",
-            "color": f"{ACENTO_TEXTO_OSCURO} !important",
-            "font-size": f"{font_px + 1}px !important",
-        },
-        ".ag-paging-panel": {
-            "display": "flex !important",
-            "align-items": "center !important",
-            "justify-content": "space-between !important",
-            "color": f"{ICON_MUTED}",
-            "background-color": f"{GRIS_FONDO}",
-            "border-top": f"1px solid {GRIS_BORDE}",
-            "padding": "8px 16px !important",
-            "border-bottom-left-radius": "10px !important",
-            "border-bottom-right-radius": "10px !important",
-            "font-size": "12px !important",
-            "min-height": "44px !important",
-        },
-        ".ag-paging-panel .ag-paging-page-size": {
-            "order": "-1 !important",
-            "margin-right": "auto !important",
-        },
-        ".ag-paging-panel .ag-paging-page-size .ag-label": {
-            "color": f"{ICON_MUTED} !important",
-            "font-size": "12px !important",
-            "margin-right": "6px !important",
-        },
-        ".ag-paging-panel .ag-paging-page-size select, "
-        ".ag-paging-panel .ag-paging-page-size .ag-select": {
-            "border": f"1px solid {GRIS_BORDE} !important",
-            "border-radius": "6px !important",
-            "background": f"{BLANCO} !important",
-            "color": f"{TEXTO_PRINCIPAL} !important",
-            "font-size": "12px !important",
-            "padding": "2px 6px !important",
-        },
-        ".ag-paging-button": {
-            "width": "28px !important",
-            "height": "28px !important",
-            "border": f"1px solid {GRIS_BORDE} !important",
-            "background": f"{BLANCO} !important",
-            "border-radius": "6px !important",
-            "color": f"{GRIS_TEXTO} !important",
-            "font-size": "13px !important",
-            "cursor": "pointer !important",
-            "display": "flex !important",
-            "align-items": "center !important",
-            "justify-content": "center !important",
-            "margin": "0 2px !important",
-            "transition": "all 0.15s ease !important",
-        },
-        ".ag-paging-button:hover:not(.ag-disabled)": {
-            "background": f"{LAVANDA_FONDO} !important",
-            "border-color": f"{LAVANDA_FOCO} !important",
-            "color": f"{ACENTO_FUERTE} !important",
-        },
-        ".ag-paging-button.ag-disabled": {
-            "color": f"{SCROLL_THUMB} !important",
-            "border-color": f"{GRIS_LINEA} !important",
-            "background": f"{GRIS_FONDO} !important",
-            "cursor": "default !important",
-        },
-        ".ag-paging-row-summary-panel": {
-            "color": f"{ICON_MUTED} !important",
-            "font-size": "12px !important",
-            "margin-left": "auto !important",
-        },
-        ".ag-paging-row-summary-panel-number": {
-            "color": f"{TEXTO_PRINCIPAL} !important",
-            "font-weight": "600 !important",
-        },
-        ".ag-status-bar": {
-            "background-color": f"{GRIS_FONDO} !important",
-            "border-top": f"1px solid {GRIS_BORDE} !important",
-            "color": f"{GRIS_TEXTO} !important",
-            "padding": "4px 16px !important",
-            "font-size": "12px !important",
-            "min-height": "0 !important",
-        },
-        ".ag-status-name-value": {
-            "color": f"{GRIS_TEXTO} !important",
-            "font-size": "12px !important",
-        },
-        ".ag-status-name-value-value": {
-            "color": f"{TEXTO_PRINCIPAL} !important",
-            "font-weight": "600 !important",
-        },
-        ".ag-side-bar": {
-            "background-color": f"{BLANCO}",
-            "border-left": f"1px solid {GRIS_BORDE} !important",
-            "border-top-right-radius": "10px !important",
-            "border-bottom-right-radius": "10px !important",
-            "border-bottom": f"1px solid {GRIS_BORDE} !important",
-        },
-        ".ag-side-bar .ag-side-buttons": {
-            "border-right": f"1px solid {GRIS_BORDE} !important",
-        },
-        ".ag-side-button": {
-            "background-color": f"{GRIS_FONDO} !important",
-            "border": "none !important",
-            "border-bottom": f"1px solid {GRIS_BORDE} !important",
-            "color": f"{GRIS_TEXTO} !important",
-        },
-        ".ag-side-button:hover": {
-            "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
-            "color": f"{ACENTO_FUERTE} !important",
-        },
-        ".ag-side-button.ag-selected": {
-            "background-color": f"{ACENTO_FUERTE} !important",
-            "color": f"{BLANCO} !important",
-            "box-shadow": f"inset 0 0 0 1px {ACENTO}",
-        },
-        ".ag-tool-panel-wrapper": {
-            "background-color": f"{BLANCO} !important",
-            "border": "none !important",
-        },
-        ".ag-column-select-panel": {
-            "padding": "10px !important",
-            "background-color": f"{BLANCO} !important",
-        },
-        ".ag-column-tool-panel .ag-column-panel": {
-            "border": "none !important",
-        },
-        ".ag-column-tool-panel .ag-column-select-all": {
-            "padding": "10px 0 !important",
-            "border-bottom": f"1px solid {GRIS_BORDE} !important",
-        },
-        ".ag-column-panel .ag-header-cell-text": {
-            "color": f"{TEXTO_PRINCIPAL} !important",
-            "font-weight": "600 !important",
-        },
-        ".ag-filter-toolpanel-body": {
-            "padding": "10px !important",
-            "background-color": f"{BLANCO} !important",
-        },
-
-        # ══════════════════════════════════════════════════════════════════
-        # PANEL COLUMNS — estilos ACOTADOS con [data-active-panel='columns']
-        # para que NO afecten al panel Pivote, que usa el mismo componente
-        # interno (agColumnsToolPanel) y comparte la clase
-        # .ag-column-select-column.
-        # ══════════════════════════════════════════════════════════════════
-
-        # Respiro inferior: evita que la última pastilla toque el borde del panel
-        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-list": {
-            "padding-bottom": "8px !important",
-        },
-
-        # Cambio 1: filas como pastillas (más espaciado)
-        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column": {
-            "display": "flex !important",
-            "align-items": "center !important",
-            "background": f"{GRIS_FONDO} !important",
-            "border": f"1px solid {GRIS_BORDE} !important",
-            "border-radius": "999px !important",
-            "padding": "8px 12px !important",
-            "margin": "5px 10px !important",
-            "transition": "background .15s ease, border-color .15s ease !important",
-        },
-        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:hover": {
-            "background": f"{LAVANDA_FONDO} !important",
-            "border-color": f"{LAVANDA_BORDE} !important",
-        },
-        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:has(.ag-checked)": {
-            "background": f"{LAVANDA_FONDO} !important",
-            "border-color": f"{LAVANDA_BORDE} !important",
-        },
-
-        # Cambio 2: etiqueta activa con color índigo
-        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:has(.ag-checked) .ag-column-select-column-label": {
-            "color": f"{ACENTO_TEXTO} !important",
-            "font-weight": "500 !important",
-        },
-        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column-label": {
-            "order": "-1 !important",
-            "margin-right": "auto !important",
-            "color": f"{GRIS_TEXTO} !important",
-            "font-size": "12.5px !important",
-        },
-        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-drag-handle": {
-            "display": "none !important",
-        },
-        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper": {
-            "width": "36px !important",
-            "height": "20px !important",
-            "border-radius": "999px !important",
-            "background": f"{GRIS_BORDE} !important",
-            "border": "none !important",
-            "box-shadow": "none !important",
-            "position": "relative !important",
-            "transition": "background .15s ease !important",
-        },
-        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper::after": {
-            "content": "'' !important",
-            "position": "absolute !important",
-            "top": "2px !important",
-            "left": "2px !important",
-            "width": "16px !important",
-            "height": "16px !important",
-            "border-radius": "50% !important",
-            "background": f"{BLANCO} !important",
-            "color": "transparent !important",
-            "box-shadow": "0 1px 2px rgba(0,0,0,0.25) !important",
-            "transition": "left .15s ease !important",
-        },
-        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper.ag-checked": {
-            "background": f"{ACENTO_FUERTE} !important",
-        },
-        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper.ag-checked::after": {
-            "content": "'' !important",
-            "left": "18px !important",
-        },
-        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input": {
-            "cursor": "pointer !important",
-        },
-        # En el panel Pivote ocultamos la lista superior de selección de
-        # columnas: ahí solo queremos ver Grupos de filas / Valores.
-        ".ag-side-bar[data-active-panel='pivotePanel'] .ag-column-select": {
-            "display": "none !important",
-        },
-
-        # ── Panel modo pivote / drop zones (NUEVO ESTILIZADO) ──
-        ".ag-pivot-mode-panel": {
-            "padding": "10px 12px !important",
-            "border-bottom": f"1px solid {GRIS_BORDE} !important",
-            "min-height": "0 !important",
-        },
-        ".ag-pivot-mode-select": {
-            "color": f"{ACENTO_TEXTO} !important",
-            "font-size": "13px !important",
-            "font-weight": "600 !important",
-        },
-        # Títulos de sección (Grupos de filas / Valores)
-        ".ag-column-drop-vertical-title-bar": {
-            "padding": "10px 12px 4px !important",
-        },
-        ".ag-column-drop-vertical-title": {
-            "color": f"{GRIS_TEXTO_SUAVE} !important",
-            "font-size": "11px !important",
-            "font-weight": "600 !important",
-            "text-transform": "uppercase !important",
-            "letter-spacing": "0.06em !important",
-        },
-        # Zona de arrastre (drop zone)
-        ".ag-column-drop-vertical": {
-            "background": "transparent !important",
-        },
-        ".ag-column-drop-vertical-list": {
-            "margin": "4px 10px 10px !important",
-            "border": f"1.5px dashed {LAVANDA_BORDE} !important",
-            "border-radius": "10px !important",
-            "background": f"{LAVANDA_SELECCION} !important",
-            "padding": "8px !important",
-        },
-        ".ag-column-drop-empty-message": {
-            "color": f"{LAVANDA_MEDIO} !important",
-            "font-size": "12px !important",
-            "text-align": "center !important",
-        },
-        # Pastillas de campos (Suma(...), Promedio(...))
-        ".ag-column-drop-vertical-cell": {
-            "background": f"{GRIS_FONDO} !important",
-            "border": f"1px solid {GRIS_BORDE} !important",
-            "border-radius": "999px !important",
-            "padding": "5px 12px !important",
-            "margin": "3px 0 !important",
-            "font-size": "12px !important",
-            "color": f"{GRIS_TEXTO_MEDIO} !important",
-        },
-        ".ag-column-drop-vertical-cell:hover": {
-            "background": f"{LAVANDA_FONDO} !important",
-            "border-color": f"{LAVANDA_BORDE} !important",
-        },
-        ".ag-column-drop-vertical-cell-text": {
-            "font-size": "12px !important",
-        },
-        ".ag-column-drop-cell-button": {
-            "color": f"{GRIS_TEXTO_SUAVE} !important",
-        },
-        ".ag-column-drop-cell-button:hover": {
-            "color": f"{ACENTO_FUERTE} !important",
-        },
-
-        # ── Panel FILTROS — a juego con el modo pivote ──
-        ".ag-filter-toolpanel": {
-            "border": "none !important",
-            "margin": "0 !important",
-        },
-        ".ag-filter-toolpanel-search": {
-            "padding": "10px 12px !important",
-            "border-bottom": f"1px solid {GRIS_BORDE} !important",
-        },
-        ".ag-filter-toolpanel-search .ag-input-field-input": {
-            "border": f"1px solid {GRIS_BORDE} !important",
-            "border-radius": "8px !important",
-            "font-size": "12.5px !important",
-            "padding": "6px 10px !important",
-            "color": f"{GRIS_TEXTO_MEDIO} !important",
-        },
-        ".ag-filter-toolpanel-search .ag-input-field-input:focus": {
-            "border-color": f"{LAVANDA_FOCO} !important",
-            "box-shadow": f"0 0 0 2px {LAVANDA_FONDO} !important",
-            "outline": "none !important",
-        },
-        # Cambio 3 (corregido): filtros como pastillas.
-        ".ag-filter-toolpanel-group-title-bar": {
-            "background": f"{GRIS_FONDO} !important",
-            "border": f"1px solid {GRIS_BORDE} !important",
-            "border-radius": "999px !important",
-            "padding": "8px 12px !important",
-            "margin": "3px 10px !important",
-            "transition": "background .15s ease, border-color .15s ease !important",
-        },
-        ".ag-filter-toolpanel-group-title-bar:hover": {
-            "background": f"{LAVANDA_FONDO} !important",
-            "border-color": f"{LAVANDA_BORDE} !important",
-        },
-        ".ag-filter-toolpanel-group-title": {
-            "color": f"{GRIS_TEXTO} !important",
-            "font-size": "12.5px !important",
-            "font-weight": "500 !important",
-        },
-        ".ag-filter-toolpanel-group-title-bar-icon .ag-icon, "
-        ".ag-filter-toolpanel-group-title-bar .ag-icon": {
-            "color": f"{GRIS_TEXTO_SUAVE} !important",
-        },
-        ".ag-filter-toolpanel-instance-header": {
-            "background": "transparent !important",
-            "border": "none !important",
-            "padding": "6px 12px !important",
-            "margin": "0 !important",
-        },
-        ".ag-filter-toolpanel-instance-header-text": {
-            "color": f"{GRIS_TEXTO} !important",
-            "font-size": "12.5px !important",
-            "font-weight": "500 !important",
-        },
-
-        # ── Panel COLUMNAS — tipografía y buscador a juego ──
-        ".ag-column-select-header": {
-            "padding": "10px 12px !important",
-            "border-bottom": f"1px solid {GRIS_BORDE} !important",
-        },
-        ".ag-column-select-header-filter-wrapper .ag-input-field-input": {
-            "border": f"1px solid {GRIS_BORDE} !important",
-            "border-radius": "8px !important",
-            "font-size": "12.5px !important",
-            "padding": "6px 10px !important",
-        },
-        ".ag-column-select-header-filter-wrapper .ag-input-field-input:focus": {
-            "border-color": f"{LAVANDA_FOCO} !important",
-            "box-shadow": f"0 0 0 2px {LAVANDA_FONDO} !important",
-            "outline": "none !important",
-        },
-        # ── Fin de los nuevos bloques ──
-    }
+    custom_css = _css_base(font_px)
 
     if envolver_cabeceras:
         custom_css[".ag-header-cell-text"].update({
