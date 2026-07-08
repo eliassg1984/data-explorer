@@ -1,17 +1,20 @@
 """
 Gestión de datos: conexión DuckDB, carga de archivos y configuración de reportes.
 """
- 
+
 import streamlit as st
 import duckdb
 import pandas as pd
 import numpy as np
- 
- 
+import boto3
+import json
+from datetime import datetime, timezone
+
+
 # ===========================================================================
 # CONFIGURACIÓN DE REPORTES
 # ===========================================================================
- 
+
 REPORTES = {
     "Ajuste de Inventario": {
         "archivo": "ajusteinventario.parquet",
@@ -95,12 +98,12 @@ REPORTES = {
         "tool": True,
     },
 }
- 
- 
+
+
 # ===========================================================================
 # CONEXIÓN A R2 VIA DUCKDB
 # ===========================================================================
- 
+
 @st.cache_resource
 def get_conn():
     """Establece y retorna la conexión a R2 usando DuckDB."""
@@ -118,8 +121,79 @@ def get_conn():
     except Exception as e:
         st.error(f"Error de conexión: {str(e)}")
         st.stop()
- 
- 
+
+
+# ===========================================================================
+# CLIENTE S3-COMPATIBLE PARA R2 (metadata + señales de refresco)
+# ===========================================================================
+# Separado de get_conn() (DuckDB): ese solo sirve para SELECT sobre parquets.
+# Este cliente boto3 sirve para head_object (fecha de modificación) y
+# put_object (dejar la señal JSON de refresco).
+
+@st.cache_resource
+def get_s3_cliente():
+    try:
+        return boto3.client(
+            "s3",
+            endpoint_url=f"https://{st.secrets['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
+            aws_access_key_id=st.secrets["R2_ACCESS_KEY"],
+            aws_secret_access_key=st.secrets["R2_SECRET_KEY"],
+            region_name="auto",
+        )
+    except Exception as e:
+        st.error(f"Error creando cliente R2: {str(e)}")
+        return None
+
+
+def fecha_ultima_actualizacion(archivo):
+    """Fecha de última modificación (LastModified) del parquet en R2, en UTC.
+    Retorna None en modo demo o si algo falla (nunca lanza excepción)."""
+    if not secrets_disponibles():
+        return None
+    try:
+        s3 = get_s3_cliente()
+        resp = s3.head_object(Bucket=st.secrets["R2_BUCKET"], Key=archivo)
+        return resp["LastModified"]
+    except Exception:
+        return None
+
+
+def solicitar_refresco(archivo, reporte):
+    """
+    Solicita el refresco de UN SOLO reporte (nunca de toda la app):
+      1) Limpia el caché local de cargar() SOLO para este 'archivo'.
+      2) Escribe un JSON de señal en R2 (carpeta _solicitudes_refresco/),
+         para que un proceso EXTERNO a esta webapp (no vive aquí) lo
+         recoja y regenere ese parquet puntual desde el origen de datos.
+
+    Retorna True si la señal se envió (o si estamos en modo demo, donde no
+    hay R2 y solo se limpia el caché local); False si falló el envío.
+    """
+    cargar.clear(archivo)   # 1) refresco local — SOLO este archivo, no todos
+
+    if not secrets_disponibles():
+        return True  # modo demo: no hay R2, nada más que hacer
+
+    try:
+        s3 = get_s3_cliente()
+        payload = {
+            "reporte": reporte,
+            "archivo": archivo,
+            "solicitado_en": datetime.now(timezone.utc).isoformat(),
+        }
+        clave = f"_solicitudes_refresco/{archivo.replace('.parquet', '')}.json"
+        s3.put_object(
+            Bucket=st.secrets["R2_BUCKET"],
+            Key=clave,
+            Body=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            ContentType="application/json",
+        )
+        return True
+    except Exception as e:
+        st.error(f"No se pudo enviar la solicitud de refresco: {str(e)}")
+        return False
+
+
 # ===========================================================================
 # MODO DEMO (sin credenciales R2)
 # ===========================================================================
@@ -183,7 +257,7 @@ def _datos_demo(archivo, filas=60):
 # ===========================================================================
 # CARGA DE DATOS
 # ===========================================================================
- 
+
 @st.cache_data(ttl=3600)
 def cargar(archivo):
     """
