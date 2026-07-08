@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
-from data import REPORTES, cargar, secrets_disponibles
+from data import REPORTES, cargar, secrets_disponibles, solicitar_refresco, fecha_ultima_actualizacion
 from estilos import TAM_FUENTE, inject_css
 from inyecciones import inject_error_overlay, inject_element_inspector
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras
@@ -53,9 +53,30 @@ if st.session_state.get("_nav_reporte"):
 if not reporte or reporte not in REPORTES:
     reporte = list(REPORTES.keys())[0]
 
-if st.session_state.pop("_nav_refresh", False):
-    st.cache_data.clear()
+# ── PROCESAR SOLICITUD DE REFRESCO (desde el botón del rail) ──
+_solicitud_refresco = st.session_state.pop("_nav_refresh_solicitud", None)
+if _solicitud_refresco:
+    _archivo_sol = _solicitud_refresco.get("archivo")
+    _reporte_sol = _solicitud_refresco.get("reporte")
 
+    if not _archivo_sol:
+        # Reportes sin archivo propio (p.ej. Inspector): nada que refrescar.
+        st.toast("ℹ️ Esta sección no tiene datos propios para actualizar.", icon="ℹ️")
+    else:
+        _fecha_conocida = fecha_ultima_actualizacion(_archivo_sol)
+        if solicitar_refresco(_archivo_sol, _reporte_sol):
+            if _fecha_conocida:
+                _fecha_txt = _fecha_conocida.astimezone().strftime("%d/%m/%Y %H:%M")
+                st.toast(
+                    f"📨 Solicitud enviada, procesando...\nÚltimo dato conocido: {_fecha_txt}",
+                    icon="🔄",
+                )
+            else:
+                st.toast("📨 Solicitud enviada, procesando...", icon="🔄")
+        else:
+            st.toast("⚠️ No se pudo enviar la solicitud de refresco.", icon="⚠️")
+
+# ── REFRESCO GLOBAL POR URL (?refresh=1) ──
 if params.get("refresh"):
     st.cache_data.clear()
     if "refresh" in st.query_params:
