@@ -21,6 +21,71 @@ actualiza este documento en el mismo commit.
 | `tema.py` | **Paleta de colores con nombre, definida UNA vez.** Todos los demás importan de aquí. |
 | `inspector.py`, `perf.py`, `utils.py` | Herramientas de apoyo (inspector de elementos, medición, utilidades). |
 
+> Los dos ficheros de abajo **no corren en Streamlit Cloud**: viven en una
+> máquina Windows aparte (Programador de tareas) y se conectan a la webapp
+> solo a través de R2. Ver sección "Pipeline de datos".
+
+| Fichero (backend, fuera de Streamlit Cloud) | Trabajo (uno solo) |
+|---|---|
+| `Extraer a parquet.py` | Extractor diario: TODAS las consultas del Sheet → SQL Server → TODOS los parquets a R2. |
+| `atender_solicitudes.py` | Atiende refrescos puntuales bajo demanda: SOLO la consulta/parquet pedido desde la webapp. |
+
+## Pipeline de datos — dos modos de actualización
+
+La webapp **nunca** escribe en SQL Server ni genera parquets: solo LEE
+parquets ya generados desde R2 (`data.py::cargar`). La generación vive en
+dos scripts aparte, que corren en una máquina Windows (fuera de este repo),
+coordinados por un sistema de locks en R2 (carpeta `_locks/`):
+
+| Script | Cuándo corre | Qué hace |
+|---|---|---|
+| `Extraer a parquet.py` | 1 vez al día (Programador de tareas, madrugada) | Lee TODAS las consultas activas del Google Sheet, las ejecuta contra SQL Server y sube TODOS los parquets a R2. |
+| `atender_solicitudes.py` | Cada pocos minutos (Programador de tareas, en paralelo) | Vigila `_solicitudes_refresco/` en R2; si hay una señal, regenera y sube SOLO ese parquet puntual. |
+
+**Requisito de acoplamiento:** `atender_solicitudes.py` debe vivir en la
+MISMA carpeta que `Extraer a parquet.py` (su nombre exacto, con espacios,
+va en `NOMBRE_ARCHIVO_EXTRACTOR`), porque lo carga dinámicamente vía
+`importlib.util` — un nombre con espacios impide un `import` normal.
+
+### Cómo se dispara un refresco puntual
+
+1. El usuario pulsa el botón refrescar (rail, `navegacion.py::inject_navegacion`)
+   sobre un reporte.
+2. `app.py` llama a `data.py::solicitar_refresco(archivo, reporte)`:
+   limpia el caché local de `cargar()` SOLO para ese archivo, y escribe un
+   JSON en R2 `_solicitudes_refresco/{archivo}.json` con
+   `{reporte, archivo, solicitado_en}`.
+3. `atender_solicitudes.py` lo recoge en su próximo ciclo: busca en el Sheet
+   la consulta cuyo nombre (limpiado con `limpiar_nombre`) coincide con el
+   archivo, toma el lock de ESE archivo, ejecuta SOLO esa consulta, sube
+   SOLO ese parquet, borra la señal y libera el lock (try/finally, siempre).
+
+### Locks (evitan que los dos procesos pisen el mismo parquet)
+
+- Carpeta R2 `_locks/`, un JSON por archivo: `{proceso, inicio}`.
+- TTL de 10 min (`LOCK_TTL_SEGUNDOS`): pasado ese tiempo el lock se
+  considera abandonado (crash de algún proceso) y cualquiera puede tomarlo.
+- Si `atender_solicitudes.py` no consigue el lock (el extractor diario lo
+  tiene ahora mismo) → **no borra la señal**, se reintenta sola en el
+  siguiente ciclo (unos minutos después).
+- Si el extractor diario no consigue el lock (un refresco puntual está en
+  curso sobre ese archivo) → **omite ese archivo hoy**, se recoge en la
+  corrida de mañana.
+- Las funciones (`lock_vigente`, `adquirir_lock`, `liberar_lock`) viven en
+  `Extraer a parquet.py`; `atender_solicitudes.py` las reusa tal cual (vía
+  el módulo cargado dinámicamente) para que ambos hablen el mismo
+  protocolo sin duplicar código.
+- No es un lock 100% atómico (R2/S3 no da compare-and-swap trivial), pero
+  las colisiones reales son raras (madrugada vs. horario laboral) y el
+  costo de una falsa colisión es solo "se omite/reintenta" — suficiente
+  para el caso real a evitar (dos procesos subiendo el mismo archivo a la vez).
+
+### Resultado vacío (0 filas)
+
+Si una consulta puntual devuelve 0 filas, `atender_solicitudes.py` no sube
+nada (deja el parquet anterior intacto en R2) pero SÍ borra la señal: se
+considera un resultado válido, no un error para reintentar por siempre.
+
 ## Reglas del proyecto (aprendidas de bugs reales)
 
 1. **Colores desde la paleta central — DOS fuentes coordinadas.** Nunca pegar
