@@ -46,8 +46,11 @@ def _on_nav_click(nombre):
     st.session_state["_nav_reporte"] = nombre
 
 
-def _on_refresh_click():
-    st.session_state["_nav_refresh"] = True
+def _on_refresh_click(reporte, archivo):
+    """Guarda la solicitud de refresco (reporte + archivo ACTUAL). Corre
+    ANTES del rerun, igual que _on_nav_click, para que app.py la vea desde
+    el principio del script."""
+    st.session_state["_nav_refresh_solicitud"] = {"reporte": reporte, "archivo": archivo}
 
 
 # ── Logo del rail (embebido en base64, leído desde assets/logo.png) ──
@@ -238,6 +241,7 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
         st.button(
             ":material/refresh:",
             key="navbtn_refresh",
-            help="Actualizar datos",
+            help=f"Actualizar datos de «{reporte_activo}»",
             on_click=_on_refresh_click,
+            args=(reporte_activo, reportes.get(reporte_activo, {}).get("archivo")),
         )
