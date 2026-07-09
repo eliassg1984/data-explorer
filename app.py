@@ -8,7 +8,10 @@ import pandas as pd
 import streamlit as st
 
 from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
-from data import REPORTES, cargar, secrets_disponibles, solicitar_refresco, fecha_ultima_actualizacion
+from data import (
+    REPORTES, cargar, secrets_disponibles, solicitar_refresco,
+    fecha_ultima_actualizacion, hay_dato_nuevo,
+)
 from estilos import TAM_FUENTE, inject_css
 from inyecciones import inject_error_overlay, inject_element_inspector
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras
@@ -63,19 +66,19 @@ if _solicitud_refresco:
     _reporte_sol = _solicitud_refresco.get("reporte")
 
     if not _archivo_sol:
-        # Reportes sin archivo propio (p.ej. Inspector): nada que refrescar.
         st.toast("ℹ️ Esta sección no tiene datos propios para actualizar.", icon="ℹ️")
+    elif not secrets_disponibles():
+        cargar.clear(_archivo_sol)
+        st.toast("🧪 Modo demo: no hay datos reales para refrescar.", icon="🧪")
     else:
         _fecha_conocida = fecha_ultima_actualizacion(_archivo_sol)
         if solicitar_refresco(_archivo_sol, _reporte_sol):
-            if _fecha_conocida:
-                _fecha_txt = _fecha_conocida.astimezone(ZONA_PERU).strftime("%d/%m/%Y %H:%M")
-                st.toast(
-                    f"📨 Solicitud enviada, procesando...\nÚltimo dato conocido: {_fecha_txt}",
-                    icon="🔄",
-                )
-            else:
-                st.toast("📨 Solicitud enviada, procesando...", icon="🔄")
+            st.session_state[f"_refresco_pendiente_{_archivo_sol}"] = {
+                "reporte": _reporte_sol,
+                "baseline": _fecha_conocida,
+                "inicio": datetime.datetime.now(ZONA_PERU),
+            }
+            st.toast(f"📨 Solicitud enviada para «{_reporte_sol}», procesando...", icon="🔄")
         else:
             st.toast("⚠️ No se pudo enviar la solicitud de refresco.", icon="⚠️")
 
@@ -89,6 +92,11 @@ if params.get("refresh"):
 inject_navegacion(REPORTES, reporte, mostrar_inspector=bool(st.query_params.get("debug")))
 
 cfg = REPORTES[reporte]
+
+# ── VIGILAR REFRESCO PENDIENTE ──
+_archivo_actual = cfg.get("archivo")
+if _archivo_actual and st.session_state.get(f"_refresco_pendiente_{_archivo_actual}"):
+    _vigilar_refresco(_archivo_actual, f"_refresco_pendiente_{_archivo_actual}")
 
 
 # ===========================================================================
@@ -286,7 +294,6 @@ n_activos = _contar_filtros_activos()
 label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_activos != 1 else '') if n_activos else ''}"
 
 # ── TÍTULO, SELECTOR DE FECHA Y BOTÓN EXTRAER (solo Ajuste de Inventario) ──
-# Cambio 2: eliminamos el botón y el date_input de aquí, solo dejamos el chip
 perf.start_phase("Ajuste top row")                                          # ⚡ PERF
 if es_ajuste:
     _fila_top = st.container(key="fila_ajuste_top")
@@ -718,6 +725,37 @@ def _render_contenido():
             renderizar_graficos_reporte(df_f, reporte, cfg)
 
     perf.fragment_end("_render_contenido")                                  # ⚡ PERF
+
+
+@st.fragment(run_every=4)
+def _vigilar_refresco(archivo, clave_estado):
+    """Revisa cada 4s si R2 ya tiene el parquet actualizado. Mientras
+    espera, muestra un aviso visible (no un toast que desaparece)."""
+    info = st.session_state.get(clave_estado)
+    if not info:
+        return  # ya se resolvió en otra ejecución
+
+    transcurrido = (datetime.datetime.now(ZONA_PERU) - info["inicio"]).total_seconds()
+
+    if hay_dato_nuevo(archivo, info["baseline"]):
+        cargar.clear(archivo)
+        st.session_state.pop(clave_estado, None)
+        st.toast(f"✅ «{info['reporte']}» actualizado.", icon="✅")
+        st.rerun(scope="app")
+        return
+
+    if transcurrido > 120:
+        st.warning(
+            f"⏳ La actualización de «{info['reporte']}» está tardando más de lo "
+            "usual. Los datos mostrados podrían no ser los más recientes.",
+            icon="⚠️",
+        )
+        return
+
+    st.info(
+        f"🔄 Actualizando datos de «{info['reporte']}»... (puede tardar unos segundos)",
+        icon="🔄",
+    )
 
 
 # ── Llamada al fragment ──────────────────────────────────────────────────────
