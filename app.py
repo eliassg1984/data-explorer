@@ -3,6 +3,7 @@ Panel de Reportes v2.0 - Punto de entrada principal (OPTIMIZADO).
 """
 
 import datetime
+from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
 
@@ -14,6 +15,8 @@ from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderiza
 from graficos import renderizar_graficos, renderizar_graficos_reporte
 from navegacion import inject_navegacion
 from perf import perf                                                       # ⚡ PERF
+
+ZONA_PERU = ZoneInfo("America/Lima")  # UTC-5 fijo, sin horario de verano
 
 
 # ===========================================================================
@@ -66,7 +69,7 @@ if _solicitud_refresco:
         _fecha_conocida = fecha_ultima_actualizacion(_archivo_sol)
         if solicitar_refresco(_archivo_sol, _reporte_sol):
             if _fecha_conocida:
-                _fecha_txt = _fecha_conocida.astimezone().strftime("%d/%m/%Y %H:%M")
+                _fecha_txt = _fecha_conocida.astimezone(ZONA_PERU).strftime("%d/%m/%Y %H:%M")
                 st.toast(
                     f"📨 Solicitud enviada, procesando...\nÚltimo dato conocido: {_fecha_txt}",
                     icon="🔄",
