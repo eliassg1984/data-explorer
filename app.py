@@ -46,6 +46,41 @@ perf.start()                                                                # �
 
 
 # ===========================================================================
+# VIGILANCIA DE REFRESCO (fragmento)
+# ===========================================================================
+
+@st.fragment(run_every=4)
+def _vigilar_refresco(archivo, clave_estado):
+    """Revisa cada 4s si R2 ya tiene el parquet actualizado. Mientras
+    espera, muestra un aviso visible (no un toast que desaparece)."""
+    info = st.session_state.get(clave_estado)
+    if not info:
+        return  # ya se resolvió en otra ejecución
+
+    transcurrido = (datetime.datetime.now(ZONA_PERU) - info["inicio"]).total_seconds()
+
+    if hay_dato_nuevo(archivo, info["baseline"]):
+        cargar.clear(archivo)
+        st.session_state.pop(clave_estado, None)
+        st.toast(f"✅ «{info['reporte']}» actualizado.", icon="✅")
+        st.rerun(scope="app")
+        return
+
+    if transcurrido > 120:
+        st.warning(
+            f"⏳ La actualización de «{info['reporte']}» está tardando más de lo "
+            "usual. Los datos mostrados podrían no ser los más recientes.",
+            icon="⚠️",
+        )
+        return
+
+    st.info(
+        f"🔄 Actualizando datos de «{info['reporte']}»... (puede tardar unos segundos)",
+        icon="🔄",
+    )
+
+
+# ===========================================================================
 # LEER REPORTE DESDE LA URL Y APLICAR REFRESCO
 # ===========================================================================
 
@@ -725,37 +760,6 @@ def _render_contenido():
             renderizar_graficos_reporte(df_f, reporte, cfg)
 
     perf.fragment_end("_render_contenido")                                  # ⚡ PERF
-
-
-@st.fragment(run_every=4)
-def _vigilar_refresco(archivo, clave_estado):
-    """Revisa cada 4s si R2 ya tiene el parquet actualizado. Mientras
-    espera, muestra un aviso visible (no un toast que desaparece)."""
-    info = st.session_state.get(clave_estado)
-    if not info:
-        return  # ya se resolvió en otra ejecución
-
-    transcurrido = (datetime.datetime.now(ZONA_PERU) - info["inicio"]).total_seconds()
-
-    if hay_dato_nuevo(archivo, info["baseline"]):
-        cargar.clear(archivo)
-        st.session_state.pop(clave_estado, None)
-        st.toast(f"✅ «{info['reporte']}» actualizado.", icon="✅")
-        st.rerun(scope="app")
-        return
-
-    if transcurrido > 120:
-        st.warning(
-            f"⏳ La actualización de «{info['reporte']}» está tardando más de lo "
-            "usual. Los datos mostrados podrían no ser los más recientes.",
-            icon="⚠️",
-        )
-        return
-
-    st.info(
-        f"🔄 Actualizando datos de «{info['reporte']}»... (puede tardar unos segundos)",
-        icon="🔄",
-    )
 
 
 # ── Llamada al fragment ──────────────────────────────────────────────────────
