@@ -158,19 +158,31 @@ def fecha_ultima_actualizacion(archivo):
         return None
 
 
+def hay_dato_nuevo(archivo, fecha_base):
+    """
+    True si el parquet en R2 tiene una fecha de modificación MÁS RECIENTE
+    que 'fecha_base' (el LastModified capturado justo ANTES de pedir el
+    refresco). Sirve para saber, sin recargar a ciegas, si el proceso
+    externo (atender_solicitudes.py) ya terminó de subir el archivo nuevo.
+    """
+    actual = fecha_ultima_actualizacion(archivo)
+    if actual is None:
+        return False
+    if fecha_base is None:
+        return True
+    return actual > fecha_base
+
+
 def solicitar_refresco(archivo, reporte):
     """
     Solicita el refresco de UN SOLO reporte (nunca de toda la app):
-      1) Limpia el caché local de cargar() SOLO para este 'archivo'.
-      2) Escribe un JSON de señal en R2 (carpeta _solicitudes_refresco/),
-         para que un proceso EXTERNO a esta webapp (no vive aquí) lo
-         recoja y regenere ese parquet puntual desde el origen de datos.
-
-    Retorna True si la señal se envió (o si estamos en modo demo, donde no
-    hay R2 y solo se limpia el caché local); False si falló el envío.
+      1) Escribe un JSON de señal en R2 (carpeta _solicitudes_refresco/).
+      2) YA NO limpia el caché aquí: el parquet en R2 todavía no cambió en
+         este instante (el proceso externo recién va a regenerarlo).
+         Limpiar aquí solo lograba que la webapp re-descargara y re-cacheara
+         el dato VIEJO. La limpieza ahora la dispara app.py::_vigilar_refresco()
+         una vez que confirma (vía LastModified) que el archivo ya cambió.
     """
-    cargar.clear(archivo)   # 1) refresco local — SOLO este archivo, no todos
-
     if not secrets_disponibles():
         return True  # modo demo: no hay R2, nada más que hacer
 
