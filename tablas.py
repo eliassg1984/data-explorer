@@ -26,6 +26,13 @@ def _css_base(font_px):
     y de las constantes de color de tema.py. Extraído de
     renderizar_aggrid_desktop en la Fase 3."""
     return {
+        # ── Nuevo: ocultar los elementos de foco de navegación por tabulación ──
+        ".ag-tab-guard-top, .ag-tab-guard-bottom": {
+            "caret-color": "transparent !important",
+            "outline": "none !important",
+            "border": "none !important",
+            "opacity": "0 !important",
+        },
         ".ag-root-wrapper": {
             "background-color": f"{BLANCO}",
             "border": f"1px solid {GRIS_BORDE}",
