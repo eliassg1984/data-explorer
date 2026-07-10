@@ -11,10 +11,15 @@ import re
 import streamlit as st
 import base64
 import os
+import datetime
+from zoneinfo import ZoneInfo
+from data import solicitar_refresco, secrets_disponibles, fecha_ultima_actualizacion, cargar
 from tema import (
     ACENTO, LAVANDA_FONDO, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO,
     GRIS_BORDE, TEXTO_PRINCIPAL,
 )
+
+ZONA_PERU = ZoneInfo("America/Lima")
 
 
 # Icono Material por defecto si un reporte no trae 'icono' válido en data.py.
@@ -44,13 +49,6 @@ def _on_nav_click(nombre):
     """Guarda el reporte elegido. Corre ANTES del script => app.py lo ve desde
     arriba en un solo rerun."""
     st.session_state["_nav_reporte"] = nombre
-
-
-def _on_refresh_click(reporte, archivo):
-    """Guarda la solicitud de refresco (reporte + archivo ACTUAL). Corre
-    ANTES del rerun, igual que _on_nav_click, para que app.py la vea desde
-    el principio del script."""
-    st.session_state["_nav_refresh_solicitud"] = {"reporte": reporte, "archivo": archivo}
 
 
 # ── Logo del rail (embebido en base64, leído desde assets/logo.png) ──
@@ -206,6 +204,42 @@ html body [data-testid="stElementContainer"]:has(#nav-topbar) {
 """
 
 
+@st.fragment
+def _fragment_boton_refresco(reporte_activo, archivo):
+    """Botón de refresco AISLADO en su propio fragment: al hacer clic,
+    resuelve todo (solicitar_refresco + guardar estado pendiente + toast)
+    sin disparar un rerun completo de app.py. Así la tabla (otro fragment)
+    nunca se re-monta por este clic."""
+
+    def _click():
+        if not archivo:
+            st.toast("ℹ️ Esta sección no tiene datos propios para actualizar.", icon="ℹ️")
+            return
+
+        if not secrets_disponibles():
+            cargar.clear(archivo)
+            st.toast("🧪 Modo demo: no hay datos reales para refrescar.", icon="🧪")
+            return
+
+        fecha_conocida = fecha_ultima_actualizacion(archivo)
+        if solicitar_refresco(archivo, reporte_activo):
+            st.session_state[f"_refresco_pendiente_{archivo}"] = {
+                "reporte": reporte_activo,
+                "baseline": fecha_conocida,
+                "inicio": datetime.datetime.now(ZONA_PERU),
+            }
+            st.toast(f"📨 Solicitud enviada para «{reporte_activo}», procesando...", icon="🔄")
+        else:
+            st.toast("⚠️ No se pudo enviar la solicitud de refresco.", icon="⚠️")
+
+    st.button(
+        ":material/refresh:",
+        key="navbtn_refresh",
+        help=f"Actualizar datos de «{reporte_activo}»",
+        on_click=_click,
+    )
+
+
 def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     """Dibuja el rail (botones nativos) + el título superior."""
     st.markdown(_CSS, unsafe_allow_html=True)
@@ -238,10 +272,6 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
                 on_click=_on_nav_click,
                 args=(nombre,),
             )
-        st.button(
-            ":material/refresh:",
-            key="navbtn_refresh",
-            help=f"Actualizar datos de «{reporte_activo}»",
-            on_click=_on_refresh_click,
-            args=(reporte_activo, reportes.get(reporte_activo, {}).get("archivo")),
+        _fragment_boton_refresco(
+            reporte_activo, reportes.get(reporte_activo, {}).get("archivo")
         )
