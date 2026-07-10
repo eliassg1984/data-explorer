@@ -613,6 +613,22 @@ def get_css():
         bottom: 16px !important;
         top: auto !important;
     }
+
+    /* =================================================================== */
+    /* AVISO DE REFRESCO EN CURSO — reposicionado junto al botón del rail   */
+    /* Contenedor con key "aviso_refresco" (app.py::_vigilar_refresco).     */
+    /* Por defecto se dibuja arriba, ancho completo; lo anclamos como       */
+    /* elemento flotante cerca del botón de refrescar (abajo del rail).     */
+    /* =================================================================== */
+    .st-key-aviso_refresco {
+        position: fixed !important;
+        left: 100px !important;
+        bottom: 16px !important;
+        max-width: 320px !important;
+        z-index: 999997 !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+        border-radius: 8px !important;
+    }
     </style>
     """
 
