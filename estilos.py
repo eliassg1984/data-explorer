@@ -464,7 +464,7 @@ def get_css():
     /* =================================================================== */
     .st-key-fila_ajuste_top {
         margin-top: -16px !important;          /* NUEVO: reduce el espacio superior */
-        margin-bottom: 24px !important;        /* NUEVO: más aire antes de las pestañas */
+        margin-bottom: 28px !important;        /* NUEVO: más aire antes de las pestañas */
     }
     .st-key-fila_ajuste_top [data-testid="stHorizontalBlock"] {
         align-items: center !important;
