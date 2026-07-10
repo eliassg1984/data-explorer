@@ -977,6 +977,25 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         if es_inventario:
             opciones_grid["groupDisplayType"] = "groupRows"
 
+            # FIX: 'groupRows' (filas de grupo a ancho completo) no es
+            # compatible con pivotMode=true. Si el usuario activa el toggle
+            # "Modo pivote" del sidebar, cambiamos dinámicamente a
+            # 'multipleColumns' (compatible con pivote); al desactivarlo,
+            # regresamos a 'groupRows'. Sin esto, la tabla se queda vacía
+            # al activar el modo pivote.
+            opciones_grid["onColumnPivotModeChanged"] = JsCode("""
+                function(params) {
+                    try {
+                        var pivotOn = params.api.isPivotMode
+                            ? params.api.isPivotMode() : false;
+                        params.api.setGridOption(
+                            'groupDisplayType',
+                            pivotOn ? 'multipleColumns' : 'groupRows'
+                        );
+                    } catch (e) {}
+                }
+            """)
+
             _col_val_js = ""
             if col_valorizado and col_valorizado in df_grid.columns:
                 _col_val_js = str(col_valorizado).replace("\\", "\\\\").replace('"', '\\"')
