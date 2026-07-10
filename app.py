@@ -8,10 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
-from data import (
-    REPORTES, cargar, secrets_disponibles, solicitar_refresco,
-    fecha_ultima_actualizacion, hay_dato_nuevo,
-)
+from data import REPORTES, cargar, secrets_disponibles, hay_dato_nuevo
 from estilos import TAM_FUENTE, inject_css
 from inyecciones import inject_error_overlay, inject_element_inspector
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras
@@ -74,6 +71,12 @@ def _vigilar_refresco(archivo, clave_estado):
         )
         return
 
+    # Periodo de gracia: si el job termina antes de este umbral, el usuario
+    # nunca ve el aviso — solo un salto directo de tabla vieja a tabla nueva.
+    GRACIA_SEGUNDOS = 8
+    if transcurrido < GRACIA_SEGUNDOS:
+        return
+
     st.info(
         f"🔄 Actualizando datos de «{info['reporte']}»... (puede tardar unos segundos)",
         icon="🔄",
@@ -93,29 +96,6 @@ if st.session_state.get("_nav_reporte"):
 
 if not reporte or reporte not in REPORTES:
     reporte = list(REPORTES.keys())[0]
-
-# ── PROCESAR SOLICITUD DE REFRESCO (desde el botón del rail) ──
-_solicitud_refresco = st.session_state.pop("_nav_refresh_solicitud", None)
-if _solicitud_refresco:
-    _archivo_sol = _solicitud_refresco.get("archivo")
-    _reporte_sol = _solicitud_refresco.get("reporte")
-
-    if not _archivo_sol:
-        st.toast("ℹ️ Esta sección no tiene datos propios para actualizar.", icon="ℹ️")
-    elif not secrets_disponibles():
-        cargar.clear(_archivo_sol)
-        st.toast("🧪 Modo demo: no hay datos reales para refrescar.", icon="🧪")
-    else:
-        _fecha_conocida = fecha_ultima_actualizacion(_archivo_sol)
-        if solicitar_refresco(_archivo_sol, _reporte_sol):
-            st.session_state[f"_refresco_pendiente_{_archivo_sol}"] = {
-                "reporte": _reporte_sol,
-                "baseline": _fecha_conocida,
-                "inicio": datetime.datetime.now(ZONA_PERU),
-            }
-            st.toast(f"📨 Solicitud enviada para «{_reporte_sol}», procesando...", icon="🔄")
-        else:
-            st.toast("⚠️ No se pudo enviar la solicitud de refresco.", icon="⚠️")
 
 # ── REFRESCO GLOBAL POR URL (?refresh=1) ──
 if params.get("refresh"):
