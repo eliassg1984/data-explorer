@@ -109,8 +109,17 @@ inject_navegacion(REPORTES, reporte, mostrar_inspector=bool(st.query_params.get(
 cfg = REPORTES[reporte]
 
 # ── VIGILAR REFRESCO PENDIENTE ──
+# Se llama SIEMPRE (aunque no haya nada pendiente todavía): así el fragment
+# queda montado desde el principio, escuchando solo con su propio run_every=4.
+# Motivo: el botón de refresco vive en SU PROPIO fragment (navegacion.py), así
+# que su clic ya NO dispara un rerun completo de app.py. Si esta llamada
+# siguiera condicionada a "ya hay algo pendiente", este bloque nunca volvería
+# a evaluarse tras el clic y _vigilar_refresco jamás se enteraría del refresco
+# solicitado. _vigilar_refresco ya hace `if not info: return` internamente,
+# así que llamarlo sin condición es seguro y no hace nada hasta que sí hay
+# un refresco pendiente para ese archivo.
 _archivo_actual = cfg.get("archivo")
-if _archivo_actual and st.session_state.get(f"_refresco_pendiente_{_archivo_actual}"):
+if _archivo_actual:
     _vigilar_refresco(_archivo_actual, f"_refresco_pendiente_{_archivo_actual}")
 
 
