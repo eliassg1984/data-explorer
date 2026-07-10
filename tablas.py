@@ -9,7 +9,7 @@ import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from utils import _norm, buscar_columna, buscar_columna_fecha, LOCALE_ES
-from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid, inject_dynamic_grid_height  # <-- AÑADIDA
+from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid, inject_dynamic_grid_height
 from perf import perf
 from tema import (
     ACENTO, ACENTO_FUERTE, ACENTO_TEXTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA_FONDO, ADVERTENCIA_TEXTO, BLANCO, CELDA_ALERTA_FONDO, CELDA_ALERTA_TEXTO, CELDA_NEG_FONDO, CELDA_POS_TEXTO, DANGER_TEXT, ERROR_FONDO, EXIT_HOVER, GRIS_BORDE, GRIS_FONDO, GRIS_FONDO_CABECERA, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE, ICON_MUTED, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FILA, LAVANDA_FILA_ALT, LAVANDA_FOCO, LAVANDA_FONDO, LAVANDA_MEDIO, LAVANDA_SELECCION, SCROLL_THUMB, TEXTO_PRINCIPAL,
@@ -290,57 +290,62 @@ def _css_base(font_px):
             "display": "none !important",
         },
 
-        # ── Panel modo pivote / drop zones (NUEVO ESTILIZADO) ──
-        ".ag-pivot-mode-panel": {
-            "padding": "10px 12px !important",
-            "border-bottom": f"1px solid {GRIS_BORDE} !important",
-            "min-height": "0 !important",
-        },
-        ".ag-pivot-mode-select": {
-            "color": f"{ACENTO_TEXTO} !important",
-            "font-size": "13px !important",
-            "font-weight": "600 !important",
-        },
+        # ── Pivote MODERNO PLANO: secciones separadas por aire y un divisor
+        #    fino, pastillas sin borde. Única fuente de verdad del espaciado
+        #    de este panel (el override compacto de renderizar_aggrid_desktop
+        #    se eliminó para que no lo pise).
         # Títulos de sección (Grupos de filas / Valores)
         ".ag-column-drop-vertical-title-bar": {
-            "padding": "10px 12px 4px !important",
+            "padding": "14px 14px 8px !important",
         },
         ".ag-column-drop-vertical-title": {
             "color": f"{GRIS_TEXTO_SUAVE} !important",
             "font-size": "11px !important",
             "font-weight": "600 !important",
             "text-transform": "uppercase !important",
-            "letter-spacing": "0.06em !important",
+            "letter-spacing": "0.07em !important",
         },
-        # Zona de arrastre (drop zone)
+        # Cada sección se ajusta a su contenido; el divisor de 1px entre
+        # secciones consecutivas sustituye a los marcos.
         ".ag-column-drop-vertical": {
             "background": "transparent !important",
+            "flex": "0 0 auto !important",
         },
+        ".ag-column-drop-vertical + .ag-column-drop-vertical": {
+            "border-top": f"1px solid {GRIS_LINEA} !important",
+            "margin-top": "14px !important",
+        },
+        # Zona de arrastre (drop zone)
         ".ag-column-drop-vertical-list": {
-            "margin": "4px 10px 10px !important",
+            "margin": "4px 14px 18px !important",
             "border": f"1.5px dashed {LAVANDA_BORDE} !important",
             "border-radius": "10px !important",
             "background": f"{LAVANDA_SELECCION} !important",
             "padding": "8px !important",
+            "min-height": "52px !important",
         },
         ".ag-column-drop-empty-message": {
             "color": f"{LAVANDA_MEDIO} !important",
             "font-size": "12px !important",
             "text-align": "center !important",
         },
-        # Pastillas de campos (Suma(...), Promedio(...))
+        # Pastillas de campos (Suma(...), Promedio(...)): rectángulo suave,
+        # sin borde, relleno lavanda tenue.
         ".ag-column-drop-vertical-cell": {
-            "background": f"{GRIS_FONDO} !important",
-            "border": f"1px solid {GRIS_BORDE} !important",
-            "border-radius": "999px !important",
-            "padding": "5px 12px !important",
-            "margin": "3px 0 !important",
+            "background": f"{LAVANDA_FONDO} !important",
+            "border": "none !important",
+            "border-radius": "8px !important",
+            "padding": "8px 12px !important",
+            "margin": "6px 2px !important",
             "font-size": "12px !important",
             "color": f"{GRIS_TEXTO_MEDIO} !important",
+            "transition": "background .15s ease !important",
         },
         ".ag-column-drop-vertical-cell:hover": {
-            "background": f"{LAVANDA_FONDO} !important",
-            "border-color": f"{LAVANDA_BORDE} !important",
+            "background": f"{LAVANDA_SELECCION} !important",
+        },
+        ".ag-column-drop-vertical-cell .ag-icon": {
+            "color": f"{LAVANDA_MEDIO} !important",
         },
         ".ag-column-drop-vertical-cell-text": {
             "font-size": "12px !important",
@@ -1215,21 +1220,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         custom_css[".ag-column-select-column .ag-toggle-button-input-wrapper"] = {
             "transform": "scale(0.85)",
         }
-        custom_css[".ag-column-drop-vertical"] = {
-            "min-height": "38px !important",
-            "padding-top": "2px !important",
-            "padding-bottom": "2px !important",
-        }
-        custom_css[".ag-column-drop-vertical-title-bar"] = {
-            "padding": "4px 6px !important",
-        }
-        custom_css[".ag-column-drop-vertical-empty-message"] = {
-            "padding": "4px 8px !important",
-            "font-size": "11px !important",
-        }
-        custom_css[".ag-column-drop-vertical-cell"] = {
-            "margin": "2px 4px !important",
-        }
+
+        # ── CONSERVAR esta (no tiene que ver con el pivote): ──
         custom_css[".ag-column-select-header"] = {
             "padding-top": "4px !important",
             "padding-bottom": "4px !important",
