@@ -1072,7 +1072,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         })
         custom_css[".ag-header"].update({
             "background-color": f"{BLANCO} !important",
-            "border-bottom": f"1px solid {ACENTO} !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
         })
         custom_css[".ag-tool-panel-horizontal-resize"] = {
             "width": "8px !important",
