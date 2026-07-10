@@ -1115,7 +1115,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "border-top-right-radius": "10px !important",
             "border-bottom-right-radius": "10px !important",
             "box-shadow": "0 4px 14px rgba(15,23,42,0.08) !important",
-            "margin": "4px 6px 6px 12px !important",
+            "margin": "42px 6px 6px 12px !important",
             "overflow": "hidden !important",
         })
         custom_css[".ag-side-bar .ag-side-buttons"].update({
