@@ -64,11 +64,12 @@ def _vigilar_refresco(archivo, clave_estado):
         return
 
     if transcurrido > 120:
-        st.warning(
-            f"⏳ La actualización de «{info['reporte']}» está tardando más de lo "
-            "usual. Los datos mostrados podrían no ser los más recientes.",
-            icon="⚠️",
-        )
+        with st.container(key="aviso_refresco"):
+            st.warning(
+                f"⏳ La actualización de «{info['reporte']}» está tardando más de lo "
+                "usual. Los datos mostrados podrían no ser los más recientes.",
+                icon="⚠️",
+            )
         return
 
     # Periodo de gracia: si el job termina antes de este umbral, el usuario
@@ -77,10 +78,11 @@ def _vigilar_refresco(archivo, clave_estado):
     if transcurrido < GRACIA_SEGUNDOS:
         return
 
-    st.info(
-        f"🔄 Actualizando datos de «{info['reporte']}»... (puede tardar unos segundos)",
-        icon="🔄",
-    )
+    with st.container(key="aviso_refresco"):
+        st.info(
+            f"🔄 Actualizando datos de «{info['reporte']}»... (puede tardar unos segundos)",
+            icon="🔄",
+        )
 
 
 # ===========================================================================
