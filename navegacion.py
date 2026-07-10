@@ -206,38 +206,46 @@ html body [data-testid="stElementContainer"]:has(#nav-topbar) {
 
 @st.fragment
 def _fragment_boton_refresco(reporte_activo, archivo):
-    """Botón de refresco AISLADO en su propio fragment: al hacer clic,
-    resuelve todo (solicitar_refresco + guardar estado pendiente + toast)
-    sin disparar un rerun completo de app.py. Así la tabla (otro fragment)
-    nunca se re-monta por este clic."""
+    """Botón de refresco AISLADO en su propio fragment. El clic se maneja
+    por VALOR DE RETORNO (no on_click): el rerun sigue siendo SOLO de este
+    fragment (la tabla no se re-monta), pero la lógica corre en el cuerpo,
+    donde toast/error se pintan de forma fiable. FIX: con on_click dentro
+    del fragment el callback no se disparaba (clic perdido en silencio)."""
 
-    def _click():
-        if not archivo:
-            st.toast("ℹ️ Esta sección no tiene datos propios para actualizar.", icon="ℹ️")
-            return
-
-        if not secrets_disponibles():
-            cargar.clear(archivo)
-            st.toast("🧪 Modo demo: no hay datos reales para refrescar.", icon="🧪")
-            return
-
-        fecha_conocida = fecha_ultima_actualizacion(archivo)
-        if solicitar_refresco(archivo, reporte_activo):
-            st.session_state[f"_refresco_pendiente_{archivo}"] = {
-                "reporte": reporte_activo,
-                "baseline": fecha_conocida,
-                "inicio": datetime.datetime.now(ZONA_PERU),
-            }
-            st.toast(f"📨 Solicitud enviada para «{reporte_activo}», procesando...", icon="🔄")
-        else:
-            st.toast("⚠️ No se pudo enviar la solicitud de refresco.", icon="⚠️")
-
-    st.button(
+    pulsado = st.button(
         ":material/refresh:",
         key="navbtn_refresh",
         help=f"Actualizar datos de «{reporte_activo}»",
-        on_click=_click,
     )
+
+    if not pulsado:
+        return
+
+    if not archivo:
+        st.toast("ℹ️ Esta sección no tiene datos propios para actualizar.", icon="ℹ️")
+        return
+
+    if not secrets_disponibles():
+        cargar.clear(archivo)
+        st.toast("🧪 Modo demo: no hay datos reales para refrescar.", icon="🧪")
+        return
+
+    try:
+        fecha_conocida = fecha_ultima_actualizacion(archivo)
+        ok = solicitar_refresco(archivo, reporte_activo)
+    except Exception as e:
+        st.error(f"❌ Error al solicitar refresco en R2: {e}")
+        return
+
+    if ok:
+        st.session_state[f"_refresco_pendiente_{archivo}"] = {
+            "reporte": reporte_activo,
+            "baseline": fecha_conocida,
+            "inicio": datetime.datetime.now(ZONA_PERU),
+        }
+        st.toast(f"📨 Solicitud enviada para «{reporte_activo}», procesando...", icon="🔄")
+    else:
+        st.error("⚠️ No se pudo enviar la solicitud de refresco.")
 
 
 def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
