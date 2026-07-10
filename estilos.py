@@ -598,6 +598,21 @@ def get_css():
     [class*="st-key-grid_"] [data-testid="stElementToolbar"] {
         display: none !important;
     }
+
+    /* =================================================================== */
+    /* POSICIÓN DEL TOAST (st.toast) — cerca del botón de refresco del rail */
+    /* Confirmado vía DevTools: data-testid="stToastContainer" es el contenedor
+       raíz que React Aria posiciona en pantalla (data-react-aria-top-layer).
+       Por defecto Streamlit lo pone abajo a la DERECHA. Lo movemos abajo a la
+       IZQUIERDA, junto al rail (RAIL_ANCHO=90px en navegacion.py + 10px de aire).
+       Si cambias RAIL_ANCHO allá, actualiza el "left" aquí. */
+    /* =================================================================== */
+    div[data-testid="stToastContainer"] {
+        left: 100px !important;
+        right: auto !important;
+        bottom: 16px !important;
+        top: auto !important;
+    }
     </style>
     """
 
