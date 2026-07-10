@@ -1115,16 +1115,41 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "border-top": f"2px solid {ACENTO} !important",
             "color": f"{ACENTO_TEXTO_OSCURO} !important",
         })
-        custom_css[".ag-body-vertical-scroll::-webkit-scrollbar"] = {"width": "8px"}
-        custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-track"] = {
-            "background": f"{GRIS_BORDE}", "border-radius": "4px",
-        }
+
+        # ── Barras "fantasma" — invisibles en reposo, aparecen al pasar el
+        #    cursor por la tabla. Colores desde tema.py. Se estila también la
+        #    horizontal (antes salía de fábrica).
+        custom_css[".ag-body-vertical-scroll::-webkit-scrollbar"] = {"width": "11px"}
+        custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar"] = {"height": "11px"}
+        custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-track"] = {"background": "transparent"}
+        custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar-track"] = {"background": "transparent"}
+        # Pulgar transparente por defecto (invisible).
         custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-thumb"] = {
-            "background": f"{ACENTO}", "border-radius": "4px",
+            "background": "transparent", "border-radius": "8px",
+            "border": "3px solid transparent", "background-clip": "padding-box",
         }
+        custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar-thumb"] = {
+            "background": "transparent", "border-radius": "8px",
+            "border": "3px solid transparent", "background-clip": "padding-box",
+        }
+        # Al pasar el cursor por la tabla → gris tenue.
+        custom_css[".ag-body-vertical-scroll:hover::-webkit-scrollbar-thumb"] = {
+            "background": f"{SCROLL_THUMB}", "background-clip": "padding-box",
+        }
+        custom_css[".ag-body-horizontal-scroll:hover::-webkit-scrollbar-thumb"] = {
+            "background": f"{SCROLL_THUMB}", "background-clip": "padding-box",
+        }
+        # Al agarrar el pulgar → lavanda de foco.
         custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-thumb:hover"] = {
-            "background": f"{ACENTO_FUERTE}",
+            "background": f"{LAVANDA_FOCO}", "background-clip": "padding-box",
         }
+        custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar-thumb:hover"] = {
+            "background": f"{LAVANDA_FOCO}", "background-clip": "padding-box",
+        }
+        custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar-corner"] = {
+            "background": "transparent",
+        }
+
         custom_css[".ag-side-bar"].update({
             "background-color": f"{LAVANDA_FILA} !important",
             "border": f"1px solid {GRIS_BORDE} !important",
