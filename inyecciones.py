@@ -1376,8 +1376,8 @@ def inject_fix_column_panel_ajuste():
                         ? inner.getBoundingClientRect().height
                         : item.getBoundingClientRect().height;
 
-                    // Agregar margen entre pastillas (equivale al margin:7px de CSS)
-                    var alturaSlot = alturaReal + 14;
+                    // Margen mínimo entre pastillas
+                    var alturaSlot = alturaReal + 4;
 
                     item.style.setProperty('top', topAcum + 'px', 'important');
                     item.style.setProperty('height', alturaSlot + 'px', 'important');
