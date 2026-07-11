@@ -1355,6 +1355,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         # Si diera problemas, comenta SOLO esta línea y vuelve al height fijo.
         inject_dynamic_grid_height(offset_px=220)
 
+    if es_ajuste:
+        from inyecciones import inject_fix_column_panel_ajuste
+        inject_fix_column_panel_ajuste()
+
 
 # ===========================================================================
 # FUNCIÓN: AGGRID MÓVIL (ANCHO COMPLETO)
