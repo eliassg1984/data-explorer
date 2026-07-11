@@ -428,6 +428,44 @@ def _css_base(font_px):
             "font-size": "12.5px !important",
             "font-weight": "500 !important",
         },
+        # ── Interior del filtro expandido — a juego con las pastillas ──
+        # Caja redondeada con tinte lavanda que envuelve el buscador y la lista.
+        # La variable --ag-checkbox-checked-color se pone AQUÍ (no global) para
+        # que las casillas moradas solo apliquen dentro del filtro.
+        ".ag-filter-toolpanel-instance-body": {
+            "background": f"{LAVANDA_SELECCION} !important",
+            "border": f"1px solid {LAVANDA_BORDE} !important",
+            "border-radius": "10px !important",
+            "padding": "8px !important",
+            "margin": "0 10px 6px !important",
+            "--ag-checkbox-checked-color": f"{ACENTO_FUERTE} !important",
+        },
+        # Buscador "Buscar…" dentro del filtro
+        ".ag-filter-toolpanel-instance-body .ag-mini-filter": {
+            "margin": "2px 0 6px !important",
+        },
+        ".ag-filter-toolpanel-instance-body .ag-mini-filter .ag-input-field-input": {
+            "background": f"{BLANCO} !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "8px !important",
+            "font-size": "12.5px !important",
+            "padding": "6px 10px !important",
+        },
+        # La lista transparente para que se vea el tinte de la caja
+        ".ag-filter-toolpanel-instance-body .ag-set-filter-list, "
+        ".ag-filter-toolpanel-instance-body .ag-virtual-list-viewport": {
+            "background": "transparent !important",
+        },
+        # Texto de cada opción de la lista
+        ".ag-filter-toolpanel-instance-body .ag-set-filter-item .ag-label": {
+            "color": f"{GRIS_TEXTO_MEDIO} !important",
+            "font-size": "12.5px !important",
+        },
+        # Casilla marcada en morado de marca (respaldo por si la variable de arriba
+        # no basta en esta versión de Balham)
+        ".ag-filter-toolpanel-instance-body .ag-checkbox-input-wrapper.ag-checked": {
+            "color": f"{ACENTO_FUERTE} !important",
+        },
 
         # ── Panel COLUMNAS — tipografía y buscador a juego ──
         ".ag-column-select-header": {
