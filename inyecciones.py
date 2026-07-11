@@ -1333,3 +1333,111 @@ def inject_dynamic_grid_height(offset_px: int = 220, min_px: int = 480):
     })();
     </script>
     """, height=0)
+
+
+# ===========================================================================
+# FIX: PANEL COLUMNAS DE AJUSTE DE INVENTARIO — reposicionamiento dinámico
+# ===========================================================================
+
+def inject_fix_column_panel_ajuste():
+    """
+    Fix para el panel Columnas de Ajuste de Inventario:
+    AgGrid calcula top:N*32px al montar (tema material, 32px por defecto).
+    Las pastillas miden ~52px, así que se enciman.
+    Este JS entra al iframe y recalcula el top de cada ítem según su
+    altura real medida en el DOM, sin tocar la virtualización.
+    Se re-ejecuta cada vez que el panel abre (MutationObserver).
+    """
+    components.html("""
+    <script>
+    (function(){
+        var win = window.parent, doc = win.document;
+        var tries = 0, MAX = 60;
+
+        function reposicionar(fdoc) {
+            // Aplica a ambos paneles: columns y pivotePanel
+            var paneles = ['columns', 'pivotePanel'];
+            paneles.forEach(function(panelId) {
+                var sidebar = fdoc.querySelector(
+                    ".ag-side-bar[data-active-panel='" + panelId + "']"
+                );
+                if (!sidebar) return;
+
+                var items = sidebar.querySelectorAll(
+                    '.ag-virtual-list-item'
+                );
+                if (!items.length) return;
+
+                var topAcum = 0;
+                items.forEach(function(item) {
+                    // Leer altura REAL del contenido (la pastilla con su padding/margin)
+                    var inner = item.firstElementChild;
+                    var alturaReal = inner
+                        ? inner.getBoundingClientRect().height
+                        : item.getBoundingClientRect().height;
+
+                    // Agregar margen entre pastillas (equivale al margin:7px de CSS)
+                    var alturaSlot = alturaReal + 14;
+
+                    item.style.setProperty('top', topAcum + 'px', 'important');
+                    item.style.setProperty('height', alturaSlot + 'px', 'important');
+                    topAcum += alturaSlot;
+                });
+
+                // Ajustar altura total del container para que el scroll funcione
+                var container = sidebar.querySelector('.ag-virtual-list-container');
+                if (container) {
+                    container.style.setProperty(
+                        'height', topAcum + 'px', 'important'
+                    );
+                }
+            });
+        }
+
+        function instalarObserver(fdoc) {
+            // Observa cambios en el sidebar para re-ejecutar cuando
+            // el usuario cambia de panel (Columnas ↔ Filtros ↔ Modo pivote)
+            var sidebar = fdoc.querySelector('.ag-side-bar');
+            if (!sidebar || sidebar.__fixObserver) return;
+
+            var obs = new MutationObserver(function() {
+                // Pequeño delay para que AgGrid termine de pintar los items
+                win.setTimeout(function() { reposicionar(fdoc); }, 80);
+            });
+            obs.observe(sidebar, {
+                attributes: true,
+                attributeFilter: ['data-active-panel'],
+                subtree: true,
+                childList: true
+            });
+            sidebar.__fixObserver = obs;
+
+            // Ejecutar una vez al instalar
+            reposicionar(fdoc);
+        }
+
+        function buscarIframe() {
+            var frames = doc.querySelectorAll('iframe[src*="st_aggrid"]');
+            if (!frames.length) frames = doc.querySelectorAll('iframe');
+            for (var i = 0; i < frames.length; i++) {
+                try {
+                    var d = frames[i].contentDocument;
+                    if (d && d.querySelector('.ag-root-wrapper')) return d;
+                } catch(e) {}
+            }
+            return null;
+        }
+
+        function check() {
+            tries++;
+            var fdoc = buscarIframe();
+            if (fdoc) {
+                instalarObserver(fdoc);
+                return;
+            }
+            if (tries < MAX) win.setTimeout(check, 500);
+        }
+        win.setTimeout(check, 900);
+    })();
+    </script>
+    """, height=0)
