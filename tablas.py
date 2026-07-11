@@ -1254,25 +1254,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         # y no crece con el contenido. Subimos a 62px (pastilla con padding
         # 10px*2 + texto 16px + margin 7px*2 = ~50px; 62px da holgura).
         # overflow:visible en el slot y su wrapper evitan el recorte.
-        custom_css[
-            ".ag-side-bar[data-active-panel='columns'], "
-            ".ag-side-bar[data-active-panel='pivotePanel']"
-        ] = {"--ag-list-item-height": "62px !important"}
-
-        custom_css[
-            ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-item, "
-            ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-item"
-        ] = {
-            "height": "62px !important",   # igual que la variable
-            "overflow": "visible !important",
-        }
-
-        custom_css[
-            ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-container, "
-            ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-container"
-        ] = {
-            "overflow": "visible !important",
-        }
+        
 
         # ── ELIMINADO: custom_css[".ag-root"] = {...}  (ya no se usa) ──
         # ── ELIMINADO: custom_css[".ag-filter-toolpanel"].update({...}) (se movió al base) ──
