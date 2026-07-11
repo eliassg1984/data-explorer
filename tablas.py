@@ -17,6 +17,24 @@ from tema import (
 
 
 # ===========================================================================
+# FUNCIONES AUXILIARES
+# ===========================================================================
+
+# Palabras que en español van en minúscula dentro de un título
+# (salvo si son la primera palabra).
+_MINUS_TITULO = {"de", "del", "la", "el", "los", "las", "y", "o",
+                 "al", "en", "a", "con", "por", "para", "un", "una"}
+
+def _titulo_es(texto):
+    """Convierte 'STOCK AL CIERRE' → 'Stock al Cierre' (modo Nombre Propio)."""
+    palabras = str(texto).strip().lower().split()
+    return " ".join(
+        p if (i > 0 and p in _MINUS_TITULO) else p.capitalize()
+        for i, p in enumerate(palabras)
+    )
+
+
+# ===========================================================================
 # FUNCIÓN: AGGRID DESKTOP — con formato financiero y diseño mejorado
 # ===========================================================================
 
@@ -1053,6 +1071,42 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 } catch(e) {}
             }
         """)
+
+        # ── ARRANQUE EN MODO PIVOTE: grupos y valores fijos ──────────────
+        # Grupos de filas — el orden de la lista define la jerarquía.
+        _grupos_ini = []
+        for _term in ("Familia", "Subfamilia", "Producto", "Unidad Medida", "Area"):
+            _rc = buscar_columna(df_grid, _term)
+            if _rc and _rc in df_grid.columns and _rc not in _grupos_ini:
+                _grupos_ini.append(_rc)
+        for _i, _c in enumerate(_grupos_ini):
+            gb.configure_column(_c, rowGroup=True, rowGroupIndex=_i, hide=True)
+
+        # Valores — exactamente 4, cada uno con su función de agregado.
+        _valores_ini = []
+        for _term, _af in (
+            ("Precio Promedio", "avg"),
+            ("Stock al Cierre", "sum"),
+            ("Ajuste",          "sum"),
+            ("Stock Declarado", "sum"),
+        ):
+            _rc = buscar_columna(df_grid, _term)
+            if _rc and _rc in df_grid.columns and _rc not in _valores_ini:
+                gb.configure_column(_rc, aggFunc=_af, enableValue=True)
+                _valores_ini.append(_rc)
+
+        # El resto de numéricos pierde su agregado → solo esos 4 en "Valores".
+        for _c in df_grid.columns:
+            if (pd.api.types.is_numeric_dtype(df_grid[_c])
+                    and _c not in _valores_ini and _c not in _grupos_ini):
+                gb.configure_column(_c, aggFunc=None)
+
+        # Encabezados en "Nombre Propio" (en vez de MAYÚSCULAS).
+        for _c in df_grid.columns:
+            gb.configure_column(_c, headerName=_titulo_es(_c))
+
+        opciones_grid["pivotMode"] = True          # arranca con el toggle ON
+        opciones_grid["groupDefaultExpanded"] = 0  # 0 = todo colapsado; 1 = abre Familia
 
     gb.configure_grid_options(**opciones_grid)
     if es_salidas:
