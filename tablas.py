@@ -1140,14 +1140,33 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         tema_grid = "material"
         custom_css[".ag-row-even"] = {"background-color": f"{BLANCO} !important"}
         custom_css[".ag-row-odd"] = {"background-color": f"{BLANCO} !important"}
-        # ── NUEVO: reemplazo del wrapper ──
+
+        # ── SEGMENTADOR (estilo Excel): el wrapper pasa a ser un contenedor
+        #    invisible; el borde/radio/sombra viven ahora en .ag-root (la
+        #    tabla) y en .ag-side-bar (el panel), que se leen como dos
+        #    tarjetas separadas aunque el DOM siga siendo uno.
         custom_css[".ag-root-wrapper"].update({
+            "background-color": "transparent !important",
+            "border": "none !important",
+            "border-radius": "0 !important",
+            "box-shadow": "none !important",
+            "overflow": "visible !important",
+        })
+        custom_css[".ag-root-wrapper-body"] = {
+            "background": "transparent !important",
+            "overflow": "visible !important",
+        }
+        custom_css[".ag-root"] = {
             "background-color": f"{BLANCO} !important",
             "border": f"1px solid {GRIS_BORDE} !important",
             "border-radius": "12px !important",
             "box-shadow": ("0 1px 2px rgba(16,16,20,0.05), "
                            "0 4px 14px rgba(16,16,20,0.07) !important"),
-        })
+            "overflow": "hidden !important",
+        }
+        # El hueco entre tarjetas muestra el fondo de la página, no blanco.
+        custom_css["html, body"] = {"background": "transparent !important"}
+
         custom_css[".ag-header"].update({
             "background-color": f"{LAVANDA_FONDO} !important",
             "border-bottom": f"1px solid {ACENTO} !important",
@@ -1208,12 +1227,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "background-color": f"{LAVANDA_FILA} !important",
             "border": f"1px solid {GRIS_BORDE} !important",
             "border-left": f"1px solid {GRIS_BORDE} !important",
-            "border-bottom": f"1px solid {GRIS_BORDE} !important",
-            "border-radius": "10px !important",
-            "border-top-right-radius": "10px !important",
-            "border-bottom-right-radius": "10px !important",
-            "box-shadow": "0 4px 14px rgba(15,23,42,0.08) !important",
-            "margin": "42px 6px 6px 12px !important",
+            "border-radius": "12px !important",
+            "box-shadow": ("0 1px 2px rgba(16,16,20,0.05), "
+                           "0 4px 14px rgba(16,16,20,0.07) !important"),
+            "margin": "0 0 0 14px !important",
             "overflow": "hidden !important",
         })
         custom_css[".ag-side-bar .ag-side-buttons"].update({
