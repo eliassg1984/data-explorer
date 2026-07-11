@@ -942,21 +942,23 @@ def inject_pagination_v2():
 
 def inject_maximize_aggrid():
     """
-    Botón flotante ⛶ que pone la tabla AgGrid en PANTALLA COMPLETA NATIVA
-    (Fullscreen API) en lugar del truco position:fixed.
+    Botón ⛶ para poner la tabla AgGrid en PANTALLA COMPLETA NATIVA (Fullscreen
+    API). El fullscreen se pide desde el documento padre sobre el ELEMENTO
+    iframe (iframe.requestFullscreen()), así que NO hace falta allow="fullscreen".
 
-    Claves de esta versión:
-    - El fullscreen se pide desde el documento padre sobre el ELEMENTO iframe
-      (iframe.requestFullscreen()), así que no hace falta allow="fullscreen".
-    - En fullscreen el navegador SOLO renderiza el iframe: el botón del padre
-      deja de verse. Por eso el botón de salida (✕) se inyecta DENTRO del
-      iframe, junto con el CSS que estira el grid (renderizado a 600/850px)
-      hasta 100vh mientras dura el fullscreen.
-    - Esc sale de forma nativa; escuchamos 'fullscreenchange' para restaurar
-      la altura del grid y reposicionar el ⛶ (también cubre la salida con Esc).
-    - Ya no hace falta tocar z-index del rail/topbar: en fullscreen nativo el
-      documento padre ni se renderiza.
-    - Safari usa la variante webkit* (fallback incluido).
+    UBICACIÓN DEL BOTÓN (cambio nuevo):
+    - Con sidebar: el ⛶ se ancla como PRIMER ítem del riel (.ag-side-buttons),
+      DENTRO del iframe. Sitio fijo, se desplaza con la tabla. (Antes flotaba
+      con position:fixed y se "despegaba" al hacer scroll.)
+    - Sin sidebar (p.ej. Salidas con sideBar=False): se conserva el botón
+      flotante como respaldo, pero reubicándolo también al hacer scroll.
+
+    El clic ocurre dentro del iframe, pero la activación de usuario se propaga
+    al padre, así que iframe.requestFullscreen() sigue siendo válido (misma
+    técnica que el botón ✕ de salida ya existente).
+
+    Esc sale de forma nativa; 'fullscreenchange' restaura la altura del grid.
+    Safari usa la variante webkit* (fallback incluido).
     """
     components.html("""
     <script>
@@ -968,38 +970,7 @@ def inject_maximize_aggrid():
         var tries = 0;
         var MAX = 40;
         var iframeFS = null;
-
-        function inyectarCSS() {
-            if (doc.getElementById('aggrid-max-css')) return;
-            var s = doc.createElement('style');
-            s.id = 'aggrid-max-css';
-            s.textContent = [
-                '#' + BTN_ID + ' {',
-                '  position: fixed;',
-                '  z-index: 99999;',
-                '  width: 30px;',
-                '  height: 30px;',
-                '  border: 1px solid var(--border);',
-                '  border-radius: 6px;',
-                '  background: var(--bg-secondary);',
-                '  color: var(--text-secondary);',
-                '  font-size: 15px;',
-                '  cursor: pointer;',
-                '  display: flex;',
-                '  align-items: center;',
-                '  justify-content: center;',
-                '  box-shadow: 0 1px 4px rgba(0,0,0,0.10);',
-                '  transition: background 0.15s, color 0.15s, border-color 0.15s;',
-                '  line-height: 1;',
-                '}',
-                '#' + BTN_ID + ':hover {',
-                '  background: var(--accent-tint);',
-                '  border-color: var(--focus-lavender);',
-                '  color: var(--accent-hover);',
-                '}',
-            ].join('\\n');
-            doc.head.appendChild(s);
-        }
+        var btnFlotante = null;   // SOLO se crea si la tabla no tiene riel
 
         function buscarIframe() {
             var frames = doc.querySelectorAll('iframe[src*="st_aggrid"]');
@@ -1013,7 +984,27 @@ def inject_maximize_aggrid():
             return null;
         }
 
-        /* CSS + botón ✕ DENTRO del iframe: es lo único visible en fullscreen. */
+        function elementoFS() {
+            return doc.fullscreenElement || doc.webkitFullscreenElement || null;
+        }
+
+        function salirFS() {
+            if (doc.exitFullscreen)            doc.exitFullscreen();
+            else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen();
+        }
+
+        function toggle() {
+            if (elementoFS()) { salirFS(); return; }
+            var iframe = buscarIframe();
+            if (!iframe) return;
+            iframeFS = iframe;
+            prepararIframe(iframe);
+            if (iframe.requestFullscreen)            iframe.requestFullscreen();
+            else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen();
+        }
+
+        /* CSS + botón ✕ DENTRO del iframe (lo único visible en fullscreen),
+           MÁS el estilo del ⛶ del riel. */
         function prepararIframe(iframe) {
             var fdoc = null;
             try { fdoc = iframe.contentDocument; } catch(e) {}
@@ -1022,12 +1013,7 @@ def inject_maximize_aggrid():
             if (!fdoc.getElementById('aggrid-fs-css')) {
                 var s = fdoc.createElement('style');
                 s.id = 'aggrid-fs-css';
-                /* ✅ PATCH 1: CSS con height: 100% (heredada) en lugar de 100vh */
                 s.textContent = [
-                    /* CLAVE anti-parpadeo: 100vh (viewport del iframe = pantalla,
-                       CONSTANTE en fullscreen) en vez de height:100% encadenado.
-                       Así el ResizeObserver de Streamlit mide siempre lo mismo y
-                       no entra en bucle (que colapsaba el cuerpo a 0). */
                     'html.fs-activo, html.fs-activo body {',
                     '  margin: 0 !important;',
                     '  height: 100vh !important;',
@@ -1042,15 +1028,9 @@ def inject_maximize_aggrid():
                     'html.fs-activo #root > div {',
                     '  height: 100vh !important;',
                     '}',
-                    /* SOLO el contenedor real del grid (vive dentro de #root).
-                       El fantasma de arrastre (.ag-dnd-ghost) y los popups de
-                       AG Grid llevan la misma clase de tema pero cuelgan de
-                       <body>, fuera de #root: quedan excluidos. */
                     'html.fs-activo #root [class*="ag-theme-"]:not(.ag-dnd-ghost):not(.ag-popup) {',
                     '  height: 100vh !important;',
                     '}',
-                    /* Cinturón y tirantes: nada de tamaños forzados en el
-                       fantasma de arrastre ni en popups del tema. */
                     'html.fs-activo .ag-dnd-ghost,',
                     'html.fs-activo .ag-popup,',
                     'html.fs-activo body > [class*="ag-theme-"]:not(#gridContainer) {',
@@ -1060,20 +1040,38 @@ def inject_maximize_aggrid():
                     'html.fs-activo .ag-root-wrapper {',
                     '  height: 100% !important; border-radius: 0 !important;',
                     '}',
-                    /* Panel Columnas/Filtros/Pivote: permite scroll interno si el
-                       contenido supera la pantalla, en vez de estirarse. */
                     'html.fs-activo .ag-column-panel,',
                     'html.fs-activo .ag-filter-toolpanel {',
                     '  height: 100% !important; overflow-y: auto !important;',
                     '}',
-                    /* FIX panel pivote alargado: las zonas "Grupos de filas" y
-                       "Valores" NO deben crecer para llenar el alto; se ajustan a
-                       su contenido. min-height mantiene un objetivo de arrastre. */
                     'html.fs-activo .ag-column-drop-vertical {',
                     '  flex: 0 0 auto !important;',
                     '  min-height: 3.2em !important;',
                     '}',
-                    /* Botón de salida (dentro del iframe) */
+                    /* ── NUEVO: ⛶ integrado en el riel de pestañas ── */
+                    '#' + BTN_ID + ' {',
+                    '  width: 100%;',
+                    '  height: 40px;',
+                    '  border: none;',
+                    '  border-bottom: 1px solid var(--border);',
+                    '  background: transparent;',
+                    '  color: var(--text-secondary);',
+                    '  font-size: 16px;',
+                    '  cursor: pointer;',
+                    '  display: flex;',
+                    '  align-items: center;',
+                    '  justify-content: center;',
+                    '  writing-mode: horizontal-tb;',
+                    '  line-height: 1;',
+                    '  transition: background .15s, color .15s;',
+                    '}',
+                    '#' + BTN_ID + ':hover {',
+                    '  background: var(--accent-tint);',
+                    '  color: var(--accent-hover);',
+                    '}',
+                    /* En fullscreen ocultamos el ⛶ (ya hay ✕ de salida). */
+                    'html.fs-activo #' + BTN_ID + ' { display: none; }',
+                    /* ── Botón de salida ✕ (idéntico al de antes) ── */
                     '#' + EXIT_ID + ' {',
                     '  position: fixed;',
                     '  top: 12px;',
@@ -1108,39 +1106,81 @@ def inject_maximize_aggrid():
             }
         }
 
-        function elementoFS() {
-            return doc.fullscreenElement || doc.webkitFullscreenElement || null;
+        /* Ancla el ⛶ como PRIMER ítem del riel. Devuelve true si lo logró (o si
+           ya estaba puesto). Devuelve false si la tabla no tiene riel. */
+        function anclarEnRiel(iframe) {
+            var fdoc = null;
+            try { fdoc = iframe.contentDocument; } catch(e) {}
+            if (!fdoc) return false;
+            var riel = fdoc.querySelector('.ag-side-buttons');
+            if (!riel) return false;
+            if (fdoc.getElementById(BTN_ID)) return true;
+            var b = fdoc.createElement('button');
+            b.id = BTN_ID;
+            b.type = 'button';
+            b.innerHTML = '&#x26F6;';
+            b.title = 'Maximizar tabla';
+            b.onclick = toggle;
+            riel.insertBefore(b, riel.firstChild);
+            return true;
         }
 
-        function salirFS() {
-            if (doc.exitFullscreen)            doc.exitFullscreen();
-            else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen();
+        /* Fallback (SOLO tablas sin riel): botón flotante, reubicado también al
+           hacer scroll para que no se despegue. */
+        function posicionarFlotante(iframe) {
+            if (!btnFlotante || !iframe || elementoFS()) return;
+            var r = iframe.getBoundingClientRect();
+            btnFlotante.style.top   = (r.top + 8) + 'px';
+            btnFlotante.style.right = (win.innerWidth - r.right + 8) + 'px';
         }
 
-        function toggle() {
-            if (elementoFS()) { salirFS(); return; }
-            var iframe = buscarIframe();
-            if (!iframe) return;
-            iframeFS = iframe;
-            prepararIframe(iframe);
-            if (iframe.requestFullscreen)            iframe.requestFullscreen();
-            else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen();
+        function crearFlotante(iframe) {
+            if (!doc.getElementById('aggrid-max-css-flot')) {
+                var s = doc.createElement('style');
+                s.id = 'aggrid-max-css-flot';
+                s.textContent = [
+                    '#' + BTN_ID + '-flot {',
+                    '  position: fixed;',
+                    '  z-index: 99999;',
+                    '  width: 30px;',
+                    '  height: 30px;',
+                    '  border: 1px solid var(--border);',
+                    '  border-radius: 6px;',
+                    '  background: var(--bg-secondary);',
+                    '  color: var(--text-secondary);',
+                    '  font-size: 15px;',
+                    '  cursor: pointer;',
+                    '  display: flex;',
+                    '  align-items: center;',
+                    '  justify-content: center;',
+                    '  box-shadow: 0 1px 4px rgba(0,0,0,0.10);',
+                    '  transition: background .15s, color .15s, border-color .15s;',
+                    '  line-height: 1;',
+                    '}',
+                    '#' + BTN_ID + '-flot:hover {',
+                    '  background: var(--accent-tint);',
+                    '  border-color: var(--focus-lavender);',
+                    '  color: var(--accent-hover);',
+                    '}',
+                ].join('\\n');
+                doc.head.appendChild(s);
+            }
+            if (!btnFlotante) {
+                btnFlotante = doc.createElement('button');
+                btnFlotante.id = BTN_ID + '-flot';
+                btnFlotante.innerHTML = '&#x26F6;';
+                btnFlotante.title = 'Maximizar tabla';
+                btnFlotante.onclick = toggle;
+                doc.body.appendChild(btnFlotante);
+                /* Reposiciona al hacer scroll (solo mueve el botón; NO fuerza
+                   resize del iframe, así que no dispara el bucle React #185). */
+                win.addEventListener('scroll', function() {
+                    posicionarFlotante(buscarIframe());
+                }, true);
+            }
+            posicionarFlotante(iframe);
         }
 
-        function posicionarBoton(iframe) {
-            if (!iframe || elementoFS()) return;
-            var rect = iframe.getBoundingClientRect();
-            btn.style.top   = (rect.top + 8) + 'px';
-            btn.style.right = (win.innerWidth - rect.right + 8) + 'px';
-        }
-
-        var btn = doc.createElement('button');
-        btn.id = BTN_ID;
-        btn.innerHTML = '&#x26F6;';
-        btn.title = 'Maximizar tabla';
-        btn.onclick = toggle;
-
-        /* ✅ PATCH 2: onFSChange con resize diferido y sin realimentación */
         function onFSChange() {
             var activo = (elementoFS() === iframeFS) && iframeFS !== null;
             var fdoc = null, fwin = null;
@@ -1151,31 +1191,28 @@ def inject_maximize_aggrid():
             if (fdoc && fdoc.documentElement) {
                 fdoc.documentElement.classList.toggle('fs-activo', activo);
             }
-            /* Un ÚNICO resize diferido: AgGrid recalcula el viewport de filas
-               una sola vez, sin realimentar el bucle de medición. */
             if (activo && fwin) {
                 win.setTimeout(function() {
                     try { fwin.dispatchEvent(new Event('resize')); } catch(e) {}
                 }, 250);
             }
-
-            btn.style.display = activo ? 'none' : 'flex';
-            if (!activo) {
-                win.setTimeout(function() {
-                    posicionarBoton(iframeFS || buscarIframe());
-                }, 100);
+            /* El ⛶ del riel se oculta/muestra por CSS (.fs-activo). Solo hay que
+               gestionar el flotante si existe. */
+            if (btnFlotante) {
+                btnFlotante.style.display = activo ? 'none' : 'flex';
+                if (!activo) {
+                    win.setTimeout(function() {
+                        posicionarFlotante(iframeFS || buscarIframe());
+                    }, 100);
+                }
             }
         }
         doc.addEventListener('fullscreenchange', onFSChange);
         doc.addEventListener('webkitfullscreenchange', onFSChange);
 
-        /* Congelar la negociacion de altura Streamlit<->componente durante
-           fullscreen. El componente AgGrid re-mide y re-reporta su altura en
-           bucle (setFrameHeight -> resize del iframe -> re-medicion...), lo
-           que tras un rato excede el limite de React (error #185) y crashea
-           el componente. En fullscreen el navegador ya renderiza el iframe a
-           pantalla completa, asi que estos mensajes no aportan nada: se
-           bloquean en fase de captura solo mientras dura el fullscreen. */
+        /* Congela la negociación de altura Streamlit<->componente durante el
+           fullscreen (evita el bucle setFrameHeight->resize->re-medición que
+           acaba en React #185). Igual que antes. */
         win.addEventListener('message', function(ev){
             if (!iframeFS || elementoFS() !== iframeFS) return;
             var d = ev.data;
@@ -1187,22 +1224,16 @@ def inject_maximize_aggrid():
 
         function check() {
             tries++;
-            inyectarCSS();
-
-            if (doc.getElementById(BTN_ID) !== btn) {
-                if (btn.parentNode) btn.parentNode.removeChild(btn);
-                doc.body.appendChild(btn);
-            }
-
             var iframe = buscarIframe();
             if (iframe) {
-                posicionarBoton(iframe);
-                prepararIframe(iframe);
-                return;
+                prepararIframe(iframe);              // estilos + ✕ + estilo del ⛶
+                if (anclarEnRiel(iframe)) return;    // con sidebar → ⛶ en el riel
+                if (tries >= 6) {                    // sin sidebar → flotante
+                    crearFlotante(iframe);
+                    return;
+                }
             }
-            if (tries < MAX) {
-                win.setTimeout(check, 500);
-            }
+            if (tries < MAX) win.setTimeout(check, 500);
         }
         win.setTimeout(check, 800);
     })();
