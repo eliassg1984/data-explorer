@@ -1248,6 +1248,28 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "background-color": f"{LAVANDA_FILA_ALT} !important",
             "border-bottom": f"1px solid {GRIS_BORDE} !important",
         })
+
+        # ── FIX: alto de ítems en las listas de Columnas / Modo pivote ──
+        # El tema material fija --ag-list-item-height: es el alto FIJO del
+        # slot virtual donde AgGrid posiciona cada .ag-column-select-column.
+        # El padding de _css_base() (10px 14px) no puede "ganar" esa altura:
+        # el slot no crece con el contenido, así que las pastillas quedan
+        # amontonadas/pisándose aunque el padding esté aplicado.
+        # Acotado por panel (mismo patrón que el resto del fichero) para no
+        # inflar también el panel Filtros, que comparte .ag-virtual-list-item.
+        custom_css[
+            ".ag-side-bar[data-active-panel='columns'], "
+            ".ag-side-bar[data-active-panel='pivotePanel']"
+        ] = {"--ag-list-item-height": "48px !important"}
+
+        custom_css[
+            ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-item, "
+            ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-item"
+        ] = {
+            "height": "auto !important",
+            "min-height": "48px !important",
+        }
+
         # ── ELIMINADO: custom_css[".ag-root"] = {...}  (ya no se usa) ──
         # ── ELIMINADO: custom_css[".ag-filter-toolpanel"].update({...}) (se movió al base) ──
 
