@@ -41,20 +41,20 @@ def _css_base(font_px):
             "box-shadow": "0 1px 3px rgba(16,16,20,0.05)",
             "width": "100% !important",
         },
-        # Cabecera clara estilo CallAI: banda gris suave con texto gris medio
+        # ── Cabecera lavanda con texto índigo (uniforme en toda la app) ──
         ".ag-header": {
-            "background-color": f"{GRIS_FONDO_CABECERA} !important",
-            "border-bottom": f"1px solid {GRIS_BORDE} !important",
+            "background-color": f"{LAVANDA_FONDO} !important",
+            "border-bottom": f"1px solid {ACENTO} !important",
         },
         ".ag-header-cell": {
-            "background-color": f"{GRIS_FONDO_CABECERA} !important",
+            "background-color": f"{LAVANDA_FONDO} !important",
         },
         ".ag-header-cell-text": {
-            "color": f"{GRIS_TEXTO} !important",
-            "font-weight": "600",
+            "color": f"{ACENTO_TEXTO_OSCURO} !important",
+            "font-weight": "500",
             "font-size": f"{font_px}px",
-            "letter-spacing": "0.03em",
-            "text-transform": "uppercase",
+            "letter-spacing": "normal",
+            "text-transform": "none",
         },
         ".ag-header-icon": {
             "color": f"{GRIS_TEXTO_SUAVE} !important",
@@ -1095,22 +1095,17 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                            "0 4px 14px rgba(16,16,20,0.07) !important"),
         })
         custom_css[".ag-header"].update({
-            "background-color": f"{BLANCO} !important",
+            "background-color": f"{LAVANDA_FONDO} !important",
             "border-bottom": f"1px solid {ACENTO} !important",
         })
-        custom_css[".ag-tool-panel-horizontal-resize"] = {
-            "width": "8px !important",
-            "background-color": f"{GRIS_BORDE}",
-            "cursor": "col-resize",
-        }
         custom_css[".ag-header-cell"].update({
-            "background-color": f"{BLANCO} !important",
+            "background-color": f"{LAVANDA_FONDO} !important",
         })
         custom_css[".ag-header-cell-text"].update({
-            "color": f"{GRIS_TEXTO} !important",
-            "font-weight": "600",
-            "letter-spacing": "0.05em",
-            "text-transform": "uppercase",
+            "color": f"{ACENTO_TEXTO_OSCURO} !important",
+            "font-weight": "500",
+            "letter-spacing": "normal",
+            "text-transform": "none",
         })
         custom_css[".ag-header-icon"].update({
             "color": f"{GRIS_TEXTO_SUAVE} !important",
