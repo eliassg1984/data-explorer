@@ -501,18 +501,18 @@ def get_css():
         min-width: 0 !important;
     }
 
-    /* La caja del input = PILL lavanda, alineada a la derecha */
+    /* La caja del input = PILL lavanda, alineada a la derecha con aire */
     .st-key-fch_ajuste_inline .stDateInput > div > div {
         background: var(--accent-tint) !important;
         border: 1px solid var(--border-lavender) !important;
         border-radius: 999px !important;
         box-shadow: none !important;
-        padding: 0 12px !important;              /* ← simétrico, sin hueco del icono */
+        padding: 0 12px !important;
         min-height: 34px !important;
         height: 34px !important;
         width: fit-content !important;
-        margin: 0 0 0 auto !important;           /* ← alineada a la DERECHA */
-        overflow: visible !important;            /* permite que el icono viva fuera */
+        margin: 0 24px 0 auto !important;           /* ← derecha con 24px de aire */
+        overflow: visible !important;
         position: relative !important;
         transition: background .15s ease, border-color .15s ease !important;
     }
@@ -525,7 +525,7 @@ def get_css():
         background: transparent !important;
         text-align: center !important;
         padding: 0 !important;
-        width: 155px !important;                       /* ancho justo para el rango */
+        width: 155px !important;
     }
     .st-key-fch_ajuste_inline .stDateInput input::placeholder {
         color: var(--accent) !important;
@@ -539,20 +539,9 @@ def get_css():
         border-color: var(--accent) !important;
     }
 
-    /* ── Icono calendario gris pegado a la PÍLDORA (izquierda) ── */
-    .st-key-fch_ajuste_inline .stDateInput::before {
-        display: none !important;                /* desactiva el anterior */
-    }
+    /* Icono de calendario retirado (antes vivía a la izquierda de la píldora) */
     .st-key-fch_ajuste_inline .stDateInput > div > div::before {
-        content: "";
-        position: absolute;
-        left: -25px; top: 50%;                   /* 25px = 18px de icono + 7px de aire */
-        width: 18px; height: 18px;
-        transform: translateY(-50%);
-        background-color: var(--icon-muted);
-        -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M16 3v4M8 3v4M4 11h16"/></svg>') center / contain no-repeat;
-                mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M16 3v4M8 3v4M4 11h16"/></svg>') center / contain no-repeat;
-        pointer-events: none;
+        display: none !important;
     }
 
     /* =================================================================== */
