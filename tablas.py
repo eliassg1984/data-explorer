@@ -230,20 +230,20 @@ def _css_base(font_px):
         # .ag-column-select-column.
         # ══════════════════════════════════════════════════════════════════
 
-        # Respiro inferior: evita que la última pastilla toque el borde del panel
+        # Respiro completo: aire arriba y abajo de la lista de columnas
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-list": {
-            "padding-bottom": "8px !important",
+            "padding": "4px 0 8px !important",
         },
 
-        # Cambio 1: filas como pastillas (más espaciado)
+        # Pastillas espaciosas — a juego con el panel Modo pivote
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column": {
             "display": "flex !important",
             "align-items": "center !important",
             "background": f"{GRIS_FONDO} !important",
             "border": f"1px solid {GRIS_BORDE} !important",
             "border-radius": "999px !important",
-            "padding": "8px 12px !important",
-            "margin": "5px 10px !important",
+            "padding": "10px 14px !important",
+            "margin": "7px 10px !important",
             "transition": "background .15s ease, border-color .15s ease !important",
         },
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:hover": {
@@ -264,7 +264,7 @@ def _css_base(font_px):
             "order": "-1 !important",
             "margin-right": "auto !important",
             "color": f"{GRIS_TEXTO} !important",
-            "font-size": "12.5px !important",
+            "font-size": "13px !important",
         },
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-drag-handle": {
             "display": "none !important",
@@ -1092,20 +1092,21 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         for _i, _c in enumerate(_grupos_ini):
             gb.configure_column(_c, rowGroup=True, rowGroupIndex=_i, hide=True)
 
-        # Valores — exactamente 4, cada uno con su función de agregado.
+        # Valores — exactamente 5, cada uno con su función de agregado.
         _valores_ini = []
         for _term, _af in (
-            ("Precio Promedio", "avg"),
-            ("Stock al Cierre", "sum"),
-            ("Ajuste",          "sum"),
-            ("Stock Declarado", "sum"),
+            ("Precio Promedio",   "avg"),
+            ("Stock al Cierre",   "sum"),
+            ("Stock Declarado",   "sum"),
+            ("Ajuste",            "sum"),
+            ("Ajuste Valorizado", "sum"),
         ):
             _rc = buscar_columna(df_grid, _term)
             if _rc and _rc in df_grid.columns and _rc not in _valores_ini:
                 gb.configure_column(_rc, aggFunc=_af, enableValue=True)
                 _valores_ini.append(_rc)
 
-        # El resto de numéricos pierde su agregado → solo esos 4 en "Valores".
+        # El resto de numéricos pierde su agregado → solo esos 5 en "Valores".
         for _c in df_grid.columns:
             if (pd.api.types.is_numeric_dtype(df_grid[_c])
                     and _c not in _valores_ini and _c not in _grupos_ini):
