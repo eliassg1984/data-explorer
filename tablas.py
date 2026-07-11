@@ -1061,6 +1061,11 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         opciones_grid["sideBar"] = False
 
     if es_ajuste:
+        # Al abrir/cerrar un panel del sidebar: (1) marca data-active-panel
+        # para el CSS acotado, y (2) re-ajusta las columnas al ancho visible
+        # con un pequeño retraso, para que "Ajuste" no quede tapada al abrir
+        # y no quede espacio muerto al cerrar. Debounce: si el usuario
+        # alterna paneles rápido, solo se ejecuta el último ajuste.
         opciones_grid["onToolPanelVisibleChanged"] = JsCode("""
             function(params) {
                 try {
@@ -1068,6 +1073,11 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                         ? params.api.getOpenedToolPanel() : null;
                     var sb = document.querySelector('.ag-side-bar');
                     if (sb) sb.setAttribute('data-active-panel', open || '');
+
+                    window.clearTimeout(window.__ajusteFitTimer);
+                    window.__ajusteFitTimer = window.setTimeout(function() {
+                        try { params.api.sizeColumnsToFit(); } catch(e) {}
+                    }, 150);
                 } catch(e) {}
             }
         """)
