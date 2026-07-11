@@ -347,17 +347,16 @@ def _css_base(font_px):
             "font-size": "12px !important",
             "text-align": "center !important",
         },
-        # Pastillas de campos (Suma(...), Promedio(...)): rectángulo suave,
-        # sin borde, relleno lavanda tenue.
+        # Pastillas de campos (Suma(...), Promedio(...)): ahora igual geometría que Columnas y Filtros
         ".ag-column-drop-vertical-cell": {
             "background": f"{LAVANDA_FONDO} !important",
-            "border": "none !important",
-            "border-radius": "8px !important",
-            "padding": "8px 12px !important",
-            "margin": "6px 2px !important",
-            "font-size": "12px !important",
-            "color": f"{GRIS_TEXTO_MEDIO} !important",
-            "transition": "background .15s ease !important",
+            "border": f"1px solid {LAVANDA_BORDE} !important",
+            "border-radius": "999px !important",
+            "padding": "10px 14px !important",
+            "margin": "7px 8px !important",
+            "font-size": "13px !important",
+            "color": f"{ACENTO_TEXTO} !important",
+            "transition": "background .15s ease, border-color .15s ease !important",
         },
         ".ag-column-drop-vertical-cell:hover": {
             "background": f"{LAVANDA_SELECCION} !important",
@@ -366,7 +365,7 @@ def _css_base(font_px):
             "color": f"{LAVANDA_MEDIO} !important",
         },
         ".ag-column-drop-vertical-cell-text": {
-            "font-size": "12px !important",
+            "font-size": "13px !important",
         },
         ".ag-column-drop-cell-button": {
             "color": f"{GRIS_TEXTO_SUAVE} !important",
@@ -396,13 +395,13 @@ def _css_base(font_px):
             "box-shadow": f"0 0 0 2px {LAVANDA_FONDO} !important",
             "outline": "none !important",
         },
-        # Cambio 3 (corregido): filtros como pastillas.
+        # Cambio 3 (corregido): filtros como pastillas, ahora con más aire.
         ".ag-filter-toolpanel-group-title-bar": {
             "background": f"{GRIS_FONDO} !important",
             "border": f"1px solid {GRIS_BORDE} !important",
             "border-radius": "999px !important",
-            "padding": "8px 12px !important",
-            "margin": "3px 10px !important",
+            "padding": "10px 14px !important",   # antes 8px 12px
+            "margin": "7px 10px !important",     # antes 3px 10px
             "transition": "background .15s ease, border-color .15s ease !important",
         },
         ".ag-filter-toolpanel-group-title-bar:hover": {
@@ -411,7 +410,7 @@ def _css_base(font_px):
         },
         ".ag-filter-toolpanel-group-title": {
             "color": f"{GRIS_TEXTO} !important",
-            "font-size": "12.5px !important",
+            "font-size": "13px !important",      # antes 12.5px
             "font-weight": "500 !important",
         },
         ".ag-filter-toolpanel-group-title-bar-icon .ag-icon, "
@@ -1254,7 +1253,25 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         # y no crece con el contenido. Subimos a 62px (pastilla con padding
         # 10px*2 + texto 16px + margin 7px*2 = ~50px; 62px da holgura).
         # overflow:visible en el slot y su wrapper evitan el recorte.
-        
+        custom_css[
+            ".ag-side-bar[data-active-panel='columns'], "
+            ".ag-side-bar[data-active-panel='pivotePanel']"
+        ] = {"--ag-list-item-height": "62px !important"}
+
+        custom_css[
+            ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-item, "
+            ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-item"
+        ] = {
+            "height": "62px !important",   # igual que la variable
+            "overflow": "visible !important",
+        }
+
+        custom_css[
+            ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-container, "
+            ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-container"
+        ] = {
+            "overflow": "visible !important",
+        }
 
         # ── ELIMINADO: custom_css[".ag-root"] = {...}  (ya no se usa) ──
         # ── ELIMINADO: custom_css[".ag-filter-toolpanel"].update({...}) (se movió al base) ──
