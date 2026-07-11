@@ -1249,25 +1249,29 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "border-bottom": f"1px solid {GRIS_BORDE} !important",
         })
 
-        # ── FIX: alto de ítems en las listas de Columnas / Modo pivote ──
-        # El tema material fija --ag-list-item-height: es el alto FIJO del
-        # slot virtual donde AgGrid posiciona cada .ag-column-select-column.
-        # El padding de _css_base() (10px 14px) no puede "ganar" esa altura:
-        # el slot no crece con el contenido, así que las pastillas quedan
-        # amontonadas/pisándose aunque el padding esté aplicado.
-        # Acotado por panel (mismo patrón que el resto del fichero) para no
-        # inflar también el panel Filtros, que comparte .ag-virtual-list-item.
+        # ── FIX panel Columnas/Pivote en tema material ──
+        # La variable --ag-list-item-height del tema fija el slot a ~32px
+        # y no crece con el contenido. Subimos a 62px (pastilla con padding
+        # 10px*2 + texto 16px + margin 7px*2 = ~50px; 62px da holgura).
+        # overflow:visible en el slot y su wrapper evitan el recorte.
         custom_css[
             ".ag-side-bar[data-active-panel='columns'], "
             ".ag-side-bar[data-active-panel='pivotePanel']"
-        ] = {"--ag-list-item-height": "48px !important"}
+        ] = {"--ag-list-item-height": "62px !important"}
 
         custom_css[
             ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-item, "
             ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-item"
         ] = {
-            "height": "auto !important",
-            "min-height": "48px !important",
+            "height": "62px !important",   # igual que la variable
+            "overflow": "visible !important",
+        }
+
+        custom_css[
+            ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-container, "
+            ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-container"
+        ] = {
+            "overflow": "visible !important",
         }
 
         # ── ELIMINADO: custom_css[".ag-root"] = {...}  (ya no se usa) ──
