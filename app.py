@@ -11,7 +11,7 @@ from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
 from data import REPORTES, cargar, secrets_disponibles, hay_dato_nuevo
 from estilos import TAM_FUENTE, inject_css
 from inyecciones import inject_error_overlay, inject_element_inspector
-from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras
+from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras, renderizar_aggrid_compras
 from graficos import renderizar_graficos, renderizar_graficos_reporte
 from navegacion import inject_navegacion
 from perf import perf                                                       # ⚡ PERF
@@ -630,7 +630,7 @@ def _render_contenido():
     if reporte == "Compras":
         vista = _selector_vista()
         if vista == "Tabla":
-            renderizar_tabla_compras(df_f, grupos_sel=grupos_sel)
+            renderizar_aggrid_compras(df_f, font_px)
         else:
             renderizar_graficos_reporte(df_f, reporte, cfg)
 
