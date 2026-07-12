@@ -7,10 +7,12 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots          # ← NUEVO
 import streamlit as st
 
 from utils import buscar_columna, _norm
 from tema import (
+    ACENTO, ACENTO_TEXTO_OSCURO,                   # ← NUEVO
     GRIS_FONDO, GRIS_BORDE, TEXTO_PRINCIPAL, BLANCO,
     SERIE_PRINCIPAL, PALETA_SERIES, ESCALA_CONTINUA, ESCALA_SEMAFORO,
 )
@@ -595,10 +597,416 @@ def renderizar_graficos_genericos(df_data, nombre_reporte):
         st.warning(f"No se pudo generar el gráfico: {err}")
 
 
+# =============================================================================
+# HELPERS PRIVADOS — Ajuste de Inventario
+# =============================================================================
+
+def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valorizado):
+    """Serie temporal con range-selector + range-slider + eje dual opcional."""
+    if not col_fecha:
+        st.info("Sin columna de fecha — no se puede graficar la evolución.")
+        return
+
+    df = df.copy()
+    df[col_fecha] = pd.to_datetime(df[col_fecha], errors="coerce")
+    df = df.dropna(subset=[col_fecha]).sort_values(col_fecha)
+    if df.empty:
+        st.info("Sin fechas válidas en el rango seleccionado.")
+        return
+
+    # ── Gráfico principal: líneas por familia ────────────────────────────
+    fig = go.Figure()
+
+    if col_familia and col_familia in df.columns:
+        for i, fam in enumerate(sorted(df[col_familia].dropna().unique())):
+            df_fam = (df[df[col_familia] == fam]
+                      .groupby(col_fecha, as_index=False)[col_ajuste_val].sum()
+                      .sort_values(col_fecha))
+            color = PALETA_SERIES[i % len(PALETA_SERIES)]
+            fig.add_trace(go.Scatter(
+                x=df_fam[col_fecha], y=df_fam[col_ajuste_val],
+                name=str(fam), mode="lines+markers",
+                line=dict(color=color, width=2),
+                marker=dict(size=6, symbol="circle"),
+                hovertemplate=(
+                    f"<b>{fam}</b><br>"
+                    "Fecha: %{x|%d/%m/%Y}<br>"
+                    "Ajuste: <b>S/ %{y:,.2f}</b><extra></extra>"
+                ),
+            ))
+    else:
+        agg = (df.groupby(col_fecha, as_index=False)[col_ajuste_val]
+               .sum().sort_values(col_fecha))
+        fig.add_trace(go.Scatter(
+            x=agg[col_fecha], y=agg[col_ajuste_val],
+            name="Ajuste valorizado", mode="lines+markers",
+            line=dict(color=SERIE_PRINCIPAL, width=2.5),
+            fill="tozeroy", fillcolor="rgba(108,92,231,0.10)",
+            hovertemplate="Fecha: %{x|%d/%m/%Y}<br>Ajuste: <b>S/ %{y:,.2f}</b><extra></extra>",
+        ))
+
+    # Línea de equilibrio
+    fig.add_hline(
+        y=0, line_dash="dot", line_color="#ef4444", line_width=1.5,
+        annotation_text="Equilibrio (0)",
+        annotation_font_color="#ef4444",
+        annotation_position="top right",
+    )
+
+    fig.update_layout(
+        **_LAYOUT_BASE,
+        title="Evolución del ajuste valorizado",
+        xaxis=dict(
+            gridcolor=GRIS_BORDE,
+            # ← CLAVE: botones de periodo + slider debajo del gráfico
+            rangeselector=dict(
+                buttons=[
+                    dict(count=1,  label="1M",  step="month", stepmode="backward"),
+                    dict(count=3,  label="3M",  step="month", stepmode="backward"),
+                    dict(count=6,  label="6M",  step="month", stepmode="backward"),
+                    dict(step="all", label="Todo"),
+                ],
+                bgcolor=GRIS_FONDO, activecolor=ACENTO,
+                font=dict(size=12),
+            ),
+            rangeslider=dict(visible=True, thickness=0.06, bgcolor=GRIS_FONDO),
+            type="date",
+        ),
+        yaxis=dict(gridcolor=GRIS_BORDE, tickprefix="S/ ", tickformat=",.2f"),
+        hovermode="x unified",   # ← tooltip unificado bajo el cursor
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        height=500,
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ── Expander: comparativa eje dual (barras ajuste + línea valorizado) ─
+    if col_valorizado and col_valorizado in df.columns:
+        with st.expander("📊 Comparativa: ajuste vs valorizado total (eje dual)"):
+            agg2 = (df.groupby(col_fecha, as_index=False)
+                    .agg(ajuste=(col_ajuste_val, "sum"), val=(col_valorizado, "sum"))
+                    .sort_values(col_fecha))
+
+            fig2 = make_subplots(specs=[[{"secondary_y": True}]])
+            # Barras con color por signo
+            fig2.add_trace(go.Bar(
+                x=agg2[col_fecha], y=agg2["ajuste"],
+                name="Ajuste valorizado",
+                marker_color=[SERIE_PRINCIPAL if v >= 0 else "#ef4444"
+                              for v in agg2["ajuste"]],
+                hovertemplate="Ajuste: S/ %{y:,.2f}<extra></extra>",
+            ), secondary_y=False)
+            # Línea de valorizado en eje derecho
+            fig2.add_trace(go.Scatter(
+                x=agg2[col_fecha], y=agg2["val"],
+                name="Valorizado total",
+                mode="lines+markers",
+                line=dict(color="#16a34a", width=2.5),
+                hovertemplate="Valorizado: S/ %{y:,.2f}<extra></extra>",
+            ), secondary_y=True)
+
+            fig2.update_layout(
+                **_LAYOUT_BASE,
+                title="Ajuste vs Valorizado total",
+                hovermode="x unified",
+                legend=dict(orientation="h", y=1.05, x=0),
+            )
+            fig2.update_yaxes(
+                tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE,
+                title_text="Ajuste valorizado", secondary_y=False,
+            )
+            fig2.update_yaxes(
+                tickprefix="S/ ", tickformat=",.2f",
+                title_text="Valorizado total", secondary_y=True,
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+
+
+def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val):
+    """Cascada (Waterfall) por familia + tabla top faltantes/sobrantes."""
+    grp_col = col_familia or col_area
+    if not grp_col:
+        st.info("Se necesita columna de familia o área para el gráfico de cascada.")
+        return
+
+    agg = (df.groupby(grp_col, as_index=False)[col_ajuste_val]
+           .sum().sort_values(col_ajuste_val))
+    total = float(agg[col_ajuste_val].sum())
+
+    col_chart, col_tabla = st.columns([2, 1])
+
+    with col_chart:
+        fig = go.Figure(go.Waterfall(
+            orientation="v",
+            measure=["relative"] * len(agg) + ["total"],
+            x=agg[grp_col].tolist() + ["TOTAL"],
+            y=agg[col_ajuste_val].tolist() + [None],
+            text=[f"S/ {v:,.0f}" for v in agg[col_ajuste_val]] + [f"S/ {total:,.0f}"],
+            textposition="outside",
+            connector=dict(line=dict(color=GRIS_BORDE, width=1, dash="dot")),
+            increasing=dict(marker=dict(color=SERIE_PRINCIPAL, opacity=0.85)),
+            decreasing=dict(marker=dict(color="#ef4444",       opacity=0.85)),
+            totals=dict(marker=dict(
+                color=ACENTO_TEXTO_OSCURO if total >= 0 else "#ef4444"
+            )),
+            hovertemplate="%{x}<br><b>S/ %{y:,.2f}</b><extra></extra>",
+        ))
+        fig.update_layout(
+            **_LAYOUT_BASE,
+            title=f"Cascada de ajuste valorizado por {grp_col}",
+            xaxis=dict(tickangle=-35, gridcolor=GRIS_BORDE),
+            yaxis=dict(tickprefix="S/ ", tickformat=",.0f", gridcolor=GRIS_BORDE),
+            showlegend=False, height=480,
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col_tabla:
+        st.markdown("**📉 Top 5 faltantes**")
+        neg = agg.nsmallest(5, col_ajuste_val)[[grp_col, col_ajuste_val]].copy()
+        neg[col_ajuste_val] = neg[col_ajuste_val].map(lambda v: f"S/ {v:,.2f}")
+        st.dataframe(neg, hide_index=True, use_container_width=True)
+
+        st.markdown("**📈 Top 5 sobrantes**")
+        pos = agg.nlargest(5, col_ajuste_val)[[grp_col, col_ajuste_val]].copy()
+        pos[col_ajuste_val] = pos[col_ajuste_val].map(lambda v: f"S/ {v:,.2f}")
+        st.dataframe(pos, hide_index=True, use_container_width=True)
+
+
+def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val):
+    """Mapa de calor familia × área con escala divergente centrada en cero."""
+    if not col_familia or not col_area:
+        st.info("Se necesitan columnas de familia y área para el mapa de calor.")
+        return
+
+    pivot = df.pivot_table(
+        index=col_familia, columns=col_area,
+        values=col_ajuste_val, aggfunc="sum", fill_value=0,
+    )
+    text_mat = [[f"S/ {v:,.0f}" for v in row] for row in pivot.values]
+
+    fig = go.Figure(go.Heatmap(
+        z=pivot.values,
+        x=pivot.columns.tolist(),
+        y=pivot.index.tolist(),
+        text=text_mat,
+        texttemplate="%{text}",
+        textfont=dict(size=10, color=TEXTO_PRINCIPAL),
+        # ← Escala divergente: rojo negativo | gris neutro | verde positivo
+        colorscale=[
+            [0.0,  "#ef4444"],
+            [0.45, "#fff7ed"],
+            [0.5,  GRIS_FONDO],
+            [0.55, "#f0fdf4"],
+            [1.0,  "#16a34a"],
+        ],
+        zmid=0,   # ← centrar siempre en cero, sin importar magnitudes
+        colorbar=dict(title="Ajuste S/", tickformat=",.0f"),
+        hovertemplate=(
+            "<b>%{y}</b><br>"
+            "Área: <b>%{x}</b><br>"
+            "Ajuste: <b>S/ %{z:,.2f}</b><extra></extra>"
+        ),
+    ))
+    fig.update_layout(
+        **_LAYOUT_BASE,
+        title="Mapa de calor: ajuste valorizado por Familia × Área",
+        xaxis=dict(tickangle=-30, side="bottom"),
+        yaxis=dict(autorange="reversed"),
+        height=max(380, len(pivot.index) * 42 + 120),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    with st.expander("📋 Tabla pivot Familia × Área"):
+        st.dataframe(
+            pivot.style
+                 .format("S/ {:,.2f}")
+                 .background_gradient(
+                     cmap="RdYlGn", axis=None,
+                     vmin=float(pivot.values.min()),
+                     vmax=float(pivot.values.max()),
+                 ),
+            use_container_width=True,
+        )
+
+
+def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_producto):
+    """Box plot con outliers visibles + histograma con líneas estadísticas."""
+    col_izq, col_der = st.columns(2)
+    grp = col_familia or col_area
+
+    with col_izq:
+        if grp and grp in df.columns:
+            fig = px.box(
+                df, x=grp, y=col_ajuste_val, color=grp,
+                color_discrete_sequence=PALETA_SERIES,
+                title=f"Distribución del ajuste por {grp}",
+                points="outliers",   # ← puntos fuera del bigote visibles
+                labels={col_ajuste_val: "Ajuste S/", grp: ""},
+            )
+            fig.add_hline(y=0, line_dash="dash", line_color="#ef4444",
+                          annotation_text="Cero", annotation_position="top right")
+            fig.update_layout(
+                **_LAYOUT_BASE, showlegend=False, xaxis_tickangle=-30,
+                yaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
+            )
+            fig.update_traces(hovertemplate="%{x}<br>S/ %{y:,.2f}<extra></extra>")
+        else:
+            fig = px.histogram(
+                df, x=col_ajuste_val, nbins=30,
+                title="Distribución de ajustes valorizados",
+                color_discrete_sequence=[SERIE_PRINCIPAL],
+            )
+            fig.add_vline(x=0, line_dash="dash", line_color="#ef4444",
+                          annotation_text="Cero")
+            fig.update_layout(
+                **_LAYOUT_BASE,
+                xaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
+                yaxis=dict(gridcolor=GRIS_BORDE),
+            )
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col_der:
+        media   = float(df[col_ajuste_val].mean())
+        mediana = float(df[col_ajuste_val].median())
+
+        fig2 = go.Figure()
+        fig2.add_trace(go.Histogram(
+            x=df[col_ajuste_val], nbinsx=30,
+            name="Frecuencia",
+            marker_color=SERIE_PRINCIPAL, opacity=0.75,
+            hovertemplate="Valor: S/ %{x:,.2f}<br>Frecuencia: %{y}<extra></extra>",
+        ))
+        # ← Líneas estadísticas de referencia con anotaciones
+        fig2.add_vline(x=0, line_dash="solid", line_color="#ef4444", line_width=2,
+                       annotation_text="Cero", annotation_font_color="#ef4444")
+        fig2.add_vline(x=media, line_dash="dot", line_color="#f97316",
+                       annotation_text=f"Media S/ {media:,.0f}",
+                       annotation_font_color="#f97316",
+                       annotation_position="top left")
+        fig2.add_vline(x=mediana, line_dash="dash", line_color="#16a34a",
+                       annotation_text=f"Mediana S/ {mediana:,.0f}",
+                       annotation_font_color="#16a34a")
+        fig2.update_layout(
+            **_LAYOUT_BASE, title="Histograma de frecuencias",
+            xaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE,
+                       title="Ajuste Valorizado"),
+            yaxis=dict(title="Frecuencia", gridcolor=GRIS_BORDE),
+            hovermode="x",
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+    # ── Tabla de productos en el 5% inferior ─────────────────────────────
+    if col_producto and col_producto in df.columns:
+        umbral = float(df[col_ajuste_val].quantile(0.05))
+        outliers = df[df[col_ajuste_val] <= umbral].copy()
+        if not outliers.empty:
+            st.markdown(
+                f"**⚠️ Productos en el 5% inferior del ajuste "
+                f"(< S/ {umbral:,.2f})**"
+            )
+            cols_tabla = [col_producto, col_ajuste_val]
+            for c in (grp,):
+                if c and c in outliers.columns and c not in cols_tabla:
+                    cols_tabla.append(c)
+            out_df = (outliers[cols_tabla]
+                      .sort_values(col_ajuste_val)
+                      .head(10)
+                      .copy())
+            out_df[col_ajuste_val] = out_df[col_ajuste_val].map(
+                lambda v: f"S/ {v:,.2f}"
+            )
+            st.dataframe(out_df, hide_index=True, use_container_width=True)
+
+
+# =============================================================================
+# FUNCIÓN PÚBLICA — Ajuste de Inventario
+# =============================================================================
+
+def renderizar_graficos_ajuste(df_f, nombre_reporte):
+    """
+    Gráficos interactivos dedicados para el reporte Ajuste de Inventario.
+
+    Estructura:
+      · KPIs rápidos (4 métricas)
+      · Tab 1 — Evolución temporal  (range-selector + range-slider + eje dual)
+      · Tab 2 — Cascada por familia (waterfall con top faltantes/sobrantes)
+      · Tab 3 — Mapa de calor       (Familia × Área, escala divergente en 0)
+      · Tab 4 — Distribución        (box plot con outliers + histograma)
+      · Expander — Explorador libre (genérico)
+    """
+    # ── Resolver columnas ────────────────────────────────────────────────
+    col_fecha      = _resolver(df_f, ["FECHA APERTURA INVENTARIO", "FECHA", "MES"])
+    col_familia    = _resolver(df_f, ["FAMILIA", "Nombre Familia", "NOMBRE FAMILIA"])
+    col_area       = _resolver(df_f, ["AREA", "Nombre Area", "NOMBRE AREA"])
+    col_ajuste_val = _resolver(df_f, ["AJUSTE VALORIZADO", "AJUSTEVALORIZADO"])
+    col_valorizado = _resolver(df_f, ["VALORIZADO TOTAL", "VALORIZADO", "VALORIZADOTOTAL"])
+    col_producto   = _resolver(df_f, ["NOMBRE PRODUCTO", "PRODUCTO", "DESCRIPCION"])
+
+    if not col_ajuste_val:
+        st.warning(
+            "No se encontró la columna de ajuste valorizado. "
+            "Mostrando explorador genérico."
+        )
+        renderizar_graficos_genericos(df_f, nombre_reporte)
+        return
+
+    # ── KPIs ─────────────────────────────────────────────────────────────
+    total_aj = float(df_f[col_ajuste_val].sum())
+    aj_pos   = float(df_f[df_f[col_ajuste_val] > 0][col_ajuste_val].sum())
+    aj_neg   = float(df_f[df_f[col_ajuste_val] < 0][col_ajuste_val].sum())
+    n        = len(df_f)
+    pct_neg  = (len(df_f[df_f[col_ajuste_val] < 0]) / n * 100) if n else 0
+
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("📊 Ajuste Total", f"S/ {total_aj:,.2f}")
+    k2.metric("📈 Sobrante (pos.)", f"S/ {aj_pos:,.2f}")
+    k3.metric("📉 Faltante (neg.)", f"S/ {aj_neg:,.2f}",
+              delta=f"{pct_neg:.1f}% de registros", delta_color="inverse")
+    if col_valorizado and col_valorizado in df_f.columns:
+        total_val = float(df_f[col_valorizado].sum())
+        pct_aj = (total_aj / total_val * 100) if total_val else 0
+        k4.metric(
+            "💰 Valorizado Total", f"S/ {total_val:,.2f}",
+            delta=f"{pct_aj:+.2f}% ajuste",
+            delta_color="inverse" if pct_aj < 0 else "normal",
+        )
+    else:
+        k4.metric("📦 Registros", f"{n:,}")
+
+    st.divider()
+
+    # ── Tabs ─────────────────────────────────────────────────────────────
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📅 Evolución temporal",
+        "🏗️ Cascada por familia",
+        "🔥 Mapa de calor",
+        "📦 Distribución",
+    ])
+    with tab1:
+        _graf_evolucion_ajuste(
+            df_f, col_fecha, col_familia, col_ajuste_val, col_valorizado
+        )
+    with tab2:
+        _graf_waterfall_ajuste(df_f, col_familia, col_area, col_ajuste_val)
+    with tab3:
+        _graf_heatmap_ajuste(df_f, col_familia, col_area, col_ajuste_val)
+    with tab4:
+        _graf_distribucion_ajuste(
+            df_f, col_familia, col_area, col_ajuste_val, col_producto
+        )
+
+    with st.expander("🎛️ Explorador libre de gráficos"):
+        renderizar_graficos_genericos(df_f, nombre_reporte)
+
+
 def renderizar_graficos_reporte(df_f, reporte, cfg):
     """Punto de entrada de la vista Gráficos para reportes genéricos.
     Muestra los gráficos definidos en REPORTES[reporte]['graficos'] (si hay)
     y siempre ofrece el explorador dinámico."""
+    # ── NUEVO: gráficos dedicados para Ajuste de Inventario ──────────
+    if reporte == "Ajuste de Inventario":
+        renderizar_graficos_ajuste(df_f, reporte)
+        return
+
     graficos_conf = cfg.get("graficos", [])
 
     if graficos_conf:
