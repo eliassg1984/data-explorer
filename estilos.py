@@ -619,6 +619,38 @@ def get_css():
         box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
         border-radius: 8px !important;
     }
+
+    /* =================================================================== */
+    /* CARDS DE GRÁFICOS — contenedor blanco con bordes redondeados         */
+    /* Uso en graficos.py: _chart_card() / _chart_card_close()              */
+    /* =================================================================== */
+    .chart-card {
+        background: #ffffff;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 1.25rem 1.5rem 0.75rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
+    }
+
+    /* Título opcional dentro del card (etiqueta muted en mayúsculas) */
+    .chart-card-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        margin: 0 0 0.35rem 0;
+        padding: 0;
+        line-height: 1;
+    }
+
+    /* El card dentro de un expander no necesita doble borde */
+    .streamlit-expanderContent .chart-card {
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0.25rem 0 0 !important;
+    }
     </style>
     """
 
