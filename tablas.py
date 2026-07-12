@@ -316,30 +316,6 @@ def _css_panel_columnas():
             "box-shadow": f"0 0 0 2px {LAVANDA_FONDO} !important",
             "outline": "none !important",
         },
-
-        # ── FRANJAS (mismo patrón que _css_panel_pivote) ──────────────────
-        # Prefijo .ag-theme-material: Inventario Valorizado / Ajuste de
-        # Inventario / Compras usan ese tema; Requerimientos usa "balham"
-        # con su propia paleta gris (bloque es_requerimientos en
-        # renderizar_aggrid_desktop) y NO debe heredar el lavanda.
-        ".ag-theme-material .ag-side-bar[data-active-panel='columns'] .ag-column-select-header": {
-            "background": f"{LAVANDA_FONDO} !important",
-            "border-bottom": f"1px solid {ACENTO} !important",
-        },
-        ".ag-theme-material .ag-side-bar[data-active-panel='columns'] .ag-tool-panel-wrapper": {
-            "position": "relative !important",
-        },
-        ".ag-theme-material .ag-side-bar[data-active-panel='columns'] .ag-tool-panel-wrapper::after": {
-            "content": "''",
-            "position": "absolute !important",
-            "left": "0",
-            "right": "0",
-            "bottom": "0",
-            "height": "32px",
-            "background": f"{LAVANDA_CABECERA_GRUPO} !important",
-            "border-top": f"2px solid {ACENTO} !important",
-            "pointer-events": "none",
-        },
     }
 
 
@@ -433,27 +409,6 @@ def _css_panel_filtros():
         },
         ".ag-filter-toolpanel-instance-body .ag-checkbox-input-wrapper.ag-checked": {
             "color": f"{ACENTO_FUERTE} !important",
-        },
-
-        # ── FRANJAS (mismo patrón que _css_panel_pivote) — ver nota de
-        # .ag-theme-material en _css_panel_columnas() ─────────────────────
-        ".ag-theme-material .ag-side-bar[data-active-panel='filters'] .ag-filter-toolpanel-search": {
-            "background": f"{LAVANDA_FONDO} !important",
-            "border-bottom": f"1px solid {ACENTO} !important",
-        },
-        ".ag-theme-material .ag-side-bar[data-active-panel='filters'] .ag-tool-panel-wrapper": {
-            "position": "relative !important",
-        },
-        ".ag-theme-material .ag-side-bar[data-active-panel='filters'] .ag-tool-panel-wrapper::after": {
-            "content": "''",
-            "position": "absolute !important",
-            "left": "0",
-            "right": "0",
-            "bottom": "0",
-            "height": "32px",
-            "background": f"{LAVANDA_CABECERA_GRUPO} !important",
-            "border-top": f"2px solid {ACENTO} !important",
-            "pointer-events": "none",
         },
     }
 
