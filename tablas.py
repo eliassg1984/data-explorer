@@ -9,7 +9,7 @@ import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from utils import _norm, buscar_columna, buscar_columna_fecha, LOCALE_ES
-from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid, inject_dynamic_grid_height
+from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid, inject_dynamic_grid_height, inject_fix_column_panel_ajuste
 from perf import perf
 from tema import (
     ACENTO, ACENTO_FUERTE, ACENTO_TEXTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA_FONDO, ADVERTENCIA_TEXTO, BLANCO, CELDA_ALERTA_FONDO, CELDA_ALERTA_TEXTO, CELDA_NEG_FONDO, CELDA_POS_TEXTO, DANGER_TEXT, ERROR_FONDO, EXIT_HOVER, GRIS_BORDE, GRIS_FONDO, GRIS_FONDO_CABECERA, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE, ICON_MUTED, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FILA, LAVANDA_FILA_ALT, LAVANDA_FOCO, LAVANDA_FONDO, LAVANDA_MEDIO, LAVANDA_SELECCION, SCROLL_THUMB, TEXTO_PRINCIPAL,
@@ -1424,137 +1424,252 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
 
 
 # ===========================================================================
-# FUNCIÓN: TABLA DE COMPRAS — st.data_editor
+# FUNCIÓN: TABLA DE COMPRAS — st.data_editor (REEMPLAZADA POR AGGIRD)
 # ===========================================================================
 
-def _es_moneda(nombre: str) -> bool:
-    """True si la columna parece un importe en soles."""
-    n = _norm(nombre)
-    return any(k in n for k in ("importe", "total", "monto", "precio", "costo", "unitario"))
-
-
-def _es_cantidad(nombre: str) -> bool:
-    """True si la columna parece una cantidad."""
-    n = _norm(nombre)
-    return any(k in n for k in ("cantidad", "qty", "unidades", "stock"))
-
-
-def _configurar_columnas_compras(df: pd.DataFrame) -> dict:
-    """Devuelve column_config para st.data_editor según tipo y nombre de columna."""
-    config = {}
-    col_fecha = buscar_columna_fecha(df)
-
-    for col in df.columns:
-        dtype = df[col].dtype
-
-        if col == col_fecha or pd.api.types.is_datetime64_any_dtype(dtype):
-            config[col] = st.column_config.DateColumn(
-                col, format="DD/MM/YYYY", width="medium",
-            )
-        elif pd.api.types.is_numeric_dtype(dtype) and _es_moneda(col):
-            config[col] = st.column_config.NumberColumn(
-                col, format="S/ %.2f", step=0.01, width="medium",
-            )
-        elif pd.api.types.is_numeric_dtype(dtype) and _es_cantidad(col):
-            config[col] = st.column_config.NumberColumn(
-                col, format="%d", step=1, width="small",
-            )
-        elif pd.api.types.is_numeric_dtype(dtype):
-            config[col] = st.column_config.NumberColumn(
-                col, format="%.2f", width="small",
-            )
-        else:
-            config[col] = st.column_config.TextColumn(col, width="medium")
-
-    return config
-
-
-def _totales_html_compras(df: pd.DataFrame) -> str:
-    """Genera el HTML de la fila de totales para Compras."""
-    partes = ["▶ TOTAL &nbsp;&nbsp;"]
-    for col in df.columns:
-        if not pd.api.types.is_numeric_dtype(df[col]):
-            continue
-        val = df[col].sum()
-        if _es_moneda(col):
-            partes.append(f"<span style='margin-right:24px'>{col}: <b>S/ {val:,.2f}</b></span>")
-        elif _es_cantidad(col):
-            partes.append(f"<span style='margin-right:24px'>{col}: <b>{int(val):,}</b></span>")
-        else:
-            partes.append(f"<span style='margin-right:24px'>{col}: <b>{val:,.2f}</b></span>")
-    return "".join(partes)
-
-
-def renderizar_tabla_compras(df: pd.DataFrame, grupos_sel: list = None):
+def renderizar_tabla_compras(df_grid: pd.DataFrame, font_px: int = 14):
     """
-    Renderiza la tabla del reporte de Compras usando st.data_editor.
+    Tabla de Compras en AgGrid modo pivote — mismo estilo que Ajuste de
+    Inventario (tema material, paleta lavanda, sidebar con pivot panel).
     """
-    if df.empty:
-        st.warning("No hay datos para mostrar con los filtros actuales.")
-        return
-
-    grupos_sel = grupos_sel or []
-
-    if grupos_sel:
-        cols_num = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
-        if cols_num:
-            df_view = df.groupby(grupos_sel, as_index=False).agg(
-                {c: "sum" for c in cols_num}
-            )
-        else:
-            df_view = df[grupos_sel].drop_duplicates()
-        st.caption(f"Agrupado por: {', '.join(grupos_sel)}")
-    else:
-        df_view = df.copy()
-
-    cols_importe = [c for c in df_view.columns
-                    if pd.api.types.is_numeric_dtype(df_view[c]) and _es_moneda(c)]
-    cols_cant    = [c for c in df_view.columns
-                    if pd.api.types.is_numeric_dtype(df_view[c]) and _es_cantidad(c)]
-
-    n_kpi = min(4, 1 + len(cols_importe[:2]) + len(cols_cant[:1]))
-    kpi_cols = st.columns(n_kpi)
-    idx = 0
-    kpi_cols[idx].metric("📄 Registros", f"{len(df_view):,}")
-    idx += 1
-    for c in cols_importe[:2]:
-        if idx >= n_kpi:
-            break
-        kpi_cols[idx].metric(f"💰 {c}", f"S/ {df_view[c].sum():,.2f}")
-        idx += 1
-    for c in cols_cant[:1]:
-        if idx >= n_kpi:
-            break
-        kpi_cols[idx].metric(f"📦 {c}", f"{int(df_view[c].sum()):,}")
-        idx += 1
-
-    st.markdown("#### 📋 Detalle de Compras")
-
-    df_editado = st.data_editor(
-        df_view,
-        column_config=_configurar_columnas_compras(df_view),
-        use_container_width=True,
-        hide_index=True,
-        num_rows="fixed",
-        height=520,
-        key="data_editor_compras",
+    # ── Formato numérico por tipo de columna ──────────────────────────────
+    gb = GridOptionsBuilder.from_dataframe(df_grid)
+    gb.configure_default_column(
+        resizable=True, filter=True, sortable=True, editable=False,
+        enableRowGroup=True, enablePivot=True, enableValue=True,
+        minWidth=100,
+        wrapHeaderText=True, autoHeaderHeight=True,
+        tooltipValueGetter=JsCode("function(params){ return params.value; }"),
     )
 
-    cols_num_view = [c for c in df_view.columns if pd.api.types.is_numeric_dtype(df_view[c])]
-    if cols_num_view:
-        st.markdown(
-            f"<div style='background:{LAVANDA_CABECERA_GRUPO};border-top:2px solid {ACENTO};"
-            "border-radius:0 0 8px 8px;padding:6px 12px;"
-            f"font-size:13px;font-weight:700;color:{ACENTO_TEXTO_OSCURO};'>"
-            + _totales_html_compras(df_editado)
-            + "</div>",
-            unsafe_allow_html=True,
+    _fmt_soles = JsCode("""
+        function(params) {
+            if (params.value == null) return '';
+            return 'S/ ' + Number(params.value).toLocaleString('es-PE',
+                { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+    """)
+    _fmt_num = JsCode("""
+        function(params) {
+            if (params.value == null) return '';
+            return Number(params.value).toLocaleString('es-PE',
+                { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+    """)
+    _mono = JsCode("""
+        function(params) {
+            return { fontFamily:"'Courier New',Courier,monospace",
+                     textAlign:'right', paddingRight:'12px' };
+        }
+    """)
+    _val_style = JsCode(f"""
+        function(params) {{
+            return {{ fontFamily:"'Courier New',Courier,monospace",
+                     color:'{ACENTO_TEXTO_OSCURO}', fontWeight:'600',
+                     textAlign:'right', paddingRight:'12px' }};
+        }}
+    """)
+
+    for c in df_grid.columns:
+        if not pd.api.types.is_numeric_dtype(df_grid[c]):
+            continue
+        n = _norm(c)
+        gb.configure_column(c, filter="agNumberColumnFilter")
+        if any(k in n for k in ("importe", "total", "monto", "subtotal")):
+            gb.configure_column(c, aggFunc="sum", type=["numericColumn"],
+                                cellStyle=_val_style, valueFormatter=_fmt_soles, minWidth=160)
+        elif any(k in n for k in ("precio", "costo", "unitario", "promedio")):
+            gb.configure_column(c, aggFunc="avg", type=["numericColumn"],
+                                cellStyle=_mono, valueFormatter=_fmt_soles)
+        elif any(k in n for k in ("cantidad", "qty", "unidades")):
+            gb.configure_column(c, aggFunc="sum", type=["numericColumn"],
+                                cellStyle=_mono, valueFormatter=_fmt_num)
+        else:
+            gb.configure_column(c, aggFunc="sum", type=["numericColumn"],
+                                cellStyle=_mono, valueFormatter=_fmt_num)
+
+    # ── Grupos de filas (auto-detectados, igual que Ajuste de Inventario) ─
+    _candidatos_grp = [
+        ("Proveedor", "Nombre Proveedor", "razon social", "supplier"),
+        ("Nombre Area", "Area", "almacen"),
+        ("Nombre Familia", "Familia"),
+        ("Nombre Subfamilia", "Subfamilia"),
+        ("Nombre Producto", "Producto", "descripcion"),
+        ("Unidad Medida", "Unidad Kardex", "unidad"),
+    ]
+    _grupos_ini = []
+    for cands in _candidatos_grp:
+        _rc = buscar_columna(df_grid, *cands)
+        if _rc and _rc in df_grid.columns and _rc not in _grupos_ini:
+            gb.configure_column(_rc, rowGroup=True,
+                                rowGroupIndex=len(_grupos_ini), hide=True)
+            _grupos_ini.append(_rc)
+
+    # ── Valores del pivote (auto-detectados) ──────────────────────────────
+    _candidatos_val = [
+        (("Importe Total", "Total", "Monto", "Subtotal"), "sum"),
+        (("Cantidad", "Qty", "Unidades"),                  "sum"),
+        (("Precio Unitario", "Precio Promedio", "Precio"),  "avg"),
+    ]
+    for cands, af in _candidatos_val:
+        _rc = buscar_columna(df_grid, *cands)
+        if _rc and _rc in df_grid.columns:
+            gb.configure_column(_rc, aggFunc=af, enableValue=True)
+
+    # Cabeceras en modo "Nombre Propio" (idéntico a Ajuste de Inventario)
+    for c in df_grid.columns:
+        gb.configure_column(c, headerName=_titulo_es(c))
+
+    # ── Estilo de fila (grupos lavanda, igual que Inventario) ─────────────
+    get_row_style = JsCode(f"""
+        function(params) {{
+            if (params.node.rowPinned === 'bottom') {{
+                return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}',
+                         color:'{ACENTO_TEXTO_OSCURO}',
+                         borderTop:'2px solid {ACENTO}', fontSize:'13px' }};
+            }}
+            if (params.node.group) {{
+                var nivel = params.node.level;
+                if (nivel === 0) return {{ backgroundColor:'{LAVANDA_BORDE}', fontWeight:'600' }};
+                if (nivel === 1) return {{ backgroundColor:'{LAVANDA_CABECERA_GRUPO}', fontWeight:'600' }};
+                return {{ backgroundColor:'{LAVANDA_FONDO}', fontWeight:'500' }};
+            }}
+            return {{ backgroundColor:'{BLANCO}' }};
+        }}
+    """)
+
+    # ── Sidebar idéntico al de Ajuste de Inventario ───────────────────────
+    _sidebar_cfg = _config_sidebar(mostrar_pivot=True, es_ajuste=True)
+
+    _js_ms = """
+        (function(){try{var o=(window.parent&&window.parent.performance)
+        ?window.parent.performance.timeOrigin:performance.timeOrigin;
+        return Math.round(Date.now()-o);}catch(e){return Math.round(performance.now());}})()
+    """
+
+    gb.configure_grid_options(
+        autoGroupColumnDef={"minWidth": 220},
+        localeText=LOCALE_ES,
+        sideBar=_sidebar_cfg,
+        rowHeight=max(28, min(60, font_px + 12)),
+        headerHeight=int(font_px * 2 + 14),
+        cellSelection=True,
+        tooltipShowDelay=300,
+        getRowStyle=get_row_style,
+        suppressAggFuncInHeader=True,
+        onGridSizeChanged=JsCode(
+            "function(params){params.api.sizeColumnsToFit();}"),
+        onFirstDataRendered=JsCode(f"""
+            function(params){{
+                params.api.autoSizeAllColumns();
+                try{{var bc=new BroadcastChannel('_perf_aggrid');
+                    bc.postMessage({{event:'firstDataRendered',
+                        ms:{_js_ms},rowCount:null,ts:Date.now(),reporte:'Compras'}});
+                    bc.close();}}catch(e){{}}
+            }}
+        """),
+        onToolPanelVisibleChanged=JsCode("""
+            function(params){
+                try{
+                    var open=(params.api&&params.api.getOpenedToolPanel)
+                        ?params.api.getOpenedToolPanel():null;
+                    var sb=document.querySelector('.ag-side-bar');
+                    if(sb)sb.setAttribute('data-active-panel',open||'');
+                    window.clearTimeout(window.__comprasFitTimer);
+                    window.__comprasFitTimer=window.setTimeout(function(){
+                        try{params.api.sizeColumnsToFit();}catch(e){}
+                    },150);
+                }catch(e){}
+            }
+        """),
+        pivotMode=True,
+        groupDefaultExpanded=0,
+    )
+    gb.configure_pagination(
+        enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
+    grid_options = gb.build()
+
+    # ── CSS: base + overrides del tema material (idéntico a Inventario) ───
+    custom_css = _css_base(font_px)
+    custom_css[".ag-row-even"] = {"background-color": f"{BLANCO} !important"}
+    custom_css[".ag-row-odd"]  = {"background-color": f"{BLANCO} !important"}
+    custom_css[".ag-root-wrapper"].update({
+        "background-color": "transparent !important",
+        "border": "none !important", "border-radius": "0 !important",
+        "box-shadow": "none !important", "overflow": "visible !important",
+    })
+    custom_css[".ag-root-wrapper-body"] = {
+        "background": "transparent !important", "overflow": "visible !important",
+    }
+    custom_css[".ag-root"] = {
+        "background-color": f"{BLANCO} !important",
+        "border": f"1px solid {GRIS_BORDE} !important",
+        "border-radius": "12px !important",
+        "box-shadow": ("0 1px 2px rgba(16,16,20,0.05),"
+                       "0 4px 14px rgba(16,16,20,0.07) !important"),
+        "overflow": "hidden !important",
+    }
+    custom_css["html, body"] = {"background": "transparent !important"}
+    custom_css[".ag-header"].update({
+        "background-color": f"{LAVANDA_FONDO} !important",
+        "border-bottom": f"1px solid {ACENTO} !important",
+    })
+    custom_css[".ag-header-cell"].update({
+        "background-color": f"{LAVANDA_FONDO} !important",
+    })
+    custom_css[".ag-header-cell-text"].update({
+        "color": f"{ACENTO_TEXTO_OSCURO} !important", "font-weight": "500",
+        "white-space": "normal !important", "overflow": "visible !important",
+        "text-overflow": "clip !important", "line-height": "1.25 !important",
+        "overflow-wrap": "break-word", "display": "flex",
+        "align-items": "center", "text-align": "center",
+    })
+    custom_css[".ag-header-cell-label"] = {
+        "white-space": "normal !important",
+        "overflow": "visible !important", "align-items": "center",
+    }
+    custom_css[".ag-row-pinned"].update({
+        "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
+        "border-top": f"2px solid {ACENTO} !important",
+        "color": f"{ACENTO_TEXTO_OSCURO} !important",
+    })
+    custom_css[".ag-side-bar"].update({
+        "background-color": f"{LAVANDA_FILA} !important",
+        "border": f"1px solid {GRIS_BORDE} !important",
+        "border-radius": "12px !important",
+        "box-shadow": ("0 1px 2px rgba(16,16,20,0.05),"
+                       "0 4px 14px rgba(16,16,20,0.07) !important"),
+        "margin": "0 0 0 14px !important", "overflow": "hidden !important",
+    })
+    custom_css[".ag-side-bar .ag-side-buttons"].update({
+        "background-color": f"{LAVANDA_FILA_ALT} !important",
+        "border-bottom": f"1px solid {GRIS_BORDE} !important",
+    })
+    custom_css[
+        ".ag-side-bar[data-active-panel='columns'],"
+        ".ag-side-bar[data-active-panel='pivotePanel']"
+    ] = {"--ag-list-item-height": "62px !important"}
+    custom_css[
+        ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-item,"
+        ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-item"
+    ] = {"height": "62px !important", "overflow": "visible !important"}
+    custom_css[
+        ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-container,"
+        ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-container"
+    ] = {"overflow": "visible !important"}
+
+    # ── Render ────────────────────────────────────────────────────────────
+    perf.set_df_info(df_grid, label="AgGrid (Compras)")
+    with perf.phase("AgGrid render"):
+        AgGrid(
+            df_grid, gridOptions=grid_options, height=600,
+            theme="material", custom_css=custom_css,
+            fit_columns_on_grid_load=True, allow_unsafe_jscode=True,
+            enable_enterprise_modules=True, key="grid_Compras",
         )
 
-    st.download_button(
-        label="⬇️ Exportar a CSV",
-        data=df_editado.to_csv(index=False).encode("utf-8-sig"),
-        file_name="compras_export.csv",
-        mime="text/csv",
-        key="btn_export_compras",
-    )
+    inject_grid_health_check()
+    inject_pagination_v2()
+    inject_maximize_aggrid()
+    inject_dynamic_grid_height(offset_px=220)
+    inject_fix_column_panel_ajuste()
