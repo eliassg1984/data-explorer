@@ -316,6 +316,30 @@ def _css_panel_columnas():
             "box-shadow": f"0 0 0 2px {LAVANDA_FONDO} !important",
             "outline": "none !important",
         },
+
+        # ── FRANJAS (mismo patrón que _css_panel_pivote) ──────────────────
+        # Prefijo .ag-theme-material: Inventario Valorizado / Ajuste de
+        # Inventario / Compras usan ese tema; Requerimientos usa "balham"
+        # con su propia paleta gris (bloque es_requerimientos en
+        # renderizar_aggrid_desktop) y NO debe heredar el lavanda.
+        ".ag-theme-material .ag-side-bar[data-active-panel='columns'] .ag-column-select-header": {
+            "background": f"{LAVANDA_FONDO} !important",
+            "border-bottom": f"1px solid {ACENTO} !important",
+        },
+        ".ag-theme-material .ag-side-bar[data-active-panel='columns'] .ag-tool-panel-wrapper": {
+            "position": "relative !important",
+        },
+        ".ag-theme-material .ag-side-bar[data-active-panel='columns'] .ag-tool-panel-wrapper::after": {
+            "content": "''",
+            "position": "absolute !important",
+            "left": "0",
+            "right": "0",
+            "bottom": "0",
+            "height": "32px",
+            "background": f"{LAVANDA_CABECERA_GRUPO} !important",
+            "border-top": f"2px solid {ACENTO} !important",
+            "pointer-events": "none",
+        },
     }
 
 
@@ -410,6 +434,27 @@ def _css_panel_filtros():
         ".ag-filter-toolpanel-instance-body .ag-checkbox-input-wrapper.ag-checked": {
             "color": f"{ACENTO_FUERTE} !important",
         },
+
+        # ── FRANJAS (mismo patrón que _css_panel_pivote) — ver nota de
+        # .ag-theme-material en _css_panel_columnas() ─────────────────────
+        ".ag-theme-material .ag-side-bar[data-active-panel='filters'] .ag-filter-toolpanel-search": {
+            "background": f"{LAVANDA_FONDO} !important",
+            "border-bottom": f"1px solid {ACENTO} !important",
+        },
+        ".ag-theme-material .ag-side-bar[data-active-panel='filters'] .ag-tool-panel-wrapper": {
+            "position": "relative !important",
+        },
+        ".ag-theme-material .ag-side-bar[data-active-panel='filters'] .ag-tool-panel-wrapper::after": {
+            "content": "''",
+            "position": "absolute !important",
+            "left": "0",
+            "right": "0",
+            "bottom": "0",
+            "height": "32px",
+            "background": f"{LAVANDA_CABECERA_GRUPO} !important",
+            "border-top": f"2px solid {ACENTO} !important",
+            "pointer-events": "none",
+        },
     }
 
 
@@ -421,43 +466,6 @@ def _css_panel_pivote():
         ".ag-side-bar[data-active-panel='pivotePanel'] .ag-column-select": {
             "display": "none !important",
         },
-
-        # ── FRANJAS: alinean el sidebar con la cabecera y la fila de
-        # totales de la tabla (mismo lavanda, mismo borde índigo) ────────
-        # Franja superior: recolorea el toggle nativo "Modo pivote" que
-        # AgGrid ya dibuja arriba del panel — no se inventa un elemento,
-        # se repinta el que existe.
-        ".ag-side-bar[data-active-panel='pivotePanel'] .ag-pivot-mode-panel": {
-            "background": f"{LAVANDA_FONDO} !important",
-            "border-bottom": f"1px solid {ACENTO} !important",
-            "padding": "10px 14px !important",
-            "margin": "0 !important",
-        },
-        ".ag-side-bar[data-active-panel='pivotePanel'] .ag-pivot-mode-panel label": {
-            "color": f"{ACENTO_TEXTO_OSCURO} !important",
-            "font-weight": "500 !important",
-            "font-size": "13px !important",
-        },
-
-        # Franja inferior: aquí NO hay elemento real (el panel termina en
-        # la última pastilla de VALORES), así que se dibuja con un ::after
-        # fijo al fondo de .ag-tool-panel-wrapper — el contenedor del
-        # contenido, sin invadir el riel de botones de la derecha.
-        ".ag-side-bar[data-active-panel='pivotePanel'] .ag-tool-panel-wrapper": {
-            "position": "relative !important",
-        },
-        ".ag-side-bar[data-active-panel='pivotePanel'] .ag-tool-panel-wrapper::after": {
-            "content": "''",
-            "position": "absolute !important",
-            "left": "0",
-            "right": "0",
-            "bottom": "0",
-            "height": "32px",
-            "background": f"{LAVANDA_CABECERA_GRUPO} !important",
-            "border-top": f"2px solid {ACENTO} !important",
-            "pointer-events": "none",
-        },
-
         # Bloque F original (Pivote MODERNO PLANO)
         ".ag-column-drop-vertical-title-bar": {
             "padding": "14px 14px 8px !important",
@@ -469,8 +477,6 @@ def _css_panel_pivote():
             "text-transform": "uppercase !important",
             "letter-spacing": "0.07em !important",
         },
-        # Cada sección se ajusta a su contenido; el divisor de 1px entre
-        # secciones consecutivas sustituye a los marcos.
         ".ag-column-drop-vertical": {
             "background": "transparent !important",
             "flex": "0 0 auto !important",
@@ -479,7 +485,6 @@ def _css_panel_pivote():
             "border-top": f"1px solid {GRIS_LINEA} !important",
             "margin-top": "14px !important",
         },
-        # Zona de arrastre (drop zone)
         ".ag-column-drop-vertical-list": {
             "margin": "4px 14px 18px !important",
             "border": f"1.5px dashed {LAVANDA_BORDE} !important",
@@ -493,7 +498,6 @@ def _css_panel_pivote():
             "font-size": "12px !important",
             "text-align": "center !important",
         },
-        # Pastillas de campos (Suma(...), Promedio(...)): ahora igual geometría que Columnas y Filtros
         ".ag-column-drop-vertical-cell": {
             "background": f"{LAVANDA_FONDO} !important",
             "border": f"1px solid {LAVANDA_BORDE} !important",
