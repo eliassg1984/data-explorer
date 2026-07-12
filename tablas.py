@@ -38,13 +38,11 @@ def _titulo_es(texto):
 # FUNCIÓN: AGGRID DESKTOP — con formato financiero y diseño mejorado
 # ===========================================================================
 
-
-def _css_base(font_px):
-    """CSS base del grid AgGrid (dict custom_css). Depende solo de font_px
-    y de las constantes de color de tema.py. Extraído de
-    renderizar_aggrid_desktop en la Fase 3."""
+# ── 1 ───────────────────────────────────────────────────────────────
+def _css_grid(font_px):
+    """CSS del propio grid: guías de tab, root-wrapper, cabecera, filas,
+    celda, fila fijada, paginación y barra de estado."""
     return {
-        # ── Nuevo: ocultar los elementos de foco de navegación por tabulación ──
         ".ag-tab-guard-top, .ag-tab-guard-bottom": {
             "caret-color": "transparent !important",
             "outline": "none !important",
@@ -59,7 +57,6 @@ def _css_base(font_px):
             "box-shadow": "0 1px 3px rgba(16,16,20,0.05)",
             "width": "100% !important",
         },
-        # ── Cabecera lavanda con texto índigo (uniforme en toda la app) ──
         ".ag-header": {
             "background-color": f"{LAVANDA_FONDO} !important",
             "border-bottom": f"1px solid {ACENTO} !important",
@@ -174,6 +171,13 @@ def _css_base(font_px):
             "color": f"{TEXTO_PRINCIPAL} !important",
             "font-weight": "600 !important",
         },
+    }
+
+
+# ── 2 ───────────────────────────────────────────────────────────────
+def _css_sidebar_marco():
+    """Armazón genérico del sidebar — igual sea cual sea la pestaña abierta."""
+    return {
         ".ag-side-bar": {
             "background-color": f"{BLANCO}",
             "border-left": f"1px solid {GRIS_BORDE} !important",
@@ -203,6 +207,14 @@ def _css_base(font_px):
             "background-color": f"{BLANCO} !important",
             "border": "none !important",
         },
+    }
+
+
+# ── 3 ───────────────────────────────────────────────────────────────
+def _css_panel_columnas():
+    """Pestaña Columnas: pastillas, interruptor toggle, cabecera y buscador."""
+    return {
+        # Reglas que estaban en la zona marco (Bloque C original)
         ".ag-column-select-panel": {
             "padding": "10px !important",
             "background-color": f"{BLANCO} !important",
@@ -218,24 +230,10 @@ def _css_base(font_px):
             "color": f"{TEXTO_PRINCIPAL} !important",
             "font-weight": "600 !important",
         },
-        ".ag-filter-toolpanel-body": {
-            "padding": "10px !important",
-            "background-color": f"{BLANCO} !important",
-        },
-
-        # ══════════════════════════════════════════════════════════════════
-        # PANEL COLUMNS — estilos ACOTADOS con [data-active-panel='columns']
-        # para que NO afecten al panel Pivote, que usa el mismo componente
-        # interno (agColumnsToolPanel) y comparte la clase
-        # .ag-column-select-column.
-        # ══════════════════════════════════════════════════════════════════
-
-        # Respiro completo: aire arriba y abajo de la lista de columnas
+        # Bloque D original (PANEL COLUMNS acotado)
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-list": {
             "padding": "4px 0 8px !important",
         },
-
-        # Pastillas espaciosas — a juego con el panel Modo pivote
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column": {
             "display": "flex !important",
             "align-items": "center !important",
@@ -254,8 +252,6 @@ def _css_base(font_px):
             "background": f"{LAVANDA_FONDO} !important",
             "border-color": f"{LAVANDA_BORDE} !important",
         },
-
-        # Cambio 2: etiqueta activa con color índigo
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:has(.ag-checked) .ag-column-select-column-label": {
             "color": f"{ACENTO_TEXTO} !important",
             "font-weight": "500 !important",
@@ -302,17 +298,128 @@ def _css_base(font_px):
         ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input": {
             "cursor": "pointer !important",
         },
-        # En el panel Pivote ocultamos la lista superior de selección de
-        # columnas: ahí solo queremos ver Grupos de filas / Valores.
+        # Bloque H original (tipografía y buscador)
+        ".ag-column-select-header": {
+            "padding": "10px 12px !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
+        },
+        ".ag-column-select-header-filter-wrapper .ag-input-field-input": {
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "8px !important",
+            "font-size": "12.5px !important",
+            "padding": "6px 10px !important",
+        },
+        ".ag-column-select-header-filter-wrapper .ag-input-field-input:focus": {
+            "border-color": f"{LAVANDA_FOCO} !important",
+            "box-shadow": f"0 0 0 2px {LAVANDA_FONDO} !important",
+            "outline": "none !important",
+        },
+    }
+
+
+# ── 4 ───────────────────────────────────────────────────────────────
+def _css_panel_filtros():
+    """Pestaña Filtros: pastillas colapsadas + interior expandido (buscador, lista, checkboxes)."""
+    return {
+        # Regla que estaba en la zona marco (Bloque C original)
+        ".ag-filter-toolpanel-body": {
+            "padding": "10px !important",
+            "background-color": f"{BLANCO} !important",
+        },
+        # Bloque G original (Panel FILTROS)
+        ".ag-filter-toolpanel": {
+            "border": "none !important",
+            "margin": "0 !important",
+        },
+        ".ag-filter-toolpanel-search": {
+            "padding": "10px 12px !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
+        },
+        ".ag-filter-toolpanel-search .ag-input-field-input": {
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "8px !important",
+            "font-size": "12.5px !important",
+            "padding": "6px 10px !important",
+            "color": f"{GRIS_TEXTO_MEDIO} !important",
+        },
+        ".ag-filter-toolpanel-search .ag-input-field-input:focus": {
+            "border-color": f"{LAVANDA_FOCO} !important",
+            "box-shadow": f"0 0 0 2px {LAVANDA_FONDO} !important",
+            "outline": "none !important",
+        },
+        ".ag-filter-toolpanel-group-title-bar": {
+            "background": f"{GRIS_FONDO} !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "999px !important",
+            "padding": "10px 14px !important",
+            "margin": "7px 10px !important",
+            "transition": "background .15s ease, border-color .15s ease !important",
+        },
+        ".ag-filter-toolpanel-group-title-bar:hover": {
+            "background": f"{LAVANDA_FONDO} !important",
+            "border-color": f"{LAVANDA_BORDE} !important",
+        },
+        ".ag-filter-toolpanel-group-title": {
+            "color": f"{GRIS_TEXTO} !important",
+            "font-size": "13px !important",
+            "font-weight": "500 !important",
+        },
+        ".ag-filter-toolpanel-group-title-bar-icon .ag-icon, "
+        ".ag-filter-toolpanel-group-title-bar .ag-icon": {
+            "color": f"{GRIS_TEXTO_SUAVE} !important",
+        },
+        ".ag-filter-toolpanel-instance-header": {
+            "background": "transparent !important",
+            "border": "none !important",
+            "padding": "6px 12px !important",
+            "margin": "0 !important",
+        },
+        ".ag-filter-toolpanel-instance-header-text": {
+            "color": f"{GRIS_TEXTO} !important",
+            "font-size": "12.5px !important",
+            "font-weight": "500 !important",
+        },
+        ".ag-filter-toolpanel-instance-body": {
+            "background": f"{LAVANDA_SELECCION} !important",
+            "border": f"1px solid {LAVANDA_BORDE} !important",
+            "border-radius": "10px !important",
+            "padding": "8px !important",
+            "margin": "0 10px 6px !important",
+            "--ag-checkbox-checked-color": f"{ACENTO_FUERTE} !important",
+        },
+        ".ag-filter-toolpanel-instance-body .ag-mini-filter": {
+            "margin": "2px 0 6px !important",
+        },
+        ".ag-filter-toolpanel-instance-body .ag-mini-filter .ag-input-field-input": {
+            "background": f"{BLANCO} !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "8px !important",
+            "font-size": "12.5px !important",
+            "padding": "6px 10px !important",
+        },
+        ".ag-filter-toolpanel-instance-body .ag-set-filter-list, "
+        ".ag-filter-toolpanel-instance-body .ag-virtual-list-viewport": {
+            "background": "transparent !important",
+        },
+        ".ag-filter-toolpanel-instance-body .ag-set-filter-item .ag-label": {
+            "color": f"{GRIS_TEXTO_MEDIO} !important",
+            "font-size": "12.5px !important",
+        },
+        ".ag-filter-toolpanel-instance-body .ag-checkbox-input-wrapper.ag-checked": {
+            "color": f"{ACENTO_FUERTE} !important",
+        },
+    }
+
+
+# ── 5 ───────────────────────────────────────────────────────────────
+def _css_panel_pivote():
+    """Pestaña Modo pivote: chips de Grupos de filas / Valores."""
+    return {
+        # Regla que oculta la lista de columnas en el panel de pivote
         ".ag-side-bar[data-active-panel='pivotePanel'] .ag-column-select": {
             "display": "none !important",
         },
-
-        # ── Pivote MODERNO PLANO: secciones separadas por aire y un divisor
-        #    fino, pastillas sin borde. Única fuente de verdad del espaciado
-        #    de este panel (el override compacto de renderizar_aggrid_desktop
-        #    se eliminó para que no lo pise).
-        # Títulos de sección (Grupos de filas / Valores)
+        # Bloque F original (Pivote MODERNO PLANO)
         ".ag-column-drop-vertical-title-bar": {
             "padding": "14px 14px 8px !important",
         },
@@ -323,8 +430,6 @@ def _css_base(font_px):
             "text-transform": "uppercase !important",
             "letter-spacing": "0.07em !important",
         },
-        # Cada sección se ajusta a su contenido; el divisor de 1px entre
-        # secciones consecutivas sustituye a los marcos.
         ".ag-column-drop-vertical": {
             "background": "transparent !important",
             "flex": "0 0 auto !important",
@@ -333,7 +438,6 @@ def _css_base(font_px):
             "border-top": f"1px solid {GRIS_LINEA} !important",
             "margin-top": "14px !important",
         },
-        # Zona de arrastre (drop zone)
         ".ag-column-drop-vertical-list": {
             "margin": "4px 14px 18px !important",
             "border": f"1.5px dashed {LAVANDA_BORDE} !important",
@@ -347,7 +451,6 @@ def _css_base(font_px):
             "font-size": "12px !important",
             "text-align": "center !important",
         },
-        # Pastillas de campos (Suma(...), Promedio(...)): ahora igual geometría que Columnas y Filtros
         ".ag-column-drop-vertical-cell": {
             "background": f"{LAVANDA_FONDO} !important",
             "border": f"1px solid {LAVANDA_BORDE} !important",
@@ -373,121 +476,24 @@ def _css_base(font_px):
         ".ag-column-drop-cell-button:hover": {
             "color": f"{ACENTO_FUERTE} !important",
         },
-
-        # ── Panel FILTROS — a juego con el modo pivote ──
-        ".ag-filter-toolpanel": {
-            "border": "none !important",
-            "margin": "0 !important",
-        },
-        ".ag-filter-toolpanel-search": {
-            "padding": "10px 12px !important",
-            "border-bottom": f"1px solid {GRIS_BORDE} !important",
-        },
-        ".ag-filter-toolpanel-search .ag-input-field-input": {
-            "border": f"1px solid {GRIS_BORDE} !important",
-            "border-radius": "8px !important",
-            "font-size": "12.5px !important",
-            "padding": "6px 10px !important",
-            "color": f"{GRIS_TEXTO_MEDIO} !important",
-        },
-        ".ag-filter-toolpanel-search .ag-input-field-input:focus": {
-            "border-color": f"{LAVANDA_FOCO} !important",
-            "box-shadow": f"0 0 0 2px {LAVANDA_FONDO} !important",
-            "outline": "none !important",
-        },
-        # Cambio 3 (corregido): filtros como pastillas, ahora con más aire.
-        ".ag-filter-toolpanel-group-title-bar": {
-            "background": f"{GRIS_FONDO} !important",
-            "border": f"1px solid {GRIS_BORDE} !important",
-            "border-radius": "999px !important",
-            "padding": "10px 14px !important",   # antes 8px 12px
-            "margin": "7px 10px !important",     # antes 3px 10px
-            "transition": "background .15s ease, border-color .15s ease !important",
-        },
-        ".ag-filter-toolpanel-group-title-bar:hover": {
-            "background": f"{LAVANDA_FONDO} !important",
-            "border-color": f"{LAVANDA_BORDE} !important",
-        },
-        ".ag-filter-toolpanel-group-title": {
-            "color": f"{GRIS_TEXTO} !important",
-            "font-size": "13px !important",      # antes 12.5px
-            "font-weight": "500 !important",
-        },
-        ".ag-filter-toolpanel-group-title-bar-icon .ag-icon, "
-        ".ag-filter-toolpanel-group-title-bar .ag-icon": {
-            "color": f"{GRIS_TEXTO_SUAVE} !important",
-        },
-        ".ag-filter-toolpanel-instance-header": {
-            "background": "transparent !important",
-            "border": "none !important",
-            "padding": "6px 12px !important",
-            "margin": "0 !important",
-        },
-        ".ag-filter-toolpanel-instance-header-text": {
-            "color": f"{GRIS_TEXTO} !important",
-            "font-size": "12.5px !important",
-            "font-weight": "500 !important",
-        },
-        # ── Interior del filtro expandido — a juego con las pastillas ──
-        # Caja redondeada con tinte lavanda que envuelve el buscador y la lista.
-        # La variable --ag-checkbox-checked-color se pone AQUÍ (no global) para
-        # que las casillas moradas solo apliquen dentro del filtro.
-        ".ag-filter-toolpanel-instance-body": {
-            "background": f"{LAVANDA_SELECCION} !important",
-            "border": f"1px solid {LAVANDA_BORDE} !important",
-            "border-radius": "10px !important",
-            "padding": "8px !important",
-            "margin": "0 10px 6px !important",
-            "--ag-checkbox-checked-color": f"{ACENTO_FUERTE} !important",
-        },
-        # Buscador "Buscar…" dentro del filtro
-        ".ag-filter-toolpanel-instance-body .ag-mini-filter": {
-            "margin": "2px 0 6px !important",
-        },
-        ".ag-filter-toolpanel-instance-body .ag-mini-filter .ag-input-field-input": {
-            "background": f"{BLANCO} !important",
-            "border": f"1px solid {GRIS_BORDE} !important",
-            "border-radius": "8px !important",
-            "font-size": "12.5px !important",
-            "padding": "6px 10px !important",
-        },
-        # La lista transparente para que se vea el tinte de la caja
-        ".ag-filter-toolpanel-instance-body .ag-set-filter-list, "
-        ".ag-filter-toolpanel-instance-body .ag-virtual-list-viewport": {
-            "background": "transparent !important",
-        },
-        # Texto de cada opción de la lista
-        ".ag-filter-toolpanel-instance-body .ag-set-filter-item .ag-label": {
-            "color": f"{GRIS_TEXTO_MEDIO} !important",
-            "font-size": "12.5px !important",
-        },
-        # Casilla marcada en morado de marca (respaldo por si la variable de arriba
-        # no basta en esta versión de Balham)
-        ".ag-filter-toolpanel-instance-body .ag-checkbox-input-wrapper.ag-checked": {
-            "color": f"{ACENTO_FUERTE} !important",
-        },
-
-        # ── Panel COLUMNAS — tipografía y buscador a juego ──
-        ".ag-column-select-header": {
-            "padding": "10px 12px !important",
-            "border-bottom": f"1px solid {GRIS_BORDE} !important",
-        },
-        ".ag-column-select-header-filter-wrapper .ag-input-field-input": {
-            "border": f"1px solid {GRIS_BORDE} !important",
-            "border-radius": "8px !important",
-            "font-size": "12.5px !important",
-            "padding": "6px 10px !important",
-        },
-        ".ag-column-select-header-filter-wrapper .ag-input-field-input:focus": {
-            "border-color": f"{LAVANDA_FOCO} !important",
-            "box-shadow": f"0 0 0 2px {LAVANDA_FONDO} !important",
-            "outline": "none !important",
-        },
-        # ── Fin de los nuevos bloques ──
     }
 
 
+def _css_base(font_px):
+    """CSS del grid AgGrid (dict custom_css), ensamblado por secciones.
+    Cada sección vive en su propia función (ver arriba)."""
+    css = {}
+    css.update(_css_grid(font_px))
+    css.update(_css_sidebar_marco())
+    css.update(_css_panel_columnas())
+    css.update(_css_panel_filtros())
+    css.update(_css_panel_pivote())
+    return css
+
+
+# ── Resto de funciones auxiliares sin cambios ──────────────────────
 def _estilos_celda(max_valorizado):
+    # ... (código sin modificar)
     """Estilos JsCode de celda del grid (mono, stock, valorizado y sus
     variantes planas). Solo dependen de max_valorizado. Extraído de
     renderizar_aggrid_desktop en la Fase 3."""
@@ -932,22 +938,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     get_row_style = _estilo_fila(col_stock, df_grid, es_inventario, quitar_fondos)
     _sidebar_cfg = _config_sidebar(mostrar_pivot, es_ajuste)
 
-    # Nombre del reporte, sanitizado para insertarlo como string literal JS.
     _reporte_js = str(reporte).replace("\\", "\\\\").replace('"', '\\"')
 
-    # NOTA SOBRE EL RELOJ USADO EN LOS EVENTOS DE PERFORMANCE:
-    # Antes se usaba performance.now() a secas, que mide "ms desde que ESTE
-    # iframe empezó a existir". Eso es inútil para comparar eventos entre
-    # sí: si el iframe de AgGrid se recrea (cambias de reporte y vuelves,
-    # etc.) el contador se reinicia, y si conviven varios grids (distintos
-    # reportes) cada uno tiene su propio origen, así que mezclarlos en una
-    # sola línea de tiempo da saltos sin sentido (ej. 4,542,776 ms seguido
-    # de 244,370 ms).
-    # Ahora usamos Date.now() - window.parent.performance.timeOrigin: el
-    # timeOrigin de la ventana PRINCIPAL (la pestaña del navegador) es el
-    # mismo sin importar cuántos iframes de AgGrid se creen o destruyan, así
-    # que el número resultante es "ms desde que cargó la página" y es
-    # comparable entre reportes y a través de remounts del grid.
     _js_ms_desde_carga = """
         (function() {
             try {
@@ -959,9 +951,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         })()
     """
 
-    # =======================================================================
-    # CONFIGURACIÓN DE OPCIONES DE AGGRID CON MEDICIÓN DE RENDIMIENTO
-    # =======================================================================
     opciones_grid = {
         "autoGroupColumnDef": {"minWidth": 200},
         "localeText": LOCALE_ES,
@@ -972,9 +961,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         "tooltipShowDelay": 300,
         "getRowStyle": get_row_style,
         "suppressAggFuncInHeader": True,
-        # FIX columnas: onFirstDataRendered autoajusta cada columna a su
-        # contenido real (no comprime en pantallas angostas). onGridSizeChanged
-        # redistribuye si el usuario redimensiona la ventana.
         "onGridSizeChanged": JsCode("function(params) { params.api.sizeColumnsToFit(); }"),
         "onGridReady": JsCode(f"""
             function(params) {{
@@ -998,15 +984,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 }} catch(e) {{}}
             }}
         """),
-        # NUEVO: a diferencia de onGridReady/onFirstDataRendered (que solo
-        # ocurren en el MONTAJE inicial del iframe), onModelUpdated se
-        # dispara cada vez que cambian los datos mostrados: nuevo rowData,
-        # filtro, orden, agrupación, paginación, etc. Por eso es el evento
-        # correcto para medir "cada vez que la tabla se renderiza" en
-        # reruns donde Streamlit reutiliza el mismo componente/iframe.
-        # Se aplica un pequeño debounce para no saturar el canal cuando
-        # ag-grid dispara varios onModelUpdated seguidos por el mismo
-        # cambio (p.ej. set rowData + auto-size + sort interno).
         "onModelUpdated": JsCode(f"""
             function(params) {{
                 try {{
@@ -1036,13 +1013,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
         if es_inventario:
             opciones_grid["groupDisplayType"] = "groupRows"
-
-            # FIX: 'groupRows' (filas de grupo a ancho completo) no es
-            # compatible con pivotMode=true. Si el usuario activa el toggle
-            # "Modo pivote" del sidebar, cambiamos dinámicamente a
-            # 'multipleColumns' (compatible con pivote); al desactivarlo,
-            # regresamos a 'groupRows'. Sin esto, la tabla se queda vacía
-            # al activar el modo pivote.
             opciones_grid["onColumnPivotModeChanged"] = JsCode("""
                 function(params) {
                     try {
@@ -1098,11 +1068,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         opciones_grid["sideBar"] = False
 
     if es_ajuste:
-        # Al abrir/cerrar un panel del sidebar: (1) marca data-active-panel
-        # para el CSS acotado, y (2) re-ajusta las columnas al ancho visible
-        # con un pequeño retraso, para que "Ajuste" no quede tapada al abrir
-        # y no quede espacio muerto al cerrar. Debounce: si el usuario
-        # alterna paneles rápido, solo se ejecuta el último ajuste.
         opciones_grid["onToolPanelVisibleChanged"] = JsCode("""
             function(params) {
                 try {
@@ -1119,8 +1084,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             }
         """)
 
-        # ── ARRANQUE EN MODO PIVOTE: grupos y valores fijos ──────────────
-        # Grupos de filas — el orden de la lista define la jerarquía.
         _grupos_ini = []
         for _term in ("Familia", "Subfamilia", "Producto", "Unidad Medida", "Area"):
             _rc = buscar_columna(df_grid, _term)
@@ -1129,7 +1092,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         for _i, _c in enumerate(_grupos_ini):
             gb.configure_column(_c, rowGroup=True, rowGroupIndex=_i, hide=True)
 
-        # Valores — exactamente 5, cada uno con su función de agregado.
         _valores_ini = []
         for _term, _af in (
             ("Precio Promedio",   "avg"),
@@ -1143,18 +1105,16 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 gb.configure_column(_rc, aggFunc=_af, enableValue=True)
                 _valores_ini.append(_rc)
 
-        # El resto de numéricos pierde su agregado → solo esos 5 en "Valores".
         for _c in df_grid.columns:
             if (pd.api.types.is_numeric_dtype(df_grid[_c])
                     and _c not in _valores_ini and _c not in _grupos_ini):
                 gb.configure_column(_c, aggFunc=None)
 
-        # Encabezados en "Nombre Propio" (en vez de MAYÚSCULAS).
         for _c in df_grid.columns:
             gb.configure_column(_c, headerName=_titulo_es(_c))
 
-        opciones_grid["pivotMode"] = True          # arranca con el toggle ON
-        opciones_grid["groupDefaultExpanded"] = 0  # 0 = todo colapsado; 1 = abre Familia
+        opciones_grid["pivotMode"] = True
+        opciones_grid["groupDefaultExpanded"] = 0
 
     gb.configure_grid_options(**opciones_grid)
     if es_salidas:
@@ -1189,10 +1149,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         custom_css[".ag-row-even"] = {"background-color": f"{BLANCO} !important"}
         custom_css[".ag-row-odd"] = {"background-color": f"{BLANCO} !important"}
 
-        # ── SEGMENTADOR (estilo Excel): el wrapper pasa a ser un contenedor
-        #    invisible; el borde/radio/sombra viven ahora en .ag-root (la
-        #    tabla) y en .ag-side-bar (el panel), que se leen como dos
-        #    tarjetas separadas aunque el DOM siga siendo uno.
         custom_css[".ag-root-wrapper"].update({
             "background-color": "transparent !important",
             "border": "none !important",
@@ -1212,7 +1168,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                            "0 4px 14px rgba(16,16,20,0.07) !important"),
             "overflow": "hidden !important",
         }
-        # El hueco entre tarjetas muestra el fondo de la página, no blanco.
         custom_css["html, body"] = {"background": "transparent !important"}
 
         custom_css[".ag-header"].update({
@@ -1237,14 +1192,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "color": f"{ACENTO_TEXTO_OSCURO} !important",
         })
 
-        # ── Barras "fantasma" — invisibles en reposo, aparecen al pasar el
-        #    cursor por la tabla. Colores desde tema.py. Se estila también la
-        #    horizontal (antes salía de fábrica).
         custom_css[".ag-body-vertical-scroll::-webkit-scrollbar"] = {"width": "11px"}
         custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar"] = {"height": "11px"}
         custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-track"] = {"background": "transparent"}
         custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar-track"] = {"background": "transparent"}
-        # Pulgar transparente por defecto (invisible).
         custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-thumb"] = {
             "background": "transparent", "border-radius": "8px",
             "border": "3px solid transparent", "background-clip": "padding-box",
@@ -1253,14 +1204,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "background": "transparent", "border-radius": "8px",
             "border": "3px solid transparent", "background-clip": "padding-box",
         }
-        # Al pasar el cursor por la tabla → gris tenue.
         custom_css[".ag-body-vertical-scroll:hover::-webkit-scrollbar-thumb"] = {
             "background": f"{SCROLL_THUMB}", "background-clip": "padding-box",
         }
         custom_css[".ag-body-horizontal-scroll:hover::-webkit-scrollbar-thumb"] = {
             "background": f"{SCROLL_THUMB}", "background-clip": "padding-box",
         }
-        # Al agarrar el pulgar → lavanda de foco.
         custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-thumb:hover"] = {
             "background": f"{LAVANDA_FOCO}", "background-clip": "padding-box",
         }
@@ -1286,11 +1235,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "border-bottom": f"1px solid {GRIS_BORDE} !important",
         })
 
-        # ── FIX panel Columnas/Pivote en tema material ──
-        # La variable --ag-list-item-height del tema fija el slot a ~32px
-        # y no crece con el contenido. Subimos a 62px (pastilla con padding
-        # 10px*2 + texto 16px + margin 7px*2 = ~50px; 62px da holgura).
-        # overflow:visible en el slot y su wrapper evitan el recorte.
         custom_css[
             ".ag-side-bar[data-active-panel='columns'], "
             ".ag-side-bar[data-active-panel='pivotePanel']"
@@ -1300,7 +1244,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-item, "
             ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-item"
         ] = {
-            "height": "62px !important",   # igual que la variable
+            "height": "62px !important",
             "overflow": "visible !important",
         }
 
@@ -1310,9 +1254,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         ] = {
             "overflow": "visible !important",
         }
-
-        # ── ELIMINADO: custom_css[".ag-root"] = {...}  (ya no se usa) ──
-        # ── ELIMINADO: custom_css[".ag-filter-toolpanel"].update({...}) (se movió al base) ──
 
     if es_requerimientos:
         custom_css[".ag-side-button.ag-selected"] = {
@@ -1341,7 +1282,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "border-color": f"{GRIS_TEXTO_SUAVE} !important",
             "color": f"{EXIT_HOVER} !important",
         }
-        # Cabecera de grupos: banda lavanda con texto índigo profundo (CallAI)
         custom_css[".ag-header-group-cell"] = {"background-color": f"{LAVANDA_CABECERA_GRUPO} !important"}
         custom_css[".ag-header-group-cell-label"] = {"color": f"{ACENTO_TEXTO_OSCURO} !important"}
         custom_css[".ag-header-group-text"] = {
@@ -1360,16 +1300,11 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         custom_css[".ag-column-select-column .ag-toggle-button-input-wrapper"] = {
             "transform": "scale(0.85)",
         }
-
-        # ── CONSERVAR esta (no tiene que ver con el pivote): ──
         custom_css[".ag-column-select-header"] = {
             "padding-top": "4px !important",
             "padding-bottom": "4px !important",
         }
 
-    # =======================================================================
-    # MEDICIÓN DE RENDIMIENTO CON PERF
-    # =======================================================================
     perf.set_df_info(df_grid, label=f"AgGrid ({reporte})")
     with perf.phase("AgGrid render"):
         AgGrid(
@@ -1385,11 +1320,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     if reporte in REPORTES_ESTILO_INVENTARIO:
         inject_pagination_v2()
 
-    # === CAMBIO APLICADO: ahora también se inyecta para Ajuste de Inventario ===
     if es_requerimientos or es_ajuste:
         inject_maximize_aggrid()
-        # Altura dinámica: la tabla llena el alto de pantalla disponible.
-        # Si diera problemas, comenta SOLO esta línea y vuelve al height fijo.
         inject_dynamic_grid_height(offset_px=220)
 
     if es_ajuste:
