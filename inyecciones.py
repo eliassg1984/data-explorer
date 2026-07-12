@@ -1399,6 +1399,12 @@ def inject_fix_column_panel_ajuste():
                 );
                 if (!items.length) return;
 
+                // Soltar el alto que dejó la corrida ANTERIOR antes de volver a medir.
+                items.forEach(function(item) {
+                    item.style.removeProperty('height');
+                });
+                void sidebar.offsetHeight;   // forzar reflow antes de medir
+
                 var topAcum = 0;
                 items.forEach(function(item) {
                     // Leer altura REAL del contenido (la pastilla con su padding/margin)
