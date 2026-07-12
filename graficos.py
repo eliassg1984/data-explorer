@@ -653,9 +653,9 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
         annotation_position="top right",
     )
 
-    # Construir layout base sin xaxis/yaxis para evitar colisión de kwargs
+    # Construir layout base sin xaxis/yaxis/height para evitar colisión de kwargs
     _layout_evolucion = {k: v for k, v in _LAYOUT_BASE.items()
-                         if k not in ("xaxis", "yaxis")}
+                         if k not in ("xaxis", "yaxis", "height")}
     fig.update_layout(
         **_layout_evolucion,
         title="Evolución del ajuste valorizado",
@@ -810,10 +810,11 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val):
         ),
     ))
     fig.update_layout(
-        **_LAYOUT_BASE,
+        **{k: v for k, v in _LAYOUT_BASE.items()
+           if k not in ("xaxis", "yaxis", "height")},
         title="Mapa de calor: ajuste valorizado por Familia × Área",
-        xaxis=dict(tickangle=-30, side="bottom"),
-        yaxis=dict(autorange="reversed"),
+        xaxis=dict(tickangle=-30, side="bottom", gridcolor=GRIS_BORDE),
+        yaxis=dict(autorange="reversed", gridcolor=GRIS_BORDE),
         height=max(380, len(pivot.index) * 42 + 120),
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -848,7 +849,10 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             fig.add_hline(y=0, line_dash="dash", line_color="#ef4444",
                           annotation_text="Cero", annotation_position="top right")
             fig.update_layout(
-                **_LAYOUT_BASE, showlegend=False, xaxis_tickangle=-30,
+                **{k: v for k, v in _LAYOUT_BASE.items()
+                   if k not in ("xaxis", "yaxis")},
+                showlegend=False,
+                xaxis=dict(tickangle=-30, gridcolor=GRIS_BORDE),
                 yaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
             )
             fig.update_traces(hovertemplate="%{x}<br>S/ %{y:,.2f}<extra></extra>")
@@ -861,7 +865,8 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             fig.add_vline(x=0, line_dash="dash", line_color="#ef4444",
                           annotation_text="Cero")
             fig.update_layout(
-                **_LAYOUT_BASE,
+                **{k: v for k, v in _LAYOUT_BASE.items()
+                   if k not in ("xaxis", "yaxis")},
                 xaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
                 yaxis=dict(gridcolor=GRIS_BORDE),
             )
@@ -889,7 +894,9 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                        annotation_text=f"Mediana S/ {mediana:,.0f}",
                        annotation_font_color="#16a34a")
         fig2.update_layout(
-            **_LAYOUT_BASE, title="Histograma de frecuencias",
+            **{k: v for k, v in _LAYOUT_BASE.items()
+               if k not in ("xaxis", "yaxis")},
+            title="Histograma de frecuencias",
             xaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE,
                        title="Ajuste Valorizado"),
             yaxis=dict(title="Frecuencia", gridcolor=GRIS_BORDE),
