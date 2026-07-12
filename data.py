@@ -72,6 +72,11 @@ REPORTES = {
     "Ventas": {
         "archivo": "ventas.parquet",
         "icono": "cash-coin",
+        # Carga filtrada por rango de fechas DENTRO de DuckDB (no baja todo
+        # el parquet). Al primer acceso: 01-del-mes-actual → hoy. El rango
+        # aplicado vive en st.session_state[f"rango_carga_{reporte}"] y el
+        # date_input del popover lo controla (ver app.py).
+        "carga_por_rango": "FEC REG DOCUMENTO",
     },
     "Salidas": {
         "archivo": "salidas.parquet",
@@ -285,6 +290,46 @@ def cargar(archivo):
         bucket = st.secrets["R2_BUCKET"]
         url = f"s3://{bucket}/{archivo}"
         return con.execute(f"SELECT * FROM read_parquet('{url}')").df()
+    except Exception as e:
+        st.error(f"Error cargando {archivo}: {str(e)}")
+        return None
+
+
+@st.cache_data(ttl=3600)
+def cargar_rango(archivo, col_fecha, ini, fin):
+    """
+    Como cargar(), pero filtrando por fecha DENTRO de DuckDB, antes de
+    materializar el DataFrame (para parquets grandes como ventas.parquet:
+    nunca se descargan/materializan las 100k+ filas completas).
+
+    ini/fin: datetime.date (rango inclusivo).
+    col_fecha: nombre EXACTO de la columna de fecha en el parquet.
+
+    Maneja col_fecha tanto si es DATE/TIMESTAMP real como si viene como
+    texto tipo '05/07/2026' (dd/mm/yyyy): COALESCE de dos intentos de cast.
+    """
+    # ── Modo demo: sin credenciales R2 → datos sintéticos filtrados ──
+    if not secrets_disponibles():
+        df = _datos_demo(archivo)
+        col = "Fecha" if "Fecha" in df.columns else None
+        if col:
+            m = (df[col].dt.date >= ini) & (df[col].dt.date <= fin)
+            return df[m]
+        return df
+    try:
+        con = get_conn()
+        bucket = st.secrets["R2_BUCKET"]
+        url = f"s3://{bucket}/{archivo}"
+        expr = (
+            f'COALESCE('
+            f'TRY_CAST("{col_fecha}" AS DATE), '
+            f'TRY_CAST(TRY_STRPTIME(CAST("{col_fecha}" AS VARCHAR), \'%d/%m/%Y\') AS DATE)'
+            f')'
+        )
+        return con.execute(
+            f"SELECT * FROM read_parquet('{url}') WHERE {expr} BETWEEN ? AND ?",
+            [ini, fin],
+        ).df()
     except Exception as e:
         st.error(f"Error cargando {archivo}: {str(e)}")
         return None
