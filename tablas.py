@@ -1684,7 +1684,7 @@ def renderizar_aggrid_compras(df_grid: pd.DataFrame, font_px: int = 14):
         "font-weight": "500 !important",
     }
 
-    # Franja INFERIOR del sidebar: a juego con la fila de totales (pinned bottom)
+    # Franja INFERIOR del sidebar: a juego con fila de totales (pinned bottom)
     custom_css[".ag-side-bar .ag-tool-panel-wrapper"] = {
         "display": "flex !important",
         "flex-direction": "column !important",
