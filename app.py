@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
-from data import REPORTES, cargar, secrets_disponibles, hay_dato_nuevo
+from data import REPORTES, cargar, cargar_rango, secrets_disponibles, hay_dato_nuevo
 from estilos import TAM_FUENTE, inject_css
 from inyecciones import inject_error_overlay, inject_element_inspector
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras, renderizar_aggrid_compras
@@ -190,7 +190,16 @@ if reporte == "Inspector" or cfg.get("tool"):
 # CARGAR DATOS
 # ===========================================================================
 with perf.phase("cargar()"):                                                # ⚡ PERF
-    df = cargar(cfg["archivo"])
+    _col_rango = cfg.get("carga_por_rango")
+    if _col_rango:
+        _hoy_c = datetime.date.today()
+        _k_rango = f"rango_carga_{reporte}"
+        if _k_rango not in st.session_state:
+            st.session_state[_k_rango] = (_hoy_c.replace(day=1), _hoy_c)
+        _r_ini, _r_fin = st.session_state[_k_rango]
+        df = cargar_rango(cfg["archivo"], _col_rango, _r_ini, _r_fin)
+    else:
+        df = cargar(cfg["archivo"])
 if df is None or df.empty:
     st.warning("No se pudieron cargar los datos o el archivo está vacío.")
     perf.end()                                                              # ⚡ PERF
