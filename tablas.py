@@ -481,6 +481,67 @@ def _css_panel_pivote():
     }
 
 
+# ── 6 ───────────────────────────────────────────────────────────────
+def _css_franjas_sidebar():
+    """Franjas lavanda del sidebar (arriba y abajo), a juego con la cabecera
+    y la fila de totales de la tabla. Válidas para las 3 pestañas.
+
+    CLAVE: AG Grid mantiene los 3 tool-panels montados y oculta los inactivos
+    con la clase `.ag-hidden` (display:none). El selector de estas reglas debe
+    llevar `:not(.ag-hidden)` para NO des-ocultar los paneles inactivos (que si
+    no aparecerían los tres uno al costado del otro)."""
+    return {
+        # ── Franja SUPERIOR ──────────────────────────────────────────────
+        # Modo pivote: su propio panel de toggle (ya lleva la banda nativa).
+        ".ag-pivot-mode-panel": {
+            "background-color": f"{LAVANDA_FONDO} !important",
+            "border-bottom": f"1px solid {ACENTO} !important",
+            "min-height": "36px !important",
+            "padding": "0 12px !important",
+            "display": "flex !important",
+            "align-items": "center !important",
+        },
+        ".ag-pivot-mode-panel .ag-label": {
+            "color": f"{ACENTO_TEXTO_OSCURO} !important",
+            "font-size": "11px !important",
+            "font-weight": "500 !important",
+        },
+        # Columnas y Filtros: banda ::before sintética (no tienen pivot-panel).
+        # En Columnas se evita duplicar si por algún reporte SÍ mostrara el
+        # toggle de pivote (:not(:has(.ag-pivot-mode-panel))).
+        ".ag-side-bar[data-active-panel='columns'] .ag-tool-panel-wrapper"
+        ":not(.ag-hidden):not(:has(.ag-pivot-mode-panel))::before,"
+        ".ag-side-bar[data-active-panel='filters'] .ag-tool-panel-wrapper"
+        ":not(.ag-hidden)::before": {
+            "content": "'' !important",
+            "display": "block !important",
+            "height": "36px !important",
+            "flex-shrink": "0 !important",
+            "background-color": f"{LAVANDA_FONDO} !important",
+            "border-bottom": f"1px solid {ACENTO} !important",
+        },
+
+        # ── Franja INFERIOR ──────────────────────────────────────────────
+        # El wrapper del panel VISIBLE pasa a columna flex para poder anclar
+        # la franja al fondo con margin-top:auto. `:not(.ag-hidden)` evita que
+        # el display:flex reactive los paneles ocultos.
+        ".ag-side-bar .ag-tool-panel-wrapper:not(.ag-hidden)": {
+            "display": "flex !important",
+            "flex-direction": "column !important",
+            "height": "100% !important",
+        },
+        ".ag-side-bar .ag-tool-panel-wrapper:not(.ag-hidden)::after": {
+            "content": "'' !important",
+            "display": "block !important",
+            "height": "34px !important",
+            "flex-shrink": "0 !important",
+            "margin-top": "auto !important",
+            "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
+            "border-top": f"2px solid {ACENTO} !important",
+        },
+    }
+
+
 def _css_base(font_px):
     """CSS del grid AgGrid (dict custom_css), ensamblado por secciones.
     Cada sección vive en su propia función (ver arriba)."""
@@ -1237,36 +1298,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "border-bottom": f"1px solid {GRIS_BORDE} !important",
         })
 
-        # Franja SUPERIOR del sidebar: a juego con la cabecera lavanda de la tabla
-        custom_css[".ag-pivot-mode-panel"] = {
-            "background-color": f"{LAVANDA_FONDO} !important",
-            "border-bottom": f"1px solid {ACENTO} !important",
-            "min-height": "36px !important",
-            "padding": "0 12px !important",
-            "display": "flex !important",
-            "align-items": "center !important",
-        }
-        custom_css[".ag-pivot-mode-panel .ag-label"] = {
-            "color": f"{ACENTO_TEXTO_OSCURO} !important",
-            "font-size": "11px !important",
-            "font-weight": "500 !important",
-        }
-
-        # Franja INFERIOR del sidebar: a juego con la fila de totales (pinned bottom)
-        custom_css[".ag-side-bar .ag-tool-panel-wrapper"] = {
-            "display": "flex !important",
-            "flex-direction": "column !important",
-            "height": "100% !important",
-        }
-        custom_css[".ag-side-bar .ag-tool-panel-wrapper::after"] = {
-            "content": "'' !important",
-            "display": "block !important",
-            "height": "34px !important",
-            "flex-shrink": "0 !important",
-            "margin-top": "auto !important",
-            "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
-            "border-top": f"2px solid {ACENTO} !important",
-        }
+        # Franjas lavanda del sidebar (superior + inferior), en las 3 pestañas.
+        # Selectores con :not(.ag-hidden) para no des-ocultar los paneles
+        # inactivos (bug de "paneles uno al costado del otro").
+        custom_css.update(_css_franjas_sidebar())
 
         custom_css[
             ".ag-side-bar[data-active-panel='columns'], "
@@ -1669,36 +1704,10 @@ def renderizar_aggrid_compras(df_grid: pd.DataFrame, font_px: int = 14):
         "border-bottom": "1px solid " + GRIS_BORDE + " !important",
     })
 
-    # Franja SUPERIOR del sidebar: a juego con la cabecera lavanda de la tabla
-    custom_css[".ag-pivot-mode-panel"] = {
-        "background-color": LAVANDA_FONDO + " !important",
-        "border-bottom": "1px solid " + ACENTO + " !important",
-        "min-height": "36px !important",
-        "padding": "0 12px !important",
-        "display": "flex !important",
-        "align-items": "center !important",
-    }
-    custom_css[".ag-pivot-mode-panel .ag-label"] = {
-        "color": ACENTO_TEXTO_OSCURO + " !important",
-        "font-size": "11px !important",
-        "font-weight": "500 !important",
-    }
-
-    # Franja INFERIOR del sidebar: a juego con fila de totales (pinned bottom)
-    custom_css[".ag-side-bar .ag-tool-panel-wrapper"] = {
-        "display": "flex !important",
-        "flex-direction": "column !important",
-        "height": "100% !important",
-    }
-    custom_css[".ag-side-bar .ag-tool-panel-wrapper::after"] = {
-        "content": "'' !important",
-        "display": "block !important",
-        "height": "34px !important",
-        "flex-shrink": "0 !important",
-        "margin-top": "auto !important",
-        "background-color": LAVANDA_CABECERA_GRUPO + " !important",
-        "border-top": "2px solid " + ACENTO + " !important",
-    }
+    # Franjas lavanda del sidebar (superior + inferior), en las 3 pestañas.
+    # Selectores con :not(.ag-hidden) para no des-ocultar los paneles
+    # inactivos (bug de "paneles uno al costado del otro").
+    custom_css.update(_css_franjas_sidebar())
 
     custom_css[
         ".ag-side-bar[data-active-panel='columns'],"
@@ -1951,6 +1960,10 @@ def renderizar_tabla_compras(df_grid: pd.DataFrame, font_px: int = 14):
         "background-color": f"{LAVANDA_FILA_ALT} !important",
         "border-bottom": f"1px solid {GRIS_BORDE} !important",
     })
+
+    # Franjas lavanda del sidebar (superior + inferior), en las 3 pestañas.
+    custom_css.update(_css_franjas_sidebar())
+
     custom_css[
         ".ag-side-bar[data-active-panel='columns'],"
         ".ag-side-bar[data-active-panel='pivotePanel']"
