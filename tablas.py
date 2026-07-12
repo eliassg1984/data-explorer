@@ -241,6 +241,8 @@ def _css_panel_columnas():
             "border": f"1px solid {GRIS_BORDE} !important",
             "border-radius": "999px !important",
             "padding": "10px 14px !important",
+            "height": "auto !important",
+            "box-sizing": "border-box !important",
             "margin": "7px 10px !important",
             "transition": "background .15s ease, border-color .15s ease !important",
         },
