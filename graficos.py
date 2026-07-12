@@ -7,12 +7,12 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots          # ← NUEVO
+from plotly.subplots import make_subplots
 import streamlit as st
 
 from utils import buscar_columna, _norm
 from tema import (
-    ACENTO, ACENTO_TEXTO_OSCURO,                   # ← NUEVO
+    ACENTO, ACENTO_TEXTO_OSCURO,
     GRIS_FONDO, GRIS_BORDE, TEXTO_PRINCIPAL, BLANCO,
     SERIE_PRINCIPAL, PALETA_SERIES, ESCALA_CONTINUA, ESCALA_SEMAFORO,
 )
@@ -20,10 +20,35 @@ from tema import (
 
 # ===========================================================================
 # TEMA CALLAI — paleta categórica para series múltiples
-# (índigo primario + tonos de los "orbes": cian, magenta, naranja, verde)
 # ===========================================================================
 
 PALETA_CALLAI = PALETA_SERIES  # alias retrocompatible; fuente en tema.py
+
+
+# ===========================================================================
+# HELPERS: CARD BLANCO PARA GRÁFICOS
+# Uso:
+#   _chart_card("Título opcional")
+#   st.plotly_chart(fig, use_container_width=True)
+#   _chart_card_close()
+# ===========================================================================
+
+def _chart_card(titulo: str = ""):
+    """Abre un div card blanco con bordes redondeados.
+    Llamar siempre seguido de _chart_card_close() después del gráfico."""
+    if titulo:
+        st.markdown(
+            f'<div class="chart-card">'
+            f'<p class="chart-card-title">{titulo}</p>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+
+
+def _chart_card_close():
+    """Cierra el div card abierto por _chart_card()."""
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ===========================================================================
@@ -137,7 +162,7 @@ def renderizar_graficos(df_f, es_movil=False):
             xaxis_title='Precio Promedio (S/)',
             yaxis_title='Stock',
             height=height,
-            paper_bgcolor=GRIS_FONDO,
+            paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor=BLANCO,
             showlegend=True if col_area else False
         )
@@ -159,8 +184,11 @@ def renderizar_graficos(df_f, es_movil=False):
                         color=col_valorizado, color_continuous_scale=ESCALA_CONTINUA,
                         title='Valorización por Área y Familia'
                     )
-                    fig_tree.update_layout(margin=dict(l=10, r=10, t=30, b=10), height=350)
+                    fig_tree.update_layout(margin=dict(l=10, r=10, t=30, b=10), height=350,
+                                           paper_bgcolor="rgba(0,0,0,0)")
+                    _chart_card()
                     st.plotly_chart(fig_tree, use_container_width=True)
+                    _chart_card_close()
                 except Exception as e:
                     st.warning(f"No se pudo generar el treemap: {str(e)}")
             else:
@@ -177,8 +205,10 @@ def renderizar_graficos(df_f, es_movil=False):
                         color_discrete_sequence=[SERIE_PRINCIPAL]
                     )
                     fig_top.update_traces(texttemplate='S/ %{text:,.0f}', textposition='outside')
-                    fig_top.update_layout(height=350)
+                    fig_top.update_layout(height=350, paper_bgcolor="rgba(0,0,0,0)")
+                    _chart_card()
                     st.plotly_chart(fig_top, use_container_width=True)
+                    _chart_card_close()
                 except Exception as e:
                     st.warning(f"No se pudo generar el top 10: {str(e)}")
         
@@ -188,7 +218,9 @@ def renderizar_graficos(df_f, es_movil=False):
                     df_f, col_precio, col_stock, col_valorizado, 
                     col_producto, col_area, height=350
                 )
+                _chart_card()
                 st.plotly_chart(fig_scatter, use_container_width=True)
+                _chart_card_close()
             except Exception as e:
                 st.warning(f"No se pudo generar el scatter plot: {str(e)}")
             
@@ -204,8 +236,10 @@ def renderizar_graficos(df_f, es_movil=False):
                             color=col_valorizado, color_continuous_scale=ESCALA_CONTINUA,
                             title='Distribución Jerárquica del Valor'
                         )
-                        fig_sun.update_layout(height=350)
+                        fig_sun.update_layout(height=350, paper_bgcolor="rgba(0,0,0,0)")
+                        _chart_card()
                         st.plotly_chart(fig_sun, use_container_width=True)
+                        _chart_card_close()
                     except Exception as e:
                         st.warning(f"No se pudo generar el sunburst: {str(e)}")
             
@@ -216,8 +250,10 @@ def renderizar_graficos(df_f, es_movil=False):
                         title='Distribución de Precios Promedio',
                         color_discrete_sequence=[SERIE_PRINCIPAL]
                     )
-                    fig_hist.update_layout(height=300)
+                    fig_hist.update_layout(height=300, paper_bgcolor="rgba(0,0,0,0)")
+                    _chart_card()
                     st.plotly_chart(fig_hist, use_container_width=True)
+                    _chart_card_close()
                 except Exception as e:
                     st.warning(f"No se pudo generar el histograma: {str(e)}")
     
@@ -242,8 +278,11 @@ def renderizar_graficos(df_f, es_movil=False):
                             color=col_valorizado, color_continuous_scale=ESCALA_CONTINUA,
                             title='Valorización por Área y Familia'
                         )
-                        fig_tree.update_layout(margin=dict(l=10, r=10, t=30, b=10))
+                        fig_tree.update_layout(margin=dict(l=10, r=10, t=30, b=10),
+                                               paper_bgcolor="rgba(0,0,0,0)")
+                        _chart_card()
                         st.plotly_chart(fig_tree, use_container_width=True)
+                        _chart_card_close()
                     except Exception as e:
                         st.warning(f"Error en treemap: {str(e)}")
                 else:
@@ -261,8 +300,11 @@ def renderizar_graficos(df_f, es_movil=False):
                             color=col_valorizado, color_continuous_scale=ESCALA_CONTINUA,
                             title='Distribución Jerárquica'
                         )
-                        fig_sun.update_layout(margin=dict(l=10, r=10, t=30, b=10))
+                        fig_sun.update_layout(margin=dict(l=10, r=10, t=30, b=10),
+                                              paper_bgcolor="rgba(0,0,0,0)")
+                        _chart_card()
                         st.plotly_chart(fig_sun, use_container_width=True)
+                        _chart_card_close()
                     except Exception as e:
                         st.warning(f"Error en sunburst: {str(e)}")
         
@@ -272,7 +314,9 @@ def renderizar_graficos(df_f, es_movil=False):
                     df_f, col_precio, col_stock, col_valorizado, 
                     col_producto, col_area, height=450
                 )
+                _chart_card()
                 st.plotly_chart(fig_scatter, use_container_width=True)
+                _chart_card_close()
             except Exception as e:
                 st.warning(f"Error en scatter: {str(e)}")
             
@@ -308,8 +352,10 @@ def renderizar_graficos(df_f, es_movil=False):
                         text=col_valorizado
                     )
                     fig_top.update_traces(texttemplate='S/ %{text:,.0f}', textposition='outside')
-                    fig_top.update_layout(height=400)
+                    fig_top.update_layout(height=400, paper_bgcolor="rgba(0,0,0,0)")
+                    _chart_card()
                     st.plotly_chart(fig_top, use_container_width=True)
+                    _chart_card_close()
                 except Exception as e:
                     st.warning(f"Error en top 15: {str(e)}")
             
@@ -327,8 +373,10 @@ def renderizar_graficos(df_f, es_movil=False):
                             text=col_valorizado
                         )
                         fig_area.update_traces(texttemplate='S/ %{text:,.0f}', textposition='outside')
-                        fig_area.update_layout(height=400)
+                        fig_area.update_layout(height=400, paper_bgcolor="rgba(0,0,0,0)")
+                        _chart_card()
                         st.plotly_chart(fig_area, use_container_width=True)
+                        _chart_card_close()
                     except Exception as e:
                         st.warning(f"Error en ranking: {str(e)}")
         
@@ -350,8 +398,10 @@ def renderizar_graficos(df_f, es_movil=False):
                             title='Distribución de Precios',
                             color_discrete_sequence=[SERIE_PRINCIPAL]
                         )
-                    fig_box.update_layout(height=400)
+                    fig_box.update_layout(height=400, paper_bgcolor="rgba(0,0,0,0)")
+                    _chart_card()
                     st.plotly_chart(fig_box, use_container_width=True)
+                    _chart_card_close()
                 except Exception as e:
                     st.warning(f"Error en box plot: {str(e)}")
             
@@ -362,8 +412,10 @@ def renderizar_graficos(df_f, es_movil=False):
                         title='Distribución de Precios',
                         color_discrete_sequence=[SERIE_PRINCIPAL]
                     )
-                    fig_hist.update_layout(height=400)
+                    fig_hist.update_layout(height=400, paper_bgcolor="rgba(0,0,0,0)")
+                    _chart_card()
                     st.plotly_chart(fig_hist, use_container_width=True)
+                    _chart_card_close()
                 except Exception as e:
                     st.warning(f"Error en histograma: {str(e)}")
             
@@ -393,38 +445,25 @@ def renderizar_graficos(df_f, es_movil=False):
 
 # ===========================================================================
 # MINI-FÁBRICA DE GRÁFICOS (config-driven)
-# Cada eje en la config es una LISTA de candidatos que se resuelve con
-# buscar_columna(), igual que el resto de la app. Si una columna no existe
-# en el parquet, el gráfico se omite con un aviso (no se rompe).
 # ===========================================================================
 
+# paper_bgcolor = "rgba(0,0,0,0)" para que el fondo del card blanco sea el
+# visible en lugar del gris de Plotly. plot_bgcolor sigue siendo BLANCO para
+# la zona interior del gráfico.
 _LAYOUT_BASE = dict(
-    paper_bgcolor=GRIS_FONDO, plot_bgcolor=BLANCO,
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor=BLANCO,
     font_color=TEXTO_PRINCIPAL,
     font_family="DM Sans, Inter, -apple-system, sans-serif",
     margin=dict(l=20, r=20, t=50, b=20),
     height=420,
     xaxis=dict(gridcolor=GRIS_BORDE),
-    # tickformat en Y: separador de miles (1,400 en vez de 1400). Plotly lo
-    # ignora en ejes categóricos, así que es seguro para todos los gráficos.
     yaxis=dict(gridcolor=GRIS_BORDE, tickformat=",.0f"),
 )
 
 
 def _layout(**overrides):
-    """_LAYOUT_BASE fusionado con `overrides` (los overrides SIEMPRE ganan).
-
-    Uso en todo update_layout, en lugar de desempacar la base:
-
-        fig.update_layout(**_layout(height=500, xaxis=dict(...)))
-
-    Con esto es imposible el clásico
-    `TypeError: got multiple values for keyword argument 'xaxis'`.
-
-    OJO: la fusión es superficial. Si pasas `xaxis=dict(...)`, tu dict
-    REEMPLAZA por completo al `xaxis` de la base (no se mezclan claves
-    internas) — re-declara `gridcolor` si quieres conservarlo.
-    """
+    """_LAYOUT_BASE fusionado con `overrides` (los overrides SIEMPRE ganan)."""
     base = dict(_LAYOUT_BASE)
     base.update(overrides)
     return base
@@ -454,10 +493,7 @@ def _preparar_datos(df, x, y, color, tipo):
 
 
 def _hover_fmt(col_y):
-    """Devuelve (prefijo, formato_numero) para el valor Y del tooltip, según
-    el nombre de la columna. Mismo criterio que _es_moneda/_es_cantidad de
-    tablas.py: valorizado/precio/total → soles con 2 decimales; stock/cantidad
-    → número con separador de miles sin decimales; resto → numérico genérico."""
+    """Devuelve (prefijo, formato_numero) para el valor Y del tooltip."""
     n = _norm(col_y) if col_y else ""
     if any(k in n for k in ("valorizado", "precio", "importe", "total",
                             "monto", "costo", "unitario")):
@@ -504,7 +540,7 @@ def crear_grafico(df, conf):
         elif tipo == "box":
             fig = px.box(df, x=x, y=y, color=x if x else None, title=titulo)
 
-        else:  # bar, line, area (con agrupación automática)
+        else:  # bar, line, area
             df_p, x_p = _preparar_datos(df, x, y, color, tipo)
             fn = {"bar": px.bar, "line": px.line, "area": px.area}[tipo]
             kwargs = dict(x=x_p, y=y, color=color, title=titulo)
@@ -519,9 +555,6 @@ def crear_grafico(df, conf):
         if conf.get("tickangle"):
             fig.update_layout(xaxis_tickangle=conf["tickangle"])
 
-        # ── Tooltips con formato peruano (soles / miles) ──────────────────
-        # Se aplica a los gráficos con eje Y de valor (bar, line, area). El
-        # prefijo "S/ " y los decimales salen del nombre de la columna Y.
         if tipo in ("bar", "line", "area") and y:
             _pref, _num = _hover_fmt(y)
             fig.update_traces(
@@ -529,11 +562,9 @@ def crear_grafico(df, conf):
             )
             fig.update_layout(hovermode="x unified")
 
-        # 🔧 NUEVO: asegurar que el eje X sea categórico cuando se solicita
         if conf.get("x_categorico"):
             fig.update_xaxes(type="category")
 
-        # ── Etiquetas de datos ────────────────────────────────────────────
         if conf.get("etiquetas"):
             if tipo == "bar":
                 fig.update_traces(texttemplate="%{y:,.0f}", textposition="outside")
@@ -549,9 +580,7 @@ def crear_grafico(df, conf):
 
 
 def renderizar_graficos_genericos(df_data, nombre_reporte):
-    """Explorador dinámico estilo tabla dinámica: el usuario elige eje X
-    (incluye fechas agrupadas por mes), métrica, serie de color, tipo de
-    gráfico y etiquetas de datos."""
+    """Explorador dinámico estilo tabla dinámica."""
     cols_num = df_data.select_dtypes("number").columns.tolist()
     cols_txt = df_data.select_dtypes(["object", "string"]).columns.tolist()
     cols_fecha = [c for c in df_data.columns
@@ -588,7 +617,6 @@ def renderizar_graficos_genericos(df_data, nombre_reporte):
     tipo_map = {"Barras": "bar", "Barras apiladas": "bar",
                 "Líneas": "line", "Área": "area"}
 
-    # Si X es texto, limitar a las 20 categorías con mayor suma
     df_plot = df_data
     if eje_x in cols_txt:
         top_cats = (df_data.groupby(eje_x)[eje_y].sum()
@@ -600,7 +628,6 @@ def renderizar_graficos_genericos(df_data, nombre_reporte):
         "titulo": f"{eje_y} por {eje_x}" + (f" y {color}" if color else ""),
         "etiquetas": etiquetas,
     }
-    # 🔧 NUEVO: para X de texto, forzar eje categórico y rotar etiquetas
     if eje_x in cols_txt:
         conf["tickangle"] = -45
         conf["x_categorico"] = True
@@ -611,7 +638,9 @@ def renderizar_graficos_genericos(df_data, nombre_reporte):
     fig, err = crear_grafico(df_plot, conf)
     if fig:
         fig.update_layout(height=450)
+        _chart_card()
         st.plotly_chart(fig, use_container_width=True)
+        _chart_card_close()
     else:
         st.warning(f"No se pudo generar el gráfico: {err}")
 
@@ -633,7 +662,6 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
         st.info("Sin fechas válidas en el rango seleccionado.")
         return
 
-    # ── Gráfico principal: líneas por familia ────────────────────────────
     fig = go.Figure()
 
     if col_familia and col_familia in df.columns:
@@ -664,7 +692,6 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
             hovertemplate="Fecha: %{x|%d/%m/%Y}<br>Ajuste: <b>S/ %{y:,.2f}</b><extra></extra>",
         ))
 
-    # Línea de equilibrio
     fig.add_hline(
         y=0, line_dash="dot", line_color="#ef4444", line_width=1.5,
         annotation_text="Equilibrio (0)",
@@ -694,9 +721,11 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         height=500,
     ))
-    st.plotly_chart(fig, use_container_width=True)
 
-    # ── Expander: comparativa eje dual (barras ajuste + línea valorizado) ─
+    _chart_card("Evolución temporal")
+    st.plotly_chart(fig, use_container_width=True)
+    _chart_card_close()
+
     if col_valorizado and col_valorizado in df.columns:
         with st.expander("📊 Comparativa: ajuste vs valorizado total (eje dual)"):
             agg2 = (df.groupby(col_fecha, as_index=False)
@@ -704,7 +733,6 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
                     .sort_values(col_fecha))
 
             fig2 = make_subplots(specs=[[{"secondary_y": True}]])
-            # Barras con color por signo
             fig2.add_trace(go.Bar(
                 x=agg2[col_fecha], y=agg2["ajuste"],
                 name="Ajuste valorizado",
@@ -712,7 +740,6 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
                               for v in agg2["ajuste"]],
                 hovertemplate="Ajuste: S/ %{y:,.2f}<extra></extra>",
             ), secondary_y=False)
-            # Línea de valorizado en eje derecho
             fig2.add_trace(go.Scatter(
                 x=agg2[col_fecha], y=agg2["val"],
                 name="Valorizado total",
@@ -734,7 +761,9 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
                 tickprefix="S/ ", tickformat=",.2f",
                 title_text="Valorizado total", secondary_y=True,
             )
+            _chart_card()
             st.plotly_chart(fig2, use_container_width=True)
+            _chart_card_close()
 
 
 def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val):
@@ -759,8 +788,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val):
             text=[f"S/ {v:,.0f}" for v in agg[col_ajuste_val]] + [f"S/ {total:,.0f}"],
             textposition="outside",
             connector=dict(line=dict(color=GRIS_BORDE, width=1, dash="dot")),
-            # Waterfall NO acepta opacity en el marker; el alfa va en el color.
-            # rgba(108,92,231,·) = SERIE_PRINCIPAL · rgba(239,68,68,·) = #ef4444
             increasing=dict(marker=dict(color="rgba(108,92,231,0.85)")),
             decreasing=dict(marker=dict(color="rgba(239,68,68,0.85)")),
             totals=dict(marker=dict(
@@ -774,7 +801,9 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val):
             yaxis=dict(tickprefix="S/ ", tickformat=",.0f", gridcolor=GRIS_BORDE),
             showlegend=False, height=480,
         ))
+        _chart_card("Cascada por familia")
         st.plotly_chart(fig, use_container_width=True)
+        _chart_card_close()
 
     with col_tabla:
         st.markdown("**📉 Top 5 faltantes**")
@@ -807,7 +836,6 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val):
         text=text_mat,
         texttemplate="%{text}",
         textfont=dict(size=10, color=TEXTO_PRINCIPAL),
-        # ← Escala divergente: rojo negativo | gris neutro | verde positivo
         colorscale=[
             [0.0,  "#ef4444"],
             [0.45, "#fff7ed"],
@@ -815,7 +843,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val):
             [0.55, "#f0fdf4"],
             [1.0,  "#16a34a"],
         ],
-        zmid=0,   # ← centrar siempre en cero, sin importar magnitudes
+        zmid=0,
         colorbar=dict(title="Ajuste S/", tickformat=",.0f"),
         hovertemplate=(
             "<b>%{y}</b><br>"
@@ -829,7 +857,10 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val):
         yaxis=dict(autorange="reversed", gridcolor=GRIS_BORDE),
         height=max(380, len(pivot.index) * 42 + 120),
     ))
+
+    _chart_card("Mapa de calor")
     st.plotly_chart(fig, use_container_width=True)
+    _chart_card_close()
 
     with st.expander("📋 Tabla pivot Familia × Área"):
         st.dataframe(
@@ -855,7 +886,7 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                 df, x=grp, y=col_ajuste_val, color=grp,
                 color_discrete_sequence=PALETA_SERIES,
                 title=f"Distribución del ajuste por {grp}",
-                points="outliers",   # ← puntos fuera del bigote visibles
+                points="outliers",
                 labels={col_ajuste_val: "Ajuste S/", grp: ""},
             )
             fig.add_hline(y=0, line_dash="dash", line_color="#ef4444",
@@ -878,7 +909,9 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                 xaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
                 yaxis=dict(gridcolor=GRIS_BORDE),
             ))
+        _chart_card("Distribución por grupo")
         st.plotly_chart(fig, use_container_width=True)
+        _chart_card_close()
 
     with col_der:
         media   = float(df[col_ajuste_val].mean())
@@ -891,7 +924,6 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             marker_color=SERIE_PRINCIPAL, opacity=0.75,
             hovertemplate="Valor: S/ %{x:,.2f}<br>Frecuencia: %{y}<extra></extra>",
         ))
-        # ← Líneas estadísticas de referencia con anotaciones
         fig2.add_vline(x=0, line_dash="solid", line_color="#ef4444", line_width=2,
                        annotation_text="Cero", annotation_font_color="#ef4444")
         fig2.add_vline(x=media, line_dash="dot", line_color="#f97316",
@@ -908,9 +940,10 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             yaxis=dict(title="Frecuencia", gridcolor=GRIS_BORDE),
             hovermode="x",
         ))
+        _chart_card("Histograma")
         st.plotly_chart(fig2, use_container_width=True)
+        _chart_card_close()
 
-    # ── Tabla de productos en el 5% inferior ─────────────────────────────
     if col_producto and col_producto in df.columns:
         umbral = float(df[col_ajuste_val].quantile(0.05))
         outliers = df[df[col_ajuste_val] <= umbral].copy()
@@ -943,13 +976,12 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte):
 
     Estructura:
       · KPIs rápidos (4 métricas)
-      · Tab 1 — Evolución temporal  (range-selector + range-slider + eje dual)
-      · Tab 2 — Cascada por familia (waterfall con top faltantes/sobrantes)
-      · Tab 3 — Mapa de calor       (Familia × Área, escala divergente en 0)
-      · Tab 4 — Distribución        (box plot con outliers + histograma)
-      · Expander — Explorador libre (genérico)
+      · Tab 1 — Evolución temporal
+      · Tab 2 — Cascada por familia
+      · Tab 3 — Mapa de calor
+      · Tab 4 — Distribución
+      · Expander — Explorador libre
     """
-    # ── Resolver columnas ────────────────────────────────────────────────
     col_fecha      = _resolver(df_f, ["FECHA APERTURA INVENTARIO", "FECHA", "MES"])
     col_familia    = _resolver(df_f, ["FAMILIA", "Nombre Familia", "NOMBRE FAMILIA"])
     col_area       = _resolver(df_f, ["AREA", "Nombre Area", "NOMBRE AREA"])
@@ -1015,10 +1047,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte):
 
 
 def renderizar_graficos_reporte(df_f, reporte, cfg):
-    """Punto de entrada de la vista Gráficos para reportes genéricos.
-    Muestra los gráficos definidos en REPORTES[reporte]['graficos'] (si hay)
-    y siempre ofrece el explorador dinámico."""
-    # ── NUEVO: gráficos dedicados para Ajuste de Inventario ──────────
+    """Punto de entrada de la vista Gráficos para reportes genéricos."""
     if reporte == "Ajuste de Inventario":
         renderizar_graficos_ajuste(df_f, reporte)
         return
@@ -1030,7 +1059,9 @@ def renderizar_graficos_reporte(df_f, reporte, cfg):
         for conf in graficos_conf:
             fig, err = crear_grafico(df_f, conf)
             if fig:
+                _chart_card()
                 st.plotly_chart(fig, use_container_width=True)
+                _chart_card_close()
             else:
                 omitidos.append(f"«{conf.get('titulo', conf.get('tipo'))}» ({err})")
         if omitidos:
@@ -1039,5 +1070,4 @@ def renderizar_graficos_reporte(df_f, reporte, cfg):
         with st.expander("🎛️ Explorador de gráficos"):
             renderizar_graficos_genericos(df_f, reporte)
     else:
-        # Sin config: el explorador es la vista principal (comportamiento actual)
         renderizar_graficos_genericos(df_f, reporte)
