@@ -1,759 +1,1670 @@
 """
-Panel de Reportes v2.0 - Punto de entrada principal (OPTIMIZADO).
+Tablas AgGrid (vista desktop y móvil) con formato financiero, totales
+al pie, panel lateral de columnas y barra de paginación.
+También incluye la tabla de Compras basada en st.data_editor.
 """
 
-import datetime
-from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
+from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
-from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
-from data import REPORTES, cargar, secrets_disponibles, hay_dato_nuevo
-from estilos import TAM_FUENTE, inject_css
-from inyecciones import inject_error_overlay, inject_element_inspector
-from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras, renderizar_aggrid_compras
-from graficos import renderizar_graficos, renderizar_graficos_reporte
-from navegacion import inject_navegacion
-from perf import perf                                                       # ⚡ PERF
-
-ZONA_PERU = ZoneInfo("America/Lima")  # UTC-5 fijo, sin horario de verano
-
-
-# ===========================================================================
-# CONFIGURACIÓN INICIAL
-# ===========================================================================
-
-st.set_page_config(
-    page_title="Reportes",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-    menu_items={
-        'Get Help': None,
-        'Report a bug': None,
-        'About': "Panel de Reportes v2.0 - Inventario & Compras"
-    }
+from utils import _norm, buscar_columna, buscar_columna_fecha, LOCALE_ES
+from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid, inject_dynamic_grid_height, inject_fix_column_panel_ajuste
+from perf import perf
+from tema import (
+    ACENTO, ACENTO_FUERTE, ACENTO_TEXTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA_FONDO, ADVERTENCIA_TEXTO, BLANCO, CELDA_ALERTA_FONDO, CELDA_ALERTA_TEXTO, CELDA_NEG_FONDO, CELDA_POS_TEXTO, DANGER_TEXT, ERROR_FONDO, EXIT_HOVER, GRIS_BORDE, GRIS_FONDO, GRIS_FONDO_CABECERA, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE, ICON_MUTED, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FILA, LAVANDA_FILA_ALT, LAVANDA_FOCO, LAVANDA_FONDO, LAVANDA_MEDIO, LAVANDA_SELECCION, SCROLL_THUMB, TEXTO_PRINCIPAL,
 )
 
-inject_css()
-inject_error_overlay()
-inject_element_inspector()
 
-perf.start()                                                                # ⚡ PERF
+# ===========================================================================
+# FUNCIONES AUXILIARES
+# ===========================================================================
+
+# Palabras que en español van en minúscula dentro de un título
+# (salvo si son la primera palabra).
+_MINUS_TITULO = {"de", "del", "la", "el", "los", "las", "y", "o",
+                 "al", "en", "a", "con", "por", "para", "un", "una"}
+
+def _titulo_es(texto):
+    """Convierte 'STOCK AL CIERRE' → 'Stock al Cierre' (modo Nombre Propio)."""
+    palabras = str(texto).strip().lower().split()
+    return " ".join(
+        p if (i > 0 and p in _MINUS_TITULO) else p.capitalize()
+        for i, p in enumerate(palabras)
+    )
 
 
 # ===========================================================================
-# VIGILANCIA DE REFRESCO (fragmento)
+# FUNCIÓN: AGGRID DESKTOP — con formato financiero y diseño mejorado
 # ===========================================================================
 
-@st.fragment(run_every=4)
-def _vigilar_refresco(archivo, clave_estado):
-    """Revisa cada 4s si R2 ya tiene el parquet actualizado. Mientras
-    espera, muestra un aviso visible (no un toast que desaparece)."""
-    info = st.session_state.get(clave_estado)
-    if not info:
-        return  # ya se resolvió en otra ejecución
+# ── 1 ───────────────────────────────────────────────────────────────
+def _css_grid(font_px):
+    """CSS del propio grid: guías de tab, root-wrapper, cabecera, filas,
+    celda, fila fijada, paginación y barra de estado."""
+    return {
+        ".ag-tab-guard-top, .ag-tab-guard-bottom": {
+            "caret-color": "transparent !important",
+            "outline": "none !important",
+            "border": "none !important",
+            "opacity": "0 !important",
+        },
+        ".ag-root-wrapper": {
+            "background-color": f"{BLANCO}",
+            "border": f"1px solid {GRIS_BORDE}",
+            "border-radius": "12px !important",
+            "overflow": "hidden !important",
+            "box-shadow": "0 1px 3px rgba(16,16,20,0.05)",
+            "width": "100% !important",
+        },
+        ".ag-header": {
+            "background-color": f"{LAVANDA_FONDO} !important",
+            "border-bottom": f"1px solid {ACENTO} !important",
+        },
+        ".ag-header-cell": {
+            "background-color": f"{LAVANDA_FONDO} !important",
+        },
+        ".ag-header-cell-text": {
+            "color": f"{ACENTO_TEXTO_OSCURO} !important",
+            "font-weight": "500",
+            "font-size": f"{font_px}px",
+            "letter-spacing": "normal",
+            "text-transform": "none",
+        },
+        ".ag-header-icon": {
+            "color": f"{GRIS_TEXTO_SUAVE} !important",
+        },
+        ".ag-row": {
+            "border-bottom": f"1px solid {GRIS_LINEA}",
+            "color": f"{TEXTO_PRINCIPAL}",
+        },
+        ".ag-row-even": {"background-color": f"{BLANCO}"},
+        ".ag-row-odd": {"background-color": f"{GRIS_FONDO}"},
+        ".ag-row-hover": {"background-color": f"{LAVANDA_FONDO} !important"},
+        ".ag-cell": {"color": f"{EXIT_HOVER}", "font-size": f"{font_px}px"},
+        ".ag-row-pinned": {
+            "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
+            "font-weight": "700 !important",
+            "border-top": f"2px solid {ACENTO} !important",
+            "color": f"{ACENTO_TEXTO_OSCURO} !important",
+            "font-size": f"{font_px + 1}px !important",
+        },
+        ".ag-paging-panel": {
+            "display": "flex !important",
+            "align-items": "center !important",
+            "justify-content": "space-between !important",
+            "color": f"{ICON_MUTED}",
+            "background-color": f"{GRIS_FONDO}",
+            "border-top": f"1px solid {GRIS_BORDE}",
+            "padding": "8px 16px !important",
+            "border-bottom-left-radius": "10px !important",
+            "border-bottom-right-radius": "10px !important",
+            "font-size": "12px !important",
+            "min-height": "44px !important",
+        },
+        ".ag-paging-panel .ag-paging-page-size": {
+            "order": "-1 !important",
+            "margin-right": "auto !important",
+        },
+        ".ag-paging-panel .ag-paging-page-size .ag-label": {
+            "color": f"{ICON_MUTED} !important",
+            "font-size": "12px !important",
+            "margin-right": "6px !important",
+        },
+        ".ag-paging-panel .ag-paging-page-size select, "
+        ".ag-paging-panel .ag-paging-page-size .ag-select": {
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "6px !important",
+            "background": f"{BLANCO} !important",
+            "color": f"{TEXTO_PRINCIPAL} !important",
+            "font-size": "12px !important",
+            "padding": "2px 6px !important",
+        },
+        ".ag-paging-button": {
+            "width": "28px !important",
+            "height": "28px !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "background": f"{BLANCO} !important",
+            "border-radius": "6px !important",
+            "color": f"{GRIS_TEXTO} !important",
+            "font-size": "13px !important",
+            "cursor": "pointer !important",
+            "display": "flex !important",
+            "align-items": "center !important",
+            "justify-content": "center !important",
+            "margin": "0 2px !important",
+            "transition": "all 0.15s ease !important",
+        },
+        ".ag-paging-button:hover:not(.ag-disabled)": {
+            "background": f"{LAVANDA_FONDO} !important",
+            "border-color": f"{LAVANDA_FOCO} !important",
+            "color": f"{ACENTO_FUERTE} !important",
+        },
+        ".ag-paging-button.ag-disabled": {
+            "color": f"{SCROLL_THUMB} !important",
+            "border-color": f"{GRIS_LINEA} !important",
+            "background": f"{GRIS_FONDO} !important",
+            "cursor": "default !important",
+        },
+        ".ag-paging-row-summary-panel": {
+            "color": f"{ICON_MUTED} !important",
+            "font-size": "12px !important",
+            "margin-left": "auto !important",
+        },
+        ".ag-paging-row-summary-panel-number": {
+            "color": f"{TEXTO_PRINCIPAL} !important",
+            "font-weight": "600 !important",
+        },
+        ".ag-status-bar": {
+            "background-color": f"{GRIS_FONDO} !important",
+            "border-top": f"1px solid {GRIS_BORDE} !important",
+            "color": f"{GRIS_TEXTO} !important",
+            "padding": "4px 16px !important",
+            "font-size": "12px !important",
+            "min-height": "0 !important",
+        },
+        ".ag-status-name-value": {
+            "color": f"{GRIS_TEXTO} !important",
+            "font-size": "12px !important",
+        },
+        ".ag-status-name-value-value": {
+            "color": f"{TEXTO_PRINCIPAL} !important",
+            "font-weight": "600 !important",
+        },
+    }
 
-    transcurrido = (datetime.datetime.now(ZONA_PERU) - info["inicio"]).total_seconds()
 
-    if hay_dato_nuevo(archivo, info["baseline"]):
-        cargar.clear(archivo)
-        st.session_state.pop(clave_estado, None)
-        st.toast(f"✅ «{info['reporte']}» actualizado.", icon="✅")
-        st.rerun(scope="app")
-        return
-
-    if transcurrido > 120:
-        with st.container(key="aviso_refresco"):
-            st.warning(
-                f"⏳ La actualización de «{info['reporte']}» está tardando más de lo "
-                "usual. Los datos mostrados podrían no ser los más recientes.",
-                icon="⚠️",
-            )
-        return
-
-    # Periodo de gracia: si el job termina antes de este umbral, el usuario
-    # nunca ve el aviso — solo un salto directo de tabla vieja a tabla nueva.
-    GRACIA_SEGUNDOS = 8
-    if transcurrido < GRACIA_SEGUNDOS:
-        return
-
-    with st.container(key="aviso_refresco"):
-        st.info(
-            f"🔄 Actualizando datos de «{info['reporte']}»... (puede tardar unos segundos)",
-            icon="🔄",
-        )
-
-
-# ===========================================================================
-# LEER REPORTE DESDE LA URL Y APLICAR REFRESCO
-# ===========================================================================
-
-params = st.query_params
-reporte = params.get("reporte", None)
-
-if st.session_state.get("_nav_reporte"):
-    reporte = st.session_state.pop("_nav_reporte")
-    st.query_params["reporte"] = reporte
-
-if not reporte or reporte not in REPORTES:
-    reporte = list(REPORTES.keys())[0]
-
-# ── REFRESCO GLOBAL POR URL (?refresh=1) ──
-if params.get("refresh"):
-    st.cache_data.clear()
-    if "refresh" in st.query_params:
-        del st.query_params["refresh"]
-    st.rerun()
-
-inject_navegacion(REPORTES, reporte, mostrar_inspector=bool(st.query_params.get("debug")))
-
-cfg = REPORTES[reporte]
-
-# ── VIGILAR REFRESCO PENDIENTE ──
-# Se llama SIEMPRE (aunque no haya nada pendiente todavía): así el fragment
-# queda montado desde el principio, escuchando solo con su propio run_every=4.
-# Motivo: el botón de refresco vive en SU PROPIO fragment (navegacion.py), así
-# que su clic ya NO dispara un rerun completo de app.py. Si esta llamada
-# siguiera condicionada a "ya hay algo pendiente", este bloque nunca volvería
-# a evaluarse tras el clic y _vigilar_refresco jamás se enteraría del refresco
-# solicitado. _vigilar_refresco ya hace `if not info: return` internamente,
-# así que llamarlo sin condición es seguro y no hace nada hasta que sí hay
-# un refresco pendiente para ese archivo.
-_archivo_actual = cfg.get("archivo")
-if _archivo_actual:
-    _vigilar_refresco(_archivo_actual, f"_refresco_pendiente_{_archivo_actual}")
+# ── 2 ───────────────────────────────────────────────────────────────
+def _css_sidebar_marco():
+    """Armazón genérico del sidebar — igual sea cual sea la pestaña abierta."""
+    return {
+        ".ag-side-bar": {
+            "background-color": f"{BLANCO}",
+            "border-left": f"1px solid {GRIS_BORDE} !important",
+            "border-top-right-radius": "10px !important",
+            "border-bottom-right-radius": "10px !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
+        },
+        ".ag-side-bar .ag-side-buttons": {
+            "border-right": f"1px solid {GRIS_BORDE} !important",
+        },
+        ".ag-side-button": {
+            "background-color": f"{GRIS_FONDO} !important",
+            "border": "none !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
+            "color": f"{GRIS_TEXTO} !important",
+        },
+        ".ag-side-button:hover": {
+            "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
+            "color": f"{ACENTO_FUERTE} !important",
+        },
+        ".ag-side-button.ag-selected": {
+            "background-color": f"{ACENTO_FUERTE} !important",
+            "color": f"{BLANCO} !important",
+            "box-shadow": f"inset 0 0 0 1px {ACENTO}",
+        },
+        ".ag-tool-panel-wrapper": {
+            "background-color": f"{BLANCO} !important",
+            "border": "none !important",
+        },
+    }
 
 
-# ===========================================================================
-# LIMPIAR ESTADO AL CAMBIAR DE REPORTE
-# ===========================================================================
-if st.session_state.get("_reporte_anterior") != reporte:
-    st.session_state["_reporte_anterior"] = reporte
-    st.session_state.pop("ajuste_rango_aplicado", None)
+# ── 3 ───────────────────────────────────────────────────────────────
+def _css_panel_columnas():
+    """Pestaña Columnas: pastillas, interruptor toggle, cabecera y buscador."""
+    return {
+        # Reglas que estaban en la zona marco (Bloque C original)
+        ".ag-column-select-panel": {
+            "padding": "10px !important",
+            "background-color": f"{BLANCO} !important",
+        },
+        ".ag-column-tool-panel .ag-column-panel": {
+            "border": "none !important",
+        },
+        ".ag-column-tool-panel .ag-column-select-all": {
+            "padding": "10px 0 !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
+        },
+        ".ag-column-panel .ag-header-cell-text": {
+            "color": f"{TEXTO_PRINCIPAL} !important",
+            "font-weight": "600 !important",
+        },
+        # Bloque D original (PANEL COLUMNS acotado)
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-list": {
+            "padding": "4px 0 8px !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column": {
+            "display": "flex !important",
+            "align-items": "center !important",
+            "background": f"{GRIS_FONDO} !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "999px !important",
+            "padding": "6px 14px !important",
+            "height": "auto !important",
+            "box-sizing": "border-box !important",
+            "margin": "7px 10px !important",
+            "transition": "background .15s ease, border-color .15s ease !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:hover": {
+            "background": f"{LAVANDA_FONDO} !important",
+            "border-color": f"{LAVANDA_BORDE} !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:has(.ag-checked)": {
+            "background": f"{LAVANDA_FONDO} !important",
+            "border-color": f"{LAVANDA_BORDE} !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column:has(.ag-checked) .ag-column-select-column-label": {
+            "color": f"{ACENTO_TEXTO} !important",
+            "font-weight": "500 !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column-label": {
+            "order": "-1 !important",
+            "margin-right": "auto !important",
+            "color": f"{GRIS_TEXTO} !important",
+            "font-size": "13px !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-drag-handle": {
+            "display": "none !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper": {
+            "width": "36px !important",
+            "height": "20px !important",
+            "border-radius": "999px !important",
+            "background": f"{GRIS_BORDE} !important",
+            "border": "none !important",
+            "box-shadow": "none !important",
+            "position": "relative !important",
+            "transition": "background .15s ease !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper::after": {
+            "content": "'' !important",
+            "position": "absolute !important",
+            "top": "2px !important",
+            "left": "2px !important",
+            "width": "16px !important",
+            "height": "16px !important",
+            "border-radius": "50% !important",
+            "background": f"{BLANCO} !important",
+            "color": "transparent !important",
+            "box-shadow": "0 1px 2px rgba(0,0,0,0.25) !important",
+            "transition": "left .15s ease !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper.ag-checked": {
+            "background": f"{ACENTO_FUERTE} !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input-wrapper.ag-checked::after": {
+            "content": "'' !important",
+            "left": "18px !important",
+        },
+        ".ag-side-bar[data-active-panel='columns'] .ag-column-select-column .ag-checkbox-input": {
+            "cursor": "pointer !important",
+        },
+        # Bloque H original (tipografía y buscador)
+        ".ag-column-select-header": {
+            "padding": "10px 12px !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
+        },
+        ".ag-column-select-header-filter-wrapper .ag-input-field-input": {
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "8px !important",
+            "font-size": "12.5px !important",
+            "padding": "6px 10px !important",
+        },
+        ".ag-column-select-header-filter-wrapper .ag-input-field-input:focus": {
+            "border-color": f"{LAVANDA_FOCO} !important",
+            "box-shadow": f"0 0 0 2px {LAVANDA_FONDO} !important",
+            "outline": "none !important",
+        },
+    }
 
 
-# ===========================================================================
-# AVISO DE MODO DEMO + PANEL DE DIAGNÓSTICO (?debug=1)
-# ===========================================================================
-modo_demo = not secrets_disponibles()
-if modo_demo:
-    st.caption("🧪 MODO DEMO — datos de ejemplo (no hay conexión a R2). "
-               "Configura los secrets R2_* para usar datos reales.")
+# ── 4 ───────────────────────────────────────────────────────────────
+def _css_panel_filtros():
+    """Pestaña Filtros: pastillas colapsadas + interior expandido (buscador, lista, checkboxes)."""
+    return {
+        # Regla que estaba en la zona marco (Bloque C original)
+        ".ag-filter-toolpanel-body": {
+            "padding": "10px !important",
+            "background-color": f"{BLANCO} !important",
+        },
+        # Bloque G original (Panel FILTROS)
+        ".ag-filter-toolpanel": {
+            "border": "none !important",
+            "margin": "0 !important",
+        },
+        ".ag-filter-toolpanel-search": {
+            "padding": "10px 12px !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
+        },
+        ".ag-filter-toolpanel-search .ag-input-field-input": {
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "8px !important",
+            "font-size": "12.5px !important",
+            "padding": "6px 10px !important",
+            "color": f"{GRIS_TEXTO_MEDIO} !important",
+        },
+        ".ag-filter-toolpanel-search .ag-input-field-input:focus": {
+            "border-color": f"{LAVANDA_FOCO} !important",
+            "box-shadow": f"0 0 0 2px {LAVANDA_FONDO} !important",
+            "outline": "none !important",
+        },
+        ".ag-filter-toolpanel-group-title-bar": {
+            "background": f"{GRIS_FONDO} !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "999px !important",
+            "padding": "10px 14px !important",
+            "margin": "7px 10px !important",
+            "transition": "background .15s ease, border-color .15s ease !important",
+        },
+        ".ag-filter-toolpanel-group-title-bar:hover": {
+            "background": f"{LAVANDA_FONDO} !important",
+            "border-color": f"{LAVANDA_BORDE} !important",
+        },
+        ".ag-filter-toolpanel-group-title": {
+            "color": f"{GRIS_TEXTO} !important",
+            "font-size": "13px !important",
+            "font-weight": "500 !important",
+        },
+        ".ag-filter-toolpanel-group-title-bar-icon .ag-icon, "
+        ".ag-filter-toolpanel-group-title-bar .ag-icon": {
+            "color": f"{GRIS_TEXTO_SUAVE} !important",
+        },
+        ".ag-filter-toolpanel-instance-header": {
+            "background": "transparent !important",
+            "border": "none !important",
+            "padding": "6px 12px !important",
+            "margin": "0 !important",
+        },
+        ".ag-filter-toolpanel-instance-header-text": {
+            "color": f"{GRIS_TEXTO} !important",
+            "font-size": "12.5px !important",
+            "font-weight": "500 !important",
+        },
+        ".ag-filter-toolpanel-instance-body": {
+            "background": f"{LAVANDA_SELECCION} !important",
+            "border": f"1px solid {LAVANDA_BORDE} !important",
+            "border-radius": "10px !important",
+            "padding": "8px !important",
+            "margin": "0 10px 6px !important",
+            "--ag-checkbox-checked-color": f"{ACENTO_FUERTE} !important",
+        },
+        ".ag-filter-toolpanel-instance-body .ag-mini-filter": {
+            "margin": "2px 0 6px !important",
+        },
+        ".ag-filter-toolpanel-instance-body .ag-mini-filter .ag-input-field-input": {
+            "background": f"{BLANCO} !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "8px !important",
+            "font-size": "12.5px !important",
+            "padding": "6px 10px !important",
+        },
+        ".ag-filter-toolpanel-instance-body .ag-set-filter-list, "
+        ".ag-filter-toolpanel-instance-body .ag-virtual-list-viewport": {
+            "background": "transparent !important",
+        },
+        ".ag-filter-toolpanel-instance-body .ag-set-filter-item .ag-label": {
+            "color": f"{GRIS_TEXTO_MEDIO} !important",
+            "font-size": "12.5px !important",
+        },
+        ".ag-filter-toolpanel-instance-body .ag-checkbox-input-wrapper.ag-checked": {
+            "color": f"{ACENTO_FUERTE} !important",
+        },
+    }
 
-if st.query_params.get("debug"):
-    import sys
-    from importlib.metadata import version, PackageNotFoundError
 
-    def _ver(paquete):
-        try:
-            return version(paquete)
-        except PackageNotFoundError:
-            return "?"
+# ── 5 ───────────────────────────────────────────────────────────────
+def _css_panel_pivote():
+    """Pestaña Modo pivote: chips de Grupos de filas / Valores."""
+    return {
+        # Regla que oculta la lista de columnas en el panel de pivote
+        ".ag-side-bar[data-active-panel='pivotePanel'] .ag-column-select": {
+            "display": "none !important",
+        },
+        # Bloque F original (Pivote MODERNO PLANO)
+        ".ag-column-drop-vertical-title-bar": {
+            "padding": "14px 14px 8px !important",
+        },
+        ".ag-column-drop-vertical-title": {
+            "color": f"{GRIS_TEXTO_SUAVE} !important",
+            "font-size": "11px !important",
+            "font-weight": "600 !important",
+            "text-transform": "uppercase !important",
+            "letter-spacing": "0.07em !important",
+        },
+        ".ag-column-drop-vertical": {
+            "background": "transparent !important",
+            "flex": "0 0 auto !important",
+        },
+        ".ag-column-drop-vertical + .ag-column-drop-vertical": {
+            "border-top": f"1px solid {GRIS_LINEA} !important",
+            "margin-top": "14px !important",
+        },
+        ".ag-column-drop-vertical-list": {
+            "margin": "4px 14px 18px !important",
+            "border": f"1.5px dashed {LAVANDA_BORDE} !important",
+            "border-radius": "10px !important",
+            "background": f"{LAVANDA_SELECCION} !important",
+            "padding": "8px !important",
+            "min-height": "52px !important",
+        },
+        ".ag-column-drop-empty-message": {
+            "color": f"{LAVANDA_MEDIO} !important",
+            "font-size": "12px !important",
+            "text-align": "center !important",
+        },
+        ".ag-column-drop-vertical-cell": {
+            "background": f"{LAVANDA_FONDO} !important",
+            "border": f"1px solid {LAVANDA_BORDE} !important",
+            "border-radius": "999px !important",
+            "padding": "10px 14px !important",
+            "margin": "7px 8px !important",
+            "font-size": "13px !important",
+            "color": f"{ACENTO_TEXTO} !important",
+            "transition": "background .15s ease, border-color .15s ease !important",
+        },
+        ".ag-column-drop-vertical-cell:hover": {
+            "background": f"{LAVANDA_SELECCION} !important",
+        },
+        ".ag-column-drop-vertical-cell .ag-icon": {
+            "color": f"{LAVANDA_MEDIO} !important",
+        },
+        ".ag-column-drop-vertical-cell-text": {
+            "font-size": "13px !important",
+        },
+        ".ag-column-drop-cell-button": {
+            "color": f"{GRIS_TEXTO_SUAVE} !important",
+        },
+        ".ag-column-drop-cell-button:hover": {
+            "color": f"{ACENTO_FUERTE} !important",
+        },
+    }
 
-    with st.expander("🔧 Diagnóstico de entorno", expanded=True):
-        st.json({
-            "python": sys.version.split()[0],
-            "streamlit": _ver("streamlit"),
-            "streamlit-aggrid": _ver("streamlit-aggrid"),
-            "pandas": _ver("pandas"),
-            "plotly": _ver("plotly"),
-            "duckdb": _ver("duckdb"),
-            "modo_demo": modo_demo,
-            "reporte": reporte,
+
+def _css_base(font_px):
+    """CSS del grid AgGrid (dict custom_css), ensamblado por secciones.
+    Cada sección vive en su propia función (ver arriba)."""
+    css = {}
+    css.update(_css_grid(font_px))
+    css.update(_css_sidebar_marco())
+    css.update(_css_panel_columnas())
+    css.update(_css_panel_filtros())
+    css.update(_css_panel_pivote())
+    return css
+
+
+# ── Resto de funciones auxiliares sin cambios ──────────────────────
+def _estilos_celda(max_valorizado):
+    # ... (código sin modificar)
+    """Estilos JsCode de celda del grid (mono, stock, valorizado y sus
+    variantes planas). Solo dependen de max_valorizado. Extraído de
+    renderizar_aggrid_desktop en la Fase 3."""
+    mono_style = JsCode("""
+        function(params) {
+            return { fontFamily: "'Courier New', Courier, monospace" };
+        }
+    """)
+
+    stock_cell_style = JsCode(f"""
+        function(params) {{
+            if (params.value === null || params.value === undefined) return {{}};
+            if (params.node && params.node.rowPinned) {{
+                return {{ fontWeight: '700', color: '{ACENTO_TEXTO_OSCURO}' }};
+            }}
+            var v = Number(params.value);
+            var base = {{
+                fontFamily: "'Courier New', Courier, monospace",
+                fontWeight: '700',
+                textAlign: 'right',
+                padding: '2px 10px'
+            }};
+            if (v < 0) {{
+                return Object.assign({{}}, base, {{
+                    backgroundColor: '{ERROR_FONDO}',
+                    color: '{DANGER_TEXT}',
+                    borderRadius: '20px'
+                }});
+            }}
+            if (v === 0) {{
+                return Object.assign({{}}, base, {{
+                    backgroundColor: '{ADVERTENCIA_FONDO}',
+                    color: '{ADVERTENCIA_TEXTO}',
+                    borderRadius: '20px'
+                }});
+            }}
+            if (v < 10) {{
+                return Object.assign({{}}, base, {{
+                    backgroundColor: '{CELDA_ALERTA_FONDO}',
+                    color: '{CELDA_ALERTA_TEXTO}',
+                    borderRadius: '20px'
+                }});
+            }}
+            return Object.assign({{}}, base, {{ color: '{CELDA_POS_TEXTO}' }});
+        }}
+    """)
+
+    stock_cell_style_plano = JsCode(f"""
+        function(params) {{
+            if (params.value === null || params.value === undefined) return {{}};
+            if (params.node && params.node.rowPinned) {{
+                return {{ fontWeight: '700', color: '{ACENTO_TEXTO_OSCURO}' }};
+            }}
+            return {{
+                fontFamily: "'Courier New', Courier, monospace",
+                fontWeight: '700',
+                textAlign: 'right',
+                padding: '2px 10px',
+                color: '{TEXTO_PRINCIPAL}'
+            }};
+        }}
+    """)
+
+    valorizado_bar_style = JsCode(f"""
+        function(params) {{
+            var base = {{
+                fontFamily: "'Courier New', Courier, monospace",
+                color: '{ACENTO_TEXTO_OSCURO}',
+                fontWeight: '600',
+                textAlign: 'right',
+                paddingRight: '12px'
+            }};
+            if (params.value === null || params.value === undefined) {{
+                return base;
+            }}
+            if (params.node && (params.node.group || params.node.rowPinned)) {{
+                return Object.assign({{}}, base, {{ fontWeight: '800' }});
+            }}
+            var maxv = {max_valorizado};
+            var num = Number(params.value);
+            if (isNaN(num)) return base;
+            var pct = maxv > 0 ? Math.max(0, Math.min(100, (num / maxv) * 100)) : 0;
+            return Object.assign({{}}, base, {{
+                backgroundImage: 'linear-gradient(to right, {LAVANDA_BORDE} 0%, {LAVANDA_BORDE} ' + pct + '%, transparent ' + pct + '%, transparent 100%)',
+                backgroundRepeat: 'no-repeat',
+                backgroundSize: '100% 80%',
+                backgroundPosition: 'left center'
+            }});
+        }}
+    """)
+
+    valorizado_plano = JsCode(f"""
+        function(params) {{
+            var base = {{
+                fontFamily: "'Courier New', Courier, monospace",
+                color: '{ACENTO_TEXTO_OSCURO}',
+                fontWeight: '600',
+                textAlign: 'right',
+                paddingRight: '12px'
+            }};
+            if (params.node && (params.node.group || params.node.rowPinned)) {{
+                return Object.assign({{}}, base, {{ fontWeight: '800' }});
+            }}
+            return base;
+        }}
+    """)
+    return (mono_style, stock_cell_style, stock_cell_style_plano,
+            valorizado_bar_style, valorizado_plano)
+
+
+
+def _estilo_fila(col_stock, df_grid, es_inventario, quitar_fondos):
+    """Devuelve el JsCode getRowStyle según el reporte: inventario (grupos
+    coloreados), stock con semáforo, o fila total simple. Extraído de
+    renderizar_aggrid_desktop en la Fase 3."""
+    if col_stock and col_stock in df_grid.columns and es_inventario:
+        get_row_style = JsCode(f"""
+            function(params) {{
+                if (params.node.rowPinned === 'bottom') {{
+                    return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}', color:'{ACENTO_TEXTO_OSCURO}',
+                             borderTop:'2px solid {ACENTO}', fontSize:'13px' }};
+                }}
+                if (params.node.group) {{
+                    var nivel = params.node.level;
+                    if (nivel === 0) return {{ backgroundColor:'{LAVANDA_BORDE}', fontWeight:'600' }};
+                    if (nivel === 1) return {{ backgroundColor:'{LAVANDA_CABECERA_GRUPO}', fontWeight:'600' }};
+                    return {{ backgroundColor:'{LAVANDA_FONDO}', fontWeight:'500' }};
+                }}
+                return {{ backgroundColor:'{BLANCO}' }};
+            }}
+        """)
+    elif col_stock and col_stock in df_grid.columns and not quitar_fondos:
+        _sf = str(col_stock).replace("\\", "\\\\").replace('"', '\\"')
+        get_row_style = JsCode(f"""
+            function(params) {{
+                if (params.node.rowPinned === 'bottom') {{
+                    return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}', color:'{ACENTO_TEXTO_OSCURO}',
+                              borderTop:'2px solid {ACENTO}', fontSize:'13px' }};
+                }}
+                if (params.node.group || !params.data) return null;
+                var s = params.data["{_sf}"];
+                if (s === null || s === undefined || s === '') return null;
+                var v = Number(s);
+                if (isNaN(v)) return null;
+                if (v === 0) return {{ backgroundColor:'{CELDA_NEG_FONDO}' }};
+                if (v < 10)  return {{ backgroundColor:'{ADVERTENCIA_FONDO}' }};
+                return null;
+            }}
+        """)
+    else:
+        get_row_style = JsCode(f"""
+            function(params) {{
+                if (params.node.rowPinned === 'bottom') {{
+                    return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}', color:'{ACENTO_TEXTO_OSCURO}',
+                             borderTop:'2px solid {ACENTO}', fontSize:'13px' }};
+                }}
+            }}
+        """)
+    return get_row_style
+
+
+
+def _config_sidebar(mostrar_pivot, es_ajuste):
+    """Arma la configuración del sidebar de AgGrid: paneles Columnas,
+    Filtros y (solo en Ajuste) Modo pivote. Devuelve el dict sideBar.
+    Extraído de renderizar_aggrid_desktop en la Fase 3."""
+    _columns_panel = {
+        "id": "columns",
+        "labelDefault": "Columnas",
+        "labelKey": "columns",
+        "iconKey": "columns",
+        "toolPanel": "agColumnsToolPanel",
+        "toolPanelParams": {
+            "suppressRowGroups": (not mostrar_pivot) or es_ajuste,
+            "suppressValues":    (not mostrar_pivot) or es_ajuste,
+            "suppressPivots":    (not mostrar_pivot) or es_ajuste,
+            "suppressPivotMode": (not mostrar_pivot) or es_ajuste,
+            "suppressColumnFilter": es_ajuste,
+            "suppressColumnSelectAll": es_ajuste,
+            "suppressColumnExpandAll": True,
+        },
+    }
+    _filters_panel = {
+        "id": "filters",
+        "labelDefault": "Filtros",
+        "labelKey": "filters",
+        "iconKey": "filter",
+        "toolPanel": "agFiltersToolPanel",
+    }
+    _tool_panels = [_columns_panel, _filters_panel]
+
+    if es_ajuste:
+        _tool_panels.append({
+            "id": "pivotePanel",
+            "labelDefault": "Modo pivote",
+            "labelKey": "pivotePanel",
+            "iconKey": "pivot",
+            "toolPanel": "agColumnsToolPanel",
+            "toolPanelParams": {
+                "suppressRowGroups": False,
+                "suppressValues": False,
+                "suppressPivots": False,
+                "suppressPivotMode": False,
+                "suppressColumnFilter": True,
+                "suppressColumnSelectAll": True,
+                "suppressColumnExpandAll": True,
+            },
         })
 
-    perf.render_panel(expanded=True)                                        # ⚡ PERF
-    perf.render_browser_panel()                                             # ⚡ PERF browser
+    _sidebar_cfg = {
+        "toolPanels": _tool_panels,
+        "defaultToolPanel": "" if es_ajuste else "columns",
+        "position": "right",
+    }
+    return _sidebar_cfg
 
 
-# ===========================================================================
-# INICIALIZAR ESTADOS DE CONFIGURACIÓN DE VISTA
-# ===========================================================================
-if 'forzar_movil' not in st.session_state:
-    st.session_state.forzar_movil = False
-if 'tabla_tam' not in st.session_state:
-    st.session_state.tabla_tam = "Mediano"
+
+def _fila_totales(df_grid, cols_valor, cols_precio, cols_stock, primera_col):
+    """Calcula la fila de totales al pie: suma para valor/stock, promedio
+    para precio, "▶ TOTAL" en la primera columna. Devuelve el dict.
+    Extraído de renderizar_aggrid_desktop en la Fase 3."""
+    fila_totales = {}
+    for c in df_grid.columns:
+        if c in cols_valor:
+            fila_totales[c] = round(float(df_grid[c].sum()), 2)
+        elif c in cols_precio:
+            fila_totales[c] = round(float(df_grid[c].mean()), 2)
+        elif c in cols_stock:
+            fila_totales[c] = round(float(df_grid[c].sum()), 2)
+        elif c == primera_col:
+            fila_totales[c] = "▶ TOTAL"
+        else:
+            fila_totales[c] = None
+    return fila_totales
 
 
-# ===========================================================================
-# INSPECTOR: herramienta de verificación de datos crudos
-# ===========================================================================
-if reporte == "Inspector" or cfg.get("tool"):
-    from inspector import render_inspector
-    render_inspector()
-    perf.end()                                                              # ⚡ PERF
-    st.stop()
+def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14, cols_visibles=None):
+    """Renderiza la tabla AgGrid en vista desktop con formato financiero y diseño premium.
 
+    cols_visibles: lista de columnas que arrancan VISIBLES. El resto se oculta
+    por defecto y el usuario las activa desde la barra lateral (panel "Columnas").
+    Si es None, se muestran todas.
+    """
 
-# ===========================================================================
-# CARGAR DATOS
-# ===========================================================================
-with perf.phase("cargar()"):                                                # ⚡ PERF
-    df = cargar(cfg["archivo"])
-if df is None or df.empty:
-    st.warning("No se pudieron cargar los datos o el archivo está vacío.")
-    perf.end()                                                              # ⚡ PERF
-    st.stop()
+    REPORTES_ESTILO_INVENTARIO = ("Inventario Valorizado", "Ajuste de Inventario")
 
+    envolver_cabeceras = reporte in REPORTES_ESTILO_INVENTARIO
+    quitar_fondos = reporte in REPORTES_ESTILO_INVENTARIO
+    es_inventario = reporte in REPORTES_ESTILO_INVENTARIO
+    es_salidas = (reporte == "Salidas")
+    es_requerimientos = (reporte == "Requerimientos")
+    es_ajuste = (reporte == "Ajuste de Inventario")
 
-# ===========================================================================
-# DETERMINAR COLUMNAS
-# ===========================================================================
-if "fecha" in cfg:
-    col_fecha = buscar_columna(df, cfg["fecha"]) if cfg["fecha"] else None
-else:
-    col_fecha = buscar_columna_fecha(df)
+    mostrar_pivot = es_requerimientos or es_inventario
 
-if "filtros_cat" in cfg:
-    cat_cols, faltan_cat = resolver_columnas(df, cfg["filtros_cat"])
-else:
-    cat_cols = [c for c in [
-        buscar_columna(df, "area", "área"),
-        buscar_columna(df, "familia"),
-        buscar_columna(df, "subfamilia", "sub familia"),
-    ] if c]
-    faltan_cat = []
+    col_producto   = buscar_columna(df_grid, "Nombre Producto", "producto", "descripcion")
+    col_stock      = buscar_columna(df_grid, "Stock al dia", "Stock al Dia", "stock")
+    col_precio_ord = buscar_columna(df_grid, "Precio Promedio", "precio promedio", "precio")
+    col_valorizado = buscar_columna(df_grid, "Valorizado total", "valorizado")
 
-if "buscador" in cfg and cfg["buscador"]:
-    col_busc = buscar_columna(df, cfg["buscador"])
-else:
-    col_busc = None
+    prioridad = []
+    for c in (col_producto, col_stock, col_precio_ord, col_valorizado):
+        if c and c in df_grid.columns and c not in prioridad:
+            prioridad.append(c)
+    if prioridad:
+        resto = [c for c in df_grid.columns if c not in prioridad]
+        df_grid = df_grid[prioridad + resto]
 
-faltantes_aviso = list(faltan_cat)
-if "buscador" in cfg and cfg["buscador"] and not col_busc:
-    faltantes_aviso.append(cfg["buscador"])
+    max_valorizado = 1.0
+    if col_valorizado and col_valorizado in df_grid.columns:
+        try:
+            m = float(df_grid[col_valorizado].max())
+            if m > 0:
+                max_valorizado = m
+        except Exception:
+            pass
 
-
-# ===========================================================================
-# PROCESAMIENTO
-# ===========================================================================
-with perf.phase("df.copy() + to_datetime"):                                 # ⚡ PERF
-    df_f = df.copy()
-    if col_fecha:
-        df_f[col_fecha] = pd.to_datetime(df_f[col_fecha], errors="coerce")
-
-@st.cache_data
-def get_columnas_sugeridas(df_f, col_fecha, cat_cols, col_busc, cfg):
-    todas_cols = df_f.columns.tolist()
-    if "columnas" in cfg:
-        sugeridas, faltan_cols = resolver_columnas(df_f, cfg["columnas"])
-    else:
-        faltan_cols = []
-        sugeridas = []
-        for c in [col_fecha] + cat_cols + ([col_busc] if col_busc else []):
-            if c and c not in sugeridas:
-                sugeridas.append(c)
-        for c in todas_cols:
-            if c not in sugeridas:
-                sugeridas.append(c)
-    return sugeridas, faltan_cols, todas_cols
-
-sugeridas, faltan_cols, todas_cols = get_columnas_sugeridas(
-    df_f, col_fecha, cat_cols, col_busc, cfg
-)
-
-if "agrupar" in cfg:
-    cols_agrupar, _ = resolver_columnas(df_f, cfg["agrupar"])
-else:
-    cols_agrupar = [c for c in [
-        buscar_columna(df_f, "area", "área"),
-        buscar_columna(df_f, "familia"),
-        buscar_columna(df_f, "subfamilia", "sub familia"),
-    ] if c]
-
-
-# ===========================================================================
-# CONTROLES DE FILTRO — st.popover
-# ===========================================================================
-
-fecha_min_full = fecha_max_full = None
-if col_fecha and df_f[col_fecha].notna().any():
-    fecha_min_full = df_f[col_fecha].min().date()
-    fecha_max_full = df_f[col_fecha].max().date()
-
-_hoy = datetime.date.today()
-fecha_ini_default = _hoy.replace(day=1)   # 01 del mes actual
-fecha_fin_default = _hoy                  # hoy
-
-es_ajuste = (reporte == "Ajuste de Inventario")
-
-controles = []
-for cc in cat_cols:
-    controles.append(("cat", cc))
-if col_busc:
-    controles.append(("busc", col_busc))
-if cols_agrupar:
-    controles.append(("grp", None))
-if fecha_min_full is not None and reporte != "Requerimientos" and not es_ajuste:
-    controles.append(("fecha", col_fecha))
-
-grupos_sel = []
-
-
-@st.cache_data
-def get_opciones_filtro(_df, _col):
-    """Retorna las opciones únicas de una columna, ordenadas."""
-    return sorted(_df[_col].dropna().unique().tolist(), key=lambda x: str(x))
-
-
-def _key(prefijo, idx):
-    return f"{prefijo}_{reporte}_{idx}"
-
-def _contar_filtros_activos():
-    n = 0
-    for idx, (tipo, col) in enumerate(controles):
-        if tipo == "fecha":
-            val = st.session_state.get(_key("fch", idx))
-            if isinstance(val, (tuple, list)) and len(val) == 2:
-                if val[0] != fecha_min_full or val[1] != fecha_max_full:
-                    n += 1
-        elif tipo == "cat":
-            if st.session_state.get(_key("cat", idx)):
-                n += 1
-        elif tipo == "busc":
-            if st.session_state.get(_key("busc", idx)):
-                n += 1
-    return n
-
-n_activos = _contar_filtros_activos()
-label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_activos != 1 else '') if n_activos else ''}"
-
-# ── TÍTULO, SELECTOR DE FECHA Y BOTÓN EXTRAER (solo Ajuste de Inventario) ──
-perf.start_phase("Ajuste top row")                                          # ⚡ PERF
-if es_ajuste:
-    _fila_top = st.container(key="fila_ajuste_top")
-    with _fila_top:
-        st.markdown(
-            f'<div class="chip-titulo-reporte">{reporte}</div>',
-            unsafe_allow_html=True,
-        )
-
-    # Rango aplicado (auto): al primer acceso usa 01-del-mes → hoy
-    if col_fecha and fecha_min_full is not None:
-        if "ajuste_rango_aplicado" not in st.session_state:
-            _ini_def = max(fecha_ini_default, fecha_min_full)
-            _fin_def = min(fecha_fin_default, fecha_max_full)
-            if _ini_def > _fin_def:
-                _ini_def, _fin_def = fecha_min_full, fecha_max_full
-            st.session_state["ajuste_rango_aplicado"] = (_ini_def, _fin_def)
-
-        _ini_apl, _fin_apl = st.session_state["ajuste_rango_aplicado"]
-        df_f = df_f[
-            (df_f[col_fecha].dt.date >= _ini_apl) &
-            (df_f[col_fecha].dt.date <= _fin_apl)
-        ]
-perf.end_phase("Ajuste top row")                                            # ⚡ PERF
-
-# ── POPOVER (solo se muestra si hay controles que mostrar) ──
-perf.start_phase("Popover + filtros")                                       # ⚡ PERF
-if controles:
-    with st.popover(label_btn, use_container_width=False):
-        for idx, (tipo, col) in enumerate(controles):
-            if tipo == "cat":
-                opts = get_opciones_filtro(df, col)
-                sel = st.multiselect(
-                    f"📂 {col}", opts, placeholder="Todos",
-                    key=_key("cat", idx),
-                )
-                if sel:
-                    df_f = df_f[df_f[col].isin(sel)]
-
-            elif tipo == "busc":
-                opts_prod = get_opciones_filtro(df_f, col)
-                sel_prod = st.multiselect(
-                    f"🔎 {col}", opts_prod, placeholder="Buscar…",
-                    key=_key("busc", idx),
-                )
-                if sel_prod:
-                    df_f = df_f[df_f[col].astype(str).isin(sel_prod)]
-
-            elif tipo == "grp":
-                grupos_sel = st.multiselect(
-                    "📊 Agrupar por", cols_agrupar, default=[],
-                    key=_key("grp", idx), placeholder="Sin agrupar",
-                )
-
-            elif tipo == "fecha":
-                rango = st.date_input(
-                    "📅 Fecha", value=(fecha_min_full, fecha_max_full),
-                    min_value=fecha_min_full, max_value=fecha_max_full,
-                    format="DD/MM/YYYY", key=_key("fch", idx),
-                )
-                if isinstance(rango, (tuple, list)) and len(rango) == 2:
-                    ini, fin = rango
-                    df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
-
-        if reporte not in ("Compras", "Salidas", "Ajuste de Inventario"):
-            st.divider()
-            st.session_state.tabla_tam = st.select_slider(
-            "🔠 Tamaño de letra",
-            options=list(TAM_FUENTE.keys()),
-            value=st.session_state.tabla_tam,
-            help="Ajusta el tamaño de fuente de la tabla",
-        )
-perf.end_phase("Popover + filtros")                                         # ⚡ PERF
-
-
-# ===========================================================================
-# AVISOS DE COLUMNAS FALTANTES
-# ===========================================================================
-if faltantes_aviso:
-    st.caption("⚠️ No se encontraron: " + ", ".join(faltantes_aviso))
-if "columnas" in cfg and faltan_cols:
-    st.caption("⚠️ Columnas no encontradas: " + ", ".join(faltan_cols))
-
-
-# ===========================================================================
-# SELECTOR DE COLUMNAS (solo para reportes con AgGrid)
-# ===========================================================================
-usa_vista_movil = st.session_state.forzar_movil
-tiene_config_movil = "columnas_movil" in cfg
-if not usa_vista_movil:
-    cols_mostrar = todas_cols
-    if reporte == "Inventario Valorizado":
-        columnas_iniciales = ["Nombre Producto", "Stock al Dia", "Nombre Area", "Valorizado total"]
-        cols_visibles = []
-        for _c in columnas_iniciales:
-            _real = buscar_columna(df_f, _c)
-            if _real and _real not in cols_visibles:
-                cols_visibles.append(_real)
-    elif reporte == "Ajuste de Inventario":
-        columnas_iniciales = ["Producto", "Precio Promedio", "Stock al Cierre",
-                              "Stock Declarado", "Ajuste", "Ajuste Valorizado"]
-        cols_visibles = []
-        for _c in columnas_iniciales:
-            _real = buscar_columna(df_f, _c)
-            if _real and _real not in cols_visibles:
-                cols_visibles.append(_real)
-    else:
-        cols_visibles = sugeridas
-else:
-    cols_mostrar_movil, _ = resolver_columnas(df_f, cfg.get("columnas_movil", []))
-    if not cols_mostrar_movil:
-        cols_mostrar_movil = sugeridas[:5]
-    cols_mostrar  = cols_mostrar_movil
-    cols_visibles = cols_mostrar_movil
-
-
-# ===========================================================================
-# VERIFICACIÓN DE DATOS VACÍOS (sin _esperando_extraccion)
-# ===========================================================================
-if df_f.empty:
-    st.warning("Ningún registro coincide con los filtros.")
-    perf.end()                                                              # ⚡ PERF
-    st.stop()
-
-
-# ===========================================================================
-# CONTENIDO PRINCIPAL
-# ===========================================================================
-font_px = TAM_FUENTE.get(st.session_state.tabla_tam, 14)
-
-
-def _aviso_rapido_aggrid(df_data):
-    """Si hay columnas duplicadas, muestra un aviso corto."""
-    duplicadas = df_data.columns[df_data.columns.duplicated()].unique().tolist()
-    if duplicadas:
-        nombres = ", ".join(f"«{d}»" for d in duplicadas)
-        st.warning(
-            f"⚠️ Columnas duplicadas: {nombres}. "
-            "Esto puede dejar la tabla en blanco."
-        )
-
-
-def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, font_px, cfg):
-    """Renderiza el reporte de Requerimientos con tabla dinámica."""
-    st.markdown(
-        '<p style="font-size:22px;font-weight:700;color:#18181d;'
-        'margin:0 0 0.6rem 0;line-height:1.2;">Requerimientos · Tabla dinámica</p>',
-        unsafe_allow_html=True,
+    gb = GridOptionsBuilder.from_dataframe(df_grid)
+    _opciones_col_def = dict(
+        resizable=True, filter=True, sortable=True,
+        editable=False, enableRowGroup=True,
+        enablePivot=True, enableValue=True,
+        minWidth=100,
+        tooltipValueGetter=JsCode("function(params){ return params.value; }"),
     )
-    st.caption(
-        "🧮 Tabla dinámica estilo Excel. En el panel derecho (pestaña "
-        "**Columnas**) arrastra campos a **Grupos de filas**, **Valores** y "
-        "**Etiquetas de columnas**. Para columnas por periodo legibles, usa los "
-        "campos **Mes** o **Año** (ya calculados) en *Etiquetas de columnas*. "
-        "El **filtro de fecha** está arriba de la tabla (rango desde / hasta)."
-    )
+    if envolver_cabeceras:
+        _opciones_col_def["wrapHeaderText"] = True
+        _opciones_col_def["autoHeaderHeight"] = True
+    gb.configure_default_column(**_opciones_col_def)
 
-    df_piv = df_data.copy()
+    (mono_style, stock_cell_style, stock_cell_style_plano,
+     valorizado_bar_style, valorizado_plano) = _estilos_celda(max_valorizado)
 
-    for _c in df_piv.columns:
-        _n = str(_c).lower()
-        if "fecha" in _n or "date" in _n or pd.api.types.is_datetime64_any_dtype(df_piv[_c]):
-            df_piv[_c] = pd.to_datetime(df_piv[_c], errors="coerce")
+    _stock_style = stock_cell_style_plano if quitar_fondos else stock_cell_style
+    _valor_style = valorizado_plano       if quitar_fondos else valorizado_bar_style
 
-    _col_freg = buscar_columna(df_piv, "Fecha Registro", "fecha registro") or col_fecha_ref
+    for c in df_grid.columns:
+        if not pd.api.types.is_numeric_dtype(df_grid[c]):
+            continue
 
-    if _col_freg and _col_freg in df_piv.columns:
-        _fechas_full = pd.to_datetime(df_piv[_col_freg], errors="coerce")
-        df_piv["Mes"] = (
-            _fechas_full.dt.to_period("M")
-            .astype(str)
-            .str.replace("NaT", "", regex=False)
-        )
-        df_piv["Año"] = (
-            _fechas_full.dt.year
-            .astype("Int64")
-            .astype(str)
-            .str.replace("<NA>", "", regex=False)
-        )
+        gb.configure_column(c, filter="agNumberColumnFilter")
 
-    cols_fecha_piv = [c for c in df_piv.columns
-                      if pd.api.types.is_datetime64_any_dtype(df_piv[c])]
+        norm_c        = _norm(c)
+        es_stock      = "stock" in norm_c
+        es_valorizado = "valorizado" in norm_c
+        es_precio     = any(k in norm_c for k in ("precio", "promedio", "unitario", "costo"))
+        es_valor      = any(k in norm_c for k in ("valorizado", "total", "importe", "monto"))
 
-    if cols_fecha_piv:
-        fc1, fc2 = st.columns([1, 2])
-        with fc1:
-            col_fecha_sel = st.selectbox(
-                "📅 Filtrar por", cols_fecha_piv, key="req_fcol",
+        if es_stock:
+            gb.configure_column(
+                c, aggFunc="sum", type=["numericColumn"],
+                cellStyle=_stock_style,
+                valueFormatter=JsCode("""
+                    function(params) {
+                        if (params.value == null) return '';
+                        return Number(params.value).toLocaleString('es-PE', {
+                            minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    }
+                """),
+            )
+        elif es_valorizado:
+            gb.configure_column(
+                c, aggFunc="sum", type=["numericColumn"],
+                minWidth=170,
+                cellStyle=_valor_style,
+                valueFormatter=JsCode("""
+                    function(params) {
+                        if (params.value == null) return '';
+                        return 'S/ ' + Number(params.value).toLocaleString('es-PE', {
+                            minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    }
+                """),
+            )
+        elif es_precio:
+            gb.configure_column(
+                c, aggFunc="avg", type=["numericColumn"],
+                cellStyle=mono_style,
+                valueFormatter=JsCode("""
+                    function(params) {
+                        if (params.value == null) return '';
+                        return 'S/ ' + Number(params.value).toLocaleString('es-PE', {
+                            minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    }
+                """),
+            )
+        elif es_valor:
+            gb.configure_column(
+                c, aggFunc="sum", type=["numericColumn"],
+                cellStyle=mono_style,
+                valueFormatter=JsCode("""
+                    function(params) {
+                        if (params.value == null) return '';
+                        return 'S/ ' + Number(params.value).toLocaleString('es-PE', {
+                            minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    }
+                """),
+            )
+        else:
+            _decimales_generico = 2 if es_ajuste else 0
+            gb.configure_column(
+                c, aggFunc="sum", type=["numericColumn"],
+                cellStyle=mono_style,
+                valueFormatter=JsCode(f"""
+                    function(params) {{
+                        if (params.value == null) return '';
+                        return Number(params.value).toLocaleString('es-PE', {{
+                            minimumFractionDigits: {_decimales_generico}, maximumFractionDigits: 2 }});
+                    }}
+                """),
             )
 
-        validos = df_piv[col_fecha_sel].dropna()
-        if not validos.empty:
-            fmin, fmax = validos.min().date(), validos.max().date()
+    if col_producto and col_producto in df_grid.columns and col_producto not in grupos_sel:
+        gb.configure_column(col_producto, pinned="left", minWidth=300)
 
-            with fc2:
-                rango = st.date_input(
-                    "Rango (desde / hasta)",
-                    value=(fmin, fmax),
-                    min_value=fmin,
-                    max_value=fmax,
-                    format="DD/MM/YYYY",
-                    key="req_frango",
-                )
+    if es_requerimientos:
+        for c in df_grid.columns:
+            _n = _norm(c)
+            es_fecha = (pd.api.types.is_datetime64_any_dtype(df_grid[c])
+                        or "fecha" in _n or "date" in _n)
+            if es_fecha and _n not in ("mes", "ano", "anio"):
+                gb.configure_column(c, filter=False, suppressFiltersToolPanel=True)
 
-            if isinstance(rango, (tuple, list)) and len(rango) == 2:
-                ini, fin = rango
-                _m = (df_piv[col_fecha_sel].dt.date >= ini) & \
-                     (df_piv[col_fecha_sel].dt.date <= fin)
-                df_piv = df_piv[_m]
+        col_mes = buscar_columna(df_grid, "Mes")
+        col_ano = buscar_columna(df_grid, "Año", "Ano", "Anio")
 
-    tiene_config_movil = "columnas_movil" in cfg
-    if usa_vista_movil and tiene_config_movil:
-        st.caption("📱 Vista móvil")
-        renderizar_aggrid_movil(
-            df_piv[cols_mostrar], cfg.get("columnas_fijas_movil", 2), "Requerimientos", font_px,
-        )
-    else:
-        _aviso_rapido_aggrid(df_piv)
-        renderizar_aggrid_desktop(
-            df_piv,
-            grupos_sel,
-            list(df_piv.columns),
-            "Requerimientos",
-            font_px,
-            cols_visibles=None,
-        )
-
-
-def _es_moneda(nombre):
-    n = str(nombre).lower()
-    return any(k in n for k in ("importe", "total", "monto", "precio", "costo", "unitario"))
-
-def _es_cantidad(nombre):
-    n = str(nombre).lower()
-    return any(k in n for k in ("cantidad", "unidades", "qty", "stock"))
-
-
-def _render_tabla():
-    """Renderiza la tabla AgGrid (desktop o móvil)."""
-    if usa_vista_movil and tiene_config_movil:
-        st.caption("📱 Vista móvil • Desliza para más columnas • Mantén presionado para menú")
-        columnas_fijas = cfg.get("columnas_fijas_movil", 2)
-        renderizar_aggrid_movil(df_f[cols_mostrar], columnas_fijas, reporte, font_px)
-    else:
-        _aviso_rapido_aggrid(df_f[cols_mostrar])
-        cols_finales = list(cols_mostrar)
-        if grupos_sel:
-            for c in grupos_sel:
-                if c not in cols_finales:
-                    cols_finales.append(c)
-        renderizar_aggrid_desktop(
-            df_f[cols_finales], grupos_sel, cols_mostrar, reporte, font_px,
-            cols_visibles=cols_visibles,
-        )
-
-
-def _render_kpis_salidas(df_data):
-    """Renderiza las métricas KPI para el reporte de Salidas."""
-    cols_imp = [c for c in df_data.columns
-                if pd.api.types.is_numeric_dtype(df_data[c]) and _es_moneda(c)]
-    cols_cnt = [c for c in df_data.columns
-                if pd.api.types.is_numeric_dtype(df_data[c]) and _es_cantidad(c)]
-    n_kpi = min(4, 1 + len(cols_imp[:2]) + len(cols_cnt[:1]))
-    kpis = st.columns(n_kpi)
-    kpis[0].metric("📄 Registros", f"{len(df_data):,}")
-    ki = 1
-    for c in cols_imp[:2]:
-        if ki >= n_kpi:
-            break
-        kpis[ki].metric(f"💰 {c}", f"S/ {df_data[c].sum():,.2f}")
-        ki += 1
-    for c in cols_cnt[:1]:
-        if ki >= n_kpi:
-            break
-        kpis[ki].metric(f"📦 {c}", f"{int(df_data[c].sum()):,}")
-        ki += 1
-
-
-# ===========================================================================
-# SELECTOR DE VISTA (Tabla / Gráficos) — tabs subrayados (underline)
-# ===========================================================================
-def _selector_vista():
-    """Muestra un radio horizontal estilizado como tabs subrayados y devuelve
-    la opción elegida ('Tabla' o 'Gráficos'). El CSS que lo convierte en tabs
-    vive en estilos.py (bloque '.st-key-vistatabs_...')."""
-    _opciones = {"Tabla": ":material/table_rows: Tabla",
-             "Gráficos": ":material/monitoring: Gráficos"}
-    with st.container(key=f"vistatabs_{reporte}"):
-        vista = st.radio(
-            "Vista",
-            options=list(_opciones.keys()),
-            format_func=lambda o: _opciones[o],
-            horizontal=True,
-            label_visibility="collapsed",
-            key=f"vista_seg_{reporte}",
-        )
-    return vista or "Tabla"
-
-
-# ===========================================================================
-# FRAGMENT GENÉRICO — aisla el contenido principal de cada reporte
-# ===========================================================================
-@st.fragment
-def _render_contenido():
-    perf.fragment_start("_render_contenido")                                # ⚡ PERF
-
-    # ── COMPRAS ─────────────────────────────────────────────────────────────
-    if reporte == "Compras":
-        vista = _selector_vista()
-        if vista == "Tabla":
-            renderizar_aggrid_compras(df_f, font_px)
-        else:
-            renderizar_graficos_reporte(df_f, reporte, cfg)
-
-    # ── INVENTARIO VALORIZADO ────────────────────────────────────────────────
-    elif reporte == "Inventario Valorizado":
-        st.markdown(
-            '<p style="font-size:22px;font-weight:700;color:#18181d;'
-            'margin:0 0 0.6rem 0;line-height:1.2;">Inventario Valorizado</p>',
-            unsafe_allow_html=True,
-        )
-        vista = _selector_vista()
-        if vista == "Tabla":
-            _render_tabla()
-        else:
-            renderizar_graficos(df_f, es_movil=usa_vista_movil)
-
-    # ── SALIDAS ──────────────────────────────────────────────────────────────
-    elif reporte == "Salidas":
-        vista = _selector_vista()
-
-        if vista == "Tabla":
-            if usa_vista_movil and tiene_config_movil:
-                st.caption("📱 Vista móvil • Desliza para más columnas")
-                renderizar_aggrid_movil(
-                    df_f[cols_mostrar], cfg.get("columnas_fijas_movil", 2), reporte, font_px,
-                )
-            else:
-                _k_cols = f"colsel_{reporte}"
-                if _k_cols not in st.session_state:
-                    st.session_state[_k_cols] = list(todas_cols)
-                _vigentes = [c for c in st.session_state[_k_cols] if c in todas_cols]
-                st.session_state[_k_cols] = _vigentes or list(todas_cols)
-
-                _k_zoom = f"zoom_{reporte}"
-                if _k_zoom not in st.session_state:
-                    st.session_state[_k_zoom] = 14
-
-                barra = st.columns([3, 3, 1.4])
-                with barra[0]:
-                    with st.popover("🧰 Columnas", use_container_width=True):
-                        st.caption("Mostrar u ocultar columnas")
-                        cols_sel = st.multiselect(
-                            "Columnas visibles", todas_cols,
-                            key=_k_cols, label_visibility="collapsed",
-                        )
-                with barra[1]:
-                    zoom = st.select_slider(
-                        "🔍 Zoom", options=[12, 14, 16, 18, 20, 22], key=_k_zoom,
-                    )
-                with barra[2]:
-                    st.download_button(
-                        "⬇️ CSV",
-                        data=df_f.to_csv(index=False).encode("utf-8-sig"),
-                        file_name="salidas_export.csv",
-                        mime="text/csv",
-                        use_container_width=True,
-                        key=f"export_{reporte}",
-                    )
-
-                if not cols_sel:
-                    cols_sel = list(todas_cols)
-
-                _render_kpis_salidas(df_f)
-
-                cols_finales = list(cols_sel)
-                if grupos_sel:
-                    for c in grupos_sel:
-                        if c not in cols_finales:
-                            cols_finales.append(c)
-
-                _aviso_rapido_aggrid(df_f[cols_finales])
-                renderizar_aggrid_desktop(
-                    df_f[cols_finales], grupos_sel, cols_sel, reporte, int(zoom),
-                    cols_visibles=None,
-                )
-        else:
-            renderizar_graficos_reporte(df_f, reporte, cfg)
-
-    # ── REQUERIMIENTOS ───────────────────────────────────────────────────────
-    elif reporte == "Requerimientos":
-        _render_requerimientos(df_f, col_fecha, grupos_sel, cols_mostrar, font_px, cfg)
-
-    # ── RESTO DE REPORTES (incluye Ajuste de Inventario) ────────────────────
-    else:
-        if not es_ajuste:
-            st.markdown(
-                f'<p style="font-size:22px;font-weight:700;color:#18181d;'
-                f'margin:0 0 0.2rem 0;line-height:1.2;">{reporte}</p>'
-                f'<hr style="border:none;border-top:2px solid #6c5ce7;margin:0 0 0.8rem 0;">',
-                unsafe_allow_html=True,
+        if col_mes and col_mes in df_grid.columns:
+            valores_mes = sorted(
+                [v for v in df_grid[col_mes].dropna().astype(str).unique().tolist() if v != ""]
             )
-            vista = _selector_vista()
+            gb.configure_column(
+                col_mes,
+                filter="agSetColumnFilter",
+                filterParams={
+                    "values": valores_mes,
+                    "suppressSorting": False,
+                    "suppressMiniFilter": False,
+                },
+            )
+
+        if col_ano and col_ano in df_grid.columns:
+            valores_ano = sorted(
+                [v for v in df_grid[col_ano].dropna().astype(str).unique().tolist() if v != ""]
+            )
+            gb.configure_column(
+                col_ano,
+                filter="agSetColumnFilter",
+                filterParams={
+                    "values": valores_ano,
+                    "suppressSorting": False,
+                    "suppressMiniFilter": False,
+                },
+            )
+
+    if cols_visibles is not None:
+        visibles_norm = {_norm(c) for c in cols_visibles}
+        hay_match = any(_norm(c) in visibles_norm for c in df_grid.columns)
+        if hay_match:
+            for c in df_grid.columns:
+                if c in grupos_sel:
+                    continue
+                if _norm(c) not in visibles_norm:
+                    gb.configure_column(c, hide=True)
+
+    row_h    = max(28, min(60, font_px + 12))
+    header_h = max(30, min(62, font_px + 14))
+    if es_requerimientos:
+        row_h = 22
+
+    cols_valor  = [c for c in df_grid.columns
+                   if pd.api.types.is_numeric_dtype(df_grid[c]) and
+                   any(k in _norm(c) for k in ("valorizado", "total", "importe", "monto"))]
+    cols_precio = [c for c in df_grid.columns
+                   if pd.api.types.is_numeric_dtype(df_grid[c]) and
+                   any(k in _norm(c) for k in ("precio", "promedio", "unitario", "costo"))]
+    cols_stock  = [c for c in df_grid.columns
+                   if pd.api.types.is_numeric_dtype(df_grid[c]) and "stock" in _norm(c)]
+
+    primera_col = list(df_grid.columns)[0] if len(df_grid.columns) > 0 else None
+    fila_totales = _fila_totales(df_grid, cols_valor, cols_precio, cols_stock, primera_col)
+
+    get_row_style = _estilo_fila(col_stock, df_grid, es_inventario, quitar_fondos)
+    _sidebar_cfg = _config_sidebar(mostrar_pivot, es_ajuste)
+
+    _reporte_js = str(reporte).replace("\\", "\\\\").replace('"', '\\"')
+
+    _js_ms_desde_carga = """
+        (function() {
+            try {
+                var origen = (window.parent && window.parent.performance)
+                    ? window.parent.performance.timeOrigin
+                    : performance.timeOrigin;
+                return Math.round(Date.now() - origen);
+            } catch(e) { return Math.round(performance.now()); }
+        })()
+    """
+
+    opciones_grid = {
+        "autoGroupColumnDef": {"minWidth": 200},
+        "localeText": LOCALE_ES,
+        "sideBar": _sidebar_cfg,
+        "rowHeight": row_h,
+        "headerHeight": header_h,
+        "cellSelection": True,
+        "tooltipShowDelay": 300,
+        "getRowStyle": get_row_style,
+        "suppressAggFuncInHeader": True,
+        "onGridSizeChanged": JsCode("function(params) { params.api.sizeColumnsToFit(); }"),
+        "onGridReady": JsCode(f"""
+            function(params) {{
+                try {{
+                    var ms = {_js_ms_desde_carga};
+                    var bc = new BroadcastChannel('_perf_aggrid');
+                    bc.postMessage({{event:'gridReady', ms: ms, ts: Date.now(), reporte: "{_reporte_js}"}});
+                    bc.close();
+                }} catch(e) {{}}
+            }}
+        """),
+        "onFirstDataRendered": JsCode(f"""
+            function(params) {{
+                params.api.autoSizeAllColumns();
+                try {{
+                    var ms = {_js_ms_desde_carga};
+                    var rc = (params.api.getDisplayedRowCount) ? params.api.getDisplayedRowCount() : null;
+                    var bc = new BroadcastChannel('_perf_aggrid');
+                    bc.postMessage({{event:'firstDataRendered', ms: ms, rowCount: rc, ts: Date.now(), reporte: "{_reporte_js}"}});
+                    bc.close();
+                }} catch(e) {{}}
+            }}
+        """),
+        "onModelUpdated": JsCode(f"""
+            function(params) {{
+                try {{
+                    window.clearTimeout(window.__pgv2ModelUpdTimer);
+                    window.__pgv2ModelUpdTimer = window.setTimeout(function() {{
+                        var ms = {_js_ms_desde_carga};
+                        var rc = (params.api.getDisplayedRowCount) ? params.api.getDisplayedRowCount() : null;
+                        var bc = new BroadcastChannel('_perf_aggrid');
+                        bc.postMessage({{event:'modelUpdated', ms: ms, rowCount: rc, ts: Date.now(), reporte: "{_reporte_js}"}});
+                        bc.close();
+                    }}, 120);
+                }} catch(e) {{}}
+            }}
+        """),
+    }
+
+    if not es_requerimientos:
+        opciones_grid["pinnedBottomRowData"] = [fila_totales]
+    else:
+        opciones_grid["grandTotalRow"] = "bottom"
+
+    agrupar_on = bool(grupos_sel)
+    if agrupar_on:
+        for c in grupos_sel:
+            if c in df_grid.columns:
+                gb.configure_column(c, rowGroup=True, hide=True)
+
+        if es_inventario:
+            opciones_grid["groupDisplayType"] = "groupRows"
+            opciones_grid["onColumnPivotModeChanged"] = JsCode("""
+                function(params) {
+                    try {
+                        var pivotOn = params.api.isPivotMode
+                            ? params.api.isPivotMode() : false;
+                        params.api.setGridOption(
+                            'groupDisplayType',
+                            pivotOn ? 'multipleColumns' : 'groupRows'
+                        );
+                    } catch (e) {}
+                }
+            """)
+
+            _col_val_js = ""
+            if col_valorizado and col_valorizado in df_grid.columns:
+                _col_val_js = str(col_valorizado).replace("\\", "\\\\").replace('"', '\\"')
+
+            opciones_grid["groupRowRendererParams"] = {
+                "innerRenderer": JsCode(f"""
+                    function(params) {{
+                        if (!params.node || !params.node.group) return params.value;
+                        var nombre = (params.value == null ? '' : params.value);
+                        var n = params.node.allChildrenCount;
+                        var extra = '';
+                        var colVal = "{_col_val_js}";
+                        if (colVal && params.node.aggData &&
+                            params.node.aggData[colVal] !== null &&
+                            params.node.aggData[colVal] !== undefined) {{
+                            var v = Number(params.node.aggData[colVal]);
+                            if (!isNaN(v)) {{
+                                extra = ' · S/ ' + v.toLocaleString('es-PE', {{
+                                    minimumFractionDigits: 2, maximumFractionDigits: 2 }});
+                            }}
+                        }}
+                        return '<span style="font-weight:600;color:{TEXTO_PRINCIPAL}">' + nombre +
+                               '</span> <span style="color:{ICON_MUTED};font-weight:400">(' +
+                               n + ')' + extra + '</span>';
+                    }}
+                """)
+            }
         else:
-            # Cambio 3: fila con tabs a la izquierda y calendario a la derecha
-            col_tabs, col_fecha_sel = st.columns([3, 1.15], vertical_alignment="bottom")
-            with col_tabs:
-                vista = _selector_vista()
-            with col_fecha_sel:
-                with st.container(key="fecha_ajuste_pill"):
-                    _ini_apl, _fin_apl = st.session_state["ajuste_rango_aplicado"]
-                    rango_aj = st.date_input(
-                        "Rango a Evaluar",
-                        value=(_ini_apl, _fin_apl),
-                        min_value=fecha_min_full,
-                        max_value=fecha_max_full,
-                        format="DD/MM/YYYY",
-                        key="fch_ajuste_inline",
-                        label_visibility="collapsed",
-                    )
-            if (isinstance(rango_aj, (tuple, list)) and len(rango_aj) == 2
-                    and tuple(rango_aj) != st.session_state["ajuste_rango_aplicado"]):
-                st.session_state["ajuste_rango_aplicado"] = tuple(rango_aj)
-                st.rerun(scope="app")   # refiltra df_f en el flujo principal
+            opciones_grid["groupDisplayType"] = "multipleColumns"
 
-        if vista == "Tabla":
-            _render_tabla()
+        opciones_grid["groupDefaultExpanded"] = 0
+        opciones_grid["pivotMode"] = es_requerimientos
+    else:
+        opciones_grid["pivotMode"] = False
+
+    if envolver_cabeceras:
+        opciones_grid["headerHeight"] = int(font_px * 2 + 14)
+
+    if es_salidas:
+        opciones_grid["sideBar"] = False
+
+    if es_ajuste:
+        opciones_grid["onToolPanelVisibleChanged"] = JsCode("""
+            function(params) {
+                try {
+                    var open = (params.api && params.api.getOpenedToolPanel)
+                        ? params.api.getOpenedToolPanel() : null;
+                    var sb = document.querySelector('.ag-side-bar');
+                    if (sb) sb.setAttribute('data-active-panel', open || '');
+
+                    window.clearTimeout(window.__ajusteFitTimer);
+                    window.__ajusteFitTimer = window.setTimeout(function() {
+                        try { params.api.sizeColumnsToFit(); } catch(e) {}
+                    }, 150);
+                } catch(e) {}
+            }
+        """)
+
+        _grupos_ini = []
+        for _term in ("Familia", "Subfamilia", "Producto", "Unidad Medida", "Area"):
+            _rc = buscar_columna(df_grid, _term)
+            if _rc and _rc in df_grid.columns and _rc not in _grupos_ini:
+                _grupos_ini.append(_rc)
+        for _i, _c in enumerate(_grupos_ini):
+            gb.configure_column(_c, rowGroup=True, rowGroupIndex=_i, hide=True)
+
+        _valores_ini = []
+        for _term, _af in (
+            ("Precio Promedio",   "avg"),
+            ("Stock al Cierre",   "sum"),
+            ("Stock Declarado",   "sum"),
+            ("Ajuste",            "sum"),
+            ("Ajuste Valorizado", "sum"),
+        ):
+            _rc = buscar_columna(df_grid, _term)
+            if _rc and _rc in df_grid.columns and _rc not in _valores_ini:
+                gb.configure_column(_rc, aggFunc=_af, enableValue=True)
+                _valores_ini.append(_rc)
+
+        for _c in df_grid.columns:
+            if (pd.api.types.is_numeric_dtype(df_grid[_c])
+                    and _c not in _valores_ini and _c not in _grupos_ini):
+                gb.configure_column(_c, aggFunc=None)
+
+        for _c in df_grid.columns:
+            gb.configure_column(_c, headerName=_titulo_es(_c))
+
+        opciones_grid["pivotMode"] = True
+        opciones_grid["groupDefaultExpanded"] = 0
+
+    gb.configure_grid_options(**opciones_grid)
+    if es_salidas:
+        gb.configure_pagination(enabled=False)
+    else:
+        gb.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
+    grid_options = gb.build()
+
+    custom_css = _css_base(font_px)
+
+    if envolver_cabeceras:
+        custom_css[".ag-header-cell-text"].update({
+            "white-space": "normal !important",
+            "overflow": "visible !important",
+            "text-overflow": "clip !important",
+            "line-height": "1.25 !important",
+            "overflow-wrap": "break-word",
+            "word-break": "normal",
+            "display": "flex",
+            "align-items": "center",
+            "text-align": "center",
+        })
+        custom_css[".ag-header-cell-label"] = {
+            "white-space": "normal !important",
+            "overflow": "visible !important",
+            "align-items": "center",
+        }
+
+    tema_grid = "balham"
+    if es_inventario:
+        tema_grid = "material"
+        custom_css[".ag-row-even"] = {"background-color": f"{BLANCO} !important"}
+        custom_css[".ag-row-odd"] = {"background-color": f"{BLANCO} !important"}
+
+        custom_css[".ag-root-wrapper"].update({
+            "background-color": "transparent !important",
+            "border": "none !important",
+            "border-radius": "0 !important",
+            "box-shadow": "none !important",
+            "overflow": "visible !important",
+        })
+        custom_css[".ag-root-wrapper-body"] = {
+            "background": "transparent !important",
+            "overflow": "visible !important",
+        }
+        custom_css[".ag-root"] = {
+            "background-color": f"{BLANCO} !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "12px !important",
+            "box-shadow": ("0 1px 2px rgba(16,16,20,0.05), "
+                           "0 4px 14px rgba(16,16,20,0.07) !important"),
+            "overflow": "hidden !important",
+        }
+        custom_css["html, body"] = {"background": "transparent !important"}
+
+        custom_css[".ag-header"].update({
+            "background-color": f"{LAVANDA_FONDO} !important",
+            "border-bottom": f"1px solid {ACENTO} !important",
+        })
+        custom_css[".ag-header-cell"].update({
+            "background-color": f"{LAVANDA_FONDO} !important",
+        })
+        custom_css[".ag-header-cell-text"].update({
+            "color": f"{ACENTO_TEXTO_OSCURO} !important",
+            "font-weight": "500",
+            "letter-spacing": "normal",
+            "text-transform": "none",
+        })
+        custom_css[".ag-header-icon"].update({
+            "color": f"{GRIS_TEXTO_SUAVE} !important",
+        })
+        custom_css[".ag-row-pinned"].update({
+            "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
+            "border-top": f"2px solid {ACENTO} !important",
+            "color": f"{ACENTO_TEXTO_OSCURO} !important",
+        })
+
+        custom_css[".ag-body-vertical-scroll::-webkit-scrollbar"] = {"width": "11px"}
+        custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar"] = {"height": "11px"}
+        custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-track"] = {"background": "transparent"}
+        custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar-track"] = {"background": "transparent"}
+        custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-thumb"] = {
+            "background": "transparent", "border-radius": "8px",
+            "border": "3px solid transparent", "background-clip": "padding-box",
+        }
+        custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar-thumb"] = {
+            "background": "transparent", "border-radius": "8px",
+            "border": "3px solid transparent", "background-clip": "padding-box",
+        }
+        custom_css[".ag-body-vertical-scroll:hover::-webkit-scrollbar-thumb"] = {
+            "background": f"{SCROLL_THUMB}", "background-clip": "padding-box",
+        }
+        custom_css[".ag-body-horizontal-scroll:hover::-webkit-scrollbar-thumb"] = {
+            "background": f"{SCROLL_THUMB}", "background-clip": "padding-box",
+        }
+        custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-thumb:hover"] = {
+            "background": f"{LAVANDA_FOCO}", "background-clip": "padding-box",
+        }
+        custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar-thumb:hover"] = {
+            "background": f"{LAVANDA_FOCO}", "background-clip": "padding-box",
+        }
+        custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar-corner"] = {
+            "background": "transparent",
+        }
+
+        custom_css[".ag-side-bar"].update({
+            "background-color": f"{LAVANDA_FILA} !important",
+            "border": f"1px solid {GRIS_BORDE} !important",
+            "border-left": f"1px solid {GRIS_BORDE} !important",
+            "border-radius": "12px !important",
+            "box-shadow": ("0 1px 2px rgba(16,16,20,0.05), "
+                           "0 4px 14px rgba(16,16,20,0.07) !important"),
+            "margin": "0 0 0 14px !important",
+            "overflow": "hidden !important",
+        })
+        custom_css[".ag-side-bar .ag-side-buttons"].update({
+            "background-color": f"{LAVANDA_FILA_ALT} !important",
+            "border-bottom": f"1px solid {GRIS_BORDE} !important",
+        })
+
+        custom_css[
+            ".ag-side-bar[data-active-panel='columns'], "
+            ".ag-side-bar[data-active-panel='pivotePanel']"
+        ] = {"--ag-list-item-height": "62px !important"}
+
+        custom_css[
+            ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-item, "
+            ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-item"
+        ] = {
+            "height": "62px !important",
+            "overflow": "visible !important",
+        }
+
+        custom_css[
+            ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-container, "
+            ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-container"
+        ] = {
+            "overflow": "visible !important",
+        }
+
+    if es_requerimientos:
+        custom_css[".ag-side-button.ag-selected"] = {
+            "background-color": f"{EXIT_HOVER} !important",
+            "color": f"{GRIS_FONDO} !important",
+            "box-shadow": f"inset 0 0 0 1px {GRIS_TEXTO}",
+        }
+        custom_css[".ag-side-button:hover"] = {
+            "background-color": f"{GRIS_BORDE} !important",
+            "color": f"{TEXTO_PRINCIPAL} !important",
+        }
+        custom_css[".ag-header-icon"] = {"color": f"{GRIS_TEXTO_SUAVE} !important"}
+        custom_css[".ag-column-select-column .ag-checkbox-input-wrapper.ag-checked"] = {
+            "background": f"{GRIS_TEXTO} !important",
+        }
+        custom_css[".ag-row-pinned"] = {
+            "background-color": f"{GRIS_BORDE} !important",
+            "font-weight": "700 !important",
+            "border-top": f"2px solid {GRIS_TEXTO} !important",
+            "color": "#101014 !important",
+            "font-size": f"{font_px + 1}px !important",
+        }
+        custom_css[".ag-row-hover"] = {"background-color": f"{GRIS_LINEA} !important"}
+        custom_css[".ag-paging-button:hover:not(.ag-disabled)"] = {
+            "background": f"{GRIS_BORDE} !important",
+            "border-color": f"{GRIS_TEXTO_SUAVE} !important",
+            "color": f"{EXIT_HOVER} !important",
+        }
+        custom_css[".ag-header-group-cell"] = {"background-color": f"{LAVANDA_CABECERA_GRUPO} !important"}
+        custom_css[".ag-header-group-cell-label"] = {"color": f"{ACENTO_TEXTO_OSCURO} !important"}
+        custom_css[".ag-header-group-text"] = {
+            "color": f"{ACENTO_TEXTO_OSCURO} !important",
+            "font-weight": "600 !important",
+        }
+        custom_css[".ag-header-group-cell .ag-icon"] = {"color": f"{ACENTO} !important"}
+        custom_css[".ag-theme-balham"] = {"--ag-list-item-height": "22px !important"}
+        custom_css[".ag-column-select-column-label"] = {
+            "font-size": f"{max(11, font_px - 1)}px !important",
+            "line-height": "1.15 !important",
+        }
+        custom_css[".ag-column-select-column .ag-checkbox-input-wrapper"] = {
+            "transform": "scale(0.85)",
+        }
+        custom_css[".ag-column-select-column .ag-toggle-button-input-wrapper"] = {
+            "transform": "scale(0.85)",
+        }
+        custom_css[".ag-column-select-header"] = {
+            "padding-top": "4px !important",
+            "padding-bottom": "4px !important",
+        }
+
+    perf.set_df_info(df_grid, label=f"AgGrid ({reporte})")
+    with perf.phase("AgGrid render"):
+        AgGrid(
+            df_grid, gridOptions=grid_options,
+            height=(850 if es_requerimientos else 600),
+            theme=tema_grid, custom_css=custom_css,
+            fit_columns_on_grid_load=True, allow_unsafe_jscode=True,
+            enable_enterprise_modules=True, key=f"grid_{reporte}",
+        )
+
+    inject_grid_health_check()
+
+    if reporte in REPORTES_ESTILO_INVENTARIO:
+        inject_pagination_v2()
+
+    if es_requerimientos or es_ajuste:
+        inject_maximize_aggrid()
+        inject_dynamic_grid_height(offset_px=220)
+
+    if es_ajuste:
+        from inyecciones import inject_fix_column_panel_ajuste
+        inject_fix_column_panel_ajuste()
+
+
+# ===========================================================================
+# FUNCIÓN: AGGRID MÓVIL (ANCHO COMPLETO)
+# ===========================================================================
+
+def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
+    """Renderiza la tabla AgGrid optimizada para vista móvil."""
+    envolver_cabeceras = (reporte == "Inventario Valorizado")
+
+    gb = GridOptionsBuilder.from_dataframe(df_grid)
+    _opciones_col_def = dict(
+        resizable=True, sortable=True, filter=True,
+        editable=False, groupable=False, enableRowGroup=False,
+        enablePivot=False, menuTabs=["filterMenuTab", "generalMenuTab", "columnsMenuTab"],
+    )
+    if envolver_cabeceras:
+        _opciones_col_def["wrapHeaderText"] = True
+        _opciones_col_def["autoHeaderHeight"] = True
+    gb.configure_default_column(**_opciones_col_def)
+
+    for i, col in enumerate(df_grid.columns):
+        if i < columnas_fijas:
+            gb.configure_column(col, pinned="left")
+        if pd.api.types.is_numeric_dtype(df_grid[col]):
+            af = "avg" if ("precio" in _norm(col) or "promedio" in _norm(col)) else "sum"
+            gb.configure_column(col, aggFunc=af, type=["numericColumn"],
+                                valueFormatter="x == null ? '' : x.toLocaleString()")
+
+    row_h = max(28, min(60, font_px + 12))
+    header_h = max(30, min(62, font_px + 14))
+
+    opciones_grid = {
+        "localeText": LOCALE_ES,
+        "suppressColumnVirtualisation": True,
+        "rowHeight": row_h,
+        "headerHeight": header_h,
+        "animateRows": False,
+        "sideBar": False,
+        "suppressContextMenu": False,
+        "pagination": True,
+        "paginationAutoPageSize": False,
+        "paginationPageSize": 25,
+    }
+
+    if envolver_cabeceras:
+        opciones_grid["headerHeight"] = int(font_px * 2 + 14)
+
+    gb.configure_grid_options(**opciones_grid)
+    grid_options = gb.build()
+
+    custom_css = {
+        ".ag-root-wrapper": {"background-color": f"{BLANCO}", "border": f"1px solid {GRIS_BORDE}", "border-radius": "8px", "width": "100% !important"},
+        ".ag-header": {"background-color": f"{GRIS_LINEA}", "border-bottom": f"2px solid {ACENTO}"},
+        ".ag-header-cell-text": {"color": f"{TEXTO_PRINCIPAL}", "font-weight": "700", "font-size": f"{font_px}px"},
+        ".ag-row": {"color": f"{EXIT_HOVER}", "border-color": f"{GRIS_BORDE}"},
+        ".ag-row-even": {"background-color": f"{BLANCO}"},
+        ".ag-row-odd": {"background-color": f"{GRIS_FONDO}"},
+        ".ag-row-hover": {"background-color": f"{LAVANDA_FONDO} !important"},
+        ".ag-cell": {"color": f"{EXIT_HOVER}", "font-size": f"{font_px}px"},
+        ".ag-paging-panel": {"color": f"{ICON_MUTED}", "background-color": f"{GRIS_FONDO}", "border-top": f"1px solid {GRIS_BORDE}", "font-size": "0.75rem"},
+        ".ag-menu": {"background-color": f"{BLANCO}", "color": f"{TEXTO_PRINCIPAL}", "border": f"1px solid {GRIS_BORDE}"},
+        ".ag-pinned-left-header": {"box-shadow": "3px 0 8px rgba(0,0,0,0.08)"},
+        ".ag-pinned-left-cols-container": {"box-shadow": "3px 0 8px rgba(0,0,0,0.08)"},
+    }
+
+    if envolver_cabeceras:
+        custom_css[".ag-header-cell-text"].update({
+            "white-space": "normal !important",
+            "overflow": "visible !important",
+            "text-overflow": "clip !important",
+            "line-height": "1.25 !important",
+            "overflow-wrap": "break-word",
+            "word-break": "normal",
+            "display": "flex",
+            "align-items": "center",
+            "text-align": "center",
+        })
+        custom_css[".ag-header-cell-label"] = {
+            "white-space": "normal !important",
+            "overflow": "visible !important",
+            "align-items": "center",
+        }
+
+    AgGrid(
+        df_grid.head(3000), gridOptions=grid_options, height=380,
+        theme="balham", custom_css=custom_css,
+        fit_columns_on_grid_load=False, allow_unsafe_jscode=True,
+        enable_enterprise_modules=True, key=f"grid_movil_{reporte}",
+    )
+
+    inject_grid_health_check()
+
+
+# ===========================================================================
+# NUEVA FUNCIÓN: AGGRID COMPRAS (MODO PIVOTE, ESTILO INVENTARIO)
+# ===========================================================================
+
+def renderizar_aggrid_compras(df_grid: pd.DataFrame, font_px: int = 14):
+    """
+    Tabla de Compras en AgGrid modo pivote — mismo estilo que Ajuste de
+    Inventario (tema material, paleta lavanda, sidebar con pivot panel).
+    """
+    from inyecciones import inject_fix_column_panel_ajuste  # local, igual que el original
+
+    # ── Formato numérico por tipo de columna ──────────────────────────────
+    gb = GridOptionsBuilder.from_dataframe(df_grid)
+    gb.configure_default_column(
+        resizable=True, filter=True, sortable=True, editable=False,
+        enableRowGroup=True, enablePivot=True, enableValue=True,
+        minWidth=100, wrapHeaderText=True, autoHeaderHeight=True,
+        tooltipValueGetter=JsCode("function(params){ return params.value; }"),
+    )
+
+    _fmt_soles = JsCode("""
+        function(params) {
+            if (params.value == null) return '';
+            return 'S/ ' + Number(params.value).toLocaleString('es-PE',
+                { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+    """)
+    _fmt_num = JsCode("""
+        function(params) {
+            if (params.value == null) return '';
+            return Number(params.value).toLocaleString('es-PE',
+                { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+    """)
+    _mono = JsCode("""
+        function(params) {
+            return {
+                fontFamily: "'Courier New',Courier,monospace",
+                textAlign: 'right', paddingRight: '12px'
+            };
+        }
+    """)
+    _val_style = JsCode(
+        "function(params) {"
+        "    return {"
+        "        fontFamily: \"'Courier New',Courier,monospace\","
+        "        color: '" + ACENTO_TEXTO_OSCURO + "', fontWeight: '600',"
+        "        textAlign: 'right', paddingRight: '12px'"
+        "    };"
+        "}"
+    )
+
+    for c in df_grid.columns:
+        if not pd.api.types.is_numeric_dtype(df_grid[c]):
+            continue
+        n = _norm(c)
+        gb.configure_column(c, filter="agNumberColumnFilter")
+        if any(k in n for k in ("importe", "total", "monto", "subtotal")):
+            gb.configure_column(c, aggFunc="sum", type=["numericColumn"],
+                                cellStyle=_val_style, valueFormatter=_fmt_soles, minWidth=160)
+        elif any(k in n for k in ("precio", "costo", "unitario", "promedio")):
+            gb.configure_column(c, aggFunc="avg", type=["numericColumn"],
+                                cellStyle=_mono, valueFormatter=_fmt_soles)
+        elif any(k in n for k in ("cantidad", "qty", "unidades")):
+            gb.configure_column(c, aggFunc="sum", type=["numericColumn"],
+                                cellStyle=_mono, valueFormatter=_fmt_num)
         else:
-            renderizar_graficos_reporte(df_f, reporte, cfg)
+            gb.configure_column(c, aggFunc="sum", type=["numericColumn"],
+                                cellStyle=_mono, valueFormatter=_fmt_num)
 
-    perf.fragment_end("_render_contenido")                                  # ⚡ PERF
+    # ── Grupos de filas (auto-detectados) ─────────────────────────────────
+    _candidatos_grp = [
+        ("Proveedor", "Nombre Proveedor", "Razon Social"),
+        ("Nombre Area", "Area", "Almacen"),
+        ("Nombre Familia", "Familia"),
+        ("Nombre Subfamilia", "Subfamilia"),
+        ("Nombre Producto", "Producto", "Descripcion"),
+        ("Unidad Medida", "Unidad Kardex", "Unidad"),
+    ]
+    _grupos_ini = []
+    for cands in _candidatos_grp:
+        _rc = buscar_columna(df_grid, *cands)
+        if _rc and _rc in df_grid.columns and _rc not in _grupos_ini:
+            gb.configure_column(_rc, rowGroup=True,
+                                rowGroupIndex=len(_grupos_ini), hide=True)
+            _grupos_ini.append(_rc)
 
+    # ── Valores del pivote (auto-detectados) ──────────────────────────────
+    for cands, af in [
+        (("Importe Total", "Total", "Monto", "Subtotal"), "sum"),
+        (("Cantidad", "Qty", "Unidades"), "sum"),
+        (("Precio Unitario", "Precio Promedio", "Precio"), "avg"),
+    ]:
+        _rc = buscar_columna(df_grid, *cands)
+        if _rc and _rc in df_grid.columns:
+            gb.configure_column(_rc, aggFunc=af, enableValue=True)
 
-# ── Llamada al fragment ──────────────────────────────────────────────────────
-_render_contenido()
+    # Cabeceras en "Nombre Propio"
+    for c in df_grid.columns:
+        gb.configure_column(c, headerName=_titulo_es(c))
 
-perf.end()                                                                  # ⚡ PERF
+    # ── Estilo de fila (grupos lavanda) ───────────────────────────────────
+    get_row_style = JsCode(
+        "function(params) {"
+        "    if (params.node.rowPinned === 'bottom') {"
+        "        return { fontWeight:'700', backgroundColor:'" + LAVANDA_CABECERA_GRUPO + "',"
+        "                 color:'" + ACENTO_TEXTO_OSCURO + "',"
+        "                 borderTop:'2px solid " + ACENTO + "', fontSize:'13px' };"
+        "    }"
+        "    if (params.node.group) {"
+        "        var nivel = params.node.level;"
+        "        if (nivel === 0) return { backgroundColor:'" + LAVANDA_BORDE + "', fontWeight:'600' };"
+        "        if (nivel === 1) return { backgroundColor:'" + LAVANDA_CABECERA_GRUPO + "', fontWeight:'600' };"
+        "        return { backgroundColor:'" + LAVANDA_FONDO + "', fontWeight:'500' };"
+        "    }"
+        "    return { backgroundColor:'" + BLANCO + "' };"
+        "}"
+    )
+
+    _sidebar_cfg = _config_sidebar(mostrar_pivot=True, es_ajuste=True)
+
+    gb.configure_grid_options(
+        autoGroupColumnDef={"minWidth": 220},
+        localeText=LOCALE_ES,
+        sideBar=_sidebar_cfg,
+        rowHeight=max(28, min(60, font_px + 12)),
+        headerHeight=int(font_px * 2 + 14),
+        cellSelection=True,
+        tooltipShowDelay=300,
+        getRowStyle=get_row_style,
+        suppressAggFuncInHeader=True,
+        onGridSizeChanged=JsCode(
+            "function(params){ params.api.sizeColumnsToFit(); }"),
+        onFirstDataRendered=JsCode(
+            "function(params){ params.api.autoSizeAllColumns(); }"),
+        onToolPanelVisibleChanged=JsCode(
+            "function(params){"
+            "    try{"
+            "        var open=(params.api&&params.api.getOpenedToolPanel)"
+            "            ?params.api.getOpenedToolPanel():null;"
+            "        var sb=document.querySelector('.ag-side-bar');"
+            "        if(sb)sb.setAttribute('data-active-panel',open||'');"
+            "        window.clearTimeout(window.__comprasFitTimer);"
+            "        window.__comprasFitTimer=window.setTimeout(function(){"
+            "            try{params.api.sizeColumnsToFit();}catch(e){}"
+            "        },150);"
+            "    }catch(e){}"
+            "}"
+        ),
+        pivotMode=True,
+        groupDefaultExpanded=0,
+    )
+    gb.configure_pagination(
+        enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
+    grid_options = gb.build()
+
+    # ── CSS idéntico a Inventario Valorizado ──────────────────────────────
+    custom_css = _css_base(font_px)
+    custom_css[".ag-row-even"] = {"background-color": BLANCO + " !important"}
+    custom_css[".ag-row-odd"]  = {"background-color": BLANCO + " !important"}
+    custom_css[".ag-root-wrapper"].update({
+        "background-color": "transparent !important",
+        "border": "none !important", "border-radius": "0 !important",
+        "box-shadow": "none !important", "overflow": "visible !important",
+    })
+    custom_css[".ag-root-wrapper-body"] = {
+        "background": "transparent !important", "overflow": "visible !important",
+    }
+    custom_css[".ag-root"] = {
+        "background-color": BLANCO + " !important",
+        "border": "1px solid " + GRIS_BORDE + " !important",
+        "border-radius": "12px !important",
+        "box-shadow": "0 1px 2px rgba(16,16,20,0.05),0 4px 14px rgba(16,16,20,0.07) !important",
+        "overflow": "hidden !important",
+    }
+    custom_css["html, body"] = {"background": "transparent !important"}
+    custom_css[".ag-header"].update({
+        "background-color": LAVANDA_FONDO + " !important",
+        "border-bottom": "1px solid " + ACENTO + " !important",
+    })
+    custom_css[".ag-header-cell"].update({
+        "background-color": LAVANDA_FONDO + " !important",
+    })
+    custom_css[".ag-header-cell-text"].update({
+        "color": ACENTO_TEXTO_OSCURO + " !important",
+        "font-weight": "500",
+        "white-space": "normal !important",
+        "overflow": "visible !important",
+        "text-overflow": "clip !important",
+        "line-height": "1.25 !important",
+        "overflow-wrap": "break-word",
+        "display": "flex",
+        "align-items": "center",
+        "text-align": "center",
+    })
+    custom_css[".ag-header-cell-label"] = {
+        "white-space": "normal !important",
+        "overflow": "visible !important",
+        "align-items": "center",
+    }
+    custom_css[".ag-row-pinned"].update({
+        "background-color": LAVANDA_CABECERA_GRUPO + " !important",
+        "border-top": "2px solid " + ACENTO + " !important",
+        "color": ACENTO_TEXTO_OSCURO + " !important",
+    })
+    custom_css[".ag-side-bar"].update({
+        "background-color": LAVANDA_FILA + " !important",
+        "border": "1px solid " + GRIS_BORDE + " !important",
+        "border-radius": "12px !important",
+        "box-shadow": "0 1px 2px rgba(16,16,20,0.05),0 4px 14px rgba(16,16,20,0.07) !important",
+        "margin": "0 0 0 14px !important",
+        "overflow": "hidden !important",
+    })
+    custom_css[".ag-side-bar .ag-side-buttons"].update({
+        "background-color": LAVANDA_FILA_ALT + " !important",
+        "border-bottom": "1px solid " + GRIS_BORDE + " !important",
+    })
+    custom_css[
+        ".ag-side-bar[data-active-panel='columns'],"
+        ".ag-side-bar[data-active-panel='pivotePanel']"
+    ] = {"--ag-list-item-height": "62px !important"}
+    custom_css[
+        ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-item,"
+        ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-item"
+    ] = {"height": "62px !important", "overflow": "visible !important"}
+    custom_css[
+        ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-container,"
+        ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-container"
+    ] = {"overflow": "visible !important"}
+
+    # ── Render ────────────────────────────────────────────────────────────
+    perf.set_df_info(df_grid, label="AgGrid (Compras)")
+    with perf.phase("AgGrid render"):
+        AgGrid(
+            df_grid, gridOptions=grid_options, height=600,
+            theme="material", custom_css=custom_css,
+            fit_columns_on_grid_load=True, allow_unsafe_jscode=True,
+            enable_enterprise_modules=True, key="grid_Compras",
+        )
+
+    inject_grid_health_check()
+    inject_pagination_v2()
+    inject_maximize_aggrid()
+    inject_dynamic_grid_height(offset_px=220)
+    inject_fix_column_panel_ajuste()
