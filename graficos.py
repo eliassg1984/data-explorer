@@ -411,6 +411,25 @@ _LAYOUT_BASE = dict(
 )
 
 
+def _layout(**overrides):
+    """_LAYOUT_BASE fusionado con `overrides` (los overrides SIEMPRE ganan).
+
+    Uso en todo update_layout, en lugar de desempacar la base:
+
+        fig.update_layout(**_layout(height=500, xaxis=dict(...)))
+
+    Con esto es imposible el clásico
+    `TypeError: got multiple values for keyword argument 'xaxis'`.
+
+    OJO: la fusión es superficial. Si pasas `xaxis=dict(...)`, tu dict
+    REEMPLAZA por completo al `xaxis` de la base (no se mezclan claves
+    internas) — re-declara `gridcolor` si quieres conservarlo.
+    """
+    base = dict(_LAYOUT_BASE)
+    base.update(overrides)
+    return base
+
+
 def _resolver(df, candidatos):
     """Resuelve una lista de candidatos (o un string) a la columna real."""
     if candidatos is None:
@@ -496,7 +515,7 @@ def crear_grafico(df, conf):
                 kwargs["markers"] = True
             fig = fn(df_p, **kwargs)
 
-        fig.update_layout(**_LAYOUT_BASE)
+        fig.update_layout(**_layout())
         if conf.get("tickangle"):
             fig.update_layout(xaxis_tickangle=conf["tickangle"])
 
@@ -653,11 +672,7 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
         annotation_position="top right",
     )
 
-    # Construir layout base sin xaxis/yaxis/height para evitar colisión de kwargs
-    _layout_evolucion = {k: v for k, v in _LAYOUT_BASE.items()
-                         if k not in ("xaxis", "yaxis", "height")}
-    fig.update_layout(
-        **_layout_evolucion,
+    fig.update_layout(**_layout(
         title="Evolución del ajuste valorizado",
         xaxis=dict(
             gridcolor=GRIS_BORDE,
@@ -678,7 +693,7 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
         hovermode="x unified",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         height=500,
-    )
+    ))
     st.plotly_chart(fig, use_container_width=True)
 
     # ── Expander: comparativa eje dual (barras ajuste + línea valorizado) ─
@@ -706,13 +721,11 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
                 hovertemplate="Valorizado: S/ %{y:,.2f}<extra></extra>",
             ), secondary_y=True)
 
-            fig2.update_layout(
-                **{k: v for k, v in _LAYOUT_BASE.items()
-                   if k not in ("xaxis", "yaxis")},
+            fig2.update_layout(**_layout(
                 title="Ajuste vs Valorizado total",
                 hovermode="x unified",
                 legend=dict(orientation="h", y=1.05, x=0),
-            )
+            ))
             fig2.update_yaxes(
                 tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE,
                 title_text="Ajuste valorizado", secondary_y=False,
@@ -746,20 +759,21 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val):
             text=[f"S/ {v:,.0f}" for v in agg[col_ajuste_val]] + [f"S/ {total:,.0f}"],
             textposition="outside",
             connector=dict(line=dict(color=GRIS_BORDE, width=1, dash="dot")),
-            increasing=dict(marker=dict(color=SERIE_PRINCIPAL, opacity=0.85)),
-            decreasing=dict(marker=dict(color="#ef4444",       opacity=0.85)),
+            # Waterfall NO acepta opacity en el marker; el alfa va en el color.
+            # rgba(108,92,231,·) = SERIE_PRINCIPAL · rgba(239,68,68,·) = #ef4444
+            increasing=dict(marker=dict(color="rgba(108,92,231,0.85)")),
+            decreasing=dict(marker=dict(color="rgba(239,68,68,0.85)")),
             totals=dict(marker=dict(
                 color=ACENTO_TEXTO_OSCURO if total >= 0 else "#ef4444"
             )),
             hovertemplate="%{x}<br><b>S/ %{y:,.2f}</b><extra></extra>",
         ))
-        fig.update_layout(
-            **_LAYOUT_BASE,
+        fig.update_layout(**_layout(
             title=f"Cascada de ajuste valorizado por {grp_col}",
             xaxis=dict(tickangle=-35, gridcolor=GRIS_BORDE),
             yaxis=dict(tickprefix="S/ ", tickformat=",.0f", gridcolor=GRIS_BORDE),
             showlegend=False, height=480,
-        )
+        ))
         st.plotly_chart(fig, use_container_width=True)
 
     with col_tabla:
@@ -809,14 +823,12 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val):
             "Ajuste: <b>S/ %{z:,.2f}</b><extra></extra>"
         ),
     ))
-    fig.update_layout(
-        **{k: v for k, v in _LAYOUT_BASE.items()
-           if k not in ("xaxis", "yaxis", "height")},
+    fig.update_layout(**_layout(
         title="Mapa de calor: ajuste valorizado por Familia × Área",
         xaxis=dict(tickangle=-30, side="bottom", gridcolor=GRIS_BORDE),
         yaxis=dict(autorange="reversed", gridcolor=GRIS_BORDE),
         height=max(380, len(pivot.index) * 42 + 120),
-    )
+    ))
     st.plotly_chart(fig, use_container_width=True)
 
     with st.expander("📋 Tabla pivot Familia × Área"):
@@ -848,13 +860,11 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             )
             fig.add_hline(y=0, line_dash="dash", line_color="#ef4444",
                           annotation_text="Cero", annotation_position="top right")
-            fig.update_layout(
-                **{k: v for k, v in _LAYOUT_BASE.items()
-                   if k not in ("xaxis", "yaxis")},
+            fig.update_layout(**_layout(
                 showlegend=False,
                 xaxis=dict(tickangle=-30, gridcolor=GRIS_BORDE),
                 yaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
-            )
+            ))
             fig.update_traces(hovertemplate="%{x}<br>S/ %{y:,.2f}<extra></extra>")
         else:
             fig = px.histogram(
@@ -864,12 +874,10 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             )
             fig.add_vline(x=0, line_dash="dash", line_color="#ef4444",
                           annotation_text="Cero")
-            fig.update_layout(
-                **{k: v for k, v in _LAYOUT_BASE.items()
-                   if k not in ("xaxis", "yaxis")},
+            fig.update_layout(**_layout(
                 xaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
                 yaxis=dict(gridcolor=GRIS_BORDE),
-            )
+            ))
         st.plotly_chart(fig, use_container_width=True)
 
     with col_der:
@@ -893,15 +901,13 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
         fig2.add_vline(x=mediana, line_dash="dash", line_color="#16a34a",
                        annotation_text=f"Mediana S/ {mediana:,.0f}",
                        annotation_font_color="#16a34a")
-        fig2.update_layout(
-            **{k: v for k, v in _LAYOUT_BASE.items()
-               if k not in ("xaxis", "yaxis")},
+        fig2.update_layout(**_layout(
             title="Histograma de frecuencias",
             xaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE,
                        title="Ajuste Valorizado"),
             yaxis=dict(title="Frecuencia", gridcolor=GRIS_BORDE),
             hovermode="x",
-        )
+        ))
         st.plotly_chart(fig2, use_container_width=True)
 
     # ── Tabla de productos en el 5% inferior ─────────────────────────────
