@@ -1237,6 +1237,37 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             "border-bottom": f"1px solid {GRIS_BORDE} !important",
         })
 
+        # Franja SUPERIOR del sidebar: a juego con la cabecera lavanda de la tabla
+        custom_css[".ag-pivot-mode-panel"] = {
+            "background-color": f"{LAVANDA_FONDO} !important",
+            "border-bottom": f"1px solid {ACENTO} !important",
+            "min-height": "36px !important",
+            "padding": "0 12px !important",
+            "display": "flex !important",
+            "align-items": "center !important",
+        }
+        custom_css[".ag-pivot-mode-panel .ag-label"] = {
+            "color": f"{ACENTO_TEXTO_OSCURO} !important",
+            "font-size": "11px !important",
+            "font-weight": "500 !important",
+        }
+
+        # Franja INFERIOR del sidebar: a juego con la fila de totales (pinned bottom)
+        custom_css[".ag-side-bar .ag-tool-panel-wrapper"] = {
+            "display": "flex !important",
+            "flex-direction": "column !important",
+            "height": "100% !important",
+        }
+        custom_css[".ag-side-bar .ag-tool-panel-wrapper::after"] = {
+            "content": "'' !important",
+            "display": "block !important",
+            "height": "34px !important",
+            "flex-shrink": "0 !important",
+            "margin-top": "auto !important",
+            "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
+            "border-top": f"2px solid {ACENTO} !important",
+        }
+
         custom_css[
             ".ag-side-bar[data-active-panel='columns'], "
             ".ag-side-bar[data-active-panel='pivotePanel']"
@@ -1637,6 +1668,38 @@ def renderizar_aggrid_compras(df_grid: pd.DataFrame, font_px: int = 14):
         "background-color": LAVANDA_FILA_ALT + " !important",
         "border-bottom": "1px solid " + GRIS_BORDE + " !important",
     })
+
+    # Franja SUPERIOR del sidebar: a juego con la cabecera lavanda de la tabla
+    custom_css[".ag-pivot-mode-panel"] = {
+        "background-color": LAVANDA_FONDO + " !important",
+        "border-bottom": "1px solid " + ACENTO + " !important",
+        "min-height": "36px !important",
+        "padding": "0 12px !important",
+        "display": "flex !important",
+        "align-items": "center !important",
+    }
+    custom_css[".ag-pivot-mode-panel .ag-label"] = {
+        "color": ACENTO_TEXTO_OSCURO + " !important",
+        "font-size": "11px !important",
+        "font-weight": "500 !important",
+    }
+
+    # Franja INFERIOR del sidebar: a juego con la fila de totales (pinned bottom)
+    custom_css[".ag-side-bar .ag-tool-panel-wrapper"] = {
+        "display": "flex !important",
+        "flex-direction": "column !important",
+        "height": "100% !important",
+    }
+    custom_css[".ag-side-bar .ag-tool-panel-wrapper::after"] = {
+        "content": "'' !important",
+        "display": "block !important",
+        "height": "34px !important",
+        "flex-shrink": "0 !important",
+        "margin-top": "auto !important",
+        "background-color": LAVANDA_CABECERA_GRUPO + " !important",
+        "border-top": "2px solid " + ACENTO + " !important",
+    }
+
     custom_css[
         ".ag-side-bar[data-active-panel='columns'],"
         ".ag-side-bar[data-active-panel='pivotePanel']"
