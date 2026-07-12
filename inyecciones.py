@@ -1414,7 +1414,7 @@ def inject_fix_column_panel_ajuste():
                         : item.getBoundingClientRect().height;
 
                     // Margen mínimo entre pastillas
-                    var alturaSlot = alturaReal + 2;
+                    var alturaSlot = alturaReal + 3;
 
                     item.style.setProperty('top', topAcum + 'px', 'important');
                     item.style.setProperty('height', alturaSlot + 'px', 'important');
