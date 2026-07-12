@@ -653,12 +653,14 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
         annotation_position="top right",
     )
 
+    # Construir layout base sin xaxis/yaxis para evitar colisión de kwargs
+    _layout_evolucion = {k: v for k, v in _LAYOUT_BASE.items()
+                         if k not in ("xaxis", "yaxis")}
     fig.update_layout(
-        **_LAYOUT_BASE,
+        **_layout_evolucion,
         title="Evolución del ajuste valorizado",
         xaxis=dict(
             gridcolor=GRIS_BORDE,
-            # ← CLAVE: botones de periodo + slider debajo del gráfico
             rangeselector=dict(
                 buttons=[
                     dict(count=1,  label="1M",  step="month", stepmode="backward"),
@@ -673,7 +675,7 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
             type="date",
         ),
         yaxis=dict(gridcolor=GRIS_BORDE, tickprefix="S/ ", tickformat=",.2f"),
-        hovermode="x unified",   # ← tooltip unificado bajo el cursor
+        hovermode="x unified",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         height=500,
     )
@@ -705,7 +707,8 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
             ), secondary_y=True)
 
             fig2.update_layout(
-                **_LAYOUT_BASE,
+                **{k: v for k, v in _LAYOUT_BASE.items()
+                   if k not in ("xaxis", "yaxis")},
                 title="Ajuste vs Valorizado total",
                 hovermode="x unified",
                 legend=dict(orientation="h", y=1.05, x=0),
