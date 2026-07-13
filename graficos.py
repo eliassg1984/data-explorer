@@ -3,6 +3,8 @@ Dashboard de gráficos: KPIs, treemap, sunburst, scatter precio/stock,
 rankings y distribución de precios.
 """
 
+import datetime as _dt
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -699,7 +701,11 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
         annotation_position="top right",
     )
 
-    fig.update_layout(**_layout(
+    # ⚠️ _LAYOUT_BASE define xaxis/yaxis — filtrar antes de desempacar
+    # para no chocar con las claves que aquí sobreescribimos (Regla 5).
+    _base_no_ejes = {k: v for k, v in _LAYOUT_BASE.items() if k not in ("xaxis", "yaxis")}
+    fig.update_layout(
+        **_base_no_ejes,
         title="Evolución del ajuste valorizado",
         xaxis=dict(
             gridcolor=GRIS_BORDE,
@@ -720,7 +726,7 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
         hovermode="x unified",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         height=500,
-    ))
+    )
 
     _chart_card("Evolución temporal")
     st.plotly_chart(fig, use_container_width=True)
@@ -764,6 +770,45 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
             _chart_card()
             st.plotly_chart(fig2, use_container_width=True)
             _chart_card_close()
+
+
+def _graf_comparativa_mensual(df, col_fecha, col_ajuste_val):
+    """Barras de ajuste total por mes (positivo lavanda, negativo rojo).
+    Pensada para la pestaña Histórico: da una lectura rápida de qué meses
+    tuvieron sobrante o faltante neto sin necesidad de leer la línea."""
+    if not col_fecha:
+        st.info("Sin columna de fecha para la comparativa mensual.")
+        return
+
+    d = df.copy()
+    d[col_fecha] = pd.to_datetime(d[col_fecha], errors="coerce")
+    d = d.dropna(subset=[col_fecha])
+    if d.empty:
+        st.info("Sin fechas válidas para la comparativa mensual.")
+        return
+
+    d["_mes"] = d[col_fecha].dt.to_period("M").dt.to_timestamp()
+    agg = d.groupby("_mes", as_index=False)[col_ajuste_val].sum().sort_values("_mes")
+
+    fig = go.Figure(go.Bar(
+        x=agg["_mes"], y=agg[col_ajuste_val],
+        marker_color=[SERIE_PRINCIPAL if v >= 0 else "#ef4444"
+                      for v in agg[col_ajuste_val]],
+        text=[f"S/ {v:,.0f}" for v in agg[col_ajuste_val]],
+        textposition="outside",
+        hovertemplate="%{x|%b %Y}<br><b>S/ %{y:,.2f}</b><extra></extra>",
+    ))
+    fig.update_layout(**_layout(
+        title="Ajuste valorizado total por mes",
+        xaxis=dict(dtick="M1", tickformat="%b %Y", gridcolor=GRIS_BORDE),
+        yaxis=dict(tickprefix="S/ ", tickformat=",.0f", gridcolor=GRIS_BORDE),
+        showlegend=False, height=440,
+    ))
+    fig.add_hline(y=0, line_dash="dot", line_color=GRIS_BORDE, line_width=1)
+
+    _chart_card("Comparativa mensual")
+    st.plotly_chart(fig, use_container_width=True)
+    _chart_card_close()
 
 
 def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val):
@@ -970,17 +1015,22 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
 # FUNCIÓN PÚBLICA — Ajuste de Inventario
 # =============================================================================
 
-def renderizar_graficos_ajuste(df_f, nombre_reporte):
+def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
     """
-    Gráficos interactivos dedicados para el reporte Ajuste de Inventario.
+    Gráficos de Ajuste de Inventario (rediseño sin KPIs).
 
     Estructura:
-      · KPIs rápidos (4 métricas)
-      · Tab 1 — Evolución temporal
-      · Tab 2 — Cascada por familia
-      · Tab 3 — Mapa de calor
-      · Tab 4 — Distribución
-      · Expander — Explorador libre
+      · Selector de ámbito: «Del periodo» / «Histórico» (segmented control).
+      · Chips (st.pills) para elegir el gráfico dentro del ámbito.
+      · Chips de filtro rápido por Familia (aplican al ámbito activo).
+      · «Del periodo»  → usa df_f (respeta el rango del popover):
+            Cascada, Mapa de calor, Distribución.
+      · «Histórico»    → usa df_full acotado al AÑO ACTUAL (ignora el rango
+            del popover): Evolución temporal, Comparativa mensual.
+      · Expander final: Explorador libre de gráficos.
+
+    Nota: df_full es opcional; si no se pasa, se usa df_f también para
+    Histórico (compatibilidad con llamadas antiguas).
     """
     col_fecha      = _resolver(df_f, ["FECHA APERTURA INVENTARIO", "FECHA", "MES"])
     col_familia    = _resolver(df_f, ["FAMILIA", "Nombre Familia", "NOMBRE FAMILIA"])
@@ -997,59 +1047,93 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte):
         renderizar_graficos_genericos(df_f, nombre_reporte)
         return
 
-    # ── KPIs ─────────────────────────────────────────────────────────────
-    total_aj = float(df_f[col_ajuste_val].sum())
-    aj_pos   = float(df_f[df_f[col_ajuste_val] > 0][col_ajuste_val].sum())
-    aj_neg   = float(df_f[df_f[col_ajuste_val] < 0][col_ajuste_val].sum())
-    n        = len(df_f)
-    pct_neg  = (len(df_f[df_f[col_ajuste_val] < 0]) / n * 100) if n else 0
+    # ── Selector de ámbito: Del periodo / Histórico ──────────────────────
+    ambito = st.segmented_control(
+        "Ámbito",
+        ["Del periodo", "Histórico"],
+        default="Del periodo",
+        key="ajuste_graf_ambito",
+        label_visibility="collapsed",
+    )
+    if not ambito:
+        ambito = "Del periodo"
 
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("📊 Ajuste Total", f"S/ {total_aj:,.2f}")
-    k2.metric("📈 Sobrante (pos.)", f"S/ {aj_pos:,.2f}")
-    k3.metric("📉 Faltante (neg.)", f"S/ {aj_neg:,.2f}",
-              delta=f"{pct_neg:.1f}% de registros", delta_color="inverse")
-    if col_valorizado and col_valorizado in df_f.columns:
-        total_val = float(df_f[col_valorizado].sum())
-        pct_aj = (total_aj / total_val * 100) if total_val else 0
-        k4.metric(
-            "💰 Valorizado Total", f"S/ {total_val:,.2f}",
-            delta=f"{pct_aj:+.2f}% ajuste",
-            delta_color="inverse" if pct_aj < 0 else "normal",
+    # ── Datos según ámbito ───────────────────────────────────────────────
+    if ambito == "Histórico":
+        base = df_full if df_full is not None else df_f
+        anio_actual = _dt.date.today().year
+        if col_fecha and col_fecha in base.columns:
+            _f = pd.to_datetime(base[col_fecha], errors="coerce")
+            base = base[_f.dt.year == anio_actual]
+        d = base
+        st.caption(
+            f"📆 Vista histórica del año {anio_actual}. "
+            "El rango de fechas del popover no aplica aquí."
         )
     else:
-        k4.metric("📦 Registros", f"{n:,}")
+        d = df_f
 
-    st.divider()
+    # ── Chips de filtro rápido por Familia (opcional) ────────────────────
+    if col_familia and col_familia in d.columns:
+        familias = sorted(d[col_familia].dropna().astype(str).unique().tolist())
+        if familias:
+            fam_sel = st.pills(
+                "Familia",
+                familias,
+                selection_mode="multi",
+                key=f"ajuste_graf_fam_{ambito}",
+                label_visibility="collapsed",
+            )
+            if fam_sel:
+                d = d[d[col_familia].astype(str).isin(fam_sel)]
 
-    # ── Tabs ─────────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "📅 Evolución temporal",
-        "🏗️ Cascada por familia",
-        "🔥 Mapa de calor",
-        "📦 Distribución",
-    ])
-    with tab1:
-        _graf_evolucion_ajuste(
-            df_f, col_fecha, col_familia, col_ajuste_val, col_valorizado
-        )
-    with tab2:
-        _graf_waterfall_ajuste(df_f, col_familia, col_area, col_ajuste_val)
-    with tab3:
-        _graf_heatmap_ajuste(df_f, col_familia, col_area, col_ajuste_val)
-    with tab4:
-        _graf_distribucion_ajuste(
-            df_f, col_familia, col_area, col_ajuste_val, col_producto
-        )
+    if d is None or d.empty:
+        st.info("No hay datos para los filtros seleccionados.")
+        return
+
+    # ── Chips selectores de gráfico ──────────────────────────────────────
+    if ambito == "Histórico":
+        opciones = ["📅 Evolución", "📊 Comparativa mensual"]
+    else:
+        opciones = ["🏗️ Cascada", "🔥 Mapa de calor", "📦 Distribución"]
+
+    graf = st.pills(
+        "Gráfico",
+        opciones,
+        default=opciones[0],
+        key=f"ajuste_graf_tipo_{ambito}",
+        label_visibility="collapsed",
+    )
+    if not graf:
+        graf = opciones[0]
+
+    # ── Render del gráfico elegido (solo uno por rerun) ──────────────────
+    if graf == "📅 Evolución":
+        _graf_evolucion_ajuste(d, col_fecha, col_familia,
+                               col_ajuste_val, col_valorizado)
+    elif graf == "📊 Comparativa mensual":
+        _graf_comparativa_mensual(d, col_fecha, col_ajuste_val)
+    elif graf == "🏗️ Cascada":
+        _graf_waterfall_ajuste(d, col_familia, col_area, col_ajuste_val)
+    elif graf == "🔥 Mapa de calor":
+        _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val)
+    elif graf == "📦 Distribución":
+        _graf_distribucion_ajuste(d, col_familia, col_area,
+                                  col_ajuste_val, col_producto)
 
     with st.expander("🎛️ Explorador libre de gráficos"):
-        renderizar_graficos_genericos(df_f, nombre_reporte)
+        renderizar_graficos_genericos(d, nombre_reporte)
 
 
-def renderizar_graficos_reporte(df_f, reporte, cfg):
-    """Punto de entrada de la vista Gráficos para reportes genéricos."""
+def renderizar_graficos_reporte(df_f, reporte, cfg, df_full=None):
+    """Punto de entrada de la vista Gráficos para reportes genéricos.
+
+    df_full: opcional, DataFrame sin el filtro de fecha aplicado. Ajuste de
+    Inventario lo usa para su pestaña Histórico (año actual completo).
+    Reportes genéricos lo ignoran.
+    """
     if reporte == "Ajuste de Inventario":
-        renderizar_graficos_ajuste(df_f, reporte)
+        renderizar_graficos_ajuste(df_f, reporte, df_full=df_full)
         return
 
     graficos_conf = cfg.get("graficos", [])
