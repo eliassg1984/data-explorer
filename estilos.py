@@ -635,16 +635,17 @@ def get_css():
 
     /* Título opcional dentro del card (etiqueta muted en mayúsculas) */
     .chart-card-title {
-        font-size: 12px;
+        font-size: 12.5px;
         font-weight: 600;
-        color: var(--text-secondary);
+        color: var(--accent);
+        background: var(--accent-tint, #efedfd);
+        border-bottom: 1px solid var(--accent);
         text-transform: uppercase;
         letter-spacing: 0.07em;
-        margin: 0 0 0.35rem 0;
-        padding: 0;
+        margin: -1.25rem -1.5rem 0.75rem;
+        padding: 10px 1.5rem;
         line-height: 1;
     }
-
     /* El card dentro de un expander no necesita doble borde */
     .streamlit-expanderContent .chart-card {
         border: none !important;
