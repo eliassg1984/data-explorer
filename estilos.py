@@ -658,6 +658,15 @@ def get_css():
         box-shadow: none !important;
         padding: 0.25rem 0 0 !important;
     }
+
+    /* Contenedor de gráficos de Ajuste — fondo blanco explícito.
+       El key incluye el ámbito (Del periodo / Histórico), por eso el
+       prefijo con [class*=...] cubre ambos casos. */
+    div[class*="st-key-ajuste_graf_card_"] {
+        background: var(--surface-2, #ffffff) !important;
+        border-radius: 12px;
+        padding: 16px 18px;
+    }
     </style>
     """
 
