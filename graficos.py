@@ -4,6 +4,8 @@ rankings y distribución de precios.
 """
 
 import datetime as _dt
+import re
+from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd
@@ -28,15 +30,41 @@ PALETA_CALLAI = PALETA_SERIES  # alias retrocompatible; fuente en tema.py
 
 
 # ===========================================================================
-# HELPERS: CARD BLANCO PARA GRÁFICOS
-# Uso:
-#   _chart_card("Título opcional")
-#   st.plotly_chart(fig, use_container_width=True)
-#   _chart_card_close()
+# HELPERS: CARDS PARA GRÁFICOS
+#
+# _card(key, titulo)  →  PATRÓN ACTUAL (buena práctica). Contenedor NATIVO
+#   de Streamlit (st.container border=True): el gráfico queda DE VERDAD
+#   dentro del card, sin divs abiertos ni position:absolute. El título se
+#   pinta como pie lavanda al final, en flujo normal. Uso:
+#       with _card("cascada", "Cascada por familia"):
+#           st.plotly_chart(fig, use_container_width=True)
+#
+# _chart_card / _chart_card_close  →  LEGACY. Solo lo usa el dashboard de
+#   Inventario Valorizado (sección NO TOCAR). No usar en código nuevo:
+#   el div abierto por markdown no envuelve realmente a los elementos.
 # ===========================================================================
 
+def _slug(texto):
+    """Convierte un texto a un identificador válido para keys/CSS."""
+    return re.sub(r"\W+", "_", str(texto)).strip("_").lower()
+
+
+@contextmanager
+def _card(key, titulo: str = ""):
+    """Card nativo para un gráfico. `key` debe ser único por rerun.
+    Si hay `titulo`, se muestra como banda lavanda al pie del card
+    (clase .chart-card-pie, estilizada en estilos.py)."""
+    with st.container(border=True, key=f"chartcard_{_slug(key)}"):
+        yield
+        if titulo:
+            st.markdown(
+                f'<p class="chart-card-pie">{titulo}</p>',
+                unsafe_allow_html=True,
+            )
+
+
 def _chart_card(titulo: str = ""):
-    """Abre un div card blanco con bordes redondeados.
+    """LEGACY (solo Inventario Valorizado). Abre un div card por markdown.
     Llamar siempre seguido de _chart_card_close() después del gráfico."""
     if titulo:
         st.markdown(
@@ -49,7 +77,7 @@ def _chart_card(titulo: str = ""):
 
 
 def _chart_card_close():
-    """Cierra el div card abierto por _chart_card()."""
+    """LEGACY (solo Inventario Valorizado). Cierra el div de _chart_card()."""
     st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -640,9 +668,8 @@ def renderizar_graficos_genericos(df_data, nombre_reporte):
     fig, err = crear_grafico(df_plot, conf)
     if fig:
         fig.update_layout(height=450)
-        _chart_card()
-        st.plotly_chart(fig, use_container_width=True)
-        _chart_card_close()
+        with _card(f"explorador_{nombre_reporte}"):
+            st.plotly_chart(fig, use_container_width=True)
     else:
         st.warning(f"No se pudo generar el gráfico: {err}")
 
@@ -702,7 +729,6 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
     )
 
     fig.update_layout(**_layout(
-        title="Evolución del ajuste valorizado",
         xaxis=dict(
             gridcolor=GRIS_BORDE,
             rangeselector=dict(
@@ -724,9 +750,8 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
         height=500,
     ))
 
-    _chart_card("Evolución temporal")
-    st.plotly_chart(fig, use_container_width=True)
-    _chart_card_close()
+    with _card("evolucion", "Evolución temporal"):
+        st.plotly_chart(fig, use_container_width=True)
 
     if col_valorizado and col_valorizado in df.columns:
         with st.expander("📊 Comparativa: ajuste vs valorizado total (eje dual)"):
@@ -763,9 +788,8 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
                 tickprefix="S/ ", tickformat=",.2f",
                 title_text="Valorizado total", secondary_y=True,
             )
-            _chart_card()
-            st.plotly_chart(fig2, use_container_width=True)
-            _chart_card_close()
+            with _card("evolucion_dual"):
+                st.plotly_chart(fig2, use_container_width=True)
 
 
 def _graf_comparativa_mensual(df, col_fecha, col_ajuste_val):
@@ -795,16 +819,14 @@ def _graf_comparativa_mensual(df, col_fecha, col_ajuste_val):
         hovertemplate="%{x|%b %Y}<br><b>S/ %{y:,.2f}</b><extra></extra>",
     ))
     fig.update_layout(**_layout(
-        title="Ajuste valorizado total por mes",
         xaxis=dict(dtick="M1", tickformat="%b %Y", gridcolor=GRIS_BORDE),
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f", gridcolor=GRIS_BORDE),
         showlegend=False, height=440,
     ))
     fig.add_hline(y=0, line_dash="dot", line_color=GRIS_BORDE, line_width=1)
 
-    _chart_card("Comparativa mensual")
-    st.plotly_chart(fig, use_container_width=True)
-    _chart_card_close()
+    with _card("comparativa", "Comparativa mensual"):
+        st.plotly_chart(fig, use_container_width=True)
 
 
 def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
@@ -855,9 +877,8 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             yaxis=dict(tickprefix="S/ ", tickformat=",.0f", gridcolor=GRIS_BORDE),
             showlegend=False, height=480,
         ))
-        _chart_card("Cascada por familia")
-        st.plotly_chart(fig, use_container_width=True)
-        _chart_card_close()
+        with _card("cascada", "Cascada por familia"):
+            st.plotly_chart(fig, use_container_width=True)
 
     with col_tabla:
         # ── 8 pestañas de análisis del periodo ─────────────────────────────
@@ -1029,9 +1050,8 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val):
         height=max(380, len(pivot.index) * 42 + 120),
     ))
 
-    _chart_card("Mapa de calor")
-    st.plotly_chart(fig, use_container_width=True)
-    _chart_card_close()
+    with _card("heatmap", "Mapa de calor"):
+        st.plotly_chart(fig, use_container_width=True)
 
     with st.expander("📋 Tabla pivot Familia × Área"):
         st.dataframe(
@@ -1080,9 +1100,8 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                 xaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
                 yaxis=dict(gridcolor=GRIS_BORDE),
             ))
-        _chart_card("Distribución por grupo")
-        st.plotly_chart(fig, use_container_width=True)
-        _chart_card_close()
+        with _card("dist_grupo", "Distribución por grupo"):
+            st.plotly_chart(fig, use_container_width=True)
 
     with col_der:
         media   = float(df[col_ajuste_val].mean())
@@ -1111,9 +1130,8 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             yaxis=dict(title="Frecuencia", gridcolor=GRIS_BORDE),
             hovermode="x",
         ))
-        _chart_card("Histograma")
-        st.plotly_chart(fig2, use_container_width=True)
-        _chart_card_close()
+        with _card("dist_hist", "Histograma"):
+            st.plotly_chart(fig2, use_container_width=True)
 
     if col_producto and col_producto in df.columns:
         umbral = float(df[col_ajuste_val].quantile(0.05))
@@ -1185,71 +1203,75 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
     if not ambito:
         ambito = "Del periodo"
 
-    # ── Datos según ámbito ───────────────────────────────────────────────
-    if ambito == "Histórico":
-        base = df_full if df_full is not None else df_f
-        anio_actual = _dt.date.today().year
-        if col_fecha and col_fecha in base.columns:
-            _f = pd.to_datetime(base[col_fecha], errors="coerce")
-            base = base[_f.dt.year == anio_actual]
-        d = base
-        st.caption(
-            f"📆 Vista histórica del año {anio_actual}. "
-            "El rango de fechas del popover no aplica aquí."
-        )
-    else:
-        d = df_f
+    # ── Todo el contenido (chips, filtros, gráfico) vive en una tarjeta ──
+    _cont = st.container(border=True, key=f"ajuste_graf_card_{_slug(ambito)}")
+    with _cont:
 
-    # ── Chips de filtro rápido por Familia (opcional) ────────────────────
-    if col_familia and col_familia in d.columns:
-        familias = sorted(d[col_familia].dropna().astype(str).unique().tolist())
-        if familias:
-            fam_sel = st.pills(
-                "Familia",
-                familias,
-                selection_mode="multi",
-                key=f"ajuste_graf_fam_{ambito}",
-                label_visibility="collapsed",
+        # ── Datos según ámbito ───────────────────────────────────────────
+        if ambito == "Histórico":
+            base = df_full if df_full is not None else df_f
+            anio_actual = _dt.date.today().year
+            if col_fecha and col_fecha in base.columns:
+                _f = pd.to_datetime(base[col_fecha], errors="coerce")
+                base = base[_f.dt.year == anio_actual]
+            d = base
+            st.caption(
+                f"📆 Vista histórica del año {anio_actual}. "
+                "El rango de fechas del popover no aplica aquí."
             )
-            if fam_sel:
-                d = d[d[col_familia].astype(str).isin(fam_sel)]
+        else:
+            d = df_f
 
-    if d is None or d.empty:
-        st.info("No hay datos para los filtros seleccionados.")
-        return
+        # ── Chips de filtro rápido por Familia (opcional) ────────────────
+        if col_familia and col_familia in d.columns:
+            familias = sorted(d[col_familia].dropna().astype(str).unique().tolist())
+            if familias:
+                fam_sel = st.pills(
+                    "Familia",
+                    familias,
+                    selection_mode="multi",
+                    key=f"ajuste_graf_fam_{ambito}",
+                    label_visibility="collapsed",
+                )
+                if fam_sel:
+                    d = d[d[col_familia].astype(str).isin(fam_sel)]
 
-    # ── Chips selectores de gráfico ──────────────────────────────────────
-    if ambito == "Histórico":
-        opciones = ["📅 Evolución", "📊 Comparativa mensual"]
-    else:
-        opciones = ["🏗️ Cascada", "🔥 Mapa de calor", "📦 Distribución"]
+        if d is None or d.empty:
+            st.info("No hay datos para los filtros seleccionados.")
+            return
 
-    graf = st.pills(
-        "Gráfico",
-        opciones,
-        default=opciones[0],
-        key=f"ajuste_graf_tipo_{ambito}",
-        label_visibility="collapsed",
-    )
-    if not graf:
-        graf = opciones[0]
+        # ── Chips selectores de gráfico ──────────────────────────────────
+        if ambito == "Histórico":
+            opciones = ["📅 Evolución", "📊 Comparativa mensual"]
+        else:
+            opciones = ["🏗️ Cascada", "🔥 Mapa de calor", "📦 Distribución"]
 
-    # ── Render del gráfico elegido (solo uno por rerun) ──────────────────
-    if graf == "📅 Evolución":
-        _graf_evolucion_ajuste(d, col_fecha, col_familia,
-                               col_ajuste_val, col_valorizado)
-    elif graf == "📊 Comparativa mensual":
-        _graf_comparativa_mensual(d, col_fecha, col_ajuste_val)
-    elif graf == "🏗️ Cascada":
-        _graf_waterfall_ajuste(d, col_familia, col_area, col_ajuste_val,
-                               col_producto=col_producto,
-                               col_valorizado=col_valorizado,
-                               col_cantidad=col_cantidad)
-    elif graf == "🔥 Mapa de calor":
-        _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val)
-    elif graf == "📦 Distribución":
-        _graf_distribucion_ajuste(d, col_familia, col_area,
-                                  col_ajuste_val, col_producto)
+        graf = st.pills(
+            "Gráfico",
+            opciones,
+            default=opciones[0],
+            key=f"ajuste_graf_tipo_{ambito}",
+            label_visibility="collapsed",
+        )
+        if not graf:
+            graf = opciones[0]
+
+        # ── Render del gráfico elegido (solo uno por rerun) ──────────────
+        if graf == "📅 Evolución":
+            _graf_evolucion_ajuste(d, col_fecha, col_familia,
+                                   col_ajuste_val, col_valorizado)
+        elif graf == "📊 Comparativa mensual":
+            _graf_comparativa_mensual(d, col_fecha, col_ajuste_val)
+        elif graf == "🏗️ Cascada":
+            _graf_waterfall_ajuste(d, col_familia, col_area, col_ajuste_val,
+                                   col_producto=col_producto,
+                                   col_valorizado=col_valorizado,
+                                   col_cantidad=col_cantidad)
+        elif graf == "🔥 Mapa de calor":
+            _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val)
+        elif graf == "📦 Distribución":
+            _graf_distribucion_ajuste(d, col_familia, col_area,
+                                      col_ajuste_val, col_producto)
 
     with st.expander("🎛️ Explorador libre de gráficos"):
         renderizar_graficos_genericos(d, nombre_reporte)
@@ -1270,12 +1292,11 @@ def renderizar_graficos_reporte(df_f, reporte, cfg, df_full=None):
 
     if graficos_conf:
         omitidos = []
-        for conf in graficos_conf:
+        for _i, conf in enumerate(graficos_conf):
             fig, err = crear_grafico(df_f, conf)
             if fig:
-                _chart_card()
-                st.plotly_chart(fig, use_container_width=True)
-                _chart_card_close()
+                with _card(f"conf_{reporte}_{_i}"):
+                    st.plotly_chart(fig, use_container_width=True)
             else:
                 omitidos.append(f"«{conf.get('titulo', conf.get('tipo'))}» ({err})")
         if omitidos:
