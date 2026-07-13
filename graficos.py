@@ -36,29 +36,21 @@ PALETA_CALLAI = PALETA_SERIES  # alias retrocompatible; fuente en tema.py
 # ===========================================================================
 
 def _chart_card(titulo: str = ""):
-    """Abre un div card blanco. El título (opcional) se emite como pie
-    en el cierre del card, no en la apertura — para que quede como
-    banda lavanda al pie del gráfico."""
-    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-    # Guardamos el título pendiente en un stack de session_state para
-    # que _chart_card_close() sepa qué escribir al cerrar.
-    st.session_state.setdefault("_chart_card_titulos", []).append(titulo)
-
-
-def _chart_card_close():
-    """Cierra el div card abierto por _chart_card().
-    Si había un título pendiente, lo escribe como pie."""
-    titulo = ""
-    stack = st.session_state.get("_chart_card_titulos")
-    if stack:
-        titulo = stack.pop()
+    """Abre un div card blanco con bordes redondeados.
+    Llamar siempre seguido de _chart_card_close() después del gráfico."""
     if titulo:
         st.markdown(
-            f'<p class="chart-card-title">{titulo}</p></div>',
+            f'<div class="chart-card">'
+            f'<p class="chart-card-title">{titulo}</p>',
             unsafe_allow_html=True,
         )
     else:
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+
+
+def _chart_card_close():
+    """Cierra el div card abierto por _chart_card()."""
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ===========================================================================
@@ -815,8 +807,21 @@ def _graf_comparativa_mensual(df, col_fecha, col_ajuste_val):
     _chart_card_close()
 
 
-def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val):
-    """Cascada (Waterfall) por familia + tabla top faltantes/sobrantes."""
+def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
+                           col_producto=None, col_valorizado=None,
+                           col_cantidad=None):
+    """Cascada (Waterfall) por familia + tabs analíticos a la derecha.
+
+    Las 8 pestañas responden a preguntas distintas del mismo df_f (periodo):
+      1. Faltantes por familia
+      2. Sobrantes por familia
+      3. Productos críticos (top 10 negativos, nivel producto)
+      4. Ranking por área
+      5. Resumen de familia (completo)
+      6. Movimientos extremos (top+bottom en una tabla)
+      7. Ranking por valorizado
+      8. Ranking por cantidad
+    """
     grp_col = col_familia or col_area
     if not grp_col:
         st.info("Se necesita columna de familia o área para el gráfico de cascada.")
@@ -855,15 +860,132 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val):
         _chart_card_close()
 
     with col_tabla:
-        st.markdown("**📉 Top 5 faltantes**")
-        neg = agg.nsmallest(5, col_ajuste_val)[[grp_col, col_ajuste_val]].copy()
-        neg[col_ajuste_val] = neg[col_ajuste_val].map(lambda v: f"S/ {v:,.2f}")
-        st.dataframe(neg, hide_index=True, use_container_width=True)
+        # ── 8 pestañas de análisis del periodo ─────────────────────────────
+        tab_names = [
+            "📉 Faltantes",
+            "📈 Sobrantes",
+            "🎯 Productos críticos",
+            "🏢 Por área",
+            "📋 Resumen familia",
+            "🔀 Extremos",
+            "💰 Ranking valorizado",
+            "📦 Ranking cantidad",
+        ]
+        tabs = st.tabs(tab_names)
 
-        st.markdown("**📈 Top 5 sobrantes**")
-        pos = agg.nlargest(5, col_ajuste_val)[[grp_col, col_ajuste_val]].copy()
-        pos[col_ajuste_val] = pos[col_ajuste_val].map(lambda v: f"S/ {v:,.2f}")
-        st.dataframe(pos, hide_index=True, use_container_width=True)
+        def _fmt_soles(df_, col):
+            df_ = df_.copy()
+            df_[col] = df_[col].map(lambda v: f"S/ {v:,.2f}")
+            return df_
+
+        def _fmt_int(df_, col):
+            df_ = df_.copy()
+            df_[col] = df_[col].map(lambda v: f"{int(v):,}")
+            return df_
+
+        # 1 — Faltantes por familia
+        with tabs[0]:
+            neg = agg.nsmallest(5, col_ajuste_val)[[grp_col, col_ajuste_val]]
+            st.dataframe(_fmt_soles(neg, col_ajuste_val),
+                         hide_index=True, use_container_width=True)
+
+        # 2 — Sobrantes por familia
+        with tabs[1]:
+            pos = agg.nlargest(5, col_ajuste_val)[[grp_col, col_ajuste_val]]
+            st.dataframe(_fmt_soles(pos, col_ajuste_val),
+                         hide_index=True, use_container_width=True)
+
+        # 3 — Productos críticos (top 10 negativos, nivel producto)
+        with tabs[2]:
+            if col_producto and col_producto in df.columns:
+                cols_p = [col_producto, col_ajuste_val]
+                if grp_col in df.columns and grp_col not in cols_p:
+                    cols_p.insert(1, grp_col)
+                prod_agg = (df.groupby(cols_p[:-1], as_index=False)[col_ajuste_val]
+                              .sum()
+                              .nsmallest(10, col_ajuste_val))
+                st.dataframe(_fmt_soles(prod_agg, col_ajuste_val),
+                             hide_index=True, use_container_width=True)
+            else:
+                st.caption("No hay columna de producto en el reporte.")
+
+        # 4 — Ranking por área
+        with tabs[3]:
+            if col_area and col_area in df.columns:
+                area_agg = (df.groupby(col_area, as_index=False)[col_ajuste_val]
+                              .sum()
+                              .sort_values(col_ajuste_val))
+                _total_abs = abs(area_agg[col_ajuste_val]).sum() or 1
+                area_agg["% |total|"] = (
+                    abs(area_agg[col_ajuste_val]) / _total_abs * 100
+                ).round(1)
+                area_agg["% |total|"] = area_agg["% |total|"].map(lambda v: f"{v:.1f}%")
+                st.dataframe(_fmt_soles(area_agg, col_ajuste_val),
+                             hide_index=True, use_container_width=True)
+            else:
+                st.caption("No hay columna de área en el reporte.")
+
+        # 5 — Resumen familia (todas las familias, N productos + ajuste + %)
+        with tabs[4]:
+            if col_producto and col_producto in df.columns:
+                resumen = (df.groupby(grp_col)
+                             .agg(**{
+                                 "N° productos": (col_producto, "nunique"),
+                                 col_ajuste_val: (col_ajuste_val, "sum"),
+                             })
+                             .reset_index())
+            else:
+                resumen = (df.groupby(grp_col, as_index=False)[col_ajuste_val]
+                             .sum())
+            resumen = resumen.reindex(
+                resumen[col_ajuste_val].abs().sort_values(ascending=False).index
+            )
+            if col_valorizado and col_valorizado in df.columns:
+                val_por_fam = df.groupby(grp_col)[col_valorizado].sum()
+                resumen["% s/ valorizado"] = resumen.apply(
+                    lambda r: (r[col_ajuste_val] / val_por_fam.get(r[grp_col], 1) * 100)
+                              if val_por_fam.get(r[grp_col], 0) else 0,
+                    axis=1,
+                ).round(2).map(lambda v: f"{v:+.2f}%")
+            st.dataframe(_fmt_soles(resumen, col_ajuste_val),
+                         hide_index=True, use_container_width=True)
+
+        # 6 — Movimientos extremos (5 más rojos + 5 más verdes en una tabla)
+        with tabs[5]:
+            neg5 = agg.nsmallest(5, col_ajuste_val)
+            pos5 = agg.nlargest(5, col_ajuste_val)[::-1]  # descendente
+            sep = pd.DataFrame({grp_col: ["———"], col_ajuste_val: [0.0]})
+            extremos = pd.concat([neg5, sep, pos5], ignore_index=True)
+            extremos[col_ajuste_val] = extremos[col_ajuste_val].map(
+                lambda v: "" if v == 0 else f"S/ {v:,.2f}"
+            )
+            st.dataframe(extremos[[grp_col, col_ajuste_val]],
+                         hide_index=True, use_container_width=True)
+
+        # 7 — Ranking por valorizado (familias ordenadas por valorizado total)
+        with tabs[6]:
+            if col_valorizado and col_valorizado in df.columns:
+                val_agg = (df.groupby(grp_col, as_index=False)[col_valorizado]
+                             .sum()
+                             .sort_values(col_valorizado, ascending=False))
+                st.dataframe(_fmt_soles(val_agg, col_valorizado),
+                             hide_index=True, use_container_width=True)
+            else:
+                st.caption("No hay columna de valorizado en el reporte.")
+
+        # 8 — Ranking por cantidad (ajuste en unidades, no en soles)
+        with tabs[7]:
+            if col_cantidad and col_cantidad in df.columns:
+                cant_agg = (df.groupby(grp_col, as_index=False)[col_cantidad]
+                              .sum()
+                              .sort_values(col_cantidad))
+                st.dataframe(_fmt_int(cant_agg, col_cantidad),
+                             hide_index=True, use_container_width=True)
+            else:
+                st.caption(
+                    "No se encontró la columna de cantidad de ajuste "
+                    "(se buscó 'AJUSTE', 'CANTIDAD AJUSTE')."
+                )
 
 
 def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val):
@@ -1025,10 +1147,6 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
 
     Estructura:
       · Selector de ámbito: «Del periodo» / «Histórico» (segmented control).
-      · Todo lo que sigue (chips, filtros y el gráfico elegido) vive dentro
-        de una tarjeta (`st.container(border=True)`) con key por ámbito,
-        para que Streamlit no reutilice el estado interno al alternar entre
-        pestañas (evita chips fantasma).
       · Chips (st.pills) para elegir el gráfico dentro del ámbito.
       · Chips de filtro rápido por Familia (aplican al ámbito activo).
       · «Del periodo»  → usa df_f (respeta el rango del popover):
@@ -1046,6 +1164,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
     col_ajuste_val = _resolver(df_f, ["AJUSTE VALORIZADO", "AJUSTEVALORIZADO"])
     col_valorizado = _resolver(df_f, ["VALORIZADO TOTAL", "VALORIZADO", "VALORIZADOTOTAL"])
     col_producto   = _resolver(df_f, ["NOMBRE PRODUCTO", "PRODUCTO", "DESCRIPCION"])
+    col_cantidad   = _resolver(df_f, ["AJUSTE", "CANTIDAD AJUSTE", "CANTIDAD"])
 
     if not col_ajuste_val:
         st.warning(
@@ -1066,75 +1185,74 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
     if not ambito:
         ambito = "Del periodo"
 
-    # ── Todo el contenido (chips, filtros, gráfico) vive en una tarjeta ──
-    _cont = st.container(border=True, key=f"ajuste_graf_card_{ambito}")
-    with _cont:
-
-        # ── Datos según ámbito ───────────────────────────────────────────
-        if ambito == "Histórico":
-            base = df_full if df_full is not None else df_f
-            anio_actual = _dt.date.today().year
-            if col_fecha and col_fecha in base.columns:
-                _f = pd.to_datetime(base[col_fecha], errors="coerce")
-                base = base[_f.dt.year == anio_actual]
-            d = base
-            st.caption(
-                f"📆 Vista histórica del año {anio_actual}. "
-                "El rango de fechas del popover no aplica aquí."
-            )
-        else:
-            d = df_f
-
-        # ── Chips de filtro rápido por Familia (opcional) ────────────────
-        if col_familia and col_familia in d.columns:
-            familias = sorted(d[col_familia].dropna().astype(str).unique().tolist())
-            if familias:
-                fam_sel = st.pills(
-                    "Familia",
-                    familias,
-                    selection_mode="multi",
-                    key=f"ajuste_graf_fam_{ambito}",
-                    label_visibility="collapsed",
-                )
-                if fam_sel:
-                    d = d[d[col_familia].astype(str).isin(fam_sel)]
-
-        if d is None or d.empty:
-            st.info("No hay datos para los filtros seleccionados.")
-            return
-
-        # ── Chips selectores de gráfico ───────────────────────────────────
-        if ambito == "Histórico":
-            opciones = ["📅 Evolución", "📊 Comparativa mensual"]
-        else:
-            opciones = ["🏗️ Cascada", "🔥 Mapa de calor", "📦 Distribución"]
-
-        graf = st.pills(
-            "Gráfico",
-            opciones,
-            default=opciones[0],
-            key=f"ajuste_graf_tipo_{ambito}",
-            label_visibility="collapsed",
+    # ── Datos según ámbito ───────────────────────────────────────────────
+    if ambito == "Histórico":
+        base = df_full if df_full is not None else df_f
+        anio_actual = _dt.date.today().year
+        if col_fecha and col_fecha in base.columns:
+            _f = pd.to_datetime(base[col_fecha], errors="coerce")
+            base = base[_f.dt.year == anio_actual]
+        d = base
+        st.caption(
+            f"📆 Vista histórica del año {anio_actual}. "
+            "El rango de fechas del popover no aplica aquí."
         )
-        if not graf:
-            graf = opciones[0]
+    else:
+        d = df_f
 
-        # ── Render del gráfico elegido (solo uno por rerun) ───────────────
-        if graf == "📅 Evolución":
-            _graf_evolucion_ajuste(d, col_fecha, col_familia,
-                                   col_ajuste_val, col_valorizado)
-        elif graf == "📊 Comparativa mensual":
-            _graf_comparativa_mensual(d, col_fecha, col_ajuste_val)
-        elif graf == "🏗️ Cascada":
-            _graf_waterfall_ajuste(d, col_familia, col_area, col_ajuste_val)
-        elif graf == "🔥 Mapa de calor":
-            _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val)
-        elif graf == "📦 Distribución":
-            _graf_distribucion_ajuste(d, col_familia, col_area,
-                                      col_ajuste_val, col_producto)
+    # ── Chips de filtro rápido por Familia (opcional) ────────────────────
+    if col_familia and col_familia in d.columns:
+        familias = sorted(d[col_familia].dropna().astype(str).unique().tolist())
+        if familias:
+            fam_sel = st.pills(
+                "Familia",
+                familias,
+                selection_mode="multi",
+                key=f"ajuste_graf_fam_{ambito}",
+                label_visibility="collapsed",
+            )
+            if fam_sel:
+                d = d[d[col_familia].astype(str).isin(fam_sel)]
 
-        with st.expander("🎛️ Explorador libre de gráficos"):
-            renderizar_graficos_genericos(d, nombre_reporte)
+    if d is None or d.empty:
+        st.info("No hay datos para los filtros seleccionados.")
+        return
+
+    # ── Chips selectores de gráfico ──────────────────────────────────────
+    if ambito == "Histórico":
+        opciones = ["📅 Evolución", "📊 Comparativa mensual"]
+    else:
+        opciones = ["🏗️ Cascada", "🔥 Mapa de calor", "📦 Distribución"]
+
+    graf = st.pills(
+        "Gráfico",
+        opciones,
+        default=opciones[0],
+        key=f"ajuste_graf_tipo_{ambito}",
+        label_visibility="collapsed",
+    )
+    if not graf:
+        graf = opciones[0]
+
+    # ── Render del gráfico elegido (solo uno por rerun) ──────────────────
+    if graf == "📅 Evolución":
+        _graf_evolucion_ajuste(d, col_fecha, col_familia,
+                               col_ajuste_val, col_valorizado)
+    elif graf == "📊 Comparativa mensual":
+        _graf_comparativa_mensual(d, col_fecha, col_ajuste_val)
+    elif graf == "🏗️ Cascada":
+        _graf_waterfall_ajuste(d, col_familia, col_area, col_ajuste_val,
+                               col_producto=col_producto,
+                               col_valorizado=col_valorizado,
+                               col_cantidad=col_cantidad)
+    elif graf == "🔥 Mapa de calor":
+        _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val)
+    elif graf == "📦 Distribución":
+        _graf_distribucion_ajuste(d, col_familia, col_area,
+                                  col_ajuste_val, col_producto)
+
+    with st.expander("🎛️ Explorador libre de gráficos"):
+        renderizar_graficos_genericos(d, nombre_reporte)
 
 
 def renderizar_graficos_reporte(df_f, reporte, cfg, df_full=None):
