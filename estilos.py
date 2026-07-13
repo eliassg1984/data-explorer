@@ -631,20 +631,26 @@ def get_css():
         padding: 1.25rem 1.5rem 0.75rem;
         margin-bottom: 1rem;
         box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
+        position: relative;
+        padding-bottom: 2.5rem;  /* espacio para el pie */
     }
 
-    /* Título opcional dentro del card (etiqueta muted en mayúsculas) */
+    /* Título opcional dentro del card — pie en banda lavanda, pegado abajo */
     .chart-card-title {
-        font-size: 12.5px;
+        position: absolute;
+        left: 0; right: 0; bottom: 0;
+        font-size: 11px;
         font-weight: 600;
         color: var(--accent);
-        background: var(--accent-tint, #efedfd);
-        border-bottom: 1px solid var(--accent);
+        background: var(--accent-tint, #EEEDFE);
+        border-top: 1px solid var(--accent, #7F77DD);
         text-transform: uppercase;
-        letter-spacing: 0.07em;
-        margin: -1.25rem -1.5rem 0.75rem;
-        padding: 10px 1.5rem;
+        letter-spacing: 0.08em;
+        padding: 8px 1.5rem;
+        margin: 0;
         line-height: 1;
+        border-bottom-left-radius: inherit;
+        border-bottom-right-radius: inherit;
     }
     /* El card dentro de un expander no necesita doble borde */
     .streamlit-expanderContent .chart-card {
