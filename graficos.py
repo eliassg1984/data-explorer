@@ -879,21 +879,26 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
 def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
                            col_producto, col_valorizado, col_cantidad,
                            ambito):
-    """Panel derecho: UNA mini-tabla analítica a la vez, elegible por chip.
+    """Panel derecho: UNA mini-tabla analítica a la vez, en pestañas.
 
     Vive dentro del contenedor blanco derecho de la vista Gráficos de
-    Ajuste. Los chips son st.pills de selección única. Para añadir un
-    mini-gráfico nuevo: sumar la opción a `opciones` y su rama al if/elif.
+    Ajuste. Usa st.tabs (8 pestañas); si no caben en el ancho, Streamlit
+    aplica scroll horizontal automáticamente. Para añadir un mini-gráfico
+    nuevo: sumar el nombre a `tab_names` y su bloque `with tabs[i]:`.
 
     Las 8 vistas responden a preguntas distintas del mismo df activo:
-      1. Faltantes por familia (top 5 negativos)
-      2. Sobrantes por familia (top 5 positivos)
-      3. Productos críticos (top 10 negativos, nivel producto)
-      4. Ranking por área (+ % sobre |total|)
-      5. Resumen de familia (N productos, ajuste, % s/ valorizado)
-      6. Movimientos extremos (top+bottom en una tabla)
-      7. Ranking por valorizado
-      8. Ranking por cantidad (unidades)
+      0. Faltantes por familia (top 5 negativos)
+      1. Sobrantes por familia (top 5 positivos)
+      2. Productos críticos (top 10 negativos, nivel producto)
+      3. Ranking por área (+ % sobre |total|)
+      4. Resumen de familia (N productos, ajuste, % s/ valorizado)
+      5. Movimientos extremos (top+bottom en una tabla)
+      6. Ranking por valorizado
+      7. Ranking por cantidad (unidades)
+
+    `ambito` se mantiene en la firma por si más adelante se usa para
+    diferenciar contenido entre «Del periodo» e «Histórico»; hoy no lo
+    necesita (las pestañas son las mismas para ambos).
     """
     grp_col = col_familia or col_area
     if not grp_col:
@@ -903,25 +908,17 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
     agg = (df.groupby(grp_col, as_index=False)[col_ajuste_val]
            .sum().sort_values(col_ajuste_val))
 
-    opciones = [
-        "📉 Faltantes",
-        "📈 Sobrantes",
-        "🎯 Críticos",
-        "🏢 Por área",
-        "📋 Resumen",
-        "🔀 Extremos",
-        "💰 Valorizado",
-        "📦 Cantidad",
+    tab_names = [
+        "Faltantes",
+        "Sobrantes",
+        "Críticos",
+        "Por área",
+        "Resumen",
+        "Extremos",
+        "Valorizado",
+        "Cantidad",
     ]
-    sel = st.pills(
-        "Análisis",
-        opciones,
-        default=opciones[0],
-        key=f"ajuste_analisis_pill_{_slug(ambito)}",
-        label_visibility="collapsed",
-    )
-    if not sel:
-        sel = opciones[0]
+    tabs = st.tabs(tab_names)
 
     def _fmt_soles(df_, col):
         df_ = df_.copy()
@@ -933,22 +930,22 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
         df_[col] = df_[col].map(lambda v: f"{int(v):,}")
         return df_
 
-    # 1 — Faltantes por familia
-    if sel == "📉 Faltantes":
+    # 0 — Faltantes por familia
+    with tabs[0]:
         st.caption("Top 5 faltantes")
         neg = agg.nsmallest(5, col_ajuste_val)[[grp_col, col_ajuste_val]]
         st.dataframe(_fmt_soles(neg, col_ajuste_val),
                      hide_index=True, use_container_width=True)
 
-    # 2 — Sobrantes por familia
-    elif sel == "📈 Sobrantes":
+    # 1 — Sobrantes por familia
+    with tabs[1]:
         st.caption("Top 5 sobrantes")
         pos = agg.nlargest(5, col_ajuste_val)[[grp_col, col_ajuste_val]]
         st.dataframe(_fmt_soles(pos, col_ajuste_val),
                      hide_index=True, use_container_width=True)
 
-    # 3 — Productos críticos (top 10 negativos, nivel producto)
-    elif sel == "🎯 Críticos":
+    # 2 — Productos críticos (top 10 negativos, nivel producto)
+    with tabs[2]:
         if col_producto and col_producto in df.columns:
             st.caption("Top 10 productos más negativos")
             cols_p = [col_producto, col_ajuste_val]
@@ -962,8 +959,8 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
         else:
             st.caption("No hay columna de producto en el reporte.")
 
-    # 4 — Ranking por área
-    elif sel == "🏢 Por área":
+    # 3 — Ranking por área
+    with tabs[3]:
         if col_area and col_area in df.columns:
             area_agg = (df.groupby(col_area, as_index=False)[col_ajuste_val]
                           .sum()
@@ -978,8 +975,8 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
         else:
             st.caption("No hay columna de área en el reporte.")
 
-    # 5 — Resumen familia (todas las familias, N productos + ajuste + %)
-    elif sel == "📋 Resumen":
+    # 4 — Resumen familia (todas las familias, N productos + ajuste + %)
+    with tabs[4]:
         if col_producto and col_producto in df.columns:
             resumen = (df.groupby(grp_col)
                          .agg(**{
@@ -1003,8 +1000,8 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
         st.dataframe(_fmt_soles(resumen, col_ajuste_val),
                      hide_index=True, use_container_width=True)
 
-    # 6 — Movimientos extremos (5 más rojos + 5 más verdes en una tabla)
-    elif sel == "🔀 Extremos":
+    # 5 — Movimientos extremos (5 más rojos + 5 más verdes en una tabla)
+    with tabs[5]:
         neg5 = agg.nsmallest(5, col_ajuste_val)
         pos5 = agg.nlargest(5, col_ajuste_val)[::-1]  # descendente
         sep = pd.DataFrame({grp_col: ["———"], col_ajuste_val: [0.0]})
@@ -1015,8 +1012,8 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
         st.dataframe(extremos[[grp_col, col_ajuste_val]],
                      hide_index=True, use_container_width=True)
 
-    # 7 — Ranking por valorizado (familias ordenadas por valorizado total)
-    elif sel == "💰 Valorizado":
+    # 6 — Ranking por valorizado (familias ordenadas por valorizado total)
+    with tabs[6]:
         if col_valorizado and col_valorizado in df.columns:
             val_agg = (df.groupby(grp_col, as_index=False)[col_valorizado]
                          .sum()
@@ -1026,8 +1023,8 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
         else:
             st.caption("No hay columna de valorizado en el reporte.")
 
-    # 8 — Ranking por cantidad (ajuste en unidades, no en soles)
-    elif sel == "📦 Cantidad":
+    # 7 — Ranking por cantidad (ajuste en unidades, no en soles)
+    with tabs[7]:
         if col_cantidad and col_cantidad in df.columns:
             cant_agg = (df.groupby(grp_col, as_index=False)[col_cantidad]
                           .sum()
