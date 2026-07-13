@@ -1051,11 +1051,11 @@ def inject_maximize_aggrid():
                     /* ── NUEVO: ⛶ integrado en el riel de pestañas ── */
                     '#' + BTN_ID + ' {',
                     '  width: 100%;',
-                    '  height: 40px;',
+                    '  height: 36px;',                              /* empata la banda superior (antes 40px) */
                     '  border: none;',
-                    '  border-bottom: 1px solid var(--border);',
-                    '  background: transparent;',
-                    '  color: var(--text-secondary);',
+                    '  border-bottom: 1px solid var(--accent);',    /* misma línea que la franja lavanda */
+                    '  background: var(--accent-tint);',            /* fondo lavanda de la banda (antes transparent) */
+                    '  color: var(--accent-hover);',                /* icono en tono acento (antes text-secondary) */
                     '  font-size: 16px;',
                     '  cursor: pointer;',
                     '  display: flex;',
