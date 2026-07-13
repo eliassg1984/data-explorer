@@ -641,7 +641,7 @@ def _render_contenido():
         if vista == "Tabla":
             renderizar_aggrid_compras(df_f, font_px)
         else:
-            renderizar_graficos_reporte(df_f, reporte, cfg)
+            renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
 
     # ── INVENTARIO VALORIZADO ────────────────────────────────────────────────
     elif reporte == "Inventario Valorizado":
@@ -716,7 +716,7 @@ def _render_contenido():
                     cols_visibles=None,
                 )
         else:
-            renderizar_graficos_reporte(df_f, reporte, cfg)
+            renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
 
     # ── REQUERIMIENTOS ───────────────────────────────────────────────────────
     elif reporte == "Requerimientos":
@@ -757,7 +757,7 @@ def _render_contenido():
         if vista == "Tabla":
             _render_tabla()
         else:
-            renderizar_graficos_reporte(df_f, reporte, cfg)
+            renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
 
     perf.fragment_end("_render_contenido")                                  # ⚡ PERF
 
