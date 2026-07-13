@@ -701,11 +701,7 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
         annotation_position="top right",
     )
 
-    # ⚠️ _LAYOUT_BASE define xaxis/yaxis — filtrar antes de desempacar
-    # para no chocar con las claves que aquí sobreescribimos (Regla 5).
-    _base_no_ejes = {k: v for k, v in _LAYOUT_BASE.items() if k not in ("xaxis", "yaxis")}
-    fig.update_layout(
-        **_base_no_ejes,
+    fig.update_layout(**_layout(
         title="Evolución del ajuste valorizado",
         xaxis=dict(
             gridcolor=GRIS_BORDE,
@@ -726,7 +722,7 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
         hovermode="x unified",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         height=500,
-    )
+    ))
 
     _chart_card("Evolución temporal")
     st.plotly_chart(fig, use_container_width=True)
