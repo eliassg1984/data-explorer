@@ -36,21 +36,29 @@ PALETA_CALLAI = PALETA_SERIES  # alias retrocompatible; fuente en tema.py
 # ===========================================================================
 
 def _chart_card(titulo: str = ""):
-    """Abre un div card blanco con bordes redondeados.
-    Llamar siempre seguido de _chart_card_close() después del gráfico."""
-    if titulo:
-        st.markdown(
-            f'<div class="chart-card">'
-            f'<p class="chart-card-title">{titulo}</p>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+    """Abre un div card blanco. El título (opcional) se emite como pie
+    en el cierre del card, no en la apertura — para que quede como
+    banda lavanda al pie del gráfico."""
+    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+    # Guardamos el título pendiente en un stack de session_state para
+    # que _chart_card_close() sepa qué escribir al cerrar.
+    st.session_state.setdefault("_chart_card_titulos", []).append(titulo)
 
 
 def _chart_card_close():
-    """Cierra el div card abierto por _chart_card()."""
-    st.markdown('</div>', unsafe_allow_html=True)
+    """Cierra el div card abierto por _chart_card().
+    Si había un título pendiente, lo escribe como pie."""
+    titulo = ""
+    stack = st.session_state.get("_chart_card_titulos")
+    if stack:
+        titulo = stack.pop()
+    if titulo:
+        st.markdown(
+            f'<p class="chart-card-title">{titulo}</p></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ===========================================================================
@@ -1017,6 +1025,10 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
 
     Estructura:
       · Selector de ámbito: «Del periodo» / «Histórico» (segmented control).
+      · Todo lo que sigue (chips, filtros y el gráfico elegido) vive dentro
+        de una tarjeta (`st.container(border=True)`) con key por ámbito,
+        para que Streamlit no reutilice el estado interno al alternar entre
+        pestañas (evita chips fantasma).
       · Chips (st.pills) para elegir el gráfico dentro del ámbito.
       · Chips de filtro rápido por Familia (aplican al ámbito activo).
       · «Del periodo»  → usa df_f (respeta el rango del popover):
@@ -1054,71 +1066,75 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
     if not ambito:
         ambito = "Del periodo"
 
-    # ── Datos según ámbito ───────────────────────────────────────────────
-    if ambito == "Histórico":
-        base = df_full if df_full is not None else df_f
-        anio_actual = _dt.date.today().year
-        if col_fecha and col_fecha in base.columns:
-            _f = pd.to_datetime(base[col_fecha], errors="coerce")
-            base = base[_f.dt.year == anio_actual]
-        d = base
-        st.caption(
-            f"📆 Vista histórica del año {anio_actual}. "
-            "El rango de fechas del popover no aplica aquí."
-        )
-    else:
-        d = df_f
+    # ── Todo el contenido (chips, filtros, gráfico) vive en una tarjeta ──
+    _cont = st.container(border=True, key=f"ajuste_graf_card_{ambito}")
+    with _cont:
 
-    # ── Chips de filtro rápido por Familia (opcional) ────────────────────
-    if col_familia and col_familia in d.columns:
-        familias = sorted(d[col_familia].dropna().astype(str).unique().tolist())
-        if familias:
-            fam_sel = st.pills(
-                "Familia",
-                familias,
-                selection_mode="multi",
-                key=f"ajuste_graf_fam_{ambito}",
-                label_visibility="collapsed",
+        # ── Datos según ámbito ───────────────────────────────────────────
+        if ambito == "Histórico":
+            base = df_full if df_full is not None else df_f
+            anio_actual = _dt.date.today().year
+            if col_fecha and col_fecha in base.columns:
+                _f = pd.to_datetime(base[col_fecha], errors="coerce")
+                base = base[_f.dt.year == anio_actual]
+            d = base
+            st.caption(
+                f"📆 Vista histórica del año {anio_actual}. "
+                "El rango de fechas del popover no aplica aquí."
             )
-            if fam_sel:
-                d = d[d[col_familia].astype(str).isin(fam_sel)]
+        else:
+            d = df_f
 
-    if d is None or d.empty:
-        st.info("No hay datos para los filtros seleccionados.")
-        return
+        # ── Chips de filtro rápido por Familia (opcional) ────────────────
+        if col_familia and col_familia in d.columns:
+            familias = sorted(d[col_familia].dropna().astype(str).unique().tolist())
+            if familias:
+                fam_sel = st.pills(
+                    "Familia",
+                    familias,
+                    selection_mode="multi",
+                    key=f"ajuste_graf_fam_{ambito}",
+                    label_visibility="collapsed",
+                )
+                if fam_sel:
+                    d = d[d[col_familia].astype(str).isin(fam_sel)]
 
-    # ── Chips selectores de gráfico ──────────────────────────────────────
-    if ambito == "Histórico":
-        opciones = ["📅 Evolución", "📊 Comparativa mensual"]
-    else:
-        opciones = ["🏗️ Cascada", "🔥 Mapa de calor", "📦 Distribución"]
+        if d is None or d.empty:
+            st.info("No hay datos para los filtros seleccionados.")
+            return
 
-    graf = st.pills(
-        "Gráfico",
-        opciones,
-        default=opciones[0],
-        key=f"ajuste_graf_tipo_{ambito}",
-        label_visibility="collapsed",
-    )
-    if not graf:
-        graf = opciones[0]
+        # ── Chips selectores de gráfico ───────────────────────────────────
+        if ambito == "Histórico":
+            opciones = ["📅 Evolución", "📊 Comparativa mensual"]
+        else:
+            opciones = ["🏗️ Cascada", "🔥 Mapa de calor", "📦 Distribución"]
 
-    # ── Render del gráfico elegido (solo uno por rerun) ──────────────────
-    if graf == "📅 Evolución":
-        _graf_evolucion_ajuste(d, col_fecha, col_familia,
-                               col_ajuste_val, col_valorizado)
-    elif graf == "📊 Comparativa mensual":
-        _graf_comparativa_mensual(d, col_fecha, col_ajuste_val)
-    elif graf == "🏗️ Cascada":
-        _graf_waterfall_ajuste(d, col_familia, col_area, col_ajuste_val)
-    elif graf == "🔥 Mapa de calor":
-        _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val)
-    elif graf == "📦 Distribución":
-        _graf_distribucion_ajuste(d, col_familia, col_area,
-                                  col_ajuste_val, col_producto)
+        graf = st.pills(
+            "Gráfico",
+            opciones,
+            default=opciones[0],
+            key=f"ajuste_graf_tipo_{ambito}",
+            label_visibility="collapsed",
+        )
+        if not graf:
+            graf = opciones[0]
 
-    with st.expander("🎛️ Explorador libre de gráficos"):
-        renderizar_graficos_genericos(d, nombre_reporte)
+        # ── Render del gráfico elegido (solo uno por rerun) ───────────────
+        if graf == "📅 Evolución":
+            _graf_evolucion_ajuste(d, col_fecha, col_familia,
+                                   col_ajuste_val, col_valorizado)
+        elif graf == "📊 Comparativa mensual":
+            _graf_comparativa_mensual(d, col_fecha, col_ajuste_val)
+        elif graf == "🏗️ Cascada":
+            _graf_waterfall_ajuste(d, col_familia, col_area, col_ajuste_val)
+        elif graf == "🔥 Mapa de calor":
+            _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val)
+        elif graf == "📦 Distribución":
+            _graf_distribucion_ajuste(d, col_familia, col_area,
+                                      col_ajuste_val, col_producto)
+
+        with st.expander("🎛️ Explorador libre de gráficos"):
+            renderizar_graficos_genericos(d, nombre_reporte)
 
 
 def renderizar_graficos_reporte(df_f, reporte, cfg, df_full=None):
