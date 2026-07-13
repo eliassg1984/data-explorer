@@ -1051,7 +1051,7 @@ def inject_maximize_aggrid():
                     /* ── NUEVO: ⛶ integrado en el riel de pestañas ── */
                     '#' + BTN_ID + ' {',
                     '  width: 100%;',
-                    '  height: 40px;',
+                    '  height: 36px;',
                     '  border: none;',
                     '  border-bottom: 1px solid var(--border);',
                     '  background: transparent;',
