@@ -659,13 +659,19 @@ def get_css():
         padding: 0.25rem 0 0 !important;
     }
 
-    /* Contenedor de gráficos de Ajuste — fondo blanco explícito.
-       El key incluye el ámbito (Del periodo / Histórico), por eso el
-       prefijo con [class*=...] cubre ambos casos. */
+    /* Contenedores de gráficos de Ajuste — sin borde, esquinas amplias.
+       El key incluye el ámbito (Del periodo / Histórico) + izq/der, por
+       eso el prefijo con [class*=...] cubre los 4 casos.
+       border:none pisa el borde que st.container(border=True) pone. */
     div[class*="st-key-ajuste_graf_card_"] {
         background: var(--surface-2, #ffffff) !important;
-        border-radius: 12px;
+        border: none !important;
+        border-radius: 20px !important;
         padding: 16px 18px;
+        box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
+    }
+    div[class*="st-key-ajuste_graf_card_"] > div {
+        border: none !important;
     }
     </style>
     """
