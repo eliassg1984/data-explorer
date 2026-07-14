@@ -28,6 +28,29 @@ from tema import (
 
 
 # ===========================================================================
+# Fragmentos JS compartidos entre inyecciones (extraídos para no duplicar).
+# ---------------------------------------------------------------------------
+# Cada `components.html()` corre en un realm de JavaScript aislado, así que no
+# pueden compartir funciones en runtime; la deduplicación se hace en Python,
+# insertando el mismo string en cada inyección. Si mañana cambia el selector
+# del iframe de AgGrid, se toca aquí en un solo sitio.
+# ===========================================================================
+
+_JS_BUSCAR_IFRAME_FN = """
+        function buscarIframe() {
+            var frames = doc.querySelectorAll('iframe[src*="st_aggrid"]');
+            if (!frames.length) frames = doc.querySelectorAll('iframe');
+            for (var i = 0; i < frames.length; i++) {
+                try {
+                    var d = frames[i].contentDocument;
+                    if (d && d.querySelector('.ag-root-wrapper')) return frames[i];
+                } catch(e) {}
+            }
+            return null;
+        }
+"""
+
+# ===========================================================================
 # CSS pre-computado en Python (colores resueltos con f-string).
 # ---------------------------------------------------------------------------
 # Estos bloques se inyectan DENTRO del iframe de AgGrid. Antes usaban
@@ -437,97 +460,6 @@ def inject_grid_health_check():
     })();
     </script>
     """, height=0)
-
-
-# ===========================================================================
-# BOTÓN FLOTANTE PARA ABRIR/CERRAR EL SIDEBAR (CACHEADO)
-# ===========================================================================
-
-@st.cache_data
-def get_sidebar_toggle_html():
-    """Retorna el HTML del botón flotante (cacheado)."""
-    return """
-    <script>
-    (function () {
-        const doc = window.parent.document;
-        const BTN_ID = 'mi-toggle-sidebar';
-
-        function buscarControlNativo() {
-            const sels = [
-                '[data-testid="stSidebarCollapseButton"] button',
-                '[data-testid="stSidebarCollapseButton"]',
-                '[data-testid="stExpandSidebarButton"]',
-                '[data-testid="collapsedControl"]',
-                '[data-testid="stSidebarCollapsedControl"]',
-                'button[kind="header"]',
-                'section[data-testid="stSidebar"] button'
-            ];
-            for (const s of sels) {
-                const el = doc.querySelector(s);
-                if (el) return el;
-            }
-            return null;
-        }
-
-        function sidebarEstaAbierto() {
-            const sb = doc.querySelector('section[data-testid="stSidebar"]');
-            if (!sb) return false;
-            const rect = sb.getBoundingClientRect();
-            return rect.left > -100;
-        }
-
-        function toggleSidebar() {
-            const nativo = buscarControlNativo();
-            if (nativo) { nativo.click(); return; }
-
-            const sb = doc.querySelector('section[data-testid="stSidebar"]');
-            if (!sb) return;
-
-            if (sidebarEstaAbierto()) {
-                sb.style.transform = 'translateX(-110%)';
-                sb.style.width = '0';
-                sb.style.minWidth = '0';
-                sb.style.overflow = 'hidden';
-                sb.dataset.abierto = '';
-            } else {
-                sb.style.transform = 'none';
-                sb.style.width = '21rem';
-                sb.style.minWidth = '21rem';
-                sb.style.visibility = 'visible';
-                sb.style.overflow = 'visible';
-                sb.style.zIndex = '1000';
-                sb.dataset.abierto = '1';
-            }
-        }
-
-        function asegurarBoton() {
-            if (doc.getElementById(BTN_ID)) return;
-            const b = doc.createElement('button');
-            b.id = BTN_ID;
-            b.innerHTML = '☰';
-            b.title = 'Abrir / cerrar menú';
-            b.style.cssText = [
-                'position:fixed', 'top:12px', 'left:12px', 'z-index:1000000',
-                'width:44px', 'height:44px', 'border-radius:10px',
-                'border:1px solid var(--accent-hover)', 'background:var(--accent)', 'color:var(--bg-secondary)',
-                'font-size:20px', 'line-height:1', 'cursor:pointer',
-                'box-shadow:0 2px 8px rgba(0,0,0,0.2)', 'display:flex',
-                'align-items:center', 'justify-content:center', 'padding:0'
-            ].join(';');
-            b.onclick = toggleSidebar;
-            doc.body.appendChild(b);
-        }
-
-        asegurarBoton();
-        setInterval(asegurarBoton, 1000);
-    })();
-    </script>
-    """
-
-
-def inject_sidebar_toggle():
-    """Inyecta el botón flotante cacheado."""
-    components.html(get_sidebar_toggle_html(), height=0)
 
 
 # ===========================================================================
@@ -1155,18 +1087,7 @@ def inject_maximize_aggrid():
         var btnFlotante = null;   // SOLO se crea si la tabla no tiene riel
 
         var FS_CSS = """ + fs_css_js + """;
-
-        function buscarIframe() {
-            var frames = doc.querySelectorAll('iframe[src*="st_aggrid"]');
-            if (!frames.length) frames = doc.querySelectorAll('iframe');
-            for (var i = 0; i < frames.length; i++) {
-                try {
-                    var d = frames[i].contentDocument;
-                    if (d && d.querySelector('.ag-root-wrapper')) return frames[i];
-                } catch(e) {}
-            }
-            return null;
-        }
+        """ + _JS_BUSCAR_IFRAME_FN + """
 
         function elementoFS() {
             return doc.fullscreenElement || doc.webkitFullscreenElement || null;
@@ -1391,18 +1312,7 @@ def inject_dynamic_grid_height(offset_px: int = 220, min_px: int = 480):
         """ + config_js + """
         var tries = 0;
         var MAX = 40;
-
-        function buscarIframe() {
-            var frames = doc.querySelectorAll('iframe[src*="st_aggrid"]');
-            if (!frames.length) frames = doc.querySelectorAll('iframe');
-            for (var i = 0; i < frames.length; i++) {
-                try {
-                    var d = frames[i].contentDocument;
-                    if (d && d.querySelector('.ag-root-wrapper')) return frames[i];
-                } catch(e) {}
-            }
-            return null;
-        }
+        """ + _JS_BUSCAR_IFRAME_FN + """
 
         function aplicarAltura() {
             var iframe = buscarIframe();
@@ -1567,21 +1477,17 @@ def inject_fix_column_panel_ajuste():
             reposicionar(fdoc);
         }
 
-        function buscarIframe() {
-            var frames = doc.querySelectorAll('iframe[src*="st_aggrid"]');
-            if (!frames.length) frames = doc.querySelectorAll('iframe');
-            for (var i = 0; i < frames.length; i++) {
-                try {
-                    var d = frames[i].contentDocument;
-                    if (d && d.querySelector('.ag-root-wrapper')) return d;
-                } catch(e) {}
-            }
-            return null;
-        }
+        """ + _JS_BUSCAR_IFRAME_FN + """
 
         function check() {
             tries++;
-            var fdoc = buscarIframe();
+            var iframe = buscarIframe();
+            // La constante estándar devuelve el ELEMENTO iframe (no el
+            // contentDocument). Aquí necesitamos el documento para instalar
+            // el observer sobre .ag-side-bar, así que accedemos a .contentDocument.
+            // buscarIframe() ya validó que .ag-root-wrapper existe, así que
+            // el documento es seguro de usar.
+            var fdoc = iframe ? iframe.contentDocument : null;
             if (fdoc) {
                 instalarObserver(fdoc);
                 return;
