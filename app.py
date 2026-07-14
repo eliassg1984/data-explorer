@@ -629,6 +629,38 @@ def _selector_vista():
 
 
 # ===========================================================================
+# AJUSTE DE INVENTARIO — auto-detección de ámbito Del periodo / Histórico
+# ===========================================================================
+# Regla: si el rango aplicado cae dentro del MISMO mes calendario, el ámbito
+# por defecto es «Del periodo»; si cruza meses, «Histórico». La detección se
+# calcula ANTES de renderizar el segmented para que el widget se dibuje con
+# el valor correcto ya en session_state. El usuario puede sobreescribirlo
+# manualmente después; solo se fuerza cuando cambia el rango entre reruns.
+#
+# El ámbito lo LEE `graficos.py` desde `st.session_state["ajuste_graf_ambito"]`,
+# nunca lo escribe. Fuente única de verdad: este bloque.
+def _calcular_ajuste_ambito_auto():
+    """Devuelve el ámbito que corresponde al rango actual del popover."""
+    _rango = st.session_state.get("ajuste_rango_aplicado")
+    if isinstance(_rango, (tuple, list)) and len(_rango) == 2:
+        _ini, _fin = _rango
+        if _ini.year == _fin.year and _ini.month == _fin.month:
+            return "Del periodo"
+        return "Histórico"
+    return "Del periodo"
+
+
+if es_ajuste:
+    _auto_ambito = _calcular_ajuste_ambito_auto()
+    if "ajuste_graf_ambito" not in st.session_state:
+        st.session_state["ajuste_graf_ambito"] = _auto_ambito
+    _rango_actual = st.session_state.get("ajuste_rango_aplicado")
+    if _rango_actual != st.session_state.get("_ajuste_rango_prev_ambito"):
+        st.session_state["ajuste_graf_ambito"] = _auto_ambito
+        st.session_state["_ajuste_rango_prev_ambito"] = _rango_actual
+
+
+# ===========================================================================
 # FRAGMENT GENÉRICO — aisla el contenido principal de cada reporte
 # ===========================================================================
 @st.fragment
@@ -733,10 +765,44 @@ def _render_contenido():
             )
             vista = _selector_vista()
         else:
-            # Cambio 3: fila con tabs a la izquierda y calendario a la derecha
-            col_tabs, col_fecha_sel = st.columns([3, 1.15], vertical_alignment="bottom")
+            # Fila superior de Ajuste de Inventario:
+            #   [Tabs Tabla/Gráficos]  [Del periodo/Histórico *]  [Rango de fechas]
+            #                            ↑ solo cuando vista == Gráficos
+            #
+            # Leemos la vista actual desde session_state ANTES de renderizar,
+            # para decidir el layout (2 o 3 columnas). En el primer clic sobre
+            # "Gráficos" desde "Tabla" habrá 1 rerun de desfase (Streamlit
+            # dispara rerun al cambiar el radio), imperceptible en la práctica.
+            _vista_actual = st.session_state.get(f"vista_seg_{reporte}", "Tabla")
+            _mostrar_segmented = (_vista_actual == "Gráficos")
+
+            if _mostrar_segmented:
+                col_tabs, col_seg, col_fecha_sel = st.columns(
+                    [2, 1.3, 1.15], vertical_alignment="bottom",
+                )
+            else:
+                col_tabs, col_fecha_sel = st.columns(
+                    [3, 1.15], vertical_alignment="bottom",
+                )
+
             with col_tabs:
                 vista = _selector_vista()
+
+            if _mostrar_segmented:
+                with col_seg:
+                    with st.container(key="ajuste_ambito_pill"):
+                        # Sin `default`: el estado ya está inicializado por
+                        # _calcular_ajuste_ambito_auto() más arriba, y esa es
+                        # la fuente única de verdad. Usar `default` aquí y
+                        # además escribir session_state con la misma key
+                        # dispararía un warning de Streamlit.
+                        st.segmented_control(
+                            "Ámbito",
+                            ["Del periodo", "Histórico"],
+                            key="ajuste_graf_ambito",
+                            label_visibility="collapsed",
+                        )
+
             with col_fecha_sel:
                 with st.container(key="fecha_ajuste_pill"):
                     _ini_apl, _fin_apl = st.session_state["ajuste_rango_aplicado"]
