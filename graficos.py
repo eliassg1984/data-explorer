@@ -511,12 +511,38 @@ def _layout(**overrides):
     xaxis = dict(base.get("xaxis", {}))
     yaxis = dict(base.get("yaxis", {}))
 
-    xaxis.update(tickangle=0, automargin=True)
+    xaxis.update(tickangle=0, automargin=True,
+                 showline=False, zeroline=False, mirror=False)
+    yaxis.update(showline=False, zeroline=False, mirror=False)
     yaxis.setdefault("showticklabels", False)  # oculta valores del eje Y
 
     base["xaxis"] = xaxis
     base["yaxis"] = yaxis
     return base
+
+
+def _wrap_cat(labels, width=14):
+    """Parte etiquetas de categoría largas en varias líneas (con <br>) para
+    que, mostradas en horizontal, no se enciman. `width` es el número
+    aproximado de caracteres por línea. Se usa como `ticktext` del eje X,
+    así que el hover (que lee el valor real) no se ve afectado."""
+    out = []
+    for lab in labels:
+        s = str(lab)
+        if len(s) <= width:
+            out.append(s)
+            continue
+        lineas, actual = [], ""
+        for palabra in s.split():
+            if actual and len(actual) + 1 + len(palabra) > width:
+                lineas.append(actual)
+                actual = palabra
+            else:
+                actual = palabra if not actual else f"{actual} {palabra}"
+        if actual:
+            lineas.append(actual)
+        out.append("<br>".join(lineas))
+    return out
 
 
 def _resolver(df, candidatos):
@@ -892,6 +918,9 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f", gridcolor=GRIS_BORDE),
         showlegend=False, height=480,
     ))
+    _xcats = agg[grp_col].tolist() + ["TOTAL"]
+    fig.update_xaxes(tickmode="array", tickvals=_xcats,
+                     ticktext=_wrap_cat(_xcats))
     with _card("cascada", "Cascada por familia"):
         st.plotly_chart(fig, use_container_width=True)
 
@@ -1098,6 +1127,9 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val):
         yaxis=dict(autorange="reversed", gridcolor=GRIS_BORDE, showticklabels=True),
         height=max(380, len(pivot.index) * 42 + 120),
     ))
+    _xcats = [str(c) for c in pivot.columns.tolist()]
+    fig.update_xaxes(tickmode="array", tickvals=_xcats,
+                     ticktext=_wrap_cat(_xcats))
 
     with _card("heatmap", "Mapa de calor"):
         st.plotly_chart(fig, use_container_width=True)
@@ -1137,6 +1169,9 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                 yaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
             ))
             fig.update_traces(hovertemplate="%{x}<br>S/ %{y:,.2f}<extra></extra>")
+            _xcats = list(pd.unique(df[grp].astype(str)))
+            fig.update_xaxes(tickmode="array", tickvals=_xcats,
+                             ticktext=_wrap_cat(_xcats))
         else:
             fig = px.histogram(
                 df, x=col_ajuste_val, nbins=30,
