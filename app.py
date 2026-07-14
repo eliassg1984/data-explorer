@@ -778,7 +778,7 @@ def _render_contenido():
 
             if _mostrar_segmented:
                 col_tabs, col_seg, col_fecha_sel = st.columns(
-                    [2, 1.3, 1.15], vertical_alignment="bottom",
+                    [4, 1.2, 1.15], vertical_alignment="bottom",
                 )
             else:
                 col_tabs, col_fecha_sel = st.columns(
