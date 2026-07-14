@@ -1383,7 +1383,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             enable_enterprise_modules=True, key=f"grid_{reporte}",
         )
 
-    inject_grid_health_check()
+    # ── CAMBIO 1: pasa usa_pagination_v2 según el reporte ─────────────────
+    inject_grid_health_check(usa_pagination_v2=(reporte in REPORTES_ESTILO_INVENTARIO))
 
     if reporte in REPORTES_ESTILO_INVENTARIO:
         inject_pagination_v2()
@@ -1486,6 +1487,7 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
         enable_enterprise_modules=True, key=f"grid_movil_{reporte}",
     )
 
+    # Sin cambios: móvil usa paginación nativa, usa_pagination_v2=False (default)
     inject_grid_health_check()
 
 
@@ -1731,7 +1733,8 @@ def renderizar_aggrid_compras(df_grid: pd.DataFrame, font_px: int = 14):
             enable_enterprise_modules=True, key="grid_Compras",
         )
 
-    inject_grid_health_check()
+    # ── CAMBIO 2: usa_pagination_v2=True en renderizar_aggrid_compras ─────
+    inject_grid_health_check(usa_pagination_v2=True)
     inject_pagination_v2()
     inject_maximize_aggrid()
     inject_dynamic_grid_height(offset_px=220)
@@ -1987,7 +1990,8 @@ def renderizar_tabla_compras(df_grid: pd.DataFrame, font_px: int = 14):
             enable_enterprise_modules=True, key="grid_Compras",
         )
 
-    inject_grid_health_check()
+    # ── CAMBIO 3: usa_pagination_v2=True en renderizar_tabla_compras ──────
+    inject_grid_health_check(usa_pagination_v2=True)
     inject_pagination_v2()
     inject_maximize_aggrid()
     inject_dynamic_grid_height(offset_px=220)
