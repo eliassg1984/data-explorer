@@ -673,6 +673,13 @@ def get_css():
     div[class*="st-key-ajuste_graf_card_"] > div {
         border: none !important;
     }
+
+    /* Gráfico de Ajuste: elimina el contorno interno sin alterar el espacio. */
+    div[class*="st-key-ajuste_graf_card_"] [data-testid="stPlotlyChart"] {
+        border: 1px solid transparent !important;
+        border-radius: 10px !important;
+        overflow: hidden !important;
+    }
     </style>
     """
 
