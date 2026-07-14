@@ -1234,32 +1234,42 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
     if not ambito:
         ambito = "Del periodo"
 
-    # ── FILTROS FUERA DEL CONTENEDOR: Área y Familia (pills/chips) ──────
-    fila_filtros = st.container(key="ajuste_graf_filtros_top")
-    with fila_filtros:
-        col_ff_area, col_ff_fam = st.columns(2)
-        area_sel, fam_sel = [], []
-        with col_ff_area:
-            if col_area and col_area in df_f.columns:
-                areas = sorted(df_f[col_area].dropna()
-                               .astype(str).unique().tolist())
-                if areas:
+    # ── FILTROS FUERA DEL CONTENEDOR: Área y Familia (popover desplegable) ─
+    # Cada filtro es un botón compacto (chip) que al hacer clic abre un
+    # popover con pills multi-selección adentro. Cuando está cerrado NO
+    # ocupa espacio vertical. El label del botón muestra cuántos ítems
+    # están seleccionados (o "Área" / "Familia" si no hay filtro activo).
+    area_sel, fam_sel = [], []
+    col_ff_area, col_ff_fam, _ = st.columns([1, 1, 4])
+    with col_ff_area:
+        if col_area and col_area in df_f.columns:
+            areas = sorted(df_f[col_area].dropna()
+                           .astype(str).unique().tolist())
+            if areas:
+                _n_area = len(st.session_state.get("ajuste_graf_filtro_area") or [])
+                _lbl_area = f"Área · {_n_area}" if _n_area else "Área"
+                with st.popover(_lbl_area, use_container_width=True):
                     area_sel = st.pills(
                         "Área",
                         areas,
                         selection_mode="multi",
                         key="ajuste_graf_filtro_area",
+                        label_visibility="collapsed",
                     ) or []
-        with col_ff_fam:
-            if col_familia and col_familia in df_f.columns:
-                familias = sorted(df_f[col_familia].dropna()
-                                  .astype(str).unique().tolist())
-                if familias:
+    with col_ff_fam:
+        if col_familia and col_familia in df_f.columns:
+            familias = sorted(df_f[col_familia].dropna()
+                              .astype(str).unique().tolist())
+            if familias:
+                _n_fam = len(st.session_state.get("ajuste_graf_filtro_familia") or [])
+                _lbl_fam = f"Familia · {_n_fam}" if _n_fam else "Familia"
+                with st.popover(_lbl_fam, use_container_width=True):
                     fam_sel = st.pills(
                         "Familia",
                         familias,
                         selection_mode="multi",
                         key="ajuste_graf_filtro_familia",
+                        label_visibility="collapsed",
                     ) or []
 
     # ── Datos según ámbito ───────────────────────────────────────────────
