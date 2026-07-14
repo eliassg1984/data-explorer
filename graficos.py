@@ -493,9 +493,29 @@ _LAYOUT_BASE = dict(
 
 
 def _layout(**overrides):
-    """_LAYOUT_BASE fusionado con `overrides` (los overrides SIEMPRE ganan)."""
+    """_LAYOUT_BASE fusionado con `overrides`, aplicando a los ejes de
+    TODOS los gráficos un estilo común:
+      · sin valores en el eje Y (la cuadrícula interna SÍ se ve)
+      · nombres del eje X horizontales (tickangle=0 + automargin)
+
+    La cuadrícula conserva su color; solo se ocultan las ETIQUETAS del
+    eje Y y se enderezan los nombres del eje X. Los overrides del gráfico
+    se respetan y luego se les inyecta este estilo encima.
+
+    Los gráficos cuyo eje Y lleva nombres (no valores numéricos) — p. ej.
+    el mapa de calor, con familias en Y — pueden pasar showticklabels=True
+    en su yaxis para conservar esas etiquetas."""
     base = dict(_LAYOUT_BASE)
     base.update(overrides)
+
+    xaxis = dict(base.get("xaxis", {}))
+    yaxis = dict(base.get("yaxis", {}))
+
+    xaxis.update(tickangle=0, automargin=True)
+    yaxis.setdefault("showticklabels", False)  # oculta valores del eje Y
+
+    base["xaxis"] = xaxis
+    base["yaxis"] = yaxis
     return base
 
 
@@ -1075,7 +1095,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val):
     fig.update_layout(**_layout(
         title="Mapa de calor: ajuste valorizado por Familia × Área",
         xaxis=dict(tickangle=-30, side="bottom", gridcolor=GRIS_BORDE),
-        yaxis=dict(autorange="reversed", gridcolor=GRIS_BORDE),
+        yaxis=dict(autorange="reversed", gridcolor=GRIS_BORDE, showticklabels=True),
         height=max(380, len(pivot.index) * 42 + 120),
     ))
 
