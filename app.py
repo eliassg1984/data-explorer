@@ -650,16 +650,6 @@ def _calcular_ajuste_ambito_auto():
     return "Del periodo"
 
 
-if es_ajuste:
-    _auto_ambito = _calcular_ajuste_ambito_auto()
-    if "ajuste_graf_ambito" not in st.session_state:
-        st.session_state["ajuste_graf_ambito"] = _auto_ambito
-    _rango_actual = st.session_state.get("ajuste_rango_aplicado")
-    if _rango_actual != st.session_state.get("_ajuste_rango_prev_ambito"):
-        st.session_state["ajuste_graf_ambito"] = _auto_ambito
-        st.session_state["_ajuste_rango_prev_ambito"] = _rango_actual
-
-
 # ===========================================================================
 # FRAGMENT GENÉRICO — aisla el contenido principal de cada reporte
 # ===========================================================================
@@ -765,14 +755,26 @@ def _render_contenido():
             )
             vista = _selector_vista()
         else:
-            # Fila superior de Ajuste de Inventario:
-            #   [Tabs Tabla/Gráficos]  [Del periodo/Histórico *]  [Rango de fechas]
-            #                            ↑ solo cuando vista == Gráficos
+            # ── Ajuste de Inventario — cabecera completa DENTRO del fragment ─
             #
-            # Leemos la vista actual desde session_state ANTES de renderizar,
-            # para decidir el layout (2 o 3 columnas). En el primer clic sobre
-            # "Gráficos" desde "Tabla" habrá 1 rerun de desfase (Streamlit
-            # dispara rerun al cambiar el radio), imperceptible en la práctica.
+            # Toda la lógica de layout (tabs + segmented + fecha) vive aquí
+            # para que el fragment sea autónomo: cuando el usuario cambia de
+            # Tabla↔Gráficos, el fragment re-ejecuta desde arriba, lee el
+            # session_state actualizado por el widget, y decide correctamente
+            # si pintar 2 o 3 columnas. Antes esta decisión se tomaba fuera
+            # del fragment y había 1 rerun de desfase.
+
+            # 1) Auto-detectar ámbito (Del periodo / Histórico) según rango.
+            _auto_ambito = _calcular_ajuste_ambito_auto()
+            if "ajuste_graf_ambito" not in st.session_state:
+                st.session_state["ajuste_graf_ambito"] = _auto_ambito
+            _rango_actual = st.session_state.get("ajuste_rango_aplicado")
+            if _rango_actual != st.session_state.get("_ajuste_rango_prev_ambito"):
+                st.session_state["ajuste_graf_ambito"] = _auto_ambito
+                st.session_state["_ajuste_rango_prev_ambito"] = _rango_actual
+
+            # 2) Layout de la fila superior: leer vista desde session_state
+            #    (ya actualizado por el rerun anterior del fragment).
             _vista_actual = st.session_state.get(f"vista_seg_{reporte}", "Tabla")
             _mostrar_segmented = (_vista_actual == "Gráficos")
 
@@ -791,11 +793,6 @@ def _render_contenido():
             if _mostrar_segmented:
                 with col_seg:
                     with st.container(key="ajuste_ambito_pill"):
-                        # Sin `default`: el estado ya está inicializado por
-                        # _calcular_ajuste_ambito_auto() más arriba, y esa es
-                        # la fuente única de verdad. Usar `default` aquí y
-                        # además escribir session_state con la misma key
-                        # dispararía un warning de Streamlit.
                         st.segmented_control(
                             "Ámbito",
                             ["Del periodo", "Histórico"],
@@ -815,10 +812,12 @@ def _render_contenido():
                         key="fch_ajuste_inline",
                         label_visibility="collapsed",
                     )
+
+            # Cambio de rango → rerun completo para refiltar df_f
             if (isinstance(rango_aj, (tuple, list)) and len(rango_aj) == 2
                     and tuple(rango_aj) != st.session_state["ajuste_rango_aplicado"]):
                 st.session_state["ajuste_rango_aplicado"] = tuple(rango_aj)
-                st.rerun(scope="app")   # refiltra df_f en el flujo principal
+                st.rerun(scope="app")
 
         if vista == "Tabla":
             _render_tabla()
