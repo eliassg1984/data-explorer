@@ -674,11 +674,13 @@ def get_css():
         border: none !important;
     }
 
-    /* Gráfico de Ajuste: elimina el contorno interno sin alterar el espacio. */
-    div[class*="st-key-ajuste_graf_card_"] [data-testid="stPlotlyChart"] {
-        border: 1px solid transparent !important;
-        border-radius: 10px !important;
-        overflow: hidden !important;
+    /* Gráfico de Ajuste: el marco interno lo crea _card(), no Plotly. */
+    div[class*="st-key-ajuste_graf_card_"] [class*="st-key-chartcard_"],
+    div[class*="st-key-ajuste_graf_card_"] [class*="st-key-chartcard_"] > div,
+    div[class*="st-key-ajuste_graf_card_"] [class*="st-key-chartcard_"]
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        border-color: transparent !important;
+        box-shadow: none !important;
     }
     </style>
     """
