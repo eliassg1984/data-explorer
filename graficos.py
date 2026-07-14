@@ -1234,7 +1234,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
     if not ambito:
         ambito = "Del periodo"
 
-    # ── FILTROS FUERA DEL CONTENEDOR: Área y Familia (multiselect) ───────
+    # ── FILTROS FUERA DEL CONTENEDOR: Área y Familia (pills/chips) ──────
     fila_filtros = st.container(key="ajuste_graf_filtros_top")
     with fila_filtros:
         col_ff_area, col_ff_fam = st.columns(2)
@@ -1244,10 +1244,10 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
                 areas = sorted(df_f[col_area].dropna()
                                .astype(str).unique().tolist())
                 if areas:
-                    area_sel = st.multiselect(
+                    area_sel = st.pills(
                         "Área",
                         areas,
-                        placeholder="Todas las áreas",
+                        selection_mode="multi",
                         key="ajuste_graf_filtro_area",
                     ) or []
         with col_ff_fam:
@@ -1255,10 +1255,10 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
                 familias = sorted(df_f[col_familia].dropna()
                                   .astype(str).unique().tolist())
                 if familias:
-                    fam_sel = st.multiselect(
+                    fam_sel = st.pills(
                         "Familia",
                         familias,
-                        placeholder="Todas las familias",
+                        selection_mode="multi",
                         key="ajuste_graf_filtro_familia",
                     ) or []
 
