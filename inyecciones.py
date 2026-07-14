@@ -1,10 +1,283 @@
 """
 Inyecciones de HTML/JS en la página: overlay de errores, health-check
 del grid de AgGrid, botón flotante del sidebar e inspector de elementos.
+
+REGLA CLAVE (ver arquitectura.md §Fase 2):
+  El :root del documento padre NO cruza la frontera del iframe de AgGrid.
+  El CSS que se inyecta DENTRO del iframe debe usar colores literales
+  (constantes de tema.py resueltas en Python via f-string). Solo el CSS
+  que se añade al documento PADRE puede usar `var(--x)` de estilos.py.
+
+Todos los bloques inyectados en `fdoc.head`/`agDoc.head`/`idoc.head` de un
+iframe siguen esa regla. Los que se añaden a `doc.head` (padre) siguen
+usando `var(--x)`. Las excepciones documentadas (colores literales del
+overlay de errores y del inspector) se mantienen.
 """
 
+import json
 import streamlit as st
 import streamlit.components.v1 as components
+
+from tema import (
+    ACENTO, ACENTO_FUERTE, ACENTO_TEXTO,
+    BLANCO, EXIT_HOVER,
+    GRIS_BORDE, GRIS_FONDO, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
+    ICON_MUTED, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FONDO,
+    LAVANDA_FOCO, SCROLL_THUMB, TEXTO_PRINCIPAL,
+)
+
+
+# ===========================================================================
+# CSS pre-computado en Python (colores resueltos con f-string).
+# ---------------------------------------------------------------------------
+# Estos bloques se inyectan DENTRO del iframe de AgGrid. Antes usaban
+# var(--x) pero como el iframe no ve el :root del padre, todas esas
+# variables caían al valor inicial del navegador (botones de paginación
+# sin fondo, ⛶ del riel sin color acento, ✕ de fullscreen con estilos por
+# defecto). Ahora usan constantes literales de tema.py.
+#
+# Se calculan una sola vez al importar el módulo y se pasan al JS con
+# json.dumps() → así no hay que escapar las llaves del JavaScript.
+# ===========================================================================
+
+# --- inject_grid_health_check: paginación nativa + status bar + tool panel ---
+_PAG_CSS_IFRAME = f"""
+.ag-status-bar {{
+  background: {GRIS_FONDO} !important;
+  border-top: 1px solid {GRIS_BORDE} !important;
+  color: {GRIS_TEXTO} !important;
+  padding: 4px 16px !important;
+  font-size: 12px !important;
+  background-image: none !important;
+  background-color: {GRIS_FONDO} !important;
+}}
+.ag-status-bar * {{
+  background-image: none !important;
+}}
+.ag-status-name-value {{ color: {GRIS_TEXTO} !important; font-size: 12px !important; }}
+.ag-status-name-value-value {{ color: {TEXTO_PRINCIPAL} !important; font-weight: 600 !important; }}
+
+.ag-paging-panel {{
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  background: {GRIS_FONDO} !important;
+  background-image: none !important;
+  border: 1px solid {GRIS_BORDE} !important;
+  border-radius: 12px !important;
+  margin-top: 12px !important;
+  padding: 8px 16px !important;
+  min-height: 44px !important;
+  font-size: 12px !important;
+  color: {ICON_MUTED} !important;
+}}
+
+.ag-paging-page-size {{ order: -1 !important; margin-right: auto !important; }}
+.ag-paging-page-size .ag-label {{ color: {ICON_MUTED} !important; font-size: 12px !important; margin-right: 6px !important; }}
+.ag-paging-page-size .ag-select, .ag-paging-page-size select {{
+  border: 1px solid {GRIS_BORDE} !important;
+  border-radius: 6px !important;
+  background: {BLANCO} !important;
+  color: {TEXTO_PRINCIPAL} !important;
+  font-size: 12px !important;
+  padding: 2px 6px !important;
+}}
+
+.ag-paging-row-summary-panel {{ color: {ICON_MUTED} !important; font-size: 12px !important; }}
+.ag-paging-row-summary-panel-number {{ color: {TEXTO_PRINCIPAL} !important; font-weight: 600 !important; }}
+
+.ag-paging-description {{ color: {ICON_MUTED} !important; font-size: 12px !important; }}
+
+.ag-paging-button {{
+  width: 28px !important; height: 28px !important;
+  border: 1px solid {GRIS_BORDE} !important;
+  border-radius: 6px !important;
+  background: {BLANCO} !important;
+  color: {GRIS_TEXTO} !important;
+  font-size: 14px !important;
+  margin: 0 2px !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.15s ease !important;
+  position: relative !important;
+}}
+.ag-paging-button span, .ag-paging-button .ag-icon {{
+  display: none !important;
+}}
+.ag-paging-button[ref="btFirst"]::after  {{ content: "«" !important; }}
+.ag-paging-button[ref="btPrevious"]::after {{ content: "‹" !important; }}
+.ag-paging-button[ref="btNext"]::after   {{ content: "›" !important; }}
+.ag-paging-button[ref="btLast"]::after   {{ content: "»" !important; }}
+.ag-paging-button::after {{
+  font-size: 16px !important;
+  line-height: 1 !important;
+  color: {GRIS_TEXTO} !important;
+}}
+.ag-paging-button:hover:not(.ag-disabled) {{
+  background: {LAVANDA_FONDO} !important;
+  border-color: {LAVANDA_FOCO} !important;
+}}
+.ag-paging-button:hover:not(.ag-disabled)::after {{
+  color: {ACENTO_FUERTE} !important;
+}}
+.ag-paging-button.ag-disabled {{
+  border-color: {GRIS_LINEA} !important;
+  background: {GRIS_FONDO} !important;
+  cursor: default !important;
+  opacity: 0.4 !important;
+}}
+
+.ag-filter-toolpanel {{
+  border: none !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}}
+.ag-filter-toolpanel::-webkit-scrollbar {{ width: 8px; }}
+.ag-filter-toolpanel::-webkit-scrollbar-track {{ background: transparent; }}
+.ag-filter-toolpanel::-webkit-scrollbar-thumb {{ background: {SCROLL_THUMB}; border-radius: 4px; }}
+"""
+
+
+# --- inject_pagination_v2: barra #pgv2 con números y salto (dentro del iframe) ---
+_PGV2_CSS_IFRAME = f"""
+.ag-paging-panel {{ position: relative !important; justify-content: center !important; }}
+.ag-paging-panel .ag-paging-page-size {{
+  position: absolute !important; left: 16px !important;
+  top: 50% !important; transform: translateY(-50%) !important; margin: 0 !important;
+}}
+.ag-paging-panel .ag-paging-row-summary-panel,
+.ag-paging-description,
+.ag-paging-button {{
+  position: absolute !important; left: -9999px !important; width: 1px !important;
+  height: 1px !important; overflow: hidden !important;
+}}
+#pgv2 {{
+  display: inline-flex; align-items: center; gap: 14px; margin: 0 auto;
+  font: 13px -apple-system, BlinkMacSystemFont, sans-serif; color: {ICON_MUTED};
+}}
+#pgv2 .pgv2-pages {{ display: inline-flex; align-items: center; gap: 6px; }}
+#pgv2 button {{
+  min-width: 30px; height: 30px; padding: 0 8px;
+  border: 1px solid {GRIS_BORDE};
+  border-radius: 8px; background: {BLANCO}; color: {GRIS_TEXTO}; font-size: 13px;
+  cursor: pointer; display: inline-flex; align-items: center;
+  justify-content: center; transition: all .15s;
+}}
+#pgv2 button:hover:not(:disabled) {{
+  background: {LAVANDA_FONDO};
+  border-color: {LAVANDA_FOCO};
+  color: {ACENTO_FUERTE};
+}}
+#pgv2 button:disabled {{ opacity: .4; cursor: default; }}
+#pgv2 button.pgv2-on {{
+  background: {ACENTO_FUERTE};
+  border-color: {ACENTO_FUERTE};
+  color: {BLANCO}; font-weight: 500;
+}}
+#pgv2 .pgv2-dots {{ color: {GRIS_TEXTO_SUAVE}; padding: 0 2px; }}
+#pgv2 .pgv2-jump {{ display: inline-flex; align-items: center; gap: 7px; color: {GRIS_TEXTO}; }}
+#pgv2 .pgv2-jump input {{
+  width: 48px; height: 30px;
+  border: 1px solid {GRIS_BORDE}; border-radius: 8px;
+  text-align: center; color: {TEXTO_PRINCIPAL}; font-size: 13px;
+  background: {BLANCO}; outline: none; -moz-appearance: textfield;
+}}
+#pgv2 .pgv2-jump input:focus {{
+  border-color: {ACENTO_FUERTE};
+  box-shadow: 0 0 0 2px {LAVANDA_CABECERA_GRUPO};
+}}
+#pgv2 .pgv2-jump input::-webkit-outer-spin-button,
+#pgv2 .pgv2-jump input::-webkit-inner-spin-button {{
+  -webkit-appearance: none; margin: 0;
+}}
+"""
+
+
+# --- inject_maximize_aggrid: fullscreen + ⛶ integrado en el riel (dentro del iframe) ---
+_FS_CSS_IFRAME = f"""
+html.fs-activo, html.fs-activo body {{
+  margin: 0 !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+  max-height: 100vh !important;
+  overflow: hidden !important;
+}}
+html.fs-activo #root {{
+  height: 100vh !important;
+  overflow: hidden !important;
+}}
+html.fs-activo #root > div {{
+  height: 100vh !important;
+}}
+html.fs-activo #root [class*="ag-theme-"]:not(.ag-dnd-ghost):not(.ag-popup) {{
+  height: 100vh !important;
+}}
+html.fs-activo .ag-dnd-ghost,
+html.fs-activo .ag-popup,
+html.fs-activo body > [class*="ag-theme-"]:not(#gridContainer) {{
+  height: auto !important;
+  min-height: 0 !important;
+}}
+html.fs-activo .ag-root-wrapper {{
+  height: 100% !important; border-radius: 0 !important;
+}}
+html.fs-activo .ag-column-panel,
+html.fs-activo .ag-filter-toolpanel {{
+  height: 100% !important; overflow-y: auto !important;
+}}
+html.fs-activo .ag-column-drop-vertical {{
+  flex: 0 0 auto !important;
+  min-height: 3.2em !important;
+}}
+/* ── ⛶ integrado en el riel de pestañas ── */
+#aggrid-maximize-btn {{
+  width: 100%;
+  height: 36px;
+  border: none;
+  border-bottom: 1px solid {ACENTO};
+  background: {LAVANDA_FONDO};
+  color: {ACENTO_FUERTE};
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  writing-mode: horizontal-tb;
+  line-height: 1;
+  transition: background .15s, color .15s;
+}}
+#aggrid-maximize-btn:hover {{
+  background: {LAVANDA_FONDO};
+  color: {ACENTO_FUERTE};
+}}
+/* En fullscreen ocultamos el ⛶ (ya hay ✕ de salida). */
+html.fs-activo #aggrid-maximize-btn {{ display: none; }}
+/* ── Botón de salida ✕ ── */
+#aggrid-exit-fs-btn {{
+  position: fixed;
+  top: 12px;
+  right: 44px;
+  z-index: 99999;
+  width: 30px;
+  height: 30px;
+  border: 1px solid {GRIS_TEXTO};
+  border-radius: 6px;
+  background: {TEXTO_PRINCIPAL};
+  color: {GRIS_FONDO};
+  font-size: 14px;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}}
+html.fs-activo #aggrid-exit-fs-btn {{ display: flex; }}
+#aggrid-exit-fs-btn:hover {{ background: {EXIT_HOVER}; }}
+"""
 
 
 # ===========================================================================
@@ -97,112 +370,22 @@ def inject_grid_health_check():
     JsCode que devuelve un nodo DOM → React #31) no llegan a la ventana
     principal, así que aquí inspeccionamos el iframe: si existe pero no aparece
     '.ag-root-wrapper' tras unos segundos, lo reportamos al overlay de errores.
-    (No revisa el nº de filas: un grid vacío legítimo SÍ monta el wrapper.)"""
+    (No revisa el nº de filas: un grid vacío legítimo SÍ monta el wrapper.)
+
+    NOTA — colores del PAG_CSS:
+        Este CSS se inyecta con fdoc.head.appendChild dentro del iframe de
+        AgGrid, así que los var(--x) del :root del padre no resolverían.
+        Se usa el bloque pre-computado _PAG_CSS_IFRAME que trae los colores
+        de tema.py ya resueltos con f-string. Ver arquitectura.md §Fase 2.
+    """
+    pag_css_js = json.dumps(_PAG_CSS_IFRAME)
     components.html("""
     <script>
     (function(){
       var win = window.parent, doc = win.document;
       var tries = 0, MAX = 50;
 
-      var PAG_CSS = [
-        '.ag-status-bar {',
-        '  background: var(--bg-primary) !important;',
-        '  border-top: 1px solid var(--border) !important;',
-        '  color: var(--text-secondary) !important;',
-        '  padding: 4px 16px !important;',
-        '  font-size: 12px !important;',
-        '  background-image: none !important;',
-        '  background-color: var(--bg-primary) !important;',
-        '}',
-        '.ag-status-bar * {',
-        '  background-image: none !important;',
-        '}',
-        '.ag-status-name-value { color: var(--text-secondary) !important; font-size: 12px !important; }',
-        '.ag-status-name-value-value { color: var(--text-primary) !important; font-weight: 600 !important; }',
-
-        '.ag-paging-panel {',
-        '  display: flex !important;',
-        '  align-items: center !important;',
-        '  justify-content: space-between !important;',
-        '  background: var(--bg-primary) !important;',
-        '  background-image: none !important;',
-        '  border: 1px solid var(--border) !important;',
-        '  border-radius: 12px !important;',
-        '  margin-top: 12px !important;',
-        '  padding: 8px 16px !important;',
-        '  min-height: 44px !important;',
-        '  font-size: 12px !important;',
-        '  color: var(--icon-muted) !important;',
-        '}',
-
-        '.ag-paging-page-size { order: -1 !important; margin-right: auto !important; }',
-        '.ag-paging-page-size .ag-label { color: var(--icon-muted) !important; font-size: 12px !important; margin-right: 6px !important; }',
-        '.ag-paging-page-size .ag-select, .ag-paging-page-size select {',
-        '  border: 1px solid var(--border) !important;',
-        '  border-radius: 6px !important;',
-        '  background: #fff !important;',
-        '  color: var(--text-primary) !important;',
-        '  font-size: 12px !important;',
-        '  padding: 2px 6px !important;',
-        '}',
-
-        '.ag-paging-row-summary-panel { color: var(--icon-muted) !important; font-size: 12px !important; }',
-        '.ag-paging-row-summary-panel-number { color: var(--text-primary) !important; font-weight: 600 !important; }',
-
-        '.ag-paging-description { color: var(--icon-muted) !important; font-size: 12px !important; }',
-
-        '.ag-paging-button {',
-        '  width: 28px !important; height: 28px !important;',
-        '  border: 1px solid var(--border) !important;',
-        '  border-radius: 6px !important;',
-        '  background: #fff !important;',
-        '  color: var(--text-secondary) !important;',
-        '  font-size: 14px !important;',
-        '  margin: 0 2px !important;',
-        '  cursor: pointer !important;',
-        '  display: inline-flex !important;',
-        '  align-items: center !important;',
-        '  justify-content: center !important;',
-        '  transition: all 0.15s ease !important;',
-        '  position: relative !important;',
-        '}',
-        '.ag-paging-button span, .ag-paging-button .ag-icon {',
-        '  display: none !important;',
-        '}',
-        '.ag-paging-button[ref="btFirst"]::after  { content: "«" !important; }',
-        '.ag-paging-button[ref="btPrevious"]::after { content: "‹" !important; }',
-        '.ag-paging-button[ref="btNext"]::after   { content: "›" !important; }',
-        '.ag-paging-button[ref="btLast"]::after   { content: "»" !important; }',
-        '.ag-paging-button::after {',
-        '  font-size: 16px !important;',
-        '  line-height: 1 !important;',
-        '  color: var(--text-secondary) !important;',
-        '}',
-        '.ag-paging-button:hover:not(.ag-disabled) {',
-        '  background: var(--accent-tint) !important;',
-        '  border-color: var(--focus-lavender) !important;',
-        '}',
-        '.ag-paging-button:hover:not(.ag-disabled)::after {',
-        '  color: var(--accent-hover) !important;',
-        '}',
-        '.ag-paging-button.ag-disabled {',
-        '  border-color: var(--line-soft) !important;',
-        '  background: var(--bg-primary) !important;',
-        '  cursor: default !important;',
-        '  opacity: 0.4 !important;',
-        '}',
-
-        '.ag-filter-toolpanel {',
-        '  border: none !important;',
-        '  border-radius: 0 !important;',
-        '  margin: 0 !important;',
-        '  overflow-y: auto !important;',
-        '  overflow-x: hidden !important;',
-        '}',
-        '.ag-filter-toolpanel::-webkit-scrollbar { width: 8px; }',
-        '.ag-filter-toolpanel::-webkit-scrollbar-track { background: transparent; }',
-        '.ag-filter-toolpanel::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 4px; }',
-      ].join('\\n');
+      var PAG_CSS = """ + pag_css_js + """;
 
       function inyectarCSS(fdoc) {
         if (fdoc.getElementById('pag-custom-css')) return;
@@ -358,6 +541,11 @@ def inject_element_inspector():
 
     Unificado con el resto de herramientas de desarrollo: el mismo ?debug=1
     que muestra el panel de diagnostico activa tambien este inspector.
+
+    NOTA — colores: el tooltip (#el-inspector-tip) y el badge
+    (#el-inspector-badge) se añaden a doc.body (documento PADRE), no al
+    iframe de AgGrid, así que sus var(--x) SÍ resuelven contra el :root de
+    estilos.py. Se mantienen tal cual.
     """
     components.html("""
     <script>
@@ -484,7 +672,7 @@ def inject_element_inspector():
                     return ['[tabla] AgGrid > celda',
                         '  columna : ' + colId,
                         '  valor   : ' + (cellVal.length > 60 ? cellVal.slice(0,57)+'...' : cellVal),
-                        '  fila no : ' + rowIdx + rowTipo].join('\n');
+                        '  fila no : ' + rowIdx + rowTipo].join('\\n');
                 }
 
                 var hcell = inner.closest('.ag-header-cell');
@@ -498,7 +686,7 @@ def inject_element_inspector():
                     return ['[tabla] AgGrid > encabezado',
                         '  col-id  : ' + hColId,
                         '  nombre  : ' + hLabel,
-                        '  orden   :' + sortInfo + filtroActivo].join('\n');
+                        '  orden   :' + sortInfo + filtroActivo].join('\\n');
                 }
 
                 var colItem = inner.closest('.ag-column-select-column');
@@ -508,25 +696,25 @@ def inject_element_inspector():
                     var visStr  = visible ? (visible.checked ? 'visible OK' : 'oculta') : '?';
                     return ['[tabla] AgGrid > panel columnas',
                         '  columna : ' + colName,
-                        '  estado  : ' + visStr].join('\n');
+                        '  estado  : ' + visStr].join('\\n');
                 }
 
                 var filtItem = inner.closest('.ag-filter-toolpanel-instance');
                 if (filtItem) {
                     var filtName = txt(filtItem.querySelector('.ag-filter-toolpanel-instance-header-text')) || '?';
-                    return ['[tabla] AgGrid > panel filtros', '  filtro  : ' + filtName].join('\n');
+                    return ['[tabla] AgGrid > panel filtros', '  filtro  : ' + filtName].join('\\n');
                 }
 
                 var pag = inner.closest('.ag-paging-panel');
                 if (pag) {
-                    var pagTxt = pag.textContent.replace(/\s+/g, ' ').trim();
-                    return ['[tabla] AgGrid > paginacion', '  ' + pagTxt.slice(0, 80)].join('\n');
+                    var pagTxt = pag.textContent.replace(/\\s+/g, ' ').trim();
+                    return ['[tabla] AgGrid > paginacion', '  ' + pagTxt.slice(0, 80)].join('\\n');
                 }
 
                 var status = inner.closest('.ag-status-bar');
                 if (status) {
                     return ['[tabla] AgGrid > barra de estado',
-                        '  ' + status.textContent.replace(/\s+/g, ' ').trim().slice(0, 80)].join('\n');
+                        '  ' + status.textContent.replace(/\\s+/g, ' ').trim().slice(0, 80)].join('\\n');
                 }
 
                 var menuItem = inner.closest('.ag-menu-option');
@@ -568,18 +756,18 @@ def inject_element_inspector():
                 if (lbl)   lines.push('  label : ' + lbl);
                 if (keyAt) lines.push('  key   : ' + keyAt);
                 if (val)   lines.push('  valor : ' + (val.length > 55 ? val.slice(0,52)+'...' : val));
-                return lines.join('\n');
+                return lines.join('\\n');
             }
 
             var btn = el.closest('[data-testid="baseButton-secondary"], [data-testid="baseButton-primary"], button[kind]');
             if (btn) {
-                var btxt = btn.innerText.trim().replace(/\n/g, ' ');
+                var btxt = btn.innerText.trim().replace(/\\n/g, ' ');
                 var bkey = btn.getAttribute('data-testid') || '';
                 var blines = ['[btn] button'];
                 if (btxt) blines.push('  texto : ' + btxt);
                 if (bkey && bkey !== 'baseButton-secondary' && bkey !== 'baseButton-primary')
                     blines.push('  testid: ' + bkey);
-                return blines.join('\n');
+                return blines.join('\\n');
             }
 
             var popover = el.closest('[data-testid="stPopover"]');
@@ -587,14 +775,14 @@ def inject_element_inspector():
                 var pbtn = popover.querySelector('button');
                 var ptxt = pbtn ? pbtn.innerText.trim() : '?';
                 var popen = popover.querySelector('[data-testid="stPopoverBody"]') ? ' (abierto)' : ' (cerrado)';
-                return '[pop] popover\n  texto : ' + ptxt + '\n  estado: ' + popen.trim();
+                return '[pop] popover\\n  texto : ' + ptxt + '\\n  estado: ' + popen.trim();
             }
 
             var tabBtn = el.closest('[data-baseweb="tab"]');
             if (tabBtn) {
                 var isActive = tabBtn.getAttribute('aria-selected') === 'true';
-                return '[tab] tab\n  nombre: ' + tabBtn.innerText.trim() +
-                       '\n  estado: ' + (isActive ? 'activa OK' : 'inactiva');
+                return '[tab] tab\\n  nombre: ' + tabBtn.innerText.trim() +
+                       '\\n  estado: ' + (isActive ? 'activa OK' : 'inactiva');
             }
 
             var expander = el.closest('[data-testid="stExpander"]');
@@ -602,8 +790,8 @@ def inject_element_inspector():
                 var etxt2 = expander.querySelector('summary p, summary span, .streamlit-expanderHeader p');
                 var eopen = expander.querySelector('[data-testid="stExpanderDetails"]')
                 var eIsOpen = eopen ? (eopen.style.display !== 'none' && eopen.style.visibility !== 'hidden') : false;
-                return '[exp] expander\n  titulo: ' + (etxt2 ? etxt2.textContent.trim() : '?') +
-                       '\n  estado: ' + (eIsOpen ? 'abierto' : 'cerrado');
+                return '[exp] expander\\n  titulo: ' + (etxt2 ? etxt2.textContent.trim() : '?') +
+                       '\\n  estado: ' + (eIsOpen ? 'abierto' : 'cerrado');
             }
 
             var metric = el.closest('[data-testid="stMetric"]');
@@ -615,7 +803,7 @@ def inject_element_inspector():
                 if (mlbl2)  mlines.push('  label : ' + mlbl2.textContent.trim());
                 if (mval)   mlines.push('  valor : ' + mval.textContent.trim());
                 if (mdelta) mlines.push('  delta : ' + mdelta.textContent.trim());
-                return mlines.join('\n');
+                return mlines.join('\\n');
             }
 
             var plotly = el.closest('.js-plotly-plot, [data-testid="stPlotlyChart"]');
@@ -627,7 +815,7 @@ def inject_element_inspector():
                 plines.push('  titulo: ' + (ptitle2 ? ptitle2.textContent.trim() : '(sin titulo)'));
                 if (xTitle) plines.push('  eje X : ' + xTitle.textContent.trim());
                 if (yTitle) plines.push('  eje Y : ' + yTitle.textContent.trim());
-                return plines.join('\n');
+                return plines.join('\\n');
             }
 
             var agEl = el.closest('[data-testid="stAgGrid"], .ag-root-wrapper');
@@ -641,12 +829,12 @@ def inject_element_inspector():
             if (railIcon) {
                 var rname   = railIcon.getAttribute('data-tooltip') || railIcon.innerText.trim();
                 var rActive = railIcon.classList.contains('active');
-                return '[nav] nav\n  reporte: ' + rname + '\n  estado : ' + (rActive ? 'activo OK' : 'inactivo');
+                return '[nav] nav\\n  reporte: ' + rname + '\\n  estado : ' + (rActive ? 'activo OK' : 'inactivo');
             }
 
             var caption = el.closest('[data-testid="stCaptionContainer"]');
             if (caption) {
-                return '[i] caption\n  ' + caption.textContent.trim().slice(0, 80);
+                return '[i] caption\\n  ' + caption.textContent.trim().slice(0, 80);
             }
 
             return null;
@@ -767,12 +955,22 @@ def inject_element_inspector():
 # ===========================================================================
 
 def inject_pagination_v2():
-    """Barra de paginación personalizada con números y salto de página."""
+    """Barra de paginación personalizada con números y salto de página.
+
+    NOTA — colores del bloque #pgv2:
+        Se inyecta con agDoc.head.appendChild dentro del iframe de AgGrid.
+        Antes usaba var(--x) del padre y no resolvía (botones sin fondo,
+        número activo sin destacar, etc). Ahora usa el bloque pre-computado
+        _PGV2_CSS_IFRAME con constantes de tema.py. Ver arquitectura.md §Fase 2.
+    """
+    pgv2_css_js = json.dumps(_PGV2_CSS_IFRAME)
     components.html("""
     <script>
     (function(){
       var win = window.parent, doc = win.document;
       var tries = 0, MAX = 60;
+
+      var PGV2_CSS = """ + pgv2_css_js + """;
 
       function intDe(txt){
         var m = (txt||'').match(/\\d[\\d.,]*/g);
@@ -803,32 +1001,7 @@ def inject_pagination_v2():
         if (!agDoc.getElementById('pgv2-css')){
           var stl = agDoc.createElement('style');
           stl.id = 'pgv2-css';
-          stl.textContent =
-            '.ag-paging-panel{position:relative!important;justify-content:center!important;}'+
-            '.ag-paging-panel .ag-paging-page-size{position:absolute!important;left:16px!important;'+
-            'top:50%!important;transform:translateY(-50%)!important;margin:0!important;}'+
-            '.ag-paging-panel .ag-paging-row-summary-panel,'+
-            '.ag-paging-description,'+
-            '.ag-paging-button{'+
-            'position:absolute!important;left:-9999px!important;width:1px!important;'+
-            'height:1px!important;overflow:hidden!important;}'+
-            '#pgv2{display:inline-flex;align-items:center;gap:14px;margin:0 auto;'+
-            'font:13px -apple-system,BlinkMacSystemFont,sans-serif;color:var(--icon-muted);}'+
-            '#pgv2 .pgv2-pages{display:inline-flex;align-items:center;gap:6px;}'+
-            '#pgv2 button{min-width:30px;height:30px;padding:0 8px;border:1px solid var(--border);'+
-            'border-radius:8px;background:#fff;color:var(--text-secondary);font-size:13px;cursor:pointer;'+
-            'display:inline-flex;align-items:center;justify-content:center;transition:all .15s;}'+
-            '#pgv2 button:hover:not(:disabled){background:var(--accent-tint);border-color:var(--focus-lavender);color:var(--accent-hover);}'+
-            '#pgv2 button:disabled{opacity:.4;cursor:default;}'+
-            '#pgv2 button.pgv2-on{background:var(--accent-hover);border-color:var(--accent-hover);color:#fff;font-weight:500;}'+
-            '#pgv2 .pgv2-dots{color:var(--text-muted);padding:0 2px;}'+
-            '#pgv2 .pgv2-jump{display:inline-flex;align-items:center;gap:7px;color:var(--text-secondary);}'+
-            '#pgv2 .pgv2-jump input{width:48px;height:30px;border:1px solid var(--border);'+
-            'border-radius:8px;text-align:center;color:var(--text-primary);font-size:13px;background:#fff;'+
-            'outline:none;-moz-appearance:textfield;}'+
-            '#pgv2 .pgv2-jump input:focus{border-color:var(--accent-hover);box-shadow:0 0 0 2px var(--accent-light);}'+
-            '#pgv2 .pgv2-jump input::-webkit-outer-spin-button,'+
-            '#pgv2 .pgv2-jump input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}';
+          stl.textContent = PGV2_CSS;
           agDoc.head.appendChild(stl);
         }
 
@@ -866,17 +1039,17 @@ def inject_pagination_v2():
           var bar = agDoc.getElementById('pgv2');
           if (!bar){ bar = agDoc.createElement('div'); bar.id = 'pgv2'; panel.appendChild(bar); }
           var html = '<span class="pgv2-pages">';
-          html += '<button data-go="'+(c-1)+'" '+(c<=1?'disabled':'')+' aria-label="Anterior">\u2039</button>';
+          html += '<button data-go="'+(c-1)+'" '+(c<=1?'disabled':'')+' aria-label="Anterior">\\u2039</button>';
           var ps = paginas(c, t);
           for (var i=0;i<ps.length;i++){
-            if (ps[i]==='...') html += '<span class="pgv2-dots">\u2026</span>';
+            if (ps[i]==='...') html += '<span class="pgv2-dots">\\u2026</span>';
             else html += '<button data-go="'+ps[i]+'" class="'+(ps[i]===c?'pgv2-on':'')+'">'+ps[i]+'</button>';
           }
-          html += '<button data-go="'+(c+1)+'" '+(c>=t?'disabled':'')+' aria-label="Siguiente">\u203a</button>';
+          html += '<button data-go="'+(c+1)+'" '+(c>=t?'disabled':'')+' aria-label="Siguiente">\\u203a</button>';
           html += '</span>';
           html += '<span class="pgv2-jump">Ir a '+
                   '<input type="number" min="1" max="'+t+'" value="'+c+'" id="pgv2-in" aria-label="Ir a pagina">'+
-                  '<button id="pgv2-goin" aria-label="Ir">\u2192</button></span>';
+                  '<button id="pgv2-goin" aria-label="Ir">\\u2192</button></span>';
           bar.innerHTML = html;
 
           var btns = bar.querySelectorAll('button[data-go]');
@@ -959,7 +1132,16 @@ def inject_maximize_aggrid():
 
     Esc sale de forma nativa; 'fullscreenchange' restaura la altura del grid.
     Safari usa la variante webkit* (fallback incluido).
+
+    NOTA — colores:
+      - `aggrid-fs-css` va DENTRO del iframe (fdoc.head.appendChild). Antes
+        usaba var(--x) que no resolvía → el ⛶ del riel salía transparente y
+        el ✕ de salida con estilos por defecto. Ahora usa el bloque pre-
+        computado _FS_CSS_IFRAME con constantes de tema.py.
+      - `aggrid-max-css-flot` va AL PADRE (doc.head). Ese SÍ ve el :root de
+        estilos.py, así que sigue usando var(--x) sin cambios.
     """
+    fs_css_js = json.dumps(_FS_CSS_IFRAME)
     components.html("""
     <script>
     (function(){
@@ -971,6 +1153,8 @@ def inject_maximize_aggrid():
         var MAX = 40;
         var iframeFS = null;
         var btnFlotante = null;   // SOLO se crea si la tabla no tiene riel
+
+        var FS_CSS = """ + fs_css_js + """;
 
         function buscarIframe() {
             var frames = doc.querySelectorAll('iframe[src*="st_aggrid"]');
@@ -1013,86 +1197,7 @@ def inject_maximize_aggrid():
             if (!fdoc.getElementById('aggrid-fs-css')) {
                 var s = fdoc.createElement('style');
                 s.id = 'aggrid-fs-css';
-                s.textContent = [
-                    'html.fs-activo, html.fs-activo body {',
-                    '  margin: 0 !important;',
-                    '  height: 100vh !important;',
-                    '  min-height: 100vh !important;',
-                    '  max-height: 100vh !important;',
-                    '  overflow: hidden !important;',
-                    '}',
-                    'html.fs-activo #root {',
-                    '  height: 100vh !important;',
-                    '  overflow: hidden !important;',
-                    '}',
-                    'html.fs-activo #root > div {',
-                    '  height: 100vh !important;',
-                    '}',
-                    'html.fs-activo #root [class*="ag-theme-"]:not(.ag-dnd-ghost):not(.ag-popup) {',
-                    '  height: 100vh !important;',
-                    '}',
-                    'html.fs-activo .ag-dnd-ghost,',
-                    'html.fs-activo .ag-popup,',
-                    'html.fs-activo body > [class*="ag-theme-"]:not(#gridContainer) {',
-                    '  height: auto !important;',
-                    '  min-height: 0 !important;',
-                    '}',
-                    'html.fs-activo .ag-root-wrapper {',
-                    '  height: 100% !important; border-radius: 0 !important;',
-                    '}',
-                    'html.fs-activo .ag-column-panel,',
-                    'html.fs-activo .ag-filter-toolpanel {',
-                    '  height: 100% !important; overflow-y: auto !important;',
-                    '}',
-                    'html.fs-activo .ag-column-drop-vertical {',
-                    '  flex: 0 0 auto !important;',
-                    '  min-height: 3.2em !important;',
-                    '}',
-                    /* ── NUEVO: ⛶ integrado en el riel de pestañas ── */
-                    '#' + BTN_ID + ' {',
-                    '  width: 100%;',
-                    '  height: 36px;',                              /* empata la banda superior (antes 40px) */
-                    '  border: none;',
-                    '  border-bottom: 1px solid var(--accent);',    /* misma línea que la franja lavanda */
-                    '  background: var(--accent-tint);',            /* fondo lavanda de la banda (antes transparent) */
-                    '  color: var(--accent-hover);',                /* icono en tono acento (antes text-secondary) */
-                    '  font-size: 16px;',
-                    '  cursor: pointer;',
-                    '  display: flex;',
-                    '  align-items: center;',
-                    '  justify-content: center;',
-                    '  writing-mode: horizontal-tb;',
-                    '  line-height: 1;',
-                    '  transition: background .15s, color .15s;',
-                    '}',
-                    '#' + BTN_ID + ':hover {',
-                    '  background: var(--accent-tint);',
-                    '  color: var(--accent-hover);',
-                    '}',
-                    /* En fullscreen ocultamos el ⛶ (ya hay ✕ de salida). */
-                    'html.fs-activo #' + BTN_ID + ' { display: none; }',
-                    /* ── Botón de salida ✕ (idéntico al de antes) ── */
-                    '#' + EXIT_ID + ' {',
-                    '  position: fixed;',
-                    '  top: 12px;',
-                    '  right: 44px;',
-                    '  z-index: 99999;',
-                    '  width: 30px;',
-                    '  height: 30px;',
-                    '  border: 1px solid var(--text-secondary);',
-                    '  border-radius: 6px;',
-                    '  background: var(--text-primary);',
-                    '  color: var(--bg-primary);',
-                    '  font-size: 14px;',
-                    '  cursor: pointer;',
-                    '  display: none;',
-                    '  align-items: center;',
-                    '  justify-content: center;',
-                    '  line-height: 1;',
-                    '}',
-                    'html.fs-activo #' + EXIT_ID + ' { display: flex; }',
-                    '#' + EXIT_ID + ':hover { background: var(--exit-hover); }',
-                ].join('\\n');
+                s.textContent = FS_CSS;
                 fdoc.head.appendChild(s);
             }
 
@@ -1135,6 +1240,8 @@ def inject_maximize_aggrid():
         }
 
         function crearFlotante(iframe) {
+            /* Este CSS va al doc.head del PADRE, así que sí ve el :root de
+               estilos.py y puede seguir usando var(--x). */
             if (!doc.getElementById('aggrid-max-css-flot')) {
                 var s = doc.createElement('style');
                 s.id = 'aggrid-max-css-flot';
@@ -1266,6 +1373,10 @@ def inject_dynamic_grid_height(offset_px: int = 220, min_px: int = 480):
       (chip de título, tabs, fecha) más un margen inferior. Súbelo si la
       tabla tapa algo de abajo; bájalo si queda blanco.
     - min_px: altura mínima; en pantallas muy bajas no baja de aquí.
+
+    NOTA — colores: el `dynh-css` que inyecta esta función dentro del iframe
+    solo trae `html, body {margin:0}` y `.ag-root-wrapper {height: Npx}`.
+    No usa colores, así que no aplica la migración del punto 4.
     """
     # Config como línea JS separada (f-string sin % ni {} conflictivos),
     # y el resto del script como literal puro: así ningún % del CSS/JS
@@ -1378,6 +1489,9 @@ def inject_fix_column_panel_ajuste():
     Este JS entra al iframe y recalcula el top de cada ítem según su
     altura real medida en el DOM, sin tocar la virtualización.
     Se re-ejecuta cada vez que el panel abre (MutationObserver).
+
+    NOTA — colores: esta función NO inyecta CSS, solo reposiciona con JS.
+    No aplica la migración del punto 4.
     """
     components.html("""
     <script>
