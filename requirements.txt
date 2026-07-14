@@ -3,7 +3,7 @@ duckdb>=1.0.0
 pandas>=2.2,<2.3
 numpy>=1.26,<2.2
 pyarrow>=14,<19
-plotly>=5.0.0
+plotly>=5.24.0
 matplotlib>=3.8,<4
 streamlit-aggrid==1.2.1.post2
 streamlit-option-menu>=0.3.6
