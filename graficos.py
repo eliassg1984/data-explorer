@@ -1193,18 +1193,19 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
     Gráficos de Ajuste de Inventario — layout de dos contenedores.
 
     Estructura:
-      · Filtros por Área y Familia (chips propios) FUERA del contenedor.
-      · Selector «Del periodo / Histórico» con AUTO-DETECCIÓN por rango:
-          - inicio y fin en el MISMO mes calendario → «Del periodo»
-          - meses distintos → «Histórico»
-        El rango vive en session_state["ajuste_rango_aplicado"] (app.py).
-        Al cambiar el rango se fuerza el ámbito auto; después el usuario
-        puede sobreescribirlo manualmente hasta el próximo cambio de rango.
+      · Filtros Área y Familia como st.multiselect (dropdowns colapsados),
+        FUERA del contenedor grande. Cada uno con su propio label.
+      · El segmented «Del periodo / Histórico» y su auto-detección por
+        rango viven ahora en `app.py` (fila superior, junto al widget de
+        fecha). Esta función solo LEE el ámbito desde:
+            st.session_state["ajuste_graf_ambito"]
+        Si por algún motivo no está seteado (p. ej. se llama fuera de la
+        vista Ajuste), cae a «Del periodo».
       · Contenedor IZQUIERDO (grande): chips de tipo de gráfico arriba
-        (Cascada / Mapa de calor / Distribución  ó  Evolución / Comparativa)
-        y el gráfico elegido debajo.
-      · Contenedor DERECHO: panel analítico (_panel_analisis_ajuste) con
-        chips propios — una mini-tabla a la vez, extensible a mini-gráficos.
+        (Cascada / Mapa de calor / Distribución  ó  Evolución /
+        Comparativa mensual) SIN iconos, y el gráfico elegido debajo.
+      · Contenedor DERECHO: `_panel_analisis_ajuste` renderiza pestañas
+        (st.tabs) con una mini-tabla a la vez.
       · «Del periodo»  → usa df_f (respeta el rango aplicado).
       · «Histórico»    → usa df_full acotado al AÑO ACTUAL.
       · Expander final: Explorador libre de gráficos.
@@ -1228,26 +1229,12 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
         renderizar_graficos_genericos(df_f, nombre_reporte)
         return
 
-    # ── Auto-detección de ámbito por rango de fechas ─────────────────────
-    # Regla: (ini.year, ini.month) == (fin.year, fin.month) → «Del periodo».
-    # Patrón session_state SIN `default` en el widget: escribir default y
-    # además session_state con la misma key genera warning/conflicto en
-    # Streamlit; aquí el estado es la única fuente de verdad.
-    rango_apl = st.session_state.get("ajuste_rango_aplicado")
-    auto_ambito = "Del periodo"
-    if isinstance(rango_apl, (tuple, list)) and len(rango_apl) == 2:
-        _ini, _fin = rango_apl
-        mismo_mes = (_ini.year == _fin.year) and (_ini.month == _fin.month)
-        auto_ambito = "Del periodo" if mismo_mes else "Histórico"
+    # ── Ámbito: se lee de session_state; app.py es la fuente de verdad ───
+    ambito = st.session_state.get("ajuste_graf_ambito", "Del periodo")
+    if not ambito:
+        ambito = "Del periodo"
 
-    if "ajuste_graf_ambito" not in st.session_state:
-        st.session_state["ajuste_graf_ambito"] = auto_ambito
-
-    if rango_apl != st.session_state.get("_ajuste_rango_prev_ambito"):
-        st.session_state["ajuste_graf_ambito"] = auto_ambito
-        st.session_state["_ajuste_rango_prev_ambito"] = rango_apl
-
-    # ── FILTROS FUERA DEL CONTENEDOR: Área y Familia (chip propio c/u) ───
+    # ── FILTROS FUERA DEL CONTENEDOR: Área y Familia (multiselect) ───────
     fila_filtros = st.container(key="ajuste_graf_filtros_top")
     with fila_filtros:
         col_ff_area, col_ff_fam = st.columns(2)
@@ -1257,31 +1244,23 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
                 areas = sorted(df_f[col_area].dropna()
                                .astype(str).unique().tolist())
                 if areas:
-                    area_sel = st.pills(
-                        "Área", areas, selection_mode="multi",
+                    area_sel = st.multiselect(
+                        "Área",
+                        areas,
+                        placeholder="Todas las áreas",
                         key="ajuste_graf_filtro_area",
-                        label_visibility="collapsed",
                     ) or []
         with col_ff_fam:
             if col_familia and col_familia in df_f.columns:
                 familias = sorted(df_f[col_familia].dropna()
                                   .astype(str).unique().tolist())
                 if familias:
-                    fam_sel = st.pills(
-                        "Familia", familias, selection_mode="multi",
+                    fam_sel = st.multiselect(
+                        "Familia",
+                        familias,
+                        placeholder="Todas las familias",
                         key="ajuste_graf_filtro_familia",
-                        label_visibility="collapsed",
                     ) or []
-
-    # ── Selector de ámbito: Del periodo / Histórico ──────────────────────
-    ambito = st.segmented_control(
-        "Ámbito",
-        ["Del periodo", "Histórico"],
-        key="ajuste_graf_ambito",
-        label_visibility="collapsed",
-    )
-    if not ambito:
-        ambito = auto_ambito
 
     # ── Datos según ámbito ───────────────────────────────────────────────
     if ambito == "Histórico":
@@ -1308,11 +1287,11 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
         st.info("No hay datos para los filtros seleccionados.")
         return
 
-    # ── Opciones de gráfico según ámbito ─────────────────────────────────
+    # ── Opciones de gráfico según ámbito (SIN iconos, punto 3) ───────────
     if ambito == "Histórico":
-        opciones = ["📅 Evolución", "📊 Comparativa mensual"]
+        opciones = ["Evolución", "Comparativa mensual"]
     else:
-        opciones = ["🏗️ Cascada", "🔥 Mapa de calor", "📦 Distribución"]
+        opciones = ["Cascada", "Mapa de calor", "Distribución"]
 
     # ── DOS CONTENEDORES BLANCOS lado a lado ─────────────────────────────
     # Las keys empiezan con "ajuste_graf_card_", así el selector
@@ -1336,19 +1315,19 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
                 graf = opciones[0]
 
             # Render del gráfico elegido (solo uno por rerun)
-            if graf == "📅 Evolución":
+            if graf == "Evolución":
                 _graf_evolucion_ajuste(d, col_fecha, col_familia,
                                        col_ajuste_val, col_valorizado)
-            elif graf == "📊 Comparativa mensual":
+            elif graf == "Comparativa mensual":
                 _graf_comparativa_mensual(d, col_fecha, col_ajuste_val)
-            elif graf == "🏗️ Cascada":
+            elif graf == "Cascada":
                 _graf_waterfall_ajuste(d, col_familia, col_area, col_ajuste_val,
                                        col_producto=col_producto,
                                        col_valorizado=col_valorizado,
                                        col_cantidad=col_cantidad)
-            elif graf == "🔥 Mapa de calor":
+            elif graf == "Mapa de calor":
                 _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val)
-            elif graf == "📦 Distribución":
+            elif graf == "Distribución":
                 _graf_distribucion_ajuste(d, col_familia, col_area,
                                           col_ajuste_val, col_producto)
 
