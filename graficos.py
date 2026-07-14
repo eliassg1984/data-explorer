@@ -487,6 +487,7 @@ _LAYOUT_BASE = dict(
     font_family="DM Sans, Inter, -apple-system, sans-serif",
     margin=dict(l=20, r=20, t=50, b=20),
     height=420,
+    barcornerradius=6,          # ← NUEVO: esquinas redondeadas en TODAS las barras
     xaxis=dict(gridcolor=GRIS_BORDE),
     yaxis=dict(gridcolor=GRIS_BORDE, tickformat=",.0f"),
 )
