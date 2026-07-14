@@ -64,7 +64,26 @@ _JS_BUSCAR_IFRAME_FN = """
 # ===========================================================================
 
 # --- inject_grid_health_check: paginación nativa + status bar + tool panel ---
-_PAG_CSS_IFRAME = f"""
+#
+# El CSS de paginación va PARTIDO EN DOS para no inyectar reglas inertes:
+#
+#   _PAG_CSS_BASE: siempre útil. Trae:
+#     - .ag-status-bar y sus valores (barra de estado abajo del grid).
+#     - .ag-filter-toolpanel + scrollbar.
+#     - .ag-paging-panel (contenedor): pagination_v2 mete #pgv2 DENTRO de
+#       este contenedor, así que su fondo/borde/altura/padding también le
+#       aprovechan al look custom.
+#     - .ag-paging-page-size (label + select del "50 filas por página"):
+#       pagination_v2 lo reposiciona a la izquierda pero sigue visible,
+#       así que sus estilos también sirven a ambos casos.
+#
+#   _PAG_CSS_NATIVA: solo tiene sentido cuando NO va a correr
+#   inject_pagination_v2. Trae los elementos que pagination_v2 esconde con
+#   position:absolute;left:-9999px (botones ‹›«», description, summary).
+#   Si los inyectáramos igual, aplicarían sobre elementos invisibles: puro
+#   trabajo perdido. Se usan en Salidas/Requerimientos/móvil, donde la
+#   paginación nativa sí se ve.
+_PAG_CSS_BASE = f"""
 .ag-status-bar {{
   background: {GRIS_FONDO} !important;
   border-top: 1px solid {GRIS_BORDE} !important;
@@ -106,6 +125,19 @@ _PAG_CSS_IFRAME = f"""
   padding: 2px 6px !important;
 }}
 
+.ag-filter-toolpanel {{
+  border: none !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}}
+.ag-filter-toolpanel::-webkit-scrollbar {{ width: 8px; }}
+.ag-filter-toolpanel::-webkit-scrollbar-track {{ background: transparent; }}
+.ag-filter-toolpanel::-webkit-scrollbar-thumb {{ background: {SCROLL_THUMB}; border-radius: 4px; }}
+"""
+
+_PAG_CSS_NATIVA = f"""
 .ag-paging-row-summary-panel {{ color: {ICON_MUTED} !important; font-size: 12px !important; }}
 .ag-paging-row-summary-panel-number {{ color: {TEXTO_PRINCIPAL} !important; font-weight: 600 !important; }}
 
@@ -151,17 +183,6 @@ _PAG_CSS_IFRAME = f"""
   cursor: default !important;
   opacity: 0.4 !important;
 }}
-
-.ag-filter-toolpanel {{
-  border: none !important;
-  border-radius: 0 !important;
-  margin: 0 !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-}}
-.ag-filter-toolpanel::-webkit-scrollbar {{ width: 8px; }}
-.ag-filter-toolpanel::-webkit-scrollbar-track {{ background: transparent; }}
-.ag-filter-toolpanel::-webkit-scrollbar-thumb {{ background: {SCROLL_THUMB}; border-radius: 4px; }}
 """
 
 
@@ -384,7 +405,7 @@ def inject_error_overlay():
     """, height=0)
 
 
-def inject_grid_health_check():
+def inject_grid_health_check(usa_pagination_v2=False):
     """Comprueba que el grid de AgGrid se haya montado de verdad e inyecta
     CSS de paginación directamente dentro del iframe para garantizar que los
     estilos pisen los del tema nativo (balham/material).
@@ -395,13 +416,26 @@ def inject_grid_health_check():
     '.ag-root-wrapper' tras unos segundos, lo reportamos al overlay de errores.
     (No revisa el nº de filas: un grid vacío legítimo SÍ monta el wrapper.)
 
+    Parámetro `usa_pagination_v2`:
+        Cuando es True, el CSS se compone SOLO con _PAG_CSS_BASE (status bar,
+        tool panel, contenedor .ag-paging-panel y page-size). Los estilos de
+        botones/description/summary de la paginación nativa NO se inyectan
+        porque `inject_pagination_v2` esconde esos elementos con
+        position:absolute;left:-9999px y monta su propia barra #pgv2 encima
+        del contenedor. Inyectarlos sería trabajo perdido sobre elementos
+        invisibles.
+        Cuando es False (default), se añade también _PAG_CSS_NATIVA. Es el
+        caso de Salidas, Requerimientos y la vista móvil, donde la
+        paginación nativa sí se ve.
+
     NOTA — colores del PAG_CSS:
         Este CSS se inyecta con fdoc.head.appendChild dentro del iframe de
         AgGrid, así que los var(--x) del :root del padre no resolverían.
-        Se usa el bloque pre-computado _PAG_CSS_IFRAME que trae los colores
-        de tema.py ya resueltos con f-string. Ver arquitectura.md §Fase 2.
+        Se usan bloques pre-computados con los colores de tema.py ya
+        resueltos con f-string. Ver arquitectura.md §Fase 2.
     """
-    pag_css_js = json.dumps(_PAG_CSS_IFRAME)
+    css = _PAG_CSS_BASE if usa_pagination_v2 else (_PAG_CSS_BASE + _PAG_CSS_NATIVA)
+    pag_css_js = json.dumps(css)
     components.html("""
     <script>
     (function(){
