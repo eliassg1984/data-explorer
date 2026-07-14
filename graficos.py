@@ -906,10 +906,11 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         text=[f"S/ {v:,.0f}" for v in agg[col_ajuste_val]] + [f"S/ {total:,.0f}"],
         textposition="outside",
         connector=dict(line=dict(color=GRIS_BORDE, width=1, dash="dot")),
-        increasing=dict(marker=dict(color="rgba(108,92,231,0.85)")),
-        decreasing=dict(marker=dict(color="rgba(239,68,68,0.85)")),
+        increasing=dict(marker=dict(color="rgba(108,92,231,0.85)", cornerradius=6)),
+        decreasing=dict(marker=dict(color="rgba(239,68,68,0.85)", cornerradius=6)),
         totals=dict(marker=dict(
-            color=ACENTO_TEXTO_OSCURO if total >= 0 else "#ef4444"
+            color=ACENTO_TEXTO_OSCURO if total >= 0 else "#ef4444",
+            cornerradius=6,
         )),
         hovertemplate="%{x}<br><b>S/ %{y:,.2f}</b><extra></extra>",
     ))
