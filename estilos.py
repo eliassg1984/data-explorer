@@ -839,6 +839,52 @@ def get_css():
             max-width: none !important;
         }
     }
+    /* =================================================================== */
+    /* SELECTOR DE VISTA — estilo segmentado                                */
+    /* Reemplaza los radios tipo subrayado por una píldora alineada con los  */
+    /* filtros y el estado activo de la barra lateral.                       */
+    /* =================================================================== */
+    [class*="st-key-vistatabs_"] [role="radiogroup"],
+    .st-key-ajuste_tabs_top [role="radiogroup"] {
+        display: inline-flex !important;
+        width: fit-content !important;
+        gap: 4px !important;
+        margin: 8px 0 0 !important;
+        padding: 4px !important;
+        background: var(--accent-tint) !important;
+        border: 1px solid var(--border-lavender) !important;
+        border-radius: 999px !important;
+    }
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label,
+    .st-key-ajuste_tabs_top [role="radiogroup"] label {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+        padding: 8px 14px !important;
+        border: 1px solid transparent !important;
+        border-radius: 999px !important;
+        background: transparent !important;
+        transition: color .15s ease, background .15s ease, box-shadow .15s ease !important;
+    }
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label:hover,
+    .st-key-ajuste_tabs_top [role="radiogroup"] label:hover {
+        background: rgba(255, 255, 255, .55) !important;
+        border-color: transparent !important;
+    }
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label:has(input:checked),
+    .st-key-ajuste_tabs_top [role="radiogroup"] label:has(input:checked) {
+        background: #ffffff !important;
+        border-color: rgba(108, 92, 231, .12) !important;
+        box-shadow: 0 1px 3px rgba(73, 56, 184, .14) !important;
+    }
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label:has(input:checked) p,
+    .st-key-ajuste_tabs_top [role="radiogroup"] label:has(input:checked) p {
+        color: var(--accent-deep) !important;
+        font-weight: 600 !important;
+    }
+
     </style>
     """
 
