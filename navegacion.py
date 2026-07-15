@@ -69,7 +69,7 @@ _LOGO_URI = _logo_data_uri()
 # ── CSS: convierte el contenedor de botones en una barra fija vertical ──────
 # RAIL_ANCHO: ancho de la barra lateral, 40% más grande que el original (64px).
 RAIL_ANCHO = 90  # 64 * 1.4 ≈ 90
-LOGO_ALTO = 64   # bloque reservado arriba, para el logo
+LOGO_ALTO = 0    # logo oculto temporalmente; el rail comienza con la navegación
 
 _CSS = f"""
 <style>
@@ -104,7 +104,7 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     display: block;
     width: 100%;
     height: {LOGO_ALTO}px;
-    background: {TEXTO_PRINCIPAL} url('{_LOGO_URI}') center / 72% auto no-repeat;
+    background: transparent;
     flex-shrink: 0;
 }}
 
