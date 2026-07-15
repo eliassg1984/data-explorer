@@ -840,7 +840,8 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
 
 
 def _graf_comparativa_mensual(df, col_fecha, col_ajuste_val):
-    """Barras de ajuste total por mes (positivo lavanda, negativo rojo).
+    """Comparativa mensual: barras de ajuste neto por mes.
+
     Pensada para la pestaña Histórico: da una lectura rápida de qué meses
     tuvieron sobrante o faltante neto sin necesidad de leer la línea."""
     if not col_fecha:
@@ -873,7 +874,26 @@ def _graf_comparativa_mensual(df, col_fecha, col_ajuste_val):
     fig.add_hline(y=0, line_dash="dot", line_color=GRIS_BORDE, line_width=1)
 
     with _card("comparativa", "Comparativa mensual"):
-        st.plotly_chart(fig, use_container_width=True)
+        evento = st.plotly_chart(
+            fig,
+            use_container_width=True,
+            key="comparativa_mensual",
+            on_select="rerun",
+            selection_mode="points",
+        )
+
+    # ── Drill-down: clic en un mes → filas de ese mes ────────────────────
+    sel = evento.get("selection", {}) if evento else {}
+    puntos = sel.get("points", [])
+    if puntos:
+        mes_clic = pd.to_datetime(puntos[0].get("x"))
+        detalle = d[d["_mes"] == mes_clic.replace(day=1)].drop(columns=["_mes"])
+        if not detalle.empty:
+            st.markdown(
+                f"**Detalle de {mes_clic:%B %Y}** — {len(detalle)} filas · "
+                f"ajuste neto S/ {detalle[col_ajuste_val].sum():,.2f}"
+            )
+            st.dataframe(detalle, use_container_width=True)
 
 
 def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
