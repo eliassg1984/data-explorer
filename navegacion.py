@@ -69,7 +69,7 @@ _LOGO_URI = _logo_data_uri()
 # ── CSS: convierte el contenedor de botones en una barra fija vertical ──────
 # RAIL_ANCHO: ancho de la barra lateral, 40% más grande que el original (64px).
 RAIL_ANCHO = 90  # 64 * 1.4 ≈ 90
-LOGO_ALTO = 0    # logo oculto temporalmente; el rail comienza con la navegación
+LOGO_ALTO = 64   # reserva el espacio superior del rail, aunque el logo está oculto
 
 _CSS = f"""
 <style>
