@@ -91,7 +91,7 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     position:fixed !important; top:0 !important; left:0 !important;
     width:{RAIL_ANCHO}px !important; height:100vh !important;
     background:#ffffff !important; z-index:999999 !important;
-    border-right:1px solid {GRIS_BORDE} !important;
+    border-right:none !important;
     padding:0 !important;
     display:flex !important;
     flex-direction:column !important;
@@ -175,10 +175,20 @@ _CSS_AJUSTE = """
 /* ── AJUSTE DE INVENTARIO: subir todo el contenido al tope ───────────── */
 
 /* 1) Topbar vacío en este reporte: oculto por completo. */
-#nav-topbar { display: none !important; }
+#nav-topbar {
+    display: flex !important;
+    background: #ffffff !important;
+    border-bottom: none !important;
+}
+
+header[data-testid="stHeader"] {
+    background: #ffffff !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
+}
 
 /* 2) Quitar el padding-top de 48px que el rail reserva para el topbar. */
-html body .stApp { padding-top: 0 !important; }
+html body .stApp { padding-top: 48px !important; }
 
 /* 3) Padding superior mínimo del contenedor principal — OVERRIDE POR SECCIÓN
    (nivel 2 de 3; jerarquía en ARQUITECTURA.md). El prefijo `html body` NO es
@@ -188,7 +198,7 @@ html body .stApp { padding-top: 0 !important; }
    CAMBIADO: de 0.4rem a 0.15rem para subir el chip "Ajuste de Inventario". */
 html body [data-testid="stMainBlockContainer"],
 html body .stMainBlockContainer,
-html body .block-container { padding-top: 0.85rem !important; }
+html body .block-container { padding-top: 0 !important; }
 
 /* 4) CLAVE: colapsar los contenedores "invisibles" que se apilan arriba
    (st.markdown que solo inyectan <style>, los iframes de overlay/inspector
@@ -196,9 +206,15 @@ html body .block-container { padding-top: 0.85rem !important; }
    sumados, forman la franja blanca. Ocultar su wrapper elimina ese gap SIN
    desactivar el CSS (un <style> aplica igual aunque esté en display:none). */
 html body [data-testid="stElementContainer"]:has([data-testid="stMarkdown"] style),
-html body [data-testid="stElementContainer"]:has([data-testid="stIFrame"]),
-html body [data-testid="stElementContainer"]:has(#nav-topbar) {
+html body [data-testid="stElementContainer"]:has([data-testid="stIFrame"]) {
     display: none !important;
+}
+
+html body [data-testid="stElementContainer"]:has(#nav-topbar) {
+    height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
 /* 5) Recorta el desborde lateral de la franja blanca superior
