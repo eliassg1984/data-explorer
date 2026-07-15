@@ -477,7 +477,7 @@ def get_css():
     .st-key-fila_ajuste_top::before {
         content: "" !important;
         position: absolute !important;
-        top: -7px !important;       /* se alinea con el borde superior del contenido */
+        top: -20px !important;      /* prolonga la franja hasta el borde superior */
         bottom: 0 !important;
         left: -8rem !important;     /* desborde generoso: se recorta en el rail */
         right: -8rem !important;    /* desborde generoso: se recorta en el borde */
