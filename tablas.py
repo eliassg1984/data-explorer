@@ -1176,6 +1176,15 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         for _c in df_grid.columns:
             gb.configure_column(_c, headerName=_titulo_es(_c))
 
+        # ── Quitar del panel de Filtros las columnas que se manejan con chips externos ──
+        col_area = buscar_columna(df_grid, "Nombre Area", "Area", "AREA")
+        col_fam = buscar_columna(df_grid, "Nombre Familia", "Familia", "FAMILIA")
+        col_aj = buscar_columna(df_grid, "Ajuste", "AJUSTE")
+        col_ajval = buscar_columna(df_grid, "Ajuste Valorizado", "AJUSTE VALORIZADO")
+        for _c in df_grid.columns:
+            if _c in (col_area, col_fam, col_aj, col_ajval):
+                gb.configure_column(_c, suppressFiltersToolPanel=True)
+
         opciones_grid["pivotMode"] = True
         opciones_grid["groupDefaultExpanded"] = 0
 
