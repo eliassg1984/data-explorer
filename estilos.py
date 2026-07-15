@@ -509,6 +509,10 @@ def get_css():
         margin: 6px 0 0 0 !important;
         padding: 0 0 0 16px !important;
     }
+    .st-key-ajuste_tabs_top {
+        position: relative !important;
+        transform: translateY(-30px);
+    }
     .st-key-ajuste_tabs_top [role="radiogroup"] label {
         min-width: 0 !important;
         justify-content: flex-start !important;
@@ -542,7 +546,7 @@ def get_css():
         font-weight: 650 !important;
         line-height: 1.25 !important;
         letter-spacing: -0.01em !important;
-        transform: translateX(-70px);
+        transform: translate(-70px, -14px);
     }
 
     /* Chip pill del título del reporte */
