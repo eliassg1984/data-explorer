@@ -797,6 +797,48 @@ def get_css():
         padding: 8px 14px !important;
         font-size: 13px !important;
     }
+
+    /* =================================================================== */
+    /* AJUSTES FINALES PARA MÓVIL                                           */
+    /* Se dejan al final para que no los pisen los estilos específicos de   */
+    /* Ajuste de Inventario definidos arriba.                               */
+    /* =================================================================== */
+    @media screen and (max-width: 768px) {
+        /* El encabezado de Ajuste usa desplazamientos de escritorio para
+           alinearse con el rail. En móvil el rail no existe. */
+        .titulo-ajuste-reporte {
+            transform: none !important;
+            font-size: 1.3rem !important;
+        }
+        .st-key-ajuste_tabs_top {
+            transform: none !important;
+        }
+        .st-key-fila_ajuste_top {
+            margin-bottom: 12px !important;
+        }
+        .st-key-fila_ajuste_top [data-testid="stHorizontalBlock"] {
+            gap: 4px !important;
+            align-items: stretch !important;
+        }
+        .st-key-fch_ajuste_inline .stDateInput > div > div,
+        .ultima-actualizacion {
+            margin-right: 0 !important;
+        }
+
+        /* Los controles anchos de escritorio no deben crear scroll lateral. */
+        [data-testid="stPopover"] button {
+            min-width: 0 !important;
+            max-width: 100% !important;
+        }
+
+        /* Los avisos estaban anclados junto al rail de escritorio (90 px). */
+        div[data-testid="stToastContainer"],
+        .st-key-aviso_refresco {
+            left: 12px !important;
+            right: 12px !important;
+            max-width: none !important;
+        }
+    }
     </style>
     """
 
