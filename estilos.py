@@ -509,6 +509,10 @@ def get_css():
         margin: 6px 0 0 0 !important;
         padding: 0 0 0 16px !important;
     }
+    /* El radio nativo no forma parte del diseño de pestañas. */
+    .st-key-ajuste_tabs_top [role="radiogroup"] label > div:first-child {
+        display: none !important;
+    }
     .st-key-ajuste_tabs_top {
         position: relative !important;
         transform: translateY(-30px);
@@ -528,6 +532,17 @@ def get_css():
         font-size: 14px !important;
         font-weight: 500 !important;
         color: var(--text-secondary) !important;
+    }
+    .st-key-ajuste_tabs_top [role="radiogroup"] label:hover {
+        border-bottom-color: var(--focus-lavender) !important;
+    }
+    .st-key-ajuste_tabs_top [role="radiogroup"] label:hover p {
+        color: var(--accent-deep) !important;
+    }
+    .st-key-ajuste_tabs_top [role="radiogroup"] label [data-testid="stIconMaterial"] {
+        font-size: 16px !important;
+        color: inherit !important;
+        vertical-align: -2px;
     }
     .st-key-ajuste_tabs_top [role="radiogroup"] label:has(input:checked) {
         background: transparent !important;
