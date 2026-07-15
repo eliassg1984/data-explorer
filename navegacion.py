@@ -177,7 +177,9 @@ _CSS_AJUSTE = """
 /* 1) Topbar vacío en este reporte: oculto por completo. */
 #nav-topbar { display: none !important; }
 
-header[data-testid="stHeader"] {
+header[data-testid="stHeader"],
+[data-testid="stHeader"],
+[data-testid="stDecoration"] {
     background: #ffffff !important;
     border-bottom: none !important;
     box-shadow: none !important;
