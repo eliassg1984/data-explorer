@@ -1284,7 +1284,6 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
         (st.tabs) con una mini-tabla a la vez.
       · «Del periodo»  → usa df_f (respeta el rango aplicado).
       · «Histórico»    → usa df_full acotado al AÑO ACTUAL.
-      · Expander final: Explorador libre de gráficos.
 
     Nota: df_full es opcional; si no se pasa, se usa df_f también para
     Histórico (compatibilidad con llamadas antiguas).
@@ -1426,10 +1425,6 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
                 d, col_familia, col_area, col_ajuste_val,
                 col_producto, col_valorizado, col_cantidad, ambito,
             )
-
-    with st.expander("🎛️ Explorador libre de gráficos"):
-        renderizar_graficos_genericos(d, nombre_reporte)
-
 
 def renderizar_graficos_reporte(df_f, reporte, cfg, df_full=None):
     """Punto de entrada de la vista Gráficos para reportes genéricos.
