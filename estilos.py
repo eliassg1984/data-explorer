@@ -682,6 +682,22 @@ def get_css():
         border-color: transparent !important;
         box-shadow: none !important;
     }
+
+    /* =================================================================== */
+    /* CHIPS DE FILTRO EXTERNOS — Tabla de Ajuste de Inventario            */
+    /* =================================================================== */
+    .st-key-chips_ajuste_tabla { margin-bottom: 10px !important; }
+    .st-key-chips_ajuste_tabla [data-testid="stHorizontalBlock"] {
+        gap: 8px !important;
+        align-items: center !important;
+    }
+    /* Anula el min-width:180px global para que quepan 4 chips en fila */
+    .st-key-chips_ajuste_tabla [data-testid="stPopover"] button {
+        min-width: 0 !important;
+        width: 100% !important;
+        padding: 8px 14px !important;
+        font-size: 13px !important;
+    }
     </style>
     """
 
