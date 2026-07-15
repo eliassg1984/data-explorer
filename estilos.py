@@ -478,7 +478,8 @@ def get_css():
         content: "" !important;
         position: absolute !important;
         top: -20px !important;      /* prolonga la franja hasta el borde superior */
-        bottom: 0 !important;
+        /* La banda termina antes del selector de vista. */
+        bottom: 32px !important;
         left: -8rem !important;     /* desborde generoso: se recorta en el rail */
         right: -8rem !important;    /* desborde generoso: se recorta en el borde */
         background: #ffffff !important;
