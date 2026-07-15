@@ -462,9 +462,34 @@ def get_css():
     /* =================================================================== */
     /* FILA SUPERIOR DE AJUSTE DE INVENTARIO — chip a la izquierda          */
     /* =================================================================== */
+    /* FRANJA BLANCA SUPERIOR — banda de borde a borde tras título + fecha.
+       El ::before se desborda a los lados (-8rem) y se recorta a la altura
+       del área de contenido con `overflow-x: clip` en stMain (ver _CSS_AJUSTE
+       en navegacion.py). Así la banda llega del rail al borde derecho sin
+       depender del padding lateral del block-container. */
     .st-key-fila_ajuste_top {
-        margin-top: -16px !important;          /* NUEVO: reduce el espacio superior */
-        margin-bottom: 36px !important;        /* NUEVO: más aire antes de las pestañas */
+        position: relative !important;
+        margin-top: 0 !important;
+        margin-bottom: 28px !important;
+        padding-top: 14px !important;
+        padding-bottom: 14px !important;
+    }
+    .st-key-fila_ajuste_top::before {
+        content: "" !important;
+        position: absolute !important;
+        top: -14px !important;      /* sube hasta el borde superior del contenido */
+        bottom: 0 !important;
+        left: -8rem !important;     /* desborde generoso: se recorta en el rail */
+        right: -8rem !important;    /* desborde generoso: se recorta en el borde */
+        background: #ffffff !important;
+        border-bottom: 1px solid var(--border) !important;
+        box-shadow: 0 2px 4px rgba(16, 16, 20, 0.04) !important;
+        z-index: 0 !important;
+    }
+    /* Título y fecha por ENCIMA de la banda */
+    .st-key-fila_ajuste_top > * {
+        position: relative !important;
+        z-index: 1 !important;
     }
     .st-key-fila_ajuste_top [data-testid="stHorizontalBlock"] {
         align-items: center !important;
