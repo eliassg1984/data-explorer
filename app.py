@@ -350,7 +350,7 @@ if es_ajuste:
         )
         with col_titulo:
             st.markdown(
-                f'<div class="chip-titulo-reporte">{reporte}</div>',
+                f'<h1 class="titulo-ajuste-reporte">{reporte}</h1>',
                 unsafe_allow_html=True,
             )
         with col_fecha_top:
