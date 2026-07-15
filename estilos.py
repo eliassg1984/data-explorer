@@ -470,14 +470,14 @@ def get_css():
     .st-key-fila_ajuste_top {
         position: relative !important;
         margin-top: 0 !important;
-        margin-bottom: 24px !important;
-        padding-top: 14px !important;
+        margin-bottom: 18px !important;
+        padding-top: 7px !important;
         padding-bottom: 0 !important;
     }
     .st-key-fila_ajuste_top::before {
         content: "" !important;
         position: absolute !important;
-        top: -14px !important;      /* se alinea con el borde superior del contenido */
+        top: -7px !important;       /* se alinea con el borde superior del contenido */
         bottom: 0 !important;
         left: -8rem !important;     /* desborde generoso: se recorta en el rail */
         right: -8rem !important;    /* desborde generoso: se recorta en el borde */
@@ -505,13 +505,13 @@ def get_css():
     .st-key-ajuste_tabs_top [role="radiogroup"] {
         gap: 26px !important;
         border-bottom: 1px solid var(--border) !important;
-        margin: 14px 0 0 0 !important;
+        margin: 6px 0 0 0 !important;
         padding: 0 0 0 16px !important;
     }
     .st-key-ajuste_tabs_top [role="radiogroup"] label {
         min-width: 0 !important;
         justify-content: flex-start !important;
-        padding: 9px 2px !important;
+        padding: 6px 2px !important;
         margin: 0 !important;
         border: none !important;
         border-bottom: 2px solid transparent !important;
@@ -537,7 +537,7 @@ def get_css():
     .titulo-ajuste-reporte {
         margin: 0 !important;
         color: var(--text-primary) !important;
-        font-size: 20px !important;
+        font-size: 22px !important;
         font-weight: 650 !important;
         line-height: 1.25 !important;
         letter-spacing: -0.01em !important;
