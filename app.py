@@ -372,6 +372,20 @@ if es_ajuste:
                     st.session_state["ajuste_rango_aplicado"] = tuple(rango_aj)
                     st.rerun(scope="app")
 
+        # El selector pertenece a la misma franja blanca que el título.
+        with st.container(key="ajuste_tabs_top"):
+            st.radio(
+                "Vista",
+                options=["Tabla", "Gráficos"],
+                format_func=lambda vista: (
+                    ":material/table_rows: Tabla"
+                    if vista == "Tabla" else ":material/monitoring: Gráficos"
+                ),
+                horizontal=True,
+                label_visibility="collapsed",
+                key=f"vista_seg_{reporte}",
+            )
+
     # Aplicar el rango al DataFrame (usa el valor ya guardado en session_state)
     if col_fecha and fecha_min_full is not None:
         _ini_apl, _fin_apl = st.session_state["ajuste_rango_aplicado"]
@@ -875,26 +889,16 @@ def _render_contenido():
                 st.session_state["ajuste_graf_ambito"] = _auto_ambito
                 st.session_state["_ajuste_rango_prev_ambito"] = _rango_actual
 
-            # 2) Layout de la fila superior: leer vista desde session_state.
-            _vista_actual = st.session_state.get(f"vista_seg_{reporte}", "Tabla")
-            _mostrar_segmented = (_vista_actual == "Gráficos")
-
-            if _mostrar_segmented:
-                col_tabs, col_seg = st.columns(
-                    [4, 1.2], vertical_alignment="bottom",
-                )
-                with col_tabs:
-                    vista = _selector_vista()
-                with col_seg:
-                    with st.container(key="ajuste_ambito_pill"):
-                        st.segmented_control(
-                            "Ámbito",
-                            ["Del periodo", "Histórico"],
-                            key="ajuste_graf_ambito",
-                            label_visibility="collapsed",
-                        )
-            else:
-                vista = _selector_vista()
+            # 2) El selector Tabla/Gráficos se dibuja arriba, en la franja.
+            vista = st.session_state.get(f"vista_seg_{reporte}", "Tabla")
+            if vista == "Gráficos":
+                with st.container(key="ajuste_ambito_pill"):
+                    st.segmented_control(
+                        "Ámbito",
+                        ["Del periodo", "Histórico"],
+                        key="ajuste_graf_ambito",
+                        label_visibility="collapsed",
+                    )
 
         if vista == "Tabla":
             if es_ajuste:
