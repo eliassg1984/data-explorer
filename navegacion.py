@@ -200,6 +200,12 @@ html body [data-testid="stElementContainer"]:has([data-testid="stIFrame"]),
 html body [data-testid="stElementContainer"]:has(#nav-topbar) {
     display: none !important;
 }
+
+/* 5) Recorta el desborde lateral de la franja blanca superior
+   (.st-key-fila_ajuste_top::before) exactamente al área de contenido:
+   izquierda = borde del rail, derecha = borde de la pantalla. `clip` no
+   crea scroll horizontal ni afecta el scroll vertical (overflow-y sigue). */
+html body [data-testid="stMain"] { overflow-x: clip !important; }
 </style>
 """
 
