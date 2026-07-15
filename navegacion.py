@@ -175,11 +175,7 @@ _CSS_AJUSTE = """
 /* ── AJUSTE DE INVENTARIO: subir todo el contenido al tope ───────────── */
 
 /* 1) Topbar vacío en este reporte: oculto por completo. */
-#nav-topbar {
-    display: flex !important;
-    background: #ffffff !important;
-    border-bottom: none !important;
-}
+#nav-topbar { display: none !important; }
 
 header[data-testid="stHeader"] {
     background: #ffffff !important;
@@ -188,7 +184,7 @@ header[data-testid="stHeader"] {
 }
 
 /* 2) Quitar el padding-top de 48px que el rail reserva para el topbar. */
-html body .stApp { padding-top: 48px !important; }
+html body .stApp { padding-top: 0 !important; }
 
 /* 3) Padding superior mínimo del contenedor principal — OVERRIDE POR SECCIÓN
    (nivel 2 de 3; jerarquía en ARQUITECTURA.md). El prefijo `html body` NO es
@@ -206,15 +202,9 @@ html body .block-container { padding-top: 0 !important; }
    sumados, forman la franja blanca. Ocultar su wrapper elimina ese gap SIN
    desactivar el CSS (un <style> aplica igual aunque esté en display:none). */
 html body [data-testid="stElementContainer"]:has([data-testid="stMarkdown"] style),
-html body [data-testid="stElementContainer"]:has([data-testid="stIFrame"]) {
-    display: none !important;
-}
-
+html body [data-testid="stElementContainer"]:has([data-testid="stIFrame"]),
 html body [data-testid="stElementContainer"]:has(#nav-topbar) {
-    height: 0 !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    display: none !important;
 }
 
 /* 5) Recorta el desborde lateral de la franja blanca superior
