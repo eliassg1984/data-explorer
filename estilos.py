@@ -470,14 +470,14 @@ def get_css():
     .st-key-fila_ajuste_top {
         position: relative !important;
         margin-top: 0 !important;
-        margin-bottom: 20px !important;
-        padding-top: 6px !important;
-        padding-bottom: 10px !important;
+        margin-bottom: 24px !important;
+        padding-top: 14px !important;
+        padding-bottom: 0 !important;
     }
     .st-key-fila_ajuste_top::before {
         content: "" !important;
         position: absolute !important;
-        top: -6px !important;       /* se alinea con el borde superior del contenido */
+        top: -14px !important;      /* se alinea con el borde superior del contenido */
         bottom: 0 !important;
         left: -8rem !important;     /* desborde generoso: se recorta en el rail */
         right: -8rem !important;    /* desborde generoso: se recorta en el borde */
@@ -501,38 +501,46 @@ def get_css():
         align-items: center !important;
     }
 
-    /* Selector Tabla / Gráficos dentro de la franja blanca superior. */
+    /* Opción 2: segunda fila de pestañas subrayadas en la franja blanca. */
     .st-key-ajuste_tabs_top [role="radiogroup"] {
-        gap: 0 !important;
-        border-bottom: none !important;
-        margin: 4px 0 0 16px !important;
-        padding: 0 !important;
+        gap: 26px !important;
+        border-bottom: 1px solid var(--border) !important;
+        margin: 14px 0 0 0 !important;
+        padding: 0 0 0 16px !important;
     }
     .st-key-ajuste_tabs_top [role="radiogroup"] label {
-        min-width: 78px !important;
-        justify-content: center !important;
-        padding: 7px 13px !important;
+        min-width: 0 !important;
+        justify-content: flex-start !important;
+        padding: 9px 2px !important;
         margin: 0 !important;
-        border: 1px solid var(--accent) !important;
-        border-bottom: 1px solid var(--accent) !important;
+        border: none !important;
+        border-bottom: 2px solid transparent !important;
         border-radius: 0 !important;
-        background: #ffffff !important;
-    }
-    .st-key-ajuste_tabs_top [role="radiogroup"] label:first-of-type {
-        border-radius: 6px 0 0 6px !important;
-    }
-    .st-key-ajuste_tabs_top [role="radiogroup"] label:last-of-type {
-        border-radius: 0 6px 6px 0 !important;
-        margin-left: -1px !important;
+        background: transparent !important;
+        margin-bottom: -1px !important;
     }
     .st-key-ajuste_tabs_top [role="radiogroup"] label p {
-        font-size: 13px !important;
-        font-weight: 600 !important;
-        color: var(--accent-deep) !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        color: var(--text-secondary) !important;
     }
     .st-key-ajuste_tabs_top [role="radiogroup"] label:has(input:checked) {
-        background: var(--accent-tint) !important;
+        background: transparent !important;
         border-bottom-color: var(--accent) !important;
+    }
+    .st-key-ajuste_tabs_top [role="radiogroup"] label:has(input:checked) p {
+        color: var(--accent-deep) !important;
+        font-weight: 600 !important;
+    }
+
+    /* Título limpio: conserva jerarquía sin convertirlo en una píldora. */
+    .titulo-ajuste-reporte {
+        margin: 0 !important;
+        color: var(--text-primary) !important;
+        font-size: 20px !important;
+        font-weight: 650 !important;
+        line-height: 1.25 !important;
+        letter-spacing: -0.01em !important;
     }
 
     /* Chip pill del título del reporte */
