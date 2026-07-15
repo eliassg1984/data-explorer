@@ -855,6 +855,22 @@ def get_css():
         border: 1px solid var(--border-lavender) !important;
         border-radius: 999px !important;
     }
+    /* Streamlit renderiza cada opción como un radio real. Se conserva para
+       accesibilidad y clic, pero se oculta su indicador circular. */
+    [class*="st-key-vistatabs_"] [role="radiogroup"] [data-baseweb="radio"],
+    .st-key-ajuste_tabs_top [role="radiogroup"] [data-baseweb="radio"] {
+        display: none !important;
+    }
+    [class*="st-key-vistatabs_"] [role="radiogroup"] input[type="radio"],
+    .st-key-ajuste_tabs_top [role="radiogroup"] input[type="radio"] {
+        appearance: none !important;
+        -webkit-appearance: none !important;
+        opacity: 0 !important;
+        position: absolute !important;
+        width: 0 !important;
+        height: 0 !important;
+        margin: 0 !important;
+    }
     [class*="st-key-vistatabs_"] [role="radiogroup"] label,
     .st-key-ajuste_tabs_top [role="radiogroup"] label {
         display: flex !important;
