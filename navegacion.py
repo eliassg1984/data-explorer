@@ -181,6 +181,9 @@ header[data-testid="stHeader"] {
     background: #ffffff !important;
     border-bottom: none !important;
     box-shadow: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
 }
 
 /* 2) Quitar el padding-top de 48px que el rail reserva para el topbar. */
