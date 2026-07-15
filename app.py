@@ -593,21 +593,99 @@ def _es_cantidad(nombre):
     return any(k in n for k in ("cantidad", "unidades", "qty", "stock"))
 
 
-def _render_tabla():
+# ===========================================================================
+# CHIPS DE FILTRO EXTERNOS — Tabla de Ajuste de Inventario
+# ===========================================================================
+def _chip_categorico(df_in, col, key, etiqueta):
+    """Chip-popover multiselección para una columna categórica.
+    Devuelve (df_filtrado, seleccion)."""
+    if not col or col not in df_in.columns:
+        return df_in, []
+    valores = sorted(df_in[col].dropna().astype(str).unique().tolist())
+    if not valores:
+        return df_in, []
+    _n = len(st.session_state.get(key) or [])
+    _lbl = f"{etiqueta} · {_n}" if _n else etiqueta
+    with st.popover(_lbl, use_container_width=True):
+        sel = st.pills(
+            etiqueta, valores, selection_mode="multi",
+            key=key, label_visibility="collapsed",
+        ) or []
+    if sel:
+        df_in = df_in[df_in[col].astype(str).isin(sel)]
+    return df_in, sel
+
+
+def _chip_numerico(df_in, col, key, etiqueta):
+    """Chip-popover single-select para una columna numérica.
+    Opciones: Todos / Faltantes (<0) / Sobrantes (>0) / Top 10 / Top 20.
+    Top N = filas de mayor magnitud (|valor|). Devuelve el df filtrado."""
+    if not col or col not in df_in.columns:
+        return df_in
+    opciones = ["Todos", "Faltantes", "Sobrantes", "Top 10", "Top 20"]
+    _prev = st.session_state.get(key) or "Todos"
+    _lbl = etiqueta if _prev == "Todos" else f"{etiqueta} · {_prev}"
+    with st.popover(_lbl, use_container_width=True):
+        sel = st.pills(
+            etiqueta, opciones, default="Todos",
+            key=key, label_visibility="collapsed",
+        ) or "Todos"
+    serie = pd.to_numeric(df_in[col], errors="coerce")
+    if sel == "Faltantes":
+        return df_in[serie < 0]
+    if sel == "Sobrantes":
+        return df_in[serie > 0]
+    if sel in ("Top 10", "Top 20"):
+        n = 10 if sel == "Top 10" else 20
+        idx = serie.abs().sort_values(ascending=False).head(n).index
+        return df_in.loc[idx]
+    return df_in
+
+
+def _filtros_chips_ajuste_tabla(df_in):
+    """Fila de chips-cápsula ARRIBA de la tabla de Ajuste. Filtra df_in en
+    Python (Área, Familia, Ajuste, Ajuste Valorizado) y devuelve el df."""
+    col_area  = buscar_columna(df_in, "Nombre Area", "Area", "AREA")
+    col_fam   = buscar_columna(df_in, "Nombre Familia", "Familia", "FAMILIA")
+    col_aj    = buscar_columna(df_in, "Ajuste", "AJUSTE", "Cantidad Ajuste")
+    col_ajval = buscar_columna(df_in, "Ajuste Valorizado", "AJUSTE VALORIZADO")
+
+    with st.container(key="chips_ajuste_tabla"):
+        c1, c2, c3, c4, _ = st.columns([1, 1, 1, 1.2, 2])
+        with c1:
+            df_in, _ = _chip_categorico(df_in, col_area,
+                                        "ajuste_tabla_filtro_area", "Área")
+        with c2:
+            df_in, _ = _chip_categorico(df_in, col_fam,
+                                        "ajuste_tabla_filtro_familia", "Familia")
+        with c3:
+            df_in = _chip_numerico(df_in, col_aj,
+                                   "ajuste_tabla_filtro_ajuste", "Ajuste")
+        with c4:
+            df_in = _chip_numerico(df_in, col_ajval,
+                                   "ajuste_tabla_filtro_ajusteval", "Ajuste Valor.")
+    return df_in
+
+
+# ===========================================================================
+# RENDERIZADO DE TABLA (con df opcional para los chips)
+# ===========================================================================
+def _render_tabla(df_data=None):
     """Renderiza la tabla AgGrid (desktop o móvil)."""
+    _df = df_f if df_data is None else df_data
     if usa_vista_movil and tiene_config_movil:
         st.caption("📱 Vista móvil • Desliza para más columnas • Mantén presionado para menú")
         columnas_fijas = cfg.get("columnas_fijas_movil", 2)
-        renderizar_aggrid_movil(df_f[cols_mostrar], columnas_fijas, reporte, font_px)
+        renderizar_aggrid_movil(_df[cols_mostrar], columnas_fijas, reporte, font_px)
     else:
-        _aviso_rapido_aggrid(df_f[cols_mostrar])
+        _aviso_rapido_aggrid(_df[cols_mostrar])
         cols_finales = list(cols_mostrar)
         if grupos_sel:
             for c in grupos_sel:
                 if c not in cols_finales:
                     cols_finales.append(c)
         renderizar_aggrid_desktop(
-            df_f[cols_finales], grupos_sel, cols_mostrar, reporte, font_px,
+            _df[cols_finales], grupos_sel, cols_mostrar, reporte, font_px,
             cols_visibles=cols_visibles,
         )
 
@@ -819,7 +897,14 @@ def _render_contenido():
                 vista = _selector_vista()
 
         if vista == "Tabla":
-            _render_tabla()
+            if es_ajuste:
+                df_tabla = _filtros_chips_ajuste_tabla(df_f)
+                if df_tabla.empty:
+                    st.info("Ningún registro coincide con los filtros seleccionados.")
+                else:
+                    _render_tabla(df_tabla)
+            else:
+                _render_tabla()
         else:
             renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
 
