@@ -470,14 +470,14 @@ def get_css():
     .st-key-fila_ajuste_top {
         position: relative !important;
         margin-top: 0 !important;
-        margin-bottom: 28px !important;
-        padding-top: 14px !important;
-        padding-bottom: 14px !important;
+        margin-bottom: 20px !important;
+        padding-top: 6px !important;
+        padding-bottom: 10px !important;
     }
     .st-key-fila_ajuste_top::before {
         content: "" !important;
         position: absolute !important;
-        top: -14px !important;      /* sube hasta el borde superior del contenido */
+        top: -6px !important;       /* se alinea con el borde superior del contenido */
         bottom: 0 !important;
         left: -8rem !important;     /* desborde generoso: se recorta en el rail */
         right: -8rem !important;    /* desborde generoso: se recorta en el borde */
@@ -499,6 +499,40 @@ def get_css():
     .st-key-fila_ajuste_top [data-testid="column"] {
         display: flex !important;
         align-items: center !important;
+    }
+
+    /* Selector Tabla / Gráficos dentro de la franja blanca superior. */
+    .st-key-ajuste_tabs_top [role="radiogroup"] {
+        gap: 0 !important;
+        border-bottom: none !important;
+        margin: 4px 0 0 16px !important;
+        padding: 0 !important;
+    }
+    .st-key-ajuste_tabs_top [role="radiogroup"] label {
+        min-width: 78px !important;
+        justify-content: center !important;
+        padding: 7px 13px !important;
+        margin: 0 !important;
+        border: 1px solid var(--accent) !important;
+        border-bottom: 1px solid var(--accent) !important;
+        border-radius: 0 !important;
+        background: #ffffff !important;
+    }
+    .st-key-ajuste_tabs_top [role="radiogroup"] label:first-of-type {
+        border-radius: 6px 0 0 6px !important;
+    }
+    .st-key-ajuste_tabs_top [role="radiogroup"] label:last-of-type {
+        border-radius: 0 6px 6px 0 !important;
+        margin-left: -1px !important;
+    }
+    .st-key-ajuste_tabs_top [role="radiogroup"] label p {
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        color: var(--accent-deep) !important;
+    }
+    .st-key-ajuste_tabs_top [role="radiogroup"] label:has(input:checked) {
+        background: var(--accent-tint) !important;
+        border-bottom-color: var(--accent) !important;
     }
 
     /* Chip pill del título del reporte */
