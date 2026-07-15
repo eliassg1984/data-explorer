@@ -605,6 +605,17 @@ def get_css():
         transition: background .15s ease, border-color .15s ease !important;
     }
 
+    /* Marca de actualización del parquet, alineada sobre el rango de fechas. */
+    .ultima-actualizacion {
+        margin: 0 24px 4px auto !important;
+        color: var(--text-muted) !important;
+        font-size: 11px !important;
+        font-weight: 500 !important;
+        line-height: 1.2 !important;
+        text-align: right !important;
+        white-space: nowrap !important;
+    }
+
     /* Texto de la fecha centrado y con tamaño justo */
     .st-key-fch_ajuste_inline .stDateInput input {
         color: var(--accent-deep) !important;
