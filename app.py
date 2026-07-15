@@ -8,7 +8,10 @@ import pandas as pd
 import streamlit as st
 
 from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
-from data import REPORTES, cargar, cargar_rango, secrets_disponibles, hay_dato_nuevo
+from data import (
+    REPORTES, cargar, cargar_rango, secrets_disponibles, hay_dato_nuevo,
+    fecha_ultima_actualizacion,
+)
 from estilos import TAM_FUENTE, inject_css
 from inyecciones import inject_error_overlay, inject_element_inspector
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras, renderizar_aggrid_compras
@@ -355,6 +358,23 @@ if es_ajuste:
             )
         with col_fecha_top:
             if col_fecha and fecha_min_full is not None:
+                try:
+                    _fecha_actualizacion = fecha_ultima_actualizacion(
+                        cfg.get("archivo")
+                    )
+                except Exception:
+                    _fecha_actualizacion = None
+
+                if isinstance(_fecha_actualizacion, datetime.datetime):
+                    if _fecha_actualizacion.tzinfo is not None:
+                        _fecha_actualizacion = _fecha_actualizacion.astimezone(ZONA_PERU)
+                    st.markdown(
+                        '<p class="ultima-actualizacion">'
+                        f'Última actualización: '
+                        f'{_fecha_actualizacion.strftime("%d/%m/%Y · %H:%M")}'
+                        '</p>',
+                        unsafe_allow_html=True,
+                    )
                 with st.container(key="fecha_ajuste_pill"):
                     _ini_apl, _fin_apl = st.session_state["ajuste_rango_aplicado"]
                     rango_aj = st.date_input(
