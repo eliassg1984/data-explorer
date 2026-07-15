@@ -328,17 +328,12 @@ def _contar_filtros_activos():
 n_activos = _contar_filtros_activos()
 label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_activos != 1 else '') if n_activos else ''}"
 
-# ── TÍTULO, SELECTOR DE FECHA Y BOTÓN EXTRAER (solo Ajuste de Inventario) ──
+# ── TÍTULO + WIDGET DE FECHA EN LA FRANJA SUPERIOR (solo Ajuste de Inventario) ──
 perf.start_phase("Ajuste top row")                                          # ⚡ PERF
 if es_ajuste:
-    _fila_top = st.container(key="fila_ajuste_top")
-    with _fila_top:
-        st.markdown(
-            f'<div class="chip-titulo-reporte">{reporte}</div>',
-            unsafe_allow_html=True,
-        )
-
-    # Rango aplicado (auto): al primer acceso usa 01-del-mes → hoy
+    # Rango aplicado (auto): al primer acceso usa 01-del-mes → hoy.
+    # Se inicializa ANTES de dibujar el date_input para que el widget
+    # arranque con el valor correcto.
     if col_fecha and fecha_min_full is not None:
         if "ajuste_rango_aplicado" not in st.session_state:
             _ini_def = max(fecha_ini_default, fecha_min_full)
@@ -347,6 +342,38 @@ if es_ajuste:
                 _ini_def, _fin_def = fecha_min_full, fecha_max_full
             st.session_state["ajuste_rango_aplicado"] = (_ini_def, _fin_def)
 
+    # Franja superior: título (izquierda) + fecha (derecha, extremo opuesto).
+    _fila_top = st.container(key="fila_ajuste_top")
+    with _fila_top:
+        col_titulo, col_fecha_top = st.columns(
+            [3, 1.15], vertical_alignment="center",
+        )
+        with col_titulo:
+            st.markdown(
+                f'<div class="chip-titulo-reporte">{reporte}</div>',
+                unsafe_allow_html=True,
+            )
+        with col_fecha_top:
+            if col_fecha and fecha_min_full is not None:
+                with st.container(key="fecha_ajuste_pill"):
+                    _ini_apl, _fin_apl = st.session_state["ajuste_rango_aplicado"]
+                    rango_aj = st.date_input(
+                        "Rango a Evaluar",
+                        value=(_ini_apl, _fin_apl),
+                        min_value=fecha_min_full,
+                        max_value=fecha_max_full,
+                        format="DD/MM/YYYY",
+                        key="fch_ajuste_inline",
+                        label_visibility="collapsed",
+                    )
+                # Cambio de rango → rerun completo para refiltrar df_f
+                if (isinstance(rango_aj, (tuple, list)) and len(rango_aj) == 2
+                        and tuple(rango_aj) != st.session_state["ajuste_rango_aplicado"]):
+                    st.session_state["ajuste_rango_aplicado"] = tuple(rango_aj)
+                    st.rerun(scope="app")
+
+    # Aplicar el rango al DataFrame (usa el valor ya guardado en session_state)
+    if col_fecha and fecha_min_full is not None:
         _ini_apl, _fin_apl = st.session_state["ajuste_rango_aplicado"]
         df_f = df_f[
             (df_f[col_fecha].dt.date >= _ini_apl) &
@@ -757,12 +784,9 @@ def _render_contenido():
         else:
             # ── Ajuste de Inventario — cabecera completa DENTRO del fragment ─
             #
-            # Toda la lógica de layout (tabs + segmented + fecha) vive aquí
-            # para que el fragment sea autónomo: cuando el usuario cambia de
-            # Tabla↔Gráficos, el fragment re-ejecuta desde arriba, lee el
-            # session_state actualizado por el widget, y decide correctamente
-            # si pintar 2 o 3 columnas. Antes esta decisión se tomaba fuera
-            # del fragment y había 1 rerun de desfase.
+            # Toda la lógica de layout (tabs + segmented) vive aquí para que
+            # el fragment sea autónomo. La fecha se ha movido a la franja
+            # superior (fuera del fragmento) para que siempre esté visible.
 
             # 1) Auto-detectar ámbito (Del periodo / Histórico) según rango.
             _auto_ambito = _calcular_ajuste_ambito_auto()
@@ -773,24 +797,16 @@ def _render_contenido():
                 st.session_state["ajuste_graf_ambito"] = _auto_ambito
                 st.session_state["_ajuste_rango_prev_ambito"] = _rango_actual
 
-            # 2) Layout de la fila superior: leer vista desde session_state
-            #    (ya actualizado por el rerun anterior del fragment).
+            # 2) Layout de la fila superior: leer vista desde session_state.
             _vista_actual = st.session_state.get(f"vista_seg_{reporte}", "Tabla")
             _mostrar_segmented = (_vista_actual == "Gráficos")
 
             if _mostrar_segmented:
-                col_tabs, col_seg, col_fecha_sel = st.columns(
-                    [4, 1.2, 1.15], vertical_alignment="bottom",
+                col_tabs, col_seg = st.columns(
+                    [4, 1.2], vertical_alignment="bottom",
                 )
-            else:
-                col_tabs, col_fecha_sel = st.columns(
-                    [3, 1.15], vertical_alignment="bottom",
-                )
-
-            with col_tabs:
-                vista = _selector_vista()
-
-            if _mostrar_segmented:
+                with col_tabs:
+                    vista = _selector_vista()
                 with col_seg:
                     with st.container(key="ajuste_ambito_pill"):
                         st.segmented_control(
@@ -799,25 +815,8 @@ def _render_contenido():
                             key="ajuste_graf_ambito",
                             label_visibility="collapsed",
                         )
-
-            with col_fecha_sel:
-                with st.container(key="fecha_ajuste_pill"):
-                    _ini_apl, _fin_apl = st.session_state["ajuste_rango_aplicado"]
-                    rango_aj = st.date_input(
-                        "Rango a Evaluar",
-                        value=(_ini_apl, _fin_apl),
-                        min_value=fecha_min_full,
-                        max_value=fecha_max_full,
-                        format="DD/MM/YYYY",
-                        key="fch_ajuste_inline",
-                        label_visibility="collapsed",
-                    )
-
-            # Cambio de rango → rerun completo para refiltar df_f
-            if (isinstance(rango_aj, (tuple, list)) and len(rango_aj) == 2
-                    and tuple(rango_aj) != st.session_state["ajuste_rango_aplicado"]):
-                st.session_state["ajuste_rango_aplicado"] = tuple(rango_aj)
-                st.rerun(scope="app")
+            else:
+                vista = _selector_vista()
 
         if vista == "Tabla":
             _render_tabla()
