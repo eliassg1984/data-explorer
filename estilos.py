@@ -62,6 +62,19 @@ def get_css():
         --scroll-thumb: #d6d6dd;    /* pulgar de scrollbar en paneles */
         --shadow: 0 1px 3px rgba(16, 16, 20, 0.05), 0 1px 2px rgba(16, 16, 20, 0.04);
         --shadow-md: 0 4px 6px rgba(16, 16, 20, 0.05), 0 2px 4px rgba(16, 16, 20, 0.03);
+
+        /* ==================================================================
+           GEOMETRÍA DE LA CABECERA FIJA — AJUSTE DE INVENTARIO
+           Única fuente de verdad de la franja blanca superior. Todos los
+           elementos fijados (banda, pestañas, chips) y la compensación del
+           contenido derivan de estas variables. NUNCA escribir estos px
+           sueltos en otras reglas; consumir siempre la variable.
+           Mapa completo de knobs: ver arquitectura.md § Cabecera fija.
+           ================================================================== */
+        --cab-altura: 122px;
+        --cab-nivel1-top: 30px;
+        --cab-nivel2-top: 74px;
+        --cab-offset-contenido: 128px;
     }
 
     /* ============ HEADER NATIVO + ESPACIO SUPERIOR ============ */
