@@ -483,16 +483,22 @@ def get_css():
     }
     .st-key-fila_ajuste_top::before {
         content: "" !important;
-        position: absolute !important;
-        top: -15px !important;      /* prolonga la franja hasta el borde superior */
-        /* La banda termina antes del selector de vista. */
-        bottom: 90px !important;
-        left: -8rem !important;     /* desborde generoso: se recorta en el rail */
-        right: -8rem !important;    /* desborde generoso: se recorta en el borde */
+        /* Es la franja blanca inspeccionada en el navegador.  Se fija de
+           forma independiente porque el scroll de Streamlit no permite que
+           el contenedor padre conserve un sticky fiable. */
+        position: fixed !important;
+        top: 0 !important;
+        bottom: auto !important;
+        left: 90px !important;      /* comienza inmediatamente tras el rail */
+        right: 0 !important;
+        height: 49px !important;
         background: #ffffff !important;
         border-bottom: 1px solid var(--border) !important;
         box-shadow: 0 2px 4px rgba(16, 16, 20, 0.04) !important;
         z-index: 0 !important;
+    }
+    @media (max-width: 768px) {
+        .st-key-fila_ajuste_top::before { left: 0 !important; }
     }
     /* Título y fecha por ENCIMA de la banda */
     .st-key-fila_ajuste_top > * {
