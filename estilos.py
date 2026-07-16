@@ -468,7 +468,12 @@ def get_css():
        en navegacion.py). Así la banda llega del rail al borde derecho sin
        depender del padding lateral del block-container. */
     .st-key-fila_ajuste_top {
-        position: relative !important;
+        /* Mantiene título, fecha y pestañas siempre disponibles al hacer
+           scroll dentro del reporte.  El fondo lo aporta el ::before para
+           conservar la franja de borde a borde. */
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 20 !important;
         margin-top: 0 !important;
         margin-bottom: 18px !important;
         padding-top: 7px !important;
