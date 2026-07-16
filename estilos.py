@@ -561,7 +561,7 @@ def get_css():
         font-weight: 650 !important;
         line-height: 1.25 !important;
         letter-spacing: -0.01em !important;
-        transform: translate(-70px, -14px);
+        transform: translate(-70px, -20px);
     }
 
     /* Chip pill del título del reporte */
