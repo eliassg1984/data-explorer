@@ -487,7 +487,7 @@ def get_css():
         position: sticky !important;
         /* El título tiene un ajuste visual de -30px; esta separación evita
            que, al quedar fija la fila, se oculte por encima del viewport. */
-        top: 30px !important;
+        top: var(--cab-nivel1-top) !important;
         z-index: 20 !important;
         margin-top: 0 !important;
         /* Los chips se mantienen visualmente arriba, sin reservar una
@@ -495,6 +495,7 @@ def get_css():
         margin-bottom: 0 !important;
         padding-top: 7px !important;
         padding-bottom: 0 !important;
+        margin-top: calc(-1 * var(--cab-offset-contenido)) !important;
     }
     .st-key-fila_ajuste_top::before {
         content: "" !important;
@@ -507,7 +508,7 @@ def get_css():
         left: 90px !important;      /* comienza inmediatamente tras el rail */
         right: 0 !important;
         /* Dos niveles: título/fecha arriba y selector de vista debajo. */
-        height: 122px !important;
+        height: var(--cab-altura) !important;
         background: #ffffff !important;
         border-bottom: 1px solid var(--border) !important;
         box-shadow: 0 2px 4px rgba(16, 16, 20, 0.04) !important;
@@ -544,7 +545,7 @@ def get_css():
     }
     .st-key-ajuste_tabs_top {
         position: fixed !important;
-        top: 62px !important;
+        top: var(--cab-nivel2-top) !important;
         left: calc(90px + 4rem) !important;
         z-index: 22 !important;
         /* Mantiene los chips bajo el título, pero el margen negativo sí
@@ -595,7 +596,7 @@ def get_css():
     /* ================================================================== */
     .st-key-chips_ajuste_tabla {
         position: fixed !important;
-        top: 74px !important;   /* antes 60px — al nivel de Tabla/Gráficos */
+        top: var(--cab-nivel2-top) !important;   /* al nivel de Tabla/Gráficos */
         right: 90px !important;
         left: auto !important;
         width: 560px !important;
