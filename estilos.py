@@ -876,6 +876,12 @@ def get_css():
     .st-key-ajuste_tabs_top [role="radiogroup"] .st-emotion-cache-pabt4k {
         display: none !important;
     }
+    /* Variante inactiva: el indicador puede usar otra clase de Emotion.
+       Es el primer div inmediatamente después del radio dentro del label. */
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label > input[type="radio"] + div,
+    .st-key-ajuste_tabs_top [role="radiogroup"] label > input[type="radio"] + div {
+        display: none !important;
+    }
     [class*="st-key-vistatabs_"] [role="radiogroup"] label,
     .st-key-ajuste_tabs_top [role="radiogroup"] label {
         display: flex !important;
