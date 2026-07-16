@@ -901,14 +901,6 @@ def _render_contenido():
             # superior (fuera del fragmento) para que siempre esté visible.
 
             # 1) Auto-detectar ámbito (Del periodo / Histórico) según rango.
-            _auto_ambito = _calcular_ajuste_ambito_auto()
-            if "ajuste_graf_ambito" not in st.session_state:
-                st.session_state["ajuste_graf_ambito"] = _auto_ambito
-            _rango_actual = st.session_state.get("ajuste_rango_aplicado")
-            if _rango_actual != st.session_state.get("_ajuste_rango_prev_ambito"):
-                st.session_state["ajuste_graf_ambito"] = _auto_ambito
-                st.session_state["_ajuste_rango_prev_ambito"] = _rango_actual
-
             # 2) El selector Tabla/Gráficos se dibuja arriba, en la franja.
             vista = st.session_state.get(f"vista_seg_{reporte}", "Tabla")
 
