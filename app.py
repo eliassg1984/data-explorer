@@ -345,6 +345,9 @@ if es_ajuste:
                 _ini_def, _fin_def = fecha_min_full, fecha_max_full
             st.session_state["ajuste_rango_aplicado"] = (_ini_def, _fin_def)
 
+    # Evitar NameError antes de la franja superior
+    _fecha_actualizacion = None
+
     # Franja superior: título (izquierda) + fecha (derecha, extremo opuesto).
     _fila_top = st.container(key="fila_ajuste_top")
     with _fila_top:
@@ -368,14 +371,7 @@ if es_ajuste:
                 if isinstance(_fecha_actualizacion, datetime.datetime):
                     if _fecha_actualizacion.tzinfo is not None:
                         _fecha_actualizacion = _fecha_actualizacion.astimezone(ZONA_PERU)
-                    with st.container(key="footer_actualizacion"):
-                        st.markdown(
-                            '<p class="ultima-actualizacion">'
-                            f'Última actualización: '
-                            f'{_fecha_actualizacion.strftime("%d/%m/%Y · %H:%M")}'
-                            '</p>',
-                            unsafe_allow_html=True,
-                        )
+                # La renderización del aviso se mueve fuera de la franja sticky
                 with st.container(key="fecha_ajuste_pill"):
                     _ini_apl, _fin_apl = st.session_state["ajuste_rango_aplicado"]
                     rango_aj = st.date_input(
@@ -405,6 +401,20 @@ if es_ajuste:
                 default="Tabla",
                 label_visibility="collapsed",
                 key=f"vista_seg_{reporte}",
+            )
+
+    # ── Texto de actualización FUERA de la franja sticky ──
+    # Así su position:fixed vive en el contexto raíz y no es tapado
+    # por .stApp::after (fila_ajuste_top crea un stacking context propio
+    # por su sticky + z-index).
+    if isinstance(_fecha_actualizacion, datetime.datetime):
+        with st.container(key="footer_actualizacion"):
+            st.markdown(
+                '<p class="ultima-actualizacion">'
+                f'Última actualización: '
+                f'{_fecha_actualizacion.strftime("%d/%m/%Y · %H:%M")}'
+                '</p>',
+                unsafe_allow_html=True,
             )
 
     # Aplicar el rango al DataFrame (usa el valor ya guardado en session_state)
