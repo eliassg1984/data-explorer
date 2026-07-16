@@ -658,7 +658,7 @@ def get_css():
        "Última actualización" del encabezado, el contenedor quedó con un
        hueco que descolgaba la pastilla. */
     .st-key-fecha_ajuste_pill {
-        margin-top: -4px !important;   /* sube la pastilla al nivel del título */
+        margin-top: -10px !important;   /* sube la pastilla al nivel del título */
     }
 
     /* Ancho ajustado al texto de la fecha */
