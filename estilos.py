@@ -583,7 +583,7 @@ def get_css():
     .st-key-chips_ajuste_tabla {
         position: fixed !important;
         top: 74px !important;   /* antes 60px — al nivel de Tabla/Gráficos */
-        right: 24px !important;
+        right: 44px !important;
         left: auto !important;
         width: 560px !important;
         max-width: calc(100vw - 90px - 360px) !important;  /* no invadir las pestañas */
