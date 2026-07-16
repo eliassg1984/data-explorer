@@ -575,6 +575,51 @@ def get_css():
         font-weight: 600 !important;
     }
 
+    /* ================================================================== */
+    /* CHIPS DE FILTRO EN LA FRANJA BLANCA — Área / Familia / Ajuste /      */
+    /* Ajuste valor.  Nivel 2, a la derecha de las pestañas Tabla/Gráficos. */
+    /* Mismo patrón de posición fija que .st-key-ajuste_tabs_top.          */
+    /* ================================================================== */
+    .st-key-chips_ajuste_tabla {
+        position: fixed !important;
+        top: 60px !important;                 /* alinea con las pestañas (62px) */
+        right: 24px !important;
+        left: auto !important;
+        width: 560px !important;
+        max-width: calc(100vw - 90px - 360px) !important;  /* no invadir las pestañas */
+        z-index: 23 !important;               /* por encima de la banda */
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    .st-key-chips_ajuste_tabla [data-testid="stHorizontalBlock"] {
+        gap: 8px !important;
+        align-items: center !important;
+        flex-wrap: nowrap !important;
+    }
+    .st-key-chips_ajuste_tabla [data-testid="stColumn"],
+    .st-key-chips_ajuste_tabla [data-testid="column"] {
+        width: auto !important;
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+    }
+    /* Anula el min-width global de 180px del popover para que quepan los 4 */
+    .st-key-chips_ajuste_tabla [data-testid="stPopover"] button {
+        min-width: 0 !important;
+        width: 100% !important;
+        min-height: 40px !important;
+        padding: 8px 12px !important;
+        font-size: 13px !important;
+    }
+    /* Pantallas chicas: si no caben junto a las pestañas, bajan a su línea */
+    @media (max-width: 900px) {
+        .st-key-chips_ajuste_tabla {
+            position: static !important;
+            width: auto !important;
+            max-width: none !important;
+            margin: 6px 0 0 0 !important;
+        }
+    }
+
     /* Título limpio: conserva jerarquía sin convertirlo en una píldora. */
     .titulo-ajuste-reporte {
         position: fixed !important;
