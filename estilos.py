@@ -914,6 +914,31 @@ def get_css():
         font-weight: 600 !important;
     }
 
+    /* Píldoras del selector Tabla / Gráficos: mayor área táctil y aire. */
+    .st-key-ajuste_tabs_top [data-testid="stPills"] {
+        gap: 10px !important;
+        padding: 5px !important;
+    }
+    .st-key-ajuste_tabs_top [data-testid="stPills"] button {
+        min-height: 42px !important;
+        padding: 10px 20px !important;
+        font-size: 15px !important;
+        border-radius: 999px !important;
+    }
+    .st-key-ajuste_tabs_top [data-testid="stPills"] button [data-testid="stIconMaterial"] {
+        font-size: 18px !important;
+    }
+    @media screen and (max-width: 768px) {
+        .st-key-ajuste_tabs_top [data-testid="stPills"] {
+            gap: 6px !important;
+        }
+        .st-key-ajuste_tabs_top [data-testid="stPills"] button {
+            min-height: 40px !important;
+            padding: 9px 14px !important;
+            font-size: 14px !important;
+        }
+    }
+
     </style>
     """
 
