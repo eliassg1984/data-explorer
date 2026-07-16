@@ -685,7 +685,7 @@ def _filtros_chips_ajuste_tabla(df_in):
     col_ajval = buscar_columna(df_in, "Ajuste Valorizado", "AJUSTE VALORIZADO")
 
     with st.container(key="chips_ajuste_tabla"):
-        c1, c2, c3, c4, _ = st.columns([1, 1, 1, 1.2, 2])
+        c1, c2, c3, c4 = st.columns([1, 1, 1, 1.2])
         with c1:
             df_in, _ = _chip_categorico(df_in, col_area,
                                         "ajuste_tabla_filtro_area", "Área")
