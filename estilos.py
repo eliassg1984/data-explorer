@@ -873,7 +873,9 @@ def get_css():
     }
     /* Indicador visual que renderiza Streamlit alrededor del radio. */
     [class*="st-key-vistatabs_"] [role="radiogroup"] .st-emotion-cache-pabt4k,
-    .st-key-ajuste_tabs_top [role="radiogroup"] .st-emotion-cache-pabt4k {
+    .st-key-ajuste_tabs_top [role="radiogroup"] .st-emotion-cache-pabt4k,
+    [class*="st-key-vistatabs_"] [role="radiogroup"] .st-emotion-cache-mzkh7q,
+    .st-key-ajuste_tabs_top [role="radiogroup"] .st-emotion-cache-mzkh7q {
         display: none !important;
     }
     /* Variante inactiva: el indicador puede usar otra clase de Emotion.
