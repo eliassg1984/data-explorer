@@ -368,13 +368,14 @@ if es_ajuste:
                 if isinstance(_fecha_actualizacion, datetime.datetime):
                     if _fecha_actualizacion.tzinfo is not None:
                         _fecha_actualizacion = _fecha_actualizacion.astimezone(ZONA_PERU)
-                    st.markdown(
-                        '<p class="ultima-actualizacion">'
-                        f'Última actualización: '
-                        f'{_fecha_actualizacion.strftime("%d/%m/%Y · %H:%M")}'
-                        '</p>',
-                        unsafe_allow_html=True,
-                    )
+                    with st.container(key="footer_actualizacion"):
+                        st.markdown(
+                            '<p class="ultima-actualizacion">'
+                            f'Última actualización: '
+                            f'{_fecha_actualizacion.strftime("%d/%m/%Y · %H:%M")}'
+                            '</p>',
+                            unsafe_allow_html=True,
+                        )
                 with st.container(key="fecha_ajuste_pill"):
                     _ini_apl, _fin_apl = st.session_state["ajuste_rango_aplicado"]
                     rango_aj = st.date_input(
@@ -650,13 +651,14 @@ def _chip_categorico(df_in, col, key, etiqueta):
     return df_in, sel
 
 
-def _chip_numerico(df_in, col, key, etiqueta):
+def _chip_numerico(df_in, col, key, etiqueta, opciones=None):
     """Chip-popover single-select para una columna numérica.
-    Opciones: Todos / Faltantes (<0) / Sobrantes (>0) / Top 10 / Top 20.
-    Top N = filas de mayor magnitud (|valor|). Devuelve el df filtrado."""
+    Opciones: Todos / Con ajuste (≠0) / Faltantes (<0) / Sobrantes (>0)
+    / Top 10 / Top 20. Top N = filas de mayor magnitud (|valor|)."""
     if not col or col not in df_in.columns:
         return df_in
-    opciones = ["Todos", "Faltantes", "Sobrantes", "Top 10", "Top 20"]
+    if opciones is None:
+        opciones = ["Todos", "Faltantes", "Sobrantes", "Top 10", "Top 20"]
     _prev = st.session_state.get(key) or "Todos"
     _lbl = etiqueta if _prev == "Todos" else f"{etiqueta} · {_prev}"
     with st.popover(_lbl, use_container_width=True):
@@ -665,6 +667,8 @@ def _chip_numerico(df_in, col, key, etiqueta):
             key=key, label_visibility="collapsed",
         ) or "Todos"
     serie = pd.to_numeric(df_in[col], errors="coerce")
+    if sel == "Con ajuste":
+        return df_in[serie.fillna(0) != 0]
     if sel == "Faltantes":
         return df_in[serie < 0]
     if sel == "Sobrantes":
@@ -693,8 +697,12 @@ def _filtros_chips_ajuste_tabla(df_in):
             df_in, _ = _chip_categorico(df_in, col_fam,
                                         "ajuste_tabla_filtro_familia", "Familia")
         with c3:
-            df_in = _chip_numerico(df_in, col_aj,
-                                   "ajuste_tabla_filtro_ajuste", "Ajuste")
+            df_in = _chip_numerico(
+                df_in, col_aj,
+                "ajuste_tabla_filtro_ajuste", "Ajuste",
+                opciones=["Todos", "Con ajuste", "Faltantes",
+                          "Sobrantes", "Top 10", "Top 20"],
+            )
         with c4:
             df_in = _chip_numerico(df_in, col_ajval,
                                    "ajuste_tabla_filtro_ajusteval", "Ajuste Valor.")
