@@ -394,14 +394,14 @@ if es_ajuste:
 
         # El selector pertenece a la misma franja blanca que el título.
         with st.container(key="ajuste_tabs_top"):
-            st.radio(
+            st.pills(
                 "Vista",
                 options=["Tabla", "Gráficos"],
                 format_func=lambda vista: (
                     ":material/table_rows: Tabla"
                     if vista == "Tabla" else ":material/monitoring: Gráficos"
                 ),
-                horizontal=True,
+                default="Tabla",
                 label_visibility="collapsed",
                 key=f"vista_seg_{reporte}",
             )
@@ -756,11 +756,11 @@ def _selector_vista():
     _opciones = {"Tabla": ":material/table_rows: Tabla",
              "Gráficos": ":material/monitoring: Gráficos"}
     with st.container(key=f"vistatabs_{reporte}"):
-        vista = st.radio(
+        vista = st.pills(
             "Vista",
             options=list(_opciones.keys()),
             format_func=lambda o: _opciones[o],
-            horizontal=True,
+            default="Tabla",
             label_visibility="collapsed",
             key=f"vista_seg_{reporte}",
         )
