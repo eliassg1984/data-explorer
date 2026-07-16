@@ -530,11 +530,14 @@ def get_css():
         display: none !important;
     }
     .st-key-ajuste_tabs_top {
-        position: relative !important;
+        position: fixed !important;
+        top: 62px !important;
+        left: calc(90px + 4rem) !important;
+        z-index: 22 !important;
         /* Mantiene los chips bajo el título, pero el margen negativo sí
            recupera espacio real para que filtros y tabla suban. */
         transform: none !important;
-        margin-top: -30px !important;
+        margin: 0 !important;
     }
     .st-key-ajuste_tabs_top [role="radiogroup"] label {
         min-width: 0 !important;
@@ -574,13 +577,17 @@ def get_css():
 
     /* Título limpio: conserva jerarquía sin convertirlo en una píldora. */
     .titulo-ajuste-reporte {
+        position: fixed !important;
+        top: 8px !important;
+        left: calc(90px + 1rem) !important;
+        z-index: 22 !important;
         margin: 0 !important;
         color: var(--text-primary) !important;
         font-size: 22px !important;
         font-weight: 650 !important;
         line-height: 1.25 !important;
         letter-spacing: -0.01em !important;
-        transform: translate(-70px, -30px);
+        transform: none !important;
     }
 
     /* Chip pill del título del reporte */
