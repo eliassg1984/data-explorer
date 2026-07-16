@@ -928,6 +928,26 @@ def get_css():
     .st-key-ajuste_tabs_top [data-testid="stPills"] button [data-testid="stIconMaterial"] {
         font-size: 18px !important;
     }
+
+    /* Franja inferior fija: cierra visualmente el área de contenido. */
+    .stApp::after {
+        content: "" !important;
+        position: fixed !important;
+        left: 90px !important; /* coincide con el ancho del rail */
+        right: 0 !important;
+        bottom: 0 !important;
+        height: 42px !important;
+        background: #ffffff !important;
+        border-top: 1px solid var(--border) !important;
+        box-shadow: 0 -2px 4px rgba(16, 16, 20, 0.04) !important;
+        pointer-events: none !important;
+        z-index: 999990 !important;
+    }
+    [data-testid="stMainBlockContainer"],
+    .stMainBlockContainer,
+    .block-container {
+        padding-bottom: 66px !important;
+    }
     @media screen and (max-width: 768px) {
         .st-key-ajuste_tabs_top [data-testid="stPills"] {
             gap: 6px !important;
@@ -936,6 +956,15 @@ def get_css():
             min-height: 40px !important;
             padding: 9px 14px !important;
             font-size: 14px !important;
+        }
+        .stApp::after {
+            left: 0 !important;
+            height: 34px !important;
+        }
+        [data-testid="stMainBlockContainer"],
+        .stMainBlockContainer,
+        .block-container {
+            padding-bottom: 52px !important;
         }
     }
 
