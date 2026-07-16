@@ -582,7 +582,7 @@ def get_css():
     /* ================================================================== */
     .st-key-chips_ajuste_tabla {
         position: fixed !important;
-        top: 60px !important;                 /* alinea con las pestañas (62px) */
+        top: 74px !important;   /* antes 60px — al nivel de Tabla/Gráficos */
         right: 24px !important;
         left: auto !important;
         width: 560px !important;
@@ -653,6 +653,13 @@ def get_css():
     /* =================================================================== */
     /* PILL LAVANDA — date_input de Ajuste de Inventario                   */
     /* =================================================================== */
+
+    /* Sube la pastilla de fecha al nivel del título: al quitar el texto de
+       "Última actualización" del encabezado, el contenedor quedó con un
+       hueco que descolgaba la pastilla. */
+    .st-key-fecha_ajuste_pill {
+        margin-top: -34px !important;   /* sube la pastilla al nivel del título */
+    }
 
     /* Ancho ajustado al texto de la fecha */
     .st-key-fch_ajuste_inline [data-baseweb="input"] {
