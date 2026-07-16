@@ -929,6 +929,20 @@ def get_css():
         font-size: 18px !important;
     }
 
+    /* Las cinco vistas del gráfico viven dentro de su tarjeta y se acomodan
+       en varias líneas antes de forzar scroll horizontal. */
+    div[class*="st-key-ajuste_graf_card_izq_"] [data-testid="stPills"] {
+        gap: 8px !important;
+        flex-wrap: wrap !important;
+        margin-bottom: 8px !important;
+    }
+    div[class*="st-key-ajuste_graf_card_izq_"] [data-testid="stPills"] button {
+        min-height: 36px !important;
+        padding: 8px 14px !important;
+        font-size: 13px !important;
+        border-radius: 999px !important;
+    }
+
     /* Franja inferior fija: cierra visualmente el área de contenido. */
     .stApp::after {
         content: "" !important;
