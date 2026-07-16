@@ -1307,7 +1307,7 @@ def inject_maximize_aggrid():
 # ALTURA DINÁMICA DEL GRID — llena el alto de pantalla disponible
 # ===========================================================================
 
-def inject_dynamic_grid_height(offset_px: int = 220, min_px: int = 480):
+def inject_dynamic_grid_height(offset_px: int = 260, min_px: int = 320):
     """
     Estira la tabla AgGrid para que ocupe el alto de pantalla disponible,
     en lugar del height=... fijo con el que se renderiza.
