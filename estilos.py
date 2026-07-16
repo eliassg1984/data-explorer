@@ -477,7 +477,9 @@ def get_css():
         top: 30px !important;
         z-index: 20 !important;
         margin-top: 0 !important;
-        margin-bottom: 18px !important;
+        /* Los chips se mantienen visualmente arriba, sin reservar una
+           segunda franja vacía antes de los filtros. */
+        margin-bottom: 0 !important;
         padding-top: 7px !important;
         padding-bottom: 0 !important;
     }
@@ -491,7 +493,8 @@ def get_css():
         bottom: auto !important;
         left: 90px !important;      /* comienza inmediatamente tras el rail */
         right: 0 !important;
-        height: 49px !important;
+        /* Dos niveles: título/fecha arriba y selector de vista debajo. */
+        height: 122px !important;
         background: #ffffff !important;
         border-bottom: 1px solid var(--border) !important;
         box-shadow: 0 2px 4px rgba(16, 16, 20, 0.04) !important;
@@ -528,7 +531,10 @@ def get_css():
     }
     .st-key-ajuste_tabs_top {
         position: relative !important;
-        transform: translateY(-30px);
+        /* Mantiene los chips bajo el título, pero el margen negativo sí
+           recupera espacio real para que filtros y tabla suban. */
+        transform: none !important;
+        margin-top: -30px !important;
     }
     .st-key-ajuste_tabs_top [role="radiogroup"] label {
         min-width: 0 !important;
@@ -542,7 +548,7 @@ def get_css():
         margin-bottom: -1px !important;
     }
     .st-key-ajuste_tabs_top [role="radiogroup"] label p {
-        font-size: 14px !important;
+        font-size: 13px !important;
         font-weight: 500 !important;
         color: var(--text-secondary) !important;
     }
