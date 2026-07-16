@@ -1386,7 +1386,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     with perf.phase("AgGrid render"):
         AgGrid(
             df_grid, gridOptions=grid_options,
-            height=(850 if es_requerimientos else 600),
+            # Respaldo compacto: la inyección ajusta este valor al alto real
+            # de la ventana, pero no deja un bloque vacío excesivo si falla.
+            height=(620 if es_requerimientos else 420),
             theme=tema_grid, custom_css=custom_css,
             fit_columns_on_grid_load=True, allow_unsafe_jscode=True,
             enable_enterprise_modules=True, key=f"grid_{reporte}",
@@ -1400,7 +1402,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     if es_requerimientos or es_ajuste:
         inject_maximize_aggrid()
-        inject_dynamic_grid_height(offset_px=220)
+        inject_dynamic_grid_height(offset_px=260, min_px=320)
 
     if es_ajuste:
         from inyecciones import inject_fix_column_panel_ajuste
@@ -1746,7 +1748,7 @@ def renderizar_aggrid_compras(df_grid: pd.DataFrame, font_px: int = 14):
     inject_grid_health_check(usa_pagination_v2=True)
     inject_pagination_v2()
     inject_maximize_aggrid()
-    inject_dynamic_grid_height(offset_px=220)
+    inject_dynamic_grid_height(offset_px=260, min_px=320)
     inject_fix_column_panel_ajuste()
 
 
@@ -2003,5 +2005,5 @@ def renderizar_tabla_compras(df_grid: pd.DataFrame, font_px: int = 14):
     inject_grid_health_check(usa_pagination_v2=True)
     inject_pagination_v2()
     inject_maximize_aggrid()
-    inject_dynamic_grid_height(offset_px=220)
+    inject_dynamic_grid_height(offset_px=260, min_px=320)
     inject_fix_column_panel_ajuste()
