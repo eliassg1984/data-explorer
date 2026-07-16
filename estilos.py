@@ -871,6 +871,11 @@ def get_css():
         height: 0 !important;
         margin: 0 !important;
     }
+    /* Indicador visual que renderiza Streamlit alrededor del radio. */
+    [class*="st-key-vistatabs_"] [role="radiogroup"] .st-emotion-cache-pabt4k,
+    .st-key-ajuste_tabs_top [role="radiogroup"] .st-emotion-cache-pabt4k {
+        display: none !important;
+    }
     [class*="st-key-vistatabs_"] [role="radiogroup"] label,
     .st-key-ajuste_tabs_top [role="radiogroup"] label {
         display: flex !important;
