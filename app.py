@@ -911,14 +911,6 @@ def _render_contenido():
 
             # 2) El selector Tabla/Gráficos se dibuja arriba, en la franja.
             vista = st.session_state.get(f"vista_seg_{reporte}", "Tabla")
-            if vista == "Gráficos":
-                with st.container(key="ajuste_ambito_pill"):
-                    st.segmented_control(
-                        "Ámbito",
-                        ["Del periodo", "Histórico"],
-                        key="ajuste_graf_ambito",
-                        label_visibility="collapsed",
-                    )
 
         if vista == "Tabla":
             if es_ajuste:
