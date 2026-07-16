@@ -1033,6 +1033,37 @@ def get_css():
     .block-container {
         padding-bottom: 66px !important;
     }
+
+    /* Texto "Última actualización" anclado a la franja inferior fija.
+       El fondo lo aporta .stApp::after; este contenedor solo coloca el texto
+       encima (z-index mayor) alineado a la derecha. */
+    .st-key-footer_actualizacion {
+        position: fixed !important;
+        left: 90px !important;      /* coincide con el rail, igual que ::after */
+        right: 0 !important;
+        bottom: 0 !important;
+        height: 42px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        padding: 0 24px !important;
+        margin: 0 !important;
+        z-index: 999991 !important; /* por encima de .stApp::after (999990) */
+        pointer-events: none !important;
+    }
+    .st-key-footer_actualizacion .ultima-actualizacion {
+        margin: 0 !important;
+        font-size: 12px !important;
+        color: var(--text-muted, #9aa0a6) !important;
+        white-space: nowrap !important;
+    }
+    @media (max-width: 768px) {
+        .st-key-footer_actualizacion {
+            left: 0 !important;
+            padding: 0 12px !important;
+        }
+    }
+
     @media screen and (max-width: 768px) {
         .st-key-ajuste_tabs_top [data-testid="stPills"] {
             gap: 6px !important;
