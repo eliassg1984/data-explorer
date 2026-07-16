@@ -486,7 +486,9 @@ _LAYOUT_BASE = dict(
     font_color=TEXTO_PRINCIPAL,
     font_family="DM Sans, Inter, -apple-system, sans-serif",
     margin=dict(l=20, r=20, t=50, b=20),
-    height=420,
+    # Altura base compacta: permite ver el gráfico completo junto con sus
+    # controles, incluso en laptops de pantalla baja.
+    height=380,
     barcornerradius=6,          # ← NUEVO: esquinas redondeadas en TODAS las barras
     xaxis=dict(gridcolor=GRIS_BORDE),
     yaxis=dict(gridcolor=GRIS_BORDE, tickformat=",.0f"),
@@ -794,7 +796,7 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
         yaxis=dict(gridcolor=GRIS_BORDE, tickprefix="S/ ", tickformat=",.2f"),
         hovermode="x unified",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        height=500,
+        height=380,
     ))
 
     with _card("evolucion", "Evolución temporal"):
@@ -869,7 +871,7 @@ def _graf_comparativa_mensual(df, col_fecha, col_ajuste_val):
     fig.update_layout(**_layout(
         xaxis=dict(dtick="M1", tickformat="%b %Y", gridcolor=GRIS_BORDE),
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f", gridcolor=GRIS_BORDE),
-        showlegend=False, height=440,
+        showlegend=False, height=360,
     ))
     fig.add_hline(y=0, line_dash="dot", line_color=GRIS_BORDE, line_width=1)
 
@@ -937,7 +939,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         title=f"Cascada de ajuste valorizado por {grp_col}",
         xaxis=dict(tickangle=-35, gridcolor=GRIS_BORDE),
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f", gridcolor=GRIS_BORDE),
-        showlegend=False, height=480,
+        showlegend=False, height=360,
     ))
     _xcats = agg[grp_col].tolist() + ["TOTAL"]
     fig.update_xaxes(tickmode="array", tickvals=_xcats,
@@ -1146,7 +1148,9 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val):
         title="Mapa de calor: ajuste valorizado por Familia × Área",
         xaxis=dict(tickangle=-30, side="bottom", gridcolor=GRIS_BORDE),
         yaxis=dict(autorange="reversed", gridcolor=GRIS_BORDE, showticklabels=True),
-        height=max(380, len(pivot.index) * 42 + 120),
+        # Evita que una lista larga de familias convierta el gráfico en una
+        # sección más alta que la ventana.
+        height=min(400, max(320, len(pivot.index) * 32 + 100)),
     ))
     _xcats = [str(c) for c in pivot.columns.tolist()]
     fig.update_xaxes(tickmode="array", tickvals=_xcats,
