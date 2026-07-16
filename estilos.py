@@ -472,7 +472,9 @@ def get_css():
            scroll dentro del reporte.  El fondo lo aporta el ::before para
            conservar la franja de borde a borde. */
         position: sticky !important;
-        top: 0 !important;
+        /* El título tiene un ajuste visual de -30px; esta separación evita
+           que, al quedar fija la fila, se oculte por encima del viewport. */
+        top: 30px !important;
         z-index: 20 !important;
         margin-top: 0 !important;
         margin-bottom: 18px !important;
