@@ -196,10 +196,12 @@ html body .stApp { padding-top: 0 !important; }
    decorativo: le da más especificidad que el default global de estilos.py
    (1.5rem) para ganar SIEMPRE, sin depender del orden de inyección. Es el
    mecanismo estándar para overrides por sección en este proyecto.
-   CAMBIADO: de 0.4rem a 0.15rem para subir el chip "Ajuste de Inventario". */
+   Ahora usa la variable definida en estilos.py (--cab-offset-contenido). */
 html body [data-testid="stMainBlockContainer"],
 html body .stMainBlockContainer,
-html body .block-container { padding-top: 100 !important; }
+html body .block-container {
+    padding-top: var(--cab-offset-contenido, 128px) !important;
+}
 
 /* 4) CLAVE: colapsar los contenedores "invisibles" que se apilan arriba
    (st.markdown que solo inyectan <style>, los iframes de overlay/inspector
