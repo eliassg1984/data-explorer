@@ -71,10 +71,10 @@ def get_css():
            sueltos en otras reglas; consumir siempre la variable.
            Mapa completo de knobs: ver arquitectura.md § Cabecera fija.
            ================================================================== */
-        --cab-altura: 122px;
+        --cab-altura: 104px;
         --cab-nivel1-top: 30px;
-        --cab-nivel2-top: 74px;
-        --cab-offset-contenido: 128px;
+        --cab-nivel2-top: 58px;
+        --cab-offset-contenido: 112px;
     }
 
     /* ============ HEADER NATIVO + ESPACIO SUPERIOR ============ */
@@ -620,9 +620,9 @@ def get_css():
     .st-key-chips_ajuste_tabla [data-testid="stPopover"] button {
         min-width: 0 !important;
         width: 100% !important;
-        min-height: 40px !important;
-        padding: 8px 12px !important;
-        font-size: 13px !important;
+        min-height: 34px !important;
+        padding: 5px 12px !important;
+        font-size: 12.5px !important;
     }
     /* Pantallas chicas: si no caben junto a las pestañas, bajan a su línea */
     @media (max-width: 900px) {
