@@ -1305,9 +1305,9 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
         return
 
     # ── Ámbito: se lee de session_state; app.py es la fuente de verdad ───
-    ambito = st.session_state.get("ajuste_graf_ambito", "Del periodo")
-    if not ambito:
-        ambito = "Del periodo"
+    # Todas las visualizaciones respetan el rango de fecha seleccionado.
+    # Se eliminó el selector «Del periodo / Histórico».
+    ambito = "actual"
 
     # ── FILTROS FUERA DEL CONTENEDOR: Área y Familia (popover desplegable) ─
     # Cada filtro es un botón compacto (chip) que al hacer clic abre un
@@ -1373,10 +1373,10 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
         return
 
     # ── Opciones de gráfico según ámbito (SIN iconos, punto 3) ───────────
-    if ambito == "Histórico":
-        opciones = ["Evolución", "Comparativa mensual"]
-    else:
-        opciones = ["Cascada", "Mapa de calor", "Distribución"]
+    opciones = [
+        "Cascada", "Mapa de calor", "Distribución",
+        "Evolución", "Comparativa mensual",
+    ]
 
     # ── DOS CONTENEDORES BLANCOS lado a lado ─────────────────────────────
     # Las keys empiezan con "ajuste_graf_card_", así el selector
