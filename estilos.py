@@ -620,9 +620,9 @@ def get_css():
     .st-key-chips_ajuste_tabla [data-testid="stPopover"] button {
         min-width: 0 !important;
         width: 100% !important;
-        min-height: 0 !important;
-        padding: 2px 12px !important;
-        font-size: 12.5px !important;
+        min-height: 42px !important;      /* antes: 0  → ahora iguala las píldoras */
+        padding: 10px 12px !important;    /* antes: 2px 12px */
+        font-size: 13px !important;       /* antes: 12.5px (opcional, para leer mejor) */
     }
     /* Pantallas chicas: si no caben junto a las pestañas, bajan a su línea */
     @media (max-width: 900px) {
