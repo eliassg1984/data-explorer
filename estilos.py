@@ -692,19 +692,20 @@ def get_css():
 
     /* =================================================================== */
     /* SELECTOR DE VISTA — OPCION C (botones ghost) — ESCRITORIO + MOVIL    */
-    /* Bloque UNIFICADO que reemplaza los estilos anteriores del selector.  */
+    /*                                                                      */
+    /* CLAVE: Streamlit marca el pill ACTIVO con el atributo [data-selected]*/
+    /* (a secas, SIN ="true"). Confirmado via DevTools:                     */
+    /*   button[data-selected]:not([data-disabled])                         */
+    /* Por eso los selectores usan [data-selected], no [data-selected=...]. */
     /*                                                                      */
     /* Diseno:                                                              */
     /*   - Contenedor: sin fondo ni borde.                                  */
-    /*   - Boton inactivo: transparente, texto gris secundario.             */
-    /*   - Boton hover: leve tinte lavanda (accent-tint).                   */
-    /*   - Boton ACTIVO: fondo indigo solido (accent) + texto blanco.       */
-    /*                                                                      */
-    /* La app usa st.pills, que renderiza [data-testid="stPills"] con       */
-    /* button. Tambien cubrimos [role="radiogroup"] para compatibilidad.    */
+    /*   - Inactivo (sin data-selected): transparente, texto gris.          */
+    /*   - Hover inactivo: leve tinte lavanda (accent-tint).                */
+    /*   - ACTIVO (data-selected): fondo indigo solido + texto blanco.      */
     /* =================================================================== */
 
-    /* --- st.pills: contenedor --- */
+    /* --- Contenedor del grupo de pills --- */
     .st-key-ajuste_tabs_top [data-testid="stPills"] {
         gap: 4px !important;
         padding: 0 !important;
@@ -713,8 +714,8 @@ def get_css():
         margin: 8px 0 0 !important;
     }
 
-    /* --- st.pills: boton inactivo --- */
-    .st-key-ajuste_tabs_top [data-testid="stPills"] button {
+    /* --- Pill INACTIVO (sin data-selected) --- */
+    .st-key-ajuste_tabs_top [data-testid="stPills"] button:not([data-selected]) {
         min-height: 42px !important;
         padding: 8px 16px !important;
         font-size: 14px !important;
@@ -726,28 +727,41 @@ def get_css():
         box-shadow: none !important;
         transition: color .15s ease, background .15s ease !important;
     }
-    .st-key-ajuste_tabs_top [data-testid="stPills"] button:hover {
+    .st-key-ajuste_tabs_top [data-testid="stPills"] button:not([data-selected]):hover {
         background: var(--accent-tint) !important;
         color: var(--accent-deep) !important;
         border: none !important;
     }
-
-    /* --- st.pills: boton ACTIVO (fondo indigo solido + texto blanco) --- */
-    .st-key-ajuste_tabs_top [data-testid="stPills"] button[aria-pressed="true"],
-    .st-key-ajuste_tabs_top [data-testid="stPills"] button[kind="primary"] {
-        background: var(--accent) !important;
-        color: #ffffff !important;
-        border: none !important;
-        box-shadow: none !important;
-    }
-    .st-key-ajuste_tabs_top [data-testid="stPills"] button[aria-pressed="true"]:hover,
-    .st-key-ajuste_tabs_top [data-testid="stPills"] button[kind="primary"]:hover {
-        background: var(--accent-hover) !important;
-        color: #ffffff !important;
-    }
-    .st-key-ajuste_tabs_top [data-testid="stPills"] button [data-testid="stIconMaterial"] {
+    .st-key-ajuste_tabs_top [data-testid="stPills"] button:not([data-selected]) [data-testid="stIconMaterial"] {
         font-size: 18px !important;
         color: inherit !important;
+    }
+
+    /* --- Pill ACTIVO (data-selected) — fondo indigo solido + texto blanco --- */
+    .st-key-ajuste_tabs_top [data-testid="stPills"] button[data-selected]:not([data-disabled]) {
+        min-height: 42px !important;
+        padding: 8px 16px !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        border: none !important;
+        border-radius: 8px !important;
+        background: var(--accent) !important;
+        color: #ffffff !important;
+        box-shadow: none !important;
+        transition: color .15s ease, background .15s ease !important;
+    }
+    /* Fuerza texto e icono internos a blanco */
+    .st-key-ajuste_tabs_top [data-testid="stPills"] button[data-selected]:not([data-disabled]) *,
+    .st-key-ajuste_tabs_top [data-testid="stPills"] button[data-selected]:not([data-disabled]) p,
+    .st-key-ajuste_tabs_top [data-testid="stPills"] button[data-selected]:not([data-disabled]) [data-testid="stIconMaterial"] {
+        color: #ffffff !important;
+    }
+    .st-key-ajuste_tabs_top [data-testid="stPills"] button[data-selected]:not([data-disabled]) [data-testid="stIconMaterial"] {
+        font-size: 18px !important;
+    }
+    .st-key-ajuste_tabs_top [data-testid="stPills"] button[data-selected]:not([data-disabled]):hover {
+        background: var(--accent-hover) !important;
+        color: #ffffff !important;
     }
 
     /* --- Compatibilidad con st.radio (radiogroup) por si se usa en algun sitio --- */
@@ -820,7 +834,7 @@ def get_css():
         color: #ffffff !important;
     }
 
-    /* --- Vistas del grafico (dentro de la tarjeta): sin cambios, siguen redondas --- */
+    /* --- Vistas del grafico (dentro de la tarjeta): siguen redondas --- */
     div[class*="st-key-ajuste_graf_card_izq_"] [data-testid="stPills"] {
         gap: 8px !important;
         flex-wrap: wrap !important;
@@ -889,7 +903,8 @@ def get_css():
         .st-key-ajuste_tabs_top [data-testid="stPills"] {
             gap: 4px !important;
         }
-        .st-key-ajuste_tabs_top [data-testid="stPills"] button {
+        .st-key-ajuste_tabs_top [data-testid="stPills"] button:not([data-selected]),
+        .st-key-ajuste_tabs_top [data-testid="stPills"] button[data-selected]:not([data-disabled]) {
             min-height: 40px !important;
             padding: 9px 14px !important;
             font-size: 13px !important;
