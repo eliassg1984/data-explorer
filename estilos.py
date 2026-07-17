@@ -659,7 +659,7 @@ def get_css():
     }
 
     .ultima-actualizacion {
-        margin: 0 24px 4px auto !important;
+        margin: 0 !important;
         color: var(--text-muted) !important;
         font-size: 11px !important;
         font-weight: 500 !important;
