@@ -400,8 +400,555 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* SELECTOR DE VISTA — botones ghost (Opción C)                        */
-    /* La vista activa se llena con el color acento; la inactiva es plana. */
+    /* SELECTOR DE VISTA — tabs subrayados (underline), Estilo 1.           */
+    /* Se aplica al st.radio horizontal envuelto en un contenedor con key   */
+    /* "vistatabs_<reporte>" (clase .st-key-vistatabs_...).                 */
+    /* =================================================================== */
+
+    /* Fila de opciones: separación entre tabs + línea inferior guía */
+    [class*="st-key-vistatabs_"] [role="radiogroup"] {
+        gap: 26px !important;
+        border-bottom: 1px solid var(--border) !important;
+        margin-bottom: 0.4rem !important;
+        padding: 0 0 0 16px !important;   /* ← antes: padding: 0 */
+    }
+
+    /* Ocultar el círculo del radio nativo */
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label > div:first-child {
+        display: none !important;
+    }
+
+    /* Cada opción = un tab (texto + subrayado en hover/activo) */
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label {
+        padding: 9px 2px !important;
+        margin: 0 !important;
+        cursor: pointer !important;
+        border-bottom: 2px solid transparent !important;
+        margin-bottom: -1px !important;   /* solapa la línea guía */
+        transition: color .15s ease, border-color .15s ease !important;
+    }
+
+    /* Texto del tab en reposo (inactivo) */
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label p {
+        font-size: 16px !important;          /* antes: 14px */
+        font-weight: 500 !important;
+        color: var(--text-secondary) !important;
+        margin: 0 !important;
+        text-transform: none !important;
+        letter-spacing: 0 !important;
+    }
+
+    /* Hover: insinúa el subrayado */
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label:hover {
+        border-bottom-color: var(--focus-lavender) !important;
+    }
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label:hover p {
+        color: var(--accent-deep) !important;
+    }
+
+    /* Tab ACTIVO — Streamlit marca el label seleccionado con aria-checked */
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label:has(input:checked) {
+        border-bottom-color: var(--accent) !important;
+    }
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label:has(input:checked) p {
+        color: var(--accent-deep) !important;
+        font-weight: 600 !important;
+    }
+
+    /* Icono Material hereda el color del tab (gris inactivo / índigo activo) */
+    [class*="st-key-vistatabs_"] [role="radiogroup"] label [data-testid="stIconMaterial"] {
+        font-size: 19px !important;        /* antes: 17px */
+        color: inherit !important;
+        vertical-align: -3px;
+    }
+
+    /* =================================================================== */
+    /* BOTÓN FILTROS (popover) — a juego, grande y con contorno índigo        */
+    /* =================================================================== */
+    [data-testid="stPopover"] button {
+        min-width: 180px !important;
+        padding: 14px 26px !important;
+        font-size: 15px !important;
+        font-weight: 600 !important;
+        border: 1.5px solid var(--border) !important;
+        border-radius: 999px !important;
+        transition: all .15s ease !important;
+    }
+    [data-testid="stPopover"] button:hover {
+        border-color: var(--accent-hover) !important;
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+    }
+
+    /* =================================================================== */
+    /* FILA SUPERIOR DE AJUSTE DE INVENTARIO — chip a la izquierda          */
+    /* =================================================================== */
+    /* FRANJA BLANCA SUPERIOR — banda de borde a borde tras título + fecha.
+       El ::before se desborda a los lados (-8rem) y se recorta a la altura
+       del área de contenido con `overflow-x: clip` en stMain (ver _CSS_AJUSTE
+       en navegacion.py). Así la banda llega del rail al borde derecho sin
+       depender del padding lateral del block-container. */
+    .st-key-fila_ajuste_top {
+        /* Mantiene título, fecha y pestañas siempre disponibles al hacer
+           scroll dentro del reporte.  El fondo lo aporta el ::before para
+           conservar la franja de borde a borde. */
+        position: sticky !important;
+        /* El título tiene un ajuste visual de -30px; esta separación evita
+           que, al quedar fija la fila, se oculte por encima del viewport. */
+        top: var(--cab-nivel1-top) !important;
+        z-index: 20 !important;
+
+        /* Los chips se mantienen visualmente arriba, sin reservar una
+           segunda franja vacía antes de los filtros. */
+        margin-bottom: 0 !important;
+        padding-top: 7px !important;
+        padding-bottom: 0 !important;
+        margin-top: calc(-1 * var(--cab-offset-contenido)) !important;
+    }
+    .st-key-fila_ajuste_top::before {
+        content: "" !important;
+        /* Es la franja blanca inspeccionada en el navegador.  Se fija de
+           forma independiente porque el scroll de Streamlit no permite que
+           el contenedor padre conserve un sticky fiable. */
+        position: fixed !important;
+        top: 0 !important;
+        bottom: auto !important;
+        left: 90px !important;      /* comienza inmediatamente tras el rail */
+        right: 0 !important;
+        /* Dos niveles: título/fecha arriba y selector de vista debajo. */
+        height: var(--cab-altura) !important;
+        background: #ffffff !important;
+        border-bottom: 1px solid var(--border) !important;
+        box-shadow: 0 2px 4px rgba(16, 16, 20, 0.04) !important;
+        z-index: 0 !important;
+    }
+    @media (max-width: 768px) {
+        .st-key-fila_ajuste_top::before { left: 0 !important; }
+    }
+    /* Título y fecha por ENCIMA de la banda */
+    .st-key-fila_ajuste_top > * {
+        position: relative !important;
+        z-index: 1 !important;
+    }
+    .st-key-fila_ajuste_top [data-testid="stHorizontalBlock"] {
+        align-items: center !important;
+        gap: 8px !important;
+    }
+    .st-key-fila_ajuste_top [data-testid="stColumn"],
+    .st-key-fila_ajuste_top [data-testid="column"] {
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    /* Opción 2: segunda fila de pestañas subrayadas en la franja blanca. */
+    .st-key-ajuste_tabs_top [role="radiogroup"] {
+        gap: 26px !important;
+        border-bottom: 1px solid var(--border) !important;
+        margin: 6px 0 0 0 !important;
+        padding: 0 0 0 16px !important;
+    }
+    /* El radio nativo no forma parte del diseño de pestañas. */
+    .st-key-ajuste_tabs_top [role="radiogroup"] label > div:first-child {
+        display: none !important;
+    }
+    .st-key-ajuste_tabs_top {
+        position: fixed !important;
+        top: var(--cab-nivel2-top) !important;
+        left: calc(90px + 4rem) !important;
+        z-index: 22 !important;
+        /* Mantiene los chips bajo el título, pero el margen negativo sí
+           recupera espacio real para que filtros y tabla suban. */
+        transform: none !important;
+        margin: 0 !important;
+    }
+    .st-key-ajuste_tabs_top [role="radiogroup"] label {
+        min-width: 0 !important;
+        justify-content: flex-start !important;
+        padding: 6px 2px !important;
+        margin: 0 !important;
+        border: none !important;
+        border-bottom: 2px solid transparent !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        margin-bottom: -1px !important;
+    }
+    .st-key-ajuste_tabs_top [role="radiogroup"] label p {
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        color: var(--text-secondary) !important;
+    }
+    .st-key-ajuste_tabs_top [role="radiogroup"] label:hover {
+        border-bottom-color: var(--focus-lavender) !important;
+    }
+    .st-key-ajuste_tabs_top [role="radiogroup"] label:hover p {
+        color: var(--accent-deep) !important;
+    }
+    .st-key-ajuste_tabs_top [role="radiogroup"] label [data-testid="stIconMaterial"] {
+        font-size: 16px !important;
+        color: inherit !important;
+        vertical-align: -2px;
+    }
+    .st-key-ajuste_tabs_top [role="radiogroup"] label:has(input:checked) {
+        background: transparent !important;
+        border-bottom-color: var(--accent) !important;
+    }
+    .st-key-ajuste_tabs_top [role="radiogroup"] label:has(input:checked) p {
+        color: var(--accent-deep) !important;
+        font-weight: 600 !important;
+    }
+
+    /* ================================================================== */
+    /* CHIPS DE FILTRO EN LA FRANJA BLANCA — Área / Familia / Ajuste /      */
+    /* Ajuste valor.  Nivel 2, a la derecha de las pestañas Tabla/Gráficos. */
+    /* Mismo patrón de posición fija que .st-key-ajuste_tabs_top.          */
+    /* ================================================================== */
+    .st-key-chips_ajuste_tabla {
+        position: fixed !important;
+        top: var(--cab-nivel2-top) !important;   /* al nivel de Tabla/Gráficos */
+        right: 90px !important;
+        left: auto !important;
+        width: 560px !important;
+        max-width: calc(100vw - 90px - 360px) !important;  /* no invadir las pestañas */
+        z-index: 23 !important;               /* por encima de la banda */
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    .st-key-chips_ajuste_tabla [data-testid="stHorizontalBlock"] {
+        gap: 8px !important;
+        align-items: center !important;
+        flex-wrap: nowrap !important;
+    }
+    .st-key-chips_ajuste_tabla [data-testid="stColumn"],
+    .st-key-chips_ajuste_tabla [data-testid="column"] {
+        width: auto !important;
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+    }
+    /* Anula el min-width global de 180px del popover para que quepan los 4 */
+    .st-key-chips_ajuste_tabla [data-testid="stPopover"] button {
+        min-width: 0 !important;
+        width: 100% !important;
+        min-height: 42px !important;      /* antes: 0  → ahora iguala las píldoras */
+        padding: 10px 12px !important;    /* antes: 2px 12px */
+        font-size: 13px !important;       /* antes: 12.5px (opcional, para leer mejor) */
+    }
+    /* Pantallas chicas: si no caben junto a las pestañas, bajan a su línea */
+    @media (max-width: 900px) {
+        .st-key-chips_ajuste_tabla {
+            position: static !important;
+            width: auto !important;
+            max-width: none !important;
+            margin: 6px 0 0 0 !important;
+        }
+    }
+
+    /* Título limpio: conserva jerarquía sin convertirlo en una píldora. */
+    .titulo-ajuste-reporte {
+        position: fixed !important;
+        top: 8px !important;
+        left: calc(90px + 1rem) !important;
+        z-index: 22 !important;
+        margin: 0 !important;
+        color: var(--text-primary) !important;
+        font-size: 22px !important;
+        font-weight: 650 !important;
+        line-height: 1.25 !important;
+        letter-spacing: -0.01em !important;
+        transform: none !important;
+    }
+
+    /* Chip pill del título del reporte */
+    .chip-titulo-reporte {
+        display: inline-flex;
+        align-items: center;
+        background: var(--accent-tint);
+        color: var(--accent-deep);
+        border-radius: 999px;
+        padding: 8px 18px;
+        font-size: 15px;
+        font-weight: 500;
+        line-height: 1;
+        white-space: nowrap;
+        letter-spacing: 0.01em;
+    }
+
+    /* =================================================================== */
+    /* PILL LAVANDA — date_input de Ajuste de Inventario                   */
+    /* =================================================================== */
+
+    /* Sube la pastilla de fecha al nivel del título: al quitar el texto de
+       "Última actualización" del encabezado, el contenedor quedó con un
+       hueco que descolgaba la pastilla. */
+    .st-key-fecha_ajuste_pill {
+        margin-top: -10px !important;   /* sube la pastilla al nivel del título */
+    }
+
+    /* Ancho ajustado al texto de la fecha */
+    .st-key-fch_ajuste_inline [data-baseweb="input"] {
+        width: auto !important;
+        min-width: 0 !important;
+    }
+
+    /* La caja del input = PILL lavanda, alineada a la derecha con aire */
+    .st-key-fch_ajuste_inline .stDateInput > div > div {
+        background: var(--accent-tint) !important;
+        border: 1px solid var(--border-lavender) !important;
+        border-radius: 999px !important;
+        box-shadow: none !important;
+        padding: 0 12px !important;
+        min-height: 34px !important;
+        height: 34px !important;
+        width: fit-content !important;
+        margin: 0 24px 0 auto !important;           /* ← derecha con 24px de aire */
+        overflow: visible !important;
+        position: relative !important;
+        transition: background .15s ease, border-color .15s ease !important;
+    }
+
+    /* Marca de actualización del parquet, alineada sobre el rango de fechas. */
+    .ultima-actualizacion {
+        margin: 0 24px 4px auto !important;
+        color: var(--text-muted) !important;
+        font-size: 11px !important;
+        font-weight: 500 !important;
+        line-height: 1.2 !important;
+        text-align: right !important;
+        white-space: nowrap !important;
+    }
+
+    /* Texto de la fecha centrado y con tamaño justo */
+    .st-key-fch_ajuste_inline .stDateInput input {
+        color: var(--accent-deep) !important;
+        font-weight: 500 !important;
+        font-size: 12.5px !important;
+        background: transparent !important;
+        text-align: center !important;
+        padding: 0 !important;
+        width: 155px !important;
+    }
+    .st-key-fch_ajuste_inline .stDateInput input::placeholder {
+        color: var(--accent) !important;
+        opacity: 0.7 !important;
+    }
+
+    /* Hover: lavanda un punto más vivo */
+    .st-key-fch_ajuste_inline .stDateInput > div > div:hover,
+    .st-key-fch_ajuste_inline .stDateInput > div > div:focus-within {
+        background: var(--accent-light) !important;
+        border-color: var(--accent) !important;
+    }
+
+    /* Icono de calendario retirado (antes vivía a la izquierda de la píldora) */
+    .st-key-fch_ajuste_inline .stDateInput > div > div::before {
+        display: none !important;
+    }
+
+    /* =================================================================== */
+    /* CALENDARIO DESPLEGABLE (BaseWeb) — marco suave, sin presets         */
+    /* =================================================================== */
+
+    /* Marco del calendario: redondeado, con sombra y tipografía de la app */
+    div[data-baseweb="calendar"] {
+        border-radius: 12px !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10) !important;
+        font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    }
+
+    /* Esquinas redondeadas en cada día */
+    div[data-baseweb="calendar"] [role="gridcell"] > div {
+        border-radius: 8px !important;
+    }
+
+    /* Flechas de navegación (‹ ›) en índigo */
+    div[data-baseweb="calendar"] button svg {
+        fill: var(--accent) !important;
+    }
+
+    /* Ocultar el selector de presets "CHOOSE A DATE RANGE / None" */
+    div[data-baseweb="popover"]:has(div[data-baseweb="calendar"]) [data-baseweb="select"] {
+        display: none !important;
+    }
+    div[data-baseweb="popover"]:has(div[data-baseweb="calendar"]) div[data-baseweb="calendar"] + div {
+        display: none !important;
+    }
+
+    /* =================================================================== */
+    /* OCULTAR TOOLBARS NATIVAS DE STREAMLIT                               */
+    /* =================================================================== */
+    /* Toolbar general (lápiz, GitHub, menú ⋮) */
+    [data-testid="stToolbar"],
+    [data-testid="stMainMenu"],
+    [data-testid="stAppDeployButton"],
+    [data-testid="stStatusWidget"] {
+        display: none !important;
+    }
+
+    /* Toolbar flotante sobre AgGrid (fullscreen nativo de Streamlit) */
+    [class*="st-key-grid_"] [data-testid="stElementToolbar"] {
+        display: none !important;
+    }
+
+    /* =================================================================== */
+    /* POSICIÓN DEL TOAST (st.toast) — cerca del botón de refresco del rail */
+    /* Confirmado vía DevTools: data-testid="stToastContainer" es el contenedor
+       raíz que React Aria posiciona en pantalla (data-react-aria-top-layer).
+       Por defecto Streamlit lo pone abajo a la DERECHA. Lo movemos abajo a la
+       IZQUIERDA, junto al rail (RAIL_ANCHO=90px en navegacion.py + 10px de aire).
+       Si cambias RAIL_ANCHO allá, actualiza el "left" aquí. */
+    /* =================================================================== */
+    div[data-testid="stToastContainer"] {
+        left: 100px !important;
+        right: auto !important;
+        bottom: 16px !important;
+        top: auto !important;
+    }
+
+    /* =================================================================== */
+    /* AVISO DE REFRESCO EN CURSO — reposicionado junto al botón del rail   */
+    /* Contenedor con key "aviso_refresco" (app.py::_vigilar_refresco).     */
+    /* Por defecto se dibuja arriba, ancho completo; lo anclamos como       */
+    /* elemento flotante cerca del botón de refrescar (abajo del rail).     */
+    /* =================================================================== */
+    .st-key-aviso_refresco {
+        position: fixed !important;
+        left: 100px !important;
+        bottom: 16px !important;
+        max-width: 320px !important;
+        z-index: 999997 !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+        border-radius: 8px !important;
+    }
+
+    /* =================================================================== */
+    /* CARDS DE GRÁFICOS — contenedor blanco con bordes redondeados         */
+    /* Uso en graficos.py: _chart_card() / _chart_card_close()              */
+    /* =================================================================== */
+    .chart-card {
+        background: #ffffff;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 1.25rem 1.5rem 0.75rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
+        position: relative;
+        padding-bottom: 2.5rem;  /* espacio para el pie */
+    }
+
+    /* Título opcional dentro del card — pie en banda lavanda, pegado abajo */
+    .chart-card-title {
+        position: absolute;
+        left: 0; right: 0; bottom: 0;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--accent);
+        background: var(--accent-tint, #EEEDFE);
+        border-top: 1px solid var(--accent, #7F77DD);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        padding: 8px 1.5rem;
+        margin: 0;
+        line-height: 1;
+        border-bottom-left-radius: inherit;
+        border-bottom-right-radius: inherit;
+    }
+    /* El card dentro de un expander no necesita doble borde */
+    .streamlit-expanderContent .chart-card {
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0.25rem 0 0 !important;
+    }
+
+    /* Contenedores de gráficos de Ajuste — sin borde, esquinas amplias.
+       El key incluye el ámbito (Del periodo / Histórico) + izq/der, por
+       eso el prefijo con [class*=...] cubre los 4 casos.
+       border:none pisa el borde que st.container(border=True) pone. */
+    div[class*="st-key-ajuste_graf_card_"] {
+        background: var(--surface-2, #ffffff) !important;
+        border: none !important;
+        border-radius: 20px !important;
+        padding: 16px 18px;
+        box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
+    }
+    div[class*="st-key-ajuste_graf_card_"] > div {
+        border: none !important;
+    }
+
+    /* Gráfico de Ajuste: el marco interno lo crea _card(), no Plotly. */
+    div[class*="st-key-ajuste_graf_card_"] [class*="st-key-chartcard_"],
+    div[class*="st-key-ajuste_graf_card_"] [class*="st-key-chartcard_"] > div,
+    div[class*="st-key-ajuste_graf_card_"] [class*="st-key-chartcard_"]
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        border-color: transparent !important;
+        box-shadow: none !important;
+    }
+
+
+
+    /* =================================================================== */
+    /* AJUSTES FINALES PARA MÓVIL                                           */
+    /* Se dejan al final para que no los pisen los estilos específicos de   */
+    /* Ajuste de Inventario definidos arriba.                               */
+    /* =================================================================== */
+    @media screen and (max-width: 768px) {
+        /* El encabezado de Ajuste usa desplazamientos de escritorio para
+           alinearse con el rail. En móvil el rail ya no está a la izquierda
+           (ahora es barra INFERIOR), así que los anclajes left de escritorio
+           (90px + margen) se reemplazan por 12px. */
+        .titulo-ajuste-reporte {
+            transform: none !important;
+            font-size: 1.3rem !important;
+            left: 12px !important;          /* NUEVO: sin rail a la izquierda */
+        }
+        .st-key-ajuste_tabs_top {
+            transform: none !important;
+            left: 12px !important;          /* NUEVO: sin rail a la izquierda */
+        }
+        .st-key-fila_ajuste_top {
+            margin-bottom: 12px !important;
+        }
+        .st-key-fila_ajuste_top [data-testid="stHorizontalBlock"] {
+            gap: 4px !important;
+            align-items: stretch !important;
+        }
+        .st-key-fch_ajuste_inline .stDateInput > div > div,
+        .ultima-actualizacion {
+            margin-right: 0 !important;
+        }
+
+        /* Los controles anchos de escritorio no deben crear scroll lateral. */
+        [data-testid="stPopover"] button {
+            min-width: 0 !important;
+            max-width: 100% !important;
+        }
+
+        /* Los avisos estaban anclados junto al rail de escritorio (90 px).
+           NUEVO: además suben por encima de la barra inferior de navegación
+           (60px) + la franja "Última actualización" (34px) + 10px de aire. */
+        div[data-testid="stToastContainer"],
+        .st-key-aviso_refresco {
+            left: 12px !important;
+            right: 12px !important;
+            max-width: none !important;
+            bottom: calc(var(--nav-movil-alto) + 44px) !important;
+        }
+
+        /* Chips de Ajuste: 2×2 en móvil en lugar de 4 apilados */
+        .st-key-chips_ajuste_tabla [data-testid="stHorizontalBlock"] {
+            flex-direction: row !important;
+            flex-wrap: wrap !important;
+            gap: 8px !important;
+        }
+        .st-key-chips_ajuste_tabla [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+        .st-key-chips_ajuste_tabla [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+            flex: 1 1 calc(50% - 8px) !important;
+            min-width: calc(50% - 8px) !important;
+            width: calc(50% - 8px) !important;
+        }
+    }
+    /* =================================================================== */
+    /* SELECTOR DE VISTA — estilo segmentado                                */
+    /* Reemplaza los radios tipo subrayado por una píldora alineada con los  */
+    /* filtros y el estado activo de la barra lateral.                       */
     /* =================================================================== */
     [class*="st-key-vistatabs_"] [role="radiogroup"],
     .st-key-ajuste_tabs_top [role="radiogroup"] {
@@ -409,12 +956,11 @@ def get_css():
         width: fit-content !important;
         gap: 4px !important;
         margin: 8px 0 0 !important;
-        padding: 0 !important;
-        background: transparent !important;   /* ← sin fondo lavanda */
-        border: none !important;              /* ← sin borde contenedor */
-        border-radius: 0 !important;
+        padding: 4px !important;
+        background: var(--accent-tint) !important;
+        border: 1px solid var(--border-lavender) !important;
+        border-radius: 999px !important;
     }
-
     /* Streamlit renderiza cada opción como un radio real. Se conserva para
        accesibilidad y clic, pero se oculta su indicador circular. */
     [class*="st-key-vistatabs_"] [role="radiogroup"] [data-baseweb="radio"],
@@ -444,8 +990,6 @@ def get_css():
     .st-key-ajuste_tabs_top [role="radiogroup"] label > input[type="radio"] + div {
         display: none !important;
     }
-
-    /* Cada opción = un botón ghost */
     [class*="st-key-vistatabs_"] [role="radiogroup"] label,
     .st-key-ajuste_tabs_top [role="radiogroup"] label {
         display: flex !important;
@@ -453,53 +997,27 @@ def get_css():
         justify-content: center !important;
         min-width: 0 !important;
         margin: 0 !important;
-        padding: 7px 16px !important;
-        border: none !important;
-        border-radius: 8px !important;        /* ← esquinas suaves, no píldora */
-        background: transparent !important;   /* ← inactivo: plano */
-        cursor: pointer !important;
-        transition: color .15s ease, background .15s ease !important;
+        padding: 8px 14px !important;
+        border: 1px solid transparent !important;
+        border-radius: 999px !important;
+        background: transparent !important;
+        transition: color .15s ease, background .15s ease, box-shadow .15s ease !important;
     }
-
-    /* Texto e icono inactivos (gris secundario) */
-    [class*="st-key-vistatabs_"] [role="radiogroup"] label p,
-    .st-key-ajuste_tabs_top [role="radiogroup"] label p {
-        font-size: 13px !important;
-        font-weight: 500 !important;
-        color: var(--text-secondary) !important;
-        margin: 0 !important;
-    }
-    [class*="st-key-vistatabs_"] [role="radiogroup"] label [data-testid="stIconMaterial"],
-    .st-key-ajuste_tabs_top [role="radiogroup"] label [data-testid="stIconMaterial"] {
-        font-size: 16px !important;
-        color: inherit !important;
-        vertical-align: -2px;
-    }
-
-    /* Hover en la opción inactiva: leve tinte lavanda */
     [class*="st-key-vistatabs_"] [role="radiogroup"] label:hover,
     .st-key-ajuste_tabs_top [role="radiogroup"] label:hover {
-        background: var(--accent-tint) !important;
+        background: rgba(255, 255, 255, .55) !important;
+        border-color: transparent !important;
     }
-    [class*="st-key-vistatabs_"] [role="radiogroup"] label:hover p,
-    .st-key-ajuste_tabs_top [role="radiogroup"] label:hover p {
-        color: var(--accent-deep) !important;
-    }
-
-    /* ACTIVO: fondo índigo sólido, texto blanco */
     [class*="st-key-vistatabs_"] [role="radiogroup"] label:has(input:checked),
     .st-key-ajuste_tabs_top [role="radiogroup"] label:has(input:checked) {
-        background: var(--accent) !important;
-        box-shadow: none !important;
+        background: #ffffff !important;
+        border-color: rgba(108, 92, 231, .12) !important;
+        box-shadow: 0 1px 3px rgba(73, 56, 184, .14) !important;
     }
     [class*="st-key-vistatabs_"] [role="radiogroup"] label:has(input:checked) p,
     .st-key-ajuste_tabs_top [role="radiogroup"] label:has(input:checked) p {
-        color: #ffffff !important;
-        font-weight: 500 !important;
-    }
-    [class*="st-key-vistatabs_"] [role="radiogroup"] label:has(input:checked) [data-testid="stIconMaterial"],
-    .st-key-ajuste_tabs_top [role="radiogroup"] label:has(input:checked) [data-testid="stIconMaterial"] {
-        color: #ffffff !important;
+        color: var(--accent-deep) !important;
+        font-weight: 600 !important;
     }
 
     /* Píldoras del selector Tabla / Gráficos: mayor área táctil y aire. */
