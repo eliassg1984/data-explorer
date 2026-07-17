@@ -71,6 +71,12 @@ _LOGO_URI = _logo_data_uri()
 RAIL_ANCHO = 90  # 64 * 1.4 ≈ 90
 LOGO_ALTO = 64   # reserva el espacio superior del rail, aunque el logo está oculto
 
+# ALTURA DE LA BARRA INFERIOR EN MÓVIL (bottom nav). Si cambias este valor,
+# actualiza también los "bottom" del bloque móvil de estilos.py
+# (.stApp::after, .st-key-footer_actualizacion, toast/aviso y el
+# padding-bottom del block-container), que asumen 60px.
+NAV_MOVIL_ALTO = 60
+
 _CSS = f"""
 <style>
 section[data-testid="stSidebar"] {{ display:none !important; }}
@@ -153,8 +159,72 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
 /* Botón de refresco, al fondo del rail */
 .st-key-navbtn_refresh {{ margin-top:auto !important; }}
 
+/* ═══════════════════════════════════════════════════════════════════════
+   MÓVIL — el rail lateral se convierte en BARRA INFERIOR (bottom nav).
+   ANTES: display:none => en móvil no había forma de navegar entre
+   reportes. AHORA los MISMOS botones nativos se reacomodan en fila fija
+   al pie de la pantalla, con scroll horizontal si no caben todos.
+   Patrón estándar de apps móviles: iconos al alcance del pulgar.
+   ═══════════════════════════════════════════════════════════════════════ */
 @media (max-width:768px) {{
-    .st-key-nav_rail {{ display:none !important; }}
+    /* 1) El rail pasa de columna izquierda a fila inferior fija */
+    .st-key-nav_rail {{
+        display:flex !important;
+        flex-direction:row !important;
+        align-items:center !important;
+        gap:4px !important;
+        top:auto !important; bottom:0 !important; left:0 !important;
+        width:100vw !important; height:{NAV_MOVIL_ALTO}px !important;
+        border-right:none !important;
+        border-top:1px solid {GRIS_BORDE} !important;
+        box-shadow:0 -2px 8px rgba(16,16,20,0.08) !important;
+        overflow-x:auto !important; overflow-y:hidden !important;
+        -webkit-overflow-scrolling:touch !important;
+    }}
+
+    /* 2) El hueco reservado al logo no aplica en horizontal */
+    .st-key-nav_rail::before {{ display:none !important; }}
+
+    /* 3) El bloque interno de botones también gira a fila.
+       min-width 100% garantiza que el refresh llegue al borde derecho
+       aunque haya pocos iconos; max-content permite scroll si hay muchos. */
+    .st-key-nav_rail [data-testid="stVerticalBlock"] {{
+        flex-direction:row !important;
+        gap:4px !important;
+        padding:6px 10px !important;
+        width:max-content !important;
+        min-width:100% !important;
+        align-items:center !important;
+    }}
+
+    /* 4) Cada wrapper de botón deja de ocupar el 100% del ancho
+       (la regla de escritorio los estira; en fila eso los apilaría). */
+    .st-key-nav_rail [data-testid="stElementContainer"],
+    .st-key-nav_rail [class*="st-key-navbtn_"],
+    .st-key-nav_rail [data-testid="stButton"] {{
+        width:auto !important;
+        flex:0 0 auto !important;
+    }}
+
+    /* 5) Botones compactos; el área táctil se mantiene sobre 44 px */
+    .st-key-nav_rail [class*="st-key-navbtn_"] button {{
+        width:52px !important; height:48px !important; min-height:48px !important;
+    }}
+    .st-key-nav_rail [class*="st-key-navbtn_"] button p,
+    .st-key-nav_rail [class*="st-key-navbtn_"] button span,
+    .st-key-nav_rail [class*="st-key-navbtn_"] button [data-testid="stIconMaterial"] {{
+        font-size:22px !important;
+    }}
+
+    /* 6) Refresh: de "al fondo" (columna) a "extremo derecho" (fila) */
+    .st-key-navbtn_refresh {{
+        margin-top:0 !important;
+        margin-left:auto !important;
+    }}
+
+    /* 7) El contenido ocupa todo el ancho; la reserva de espacio inferior
+       para que la barra no tape la última fila la aporta estilos.py
+       (padding-bottom del block-container en su bloque móvil). */
     .stApp {{ margin-left:0 !important; }}
     #nav-topbar {{ left:0 !important; }}
 }}
