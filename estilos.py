@@ -931,6 +931,19 @@ def get_css():
             max-width: none !important;
             bottom: calc(var(--nav-movil-alto) + 44px) !important;
         }
+
+        /* Chips de Ajuste: 2×2 en móvil en lugar de 4 apilados */
+        .st-key-chips_ajuste_tabla [data-testid="stHorizontalBlock"] {
+            flex-direction: row !important;
+            flex-wrap: wrap !important;
+            gap: 8px !important;
+        }
+        .st-key-chips_ajuste_tabla [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+        .st-key-chips_ajuste_tabla [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+            flex: 1 1 calc(50% - 8px) !important;
+            min-width: calc(50% - 8px) !important;
+            width: calc(50% - 8px) !important;
+        }
     }
     /* =================================================================== */
     /* SELECTOR DE VISTA — estilo segmentado                                */
