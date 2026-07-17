@@ -73,7 +73,7 @@ def get_css():
            ================================================================== */
         --cab-altura: 104px;
         --cab-nivel1-top: 30px;
-        --cab-nivel2-top: 70px;
+        --cab-nivel2-top: 40px;
         --cab-offset-contenido: 112px;
     }
 
