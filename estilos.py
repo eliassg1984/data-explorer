@@ -489,7 +489,7 @@ def get_css():
            que, al quedar fija la fila, se oculte por encima del viewport. */
         top: var(--cab-nivel1-top) !important;
         z-index: 20 !important;
-        margin-top: 0 !important;
+
         /* Los chips se mantienen visualmente arriba, sin reservar una
            segunda franja vacía antes de los filtros. */
         margin-bottom: 0 !important;
@@ -874,21 +874,7 @@ def get_css():
         box-shadow: none !important;
     }
 
-    /* =================================================================== */
-    /* CHIPS DE FILTRO EXTERNOS — Tabla de Ajuste de Inventario            */
-    /* =================================================================== */
-    .st-key-chips_ajuste_tabla { margin-bottom: 10px !important; }
-    .st-key-chips_ajuste_tabla [data-testid="stHorizontalBlock"] {
-        gap: 8px !important;
-        align-items: center !important;
-    }
-    /* Anula el min-width:180px global para que quepan 4 chips en fila */
-    .st-key-chips_ajuste_tabla [data-testid="stPopover"] button {
-        min-width: 0 !important;
-        width: 100% !important;
-        padding: 8px 14px !important;
-        font-size: 13px !important;
-    }
+
 
     /* =================================================================== */
     /* AJUSTES FINALES PARA MÓVIL                                           */
