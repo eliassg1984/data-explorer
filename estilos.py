@@ -629,6 +629,9 @@ def get_css():
 
     /* =================================================================== */
     /* PILL LAVANDA — date_input de Ajuste de Inventario                    */
+    /* Fijado en la esquina superior derecha de la franja blanca.           */
+    /* CAMBIO: position:fixed + top/right explícitos reemplazan el          */
+    /* margin:auto anterior (que solo funcionaba en flujo normal).          */
     /* =================================================================== */
     .st-key-fecha_ajuste_pill {
         position: fixed !important;
@@ -643,6 +646,8 @@ def get_css():
         min-width: 0 !important;
     }
 
+    /* CAMBIO: margin:0 (antes era "0 24px 0 auto") — el posicionamiento
+       ahora lo controla el padre fixed, no el margen automático. */
     .st-key-fch_ajuste_inline .stDateInput > div > div {
         background: var(--accent-tint) !important;
         border: 1px solid var(--border-lavender) !important;
@@ -652,7 +657,7 @@ def get_css():
         min-height: 34px !important;
         height: 34px !important;
         width: fit-content !important;
-        margin: 0 24px 0 auto !important;
+        margin: 0 !important;
         overflow: visible !important;
         position: relative !important;
         transition: background .15s ease, border-color .15s ease !important;
@@ -891,9 +896,13 @@ def get_css():
             gap: 4px !important;
             align-items: stretch !important;
         }
-        .st-key-fch_ajuste_inline .stDateInput > div > div,
-        .ultima-actualizacion {
-            margin-right: 0 !important;
+
+        /* CAMBIO: la pill de fecha también pierde su fixed en móvil y
+           vuelve al flujo (igual que los chips de filtro en <900px).
+           Evita que tape el título o quede fuera del viewport estrecho. */
+        .st-key-fecha_ajuste_pill {
+            position: static !important;
+            margin: 4px 0 0 auto !important;
         }
 
         /* Selector de vista: mantiene Opción C, más compacto para tocar */
