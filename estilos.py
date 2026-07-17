@@ -631,7 +631,11 @@ def get_css():
     /* PILL LAVANDA — date_input de Ajuste de Inventario                    */
     /* =================================================================== */
     .st-key-fecha_ajuste_pill {
-        margin-top: -10px !important;
+        position: fixed !important;
+        top: 6px !important;
+        right: 16px !important;
+        z-index: 23 !important;
+        margin: 0 !important;
     }
 
     .st-key-fch_ajuste_inline [data-baseweb="input"] {
