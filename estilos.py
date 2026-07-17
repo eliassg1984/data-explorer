@@ -75,6 +75,14 @@ def get_css():
         --cab-nivel1-top: 30px;
         --cab-nivel2-top: 40px;
         --cab-offset-contenido: 112px;
+
+        /* ==================================================================
+           BARRA INFERIOR DE NAVEGACIÓN EN MÓVIL (bottom nav)
+           Debe coincidir con NAV_MOVIL_ALTO en navegacion.py (60px). Todos
+           los elementos fijos del pie en móvil (franja ::after, footer de
+           actualización, toasts) se apoyan sobre esta altura.
+           ================================================================== */
+        --nav-movil-alto: 60px;
     }
 
     /* ============ HEADER NATIVO + ESPACIO SUPERIOR ============ */
@@ -883,13 +891,17 @@ def get_css():
     /* =================================================================== */
     @media screen and (max-width: 768px) {
         /* El encabezado de Ajuste usa desplazamientos de escritorio para
-           alinearse con el rail. En móvil el rail no existe. */
+           alinearse con el rail. En móvil el rail ya no está a la izquierda
+           (ahora es barra INFERIOR), así que los anclajes left de escritorio
+           (90px + margen) se reemplazan por 12px. */
         .titulo-ajuste-reporte {
             transform: none !important;
             font-size: 1.3rem !important;
+            left: 12px !important;          /* NUEVO: sin rail a la izquierda */
         }
         .st-key-ajuste_tabs_top {
             transform: none !important;
+            left: 12px !important;          /* NUEVO: sin rail a la izquierda */
         }
         .st-key-fila_ajuste_top {
             margin-bottom: 12px !important;
@@ -909,12 +921,15 @@ def get_css():
             max-width: 100% !important;
         }
 
-        /* Los avisos estaban anclados junto al rail de escritorio (90 px). */
+        /* Los avisos estaban anclados junto al rail de escritorio (90 px).
+           NUEVO: además suben por encima de la barra inferior de navegación
+           (60px) + la franja "Última actualización" (34px) + 10px de aire. */
         div[data-testid="stToastContainer"],
         .st-key-aviso_refresco {
             left: 12px !important;
             right: 12px !important;
             max-width: none !important;
+            bottom: calc(var(--nav-movil-alto) + 44px) !important;
         }
     }
     /* =================================================================== */
@@ -1068,6 +1083,11 @@ def get_css():
         .st-key-footer_actualizacion {
             left: 0 !important;
             padding: 0 12px !important;
+            /* NUEVO: se apoya SOBRE la barra inferior de navegación y
+               adopta la altura móvil de la franja (34px, igual que
+               .stApp::after en móvil) para que texto y fondo coincidan. */
+            bottom: var(--nav-movil-alto) !important;
+            height: 34px !important;
         }
     }
 
@@ -1083,11 +1103,17 @@ def get_css():
         .stApp::after {
             left: 0 !important;
             height: 34px !important;
+            /* NUEVO: la franja blanca inferior sube y se apoya sobre la
+               barra de navegación móvil (60px) en vez de pegarse al borde. */
+            bottom: var(--nav-movil-alto) !important;
         }
         [data-testid="stMainBlockContainer"],
         .stMainBlockContainer,
         .block-container {
-            padding-bottom: 52px !important;
+            /* NUEVO: antes 52px. Ahora reserva barra nav (60) + franja (34)
+               + 10 de aire para que la última fila de la tabla no quede
+               tapada por los elementos fijos del pie. */
+            padding-bottom: 104px !important;
         }
     }
 
