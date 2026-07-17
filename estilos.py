@@ -652,7 +652,7 @@ def get_css():
         min-height: 34px !important;
         height: 34px !important;
         width: fit-content !important;
-        margin: 0 !important;
+        margin: 0 24px 0 auto !important;
         overflow: visible !important;
         position: relative !important;
         transition: background .15s ease, border-color .15s ease !important;
