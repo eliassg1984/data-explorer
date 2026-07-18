@@ -289,6 +289,22 @@ html body [data-testid="stElementContainer"]:has(#nav-topbar) {
    izquierda = borde del rail, derecha = borde de la pantalla. `clip` no
    crea scroll horizontal ni afecta el scroll vertical (overflow-y sigue). */
 html body [data-testid="stMain"] { overflow-x: clip !important; }
+
+/* 6) MÓVIL — compactar el aire vertical bajo la cabecera.
+   Los wrappers que el punto 4 no alcanza a ocultar (fragmentos, contenedores
+   vacíos) miden 0px de alto, pero cada uno añade el row-gap (16px) del bloque
+   vertical; encadenados suman una franja vacía antes de los chips/tabla.
+   Verificado midiendo el DOM real en viewport 375px. */
+@media screen and (max-width: 768px) {
+    html body [data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"] {
+        row-gap: 4px !important;
+    }
+    html body [data-testid="stMainBlockContainer"],
+    html body .stMainBlockContainer,
+    html body .block-container {
+        padding-top: 108px !important;  /* banda fija (104px) + colchón mínimo */
+    }
+}
 </style>
 """
 

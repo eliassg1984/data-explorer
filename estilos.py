@@ -943,7 +943,7 @@ def get_css():
             min-height: 0 !important;
             padding: 0 !important;
             margin-top: 0 !important;
-            margin-bottom: 6px !important;
+            margin-bottom: 0 !important;
         }
         .st-key-fila_ajuste_top::before {
             left: 0 !important;
@@ -986,6 +986,11 @@ def get_css():
         [data-testid="stPopover"] button {
             min-width: 0 !important;
             max-width: 100% !important;
+        }
+
+        /* Chips pegados a la franja (el margen de 6px es para tablet) */
+        .st-key-chips_ajuste_tabla {
+            margin: 2px 0 0 0 !important;
         }
 
         /* Avisos: sobre la barra inferior de navegación */
