@@ -561,7 +561,7 @@ def get_css():
         top: var(--cab-nivel2-top) !important;
         right: 90px !important;
         left: auto !important;
-        width: 560px !important;
+        width: auto !important;
         max-width: calc(100vw - 90px - 360px) !important;
         z-index: 23 !important;
         margin: 0 !important;
@@ -575,17 +575,24 @@ def get_css():
     .st-key-chips_ajuste_tabla [data-testid="stColumn"],
     .st-key-chips_ajuste_tabla [data-testid="column"] {
         width: auto !important;
-        flex: 1 1 0 !important;
+        flex: 0 1 auto !important;
         min-width: 0 !important;
     }
-    /* Anula el min-width global del popover para que quepan los 4; misma
-       altura que los botones del selector de vista (42px). */
+    /* Angosto (ajustado al texto, como el widget de fecha) + tono lavanda
+       que los resalta levemente, a juego con el resto de la webapp. */
     .st-key-chips_ajuste_tabla [data-testid="stPopover"] button {
         min-width: 0 !important;
-        width: 100% !important;
+        width: auto !important;
         min-height: 36px !important;
-        padding: 7px 14px !important;
+        padding: 7px 16px !important;
         font-size: 12px !important;
+        background: var(--accent-tint) !important;
+        border: 1px solid var(--border-lavender) !important;
+        color: var(--accent-deep) !important;
+    }
+    .st-key-chips_ajuste_tabla [data-testid="stPopover"] button:hover {
+        background: var(--accent-light) !important;
+        border-color: var(--accent) !important;
     }
     /* Pantallas chicas: si no caben junto a las pestañas, bajan a su línea */
     @media (max-width: 900px) {
