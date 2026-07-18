@@ -651,11 +651,13 @@ def _chip_categorico(df_in, col, key, etiqueta):
         return df_in, []
     _n = len(st.session_state.get(key) or [])
     _lbl = f"{etiqueta} · {_n}" if _n else etiqueta
-    with st.popover(_lbl, use_container_width=True):
-        sel = st.pills(
-            etiqueta, valores, selection_mode="multi",
-            key=key, label_visibility="collapsed",
-        ) or []
+    _estado = "on" if _n else "off"
+    with st.container(key=f"chipwrap_{key}_{_estado}"):
+        with st.popover(_lbl, use_container_width=True):
+            sel = st.pills(
+                etiqueta, valores, selection_mode="multi",
+                key=key, label_visibility="collapsed",
+            ) or []
     if sel:
         df_in = df_in[df_in[col].astype(str).isin(sel)]
     return df_in, sel
@@ -671,11 +673,13 @@ def _chip_numerico(df_in, col, key, etiqueta, opciones=None):
         opciones = ["Todos", "Faltantes", "Sobrantes", "Top 10", "Top 20"]
     _prev = st.session_state.get(key) or "Todos"
     _lbl = etiqueta if _prev == "Todos" else f"{etiqueta} · {_prev}"
-    with st.popover(_lbl, use_container_width=True):
-        sel = st.pills(
-            etiqueta, opciones, default="Todos",
-            key=key, label_visibility="collapsed",
-        ) or "Todos"
+    _estado = "off" if _prev == "Todos" else "on"
+    with st.container(key=f"chipwrap_{key}_{_estado}"):
+        with st.popover(_lbl, use_container_width=True):
+            sel = st.pills(
+                etiqueta, opciones, default="Todos",
+                key=key, label_visibility="collapsed",
+            ) or "Todos"
     serie = pd.to_numeric(df_in[col], errors="coerce")
     if sel == "Con ajuste":
         return df_in[serie.fillna(0) != 0]
