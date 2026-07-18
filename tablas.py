@@ -1753,7 +1753,7 @@ def renderizar_aggrid_compras(df_grid: pd.DataFrame, font_px: int = 14):
 
 
 # ===========================================================================
-# FUNCIÓN: TABLA DE COMPRAS — st.data_editor (REEMPLAZADA POR AGGIRD)
+# FUNCIÓN: TABLA DE COMPRAS — st.data_editor (REEMPLAZADA POR AGGRID)
 # ===========================================================================
 
 def renderizar_tabla_compras(df_grid: pd.DataFrame, font_px: int = 14):
