@@ -585,7 +585,7 @@ def get_css():
         width: 100% !important;
         min-height: 42px !important;
         padding: 7px 14px !important;
-        font-size: 13px !important;
+        font-size: 12px !important;
     }
     /* Pantallas chicas: si no caben junto a las pestañas, bajan a su línea */
     @media (max-width: 900px) {
