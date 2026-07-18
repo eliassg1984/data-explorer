@@ -583,18 +583,23 @@ def get_css():
     .st-key-chips_ajuste_tabla [data-testid="stPopover"] button {
         min-width: 0 !important;
         width: 132px !important;
-        min-height: 36px !important;
-        padding: 7px 10px !important;
+        min-height: 26px !important;
+        height: 26px !important;
+        padding: 3px 10px !important;
         font-size: 12px !important;
         background: var(--accent-tint) !important;
         border: 1px solid var(--border-lavender) !important;
         color: var(--accent-deep) !important;
         overflow: hidden !important;
+        gap: 4px !important;
     }
     .st-key-chips_ajuste_tabla [data-testid="stPopover"] button p {
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         white-space: nowrap !important;
+    }
+    .st-key-chips_ajuste_tabla [data-testid="stPopover"] button [data-testid="stIconMaterial"] {
+        font-size: 14px !important;
     }
     .st-key-chips_ajuste_tabla [data-testid="stPopover"] button:hover {
         background: var(--accent-light) !important;

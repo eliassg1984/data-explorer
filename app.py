@@ -650,7 +650,7 @@ def _chip_categorico(df_in, col, key, etiqueta):
     if not valores:
         return df_in, []
     _n = len(st.session_state.get(key) or [])
-    _lbl = f"{etiqueta} · {_n}" if _n else etiqueta
+    _lbl = f":material/filter_alt: {etiqueta} · {_n}" if _n else f":material/filter_alt: {etiqueta}"
     _estado = "on" if _n else "off"
     with st.container(key=f"chipwrap_{key}_{_estado}"):
         with st.popover(_lbl, use_container_width=True):
@@ -672,7 +672,7 @@ def _chip_numerico(df_in, col, key, etiqueta, opciones=None):
     if opciones is None:
         opciones = ["Todos", "Faltantes", "Sobrantes", "Top 10", "Top 20"]
     _prev = st.session_state.get(key) or "Todos"
-    _lbl = etiqueta if _prev == "Todos" else f"{etiqueta} · {_prev}"
+    _lbl = f":material/filter_alt: {etiqueta}" if _prev == "Todos" else f":material/filter_alt: {etiqueta} · {_prev}"
     _estado = "off" if _prev == "Todos" else "on"
     with st.container(key=f"chipwrap_{key}_{_estado}"):
         with st.popover(_lbl, use_container_width=True):
