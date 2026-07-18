@@ -334,7 +334,7 @@ perf.start_phase("Ajuste top row")                                          # �
 # TODOS los reportes. El rango de fecha vive en una clave por reporte
 # (Ajuste conserva su clave histórica, que graficos.py también lee).
 _k_rango_franja = "ajuste_rango_aplicado" if es_ajuste else f"rango_franja_{reporte}"
-_franja_con_fecha = bool(col_fecha) and fecha_min_full is not None and reporte != "Requerimientos"
+_franja_con_fecha = bool(col_fecha) and fecha_min_full is not None
 if True:
     # Rango aplicado (auto): al primer acceso usa 01-del-mes → hoy.
     # Se inicializa ANTES de dibujar el date_input para que el widget
@@ -429,63 +429,17 @@ if True:
         ]
 perf.end_phase("Ajuste top row")                                            # ⚡ PERF
 
-# ── POPOVER (solo se muestra si hay controles que mostrar) ──
-perf.start_phase("Popover + filtros")                                       # ⚡ PERF
-if controles:
-    with st.popover(label_btn, use_container_width=False):
-        for idx, (tipo, col) in enumerate(controles):
-            if tipo == "cat":
-                opts = get_opciones_filtro(df, col)
-                sel = st.multiselect(
-                    f"📂 {col}", opts, placeholder="Todos",
-                    key=_key("cat", idx),
-                )
-                if sel:
-                    df_f = df_f[df_f[col].isin(sel)]
-
-            elif tipo == "busc":
-                opts_prod = get_opciones_filtro(df_f, col)
-                sel_prod = st.multiselect(
-                    f"🔎 {col}", opts_prod, placeholder="Buscar…",
-                    key=_key("busc", idx),
-                )
-                if sel_prod:
-                    df_f = df_f[df_f[col].astype(str).isin(sel_prod)]
-
-            elif tipo == "grp":
-                grupos_sel = st.multiselect(
-                    "📊 Agrupar por", cols_agrupar, default=[],
-                    key=_key("grp", idx), placeholder="Sin agrupar",
-                )
-
-            elif tipo == "fecha":
-                rango = st.date_input(
-                    "📅 Fecha", value=(fecha_min_full, fecha_max_full),
-                    min_value=fecha_min_full, max_value=fecha_max_full,
-                    format="DD/MM/YYYY", key=_key("fch", idx),
-                )
-                if isinstance(rango, (tuple, list)) and len(rango) == 2:
-                    ini, fin = rango
-                    df_f = df_f[(df_f[col].dt.date >= ini) & (df_f[col].dt.date <= fin)]
-
-        if reporte not in ("Compras", "Salidas", "Ajuste de Inventario"):
-            st.divider()
-            st.session_state.tabla_tam = st.select_slider(
-            "🔠 Tamaño de letra",
-            options=list(TAM_FUENTE.keys()),
-            value=st.session_state.tabla_tam,
-            help="Ajusta el tamaño de fuente de la tabla",
-        )
-perf.end_phase("Popover + filtros")                                         # ⚡ PERF
+# (El popover de filtros fue retirado: los filtros viven en la franja.)
 
 
 # ===========================================================================
 # AVISOS DE COLUMNAS FALTANTES
 # ===========================================================================
-if faltantes_aviso:
-    st.caption("⚠️ No se encontraron: " + ", ".join(faltantes_aviso))
-if "columnas" in cfg and faltan_cols:
-    st.caption("⚠️ Columnas no encontradas: " + ", ".join(faltan_cols))
+if st.query_params.get("debug"):
+    if faltantes_aviso:
+        st.caption("⚠️ No se encontraron: " + ", ".join(faltantes_aviso))
+    if "columnas" in cfg and faltan_cols:
+        st.caption("⚠️ Columnas no encontradas: " + ", ".join(faltan_cols))
 
 
 # ===========================================================================
@@ -548,19 +502,6 @@ def _aviso_rapido_aggrid(df_data):
 
 def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, font_px, cfg):
     """Renderiza el reporte de Requerimientos con tabla dinámica."""
-    st.markdown(
-        '<p style="font-size:22px;font-weight:700;color:#18181d;'
-        'margin:0 0 0.6rem 0;line-height:1.2;">Requerimientos · Tabla dinámica</p>',
-        unsafe_allow_html=True,
-    )
-    st.caption(
-        "🧮 Tabla dinámica estilo Excel. En el panel derecho (pestaña "
-        "**Columnas**) arrastra campos a **Grupos de filas**, **Valores** y "
-        "**Etiquetas de columnas**. Para columnas por periodo legibles, usa los "
-        "campos **Mes** o **Año** (ya calculados) en *Etiquetas de columnas*. "
-        "El **filtro de fecha** está arriba de la tabla (rango desde / hasta)."
-    )
-
     df_piv = df_data.copy()
 
     for _c in df_piv.columns:
@@ -587,33 +528,8 @@ def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, fon
     cols_fecha_piv = [c for c in df_piv.columns
                       if pd.api.types.is_datetime64_any_dtype(df_piv[c])]
 
-    if cols_fecha_piv:
-        fc1, fc2 = st.columns([1, 2])
-        with fc1:
-            col_fecha_sel = st.selectbox(
-                "📅 Filtrar por", cols_fecha_piv, key="req_fcol",
-            )
-
-        validos = df_piv[col_fecha_sel].dropna()
-        if not validos.empty:
-            fmin, fmax = validos.min().date(), validos.max().date()
-
-            with fc2:
-                rango = st.date_input(
-                    "Rango (desde / hasta)",
-                    value=(fmin, fmax),
-                    min_value=fmin,
-                    max_value=fmax,
-                    format="DD/MM/YYYY",
-                    key="req_frango",
-                )
-
-            if isinstance(rango, (tuple, list)) and len(rango) == 2:
-                ini, fin = rango
-                _m = (df_piv[col_fecha_sel].dt.date >= ini) & \
-                     (df_piv[col_fecha_sel].dt.date <= fin)
-                df_piv = df_piv[_m]
-
+    # (El filtro de fecha propio fue retirado: la pill de la franja ya
+    #  filtra df_data por rango antes de llegar aquí.)
     tiene_config_movil = "columnas_movil" in cfg
     if usa_vista_movil and tiene_config_movil:
         st.caption("📱 Vista móvil")
@@ -854,69 +770,6 @@ def _render_contenido():
             _render_tabla(_filtros_chips_franja(df_f))
         else:
             renderizar_graficos(df_f, es_movil=usa_vista_movil)
-
-    # ── SALIDAS ──────────────────────────────────────────────────────────────
-    elif reporte == "Salidas":
-        vista = st.session_state.get(f"vista_seg_{reporte}", "Tabla") or "Tabla"
-
-        if vista == "Tabla":
-            df_f_tab = _filtros_chips_franja(df_f)
-            if usa_vista_movil and tiene_config_movil:
-                st.caption("📱 Vista móvil • Desliza para más columnas")
-                renderizar_aggrid_movil(
-                    df_f_tab[cols_mostrar], cfg.get("columnas_fijas_movil", 2), reporte, font_px,
-                )
-            else:
-                _k_cols = f"colsel_{reporte}"
-                if _k_cols not in st.session_state:
-                    st.session_state[_k_cols] = list(todas_cols)
-                _vigentes = [c for c in st.session_state[_k_cols] if c in todas_cols]
-                st.session_state[_k_cols] = _vigentes or list(todas_cols)
-
-                _k_zoom = f"zoom_{reporte}"
-                if _k_zoom not in st.session_state:
-                    st.session_state[_k_zoom] = 14
-
-                barra = st.columns([3, 3, 1.4])
-                with barra[0]:
-                    with st.popover("🧰 Columnas", use_container_width=True):
-                        st.caption("Mostrar u ocultar columnas")
-                        cols_sel = st.multiselect(
-                            "Columnas visibles", todas_cols,
-                            key=_k_cols, label_visibility="collapsed",
-                        )
-                with barra[1]:
-                    zoom = st.select_slider(
-                        "🔍 Zoom", options=[12, 14, 16, 18, 20, 22], key=_k_zoom,
-                    )
-                with barra[2]:
-                    st.download_button(
-                        "⬇️ CSV",
-                        data=df_f_tab.to_csv(index=False).encode("utf-8-sig"),
-                        file_name="salidas_export.csv",
-                        mime="text/csv",
-                        use_container_width=True,
-                        key=f"export_{reporte}",
-                    )
-
-                if not cols_sel:
-                    cols_sel = list(todas_cols)
-
-                _render_kpis_salidas(df_f_tab)
-
-                cols_finales = list(cols_sel)
-                if grupos_sel:
-                    for c in grupos_sel:
-                        if c not in cols_finales:
-                            cols_finales.append(c)
-
-                _aviso_rapido_aggrid(df_f_tab[cols_finales])
-                renderizar_aggrid_desktop(
-                    df_f_tab[cols_finales], grupos_sel, cols_sel, reporte, int(zoom),
-                    cols_visibles=None,
-                )
-        else:
-            renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
 
     # ── REQUERIMIENTOS ───────────────────────────────────────────────────────
     elif reporte == "Requerimientos":
