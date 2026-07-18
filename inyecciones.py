@@ -1541,14 +1541,16 @@ def inject_fix_column_panel_ajuste():
 def inject_alinear_cabecera_ajuste():
     """
     Alinea el título "Ajuste de Inventario" y las pestañas Tabla/Gráficos
-    (ambos position:fixed, ver estilos.py) con el borde izquierdo real del
-    área de contenido — la misma columna donde arranca la tabla.
+    (ambos position:fixed, ver estilos.py) con el borde izquierdo REAL de
+    la tabla AgGrid — no con el contenedor de contenido, que empieza justo
+    tras el riel y queda más a la izquierda que la tabla.
 
     Por qué JS y no un valor fijo en CSS: el título/pestañas están fuera
     del flujo normal (position:fixed) mientras que la tabla vive dentro del
-    padding por defecto de Streamlit, que no está pisado en estilos.py y
-    puede variar. En vez de adivinar ese padding, se mide en tiempo real
-    con getBoundingClientRect() y se aplica como left inline.
+    padding de Streamlit, que varía con el ancho de ventana. En vez de
+    adivinar píxeles, se mide el iframe de AgGrid con
+    getBoundingClientRect() y se aplica como left inline. Mientras el
+    iframe no exista aún, cae al borde del contenedor como aproximación.
 
     Mismo espíritu que inject_dynamic_grid_height: medición puntual con
     reintentos hasta que los elementos existan, SIN listener de resize
@@ -1560,13 +1562,24 @@ def inject_alinear_cabecera_ajuste():
         var win = window.parent, doc = win.document;
         var tries = 0, MAX = 40;
 
-        function alinear() {
+        function bordeTabla() {
+            /* Borde izquierdo del iframe de AgGrid (la tabla visible). */
+            var frames = doc.querySelectorAll('iframe[src*="st_aggrid"]');
+            for (var i = 0; i < frames.length; i++) {
+                var r = frames[i].getBoundingClientRect();
+                if (r.width > 0) return r.left;
+            }
+            /* Aún no montó: aproximar con el contenedor de contenido. */
             var contenido = doc.querySelector('[data-testid="stMainBlockContainer"]')
                           || doc.querySelector('.block-container');
-            var titulo = doc.querySelector('.titulo-ajuste-reporte');
-            if (!contenido || !titulo) return false;
+            return contenido ? contenido.getBoundingClientRect().left : null;
+        }
 
-            var left = contenido.getBoundingClientRect().left;
+        function alinear() {
+            var titulo = doc.querySelector('.titulo-ajuste-reporte');
+            var left = bordeTabla();
+            if (left === null || !titulo) return false;
+
             titulo.style.setProperty('left', left + 'px', 'important');
 
             var tabs = doc.querySelector('.st-key-ajuste_tabs_top');
