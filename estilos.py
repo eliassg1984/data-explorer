@@ -629,15 +629,15 @@ def get_css():
     /* Título del reporte, fijo en el nivel 1 de la franja */
     .titulo-ajuste-reporte {
         position: fixed !important;
-        top: 8px !important;
+        top: 6px !important;
         left: calc(90px + 1rem) !important;
         z-index: 22 !important;
         margin: 0 !important;
         color: var(--text-primary) !important;
-        font-size: 22px !important;
-        font-weight: 650 !important;
-        line-height: 1.25 !important;
-        letter-spacing: -0.01em !important;
+        font-size: 27px !important;
+        font-weight: 750 !important;
+        line-height: 1.2 !important;
+        letter-spacing: -0.02em !important;
         transform: none !important;
     }
 
@@ -678,12 +678,14 @@ def get_css():
     }
 
     /* CAMBIO: margin:0 (antes era "0 24px 0 auto") — el posicionamiento
-       ahora lo controla el padre fixed, no el margen automático. */
+       ahora lo controla el padre fixed, no el margen automático.
+       Forma RECTANGULAR (esquinas suaves) y fondo blanco: se distingue de
+       las cápsulas lavanda de filtro, que son píldoras con fondo tenue. */
     .st-key-fch_ajuste_inline .stDateInput > div > div {
-        background: var(--accent-tint) !important;
-        border: 1px solid var(--border-lavender) !important;
-        border-radius: 999px !important;
-        box-shadow: none !important;
+        background: #ffffff !important;
+        border: 1.5px solid var(--accent) !important;
+        border-radius: 8px !important;
+        box-shadow: var(--shadow) !important;
         padding: 0 12px !important;
         min-height: 34px !important;
         height: 34px !important;
@@ -720,8 +722,8 @@ def get_css():
 
     .st-key-fch_ajuste_inline .stDateInput > div > div:hover,
     .st-key-fch_ajuste_inline .stDateInput > div > div:focus-within {
-        background: var(--accent-light) !important;
-        border-color: var(--accent) !important;
+        background: var(--accent-tint) !important;
+        border-color: var(--accent-deep) !important;
     }
 
     .st-key-fch_ajuste_inline .stDateInput > div > div::before {
