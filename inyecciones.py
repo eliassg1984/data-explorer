@@ -99,19 +99,33 @@ _PAG_CSS_BASE = f"""
 .ag-status-name-value {{ color: {GRIS_TEXTO} !important; font-size: 12px !important; }}
 .ag-status-name-value-value {{ color: {TEXTO_PRINCIPAL} !important; font-weight: 600 !important; }}
 
+/* Barra INTEGRADA al pie de la tabla: mismo marco que el grid (sin
+   tarjeta aparte), solo un divisor arriba y las esquinas inferiores
+   del propio card. */
 .ag-paging-panel {{
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
-  background: {GRIS_FONDO} !important;
+  background: {BLANCO} !important;
   background-image: none !important;
-  border: 1px solid {GRIS_BORDE} !important;
-  border-radius: 12px !important;
-  margin-top: 12px !important;
+  border: none !important;
+  border-top: 1px solid {GRIS_BORDE} !important;
+  border-radius: 0 0 12px 12px !important;
+  margin-top: 0 !important;
   padding: 8px 16px !important;
   min-height: 44px !important;
   font-size: 12px !important;
   color: {ICON_MUTED} !important;
+}}
+
+/* AUTO-OCULTAR con una sola página: si ‹ y › están ambos deshabilitados
+   no hay nada que paginar. Cubre la paginación nativa y la v2 (que solo
+   mueve los botones fuera de pantalla; sus estados disabled siguen
+   actualizándose). AgGrid moderno marca los botones con data-ref; se
+   mantiene la variante ref por compatibilidad con versiones previas. */
+.ag-paging-panel:has([ref="btPrevious"].ag-disabled):has([ref="btNext"].ag-disabled),
+.ag-paging-panel:has([data-ref="btPrevious"].ag-disabled):has([data-ref="btNext"].ag-disabled) {{
+  display: none !important;
 }}
 
 .ag-paging-page-size {{ order: -1 !important; margin-right: auto !important; }}
@@ -161,10 +175,14 @@ _PAG_CSS_NATIVA = f"""
 .ag-paging-button span, .ag-paging-button .ag-icon {{
   display: none !important;
 }}
-.ag-paging-button[ref="btFirst"]::after  {{ content: "«" !important; }}
-.ag-paging-button[ref="btPrevious"]::after {{ content: "‹" !important; }}
-.ag-paging-button[ref="btNext"]::after   {{ content: "›" !important; }}
-.ag-paging-button[ref="btLast"]::after   {{ content: "»" !important; }}
+.ag-paging-button[ref="btFirst"]::after,
+.ag-paging-button[data-ref="btFirst"]::after  {{ content: "«" !important; }}
+.ag-paging-button[ref="btPrevious"]::after,
+.ag-paging-button[data-ref="btPrevious"]::after {{ content: "‹" !important; }}
+.ag-paging-button[ref="btNext"]::after,
+.ag-paging-button[data-ref="btNext"]::after   {{ content: "›" !important; }}
+.ag-paging-button[ref="btLast"]::after,
+.ag-paging-button[data-ref="btLast"]::after   {{ content: "»" !important; }}
 .ag-paging-button::after {{
   font-size: 16px !important;
   line-height: 1 !important;
@@ -976,8 +994,10 @@ def inject_pagination_v2():
           p = Math.max(1, Math.min(e.tot, p));
           if (p === e.cur) return;
           win.__pgv2busy = true;
-          var btn = (p > e.cur) ? panel.querySelector('[ref=btNext]')
-                                : panel.querySelector('[ref=btPrevious]');
+          /* AgGrid moderno usa data-ref; ref queda por compatibilidad. */
+          var btn = (p > e.cur)
+              ? panel.querySelector('[ref=btNext], [data-ref=btNext]')
+              : panel.querySelector('[ref=btPrevious], [data-ref=btPrevious]');
           var n = Math.abs(p - e.cur);
           for (var k=0; k<n && btn; k++){ btn.click(); }
           win.__pgv2busy = false;
@@ -1002,6 +1022,11 @@ def inject_pagination_v2():
         function render(){
           var e = leerEstado(panel); if (!e) return;
           var c = e.cur, t = e.tot;
+          /* Una sola página: nada que paginar; la barra completa se oculta
+             y reaparece sola cuando el total de páginas vuelve a crecer
+             (el MutationObserver re-invoca render en cada cambio). */
+          panel.style.display = (t <= 1) ? 'none' : '';
+          if (t <= 1) return;
           var bar = agDoc.getElementById('pgv2');
           if (!bar){ bar = agDoc.createElement('div'); bar.id = 'pgv2'; panel.appendChild(bar); }
           var html = '<span class="pgv2-pages">';
