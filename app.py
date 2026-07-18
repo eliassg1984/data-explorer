@@ -291,14 +291,11 @@ fecha_fin_default = _hoy                  # hoy
 es_ajuste = (reporte == "Ajuste de Inventario")
 
 controles = []
-for cc in cat_cols:
-    controles.append(("cat", cc))
+# (los filtros categóricos ahora son chips en la franja; la fecha, la pill)
 if col_busc:
     controles.append(("busc", col_busc))
 if cols_agrupar:
     controles.append(("grp", None))
-if fecha_min_full is not None and reporte != "Requerimientos" and not es_ajuste:
-    controles.append(("fecha", col_fecha))
 
 grupos_sel = []
 
@@ -333,17 +330,22 @@ label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_act
 
 # ── TÍTULO + WIDGET DE FECHA EN LA FRANJA SUPERIOR (solo Ajuste de Inventario) ──
 perf.start_phase("Ajuste top row")                                          # ⚡ PERF
-if es_ajuste:
+# DISEÑO UNIFICADO: la franja fija (título + fecha + pestañas) aplica a
+# TODOS los reportes. El rango de fecha vive en una clave por reporte
+# (Ajuste conserva su clave histórica, que graficos.py también lee).
+_k_rango_franja = "ajuste_rango_aplicado" if es_ajuste else f"rango_franja_{reporte}"
+_franja_con_fecha = bool(col_fecha) and fecha_min_full is not None and reporte != "Requerimientos"
+if True:
     # Rango aplicado (auto): al primer acceso usa 01-del-mes → hoy.
     # Se inicializa ANTES de dibujar el date_input para que el widget
     # arranque con el valor correcto.
-    if col_fecha and fecha_min_full is not None:
-        if "ajuste_rango_aplicado" not in st.session_state:
+    if _franja_con_fecha:
+        if _k_rango_franja not in st.session_state:
             _ini_def = max(fecha_ini_default, fecha_min_full)
             _fin_def = min(fecha_fin_default, fecha_max_full)
             if _ini_def > _fin_def:
                 _ini_def, _fin_def = fecha_min_full, fecha_max_full
-            st.session_state["ajuste_rango_aplicado"] = (_ini_def, _fin_def)
+            st.session_state[_k_rango_franja] = (_ini_def, _fin_def)
 
     # Evitar NameError antes de la franja superior
     _fecha_actualizacion = None
@@ -360,7 +362,7 @@ if es_ajuste:
                 unsafe_allow_html=True,
             )
         with col_fecha_top:
-            if col_fecha and fecha_min_full is not None:
+            if _franja_con_fecha:
                 try:
                     _fecha_actualizacion = fecha_ultima_actualizacion(
                         cfg.get("archivo")
@@ -373,35 +375,36 @@ if es_ajuste:
                         _fecha_actualizacion = _fecha_actualizacion.astimezone(ZONA_PERU)
                 # La renderización del aviso se mueve fuera de la franja sticky
                 with st.container(key="fecha_ajuste_pill"):
-                    _ini_apl, _fin_apl = st.session_state["ajuste_rango_aplicado"]
+                    _ini_apl, _fin_apl = st.session_state[_k_rango_franja]
                     rango_aj = st.date_input(
                         "Rango a Evaluar",
                         value=(_ini_apl, _fin_apl),
                         min_value=fecha_min_full,
                         max_value=fecha_max_full,
                         format="DD/MM/YYYY",
-                        key="fch_ajuste_inline",
+                        key=f"fch_franja_{reporte.replace(' ', '_')}",
                         label_visibility="collapsed",
                     )
                 # Cambio de rango → rerun completo para refiltrar df_f
                 if (isinstance(rango_aj, (tuple, list)) and len(rango_aj) == 2
-                        and tuple(rango_aj) != st.session_state["ajuste_rango_aplicado"]):
-                    st.session_state["ajuste_rango_aplicado"] = tuple(rango_aj)
+                        and tuple(rango_aj) != st.session_state[_k_rango_franja]):
+                    st.session_state[_k_rango_franja] = tuple(rango_aj)
                     st.rerun(scope="app")
 
         # El selector pertenece a la misma franja blanca que el título.
-        with st.container(key="ajuste_tabs_top"):
-            st.pills(
-                "Vista",
-                options=["Tabla", "Gráficos"],
-                format_func=lambda vista: (
-                    ":material/table_rows: Tabla"
-                    if vista == "Tabla" else ":material/monitoring: Gráficos"
-                ),
-                default="Tabla",
-                label_visibility="collapsed",
-                key=f"vista_seg_{reporte}",
-            )
+        if reporte != "Requerimientos":
+            with st.container(key="ajuste_tabs_top"):
+                st.pills(
+                    "Vista",
+                    options=["Tabla", "Gráficos"],
+                    format_func=lambda vista: (
+                        ":material/table_rows: Tabla"
+                        if vista == "Tabla" else ":material/monitoring: Gráficos"
+                    ),
+                    default="Tabla",
+                    label_visibility="collapsed",
+                    key=f"vista_seg_{reporte}",
+                )
 
     # ── Texto de actualización FUERA de la franja sticky ──
     # Así su position:fixed vive en el contexto raíz y no es tapado
@@ -418,8 +421,8 @@ if es_ajuste:
             )
 
     # Aplicar el rango al DataFrame (usa el valor ya guardado en session_state)
-    if col_fecha and fecha_min_full is not None:
-        _ini_apl, _fin_apl = st.session_state["ajuste_rango_aplicado"]
+    if _franja_con_fecha:
+        _ini_apl, _fin_apl = st.session_state[_k_rango_franja]
         df_f = df_f[
             (df_f[col_fecha].dt.date >= _ini_apl) &
             (df_f[col_fecha].dt.date <= _fin_apl)
@@ -723,6 +726,24 @@ def _filtros_chips_ajuste_tabla(df_in):
     return df_in
 
 
+def _filtros_chips_franja(df_in):
+    """Chips de filtro de la franja para el reporte activo: Ajuste usa sus
+    4 chips propios; el resto muestra sus filtros categóricos (cfg) como
+    cápsulas equivalentes."""
+    if es_ajuste:
+        return _filtros_chips_ajuste_tabla(df_in)
+    if not cat_cols:
+        return df_in
+    with st.container(key="chips_ajuste_tabla"):
+        _cols = st.columns([1] * len(cat_cols))
+        for _cc, _col in zip(_cols, cat_cols):
+            with _cc:
+                df_in, _ = _chip_categorico(
+                    df_in, _col,
+                    f"chip_franja_{reporte.replace(' ', '_')}_{_col}", _col)
+    return df_in
+
+
 # ===========================================================================
 # RENDERIZADO DE TABLA (con df opcional para los chips)
 # ===========================================================================
@@ -820,34 +841,30 @@ def _render_contenido():
 
     # ── COMPRAS ─────────────────────────────────────────────────────────────
     if reporte == "Compras":
-        vista = _selector_vista()
+        vista = st.session_state.get(f"vista_seg_{reporte}", "Tabla") or "Tabla"
         if vista == "Tabla":
-            renderizar_aggrid_compras(df_f, font_px)
+            renderizar_aggrid_compras(_filtros_chips_franja(df_f), font_px)
         else:
             renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
 
     # ── INVENTARIO VALORIZADO ────────────────────────────────────────────────
     elif reporte == "Inventario Valorizado":
-        st.markdown(
-            '<p style="font-size:22px;font-weight:700;color:#18181d;'
-            'margin:0 0 0.6rem 0;line-height:1.2;">Inventario Valorizado</p>',
-            unsafe_allow_html=True,
-        )
-        vista = _selector_vista()
+        vista = st.session_state.get(f"vista_seg_{reporte}", "Tabla") or "Tabla"
         if vista == "Tabla":
-            _render_tabla()
+            _render_tabla(_filtros_chips_franja(df_f))
         else:
             renderizar_graficos(df_f, es_movil=usa_vista_movil)
 
     # ── SALIDAS ──────────────────────────────────────────────────────────────
     elif reporte == "Salidas":
-        vista = _selector_vista()
+        vista = st.session_state.get(f"vista_seg_{reporte}", "Tabla") or "Tabla"
 
         if vista == "Tabla":
+            df_f_tab = _filtros_chips_franja(df_f)
             if usa_vista_movil and tiene_config_movil:
                 st.caption("📱 Vista móvil • Desliza para más columnas")
                 renderizar_aggrid_movil(
-                    df_f[cols_mostrar], cfg.get("columnas_fijas_movil", 2), reporte, font_px,
+                    df_f_tab[cols_mostrar], cfg.get("columnas_fijas_movil", 2), reporte, font_px,
                 )
             else:
                 _k_cols = f"colsel_{reporte}"
@@ -875,7 +892,7 @@ def _render_contenido():
                 with barra[2]:
                     st.download_button(
                         "⬇️ CSV",
-                        data=df_f.to_csv(index=False).encode("utf-8-sig"),
+                        data=df_f_tab.to_csv(index=False).encode("utf-8-sig"),
                         file_name="salidas_export.csv",
                         mime="text/csv",
                         use_container_width=True,
@@ -885,7 +902,7 @@ def _render_contenido():
                 if not cols_sel:
                     cols_sel = list(todas_cols)
 
-                _render_kpis_salidas(df_f)
+                _render_kpis_salidas(df_f_tab)
 
                 cols_finales = list(cols_sel)
                 if grupos_sel:
@@ -893,9 +910,9 @@ def _render_contenido():
                         if c not in cols_finales:
                             cols_finales.append(c)
 
-                _aviso_rapido_aggrid(df_f[cols_finales])
+                _aviso_rapido_aggrid(df_f_tab[cols_finales])
                 renderizar_aggrid_desktop(
-                    df_f[cols_finales], grupos_sel, cols_sel, reporte, int(zoom),
+                    df_f_tab[cols_finales], grupos_sel, cols_sel, reporte, int(zoom),
                     cols_visibles=None,
                 )
         else:
@@ -907,15 +924,7 @@ def _render_contenido():
 
     # ── RESTO DE REPORTES (incluye Ajuste de Inventario) ────────────────────
     else:
-        if not es_ajuste:
-            st.markdown(
-                f'<p style="font-size:22px;font-weight:700;color:#18181d;'
-                f'margin:0 0 0.2rem 0;line-height:1.2;">{reporte}</p>'
-                f'<hr style="border:none;border-top:2px solid #6c5ce7;margin:0 0 0.8rem 0;">',
-                unsafe_allow_html=True,
-            )
-            vista = _selector_vista()
-        else:
+        if True:
             # ── Ajuste de Inventario — cabecera completa DENTRO del fragment ─
             #
             # Toda la lógica de layout (tabs + segmented) vive aquí para que
@@ -924,17 +933,14 @@ def _render_contenido():
 
             # 1) Auto-detectar ámbito (Del periodo / Histórico) según rango.
             # 2) El selector Tabla/Gráficos se dibuja arriba, en la franja.
-            vista = st.session_state.get(f"vista_seg_{reporte}", "Tabla")
+            vista = st.session_state.get(f"vista_seg_{reporte}", "Tabla") or "Tabla"
 
         if vista == "Tabla":
-            if es_ajuste:
-                df_tabla = _filtros_chips_ajuste_tabla(df_f)
-                if df_tabla.empty:
-                    st.info("Ningún registro coincide con los filtros seleccionados.")
-                else:
-                    _render_tabla(df_tabla)
+            df_tabla = _filtros_chips_franja(df_f)
+            if df_tabla.empty:
+                st.info("Ningún registro coincide con los filtros seleccionados.")
             else:
-                _render_tabla()
+                _render_tabla(df_tabla)
         else:
             renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
 

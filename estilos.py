@@ -672,7 +672,7 @@ def get_css():
     margin: 0 !important;
 }
 
-    .st-key-fch_ajuste_inline [data-baseweb="input"] {
+    [class*="st-key-fch_franja_"] [data-baseweb="input"] {
         width: auto !important;
         min-width: 0 !important;
     }
@@ -681,7 +681,7 @@ def get_css():
        ahora lo controla el padre fixed, no el margen automático.
        Forma RECTANGULAR (esquinas suaves) y fondo blanco: se distingue de
        las cápsulas lavanda de filtro, que son píldoras con fondo tenue. */
-    .st-key-fch_ajuste_inline .stDateInput > div > div {
+    [class*="st-key-fch_franja_"] .stDateInput > div > div {
         background: #ffffff !important;
         border: 1.5px solid var(--accent) !important;
         border-radius: 8px !important;
@@ -706,7 +706,7 @@ def get_css():
         white-space: nowrap !important;
     }
 
-    .st-key-fch_ajuste_inline .stDateInput input {
+    [class*="st-key-fch_franja_"] .stDateInput input {
         color: var(--accent-deep) !important;
         font-weight: 500 !important;
         font-size: 12.5px !important;
@@ -715,18 +715,18 @@ def get_css():
         padding: 0 !important;
         width: 155px !important;
     }
-    .st-key-fch_ajuste_inline .stDateInput input::placeholder {
+    [class*="st-key-fch_franja_"] .stDateInput input::placeholder {
         color: var(--accent) !important;
         opacity: 0.7 !important;
     }
 
-    .st-key-fch_ajuste_inline .stDateInput > div > div:hover,
-    .st-key-fch_ajuste_inline .stDateInput > div > div:focus-within {
+    [class*="st-key-fch_franja_"] .stDateInput > div > div:hover,
+    [class*="st-key-fch_franja_"] .stDateInput > div > div:focus-within {
         background: var(--accent-tint) !important;
         border-color: var(--accent-deep) !important;
     }
 
-    .st-key-fch_ajuste_inline .stDateInput > div > div::before {
+    [class*="st-key-fch_franja_"] .stDateInput > div > div::before {
         display: none !important;
     }
 
@@ -974,7 +974,7 @@ def get_css():
             margin: 0 !important;
             z-index: 23 !important;
         }
-        .st-key-fch_ajuste_inline .stDateInput input {
+        [class*="st-key-fch_franja_"] .stDateInput input {
             width: 140px !important;
             font-size: 11.5px !important;
         }
