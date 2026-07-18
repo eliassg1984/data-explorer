@@ -931,8 +931,19 @@ def get_css():
             transform: none !important;
             left: 12px !important;
         }
+        /* COLAPSAR el hueco fantasma de la franja: en móvil TODO su
+           contenido visible (título, pestañas, fecha) es position:fixed,
+           así que su altura en el flujo es espacio muerto — y al apilarse
+           las columnas en vertical, ese hueco crece. Se anula la altura y
+           el margin-top negativo (que compensaba al padding del contenedor)
+           para que el contenido arranque justo bajo la franja fija. */
         .st-key-fila_ajuste_top {
-            margin-bottom: 12px !important;
+            position: static !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            padding: 0 !important;
+            margin-top: 0 !important;
+            margin-bottom: 6px !important;
         }
         .st-key-fila_ajuste_top::before {
             left: 0 !important;
