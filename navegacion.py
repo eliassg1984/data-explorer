@@ -186,29 +186,33 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     .st-key-nav_rail::before {{ display:none !important; }}
 
     /* 3) El bloque interno de botones también gira a fila.
-       min-width 100% garantiza que el refresh llegue al borde derecho
-       aunque haya pocos iconos; max-content permite scroll si hay muchos. */
+       min-width 100% garantiza que la fila llegue al borde derecho
+       aunque haya pocos iconos; max-content permite scroll si hay muchos.
+       El padding-right de 150px es una COLA de espacio: Streamlit Cloud
+       superpone sus insignias (avatar + "Hosted with Streamlit") sobre la
+       esquina inferior derecha; con esta cola, al deslizar hasta el final
+       el último icono queda a la izquierda de esa zona, nunca oculto. */
     .st-key-nav_rail [data-testid="stVerticalBlock"] {{
         flex-direction:row !important;
         gap:4px !important;
-        padding:6px 10px !important;
+        padding:6px 150px 6px 10px !important;
         width:max-content !important;
         min-width:100% !important;
         align-items:center !important;
     }}
 
-    /* 4) Cada wrapper de botón deja de ocupar el 100% del ancho
-       (la regla de escritorio los estira; en fila eso los apilaría). */
+    /* 4) Cada wrapper de botón mide 1/4 del viewport: se ven exactamente
+       4 iconos a la vez y el resto se alcanza deslizando la barra. */
     .st-key-nav_rail [data-testid="stElementContainer"],
     .st-key-nav_rail [class*="st-key-navbtn_"],
     .st-key-nav_rail [data-testid="stButton"] {{
-        width:auto !important;
-        flex:0 0 auto !important;
+        width:calc(25vw - 8px) !important;
+        flex:0 0 calc(25vw - 8px) !important;
     }}
 
-    /* 5) Botones compactos; el área táctil se mantiene sobre 44 px */
+    /* 5) El botón llena su wrapper; el área táctil se mantiene sobre 44 px */
     .st-key-nav_rail [class*="st-key-navbtn_"] button {{
-        width:52px !important; height:48px !important; min-height:48px !important;
+        width:100% !important; height:48px !important; min-height:48px !important;
     }}
     .st-key-nav_rail [class*="st-key-navbtn_"] button p,
     .st-key-nav_rail [class*="st-key-navbtn_"] button span,
@@ -216,10 +220,11 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
         font-size:22px !important;
     }}
 
-    /* 6) Refresh: de "al fondo" (columna) a "extremo derecho" (fila) */
+    /* 6) Refresh: con anchos fijos de 25vw ya no hay espacio libre que
+       repartir, el margin-left:auto de columna no aplica en la fila. */
     .st-key-navbtn_refresh {{
         margin-top:0 !important;
-        margin-left:auto !important;
+        margin-left:0 !important;
     }}
 
     /* 7) El contenido ocupa todo el ancho; la reserva de espacio inferior
