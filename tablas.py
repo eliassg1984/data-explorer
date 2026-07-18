@@ -675,9 +675,9 @@ def _estilo_fila(col_stock, df_grid, es_inventario, quitar_fondos):
     if col_stock and col_stock in df_grid.columns and es_inventario:
         get_row_style = JsCode(f"""
             function(params) {{
-                if (params.node.rowPinned === 'bottom') {{
+                if (params.node.rowPinned) {{
                     return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}', color:'{ACENTO_TEXTO_OSCURO}',
-                             borderTop:'2px solid {ACENTO}', fontSize:'13px' }};
+                             borderBottom:'2px solid {ACENTO}', fontSize:'13px' }};
                 }}
                 if (params.node.group) {{
                     var nivel = params.node.level;
@@ -692,9 +692,9 @@ def _estilo_fila(col_stock, df_grid, es_inventario, quitar_fondos):
         _sf = str(col_stock).replace("\\", "\\\\").replace('"', '\\"')
         get_row_style = JsCode(f"""
             function(params) {{
-                if (params.node.rowPinned === 'bottom') {{
+                if (params.node.rowPinned) {{
                     return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}', color:'{ACENTO_TEXTO_OSCURO}',
-                              borderTop:'2px solid {ACENTO}', fontSize:'13px' }};
+                              borderBottom:'2px solid {ACENTO}', fontSize:'13px' }};
                 }}
                 if (params.node.group || !params.data) return null;
                 var s = params.data["{_sf}"];
@@ -709,9 +709,9 @@ def _estilo_fila(col_stock, df_grid, es_inventario, quitar_fondos):
     else:
         get_row_style = JsCode(f"""
             function(params) {{
-                if (params.node.rowPinned === 'bottom') {{
+                if (params.node.rowPinned) {{
                     return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}', color:'{ACENTO_TEXTO_OSCURO}',
-                             borderTop:'2px solid {ACENTO}', fontSize:'13px' }};
+                             borderBottom:'2px solid {ACENTO}', fontSize:'13px' }};
                 }}
             }}
         """)
@@ -1064,7 +1064,9 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     }
 
     if not es_requerimientos:
-        opciones_grid["pinnedBottomRowData"] = [fila_totales]
+        # Totales ANCLADOS ARRIBA (bajo el encabezado): siempre visibles,
+        # sin importar cuántas filas haya ni el alto del grid.
+        opciones_grid["pinnedTopRowData"] = [fila_totales]
     else:
         opciones_grid["grandTotalRow"] = "bottom"
 
@@ -1197,6 +1199,14 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     custom_css = _css_base(font_px)
 
+    # Totales anclados ARRIBA en este grid: el acento separador va DEBAJO
+    # de la fila total (la base trae border-top, pensado para pie de tabla,
+    # que Compras sigue usando).
+    custom_css[".ag-row-pinned"].update({
+        "border-top": "none !important",
+        "border-bottom": f"2px solid {ACENTO} !important",
+    })
+
     if envolver_cabeceras:
         custom_css[".ag-header-cell-text"].update({
             "white-space": "normal !important",
@@ -1260,7 +1270,8 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         })
         custom_css[".ag-row-pinned"].update({
             "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
-            "border-top": f"2px solid {ACENTO} !important",
+            "border-top": "none !important",
+            "border-bottom": f"2px solid {ACENTO} !important",
             "color": f"{ACENTO_TEXTO_OSCURO} !important",
         })
 
@@ -1349,7 +1360,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         custom_css[".ag-row-pinned"] = {
             "background-color": f"{GRIS_BORDE} !important",
             "font-weight": "700 !important",
-            "border-top": f"2px solid {GRIS_TEXTO} !important",
+            "border-bottom": f"2px solid {GRIS_TEXTO} !important",
             "color": "#101014 !important",
             "font-size": f"{font_px + 1}px !important",
         }
