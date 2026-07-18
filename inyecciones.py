@@ -1532,3 +1532,55 @@ def inject_fix_column_panel_ajuste():
     })();
     </script>
     """, height=0)
+
+
+# ===========================================================================
+# ALINEAR TÍTULO + PESTAÑAS DE AJUSTE CON EL BORDE DE LA TABLA
+# ===========================================================================
+
+def inject_alinear_cabecera_ajuste():
+    """
+    Alinea el título "Ajuste de Inventario" y las pestañas Tabla/Gráficos
+    (ambos position:fixed, ver estilos.py) con el borde izquierdo real del
+    área de contenido — la misma columna donde arranca la tabla.
+
+    Por qué JS y no un valor fijo en CSS: el título/pestañas están fuera
+    del flujo normal (position:fixed) mientras que la tabla vive dentro del
+    padding por defecto de Streamlit, que no está pisado en estilos.py y
+    puede variar. En vez de adivinar ese padding, se mide en tiempo real
+    con getBoundingClientRect() y se aplica como left inline.
+
+    Mismo espíritu que inject_dynamic_grid_height: medición puntual con
+    reintentos hasta que los elementos existan, SIN listener de resize
+    continuo (evita el bucle de re-medición / error React #185).
+    """
+    components.html("""
+    <script>
+    (function(){
+        var win = window.parent, doc = win.document;
+        var tries = 0, MAX = 40;
+
+        function alinear() {
+            var contenido = doc.querySelector('[data-testid="stMainBlockContainer"]')
+                          || doc.querySelector('.block-container');
+            var titulo = doc.querySelector('.titulo-ajuste-reporte');
+            if (!contenido || !titulo) return false;
+
+            var left = contenido.getBoundingClientRect().left;
+            titulo.style.setProperty('left', left + 'px', 'important');
+
+            var tabs = doc.querySelector('.st-key-ajuste_tabs_top');
+            if (tabs) tabs.style.setProperty('left', left + 'px', 'important');
+
+            return true;
+        }
+
+        function check() {
+            tries++;
+            alinear();
+            if (tries < MAX) win.setTimeout(check, 400);
+        }
+        win.setTimeout(check, 300);
+    })();
+    </script>
+    """, height=0)
