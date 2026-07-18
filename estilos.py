@@ -633,13 +633,15 @@ def get_css():
     /* CAMBIO: position:fixed + top/right explícitos reemplazan el          */
     /* margin:auto anterior (que solo funcionaba en flujo normal).          */
     /* =================================================================== */
-    .st-key-fecha_ajuste_pill {
-        position: fixed !important;
-        top: 6px !important;
-        right: 16px !important;
-        z-index: 23 !important;
-        margin: 0 !important;
-    }
+.st-key-fecha_ajuste_pill {
+    position: fixed !important;
+    top: 6px !important;
+    right: 16px !important;
+    left: auto !important;          /* nada lo ancla a la izquierda */
+    width: fit-content !important;  /* la caja se encoge al input   */
+    z-index: 23 !important;
+    margin: 0 !important;
+}
 
     .st-key-fch_ajuste_inline [data-baseweb="input"] {
         width: auto !important;
