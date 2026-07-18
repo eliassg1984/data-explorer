@@ -296,6 +296,9 @@ html.fs-activo .ag-column-drop-vertical {{
   min-height: 3.2em !important;
 }}
 /* ── ⛶ integrado en el riel de pestañas ── */
+/* El tema de AgGrid da al riel un padding-top de 24px que empujaba el ⛶
+   hacia abajo; sin él, el botón queda al tope, alineado con la cabecera. */
+.ag-side-buttons {{ padding-top: 0 !important; }}
 #aggrid-maximize-btn {{
   width: 100%;
   height: 36px;
