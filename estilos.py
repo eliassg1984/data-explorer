@@ -583,7 +583,7 @@ def get_css():
     .st-key-chips_ajuste_tabla [data-testid="stPopover"] button {
         min-width: 0 !important;
         width: 100% !important;
-        min-height: 42px !important;
+        min-height: 36px !important;
         padding: 7px 14px !important;
         font-size: 12px !important;
     }
