@@ -1625,3 +1625,32 @@ def inject_alinear_cabecera_ajuste():
     })();
     </script>
     """, height=0)
+
+
+# ===========================================================================
+# TEXTO "ÚLTIMA ACTUALIZACIÓN" EN LA FRANJA INFERIOR
+# ===========================================================================
+
+def inject_footer_actualizacion(texto):
+    """Pinta el texto como div fijo en el body del documento de la app:
+    los contenedores de Streamlit crean stacking contexts que dejaban el
+    texto ENTERRADO bajo la franja inferior (.stApp::after) por más
+    z-index que tuviera; anclado directo al body escapa de todos ellos."""
+    _t = json.dumps(str(texto))
+    components.html("""
+    <script>
+    (function(){
+        var doc = window.parent.document;
+        var el = doc.getElementById('footer-actualizacion');
+        if (!el) {
+            el = doc.createElement('div');
+            el.id = 'footer-actualizacion';
+            el.style.cssText = 'position:fixed;left:114px;bottom:13px;'
+                + 'z-index:2147483647;font-size:12px;color:#71717a;'
+                + "font-family:'DM Sans',sans-serif;pointer-events:none;";
+            doc.body.appendChild(el);
+        }
+        el.textContent = """ + _t + """;
+    })();
+    </script>
+    """, height=0)

@@ -13,7 +13,7 @@ from data import (
     fecha_ultima_actualizacion,
 )
 from estilos import TAM_FUENTE, inject_css
-from inyecciones import inject_error_overlay, inject_element_inspector
+from inyecciones import inject_error_overlay, inject_element_inspector, inject_footer_actualizacion
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras, renderizar_aggrid_compras
 from graficos import renderizar_graficos, renderizar_graficos_reporte
 from navegacion import inject_navegacion
@@ -411,14 +411,10 @@ if True:
     # por .stApp::after (fila_ajuste_top crea un stacking context propio
     # por su sticky + z-index).
     if isinstance(_fecha_actualizacion, datetime.datetime):
-        with st.container(key="footer_actualizacion"):
-            st.markdown(
-                '<p class="ultima-actualizacion">'
-                f'Última actualización: '
-                f'{_fecha_actualizacion.strftime("%d/%m/%Y · %H:%M")}'
-                '</p>',
-                unsafe_allow_html=True,
-            )
+        inject_footer_actualizacion(
+            "Última actualización: "
+            + _fecha_actualizacion.strftime("%d/%m/%Y · %H:%M")
+        )
 
     # Aplicar el rango al DataFrame (usa el valor ya guardado en session_state)
     if _franja_con_fecha:
