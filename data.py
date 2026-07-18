@@ -65,11 +65,13 @@ REPORTES = {
         "columnas_fijas_movil": 2,
     },
     "Receta Base": {
+        "fecha": None,  # catálogo (foto completa): sin filtro de fecha
         "label_corto": "R. Base",
         "archivo": "recetabase.parquet",
         "icono": "clipboard-data",
     },
     "Receta Venta": {
+        "fecha": None,  # catálogo (foto completa): sin filtro de fecha
         "label_corto": "R. Venta",
         "archivo": "recetaventa.parquet",
         "icono": "receipt",
