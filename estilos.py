@@ -578,21 +578,38 @@ def get_css():
         flex: 0 1 auto !important;
         min-width: 0 !important;
     }
-    /* Angosto (ajustado al texto, como el widget de fecha) + tono lavanda
-       que los resalta levemente, a juego con el resto de la webapp. */
+    /* Ancho uniforme (en vez de ajustarse al largo de cada texto) + tono
+       lavanda que los resalta levemente, a juego con el resto de la webapp. */
     .st-key-chips_ajuste_tabla [data-testid="stPopover"] button {
         min-width: 0 !important;
-        width: auto !important;
+        width: 132px !important;
         min-height: 36px !important;
-        padding: 7px 16px !important;
+        padding: 7px 10px !important;
         font-size: 12px !important;
         background: var(--accent-tint) !important;
         border: 1px solid var(--border-lavender) !important;
         color: var(--accent-deep) !important;
+        overflow: hidden !important;
+    }
+    .st-key-chips_ajuste_tabla [data-testid="stPopover"] button p {
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
     }
     .st-key-chips_ajuste_tabla [data-testid="stPopover"] button:hover {
         background: var(--accent-light) !important;
         border-color: var(--accent) !important;
+    }
+    /* Estado ACTIVO (hay un filtro aplicado): fondo lleno en vez del tono
+       tenue de reposo, para diferenciarlo a simple vista. */
+    .st-key-chips_ajuste_tabla [class*="st-key-chipwrap_"][class*="_on"] [data-testid="stPopover"] button {
+        background: var(--accent) !important;
+        border-color: var(--accent) !important;
+        color: #ffffff !important;
+    }
+    .st-key-chips_ajuste_tabla [class*="st-key-chipwrap_"][class*="_on"] [data-testid="stPopover"] button:hover {
+        background: var(--accent-deep) !important;
+        border-color: var(--accent-deep) !important;
     }
     /* Pantallas chicas: si no caben junto a las pestañas, bajan a su línea */
     @media (max-width: 900px) {
