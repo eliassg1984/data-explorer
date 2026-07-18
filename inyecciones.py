@@ -1597,3 +1597,46 @@ def inject_alinear_cabecera_ajuste():
     })();
     </script>
     """, height=0)
+
+
+# ===========================================================================
+# OCULTAR INSIGNIAS DE STREAMLIT CLOUD EN MÓVIL
+# ===========================================================================
+
+def inject_ocultar_badges_cloud():
+    """
+    Oculta, SOLO en móvil, las insignias que Streamlit Community Cloud
+    superpone en la esquina inferior (avatar del creador y "Hosted with
+    Streamlit"), porque tapan los últimos iconos de la barra de navegación
+    inferior.
+
+    Estos elementos NO viven en el documento de la app sino en la página
+    anfitriona: la cadena es [iframe del componente] → [documento de la app]
+    → [página host de Cloud]. `window.parent` solo llega a la app, así que
+    aquí se usa `window.top` (el documento raíz). En local no hay host y
+    window.top ES el documento de la app: los selectores no matchean nada,
+    inofensivo. El try/catch cubre el caso de incrustar la app en un dominio
+    ajeno (cross-origin bloquearía el acceso). Las clases van con hash
+    (_viewerBadge_xxx), por eso se seleccionan por substring.
+
+    NOTA — colores: no aplica, solo display:none.
+    """
+    components.html("""
+    <script>
+    (function(){
+        try {
+            var doc = window.top.document;
+            if (doc.getElementById('ocultar-badges-cloud')) return;
+            var stl = doc.createElement('style');
+            stl.id = 'ocultar-badges-cloud';
+            stl.textContent =
+                '@media screen and (max-width: 768px) {' +
+                '  a[class*="_viewerBadge"], div[class*="_profileContainer"] {' +
+                '    display: none !important;' +
+                '  }' +
+                '}';
+            doc.head.appendChild(stl);
+        } catch(e) {}
+    })();
+    </script>
+    """, height=0)
