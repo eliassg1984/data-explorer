@@ -222,6 +222,18 @@ def _css_panel_columnas():
         ".ag-column-tool-panel .ag-column-panel": {
             "border": "none !important",
         },
+        # Modo pivote: sus listas (grupos de filas, valores, etiquetas) deben
+        # poder deslizarse; sin esto la lista queda cortada sin scrollbar.
+        ".ag-side-bar[data-active-panel='pivotePanel'] .ag-column-panel": {
+            "overflow-y": "auto !important",
+        },
+        ".ag-column-drop-vertical": {
+            "min-height": "0 !important",
+            "flex": "1 1 auto !important",
+        },
+        ".ag-column-drop-vertical-list": {
+            "overflow-y": "auto !important",
+        },
         ".ag-column-tool-panel .ag-column-select-all": {
             "padding": "10px 0 !important",
             "border-bottom": f"1px solid {GRIS_BORDE} !important",
@@ -748,7 +760,7 @@ def _config_sidebar(mostrar_pivot, es_ajuste):
     }
     _tool_panels = [_columns_panel, _filters_panel]
 
-    if es_ajuste:
+    if True:
         _tool_panels.append({
             "id": "pivotePanel",
             "labelDefault": "Modo pivote",
@@ -1135,10 +1147,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     if envolver_cabeceras:
         opciones_grid["headerHeight"] = int(font_px * 2 + 14)
 
-    if es_salidas:
-        opciones_grid["sideBar"] = False
-
-    if es_ajuste:
+    # DISEÑO UNIFICADO: el atributo data-active-panel (del que dependen
+    # TODOS los estilos de pastillas/toggles del sidebar) se marca en
+    # todos los reportes, no solo en Ajuste.
+    if True:
         opciones_grid["onToolPanelVisibleChanged"] = JsCode("""
             function(params) {
                 try {
