@@ -1095,7 +1095,10 @@ def inject_pagination_v2():
           ultimo = r;
         }
         if (tries < MAX){ win.setTimeout(check, 500); return; }
-        if (win.__logErr) win.__logErr('Paginacion v2 no se pudo montar (' + ultimo + ').');
+        /* Aviso solo en modo debug: con la barra auto-oculta (1 pagina),
+           un grid vacio o la vista de graficos, no montar es esperable. */
+        var esDebug = (win.location.search || '').indexOf('debug') !== -1;
+        if (esDebug && win.__logErr) win.__logErr('Paginacion v2 no se pudo montar (' + ultimo + ').');
       }
       win.setTimeout(check, 800);
     })();
