@@ -150,10 +150,17 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     background:{LAVANDA_CABECERA_GRUPO} !important; color:{ACENTO} !important;
     box-shadow:inset 0 0 0 1px {LAVANDA_BORDE} !important;
 }}
-.st-key-nav_rail [class*="st-key-navbtn_"] button p,
-.st-key-nav_rail [class*="st-key-navbtn_"] button span,
+/* Icono ARRIBA y etiqueta corta DEBAJO, apilados en columna dentro del
+   mismo botón (el label del botón es ":material/x: Nombre"). */
+.st-key-nav_rail [class*="st-key-navbtn_"] button p {{
+    display:flex !important; flex-direction:column !important;
+    align-items:center !important; gap:3px !important;
+    font-size:9.5px !important; font-weight:600 !important;
+    line-height:1.1 !important; margin:0 !important;
+    white-space:nowrap !important;
+}}
 .st-key-nav_rail [class*="st-key-navbtn_"] button [data-testid="stIconMaterial"] {{
-    font-size:26px !important; line-height:1 !important;
+    font-size:22px !important; line-height:1 !important;
 }}
 
 /* Botón de refresco, al fondo del rail */
@@ -214,10 +221,13 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     .st-key-nav_rail [class*="st-key-navbtn_"] button {{
         width:100% !important; height:48px !important; min-height:48px !important;
     }}
-    .st-key-nav_rail [class*="st-key-navbtn_"] button p,
-    .st-key-nav_rail [class*="st-key-navbtn_"] button span,
+    /* Icono + etiqueta apilados, versión compacta para la barra inferior */
+    .st-key-nav_rail [class*="st-key-navbtn_"] button p {{
+        font-size:8.5px !important;
+        gap:2px !important;
+    }}
     .st-key-nav_rail [class*="st-key-navbtn_"] button [data-testid="stIconMaterial"] {{
-        font-size:22px !important;
+        font-size:20px !important;
     }}
 
     /* 6) Refresh: con anchos fijos de 25vw ya no hay espacio libre que
@@ -323,7 +333,7 @@ def _fragment_boton_refresco(reporte_activo, archivo):
     del fragment el callback no se disparaba (clic perdido en silencio)."""
 
     pulsado = st.button(
-        ":material/refresh:",
+        ":material/refresh: Refrescar",
         key="navbtn_refresh",
         help=f"Actualizar datos de «{reporte_activo}»",
     )
@@ -374,16 +384,19 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     )
 
     visibles = {
-        nombre: info.get("icono") or "question-circle"
+        nombre: info
         for nombre, info in reportes.items()
         if not (nombre == "Inspector" and not mostrar_inspector)
     }
 
     with st.container(key="nav_rail"):
-        for nombre, icono in visibles.items():
-            mat = _MATERIAL.get(icono, ICONO_DEFECTO)
+        for nombre, info in visibles.items():
+            mat = _MATERIAL.get(info.get("icono") or "question-circle", ICONO_DEFECTO)
+            # Etiqueta corta visible bajo el icono (el CSS del rail la apila
+            # en columna). Respaldo: primera palabra del nombre, recortada.
+            etiqueta = info.get("label_corto") or nombre.split()[0][:10]
             st.button(
-                f":material/{mat}:",
+                f":material/{mat}: {etiqueta}",
                 key=f"navbtn_{_slug(nombre)}",
                 help=nombre,
                 type="primary" if nombre == reporte_activo else "secondary",
