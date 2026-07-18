@@ -804,8 +804,11 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     REPORTES_ESTILO_INVENTARIO = ("Inventario Valorizado", "Ajuste de Inventario")
 
-    envolver_cabeceras = reporte in REPORTES_ESTILO_INVENTARIO
-    quitar_fondos = reporte in REPORTES_ESTILO_INVENTARIO
+    # DISEÑO UNIFICADO: todos los reportes usan el estilo plano de Ajuste
+    # (cabeceras envueltas, sin fondos semáforo por valor). es_inventario
+    # sigue acotado: controla colores de grupo y panel pivote.
+    envolver_cabeceras = True
+    quitar_fondos = True
     es_inventario = reporte in REPORTES_ESTILO_INVENTARIO
     es_salidas = (reporte == "Salidas")
     es_requerimientos = (reporte == "Requerimientos")

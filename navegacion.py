@@ -372,12 +372,12 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     """Dibuja el rail (botones nativos) + el título superior."""
     st.markdown(_CSS, unsafe_allow_html=True)
 
-    # Ajuste de Inventario: sube el encabezado al tope (elimina la franja).
-    if reporte_activo == "Ajuste de Inventario":
-        st.markdown(_CSS_AJUSTE, unsafe_allow_html=True)
+    # DISEÑO UNIFICADO: la cabecera fija (antes exclusiva de Ajuste de
+    # Inventario) aplica a TODOS los reportes; el título vive en la franja.
+    st.markdown(_CSS_AJUSTE, unsafe_allow_html=True)
 
-    # El título superior queda vacío en "Ajuste de Inventario"
-    _titulo_topbar = "" if reporte_activo == "Ajuste de Inventario" else reporte_activo
+    # El título del topbar queda vacío siempre (lo muestra la franja fija)
+    _titulo_topbar = ""
     st.markdown(
         f'<div id="nav-topbar">{_titulo_topbar}</div>',
         unsafe_allow_html=True,
