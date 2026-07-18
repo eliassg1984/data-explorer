@@ -895,7 +895,9 @@ def get_css():
         height: 42px !important;
         display: flex !important;
         align-items: center !important;
-        justify-content: flex-end !important;
+        /* A la IZQUIERDA de la franja: la esquina derecha la ocupa el botón
+           'Manage app' de Streamlit Cloud y tapaba el texto. */
+        justify-content: flex-start !important;
         padding: 0 24px !important;
         margin: 0 !important;
         z-index: 999991 !important; /* por encima de .stApp::after */
