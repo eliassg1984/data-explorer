@@ -159,7 +159,10 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     line-height:1.1 !important; margin:0 !important;
     white-space:nowrap !important;
 }}
-.st-key-nav_rail [class*="st-key-navbtn_"] button [data-testid="stIconMaterial"] {{
+/* El icono puede venir como stIconMaterial o como span material-symbols
+   (cuando va inline en el label junto a la etiqueta). Cubrimos ambos. */
+.st-key-nav_rail [class*="st-key-navbtn_"] button [data-testid="stIconMaterial"],
+.st-key-nav_rail [class*="st-key-navbtn_"] button p > span {{
     font-size:27px !important; line-height:1 !important;
 }}
 
@@ -226,7 +229,8 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
         font-size:8.5px !important;
         gap:2px !important;
     }}
-    .st-key-nav_rail [class*="st-key-navbtn_"] button [data-testid="stIconMaterial"] {{
+    .st-key-nav_rail [class*="st-key-navbtn_"] button [data-testid="stIconMaterial"],
+    .st-key-nav_rail [class*="st-key-navbtn_"] button p > span {{
         font-size:23px !important;
     }}
 
