@@ -160,7 +160,7 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     white-space:nowrap !important;
 }}
 .st-key-nav_rail [class*="st-key-navbtn_"] button [data-testid="stIconMaterial"] {{
-    font-size:22px !important; line-height:1 !important;
+    font-size:27px !important; line-height:1 !important;
 }}
 
 /* Botón de refresco, al fondo del rail */
@@ -227,7 +227,7 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
         gap:2px !important;
     }}
     .st-key-nav_rail [class*="st-key-navbtn_"] button [data-testid="stIconMaterial"] {{
-        font-size:20px !important;
+        font-size:23px !important;
     }}
 
     /* 6) Refresh: con anchos fijos de 25vw ya no hay espacio libre que
