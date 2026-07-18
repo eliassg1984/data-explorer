@@ -1309,25 +1309,30 @@ def inject_maximize_aggrid():
 
 def inject_dynamic_grid_height(offset_px: int = 260, min_px: int = 320):
     """
-    Estira la tabla AgGrid para que ocupe el alto de pantalla disponible,
-    en lugar del height=... fijo con el que se renderiza.
+    Ajusta el alto de la tabla AgGrid a su CONTENIDO real, con tope en el
+    alto de pantalla disponible: con pocas filas la tabla queda compacta y
+    la fila de totales pegada a la última fila; con muchas crece hasta el
+    tope y ahí pagina/scrollea (comportamiento anterior).
 
     DISEÑO SEGURO (mismo espíritu que inject_maximize_aggrid):
     - El grid se sigue creando con su height fijo en tablas.py. Esta función
-      solo lo AGRANDA por CSS/JS después. Si algo falla, el fijo queda como
-      red de seguridad: comenta la llamada y vuelves al estado anterior.
-    - Mide window.innerHeight UNA sola vez (con reintentos hasta que el iframe
-      exista). NO instala listener de resize continuo, que es justo lo que
-      provoca el bucle de re-medición (setFrameHeight -> resize -> re-mide...)
-      y el error React #185. Es una medición puntual, no reactiva.
+      solo lo redimensiona por CSS/JS después. Si algo falla, el fijo queda
+      como red de seguridad: comenta la llamada y vuelves al estado anterior.
+    - Si la medición del contenido falla, cae al comportamiento anterior
+      (llenar el alto disponible).
+    - NO instala listener de resize continuo, que es justo lo que provoca el
+      bucle de re-medición (setFrameHeight -> resize -> re-mide...) y el
+      error React #185. La re-medición al expandir/colapsar grupos usa un
+      ÚNICO listener de click con debounce: los clicks son acciones del
+      usuario, acotadas, no un bucle reactivo.
     - Reutiliza el mismo buscarIframe() que el fullscreen: localiza el iframe
       del componente por su .ag-root-wrapper.
 
     Parámetros:
     - offset_px: píxeles reservados para lo que hay ARRIBA de la tabla
-      (chip de título, tabs, fecha) más un margen inferior. Súbelo si la
-      tabla tapa algo de abajo; bájalo si queda blanco.
-    - min_px: altura mínima; en pantallas muy bajas no baja de aquí.
+      (chip de título, tabs, fecha) más un margen inferior. Define el TOPE:
+      disponible = alto de ventana - offset_px.
+    - min_px: tope mínimo; en pantallas muy bajas el límite no baja de aquí.
 
     NOTA — colores: el `dynh-css` que inyecta esta función dentro del iframe
     solo trae `html, body {margin:0}` y `.ag-root-wrapper {height: Npx}`.
@@ -1348,12 +1353,41 @@ def inject_dynamic_grid_height(offset_px: int = 260, min_px: int = 320):
         var MAX = 40;
         """ + _JS_BUSCAR_IFRAME_FN + """
 
+        /* Alto real del contenido del grid: cabecera + filas visibles +
+           fila total anclada + scrollbar horizontal + barra de paginación.
+           Devuelve null si algo no está montado aún (usa el fallback). */
+        function medirContenido(idoc) {
+            try {
+                var partes = [
+                    '.ag-header',
+                    '.ag-center-cols-container',
+                    '.ag-floating-bottom',
+                    '.ag-body-horizontal-scroll',
+                    '.ag-paging-panel'
+                ];
+                var total = 0, header = idoc.querySelector('.ag-header');
+                if (!header) return null;
+                for (var i = 0; i < partes.length; i++) {
+                    var el = idoc.querySelector(partes[i]);
+                    if (el) total += el.getBoundingClientRect().height;
+                }
+                return Math.ceil(total) + 6;   /* margen para bordes */
+            } catch(e) { return null; }
+        }
+
         function aplicarAltura() {
             var iframe = buscarIframe();
             if (!iframe) return false;
 
-            /* Alto disponible = ventana - lo que va arriba/abajo (offset). */
-            var h = Math.max(MINPX, win.innerHeight - OFFSET);
+            /* Tope = ventana - lo que va arriba/abajo (offset). El alto
+               final es el del CONTENIDO, sin pasarse del tope. */
+            var disponible = Math.max(MINPX, win.innerHeight - OFFSET);
+            var h = disponible;
+            var contenido = iframe.contentDocument
+                ? medirContenido(iframe.contentDocument) : null;
+            if (contenido !== null) {
+                h = Math.min(disponible, Math.max(160, contenido));
+            }
 
             /* 1) El iframe del componente. */
             iframe.style.height = h + 'px';
@@ -1404,6 +1438,18 @@ def inject_dynamic_grid_height(offset_px: int = 260, min_px: int = 320):
                     win.setTimeout(function(){
                         try { iframe.contentWindow.dispatchEvent(new Event('resize')); } catch(e) {}
                     }, 200);
+                }
+
+                /* Re-medición al expandir/colapsar grupos o cambiar de
+                   página: un único listener de click (guardado en el doc
+                   del iframe), con espera para que la animación de filas
+                   termine antes de medir. Acotado a acciones del usuario. */
+                if (idoc && !idoc.__dynhClick) {
+                    idoc.__dynhClick = true;
+                    idoc.addEventListener('click', function(){
+                        win.clearTimeout(idoc.__dynhTimer);
+                        idoc.__dynhTimer = win.setTimeout(aplicarAltura, 320);
+                    }, true);
                 }
             } catch(e) {}
 
