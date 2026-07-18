@@ -760,6 +760,13 @@ def get_css():
     [data-testid="stStatusWidget"] {
         display: none !important;
     }
+    /* Botón "Manage app" de Streamlit Community Cloud (abajo a la derecha;
+       en móvil tapa la barra de navegación inferior). Las clases van con
+       hash y cambian entre versiones, por eso el selector por substring. */
+    [data-testid="manage-app-button"],
+    div[class*="viewerBadge"] {
+        display: none !important;
+    }
     [class*="st-key-grid_"] [data-testid="stElementToolbar"] {
         display: none !important;
     }
@@ -914,6 +921,11 @@ def get_css():
             transform: none !important;
             font-size: 1.3rem !important;
             left: 12px !important;
+            /* No pisarse con la pill de fecha fija de la derecha */
+            max-width: calc(100vw - 220px) !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
         }
         .st-key-ajuste_tabs_top {
             transform: none !important;
@@ -930,12 +942,21 @@ def get_css():
             align-items: stretch !important;
         }
 
-        /* CAMBIO: la pill de fecha también pierde su fixed en móvil y
-           vuelve al flujo (igual que los chips de filtro en <900px).
-           Evita que tape el título o quede fuera del viewport estrecho. */
+        /* La pill de fecha se mantiene FIJA también en móvil (anclada
+           arriba a la derecha, dentro de la franja blanca) para que no
+           se desplace con el scroll. El título lleva max-width con
+           ellipsis (arriba) para que no se pisen en pantallas angostas. */
         .st-key-fecha_ajuste_pill {
-            position: static !important;
-            margin: 4px 0 0 auto !important;
+            position: fixed !important;
+            top: 6px !important;
+            right: 8px !important;
+            left: auto !important;
+            margin: 0 !important;
+            z-index: 23 !important;
+        }
+        .st-key-fch_ajuste_inline .stDateInput input {
+            width: 140px !important;
+            font-size: 11.5px !important;
         }
 
         /* Selector de vista: mantiene Opción C, más compacto para tocar */
