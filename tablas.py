@@ -809,7 +809,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     # sigue acotado: controla colores de grupo y panel pivote.
     envolver_cabeceras = True
     quitar_fondos = True
-    es_inventario = reporte in REPORTES_ESTILO_INVENTARIO
+    # DISEÑO UNIFICADO: todos los grids desktop reciben el tratamiento
+    # completo de Ajuste (grupos coloreados, paginación v2, panel lateral
+    # con Modo pivote, maximizar y altura dinámica).
+    es_inventario = True
     es_salidas = (reporte == "Salidas")
     es_requerimientos = (reporte == "Requerimientos")
     es_ajuste = (reporte == "Ajuste de Inventario")
@@ -1002,7 +1005,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     fila_totales = _fila_totales(df_grid, cols_valor, cols_precio, cols_stock, primera_col)
 
     get_row_style = _estilo_fila(col_stock, df_grid, es_inventario, quitar_fondos)
-    _sidebar_cfg = _config_sidebar(mostrar_pivot, es_ajuste)
+    _sidebar_cfg = _config_sidebar(mostrar_pivot=True, es_ajuste=True)
 
     _reporte_js = str(reporte).replace("\\", "\\\\").replace('"', '\\"')
 
@@ -1409,19 +1412,13 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         )
 
     # ── CAMBIO 1: pasa usa_pagination_v2 según el reporte ─────────────────
-    inject_grid_health_check(usa_pagination_v2=(reporte in REPORTES_ESTILO_INVENTARIO))
+    inject_grid_health_check(usa_pagination_v2=True)
 
-    if reporte in REPORTES_ESTILO_INVENTARIO:
-        inject_pagination_v2()
-
-    if es_requerimientos or es_ajuste:
-        inject_maximize_aggrid()
-        inject_dynamic_grid_height(offset_px=260, min_px=320)
-
-    if es_ajuste:
-        from inyecciones import inject_fix_column_panel_ajuste
-        inject_fix_column_panel_ajuste()
-        inject_alinear_cabecera_ajuste()
+    inject_pagination_v2()
+    inject_maximize_aggrid()
+    inject_dynamic_grid_height(offset_px=260, min_px=320)
+    inject_fix_column_panel_ajuste()
+    inject_alinear_cabecera_ajuste()
 
 
 # ===========================================================================
