@@ -584,7 +584,7 @@ def get_css():
         min-width: 0 !important;
         width: 100% !important;
         min-height: 42px !important;
-        padding: 10px 12px !important;
+        padding: 7px 14px !important;
         font-size: 13px !important;
     }
     /* Pantallas chicas: si no caben junto a las pestañas, bajan a su línea */
