@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 
 REPORTES = {
     "Ajuste de Inventario": {
+        "label_corto": "Ajuste",
         "archivo": "ajusteinventario.parquet",
         "icono": "sliders",
         "filtros_cat": [],  # Sin filtros de Área/Familia/Subfamilia en el popover
@@ -41,10 +42,12 @@ REPORTES = {
         ],
     },
     "Compras": {
+        "label_corto": "Compras",
         "archivo": "compras.parquet",
         "icono": "cart",
     },
     "Inventario Valorizado": {
+        "label_corto": "Inventario",
         "archivo": "inventariovalorizado.parquet",
         "icono": "boxes",
         "columnas": [
@@ -62,14 +65,17 @@ REPORTES = {
         "columnas_fijas_movil": 2,
     },
     "Receta Base": {
+        "label_corto": "R. Base",
         "archivo": "recetabase.parquet",
         "icono": "clipboard-data",
     },
     "Receta Venta": {
+        "label_corto": "R. Venta",
         "archivo": "recetaventa.parquet",
         "icono": "receipt",
     },
     "Ventas": {
+        "label_corto": "Ventas",
         "archivo": "ventas.parquet",
         "icono": "cash-coin",
         # Carga filtrada por rango de fechas DENTRO de DuckDB (no baja todo
@@ -79,6 +85,7 @@ REPORTES = {
         "carga_por_rango": "FEC REG DOCUMENTO",
     },
     "Salidas": {
+        "label_corto": "Salidas",
         "archivo": "salidas.parquet",
         "icono": "box-arrow-up",
         # NOTA: estos nombres deben coincidir con las columnas reales de
@@ -93,10 +100,12 @@ REPORTES = {
         "columnas_fijas_movil": 2,
     },
     "Requerimientos": {
+        "label_corto": "Requerim.",
         "archivo": "requerimientos.parquet",
         "icono": "card-checklist",
     },
     "Inspector": {
+        "label_corto": "Inspector",
         # Herramienta de verificación de datos crudos (no es un parquet propio):
         # permite inspeccionar cualquiera de los archivos de arriba.
         "icono": "search",
