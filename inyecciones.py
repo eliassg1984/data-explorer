@@ -1650,6 +1650,17 @@ def inject_footer_actualizacion(texto):
                 + "font-family:'DM Sans',sans-serif;pointer-events:none;";
             doc.body.appendChild(el);
         }
+        /* En movil la barra de navegacion inferior ocupa 60px: el texto
+           sube para no solaparse con los iconos. */
+        if (!doc.getElementById('footer-actualizacion-css')) {
+            var stl = doc.createElement('style');
+            stl.id = 'footer-actualizacion-css';
+            stl.textContent = '@media (max-width:768px) {'
+                + ' #footer-actualizacion {'
+                + '   left: 12px !important; bottom: 68px !important;'
+                + ' } }';
+            doc.head.appendChild(stl);
+        }
         el.textContent = """ + _t + """;
     })();
     </script>
