@@ -558,7 +558,7 @@ def get_css():
     /* ================================================================== */
     .st-key-chips_ajuste_tabla {
         position: fixed !important;
-        top: var(--cab-nivel2-top) !important;
+        top: calc(var(--cab-nivel2-top) + 10px) !important;
         right: 90px !important;
         left: auto !important;
         width: auto !important;
