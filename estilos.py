@@ -900,6 +900,15 @@ def get_css():
         margin: 0 !important;
         z-index: 999991 !important; /* por encima de .stApp::after */
         pointer-events: none !important;
+        /* El bloque vertical de Streamlit es columna con gap: en fila y sin
+           separaciones el texto queda centrado DENTRO de la franja de 42px
+           (antes desbordaba por debajo del viewport). */
+        flex-direction: row !important;
+        gap: 0 !important;
+    }
+    .st-key-footer_actualizacion > div {
+        height: auto !important;
+        margin: 0 !important;
     }
     .st-key-footer_actualizacion .ultima-actualizacion {
         margin: 0 !important;
