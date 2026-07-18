@@ -945,8 +945,17 @@ def get_css():
             margin-top: 0 !important;
             margin-bottom: 0 !important;
         }
+        /* ORDEN DE APILAMIENTO al scrollear (verificado en el DOM real):
+           banda blanca (15) TAPA al contenido que sube; los hijos de la
+           franja (título/pestañas/fecha, 16) quedan encima de la banda.
+           Los chips vuelven a z auto: su z:23 de escritorio aplica aunque
+           estén static, porque son flex items — y los ponía sobre la banda. */
         .st-key-fila_ajuste_top::before {
             left: 0 !important;
+            z-index: 15 !important;
+        }
+        .st-key-fila_ajuste_top > * {
+            z-index: 16 !important;
         }
         .st-key-fila_ajuste_top [data-testid="stHorizontalBlock"] {
             gap: 4px !important;
@@ -991,6 +1000,7 @@ def get_css():
         /* Chips pegados a la franja (el margen de 6px es para tablet) */
         .st-key-chips_ajuste_tabla {
             margin: 2px 0 0 0 !important;
+            z-index: auto !important;
         }
 
         /* Avisos: sobre la barra inferior de navegación */
