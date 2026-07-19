@@ -385,11 +385,15 @@ if True:
                         key=f"fch_franja_{reporte.replace(' ', '_')}",
                         label_visibility="collapsed",
                     )
-                # Cambio de rango → rerun completo para refiltrar df_f
+                # Cambio de rango: basta con guardar el valor — el filtro
+                # se aplica más abajo EN ESTA MISMA pasada. El st.rerun()
+                # que había aquí interrumpía la ejecución ANTES de que las
+                # pestañas Tabla/Gráficos se renderizaran, Streamlit limpiaba
+                # su estado y la vista caía a "Tabla" aunque la pill siguiera
+                # marcando "Gráficos".
                 if (isinstance(rango_aj, (tuple, list)) and len(rango_aj) == 2
                         and tuple(rango_aj) != st.session_state[_k_rango_franja]):
                     st.session_state[_k_rango_franja] = tuple(rango_aj)
-                    st.rerun(scope="app")
 
         # El selector pertenece a la misma franja blanca que el título.
         if reporte != "Requerimientos":
