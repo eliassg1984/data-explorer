@@ -2463,21 +2463,21 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
                         x=g["dia"], y=g["venta"], name="Venta",
                         marker=dict(color=ACENTO), yaxis="y",
                         texttemplate="S/ %{y:,.0f}", textposition="outside",
-                        textfont=dict(size=9), cliponaxis=False,
+                        textfont=dict(size=13), cliponaxis=False,
                         hovertemplate="%{x|%d/%m/%Y}<br>Venta: S/ %{y:,.2f}<extra></extra>")
                 if "Costo" in sel and "costo" in g.columns:
                     fig.add_bar(
                         x=g["dia"], y=g["costo"], name="Costo",
                         marker=dict(color=PALETA_CALLAI[1]), yaxis="y",
                         texttemplate="S/ %{y:,.0f}", textposition="outside",
-                        textfont=dict(size=9), cliponaxis=False,
+                        textfont=dict(size=13), cliponaxis=False,
                         hovertemplate="%{x|%d/%m/%Y}<br>Costo: S/ %{y:,.2f}<extra></extra>")
                 if _need_y2:
                     fig.add_trace(go.Scatter(
                         x=g["dia"], y=g["pax"], name="Pax",
                         mode="lines+markers+text",
                         text=g["pax"], texttemplate="%{y:,.0f}",
-                        textposition="top center", textfont=dict(size=9),
+                        textposition="top center", textfont=dict(size=12),
                         line=dict(color=PALETA_CALLAI[2], width=2.5), yaxis="y2",
                         hovertemplate="%{x|%d/%m/%Y}<br>Pax: %{y:,.0f}<extra></extra>"))
                 if _need_y3:
