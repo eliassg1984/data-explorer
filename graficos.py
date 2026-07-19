@@ -2358,6 +2358,8 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
     col_sub   = _resolver(df_f, ["Sub Grupo", "Sub_Grupo", "Subgrupo"])
     col_fecha = _resolver(df_f, ["Fec Reg Documento", "Fec_Reg_Documento",
                                  "Fecha Registro", "FECHA"])
+    col_costo = _resolver(df_f, ["Precio Costo", "Costo Item Ddocumento", "Costo"])
+    col_pax   = _resolver(df_f, ["Cant Pax", "Cantidad Pax", "Pax"])
     if not col_fecha:
         for _c in df_f.columns:
             if pd.api.types.is_datetime64_any_dtype(df_f[_c]):
@@ -2420,23 +2422,80 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
 
     with st.container(border=True, key="ajuste_graf_card_izq_ventas"):
 
-        # ── 1) Venta bruta por día ──────────────────────────────────────
+        # ── 1) Venta bruta por día (Venta / Costo / Pax / Pax·Venta) ─────
+        # Venta y Costo comparten el eje IZQUIERDO (soles). Pax va a un eje
+        # derecho (conteo) y el ratio Pax/Venta a un tercer eje derecho
+        # (escala minúscula), para que las 4 escalas no se pisen. El selector
+        # de métricas (pills multi) permite prender/apagar cada serie.
         if graf == "Venta por día" and col_fecha:
             _fe = pd.to_datetime(d[col_fecha], errors="coerce").dt.normalize()
-            g = (pd.DataFrame({"dia": _fe, "venta": _venta})
-                 .dropna(subset=["dia"])
-                 .groupby("dia", as_index=False)["venta"].sum()
-                 .sort_values("dia"))
+            _base = pd.DataFrame({"dia": _fe, "venta": _venta})
+            if col_costo:
+                _base["costo"] = pd.to_numeric(d[col_costo], errors="coerce").fillna(0)
+            if col_pax:
+                _base["pax"] = pd.to_numeric(d[col_pax], errors="coerce").fillna(0)
+            _base = _base.dropna(subset=["dia"])
+            _agg = {c: "sum" for c in _base.columns if c != "dia"}
+            g = _base.groupby("dia", as_index=False).agg(_agg).sort_values("dia")
+            if "pax" in g.columns:
+                g["ratio"] = g["pax"] / g["venta"].replace(0, np.nan)
+
             if g.empty:
                 st.info("Sin fechas válidas en el rango.")
             else:
-                fig = go.Figure(go.Bar(
-                    x=g["dia"], y=g["venta"], marker=dict(color=ACENTO),
-                    hovertemplate="%{x|%d/%m/%Y}<br>S/ %{y:,.2f}<extra></extra>",
-                ))
+                _opts = ["Venta"]
+                if col_costo:
+                    _opts.append("Costo")
+                if col_pax:
+                    _opts += ["Pax", "Pax/Venta"]
+                _def = [m for m in ("Venta", "Costo") if m in _opts]
+                sel = st.pills(
+                    "Métricas", _opts, selection_mode="multi", default=_def,
+                    key="ventas_dia_metricas", label_visibility="collapsed",
+                ) or ["Venta"]
+
+                _need_y2 = "Pax" in sel and "pax" in g.columns
+                _need_y3 = "Pax/Venta" in sel and "ratio" in g.columns
+
+                fig = go.Figure()
+                if "Venta" in sel:
+                    fig.add_bar(
+                        x=g["dia"], y=g["venta"], name="Venta",
+                        marker=dict(color=ACENTO), yaxis="y",
+                        hovertemplate="%{x|%d/%m/%Y}<br>Venta: S/ %{y:,.2f}<extra></extra>")
+                if "Costo" in sel and "costo" in g.columns:
+                    fig.add_bar(
+                        x=g["dia"], y=g["costo"], name="Costo",
+                        marker=dict(color=PALETA_CALLAI[1]), yaxis="y",
+                        hovertemplate="%{x|%d/%m/%Y}<br>Costo: S/ %{y:,.2f}<extra></extra>")
+                if _need_y2:
+                    fig.add_trace(go.Scatter(
+                        x=g["dia"], y=g["pax"], name="Pax", mode="lines+markers",
+                        line=dict(color=PALETA_CALLAI[2], width=2.5), yaxis="y2",
+                        hovertemplate="%{x|%d/%m/%Y}<br>Pax: %{y:,.0f}<extra></extra>"))
+                if _need_y3:
+                    fig.add_trace(go.Scatter(
+                        x=g["dia"], y=g["ratio"], name="Pax/Venta",
+                        mode="lines+markers",
+                        line=dict(color=PALETA_CALLAI[3], width=2, dash="dot"),
+                        yaxis="y3",
+                        hovertemplate="%{x|%d/%m/%Y}<br>Pax/Venta: %{y:.4f}<extra></extra>"))
+
                 _compras_layout(fig, alto=500)
-                fig.update_layout(title="Venta bruta por día",
-                                  xaxis_title=None, yaxis_title=None)
+                _xright = 0.88 if _need_y3 else 1.0
+                fig.update_layout(
+                    title="Venta bruta por día",
+                    barmode="group",
+                    xaxis=dict(domain=[0.0, _xright]),
+                    yaxis=dict(tickprefix="S/ ", tickformat=",.0f"),
+                    yaxis2=dict(overlaying="y", side="right", showgrid=False,
+                                tickformat=",.0f", title="Pax", visible=_need_y2),
+                    yaxis3=dict(overlaying="y", side="right", anchor="free",
+                                position=1.0, showgrid=False, tickformat=".4f",
+                                title="Pax/Venta", visible=_need_y3),
+                    margin=dict(l=10, r=(70 if _need_y3 else 10), t=30, b=10),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+                )
                 st.plotly_chart(fig, use_container_width=True, key="ventas_g_dia")
 
         # ── 2) Venta por familia/subfamilia por semana ──────────────────
