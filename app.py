@@ -401,12 +401,12 @@ if True:
             with st.container(key="ajuste_tabs_top"):
                 st.pills(
                     "Vista",
-                    options=["Tabla", "Gráficos"],
+                    options=["Gráficos", "Tabla"],
                     format_func=lambda vista: (
                         ":material/table_rows: Tabla"
                         if vista == "Tabla" else ":material/monitoring: Gráficos"
                     ),
-                    default="Tabla",
+                    default="Gráficos",
                     label_visibility="collapsed",
                     key=f"vista_seg_{reporte}",
                 )
@@ -713,18 +713,18 @@ def _selector_vista():
     """Muestra un radio horizontal estilizado como tabs subrayados y devuelve
     la opción elegida ('Tabla' o 'Gráficos'). El CSS que lo convierte en tabs
     vive en estilos.py (bloque '.st-key-vistatabs_...')."""
-    _opciones = {"Tabla": ":material/table_rows: Tabla",
-             "Gráficos": ":material/monitoring: Gráficos"}
+    _opciones = {"Gráficos": ":material/monitoring: Gráficos",
+             "Tabla": ":material/table_rows: Tabla"}
     with st.container(key=f"vistatabs_{reporte}"):
         vista = st.pills(
             "Vista",
             options=list(_opciones.keys()),
             format_func=lambda o: _opciones[o],
-            default="Tabla",
+            default="Gráficos",
             label_visibility="collapsed",
             key=f"vista_seg_{reporte}",
         )
-    return vista or "Tabla"
+    return vista or "Gráficos"
 
 
 # ===========================================================================
@@ -758,7 +758,7 @@ def _render_contenido():
 
     # ── COMPRAS ─────────────────────────────────────────────────────────────
     if reporte == "Compras":
-        vista = st.session_state.get(f"vista_seg_{reporte}", "Tabla") or "Tabla"
+        vista = st.session_state.get(f"vista_seg_{reporte}", "Gráficos") or "Gráficos"
         if vista == "Tabla":
             renderizar_aggrid_compras(_filtros_chips_franja(df_f), font_px)
         else:
@@ -766,7 +766,7 @@ def _render_contenido():
 
     # ── INVENTARIO VALORIZADO ────────────────────────────────────────────────
     elif reporte == "Inventario Valorizado":
-        vista = st.session_state.get(f"vista_seg_{reporte}", "Tabla") or "Tabla"
+        vista = st.session_state.get(f"vista_seg_{reporte}", "Gráficos") or "Gráficos"
         if vista == "Tabla":
             _render_tabla(_filtros_chips_franja(df_f))
         else:
@@ -787,7 +787,7 @@ def _render_contenido():
 
             # 1) Auto-detectar ámbito (Del periodo / Histórico) según rango.
             # 2) El selector Tabla/Gráficos se dibuja arriba, en la franja.
-            vista = st.session_state.get(f"vista_seg_{reporte}", "Tabla") or "Tabla"
+            vista = st.session_state.get(f"vista_seg_{reporte}", "Gráficos") or "Gráficos"
 
         if vista == "Tabla":
             df_tabla = _filtros_chips_franja(df_f)
