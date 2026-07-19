@@ -1454,6 +1454,10 @@ def renderizar_graficos_reporte(df_f, reporte, cfg, df_full=None):
         renderizar_graficos_inventario(df_f, reporte, df_full=df_full)
         return
 
+    if reporte == "Ventas":
+        renderizar_graficos_ventas(df_f, reporte, df_full=df_full)
+        return
+
     graficos_conf = cfg.get("graficos", [])
 
     if graficos_conf:
@@ -2339,3 +2343,182 @@ def _constructor_grafico(d, key_prefix="compras"):
         _tt = "%{x:,.0f}" if tipo == "Barras horizontales" else "%{y:,.0f}"
         fig.update_traces(texttemplate=_tt, textposition="outside")
     st.plotly_chart(fig, use_container_width=True, key=f"{key_prefix}_cb_fig")
+
+
+# ===========================================================================
+# DASHBOARD DE GRÁFICOS — VENTAS
+# ===========================================================================
+
+def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
+    """Dashboard de Ventas: venta por día, familia/subfamilia por semana,
+    e histórica de subfamilia. Columnas reales del parquet de ventas."""
+    col_venta = _resolver(df_f, ["Venta Item Ddocumento", "Venta_Item_Ddocumento",
+                                 "Neto Total Item Ddocumento", "Venta"])
+    col_fam   = _resolver(df_f, ["Grupo"])
+    col_sub   = _resolver(df_f, ["Sub Grupo", "Sub_Grupo", "Subgrupo"])
+    col_fecha = _resolver(df_f, ["Fec Reg Documento", "Fec_Reg_Documento",
+                                 "Fecha Registro", "FECHA"])
+    if not col_fecha:
+        for _c in df_f.columns:
+            if pd.api.types.is_datetime64_any_dtype(df_f[_c]):
+                col_fecha = _c
+                break
+
+    if not col_venta:
+        st.warning("No se encontró la columna de venta. "
+                   "Mostrando explorador genérico.")
+        renderizar_graficos_genericos(df_f, nombre_reporte)
+        return
+
+    # ── Filtros Grupo / Sub Grupo como chips en la franja ───────────────
+    fam_sel, sub_sel = [], []
+    with st.container(key="chips_ajuste_tabla"):
+        c1, c2, _ = st.columns([1, 1, 4])
+        with c1:
+            if col_fam:
+                fams = sorted(df_f[col_fam].dropna().astype(str).unique().tolist())
+                if fams:
+                    _n = len(st.session_state.get("ventas_graf_filtro_fam") or [])
+                    _lbl = f"Grupo · {_n}" if _n else "Grupo"
+                    with st.popover(_lbl, use_container_width=True):
+                        fam_sel = st.pills(
+                            "Grupo", fams, selection_mode="multi",
+                            key="ventas_graf_filtro_fam",
+                            label_visibility="collapsed") or []
+        with c2:
+            if col_sub:
+                _dd = df_f
+                if fam_sel and col_fam:
+                    _dd = _dd[_dd[col_fam].astype(str).isin(fam_sel)]
+                subs = sorted(_dd[col_sub].dropna().astype(str).unique().tolist())
+                if subs:
+                    _n = len(st.session_state.get("ventas_graf_filtro_sub") or [])
+                    _lbl = f"Sub Grupo · {_n}" if _n else "Sub Grupo"
+                    with st.popover(_lbl, use_container_width=True):
+                        sub_sel = st.pills(
+                            "Sub Grupo", subs, selection_mode="multi",
+                            key="ventas_graf_filtro_sub",
+                            label_visibility="collapsed") or []
+
+    d = df_f
+    if fam_sel and col_fam:
+        d = d[d[col_fam].astype(str).isin(fam_sel)]
+    if sub_sel and col_sub:
+        d = d[d[col_sub].astype(str).isin(sub_sel)]
+    if d is None or d.empty:
+        st.info("No hay datos para los filtros seleccionados.")
+        return
+
+    _venta = pd.to_numeric(d[col_venta], errors="coerce").fillna(0)
+
+    opciones = ["Venta por día", "Familia/Subfamilia semanal",
+                "Histórica subfamilia"]
+
+    graf = st.pills("Gráfico", opciones, default=opciones[0],
+                    key="ventas_graf_tipo",
+                    label_visibility="collapsed") or opciones[0]
+
+    with st.container(border=True, key="ajuste_graf_card_izq_ventas"):
+
+        # ── 1) Venta bruta por día ──────────────────────────────────────
+        if graf == "Venta por día" and col_fecha:
+            _fe = pd.to_datetime(d[col_fecha], errors="coerce").dt.normalize()
+            g = (pd.DataFrame({"dia": _fe, "venta": _venta})
+                 .dropna(subset=["dia"])
+                 .groupby("dia", as_index=False)["venta"].sum()
+                 .sort_values("dia"))
+            if g.empty:
+                st.info("Sin fechas válidas en el rango.")
+            else:
+                fig = go.Figure(go.Bar(
+                    x=g["dia"], y=g["venta"], marker=dict(color=ACENTO),
+                    hovertemplate="%{x|%d/%m/%Y}<br>S/ %{y:,.2f}<extra></extra>",
+                ))
+                _compras_layout(fig, alto=500)
+                fig.update_layout(title="Venta bruta por día",
+                                  xaxis_title=None, yaxis_title=None)
+                st.plotly_chart(fig, use_container_width=True, key="ventas_g_dia")
+
+        # ── 2) Venta por familia/subfamilia por semana ──────────────────
+        elif graf == "Familia/Subfamilia semanal" and col_fecha and col_fam:
+            _dias_ini = {"Lunes": 0, "Sábado": 5, "Domingo": 6}
+            cc = st.columns([1, 1, 2])
+            with cc[0]:
+                _dini = st.selectbox("La semana empieza:",
+                                     list(_dias_ini.keys()),
+                                     key="ventas_sem_ini")
+            with cc[1]:
+                _desg = st.selectbox("Desglosar por:",
+                                     ["Familia", "Subfamilia"],
+                                     key="ventas_sem_desg")
+            col_seg = col_fam if _desg == "Familia" else (col_sub or col_fam)
+            _off = _dias_ini[_dini]
+            _fe = pd.to_datetime(d[col_fecha], errors="coerce")
+            _sem = (_fe - pd.to_timedelta(
+                (_fe.dt.weekday - _off) % 7, unit="D")).dt.date
+            seg = d[col_seg].astype(str)
+            top = _venta.groupby(seg).sum().nlargest(8).index
+            seg2 = seg.where(seg.isin(top), "Otros")
+            dd = (pd.DataFrame({"sem": _sem, "seg": seg2, "venta": _venta})
+                  .dropna(subset=["sem"]))
+            g = (dd.groupby(["sem", "seg"], as_index=False)["venta"].sum()
+                 .sort_values("sem"))
+            if g.empty:
+                st.info("Sin datos en el rango.")
+            else:
+                g["lbl"] = pd.to_datetime(g["sem"]).dt.strftime("Sem %d/%m")
+                fig = go.Figure()
+                segs = ([s for s in top if s in set(g["seg"])] +
+                        (["Otros"] if (g["seg"] == "Otros").any() else []))
+                for i, sname in enumerate(segs):
+                    gg = g[g["seg"] == sname]
+                    fig.add_bar(
+                        x=gg["lbl"], y=gg["venta"],
+                        name=_compras_truncar(sname, 22),
+                        marker=dict(color=(GRIS_BORDE if sname == "Otros"
+                                    else PALETA_CALLAI[i % len(PALETA_CALLAI)])),
+                        hovertemplate="%{fullData.name}<br>%{x}<br>S/ %{y:,.2f}<extra></extra>",
+                    )
+                _compras_layout(fig, alto=540)
+                fig.update_layout(
+                    title=f"Venta semanal por {_desg.lower()} (top 8 + Otros)",
+                    barmode="stack",
+                    legend=dict(orientation="h", y=-0.22, x=0, font=dict(size=10)))
+                fig.update_xaxes(type="category")
+                st.plotly_chart(fig, use_container_width=True, key="ventas_g_sem")
+
+        # ── 3) Venta histórica de subfamilia ────────────────────────────
+        elif graf == "Histórica subfamilia" and col_fecha and col_sub:
+            _fams = ["(Todas)"] + (sorted(d[col_fam].dropna().astype(str)
+                                          .unique().tolist()) if col_fam else [])
+            cc = st.columns([1.4, 1.6])
+            with cc[0]:
+                fam_pick = st.selectbox("Familia", _fams, key="ventas_hist_fam")
+            dd = (d if (fam_pick == "(Todas)" or not col_fam)
+                  else d[d[col_fam].astype(str) == fam_pick])
+            _fe = pd.to_datetime(dd[col_fecha], errors="coerce")
+            _mes = _fe.dt.to_period("M").astype(str)
+            _vv = pd.to_numeric(dd[col_venta], errors="coerce").fillna(0)
+            seg = dd[col_sub].astype(str)
+            top = _vv.groupby(seg).sum().nlargest(10).index
+            g = pd.DataFrame({"mes": _mes, "sub": seg, "venta": _vv})
+            g = (g[g["sub"].isin(top)]
+                 .groupby(["mes", "sub"], as_index=False)["venta"].sum())
+            if g.empty:
+                st.info("Sin datos para esa familia.")
+            else:
+                fig = px.line(g, x="mes", y="venta", color="sub", markers=True,
+                              color_discrete_sequence=PALETA_CALLAI)
+                fig.for_each_trace(
+                    lambda t: t.update(name=_compras_truncar(t.name, 22)))
+                _compras_layout(fig, alto=520)
+                fig.update_layout(
+                    title="Venta histórica por subfamilia (top 10)",
+                    xaxis_title=None, yaxis_title=None, hovermode="x unified",
+                    legend=dict(orientation="h", y=-0.2, x=0, font=dict(size=10)))
+                fig.update_xaxes(type="category")
+                st.plotly_chart(fig, use_container_width=True, key="ventas_g_hist")
+                st.caption("Histórica sobre el rango de fechas cargado. Para ver "
+                           "más meses, amplía el rango en el selector de fecha.")
+        else:
+            st.info("No hay columnas suficientes para este gráfico.")
