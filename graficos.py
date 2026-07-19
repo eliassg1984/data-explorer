@@ -1605,8 +1605,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
         _mes = _f.dt.to_period("M").astype(str)
 
     opciones = ["Familia", "Proveedor", "Evolución proveedor",
-                "Precio top 10", "Precio por compra", "Semanal",
-                "Vs año anterior"]
+                "Precio top 10", "Precio por compra",
+                "Precio vs año pasado", "Semanal", "Vs año anterior"]
 
     col_izq, col_der = st.columns([1.7, 1])
 
@@ -1710,6 +1710,59 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                     hovertemplate="%{fullData.name}<br>%{x|%d/%m/%Y}: S/ %{y:,.2f}<extra></extra>",
                 )
                 st.plotly_chart(fig, use_container_width=True, key="compras_g_precio_real")
+
+            elif graf == "Precio vs año pasado" and col_prod and col_punit and col_fecha:
+                # Un producto a la vez: precio real de cada compra (línea
+                # sólida) vs el precio unitario del año pasado (punteada).
+                _col_pu_aa = _resolver(d, ["Precio_unit_ano_anterior",
+                                           "Precio unit ano anterior",
+                                           "Precio_unit_ano_a nterior"])
+                _tops = _valor.groupby(d[col_prod].astype(str)).sum().nlargest(30).index.tolist()
+                _cp, _ = st.columns([1.4, 1.6])
+                with _cp:
+                    prod_sel = st.selectbox("Producto", _tops,
+                                            key="compras_pvsaa_prod")
+                dd = d[d[col_prod].astype(str) == prod_sel]
+                _fe = pd.to_datetime(dd[col_fecha], errors="coerce")
+                _pu = pd.to_numeric(dd[col_punit], errors="coerce")
+                base = pd.DataFrame({"fecha": _fe, "pu": _pu})
+                if _col_pu_aa:
+                    base["pu_aa"] = pd.to_numeric(dd[_col_pu_aa], errors="coerce")
+                base = base.dropna(subset=["fecha", "pu"]).sort_values("fecha")
+                if base.empty:
+                    st.info("Sin compras de ese producto en el rango.")
+                else:
+                    fig = go.Figure()
+                    fig.add_scatter(
+                        x=base["fecha"], y=base["pu"], mode="lines+markers",
+                        name="Precio por compra",
+                        line=dict(color=ACENTO, width=2.2),
+                        marker=dict(size=7),
+                        hovertemplate="%{x|%d/%m/%Y}: S/ %{y:,.2f}<extra>Compra</extra>",
+                    )
+                    _sub = ""
+                    if _col_pu_aa and base.get("pu_aa") is not None and base["pu_aa"].notna().any():
+                        fig.add_scatter(
+                            x=base["fecha"], y=base["pu_aa"], mode="lines",
+                            name="Precio año pasado",
+                            line=dict(color="#9aa0a6", width=2, dash="dot"),
+                            hovertemplate="%{x|%d/%m/%Y}: S/ %{y:,.2f}<extra>Año pasado</extra>",
+                        )
+                        _m_act = base["pu"].mean()
+                        _m_aa = base["pu_aa"].mean()
+                        if _m_aa and _m_aa > 0:
+                            _var = (_m_act - _m_aa) / _m_aa * 100
+                            _sub = f" · variación promedio {_var:+.1f}% vs año pasado"
+                    else:
+                        st.caption("Este producto no tiene precio del año pasado registrado.")
+                    _compras_layout(fig, alto=500)
+                    fig.update_layout(
+                        title=_compras_truncar(prod_sel, 48) + _sub,
+                        xaxis_title=None, yaxis_title=None,
+                        legend=dict(orientation="h", y=-0.18, x=0),
+                    )
+                    st.plotly_chart(fig, use_container_width=True,
+                                    key="compras_g_pvsaa")
 
             elif graf == "Semanal" and col_prod and col_fecha:
                 # Compra por SEMANA: barras apiladas (valor) por producto
