@@ -1601,7 +1601,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
         _mes = _f.dt.to_period("M").astype(str)
 
     opciones = ["Familia", "Proveedor", "Evolución proveedor",
-                "Precio top 10", "Precio por compra", "Vs año anterior"]
+                "Precio top 10", "Precio por compra", "Semanal",
+                "Vs año anterior"]
 
     col_izq, col_der = st.columns([1.7, 1])
 
@@ -1705,6 +1706,47 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                     hovertemplate="%{fullData.name}<br>%{x|%d/%m/%Y}: S/ %{y:,.2f}<extra></extra>",
                 )
                 st.plotly_chart(fig, use_container_width=True, key="compras_g_precio_real")
+
+            elif graf == "Semanal" and col_prod and col_fecha:
+                # Compra por SEMANA: barras apiladas (valor) por producto
+                # (top 8 + Otros); el hover muestra valor y cantidad.
+                _fe = pd.to_datetime(d[col_fecha], errors="coerce")
+                _sem_ini = (_fe - pd.to_timedelta(_fe.dt.weekday, unit="D")).dt.date
+                _cnt = (pd.to_numeric(d[col_cant], errors="coerce").fillna(0)
+                        if col_cant else pd.Series(0, index=d.index))
+                top = _valor.groupby(d[col_prod].astype(str)).sum().nlargest(8).index
+                _pr = d[col_prod].astype(str).where(
+                    d[col_prod].astype(str).isin(top), "Otros")
+                dd = pd.DataFrame({"sem": _sem_ini, "prod": _pr,
+                                   "valor": _valor, "cant": _cnt}).dropna(subset=["sem"])
+                g = dd.groupby(["sem", "prod"], as_index=False)[["valor", "cant"]].sum()
+                g = g.sort_values("sem")
+                g["sem_lbl"] = pd.to_datetime(g["sem"]).dt.strftime("Sem %d/%m")
+                fig = go.Figure()
+                _prods = ([p_ for p_ in top if p_ in set(g["prod"])] +
+                          (["Otros"] if (g["prod"] == "Otros").any() else []))
+                for _i, _p in enumerate(_prods):
+                    gg = g[g["prod"] == _p]
+                    fig.add_bar(
+                        x=gg["sem_lbl"], y=gg["valor"],
+                        name=_compras_truncar(_p, 22),
+                        marker=dict(color=(GRIS_BORDE if _p == "Otros"
+                                    else PALETA_CALLAI[_i % len(PALETA_CALLAI)])),
+                        customdata=gg["cant"],
+                        hovertemplate=("%{fullData.name}<br>%{x}"
+                                       "<br>Valor: S/ %{y:,.2f}"
+                                       "<br>Cantidad: %{customdata:,.1f}"
+                                       "<extra></extra>"),
+                    )
+                _compras_layout(fig, alto=540)
+                fig.update_layout(
+                    title="Compra por semana — valor por producto (top 8 + Otros)",
+                    barmode="stack",
+                    legend=dict(orientation="h", y=-0.22, x=0,
+                                font=dict(size=10)),
+                )
+                fig.update_xaxes(type="category")
+                st.plotly_chart(fig, use_container_width=True, key="compras_g_semanal")
 
             elif graf == "Vs año anterior" and col_fam and col_val_aa:
                 _vaa = pd.to_numeric(d[col_val_aa], errors="coerce").fillna(0)
