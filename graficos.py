@@ -1648,9 +1648,15 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                 piv = dd.groupby(["mes", "prov"])["valor"].sum().reset_index()
                 fig = px.line(piv, x="mes", y="valor", color="prov", markers=True)
                 fig.for_each_trace(lambda t: t.update(name=_compras_truncar(t.name, 22)))
-                _compras_layout(fig, alto=470)
-                fig.update_layout(title="Evolución mensual de compra — top 8 proveedores",
-                                  xaxis_title=None, yaxis_title=None)
+                _compras_layout(fig, alto=540)
+                fig.update_layout(
+                    title="Evolución mensual de compra — top 8 proveedores",
+                    xaxis_title=None, yaxis_title=None,
+                    hovermode="x unified",
+                    legend=dict(orientation="h", y=-0.22, x=0,
+                                font=dict(size=10)),
+                )
+                fig.update_xaxes(type="category")
                 st.plotly_chart(fig, use_container_width=True, key="compras_g_evo_prov")
 
             elif graf == "Precio top 10" and col_prod and col_punit and _mes is not None:
@@ -1662,9 +1668,17 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                 piv = dd.groupby(["mes", "prod"])["precio"].mean().reset_index()
                 fig = px.line(piv, x="mes", y="precio", color="prod", markers=True)
                 fig.for_each_trace(lambda t: t.update(name=_compras_truncar(t.name, 22)))
-                _compras_layout(fig, alto=470)
-                fig.update_layout(title="Precio unitario promedio — top 10 productos más comprados",
-                                  xaxis_title=None, yaxis_title=None)
+                _compras_layout(fig, alto=560)
+                fig.update_layout(
+                    title="Precio unitario promedio — top 10 productos más comprados",
+                    xaxis_title=None, yaxis_title=None,
+                    hovermode="x unified",
+                    legend=dict(orientation="h", y=-0.2, x=0,
+                                font=dict(size=10)),
+                )
+                fig.update_xaxes(type="category")
+                fig.update_traces(line=dict(width=2.2),
+                                  marker=dict(size=6))
                 st.plotly_chart(fig, use_container_width=True, key="compras_g_precio")
 
             elif graf == "Vs año anterior" and col_fam and col_val_aa:
