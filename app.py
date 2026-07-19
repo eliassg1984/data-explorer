@@ -769,7 +769,7 @@ def _render_contenido():
         if vista == "Tabla":
             _render_tabla(_filtros_chips_franja(df_f))
         else:
-            renderizar_graficos(df_f, es_movil=usa_vista_movil)
+            renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
 
     # ── REQUERIMIENTOS ───────────────────────────────────────────────────────
     elif reporte == "Requerimientos":
