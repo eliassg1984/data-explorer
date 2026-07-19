@@ -1668,3 +1668,81 @@ def inject_footer_actualizacion(texto):
     })();
     </script>
     """, height=0)
+
+
+# ===========================================================================
+# CALENDARIO EN ESPAÑOL (st.date_input)
+# ===========================================================================
+
+def inject_calendario_es():
+    """Traduce a español el calendario nativo de Streamlit (BaseWeb): meses,
+    abreviaturas de días, el desplegable de meses y el texto de ayuda.
+
+    Streamlit/BaseWeb no exponen un parámetro de idioma, así que se traduce
+    por TEXTO (las clases son dinámicas y cambian entre versiones). Un
+    MutationObserver reaplica la traducción cuando el calendario o el
+    desplegable de meses aparecen: el desplegable se renderiza FUERA del
+    popover del calendario (como [role=listbox]), por eso se observa el
+    documento entero y se recorren popovers/listboxes (barato: si no hay
+    ninguno abierto, no hace nada).
+
+    Verificado en la app publicada: meses, días (Lu Ma Mi Ju Vi Sá Do),
+    desplegable de meses y "Elige un rango de fechas".
+    """
+    components.html(r"""
+    <script>
+    (function(){
+        var doc = window.parent.document;
+        var win = window.parent;
+        if (doc.__calEsInit) return;
+        doc.__calEsInit = true;
+
+        var MESES = {January:'Enero',February:'Febrero',March:'Marzo',
+            April:'Abril',May:'Mayo',June:'Junio',July:'Julio',
+            August:'Agosto',September:'Septiembre',October:'Octubre',
+            November:'Noviembre',December:'Diciembre'};
+        var DIAS = {Mo:'Lu',Tu:'Ma',We:'Mi',Th:'Ju',Fr:'Vi',Sa:'Sá',Su:'Do'};
+        var DIAS_L = {Monday:'lunes',Tuesday:'martes',Wednesday:'miércoles',
+            Thursday:'jueves',Friday:'viernes',Saturday:'sábado',Sunday:'domingo'};
+
+        function traducir(){
+            // Solo zonas relevantes (popover del calendario, desplegables).
+            // Si no hay ninguna abierta, querySelectorAll no devuelve nada.
+            var zonas = doc.querySelectorAll(
+                '[data-baseweb="popover"], [role="listbox"]');
+            for (var z = 0; z < zonas.length; z++){
+                var zona = zonas[z];
+                var w = doc.createTreeWalker(zona, NodeFilter.SHOW_TEXT, null);
+                var n;
+                while ((n = w.nextNode())){
+                    var t = n.textContent.trim();
+                    if (MESES[t]) n.textContent = MESES[t];
+                    else if (DIAS[t]) n.textContent = DIAS[t];
+                    else if (/^Choose a date range$/i.test(t))
+                        n.textContent = 'Elige un rango de fechas';
+                }
+                // aria-labels de los días (lector de pantalla / tooltip).
+                try {
+                    var etiq = zona.querySelectorAll('[aria-label]');
+                    for (var e = 0; e < etiq.length; e++){
+                        var el = etiq[e], a = el.getAttribute('aria-label'), o = a;
+                        for (var k in MESES)
+                            a = a.replace(new RegExp('\\b'+k+'\\b','g'), MESES[k]);
+                        for (var k2 in DIAS_L)
+                            a = a.replace(new RegExp('\\b'+k2+'\\b','g'), DIAS_L[k2]);
+                        a = a.replace(/^Choose /, 'Elegir ');
+                        if (a !== o) el.setAttribute('aria-label', a);
+                    }
+                } catch(err) {}
+            }
+        }
+
+        var obs = new MutationObserver(function(){
+            win.clearTimeout(doc.__calEsT);
+            doc.__calEsT = win.setTimeout(traducir, 30);
+        });
+        obs.observe(doc.body, {childList: true, subtree: true});
+        traducir();
+    })();
+    </script>
+    """, height=0)

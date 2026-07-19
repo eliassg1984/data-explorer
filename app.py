@@ -13,7 +13,7 @@ from data import (
     fecha_ultima_actualizacion,
 )
 from estilos import TAM_FUENTE, inject_css
-from inyecciones import inject_error_overlay, inject_element_inspector, inject_footer_actualizacion
+from inyecciones import inject_error_overlay, inject_element_inspector, inject_footer_actualizacion, inject_calendario_es
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras, renderizar_aggrid_compras
 from graficos import renderizar_graficos, renderizar_graficos_reporte
 from navegacion import inject_navegacion
@@ -41,6 +41,7 @@ st.set_page_config(
 inject_css()
 inject_error_overlay()
 inject_element_inspector()
+inject_calendario_es()
 
 perf.start()                                                                # ⚡ PERF
 
