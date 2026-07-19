@@ -2349,6 +2349,83 @@ def _constructor_grafico(d, key_prefix="compras"):
 # DASHBOARD DE GRÁFICOS — VENTAS
 # ===========================================================================
 
+@st.fragment
+def _ventas_grafico_dia(g, col_costo, col_pax):
+    """Gráfico 'Venta bruta por día' aislado en su PROPIO @st.fragment.
+
+    Al vivir en un fragment, togglear una métrica (pills) solo redibuja
+    ESTE gráfico: no re-ejecuta los filtros de Grupo/Sub Grupo ni el resto
+    de la vista de Ventas. `g` ya viene agregado por día (venta, costo,
+    pax, ratio); Streamlit reutiliza el mismo `g` en los reruns del
+    fragment, así que no se recalcula nada aguas arriba.
+    """
+    _opts = ["Venta"]
+    if col_costo:
+        _opts.append("Costo")
+    if col_pax:
+        _opts += ["Pax", "Pax/Venta"]
+    _def = [m for m in ("Venta", "Costo") if m in _opts]
+    sel = st.pills(
+        "Métricas", _opts, selection_mode="multi", default=_def,
+        key="ventas_dia_metricas", label_visibility="collapsed",
+    ) or ["Venta"]
+
+    _need_y2 = "Pax" in sel and "pax" in g.columns
+    _need_y3 = "Pax/Venta" in sel and "ratio" in g.columns
+
+    fig = go.Figure()
+    if "Venta" in sel:
+        fig.add_bar(
+            x=g["dia"], y=g["venta"], name="Venta",
+            marker=dict(color=ACENTO), yaxis="y",
+            texttemplate="S/ %{y:,.0f}", textposition="outside",
+            textfont=dict(size=13), cliponaxis=False,
+            hovertemplate="%{x|%d/%m/%Y}<br>Venta: S/ %{y:,.2f}<extra></extra>")
+    if "Costo" in sel and "costo" in g.columns:
+        fig.add_bar(
+            x=g["dia"], y=g["costo"], name="Costo",
+            marker=dict(color=PALETA_CALLAI[1]), yaxis="y",
+            texttemplate="S/ %{y:,.0f}", textposition="outside",
+            textfont=dict(size=13), cliponaxis=False,
+            hovertemplate="%{x|%d/%m/%Y}<br>Costo: S/ %{y:,.2f}<extra></extra>")
+    if _need_y2:
+        fig.add_trace(go.Scatter(
+            x=g["dia"], y=g["pax"], name="Pax",
+            mode="lines+markers+text",
+            text=g["pax"], texttemplate="%{y:,.0f}",
+            textposition="top center", textfont=dict(size=12),
+            line=dict(color=PALETA_CALLAI[2], width=2.5), yaxis="y2",
+            hovertemplate="%{x|%d/%m/%Y}<br>Pax: %{y:,.0f}<extra></extra>"))
+    if _need_y3:
+        fig.add_trace(go.Scatter(
+            x=g["dia"], y=g["ratio"], name="Pax/Venta",
+            mode="lines+markers",
+            line=dict(color=PALETA_CALLAI[3], width=2, dash="dot"),
+            yaxis="y3",
+            hovertemplate="%{x|%d/%m/%Y}<br>Pax/Venta: %{y:.4f}<extra></extra>"))
+
+    _compras_layout(fig, alto=500)
+    _xright = 0.88 if _need_y3 else 1.0
+    fig.update_layout(
+        title="Venta bruta por día",
+        barmode="group",
+        xaxis=dict(
+            domain=[0.0, _xright], type="date",
+            tickmode="linear", tick0=g["dia"].min(), dtick=86400000.0,
+            tickformat="%d/%m", tickangle=-45, tickfont=dict(size=10),
+        ),
+        yaxis=dict(tickprefix="S/ ", tickformat=",.0f"),
+        yaxis2=dict(overlaying="y", side="right", showgrid=False,
+                    tickformat=",.0f", title="Pax", visible=_need_y2),
+        yaxis3=dict(overlaying="y", side="right", anchor="free",
+                    position=1.0, showgrid=False, tickformat=".4f",
+                    title="Pax/Venta", visible=_need_y3),
+        margin=dict(l=10, r=(70 if _need_y3 else 10), t=30, b=10),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+    )
+    st.plotly_chart(fig, use_container_width=True, key="ventas_g_dia")
+
+
 def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
     """Dashboard de Ventas: venta por día, familia/subfamilia por semana,
     e histórica de subfamilia. Columnas reales del parquet de ventas."""
@@ -2463,71 +2540,7 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
             if g.empty:
                 st.info("Sin fechas válidas en el rango.")
             else:
-                _opts = ["Venta"]
-                if col_costo:
-                    _opts.append("Costo")
-                if col_pax:
-                    _opts += ["Pax", "Pax/Venta"]
-                _def = [m for m in ("Venta", "Costo") if m in _opts]
-                sel = st.pills(
-                    "Métricas", _opts, selection_mode="multi", default=_def,
-                    key="ventas_dia_metricas", label_visibility="collapsed",
-                ) or ["Venta"]
-
-                _need_y2 = "Pax" in sel and "pax" in g.columns
-                _need_y3 = "Pax/Venta" in sel and "ratio" in g.columns
-
-                fig = go.Figure()
-                if "Venta" in sel:
-                    fig.add_bar(
-                        x=g["dia"], y=g["venta"], name="Venta",
-                        marker=dict(color=ACENTO), yaxis="y",
-                        texttemplate="S/ %{y:,.0f}", textposition="outside",
-                        textfont=dict(size=13), cliponaxis=False,
-                        hovertemplate="%{x|%d/%m/%Y}<br>Venta: S/ %{y:,.2f}<extra></extra>")
-                if "Costo" in sel and "costo" in g.columns:
-                    fig.add_bar(
-                        x=g["dia"], y=g["costo"], name="Costo",
-                        marker=dict(color=PALETA_CALLAI[1]), yaxis="y",
-                        texttemplate="S/ %{y:,.0f}", textposition="outside",
-                        textfont=dict(size=13), cliponaxis=False,
-                        hovertemplate="%{x|%d/%m/%Y}<br>Costo: S/ %{y:,.2f}<extra></extra>")
-                if _need_y2:
-                    fig.add_trace(go.Scatter(
-                        x=g["dia"], y=g["pax"], name="Pax",
-                        mode="lines+markers+text",
-                        text=g["pax"], texttemplate="%{y:,.0f}",
-                        textposition="top center", textfont=dict(size=12),
-                        line=dict(color=PALETA_CALLAI[2], width=2.5), yaxis="y2",
-                        hovertemplate="%{x|%d/%m/%Y}<br>Pax: %{y:,.0f}<extra></extra>"))
-                if _need_y3:
-                    fig.add_trace(go.Scatter(
-                        x=g["dia"], y=g["ratio"], name="Pax/Venta",
-                        mode="lines+markers",
-                        line=dict(color=PALETA_CALLAI[3], width=2, dash="dot"),
-                        yaxis="y3",
-                        hovertemplate="%{x|%d/%m/%Y}<br>Pax/Venta: %{y:.4f}<extra></extra>"))
-
-                _compras_layout(fig, alto=500)
-                _xright = 0.88 if _need_y3 else 1.0
-                fig.update_layout(
-                    title="Venta bruta por día",
-                    barmode="group",
-                    xaxis=dict(
-                        domain=[0.0, _xright], type="date",
-                        tickmode="linear", tick0=g["dia"].min(), dtick=86400000.0,
-                        tickformat="%d/%m", tickangle=-45, tickfont=dict(size=10),
-                    ),
-                    yaxis=dict(tickprefix="S/ ", tickformat=",.0f"),
-                    yaxis2=dict(overlaying="y", side="right", showgrid=False,
-                                tickformat=",.0f", title="Pax", visible=_need_y2),
-                    yaxis3=dict(overlaying="y", side="right", anchor="free",
-                                position=1.0, showgrid=False, tickformat=".4f",
-                                title="Pax/Venta", visible=_need_y3),
-                    margin=dict(l=10, r=(70 if _need_y3 else 10), t=30, b=10),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-                )
-                st.plotly_chart(fig, use_container_width=True, key="ventas_g_dia")
+                _ventas_grafico_dia(g, col_costo, col_pax)
 
         # ── 2) Venta por familia/subfamilia por semana ──────────────────
         elif graf == "Familia/Subfamilia semanal" and col_fecha and col_fam:
