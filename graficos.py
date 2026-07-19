@@ -1606,7 +1606,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
 
     opciones = ["Familia", "Proveedor", "Evolución proveedor",
                 "Precio top 10", "Precio por compra",
-                "Precio vs año pasado", "Semanal", "Vs año anterior"]
+                "Precio vs año pasado", "Cantidad vs año pasado",
+                "Semanal", "Vs año anterior"]
 
     col_izq, col_der = st.columns([1.7, 1])
 
@@ -1764,11 +1765,62 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                     st.plotly_chart(fig, use_container_width=True,
                                     key="compras_g_pvsaa")
 
+            elif graf == "Cantidad vs año pasado" and col_fecha and col_cant:
+                _col_cant_aa = _resolver(d, ["Cantidad_ano_anterior",
+                                             "Cantidad ano anterior"])
+                _tops = (["(Todos)"] +
+                         _valor.groupby(d[col_prod].astype(str)).sum()
+                         .nlargest(30).index.tolist()) if col_prod else ["(Todos)"]
+                _cp, _ = st.columns([1.4, 1.6])
+                with _cp:
+                    prod_sel = st.selectbox("Producto", _tops,
+                                            key="compras_cvsaa_prod")
+                dd = d if prod_sel == "(Todos)" else d[
+                    d[col_prod].astype(str) == prod_sel]
+                _fe = pd.to_datetime(dd[col_fecha], errors="coerce")
+                _mm = _fe.dt.to_period("M").astype(str)
+                _cn = pd.to_numeric(dd[col_cant], errors="coerce").fillna(0)
+                base = pd.DataFrame({"mes": _mm, "Este año": _cn})
+                if _col_cant_aa:
+                    base["Año pasado"] = pd.to_numeric(
+                        dd[_col_cant_aa], errors="coerce").fillna(0)
+                g = base.groupby("mes").sum().sort_index()
+                if g.empty:
+                    st.info("Sin datos en el rango.")
+                else:
+                    fig = go.Figure()
+                    if "Año pasado" in g.columns:
+                        fig.add_bar(x=g.index, y=g["Año pasado"],
+                                    name="Año pasado",
+                                    marker=dict(color=GRIS_BORDE))
+                    fig.add_bar(x=g.index, y=g["Este año"], name="Este año",
+                                marker=dict(color=ACENTO))
+                    _compras_layout(fig, alto=500)
+                    _tt = ("Cantidad comprada por mes: este año vs año pasado"
+                           if prod_sel == "(Todos)" else
+                           _compras_truncar(prod_sel, 40)
+                           + " — cantidad mensual vs año pasado")
+                    fig.update_layout(title=_tt, barmode="group",
+                                      legend=dict(orientation="h", y=-0.18, x=0))
+                    fig.update_xaxes(type="category")
+                    fig.update_traces(
+                        hovertemplate="%{fullData.name}<br>%{x}: %{y:,.1f}<extra></extra>")
+                    st.plotly_chart(fig, use_container_width=True,
+                                    key="compras_g_cvsaa")
+
             elif graf == "Semanal" and col_prod and col_fecha:
                 # Compra por SEMANA: barras apiladas (valor) por producto
                 # (top 8 + Otros); el hover muestra valor y cantidad.
+                _dias_ini = {"Lunes": 0, "Sábado": 5, "Domingo": 6}
+                _cd, _ = st.columns([1, 2.2])
+                with _cd:
+                    _dini = st.selectbox("La semana empieza:",
+                                         list(_dias_ini.keys()),
+                                         key="compras_sem_inicio")
+                _off = _dias_ini[_dini]
                 _fe = pd.to_datetime(d[col_fecha], errors="coerce")
-                _sem_ini = (_fe - pd.to_timedelta(_fe.dt.weekday, unit="D")).dt.date
+                _sem_ini = (_fe - pd.to_timedelta(
+                    (_fe.dt.weekday - _off) % 7, unit="D")).dt.date
                 _cnt = (pd.to_numeric(d[col_cant], errors="coerce").fillna(0)
                         if col_cant else pd.Series(0, index=d.index))
                 top = _valor.groupby(d[col_prod].astype(str)).sum().nlargest(8).index
