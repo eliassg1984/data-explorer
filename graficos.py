@@ -1446,6 +1446,10 @@ def renderizar_graficos_reporte(df_f, reporte, cfg, df_full=None):
         renderizar_graficos_ajuste(df_f, reporte, df_full=df_full)
         return
 
+    if reporte == "Compras":
+        renderizar_graficos_compras(df_f, reporte, df_full=df_full)
+        return
+
     graficos_conf = cfg.get("graficos", [])
 
     if graficos_conf:
@@ -1464,3 +1468,262 @@ def renderizar_graficos_reporte(df_f, reporte, cfg, df_full=None):
             renderizar_graficos_genericos(df_f, reporte)
     else:
         renderizar_graficos_genericos(df_f, reporte)
+
+
+# ===========================================================================
+# DASHBOARD DE GRÁFICOS — COMPRAS
+# ===========================================================================
+# Réplica del layout del dashboard de Ajuste: filtros como chips en la
+# franja blanca, contenedor izquierdo con pills de tipo de gráfico y
+# contenedor derecho con pestañas de mini-tops. Las keys de los cards
+# reutilizan el prefijo "ajuste_graf_card_" para heredar el CSS existente.
+
+def _compras_truncar(s, n=26):
+    s = str(s)
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+
+def _compras_layout(fig, alto=430):
+    fig.update_layout(
+        height=alto,
+        margin=dict(l=10, r=10, t=30, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=12),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+        colorway=PALETA_CALLAI,
+    )
+    fig.update_xaxes(showgrid=False, zeroline=False)
+    fig.update_yaxes(gridcolor=GRIS_BORDE, zeroline=False)
+    return fig
+
+
+def _compras_mini_barras(serie, titulo, fmt="S/ {:,.0f}", alto=400):
+    """Mini gráfico de barras horizontales top-N (mayor arriba)."""
+    if serie is None or serie.empty:
+        st.info("Sin datos para este top.")
+        return
+    d = serie.sort_values(ascending=True)
+    fig = go.Figure(go.Bar(
+        x=d.values,
+        y=[_compras_truncar(i) for i in d.index],
+        orientation="h",
+        marker=dict(color=ACENTO, opacity=0.85),
+        text=[fmt.format(v) for v in d.values],
+        textposition="outside",
+        cliponaxis=False,
+        hovertemplate="%{y}: %{x:,.2f}<extra></extra>",
+    ))
+    fig.update_layout(
+        height=alto,
+        margin=dict(l=4, r=40, t=10, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=11),
+    )
+    fig.update_xaxes(visible=False)
+    fig.update_yaxes(showgrid=False)
+    st.plotly_chart(fig, use_container_width=True,
+                    key=f"compras_mini_{_slug(titulo)}")
+
+
+def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
+    """Dashboard dedicado de Compras: 5 gráficos con pestañas + 5 mini-tops."""
+    col_fam    = _resolver(df_f, ["Familia", "Nombre Familia"])
+    col_subfam = _resolver(df_f, ["Subfamilia", "Nombre Subfamilia"])
+    col_prov   = _resolver(df_f, ["Nombre_proveedor", "Nombre proveedor", "Proveedor"])
+    col_prod   = _resolver(df_f, ["Nombre_producto", "Nombre producto", "Producto"])
+    col_cant   = _resolver(df_f, ["Cantidad_compra", "Cantidad compra", "Cantidad"])
+    col_valor  = _resolver(df_f, ["Valor_compra", "Valor compra", "Importe Total", "Valorizado"])
+    col_val_aa = _resolver(df_f, ["Valor_ano_anterior", "Valor año anterior"])
+    col_punit  = _resolver(df_f, ["Precio_unit", "Precio unit", "Precio Unitario"])
+    col_punit_ant = _resolver(df_f, ["Ultimo_precio_unit", "Ultimo precio unit",
+                                     "Ultimo_anterior", "Ultimo anterior"])
+    col_fecha  = _resolver(df_f, ["Fecha_documento", "Fecha documento",
+                                  "Fecha_registro", "Fecha registro", "FECHA"])
+    if not col_fecha:
+        for _c in df_f.columns:
+            if pd.api.types.is_datetime64_any_dtype(df_f[_c]) or "fecha" in _norm(str(_c)):
+                col_fecha = _c
+                break
+
+    if not col_valor:
+        st.warning("No se encontró la columna de valor de compra. "
+                   "Mostrando explorador genérico.")
+        renderizar_graficos_genericos(df_f, nombre_reporte)
+        return
+
+    # ── Filtros Familia / Subfamilia como chips en la FRANJA blanca ──────
+    fam_sel, sub_sel = [], []
+    with st.container(key="chips_ajuste_tabla"):
+        c1, c2, _ = st.columns([1, 1, 4])
+        with c1:
+            if col_fam and col_fam in df_f.columns:
+                fams = sorted(df_f[col_fam].dropna().astype(str).unique().tolist())
+                if fams:
+                    _n = len(st.session_state.get("compras_graf_filtro_fam") or [])
+                    _lbl = f"Familia · {_n}" if _n else "Familia"
+                    with st.popover(_lbl, use_container_width=True):
+                        fam_sel = st.pills(
+                            "Familia", fams, selection_mode="multi",
+                            key="compras_graf_filtro_fam",
+                            label_visibility="collapsed",
+                        ) or []
+        with c2:
+            if col_subfam and col_subfam in df_f.columns:
+                _d_sub = df_f
+                if fam_sel and col_fam:
+                    _d_sub = _d_sub[_d_sub[col_fam].astype(str).isin(fam_sel)]
+                subs = sorted(_d_sub[col_subfam].dropna().astype(str).unique().tolist())
+                if subs:
+                    _n = len(st.session_state.get("compras_graf_filtro_sub") or [])
+                    _lbl = f"Subfamilia · {_n}" if _n else "Subfamilia"
+                    with st.popover(_lbl, use_container_width=True):
+                        sub_sel = st.pills(
+                            "Subfamilia", subs, selection_mode="multi",
+                            key="compras_graf_filtro_sub",
+                            label_visibility="collapsed",
+                        ) or []
+
+    d = df_f
+    if fam_sel and col_fam:
+        d = d[d[col_fam].astype(str).isin(fam_sel)]
+    if sub_sel and col_subfam:
+        d = d[d[col_subfam].astype(str).isin(sub_sel)]
+    if d is None or d.empty:
+        st.info("No hay datos para los filtros seleccionados.")
+        return
+
+    _valor = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
+    _mes = None
+    if col_fecha and col_fecha in d.columns:
+        _f = pd.to_datetime(d[col_fecha], errors="coerce")
+        _mes = _f.dt.to_period("M").astype(str)
+
+    opciones = ["Familia", "Proveedor", "Evolución proveedor",
+                "Precio top 10", "Vs año anterior"]
+
+    col_izq, col_der = st.columns([1.7, 1])
+
+    with col_izq:
+        with st.container(border=True, key="ajuste_graf_card_izq_compras"):
+            graf = st.pills(
+                "Gráfico", opciones, default=opciones[0],
+                key="compras_graf_tipo", label_visibility="collapsed",
+            ) or opciones[0]
+
+            if graf == "Familia" and col_fam:
+                serie = _valor.groupby(d[col_fam].astype(str)).sum().sort_values(ascending=False)
+                fig = go.Figure(go.Bar(
+                    x=serie.index, y=serie.values,
+                    marker=dict(color=PALETA_CALLAI * 4),
+                    text=[f"S/ {v:,.0f}" for v in serie.values],
+                    textposition="outside", cliponaxis=False,
+                ))
+                _compras_layout(fig)
+                fig.update_layout(title="Valorizado de compra por familia")
+                st.plotly_chart(fig, use_container_width=True, key="compras_g_fam")
+
+            elif graf == "Proveedor" and col_prov:
+                serie = (_valor.groupby(d[col_prov].astype(str)).sum()
+                         .sort_values(ascending=False).head(15).sort_values())
+                fig = go.Figure(go.Bar(
+                    x=serie.values,
+                    y=[_compras_truncar(i, 32) for i in serie.index],
+                    orientation="h",
+                    marker=dict(color=ACENTO, opacity=0.85),
+                    text=[f"S/ {v:,.0f}" for v in serie.values],
+                    textposition="outside", cliponaxis=False,
+                ))
+                _compras_layout(fig, alto=480)
+                fig.update_layout(title="Top 15 proveedores por valorizado")
+                fig.update_xaxes(visible=False)
+                st.plotly_chart(fig, use_container_width=True, key="compras_g_prov")
+
+            elif graf == "Evolución proveedor" and col_prov and _mes is not None:
+                top = _valor.groupby(d[col_prov].astype(str)).sum().nlargest(8).index
+                dd = pd.DataFrame({"mes": _mes, "prov": d[col_prov].astype(str),
+                                   "valor": _valor})
+                dd = dd[dd["prov"].isin(top)]
+                piv = dd.groupby(["mes", "prov"])["valor"].sum().reset_index()
+                fig = px.line(piv, x="mes", y="valor", color="prov", markers=True)
+                fig.for_each_trace(lambda t: t.update(name=_compras_truncar(t.name, 22)))
+                _compras_layout(fig, alto=470)
+                fig.update_layout(title="Evolución mensual de compra — top 8 proveedores",
+                                  xaxis_title=None, yaxis_title=None)
+                st.plotly_chart(fig, use_container_width=True, key="compras_g_evo_prov")
+
+            elif graf == "Precio top 10" and col_prod and col_punit and _mes is not None:
+                top = _valor.groupby(d[col_prod].astype(str)).sum().nlargest(10).index
+                _pu = pd.to_numeric(d[col_punit], errors="coerce")
+                dd = pd.DataFrame({"mes": _mes, "prod": d[col_prod].astype(str),
+                                   "precio": _pu})
+                dd = dd[dd["prod"].isin(top)].dropna(subset=["precio"])
+                piv = dd.groupby(["mes", "prod"])["precio"].mean().reset_index()
+                fig = px.line(piv, x="mes", y="precio", color="prod", markers=True)
+                fig.for_each_trace(lambda t: t.update(name=_compras_truncar(t.name, 22)))
+                _compras_layout(fig, alto=470)
+                fig.update_layout(title="Precio unitario promedio — top 10 productos más comprados",
+                                  xaxis_title=None, yaxis_title=None)
+                st.plotly_chart(fig, use_container_width=True, key="compras_g_precio")
+
+            elif graf == "Vs año anterior" and col_fam and col_val_aa:
+                _vaa = pd.to_numeric(d[col_val_aa], errors="coerce").fillna(0)
+                g = pd.DataFrame({
+                    "fam": d[col_fam].astype(str),
+                    "Este año": _valor, "Año anterior": _vaa,
+                }).groupby("fam").sum().sort_values("Este año", ascending=False)
+                fig = go.Figure()
+                fig.add_bar(x=g.index, y=g["Año anterior"], name="Año anterior",
+                            marker=dict(color=GRIS_BORDE))
+                fig.add_bar(x=g.index, y=g["Este año"], name="Este año",
+                            marker=dict(color=ACENTO))
+                _compras_layout(fig)
+                fig.update_layout(title="Compra por familia: este año vs año anterior",
+                                  barmode="group")
+                st.plotly_chart(fig, use_container_width=True, key="compras_g_vsaa")
+
+            else:
+                st.info("No hay columnas suficientes para este gráfico.")
+
+    with col_der:
+        with st.container(border=True, key="ajuste_graf_card_der_compras"):
+            tabs = st.tabs(["Prod. valor", "Proveedores", "Cantidad",
+                            "Frecuencia", "Alzas precio"])
+            with tabs[0]:
+                if col_prod:
+                    _compras_mini_barras(
+                        _valor.groupby(d[col_prod].astype(str)).sum().nlargest(10),
+                        "prod_valor")
+            with tabs[1]:
+                if col_prov:
+                    _compras_mini_barras(
+                        _valor.groupby(d[col_prov].astype(str)).sum().nlargest(10),
+                        "prov_valor")
+            with tabs[2]:
+                if col_prod and col_cant:
+                    _cnt = pd.to_numeric(d[col_cant], errors="coerce").fillna(0)
+                    _compras_mini_barras(
+                        _cnt.groupby(d[col_prod].astype(str)).sum().nlargest(10),
+                        "prod_cant", fmt="{:,.0f}")
+            with tabs[3]:
+                if col_prod:
+                    _compras_mini_barras(
+                        d[col_prod].astype(str).value_counts().head(10),
+                        "prod_freq", fmt="{:,.0f}")
+            with tabs[4]:
+                if col_prod and col_punit and col_punit_ant:
+                    _pu  = pd.to_numeric(d[col_punit], errors="coerce")
+                    _pa  = pd.to_numeric(d[col_punit_ant], errors="coerce")
+                    base = pd.DataFrame({"prod": d[col_prod].astype(str),
+                                         "pu": _pu, "pa": _pa}).dropna()
+                    base = base[base["pa"] > 0]
+                    if base.empty:
+                        st.info("Sin datos de precio anterior.")
+                    else:
+                        g = base.groupby("prod")[["pu", "pa"]].mean()
+                        alza = ((g["pu"] - g["pa"]) / g["pa"] * 100)
+                        alza = alza[alza > 0].nlargest(10)
+                        _compras_mini_barras(alza, "alzas", fmt="+{:,.1f}%")
+                else:
+                    st.info("Sin columnas de precio anterior.")
