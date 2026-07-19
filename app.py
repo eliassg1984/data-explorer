@@ -291,6 +291,11 @@ fecha_fin_default = _hoy                  # hoy
 
 es_ajuste = (reporte == "Ajuste de Inventario")
 
+# Vista por defecto al abrir un reporte: "Gráficos" para todos, salvo los
+# reportes de consulta (recetas), que arrancan en "Tabla".
+REPORTES_INICIO_TABLA = ("Receta Base", "Receta Venta")
+_vista_default = "Tabla" if reporte in REPORTES_INICIO_TABLA else "Gráficos"
+
 controles = []
 # (los filtros categóricos ahora son chips en la franja; la fecha, la pill)
 if col_busc:
@@ -406,7 +411,7 @@ if True:
                         ":material/table_rows: Tabla"
                         if vista == "Tabla" else ":material/monitoring: Gráficos"
                     ),
-                    default="Gráficos",
+                    default=_vista_default,
                     label_visibility="collapsed",
                     key=f"vista_seg_{reporte}",
                 )
@@ -758,7 +763,7 @@ def _render_contenido():
 
     # ── COMPRAS ─────────────────────────────────────────────────────────────
     if reporte == "Compras":
-        vista = st.session_state.get(f"vista_seg_{reporte}", "Gráficos") or "Gráficos"
+        vista = st.session_state.get(f"vista_seg_{reporte}", _vista_default) or _vista_default
         if vista == "Tabla":
             renderizar_aggrid_compras(_filtros_chips_franja(df_f), font_px)
         else:
@@ -766,7 +771,7 @@ def _render_contenido():
 
     # ── INVENTARIO VALORIZADO ────────────────────────────────────────────────
     elif reporte == "Inventario Valorizado":
-        vista = st.session_state.get(f"vista_seg_{reporte}", "Gráficos") or "Gráficos"
+        vista = st.session_state.get(f"vista_seg_{reporte}", _vista_default) or _vista_default
         if vista == "Tabla":
             _render_tabla(_filtros_chips_franja(df_f))
         else:
@@ -787,7 +792,7 @@ def _render_contenido():
 
             # 1) Auto-detectar ámbito (Del periodo / Histórico) según rango.
             # 2) El selector Tabla/Gráficos se dibuja arriba, en la franja.
-            vista = st.session_state.get(f"vista_seg_{reporte}", "Gráficos") or "Gráficos"
+            vista = st.session_state.get(f"vista_seg_{reporte}", _vista_default) or _vista_default
 
         if vista == "Tabla":
             df_tabla = _filtros_chips_franja(df_f)
