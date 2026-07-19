@@ -2358,8 +2358,10 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
     col_sub   = _resolver(df_f, ["Sub Grupo", "Sub_Grupo", "Subgrupo"])
     col_fecha = _resolver(df_f, ["Fec Reg Documento", "Fec_Reg_Documento",
                                  "Fecha Registro", "FECHA"])
-    col_costo = _resolver(df_f, ["Precio Costo", "Costo Item Ddocumento", "Costo"])
-    col_pax   = _resolver(df_f, ["Cant Pax", "Cantidad Pax", "Pax"])
+    col_costo  = _resolver(df_f, ["Precio Costo", "Costo Item Ddocumento", "Costo"])
+    col_pax    = _resolver(df_f, ["Cant Pax", "Cantidad Pax", "Pax"])
+    col_pedido = _resolver(df_f, ["Llave Local Pedido", "Llave_Local_Pedido",
+                                  "Nro Pedido", "Numero Pedido"])
     if not col_fecha:
         for _c in df_f.columns:
             if pd.api.types.is_datetime64_any_dtype(df_f[_c]):
@@ -2429,15 +2431,33 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
         # de métricas (pills multi) permite prender/apagar cada serie.
         if graf == "Venta por día" and col_fecha:
             _fe = pd.to_datetime(d[col_fecha], errors="coerce").dt.normalize()
+
+            # Venta y Costo: suma por línea (cada línea es un valor distinto).
             _base = pd.DataFrame({"dia": _fe, "venta": _venta})
             if col_costo:
                 _base["costo"] = pd.to_numeric(d[col_costo], errors="coerce").fillna(0)
-            if col_pax:
-                _base["pax"] = pd.to_numeric(d[col_pax], errors="coerce").fillna(0)
             _base = _base.dropna(subset=["dia"])
             _agg = {c: "sum" for c in _base.columns if c != "dia"}
             g = _base.groupby("dia", as_index=False).agg(_agg).sort_values("dia")
-            if "pax" in g.columns:
+
+            # Pax: NO sumar todas las líneas (Cant Pax se repite por línea del
+            # mismo pedido). Se toma 1 valor por pedido y luego se suma por día.
+            if col_pax:
+                _pdf = pd.DataFrame({
+                    "dia": _fe,
+                    "pax": pd.to_numeric(d[col_pax], errors="coerce").fillna(0),
+                })
+                if col_pedido:
+                    _pdf["ped"] = d[col_pedido].astype(str)
+                    _pdf = _pdf.dropna(subset=["dia"])
+                    _pax_dia = (_pdf.groupby(["dia", "ped"], as_index=False)["pax"]
+                                .max()
+                                .groupby("dia", as_index=False)["pax"].sum())
+                else:
+                    _pdf = _pdf.dropna(subset=["dia"])
+                    _pax_dia = _pdf.groupby("dia", as_index=False)["pax"].sum()
+                g = g.merge(_pax_dia, on="dia", how="left")
+                g["pax"] = g["pax"].fillna(0)
                 g["ratio"] = g["pax"] / g["venta"].replace(0, np.nan)
 
             if g.empty:
