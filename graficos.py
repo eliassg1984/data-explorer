@@ -1601,7 +1601,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
         _mes = _f.dt.to_period("M").astype(str)
 
     opciones = ["Familia", "Proveedor", "Evolución proveedor",
-                "Precio top 10", "Vs año anterior"]
+                "Precio top 10", "Precio por compra", "Vs año anterior"]
 
     col_izq, col_der = st.columns([1.7, 1])
 
@@ -1680,6 +1680,31 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                 fig.update_traces(line=dict(width=2.2),
                                   marker=dict(size=6))
                 st.plotly_chart(fig, use_container_width=True, key="compras_g_precio")
+
+            elif graf == "Precio por compra" and col_prod and col_punit and col_fecha:
+                # Precio REAL de cada compra en su fecha exacta (sin promediar):
+                # un punto por ingreso; varios ingresos el mismo día = varios puntos.
+                top = _valor.groupby(d[col_prod].astype(str)).sum().nlargest(10).index
+                _pu = pd.to_numeric(d[col_punit], errors="coerce")
+                _fe = pd.to_datetime(d[col_fecha], errors="coerce")
+                dd = pd.DataFrame({"fecha": _fe, "prod": d[col_prod].astype(str),
+                                   "precio": _pu})
+                dd = dd[dd["prod"].isin(top)].dropna(subset=["fecha", "precio"])
+                dd = dd.sort_values("fecha")
+                fig = px.line(dd, x="fecha", y="precio", color="prod", markers=True)
+                fig.for_each_trace(lambda t: t.update(name=_compras_truncar(t.name, 22)))
+                _compras_layout(fig, alto=560)
+                fig.update_layout(
+                    title="Precio real por compra — top 10 productos más comprados",
+                    xaxis_title=None, yaxis_title=None,
+                    legend=dict(orientation="h", y=-0.2, x=0,
+                                font=dict(size=10)),
+                )
+                fig.update_traces(
+                    line=dict(width=1.6), marker=dict(size=7),
+                    hovertemplate="%{fullData.name}<br>%{x|%d/%m/%Y}: S/ %{y:,.2f}<extra></extra>",
+                )
+                st.plotly_chart(fig, use_container_width=True, key="compras_g_precio_real")
 
             elif graf == "Vs año anterior" and col_fam and col_val_aa:
                 _vaa = pd.to_numeric(d[col_val_aa], errors="coerce").fillna(0)
