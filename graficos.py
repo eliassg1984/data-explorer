@@ -1574,8 +1574,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         st.info("Faltan columnas (Proveedor, Valor) para este gráfico.")
         return
 
-    topn = st.pills("Top productos", [5, 10, 20], default=10,
-                    key="compras_prov_topn") or 10
+    _cta, _ctb, _ = st.columns([1.2, 1.2, 3])
+    with _cta:
+        topn_prov = st.pills("Top proveedores", [10, 15, 20, 30], default=15,
+                             key="compras_prov_topnprov") or 15
+    with _ctb:
+        topn = st.pills("Top productos", [5, 10, 20], default=10,
+                        key="compras_prov_topn") or 10
 
     base = pd.DataFrame({
         "prov": d[col_prov].astype(str).values,
@@ -1610,25 +1615,40 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         m = grp["um"].mode()
         return (" " + m.iat[0]) if len(m) and m.iat[0] not in ("", "nan") else ""
 
-    # ── Main: Top 15 proveedores por valorizado (clic → selecciona) ─────
+    # ── Main: Top N proveedores por valorizado (clic → selecciona) ──────
     # % = participación de cada proveedor sobre el TOTAL comprado del rango.
+    # Hover: top 5 productos de ese proveedor (por valorizado).
     _tot_all = base["valor"].sum() or 1.0
-    prov_tot = base.groupby("prov")["valor"].sum().nlargest(15).sort_values()
+    prov_tot = base.groupby("prov")["valor"].sum().nlargest(topn_prov).sort_values()
     prov_cats = list(prov_tot.index)
-    with _card("prov_main", "Top 15 proveedores por valorizado"):
+    with _card("prov_main", f"Top {topn_prov} proveedores por valorizado"):
         _pc = [SERIE_PRINCIPAL if p == prov_focus else ACENTO for p in prov_cats]
+        _top5 = {}
+        for p in prov_cats:
+            if col_prod:
+                _t5 = (base[base["prov"] == p].groupby("prod")["valor"]
+                       .sum().nlargest(5))
+                _top5[p] = "<br>".join(
+                    f"• {_compras_truncar(str(pr), 24)}: S/ {vv:,.0f}"
+                    for pr, vv in _t5.items()) or "—"
+            else:
+                _top5[p] = "—"
+        _cd = [[v / _tot_all * 100, _top5[p]]
+               for p, v in zip(prov_cats, prov_tot.values)]
         figm = go.Figure(go.Bar(
             x=prov_tot.values, y=[_compras_truncar(i, 34) for i in prov_cats],
             orientation="h", marker=dict(color=_pc),
             text=[f"S/ {v:,.0f}  ·  {v / _tot_all * 100:.1f}%"
                   for v in prov_tot.values],
             textposition="outside", cliponaxis=False,
-            customdata=(prov_tot.values / _tot_all * 100),
-            hovertemplate="%{y}<br>S/ %{x:,.0f} · %{customdata:.1f}% del total"
-                          "<extra></extra>"))
+            customdata=_cd,
+            hovertemplate="<b>%{y}</b><br>S/ %{x:,.0f} · %{customdata[0]:.1f}% "
+                          "del total<br><br><b>Top 5 productos:</b><br>"
+                          "%{customdata[1]}<extra></extra>"))
         _compras_layout(figm, alto=max(320, 30 * len(prov_cats) + 80))
         figm.update_xaxes(visible=False)
-        figm.update_layout(margin=dict(l=10, r=140, t=10, b=10))
+        figm.update_layout(margin=dict(l=10, r=140, t=10, b=10),
+                           hoverlabel=dict(align="left"))
         _mevt = st.plotly_chart(figm, use_container_width=True,
                                 key=f"compras_g_prov_main_{prov_focus}",
                                 on_select="rerun", selection_mode="points")
@@ -2107,7 +2127,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
     col_subfam = _resolver(df_f, ["Subfamilia", "Nombre Subfamilia"])
     col_prov   = _resolver(df_f, ["Nombre_proveedor", "Nombre proveedor", "Proveedor"])
     col_prod   = _resolver(df_f, ["Nombre_producto", "Nombre producto", "Producto"])
-    col_um     = _resolver(df_f, ["Unidad Kardex", "Unidad_kardex", "Unidad_medida",
+    col_um     = _resolver(df_f, ["Unidad de Ingreso", "Unidad_de_ingreso",
+                                  "Unidad Ingreso", "Unidad Kardex", "Unidad_medida",
                                   "Unidad medida", "Unidad de medida", "Unidad_compra",
                                   "Unidad compra", "Unidad", "UM", "Und"])
     col_cant   = _resolver(df_f, ["Cantidad_compra", "Cantidad compra", "Cantidad"])
