@@ -2430,117 +2430,300 @@ _MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
              "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
 
+def _slug_col(s):
+    """id de columna AgGrid seguro: solo letras/dígitos/_ (evita espacios/%
+    que rompen accesos por nombre en JS)."""
+    return re.sub(r"\W+", "_", str(s)).strip("_")
+
+
 @st.fragment
-def _ventas_matriz_agrupada(d, col_venta, col_fam, col_sub, col_prod, col_fecha):
-    """Matriz dinámica Nivel × Mes con comparación vs Año Pasado.
+def _ventas_matriz_agrupada(d, col_venta, col_costo, col_fam, col_sub,
+                            col_prod, col_fecha):
+    """Matriz dinámica Grupo → Sub Grupo → Producto × Mes/Semana con
+    comparación vs Año Pasado, en un ÁRBOL AgGrid expandible.
 
-    Vive DENTRO de la vista Gráficos (una opción más del pills), NO toca la
-    Tabla. Al estar en su propio @st.fragment, cambiar el chip de nivel solo
-    redibuja esta matriz.
+    Vive DENTRO de la vista Gráficos (opción del pills "Matriz agrupada"), no
+    toca la Tabla. Al estar en su propio @st.fragment, cambiar sub-pestaña o
+    expandir/colapsar solo redibuja esta matriz.
 
-    - Chip "Nivel": Grupo / Sub Grupo / Producto → hasta qué nivel se agrega.
-    - Columnas agrupadas por mes; dentro de cada mes: Vta AP (año pasado),
-      Actual (año en curso), %Part y %vs AP.
-    - "Actual" = año máximo presente en los datos cargados; "AP" = año-1.
-      El vs AP solo tiene valor si el rango cargado incluye el año anterior.
+    Sub-pestañas: Venta mes / Venta semana / FoodCost mes / FoodCost semana.
     """
-    _map = {}
-    if col_fam:
-        _map["Grupo"] = col_fam
-    if col_sub:
-        _map["Sub Grupo"] = col_sub
-    if col_prod:
-        _map["Producto"] = col_prod
-    if not _map or not col_fecha:
-        st.info("Faltan columnas (grupo/subgrupo/producto o fecha) para la matriz.")
+    from st_aggrid import AgGrid, GridOptionsBuilder, JsCode  # noqa: E402
+
+    if not col_fam or not col_sub or not col_prod or not col_fecha or not col_venta:
+        st.info("Faltan columnas (Grupo, Sub Grupo, Producto, Fecha, Venta) "
+                "para la matriz agrupada.")
         return
 
-    _niveles = list(_map.keys())
-    _def = "Sub Grupo" if "Sub Grupo" in _niveles else _niveles[0]
-    nivel = st.pills("Nivel", _niveles, default=_def,
-                     key="ventas_matriz_nivel",
-                     label_visibility="collapsed") or _def
-    nivel_col = _map[nivel]
+    # ── Sub-pestañas: modo (Venta / FoodCost) × granularidad (mes / semana) ─
+    modos = ["Venta mes", "Venta semana"]
+    if col_costo:
+        modos += ["FoodCost mes", "FoodCost semana"]
+    modo = st.pills("Modo", modos, default="Venta mes",
+                    key="ventas_matriz_modo",
+                    label_visibility="collapsed") or "Venta mes"
+    es_fc = modo.startswith("FoodCost")
+    es_sem = modo.endswith("semana")
 
+    # ── Preparar df base: producto/anio/periodo con venta y costo ───────
     _fe = pd.to_datetime(d[col_fecha], errors="coerce")
+    if es_sem:
+        iso = _fe.dt.isocalendar()
+        anio_serie = iso["year"].astype("Int64")
+        periodo_serie = iso["week"].astype("Int64")
+
+        def et_periodo(w):
+            return f"S{int(w):02d}"
+    else:
+        anio_serie = _fe.dt.year.astype("Int64")
+        periodo_serie = _fe.dt.month.astype("Int64")
+
+        def et_periodo(m):
+            return _MESES_ES[int(m) - 1]
+
     base = pd.DataFrame({
-        "niv": d[nivel_col].astype(str).values,
-        "anio": _fe.dt.year.values,
-        "mes": _fe.dt.month.values,
+        "grupo": d[col_fam].astype(str).values,
+        "sub":   d[col_sub].astype(str).values,
+        "prod":  d[col_prod].astype(str).values,
+        "anio":  anio_serie.values,
+        "per":   periodo_serie.values,
         "venta": pd.to_numeric(d[col_venta], errors="coerce").fillna(0).values,
-    }).dropna(subset=["anio", "mes"])
+    })
+    if col_costo:
+        base["costo"] = pd.to_numeric(d[col_costo], errors="coerce").fillna(0).values
+    base = base.dropna(subset=["anio", "per"])
     if base.empty:
         st.info("Sin datos en el rango cargado.")
         return
-
     base["anio"] = base["anio"].astype(int)
-    base["mes"] = base["mes"].astype(int)
+    base["per"] = base["per"].astype(int)
+
     cur = int(base["anio"].max())
     prev = cur - 1
     hay_ap = (base["anio"] == prev).any()
     base = base[base["anio"].isin([cur, prev])]
 
-    piv = base.pivot_table(index="niv", columns=["mes", "anio"],
-                           values="venta", aggfunc="sum", fill_value=0.0)
-    meses = sorted({m for (m, _a) in piv.columns})
+    valores = ["venta"] + (["costo"] if "costo" in base.columns else [])
+    piv = base.pivot_table(
+        index=["grupo", "sub", "prod"], columns=["per", "anio"],
+        values=valores, aggfunc="sum", fill_value=0.0,
+    )
 
-    datos, act_cols, vs_cols = {}, [], []
-    for m in meses:
-        mn = _MESES_ES[m - 1]
-        act = piv[(m, cur)] if (m, cur) in piv.columns else pd.Series(0.0, index=piv.index)
-        ap = piv[(m, prev)] if (m, prev) in piv.columns else pd.Series(0.0, index=piv.index)
-        tot = act.sum() or 1.0
-        with np.errstate(divide="ignore", invalid="ignore"):
-            vs = np.where(ap.values > 0, (act.values - ap.values) / ap.values * 100, np.nan)
-        datos[(mn, "Vta AP")] = ap.values
-        datos[(mn, "Actual")] = act.values
-        datos[(mn, "%Part")] = act.values / tot * 100
-        datos[(mn, "%vs AP")] = vs
-        act_cols.append((mn, "Actual"))
-        vs_cols.append((mn, "%vs AP"))
+    periodos = sorted({p for (_v, p, _a) in piv.columns})
 
-    tabla = pd.DataFrame(datos, index=piv.index)
-    tabla.columns = pd.MultiIndex.from_tuples(tabla.columns)
-    # Ordenar filas por venta actual total (desc)
-    _tot_fila = sum(tabla[c] for c in act_cols)
-    tabla = tabla.loc[_tot_fila.sort_values(ascending=False).index]
-    tabla.index.name = nivel
+    # ── Armar df wide a nivel producto (una fila por Grupo/Sub/Prod) ────
+    df_wide = piv.reset_index()
+    df_wide.columns = ["grupo", "sub", "prod"] + [
+        f"{v}_{a}_{p}" for (v, p, a) in piv.columns
+    ]
 
-    if nivel == "Producto" and len(tabla) > 30:
-        tabla = tabla.head(30)
-        st.caption("Mostrando top 30 productos por venta actual del periodo.")
+    # Columnas numéricas del grid (sumables): Vta Act, Vta AP, y para FC
+    # también Costo Act / Costo AP. %Part y %vs AP se calculan en JS.
+    per_labels = {p: et_periodo(p) for p in periodos}
+    fld_va, fld_ap = {}, {}          # per → nombre de columna Actual/AP (venta)
+    fld_ca, fld_cp = {}, {}          # per → costo Actual/AP
+    for p in periodos:
+        fld_va[p] = f"venta_{cur}_{p}"
+        fld_ap[p] = f"venta_{prev}_{p}"
+        if col_costo:
+            fld_ca[p] = f"costo_{cur}_{p}"
+            fld_cp[p] = f"costo_{prev}_{p}"
+        for f in (fld_va[p], fld_ap[p], fld_ca.get(p), fld_cp.get(p)):
+            if f and f not in df_wide.columns:
+                df_wide[f] = 0.0
 
-    # ── Estilo: formato + heat (Actual) + color (%vs AP) ────────────────
-    fmt = {}
-    for (mn, met) in tabla.columns:
-        if met in ("Vta AP", "Actual"):
-            fmt[(mn, met)] = lambda x: f"S/ {x:,.0f}"
-        elif met == "%Part":
-            fmt[(mn, met)] = lambda x: f"{x:.0f}%"
-        else:  # %vs AP
-            fmt[(mn, met)] = lambda x: "—" if pd.isna(x) else f"{x:+.0f}%"
+    # Total del periodo actual (para %Part). Se pasa a JS por gridOptions.context.
+    totales = {int(p): float(df_wide[fld_va[p]].sum()) for p in periodos}
 
-    def _color_vs(v):
-        if pd.isna(v):
-            return "color:#9aa0a6"
-        if v > 0:
-            return "color:#15803d"
-        if v < 0:
-            return "color:#dc2626"
-        return ""
+    # ── AgGrid: rowGroup en grupo y sub, tree con expand/collapse ───────
+    gb = GridOptionsBuilder.from_dataframe(df_wide)
+    gb.configure_default_column(
+        resizable=True, sortable=False, filter=False, suppressMenu=True,
+    )
+    gb.configure_column("grupo", header_name="Grupo", rowGroup=True, hide=True)
+    gb.configure_column("sub", header_name="Sub Grupo", rowGroup=True, hide=True)
+    gb.configure_column("prod", header_name="Producto", minWidth=240,
+                        pinned="left")
 
-    sty = (tabla.style
-           .format(fmt, na_rep="—")
-           .background_gradient(cmap="Purples", subset=act_cols, axis=0)
-           .map(_color_vs, subset=vs_cols))
+    # Formatters JS reutilizables
+    fmt_soles = JsCode("""
+        function(p){ if(p.value==null||isNaN(p.value))return '';
+          return 'S/ '+Number(p.value).toLocaleString('es-PE',{maximumFractionDigits:0});}
+    """)
+    fmt_pct0 = JsCode("""
+        function(p){ if(p.value==null||isNaN(p.value))return '—';
+          return Number(p.value).toFixed(0)+'%';}
+    """)
+    fmt_pct_signed = JsCode("""
+        function(p){ if(p.value==null||isNaN(p.value))return '—';
+          var v=Number(p.value); return (v>=0?'+':'')+v.toFixed(0)+'%';}
+    """)
+    style_vs = JsCode("""
+        function(p){ if(p.value==null||isNaN(p.value))return {color:'#9aa0a6'};
+          var v=Number(p.value);
+          if(v>0)return {color:'#15803d',fontWeight:500};
+          if(v<0)return {color:'#dc2626',fontWeight:500};
+          return {};}
+    """)
+    # Sombreado según magnitud de "Actual". Máx por columna via gridOptions.context.
+    style_heat = JsCode("""
+        function(p){
+          if(p.value==null||isNaN(p.value)||!p.colDef||!p.colDef.field)return {};
+          var mx=(p.context&&p.context.maxAct)?(p.context.maxAct[p.colDef.field]||0):0;
+          if(mx<=0)return {};
+          var t=Math.min(1,Math.max(0,Number(p.value)/mx));
+          var a=(0.06+0.5*t).toFixed(3);
+          return {background:'rgba(108,92,231,'+a+')', borderRadius:'4px'};}
+    """)
+    style_heat_fc = JsCode("""
+        function(p){
+          if(p.value==null||isNaN(p.value))return {color:'#9aa0a6'};
+          var v=Number(p.value);
+          var t=Math.min(1,Math.max(0,v/60));
+          var a=(0.06+0.55*t).toFixed(3);
+          return {background:'rgba(220,38,38,'+a+')', borderRadius:'4px', fontWeight:500};}
+    """)
 
-    st.dataframe(sty, use_container_width=True, height=min(560, 80 + 34 * len(tabla)))
+    # Getter %Part = Actual / total_periodo * 100
+    def _mk_part(fld_act, per_i):
+        return JsCode(f"""
+            function(p){{ var d=p.data||(p.node&&p.node.aggData); if(!d)return null;
+              var act=Number(d['{fld_act}']||0);
+              var tot=(p.context&&p.context.totales)?(p.context.totales[{per_i}]||0):0;
+              if(!tot)return null; return act/tot*100;}}
+        """)
+
+    # Getter %vs AP = (Actual - AP) / AP * 100
+    def _mk_vs(fld_act, fld_ap):
+        return JsCode(f"""
+            function(p){{ var d=p.data||(p.node&&p.node.aggData); if(!d)return null;
+              var a=Number(d['{fld_act}']||0), b=Number(d['{fld_ap}']||0);
+              if(!(b>0))return null; return (a-b)/b*100;}}
+        """)
+
+    # Getter FoodCost % = Costo / Venta * 100
+    def _mk_fc(fld_costo, fld_venta):
+        return JsCode(f"""
+            function(p){{ var d=p.data||(p.node&&p.node.aggData); if(!d)return null;
+              var c=Number(d['{fld_costo}']||0), v=Number(d['{fld_venta}']||0);
+              if(!(v>0))return null; return c/v*100;}}
+        """)
+
+    # Getter vs FoodCost AP (diferencia en puntos porcentuales)
+    def _mk_fc_vs(f_c_a, f_v_a, f_c_p, f_v_p):
+        return JsCode(f"""
+            function(p){{ var d=p.data||(p.node&&p.node.aggData); if(!d)return null;
+              var ca=Number(d['{f_c_a}']||0), va=Number(d['{f_v_a}']||0);
+              var cp=Number(d['{f_c_p}']||0), vp=Number(d['{f_v_p}']||0);
+              if(!(va>0)||!(vp>0))return null;
+              return (ca/va - cp/vp)*100;}}
+        """)
+
+    # ── Construir columnas por periodo (con column groups) ──────────────
+    columnDefs_period = []
+    for p in periodos:
+        header = per_labels[p]
+        children = []
+        if es_fc:
+            # FoodCost: Vta · Costo · FC% · vs FC AP (puntos)
+            children.append({
+                "field": fld_va[p], "headerName": "Vta",
+                "type": "numericColumn", "width": 100,
+                "aggFunc": "sum", "valueFormatter": fmt_soles,
+            })
+            children.append({
+                "field": fld_ca[p], "headerName": "Costo",
+                "type": "numericColumn", "width": 100,
+                "aggFunc": "sum", "valueFormatter": fmt_soles,
+            })
+            children.append({
+                "headerName": "FC%", "type": "numericColumn", "width": 80,
+                "valueGetter": _mk_fc(fld_ca[p], fld_va[p]),
+                "valueFormatter": fmt_pct0,
+                "cellStyle": style_heat_fc,
+            })
+            children.append({
+                "headerName": "vs AP", "type": "numericColumn", "width": 90,
+                "valueGetter": _mk_fc_vs(fld_ca[p], fld_va[p],
+                                          fld_cp[p], fld_ap[p]),
+                "valueFormatter": fmt_pct_signed,
+                "cellStyle": style_vs,
+            })
+        else:
+            # Venta: Vta AP · Actual · %Part · %vs AP
+            children.append({
+                "field": fld_ap[p], "headerName": "Vta AP",
+                "type": "numericColumn", "width": 100,
+                "aggFunc": "sum", "valueFormatter": fmt_soles,
+                "cellStyle": {"color": "#9aa0a6"},
+            })
+            children.append({
+                "field": fld_va[p], "headerName": "Actual",
+                "type": "numericColumn", "width": 110,
+                "aggFunc": "sum", "valueFormatter": fmt_soles,
+                "cellStyle": style_heat,
+            })
+            children.append({
+                "headerName": "%Part", "type": "numericColumn", "width": 80,
+                "valueGetter": _mk_part(fld_va[p], int(p)),
+                "valueFormatter": fmt_pct0,
+                "cellStyle": {"color": "#5a5a5a"},
+            })
+            children.append({
+                "headerName": "%vs AP", "type": "numericColumn", "width": 90,
+                "valueGetter": _mk_vs(fld_va[p], fld_ap[p]),
+                "valueFormatter": fmt_pct_signed,
+                "cellStyle": style_vs,
+            })
+        columnDefs_period.append({"headerName": header, "children": children})
+
+    opciones_grid = gb.build()
+    # Añadir los grupos de columnas por periodo al final
+    opciones_grid["columnDefs"] = list(opciones_grid.get("columnDefs", [])) + columnDefs_period
+
+    # Contexto (para JS): totales por periodo y máximo por campo Actual (heat)
+    max_act = {fld_va[p]: float(df_wide[fld_va[p]].max() or 0) for p in periodos}
+    opciones_grid["context"] = {"totales": totales, "maxAct": max_act}
+
+    # Modo árbol: filas de grupo, expand controlado por botones
+    opciones_grid["groupDisplayType"] = "groupRows"
+    opciones_grid["groupDefaultExpanded"] = 1  # muestra Grupo abierto (Sub cerrado)
+    opciones_grid["animateRows"] = True
+    opciones_grid["suppressAggFuncInHeader"] = True
+    opciones_grid["autoGroupColumnDef"] = {"minWidth": 260, "cellRendererParams": {
+        "suppressCount": False,
+    }}
 
     st.caption(
         f"Actual = {cur} · Año pasado = {prev}. "
+        + ("Modo: " + modo + ".")
         + ("" if hay_ap else
-           "⚠️ El rango cargado no incluye datos de "
-           f"{prev}; amplía el rango de fecha para ver el «vs AP»."))
+           f" ⚠️ El rango cargado no incluye datos de {prev}; "
+           "amplía el rango de fecha para ver el «vs AP»."))
+
+    # Botones de expandir/colapsar todo (sin rerun de la app)
+    _b1, _b2, _b3 = st.columns([1, 1, 6])
+    with _b1:
+        _btn_exp = st.button("⤢ Expandir todo", key="ventas_matriz_exp",
+                             use_container_width=True)
+    with _b2:
+        _btn_col = st.button("⤡ Colapsar todo", key="ventas_matriz_col",
+                             use_container_width=True)
+    if _btn_exp:
+        opciones_grid["groupDefaultExpanded"] = -1
+    elif _btn_col:
+        opciones_grid["groupDefaultExpanded"] = 0
+
+    AgGrid(
+        df_wide,
+        gridOptions=opciones_grid,
+        allow_unsafe_jscode=True,
+        theme="streamlit",
+        height=560,
+        enable_enterprise_modules=False,
+        key=f"ventas_matriz_grid_{modo}",
+        reload_data=False,
+    )
 
 
 def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
@@ -2558,6 +2741,10 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
                                   "Nro Pedido", "Numero Pedido"])
     col_prod   = _resolver(df_f, ["Nomb Item Venta", "Nombre Producto",
                                   "Producto", "Descripcion"])
+    col_canal  = _resolver(df_f, ["Canal Venta", "Canal_Venta",
+                                  "Nomb Canal Venta", "Canal"])
+    col_serv   = _resolver(df_f, ["Servicio", "Tipo Servicio",
+                                  "Nomb Servicio", "Nombre Servicio"])
     if not col_fecha:
         for _c in df_f.columns:
             if pd.api.types.is_datetime64_any_dtype(df_f[_c]):
@@ -2570,23 +2757,30 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
         renderizar_graficos_genericos(df_f, nombre_reporte)
         return
 
-    # ── Filtros Grupo / Sub Grupo como chips en la franja ───────────────
-    fam_sel, sub_sel = [], []
+    # ── Filtros como chips popover en la franja ─────────────────────────
+    # Aplican a TODOS los gráficos de Ventas (venta por día, semanal, matriz).
+    # Canal Venta y Servicio solo aparecen si su columna existe en el parquet
+    # (Servicio no siempre está — se salta silenciosamente).
+    def _filtro_popover(col_col, key, label):
+        if not col_col or col_col not in df_f.columns:
+            return []
+        opts = sorted(df_f[col_col].dropna().astype(str).unique().tolist())
+        if not opts:
+            return []
+        _n = len(st.session_state.get(key) or [])
+        _lbl = f"{label} · {_n}" if _n else label
+        with st.popover(_lbl, use_container_width=True):
+            return st.pills(label, opts, selection_mode="multi",
+                            key=key, label_visibility="collapsed") or []
+
+    fam_sel, sub_sel, canal_sel, serv_sel = [], [], [], []
     with st.container(key="chips_ajuste_tabla"):
-        c1, c2, _ = st.columns([1, 1, 4])
-        with c1:
-            if col_fam:
-                fams = sorted(df_f[col_fam].dropna().astype(str).unique().tolist())
-                if fams:
-                    _n = len(st.session_state.get("ventas_graf_filtro_fam") or [])
-                    _lbl = f"Grupo · {_n}" if _n else "Grupo"
-                    with st.popover(_lbl, use_container_width=True):
-                        fam_sel = st.pills(
-                            "Grupo", fams, selection_mode="multi",
-                            key="ventas_graf_filtro_fam",
-                            label_visibility="collapsed") or []
-        with c2:
-            if col_sub:
+        _cols = st.columns([1, 1, 1, 1, 2])
+        with _cols[0]:
+            fam_sel = _filtro_popover(col_fam, "ventas_graf_filtro_fam", "Grupo")
+        with _cols[1]:
+            # Sub Grupo depende del filtro de Grupo (cascada)
+            if col_sub and col_sub in df_f.columns:
                 _dd = df_f
                 if fam_sel and col_fam:
                     _dd = _dd[_dd[col_fam].astype(str).isin(fam_sel)]
@@ -2599,12 +2793,20 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
                             "Sub Grupo", subs, selection_mode="multi",
                             key="ventas_graf_filtro_sub",
                             label_visibility="collapsed") or []
+        with _cols[2]:
+            canal_sel = _filtro_popover(col_canal, "ventas_graf_filtro_canal", "Canal Venta")
+        with _cols[3]:
+            serv_sel = _filtro_popover(col_serv, "ventas_graf_filtro_serv", "Servicio")
 
     d = df_f
     if fam_sel and col_fam:
         d = d[d[col_fam].astype(str).isin(fam_sel)]
     if sub_sel and col_sub:
         d = d[d[col_sub].astype(str).isin(sub_sel)]
+    if canal_sel and col_canal:
+        d = d[d[col_canal].astype(str).isin(canal_sel)]
+    if serv_sel and col_serv:
+        d = d[d[col_serv].astype(str).isin(serv_sel)]
     if d is None or d.empty:
         st.info("No hay datos para los filtros seleccionados.")
         return
@@ -2745,7 +2947,7 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
 
         # ── 4) Matriz agrupada (Nivel × Mes, vs Año Pasado) ─────────────
         elif graf == "Matriz agrupada":
-            _ventas_matriz_agrupada(d, col_venta, col_fam, col_sub,
-                                    col_prod, col_fecha)
+            _ventas_matriz_agrupada(d, col_venta, col_costo, col_fam,
+                                    col_sub, col_prod, col_fecha)
         else:
             st.info("No hay columnas suficientes para este gráfico.")
