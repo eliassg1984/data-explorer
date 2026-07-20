@@ -1535,6 +1535,168 @@ def _compras_mini_barras(serie, titulo, fmt="S/ {:,.0f}", alto=400):
                     key=f"compras_mini_{_slug(titulo)}")
 
 
+def _periodo_serie(fe, gran):
+    """Serie de etiquetas de periodo (ordenables) según granularidad."""
+    if gran == "Semana":
+        iso = fe.dt.isocalendar()
+        return (iso["year"].astype("Int64").astype(str) + "-S"
+                + iso["week"].astype("Int64").astype(str).str.zfill(2))
+    if gran == "Año":
+        return fe.dt.year.astype("Int64").astype(str)
+    return fe.dt.to_period("M").astype(str)  # Mes
+
+
+@st.fragment
+def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
+                           col_cant, col_fecha):
+    """Dashboard de Familia con drill-down (reemplaza la barra simple).
+
+    - Granularidad Semana/Mes/Año, vista Apilado/Agrupado, medida Valor/Cantidad.
+    - Drill: Familia (selectbox) → sus Subfamilias en el tiempo; Subfamilia
+      (selectbox) refina el Top N de productos.
+    - Paneles: composición (Familias o Subfamilias) + Top N productos.
+    Series apiladas se limitan a Top 6 + «Otros» para no saturar.
+    """
+    if not (col_fam and col_fecha and col_valor):
+        st.info("Faltan columnas (Familia, Fecha, Valor) para este gráfico.")
+        return
+
+    # ── Controles ───────────────────────────────────────────────────────
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        gran = st.pills("Agrupar por", ["Semana", "Mes", "Año"],
+                        default="Mes", key="compras_fam_gran") or "Mes"
+    with c2:
+        vista = st.pills("Vista", ["Apilado", "Agrupado"],
+                         default="Apilado", key="compras_fam_vista") or "Apilado"
+    with c3:
+        _meas = ["Valor S/"] + (["Cantidad"] if col_cant else [])
+        meas = st.pills("Medir", _meas, default="Valor S/",
+                        key="compras_fam_meas") or "Valor S/"
+    with c4:
+        topn = st.pills("Top", [5, 10, 20], default=10,
+                        key="compras_fam_topn") or 10
+
+    es_valor = (meas == "Valor S/")
+    medida = (pd.to_numeric(d[col_valor], errors="coerce").fillna(0) if es_valor
+              else pd.to_numeric(d[col_cant], errors="coerce").fillna(0))
+    fe = pd.to_datetime(d[col_fecha], errors="coerce")
+
+    base = pd.DataFrame({
+        "per": _periodo_serie(fe, gran).values,
+        "fam": d[col_fam].astype(str).values,
+        "sub": (d[col_subfam].astype(str).values if col_subfam else "—"),
+        "prod": (d[col_prod].astype(str).values if col_prod else "—"),
+        "m": medida.values,
+    })
+    base = base[base["per"].notna() & (base["per"] != "<NA>")]
+    if base.empty or base["m"].sum() == 0:
+        st.info("Sin datos en el rango seleccionado.")
+        return
+
+    # ── Drill: Familia → Subfamilia ─────────────────────────────────────
+    d1, d2, _ = st.columns([1.3, 1.3, 3])
+    with d1:
+        fams = sorted(base["fam"].dropna().unique().tolist())
+        fam_sel = st.selectbox("Familia", ["Todas"] + fams,
+                               key="compras_fam_sel")
+    sub_sel = "Todas"
+    with d2:
+        if fam_sel != "Todas" and col_subfam:
+            subs = sorted(base[base["fam"] == fam_sel]["sub"]
+                          .dropna().unique().tolist())
+            sub_sel = st.selectbox("Subfamilia", ["Todas"] + subs,
+                                   key="compras_fam_subsel")
+
+    def _fmt(v):
+        return f"S/ {v:,.0f}" if es_valor else f"{v:,.0f}"
+
+    # ── Barras en el tiempo (serie = familia o subfamilia) ──────────────
+    if fam_sel == "Todas":
+        tb, serie_col, titulo_ser = base, "fam", "familia"
+    else:
+        tb, serie_col, titulo_ser = base[base["fam"] == fam_sel], "sub", "subfamilia"
+
+    tot_ser = tb.groupby(serie_col)["m"].sum().sort_values(ascending=False)
+    top_ser = tot_ser.head(6).index.tolist()
+    tb = tb.copy()
+    tb["serie"] = tb[serie_col].where(tb[serie_col].isin(top_ser), "Otros")
+    g = tb.groupby(["per", "serie"], as_index=False)["m"].sum()
+    periodos = sorted(g["per"].unique())
+    orden = top_ser + (["Otros"] if (tb["serie"] == "Otros").any() else [])
+
+    _pref = "S/ " if es_valor else ""
+    _tpl = ("S/ %{y:,.0f}" if es_valor else "%{y:,.0f}")
+    fig = go.Figure()
+    for i, s in enumerate(orden):
+        ss = (g[g["serie"] == s].set_index("per")["m"]
+              .reindex(periodos, fill_value=0))
+        color = (GRIS_BORDE if s == "Otros"
+                 else PALETA_CALLAI[i % len(PALETA_CALLAI)])
+        fig.add_bar(x=periodos, y=ss.values, name=_compras_truncar(s, 22),
+                    marker_color=color,
+                    hovertemplate="%{fullData.name}<br>%{x}<br>"
+                                  + _tpl + "<extra></extra>")
+    _compras_layout(fig, alto=380)
+    _mn = "Valor" if es_valor else "Cantidad"
+    fig.update_layout(
+        title=f"{_mn} de compra por {gran.lower()} y {titulo_ser}"
+              + ("" if fam_sel == "Todas" else f" — {_compras_truncar(fam_sel, 32)}"),
+        barmode="stack" if vista == "Apilado" else "group",
+        yaxis=dict(tickprefix=_pref, tickformat=",.0f"),
+        legend=dict(orientation="h", y=-0.22, x=0, font=dict(size=10)))
+    fig.update_xaxes(type="category", tickangle=-45)
+    st.plotly_chart(fig, use_container_width=True, key="compras_g_fam_time")
+
+    # ── Paneles: composición + Top N productos ──────────────────────────
+    pc, pt = st.columns(2)
+    with pc:
+        if fam_sel == "Todas":
+            comp = base.groupby("fam")["m"].sum().sort_values()
+            ctitulo = "Valorizado por Familia" if es_valor else "Cantidad por Familia"
+        else:
+            comp = base[base["fam"] == fam_sel].groupby("sub")["m"].sum().sort_values()
+            ctitulo = f"Subfamilias de {_compras_truncar(fam_sel, 26)}"
+        with _card("fam_comp", ctitulo):
+            if comp.empty:
+                st.info("Sin datos.")
+            else:
+                figc = go.Figure(go.Bar(
+                    x=comp.values, y=[_compras_truncar(i, 26) for i in comp.index],
+                    orientation="h", marker_color=ACENTO,
+                    text=[_fmt(v) for v in comp.values],
+                    textposition="outside", cliponaxis=False,
+                    hovertemplate="%{y}<br>" + _tpl.replace("y", "x") + "<extra></extra>"))
+                _compras_layout(figc, alto=max(240, 32 * len(comp) + 80))
+                figc.update_layout(xaxis=dict(tickprefix=_pref, tickformat=",.0f"),
+                                   margin=dict(l=10, r=70, t=10, b=10))
+                st.plotly_chart(figc, use_container_width=True, key="compras_g_fam_comp")
+
+    with pt:
+        scope = base
+        if fam_sel != "Todas":
+            scope = scope[scope["fam"] == fam_sel]
+        if sub_sel != "Todas":
+            scope = scope[scope["sub"] == sub_sel]
+        _amb = (sub_sel if sub_sel != "Todas"
+                else (fam_sel if fam_sel != "Todas" else "todas las familias"))
+        with _card("fam_top", f"Top {topn} productos · {_compras_truncar(_amb, 24)}"):
+            topp = scope.groupby("prod")["m"].sum().nlargest(topn).sort_values()
+            if topp.empty:
+                st.info("Sin datos de productos.")
+            else:
+                figt = go.Figure(go.Bar(
+                    x=topp.values, y=[_compras_truncar(i, 28) for i in topp.index],
+                    orientation="h", marker_color=SERIE_PRINCIPAL,
+                    text=[_fmt(v) for v in topp.values],
+                    textposition="outside", cliponaxis=False,
+                    hovertemplate="%{y}<br>" + _tpl.replace("y", "x") + "<extra></extra>"))
+                _compras_layout(figt, alto=max(240, 32 * len(topp) + 80))
+                figt.update_layout(xaxis=dict(tickprefix=_pref, tickformat=",.0f"),
+                                   margin=dict(l=10, r=70, t=10, b=10))
+                st.plotly_chart(figt, use_container_width=True, key="compras_g_fam_top")
+
+
 @st.fragment
 def _compras_cantidad_producto(d, col_prod, col_cant, col_valor, col_punit, col_fecha):
     """Cantidad/Valor de compra por producto, agrupable por Semana/Mes/Año.
@@ -1750,23 +1912,18 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                                        col_punit, col_fecha)
         return
 
+    # Familia: ancho completo (dashboard con drill Familia→Subfamilia→productos).
+    if graf == "Familia":
+        with st.container(border=True, key="ajuste_graf_card_izq_compras"):
+            _compras_familia_drill(d, col_fam, col_subfam, col_prod,
+                                   col_valor, col_cant, col_fecha)
+        return
+
     col_izq, col_der = st.columns([1.7, 1])
 
     with col_izq:
         with st.container(border=True, key="ajuste_graf_card_izq_compras"):
-            if graf == "Familia" and col_fam:
-                serie = _valor.groupby(d[col_fam].astype(str)).sum().sort_values(ascending=False)
-                fig = go.Figure(go.Bar(
-                    x=serie.index, y=serie.values,
-                    marker=dict(color=PALETA_CALLAI * 4),
-                    text=[f"S/ {v:,.0f}" for v in serie.values],
-                    textposition="outside", cliponaxis=False,
-                ))
-                _compras_layout(fig)
-                fig.update_layout(title="Valorizado de compra por familia")
-                st.plotly_chart(fig, use_container_width=True, key="compras_g_fam")
-
-            elif graf == "Proveedor" and col_prov:
+            if graf == "Proveedor" and col_prov:
                 serie = (_valor.groupby(d[col_prov].astype(str)).sum()
                          .sort_values(ascending=False).head(15).sort_values())
                 fig = go.Figure(go.Bar(
