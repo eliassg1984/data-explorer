@@ -84,10 +84,7 @@ REPORTES = {
         # el parquet). Al primer acceso: 01-del-mes-actual → hoy. El rango
         # aplicado vive en st.session_state[f"rango_carga_{reporte}"] y el
         # date_input del popover lo controla (ver app.py).
-        "carga_por_rango": "Fec Reg Documento",
-        # Columnas que ofrece la franja "Agrupar por" (chips + Expandir/
-        # Colapsar). Nombres reales del parquet de ventas.
-        "agrupar": ["Grupo", "Sub Grupo", "Nomb Item Venta"],
+        "carga_por_rango": "FEC REG DOCUMENTO",
     },
     "Salidas": {
         "label_corto": "Salidas",
