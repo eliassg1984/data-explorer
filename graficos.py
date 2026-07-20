@@ -2678,8 +2678,12 @@ def _ventas_matriz_agrupada(d, col_venta, col_costo, col_fam, col_sub,
         columnDefs_period.append({"headerName": header, "children": children})
 
     opciones_grid = gb.build()
-    # Añadir los grupos de columnas por periodo al final
-    opciones_grid["columnDefs"] = list(opciones_grid.get("columnDefs", [])) + columnDefs_period
+    # columnDefs SOLO con la jerarquía + los grupos por periodo. Sin este
+    # filtro, from_dataframe() añade también las columnas crudas del df wide
+    # (venta_2026_7, costo_2025_7, ...) sin formato y duplicadas.
+    _base_defs = [c for c in opciones_grid.get("columnDefs", [])
+                  if c.get("field") in ("grupo", "sub", "prod")]
+    opciones_grid["columnDefs"] = _base_defs + columnDefs_period
 
     # Contexto (para JS): totales por periodo y máximo por campo Actual (heat)
     max_act = {fld_va[p]: float(df_wide[fld_va[p]].max() or 0) for p in periodos}
@@ -2720,7 +2724,9 @@ def _ventas_matriz_agrupada(d, col_venta, col_costo, col_fam, col_sub,
         allow_unsafe_jscode=True,
         theme="streamlit",
         height=560,
-        enable_enterprise_modules=False,
+        # rowGroup (árbol Grupo→Sub Grupo→Producto) es función Enterprise:
+        # sin esto AgGrid ignora la agrupación y muestra filas planas.
+        enable_enterprise_modules=True,
         key=f"ventas_matriz_grid_{modo}",
         reload_data=False,
     )
