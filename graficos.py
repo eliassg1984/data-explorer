@@ -1594,19 +1594,28 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
         st.info("Sin datos en el rango seleccionado.")
         return
 
-    # ── Drill: Familia → Subfamilia ─────────────────────────────────────
-    d1, d2, _ = st.columns([1.3, 1.3, 3])
+    # ── Drill: Familia → Subfamilia (+ Desglose del gráfico) ────────────
+    d1, d2, d3, _ = st.columns([1.3, 1.3, 1.6, 2])
     with d1:
         fams = sorted(base["fam"].dropna().unique().tolist())
         fam_sel = st.selectbox("Familia", ["Todas"] + fams,
                                key="compras_fam_sel")
     sub_sel = "Todas"
+    desglose = "Total familia"
     with d2:
         if fam_sel != "Todas" and col_subfam:
             subs = sorted(base[base["fam"] == fam_sel]["sub"]
                           .dropna().unique().tolist())
             sub_sel = st.selectbox("Subfamilia", ["Todas"] + subs,
                                    key="compras_fam_subsel")
+    with d3:
+        # Al elegir una familia NO se desglosa solo: el usuario decide si
+        # expandir las subfamilias en el gráfico del tiempo.
+        if fam_sel != "Todas" and col_subfam:
+            desglose = st.pills("Desglose",
+                                ["Total familia", "Por subfamilia"],
+                                default="Total familia",
+                                key="compras_fam_desglose") or "Total familia"
 
     def _fmt(v):
         return f"S/ {v:,.0f}" if es_valor else f"{v:,.0f}"
@@ -1614,8 +1623,10 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
     # ── Barras en el tiempo (serie = familia o subfamilia) ──────────────
     if fam_sel == "Todas":
         tb, serie_col, titulo_ser = base, "fam", "familia"
-    else:
+    elif desglose == "Por subfamilia":
         tb, serie_col, titulo_ser = base[base["fam"] == fam_sel], "sub", "subfamilia"
+    else:
+        tb, serie_col, titulo_ser = base[base["fam"] == fam_sel], "fam", "familia"
 
     tot_ser = tb.groupby(serie_col)["m"].sum().sort_values(ascending=False)
     top_ser = tot_ser.head(6).index.tolist()
@@ -1646,16 +1657,44 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
         yaxis=dict(tickprefix=_pref, tickformat=",.0f"),
         legend=dict(orientation="h", y=-0.22, x=0, font=dict(size=10)))
     fig.update_xaxes(type="category", tickangle=-45)
-    st.plotly_chart(fig, use_container_width=True, key="compras_g_fam_time")
+
+    # Clic en una columna → filtra los paneles de abajo a ese periodo.
+    # El `key` lleva un contador de reset: al pulsar «Ver todo el rango» se
+    # incrementa y el widget se recrea sin selección.
+    _rst = st.session_state.get("compras_fam_time_rst", 0)
+    _evt = st.plotly_chart(
+        fig, use_container_width=True,
+        key=f"compras_g_fam_time_{_rst}",
+        on_select="rerun", selection_mode="points")
+    try:
+        _sel = getattr(_evt, "selection", None) or (_evt or {}).get("selection", {})
+        _pts = (_sel or {}).get("points", [])
+    except Exception:
+        _pts = []
+    periodo_sel = _pts[0].get("x") if _pts else None
+
+    if periodo_sel is not None:
+        cinfo, cbtn = st.columns([4, 1])
+        cinfo.caption(f"📍 Paneles abajo filtrados al bloque **{periodo_sel}**. "
+                      "Clic en otra columna para cambiar.")
+        if cbtn.button("Ver todo el rango", key="compras_fam_verrango",
+                       use_container_width=True):
+            st.session_state["compras_fam_time_rst"] = _rst + 1
+            st.rerun()
+        base_b = base[base["per"] == periodo_sel]
+    else:
+        st.caption("💡 Haz clic en una columna del gráfico para ver solo ese "
+                   "periodo en los paneles de abajo (por defecto, todo el rango).")
+        base_b = base
 
     # ── Paneles: composición + Top N productos ──────────────────────────
     pc, pt = st.columns(2)
     with pc:
         if fam_sel == "Todas":
-            comp = base.groupby("fam")["m"].sum().sort_values()
+            comp = base_b.groupby("fam")["m"].sum().sort_values()
             ctitulo = "Valorizado por Familia" if es_valor else "Cantidad por Familia"
         else:
-            comp = base[base["fam"] == fam_sel].groupby("sub")["m"].sum().sort_values()
+            comp = base_b[base_b["fam"] == fam_sel].groupby("sub")["m"].sum().sort_values()
             ctitulo = f"Subfamilias de {_compras_truncar(fam_sel, 26)}"
         with _card("fam_comp", ctitulo):
             if comp.empty:
@@ -1673,7 +1712,7 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
                 st.plotly_chart(figc, use_container_width=True, key="compras_g_fam_comp")
 
     with pt:
-        scope = base
+        scope = base_b
         if fam_sel != "Todas":
             scope = scope[scope["fam"] == fam_sel]
         if sub_sel != "Todas":
