@@ -344,3 +344,40 @@ def cargar_rango(archivo, col_fecha, ini, fin):
     except Exception as e:
         st.error(f"Error cargando {archivo}: {str(e)}")
         return None
+
+
+@st.cache_data(ttl=3600)
+def rango_fechas(archivo, col_fecha):
+    """(min, max) de la columna de fecha del parquet, vía un agregado en
+    DuckDB (MIN/MAX) que NO materializa las filas. Sirve para fijar los
+    límites del date-picker sin descargar todo el parquet.
+
+    Retorna (datetime.date, datetime.date) o None si falla / no hay datos.
+    Maneja col_fecha como DATE/TIMESTAMP real o como texto dd/mm/yyyy,
+    igual que cargar_rango().
+    """
+    if not secrets_disponibles():
+        df = _datos_demo(archivo)
+        col = "Fecha" if "Fecha" in df.columns else None
+        if col is not None and not df.empty:
+            return df[col].min().date(), df[col].max().date()
+        return None
+    try:
+        con = get_conn()
+        bucket = st.secrets["R2_BUCKET"]
+        url = f"s3://{bucket}/{archivo}"
+        expr = (
+            f'COALESCE('
+            f'TRY_CAST("{col_fecha}" AS DATE), '
+            f'TRY_CAST(TRY_STRPTIME(CAST("{col_fecha}" AS VARCHAR), \'%d/%m/%Y\') AS DATE)'
+            f')'
+        )
+        fila = con.execute(
+            f"SELECT MIN({expr}) AS a, MAX({expr}) AS b "
+            f"FROM read_parquet('{url}')"
+        ).fetchone()
+        if fila and fila[0] is not None and fila[1] is not None:
+            return fila[0], fila[1]
+        return None
+    except Exception:
+        return None

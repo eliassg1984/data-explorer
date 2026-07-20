@@ -9,8 +9,8 @@ import streamlit as st
 
 from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
 from data import (
-    REPORTES, cargar, cargar_rango, secrets_disponibles, hay_dato_nuevo,
-    fecha_ultima_actualizacion,
+    REPORTES, cargar, cargar_rango, rango_fechas, secrets_disponibles,
+    hay_dato_nuevo, fecha_ultima_actualizacion,
 )
 from estilos import TAM_FUENTE, inject_css
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_footer_actualizacion, inject_calendario_es
@@ -196,11 +196,24 @@ if reporte == "Inspector" or cfg.get("tool"):
 with perf.phase("cargar()"):                                                # ⚡ PERF
     _col_rango = cfg.get("carga_por_rango")
     if _col_rango:
+        # El date-picker de la franja (más abajo) usa esta MISMA clave, así que
+        # al cambiar el rango Streamlit lo re-commitea antes del siguiente
+        # rerun y aquí se recarga desde R2 con el nuevo rango. Default liviano:
+        # 01-del-mes → hoy (no baja las 100k+ filas salvo que el usuario amplíe).
         _hoy_c = datetime.date.today()
         _k_rango = f"rango_carga_{reporte}"
+        _k_rango_ok = f"rango_carga_ok_{reporte}"   # último rango 2-tupla válido
         if _k_rango not in st.session_state:
             st.session_state[_k_rango] = (_hoy_c.replace(day=1), _hoy_c)
-        _r_ini, _r_fin = st.session_state[_k_rango]
+        _rc = st.session_state.get(_k_rango)
+        if isinstance(_rc, (tuple, list)) and len(_rc) == 2 and all(_rc):
+            _r_ini, _r_fin = _rc
+            st.session_state[_k_rango_ok] = (_r_ini, _r_fin)
+        else:
+            # Selección de rango a medias (1 fecha): reusar el último válido,
+            # sin tocar la clave del widget (evita resetear el picker).
+            _r_ini, _r_fin = st.session_state.get(
+                _k_rango_ok, (_hoy_c.replace(day=1), _hoy_c))
         df = cargar_rango(cfg["archivo"], _col_rango, _r_ini, _r_fin)
     else:
         df = cargar(cfg["archivo"])
@@ -285,6 +298,26 @@ if col_fecha and df_f[col_fecha].notna().any():
     fecha_min_full = df_f[col_fecha].min().date()
     fecha_max_full = df_f[col_fecha].max().date()
 
+# Reportes con carga por rango (Ventas): los límites del date-picker deben ser
+# el rango COMPLETO del parquet (no solo lo ya cargado), para poder ampliar a
+# cualquier fecha histórica. Se obtiene con un MIN/MAX barato en DuckDB.
+_usa_carga_rango = bool(cfg.get("carga_por_rango"))
+if _usa_carga_rango and col_fecha:
+    _rf = rango_fechas(cfg["archivo"], cfg["carga_por_rango"])
+    if _rf:
+        fecha_min_full, fecha_max_full = _rf
+        # Acotar el rango guardado a [min, max] del parquet ANTES de dibujar el
+        # date-picker: el default (01-mes → hoy) puede exceder el máximo real
+        # si la data no llega hasta hoy, y date_input fallaría (value > max).
+        _kc = f"rango_carga_{reporte}"
+        _cur = st.session_state.get(_kc)
+        if isinstance(_cur, (tuple, list)) and len(_cur) == 2 and all(_cur):
+            _ci = min(max(_cur[0], fecha_min_full), fecha_max_full)
+            _cf = min(max(_cur[1], fecha_min_full), fecha_max_full)
+            if (_ci, _cf) != tuple(_cur):
+                st.session_state[_kc] = (_ci, _cf)
+                st.session_state[f"rango_carga_ok_{reporte}"] = (_ci, _cf)
+
 _hoy = datetime.date.today()
 fecha_ini_default = _hoy.replace(day=1)   # 01 del mes actual
 fecha_fin_default = _hoy                  # hoy
@@ -339,7 +372,16 @@ perf.start_phase("Ajuste top row")                                          # �
 # DISEÑO UNIFICADO: la franja fija (título + fecha + pestañas) aplica a
 # TODOS los reportes. El rango de fecha vive en una clave por reporte
 # (Ajuste conserva su clave histórica, que graficos.py también lee).
-_k_rango_franja = "ajuste_rango_aplicado" if es_ajuste else f"rango_franja_{reporte}"
+# Clave del rango de la franja. Para reportes con carga por rango (Ventas) es
+# la MISMA clave que usa la carga (`rango_carga_{reporte}`): así el date-picker
+# controla directamente qué se descarga de R2. Ajuste conserva su clave
+# histórica (que graficos.py lee); el resto usa una clave de filtro local.
+if _usa_carga_rango:
+    _k_rango_franja = f"rango_carga_{reporte}"
+elif es_ajuste:
+    _k_rango_franja = "ajuste_rango_aplicado"
+else:
+    _k_rango_franja = f"rango_franja_{reporte}"
 _franja_con_fecha = bool(col_fecha) and fecha_min_full is not None
 if True:
     # Rango aplicado (auto): al primer acceso usa 01-del-mes → hoy.
@@ -381,25 +423,40 @@ if True:
                         _fecha_actualizacion = _fecha_actualizacion.astimezone(ZONA_PERU)
                 # La renderización del aviso se mueve fuera de la franja sticky
                 with st.container(key="fecha_ajuste_pill"):
-                    _ini_apl, _fin_apl = st.session_state[_k_rango_franja]
-                    rango_aj = st.date_input(
-                        "Rango a Evaluar",
-                        value=(_ini_apl, _fin_apl),
-                        min_value=fecha_min_full,
-                        max_value=fecha_max_full,
-                        format="DD/MM/YYYY",
-                        key=f"fch_franja_{reporte.replace(' ', '_')}",
-                        label_visibility="collapsed",
-                    )
-                # Cambio de rango: basta con guardar el valor — el filtro
-                # se aplica más abajo EN ESTA MISMA pasada. El st.rerun()
-                # que había aquí interrumpía la ejecución ANTES de que las
-                # pestañas Tabla/Gráficos se renderizaran, Streamlit limpiaba
-                # su estado y la vista caía a "Tabla" aunque la pill siguiera
-                # marcando "Gráficos".
-                if (isinstance(rango_aj, (tuple, list)) and len(rango_aj) == 2
-                        and tuple(rango_aj) != st.session_state[_k_rango_franja]):
-                    st.session_state[_k_rango_franja] = tuple(rango_aj)
+                    if _usa_carga_rango:
+                        # El widget ES la fuente del rango de carga: usa la clave
+                        # de carga directamente. Al cambiarlo, Streamlit commitea
+                        # el valor ANTES del rerun, y la sección "CARGAR DATOS"
+                        # (arriba) re-descarga ese rango desde R2. Sin st.rerun,
+                        # sin copia manual → no se pierde el estado de la vista.
+                        st.date_input(
+                            "Rango a Evaluar",
+                            min_value=fecha_min_full,
+                            max_value=fecha_max_full,
+                            format="DD/MM/YYYY",
+                            key=_k_rango_franja,
+                            label_visibility="collapsed",
+                        )
+                    else:
+                        _ini_apl, _fin_apl = st.session_state[_k_rango_franja]
+                        rango_aj = st.date_input(
+                            "Rango a Evaluar",
+                            value=(_ini_apl, _fin_apl),
+                            min_value=fecha_min_full,
+                            max_value=fecha_max_full,
+                            format="DD/MM/YYYY",
+                            key=f"fch_franja_{reporte.replace(' ', '_')}",
+                            label_visibility="collapsed",
+                        )
+                        # Cambio de rango: basta con guardar el valor — el filtro
+                        # se aplica más abajo EN ESTA MISMA pasada. El st.rerun()
+                        # que había aquí interrumpía la ejecución ANTES de que las
+                        # pestañas Tabla/Gráficos se renderizaran, Streamlit
+                        # limpiaba su estado y la vista caía a "Tabla".
+                        if (isinstance(rango_aj, (tuple, list))
+                                and len(rango_aj) == 2
+                                and tuple(rango_aj) != st.session_state[_k_rango_franja]):
+                            st.session_state[_k_rango_franja] = tuple(rango_aj)
 
         # El selector pertenece a la misma franja blanca que el título.
         if reporte != "Requerimientos":
@@ -426,13 +483,18 @@ if True:
             + _fecha_actualizacion.strftime("%d/%m/%Y · %H:%M")
         )
 
-    # Aplicar el rango al DataFrame (usa el valor ya guardado en session_state)
+    # Aplicar el rango al DataFrame (usa el valor ya guardado en session_state).
+    # En carga_por_rango el widget puede dejar una tupla de 1 elemento mientras
+    # el usuario elige la 2ª fecha: en ese caso no se filtra (se muestra lo ya
+    # cargado) hasta que el rango quede completo.
     if _franja_con_fecha:
-        _ini_apl, _fin_apl = st.session_state[_k_rango_franja]
-        df_f = df_f[
-            (df_f[col_fecha].dt.date >= _ini_apl) &
-            (df_f[col_fecha].dt.date <= _fin_apl)
-        ]
+        _rango_apl = st.session_state.get(_k_rango_franja)
+        if isinstance(_rango_apl, (tuple, list)) and len(_rango_apl) == 2 and all(_rango_apl):
+            _ini_apl, _fin_apl = _rango_apl
+            df_f = df_f[
+                (df_f[col_fecha].dt.date >= _ini_apl) &
+                (df_f[col_fecha].dt.date <= _fin_apl)
+            ]
 perf.end_phase("Ajuste top row")                                            # ⚡ PERF
 
 # (El popover de filtros fue retirado: los filtros viven en la franja.)
