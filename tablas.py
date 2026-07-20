@@ -806,7 +806,7 @@ def _fila_totales(df_grid, cols_valor, cols_precio, cols_stock, primera_col):
     return fila_totales
 
 
-def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14, cols_visibles=None, expandir_grupos=False):
+def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14, cols_visibles=None):
     """Renderiza la tabla AgGrid en vista desktop con formato financiero y diseño premium.
 
     cols_visibles: lista de columnas que arrancan VISIBLES. El resto se oculta
@@ -1139,9 +1139,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         else:
             opciones_grid["groupDisplayType"] = "multipleColumns"
 
-        # -1 = expandir TODOS los niveles; 0 = colapsar todo. Controlado por
-        # los botones "Expandir todo / Colapsar todo" de la franja (app.py).
-        opciones_grid["groupDefaultExpanded"] = -1 if expandir_grupos else 0
+        opciones_grid["groupDefaultExpanded"] = 0
         opciones_grid["pivotMode"] = es_requerimientos
     else:
         opciones_grid["pivotMode"] = False
