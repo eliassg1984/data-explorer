@@ -2426,6 +2426,123 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
     st.plotly_chart(fig, use_container_width=True, key="ventas_g_dia")
 
 
+_MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
+             "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+
+
+@st.fragment
+def _ventas_matriz_agrupada(d, col_venta, col_fam, col_sub, col_prod, col_fecha):
+    """Matriz dinámica Nivel × Mes con comparación vs Año Pasado.
+
+    Vive DENTRO de la vista Gráficos (una opción más del pills), NO toca la
+    Tabla. Al estar en su propio @st.fragment, cambiar el chip de nivel solo
+    redibuja esta matriz.
+
+    - Chip "Nivel": Grupo / Sub Grupo / Producto → hasta qué nivel se agrega.
+    - Columnas agrupadas por mes; dentro de cada mes: Vta AP (año pasado),
+      Actual (año en curso), %Part y %vs AP.
+    - "Actual" = año máximo presente en los datos cargados; "AP" = año-1.
+      El vs AP solo tiene valor si el rango cargado incluye el año anterior.
+    """
+    _map = {}
+    if col_fam:
+        _map["Grupo"] = col_fam
+    if col_sub:
+        _map["Sub Grupo"] = col_sub
+    if col_prod:
+        _map["Producto"] = col_prod
+    if not _map or not col_fecha:
+        st.info("Faltan columnas (grupo/subgrupo/producto o fecha) para la matriz.")
+        return
+
+    _niveles = list(_map.keys())
+    _def = "Sub Grupo" if "Sub Grupo" in _niveles else _niveles[0]
+    nivel = st.pills("Nivel", _niveles, default=_def,
+                     key="ventas_matriz_nivel",
+                     label_visibility="collapsed") or _def
+    nivel_col = _map[nivel]
+
+    _fe = pd.to_datetime(d[col_fecha], errors="coerce")
+    base = pd.DataFrame({
+        "niv": d[nivel_col].astype(str).values,
+        "anio": _fe.dt.year.values,
+        "mes": _fe.dt.month.values,
+        "venta": pd.to_numeric(d[col_venta], errors="coerce").fillna(0).values,
+    }).dropna(subset=["anio", "mes"])
+    if base.empty:
+        st.info("Sin datos en el rango cargado.")
+        return
+
+    base["anio"] = base["anio"].astype(int)
+    base["mes"] = base["mes"].astype(int)
+    cur = int(base["anio"].max())
+    prev = cur - 1
+    hay_ap = (base["anio"] == prev).any()
+    base = base[base["anio"].isin([cur, prev])]
+
+    piv = base.pivot_table(index="niv", columns=["mes", "anio"],
+                           values="venta", aggfunc="sum", fill_value=0.0)
+    meses = sorted({m for (m, _a) in piv.columns})
+
+    datos, act_cols, vs_cols = {}, [], []
+    for m in meses:
+        mn = _MESES_ES[m - 1]
+        act = piv[(m, cur)] if (m, cur) in piv.columns else pd.Series(0.0, index=piv.index)
+        ap = piv[(m, prev)] if (m, prev) in piv.columns else pd.Series(0.0, index=piv.index)
+        tot = act.sum() or 1.0
+        with np.errstate(divide="ignore", invalid="ignore"):
+            vs = np.where(ap.values > 0, (act.values - ap.values) / ap.values * 100, np.nan)
+        datos[(mn, "Vta AP")] = ap.values
+        datos[(mn, "Actual")] = act.values
+        datos[(mn, "%Part")] = act.values / tot * 100
+        datos[(mn, "%vs AP")] = vs
+        act_cols.append((mn, "Actual"))
+        vs_cols.append((mn, "%vs AP"))
+
+    tabla = pd.DataFrame(datos, index=piv.index)
+    tabla.columns = pd.MultiIndex.from_tuples(tabla.columns)
+    # Ordenar filas por venta actual total (desc)
+    _tot_fila = sum(tabla[c] for c in act_cols)
+    tabla = tabla.loc[_tot_fila.sort_values(ascending=False).index]
+    tabla.index.name = nivel
+
+    if nivel == "Producto" and len(tabla) > 30:
+        tabla = tabla.head(30)
+        st.caption("Mostrando top 30 productos por venta actual del periodo.")
+
+    # ── Estilo: formato + heat (Actual) + color (%vs AP) ────────────────
+    fmt = {}
+    for (mn, met) in tabla.columns:
+        if met in ("Vta AP", "Actual"):
+            fmt[(mn, met)] = lambda x: f"S/ {x:,.0f}"
+        elif met == "%Part":
+            fmt[(mn, met)] = lambda x: f"{x:.0f}%"
+        else:  # %vs AP
+            fmt[(mn, met)] = lambda x: "—" if pd.isna(x) else f"{x:+.0f}%"
+
+    def _color_vs(v):
+        if pd.isna(v):
+            return "color:#9aa0a6"
+        if v > 0:
+            return "color:#15803d"
+        if v < 0:
+            return "color:#dc2626"
+        return ""
+
+    sty = (tabla.style
+           .format(fmt, na_rep="—")
+           .background_gradient(cmap="Purples", subset=act_cols, axis=0)
+           .map(_color_vs, subset=vs_cols))
+
+    st.dataframe(sty, use_container_width=True, height=min(560, 80 + 34 * len(tabla)))
+
+    st.caption(
+        f"Actual = {cur} · Año pasado = {prev}. "
+        + ("" if hay_ap else
+           "⚠️ El rango cargado no incluye datos de "
+           f"{prev}; amplía el rango de fecha para ver el «vs AP»."))
+
+
 def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
     """Dashboard de Ventas: venta por día, familia/subfamilia por semana,
     e histórica de subfamilia. Columnas reales del parquet de ventas."""
@@ -2439,6 +2556,8 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
     col_pax    = _resolver(df_f, ["Cant Pax", "Cantidad Pax", "Pax"])
     col_pedido = _resolver(df_f, ["Llave Local Pedido", "Llave_Local_Pedido",
                                   "Nro Pedido", "Numero Pedido"])
+    col_prod   = _resolver(df_f, ["Nomb Item Venta", "Nombre Producto",
+                                  "Producto", "Descripcion"])
     if not col_fecha:
         for _c in df_f.columns:
             if pd.api.types.is_datetime64_any_dtype(df_f[_c]):
@@ -2493,7 +2612,7 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
     _venta = pd.to_numeric(d[col_venta], errors="coerce").fillna(0)
 
     opciones = ["Venta por día", "Familia/Subfamilia semanal",
-                "Histórica subfamilia"]
+                "Histórica subfamilia", "Matriz agrupada"]
 
     graf = st.pills("Gráfico", opciones, default=opciones[0],
                     key="ventas_graf_tipo",
@@ -2623,5 +2742,10 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
                 st.plotly_chart(fig, use_container_width=True, key="ventas_g_hist")
                 st.caption("Histórica sobre el rango de fechas cargado. Para ver "
                            "más meses, amplía el rango en el selector de fecha.")
+
+        # ── 4) Matriz agrupada (Nivel × Mes, vs Año Pasado) ─────────────
+        elif graf == "Matriz agrupada":
+            _ventas_matriz_agrupada(d, col_venta, col_fam, col_sub,
+                                    col_prod, col_fecha)
         else:
             st.info("No hay columnas suficientes para este gráfico.")
