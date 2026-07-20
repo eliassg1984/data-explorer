@@ -1599,17 +1599,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     if prov_focus not in set(base["prov"].unique()):
         prov_focus, prod_focus = None, None
 
-    nav = st.columns([1.6, 4])
-    with nav[0]:
-        if prov_focus and st.button("↩ Ver proveedores", key="cp_bc_all",
-                                    use_container_width=True):
-            st.session_state["compras_prov_focus"] = None
-            st.session_state["compras_prov_prodfocus"] = None
-            st.rerun()
-    with nav[1]:
-        _ruta = ("Proveedores" + (f" › {prov_focus}" if prov_focus else "")
-                 + (f" › {prod_focus}" if prod_focus else ""))
-        st.caption(f"📂 {_ruta}  ·  clic en las barras para bajar de nivel")
+    if prov_focus and st.button("↩ Ver proveedores", key="cp_bc_all"):
+        st.session_state["compras_prov_focus"] = None
+        st.session_state["compras_prov_prodfocus"] = None
+        st.rerun()
 
     def _um_de(grp):
         if not col_um:
@@ -1618,6 +1611,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         return (" " + m.iat[0]) if len(m) and m.iat[0] not in ("", "nan") else ""
 
     # ── Main: Top 15 proveedores por valorizado (clic → selecciona) ─────
+    # % = participación de cada proveedor sobre el TOTAL comprado del rango.
+    _tot_all = base["valor"].sum() or 1.0
     prov_tot = base.groupby("prov")["valor"].sum().nlargest(15).sort_values()
     prov_cats = list(prov_tot.index)
     with _card("prov_main", "Top 15 proveedores por valorizado"):
@@ -1625,12 +1620,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         figm = go.Figure(go.Bar(
             x=prov_tot.values, y=[_compras_truncar(i, 34) for i in prov_cats],
             orientation="h", marker=dict(color=_pc),
-            text=[f"S/ {v:,.0f}" for v in prov_tot.values],
+            text=[f"S/ {v:,.0f}  ·  {v / _tot_all * 100:.1f}%"
+                  for v in prov_tot.values],
             textposition="outside", cliponaxis=False,
-            hovertemplate="%{y}<br>S/ %{x:,.0f}<extra></extra>"))
+            customdata=(prov_tot.values / _tot_all * 100),
+            hovertemplate="%{y}<br>S/ %{x:,.0f} · %{customdata:.1f}% del total"
+                          "<extra></extra>"))
         _compras_layout(figm, alto=max(320, 30 * len(prov_cats) + 80))
         figm.update_xaxes(visible=False)
-        figm.update_layout(margin=dict(l=10, r=90, t=10, b=10))
+        figm.update_layout(margin=dict(l=10, r=140, t=10, b=10))
         _mevt = st.plotly_chart(figm, use_container_width=True,
                                 key=f"compras_g_prov_main_{prov_focus}",
                                 on_select="rerun", selection_mode="points")
@@ -1699,19 +1697,30 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 filas = []
                 for prov, grp in sub2.groupby("prov"):
                     g2 = grp
+                    _uf = None
                     if col_fecha and grp["fecha"].notna().any():
                         g2 = grp.dropna(subset=["fecha"]).sort_values("fecha")
+                        _uf = pd.to_datetime(g2["fecha"].iloc[-1])
                     ult = (g2["punit"].iloc[-1] if (col_punit and len(g2)
                            and pd.notna(g2["punit"].iloc[-1])) else np.nan)
                     filas.append({
                         "Proveedor": prov,
                         "Último precio": ult,
+                        "Últ. compra": (_uf.strftime("%d/%m/%Y")
+                                        if _uf is not None else "—"),
                         "Cant. acum.": grp["cant"].sum(),
                         "Unid": (_um_de(grp).strip() if col_um else ""),
                     })
                 tabla = pd.DataFrame(filas).sort_values("Cant. acum.", ascending=False)
+                _orden = ["Proveedor", "Último precio", "Últ. compra",
+                          "Cant. acum.", "Unid"]
                 if not col_um:
+                    _orden.remove("Unid")
                     tabla = tabla.drop(columns=["Unid"])
+                if not col_fecha:
+                    _orden.remove("Últ. compra")
+                    tabla = tabla.drop(columns=["Últ. compra"])
+                tabla = tabla[_orden]
                 _min = (tabla["Último precio"].min()
                         if tabla["Último precio"].notna().any() else None)
 
@@ -2098,8 +2107,9 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
     col_subfam = _resolver(df_f, ["Subfamilia", "Nombre Subfamilia"])
     col_prov   = _resolver(df_f, ["Nombre_proveedor", "Nombre proveedor", "Proveedor"])
     col_prod   = _resolver(df_f, ["Nombre_producto", "Nombre producto", "Producto"])
-    col_um     = _resolver(df_f, ["Unidad_medida", "Unidad medida", "Unidad de medida",
-                                  "Unidad_compra", "Unidad compra", "Unidad", "UM", "Und"])
+    col_um     = _resolver(df_f, ["Unidad Kardex", "Unidad_kardex", "Unidad_medida",
+                                  "Unidad medida", "Unidad de medida", "Unidad_compra",
+                                  "Unidad compra", "Unidad", "UM", "Und"])
     col_cant   = _resolver(df_f, ["Cantidad_compra", "Cantidad compra", "Cantidad"])
     col_valor  = _resolver(df_f, ["Valor_compra", "Valor compra", "Importe Total", "Valorizado"])
     col_val_aa = _resolver(df_f, ["Valor_ano_anterior", "Valor año anterior"])
