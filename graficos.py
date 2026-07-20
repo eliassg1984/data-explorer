@@ -1560,6 +1560,178 @@ def _periodo_serie(fe, gran):
 
 
 @st.fragment
+def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
+                             col_punit, col_um, col_fecha):
+    """Dashboard de Proveedor con drill de dos niveles.
+
+    - Top 15 proveedores por valorizado (clic → selecciona proveedor).
+    - Panel A: Top N productos comprados a ese proveedor (valor + cantidad y
+      unidad). Clic en un producto → lo selecciona.
+    - Panel B: proveedores a los que se compró ese producto, con su ÚLTIMO
+      precio unitario y la cantidad acumulada por unidad de medida.
+    """
+    if not (col_prov and col_valor):
+        st.info("Faltan columnas (Proveedor, Valor) para este gráfico.")
+        return
+
+    topn = st.pills("Top productos", [5, 10, 20], default=10,
+                    key="compras_prov_topn") or 10
+
+    base = pd.DataFrame({
+        "prov": d[col_prov].astype(str).values,
+        "prod": (d[col_prod].astype(str).values if col_prod else "—"),
+        "cant": (pd.to_numeric(d[col_cant], errors="coerce").fillna(0).values
+                 if col_cant else 0.0),
+        "valor": pd.to_numeric(d[col_valor], errors="coerce").fillna(0).values,
+        "punit": (pd.to_numeric(d[col_punit], errors="coerce").values
+                  if col_punit else np.nan),
+        "um": (d[col_um].astype(str).values if col_um else ""),
+        "fecha": (pd.to_datetime(d[col_fecha], errors="coerce").values
+                  if col_fecha else pd.NaT),
+    })
+    base = base[base["prov"].notna() & (base["prov"] != "nan")]
+    if base.empty or base["valor"].sum() == 0:
+        st.info("Sin datos en el rango seleccionado.")
+        return
+
+    prov_focus = st.session_state.get("compras_prov_focus")
+    prod_focus = st.session_state.get("compras_prov_prodfocus")
+    if prov_focus not in set(base["prov"].unique()):
+        prov_focus, prod_focus = None, None
+
+    nav = st.columns([1.6, 4])
+    with nav[0]:
+        if prov_focus and st.button("↩ Ver proveedores", key="cp_bc_all",
+                                    use_container_width=True):
+            st.session_state["compras_prov_focus"] = None
+            st.session_state["compras_prov_prodfocus"] = None
+            st.rerun()
+    with nav[1]:
+        _ruta = ("Proveedores" + (f" › {prov_focus}" if prov_focus else "")
+                 + (f" › {prod_focus}" if prod_focus else ""))
+        st.caption(f"📂 {_ruta}  ·  clic en las barras para bajar de nivel")
+
+    def _um_de(grp):
+        if not col_um:
+            return ""
+        m = grp["um"].mode()
+        return (" " + m.iat[0]) if len(m) and m.iat[0] not in ("", "nan") else ""
+
+    # ── Main: Top 15 proveedores por valorizado (clic → selecciona) ─────
+    prov_tot = base.groupby("prov")["valor"].sum().nlargest(15).sort_values()
+    prov_cats = list(prov_tot.index)
+    with _card("prov_main", "Top 15 proveedores por valorizado"):
+        _pc = [SERIE_PRINCIPAL if p == prov_focus else ACENTO for p in prov_cats]
+        figm = go.Figure(go.Bar(
+            x=prov_tot.values, y=[_compras_truncar(i, 34) for i in prov_cats],
+            orientation="h", marker=dict(color=_pc),
+            text=[f"S/ {v:,.0f}" for v in prov_tot.values],
+            textposition="outside", cliponaxis=False,
+            hovertemplate="%{y}<br>S/ %{x:,.0f}<extra></extra>"))
+        _compras_layout(figm, alto=max(320, 30 * len(prov_cats) + 80))
+        figm.update_xaxes(visible=False)
+        figm.update_layout(margin=dict(l=10, r=90, t=10, b=10))
+        _mevt = st.plotly_chart(figm, use_container_width=True,
+                                key=f"compras_g_prov_main_{prov_focus}",
+                                on_select="rerun", selection_mode="points")
+        _mp = _first_point(_mevt)
+        if _mp is not None:
+            _i = _mp.get("point_number", _mp.get("point_index"))
+            if _i is not None and 0 <= _i < len(prov_cats):
+                st.session_state["compras_prov_focus"] = prov_cats[_i]
+                st.session_state["compras_prov_prodfocus"] = None
+                st.rerun()
+        st.caption("👆 Clic en un proveedor para ver sus productos abajo.")
+
+    pa, pb = st.columns(2)
+
+    # ── Panel A: productos del proveedor (clic → selecciona producto) ───
+    with pa:
+        _ta = ("Productos del proveedor" if prov_focus is None
+               else f"Top {topn} productos · {_compras_truncar(prov_focus, 22)}")
+        with _card("prov_prods", _ta):
+            if prov_focus is None:
+                st.info("👆 Clic en un proveedor arriba.")
+            else:
+                sub = base[base["prov"] == prov_focus]
+                agg = sub.groupby("prod").agg(valor=("valor", "sum"),
+                                              cant=("cant", "sum"))
+                agg = agg.nlargest(topn, "valor").sort_values("valor")
+                if agg.empty:
+                    st.info("Sin productos.")
+                else:
+                    prod_cats = list(agg.index)
+                    _um_map = {p: _um_de(sub[sub["prod"] == p]) for p in prod_cats}
+                    _txt = [f"S/ {v:,.0f}  ·  {c:,.0f}{_um_map[p]}"
+                            for p, v, c in zip(prod_cats, agg["valor"], agg["cant"])]
+                    _cc = [SERIE_PRINCIPAL if p == prod_focus else ACENTO
+                           for p in prod_cats]
+                    figa = go.Figure(go.Bar(
+                        x=agg["valor"].values,
+                        y=[_compras_truncar(i, 24) for i in prod_cats],
+                        orientation="h", marker_color=_cc,
+                        text=_txt, textposition="outside", cliponaxis=False,
+                        hovertemplate="%{y}<extra></extra>"))
+                    _compras_layout(figa, alto=max(240, 34 * len(agg) + 80))
+                    figa.update_xaxes(tickprefix="S/ ", tickformat=",.0f")
+                    figa.update_layout(margin=dict(l=10, r=140, t=10, b=10))
+                    _aevt = st.plotly_chart(
+                        figa, use_container_width=True,
+                        key=f"compras_g_prov_prods_{prov_focus}_{prod_focus}",
+                        on_select="rerun", selection_mode="points")
+                    _ap = _first_point(_aevt)
+                    if _ap is not None:
+                        _j = _ap.get("point_number", _ap.get("point_index"))
+                        if _j is not None and 0 <= _j < len(prod_cats):
+                            st.session_state["compras_prov_prodfocus"] = prod_cats[_j]
+                            st.rerun()
+                    st.caption("👆 Clic en un producto para ver sus proveedores.")
+
+    # ── Panel B: proveedores del producto (último precio + cant acum) ───
+    with pb:
+        _tb = ("Proveedores del producto" if prod_focus is None
+               else f"Proveedores de · {_compras_truncar(prod_focus, 26)}")
+        with _card("prov_prov_de_prod", _tb):
+            if prod_focus is None:
+                st.info("👈 Clic en un producto del panel de la izquierda.")
+            else:
+                sub2 = base[base["prod"] == prod_focus]
+                filas = []
+                for prov, grp in sub2.groupby("prov"):
+                    g2 = grp
+                    if col_fecha and grp["fecha"].notna().any():
+                        g2 = grp.dropna(subset=["fecha"]).sort_values("fecha")
+                    ult = (g2["punit"].iloc[-1] if (col_punit and len(g2)
+                           and pd.notna(g2["punit"].iloc[-1])) else np.nan)
+                    filas.append({
+                        "Proveedor": prov,
+                        "Último precio": ult,
+                        "Cant. acum.": grp["cant"].sum(),
+                        "Unid": (_um_de(grp).strip() if col_um else ""),
+                    })
+                tabla = pd.DataFrame(filas).sort_values("Cant. acum.", ascending=False)
+                if not col_um:
+                    tabla = tabla.drop(columns=["Unid"])
+                _min = (tabla["Último precio"].min()
+                        if tabla["Último precio"].notna().any() else None)
+
+                def _hl(col):
+                    if col.name != "Último precio" or _min is None:
+                        return ["" for _ in col]
+                    return ["color:#15803d;font-weight:600"
+                            if (pd.notna(v) and v == _min) else "" for v in col]
+
+                sty = (tabla.style
+                       .format({"Último precio": "S/ {:,.2f}", "Cant. acum.": "{:,.0f}"},
+                               na_rep="—")
+                       .apply(_hl, axis=0))
+                st.dataframe(sty, hide_index=True, use_container_width=True,
+                             height=min(430, 60 + 34 * len(tabla)))
+                st.caption("Último precio = precio unitario de la compra más "
+                           "reciente a cada proveedor. Verde = menor precio.")
+
+
+@st.fragment
 def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
                            col_cant, col_fecha):
     """Dashboard de Familia con drill-down (reemplaza la barra simple).
@@ -1926,6 +2098,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
     col_subfam = _resolver(df_f, ["Subfamilia", "Nombre Subfamilia"])
     col_prov   = _resolver(df_f, ["Nombre_proveedor", "Nombre proveedor", "Proveedor"])
     col_prod   = _resolver(df_f, ["Nombre_producto", "Nombre producto", "Producto"])
+    col_um     = _resolver(df_f, ["Unidad_medida", "Unidad medida", "Unidad de medida",
+                                  "Unidad_compra", "Unidad compra", "Unidad", "UM", "Und"])
     col_cant   = _resolver(df_f, ["Cantidad_compra", "Cantidad compra", "Cantidad"])
     col_valor  = _resolver(df_f, ["Valor_compra", "Valor compra", "Importe Total", "Valorizado"])
     col_val_aa = _resolver(df_f, ["Valor_ano_anterior", "Valor año anterior"])
@@ -2024,27 +2198,18 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                                    col_valor, col_cant, col_fecha)
         return
 
+    # Proveedor: ancho completo (drill Proveedor→productos→proveedores del prod.).
+    if graf == "Proveedor":
+        with st.container(border=True, key="ajuste_graf_card_izq_compras"):
+            _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
+                                     col_punit, col_um, col_fecha)
+        return
+
     col_izq, col_der = st.columns([1.7, 1])
 
     with col_izq:
         with st.container(border=True, key="ajuste_graf_card_izq_compras"):
-            if graf == "Proveedor" and col_prov:
-                serie = (_valor.groupby(d[col_prov].astype(str)).sum()
-                         .sort_values(ascending=False).head(15).sort_values())
-                fig = go.Figure(go.Bar(
-                    x=serie.values,
-                    y=[_compras_truncar(i, 32) for i in serie.index],
-                    orientation="h",
-                    marker=dict(color=ACENTO, opacity=0.85),
-                    text=[f"S/ {v:,.0f}" for v in serie.values],
-                    textposition="outside", cliponaxis=False,
-                ))
-                _compras_layout(fig, alto=480)
-                fig.update_layout(title="Top 15 proveedores por valorizado")
-                fig.update_xaxes(visible=False)
-                st.plotly_chart(fig, use_container_width=True, key="compras_g_prov")
-
-            elif graf == "Evolución proveedor" and col_prov and _mes is not None:
+            if graf == "Evolución proveedor" and col_prov and _mes is not None:
                 top = _valor.groupby(d[col_prov].astype(str)).sum().nlargest(8).index
                 dd = pd.DataFrame({"mes": _mes, "prov": d[col_prov].astype(str),
                                    "valor": _valor})
