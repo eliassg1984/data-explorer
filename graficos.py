@@ -2891,7 +2891,11 @@ def _ventas_ranking_foodcost(d, col_venta, col_costo, col_cant,
     for prod, grp in pm.groupby("prod"):
         m2v = dict(zip(grp["mes"].astype(int), grp["venta"]))
         trend_map[prod] = [float(m2v.get(m, 0.0)) for m in meses_cur]
-    rk["trend"] = rk["prod"].map(lambda p: trend_map.get(p, []))
+    # La tendencia se pasa como texto "v1,v2,v3" (no lista): streamlit-aggrid
+    # no serializa listas de forma fiable a arrays JS y el cellRenderer fallaba
+    # con "a.map is not a function". El renderer la separa por comas.
+    rk["trend"] = rk["prod"].map(
+        lambda p: ",".join(f"{v:.0f}" for v in trend_map.get(p, [])))
 
     df_rank = rk[["prod", "ap", "ac", "trend", "var", "cant", "fc"]].copy()
 
@@ -2923,9 +2927,12 @@ def _ventas_ranking_foodcost(d, col_venta, col_costo, col_cant,
           return {backgroundColor:'rgba('+r+','+g+','+b+',0.6)',color:'#3a2a10',fontWeight:500};}
     """)
     spark = JsCode("""
-        function(p){ var a=p.value; if(!a||!a.length)return '';
+        function(p){
+          var s=p.value; if(s==null)return '';
+          var a=String(s).split(',').map(Number).filter(function(x){return !isNaN(x);});
+          if(a.length<2)return '';
           var w=88,h=22,mn=Math.min.apply(null,a),mx=Math.max.apply(null,a),rng=(mx-mn)||1;
-          var pts=a.map(function(v,i){return (i/(Math.max(1,a.length-1))*(w-4)+2).toFixed(1)+','+(h-2-(v-mn)/rng*(h-4)).toFixed(1);}).join(' ');
+          var pts=a.map(function(v,i){return (i/(a.length-1)*(w-4)+2).toFixed(1)+','+(h-2-(v-mn)/rng*(h-4)).toFixed(1);}).join(' ');
           var col=a[a.length-1]>=a[0]?'#15803d':'#dc2626';
           return '<svg width="'+w+'" height="'+h+'"><polyline points="'+pts+'" fill="none" stroke="'+col+'" stroke-width="1.5"></polyline></svg>';}
     """)
