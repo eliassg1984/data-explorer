@@ -2542,8 +2542,10 @@ def _ventas_matriz_agrupada(d, col_venta, col_costo, col_fam, col_sub,
     )
     gb.configure_column("grupo", header_name="Grupo", rowGroup=True, hide=True)
     gb.configure_column("sub", header_name="Sub Grupo", rowGroup=True, hide=True)
-    gb.configure_column("prod", header_name="Producto", minWidth=240,
-                        pinned="left")
+    # El producto se muestra en la MISMA columna del árbol (autoGroupColumnDef
+    # con field="prod"): las hojas muestran el nombre del producto y las filas
+    # de grupo su clave + conteo. Por eso la columna suelta va oculta.
+    gb.configure_column("prod", header_name="Producto", hide=True)
 
     # Formatters JS reutilizables
     fmt_soles = JsCode("""
@@ -2566,8 +2568,11 @@ def _ventas_matriz_agrupada(d, col_venta, col_costo, col_fam, col_sub,
           return {};}
     """)
     # Sombreado según magnitud de "Actual". Máx por columna via gridOptions.context.
+    # Filas de grupo (subtotales): sin heat — el máximo es de hojas y todos los
+    # subtotales saldrían con el tono más oscuro; solo se marcan en negrita.
     style_heat = JsCode("""
         function(p){
+          if(p.node&&p.node.group)return {fontWeight:600};
           if(p.value==null||isNaN(p.value)||!p.colDef||!p.colDef.field)return {};
           var mx=(p.context&&p.context.maxAct)?(p.context.maxAct[p.colDef.field]||0):0;
           if(mx<=0)return {};
@@ -2689,14 +2694,21 @@ def _ventas_matriz_agrupada(d, col_venta, col_costo, col_fam, col_sub,
     max_act = {fld_va[p]: float(df_wide[fld_va[p]].max() or 0) for p in periodos}
     opciones_grid["context"] = {"totales": totales, "maxAct": max_act}
 
-    # Modo árbol: filas de grupo, expand controlado por botones
-    opciones_grid["groupDisplayType"] = "groupRows"
+    # Modo árbol "singleColumn": la PRIMERA columna contiene la jerarquía
+    # (chevrons + indentación) y — a diferencia de "groupRows" — las filas de
+    # grupo SÍ muestran los subtotales agregados en las columnas de valores.
+    # field="prod": en las hojas esa misma columna muestra el producto.
+    opciones_grid["groupDisplayType"] = "singleColumn"
     opciones_grid["groupDefaultExpanded"] = 1  # muestra Grupo abierto (Sub cerrado)
     opciones_grid["animateRows"] = True
     opciones_grid["suppressAggFuncInHeader"] = True
-    opciones_grid["autoGroupColumnDef"] = {"minWidth": 260, "cellRendererParams": {
-        "suppressCount": False,
-    }}
+    opciones_grid["autoGroupColumnDef"] = {
+        "headerName": "Grupo / Sub Grupo / Producto",
+        "field": "prod",
+        "pinned": "left",
+        "minWidth": 280,
+        "cellRendererParams": {"suppressCount": False},
+    }
 
     st.caption(
         f"Actual = {cur} · Año pasado = {prev}. "
