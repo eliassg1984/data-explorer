@@ -731,8 +731,13 @@ def _filtros_chips_franja(df_in):
 # ===========================================================================
 # RENDERIZADO DE TABLA (con df opcional para los chips)
 # ===========================================================================
-def _render_tabla(df_data=None):
-    """Renderiza la tabla AgGrid (desktop o móvil)."""
+def _render_tabla(df_data=None, expandir=False):
+    """Renderiza la tabla AgGrid (desktop o móvil).
+
+    `expandir` = si True, la tabla arranca con TODOS los grupos abiertos
+    (equivalente a `groupDefaultExpanded=-1` en AgGrid). Lo setean los
+    botones "Expandir todo / Colapsar todo" de la franja de agrupación.
+    """
     _df = df_f if df_data is None else df_data
     if usa_vista_movil and tiene_config_movil:
         st.caption("📱 Vista móvil • Desliza para más columnas • Mantén presionado para menú")
@@ -747,7 +752,7 @@ def _render_tabla(df_data=None):
                     cols_finales.append(c)
         renderizar_aggrid_desktop(
             _df[cols_finales], grupos_sel, cols_mostrar, reporte, font_px,
-            cols_visibles=cols_visibles,
+            cols_visibles=cols_visibles, expandir_grupos=expandir,
         )
 
 
@@ -817,6 +822,53 @@ def _calcular_ajuste_ambito_auto():
 
 
 # ===========================================================================
+# FRANJA DE AGRUPACIÓN — chips + botones Expandir/Colapsar
+# ===========================================================================
+def _render_franja_agrupar():
+    """Dibuja una franja compacta con:
+      - Chips (st.pills multi) para elegir por qué columnas agrupar la tabla.
+        Escribe en la variable-módulo `grupos_sel`, que `_render_tabla` lee.
+      - Botones "Expandir todo" / "Colapsar todo": alternan `expandir_grupos`
+        en session_state; `renderizar_aggrid_desktop` lo pasa a AgGrid como
+        `groupDefaultExpanded = -1 | 0`.
+    Devuelve (grupos_sel, expandir) para que el caller decida.
+
+    Solo se dibuja si el reporte tiene columnas agrupables (`cfg["agrupar"]`
+    o la auto-detección de más arriba). Sin ellas, es un no-op silencioso.
+    """
+    global grupos_sel
+    if not cols_agrupar:
+        return [], False
+
+    _k_grp = f"grupos_franja_{reporte.replace(' ', '_')}"
+    _k_exp = f"expandir_grupos_{reporte.replace(' ', '_')}"
+
+    with st.container(key=f"franja_agrupar_{reporte.replace(' ', '_')}"):
+        c1, c2, c3, _ = st.columns([3, 1, 1, 3])
+        with c1:
+            seleccion = st.pills(
+                "Agrupar por",
+                options=cols_agrupar,
+                selection_mode="multi",
+                key=_k_grp,
+                label_visibility="collapsed",
+            ) or []
+        with c2:
+            if st.button("⤢ Expandir todo",
+                         key=f"btn_exp_{reporte.replace(' ', '_')}",
+                         use_container_width=True):
+                st.session_state[_k_exp] = True
+        with c3:
+            if st.button("⤡ Colapsar todo",
+                         key=f"btn_col_{reporte.replace(' ', '_')}",
+                         use_container_width=True):
+                st.session_state[_k_exp] = False
+
+    grupos_sel = seleccion
+    return seleccion, bool(st.session_state.get(_k_exp, False))
+
+
+# ===========================================================================
 # FRAGMENT GENÉRICO — aisla el contenido principal de cada reporte
 # ===========================================================================
 @st.fragment
@@ -858,10 +910,11 @@ def _render_contenido():
 
         if vista == "Tabla":
             df_tabla = _filtros_chips_franja(df_f)
+            _, _expandir = _render_franja_agrupar()
             if df_tabla.empty:
                 st.info("Ningún registro coincide con los filtros seleccionados.")
             else:
-                _render_tabla(df_tabla)
+                _render_tabla(df_tabla, expandir=_expandir)
         else:
             renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
 
