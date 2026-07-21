@@ -495,6 +495,26 @@ def get_css():
     }
 
     /* =================================================================== */
+    /* CHIPS DE TIPO DE GRÁFICO EN LA MISMA BANDA QUE LAS PESTAÑAS           */
+    /* Se suben a la fila de los tabs (margin-top negativo) e indentan a la  */
+    /* derecha de "Gráficos/Tabla" (ancho fijo ~210px). Si son muchos,       */
+    /* scroll horizontal para no encimar el canvas. Valores ajustables.      */
+    /* =================================================================== */
+    .st-key-graf_tipo_chips {
+        margin-top: -44px !important;
+        margin-left: 215px !important;
+        margin-bottom: 8px !important;
+        position: relative !important;
+        z-index: 6 !important;
+        overflow-x: auto !important;
+    }
+    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] {
+        margin: 0 !important;
+        flex-wrap: nowrap !important;
+        width: max-content !important;
+    }
+
+    /* =================================================================== */
     /* BOTÓN FILTROS (popover) — a juego, grande y con contorno índigo      */
     /* =================================================================== */
     [data-testid="stPopover"] button {
