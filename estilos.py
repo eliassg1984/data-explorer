@@ -556,13 +556,16 @@ def get_css():
     /* CHIPS DE FILTRO EN LA FRANJA BLANCA — Área / Familia / Ajuste /     */
     /* Ajuste valor.  Nivel 2, a la derecha del selector de vista.         */
     /* ================================================================== */
+    /* Sub-paso 2 del rediseño: los filtros suben al NIVEL 1 (fila del
+       título), a la izquierda del widget de fecha. El offset derecho deja
+       ~260px para la píldora de fecha (01/.. – ../..). Ajustable si roza. */
     .st-key-chips_ajuste_tabla {
         position: fixed !important;
-        top: calc(var(--cab-nivel2-top) + 10px) !important;
-        right: 90px !important;
+        top: 6px !important;
+        right: 280px !important;
         left: auto !important;
         width: auto !important;
-        max-width: calc(100vw - 90px - 360px) !important;
+        max-width: calc(100vw - 90px - 620px) !important;
         z-index: 23 !important;
         margin: 0 !important;
         padding: 0 !important;
