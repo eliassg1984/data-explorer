@@ -1576,7 +1576,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
     _cta, _ctb, _ = st.columns([1.2, 1.2, 3])
     with _cta:
-        topn_prov = st.pills("Top proveedores", [10, 15, 20, 30], default=15,
+        topn_prov = st.pills("Top proveedores", [5, 10, 15, 20, 30], default=15,
                              key="compras_prov_topnprov") or 15
     with _ctb:
         topn = st.pills("Top productos", [5, 10, 20], default=10,
