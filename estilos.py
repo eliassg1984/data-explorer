@@ -501,9 +501,9 @@ def get_css():
     /* scroll horizontal para no encimar el canvas. Valores ajustables.      */
     /* =================================================================== */
     .st-key-graf_tipo_chips {
-        margin-top: -44px !important;
+        margin-top: -80px !important;   /* alinea los chips con la fila de tabs */
         margin-left: 215px !important;
-        margin-bottom: 8px !important;
+        margin-bottom: 4px !important;
         position: relative !important;
         z-index: 6 !important;
         overflow-x: auto !important;
