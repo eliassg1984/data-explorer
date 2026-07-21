@@ -458,20 +458,9 @@ if True:
                                 and tuple(rango_aj) != st.session_state[_k_rango_franja]):
                             st.session_state[_k_rango_franja] = tuple(rango_aj)
 
-        # El selector pertenece a la misma franja blanca que el título.
-        if reporte != "Requerimientos":
-            with st.container(key="ajuste_tabs_top"):
-                st.pills(
-                    "Vista",
-                    options=["Gráficos", "Tabla"],
-                    format_func=lambda vista: (
-                        ":material/table_rows: Tabla"
-                        if vista == "Tabla" else ":material/monitoring: Gráficos"
-                    ),
-                    default=_vista_default,
-                    label_visibility="collapsed",
-                    key=f"vista_seg_{reporte}",
-                )
+        # Las pestañas Gráficos/Tabla se movieron FUERA de la franja, a una
+        # banda pegada al borde superior del canvas (ver más abajo, justo
+        # antes de _render_contenido). Así la franja queda de un solo nivel.
 
     # ── Texto de actualización FUERA de la franja sticky ──
     # Así su position:fixed vive en el contexto raíz y no es tapado
@@ -867,6 +856,23 @@ def _render_contenido():
 
     perf.fragment_end("_render_contenido")                                  # ⚡ PERF
 
+
+# ── Pestañas Gráficos/Tabla — banda pegada al borde superior del canvas ──────
+# Se renderizan aquí (fuera de la franja y fuera del fragment) para que queden
+# encima del contenido, como pestañas del canvas. Misma key → mismo estado.
+if reporte != "Requerimientos":
+    with st.container(key="ajuste_tabs_top"):
+        st.pills(
+            "Vista",
+            options=["Gráficos", "Tabla"],
+            format_func=lambda vista: (
+                ":material/table_rows: Tabla"
+                if vista == "Tabla" else ":material/monitoring: Gráficos"
+            ),
+            default=_vista_default,
+            label_visibility="collapsed",
+            key=f"vista_seg_{reporte}",
+        )
 
 # ── Llamada al fragment ──────────────────────────────────────────────────────
 _render_contenido()
