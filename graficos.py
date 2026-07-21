@@ -2204,10 +2204,13 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                 "Cantidad por producto",
                 "Semanal", "Vs año anterior", "Personalizado"]
 
-    graf = st.pills(
-        "Gráfico", opciones, default=opciones[0],
-        key="compras_graf_tipo", label_visibility="collapsed",
-    ) or opciones[0]
+    # Contenedor con key común (graf_tipo_chips) para que el CSS suba estos
+    # chips a la MISMA fila que las pestañas Gráficos/Tabla (banda del canvas).
+    with st.container(key="graf_tipo_chips"):
+        graf = st.pills(
+            "Gráfico", opciones, default=opciones[0],
+            key="compras_graf_tipo", label_visibility="collapsed",
+        ) or opciones[0]
 
     # Constructor: ancho completo, sin panel de mini-tops.
     if graf == "Personalizado":
