@@ -85,10 +85,13 @@ def get_css():
            sueltos en otras reglas; consumir siempre la variable.
            Mapa completo de knobs: ver arquitectura.md § Cabecera fija.
            ================================================================== */
-        --cab-altura: 104px;
+        /* Franja de UN SOLO NIVEL (título + filtros + fecha). Los tabs
+           Gráficos/Tabla salieron de la banda al canvas, así que la altura
+           baja de 104px (2 niveles) a ~50px (1 nivel). Ajustable en preview. */
+        --cab-altura: 50px;
         --cab-nivel1-top: 30px;
-        --cab-nivel2-top: 52px;
-        --cab-offset-contenido: 112px;
+        --cab-nivel2-top: 52px;   /* legacy: ya no hay nivel 2 en la banda */
+        --cab-offset-contenido: 58px;
 
         /* ==================================================================
            BARRA INFERIOR DE NAVEGACIÓN EN MÓVIL (bottom nav)
@@ -542,14 +545,14 @@ def get_css():
         align-items: center !important;
     }
 
-    /* Contenedor del selector de vista, fijado en el nivel 2 de la franja */
+    /* Pestañas Gráficos/Tabla — ya NO fijas en la franja: ahora fluyen justo
+       encima del canvas (se renderizan en app.py antes de _render_contenido).
+       Quedan pegadas al borde superior del primer contenedor del contenido. */
     .st-key-ajuste_tabs_top {
-        position: fixed !important;
-        top: var(--cab-nivel2-top) !important;
-        left: calc(90px + 4rem) !important;
-        z-index: 22 !important;
-        transform: none !important;
-        margin: 0 !important;
+        position: relative !important;
+        z-index: 5 !important;
+        margin: 2px 0 6px 0 !important;
+        padding: 0 !important;
     }
 
     /* ================================================================== */
@@ -945,7 +948,9 @@ def get_css():
         }
         .st-key-ajuste_tabs_top {
             transform: none !important;
-            left: 12px !important;
+            position: relative !important;
+            left: auto !important;
+            margin: 2px 0 6px 0 !important;
         }
         /* COLAPSAR el hueco fantasma de la franja: en móvil TODO su
            contenido visible (título, pestañas, fecha) es position:fixed,
