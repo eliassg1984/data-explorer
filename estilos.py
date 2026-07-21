@@ -634,10 +634,12 @@ def get_css():
         z-index: 22 !important;
         margin: 0 !important;
         color: var(--text-primary) !important;
+        font-family: 'Corbel', 'Segoe UI', system-ui, -apple-system, sans-serif !important;
+        text-transform: uppercase !important;
         font-size: 27px !important;
-        font-weight: 750 !important;
+        font-weight: 700 !important;
         line-height: 1.2 !important;
-        letter-spacing: -0.02em !important;
+        letter-spacing: 0.01em !important;
         transform: none !important;
     }
 
