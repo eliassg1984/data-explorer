@@ -420,31 +420,35 @@ def get_css():
     /* --- Contenedor del grupo --- */
     .st-key-ajuste_tabs_top [data-testid="stButtonGroup"],
     [class*="st-key-vistatabs_"] [data-testid="stButtonGroup"] {
-        display: inline-flex !important;
-        width: fit-content !important;
+        display: flex !important;
+        width: 100% !important;
         gap: 4px !important;
-        margin: 8px 0 0 !important;
+        margin: 6px 0 0 !important;
         padding: 0 !important;
         background: transparent !important;
         border: none !important;
+        border-bottom: 1px solid var(--border) !important;   /* línea base de pestañas */
         border-radius: 0 !important;
         flex-wrap: nowrap !important;
+        align-items: flex-end !important;
     }
 
-    /* --- Botón base (estado inactivo) --- */
+    /* --- Botón base (estado inactivo): PESTAÑA (subrayado, sin píldora) --- */
     .st-key-ajuste_tabs_top [data-testid="stButtonGroup"] button[role="radio"],
     [class*="st-key-vistatabs_"] [data-testid="stButtonGroup"] button[role="radio"] {
-        min-height: 42px !important;
+        min-height: 38px !important;
         padding: 8px 16px !important;
         font-size: 14px !important;
         font-weight: 500 !important;
         border: none !important;
-        border-radius: 8px !important;
+        border-bottom: 2px solid transparent !important;
+        border-radius: 0 !important;
+        margin-bottom: -1px !important;   /* el subrayado tapa la línea base */
         background: transparent !important;
         color: var(--text-secondary) !important;
         box-shadow: none !important;
         cursor: pointer !important;
-        transition: color .15s ease, background .15s ease !important;
+        transition: color .15s ease, border-color .15s ease !important;
     }
     .st-key-ajuste_tabs_top [data-testid="stButtonGroup"] button[role="radio"] p,
     [class*="st-key-vistatabs_"] [data-testid="stButtonGroup"] button[role="radio"] p {
@@ -459,11 +463,12 @@ def get_css():
         color: inherit !important;
     }
 
-    /* --- Hover sobre botón inactivo --- */
+    /* --- Hover sobre pestaña inactiva --- */
     .st-key-ajuste_tabs_top [data-testid="stButtonGroup"] button[role="radio"]:hover:not([data-selected]),
     [class*="st-key-vistatabs_"] [data-testid="stButtonGroup"] button[role="radio"]:hover:not([data-selected]) {
-        background: var(--accent-tint) !important;
+        background: transparent !important;
         color: var(--accent-deep) !important;
+        border-bottom-color: var(--border-lavender) !important;
     }
 
     /* --- Botón ACTIVO (data-selected) --- */
@@ -472,19 +477,21 @@ def get_css():
        su especificidad y que nuestro estilo gane. */
     .st-key-ajuste_tabs_top [data-testid="stButtonGroup"] button[role="radio"][data-selected]:not([data-disabled]),
     [class*="st-key-vistatabs_"] [data-testid="stButtonGroup"] button[role="radio"][data-selected]:not([data-disabled]) {
-        background: var(--accent) !important;      /* índigo SÓLIDO */
+        background: transparent !important;                        /* sin píldora */
         border: none !important;
+        border-bottom: 2px solid var(--accent) !important;        /* PESTAÑA activa */
         box-shadow: none !important;
-        color: #ffffff !important;
+        color: var(--accent-deep) !important;
     }
-    /* Texto e icono internos en blanco, gane quien gane la cascada */
+    /* Texto e icono internos en color de acento (pestaña activa) */
     .st-key-ajuste_tabs_top [data-testid="stButtonGroup"] button[role="radio"][data-selected]:not([data-disabled]) *,
     [class*="st-key-vistatabs_"] [data-testid="stButtonGroup"] button[role="radio"][data-selected]:not([data-disabled]) * {
-        color: #ffffff !important;
+        color: var(--accent-deep) !important;
     }
     .st-key-ajuste_tabs_top [data-testid="stButtonGroup"] button[role="radio"][data-selected]:not([data-disabled]):hover,
     [class*="st-key-vistatabs_"] [data-testid="stButtonGroup"] button[role="radio"][data-selected]:not([data-disabled]):hover {
-        background: var(--accent-hover) !important;
+        background: transparent !important;
+        border-bottom-color: var(--accent-hover) !important;
     }
 
     /* =================================================================== */
