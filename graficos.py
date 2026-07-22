@@ -1559,176 +1559,6 @@ def _periodo_serie(fe, gran):
     return fe.dt.to_period("M").astype(str)  # Mes
 
 
-def _compras_periodos_proveedor(fecha, granularidad):
-    """Devuelve orden y etiquetas legibles para periodos de compras."""
-    fecha = pd.to_datetime(fecha, errors="coerce")
-    meses = ["ene", "feb", "mar", "abr", "may", "jun",
-             "jul", "ago", "sep", "oct", "nov", "dic"]
-
-    if granularidad == "Día":
-        orden = fecha.dt.normalize()
-        etiqueta = orden.map(
-            lambda x: f"{x.day:02d} {meses[x.month - 1]}" if pd.notna(x) else "")
-    elif granularidad == "Semana":
-        orden = fecha.dt.to_period("W-SUN").dt.start_time
-
-        def _semana(x):
-            if pd.isna(x):
-                return ""
-            fin = x + pd.Timedelta(days=6)
-            if x.month == fin.month:
-                return f"{x.day:02d}–{fin.day:02d} {meses[fin.month - 1]}"
-            return (f"{x.day:02d} {meses[x.month - 1]}–"
-                    f"{fin.day:02d} {meses[fin.month - 1]}")
-
-        etiqueta = orden.map(_semana)
-    elif granularidad == "Año":
-        orden = fecha.dt.to_period("Y").dt.start_time
-        etiqueta = orden.dt.year.astype("Int64").astype(str)
-    else:
-        orden = fecha.dt.to_period("M").dt.start_time
-        etiqueta = orden.map(
-            lambda x: f"{meses[x.month - 1].title()} {x.year}" if pd.notna(x) else "")
-
-    return pd.DataFrame({"periodo": orden, "etiqueta": etiqueta})
-
-
-def _compras_proveedor_evolucion(base, col_punit, modo):
-    """Evolución temporal de compras por proveedor dentro de la vista Proveedor."""
-    if base["fecha"].notna().sum() == 0:
-        st.info("No hay fechas disponibles para mostrar la evolución de proveedores.")
-        return
-
-    c1, c2, c3 = st.columns([1.2, 1.5, 2.2])
-    with c1:
-        granularidad = st.pills(
-            "Agrupar por", ["Día", "Semana", "Mes", "Año"], default="Mes",
-            key="compras_prov_evo_gran",
-        ) or "Mes"
-    with c2:
-        metrica = st.pills(
-            "Métrica", ["Total compras (S/)", "Cantidad", "Precio promedio"],
-            default="Total compras (S/)", key="compras_prov_evo_metrica",
-        ) or "Total compras (S/)"
-    with c3:
-        tipo = st.pills(
-            "Gráfico", ["Barras agrupadas", "Líneas", "Área"],
-            default="Barras agrupadas", key="compras_prov_evo_tipo",
-        ) or "Barras agrupadas"
-
-    ranking = (base.groupby("prov")["valor"].sum()
-               .sort_values(ascending=False).index.tolist())
-    origen_default = "Elegir" if modo == "Comparativo" else "Top 5"
-    origen = st.pills(
-        "Proveedores", ["Top 5", "Top 10", "Top 20", "Elegir"],
-        default=origen_default, key=f"compras_prov_evo_origen_{modo}",
-    ) or origen_default
-    if origen == "Elegir":
-        elegidos = st.multiselect(
-            "Seleccionar proveedores (máx. 5)", ranking,
-            default=ranking[:min(3, len(ranking))],
-            key="compras_prov_evo_elegidos",
-        )
-        if len(elegidos) > 5:
-            st.warning("Para que el gráfico siga legible se muestran los primeros 5 proveedores elegidos.")
-            elegidos = elegidos[:5]
-    else:
-        cantidad_top = int(origen.split()[1])
-        elegidos = ranking[:cantidad_top]
-
-    if not elegidos:
-        st.info("Elige al menos un proveedor para compararlo en el tiempo.")
-        return
-
-    trabajo = base[base["prov"].isin(elegidos)].copy()
-    periodo = _compras_periodos_proveedor(trabajo["fecha"], granularidad)
-    trabajo["periodo"] = periodo["periodo"].values
-    trabajo["etiqueta"] = periodo["etiqueta"].values
-    trabajo = trabajo[trabajo["periodo"].notna()]
-    if trabajo.empty:
-        st.info("Sin datos para los proveedores y periodos seleccionados.")
-        return
-
-    if metrica == "Total compras (S/)":
-        trabajo["medida"] = trabajo["valor"]
-        agregacion = "sum"
-        prefijo, plantilla = "S/ ", "S/ %{y:,.0f}"
-    elif metrica == "Cantidad":
-        trabajo["medida"] = trabajo["cant"]
-        agregacion = "sum"
-        prefijo, plantilla = "", "%{y:,.0f}"
-    else:
-        precio_calculado = np.where(
-            trabajo["cant"] != 0, trabajo["valor"] / trabajo["cant"], np.nan)
-        trabajo["medida"] = trabajo["punit"].where(
-            trabajo["punit"].notna(), precio_calculado)
-        trabajo = trabajo.replace([np.inf, -np.inf], np.nan).dropna(subset=["medida"])
-        agregacion = "mean"
-        prefijo, plantilla = "S/ ", "S/ %{y:,.2f}"
-
-    if trabajo.empty:
-        st.info("No hay datos suficientes para calcular la métrica seleccionada.")
-        return
-
-    resumen = (trabajo.groupby(["periodo", "etiqueta", "prov"], as_index=False)["medida"]
-               .agg(agregacion))
-    periodos_df = (resumen[["periodo", "etiqueta"]].drop_duplicates()
-                   .sort_values("periodo"))
-    periodos = periodos_df["periodo"].tolist()
-    etiquetas = periodos_df["etiqueta"].tolist()
-
-    fig = go.Figure()
-    for indice, proveedor in enumerate(elegidos):
-        serie = (resumen[resumen["prov"] == proveedor]
-                 .set_index("periodo")["medida"].reindex(periodos, fill_value=0))
-        nombre = _compras_truncar(proveedor, 26)
-        color = PALETA_CALLAI[indice % len(PALETA_CALLAI)]
-        datos_hover = np.array(etiquetas)
-        if tipo == "Barras agrupadas":
-            fig.add_bar(
-                x=periodos, y=serie.values, name=nombre, marker_color=color,
-                customdata=datos_hover,
-                hovertemplate=f"<b>{nombre}</b><br>%{{customdata}}<br>{plantilla}<extra></extra>",
-            )
-        else:
-            fig.add_scatter(
-                x=periodos, y=serie.values, name=nombre, mode="lines+markers",
-                line=dict(color=color, width=2), marker=dict(size=5),
-                fill="tozeroy" if tipo == "Área" else None,
-                opacity=0.45 if tipo == "Área" else 1,
-                customdata=datos_hover,
-                hovertemplate=f"<b>{nombre}</b><br>%{{customdata}}<br>{plantilla}<extra></extra>",
-            )
-
-    _compras_layout(fig, alto=460)
-    fig.update_layout(
-        title=f"Evolución de compras por proveedor · {metrica}",
-        barmode="group", hovermode="x unified",
-        yaxis=dict(tickprefix=prefijo, tickformat=",.0f"),
-        legend=dict(orientation="h", y=-0.28, x=0, font=dict(size=10)),
-        margin=dict(l=10, r=20, t=55, b=105),
-    )
-    fig.update_xaxes(
-        tickmode="array", tickvals=periodos, ticktext=etiquetas,
-        tickangle=-40, type="date",
-    )
-    ventanas = {"Día": 31, "Semana": 12, "Mes": 12, "Año": 8}
-    visible = ventanas[granularidad]
-    if len(periodos) > visible:
-        inicio = max(0, len(periodos) - visible)
-        fig.update_xaxes(
-            rangeslider=dict(visible=True, thickness=0.08, bgcolor=GRIS_FONDO),
-            range=[periodos[inicio], periodos[-1]],
-        )
-
-    st.plotly_chart(
-        fig, use_container_width=True,
-        key=f"compras_g_prov_evolucion_{modo}_{granularidad}_{metrica}_{tipo}_{origen}",
-    )
-    if len(periodos) > visible:
-        st.caption("↔ Arrastra la barra inferior para recorrer periodos anteriores o posteriores.")
-
-
 @st.fragment
 def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                              col_punit, col_um, col_fecha):
@@ -1744,18 +1574,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         st.info("Faltan columnas (Proveedor, Valor) para este gráfico.")
         return
 
-    vista = st.pills(
-        "Vista", ["Ranking", "Evolución", "Comparativo"], default="Ranking",
-        key="compras_prov_vista",
-    ) or "Ranking"
-    if vista == "Ranking":
-        _cta, _ctb, _ = st.columns([1.2, 1.2, 3])
-        with _cta:
-            topn_prov = st.pills("Top proveedores", [5, 10, 15, 20, 30], default=15,
-                                 key="compras_prov_topnprov") or 15
-        with _ctb:
-            topn = st.pills("Top productos", [5, 10, 20], default=10,
-                            key="compras_prov_topn") or 10
+    _cta, _ctb, _ = st.columns([1.2, 1.2, 3])
+    with _cta:
+        topn_prov = st.pills("Top proveedores", [5, 10, 15, 20, 30], default=15,
+                             key="compras_prov_topnprov") or 15
+    with _ctb:
+        topn = st.pills("Top productos", [5, 10, 20], default=10,
+                        key="compras_prov_topn") or 10
 
     base = pd.DataFrame({
         "prov": d[col_prov].astype(str).values,
@@ -1772,10 +1597,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     base = base[base["prov"].notna() & (base["prov"] != "nan")]
     if base.empty or base["valor"].sum() == 0:
         st.info("Sin datos en el rango seleccionado.")
-        return
-
-    if vista in ("Evolución", "Comparativo"):
-        _compras_proveedor_evolucion(base, col_punit, vista)
         return
 
     prov_focus = st.session_state.get("compras_prov_focus")
