@@ -1631,7 +1631,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # Asignar color por proveedor (los que no están en top → "Otros" en gris)
     base["prov_label"] = base["prov"].where(base["prov"].isin(top_provs), "Otros")
 
-    periodos = sorted(base["per"].dropna().unique())
+    if "_per_sort" in base.columns:
+        _per_order = (base[["_per_sort", "per"]].drop_duplicates()
+                      .sort_values("_per_sort")["per"].tolist())
+        periodos = list(dict.fromkeys(_per_order))   # deduplicado, orden cronológico
+    else:
+        periodos = sorted(base["per"].dropna().unique())
 
     # ── Estado de foco ────────────────────────────────────────────────────
     prov_focus = st.session_state.get("compras_prov_focus")
