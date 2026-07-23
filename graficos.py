@@ -1693,7 +1693,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         title=f"Compra por {gran.lower()} — top {topn_prov} proveedores"
               + (f" (foco: {_compras_truncar(prov_focus, 28)})" if prov_focus else ""),
         barmode="group",
-        xaxis=dict(type="category", tickangle=-40),
+        xaxis=dict(type="category", tickangle=0),
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
                     font=dict(size=10)),
