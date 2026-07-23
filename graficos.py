@@ -1667,9 +1667,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             marker=dict(color=_color, opacity=_opacity),
             customdata=[[prov, _pct]] * len(periodos),
             hovertemplate=(
-                "<b>%{customdata[0]}</b><br>"
-                "%{x}<br>"
-                "S/ %{y:,.0f}  ·  %{customdata[1]:.1f}% del total"
+                "<b>%{customdata[0]}</b>  %{x}<br>"
+                "S/ %{y:,.0f} · %{customdata[1]:.1f}%"
                 "<extra></extra>"
             ),
         )
