@@ -1640,8 +1640,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
     # Top N proveedores por valor total (para la paleta y el filtro)
     _tot_all  = base["valor"].sum() or 1.0
-    top_provs = (base.groupby("prov")["valor"].sum()
-                     .nlargest(topn_prov).index.tolist())
+    top_provs = [p for p in prov_multisel if p in set(base["prov"].unique())]
+    if not top_provs:
+        top_provs = (base.groupby("prov")["valor"].sum()
+                         .nlargest(5).index.tolist())
 
     # Asignar color por proveedor (los que no están en top → "Otros" en gris)
     base["prov_label"] = base["prov"].where(base["prov"].isin(top_provs), "Otros")
