@@ -1581,6 +1581,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     _todos_provs_temp = (d.groupby(col_prov)[col_valor].sum()
                           .sort_values(ascending=False).index.tolist()
                           if col_prov and col_valor else [])
+    # Agregar "Otros" al final si hay proveedores fuera del top
+    _otros_mask_temp = ~d[col_prov].astype(str).isin(_todos_provs_temp[:20])
+    if _otros_mask_temp.any():
+        _todos_provs_temp = _todos_provs_temp + ["Otros"]
     _prev_prov_sel = st.session_state.get("compras_prov_multisel") or []
     _valid_prev_prov = [p for p in _prev_prov_sel if p in _todos_provs_temp]
     _default_prov_sel = _valid_prev_prov if _valid_prev_prov else _todos_provs_temp[:5]
