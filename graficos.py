@@ -1611,13 +1611,16 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # ── Calcular periodo ──────────────────────────────────────────────────
     fe_s = pd.to_datetime(base["fecha"], errors="coerce")
     if gran == "Semana":
-        _iso = fe_s.dt.isocalendar()
-        base["per"] = (_iso["year"].astype("Int64").astype(str) + "-S"
-                       + _iso["week"].astype("Int64").astype(str).str.zfill(2))
+        _wstart = (fe_s - pd.to_timedelta(fe_s.dt.weekday, unit="D")).dt.normalize()
+        _wend = _wstart + pd.Timedelta(days=6)
+        base["_per_sort"] = _wstart.dt.strftime("%Y-%m-%d")   # clave de orden
+        base["per"] = (_wstart.dt.strftime("%d/%m") + " - " + _wend.dt.strftime("%d/%m"))
     elif gran == "Año":
-        base["per"] = fe_s.dt.year.astype("Int64").astype(str)
+        base["_per_sort"] = fe_s.dt.year.astype("Int64").astype(str)
+        base["per"] = base["_per_sort"]
     else:  # Mes
-        base["per"] = fe_s.dt.to_period("M").astype(str)
+        base["_per_sort"] = fe_s.dt.to_period("M").astype(str)
+        base["per"] = base["_per_sort"]
     base = base[base["per"].notna() & (base["per"] != "<NA>")]
 
     # Top N proveedores por valor total (para la paleta y el filtro)
