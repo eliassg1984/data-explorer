@@ -1698,9 +1698,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             ),
         )
 
-    # "Otros" proveedores agrupados (gris)
+    # "Otros" proveedores agrupados (gris) — solo si el usuario lo pidió
     _otros_mask = ~base["prov"].isin(top_provs)
-    if _otros_mask.any():
+    _hay_otros = _otros_mask.any()
+    _otros_seleccionado = "Otros" in prov_multisel
+    if _hay_otros and _otros_seleccionado:
         grp_otros = (base[_otros_mask]
                      .groupby("per", as_index=False)["valor"].sum()
                      .set_index("per")["valor"]
