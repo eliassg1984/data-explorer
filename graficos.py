@@ -1698,7 +1698,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
                     font=dict(size=10)),
-        hovermode="x unified",
+        hovermode="closest",
     )
     # Range-slider si hay muchos periodos
     if len(periodos) > 12:
