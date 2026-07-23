@@ -1811,7 +1811,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         if _j is not None and 0 <= _j < len(prod_cats):
                             st.session_state["compras_prov_prodfocus"] = prod_cats[_j]
                             st.rerun()
-                    st.caption("👆 Clic en un producto para ver sus proveedores.")
+
 
     # Panel B: proveedores del producto seleccionado
     with pb:
