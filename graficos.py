@@ -1715,8 +1715,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
     _compras_layout(fig, alto=420)
     fig.update_layout(
-        title=f"Compra por {gran.lower()} — top {topn_prov} proveedores"
-              + (f" (foco: {_compras_truncar(prov_focus, 28)})" if prov_focus else ""),
+
         barmode="group",
         xaxis=dict(type="category", tickangle=0),
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f"),
