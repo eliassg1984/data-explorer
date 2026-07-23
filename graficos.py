@@ -1577,7 +1577,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         return
 
     # ── Controles ──────────────────────────────────────────────────────────
-    c1, c2, c3 = st.columns([1.1, 1.1, 1.1])
+    # Calcular lista de proveedores ANTES de dibujar los controles
+    _todos_provs_temp = (d.groupby(col_prov)[col_valor].sum()
+                          .sort_values(ascending=False).index.tolist()
+                          if col_prov and col_valor else [])
+    _prev_prov_sel = st.session_state.get("compras_prov_multisel") or []
+    _valid_prev_prov = [p for p in _prev_prov_sel if p in _todos_provs_temp]
+    _default_prov_sel = _valid_prev_prov if _valid_prev_prov else _todos_provs_temp[:5]
+
+    c1, c2, c3 = st.columns([1.1, 1.1, 2.5])
     with c1:
         gran = st.pills("Periodo", ["Semana", "Mes", "Año"],
                         default="Mes", key="compras_prov_gran") or "Mes"
@@ -1585,24 +1593,16 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         topn = st.pills("Top productos", [5, 10, 20], default=10,
                         key="compras_prov_topn") or 10
     with c3:
-        st.caption("👆 Clic en una barra para ver productos y comparar proveedores abajo.")
+        prov_multisel = st.multiselect(
+            "Seleccionar proveedores",
+            options=_todos_provs_temp,
+            default=_default_prov_sel,
+            max_selections=10,
+            key="compras_prov_multisel",
+            placeholder="Buscar proveedor por nombre...",
+            label_visibility="collapsed",
+        ) or _todos_provs_temp[:5]
 
-    # Multiselect con búsqueda para elegir proveedores (máx. 10)
-    _todos_provs_temp = (d.groupby(col_prov)[col_valor].sum()
-                          .sort_values(ascending=False).index.tolist()
-                          if col_prov and col_valor else [])
-    _prev_prov_sel = st.session_state.get("compras_prov_multisel") or []
-    _valid_prev_prov = [p for p in _prev_prov_sel if p in _todos_provs_temp]
-    _default_prov_sel = _valid_prev_prov if _valid_prev_prov else _todos_provs_temp[:5]
-    prov_multisel = st.multiselect(
-        "Seleccionar proveedores",
-        options=_todos_provs_temp,
-        default=_default_prov_sel,
-        max_selections=10,
-        key="compras_prov_multisel",
-        placeholder="Buscar proveedor por nombre...",
-        label_visibility="collapsed",
-    ) or _todos_provs_temp[:5]
     topn_prov = len(prov_multisel)
 
     # ── Preparar base de datos ─────────────────────────────────────────────
