@@ -1685,7 +1685,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             y=grp_otros.values,
             name="Otros",
             marker=dict(color=GRIS_BORDE, opacity=0.6),
-            hovertemplate="Otros<br>%{x}<br>S/ %{y:,.0f}<extra></extra>",
+            hovertemplate="Otros · %{x}<br>S/ %{y:,.0f}<extra></extra>",
         )
 
     _compras_layout(fig, alto=420)
