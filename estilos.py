@@ -495,23 +495,37 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* CHIPS DE TIPO DE GRÁFICO EN LA MISMA BANDA QUE LAS PESTAÑAS           */
-    /* Se suben a la fila de los tabs (margin-top negativo) e indentan a la  */
-    /* derecha de "Gráficos/Tabla" (ancho fijo ~210px). Si son muchos,       */
-    /* scroll horizontal para no encimar el canvas. Valores ajustables.      */
+    /* PESTAÑAS DE TIPO DE GRÁFICO — fila propia pegada al tope del gráfico  */
+    /* Una sola línea con scroll horizontal si no entran las 11. El borde    */
+    /* inferior la conecta visualmente con la card del gráfico de abajo.     */
     /* =================================================================== */
     .st-key-graf_tipo_chips {
-        margin-top: -80px !important;   /* alinea los chips con la fila de tabs */
-        margin-left: 215px !important;
-        margin-bottom: 4px !important;
-        position: relative !important;
-        z-index: 6 !important;
+        margin: 0 0 8px 0 !important;
         overflow-x: auto !important;
+        border-bottom: 1px solid var(--border) !important;
+        padding-bottom: 2px !important;
     }
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] {
         margin: 0 !important;
         flex-wrap: nowrap !important;
         width: max-content !important;
+        gap: 2px !important;
+    }
+    /* Estilo pestaña: botón plano, subrayado en el activo */
+    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button {
+        border: none !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        border-bottom: 2px solid transparent !important;
+        white-space: nowrap !important;
+    }
+    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button[aria-checked="true"],
+    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button[kind="primary"],
+    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button[kind="pillsActive"],
+    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] [data-testid="stBaseButton-pillsActive"] {
+        color: var(--accent-deep, #4938b8) !important;
+        border-bottom-color: var(--accent, #6c5ce7) !important;
+        font-weight: 600 !important;
     }
 
     /* =================================================================== */
