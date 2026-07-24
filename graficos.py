@@ -1621,9 +1621,16 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                           on_click=_cp_set_topn, args=(10,))
             _bt[3].button("Limpiar", key="cp_topnclr", use_container_width=True,
                           on_click=_cp_set_topn, args=(0,))
+            # Buscador: filtra la lista por nombre (no afecta la selección).
+            _q = st.text_input("Buscar", key="cp_prov_q",
+                               placeholder="Buscar proveedor por nombre...",
+                               label_visibility="collapsed").strip().lower()
             # Lista completa en orden descendente por valor. El estado vive en
             # las claves cp_prov_cb::<nombre>, por eso no se pasa value=.
-            for _p in _todos_provs_temp:
+            _vistos = [p for p in _todos_provs_temp if not _q or _q in str(p).lower()]
+            if not _vistos:
+                st.caption("Sin coincidencias.")
+            for _p in _vistos:
                 st.checkbox(_p, key="cp_prov_cb::" + str(_p))
         prov_multisel = [p for p in _todos_provs_temp
                          if st.session_state.get("cp_prov_cb::" + str(p))] \
