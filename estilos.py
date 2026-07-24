@@ -500,10 +500,10 @@ def get_css():
     /* inferior la conecta visualmente con la card del gráfico de abajo.     */
     /* =================================================================== */
     .st-key-graf_tipo_chips {
-        margin: 0 0 8px 0 !important;
+        margin: -10px 0 -6px 0 !important;   /* come el gap arriba y abajo */
         overflow-x: auto !important;
         border-bottom: 1px solid var(--border) !important;
-        padding-bottom: 2px !important;
+        padding-bottom: 0 !important;
     }
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] {
         margin: 0 !important;
@@ -511,13 +511,16 @@ def get_css():
         width: max-content !important;
         gap: 2px !important;
     }
-    /* Estilo pestaña: botón plano, subrayado en el activo */
+    /* Estilo pestaña: botón plano y COMPACTO, subrayado en el activo */
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button {
         border: none !important;
         border-radius: 0 !important;
         background: transparent !important;
         border-bottom: 2px solid transparent !important;
         white-space: nowrap !important;
+        padding-top: 3px !important;
+        padding-bottom: 3px !important;
+        min-height: 0 !important;
     }
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button[aria-checked="true"],
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button[kind="primary"],
