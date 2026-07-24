@@ -1609,7 +1609,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     with c3:
         _sel_now = [p for p in _todos_provs_temp
                     if st.session_state.get("cp_prov_cb::" + str(p))]
-        st.caption("Proveedores")
         with st.popover(f"Proveedores ({len(_sel_now)})",
                         use_container_width=True):
             # Atajos: marcan los primeros N proveedores por valor (desc.)
