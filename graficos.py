@@ -1757,10 +1757,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         barmode="group",
         xaxis=dict(type="category", tickangle=0),
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f"),
-        # Leyenda VERTICAL a la derecha. Arranca más abajo (y=0.88) para no
-        # pisarse con el toggle de granularidad que flota arriba-derecha.
-        legend=dict(orientation="v", yanchor="top", y=0.88,
-                    xanchor="left", x=1.01, font=dict(size=10)),
+        # Leyenda VERTICAL flotando DENTRO del área (x<=1 → Plotly no reserva
+        # margen → no encoge el gráfico). Fondo semitransparente para leerse
+        # sobre las barras. Arranca en y=0.82 para no pisar el toggle superior.
+        legend=dict(orientation="v", yanchor="top", y=0.82,
+                    xanchor="right", x=0.99, font=dict(size=10),
+                    bgcolor="rgba(255,255,255,0.78)",
+                    bordercolor="rgba(0,0,0,0.12)", borderwidth=1),
         hovermode="closest",
     )
     # Range-slider si hay muchos periodos
