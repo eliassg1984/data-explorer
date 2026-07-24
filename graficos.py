@@ -1669,19 +1669,27 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     if prov_focus not in set(base["prov"].unique()):
         prov_focus, prod_focus = None, None
 
-    # Botón para limpiar selección
-    if prov_focus:
-        _bc1, _bc2 = st.columns([1, 6])
-        with _bc1:
-            if st.button("↩ Todos los proveedores", key="cp_bc_all",
-                         use_container_width=True):
-                st.session_state["compras_prov_focus"]    = None
+    orden_provs = top_provs  # de mayor a menor valor total
+
+    # ── Procesar clic ANTES de dibujar ────────────────────────────────────
+    # Leemos la selección que Streamlit guardó en session_state[chart_key] en
+    # la interacción previa. Así actualizamos el foco y construimos el figure
+    # UNA sola vez con el foco correcto: sin doble rerun = sin parpadeo.
+    # Clic en la barra ya enfocada → vuelve a "todos" (toggle).
+    _chart_key = f"compras_g_prov_main_{gran}"
+    _mp = _first_point(st.session_state.get(_chart_key))
+    if _mp is not None:
+        _cn = _mp.get("curve_number")
+        if _cn is not None and 0 <= _cn < len(orden_provs):
+            _clicked = orden_provs[_cn]
+            if st.session_state.get("compras_prov_last_click") != _clicked:
+                st.session_state["compras_prov_last_click"] = _clicked
+                prov_focus = None if _clicked == prov_focus else _clicked
+                prod_focus = None
+                st.session_state["compras_prov_focus"]     = prov_focus
                 st.session_state["compras_prov_prodfocus"] = None
-                st.session_state["compras_prov_last_click"] = None
-                st.rerun()
 
     # ── Gráfico principal: barras verticales por periodo ──────────────────
-    orden_provs = top_provs  # de mayor a menor valor total
 
     fig = go.Figure()
     for i, prov in enumerate(orden_provs):
@@ -1742,29 +1750,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         )
 
     # Key ESTABLE (solo depende de la granularidad): evita que Streamlit
-    # remonte el componente Plotly en cada clic — eso era lo que causaba el
-    # parpadeo. Con key estable, el gráfico se actualiza en el lugar.
-    _evt = st.plotly_chart(
+    # remonte el componente Plotly en cada clic. El clic se procesa arriba,
+    # antes de construir el figure (sin doble rerun = sin parpadeo).
+    st.plotly_chart(
         fig,
         use_container_width=True,
-        key=f"compras_g_prov_main_{gran}",
+        key=_chart_key,
         on_select="rerun",
         selection_mode="points",
     )
-    _mp = _first_point(_evt)
-    if _mp is not None:
-        # Determinar qué proveedor corresponde a la traza clickeada
-        _cn = _mp.get("curve_number")
-        if _cn is not None and 0 <= _cn < len(orden_provs):
-            _clicked = orden_provs[_cn]
-            # Con key estable la selección queda "pegada" en el widget y se
-            # re-emite en cada rerun. Solo actuamos si es un clic nuevo.
-            if st.session_state.get("compras_prov_last_click") != _clicked:
-                st.session_state["compras_prov_last_click"] = _clicked
-                _new_focus = None if _clicked == prov_focus else _clicked
-                st.session_state["compras_prov_focus"]     = _new_focus
-                st.session_state["compras_prov_prodfocus"] = None
-                st.rerun()
 
     # ── Paneles A y B ─────────────────────────────────────────────────────
     def _um_de(grp):
