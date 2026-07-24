@@ -1837,6 +1837,39 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             config={"displayModeBar": False},
         )
 
+    # ── Tabla resumen: Proveedor × Período (debajo del gráfico) ───────────
+    _piv = (base[base["prov"].isin(top_provs)]
+            .groupby(["prov", "per"])["valor"].sum()
+            .unstack(fill_value=0)
+            .reindex(columns=periodos, fill_value=0))
+    if not _piv.empty:
+        # Filas en el mismo orden que el gráfico (por valor total desc.)
+        _piv = _piv.reindex([p for p in orden_provs if p in _piv.index])
+        _piv["Total S/"] = _piv[periodos].sum(axis=1)
+        _gran_tot = _piv["Total S/"].sum() or 1.0
+        _piv["% Part."] = (_piv["Total S/"] / _gran_tot * 100).round(1)
+        # Fila de totales al pie
+        _tot = _piv[periodos + ["Total S/"]].sum()
+        _tot["% Part."] = 100.0
+        _piv.loc["TOTAL"] = _tot
+
+        with st.expander(f"Resumen de compras por proveedor · vista {gran}",
+                         expanded=False):
+            _sty = (_piv.style
+                    .format("S/ {:,.0f}", subset=periodos + ["Total S/"])
+                    .format("{:.1f}%", subset=["% Part."])
+                    .apply(lambda row: [
+                        "background:#EEEDFE; font-weight:500; color:#4938b8"
+                        if row.name == "TOTAL" else "" for _ in row], axis=1))
+            st.dataframe(_sty, use_container_width=True)
+            st.download_button(
+                "⬇ Descargar CSV",
+                data=_piv.to_csv().encode("utf-8-sig"),
+                file_name=f"compras_resumen_{gran.lower()}.csv",
+                mime="text/csv",
+                key="cp_prov_resumen_dl",
+            )
+
     # ── Paneles A y B ─────────────────────────────────────────────────────
     def _um_de(grp):
         if not col_um:
