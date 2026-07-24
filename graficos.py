@@ -1560,7 +1560,6 @@ def _periodo_serie(fe, gran):
 
 
 @st.fragment
-@st.fragment
 def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                              col_punit, col_um, col_fecha):
     """Dashboard de Proveedor — barras verticales agrupadas por periodo.
@@ -1678,7 +1677,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                          use_container_width=True):
                 st.session_state["compras_prov_focus"]    = None
                 st.session_state["compras_prov_prodfocus"] = None
-                st.rerun(scope="fragment")
+                st.rerun()
 
     # ── Gráfico principal: barras verticales por periodo ──────────────────
     orden_provs = top_provs  # de mayor a menor valor total
@@ -1759,7 +1758,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             st.session_state["compras_prov_focus"]     = _new_focus
             st.session_state["compras_prov_prodfocus"] = None
             st.session_state["compras_prov_main_rst"]  = _rst + 1
-            st.rerun(scope="fragment")
+            st.rerun()
 
     # ── Paneles A y B ─────────────────────────────────────────────────────
     def _um_de(grp):
@@ -1815,7 +1814,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         _j = _ap.get("point_number", _ap.get("point_index"))
                         if _j is not None and 0 <= _j < len(prod_cats):
                             st.session_state["compras_prov_prodfocus"] = prod_cats[_j]
-                            st.rerun(scope="fragment")
+                            st.rerun()
 
 
     # Panel B: proveedores del producto seleccionado
