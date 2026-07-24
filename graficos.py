@@ -2810,7 +2810,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
     # Los ~40px del margin-top negativo ≈ alto de la fila G/T (botón 38px).
     st.markdown("""
         <style>
-        .st-key-graf_tipo_chips { margin: -44px 210px 2px 0 !important; }
+        .st-key-graf_tipo_chips { margin: -44px 210px -10px 0 !important; }
         /* Igualar la altura de las pestañas a la de G/T (38px) para que
            queden al MISMO nivel, no una fila más abajo. */
         .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button {
