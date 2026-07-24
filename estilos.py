@@ -507,6 +507,8 @@ def get_css():
         scrollbar-width: none !important;   /* barra oculta: no roba alto */
     }
     .st-key-graf_tipo_chips::-webkit-scrollbar { display: none !important; }
+    /* Cierra el gap entre la fila de pestañas/G-T y la card del gráfico. */
+    .st-key-compras_tabs_row { margin-bottom: -22px !important; }
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] {
         margin: 0 !important;
         flex-wrap: nowrap !important;
