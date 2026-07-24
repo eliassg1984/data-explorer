@@ -1792,6 +1792,23 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-gran_float [data-testid="stElementToolbar"] { display: none; }
         /* Ocultar la barra de herramientas del propio gráfico (fullscreen) */
         .st-key-prov_chart_box > div > [data-testid="stElementToolbar"] { display: none; }
+
+        /* ── Cápsula segmentada: unir las 3 pills en un solo control ── */
+        .st-key-gran_float [data-testid="stButtonGroup"] {
+            gap: 0 !important;
+            border: 1px solid rgba(49,51,63,0.2);
+            border-radius: 999px;
+            overflow: hidden;
+            background: var(--background-color, #fff);
+        }
+        .st-key-gran_float [data-testid="stButtonGroup"] button {
+            border: 0 !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+        }
+        .st-key-gran_float [data-testid="stButtonGroup"] button:not(:first-child) {
+            border-left: 1px solid rgba(49,51,63,0.15) !important;
+        }
         </style>
     """, unsafe_allow_html=True)
 
