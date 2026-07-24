@@ -1599,14 +1599,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         for _pp in _todos_provs_temp:
             st.session_state["cp_prov_cb::" + str(_pp)] = (_pp in _real_provs[:_n])
 
-    # Granularidad: se lee aquí (de session_state) para calcular los periodos,
-    # pero el selector se DIBUJA flotando sobre el gráfico (ver más abajo).
+    # Granularidad y Top productos: se leen aquí (de session_state), pero sus
+    # selectores se DIBUJAN flotando sobre sus gráficos respectivos (más abajo).
     gran = st.session_state.get("compras_prov_gran") or "Mes"
+    topn = st.session_state.get("compras_prov_topn") or 10
 
-    c2, c3 = st.columns([1.1, 2.5], vertical_alignment="bottom")
-    with c2:
-        topn = st.pills("Top productos", [5, 10, 20], default=10,
-                        key="compras_prov_topn") or 10
+    _, c3 = st.columns([1.1, 2.5], vertical_alignment="bottom")
     with c3:
         _sel_now = [p for p in _todos_provs_temp
                     if st.session_state.get("cp_prov_cb::" + str(p))]
@@ -1793,20 +1791,31 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         /* Ocultar la barra de herramientas del propio gráfico (fullscreen) */
         .st-key-prov_chart_box > div > [data-testid="stElementToolbar"] { display: none; }
 
-        /* ── Cápsula segmentada: unir las 3 pills en un solo control ── */
-        .st-key-gran_float [data-testid="stButtonGroup"] {
+        /* Top productos flotante en la esquina del Panel A (card prov_prods) */
+        .st-key-chartcard_prov_prods { position: relative; }
+        .st-key-topn_float {
+            position: absolute; top: 8px; right: 12px; z-index: 20;
+            width: auto !important;
+        }
+        .st-key-topn_float [data-testid="stElementToolbar"] { display: none; }
+
+        /* ── Cápsula segmentada: unir las pills en un solo control ── */
+        .st-key-gran_float [data-testid="stButtonGroup"],
+        .st-key-topn_float [data-testid="stButtonGroup"] {
             gap: 0 !important;
             border: 1px solid rgba(49,51,63,0.2);
             border-radius: 999px;
             overflow: hidden;
             background: var(--background-color, #fff);
         }
-        .st-key-gran_float [data-testid="stButtonGroup"] button {
+        .st-key-gran_float [data-testid="stButtonGroup"] button,
+        .st-key-topn_float [data-testid="stButtonGroup"] button {
             border: 0 !important;
             border-radius: 0 !important;
             margin: 0 !important;
         }
-        .st-key-gran_float [data-testid="stButtonGroup"] button:not(:first-child) {
+        .st-key-gran_float [data-testid="stButtonGroup"] button:not(:first-child),
+        .st-key-topn_float [data-testid="stButtonGroup"] button:not(:first-child) {
             border-left: 1px solid rgba(49,51,63,0.15) !important;
         }
         </style>
@@ -1841,8 +1850,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     with pa:
         _ta = ("Selecciona un proveedor arriba para ver sus productos"
                if prov_focus is None
-               else f"Top {topn} productos · {_compras_truncar(prov_focus, 24)}")
+               else f"Productos · {_compras_truncar(prov_focus, 24)}")
         with _card("prov_prods", _ta):
+            # Selector Top N flotante en la esquina superior derecha de la card
+            with st.container(key="topn_float"):
+                st.pills("Top productos", [5, 10, 20], default=10,
+                         key="compras_prov_topn", label_visibility="collapsed")
             if prov_focus is None:
                 st.info("👆 Clic en una barra del gráfico para explorar.")
             else:
@@ -1871,11 +1884,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     ))
                     _compras_layout(figa, alto=max(240, 34 * len(agg) + 80))
                     figa.update_xaxes(tickprefix="S/ ", tickformat=",.0f")
-                    figa.update_layout(margin=dict(l=10, r=140, t=10, b=10))
+                    figa.update_layout(margin=dict(l=10, r=140, t=44, b=10))
                     _aevt = st.plotly_chart(
                         figa, use_container_width=True,
                         key=f"compras_g_prov_prods_{prov_focus}_{prod_focus}",
                         on_select="rerun", selection_mode="points",
+                        config={"displayModeBar": False},
                     )
                     _ap = _first_point(_aevt)
                     if _ap is not None:
