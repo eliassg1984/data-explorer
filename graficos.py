@@ -1677,6 +1677,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                          use_container_width=True):
                 st.session_state["compras_prov_focus"]    = None
                 st.session_state["compras_prov_prodfocus"] = None
+                st.session_state["compras_prov_last_click"] = None
                 st.rerun()
 
     # ── Gráfico principal: barras verticales por periodo ──────────────────
@@ -1740,11 +1741,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             range=[len(periodos) - 12.5, len(periodos) - 0.5],
         )
 
-    _rst = st.session_state.get("compras_prov_main_rst", 0)
+    # Key ESTABLE (solo depende de la granularidad): evita que Streamlit
+    # remonte el componente Plotly en cada clic — eso era lo que causaba el
+    # parpadeo. Con key estable, el gráfico se actualiza en el lugar.
     _evt = st.plotly_chart(
         fig,
         use_container_width=True,
-        key=f"compras_g_prov_main_{prov_focus}_{gran}_{_rst}",
+        key=f"compras_g_prov_main_{gran}",
         on_select="rerun",
         selection_mode="points",
     )
@@ -1754,11 +1757,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         _cn = _mp.get("curve_number")
         if _cn is not None and 0 <= _cn < len(orden_provs):
             _clicked = orden_provs[_cn]
-            _new_focus = None if _clicked == prov_focus else _clicked
-            st.session_state["compras_prov_focus"]     = _new_focus
-            st.session_state["compras_prov_prodfocus"] = None
-            st.session_state["compras_prov_main_rst"]  = _rst + 1
-            st.rerun()
+            # Con key estable la selección queda "pegada" en el widget y se
+            # re-emite en cada rerun. Solo actuamos si es un clic nuevo.
+            if st.session_state.get("compras_prov_last_click") != _clicked:
+                st.session_state["compras_prov_last_click"] = _clicked
+                _new_focus = None if _clicked == prov_focus else _clicked
+                st.session_state["compras_prov_focus"]     = _new_focus
+                st.session_state["compras_prov_prodfocus"] = None
+                st.rerun()
 
     # ── Paneles A y B ─────────────────────────────────────────────────────
     def _um_de(grp):
