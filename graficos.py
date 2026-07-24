@@ -1897,6 +1897,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             # La MISMA tabla resumen es master/detail: cada proveedor tiene una
             # flecha ▸ que despliega sus documentos (Num Documento + Valor)
             # dentro de la propia grilla. El valor por proveedor = suma de docs.
+            import json  # noqa: E402
             from st_aggrid import AgGrid, JsCode  # noqa: E402
             _bd = base[base["prov"].isin(top_provs)]
             _provs_ord = [p for p in orden_provs if p in _piv.index and p != "TOTAL"]
@@ -1923,9 +1924,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 _sub = _bd[_bd["prov"] == _pv]
                 _docs = (_sub.groupby("docu", as_index=False)["valor"].sum()
                          .sort_values("valor", ascending=False))
-                _r["documentos"] = [{"Num Documento": str(t.docu),
-                                     "Valor": float(t.valor)}
-                                    for t in _docs.itertuples()]
+                # JSON string (no lista Python): st_aggrid no serializa bien
+                # columnas anidadas; el string sobrevive y se parsea en el front.
+                _r["documentos"] = json.dumps(
+                    [{"Num Documento": str(t.docu), "Valor": float(t.valor)}
+                     for t in _docs.itertuples()], ensure_ascii=False)
                 _rows.append(_r)
             _df_master = pd.DataFrame(_rows)
 
@@ -1959,8 +1962,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         "defaultColDef": {"resizable": True, "sortable": True},
                     },
                     "getDetailRowData": JsCode(
-                        "function(params){ params.successCallback("
-                        "params.data.documentos); }"),
+                        "function(params){ var d = params.data.documentos; "
+                        "params.successCallback(d ? JSON.parse(d) : []); }"),
                 },
                 "pinnedBottomRowData": [_total_row],
                 "getRowStyle": JsCode(
