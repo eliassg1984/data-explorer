@@ -1757,10 +1757,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         barmode="group",
         xaxis=dict(type="category", tickangle=0),
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f"),
-        # Leyenda centrada: deja el hueco izquierdo para el popover flotante y
-        # el derecho para el toggle de granularidad (los tres en una banda).
-        legend=dict(orientation="h", yanchor="bottom", y=1.02,
-                    xanchor="center", x=0.5, font=dict(size=10)),
+        # Leyenda VERTICAL a la derecha. Arranca más abajo (y=0.88) para no
+        # pisarse con el toggle de granularidad que flota arriba-derecha.
+        legend=dict(orientation="v", yanchor="top", y=0.88,
+                    xanchor="left", x=1.01, font=dict(size=10)),
         hovermode="closest",
     )
     # Range-slider si hay muchos periodos
@@ -1776,14 +1776,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     st.markdown("""
         <style>
         .st-key-prov_chart_box { position: relative; }
-        /* top alineado con la banda de la leyenda de Plotly (margen sup. t=30). */
+        /* La leyenda se movió a la derecha (vertical); la banda superior solo
+           tiene popover (izq) + toggle (der), alineados arriba. */
         .st-key-gran_float {
-            position: absolute; top: 14px; right: 6px; z-index: 20;
+            position: absolute; top: 6px; right: 6px; z-index: 20;
             width: auto !important;
         }
         /* Popover de proveedores flotando arriba-IZQUIERDA (compacto) */
         .st-key-prov_pop_float {
-            position: absolute; top: 14px; left: 6px; z-index: 21;
+            position: absolute; top: 6px; left: 6px; z-index: 21;
             width: auto !important;
         }
         .st-key-prov_pop_float [data-testid="stPopover"] button {
