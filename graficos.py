@@ -1776,13 +1776,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     st.markdown("""
         <style>
         .st-key-prov_chart_box { position: relative; }
+        /* top alineado con la banda de la leyenda de Plotly (margen sup. t=30). */
         .st-key-gran_float {
-            position: absolute; top: 2px; right: 6px; z-index: 20;
+            position: absolute; top: 14px; right: 6px; z-index: 20;
             width: auto !important;
         }
         /* Popover de proveedores flotando arriba-IZQUIERDA (compacto) */
         .st-key-prov_pop_float {
-            position: absolute; top: 2px; left: 6px; z-index: 21;
+            position: absolute; top: 14px; left: 6px; z-index: 21;
             width: auto !important;
         }
         .st-key-prov_pop_float [data-testid="stPopover"] button {
