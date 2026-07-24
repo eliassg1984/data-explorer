@@ -15,7 +15,7 @@ from data import (
 from estilos import TAM_FUENTE, inject_css
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_footer_actualizacion, inject_calendario_es
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras, renderizar_aggrid_compras
-from graficos import renderizar_graficos, renderizar_graficos_reporte
+from graficos import renderizar_graficos, renderizar_graficos_reporte, render_vista_pills
 from navegacion import inject_navegacion
 from perf import perf                                                       # ⚡ PERF
 
@@ -816,6 +816,9 @@ def _render_contenido():
     if reporte == "Compras":
         vista = st.session_state.get(f"vista_seg_{reporte}", _vista_default) or _vista_default
         if vista == "Tabla":
+            # G/T se dibuja aquí (en Gráficos lo dibuja graficos.py, en la fila
+            # de pestañas). Solo uno corre por rerun → sin key duplicada.
+            render_vista_pills("Compras", _vista_default)
             renderizar_aggrid_compras(_filtros_chips_franja(df_f), font_px)
         else:
             renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
@@ -860,7 +863,9 @@ def _render_contenido():
 # ── Pestañas Gráficos/Tabla — banda pegada al borde superior del canvas ──────
 # Se renderizan aquí (fuera de la franja y fuera del fragment) para que queden
 # encima del contenido, como pestañas del canvas. Misma key → mismo estado.
-if reporte != "Requerimientos":
+# Compras dibuja su propio G/T dentro de la fila de pestañas (graficos.py),
+# por eso se excluye aquí (evita key duplicada vista_seg_Compras).
+if reporte not in ("Requerimientos", "Compras"):
     with st.container(key="ajuste_tabs_top"):
         st.pills(
             "Vista",

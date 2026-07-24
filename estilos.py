@@ -500,11 +500,13 @@ def get_css():
     /* inferior la conecta visualmente con la card del gráfico de abajo.     */
     /* =================================================================== */
     .st-key-graf_tipo_chips {
-        margin: -10px 0 -6px 0 !important;   /* come el gap arriba y abajo */
+        margin: 0 0 4px 0 !important;
         overflow-x: auto !important;
         border-bottom: 1px solid var(--border) !important;
         padding-bottom: 0 !important;
+        scrollbar-width: none !important;   /* barra oculta: no roba alto */
     }
+    .st-key-graf_tipo_chips::-webkit-scrollbar { display: none !important; }
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] {
         margin: 0 !important;
         flex-wrap: nowrap !important;

@@ -81,6 +81,22 @@ def _chart_card_close():
     st.markdown('</div>', unsafe_allow_html=True)
 
 
+def render_vista_pills(reporte, default="Gráficos"):
+    """Pills Gráficos/Tabla (mismo widget/estilo que la banda superior).
+    Se envuelve en el contenedor vistatabs_<reporte> para heredar el CSS de
+    pestañas subrayadas. Usa la key vista_seg_<reporte> (fuente única). Se
+    llama desde donde convenga (fila de pestañas en Compras, o app.py)."""
+    _op = {"Gráficos": ":material/monitoring: Gráficos",
+           "Tabla":    ":material/table_rows: Tabla"}
+    with st.container(key=f"vistatabs_{reporte}"):
+        v = st.pills(
+            "Vista", options=list(_op.keys()),
+            format_func=lambda o: _op[o], default=default,
+            label_visibility="collapsed", key=f"vista_seg_{reporte}",
+        )
+    return v or default
+
+
 # ===========================================================================
 # FUNCIÓN: DASHBOARD DE GRÁFICOS (Inventario Valorizado - NO TOCAR)
 # ===========================================================================
@@ -2795,43 +2811,18 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                 "Cantidad por producto",
                 "Semanal", "Vs año anterior", "Personalizado"]
 
-    # Tipo de gráfico como fila de pestañas pegada al tope del gráfico, con
-    # scroll horizontal si no entran (CSS .st-key-graf_tipo_chips en estilos.py).
-    with st.container(key="graf_tipo_chips"):
-        graf = st.pills(
-            "Gráfico", opciones, default=opciones[0],
-            key="compras_graf_tipo", label_visibility="collapsed",
-        ) or opciones[0]
-
-    # Solo en Compras: subir las pestañas de tipo a la MISMA fila que el
-    # selector Gráficos/Tabla (que renderiza app.py arriba) y mandar G/T a la
-    # derecha. Así se recupera la fila entera que ocupaba G/T y el gráfico sube.
-    # Scoped a Compras (se inyecta desde aquí); otros reportes no se tocan.
-    # Los ~40px del margin-top negativo ≈ alto de la fila G/T (botón 38px).
-    st.markdown("""
-        <style>
-        .st-key-graf_tipo_chips {
-            margin: -44px 210px -10px 0 !important;
-            scrollbar-width: none !important;   /* la barra robaba alto y
-                                                   desalineaba las pestañas */
-        }
-        .st-key-graf_tipo_chips::-webkit-scrollbar { display: none !important; }
-        /* Igualar la altura de las pestañas a la de G/T (38px) para que
-           queden al MISMO nivel, no una fila más abajo. */
-        .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button {
-            min-height: 38px !important;
-            padding-top: 8px !important;
-            padding-bottom: 8px !important;
-            display: flex !important;
-            align-items: center !important;
-        }
-        .st-key-ajuste_tabs_top [data-testid="stElementContainer"]:has([data-testid="stButtonGroup"]) {
-            width: max-content !important;
-            margin-left: auto !important;
-            margin-right: 4px !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+    # Fila única: pestañas de tipo (con scroll horizontal) + Gráficos/Tabla a
+    # la derecha, en columnas REALES (alineación determinística, sin hacks de
+    # margin negativo). En Compras, G/T se dibuja aquí (app.py lo omite).
+    _c_tabs, _c_vista = st.columns([4, 1.15], vertical_alignment="center")
+    with _c_tabs:
+        with st.container(key="graf_tipo_chips"):
+            graf = st.pills(
+                "Gráfico", opciones, default=opciones[0],
+                key="compras_graf_tipo", label_visibility="collapsed",
+            ) or opciones[0]
+    with _c_vista:
+        render_vista_pills("Compras", "Gráficos")
 
     # Constructor: ancho completo, sin panel de mini-tops.
     if graf == "Personalizado":
