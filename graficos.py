@@ -1599,10 +1599,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         for _pp in _todos_provs_temp:
             st.session_state["cp_prov_cb::" + str(_pp)] = (_pp in _real_provs[:_n])
 
-    c1, c2, c3 = st.columns([1.1, 1.1, 2.5], vertical_alignment="bottom")
-    with c1:
-        gran = st.pills("Periodo", ["Semana", "Mes", "Año"],
-                        default="Mes", key="compras_prov_gran") or "Mes"
+    # Granularidad: se lee aquí (de session_state) para calcular los periodos,
+    # pero el selector se DIBUJA flotando sobre el gráfico (ver más abajo).
+    gran = st.session_state.get("compras_prov_gran") or "Mes"
+
+    c2, c3 = st.columns([1.1, 2.5], vertical_alignment="bottom")
     with c2:
         topn = st.pills("Top productos", [5, 10, 20], default=10,
                         key="compras_prov_topn") or 10
@@ -1778,16 +1779,37 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             range=[len(periodos) - 12.5, len(periodos) - 0.5],
         )
 
+    # ── Selector de granularidad FLOTANTE sobre el gráfico ────────────────
+    # El contenedor "prov_chart_box" es posición relativa; dentro, las pills
+    # se posicionan en absoluto arriba-derecha, superpuestas al gráfico.
+    st.markdown("""
+        <style>
+        .st-key-prov_chart_box { position: relative; }
+        .st-key-gran_float {
+            position: absolute; top: 2px; right: 6px; z-index: 20;
+            width: auto !important;
+        }
+        .st-key-gran_float [data-testid="stElementToolbar"] { display: none; }
+        /* Ocultar la barra de herramientas del propio gráfico (fullscreen) */
+        .st-key-prov_chart_box > div > [data-testid="stElementToolbar"] { display: none; }
+        </style>
+    """, unsafe_allow_html=True)
+
     # Key ESTABLE (solo depende de la granularidad): evita que Streamlit
     # remonte el componente Plotly en cada clic. El clic se procesa arriba,
     # antes de construir el figure (sin doble rerun = sin parpadeo).
-    st.plotly_chart(
-        fig,
-        use_container_width=True,
-        key=_chart_key,
-        on_select="rerun",
-        selection_mode="points",
-    )
+    with st.container(key="prov_chart_box"):
+        with st.container(key="gran_float"):
+            st.pills("Periodo", ["Semana", "Mes", "Año"], default="Mes",
+                     key="compras_prov_gran", label_visibility="collapsed")
+        st.plotly_chart(
+            fig,
+            use_container_width=True,
+            key=_chart_key,
+            on_select="rerun",
+            selection_mode="points",
+            config={"displayModeBar": False},
+        )
 
     # ── Paneles A y B ─────────────────────────────────────────────────────
     def _um_de(grp):
