@@ -1922,12 +1922,19 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             for _pv in _provs_ord:
                 _r = _fila_piv(_pv)
                 _sub = _bd[_bd["prov"] == _pv]
-                _docs = (_sub.groupby("docu", as_index=False)["valor"].sum()
+                _docs = (_sub.groupby("docu", as_index=False)
+                         .agg(valor=("valor", "sum"),
+                              fecha=("fecha", "first"))
                          .sort_values("valor", ascending=False))
                 # JSON string (no lista Python): st_aggrid no serializa bien
                 # columnas anidadas; el string sobrevive y se parsea en el front.
+                # Fecha en ISO (yyyy-mm-dd) para que ordene bien; el front la
+                # muestra como dd/mm/yyyy vía valueFormatter.
                 _r["documentos"] = json.dumps(
-                    [{"Num Documento": str(t.docu), "Valor": float(t.valor)}
+                    [{"Num Documento": str(t.docu),
+                      "Valor": float(t.valor),
+                      "Fecha": (pd.Timestamp(t.fecha).strftime("%Y-%m-%d")
+                                if pd.notna(t.fecha) else "")}
                      for t in _docs.itertuples()], ensure_ascii=False)
                 _rows.append(_r)
             _df_master = pd.DataFrame(_rows)
@@ -1958,6 +1965,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             {"field": "Num Documento", "flex": 2},
                             {"field": "Valor", "type": "numericColumn", "flex": 1,
                              "valueFormatter": _fmt_soles},
+                            {"field": "Fecha", "headerName": "Fecha Emisión",
+                             "flex": 1,
+                             "valueFormatter": JsCode(
+                                 "function(p){ if(!p.value) return ''; "
+                                 "var s=String(p.value).split('-'); "
+                                 "return s.length===3 ? s[2]+'/'+s[1]+'/'+s[0] : p.value; }")},
                         ],
                         "defaultColDef": {"resizable": True, "sortable": True},
                     },
@@ -1979,7 +1992,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 theme="streamlit",
                 height=min(560, 150 + 30 * len(_df_master)),
                 enable_enterprise_modules=True,
-                fit_columns_on_grid_load=False,
+                fit_columns_on_grid_load=True,
                 key="cp_prov_resumen_md",
             )
         else:
