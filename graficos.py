@@ -1620,37 +1620,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     gran = st.session_state.get("compras_prov_gran") or "Mes"
     topn = st.session_state.get("compras_prov_topn") or 10
 
-    _, c3 = st.columns([1.1, 2.5], vertical_alignment="bottom")
-    with c3:
-        _sel_now = [p for p in _todos_provs_temp
-                    if st.session_state.get("cp_prov_cb::" + str(p))]
-        with st.popover(f"Proveedores ({len(_sel_now)})",
-                        use_container_width=True):
-            # Atajos: marcan los primeros N proveedores por valor (desc.)
-            _bt = st.columns(4)
-            _bt[0].button("Top 3", key="cp_topn3", use_container_width=True,
-                          on_click=_cp_set_topn, args=(3,))
-            _bt[1].button("Top 5", key="cp_topn5", use_container_width=True,
-                          on_click=_cp_set_topn, args=(5,))
-            _bt[2].button("Top 10", key="cp_topn10", use_container_width=True,
-                          on_click=_cp_set_topn, args=(10,))
-            _bt[3].button("Limpiar", key="cp_topnclr", use_container_width=True,
-                          on_click=_cp_set_topn, args=(0,))
-            # Buscador: filtra la lista por nombre (no afecta la selección).
-            _q = st.text_input("Buscar", key="cp_prov_q",
-                               placeholder="Buscar proveedor por nombre...",
-                               label_visibility="collapsed").strip().lower()
-            # Lista completa en orden descendente por valor. El estado vive en
-            # las claves cp_prov_cb::<nombre>, por eso no se pasa value=.
-            _vistos = [p for p in _todos_provs_temp if not _q or _q in str(p).lower()]
-            if not _vistos:
-                st.caption("Sin coincidencias.")
-            for _p in _vistos:
-                st.checkbox(_p, key="cp_prov_cb::" + str(_p))
-        prov_multisel = [p for p in _todos_provs_temp
-                         if st.session_state.get("cp_prov_cb::" + str(p))] \
-                        or _real_provs[:5]
-
+    # Selección de proveedores: se LEE de session_state (cp_prov_cb::<nombre>).
+    # El popover se DIBUJA flotando arriba-izquierda sobre el gráfico (más
+    # abajo), por eso aquí solo se calcula la selección para armar el figure.
+    prov_multisel = [p for p in _todos_provs_temp
+                     if st.session_state.get("cp_prov_cb::" + str(p))] \
+                    or _real_provs[:5]
     topn_prov = len(prov_multisel)
 
     # ── Preparar base de datos ─────────────────────────────────────────────
@@ -1782,8 +1757,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         barmode="group",
         xaxis=dict(type="category", tickangle=0),
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
-                    font=dict(size=10)),
+        # Leyenda centrada: deja el hueco izquierdo para el popover flotante y
+        # el derecho para el toggle de granularidad (los tres en una banda).
+        legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                    xanchor="center", x=0.5, font=dict(size=10)),
         hovermode="closest",
     )
     # Range-slider si hay muchos periodos
@@ -1802,6 +1779,18 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-gran_float {
             position: absolute; top: 2px; right: 6px; z-index: 20;
             width: auto !important;
+        }
+        /* Popover de proveedores flotando arriba-IZQUIERDA (compacto) */
+        .st-key-prov_pop_float {
+            position: absolute; top: 2px; left: 6px; z-index: 21;
+            width: auto !important;
+        }
+        .st-key-prov_pop_float [data-testid="stPopover"] button {
+            min-width: 0 !important;
+            padding: 4px 12px !important;
+            font-size: 12px !important;
+            font-weight: 500 !important;
+            border-radius: 999px !important;
         }
         .st-key-gran_float [data-testid="stElementToolbar"] { display: none; }
         /* Ocultar la barra de herramientas del propio gráfico (fullscreen) */
@@ -1841,6 +1830,31 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # remonte el componente Plotly en cada clic. El clic se procesa arriba,
     # antes de construir el figure (sin doble rerun = sin parpadeo).
     with st.container(key="prov_chart_box"):
+        # Popover de proveedores — flota arriba-izquierda (misma banda que la
+        # leyenda y el toggle). Los checkboxes escriben cp_prov_cb::<nombre>;
+        # la selección se leyó arriba para armar el figure (patrón 1 rerun).
+        with st.container(key="prov_pop_float"):
+            _sel_now = [p for p in _todos_provs_temp
+                        if st.session_state.get("cp_prov_cb::" + str(p))]
+            with st.popover(f"Proveedores ({len(_sel_now)})"):
+                _bt = st.columns(4)
+                _bt[0].button("Top 3", key="cp_topn3", use_container_width=True,
+                              on_click=_cp_set_topn, args=(3,))
+                _bt[1].button("Top 5", key="cp_topn5", use_container_width=True,
+                              on_click=_cp_set_topn, args=(5,))
+                _bt[2].button("Top 10", key="cp_topn10", use_container_width=True,
+                              on_click=_cp_set_topn, args=(10,))
+                _bt[3].button("Limpiar", key="cp_topnclr", use_container_width=True,
+                              on_click=_cp_set_topn, args=(0,))
+                _q = st.text_input("Buscar", key="cp_prov_q",
+                                   placeholder="Buscar proveedor por nombre...",
+                                   label_visibility="collapsed").strip().lower()
+                _vistos = [p for p in _todos_provs_temp
+                           if not _q or _q in str(p).lower()]
+                if not _vistos:
+                    st.caption("Sin coincidencias.")
+                for _p in _vistos:
+                    st.checkbox(_p, key="cp_prov_cb::" + str(_p))
         with st.container(key="gran_float"):
             st.pills("Periodo", ["Semana", "Mes", "Año"], default="Mes",
                      key="compras_prov_gran", label_visibility="collapsed")
