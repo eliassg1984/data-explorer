@@ -1767,10 +1767,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
     # Panel A: Top N productos del proveedor en foco
     with pa:
-
+        _ta = ("Selecciona un proveedor arriba para ver sus productos"
+               if prov_focus is None
+               else f"Top {topn} productos · {_compras_truncar(prov_focus, 24)}")
         with _card("prov_prods", _ta):
             if prov_focus is None:
-
+                st.info("👆 Clic en una barra del gráfico para explorar.")
             else:
                 sub = base[base["prov"] == prov_focus]
                 agg = (sub.groupby("prod")
@@ -1813,10 +1815,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
     # Panel B: proveedores del producto seleccionado
     with pb:
-
+        _tb = ("Proveedores del producto" if prod_focus is None
+               else f"Proveedores de · {_compras_truncar(prod_focus, 26)}")
         with _card("prov_prov_de_prod", _tb):
             if prod_focus is None:
- 
+                st.info("👈 Clic en un producto del panel izquierdo.")
             else:
                 sub2 = base[base["prod"] == prod_focus]
                 filas = []
