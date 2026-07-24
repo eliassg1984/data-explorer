@@ -1599,7 +1599,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         for _pp in _todos_provs_temp:
             st.session_state["cp_prov_cb::" + str(_pp)] = (_pp in _real_provs[:_n])
 
-    c1, c2, c3 = st.columns([1.1, 1.1, 2.5])
+    c1, c2, c3 = st.columns([1.1, 1.1, 2.5], vertical_alignment="bottom")
     with c1:
         gran = st.pills("Periodo", ["Semana", "Mes", "Año"],
                         default="Mes", key="compras_prov_gran") or "Mes"
