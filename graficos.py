@@ -1634,7 +1634,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         _wstart = (fe_s - pd.to_timedelta(fe_s.dt.weekday, unit="D")).dt.normalize()
         _wend = _wstart + pd.Timedelta(days=6)
         base["_per_sort"] = _wstart.dt.strftime("%Y-%m-%d")   # clave de orden
-        base["per"] = (_wstart.dt.strftime("%d/%m") + " - " + _wend.dt.strftime("%d/%m"))
+        _mes_es = {'Jan':'Ene','Apr':'Abr','Aug':'Ago','Dec':'Dic'}
+        _per = _wstart.dt.strftime("%d%b") + "-" + _wend.dt.strftime("%d%b")
+        for _en, _es in _mes_es.items():
+            _per = _per.str.replace(_en, _es)
+        base["per"] = _per
     elif gran == "Año":
         base["_per_sort"] = fe_s.dt.year.astype("Int64").astype(str)
         base["per"] = base["_per_sort"]
