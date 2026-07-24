@@ -2803,6 +2803,22 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
             key="compras_graf_tipo", label_visibility="collapsed",
         ) or opciones[0]
 
+    # Solo en Compras: subir las pestañas de tipo a la MISMA fila que el
+    # selector Gráficos/Tabla (que renderiza app.py arriba) y mandar G/T a la
+    # derecha. Así se recupera la fila entera que ocupaba G/T y el gráfico sube.
+    # Scoped a Compras (se inyecta desde aquí); otros reportes no se tocan.
+    # Los ~40px del margin-top negativo ≈ alto de la fila G/T (botón 38px).
+    st.markdown("""
+        <style>
+        .st-key-graf_tipo_chips { margin: -40px 210px -6px 0 !important; }
+        .st-key-ajuste_tabs_top [data-testid="stElementContainer"]:has([data-testid="stButtonGroup"]) {
+            width: max-content !important;
+            margin-left: auto !important;
+            margin-right: 4px !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
     # Constructor: ancho completo, sin panel de mini-tops.
     if graf == "Personalizado":
         with st.container(border=True, key="ajuste_graf_card_izq_compras"):
