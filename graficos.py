@@ -1869,7 +1869,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             key=_chart_key,
             on_select="rerun",
             selection_mode="points",
-            config={"displayModeBar": False},
+            # edits.legendPosition: permite ARRASTRAR la leyenda con el cursor.
+            # Ojo: la posición no persiste (al reejecutar vuelve a y=0.82).
+            config={"displayModeBar": False, "edits": {"legendPosition": True}},
         )
 
     # ── Tabla resumen: Proveedor × Período (debajo del gráfico) ───────────
