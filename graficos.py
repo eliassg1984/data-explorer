@@ -1891,52 +1891,61 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         _tot["% Part."] = 100.0
         _piv.loc["TOTAL"] = _tot
 
-        with st.expander(f"Resumen de compras por proveedor · vista {gran}",
-                         expanded=False):
-            _sty = (_piv.style
-                    .format("S/ {:,.0f}", subset=periodos + ["Total S/"])
-                    .format("{:.1f}%", subset=["% Part."])
-                    .apply(lambda row: [
-                        "background:#EEEDFE; font-weight:500; color:#4938b8"
-                        if row.name == "TOTAL" else "" for _ in row], axis=1))
-            st.dataframe(_sty, use_container_width=True)
-            st.download_button(
-                "⬇ Descargar CSV",
-                data=_piv.to_csv().encode("utf-8-sig"),
-                file_name=f"compras_resumen_{gran.lower()}.csv",
-                mime="text/csv",
-                key="cp_prov_resumen_dl",
-            )
+        st.markdown(f"**Resumen de compras por proveedor · vista {gran}**")
 
-        # Grilla master/detail: cada proveedor tiene una flecha ▸ que despliega
-        # SUS documentos (Num Documento + Valor) DENTRO de la misma grilla.
-        # El valor del proveedor = suma del valor de sus documentos.
-        # Usa AgGrid enterprise (ya habilitado en la app).
         if col_docu:
+            # La MISMA tabla resumen es master/detail: cada proveedor tiene una
+            # flecha ▸ que despliega sus documentos (Num Documento + Valor)
+            # dentro de la propia grilla. El valor por proveedor = suma de docs.
             from st_aggrid import AgGrid, JsCode  # noqa: E402
             _bd = base[base["prov"].isin(top_provs)]
-            _rows = []
-            for _pv in [p for p in orden_provs if p in set(_bd["prov"])]:
-                _sub = _bd[_bd["prov"] == _pv]
-                _docs = (_sub.groupby("docu", as_index=False)["valor"].sum()
-                         .sort_values("valor", ascending=False))
-                _docs_list = [{"Num Documento": str(r.docu), "Valor": float(r.valor)}
-                              for r in _docs.itertuples()]
-                _rows.append({"Proveedor": str(_pv),
-                              "Valor": float(_sub["valor"].sum()),
-                              "documentos": _docs_list})
-            _df_master = pd.DataFrame(_rows)
+            _provs_ord = [p for p in orden_provs if p in _piv.index and p != "TOTAL"]
 
             _fmt_soles = JsCode(
                 "function(p){ if(p.value==null) return ''; "
                 "return 'S/ ' + Math.round(p.value).toLocaleString('es-PE'); }")
+            _fmt_pct = JsCode(
+                "function(p){ if(p.value==null) return ''; "
+                "return Number(p.value).toFixed(1) + '%'; }")
+
+            def _fila_piv(_pv):
+                _r = {"Proveedor": str(_pv)}
+                for _per in periodos:
+                    _r[_per] = (float(_piv.at[_pv, _per])
+                                if _per in _piv.columns else 0.0)
+                _r["total"] = float(_piv.at[_pv, "Total S/"])
+                _r["pct"] = float(_piv.at[_pv, "% Part."])
+                return _r
+
+            _rows = []
+            for _pv in _provs_ord:
+                _r = _fila_piv(_pv)
+                _sub = _bd[_bd["prov"] == _pv]
+                _docs = (_sub.groupby("docu", as_index=False)["valor"].sum()
+                         .sort_values("valor", ascending=False))
+                _r["documentos"] = [{"Num Documento": str(t.docu),
+                                     "Valor": float(t.valor)}
+                                    for t in _docs.itertuples()]
+                _rows.append(_r)
+            _df_master = pd.DataFrame(_rows)
+
+            _total_row = _fila_piv("TOTAL")   # fila de totales → pie fijo
+            _total_row["pct"] = 100.0
+
+            _col_defs = [{"field": "Proveedor", "pinned": "left", "minWidth": 170,
+                          "cellRenderer": "agGroupCellRenderer"}]
+            for _per in periodos:
+                _col_defs.append({"field": _per, "type": "numericColumn",
+                                  "width": 95, "valueFormatter": _fmt_soles})
+            _col_defs.append({"field": "total", "headerName": "Total S/",
+                              "type": "numericColumn", "width": 115,
+                              "valueFormatter": _fmt_soles})
+            _col_defs.append({"field": "pct", "headerName": "% Part.",
+                              "type": "numericColumn", "width": 90,
+                              "valueFormatter": _fmt_pct})
+
             _grid_md = {
-                "columnDefs": [
-                    {"field": "Proveedor", "flex": 2,
-                     "cellRenderer": "agGroupCellRenderer"},
-                    {"field": "Valor", "flex": 1, "type": "numericColumn",
-                     "valueFormatter": _fmt_soles},
-                ],
+                "columnDefs": _col_defs,
                 "defaultColDef": {"resizable": True, "sortable": True},
                 "masterDetail": True,
                 "detailRowAutoHeight": True,
@@ -1944,7 +1953,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     "detailGridOptions": {
                         "columnDefs": [
                             {"field": "Num Documento", "flex": 2},
-                            {"field": "Valor", "flex": 1, "type": "numericColumn",
+                            {"field": "Valor", "type": "numericColumn", "flex": 1,
                              "valueFormatter": _fmt_soles},
                         ],
                         "defaultColDef": {"resizable": True, "sortable": True},
@@ -1953,19 +1962,40 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         "function(params){ params.successCallback("
                         "params.data.documentos); }"),
                 },
-                "rowHeight": 32,
+                "pinnedBottomRowData": [_total_row],
+                "getRowStyle": JsCode(
+                    "function(p){ if(p.node.rowPinned){ return {'fontWeight':'600',"
+                    "'background':'#EEEDFE','color':'#4938b8'}; } }"),
+                "rowHeight": 30,
                 "headerHeight": 34,
             }
-            st.caption("📄 Clic en la flecha ▸ de un proveedor para ver sus documentos")
             AgGrid(
                 _df_master,
                 gridOptions=_grid_md,
                 allow_unsafe_jscode=True,
                 theme="streamlit",
-                height=min(520, 130 + 34 * len(_df_master)),
+                height=min(560, 150 + 30 * len(_df_master)),
                 enable_enterprise_modules=True,
-                key="cp_prov_docs_md",
+                fit_columns_on_grid_load=False,
+                key="cp_prov_resumen_md",
             )
+        else:
+            # Sin columna de documentos: tabla estática (como antes).
+            _sty = (_piv.style
+                    .format("S/ {:,.0f}", subset=periodos + ["Total S/"])
+                    .format("{:.1f}%", subset=["% Part."])
+                    .apply(lambda row: [
+                        "background:#EEEDFE; font-weight:500; color:#4938b8"
+                        if row.name == "TOTAL" else "" for _ in row], axis=1))
+            st.dataframe(_sty, use_container_width=True)
+
+        st.download_button(
+            "⬇ Descargar CSV",
+            data=_piv.to_csv().encode("utf-8-sig"),
+            file_name=f"compras_resumen_{gran.lower()}.csv",
+            mime="text/csv",
+            key="cp_prov_resumen_dl",
+        )
 
     # ── Paneles A y B ─────────────────────────────────────────────────────
     def _um_de(grp):
