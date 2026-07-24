@@ -1908,29 +1908,64 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 key="cp_prov_resumen_dl",
             )
 
-        # Filas expandibles: un desplegable por proveedor que muestra SUS
-        # documentos. Van como hermanas del resumen (Streamlit no permite
-        # anidar expanders). Solo si la columna Num Documento existe.
+        # Grilla master/detail: cada proveedor tiene una flecha ▸ que despliega
+        # SUS documentos (Num Documento + Valor) DENTRO de la misma grilla.
+        # El valor del proveedor = suma del valor de sus documentos.
+        # Usa AgGrid enterprise (ya habilitado en la app).
         if col_docu:
+            from st_aggrid import AgGrid, JsCode  # noqa: E402
             _bd = base[base["prov"].isin(top_provs)]
-            st.caption("📄 Documentos por proveedor — clic en un proveedor para desplegar")
+            _rows = []
             for _pv in [p for p in orden_provs if p in set(_bd["prov"])]:
                 _sub = _bd[_bd["prov"] == _pv]
-                with st.expander(
-                        f"{_compras_truncar(_pv, 44)}   ·   "
-                        f"S/ {_sub['valor'].sum():,.0f}   ·   "
-                        f"{_sub['docu'].nunique()} doc."):
-                    _docs = _sub[["docu", "fecha", "prod", "cant", "valor"]].copy()
-                    _docs["fecha"] = (pd.to_datetime(_docs["fecha"], errors="coerce")
-                                      .dt.strftime("%d/%m/%Y"))
-                    _docs = (_docs.sort_values("valor", ascending=False)
-                             .rename(columns={"docu": "Num Documento", "fecha": "Fecha",
-                                              "prod": "Producto", "cant": "Cantidad",
-                                              "valor": "Valor"}))
-                    st.dataframe(
-                        _docs.style.format({"Valor": "S/ {:,.0f}",
-                                            "Cantidad": "{:,.0f}"}),
-                        use_container_width=True, hide_index=True)
+                _docs = (_sub.groupby("docu", as_index=False)["valor"].sum()
+                         .sort_values("valor", ascending=False))
+                _docs_list = [{"Num Documento": str(r.docu), "Valor": float(r.valor)}
+                              for r in _docs.itertuples()]
+                _rows.append({"Proveedor": str(_pv),
+                              "Valor": float(_sub["valor"].sum()),
+                              "documentos": _docs_list})
+            _df_master = pd.DataFrame(_rows)
+
+            _fmt_soles = JsCode(
+                "function(p){ if(p.value==null) return ''; "
+                "return 'S/ ' + Math.round(p.value).toLocaleString('es-PE'); }")
+            _grid_md = {
+                "columnDefs": [
+                    {"field": "Proveedor", "flex": 2,
+                     "cellRenderer": "agGroupCellRenderer"},
+                    {"field": "Valor", "flex": 1, "type": "numericColumn",
+                     "valueFormatter": _fmt_soles},
+                ],
+                "defaultColDef": {"resizable": True, "sortable": True},
+                "masterDetail": True,
+                "detailRowAutoHeight": True,
+                "detailCellRendererParams": {
+                    "detailGridOptions": {
+                        "columnDefs": [
+                            {"field": "Num Documento", "flex": 2},
+                            {"field": "Valor", "flex": 1, "type": "numericColumn",
+                             "valueFormatter": _fmt_soles},
+                        ],
+                        "defaultColDef": {"resizable": True, "sortable": True},
+                    },
+                    "getDetailRowData": JsCode(
+                        "function(params){ params.successCallback("
+                        "params.data.documentos); }"),
+                },
+                "rowHeight": 32,
+                "headerHeight": 34,
+            }
+            st.caption("📄 Clic en la flecha ▸ de un proveedor para ver sus documentos")
+            AgGrid(
+                _df_master,
+                gridOptions=_grid_md,
+                allow_unsafe_jscode=True,
+                theme="streamlit",
+                height=min(520, 130 + 34 * len(_df_master)),
+                enable_enterprise_modules=True,
+                key="cp_prov_docs_md",
+            )
 
     # ── Paneles A y B ─────────────────────────────────────────────────────
     def _um_de(grp):
