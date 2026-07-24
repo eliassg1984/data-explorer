@@ -2795,13 +2795,11 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                 "Cantidad por producto",
                 "Semanal", "Vs año anterior", "Personalizado"]
 
-    # Contenedor con key común (graf_tipo_chips) para que el CSS suba estos
-    # chips a la MISMA fila que las pestañas Gráficos/Tabla (banda del canvas).
-    with st.container(key="graf_tipo_chips"):
-        graf = st.pills(
-            "Gráfico", opciones, default=opciones[0],
-            key="compras_graf_tipo", label_visibility="collapsed",
-        ) or opciones[0]
+    # El tipo de gráfico ahora se elige en el submenú lateral (app.py); aquí
+    # solo se LEE de session_state. Fuente única de verdad: _render_nav_tipos.
+    graf = st.session_state.get("compras_graf_tipo") or opciones[0]
+    if graf not in opciones:
+        graf = opciones[0]
 
     # Constructor: ancho completo, sin panel de mini-tops.
     if graf == "Personalizado":

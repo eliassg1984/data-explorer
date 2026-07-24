@@ -806,6 +806,61 @@ def _calcular_ajuste_ambito_auto():
 
 
 # ===========================================================================
+# SUBMENÚ LATERAL DE TIPO DE GRÁFICO (agrupado + colapsable)
+# ===========================================================================
+# Los tipos de gráfico se agrupan por categoría y se muestran como una columna
+# vertical a la izquierda del contenido. El estado del tipo activo vive en la
+# misma key que usaba el st.pills (p. ej. "compras_graf_tipo"), así graficos.py
+# la lee sin cambios de contrato. Se usa st.button nativo (type="primary" para
+# el activo) para no depender de CSS acoplado a internals de Streamlit.
+COMPRAS_NAV_GRUPOS = [
+    ("Resumen",     ["Familia", "Proveedor"]),
+    ("Evolución",   ["Evolución proveedor", "Semanal"]),
+    ("Precios",     ["Precio top 10", "Precio por compra", "Precio vs año pasado"]),
+    ("Cantidades",  ["Cantidad vs año pasado", "Cantidad por producto"]),
+    ("Comparativo", ["Vs año anterior"]),
+    ("Otros",       ["Personalizado"]),
+]
+
+
+def _render_nav_tipos(state_key, grupos, default):
+    """Dibuja el submenú vertical agrupado y devuelve el tipo activo.
+    Escribe la selección en st.session_state[state_key]."""
+    sel = st.session_state.get(state_key) or default
+    for titulo, items in grupos:
+        st.caption(titulo)
+        for it in items:
+            if st.button(it, key=f"navtipo_{state_key}_{it}",
+                         use_container_width=True,
+                         type=("primary" if it == sel else "secondary")):
+                st.session_state[state_key] = it
+                st.rerun()
+    return sel
+
+
+def _con_nav_lateral(state_key, grupos, default, render_contenido):
+    """Envuelve `render_contenido()` con el submenú lateral colapsable.
+    `render_contenido` es una función sin argumentos que dibuja el gráfico."""
+    abierto = st.session_state.get("nav_lat_abierto", True)
+    if abierto:
+        cnav, ccont = st.columns([1, 4], vertical_alignment="top")
+        with cnav:
+            if st.button("‹ Ocultar menú", key="nav_lat_toggle_close",
+                         use_container_width=True):
+                st.session_state["nav_lat_abierto"] = False
+                st.rerun()
+            _render_nav_tipos(state_key, grupos, default)
+        with ccont:
+            render_contenido()
+    else:
+        _actual = st.session_state.get(state_key) or default
+        if st.button(f"☰  {_actual}", key="nav_lat_toggle_open"):
+            st.session_state["nav_lat_abierto"] = True
+            st.rerun()
+        render_contenido()
+
+
+# ===========================================================================
 # FRAGMENT GENÉRICO — aisla el contenido principal de cada reporte
 # ===========================================================================
 @st.fragment
@@ -818,7 +873,10 @@ def _render_contenido():
         if vista == "Tabla":
             renderizar_aggrid_compras(_filtros_chips_franja(df_f), font_px)
         else:
-            renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
+            _con_nav_lateral(
+                "compras_graf_tipo", COMPRAS_NAV_GRUPOS, "Familia",
+                lambda: renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df),
+            )
 
     # ── INVENTARIO VALORIZADO ────────────────────────────────────────────────
     elif reporte == "Inventario Valorizado":
