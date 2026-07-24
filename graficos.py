@@ -1585,9 +1585,19 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     _otros_mask_temp = ~d[col_prov].astype(str).isin(_todos_provs_temp[:20])
     if _otros_mask_temp.any():
         _todos_provs_temp = _todos_provs_temp + ["Otros"]
-    _prev_prov_sel = st.session_state.get("compras_prov_multisel") or []
-    _valid_prev_prov = [p for p in _prev_prov_sel if p in _todos_provs_temp]
-    _default_prov_sel = _valid_prev_prov if _valid_prev_prov else _todos_provs_temp[:5]
+    _real_provs = [p for p in _todos_provs_temp if p != "Otros"]  # sin "Otros"
+    _default_prov_sel = _real_provs[:5]
+    # Inicializar el estado de cada proveedor (checkbox) la primera vez que
+    # aparece. La clave usa el nombre (estable aunque cambie el orden/filtro).
+    for _p in _todos_provs_temp:
+        _k = "cp_prov_cb::" + str(_p)
+        if _k not in st.session_state:
+            st.session_state[_k] = (_p in _default_prov_sel)
+
+    def _cp_set_topn(_n):
+        """Marca solo los primeros _n proveedores (por valor). _n=0 → limpiar."""
+        for _pp in _todos_provs_temp:
+            st.session_state["cp_prov_cb::" + str(_pp)] = (_pp in _real_provs[:_n])
 
     c1, c2, c3 = st.columns([1.1, 1.1, 2.5])
     with c1:
@@ -1597,15 +1607,28 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         topn = st.pills("Top productos", [5, 10, 20], default=10,
                         key="compras_prov_topn") or 10
     with c3:
-        prov_multisel = st.multiselect(
-            "Seleccionar proveedores",
-            options=_todos_provs_temp,
-            default=_default_prov_sel,
-            max_selections=10,
-            key="compras_prov_multisel",
-            placeholder="Buscar proveedor por nombre...",
-            label_visibility="collapsed",
-        ) or _todos_provs_temp[:5]
+        _sel_now = [p for p in _todos_provs_temp
+                    if st.session_state.get("cp_prov_cb::" + str(p))]
+        st.caption("Proveedores")
+        with st.popover(f"Proveedores ({len(_sel_now)})",
+                        use_container_width=True):
+            # Atajos: marcan los primeros N proveedores por valor (desc.)
+            _bt = st.columns(4)
+            _bt[0].button("Top 3", key="cp_topn3", use_container_width=True,
+                          on_click=_cp_set_topn, args=(3,))
+            _bt[1].button("Top 5", key="cp_topn5", use_container_width=True,
+                          on_click=_cp_set_topn, args=(5,))
+            _bt[2].button("Top 10", key="cp_topn10", use_container_width=True,
+                          on_click=_cp_set_topn, args=(10,))
+            _bt[3].button("Limpiar", key="cp_topnclr", use_container_width=True,
+                          on_click=_cp_set_topn, args=(0,))
+            # Lista completa en orden descendente por valor. El estado vive en
+            # las claves cp_prov_cb::<nombre>, por eso no se pasa value=.
+            for _p in _todos_provs_temp:
+                st.checkbox(_p, key="cp_prov_cb::" + str(_p))
+        prov_multisel = [p for p in _todos_provs_temp
+                         if st.session_state.get("cp_prov_cb::" + str(p))] \
+                        or _real_provs[:5]
 
     topn_prov = len(prov_multisel)
 
