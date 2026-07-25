@@ -157,19 +157,24 @@ def main():
     df, df_min = _df_completo(), _df_minimo()
     fallos = 0
 
+    # Tras el refactor Fase 2, los helpers privados de Ajuste viven en
+    # graficos.ajuste (se prueban desde su módulo real). renderizar_graficos_
+    # ajuste sigue accesible como graficos.X porque __init__ lo re-exporta.
+    from graficos import ajuste as _aj
+
     pruebas = [
-        ("evolucion (por familia)", graficos._graf_evolucion_ajuste,
+        ("evolucion (por familia)", _aj._graf_evolucion_ajuste,
             (df, "FECHA APERTURA INVENTARIO", "FAMILIA",
              "AJUSTE VALORIZADO", "VALORIZADO TOTAL")),
-        ("evolucion (rama else, sin familia)", graficos._graf_evolucion_ajuste,
+        ("evolucion (rama else, sin familia)", _aj._graf_evolucion_ajuste,
             (df_min, "FECHA APERTURA INVENTARIO", None, "AJUSTE VALORIZADO", None)),
-        ("waterfall (Cascada)", graficos._graf_waterfall_ajuste,
+        ("waterfall (Cascada)", _aj._graf_waterfall_ajuste,
             (df, "FAMILIA", "AREA", "AJUSTE VALORIZADO")),
-        ("heatmap (Mapa de calor)", graficos._graf_heatmap_ajuste,
+        ("heatmap (Mapa de calor)", _aj._graf_heatmap_ajuste,
             (df, "FAMILIA", "AREA", "AJUSTE VALORIZADO")),
-        ("distribucion (box por familia)", graficos._graf_distribucion_ajuste,
+        ("distribucion (box por familia)", _aj._graf_distribucion_ajuste,
             (df, "FAMILIA", "AREA", "AJUSTE VALORIZADO", "NOMBRE PRODUCTO")),
-        ("distribucion (rama else: histograma)", graficos._graf_distribucion_ajuste,
+        ("distribucion (rama else: histograma)", _aj._graf_distribucion_ajuste,
             (df_min, None, None, "AJUSTE VALORIZADO", None)),
     ]
 
