@@ -1,12 +1,13 @@
-"""asistente.py — Asistente flotante de IA (Groq / Llama 3.1) con búsqueda web.
+"""asistente.py — Asistente flotante de IA (Groq / GPT-OSS 120B) con búsqueda web.
 
 Diseño:
 - st.popover como burbuja flotante en la esquina inferior derecha
   (fijado con CSS position:fixed en el container ai_float_wrap).
 - @st.fragment: al enviar un mensaje, solo re-ejecuta el asistente
   — la tabla, gráficos y filtros del reporte NO se recargan.
-- Cliente Groq (Llama 3.1 8B) para sintetizar respuestas. La key vive en
-  st.secrets['GROQ_API_KEY'] y NUNCA sale al navegador.
+- Cliente Groq (GPT-OSS 120B) para sintetizar respuestas. La key vive en
+  st.secrets['GROQ_API_KEY'] y NUNCA sale al navegador. Nota: el modelo
+  anterior (llama-3.1-8b-instant) fue deprecado por Groq el 2026-06-17.
 - Búsqueda web vía Tavily (opcional). Requiere st.secrets['TAVILY_API_KEY'].
   Se activa: (a) automáticamente si detectamos palabras clave de "precio /
   actual / esta semana / mercado / cotización / ..."; o (b) manualmente con
@@ -23,7 +24,7 @@ import streamlit as st
 
 from tema import ACENTO, ACENTO_FUERTE, BLANCO
 
-_MODELO = "llama-3.1-8b-instant"
+_MODELO = "openai/gpt-oss-120b"   # reemplaza a llama-3.1-8b-instant (deprecado 2026-06-17)
 _MAX_HISTORIAL = 20           # pares user/assistant a conservar
 _MAX_TOKENS_RESP = 800
 
