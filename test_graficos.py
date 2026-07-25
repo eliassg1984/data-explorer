@@ -81,10 +81,15 @@ def _pruebas_puras():
             print(f"FALLA puro · {nombre}: got={got!r} exp={exp!r}")
 
     g = graficos
+    # Tras el refactor Fase 2, las funciones puras de infraestructura viven en
+    # graficos/base.py; se prueban desde ahí (su módulo real). Las que aún
+    # viven en graficos/__init__.py se acceden como graficos.X hasta que se
+    # extraigan a su dashboard.
+    b = graficos.base
 
     # _slug — id seguro para keys/CSS
-    check("_slug símbolos", g._slug("Cascada · Precio"), "cascada_precio")
-    check("_slug espacios extremos", g._slug("  Hola Mundo  "), "hola_mundo")
+    check("_slug símbolos", b._slug("Cascada · Precio"), "cascada_precio")
+    check("_slug espacios extremos", b._slug("  Hola Mundo  "), "hola_mundo")
 
     # _compras_truncar — recorte con elipsis
     check("_truncar corto intacto", g._compras_truncar("corto"), "corto")
@@ -92,21 +97,21 @@ def _pruebas_puras():
     check("_truncar n custom", g._compras_truncar("hola", 3), "ho…")
 
     # _hover_fmt — (prefijo, formato) según el nombre de la columna Y
-    check("_hover valorizado", g._hover_fmt("AJUSTE VALORIZADO"), ("S/ ", ",.2f"))
-    check("_hover stock", g._hover_fmt("Stock al Dia"), ("", ",.0f"))
-    check("_hover genérico", g._hover_fmt("Descripción"), ("", ",.2f"))
-    check("_hover None", g._hover_fmt(None), ("", ",.2f"))
+    check("_hover valorizado", b._hover_fmt("AJUSTE VALORIZADO"), ("S/ ", ",.2f"))
+    check("_hover stock", b._hover_fmt("Stock al Dia"), ("", ",.0f"))
+    check("_hover genérico", b._hover_fmt("Descripción"), ("", ",.2f"))
+    check("_hover None", b._hover_fmt(None), ("", ",.2f"))
 
     # _wrap_cat — parte etiquetas largas con <br>
-    check("_wrap corto intacto", g._wrap_cat(["corto"], 14), ["corto"])
-    check("_wrap largo parte", g._wrap_cat(["Entraña fina importada"], 14),
+    check("_wrap corto intacto", b._wrap_cat(["corto"], 14), ["corto"])
+    check("_wrap largo parte", b._wrap_cat(["Entraña fina importada"], 14),
           ["Entraña fina<br>importada"])
 
     # _resolver — None / str / lista de candidatos → nombre real o None
     df = _df_completo()
-    check("_resolver None", g._resolver(df, None), None)
-    check("_resolver match (case-insensitive)", g._resolver(df, ["Familia"]), "FAMILIA")
-    check("_resolver no existe", g._resolver(df, "columna_inexistente"), None)
+    check("_resolver None", b._resolver(df, None), None)
+    check("_resolver match (case-insensitive)", b._resolver(df, ["Familia"]), "FAMILIA")
+    check("_resolver no existe", b._resolver(df, "columna_inexistente"), None)
 
     # _first_point — extrae el primer punto de un evento de selección
     check("_first_point con punto",
@@ -129,20 +134,20 @@ def _pruebas_puras():
 
     # _preparar_datos — agrupa+suma por categoría; fecha → columna _mes
     dcat = pd.DataFrame({"FAMILIA": ["A", "A", "B"], "VAL": [1.0, 2.0, 4.0]})
-    out, xcol = g._preparar_datos(dcat, "FAMILIA", "VAL", None, "bar")
+    out, xcol = b._preparar_datos(dcat, "FAMILIA", "VAL", None, "bar")
     check("_preparar_datos x", xcol, "FAMILIA")
     check("_preparar_datos suma grupo A",
           float(out.loc[out["FAMILIA"] == "A", "VAL"].iloc[0]), 3.0)
     dfe = pd.DataFrame({"F": pd.to_datetime(["2024-01-01", "2024-01-15"]),
                         "VAL": [1.0, 2.0]})
-    _, xcol2 = g._preparar_datos(dfe, "F", "VAL", None, "bar")
+    _, xcol2 = b._preparar_datos(dfe, "F", "VAL", None, "bar")
     check("_preparar_datos fecha → _mes", xcol2, "_mes")
 
     # _layout — oculta etiquetas del eje Y, endereza X, respeta overrides
-    lay = g._layout()
+    lay = b._layout()
     check("_layout oculta labels Y", lay["yaxis"]["showticklabels"], False)
     check("_layout endereza X", lay["xaxis"]["tickangle"], 0)
-    lay2 = g._layout(yaxis=dict(showticklabels=True))
+    lay2 = b._layout(yaxis=dict(showticklabels=True))
     check("_layout respeta override Y", lay2["yaxis"]["showticklabels"], True)
 
     return fallos
