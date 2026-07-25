@@ -405,8 +405,12 @@ if True:
             [3, 1.15], vertical_alignment="center",
         )
         with col_titulo:
-            # Título del reporte oculto por pedido — la franja queda sin nombre.
-            pass
+            # Título oculto por pedido: en su lugar van las pestañas
+            # Gráficos/Tabla (misma key vista_seg_<reporte> → mismo estado).
+            # Compras dibuja su propio G/T dentro de la fila de pestañas
+            # (graficos.py); Requerimientos no tiene esas pestañas.
+            if reporte not in ("Requerimientos", "Compras"):
+                render_vista_pills(reporte, default=_vista_default)
         with col_fecha_top:
             if _franja_con_fecha:
                 try:
@@ -858,24 +862,10 @@ def _render_contenido():
     perf.fragment_end("_render_contenido")                                  # ⚡ PERF
 
 
-# ── Pestañas Gráficos/Tabla — banda pegada al borde superior del canvas ──────
-# Se renderizan aquí (fuera de la franja y fuera del fragment) para que queden
-# encima del contenido, como pestañas del canvas. Misma key → mismo estado.
-# Compras dibuja su propio G/T dentro de la fila de pestañas (graficos.py),
-# por eso se excluye aquí (evita key duplicada vista_seg_Compras).
-if reporte not in ("Requerimientos", "Compras"):
-    with st.container(key="ajuste_tabs_top"):
-        st.pills(
-            "Vista",
-            options=["Gráficos", "Tabla"],
-            format_func=lambda vista: (
-                ":material/table_rows: Tabla"
-                if vista == "Tabla" else ":material/monitoring: Gráficos"
-            ),
-            default=_vista_default,
-            label_visibility="collapsed",
-            key=f"vista_seg_{reporte}",
-        )
+# ── Pestañas Gráficos/Tabla ──────────────────────────────────────────────────
+# Ahora viven DENTRO de la franja superior (col_titulo, más arriba), en el
+# hueco que dejó el título. Requerimientos no tiene pestañas; Compras dibuja
+# su propio G/T dentro de la fila de pestañas de tipo (graficos.py).
 
 # ── Llamada al fragment ──────────────────────────────────────────────────────
 _render_contenido()
