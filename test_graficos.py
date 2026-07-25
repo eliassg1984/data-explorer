@@ -26,6 +26,11 @@ import sys
 
 import pandas as pd
 
+# La consola de Windows (cp1252) no puede imprimir emojis (✅/❌); forzar UTF-8
+# para que el script corra igual en Windows y en Streamlit Cloud (Linux).
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 # Silenciar el ruido de Streamlit en modo "bare" (fuera de la app)
 logging.getLogger("streamlit").setLevel(logging.ERROR)
 

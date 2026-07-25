@@ -14,8 +14,8 @@ from data import (
 )
 from estilos import TAM_FUENTE, inject_css
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_footer_actualizacion, inject_calendario_es
-from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras, renderizar_aggrid_compras
-from graficos import renderizar_graficos, renderizar_graficos_reporte, render_vista_pills
+from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_aggrid_compras
+from graficos import renderizar_graficos_reporte, render_vista_pills
 from asistente import inject_asistente
 from navegacion import inject_navegacion
 from perf import perf                                                       # ⚡ PERF
@@ -584,8 +584,6 @@ def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, fon
             .str.replace("<NA>", "", regex=False)
         )
 
-    cols_fecha_piv = [c for c in df_piv.columns
-                      if pd.api.types.is_datetime64_any_dtype(df_piv[c])]
 
     # (El filtro de fecha propio fue retirado: la pill de la franja ya
     #  filtra df_data por rango antes de llegar aquí.)

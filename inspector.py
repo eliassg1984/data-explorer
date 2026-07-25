@@ -17,7 +17,7 @@ Funciones:
 import pandas as pd
 import streamlit as st
 
-from utils import _norm, buscar_columna, buscar_columna_fecha
+from utils import _norm
 from data import REPORTES, cargar
 
 

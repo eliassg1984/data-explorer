@@ -1626,7 +1626,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     prov_multisel = [p for p in _todos_provs_temp
                      if st.session_state.get("cp_prov_cb::" + str(p))] \
                     or _real_provs[:5]
-    topn_prov = len(prov_multisel)
 
     # ── Preparar base de datos ─────────────────────────────────────────────
     base = pd.DataFrame({
@@ -2795,7 +2794,6 @@ def _compras_evolucion_proveedores(d, col_prov, col_prod, col_cant,
                 })
 
             # Mostrar con barras de progreso usando plotly horizontal
-            _max_val = max(r["_valor"] for r in _filas_otros) or 1
             fig_otros = go.Figure()
             for i, row in enumerate(reversed(_filas_otros)):
                 fig_otros.add_bar(
@@ -3717,12 +3715,6 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
 
 _MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
              "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-
-
-def _slug_col(s):
-    """id de columna AgGrid seguro: solo letras/dígitos/_ (evita espacios/%
-    que rompen accesos por nombre en JS)."""
-    return re.sub(r"\W+", "_", str(s)).strip("_")
 
 
 @st.fragment

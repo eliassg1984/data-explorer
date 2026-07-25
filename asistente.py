@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from tema import ACENTO, ACENTO_FUERTE, BLANCO, GRIS_BORDE
+from tema import ACENTO, ACENTO_FUERTE, BLANCO
 
 _MODELO = "llama-3.1-8b-instant"
 _MAX_HISTORIAL = 20           # pares user/assistant a conservar

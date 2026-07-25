@@ -15,14 +15,13 @@ overlay de errores y del inspector) se mantienen.
 """
 
 import json
-import streamlit as st
 import streamlit.components.v1 as components
 
 from tema import (
-    ACENTO, ACENTO_FUERTE, ACENTO_TEXTO,
+    ACENTO, ACENTO_FUERTE,
     BLANCO, EXIT_HOVER,
     GRIS_BORDE, GRIS_FONDO, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
-    ICON_MUTED, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FONDO,
+    ICON_MUTED, LAVANDA_CABECERA_GRUPO, LAVANDA_FONDO,
     LAVANDA_FOCO, SCROLL_THUMB, TEXTO_PRINCIPAL,
 )
 
