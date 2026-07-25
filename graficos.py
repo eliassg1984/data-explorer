@@ -2908,20 +2908,14 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                 "Cantidad por producto",
                 "Semanal", "Vs año anterior", "Personalizado"]
 
-    # Fila única: pestañas de tipo (con scroll horizontal) + Gráficos/Tabla a
-    # la derecha, en columnas REALES (alineación determinística, sin hacks de
-    # margin negativo). En Compras, G/T se dibuja aquí (app.py lo omite).
-    # El contenedor compras_tabs_row permite cerrar por CSS el gap con la card.
+    # Pestañas de tipo de gráfico (Familia, Proveedor, ...). G/T se dibuja
+    # en la franja superior (app.py, col_titulo) igual que el resto de reportes.
     with st.container(key="compras_tabs_row"):
-        _c_tabs, _c_vista = st.columns([4, 1.15], vertical_alignment="center")
-        with _c_tabs:
-            with st.container(key="graf_tipo_chips"):
-                graf = st.pills(
-                    "Gráfico", opciones, default=opciones[0],
-                    key="compras_graf_tipo", label_visibility="collapsed",
-                ) or opciones[0]
-        with _c_vista:
-            render_vista_pills("Compras", "Gráficos")
+        with st.container(key="graf_tipo_chips"):
+            graf = st.pills(
+                "Gráfico", opciones, default=opciones[0],
+                key="compras_graf_tipo", label_visibility="collapsed",
+            ) or opciones[0]
 
     # Constructor: ancho completo, sin panel de mini-tops.
     if graf == "Personalizado":

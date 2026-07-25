@@ -407,9 +407,8 @@ if True:
         with col_titulo:
             # Título oculto por pedido: en su lugar van las pestañas
             # Gráficos/Tabla (misma key vista_seg_<reporte> → mismo estado).
-            # Compras dibuja su propio G/T dentro de la fila de pestañas
-            # (graficos.py); Requerimientos no tiene esas pestañas.
-            if reporte not in ("Requerimientos", "Compras"):
+            # Requerimientos no tiene esas pestañas.
+            if reporte != "Requerimientos":
                 render_vista_pills(reporte, default=_vista_default)
         with col_fecha_top:
             if _franja_con_fecha:
@@ -816,11 +815,9 @@ def _render_contenido():
 
     # ── COMPRAS ─────────────────────────────────────────────────────────────
     if reporte == "Compras":
+        # G/T vive en la franja superior (col_titulo). Aquí solo se lee.
         vista = st.session_state.get(f"vista_seg_{reporte}", _vista_default) or _vista_default
         if vista == "Tabla":
-            # G/T se dibuja aquí (en Gráficos lo dibuja graficos.py, en la fila
-            # de pestañas). Solo uno corre por rerun → sin key duplicada.
-            render_vista_pills("Compras", _vista_default)
             renderizar_aggrid_compras(_filtros_chips_franja(df_f), font_px)
         else:
             renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
