@@ -16,6 +16,7 @@ from estilos import TAM_FUENTE, inject_css
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_footer_actualizacion, inject_calendario_es
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_tabla_compras, renderizar_aggrid_compras
 from graficos import renderizar_graficos, renderizar_graficos_reporte, render_vista_pills
+from asistente import inject_asistente
 from navegacion import inject_navegacion
 from perf import perf                                                       # ⚡ PERF
 
@@ -866,5 +867,12 @@ def _render_contenido():
 
 # ── Llamada al fragment ──────────────────────────────────────────────────────
 _render_contenido()
+
+# ── Asistente flotante IA (burbuja abajo-derecha) ────────────────────────────
+try:
+    inject_asistente(reporte_activo=reporte, df_contexto=df_f)
+except Exception:
+    # Si algo falla en el asistente, la app principal sigue funcionando.
+    pass
 
 perf.end()                                                                  # ⚡ PERF
