@@ -405,10 +405,8 @@ if True:
             [3, 1.15], vertical_alignment="center",
         )
         with col_titulo:
-            st.markdown(
-                f'<h1 class="titulo-ajuste-reporte">{reporte}</h1>',
-                unsafe_allow_html=True,
-            )
+            # Título del reporte oculto por pedido — la franja queda sin nombre.
+            pass
         with col_fecha_top:
             if _franja_con_fecha:
                 try:
