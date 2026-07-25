@@ -1875,110 +1875,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             config={"displayModeBar": False, "edits": {"legendPosition": True}},
         )
 
-    # ── Tabla pivotable de documentos (debajo del gráfico) ────────────────
-    # Cada fila es una línea de detalle (documento × producto). El usuario
-    # puede arrastrar campos a Filas/Columnas/Valores (panel derecho) para
-    # pivotar. Por defecto: filas = Proveedor→Fecha→Documento→Producto,
-    # columnas = Período (Semana/Mes/Año), valor = suma. Gran total al pie.
-    import json  # noqa: E402
-    from st_aggrid import AgGrid, JsCode  # noqa: E402
-
-    _bd = base[base["prov"].isin(top_provs)].copy()
-    if not _bd.empty:
-        _fe = pd.to_datetime(_bd["fecha"], errors="coerce")
-        _pv_docs = pd.DataFrame({
-            "Proveedor": _bd["prov"].astype(str).values,
-            # Fecha en ISO para orden correcto; se muestra dd/mm/yyyy en el front
-            "Fecha": _fe.dt.strftime("%Y-%m-%d").fillna("").values,
-            "Documento": (_bd["docu"].astype(str).values
-                          if col_docu else _bd.index.astype(str).values),
-            "Producto": _bd["prod"].astype(str).values,
-            "Periodo": _bd["per"].astype(str).values,
-            "Valor": _bd["valor"].astype(float).values,
-        })
-
-        st.markdown(f"**Detalle de documentos por proveedor · vista {gran}**")
-        st.caption("Arrastra campos a Filas / Columnas / Valores en el panel "
-                   "derecho para pivotar. ▸ expande cada nivel.")
-
-        _fmt_soles = JsCode(
-            "function(p){ if(p.value==null) return ''; "
-            "return 'S/ ' + Math.round(p.value).toLocaleString('es-PE'); }")
-        _fmt_fecha = JsCode(
-            "function(p){ if(!p.value) return ''; "
-            "var s=String(p.value).split('-'); "
-            "return s.length===3 ? s[2]+'/'+s[1]+'/'+s[0] : p.value; }")
-        # Orden cronológico de las columnas de período en el pivote
-        _pivot_cmp = JsCode(
-            "function(a,b){ var o=" + json.dumps(periodos) + "; "
-            "return o.indexOf(a)-o.indexOf(b); }")
-
-        _col_defs_pv = [
-            {"field": "Proveedor", "rowGroup": True, "rowGroupIndex": 0,
-             "hide": True},
-            {"field": "Fecha", "rowGroup": True, "rowGroupIndex": 1,
-             "hide": True, "valueFormatter": _fmt_fecha},
-            {"field": "Documento", "rowGroup": True, "rowGroupIndex": 2,
-             "hide": True},
-            {"field": "Producto", "rowGroup": True, "rowGroupIndex": 3,
-             "hide": True},
-            {"field": "Periodo", "headerName": "Período", "pivot": True,
-             "hide": True, "pivotComparator": _pivot_cmp},
-            {"field": "Valor", "type": "numericColumn", "aggFunc": "sum",
-             "valueFormatter": _fmt_soles, "minWidth": 110},
-        ]
-
-        _grid_pv = {
-            "columnDefs": _col_defs_pv,
-            "defaultColDef": {
-                "resizable": True, "sortable": True, "filter": True,
-                "enableRowGroup": True, "enablePivot": True,
-                "enableValue": True, "minWidth": 110,
-            },
-            "pivotMode": True,
-            "groupDefaultExpanded": 0,
-            "autoGroupColumnDef": {
-                "headerName": "Proveedor / Fecha / Documento / Producto",
-                "minWidth": 300, "pinned": "left",
-                "cellRendererParams": {"suppressCount": True},
-            },
-            "grandTotalRow": "bottom",
-            "getRowStyle": JsCode(
-                "function(p){ if(p.node.footer && p.node.level===-1){ "
-                "return {'fontWeight':'600','background':'#EEEDFE',"
-                "'color':'#4938b8'}; } }"),
-            "sideBar": {
-                "toolPanels": [{
-                    "id": "columns",
-                    "labelDefault": "Columnas",
-                    "labelKey": "columns",
-                    "iconKey": "columns",
-                    "toolPanel": "agColumnsToolPanel",
-                }],
-                "position": "right",
-            },
-            "rowHeight": 30,
-            "headerHeight": 38,
-        }
-        AgGrid(
-            _pv_docs,
-            gridOptions=_grid_pv,
-            allow_unsafe_jscode=True,
-            theme="streamlit",
-            height=560,
-            enable_enterprise_modules=True,
-            fit_columns_on_grid_load=True,
-            key=f"cp_prov_pivot_docs_{gran}",
-        )
-
-        st.download_button(
-            "⬇ Descargar CSV",
-            data=_pv_docs.to_csv(index=False).encode("utf-8-sig"),
-            file_name=f"compras_documentos_{gran.lower()}.csv",
-            mime="text/csv",
-            key="cp_prov_resumen_dl",
-        )
-
     # ── Paneles A y B ─────────────────────────────────────────────────────
     def _um_de(grp):
         if not col_um:
@@ -2096,6 +1992,110 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                              height=min(430, 60 + 34 * len(tabla)))
                 st.caption("Último precio = precio unitario de la compra más "
                            "reciente. Verde = menor precio.")
+
+    # ── Tabla pivotable de documentos (debajo de los paneles A/B) ─────────
+    # Cada fila es una línea de detalle (documento × producto). El usuario
+    # puede arrastrar campos a Filas/Columnas/Valores (panel derecho) para
+    # pivotar. Por defecto: filas = Proveedor→Fecha→Documento→Producto,
+    # columnas = Período (Semana/Mes/Año), valor = suma. Gran total al pie.
+    import json  # noqa: E402
+    from st_aggrid import AgGrid, JsCode  # noqa: E402
+
+    _bd = base[base["prov"].isin(top_provs)].copy()
+    if not _bd.empty:
+        _fe = pd.to_datetime(_bd["fecha"], errors="coerce")
+        _pv_docs = pd.DataFrame({
+            "Proveedor": _bd["prov"].astype(str).values,
+            # Fecha en ISO para orden correcto; se muestra dd/mm/yyyy en el front
+            "Fecha": _fe.dt.strftime("%Y-%m-%d").fillna("").values,
+            "Documento": (_bd["docu"].astype(str).values
+                          if col_docu else _bd.index.astype(str).values),
+            "Producto": _bd["prod"].astype(str).values,
+            "Periodo": _bd["per"].astype(str).values,
+            "Valor": _bd["valor"].astype(float).values,
+        })
+
+        st.markdown(f"**Detalle de documentos por proveedor · vista {gran}**")
+        st.caption("Arrastra campos a Filas / Columnas / Valores en el panel "
+                   "derecho para pivotar. ▸ expande cada nivel.")
+
+        _fmt_soles = JsCode(
+            "function(p){ if(p.value==null) return ''; "
+            "return 'S/ ' + Math.round(p.value).toLocaleString('es-PE'); }")
+        _fmt_fecha = JsCode(
+            "function(p){ if(!p.value) return ''; "
+            "var s=String(p.value).split('-'); "
+            "return s.length===3 ? s[2]+'/'+s[1]+'/'+s[0] : p.value; }")
+        # Orden cronológico de las columnas de período en el pivote
+        _pivot_cmp = JsCode(
+            "function(a,b){ var o=" + json.dumps(periodos) + "; "
+            "return o.indexOf(a)-o.indexOf(b); }")
+
+        _col_defs_pv = [
+            {"field": "Proveedor", "rowGroup": True, "rowGroupIndex": 0,
+             "hide": True},
+            {"field": "Fecha", "rowGroup": True, "rowGroupIndex": 1,
+             "hide": True, "valueFormatter": _fmt_fecha},
+            {"field": "Documento", "rowGroup": True, "rowGroupIndex": 2,
+             "hide": True},
+            {"field": "Producto", "rowGroup": True, "rowGroupIndex": 3,
+             "hide": True},
+            {"field": "Periodo", "headerName": "Período", "pivot": True,
+             "hide": True, "pivotComparator": _pivot_cmp},
+            {"field": "Valor", "type": "numericColumn", "aggFunc": "sum",
+             "valueFormatter": _fmt_soles, "minWidth": 110},
+        ]
+
+        _grid_pv = {
+            "columnDefs": _col_defs_pv,
+            "defaultColDef": {
+                "resizable": True, "sortable": True, "filter": True,
+                "enableRowGroup": True, "enablePivot": True,
+                "enableValue": True, "minWidth": 110,
+            },
+            "pivotMode": True,
+            "groupDefaultExpanded": 0,
+            "autoGroupColumnDef": {
+                "headerName": "Proveedor / Fecha / Documento / Producto",
+                "minWidth": 300, "pinned": "left",
+                "cellRendererParams": {"suppressCount": True},
+            },
+            "grandTotalRow": "bottom",
+            "getRowStyle": JsCode(
+                "function(p){ if(p.node.footer && p.node.level===-1){ "
+                "return {'fontWeight':'600','background':'#EEEDFE',"
+                "'color':'#4938b8'}; } }"),
+            "sideBar": {
+                "toolPanels": [{
+                    "id": "columns",
+                    "labelDefault": "Columnas",
+                    "labelKey": "columns",
+                    "iconKey": "columns",
+                    "toolPanel": "agColumnsToolPanel",
+                }],
+                "position": "right",
+            },
+            "rowHeight": 30,
+            "headerHeight": 38,
+        }
+        AgGrid(
+            _pv_docs,
+            gridOptions=_grid_pv,
+            allow_unsafe_jscode=True,
+            theme="streamlit",
+            height=560,
+            enable_enterprise_modules=True,
+            fit_columns_on_grid_load=True,
+            key=f"cp_prov_pivot_docs_{gran}",
+        )
+
+        st.download_button(
+            "⬇ Descargar CSV",
+            data=_pv_docs.to_csv(index=False).encode("utf-8-sig"),
+            file_name=f"compras_documentos_{gran.lower()}.csv",
+            mime="text/csv",
+            key="cp_prov_resumen_dl",
+        )
 
 
 @st.fragment
