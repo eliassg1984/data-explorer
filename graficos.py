@@ -1802,11 +1802,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         /* Ocultar la barra de herramientas del propio gráfico (fullscreen) */
         .st-key-prov_chart_box > div > [data-testid="stElementToolbar"] { display: none; }
 
-        /* Top productos flotante en la esquina del Panel A (card prov_prods) */
+        /* Top productos flotante — isla sobre el área del gráfico del Panel A */
         .st-key-chartcard_prov_prods { position: relative; }
         .st-key-topn_float {
-            position: absolute; top: 8px; right: 12px; z-index: 20;
+            position: absolute; top: 14px; right: 16px; z-index: 20;
             width: auto !important;
+            box-shadow: 0 2px 8px rgba(16,16,20,0.12);
+            border-radius: 999px;
+            background: rgba(255,255,255,0.92);
+            backdrop-filter: blur(2px);
         }
         .st-key-topn_float [data-testid="stElementToolbar"] { display: none; }
 
@@ -1922,7 +1926,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     ))
                     _compras_layout(figa, alto=max(240, 34 * len(agg) + 80))
                     figa.update_xaxes(tickprefix="S/ ", tickformat=",.0f")
-                    figa.update_layout(margin=dict(l=10, r=140, t=44, b=10))
+                    figa.update_layout(margin=dict(l=10, r=140, t=12, b=10))
                     _aevt = st.plotly_chart(
                         figa, use_container_width=True,
                         key=f"compras_g_prov_prods_{prov_focus}_{prod_focus}",
