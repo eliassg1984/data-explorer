@@ -593,6 +593,16 @@ def get_css():
         align-items: center !important;
     }
 
+    /* Pestañas Gráficos/Tabla DENTRO de la franja (col_titulo): anular el
+       margin-top de 6px que las bajaba cuando vivían en su banda propia. */
+    .st-key-fila_ajuste_top [class*="st-key-vistatabs_"] [data-testid="stButtonGroup"] {
+        margin: 0 !important;
+    }
+    .st-key-fila_ajuste_top [class*="st-key-vistatabs_"] {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
     /* Pestañas Gráficos/Tabla — ya NO fijas en la franja: ahora fluyen justo
        encima del canvas (se renderizan en app.py antes de _render_contenido).
        Quedan pegadas al borde superior del primer contenedor del contenido. */
