@@ -1999,7 +1999,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 st.pills("Top productos", [5, 10, 20], default=10,
                          key="compras_prov_topn", label_visibility="collapsed")
             if prov_focus is None:
-                st.info("👆 Clic en una barra del gráfico para explorar.")
+                pass
             else:
                 sub = base[base["prov"] == prov_focus]
                 agg = (sub.groupby("prod")
@@ -2047,7 +2047,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                else f"Proveedores de · {_compras_truncar(prod_focus, 26)}")
         with _card("prov_prov_de_prod", _tb):
             if prod_focus is None:
-                st.info("👈 Clic en un producto del panel izquierdo.")
+                pass
             else:
                 sub2 = base[base["prod"] == prod_focus]
                 filas = []
