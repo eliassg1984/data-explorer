@@ -36,10 +36,11 @@ from graficos.base import _card, crear_grafico, renderizar_graficos_genericos
 # importen como `graficos.renderizar_graficos_X` (compat) y para el dispatcher.
 # ---------------------------------------------------------------------------
 
-from graficos.ajuste import renderizar_graficos_ajuste          # noqa: F401
-from graficos.compras import renderizar_graficos_compras        # noqa: F401
-from graficos.inventario import renderizar_graficos_inventario  # noqa: F401
-from graficos.ventas import renderizar_graficos_ventas          # noqa: F401
+from graficos.ajuste import renderizar_graficos_ajuste                # noqa: F401
+from graficos.compras import renderizar_graficos_compras              # noqa: F401
+from graficos.inventario import renderizar_graficos_inventario        # noqa: F401
+from graficos.recetaventa import renderizar_graficos_recetaventa      # noqa: F401
+from graficos.ventas import renderizar_graficos_ventas                # noqa: F401
 # legacy.renderizar_graficos NO se re-exporta: ya no se usa desde fuera.
 
 
@@ -73,6 +74,7 @@ _DASHBOARDS = {
     "Ajuste de Inventario": renderizar_graficos_ajuste,
     "Compras":               renderizar_graficos_compras,
     "Inventario Valorizado": renderizar_graficos_inventario,
+    "Receta Venta":          renderizar_graficos_recetaventa,
     "Ventas":                renderizar_graficos_ventas,
 }
 
