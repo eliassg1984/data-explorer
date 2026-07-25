@@ -80,21 +80,20 @@ def _pruebas_puras():
             fallos += 1
             print(f"FALLA puro · {nombre}: got={got!r} exp={exp!r}")
 
-    g = graficos
-    # Tras el refactor Fase 2, las funciones puras de infraestructura viven en
-    # graficos/base.py; se prueban desde ahí (su módulo real). Las que aún
-    # viven en graficos/__init__.py se acceden como graficos.X hasta que se
-    # extraigan a su dashboard.
+    # Tras el refactor Fase 2, las funciones puras viven en sus módulos reales
+    # (graficos/base.py y graficos/{ventas,compras,...}.py). Se prueban desde
+    # ahí. `graficos.X` sigue funcionando para lo que se re-exporta.
     b = graficos.base
+    from graficos import ventas as _v, compras as _c
 
     # _slug — id seguro para keys/CSS
     check("_slug símbolos", b._slug("Cascada · Precio"), "cascada_precio")
     check("_slug espacios extremos", b._slug("  Hola Mundo  "), "hola_mundo")
 
-    # _compras_truncar — recorte con elipsis
-    check("_truncar corto intacto", g._compras_truncar("corto"), "corto")
-    check("_truncar largo", g._compras_truncar("x" * 30), "x" * 25 + "…")
-    check("_truncar n custom", g._compras_truncar("hola", 3), "ho…")
+    # _compras_truncar — recorte con elipsis (vive en base.py tras el refactor)
+    check("_truncar corto intacto", b._compras_truncar("corto"), "corto")
+    check("_truncar largo", b._compras_truncar("x" * 30), "x" * 25 + "…")
+    check("_truncar n custom", b._compras_truncar("hola", 3), "ho…")
 
     # _hover_fmt — (prefijo, formato) según el nombre de la columna Y
     check("_hover valorizado", b._hover_fmt("AJUSTE VALORIZADO"), ("S/ ", ",.2f"))
@@ -113,24 +112,23 @@ def _pruebas_puras():
     check("_resolver match (case-insensitive)", b._resolver(df, ["Familia"]), "FAMILIA")
     check("_resolver no existe", b._resolver(df, "columna_inexistente"), None)
 
-    # _first_point — extrae el primer punto de un evento de selección
+    # _first_point / _periodo_serie viven en graficos.compras tras el refactor
     check("_first_point con punto",
-          g._first_point({"selection": {"points": [{"x": 1}]}}), {"x": 1})
+          _c._first_point({"selection": {"points": [{"x": 1}]}}), {"x": 1})
     check("_first_point sin puntos",
-          g._first_point({"selection": {"points": []}}), None)
-    check("_first_point None", g._first_point(None), None)
+          _c._first_point({"selection": {"points": []}}), None)
+    check("_first_point None", _c._first_point(None), None)
 
-    # _fc_heat_css — color amarillo→rojo por %FoodCost
-    check("_fc_heat mínimo (amarillo)", g._fc_heat_css(12),
+    # _fc_heat_css vive en graficos.ventas tras el refactor
+    check("_fc_heat mínimo (amarillo)", _v._fc_heat_css(12),
           "background-color: rgba(254,240,138,0.6); color:#3a2a10")
-    check("_fc_heat máximo (rojo)", g._fc_heat_css(42),
+    check("_fc_heat máximo (rojo)", _v._fc_heat_css(42),
           "background-color: rgba(220,38,38,0.6); color:#3a2a10")
-    check("_fc_heat NaN → vacío", g._fc_heat_css(float("nan")), "")
+    check("_fc_heat NaN → vacío", _v._fc_heat_css(float("nan")), "")
 
-    # _periodo_serie — etiquetas ordenables por granularidad
     fe = pd.Series(pd.to_datetime(["2024-01-15", "2024-12-31"]))
-    check("_periodo Mes", g._periodo_serie(fe, "Mes"), ["2024-01", "2024-12"])
-    check("_periodo Año", g._periodo_serie(fe, "Año"), ["2024", "2024"])
+    check("_periodo Mes", _c._periodo_serie(fe, "Mes"), ["2024-01", "2024-12"])
+    check("_periodo Año", _c._periodo_serie(fe, "Año"), ["2024", "2024"])
 
     # _preparar_datos — agrupa+suma por categoría; fecha → columna _mes
     dcat = pd.DataFrame({"FAMILIA": ["A", "A", "B"], "VAL": [1.0, 2.0, 4.0]})
