@@ -1839,7 +1839,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # Key ESTABLE (solo depende de la granularidad): evita que Streamlit
     # remonte el componente Plotly en cada clic. El clic se procesa arriba,
     # antes de construir el figure (sin doble rerun = sin parpadeo).
-    with st.container(key="prov_chart_box"):
+    with st.container(border=True, key="prov_chart_box"):
         # Popover de proveedores — flota arriba-izquierda (misma banda que la
         # leyenda y el toggle). Los checkboxes escriben cp_prov_cb::<nombre>;
         # la selección se leyó arriba para armar el figure (patrón 1 rerun).
@@ -2019,9 +2019,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             "Valor": _bd["valor"].astype(float).values,
         })
 
-        st.markdown(f"**Detalle de documentos por proveedor · vista {gran}**")
-        st.caption("Arrastra campos a Filas / Columnas / Valores en el panel "
-                   "derecho para pivotar. ▸ expande cada nivel.")
+        _pv_box = st.container(border=True)
+        _pv_box.markdown(f"**Detalle de documentos por proveedor · vista {gran}**")
+        _pv_box.caption("Arrastra campos a Filas / Columnas / Valores en el panel "
+                        "derecho para pivotar. ▸ expande cada nivel.")
 
         _fmt_soles = JsCode(
             "function(p){ if(p.value==null) return ''; "
@@ -2082,24 +2083,25 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             "rowHeight": 30,
             "headerHeight": 38,
         }
-        AgGrid(
-            _pv_docs,
-            gridOptions=_grid_pv,
-            allow_unsafe_jscode=True,
-            theme="streamlit",
-            height=560,
-            enable_enterprise_modules=True,
-            fit_columns_on_grid_load=True,
-            key=f"cp_prov_pivot_docs_{gran}",
-        )
+        with _pv_box:
+            AgGrid(
+                _pv_docs,
+                gridOptions=_grid_pv,
+                allow_unsafe_jscode=True,
+                theme="streamlit",
+                height=560,
+                enable_enterprise_modules=True,
+                fit_columns_on_grid_load=True,
+                key=f"cp_prov_pivot_docs_{gran}",
+            )
 
-        st.download_button(
-            "⬇ Descargar CSV",
-            data=_pv_docs.to_csv(index=False).encode("utf-8-sig"),
-            file_name=f"compras_documentos_{gran.lower()}.csv",
-            mime="text/csv",
-            key="cp_prov_resumen_dl",
-        )
+            st.download_button(
+                "⬇ Descargar CSV",
+                data=_pv_docs.to_csv(index=False).encode("utf-8-sig"),
+                file_name=f"compras_documentos_{gran.lower()}.csv",
+                mime="text/csv",
+                key="cp_prov_resumen_dl",
+            )
 
 
 @st.fragment
@@ -2942,8 +2944,11 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
         return
 
     # Proveedor: ancho completo (drill Proveedor→productos→proveedores del prod.).
+    # Sin borde externo: cada uno de los 4 bloques internos (gráfico, panel A,
+    # panel B, tabla AgGrid) lleva su propio borde para separación visual
+    # limpia sin cajas anidadas.
     if graf == "Proveedor":
-        with st.container(border=True, key="ajuste_graf_card_izq_compras"):
+        with st.container(key="ajuste_graf_card_izq_compras"):
             _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                      col_punit, col_um, col_fecha, col_docu)
         return
