@@ -16,6 +16,7 @@ import streamlit as st
 from utils import buscar_columna, _norm
 from tema import (
     BLANCO, ESCALA_CONTINUA, GRIS_BORDE, SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
+    PALETA_SERIES,
 )
 
 
@@ -279,3 +280,35 @@ def renderizar_graficos_genericos(df_data, nombre_reporte):
             st.plotly_chart(fig, use_container_width=True)
     else:
         st.warning(f"No se pudo generar el gráfico: {err}")
+
+# ===========================================================================
+# ALIAS RETROCOMPATIBLES
+# ===========================================================================
+
+PALETA_CALLAI = PALETA_SERIES  # alias retrocompatible; fuente en tema.py
+
+
+# ===========================================================================
+# HELPERS DE LAYOUT COMPARTIDOS (nombre '_compras_*' es histórico; los usan
+# también ventas, inventario y constructor. Se mantienen los nombres para
+# no romper contratos existentes.)
+# ===========================================================================
+
+def _compras_truncar(s, n=26):
+    s = str(s)
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+
+def _compras_layout(fig, alto=430):
+    fig.update_layout(
+        height=alto,
+        margin=dict(l=10, r=10, t=30, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=12),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+        colorway=PALETA_CALLAI,
+    )
+    fig.update_xaxes(showgrid=False, zeroline=False)
+    fig.update_yaxes(gridcolor=GRIS_BORDE, zeroline=False)
+    return fig

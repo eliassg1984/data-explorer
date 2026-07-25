@@ -13,7 +13,7 @@ from utils import buscar_columna, _norm
 from tema import (
     ACENTO,
     GRIS_BORDE, TEXTO_PRINCIPAL, BLANCO,
-    SERIE_PRINCIPAL, PALETA_SERIES, ESCALA_CONTINUA, ESCALA_SEMAFORO,
+    SERIE_PRINCIPAL, ESCALA_CONTINUA, ESCALA_SEMAFORO,
 )
 
 # Infraestructura compartida — movida a graficos/base.py (refactor Fase 2).
@@ -22,6 +22,7 @@ from tema import (
 from graficos.base import (
     _slug, _card, _resolver,
     crear_grafico, renderizar_graficos_genericos,
+    PALETA_CALLAI, _compras_truncar, _compras_layout,
 )
 
 # Dashboard de Ajuste de Inventario — extraído a graficos/ajuste.py (refactor Fase 2).
@@ -33,7 +34,6 @@ from graficos.ajuste import renderizar_graficos_ajuste  # noqa: F401
 # TEMA CALLAI — paleta categórica para series múltiples
 # ===========================================================================
 
-PALETA_CALLAI = PALETA_SERIES  # alias retrocompatible; fuente en tema.py
 
 
 # ===========================================================================
@@ -534,24 +534,8 @@ def renderizar_graficos_reporte(df_f, reporte, cfg, df_full=None):
 # contenedor derecho con pestañas de mini-tops. Las keys de los cards
 # reutilizan el prefijo "ajuste_graf_card_" para heredar el CSS existente.
 
-def _compras_truncar(s, n=26):
-    s = str(s)
-    return s if len(s) <= n else s[: n - 1] + "…"
 
 
-def _compras_layout(fig, alto=430):
-    fig.update_layout(
-        height=alto,
-        margin=dict(l=10, r=10, t=30, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=12),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-        colorway=PALETA_CALLAI,
-    )
-    fig.update_xaxes(showgrid=False, zeroline=False)
-    fig.update_yaxes(gridcolor=GRIS_BORDE, zeroline=False)
-    return fig
 
 
 def _compras_mini_barras(serie, titulo, fmt="S/ {:,.0f}", alto=400):
