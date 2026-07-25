@@ -1,7 +1,32 @@
 """
 Estilos globales de la app: CSS, tamaños de fuente e inyección del tema.
 
-NOTA SOBRE st.pills (importante para futuros cambios de estilo):
+Estructura del archivo
+----------------------
+El grueso vive dentro del string CSS de `get_css()`, agrupado por secciones
+delimitadas con headers de la forma:
+
+    /* ============ NOMBRE DE LA SECCIÓN ============ */
+
+Al agregar reglas nuevas, ponerlas en la sección que corresponda; si no
+existe, crear un header nuevo con el mismo formato.
+
+Sobre los `!important` (hoy hay ~450)
+-------------------------------------
+Casi todos son `!important` LEGÍTIMOS, no deuda: los usamos para ganarle
+en especificidad a las clases internas que Streamlit inyecta. Reducir el
+número por sí solo no aporta nada. Lo que sí importa:
+
+- Cuando una regla ANULA algo que Python declaró (ej. `st.container(border=
+  True)` cuyo borde tapas con `border: none !important`), documentar el
+  POR QUÉ arriba de la regla. Un `!important` sin comentario adyacente
+  es aceptable; uno que contradice al código Python NO.
+- Cuando un cambio de diseño hace innecesario un bloque, borrarlo — no
+  dejarlo "por si acaso". Los parches olvidados generan bugs futuros
+  (ver el commit de bordes del drill Proveedor, 2026-07-25).
+
+Sobre st.pills (importante para futuros cambios de estilo)
+----------------------------------------------------------
 En la versión actual de Streamlit, st.pills renderiza este DOM:
 
     div[data-testid="stButtonGroup"]  (con role="radiogroup")
@@ -897,16 +922,43 @@ def get_css():
         padding: 0.25rem 0 0 !important;
     }
 
+    /* ============================================================
+       CARDS EXTERIORES DE LOS DASHBOARDS DE GRÁFICOS
+
+       Convención en Python: `st.container(border=True, key="ajuste_graf_
+       card_...")` para envolver cada dashboard. Aquí en CSS reemplazamos
+       ese borde por un look plano (fondo blanco + radius grande + sombra
+       tenue) y anulamos también los bordes internos que _card() añade a
+       los paneles hijos (para no doble-marcar).
+
+       Efecto neto: el usuario ve UNA card grande sin líneas internas,
+       no una malla de cajas anidadas.
+
+       EXCEPCIÓN (dashboard de Compras / drill Proveedor):
+       Ahí SÍ queremos ver cada bloque bordeado (gráfico, paneles A/B,
+       tabla) — el usuario lo pidió así (2026-07-25). Por eso el
+       container externo de ese caso se declara SIN `border=True` en
+       graficos/compras.py, y cada bloque interno lleva su propio
+       `border=True`. Así las reglas de abajo no le aplican (no hay
+       nada que anular).
+
+       Al modificar: pensar primero si el cambio afecta a los cards
+       "clásicos" (Familia/Evolución) o a los del drill Proveedor.
+       ============================================================ */
     div[class*="st-key-ajuste_graf_card_"] {
         background: var(--surface-2, #ffffff) !important;
-        border: none !important;
+        border: none !important;                    /* look plano: sin borde de Streamlit */
         border-radius: 20px !important;
         padding: 16px 18px;
-        box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
+        box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);  /* sombra tenue reemplaza al borde */
     }
+    /* Anula el borde que Streamlit pinta en el hijo directo del container
+       (stVerticalBlockBorderWrapper) cuando border=True está activo. */
     div[class*="st-key-ajuste_graf_card_"] > div {
         border: none !important;
     }
+    /* Cards internos (Paneles A/B via `_card()`): dejar transparentes para
+       que no se doble-marquen dentro del contenedor externo. */
     div[class*="st-key-ajuste_graf_card_"] [class*="st-key-chartcard_"],
     div[class*="st-key-ajuste_graf_card_"] [class*="st-key-chartcard_"] > div,
     div[class*="st-key-ajuste_graf_card_"] [class*="st-key-chartcard_"]
