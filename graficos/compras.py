@@ -219,6 +219,19 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
     # ── Gráfico principal: barras verticales por periodo ──────────────────
 
+    # Modo de etiquetas de datos sobre las barras (control flotante, abajo).
+    # Se LEE aquí, antes de instanciar el widget de pills; persiste en
+    # session_state, así el default "Off" solo aplica la primera vez.
+    _etq = st.session_state.get("compras_prov_etiq", "Off")
+
+    def _fmt_k(v):
+        """Monto compacto para etiquetas angostas: S/ 4.0k, S/ 1.2M."""
+        if v >= 1_000_000:
+            return f"S/ {v / 1_000_000:.1f}M"
+        if v >= 1_000:
+            return f"S/ {v / 1_000:.1f}k"
+        return f"S/ {v:.0f}"
+
     fig = go.Figure()
     for i, prov in enumerate(orden_provs):
         grp = (base[base["prov"] == prov]
@@ -230,11 +243,35 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # Resaltar el proveedor en foco con opacidad plena; los demás, semitransparentes
         _opacity = 1.0 if (prov_focus is None or prov == prov_focus) else 0.30
 
+        # Etiquetas: solo si el modo != Off. Con un proveedor en foco se
+        # etiqueta SOLO ese (los atenuados van sin texto, para no saturar) y
+        # se le antepone el nombre (hay ancho de sobra). El % es la
+        # participación del proveedor en el total, igual que el hover.
+        if _etq == "Off" or (prov_focus is not None and prov != prov_focus):
+            _text = None
+        else:
+            _en_foco = (prov == prov_focus)
+            _text = []
+            for _v in grp.values:
+                if _v <= 0:
+                    _text.append("")
+                    continue
+                _l = _fmt_k(_v)
+                if _etq == "Detalle":
+                    _l += f"<br>{_pct:.0f}%"
+                if _en_foco:
+                    _l = f"{_compras_truncar(prov, 14)}<br>{_l}"
+                _text.append(_l)
+
         fig.add_bar(
             x=periodos,
             y=grp.values,
             name=_compras_truncar(prov, 22),
             marker=dict(color=_color, opacity=_opacity),
+            text=_text,
+            textposition="outside",
+            textfont=dict(size=9),
+            cliponaxis=False,
             customdata=[[prov, _pct]] * len(periodos),
             hovertemplate=(
                 "<b>%{customdata[0]}</b>  %{x}<br>"
@@ -252,11 +289,20 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                      .groupby("per", as_index=False)["valor"].sum()
                      .set_index("per")["valor"]
                      .reindex(periodos, fill_value=0))
+        # "Otros" solo lleva el total (sin nombre ni %) y solo sin foco.
+        _otros_text = None
+        if _etq != "Off" and prov_focus is None:
+            _otros_text = [(_fmt_k(v) if v > 0 else "")
+                           for v in grp_otros.values]
         fig.add_bar(
             x=periodos,
             y=grp_otros.values,
             name="Otros",
             marker=dict(color=GRIS_BORDE, opacity=0.6),
+            text=_otros_text,
+            textposition="outside",
+            textfont=dict(size=9),
+            cliponaxis=False,
             hovertemplate="Otros · %{x}<br>S/ %{y:,.0f}<extra></extra>",
         )
 
@@ -268,8 +314,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f"),
         # Leyenda VERTICAL flotando DENTRO del área (x<=1 → Plotly no reserva
         # margen → no encoge el gráfico). Fondo semitransparente para leerse
-        # sobre las barras. Arranca en y=0.82 para no pisar el toggle superior.
-        legend=dict(orientation="v", yanchor="top", y=0.82,
+        # sobre las barras. Arranca en y=0.74 para no pisar los DOS toggles
+        # apilados arriba-derecha (Período + Etiquetas).
+        legend=dict(orientation="v", yanchor="top", y=0.74,
                     xanchor="right", x=0.99, font=dict(size=10),
                     bgcolor="rgba(255,255,255,0.78)",
                     bordercolor="rgba(0,0,0,0.12)", borderwidth=1),
@@ -294,6 +341,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             position: absolute; top: 6px; right: 6px; z-index: 20;
             width: auto !important;
         }
+        /* Segundo toggle: Etiquetas, apilado JUSTO debajo de Período. */
+        .st-key-etiq_float {
+            position: absolute; top: 40px; right: 6px; z-index: 20;
+            width: auto !important;
+        }
+        .st-key-etiq_float [data-testid="stElementToolbar"] { display: none; }
         /* Popover de proveedores flotando arriba-IZQUIERDA (compacto) */
         .st-key-prov_pop_float {
             position: absolute; top: 6px; left: 6px; z-index: 21;
@@ -466,6 +519,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         with st.container(key="gran_float"):
             st.pills("Periodo", ["Semana", "Mes", "Año"], default="Mes",
                      key="compras_prov_gran", label_visibility="collapsed")
+        with st.container(key="etiq_float"):
+            st.pills("Etiquetas", ["Off", "Total", "Detalle"], default="Off",
+                     key="compras_prov_etiq", label_visibility="collapsed",
+                     help="Etiquetas de datos sobre las barras "
+                          "(total y %; el nombre aparece en foco)")
         st.plotly_chart(
             fig,
             use_container_width=True,
