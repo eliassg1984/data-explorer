@@ -804,29 +804,11 @@ def get_css():
         display: none !important;
     }
 
-    [class*="st-key-fch_franja_"] [data-baseweb="input"] {
-        width: auto !important;
-        min-width: 0 !important;
-    }
-
-    /* CAMBIO: margin:0 (antes era "0 24px 0 auto") — el posicionamiento
-       ahora lo controla el padre fixed, no el margen automático.
-       Forma RECTANGULAR (esquinas suaves) y fondo blanco: se distingue de
-       las cápsulas lavanda de filtro, que son píldoras con fondo tenue. */
-    [class*="st-key-fch_franja_"] .stDateInput > div > div {
-        background: #ffffff !important;
-        border: 1.5px solid var(--accent) !important;
-        border-radius: 8px !important;
-        box-shadow: var(--shadow) !important;
-        padding: 0 12px !important;
-        min-height: 34px !important;
-        height: 34px !important;
-        width: fit-content !important;
-        margin: 0 !important;
-        overflow: visible !important;
-        position: relative !important;
-        transition: background .15s ease, border-color .15s ease !important;
-    }
+    /* Legacy [class*="st-key-fch_franja_"]: se retiró. Ese key es del widget
+       date_input, hijo del contenedor .st-key-fecha_ajuste_pill que ya carga
+       TODO el estilado. Mantener ambos rutas creaba conflictos de cascada
+       (mismo elemento, dos declaraciones !important, la del widget ganaba
+       por orden y el overlay se veía doble). */
 
     .ultima-actualizacion {
         margin: 0 !important;
@@ -836,30 +818,6 @@ def get_css():
         line-height: 1.2 !important;
         text-align: right !important;
         white-space: nowrap !important;
-    }
-
-    [class*="st-key-fch_franja_"] .stDateInput input {
-        color: var(--accent-deep) !important;
-        font-weight: 500 !important;
-        font-size: 12.5px !important;
-        background: transparent !important;
-        text-align: center !important;
-        padding: 0 !important;
-        width: 155px !important;
-    }
-    [class*="st-key-fch_franja_"] .stDateInput input::placeholder {
-        color: var(--accent) !important;
-        opacity: 0.7 !important;
-    }
-
-    [class*="st-key-fch_franja_"] .stDateInput > div > div:hover,
-    [class*="st-key-fch_franja_"] .stDateInput > div > div:focus-within {
-        background: var(--accent-tint) !important;
-        border-color: var(--accent-deep) !important;
-    }
-
-    [class*="st-key-fch_franja_"] .stDateInput > div > div::before {
-        display: none !important;
     }
 
     /* =================================================================== */
@@ -1191,14 +1149,13 @@ def get_css():
             margin: 0 !important;
             z-index: 23 !important;
         }
-        .st-key-fecha_ajuste_pill [data-testid="stPopover"] > div > button,
-        .st-key-fecha_ajuste_pill button[kind="secondary"],
-        .st-key-fecha_ajuste_pill button[data-testid="stPopoverButton"] {
+        .st-key-fecha_ajuste_pill .fecha-overlay-txt {
             font-size: 13px !important;
+            top: 5px !important;
         }
-        [class*="st-key-fch_franja_"] .stDateInput input {
-            width: 140px !important;
-            font-size: 11.5px !important;
+        .st-key-fecha_ajuste_pill .stDateInput input {
+            min-width: 200px !important;
+            font-size: 13px !important;
         }
 
         /* Selector de vista: mantiene Opción C, más compacto para tocar */
