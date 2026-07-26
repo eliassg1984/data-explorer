@@ -983,6 +983,37 @@ def get_css():
     }
 
     /* =================================================================== */
+    /* TARJETAS DEL DRILL DE PROVEEDOR (Compras)                             */
+    /*                                                                       */
+    /* Convención independiente de `ajuste_graf_card_*`: el drill de         */
+    /* Proveedor NO usa un wrapper blanco único, sino 3 bloques separados    */
+    /* por el gris del app. Cada bloque declara su key con prefijo           */
+    /* `compras_prov_card_` y esta regla les pinta el fondo blanco propio.   */
+    /*                                                                       */
+    /* No tocar sin revisar `_compras_proveedor_drill` en graficos/compras.py*/
+    /* =================================================================== */
+    div[class*="st-key-compras_prov_card_"] {
+        background: var(--surface-2, #ffffff) !important;
+        border: none !important;
+        border-radius: 20px !important;
+        padding: 16px 18px;
+        box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
+    }
+    /* Anula el borde interno que Streamlit pinta cuando border=True. */
+    div[class*="st-key-compras_prov_card_"] > div {
+        border: none !important;
+    }
+    /* Cards internos (Paneles A/B via `_card()`): transparentes para
+       no doble-marcar dentro de la tarjeta blanca del bloque. */
+    div[class*="st-key-compras_prov_card_"] [class*="st-key-chartcard_"],
+    div[class*="st-key-compras_prov_card_"] [class*="st-key-chartcard_"] > div,
+    div[class*="st-key-compras_prov_card_"] [class*="st-key-chartcard_"]
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        border-color: transparent !important;
+        box-shadow: none !important;
+    }
+
+    /* =================================================================== */
     /* FRANJA INFERIOR FIJA — cierra visualmente el área de contenido       */
     /* =================================================================== */
     .stApp::after {

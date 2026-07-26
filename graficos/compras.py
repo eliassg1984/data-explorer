@@ -269,11 +269,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         )
 
     # ── Selector de granularidad FLOTANTE sobre el gráfico ────────────────
-    # El contenedor "prov_chart_box" es posición relativa; dentro, las pills
-    # se posicionan en absoluto arriba-derecha, superpuestas al gráfico.
+    # El contenedor "compras_prov_card_chart" es posición relativa; dentro,
+    # las pills se posicionan en absoluto arriba-derecha, superpuestas al gráfico.
     st.markdown("""
         <style>
-        .st-key-prov_chart_box { position: relative; }
+        .st-key-compras_prov_card_chart { position: relative; }
         /* La leyenda se movió a la derecha (vertical); la banda superior solo
            tiene popover (izq) + toggle (der), alineados arriba. */
         .st-key-gran_float {
@@ -294,7 +294,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         }
         .st-key-gran_float [data-testid="stElementToolbar"] { display: none; }
         /* Ocultar la barra de herramientas del propio gráfico (fullscreen) */
-        .st-key-prov_chart_box > div > [data-testid="stElementToolbar"] { display: none; }
+        .st-key-compras_prov_card_chart > div > [data-testid="stElementToolbar"] { display: none; }
 
         /* Top productos flotante — isla sobre el área del gráfico del Panel A */
         .st-key-chartcard_prov_prods { position: relative; }
@@ -333,7 +333,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # Key ESTABLE (solo depende de la granularidad): evita que Streamlit
     # remonte el componente Plotly en cada clic. El clic se procesa arriba,
     # antes de construir el figure (sin doble rerun = sin parpadeo).
-    with st.container(border=True, key="prov_chart_box"):
+    with st.container(border=True, key="compras_prov_card_chart"):
         # Popover de proveedores — flota arriba-izquierda (misma banda que la
         # leyenda y el toggle). Los checkboxes escriben cp_prov_cb::<nombre>;
         # la selección se leyó arriba para armar el figure (patrón 1 rerun).
@@ -387,7 +387,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         unsafe_allow_html=True,
     )
 
-    with st.container(border=True):
+    with st.container(border=True, key="compras_prov_card_paneles"):
         pa, pb = st.columns(2)
 
         # Panel A: Top N productos del proveedor en foco
@@ -527,7 +527,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             "📋 Documentos de compra</div>",
             unsafe_allow_html=True,
         )
-        _pv_box = st.container(border=True)
+        _pv_box = st.container(border=True, key="compras_prov_card_docs")
         _pv_box.markdown(f"**Detalle de documentos por proveedor · vista {gran}**")
         _pv_box.caption("Arrastra campos a Filas / Columnas / Valores en el panel "
                         "derecho para pivotar. ▸ expande cada nivel.")
