@@ -9,11 +9,14 @@ Diseño:
   st.secrets['GROQ_API_KEY'] y NUNCA sale al navegador. Nota: el modelo
   anterior (llama-3.1-8b-instant) fue deprecado por Groq el 2026-06-17.
 - Búsqueda web vía Tavily (opcional). Requiere st.secrets['TAVILY_API_KEY'].
-  Se activa: (a) automáticamente si detectamos palabras clave de "precio /
-  actual / esta semana / mercado / cotización / ..."; o (b) manualmente con
-  el toggle 🌐. Los resultados frescos se adjuntan al prompt de Llama para
-  que la respuesta cite datos reales. Sin Tavily key, el asistente sigue
+  Activa POR DEFECTO (toggle 🌐 encendido): cada pregunta trae datos frescos.
+  El usuario puede apagarla para preguntas solo del reporte. Con el toggle
+  apagado seguimos buscando si detectamos palabras clave ("precio", "actual",
+  "esta semana", "mercado"…). Los enlaces a las fuentes se muestran como
+  chips clicables bajo la respuesta. Sin Tavily key, el asistente sigue
   funcionando (solo pierde búsqueda web).
+- Respuestas en STREAMING (token a token) con st.write_stream: la respuesta
+  aparece viva, no de golpe.
 - Contexto del reporte: se adjunta un resumen del df filtrado del reporte
   activo (totales, top 5 por familia, etc.) como bloque separado.
 """
@@ -56,8 +59,8 @@ _SYSTEM_PROMPT = (
     "verificar con proveedor. Si el usuario adjunta 'Contexto del reporte', "
     "úsalo para responder con datos reales. Si el usuario adjunta 'Resultados "
     "de la web', prioriza ESA información sobre tu conocimiento previo (que "
-    "puede estar desactualizado) y cita las fuentes al final como "
-    "[Fuente: título del sitio]."
+    "puede estar desactualizado). No incluyas URLs ni una lista de fuentes "
+    "al final: los enlaces a las fuentes se muestran aparte automáticamente."
 )
 
 
@@ -65,7 +68,10 @@ _SYSTEM_PROMPT = (
 def _init_estado():
     if "ai_historial" not in st.session_state:
         st.session_state["ai_historial"] = []
-    st.session_state.setdefault("ai_web_toggle", False)
+    # Búsqueda web ENCENDIDA por defecto (el usuario puede apagarla).
+    st.session_state.setdefault("ai_web_toggle", True)
+    # Pregunta a la espera de respuesta (para el render en streaming).
+    st.session_state.setdefault("ai_pending", None)
 
 
 # ─── Búsqueda web (Tavily) ─────────────────────────────────────────────────
@@ -180,24 +186,12 @@ def _resumir_df(reporte: str, df) -> str:
         return f"Reporte activo: {reporte or '—'} (resumen no disponible)."
 
 
-# ─── Llamada a Groq (API estilo OpenAI) ────────────────────────────────────
-def _llamar_groq(pregunta: str, contexto: str, contexto_web: str = "") -> str:
-    try:
-        from groq import Groq
-    except ImportError:
-        return ("⚠️ Falta la librería `groq`. Añade `groq` a requirements.txt "
-                "y redeploya.")
-
-    try:
-        api_key = st.secrets["GROQ_API_KEY"]
-    except (KeyError, FileNotFoundError):
-        return ("⚠️ Falta la clave `GROQ_API_KEY` en Secrets de Streamlit "
-                "Cloud. Consíguela gratis en https://console.groq.com")
-
-    cliente = Groq(api_key=api_key)
-
-    # Construir mensajes: system + historial + nuevo prompt con contextos.
-    # Orden: contexto del reporte (interno) → contexto web (externo) → pregunta.
+# ─── Llamada a Groq (API estilo OpenAI) — streaming ────────────────────────
+def _construir_mensajes(pregunta: str, contexto: str,
+                        contexto_web: str = "") -> list[dict]:
+    """Arma la lista de mensajes: system + historial + prompt con contextos.
+    Orden del prompt: contexto del reporte (interno) → web (externo) → pregunta.
+    """
     bloques = []
     if contexto:
         bloques.append(f"[Contexto del reporte activo]\n{contexto}")
@@ -206,21 +200,61 @@ def _llamar_groq(pregunta: str, contexto: str, contexto_web: str = "") -> str:
     bloques.append(pregunta)
     prompt_con_ctx = "\n\n".join(bloques)
 
-    historial = st.session_state["ai_historial"][-_MAX_HISTORIAL:]
     mensajes = [{"role": "system", "content": _SYSTEM_PROMPT}]
-    mensajes.extend(historial)
+    # Historial previo (la pregunta actual aún NO está en el log). Nos quedamos
+    # solo con role/content — descartamos claves extra como 'sources'/'aviso'.
+    for m in st.session_state["ai_historial"][-_MAX_HISTORIAL:]:
+        mensajes.append({"role": m["role"], "content": m["content"]})
     mensajes.append({"role": "user", "content": prompt_con_ctx})
+    return mensajes
 
+
+def _stream_groq(pregunta: str, contexto: str, contexto_web: str = ""):
+    """Generador: cede la respuesta de Groq token a token (para st.write_stream).
+    Nunca lanza — ante cualquier fallo cede un mensaje de error legible."""
     try:
-        resp = cliente.chat.completions.create(
+        from groq import Groq
+    except ImportError:
+        yield ("⚠️ Falta la librería `groq`. Añade `groq` a requirements.txt "
+               "y redeploya.")
+        return
+    try:
+        api_key = st.secrets["GROQ_API_KEY"]
+    except (KeyError, FileNotFoundError):
+        yield ("⚠️ Falta la clave `GROQ_API_KEY` en Secrets de Streamlit "
+               "Cloud. Consíguela gratis en https://console.groq.com")
+        return
+
+    mensajes = _construir_mensajes(pregunta, contexto, contexto_web)
+    try:
+        stream = Groq(api_key=api_key).chat.completions.create(
             model=_MODELO,
             messages=mensajes,
             max_tokens=_MAX_TOKENS_RESP,
             temperature=0.4,
+            stream=True,
         )
-        return resp.choices[0].message.content.strip()
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield delta
     except Exception as e:
-        return f"⚠️ Error al contactar Groq: {str(e)[:250]}"
+        yield f"⚠️ Error al contactar Groq: {str(e)[:250]}"
+
+
+def _render_fuentes(sources) -> None:
+    """Pinta las fuentes web como enlaces clicables (dedup por URL, máx 4)."""
+    vistos, links = set(), []
+    for title, url in sources or []:
+        if not url or url in vistos:
+            continue
+        vistos.add(url)
+        etiqueta = (title or url)[:38]
+        links.append(f"[{etiqueta}]({url})")
+        if len(links) >= 4:
+            break
+    if links:
+        st.caption("🔗 Fuentes: " + " · ".join(links))
 
 
 # ─── CSS del wrapper flotante ──────────────────────────────────────────────
@@ -291,87 +325,83 @@ def _asistente_fragment(reporte: str, contexto: str):
             )
 
             historial = st.session_state.get("ai_historial", [])
+            pendiente = st.session_state.get("ai_pending")
 
-            with st.container():
-                st.markdown('<div class="ai-msg-scroll">', unsafe_allow_html=True)
-                if not historial:
-                    st.caption("Hola 👋 Pregunta sobre precios de mercado, "
-                               "proveedores o pide un análisis del reporte "
-                               "que tienes abierto.")
-                for msg in historial:
-                    with st.chat_message(msg["role"]):
-                        st.write(msg["content"])
-                st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('<div class="ai-msg-scroll">', unsafe_allow_html=True)
+            if not historial and not pendiente:
+                st.caption("Hola 👋 Pregúntame por precios de mercado, "
+                           "proveedores o pídeme que analice el reporte que "
+                           "tienes abierto. 🌐 La búsqueda web está activa.")
 
-            # Toggle de búsqueda web — visible siempre para que el usuario
-            # sepa que la opción existe. Persiste en session_state.
-            st.toggle(
-                "🌐 Buscar en web (precios, mercado)",
-                key="ai_web_toggle",
-                help=("Si está activo, cada pregunta consulta Tavily para "
-                      "traer datos frescos. Si está apagado, buscamos solo "
-                      "cuando detectamos palabras como 'precio', 'actual', "
-                      "'esta semana', etc."),
-            )
+            # Historial ya resuelto.
+            for msg in historial:
+                with st.chat_message(msg["role"]):
+                    if msg.get("aviso"):
+                        st.caption("⚠️ " + msg["aviso"])
+                    st.write(msg["content"])
+                    if msg.get("sources"):
+                        _render_fuentes(msg["sources"])
 
-            # Chips de sugerencias (solo si aún no hay historial)
-            if not historial:
-                c1, c2 = st.columns(2)
-                sugerencias = [
-                    ("🐔 Precio pollo hoy",
-                     "¿Cuál es el precio de mercado del pollo en Lima hoy?"),
-                    ("📊 Analizar reporte",
-                     "Analiza el reporte activo y dame los puntos más importantes."),
-                    ("💡 Bajar foodcost",
-                     "Dame 3 ideas concretas para reducir foodcost."),
-                    ("🥩 Cotización res",
-                     "¿Cuánto cuesta el kilo de carne de res esta semana en Lima?"),
-                ]
-                prefill = None
-                for i, (etq, prompt) in enumerate(sugerencias):
-                    col = c1 if i % 2 == 0 else c2
-                    if col.button(etq, key=f"ai_sug_{i}",
-                                  use_container_width=True):
-                        prefill = prompt
-                if prefill:
-                    _procesar_mensaje(prefill, contexto)
+            # Turno pendiente: pinta la pregunta y transmite la respuesta EN VIVO.
+            if pendiente:
+                with st.chat_message("user"):
+                    st.write(pendiente)
+                with st.chat_message("assistant"):
+                    contexto_web, sources, aviso = "", [], ""
+                    # ¿Buscamos en web? Toggle manual O heurística automática.
+                    forzar_web = st.session_state.get("ai_web_toggle", True)
+                    if forzar_web or _necesita_busqueda_web(pendiente):
+                        with st.spinner("🌐 Buscando en la web…"):
+                            web = _buscar_web(pendiente)
+                        if web is None:
+                            # Sin TAVILY_API_KEY o falló: seguimos sin web y
+                            # avisamos una sola vez por sesión.
+                            if not st.session_state.get("_ai_aviso_tavily_mostrado"):
+                                st.session_state["_ai_aviso_tavily_mostrado"] = True
+                                aviso = ("Búsqueda web no disponible: configura "
+                                         "`TAVILY_API_KEY` en Secrets para activarla.")
+                        else:
+                            contexto_web = _formatear_contexto_web(web)
+                            sources = web.get("sources", [])
+                    if aviso:
+                        st.caption("⚠️ " + aviso)
+                    respuesta = st.write_stream(
+                        _stream_groq(pendiente, contexto, contexto_web))
+                    if sources:
+                        _render_fuentes(sources)
+
+                # Persistimos el turno (con fuentes/aviso para el replay) y
+                # limpiamos el pendiente. No hacemos rerun: lo ya pintado queda.
+                st.session_state["ai_historial"].append(
+                    {"role": "user", "content": pendiente})
+                st.session_state["ai_historial"].append(
+                    {"role": "assistant", "content": respuesta,
+                     "sources": sources, "aviso": aviso})
+                st.session_state["ai_pending"] = None
+                historial = st.session_state["ai_historial"]
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            # Controles: toggle de web (izq) + limpiar conversación (der).
+            col_web, col_reset = st.columns([3, 2])
+            with col_web:
+                st.toggle(
+                    "🌐 Buscar en web",
+                    key="ai_web_toggle",
+                    help=("Activa: cada pregunta consulta la web (Tavily) para "
+                          "traer precios y datos frescos. Apágala para preguntas "
+                          "solo del reporte y responder más rápido."),
+                )
+            with col_reset:
+                if historial and st.button("🗑️ Limpiar", key="ai_reset",
+                                           use_container_width=True):
+                    st.session_state["ai_historial"] = []
+                    st.session_state["ai_pending"] = None
                     st.rerun(scope="fragment")
 
-            pregunta = st.chat_input("Escribe tu pregunta…",
-                                     key="ai_chat_input")
-            if pregunta:
-                _procesar_mensaje(pregunta, contexto)
+            pregunta = st.chat_input("Escribe tu pregunta…", key="ai_chat_input")
+            if pregunta and not pendiente:
+                st.session_state["ai_pending"] = pregunta
                 st.rerun(scope="fragment")
-
-
-def _procesar_mensaje(pregunta: str, contexto: str):
-    st.session_state["ai_historial"].append(
-        {"role": "user", "content": pregunta})
-
-    # ¿Buscamos en web? Toggle manual O heurística automática.
-    forzar_web = st.session_state.get("ai_web_toggle", False)
-    debe_buscar = forzar_web or _necesita_busqueda_web(pregunta)
-    contexto_web = ""
-    web_status = ""  # nota informativa para agregar arriba de la respuesta
-
-    if debe_buscar:
-        with st.spinner("🌐 Buscando en la web…"):
-            web = _buscar_web(pregunta)
-        if web is None:
-            # No hay TAVILY_API_KEY o falló la petición. Seguimos sin web y
-            # avisamos discretamente al usuario (una sola vez por sesión).
-            if not st.session_state.get("_ai_aviso_tavily_mostrado"):
-                st.session_state["_ai_aviso_tavily_mostrado"] = True
-                web_status = ("_(Búsqueda web no disponible: configura "
-                              "`TAVILY_API_KEY` en Secrets para activarla.)_\n\n")
-        else:
-            contexto_web = _formatear_contexto_web(web)
-
-    with st.spinner("Pensando…"):
-        respuesta = _llamar_groq(pregunta, contexto, contexto_web)
-
-    st.session_state["ai_historial"].append(
-        {"role": "assistant", "content": web_status + respuesta})
 
 
 # ─── API pública ───────────────────────────────────────────────────────────
