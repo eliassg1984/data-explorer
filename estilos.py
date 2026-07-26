@@ -748,9 +748,8 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* FECHA COMO TEXTO — trigger del popover a la IZQUIERDA de la franja.  */
-    /* Formato: "21 Julio 2026 - 25 Julio 2026" en negrita, sin borde.      */
-    /* El popover contiene el date_input real.                              */
+    /* FECHA COMO TEXTO — overlay en español a la IZQUIERDA de la franja.   */
+    /* El date_input real está transparente debajo: 1 click abre calendario.*/
     /* =================================================================== */
 .st-key-fecha_ajuste_pill {
     position: fixed !important;
@@ -762,25 +761,47 @@ def get_css():
     margin: 0 !important;
 }
 
-    /* Botón del popover: texto negro en negrita, sin borde ni fondo. */
-    .st-key-fecha_ajuste_pill [data-testid="stPopover"] > div > button,
-    .st-key-fecha_ajuste_pill button[kind="secondary"],
-    .st-key-fecha_ajuste_pill button[data-testid="stPopoverButton"] {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 2px 4px !important;
-        min-height: 0 !important;
+    /* El overlay flota SOBRE el input, pero deja pasar los clicks. */
+    .st-key-fecha_ajuste_pill .fecha-overlay-txt {
+        position: absolute !important;
+        top: 6px !important;
+        left: 10px !important;
         color: #101014 !important;
         font-weight: 700 !important;
         font-size: 15px !important;
         line-height: 1.2 !important;
+        white-space: nowrap !important;
+        pointer-events: none !important;
+        z-index: 2 !important;
     }
-    .st-key-fecha_ajuste_pill [data-testid="stPopover"] > div > button:hover,
-    .st-key-fecha_ajuste_pill button[kind="secondary"]:hover,
-    .st-key-fecha_ajuste_pill button[data-testid="stPopoverButton"]:hover {
-        background: rgba(0, 0, 0, 0.04) !important;
-        color: var(--accent-deep) !important;
+    .st-key-fecha_ajuste_pill .stElementContainer:has(> .stMarkdown),
+    .st-key-fecha_ajuste_pill [data-testid="stMarkdownContainer"] {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* Input: transparente pero clicable — recibe el tap y abre el picker. */
+    .st-key-fecha_ajuste_pill .stDateInput > div > div {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        min-height: 30px !important;
+        padding: 0 !important;
+        cursor: pointer !important;
+    }
+    .st-key-fecha_ajuste_pill .stDateInput input {
+        color: transparent !important;
+        caret-color: transparent !important;
+        background: transparent !important;
+        cursor: pointer !important;
+        min-width: 260px !important;   /* área clicable ≈ ancho del texto ES */
+        font-size: 15px !important;    /* misma métrica que el overlay */
+        font-weight: 700 !important;
+        padding: 0 10px !important;
+    }
+    /* Ocultar el ícono de calendario para dejar solo el texto */
+    .st-key-fecha_ajuste_pill .stDateInput svg {
+        display: none !important;
     }
 
     [class*="st-key-fch_franja_"] [data-baseweb="input"] {

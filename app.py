@@ -433,9 +433,10 @@ if True:
                 if isinstance(_fecha_actualizacion, datetime.datetime):
                     if _fecha_actualizacion.tzinfo is not None:
                         _fecha_actualizacion = _fecha_actualizacion.astimezone(ZONA_PERU)
-                # La renderización del aviso se mueve fuera de la franja sticky
-                # Label del popover = rango en formato español ("21 Julio 2026 -
-                # 25 Julio 2026"); el date_input real vive dentro del popover.
+                # La renderización del aviso se mueve fuera de la franja sticky.
+                # Overlay: texto en español "1 Julio 2026 - 24 Julio 2026" flota
+                # sobre el date_input con pointer-events:none — el click cae
+                # directo en el widget y abre el calendario en UN solo tap.
                 _rango_actual = st.session_state.get(_k_rango_franja)
                 if (isinstance(_rango_actual, (tuple, list))
                         and len(_rango_actual) == 2 and all(_rango_actual)):
@@ -444,38 +445,41 @@ if True:
                     _label_fecha = "Seleccionar rango"
 
                 with st.container(key="fecha_ajuste_pill"):
-                    with st.popover(_label_fecha, use_container_width=False):
-                        if _usa_carga_rango:
-                            # El widget ES la fuente del rango de carga: usa la clave
-                            # de carga directamente. Al cambiarlo, Streamlit commitea
-                            # el valor ANTES del rerun, y la sección "CARGAR DATOS"
-                            # (arriba) re-descarga ese rango desde R2. Sin st.rerun,
-                            # sin copia manual → no se pierde el estado de la vista.
-                            st.date_input(
-                                "Rango a Evaluar",
-                                min_value=fecha_min_full,
-                                max_value=fecha_max_full,
-                                format="DD/MM/YYYY",
-                                key=_k_rango_franja,
-                                label_visibility="collapsed",
-                            )
-                        else:
-                            _ini_apl, _fin_apl = st.session_state[_k_rango_franja]
-                            rango_aj = st.date_input(
-                                "Rango a Evaluar",
-                                value=(_ini_apl, _fin_apl),
-                                min_value=fecha_min_full,
-                                max_value=fecha_max_full,
-                                format="DD/MM/YYYY",
-                                key=f"fch_franja_{reporte.replace(' ', '_')}",
-                                label_visibility="collapsed",
-                            )
-                            # Cambio de rango: basta con guardar el valor — el
-                            # filtro se aplica más abajo EN ESTA MISMA pasada.
-                            if (isinstance(rango_aj, (tuple, list))
-                                    and len(rango_aj) == 2
-                                    and tuple(rango_aj) != st.session_state[_k_rango_franja]):
-                                st.session_state[_k_rango_franja] = tuple(rango_aj)
+                    st.markdown(
+                        f'<div class="fecha-overlay-txt">{_label_fecha}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if _usa_carga_rango:
+                        # El widget ES la fuente del rango de carga: usa la clave
+                        # de carga directamente. Al cambiarlo, Streamlit commitea
+                        # el valor ANTES del rerun, y la sección "CARGAR DATOS"
+                        # (arriba) re-descarga ese rango desde R2. Sin st.rerun,
+                        # sin copia manual → no se pierde el estado de la vista.
+                        st.date_input(
+                            "Rango a Evaluar",
+                            min_value=fecha_min_full,
+                            max_value=fecha_max_full,
+                            format="DD/MM/YYYY",
+                            key=_k_rango_franja,
+                            label_visibility="collapsed",
+                        )
+                    else:
+                        _ini_apl, _fin_apl = st.session_state[_k_rango_franja]
+                        rango_aj = st.date_input(
+                            "Rango a Evaluar",
+                            value=(_ini_apl, _fin_apl),
+                            min_value=fecha_min_full,
+                            max_value=fecha_max_full,
+                            format="DD/MM/YYYY",
+                            key=f"fch_franja_{reporte.replace(' ', '_')}",
+                            label_visibility="collapsed",
+                        )
+                        # Cambio de rango: basta con guardar el valor — el
+                        # filtro se aplica más abajo EN ESTA MISMA pasada.
+                        if (isinstance(rango_aj, (tuple, list))
+                                and len(rango_aj) == 2
+                                and tuple(rango_aj) != st.session_state[_k_rango_franja]):
+                            st.session_state[_k_rango_franja] = tuple(rango_aj)
 
         # Las pestañas Gráficos/Tabla se movieron FUERA de la franja, a una
         # banda pegada al borde superior del canvas (ver más abajo, justo
