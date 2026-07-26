@@ -219,6 +219,33 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
     # ── Gráfico principal: barras verticales por periodo ──────────────────
 
+    def _fmt_k(v):
+        """Monto compacto para etiquetas angostas: S/ 4.0k, S/ 1.2M."""
+        if v >= 1_000_000:
+            return f"S/ {v / 1_000_000:.1f}M"
+        if v >= 1_000:
+            return f"S/ {v / 1_000:.1f}k"
+        return f"S/ {v:.0f}"
+
+    def _etiqueta_serie(vals):
+        """Texto por barra: total SIEMPRE encima + variación vs el período
+        ANTERIOR del mismo proveedor (▲ verde sube / ▼ rojo baja). La 1ª
+        barra no tiene anterior → solo total. Barras en 0 → sin etiqueta."""
+        _txt = []
+        for j, v in enumerate(vals):
+            if v <= 0:
+                _txt.append("")
+                continue
+            linea = _fmt_k(v)
+            if j > 0 and vals[j - 1] > 0:
+                chg = (v - vals[j - 1]) / vals[j - 1] * 100
+                flecha = "▲" if chg >= 0 else "▼"
+                col = "#0F6E56" if chg >= 0 else "#A32D2D"
+                linea += (f"<br><span style='color:{col}'>"
+                          f"{flecha}{abs(chg):.0f}%</span>")
+            _txt.append(linea)
+        return _txt
+
     fig = go.Figure()
     for i, prov in enumerate(orden_provs):
         grp = (base[base["prov"] == prov]
@@ -235,6 +262,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             y=grp.values,
             name=_compras_truncar(prov, 22),
             marker=dict(color=_color, opacity=_opacity),
+            text=_etiqueta_serie(list(grp.values)),
+            textposition="outside",
+            textfont=dict(size=9),
+            cliponaxis=False,
             customdata=[[prov, _pct]] * len(periodos),
             hovertemplate=(
                 "<b>%{customdata[0]}</b>  %{x}<br>"
@@ -257,6 +288,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             y=grp_otros.values,
             name="Otros",
             marker=dict(color=GRIS_BORDE, opacity=0.6),
+            text=_etiqueta_serie(list(grp_otros.values)),
+            textposition="outside",
+            textfont=dict(size=9),
+            cliponaxis=False,
             hovertemplate="Otros · %{x}<br>S/ %{y:,.0f}<extra></extra>",
         )
 
