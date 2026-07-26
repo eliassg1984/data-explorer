@@ -28,6 +28,8 @@ el widget en ESTE render — nunca después. Un recorte posterior al render se
 vería recién en el siguiente rerun (un render de retraso = desync visible).
 """
 
+import datetime
+
 import streamlit as st
 
 
@@ -79,6 +81,67 @@ def asegurar_rango(clave, default, bounds=None, reporte=None,
         if usa_carga_rango and reporte is not None:
             st.session_state[f"rango_carga_ok_{reporte}"] = nuevo
     return nuevo
+
+
+def _fin_de_mes(d):
+    """Último día del mes de `d`."""
+    if d.month == 12:
+        return d.replace(day=31)
+    return d.replace(month=d.month + 1, day=1) - datetime.timedelta(days=1)
+
+
+def atajos_rango(hoy, bounds):
+    """Lista de atajos `(clave, etiqueta, (ini, fin))` válidos para la data.
+
+    - Atajos relativos (semana / mes / últimos 30 días / año) anclados a
+      `hoy` y recortados a `bounds` = (min, max).
+    - Un chip por cada año presente en la data (además del actual).
+    - Se DESCARTA todo atajo cuyo rango original no intersecta `bounds`
+      (evita ofrecer "Este mes" cuando colapsaría a un día suelto del borde
+      porque la data no llega hasta hoy). El overlay/calendario siguen
+      leyendo la misma clave → el atajo no puede desincronizar nada.
+    """
+    if not (bounds and all(bounds)):
+        return []
+    min_b, max_b = bounds
+
+    lunes = hoy - datetime.timedelta(days=hoy.weekday())
+    crudos = [
+        ("semana", "Esta semana", (lunes, lunes + datetime.timedelta(days=6))),
+        ("mes", "Este mes", (hoy.replace(day=1), _fin_de_mes(hoy))),
+        ("d30", "Últimos 30 días",
+         (hoy - datetime.timedelta(days=29), hoy)),
+        ("anio", "Este año",
+         (datetime.date(hoy.year, 1, 1), datetime.date(hoy.year, 12, 31))),
+    ]
+    for y in range(max_b.year, min_b.year - 1, -1):
+        if y == hoy.year:
+            continue
+        crudos.append((f"y{y}", str(y),
+                       (datetime.date(y, 1, 1), datetime.date(y, 12, 31))))
+
+    salida = []
+    for clave, etiqueta, (ini, fin) in crudos:
+        if fin < min_b or ini > max_b:      # no intersecta la data → fuera
+            continue
+        ci = min(max(ini, min_b), max_b)
+        cf = min(max(fin, min_b), max_b)
+        salida.append((clave, etiqueta, (ci, cf)))
+    return salida
+
+
+def aplicar_atajo(clave, rango, reporte=None, usa_carga_rango=False):
+    """Callback `on_click` que fija el rango desde un atajo.
+
+    Al correr ANTES del rerun, el date_input (que usa `clave`) ve el valor
+    nuevo al instanciarse — sin el error "no se puede modificar un widget ya
+    instanciado". Enrutar SIEMPRE por aquí: es el ÚNICO punto (junto a
+    `asegurar_rango`) autorizado a escribir la clave del rango.
+    """
+    rango = tuple(rango)
+    st.session_state[clave] = rango
+    if usa_carga_rango and reporte is not None:
+        st.session_state[f"rango_carga_ok_{reporte}"] = rango
 
 
 def debug_estado_rango():

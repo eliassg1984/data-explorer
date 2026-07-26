@@ -13,7 +13,10 @@ from data import (
     hay_dato_nuevo, fecha_ultima_actualizacion,
 )
 from estilos import TAM_FUENTE, inject_css
-from estado_rango import clave_rango, asegurar_rango, debug_estado_rango
+from estado_rango import (
+    clave_rango, asegurar_rango, debug_estado_rango,
+    atajos_rango, aplicar_atajo,
+)
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_footer_actualizacion, inject_calendario_es
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_aggrid_compras
 from graficos import renderizar_graficos_reporte, render_vista_pills
@@ -428,11 +431,11 @@ if True:
                     if _fecha_actualizacion.tzinfo is not None:
                         _fecha_actualizacion = _fecha_actualizacion.astimezone(ZONA_PERU)
                 # El estado ya quedó sembrado y recortado por asegurar_rango()
-                # arriba (una sola vez, antes de este widget). Aquí solo se
-                # LEE. El widget usa la MISMA key → Streamlit sincroniza solo,
-                # sin value= ni mirror-back manual.
-                #
-                # Overlay: lee la MISMA key que el widget → nunca divergen.
+                # arriba (una sola vez, antes del widget). Aquí solo se LEE.
+                # El texto del rango es el TRIGGER de un panel (Opción B):
+                # atajos rápidos a la izquierda + calendario manual a la
+                # derecha. El date_input, los atajos y el label leen/escriben
+                # la MISMA clave → no pueden desincronizarse.
                 _rango_actual = st.session_state.get(_k_rango_franja)
                 if (isinstance(_rango_actual, (tuple, list))
                         and len(_rango_actual) == 2 and all(_rango_actual)):
@@ -440,19 +443,35 @@ if True:
                 else:
                     _label_fecha = "Seleccionar rango"
 
+                # Atajos válidos para la data actual (los calcula el dueño único).
+                _atajos = atajos_rango(_hoy, (fecha_min_full, fecha_max_full))
+
                 with st.container(key="fecha_ajuste_pill"):
-                    st.markdown(
-                        f'<div class="fecha-overlay-txt">{_label_fecha}</div>',
-                        unsafe_allow_html=True,
-                    )
-                    st.date_input(
-                        "Rango a Evaluar",
-                        min_value=fecha_min_full,
-                        max_value=fecha_max_full,
-                        format="DD/MM/YYYY",
-                        key=_k_rango_franja,
-                        label_visibility="collapsed",
-                    )
+                    with st.popover(_label_fecha, use_container_width=False):
+                        # Contenedor keyed → permite scopear el ancho del panel
+                        # por CSS aunque el popover se renderice en un portal.
+                        with st.container(key="fecha_panel"):
+                            _c_atajos, _c_cal = st.columns([1, 1.5])
+                            with _c_atajos:
+                                st.caption("Atajos")
+                                for _ca, _et, _rg in _atajos:
+                                    st.button(
+                                        _et, use_container_width=True,
+                                        key=f"atajo_{reporte}_{_ca}".replace(" ", "_"),
+                                        on_click=aplicar_atajo,
+                                        args=(_k_rango_franja, _rg, reporte,
+                                              _usa_carga_rango),
+                                    )
+                            with _c_cal:
+                                st.caption("Rango manual")
+                                st.date_input(
+                                    "Rango a Evaluar",
+                                    min_value=fecha_min_full,
+                                    max_value=fecha_max_full,
+                                    format="DD/MM/YYYY",
+                                    key=_k_rango_franja,
+                                    label_visibility="collapsed",
+                                )
 
         # Las pestañas Gráficos/Tabla se movieron FUERA de la franja, a una
         # banda pegada al borde superior del canvas (ver más abajo, justo

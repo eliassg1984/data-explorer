@@ -21,7 +21,7 @@ Estilos globales de la app: CSS, tamaños de fuente e inyección del tema.
     L  606  BOTÓN FILTROS (popover)
     L  624  FILA SUPERIOR DE AJUSTE DE INVENTARIO — franja blanca sticky
     L  684  CHIPS DE FILTRO EN LA FRANJA BLANCA — Área / Familia / etc.
-    L  793  FECHA EN EL HEADER — overlay ES a la izquierda de la franja
+    L  793  FECHA EN EL HEADER — trigger del popover (atajos + calendario)
     L  866  CALENDARIO DESPLEGABLE (BaseWeb)
     L  887  OCULTAR TOOLBARS NATIVAS DE STREAMLIT
     L  907  POSICIÓN DEL TOAST (st.toast)
@@ -790,12 +790,12 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* FECHA COMO TEXTO — overlay en español a la IZQUIERDA de la franja.   */
-    /* El date_input real está transparente debajo: 1 click abre calendario.*/
+    /* FECHA EN EL HEADER — texto del rango a la IZQUIERDA de la franja.    */
+    /* Es el TRIGGER de un popover (Opción B): atajos + calendario manual.  */
     /* =================================================================== */
 .st-key-fecha_ajuste_pill {
     position: fixed !important;
-    top: 10px !important;
+    top: 8px !important;
     left: 106px !important;         /* 90px (rail) + 16px margen */
     right: auto !important;
     width: fit-content !important;
@@ -803,54 +803,42 @@ def get_css():
     margin: 0 !important;
 }
 
-    /* El overlay flota SOBRE el input, pero deja pasar los clicks. */
-    .st-key-fecha_ajuste_pill .fecha-overlay-txt {
-        position: absolute !important;
-        top: 6px !important;
-        left: 10px !important;
+    /* Trigger: anula la regla GLOBAL de pill (BOTÓN FILTROS, arriba) SOLO
+       aquí → el rango se ve como texto negro en negrita, sin caja. */
+    .st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
+        min-width: 0 !important;
+        padding: 4px 8px !important;
+        border: none !important;
+        border-radius: 8px !important;
+        background: transparent !important;
+        box-shadow: none !important;
         color: #101014 !important;
         font-weight: 700 !important;
         font-size: 15px !important;
         line-height: 1.2 !important;
         white-space: nowrap !important;
-        pointer-events: none !important;
-        z-index: 2 !important;
     }
-    .st-key-fecha_ajuste_pill .stElementContainer:has(> .stMarkdown),
-    .st-key-fecha_ajuste_pill [data-testid="stMarkdownContainer"] {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    /* Input: transparente pero clicable — recibe el tap y abre el picker. */
-    .st-key-fecha_ajuste_pill .stDateInput > div > div {
-        background: transparent !important;
+    .st-key-fecha_ajuste_pill [data-testid="stPopover"] button:hover {
+        background: rgba(0, 0, 0, 0.04) !important;
         border: none !important;
-        box-shadow: none !important;
-        min-height: 30px !important;
-        padding: 0 !important;
-        cursor: pointer !important;
-    }
-    .st-key-fecha_ajuste_pill .stDateInput input {
-        color: transparent !important;
-        caret-color: transparent !important;
-        background: transparent !important;
-        cursor: pointer !important;
-        min-width: 260px !important;   /* área clicable ≈ ancho del texto ES */
-        font-size: 15px !important;    /* misma métrica que el overlay */
-        font-weight: 700 !important;
-        padding: 0 10px !important;
-    }
-    /* Ocultar el ícono de calendario para dejar solo el texto */
-    .st-key-fecha_ajuste_pill .stDateInput svg {
-        display: none !important;
+        color: var(--accent-deep) !important;
     }
 
-    /* Legacy [class*="st-key-fch_franja_"]: se retiró. Ese key es del widget
-       date_input, hijo del contenedor .st-key-fecha_ajuste_pill que ya carga
-       TODO el estilado. Mantener ambos rutas creaba conflictos de cascada
-       (mismo elemento, dos declaraciones !important, la del widget ganaba
-       por orden y el overlay se veía doble). */
+    /* Panel del popover: se renderiza en un portal (fuera del contenedor),
+       así que lo scopeamos por el contenedor keyed interno con :has(). */
+    [data-testid="stPopoverBody"]:has(.st-key-fecha_panel) {
+        min-width: 380px !important;
+    }
+    /* Botones de atajo: compactos, alineados a la izquierda. */
+    .st-key-fecha_panel [data-testid="stColumn"]:first-child button {
+        min-width: 0 !important;
+        padding: 6px 10px !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        border-radius: 8px !important;
+        justify-content: flex-start !important;
+        text-align: left !important;
+    }
 
     .ultima-actualizacion {
         margin: 0 !important;
@@ -1191,13 +1179,12 @@ def get_css():
             margin: 0 !important;
             z-index: 23 !important;
         }
-        .st-key-fecha_ajuste_pill .fecha-overlay-txt {
+        .st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
             font-size: 13px !important;
-            top: 5px !important;
         }
-        .st-key-fecha_ajuste_pill .stDateInput input {
-            min-width: 200px !important;
-            font-size: 13px !important;
+        /* Panel a ancho de pantalla en móvil (menos el margen). */
+        [data-testid="stPopoverBody"]:has(.st-key-fecha_panel) {
+            min-width: min(380px, 92vw) !important;
         }
 
         /* Selector de vista: mantiene Opción C, más compacto para tocar */
