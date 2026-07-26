@@ -433,10 +433,27 @@ if True:
                 if isinstance(_fecha_actualizacion, datetime.datetime):
                     if _fecha_actualizacion.tzinfo is not None:
                         _fecha_actualizacion = _fecha_actualizacion.astimezone(ZONA_PERU)
-                # La renderización del aviso se mueve fuera de la franja sticky.
-                # Overlay: texto en español "1 Julio 2026 - 24 Julio 2026" flota
-                # sobre el date_input con pointer-events:none — el click cae
-                # directo en el widget y abre el calendario en UN solo tap.
+                # UNA sola key para widget + estado + loader de datos.
+                # Streamlit auto-sincroniza cuando `key=` coincide con la
+                # session_state key. No usamos value= (redundante y trigger
+                # de bugs de caché) ni mirror-back manual.
+                #
+                # Clamp defensivo INMEDIATAMENTE antes del widget: si el
+                # rango guardado excede los bounds actuales de la data,
+                # lo recortamos AQUÍ (no arriba en CARGAR DATOS, para
+                # asegurar que el widget vea el valor recortado en este
+                # mismo render y NO en el siguiente).
+                _cur_st = st.session_state.get(_k_rango_franja)
+                if (isinstance(_cur_st, (tuple, list)) and len(_cur_st) == 2
+                        and all(_cur_st) and fecha_min_full and fecha_max_full):
+                    _ci = min(max(_cur_st[0], fecha_min_full), fecha_max_full)
+                    _cf = min(max(_cur_st[1], fecha_min_full), fecha_max_full)
+                    if (_ci, _cf) != tuple(_cur_st):
+                        st.session_state[_k_rango_franja] = (_ci, _cf)
+                        if _usa_carga_rango:
+                            st.session_state[f"rango_carga_ok_{reporte}"] = (_ci, _cf)
+
+                # Overlay: lee la MISMA key que el widget → siempre en sync.
                 _rango_actual = st.session_state.get(_k_rango_franja)
                 if (isinstance(_rango_actual, (tuple, list))
                         and len(_rango_actual) == 2 and all(_rango_actual)):
@@ -449,38 +466,14 @@ if True:
                         f'<div class="fecha-overlay-txt">{_label_fecha}</div>',
                         unsafe_allow_html=True,
                     )
-                    # Patrón "widget re-montable": la key del WIDGET incluye
-                    # el hash del rango actual del estado. Cuando algo escribe
-                    # programáticamente al estado (p.ej. el clamp de línea
-                    # ~329 al cargar un reporte con bounds nuevos), la key
-                    # cambia → Streamlit trata al widget como uno nuevo y
-                    # re-lee `value=`. Sin esto, Streamlit cachea el valor
-                    # inicial en session_state[widget_key] e ignora `value=`
-                    # en los renders siguientes → overlay desync.
-                    _ini_apl, _fin_apl = st.session_state[_k_rango_franja]
-                    _wkey = (f"fch_franja_{reporte.replace(' ', '_')}"
-                             f"_{_ini_apl}_{_fin_apl}")
-                    rango_aj = st.date_input(
+                    st.date_input(
                         "Rango a Evaluar",
-                        value=(_ini_apl, _fin_apl),
                         min_value=fecha_min_full,
                         max_value=fecha_max_full,
                         format="DD/MM/YYYY",
-                        key=_wkey,
+                        key=_k_rango_franja,
                         label_visibility="collapsed",
                     )
-                    if (isinstance(rango_aj, (tuple, list))
-                            and len(rango_aj) == 2 and all(rango_aj)
-                            and tuple(rango_aj) != (_ini_apl, _fin_apl)):
-                        st.session_state[_k_rango_franja] = tuple(rango_aj)
-                        if _usa_carga_rango:
-                            # Reportes por-rango: mirror también al rango
-                            # "ok" y forzar rerun para que la sección CARGAR
-                            # DATOS re-descargue desde R2 con el nuevo rango.
-                            st.session_state[f"rango_carga_ok_{reporte}"] = tuple(rango_aj)
-                            st.rerun()
-                        # Reportes con filtro local: no hace falta rerun,
-                        # el filtro se aplica más abajo EN ESTA MISMA pasada.
 
         # Las pestañas Gráficos/Tabla se movieron FUERA de la franja, a una
         # banda pegada al borde superior del canvas (ver más abajo, justo
