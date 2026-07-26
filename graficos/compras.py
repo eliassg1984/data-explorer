@@ -327,6 +327,45 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-topn_float [data-testid="stButtonGroup"] button:not(:first-child) {
             border-left: 1px solid rgba(49,51,63,0.15) !important;
         }
+
+        /* ── TARJETAS COLAPSABLES: animacion unfold (drill Proveedor) ── */
+        @keyframes unfoldDown {
+            0%   { transform: perspective(600px) scaleY(0) rotateX(-90deg);
+                   opacity: 0; }
+            65%  { transform: perspective(600px) scaleY(1.04) rotateX(3deg);
+                   opacity: 1; }
+            100% { transform: perspective(600px) scaleY(1) rotateX(0deg);
+                   opacity: 1; }
+        }
+        /* La animacion se aplica DIRECTO a la tarjeta por su key estable.
+           Streamlit reutiliza el nodo DOM mientras sigue abierta, asi que el
+           unfold solo corre al montarse (oculta->visible), no en cada rerun.
+           fill-mode backwards: arranca colapsada y al terminar no deja
+           transform residual (evita texto borroso). NO usamos <script>
+           porque st.markdown NO ejecuta JS. */
+        .st-key-compras_prov_card_paneles,
+        .st-key-compras_prov_card_docs {
+            transform-origin: top center;
+            animation: unfoldDown 0.38s cubic-bezier(0.4, 0, 0.2, 1) backwards;
+        }
+        /* Botones de toggle (capsula lavanda compacta) */
+        .st-key-collapse_btn_paneles button,
+        .st-key-collapse_btn_docs button {
+            background: var(--accent-tint, #f0edfe) !important;
+            border: 1px solid var(--border-lavender, #d4cdf7) !important;
+            border-radius: 999px !important;
+            color: var(--accent-deep, #4938b8) !important;
+            font-size: 11px !important;
+            font-weight: 600 !important;
+            padding: 2px 12px !important;
+            min-height: 24px !important;
+            letter-spacing: 0.02em;
+        }
+        .st-key-collapse_btn_paneles button:hover,
+        .st-key-collapse_btn_docs button:hover {
+            background: var(--accent-light, #e7e3fb) !important;
+            border-color: var(--accent, #6c5ce7) !important;
+        }
         </style>
     """, unsafe_allow_html=True)
 
@@ -380,117 +419,134 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         m = grp["um"].mode()
         return (" " + m.iat[0]) if len(m) and m.iat[0] not in ("", "nan") else ""
 
-    with st.container(border=True, key="compras_prov_card_paneles"):
-        pa, pb = st.columns(2)
+    if "cp_paneles_abierto" not in st.session_state:
+        st.session_state["cp_paneles_abierto"] = True
+    _c_hdr_pan, _c_btn_pan = st.columns([8, 1.5], vertical_alignment="center")
+    with _c_hdr_pan:
+        st.markdown(
+            "<p style='margin:4px 0 2px;font-size:13px;font-weight:600;"
+            "color:var(--text-secondary,#71717a)'>"
+            "Analisis de productos y proveedores</p>",
+            unsafe_allow_html=True,
+        )
+    with _c_btn_pan, st.container(key="collapse_btn_paneles"):
+        if st.button("▾ Ocultar" if st.session_state["cp_paneles_abierto"]
+                     else "▸ Mostrar", key="cp_btn_paneles"):
+            st.session_state["cp_paneles_abierto"] = \
+                not st.session_state["cp_paneles_abierto"]
+            st.rerun()
+    if st.session_state.get("cp_paneles_abierto", True):
+        with st.container(border=True, key="compras_prov_card_paneles"):
+            pa, pb = st.columns(2)
 
-        # Panel A: Top N productos del proveedor en foco
-        with pa:
-            _ta = ("Selecciona un proveedor arriba para ver sus productos"
-                   if prov_focus is None
-                   else f"Productos · {_compras_truncar(prov_focus, 24)}")
-            with _card("prov_prods", _ta):
-                # Selector Top N flotante en la esquina superior derecha de la card
-                with st.container(key="topn_float"):
-                    st.pills("Top productos", [5, 10, 20], default=10,
-                             key="compras_prov_topn", label_visibility="collapsed")
-                if prov_focus is None:
-                    pass
-                else:
-                    sub = base[base["prov"] == prov_focus]
-                    agg = (sub.groupby("prod")
-                              .agg(valor=("valor", "sum"), cant=("cant", "sum"))
-                              .nlargest(topn, "valor")
-                              .sort_values("valor"))
-                    if agg.empty:
-                        st.info("Sin productos para este proveedor.")
+            # Panel A: Top N productos del proveedor en foco
+            with pa:
+                _ta = ("Selecciona un proveedor arriba para ver sus productos"
+                       if prov_focus is None
+                       else f"Productos · {_compras_truncar(prov_focus, 24)}")
+                with _card("prov_prods", _ta):
+                    # Selector Top N flotante en la esquina superior derecha de la card
+                    with st.container(key="topn_float"):
+                        st.pills("Top productos", [5, 10, 20], default=10,
+                                 key="compras_prov_topn", label_visibility="collapsed")
+                    if prov_focus is None:
+                        pass
                     else:
-                        prod_cats = list(agg.index)
-                        _um_map = {p: _um_de(sub[sub["prod"] == p]) for p in prod_cats}
-                        _txt = [
-                            f"S/ {v:,.0f}  ·  {c:,.0f}{_um_map[p]}"
-                            for p, v, c in zip(prod_cats, agg["valor"], agg["cant"])
-                        ]
-                        _cc = [SERIE_PRINCIPAL if p == prod_focus else ACENTO
-                               for p in prod_cats]
-                        figa = go.Figure(go.Bar(
-                            x=agg["valor"].values,
-                            y=[_compras_truncar(i, 24) for i in prod_cats],
-                            orientation="h", marker_color=_cc,
-                            text=_txt, textposition="outside", cliponaxis=False,
-                            hovertemplate="%{y}<extra></extra>",
-                        ))
-                        _compras_layout(figa, alto=max(240, 34 * len(agg) + 80))
-                        figa.update_xaxes(tickprefix="S/ ", tickformat=",.0f")
-                        figa.update_layout(margin=dict(l=10, r=140, t=12, b=10))
-                        _aevt = st.plotly_chart(
-                            figa, use_container_width=True,
-                            key=f"compras_g_prov_prods_{prov_focus}_{prod_focus}",
-                            on_select="rerun", selection_mode="points",
-                            config={"displayModeBar": False},
-                        )
-                        _ap = _first_point(_aevt)
-                        if _ap is not None:
-                            _j = _ap.get("point_number", _ap.get("point_index"))
-                            if _j is not None and 0 <= _j < len(prod_cats):
-                                st.session_state["compras_prov_prodfocus"] = prod_cats[_j]
-                                st.rerun()
+                        sub = base[base["prov"] == prov_focus]
+                        agg = (sub.groupby("prod")
+                                  .agg(valor=("valor", "sum"), cant=("cant", "sum"))
+                                  .nlargest(topn, "valor")
+                                  .sort_values("valor"))
+                        if agg.empty:
+                            st.info("Sin productos para este proveedor.")
+                        else:
+                            prod_cats = list(agg.index)
+                            _um_map = {p: _um_de(sub[sub["prod"] == p]) for p in prod_cats}
+                            _txt = [
+                                f"S/ {v:,.0f}  ·  {c:,.0f}{_um_map[p]}"
+                                for p, v, c in zip(prod_cats, agg["valor"], agg["cant"])
+                            ]
+                            _cc = [SERIE_PRINCIPAL if p == prod_focus else ACENTO
+                                   for p in prod_cats]
+                            figa = go.Figure(go.Bar(
+                                x=agg["valor"].values,
+                                y=[_compras_truncar(i, 24) for i in prod_cats],
+                                orientation="h", marker_color=_cc,
+                                text=_txt, textposition="outside", cliponaxis=False,
+                                hovertemplate="%{y}<extra></extra>",
+                            ))
+                            _compras_layout(figa, alto=max(240, 34 * len(agg) + 80))
+                            figa.update_xaxes(tickprefix="S/ ", tickformat=",.0f")
+                            figa.update_layout(margin=dict(l=10, r=140, t=12, b=10))
+                            _aevt = st.plotly_chart(
+                                figa, use_container_width=True,
+                                key=f"compras_g_prov_prods_{prov_focus}_{prod_focus}",
+                                on_select="rerun", selection_mode="points",
+                                config={"displayModeBar": False},
+                            )
+                            _ap = _first_point(_aevt)
+                            if _ap is not None:
+                                _j = _ap.get("point_number", _ap.get("point_index"))
+                                if _j is not None and 0 <= _j < len(prod_cats):
+                                    st.session_state["compras_prov_prodfocus"] = prod_cats[_j]
+                                    st.rerun()
 
 
-        # Panel B: proveedores del producto seleccionado
-        with pb:
-            _tb = ("Proveedores del producto" if prod_focus is None
-                   else f"Proveedores de · {_compras_truncar(prod_focus, 26)}")
-            with _card("prov_prov_de_prod", _tb):
-                if prod_focus is None:
-                    pass
-                else:
-                    sub2 = base[base["prod"] == prod_focus]
-                    filas = []
-                    for prov, grp in sub2.groupby("prov"):
-                        g2 = grp
-                        _uf = None
-                        if col_fecha and grp["fecha"].notna().any():
-                            g2 = grp.dropna(subset=["fecha"]).sort_values("fecha")
-                            _uf = pd.to_datetime(g2["fecha"].iloc[-1])
-                        ult = (g2["punit"].iloc[-1]
-                               if (col_punit and len(g2)
-                                   and pd.notna(g2["punit"].iloc[-1])) else np.nan)
-                        filas.append({
-                            "Proveedor":     prov,
-                            "Último precio": ult,
-                            "Últ. compra":   (_uf.strftime("%d/%m/%Y")
-                                              if _uf is not None else "—"),
-                            "Cant. acum.":   grp["cant"].sum(),
-                            "Unid":          (_um_de(grp).strip() if col_um else ""),
-                        })
-                    tabla = pd.DataFrame(filas).sort_values("Cant. acum.", ascending=False)
-                    _orden = ["Proveedor", "Último precio", "Últ. compra",
-                              "Cant. acum.", "Unid"]
-                    if not col_um:
-                        _orden.remove("Unid")
-                        tabla = tabla.drop(columns=["Unid"])
-                    if not col_fecha:
-                        _orden.remove("Últ. compra")
-                        tabla = tabla.drop(columns=["Últ. compra"])
-                    tabla = tabla[_orden]
-                    _min = (tabla["Último precio"].min()
-                            if tabla["Último precio"].notna().any() else None)
+            # Panel B: proveedores del producto seleccionado
+            with pb:
+                _tb = ("Proveedores del producto" if prod_focus is None
+                       else f"Proveedores de · {_compras_truncar(prod_focus, 26)}")
+                with _card("prov_prov_de_prod", _tb):
+                    if prod_focus is None:
+                        pass
+                    else:
+                        sub2 = base[base["prod"] == prod_focus]
+                        filas = []
+                        for prov, grp in sub2.groupby("prov"):
+                            g2 = grp
+                            _uf = None
+                            if col_fecha and grp["fecha"].notna().any():
+                                g2 = grp.dropna(subset=["fecha"]).sort_values("fecha")
+                                _uf = pd.to_datetime(g2["fecha"].iloc[-1])
+                            ult = (g2["punit"].iloc[-1]
+                                   if (col_punit and len(g2)
+                                       and pd.notna(g2["punit"].iloc[-1])) else np.nan)
+                            filas.append({
+                                "Proveedor":     prov,
+                                "Último precio": ult,
+                                "Últ. compra":   (_uf.strftime("%d/%m/%Y")
+                                                  if _uf is not None else "—"),
+                                "Cant. acum.":   grp["cant"].sum(),
+                                "Unid":          (_um_de(grp).strip() if col_um else ""),
+                            })
+                        tabla = pd.DataFrame(filas).sort_values("Cant. acum.", ascending=False)
+                        _orden = ["Proveedor", "Último precio", "Últ. compra",
+                                  "Cant. acum.", "Unid"]
+                        if not col_um:
+                            _orden.remove("Unid")
+                            tabla = tabla.drop(columns=["Unid"])
+                        if not col_fecha:
+                            _orden.remove("Últ. compra")
+                            tabla = tabla.drop(columns=["Últ. compra"])
+                        tabla = tabla[_orden]
+                        _min = (tabla["Último precio"].min()
+                                if tabla["Último precio"].notna().any() else None)
 
-                    def _hl(col):
-                        if col.name != "Último precio" or _min is None:
-                            return ["" for _ in col]
-                        return ["color:#15803d;font-weight:600"
-                                if (pd.notna(v) and v == _min) else "" for v in col]
+                        def _hl(col):
+                            if col.name != "Último precio" or _min is None:
+                                return ["" for _ in col]
+                            return ["color:#15803d;font-weight:600"
+                                    if (pd.notna(v) and v == _min) else "" for v in col]
 
-                    sty = (tabla.style
-                           .format({"Último precio": "S/ {:,.2f}",
-                                    "Cant. acum.": "{:,.0f}"},
-                                   na_rep="—")
-                           .apply(_hl, axis=0))
-                    st.dataframe(sty, hide_index=True, use_container_width=True,
-                                 height=min(430, 60 + 34 * len(tabla)))
-                    st.caption("Último precio = precio unitario de la compra más "
-                               "reciente. Verde = menor precio.")
+                        sty = (tabla.style
+                               .format({"Último precio": "S/ {:,.2f}",
+                                        "Cant. acum.": "{:,.0f}"},
+                                       na_rep="—")
+                               .apply(_hl, axis=0))
+                        st.dataframe(sty, hide_index=True, use_container_width=True,
+                                     height=min(430, 60 + 34 * len(tabla)))
+                        st.caption("Último precio = precio unitario de la compra más "
+                                   "reciente. Verde = menor precio.")
 
     # ── Tabla pivotable de documentos (debajo de los paneles A/B) ─────────
     # Cada fila es una línea de detalle (documento × producto). El usuario
@@ -500,8 +556,24 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     import json  # noqa: E402
     from st_aggrid import AgGrid, JsCode  # noqa: E402
 
+    if "cp_docs_abierto" not in st.session_state:
+        st.session_state["cp_docs_abierto"] = True
+    _c_hdr_docs, _c_btn_docs = st.columns([8, 1.5], vertical_alignment="center")
+    with _c_hdr_docs:
+        st.markdown(
+            f"<p style='margin:8px 0 2px;font-size:13px;font-weight:600;"
+            f"color:var(--text-secondary,#71717a)'>"
+            f"Detalle de documentos por proveedor · vista {gran}</p>",
+            unsafe_allow_html=True,
+        )
+    with _c_btn_docs, st.container(key="collapse_btn_docs"):
+        if st.button("▾ Ocultar" if st.session_state["cp_docs_abierto"]
+                     else "▸ Mostrar", key="cp_btn_docs"):
+            st.session_state["cp_docs_abierto"] = \
+                not st.session_state["cp_docs_abierto"]
+            st.rerun()
     _bd = base[base["prov"].isin(top_provs)].copy()
-    if not _bd.empty:
+    if st.session_state.get("cp_docs_abierto", True) and not _bd.empty:
         _fe = pd.to_datetime(_bd["fecha"], errors="coerce")
         _pv_docs = pd.DataFrame({
             "Proveedor": _bd["prov"].astype(str).values,
@@ -515,7 +587,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         })
 
         _pv_box = st.container(border=True, key="compras_prov_card_docs")
-        _pv_box.markdown(f"**Detalle de documentos por proveedor · vista {gran}**")
         _pv_box.caption("Arrastra campos a Filas / Columnas / Valores en el panel "
                         "derecho para pivotar. ▸ expande cada nivel.")
 
