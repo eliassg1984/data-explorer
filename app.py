@@ -449,37 +449,34 @@ if True:
                         f'<div class="fecha-overlay-txt">{_label_fecha}</div>',
                         unsafe_allow_html=True,
                     )
-                    if _usa_carga_rango:
-                        # El widget ES la fuente del rango de carga: usa la clave
-                        # de carga directamente. Al cambiarlo, Streamlit commitea
-                        # el valor ANTES del rerun, y la sección "CARGAR DATOS"
-                        # (arriba) re-descarga ese rango desde R2. Sin st.rerun,
-                        # sin copia manual → no se pierde el estado de la vista.
-                        st.date_input(
-                            "Rango a Evaluar",
-                            min_value=fecha_min_full,
-                            max_value=fecha_max_full,
-                            format="DD/MM/YYYY",
-                            key=_k_rango_franja,
-                            label_visibility="collapsed",
-                        )
-                    else:
-                        _ini_apl, _fin_apl = st.session_state[_k_rango_franja]
-                        rango_aj = st.date_input(
-                            "Rango a Evaluar",
-                            value=(_ini_apl, _fin_apl),
-                            min_value=fecha_min_full,
-                            max_value=fecha_max_full,
-                            format="DD/MM/YYYY",
-                            key=f"fch_franja_{reporte.replace(' ', '_')}",
-                            label_visibility="collapsed",
-                        )
-                        # Cambio de rango: basta con guardar el valor — el
-                        # filtro se aplica más abajo EN ESTA MISMA pasada.
-                        if (isinstance(rango_aj, (tuple, list))
-                                and len(rango_aj) == 2
-                                and tuple(rango_aj) != st.session_state[_k_rango_franja]):
-                            st.session_state[_k_rango_franja] = tuple(rango_aj)
+                    # Patrón unificado: la key del WIDGET es distinta de la key
+                    # del estado. Así los clamps y writes programáticos que
+                    # hacemos sobre el estado (línea ~329) NO se ven pisados
+                    # por el estado interno cacheado del widget de Streamlit —
+                    # el widget siempre re-lee `value=` desde el estado.
+                    _ini_apl, _fin_apl = st.session_state[_k_rango_franja]
+                    _wkey = f"fch_franja_{reporte.replace(' ', '_')}"
+                    rango_aj = st.date_input(
+                        "Rango a Evaluar",
+                        value=(_ini_apl, _fin_apl),
+                        min_value=fecha_min_full,
+                        max_value=fecha_max_full,
+                        format="DD/MM/YYYY",
+                        key=_wkey,
+                        label_visibility="collapsed",
+                    )
+                    if (isinstance(rango_aj, (tuple, list))
+                            and len(rango_aj) == 2 and all(rango_aj)
+                            and tuple(rango_aj) != (_ini_apl, _fin_apl)):
+                        st.session_state[_k_rango_franja] = tuple(rango_aj)
+                        if _usa_carga_rango:
+                            # Reportes por-rango: mirror también al rango
+                            # "ok" y forzar rerun para que la sección CARGAR
+                            # DATOS re-descargue desde R2 con el nuevo rango.
+                            st.session_state[f"rango_carga_ok_{reporte}"] = tuple(rango_aj)
+                            st.rerun()
+                        # Reportes con filtro local: no hace falta rerun,
+                        # el filtro se aplica más abajo EN ESTA MISMA pasada.
 
         # Las pestañas Gráficos/Tabla se movieron FUERA de la franja, a una
         # banda pegada al borde superior del canvas (ver más abajo, justo
