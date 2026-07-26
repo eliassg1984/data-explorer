@@ -72,7 +72,8 @@ def _periodo_serie(fe, gran):
 
 @st.fragment
 def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
-                             col_punit, col_um, col_fecha, col_docu=None):
+                             col_punit, col_um, col_fecha, col_docu=None,
+                             d_full=None):
     """Dashboard de Proveedor — barras verticales agrupadas por periodo.
 
     Gráfico principal: barras verticales por periodo (Semana/Mes/Año), un color
@@ -308,9 +309,19 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-chartcard_prov_prods .chart-card-hdr { padding-right: 124px; }
         .st-key-topn_float [data-testid="stElementToolbar"] { display: none; }
 
+        /* Ámbito de fecha (En rango / Todo) — en la cabecera del Panel B. */
+        .st-key-chartcard_prov_prov_de_prod { position: relative; }
+        .st-key-panelb_scope_float {
+            position: absolute; top: 10px; right: 16px; z-index: 20;
+            width: auto !important;
+        }
+        .st-key-chartcard_prov_prov_de_prod .chart-card-hdr { padding-right: 140px; }
+        .st-key-panelb_scope_float [data-testid="stElementToolbar"] { display: none; }
+
         /* ── Cápsula segmentada: unir las pills en un solo control ── */
         .st-key-gran_float [data-testid="stButtonGroup"],
-        .st-key-topn_float [data-testid="stButtonGroup"] {
+        .st-key-topn_float [data-testid="stButtonGroup"],
+        .st-key-panelb_scope_float [data-testid="stButtonGroup"] {
             gap: 0 !important;
             border: 1px solid rgba(49,51,63,0.2);
             border-radius: 999px;
@@ -318,13 +329,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             background: var(--background-color, #fff);
         }
         .st-key-gran_float [data-testid="stButtonGroup"] button,
-        .st-key-topn_float [data-testid="stButtonGroup"] button {
+        .st-key-topn_float [data-testid="stButtonGroup"] button,
+        .st-key-panelb_scope_float [data-testid="stButtonGroup"] button {
             border: 0 !important;
             border-radius: 0 !important;
             margin: 0 !important;
         }
         .st-key-gran_float [data-testid="stButtonGroup"] button:not(:first-child),
-        .st-key-topn_float [data-testid="stButtonGroup"] button:not(:first-child) {
+        .st-key-topn_float [data-testid="stButtonGroup"] button:not(:first-child),
+        .st-key-panelb_scope_float [data-testid="stButtonGroup"] button:not(:first-child) {
             border-left: 1px solid rgba(49,51,63,0.15) !important;
         }
 
@@ -435,6 +448,23 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         m = grp["um"].mode()
         return (" " + m.iat[0]) if len(m) and m.iat[0] not in ("", "nan") else ""
 
+    def _base_prov_de(_src):
+        """Base mínima (prov/prod/punit/cant/um/fecha) para la tabla del
+        Panel B, a partir de cualquier df origen (`d` filtrado por fecha o
+        `d_full` con todo el histórico)."""
+        _b = pd.DataFrame({
+            "prov":  _src[col_prov].astype(str).values,
+            "prod":  (_src[col_prod].astype(str).values if col_prod else "—"),
+            "cant":  (pd.to_numeric(_src[col_cant], errors="coerce").fillna(0).values
+                      if col_cant else 0.0),
+            "punit": (pd.to_numeric(_src[col_punit], errors="coerce").values
+                      if col_punit else np.nan),
+            "um":    (_src[col_um].astype(str).values if col_um else ""),
+            "fecha": (pd.to_datetime(_src[col_fecha], errors="coerce").values
+                      if col_fecha else pd.NaT),
+        })
+        return _b[_b["prov"].notna() & (_b["prov"] != "nan")]
+
     if "cp_paneles_abierto" not in st.session_state:
         st.session_state["cp_paneles_abierto"] = True
     # El título ES el toggle: prefijo −/+ (signo menos U+2212 + NBSP para que no
@@ -508,10 +538,24 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 _tb = ("Proveedores del producto" if prod_focus is None
                        else f"Proveedores de · {_compras_truncar(prod_focus, 26)}")
                 with _card("prov_prov_de_prod", _tb, titulo_arriba=True):
+                    # Toggle de ámbito de fecha, alojado en la cabecera (dcha.):
+                    # "En rango" respeta el filtro superior; "Todo" recalcula con
+                    # el histórico completo (d_full), ignorando el filtro de fecha.
+                    with st.container(key="panelb_scope_float"):
+                        _scope = st.pills(
+                            "Ámbito de fecha", ["En rango", "Todo"],
+                            default="En rango", key="compras_prov_prov_scope",
+                            label_visibility="collapsed",
+                        ) or "En rango"
                     if prod_focus is None:
                         pass
                     else:
-                        sub2 = base[base["prod"] == prod_focus]
+                        _todo_hist = (_scope == "Todo" and d_full is not None)
+                        _srcB = _base_prov_de(d_full) if _todo_hist else base
+                        if _todo_hist:
+                            st.caption("📅 Todo el histórico — ignora el filtro "
+                                       "de fecha de arriba.")
+                        sub2 = _srcB[_srcB["prod"] == prod_focus]
                         filas = []
                         for prov, grp in sub2.groupby("prov"):
                             g2 = grp
@@ -1474,6 +1518,15 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
         st.info("No hay datos para los filtros seleccionados.")
         return
 
+    # Data SIN filtro de fecha (para el toggle "Todo el histórico" del Panel B
+    # del drill Proveedor). Se le aplican los mismos chips Familia/Subfamilia,
+    # que no son de fecha. Si no llega df_full, cae a df_f (mismo comportamiento).
+    d_full = df_full if df_full is not None else df_f
+    if fam_sel and col_fam and col_fam in d_full.columns:
+        d_full = d_full[d_full[col_fam].astype(str).isin(fam_sel)]
+    if sub_sel and col_subfam and col_subfam in d_full.columns:
+        d_full = d_full[d_full[col_subfam].astype(str).isin(sub_sel)]
+
     _valor = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
     _mes = None
     if col_fecha and col_fecha in d.columns:
@@ -1531,7 +1584,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
     if graf == "Proveedor":
         with st.container(key="compras_prov_drill_wrap"):
             _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
-                                     col_punit, col_um, col_fecha, col_docu)
+                                     col_punit, col_um, col_fecha, col_docu,
+                                     d_full=d_full)
         return
 
     # Evolución proveedor: ancho completo (dashboard rediseñado con drill y detalle).
