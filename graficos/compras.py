@@ -380,13 +380,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         m = grp["um"].mode()
         return (" " + m.iat[0]) if len(m) and m.iat[0] not in ("", "nan") else ""
 
-    st.markdown(
-        "<div style='margin:18px 0 6px 0; font-size:13px; font-weight:600;"
-        "color:#71717a; text-transform:uppercase; letter-spacing:0.06em;'>"
-        "📦 Detalle del proveedor</div>",
-        unsafe_allow_html=True,
-    )
-
     with st.container(border=True, key="compras_prov_card_paneles"):
         pa, pb = st.columns(2)
 
@@ -521,12 +514,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             "Valor": _bd["valor"].astype(float).values,
         })
 
-        st.markdown(
-            "<div style='margin:18px 0 6px 0; font-size:13px; font-weight:600;"
-            "color:#71717a; text-transform:uppercase; letter-spacing:0.06em;'>"
-            "📋 Documentos de compra</div>",
-            unsafe_allow_html=True,
-        )
         _pv_box = st.container(border=True, key="compras_prov_card_docs")
         _pv_box.markdown(f"**Detalle de documentos por proveedor · vista {gran}**")
         _pv_box.caption("Arrastra campos a Filas / Columnas / Valores en el panel "
