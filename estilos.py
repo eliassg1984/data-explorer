@@ -1,15 +1,56 @@
 """
 Estilos globales de la app: CSS, tamaños de fuente e inyección del tema.
 
-Estructura del archivo
-----------------------
-El grueso vive dentro del string CSS de `get_css()`, agrupado por secciones
-delimitadas con headers de la forma:
+ÍNDICE (buscar el header exacto con Ctrl+F)
+-------------------------------------------
+    L  112  PALETA DE COLORES — variables :root del tema CallAI
+    L  170  HEADER NATIVO + ESPACIO SUPERIOR
+    L  197  IFRAMES INVISIBLES (por defecto)
+    L  211  PANEL DE RENDIMIENTO DEL NAVEGADOR (excepción iframe)
+    L  225  BOTÓN PARA EXPANDIR EL SIDEBAR
+    L  234  ESTILOS BASE — tipografía, fondos, layout raíz
+    L  274  INPUTS Y BOTONES
+    L  313  EXPANDER
+    L  328  CAPTION Y ALERTAS
+    L  354  SIDEBAR NAV
+    L  373  AGGRID — ancho completo
+    L  383  CONTROL DE TAMAÑO EN SIDEBAR
+    L  389  MÓVIL — LAYOUT GENERAL
+    L  469  SELECTOR DE VISTA (Tabla / Gráficos) — pestañas ghost
+    L  565  PESTAÑAS DE TIPO DE GRÁFICO (fila pegada al tope del gráfico)
+    L  606  BOTÓN FILTROS (popover)
+    L  624  FILA SUPERIOR DE AJUSTE DE INVENTARIO — franja blanca sticky
+    L  684  CHIPS DE FILTRO EN LA FRANJA BLANCA — Área / Familia / etc.
+    L  793  FECHA EN EL HEADER — overlay ES a la izquierda de la franja
+    L  866  CALENDARIO DESPLEGABLE (BaseWeb)
+    L  887  OCULTAR TOOLBARS NATIVAS DE STREAMLIT
+    L  907  POSICIÓN DEL TOAST (st.toast)
+    L  917  AVISO DE REFRESCO EN CURSO
+    L  930  CARDS DE GRÁFICOS — contenedor blanco (ajuste_graf_card_*)
+    L 1043  TARJETAS DEL DRILL DE PROVEEDOR (compras_prov_card_*)
+    L 1074  FRANJA INFERIOR FIJA — cierre visual del área de contenido
+    L 1129  MÓVIL — overrides @media (SIEMPRE al final; no mover)
 
-    /* ============ NOMBRE DE LA SECCIÓN ============ */
+Al mover secciones, ACTUALIZAR estos números. Los @media al final NO se
+tocan de posición: van al fondo para que ninguna regla desktop las pise.
 
-Al agregar reglas nuevas, ponerlas en la sección que corresponda; si no
-existe, crear un header nuevo con el mismo formato.
+Convención de keys — CRÍTICO para evitar solapes
+------------------------------------------------
+Un elemento visual = UNA key que es dueña de su estilo.
+
+- La key dueña vive en un `st.container(key="…")` que envuelve al elemento.
+- Los WIDGETS (`st.date_input`, `st.pills`, `st.selectbox`) NO se estilan
+  por su propia key — se envuelven en un container con key propia y se
+  estila el container. Ese container es el único bloque CSS que existe.
+- Antes de agregar CSS para un elemento nuevo: `grep -n <key-prefix>`
+  aquí; si ya hay otro bloque estilándolo, consolidar en UNO — no dejar
+  dos rutas de estilado para el mismo elemento (misma especificidad +
+  ambos `!important` = gana el que aparezca ÚLTIMO en el archivo, y eso
+  es un bug esperando a pasar).
+
+Excepciones conocidas (widgets estilados por su propia key, legado):
+- `[class*="st-key-vistatabs_"]` — pestañas Tabla/Gráficos (bloque L 426).
+  A consolidar la próxima vez que se toque ese bloque.
 
 Sobre los `!important` (hoy hay ~450)
 -------------------------------------
@@ -23,7 +64,8 @@ número por sí solo no aporta nada. Lo que sí importa:
   es aceptable; uno que contradice al código Python NO.
 - Cuando un cambio de diseño hace innecesario un bloque, borrarlo — no
   dejarlo "por si acaso". Los parches olvidados generan bugs futuros
-  (ver el commit de bordes del drill Proveedor, 2026-07-25).
+  (ver commit de bordes del drill Proveedor 2026-07-25, y solape de
+  `fch_franja_` vs `fecha_ajuste_pill` 2026-07-26).
 
 Sobre st.pills (importante para futuros cambios de estilo)
 ----------------------------------------------------------
