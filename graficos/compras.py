@@ -310,27 +310,39 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         /* Ocultar la barra de herramientas del propio gráfico (fullscreen) */
         .st-key-compras_prov_card_chart > div > [data-testid="stElementToolbar"] { display: none; }
 
-        /* Top productos 5/10/20 — alojado en la cabecera del Panel A, a la
-           derecha del título (Opción A: barra de cabecera con divisoria). */
+        /* Panel A — controles flotantes en la cabecera (Opción 1): DOS flotantes
+           absolutos apilados a la derecha — un texto chico con la selección
+           (período) ARRIBA y, justo debajo, Ámbito + Top N en una FILA. Al ser
+           absolutos no empujan el gráfico. El key de un st.container SIN borde ES
+           el stVerticalBlock, por eso la dirección FILA se fija sobre .st-key-...
+           directamente (no sobre un bloque anidado). Valores verificados. */
         .st-key-chartcard_prov_prods { position: relative; }
-        .st-key-topn_float {
-            position: absolute; top: 10px; right: 16px; z-index: 20;
+        .st-key-topn_selfloat {
+            position: absolute; top: 6px; right: 16px; z-index: 21;
             width: auto !important;
         }
-        /* Ámbito de período + Top N en una sola fila dentro de la cabecera
-           (patrón del repo: fila sobre el stVerticalBlock del contenedor). */
-        .st-key-topn_float [data-testid="stVerticalBlock"] {
+        .topn-selec {
+            font-size: 10px; line-height: 1; color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .st-key-topn_float {
+            position: absolute; top: 19px; right: 16px; z-index: 20;
+            width: auto !important;
+        }
+        .st-key-topn_float > div { width: auto !important; }
+        .st-key-topn_pills {
             flex-direction: row !important;
             flex-wrap: nowrap !important;
-            gap: 8px !important;
             align-items: center !important;
-        }
-        .st-key-topn_float [data-testid="stVerticalBlock"] > div {
+            gap: 8px !important;
             width: auto !important;
         }
-        /* Reservar espacio a la derecha del título para que se trunque con
-           "…" antes de llegar a los dos controles (ámbito + Top N). */
-        .st-key-chartcard_prov_prods .chart-card-hdr { padding-right: 252px; }
+        .st-key-topn_pills > div { width: auto !important; }
+        /* Reservar sitio a la derecha del título (se trunca con "…") y alto de
+           cabecera para alojar texto + controles sin pisar el gráfico. */
+        .st-key-chartcard_prov_prods .chart-card-hdr {
+            padding-right: 240px; min-height: 46px;
+        }
         .st-key-topn_float [data-testid="stElementToolbar"] { display: none; }
 
         /* Ámbito de fecha (En rango / Todo) — en la cabecera del Panel B. */
@@ -510,31 +522,35 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                        if prov_focus is None
                        else f"Productos · {_compras_truncar(prov_focus, 24)}")
                 with _card("prov_prods", _ta, titulo_arriba=True):
-                    # Controles de cabecera (encima de la divisoria, Opción 1):
-                    # ámbito de período + Top N, en una fila. El ámbito arranca
-                    # en "periodo" (el período de la barra que se clicó arriba).
-                    _per_lbl = {"Semana": "Esta semana",
-                                "Año": "Este año"}.get(gran, "Este mes")
+                    # Controles flotantes en la cabecera (Opción 1). Dos flotantes
+                    # absolutos apilados a la derecha: un texto chico con la
+                    # selección (período) clicada ARRIBA y, justo debajo, Ámbito +
+                    # Top N en una fila. Flotantes → no empujan el gráfico. El
+                    # ámbito arranca en "periodo" (el período de la barra clicada).
+                    _perf = st.session_state.get("compras_prov_perfocus")
+                    if _perf is not None:
+                        with st.container(key="topn_selfloat"):
+                            st.markdown(f'<div class="topn-selec">📅 {_perf}</div>',
+                                        unsafe_allow_html=True)
                     with st.container(key="topn_float"):
-                        _scope = st.pills(
-                            "Ámbito de período", ["rango", "periodo"],
-                            default="periodo",
-                            format_func=lambda v: {"rango": "Todo el rango",
-                                                   "periodo": _per_lbl}[v],
-                            key="compras_prov_prod_scope",
-                            label_visibility="collapsed",
-                        ) or "periodo"
-                        st.pills("Top productos", [5, 10, 20], default=10,
-                                 key="compras_prov_topn", label_visibility="collapsed")
+                        with st.container(key="topn_pills"):
+                            _scope = st.pills(
+                                "Ámbito de período", ["rango", "periodo"],
+                                default="periodo",
+                                format_func=lambda v: ("Todo el rango"
+                                                       if v == "rango" else "Selección"),
+                                key="compras_prov_prod_scope",
+                                label_visibility="collapsed",
+                            ) or "periodo"
+                            st.pills("Top productos", [5, 10, 20], default=10,
+                                     key="compras_prov_topn",
+                                     label_visibility="collapsed")
                     if prov_focus is None:
                         pass
                     else:
                         sub = base[base["prov"] == prov_focus]
-                        _perf = st.session_state.get("compras_prov_perfocus")
                         if _scope == "periodo" and _perf is not None:
                             sub = sub[sub["per"] == _perf]
-                            st.caption(f"📅 Solo {_perf} — período de la barra "
-                                       "que clicaste arriba.")
                         agg = (sub.groupby("prod")
                                   .agg(valor=("valor", "sum"), cant=("cant", "sum"))
                                   .nlargest(topn, "valor")
