@@ -916,6 +916,22 @@ def get_css():
         border-bottom-right-radius: inherit;
     }
 
+    /* Cabecera de _card(titulo_arriba=True): título arriba + divisoria.
+       Solo se emite en las tarjetas de Compras que lo piden; el resto
+       de dashboards conserva su título al pie (.chart-card-pie). */
+    .chart-card-hdr {
+        margin: 0 0 0.55rem;
+        padding: 0.1rem 0 0.5rem;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.35;
+        color: var(--accent-deep);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
     .streamlit-expanderContent .chart-card {
         border: none !important;
         box-shadow: none !important;

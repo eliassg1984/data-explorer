@@ -26,13 +26,20 @@ def _slug(texto):
 
 
 @contextmanager
-def _card(key, titulo: str = ""):
+def _card(key, titulo: str = "", titulo_arriba: bool = False):
     """Card nativo para un gráfico. `key` debe ser único por rerun.
-    Si hay `titulo`, se muestra como banda lavanda al pie del card
-    (clase .chart-card-pie, estilizada en estilos.py)."""
+    Con `titulo`:
+      - por defecto se muestra al pie (clase .chart-card-pie);
+      - si `titulo_arriba=True`, se muestra como cabecera arriba del card,
+        con divisoria (clase .chart-card-hdr, estilizada en estilos.py)."""
     with st.container(border=True, key=f"chartcard_{_slug(key)}"):
+        if titulo and titulo_arriba:
+            st.markdown(
+                f'<p class="chart-card-hdr">{titulo}</p>',
+                unsafe_allow_html=True,
+            )
         yield
-        if titulo:
+        if titulo and not titulo_arriba:
             st.markdown(
                 f'<p class="chart-card-pie">{titulo}</p>',
                 unsafe_allow_html=True,

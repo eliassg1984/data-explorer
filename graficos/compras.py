@@ -296,16 +296,16 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         /* Ocultar la barra de herramientas del propio gráfico (fullscreen) */
         .st-key-compras_prov_card_chart > div > [data-testid="stElementToolbar"] { display: none; }
 
-        /* Top productos flotante — isla sobre el área del gráfico del Panel A */
+        /* Top productos 5/10/20 — alojado en la cabecera del Panel A, a la
+           derecha del título (Opción A: barra de cabecera con divisoria). */
         .st-key-chartcard_prov_prods { position: relative; }
         .st-key-topn_float {
-            position: absolute; top: 14px; right: 16px; z-index: 20;
+            position: absolute; top: 10px; right: 16px; z-index: 20;
             width: auto !important;
-            box-shadow: 0 2px 8px rgba(16,16,20,0.12);
-            border-radius: 999px;
-            background: rgba(255,255,255,0.92);
-            backdrop-filter: blur(2px);
         }
+        /* Reservar espacio a la derecha del título para que se trunque con
+           "…" antes de llegar al control (evita solaparse con el toggle). */
+        .st-key-chartcard_prov_prods .chart-card-hdr { padding-right: 124px; }
         .st-key-topn_float [data-testid="stElementToolbar"] { display: none; }
 
         /* ── Cápsula segmentada: unir las pills en un solo control ── */
@@ -455,7 +455,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 _ta = ("Selecciona un proveedor arriba para ver sus productos"
                        if prov_focus is None
                        else f"Productos · {_compras_truncar(prov_focus, 24)}")
-                with _card("prov_prods", _ta):
+                with _card("prov_prods", _ta, titulo_arriba=True):
                     # Selector Top N flotante en la esquina superior derecha de la card
                     with st.container(key="topn_float"):
                         st.pills("Top productos", [5, 10, 20], default=10,
@@ -507,7 +507,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             with pb:
                 _tb = ("Proveedores del producto" if prod_focus is None
                        else f"Proveedores de · {_compras_truncar(prod_focus, 26)}")
-                with _card("prov_prov_de_prod", _tb):
+                with _card("prov_prov_de_prod", _tb, titulo_arriba=True):
                     if prod_focus is None:
                         pass
                     else:
@@ -850,7 +850,7 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
                     .groupby("sub")["m"].sum().sort_values())
             ctitulo = f"Subfamilias de {_compras_truncar(focus_fam, 26)}"
         comp_cats = list(comp.index)
-        with _card("fam_comp", ctitulo):
+        with _card("fam_comp", ctitulo, titulo_arriba=True):
             if comp.empty:
                 st.info("Sin datos.")
             else:
@@ -897,7 +897,8 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
         if focus_sub is not None:
             scope = scope[scope["sub"] == focus_sub]
         _amb = (focus_sub or focus_fam or "todas las familias")
-        with _card("fam_top", f"Top {topn} productos · {_compras_truncar(_amb, 24)}"):
+        with _card("fam_top", f"Top {topn} productos · {_compras_truncar(_amb, 24)}",
+                   titulo_arriba=True):
             agg = scope.groupby("prod").agg(
                 valor=("valor", "sum"), cant=("cant", "sum"), m=("m", "sum"))
             agg = agg.nlargest(topn, "m").sort_values("m")
