@@ -348,23 +348,39 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             transform-origin: top center;
             animation: unfoldDown 0.38s cubic-bezier(0.4, 0, 0.2, 1) backwards;
         }
-        /* Botones de toggle (capsula lavanda compacta) */
-        .st-key-collapse_btn_paneles button,
-        .st-key-collapse_btn_docs button {
-            background: var(--accent-tint, #f0edfe) !important;
-            border: 1px solid var(--border-lavender, #d4cdf7) !important;
-            border-radius: 999px !important;
-            color: var(--accent-deep, #4938b8) !important;
-            font-size: 11px !important;
-            font-weight: 600 !important;
-            padding: 2px 12px !important;
-            min-height: 24px !important;
-            letter-spacing: 0.02em;
+        /* Encabezado-toggle: el título ES el botón, con −/+ delante.
+           Se ve como texto plano (sin fondo ni borde), no como botón. */
+        .st-key-collapse_hdr_paneles button,
+        .st-key-collapse_hdr_docs button {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 4px 0 !important;
+            min-height: 0 !important;
+            width: auto !important;
+            justify-content: flex-start !important;
+            color: var(--text-secondary, #71717a) !important;
         }
-        .st-key-collapse_btn_paneles button:hover,
-        .st-key-collapse_btn_docs button:hover {
-            background: var(--accent-light, #e7e3fb) !important;
-            border-color: var(--accent, #6c5ce7) !important;
+        .st-key-collapse_hdr_paneles button p,
+        .st-key-collapse_hdr_docs button p {
+            font-size: 13px !important;
+            font-weight: 600 !important;
+            text-align: left !important;
+            color: var(--text-secondary, #71717a) !important;
+        }
+        .st-key-collapse_hdr_paneles button:hover, .st-key-collapse_hdr_paneles button:hover p,
+        .st-key-collapse_hdr_docs button:hover, .st-key-collapse_hdr_docs button:hover p,
+        .st-key-collapse_hdr_paneles button:focus, .st-key-collapse_hdr_paneles button:focus p,
+        .st-key-collapse_hdr_docs button:focus, .st-key-collapse_hdr_docs button:focus p {
+            color: var(--accent, #6c5ce7) !important;
+        }
+        .st-key-collapse_hdr_paneles button:focus,
+        .st-key-collapse_hdr_docs button:focus,
+        .st-key-collapse_hdr_paneles button:active,
+        .st-key-collapse_hdr_docs button:active {
+            background: transparent !important;
+            box-shadow: none !important;
+            outline: none !important;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -421,19 +437,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
     if "cp_paneles_abierto" not in st.session_state:
         st.session_state["cp_paneles_abierto"] = True
-    _c_hdr_pan, _c_btn_pan = st.columns([8, 1.5], vertical_alignment="center")
-    with _c_hdr_pan:
-        st.markdown(
-            "<p style='margin:4px 0 2px;font-size:13px;font-weight:600;"
-            "color:var(--text-secondary,#71717a)'>"
-            "Analisis de productos y proveedores</p>",
-            unsafe_allow_html=True,
-        )
-    with _c_btn_pan, st.container(key="collapse_btn_paneles"):
-        if st.button("▾ Ocultar" if st.session_state["cp_paneles_abierto"]
-                     else "▸ Mostrar", key="cp_btn_paneles"):
-            st.session_state["cp_paneles_abierto"] = \
-                not st.session_state["cp_paneles_abierto"]
+    # El título ES el toggle: prefijo −/+ (signo menos U+2212 + NBSP para que no
+    # se parsee como viñeta Markdown y para que + y − alineen igual).
+    with st.container(key="collapse_hdr_paneles"):
+        _pan_ab = st.session_state["cp_paneles_abierto"]
+        if st.button(("−" if _pan_ab else "+")
+                     + " Analisis de productos y proveedores",
+                     key="cp_btn_paneles"):
+            st.session_state["cp_paneles_abierto"] = not _pan_ab
             st.rerun()
     if st.session_state.get("cp_paneles_abierto", True):
         with st.container(border=True, key="compras_prov_card_paneles"):
@@ -558,19 +569,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
     if "cp_docs_abierto" not in st.session_state:
         st.session_state["cp_docs_abierto"] = True
-    _c_hdr_docs, _c_btn_docs = st.columns([8, 1.5], vertical_alignment="center")
-    with _c_hdr_docs:
-        st.markdown(
-            f"<p style='margin:8px 0 2px;font-size:13px;font-weight:600;"
-            f"color:var(--text-secondary,#71717a)'>"
-            f"Detalle de documentos por proveedor · vista {gran}</p>",
-            unsafe_allow_html=True,
-        )
-    with _c_btn_docs, st.container(key="collapse_btn_docs"):
-        if st.button("▾ Ocultar" if st.session_state["cp_docs_abierto"]
-                     else "▸ Mostrar", key="cp_btn_docs"):
-            st.session_state["cp_docs_abierto"] = \
-                not st.session_state["cp_docs_abierto"]
+    # El titulo ES el toggle (mismo patron que Paneles): prefijo −/+ con NBSP
+    # (evita que Markdown lo lea como vineta y alinea + con −).
+    with st.container(key="collapse_hdr_docs"):
+        _docs_ab = st.session_state["cp_docs_abierto"]
+        if st.button(("−" if _docs_ab else "+")
+                     + f" Detalle de documentos por proveedor · vista {gran}",
+                     key="cp_btn_docs"):
+            st.session_state["cp_docs_abierto"] = not _docs_ab
             st.rerun()
     _bd = base[base["prov"].isin(top_provs)].copy()
     if st.session_state.get("cp_docs_abierto", True) and not _bd.empty:
