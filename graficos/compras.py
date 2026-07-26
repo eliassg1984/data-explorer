@@ -1455,7 +1455,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
     # panel B, tabla AgGrid) lleva su propio borde para separación visual
     # limpia sin cajas anidadas.
     if graf == "Proveedor":
-        with st.container(key="ajuste_graf_card_izq_compras"):
+        with st.container(key="compras_prov_drill_wrap"):
             _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                      col_punit, col_um, col_fecha, col_docu)
         return
