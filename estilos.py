@@ -748,20 +748,40 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* PILL LAVANDA — date_input de Ajuste de Inventario                    */
-    /* Fijado en la esquina superior derecha de la franja blanca.           */
-    /* CAMBIO: position:fixed + top/right explícitos reemplazan el          */
-    /* margin:auto anterior (que solo funcionaba en flujo normal).          */
+    /* FECHA COMO TEXTO — trigger del popover a la IZQUIERDA de la franja.  */
+    /* Formato: "21 Julio 2026 - 25 Julio 2026" en negrita, sin borde.      */
+    /* El popover contiene el date_input real.                              */
     /* =================================================================== */
 .st-key-fecha_ajuste_pill {
     position: fixed !important;
-    top: 6px !important;
-    right: 16px !important;
-    left: auto !important;          /* nada lo ancla a la izquierda */
-    width: fit-content !important;  /* la caja se encoge al input   */
+    top: 10px !important;
+    left: 106px !important;         /* 90px (rail) + 16px margen */
+    right: auto !important;
+    width: fit-content !important;
     z-index: 23 !important;
     margin: 0 !important;
 }
+
+    /* Botón del popover: texto negro en negrita, sin borde ni fondo. */
+    .st-key-fecha_ajuste_pill [data-testid="stPopover"] > div > button,
+    .st-key-fecha_ajuste_pill button[kind="secondary"],
+    .st-key-fecha_ajuste_pill button[data-testid="stPopoverButton"] {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 2px 4px !important;
+        min-height: 0 !important;
+        color: #101014 !important;
+        font-weight: 700 !important;
+        font-size: 15px !important;
+        line-height: 1.2 !important;
+    }
+    .st-key-fecha_ajuste_pill [data-testid="stPopover"] > div > button:hover,
+    .st-key-fecha_ajuste_pill button[kind="secondary"]:hover,
+    .st-key-fecha_ajuste_pill button[data-testid="stPopoverButton"]:hover {
+        background: rgba(0, 0, 0, 0.04) !important;
+        color: var(--accent-deep) !important;
+    }
 
     [class*="st-key-fch_franja_"] [data-baseweb="input"] {
         width: auto !important;
@@ -1140,17 +1160,20 @@ def get_css():
             align-items: stretch !important;
         }
 
-        /* La pill de fecha se mantiene FIJA también en móvil (anclada
-           arriba a la derecha, dentro de la franja blanca) para que no
-           se desplace con el scroll. El título lleva max-width con
-           ellipsis (arriba) para que no se pisen en pantallas angostas. */
+        /* Fecha como texto: en móvil se ancla a la izquierda tras la
+           esquina superior (no hay nav-rail: la barra de nav vive abajo). */
         .st-key-fecha_ajuste_pill {
             position: fixed !important;
-            top: 6px !important;
-            right: 8px !important;
-            left: auto !important;
+            top: 8px !important;
+            left: 12px !important;
+            right: auto !important;
             margin: 0 !important;
             z-index: 23 !important;
+        }
+        .st-key-fecha_ajuste_pill [data-testid="stPopover"] > div > button,
+        .st-key-fecha_ajuste_pill button[kind="secondary"],
+        .st-key-fecha_ajuste_pill button[data-testid="stPopoverButton"] {
+            font-size: 13px !important;
         }
         [class*="st-key-fch_franja_"] .stDateInput input {
             width: 140px !important;
