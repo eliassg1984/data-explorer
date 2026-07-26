@@ -1406,7 +1406,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                 "Precio top 10", "Precio por compra",
                 "Precio vs año pasado", "Cantidad vs año pasado",
                 "Cantidad por producto",
-                "Semanal", "Vs año anterior", "Personalizado"]
+                "Semanal", "Vs año anterior", "Personalizado", "Tabla"]
 
     # Pestañas de tipo de gráfico (Familia, Proveedor, ...). G/T se dibuja
     # en la franja superior (app.py, col_titulo) igual que el resto de reportes.
@@ -1416,6 +1416,15 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                 "Gráfico", opciones, default=opciones[0],
                 key="compras_graf_tipo", label_visibility="collapsed",
             ) or opciones[0]
+
+    # Tabla: usa el mismo AgGrid de la vista Tabla, pero como una opción más
+    # del selector. `d` ya viene filtrado por los chips Familia/Subfamilia.
+    if graf == "Tabla":
+        from tablas import renderizar_aggrid_compras as _render_tabla_compras
+        from estilos import TAM_FUENTE
+        _font_px = TAM_FUENTE.get(st.session_state.get("tabla_tam", "Mediano"), 14)
+        _render_tabla_compras(d, _font_px)
+        return
 
     # Constructor: ancho completo, sin panel de mini-tops.
     if graf == "Personalizado":

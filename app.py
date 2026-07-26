@@ -409,7 +409,7 @@ if True:
             # Título oculto por pedido: en su lugar van las pestañas
             # Gráficos/Tabla (misma key vista_seg_<reporte> → mismo estado).
             # Requerimientos no tiene esas pestañas.
-            if reporte != "Requerimientos":
+            if reporte != "Requerimientos" and reporte != "Compras":
                 render_vista_pills(reporte, default=_vista_default)
         with col_fecha_top:
             if _franja_con_fecha:
@@ -814,12 +814,11 @@ def _render_contenido():
 
     # ── COMPRAS ─────────────────────────────────────────────────────────────
     if reporte == "Compras":
-        # G/T vive en la franja superior (col_titulo). Aquí solo se lee.
-        vista = st.session_state.get(f"vista_seg_{reporte}", _vista_default) or _vista_default
-        if vista == "Tabla":
-            renderizar_aggrid_compras(_filtros_chips_franja(df_f), font_px)
-        else:
-            renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
+        # Compras no usa G/T en la franja: la Tabla es una opción más dentro
+        # del selector de tipo de gráfico (ver graficos/compras.py). Los chips
+        # Familia/Subfamilia viven dentro de compras.py y se aplican por igual
+        # a los gráficos y a la Tabla.
+        renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
 
     # ── INVENTARIO VALORIZADO ────────────────────────────────────────────────
     elif reporte == "Inventario Valorizado":
