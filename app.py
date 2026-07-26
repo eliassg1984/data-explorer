@@ -13,6 +13,7 @@ from data import (
     hay_dato_nuevo, fecha_ultima_actualizacion,
 )
 from estilos import TAM_FUENTE, inject_css
+from estado_rango import clave_rango, asegurar_rango, debug_estado_rango
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_footer_actualizacion, inject_calendario_es
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_aggrid_compras
 from graficos import renderizar_graficos_reporte, render_vista_pills
@@ -212,10 +213,12 @@ with perf.phase("cargar()"):                                                # �
         # rerun y aquí se recarga desde R2 con el nuevo rango. Default liviano:
         # 01-del-mes → hoy (no baja las 100k+ filas salvo que el usuario amplíe).
         _hoy_c = datetime.date.today()
-        _k_rango = f"rango_carga_{reporte}"
+        # Dueño único del estado (ver estado_rango.py). Aquí aún no conocemos
+        # los bounds del parquet (se calculan tras cargar), así que solo
+        # SEMBRAMOS el default; el recorte a bounds ocurre más abajo.
+        _k_rango = clave_rango(reporte, usa_carga_rango=True, es_ajuste=False)
         _k_rango_ok = f"rango_carga_ok_{reporte}"   # último rango 2-tupla válido
-        if _k_rango not in st.session_state:
-            st.session_state[_k_rango] = (_hoy_c.replace(day=1), _hoy_c)
+        asegurar_rango(_k_rango, default=(_hoy_c.replace(day=1), _hoy_c))
         _rc = st.session_state.get(_k_rango)
         if isinstance(_rc, (tuple, list)) and len(_rc) == 2 and all(_rc):
             _r_ini, _r_fin = _rc
@@ -317,17 +320,15 @@ if _usa_carga_rango and col_fecha:
     _rf = rango_fechas(cfg["archivo"], cfg["carga_por_rango"])
     if _rf:
         fecha_min_full, fecha_max_full = _rf
-        # Acotar el rango guardado a [min, max] del parquet ANTES de dibujar el
-        # date-picker: el default (01-mes → hoy) puede exceder el máximo real
-        # si la data no llega hasta hoy, y date_input fallaría (value > max).
-        _kc = f"rango_carga_{reporte}"
-        _cur = st.session_state.get(_kc)
-        if isinstance(_cur, (tuple, list)) and len(_cur) == 2 and all(_cur):
-            _ci = min(max(_cur[0], fecha_min_full), fecha_max_full)
-            _cf = min(max(_cur[1], fecha_min_full), fecha_max_full)
-            if (_ci, _cf) != tuple(_cur):
-                st.session_state[_kc] = (_ci, _cf)
-                st.session_state[f"rango_carga_ok_{reporte}"] = (_ci, _cf)
+        # Ya conocemos los bounds reales del parquet: el DUEÑO ÚNICO recorta
+        # el rango guardado a [min, max] (el default 01-mes→hoy puede exceder
+        # el máximo real si la data no llega hasta hoy → date_input fallaría).
+        asegurar_rango(
+            clave_rango(reporte, usa_carga_rango=True, es_ajuste=False),
+            default=(fecha_min_full, fecha_max_full),
+            bounds=(fecha_min_full, fecha_max_full),
+            reporte=reporte, usa_carga_rango=True,
+        )
 
 _hoy = datetime.date.today()
 fecha_ini_default = _hoy.replace(day=1)   # 01 del mes actual
@@ -382,29 +383,22 @@ label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_act
 perf.start_phase("Ajuste top row")                                          # ⚡ PERF
 # DISEÑO UNIFICADO: la franja fija (título + fecha + pestañas) aplica a
 # TODOS los reportes. El rango de fecha vive en una clave por reporte
-# (Ajuste conserva su clave histórica, que graficos.py también lee).
-# Clave del rango de la franja. Para reportes con carga por rango (Ventas) es
-# la MISMA clave que usa la carga (`rango_carga_{reporte}`): así el date-picker
-# controla directamente qué se descarga de R2. Ajuste conserva su clave
-# histórica (que graficos.py lee); el resto usa una clave de filtro local.
-if _usa_carga_rango:
-    _k_rango_franja = f"rango_carga_{reporte}"
-elif es_ajuste:
-    _k_rango_franja = "ajuste_rango_aplicado"
-else:
-    _k_rango_franja = f"rango_franja_{reporte}"
+# Clave del rango de la franja — vía DUEÑO ÚNICO (ver estado_rango.py).
+_k_rango_franja = clave_rango(reporte, _usa_carga_rango, es_ajuste)
 _franja_con_fecha = bool(col_fecha) and fecha_min_full is not None
 if True:
-    # Rango aplicado (auto): al primer acceso usa 01-del-mes → hoy.
-    # Se inicializa ANTES de dibujar el date_input para que el widget
-    # arranque con el valor correcto.
+    # INVARIANTE: sembrar el default Y recortar a bounds AQUÍ, justo antes de
+    # dibujar el widget en este mismo render. Nunca clampear después del
+    # widget (se vería un render tarde → desync overlay/calendario/datos).
+    # Para carga_por_rango es idempotente con el recorte de arriba; para el
+    # resto de reportes ésta es su única inicialización/recorte.
     if _franja_con_fecha:
-        if _k_rango_franja not in st.session_state:
-            _ini_def = max(fecha_ini_default, fecha_min_full)
-            _fin_def = min(fecha_fin_default, fecha_max_full)
-            if _ini_def > _fin_def:
-                _ini_def, _fin_def = fecha_min_full, fecha_max_full
-            st.session_state[_k_rango_franja] = (_ini_def, _fin_def)
+        asegurar_rango(
+            _k_rango_franja,
+            default=(fecha_ini_default, fecha_fin_default),
+            bounds=(fecha_min_full, fecha_max_full),
+            reporte=reporte, usa_carga_rango=_usa_carga_rango,
+        )
 
     # Evitar NameError antes de la franja superior
     _fecha_actualizacion = None
@@ -433,27 +427,12 @@ if True:
                 if isinstance(_fecha_actualizacion, datetime.datetime):
                     if _fecha_actualizacion.tzinfo is not None:
                         _fecha_actualizacion = _fecha_actualizacion.astimezone(ZONA_PERU)
-                # UNA sola key para widget + estado + loader de datos.
-                # Streamlit auto-sincroniza cuando `key=` coincide con la
-                # session_state key. No usamos value= (redundante y trigger
-                # de bugs de caché) ni mirror-back manual.
+                # El estado ya quedó sembrado y recortado por asegurar_rango()
+                # arriba (una sola vez, antes de este widget). Aquí solo se
+                # LEE. El widget usa la MISMA key → Streamlit sincroniza solo,
+                # sin value= ni mirror-back manual.
                 #
-                # Clamp defensivo INMEDIATAMENTE antes del widget: si el
-                # rango guardado excede los bounds actuales de la data,
-                # lo recortamos AQUÍ (no arriba en CARGAR DATOS, para
-                # asegurar que el widget vea el valor recortado en este
-                # mismo render y NO en el siguiente).
-                _cur_st = st.session_state.get(_k_rango_franja)
-                if (isinstance(_cur_st, (tuple, list)) and len(_cur_st) == 2
-                        and all(_cur_st) and fecha_min_full and fecha_max_full):
-                    _ci = min(max(_cur_st[0], fecha_min_full), fecha_max_full)
-                    _cf = min(max(_cur_st[1], fecha_min_full), fecha_max_full)
-                    if (_ci, _cf) != tuple(_cur_st):
-                        st.session_state[_k_rango_franja] = (_ci, _cf)
-                        if _usa_carga_rango:
-                            st.session_state[f"rango_carga_ok_{reporte}"] = (_ci, _cf)
-
-                # Overlay: lee la MISMA key que el widget → siempre en sync.
+                # Overlay: lee la MISMA key que el widget → nunca divergen.
                 _rango_actual = st.session_state.get(_k_rango_franja)
                 if (isinstance(_rango_actual, (tuple, list))
                         and len(_rango_actual) == 2 and all(_rango_actual)):
@@ -514,6 +493,9 @@ if st.query_params.get("debug"):
         st.caption("⚠️ No se encontraron: " + ", ".join(faltantes_aviso))
     if "columnas" in cfg and faltan_cols:
         st.caption("⚠️ Columnas no encontradas: " + ", ".join(faltan_cols))
+    # Verdad del estado del rango (contrastar contra overlay y calendario si
+    # se sospecha un desync). Acceder con ?debug=1 en la URL.
+    debug_estado_rango()
 
 
 # ===========================================================================
