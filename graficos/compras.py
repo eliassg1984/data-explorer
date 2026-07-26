@@ -190,19 +190,32 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # Leemos la selección que Streamlit guardó en session_state[chart_key] en
     # la interacción previa. Así actualizamos el foco y construimos el figure
     # UNA sola vez con el foco correcto: sin doble rerun = sin parpadeo.
-    # Clic en la barra ya enfocada → vuelve a "todos" (toggle).
+    # Clic en la MISMA barra enfocada → la desenfoca; clic en otra barra del
+    # mismo proveedor → cambia el período sin perder el foco.
     _chart_key = f"compras_g_prov_main_{gran}"
     _mp = _first_point(st.session_state.get(_chart_key))
     if _mp is not None:
         _cn = _mp.get("curve_number")
+        # Período (barra) clicado: x de la selección, con fallback al índice.
+        _per_click = _mp.get("x")
+        if _per_click is None:
+            _pi = _mp.get("point_index", _mp.get("point_number"))
+            if _pi is not None and 0 <= _pi < len(periodos):
+                _per_click = periodos[_pi]
         if _cn is not None and 0 <= _cn < len(orden_provs):
             _clicked = orden_provs[_cn]
-            if st.session_state.get("compras_prov_last_click") != _clicked:
-                st.session_state["compras_prov_last_click"] = _clicked
-                prov_focus = None if _clicked == prov_focus else _clicked
+            # Dedup por (proveedor, período) para no reprocesar el mismo clic.
+            _click_key = (_clicked, _per_click)
+            if st.session_state.get("compras_prov_last_click") != _click_key:
+                st.session_state["compras_prov_last_click"] = _click_key
+                _misma_barra = (_clicked == prov_focus and _per_click ==
+                                st.session_state.get("compras_prov_perfocus"))
+                prov_focus = None if _misma_barra else _clicked
                 prod_focus = None
                 st.session_state["compras_prov_focus"]     = prov_focus
                 st.session_state["compras_prov_prodfocus"] = None
+                st.session_state["compras_prov_perfocus"]  = (
+                    None if _misma_barra else _per_click)
 
     # ── Gráfico principal: barras verticales por periodo ──────────────────
 
@@ -304,9 +317,20 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             position: absolute; top: 10px; right: 16px; z-index: 20;
             width: auto !important;
         }
+        /* Ámbito de período + Top N en una sola fila dentro de la cabecera
+           (patrón del repo: fila sobre el stVerticalBlock del contenedor). */
+        .st-key-topn_float [data-testid="stVerticalBlock"] {
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            gap: 8px !important;
+            align-items: center !important;
+        }
+        .st-key-topn_float [data-testid="stVerticalBlock"] > div {
+            width: auto !important;
+        }
         /* Reservar espacio a la derecha del título para que se trunque con
-           "…" antes de llegar al control (evita solaparse con el toggle). */
-        .st-key-chartcard_prov_prods .chart-card-hdr { padding-right: 124px; }
+           "…" antes de llegar a los dos controles (ámbito + Top N). */
+        .st-key-chartcard_prov_prods .chart-card-hdr { padding-right: 252px; }
         .st-key-topn_float [data-testid="stElementToolbar"] { display: none; }
 
         /* Ámbito de fecha (En rango / Todo) — en la cabecera del Panel B. */
@@ -486,14 +510,31 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                        if prov_focus is None
                        else f"Productos · {_compras_truncar(prov_focus, 24)}")
                 with _card("prov_prods", _ta, titulo_arriba=True):
-                    # Selector Top N flotante en la esquina superior derecha de la card
+                    # Controles de cabecera (encima de la divisoria, Opción 1):
+                    # ámbito de período + Top N, en una fila. El ámbito arranca
+                    # en "periodo" (el período de la barra que se clicó arriba).
+                    _per_lbl = {"Semana": "Esta semana",
+                                "Año": "Este año"}.get(gran, "Este mes")
                     with st.container(key="topn_float"):
+                        _scope = st.pills(
+                            "Ámbito de período", ["rango", "periodo"],
+                            default="periodo",
+                            format_func=lambda v: {"rango": "Todo el rango",
+                                                   "periodo": _per_lbl}[v],
+                            key="compras_prov_prod_scope",
+                            label_visibility="collapsed",
+                        ) or "periodo"
                         st.pills("Top productos", [5, 10, 20], default=10,
                                  key="compras_prov_topn", label_visibility="collapsed")
                     if prov_focus is None:
                         pass
                     else:
                         sub = base[base["prov"] == prov_focus]
+                        _perf = st.session_state.get("compras_prov_perfocus")
+                        if _scope == "periodo" and _perf is not None:
+                            sub = sub[sub["per"] == _perf]
+                            st.caption(f"📅 Solo {_perf} — período de la barra "
+                                       "que clicaste arriba.")
                         agg = (sub.groupby("prod")
                                   .agg(valor=("valor", "sum"), cant=("cant", "sum"))
                                   .nlargest(topn, "valor")
