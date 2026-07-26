@@ -449,13 +449,17 @@ if True:
                         f'<div class="fecha-overlay-txt">{_label_fecha}</div>',
                         unsafe_allow_html=True,
                     )
-                    # Patrón unificado: la key del WIDGET es distinta de la key
-                    # del estado. Así los clamps y writes programáticos que
-                    # hacemos sobre el estado (línea ~329) NO se ven pisados
-                    # por el estado interno cacheado del widget de Streamlit —
-                    # el widget siempre re-lee `value=` desde el estado.
+                    # Patrón "widget re-montable": la key del WIDGET incluye
+                    # el hash del rango actual del estado. Cuando algo escribe
+                    # programáticamente al estado (p.ej. el clamp de línea
+                    # ~329 al cargar un reporte con bounds nuevos), la key
+                    # cambia → Streamlit trata al widget como uno nuevo y
+                    # re-lee `value=`. Sin esto, Streamlit cachea el valor
+                    # inicial en session_state[widget_key] e ignora `value=`
+                    # en los renders siguientes → overlay desync.
                     _ini_apl, _fin_apl = st.session_state[_k_rango_franja]
-                    _wkey = f"fch_franja_{reporte.replace(' ', '_')}"
+                    _wkey = (f"fch_franja_{reporte.replace(' ', '_')}"
+                             f"_{_ini_apl}_{_fin_apl}")
                     rango_aj = st.date_input(
                         "Rango a Evaluar",
                         value=(_ini_apl, _fin_apl),
