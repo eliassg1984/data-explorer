@@ -605,6 +605,17 @@ def get_css():
         margin-top: -40px !important;
     }
 
+    /* Franja del título MÁS ANGOSTA en Compras: reduce la altura del fondo
+       blanco fijo (::before de fila_ajuste_top) y su padding. Los chips
+       Familia/Subfamilia y la fecha (position:fixed a top:6px) se mantienen
+       centrados dentro del alto nuevo. Scopeado con :has, no afecta a otros. */
+    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row) .st-key-fila_ajuste_top::before {
+        height: 34px !important;
+    }
+    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row) .st-key-fila_ajuste_top {
+        padding-top: 2px !important;
+    }
+
     .st-key-graf_tipo_chips {
         margin: 0 !important;
         overflow: visible !important;
