@@ -295,7 +295,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             hovertemplate="Otros · %{x}<br>S/ %{y:,.0f}<extra></extra>",
         )
 
-    _compras_layout(fig, alto=400)
+    _compras_layout(fig, alto=360)
     fig.update_layout(
 
         barmode="group",
