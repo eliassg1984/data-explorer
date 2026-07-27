@@ -317,6 +317,17 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             range=[len(periodos) - 12.5, len(periodos) - 0.5],
         )
 
+    # Ancho mínimo por barra: si muchos proveedores × muchos periodos no caben
+    # cómodos en el ancho disponible, damos ancho fijo al figure y el
+    # contenedor exterior le pone scroll horizontal. Umbral: si el grupo de
+    # barras por periodo mide menos de ~90px, activamos el modo scroll.
+    _n_series = len(orden_provs) + (1 if (_hay_otros and _otros_seleccionado) else 0)
+    _min_por_barra = 12          # ancho mínimo de cada barra (px)
+    _sep_entre_grupos = 40       # aire entre grupos de barras (px)
+    _px_grupo_min = _n_series * _min_por_barra + _sep_entre_grupos
+    _fig_width_needed = _px_grupo_min * max(1, len(periodos)) + 120  # + márgenes
+    _scroll_mode = _n_series >= 4 and _fig_width_needed > 900
+
     # ── Selector de granularidad FLOTANTE sobre el gráfico ────────────────
     # El contenedor "compras_prov_card_chart" es posición relativa; dentro,
     # las pills se posicionan en absoluto arriba-derecha, superpuestas al gráfico.
@@ -501,16 +512,32 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         with st.container(key="gran_float"):
             st.pills("Periodo", ["Semana", "Mes", "Año"], default="Mes",
                      key="compras_prov_gran", label_visibility="collapsed")
-        st.plotly_chart(
-            fig,
-            use_container_width=True,
-            key=_chart_key,
-            on_select="rerun",
-            selection_mode="points",
-            # edits.legendPosition: permite ARRASTRAR la leyenda con el cursor.
-            # Ojo: la posición no persiste (al reejecutar vuelve a y=0.82).
-            config={"displayModeBar": False, "edits": {"legendPosition": True}},
-        )
+        if _scroll_mode:
+            # Ancho fijo del figure > ancho del contenedor → el wrapper con
+            # overflow-x:auto (CSS en estilos.py) muestra scroll horizontal.
+            fig.update_layout(width=_fig_width_needed)
+            with st.container(key="compras_prov_chart_scroll"):
+                st.plotly_chart(
+                    fig,
+                    use_container_width=False,
+                    key=_chart_key,
+                    on_select="rerun",
+                    selection_mode="points",
+                    config={"displayModeBar": False,
+                            "edits": {"legendPosition": True}},
+                )
+        else:
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                key=_chart_key,
+                on_select="rerun",
+                selection_mode="points",
+                # edits.legendPosition: permite ARRASTRAR la leyenda con el cursor.
+                # Ojo: la posición no persiste (al reejecutar vuelve a y=0.82).
+                config={"displayModeBar": False,
+                        "edits": {"legendPosition": True}},
+            )
 
     # ── Paneles A y B ─────────────────────────────────────────────────────
     def _um_de(grp):
