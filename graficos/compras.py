@@ -1631,26 +1631,27 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                 "Cantidad por producto",
                 "Semanal", "Vs año anterior", "Personalizado", "Tabla"]
 
-    # Iconos por sección: se anteponen SOLO en la vista (format_func); el valor
-    # que devuelve st.pills sigue siendo el texto plano, así que los
-    # `if graf == "..."` de abajo no cambian. Sirven de ancla visual cuando el
-    # rail de la derecha está colapsado (solo se ve el emoji).
+    # Iconos por seccion (Material Symbols): se anteponen SOLO en la vista
+    # (format_func); el valor que devuelve st.pills sigue siendo el texto plano,
+    # asi que los `if graf == "..."` de abajo no cambian. Son el ancla visual
+    # cuando el rail de la derecha esta colapsado (solo se ve el icono).
     _ICONOS_GRAF = {
-        "Familia": "🗂️", "Proveedor": "🏢", "Evolución proveedor": "📈",
-        "Precio top 10": "🏆", "Precio por compra": "🧾",
-        "Precio vs año pasado": "💹", "Cantidad vs año pasado": "📦",
-        "Cantidad por producto": "🔢", "Semanal": "🗓️",
-        "Vs año anterior": "🔁", "Personalizado": "🛠️", "Tabla": "📋",
+        "Familia": "category", "Proveedor": "local_shipping",
+        "Evolución proveedor": "trending_up", "Precio top 10": "leaderboard",
+        "Precio por compra": "sell", "Precio vs año pasado": "price_change",
+        "Cantidad vs año pasado": "inventory_2", "Cantidad por producto": "bar_chart",
+        "Semanal": "calendar_view_week", "Vs año anterior": "compare_arrows",
+        "Personalizado": "tune", "Tabla": "table_chart",
     }
 
     # Rail vertical colapsable pegado al borde DERECHO (estilos.py). Colapsado
-    # muestra solo el icono; al pasar el cursor se ensancha y aparece el texto.
+    # muestra solo el icono; al pasar el cursor se ensancha y aparece el nombre.
     with st.container(key="compras_tabs_row"):
         with st.container(key="graf_tipo_chips"):
             graf = st.pills(
                 "Gráfico", opciones, default=opciones[0],
                 key="compras_graf_tipo", label_visibility="collapsed",
-                format_func=lambda o: f"{_ICONOS_GRAF.get(o, '•')} {o}",
+                format_func=lambda o: f":material/{_ICONOS_GRAF.get(o, 'circle')}: {o}",
             ) or opciones[0]
 
     # Tabla: usa el mismo AgGrid de la vista Tabla, pero como una opción más

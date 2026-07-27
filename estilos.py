@@ -571,26 +571,31 @@ def get_css():
     /* =================================================================== */
     .st-key-compras_tabs_row {
         position: fixed !important;
-        top: 74px !important;
+        top: 0 !important;
         right: 0 !important;
+        bottom: 0 !important;
+        height: 100vh !important;
         z-index: 900 !important;
-        width: 52px !important;
-        max-height: calc(100vh - 96px) !important;
+        width: 56px !important;
         overflow-x: hidden !important;
         overflow-y: auto !important;
         margin: 0 !important;
-        padding: 6px 0 !important;
+        /* padding-top deja pasar la franja superior (fecha/título) */
+        padding: 78px 0 16px 0 !important;
         background: var(--bg-card, #ffffff) !important;
-        border: 1px solid var(--border) !important;
-        border-right: none !important;
-        border-radius: 14px 0 0 14px !important;
-        box-shadow: -6px 0 18px rgba(0,0,0,.10) !important;
-        transition: width .22s ease !important;
+        border-left: 1px solid var(--border) !important;
+        border-radius: 0 !important;       /* franja plana, no pastilla */
+        box-shadow: none !important;       /* sin sombra en reposo */
+        transition: width .2s ease, box-shadow .2s ease !important;
         scrollbar-width: none !important;
     }
     .st-key-compras_tabs_row::-webkit-scrollbar { display: none !important; }
-    /* Al pasar el cursor: se despliega y revela el texto completo. */
-    .st-key-compras_tabs_row:hover { width: 236px !important; }
+    /* Al pasar el cursor: se despliega, revela los nombres y se separa del
+       fondo con una sombra suave (solo mientras está abierta). */
+    .st-key-compras_tabs_row:hover {
+        width: 240px !important;
+        box-shadow: -10px 0 26px rgba(0,0,0,.10) !important;
+    }
 
     /* Reserva el ancho del rail COLAPSADO solo en Compras (no toca otros
        reportes): el :has() detecta el rail dentro del contenedor principal. */
