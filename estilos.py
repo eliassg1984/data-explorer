@@ -596,11 +596,13 @@ def get_css():
         padding-right: 98px !important;
     }
 
-    /* Subir el contenido: ya no hay barra de pestañas horizontal ocupando alto,
-       así que recuperamos ese espacio subiendo los chips + las tarjetas. Solo
-       en Compras (scopeado por :has el rail de la derecha). */
-    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-chips_ajuste_tabla {
-        margin-top: -26px !important;
+    /* Subir las TARJETAS (no los chips fijos): recupera el hueco que dejó la
+       antigua barra horizontal de pestañas. Se aplica solo a los contenedores
+       que sí viven en el flujo del dashboard de Compras. */
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap,
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_izq_compras,
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_der_compras {
+        margin-top: -18px !important;
     }
 
     .st-key-graf_tipo_chips {
