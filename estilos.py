@@ -602,7 +602,7 @@ def get_css():
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap,
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_izq_compras,
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_der_compras {
-        margin-top: -18px !important;
+        margin-top: -40px !important;
     }
 
     .st-key-graf_tipo_chips {
