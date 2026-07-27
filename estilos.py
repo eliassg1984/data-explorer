@@ -596,6 +596,13 @@ def get_css():
         padding-right: 98px !important;
     }
 
+    /* Subir el contenido: ya no hay barra de pestañas horizontal ocupando alto,
+       así que recuperamos ese espacio subiendo los chips + las tarjetas. Solo
+       en Compras (scopeado por :has el rail de la derecha). */
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-chips_ajuste_tabla {
+        margin-top: -26px !important;
+    }
+
     .st-key-graf_tipo_chips {
         margin: 0 !important;
         overflow: visible !important;
@@ -608,7 +615,7 @@ def get_css():
         flex-wrap: nowrap !important;
         align-items: stretch !important;
         width: 100% !important;
-        gap: 2px !important;
+        gap: 12px !important;   /* separación entre secciones */
     }
     /* Cada sección: bloque completo, contenido centrado. */
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button {
@@ -624,28 +631,19 @@ def get_css():
         border-right: 3px solid transparent !important;   /* marca el activo */
         padding: 10px 4px !important;
     }
-    /* Apila ÍCONO (arriba) + NOMBRE (abajo). El markdown del label es un solo
-       <p> con el icono (span) y el texto; con flex-column el texto cae debajo. */
+    /* Solo el NOMBRE, centrado y con posibilidad de envolver en varias líneas. */
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button p,
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button [data-testid="stMarkdownContainer"] {
         display: flex !important;
         flex-direction: column !important;
         align-items: center !important;
         justify-content: center !important;
-        gap: 4px !important;
         margin: 0 !important;
         white-space: normal !important;    /* el nombre puede envolver */
         text-align: center !important;
-        line-height: 1.12 !important;
-        font-size: 10.5px !important;      /* tamaño del NOMBRE */
+        line-height: 1.15 !important;
+        font-size: 10.5px !important;      /* tamaño del NOMBRE (sin cambios) */
         word-break: break-word !important;
-    }
-    /* El ícono más grande que el texto (el font-size del span manda). */
-    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button [data-testid="stIconMaterial"],
-    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button span[class*="material"] {
-        font-size: 23px !important;
-        width: 23px !important;
-        height: 23px !important;
     }
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button:hover {
         background: var(--bg-hover, #f0edfe) !important;
