@@ -501,8 +501,24 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
            lo fija un <style> inyectado desde Python (st.markdown NO ejecuta JS,
            mismo patron de .st-key-*). El boton se estira al ancho de su columna
            pero se topa a 44px, asi no se desborda en pantallas angostas. */
-        .st-key-latch_paneles { display: flex; align-items: flex-start;
-                                justify-content: center; }
+        /* La tarjeta va full-width (flujo normal); el pestillo FLOTA en el
+           margen izquierdo (gutter ~80px del block-container) sin empujarla.
+           El wrap es el ancla de posicion. */
+        .st-key-paneles_wrap { position: relative; }
+        .st-key-latch_paneles {
+            position: absolute; top: 2px; left: -58px;
+            width: 44px !important; min-width: 44px !important;
+            margin: 0 !important; z-index: 10;
+            display: flex; align-items: flex-start; justify-content: center;
+        }
+        /* En pantallas angostas no hay gutter: el pestillo vuelve al flujo,
+           apilado arriba del titulo. */
+        @media (max-width: 768px) {
+            .st-key-latch_paneles {
+                position: static !important; left: auto !important;
+                top: auto !important; margin: 0 0 6px 0 !important;
+            }
+        }
         .st-key-latch_paneles button {
             display: flex !important; flex-direction: column;
             align-items: center; justify-content: center; gap: 8px;
@@ -795,16 +811,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         "</style>",
         unsafe_allow_html=True,
     )
-    _lat_col, _body_col = st.columns([1, 18], gap="small",
-                                     vertical_alignment="top")
-    with _lat_col:
+    # Wrap relativo: la tarjeta queda full-width (flujo normal) y el pestillo
+    # flota en el margen izquierdo (absolute) sin desplazarla.
+    with st.container(key="paneles_wrap"):
         with st.container(key="latch_paneles"):
             if st.button("⚓", key="cp_btn_paneles",
                          help="Abrir / cerrar el analisis de productos y "
                               "proveedores"):
                 st.session_state["cp_paneles_abierto"] = not _pan_ab
                 st.rerun(scope="fragment")
-    with _body_col:
         st.markdown(
             '<div class="latch-title">Analisis de productos y proveedores</div>',
             unsafe_allow_html=True,
