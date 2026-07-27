@@ -295,10 +295,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             hovertemplate="Otros · %{x}<br>S/ %{y:,.0f}<extra></extra>",
         )
 
-    _compras_layout(fig, alto=420)
+    _compras_layout(fig, alto=400)
     fig.update_layout(
 
         barmode="group",
+        # Margen superior mínimo: el gráfico sube dentro de la tarjeta y elimina
+        # la franja vacía sobre las barras (los flotantes Proveedores/Periodo se
+        # superponen encima; van con fondo semitransparente y no molestan).
+        margin=dict(l=10, r=10, t=6, b=10),
         xaxis=dict(type="category", tickangle=0),
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f"),
         # Leyenda VERTICAL flotando DENTRO del área (x<=1 → Plotly no reserva
