@@ -442,10 +442,23 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
            fill-mode backwards: arranca colapsada y al terminar no deja
            transform residual (evita texto borroso). NO usamos <script>
            porque st.markdown NO ejecuta JS. */
-        .st-key-compras_prov_card_paneles,
+        /* Bloque docs: se despliega hacia ABAJO. */
         .st-key-compras_prov_card_docs {
             transform-origin: top center;
             animation: unfoldDown 0.38s cubic-bezier(0.4, 0, 0.2, 1) backwards;
+        }
+        /* Bloque paneles: se despliega hacia la DERECHA (sale del pestillo). */
+        @keyframes unfoldRight {
+            0%   { transform: perspective(700px) scaleX(0) rotateY(90deg);
+                   opacity: 0; }
+            65%  { transform: perspective(700px) scaleX(1.03) rotateY(-4deg);
+                   opacity: 1; }
+            100% { transform: perspective(700px) scaleX(1) rotateY(0deg);
+                   opacity: 1; }
+        }
+        .st-key-compras_prov_card_paneles {
+            transform-origin: left center;
+            animation: unfoldRight 0.42s cubic-bezier(0.4, 0, 0.2, 1) backwards;
         }
         /* Encabezado-toggle: el título ES el botón, con −/+ delante.
            Se ve como texto plano (sin fondo ni borde), no como botón. */
@@ -481,6 +494,52 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             box-shadow: none !important;
             outline: none !important;
         }
+
+        /* ── PESTILLO LATERAL (ancla) — bloque "Analisis de productos y
+           proveedores". El ancla es el emoji del label: gira 180 al abrir.
+           Debajo, ::after muestra abrir/cerrar. El estado (rotacion + palabra)
+           lo fija un <style> inyectado desde Python (st.markdown NO ejecuta JS,
+           mismo patron de .st-key-*). El boton se estira al ancho de su columna
+           pero se topa a 44px, asi no se desborda en pantallas angostas. */
+        .st-key-latch_paneles { display: flex; align-items: flex-start;
+                                justify-content: center; }
+        .st-key-latch_paneles button {
+            display: flex !important; flex-direction: column;
+            align-items: center; justify-content: center; gap: 8px;
+            width: 100% !important; min-width: 0 !important;
+            max-width: 44px !important; min-height: 66px !important;
+            margin-top: 4px; padding: 12px 4px !important;
+            border: 0.5px solid var(--border, #e4e4e7) !important;
+            border-radius: 10px !important;
+            background: var(--surface-1, #fafafa) !important;
+            box-shadow: none !important;
+            transition: background .15s, border-color .15s !important;
+        }
+        .st-key-latch_paneles button:hover {
+            background: var(--bg-accent, #f0edfe) !important;
+            border-color: #d4cdf7 !important;
+        }
+        .st-key-latch_paneles button:focus,
+        .st-key-latch_paneles button:active {
+            outline: none !important; box-shadow: none !important;
+            border-color: #d4cdf7 !important;
+            background: var(--bg-accent, #f0edfe) !important;
+        }
+        .st-key-latch_paneles button p {
+            font-size: 19px !important; line-height: 1 !important;
+            margin: 0 !important;
+            transition: transform .42s cubic-bezier(.4, 0, .2, 1);
+        }
+        .st-key-latch_paneles button::after {
+            content: "abrir"; font-size: 10px; letter-spacing: .04em;
+            line-height: 1; writing-mode: vertical-rl; text-orientation: mixed;
+            transform: rotate(180deg); color: var(--text-muted, #a1a1aa);
+        }
+        .st-key-latch_paneles button:hover::after {
+            color: var(--accent, #6c5ce7);
+        }
+        .latch-title { font-size: 15px; font-weight: 600;
+                       color: var(--accent, #6c5ce7); margin: 6px 0 10px; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -569,16 +628,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
     if "cp_paneles_abierto" not in st.session_state:
         st.session_state["cp_paneles_abierto"] = True
-    # El título ES el toggle: prefijo −/+ (signo menos U+2212 + NBSP para que no
-    # se parsee como viñeta Markdown y para que + y − alineen igual).
-    with st.container(key="collapse_hdr_paneles"):
-        _pan_ab = st.session_state["cp_paneles_abierto"]
-        if st.button(("−" if _pan_ab else "+")
-                     + " Analisis de productos y proveedores",
-                     key="cp_btn_paneles"):
-            st.session_state["cp_paneles_abierto"] = not _pan_ab
-            st.rerun()
-    if st.session_state.get("cp_paneles_abierto", True):
+
+    # -- Bloque 2: pestillo lateral (ancla). El titulo queda SIEMPRE visible;
+    #    la tarjeta A/B se despliega a la derecha del pestillo. La tarjeta vive
+    #    en una funcion local para NO re-indentar su cuerpo; se llama dentro de
+    #    la columna body (abajo) solo si el pestillo esta abierto.
+    def _paneles_card():
         with st.container(border=True, key="compras_prov_card_paneles"):
             pa, pb = st.columns(2)
 
@@ -653,7 +708,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 _j = _ap.get("point_number", _ap.get("point_index"))
                                 if _j is not None and 0 <= _j < len(prod_cats):
                                     st.session_state["compras_prov_prodfocus"] = prod_cats[_j]
-                                    st.rerun()
+                                    st.rerun(scope="fragment")
 
 
             # Panel B: proveedores del producto seleccionado
@@ -725,6 +780,37 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                      height=min(430, 60 + 34 * len(tabla)))
                         st.caption("Último precio = precio unitario de la compra más "
                                    "reciente. Verde = menor precio.")
+
+    # -- Pestillo (ancla) + titulo del bloque. El icono gira 180 y la palabra
+    #    abrir/cerrar cambia segun el estado, via CSS inyectado. El pestillo usa
+    #    scope="fragment" para no recargar toda la app (este drill ya vive en su
+    #    propio @st.fragment).
+    _pan_ab = st.session_state.get("cp_paneles_abierto", True)
+    _rot = "180deg" if _pan_ab else "0deg"
+    _word = "cerrar" if _pan_ab else "abrir"
+    st.markdown(
+        "<style>"
+        f".st-key-latch_paneles button p{{transform:rotate({_rot});}}"
+        f'.st-key-latch_paneles button::after{{content:"{_word}";}}'
+        "</style>",
+        unsafe_allow_html=True,
+    )
+    _lat_col, _body_col = st.columns([1, 18], gap="small",
+                                     vertical_alignment="top")
+    with _lat_col:
+        with st.container(key="latch_paneles"):
+            if st.button("⚓", key="cp_btn_paneles",
+                         help="Abrir / cerrar el analisis de productos y "
+                              "proveedores"):
+                st.session_state["cp_paneles_abierto"] = not _pan_ab
+                st.rerun(scope="fragment")
+    with _body_col:
+        st.markdown(
+            '<div class="latch-title">Analisis de productos y proveedores</div>',
+            unsafe_allow_html=True,
+        )
+        if _pan_ab:
+            _paneles_card()
 
     # ── Tabla pivotable de documentos (debajo de los paneles A/B) ─────────
     # Cada fila es una línea de detalle (documento × producto). El usuario
