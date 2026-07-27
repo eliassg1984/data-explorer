@@ -1644,8 +1644,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
         "Personalizado": "tune", "Tabla": "table_chart",
     }
 
-    # Rail vertical colapsable pegado al borde DERECHO (estilos.py). Colapsado
-    # muestra solo el icono; al pasar el cursor se ensancha y aparece el nombre.
+    # Rail vertical fijo pegado al borde DERECHO (estilos.py): cada sección se
+    # apila con el ícono arriba y el nombre debajo, siempre visible.
     with st.container(key="compras_tabs_row"):
         with st.container(key="graf_tipo_chips"):
             graf = st.pills(

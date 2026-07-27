@@ -562,12 +562,11 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* SECCIONES DE COMPRAS — RAIL VERTICAL COLAPSABLE (borde derecho)       */
-    /* Franja angosta pegada a la derecha: colapsada (~52px) muestra solo el  */
-    /* icono; al pasar el cursor se ensancha (~236px) y aparece el texto.     */
-    /* Cada botón es un botón real de st.pills → el clic hace rerun.          */
-    /* El contenedor solo existe en Compras, así que este CSS no afecta a     */
-    /* otros reportes.                                                        */
+    /* SECCIONES DE COMPRAS — RAIL VERTICAL (borde derecho, apilado)         */
+    /* Franja fija de altura completa pegada al borde. Cada sección se apila  */
+    /* ÍCONO ARRIBA + NOMBRE DEBAJO (como la barra lateral izquierda), con    */
+    /* el nombre siempre visible. Cada botón es un st.pills real → hace rerun.*/
+    /* El contenedor solo existe en Compras: este CSS no afecta otros reportes*/
     /* =================================================================== */
     .st-key-compras_tabs_row {
         position: fixed !important;
@@ -576,7 +575,7 @@ def get_css():
         bottom: 0 !important;
         height: 100vh !important;
         z-index: 900 !important;
-        width: 56px !important;
+        width: 90px !important;
         overflow-x: hidden !important;
         overflow-y: auto !important;
         margin: 0 !important;
@@ -585,23 +584,16 @@ def get_css():
         background: var(--bg-card, #ffffff) !important;
         border-left: 1px solid var(--border) !important;
         border-radius: 0 !important;       /* franja plana, no pastilla */
-        box-shadow: none !important;       /* sin sombra en reposo */
-        transition: width .2s ease, box-shadow .2s ease !important;
+        box-shadow: none !important;       /* sin sombra: integrada al borde */
         scrollbar-width: none !important;
     }
     .st-key-compras_tabs_row::-webkit-scrollbar { display: none !important; }
-    /* Al pasar el cursor: se despliega, revela los nombres y se separa del
-       fondo con una sombra suave (solo mientras está abierta). */
-    .st-key-compras_tabs_row:hover {
-        width: 240px !important;
-        box-shadow: -10px 0 26px rgba(0,0,0,.10) !important;
-    }
 
-    /* Reserva el ancho del rail COLAPSADO solo en Compras (no toca otros
-       reportes): el :has() detecta el rail dentro del contenedor principal. */
+    /* Reserva el ancho de la franja solo en Compras (no toca otros reportes):
+       el :has() detecta el rail dentro del contenedor principal. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row),
     .block-container:has(.st-key-compras_tabs_row) {
-        padding-right: 66px !important;
+        padding-right: 98px !important;
     }
 
     .st-key-graf_tipo_chips {
@@ -616,31 +608,44 @@ def get_css():
         flex-wrap: nowrap !important;
         align-items: stretch !important;
         width: 100% !important;
-        gap: 1px !important;
+        gap: 2px !important;
     }
-    /* Cada sección: fila plana alineada a la izquierda; el texto se recorta en
-       colapsado (overflow hidden del botón) y se ve completo al expandir. */
+    /* Cada sección: bloque completo, contenido centrado. */
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button {
         display: flex !important;
-        justify-content: flex-start !important;
+        justify-content: center !important;
         align-items: center !important;
-        text-align: left !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
+        text-align: center !important;
         width: 100% !important;
         min-height: 0 !important;
         border: none !important;
         border-radius: 0 !important;
         background: transparent !important;
-        border-left: 3px solid transparent !important;
-        padding: 9px 12px !important;
-        font-size: 14px !important;
+        border-right: 3px solid transparent !important;   /* marca el activo */
+        padding: 10px 4px !important;
     }
-    /* Evita que Streamlit añada ellipsis (…) al recortar: nowrap sin ellipsis. */
-    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button * {
-        white-space: nowrap !important;
-        overflow: visible !important;
-        text-overflow: clip !important;
+    /* Apila ÍCONO (arriba) + NOMBRE (abajo). El markdown del label es un solo
+       <p> con el icono (span) y el texto; con flex-column el texto cae debajo. */
+    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button p,
+    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button [data-testid="stMarkdownContainer"] {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 4px !important;
+        margin: 0 !important;
+        white-space: normal !important;    /* el nombre puede envolver */
+        text-align: center !important;
+        line-height: 1.12 !important;
+        font-size: 10.5px !important;      /* tamaño del NOMBRE */
+        word-break: break-word !important;
+    }
+    /* El ícono más grande que el texto (el font-size del span manda). */
+    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button [data-testid="stIconMaterial"],
+    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button span[class*="material"] {
+        font-size: 23px !important;
+        width: 23px !important;
+        height: 23px !important;
     }
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button:hover {
         background: var(--bg-hover, #f0edfe) !important;
@@ -650,7 +655,7 @@ def get_css():
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button[kind="pillsActive"],
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] [data-testid="stBaseButton-pillsActive"] {
         color: var(--accent-deep, #4938b8) !important;
-        border-left-color: var(--accent, #6c5ce7) !important;
+        border-right-color: var(--accent, #6c5ce7) !important;
         background: var(--accent-light, #e7e3fb) !important;
         font-weight: 600 !important;
     }
