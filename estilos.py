@@ -562,43 +562,91 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* PESTAÑAS DE TIPO DE GRÁFICO — fila propia pegada al tope del gráfico  */
-    /* Una sola línea con scroll horizontal si no entran las 11. El borde    */
-    /* inferior la conecta visualmente con la card del gráfico de abajo.     */
+    /* SECCIONES DE COMPRAS — RAIL VERTICAL COLAPSABLE (borde derecho)       */
+    /* Franja angosta pegada a la derecha: colapsada (~52px) muestra solo el  */
+    /* icono; al pasar el cursor se ensancha (~236px) y aparece el texto.     */
+    /* Cada botón es un botón real de st.pills → el clic hace rerun.          */
+    /* El contenedor solo existe en Compras, así que este CSS no afecta a     */
+    /* otros reportes.                                                        */
     /* =================================================================== */
-    .st-key-graf_tipo_chips {
-        margin: 0 0 4px 0 !important;
-        overflow-x: auto !important;
-        border-bottom: 1px solid var(--border) !important;
-        padding-bottom: 0 !important;
-        scrollbar-width: none !important;   /* barra oculta: no roba alto */
+    .st-key-compras_tabs_row {
+        position: fixed !important;
+        top: 74px !important;
+        right: 0 !important;
+        z-index: 900 !important;
+        width: 52px !important;
+        max-height: calc(100vh - 96px) !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        margin: 0 !important;
+        padding: 6px 0 !important;
+        background: var(--bg-card, #ffffff) !important;
+        border: 1px solid var(--border) !important;
+        border-right: none !important;
+        border-radius: 14px 0 0 14px !important;
+        box-shadow: -6px 0 18px rgba(0,0,0,.10) !important;
+        transition: width .22s ease !important;
+        scrollbar-width: none !important;
     }
-    .st-key-graf_tipo_chips::-webkit-scrollbar { display: none !important; }
-    /* Cierra el gap ARRIBA (franja→pestañas) y ABAJO (pestañas→card). */
-    .st-key-compras_tabs_row { margin: -34px 0 -22px 0 !important; }
+    .st-key-compras_tabs_row::-webkit-scrollbar { display: none !important; }
+    /* Al pasar el cursor: se despliega y revela el texto completo. */
+    .st-key-compras_tabs_row:hover { width: 236px !important; }
+
+    /* Reserva el ancho del rail COLAPSADO solo en Compras (no toca otros
+       reportes): el :has() detecta el rail dentro del contenedor principal. */
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row),
+    .block-container:has(.st-key-compras_tabs_row) {
+        padding-right: 66px !important;
+    }
+
+    .st-key-graf_tipo_chips {
+        margin: 0 !important;
+        overflow: visible !important;
+        border-bottom: none !important;
+        padding: 0 !important;
+    }
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] {
         margin: 0 !important;
+        flex-direction: column !important;
         flex-wrap: nowrap !important;
-        width: max-content !important;
-        gap: 2px !important;
+        align-items: stretch !important;
+        width: 100% !important;
+        gap: 1px !important;
     }
-    /* Estilo pestaña: botón plano y COMPACTO, subrayado en el activo */
+    /* Cada sección: fila plana alineada a la izquierda; el texto se recorta en
+       colapsado (overflow hidden del botón) y se ve completo al expandir. */
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button {
+        display: flex !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+        text-align: left !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        width: 100% !important;
+        min-height: 0 !important;
         border: none !important;
         border-radius: 0 !important;
         background: transparent !important;
-        border-bottom: 2px solid transparent !important;
+        border-left: 3px solid transparent !important;
+        padding: 9px 12px !important;
+        font-size: 14px !important;
+    }
+    /* Evita que Streamlit añada ellipsis (…) al recortar: nowrap sin ellipsis. */
+    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button * {
         white-space: nowrap !important;
-        padding-top: 3px !important;
-        padding-bottom: 3px !important;
-        min-height: 0 !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+    }
+    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button:hover {
+        background: var(--bg-hover, #f0edfe) !important;
     }
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button[aria-checked="true"],
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button[kind="primary"],
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button[kind="pillsActive"],
     .st-key-graf_tipo_chips [data-testid="stButtonGroup"] [data-testid="stBaseButton-pillsActive"] {
         color: var(--accent-deep, #4938b8) !important;
-        border-bottom-color: var(--accent, #6c5ce7) !important;
+        border-left-color: var(--accent, #6c5ce7) !important;
+        background: var(--accent-light, #e7e3fb) !important;
         font-weight: 600 !important;
     }
 

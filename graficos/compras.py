@@ -1631,13 +1631,26 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                 "Cantidad por producto",
                 "Semanal", "Vs año anterior", "Personalizado", "Tabla"]
 
-    # Pestañas de tipo de gráfico (Familia, Proveedor, ...). G/T se dibuja
-    # en la franja superior (app.py, col_titulo) igual que el resto de reportes.
+    # Iconos por sección: se anteponen SOLO en la vista (format_func); el valor
+    # que devuelve st.pills sigue siendo el texto plano, así que los
+    # `if graf == "..."` de abajo no cambian. Sirven de ancla visual cuando el
+    # rail de la derecha está colapsado (solo se ve el emoji).
+    _ICONOS_GRAF = {
+        "Familia": "🗂️", "Proveedor": "🏢", "Evolución proveedor": "📈",
+        "Precio top 10": "🏆", "Precio por compra": "🧾",
+        "Precio vs año pasado": "💹", "Cantidad vs año pasado": "📦",
+        "Cantidad por producto": "🔢", "Semanal": "🗓️",
+        "Vs año anterior": "🔁", "Personalizado": "🛠️", "Tabla": "📋",
+    }
+
+    # Rail vertical colapsable pegado al borde DERECHO (estilos.py). Colapsado
+    # muestra solo el icono; al pasar el cursor se ensancha y aparece el texto.
     with st.container(key="compras_tabs_row"):
         with st.container(key="graf_tipo_chips"):
             graf = st.pills(
                 "Gráfico", opciones, default=opciones[0],
                 key="compras_graf_tipo", label_visibility="collapsed",
+                format_func=lambda o: f"{_ICONOS_GRAF.get(o, '•')} {o}",
             ) or opciones[0]
 
     # Tabla: usa el mismo AgGrid de la vista Tabla, pero como una opción más
