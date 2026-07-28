@@ -563,10 +563,11 @@ def get_css():
 
     /* =================================================================== */
     /* SECCIONES DE COMPRAS — RAIL VERTICAL (borde derecho, apilado)         */
-    /* Franja fija de altura completa pegada al borde. Cada sección se apila  */
-    /* ÍCONO ARRIBA + NOMBRE DEBAJO (como la barra lateral izquierda), con    */
-    /* el nombre siempre visible. Cada botón es un st.pills real → hace rerun.*/
-    /* El contenedor solo existe en Compras: este CSS no afecta otros reportes*/
+    /* Variante 2: cabecera neutra "Compras / Gráficos" arriba + secciones    */
+    /* agrupadas por categoría (Dimensión, Precios, Cantidad, Más). Cada     */
+    /* ítem es un st.button con dot a la izquierda; el activo se marca con   */
+    /* type="primary" (accent-light + barra izquierda accent). El contenedor  */
+    /* solo existe en Compras: este CSS no afecta otros reportes.            */
     /* =================================================================== */
     .st-key-compras_tabs_row {
         position: fixed !important;
@@ -575,12 +576,12 @@ def get_css():
         bottom: 0 !important;
         height: 100vh !important;
         z-index: 900 !important;
-        width: 90px !important;
+        width: 130px !important;
         overflow-x: hidden !important;
         overflow-y: auto !important;
         margin: 0 !important;
-        /* padding-top deja pasar la franja superior (fecha/título) */
-        padding: 78px 0 16px 0 !important;
+        /* padding-top clara la topbar (48px), la cabecera del rail arranca justo debajo */
+        padding: 48px 0 16px 0 !important;
         background: var(--bg-card, #ffffff) !important;
         border-left: 1px solid var(--border) !important;
         border-radius: 0 !important;       /* franja plana, no pastilla */
@@ -593,7 +594,61 @@ def get_css():
        el :has() detecta el rail dentro del contenedor principal. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row),
     .block-container:has(.st-key-compras_tabs_row) {
-        padding-right: 98px !important;
+        padding-right: 138px !important;
+    }
+
+    /* Cabecera del rail — icono + "Compras / Gráficos" */
+    .st-key-compras_tabs_row .rail-header {
+        background: var(--surface-1, #f6f7f9) !important;
+        border-bottom: 0.5px solid var(--border) !important;
+        padding: 10px 10px 8px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        margin: 0 0 6px 0 !important;
+    }
+    .st-key-compras_tabs_row .rail-header .rail-icon {
+        display: inline-flex !important;
+        align-items: center !important;
+        color: var(--accent, #6c5ce7) !important;
+        flex-shrink: 0 !important;
+    }
+    .st-key-compras_tabs_row .rail-header .rail-icon svg {
+        display: block !important;
+    }
+    .st-key-compras_tabs_row .rail-header .rail-texts {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 1px !important;
+        min-width: 0 !important;
+    }
+    .st-key-compras_tabs_row .rail-header .rail-title {
+        font-size: 10.5px !important;
+        font-weight: 500 !important;
+        color: var(--text-primary, #18181d) !important;
+        line-height: 1.2 !important;
+    }
+    .st-key-compras_tabs_row .rail-header .rail-sub {
+        font-size: 9px !important;
+        color: var(--text-muted, #a2a2ad) !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.06em !important;
+        line-height: 1.2 !important;
+    }
+
+    /* Badge de categoría + separador entre secciones */
+    .st-key-compras_tabs_row .rail-cat-badge {
+        font-size: 8.5px !important;
+        font-weight: 600 !important;
+        color: var(--text-muted, #a2a2ad) !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.1em !important;
+        padding: 7px 10px 3px !important;
+    }
+    .st-key-compras_tabs_row .rail-sep {
+        height: 0.5px !important;
+        background: var(--border, #e6e6ea) !important;
+        margin: 4px 8px !important;
     }
 
     /* Subir las TARJETAS (no los chips fijos): recupera el hueco que dejó la
@@ -625,6 +680,7 @@ def get_css():
        centrados dentro del alto nuevo. Scopeado con :has, no afecta a otros. */
     [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row) .st-key-fila_ajuste_top::before {
         height: 34px !important;
+        right: 130px !important;    /* que la franja no invada el rail derecho */
     }
     [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row) .st-key-fila_ajuste_top {
         padding-top: 2px !important;
@@ -636,53 +692,74 @@ def get_css():
         border-bottom: none !important;
         padding: 0 !important;
     }
-    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] {
-        margin: 0 !important;
-        flex-direction: column !important;
-        flex-wrap: nowrap !important;
-        align-items: stretch !important;
-        width: 100% !important;
-        gap: 12px !important;   /* separación entre secciones */
+    /* Compactar el gap por defecto del vertical block: cada ítem del rail
+       vive apilado sin separación adicional entre botones. */
+    .st-key-graf_tipo_chips > [data-testid="stVerticalBlock"] {
+        gap: 0 !important;
     }
-    /* Cada sección: bloque completo, contenido centrado. */
-    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button {
+    .st-key-graf_tipo_chips [data-testid="stElementContainer"] {
+        margin: 0 !important;
+    }
+    /* Cada ítem del rail: botón estilo lista, sin borde ni fondo por defecto.
+       Un dot a la izquierda (::before) precede al texto. */
+    .st-key-graf_tipo_chips [data-testid="stButton"] > button,
+    .st-key-graf_tipo_chips .stButton > button {
         display: flex !important;
-        justify-content: center !important;
+        justify-content: flex-start !important;
         align-items: center !important;
-        text-align: center !important;
+        text-align: left !important;
         width: 100% !important;
         min-height: 0 !important;
         border: none !important;
         border-radius: 0 !important;
         background: transparent !important;
-        border-right: 3px solid transparent !important;   /* marca el activo */
-        padding: 10px 4px !important;
+        padding: 5px 10px !important;
+        gap: 7px !important;
+        color: var(--text-secondary, #71717a) !important;
+        font-weight: 400 !important;
+        box-shadow: none !important;
+        position: relative !important;
+        transition: background 0.12s !important;
     }
-    /* Solo el NOMBRE, centrado y con posibilidad de envolver en varias líneas. */
-    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button p,
-    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button [data-testid="stMarkdownContainer"] {
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: center !important;
-        justify-content: center !important;
+    .st-key-graf_tipo_chips [data-testid="stButton"] > button::before,
+    .st-key-graf_tipo_chips .stButton > button::before {
+        content: "" !important;
+        width: 5px !important;
+        height: 5px !important;
+        border-radius: 50% !important;
+        background: var(--border-strong, #c8c8d0) !important;
+        flex-shrink: 0 !important;
+        display: inline-block !important;
+    }
+    .st-key-graf_tipo_chips [data-testid="stButton"] > button p,
+    .st-key-graf_tipo_chips [data-testid="stButton"] > button [data-testid="stMarkdownContainer"],
+    .st-key-graf_tipo_chips .stButton > button p,
+    .st-key-graf_tipo_chips .stButton > button [data-testid="stMarkdownContainer"] {
         margin: 0 !important;
-        white-space: normal !important;    /* el nombre puede envolver */
-        text-align: center !important;
-        line-height: 1.15 !important;
-        font-size: 10.5px !important;      /* tamaño del NOMBRE (sin cambios) */
-        word-break: break-word !important;
+        font-size: 11px !important;
+        line-height: 1.25 !important;
+        white-space: normal !important;
+        text-align: left !important;
+        font-weight: inherit !important;
+        color: inherit !important;
     }
-    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button:hover {
-        background: var(--bg-hover, #f0edfe) !important;
-    }
-    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button[aria-checked="true"],
-    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button[kind="primary"],
-    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] button[kind="pillsActive"],
-    .st-key-graf_tipo_chips [data-testid="stButtonGroup"] [data-testid="stBaseButton-pillsActive"] {
-        color: var(--accent-deep, #4938b8) !important;
-        border-right-color: var(--accent, #6c5ce7) !important;
+    .st-key-graf_tipo_chips [data-testid="stButton"] > button:hover,
+    .st-key-graf_tipo_chips .stButton > button:hover {
         background: var(--accent-light, #e7e3fb) !important;
-        font-weight: 600 !important;
+        color: var(--accent-deep, #4938b8) !important;
+    }
+    /* Activo: kind="primary" del st.button */
+    .st-key-graf_tipo_chips [data-testid="stButton"] > button[kind="primary"],
+    .st-key-graf_tipo_chips .stButton > button[kind="primary"] {
+        background: var(--accent-light, #e7e3fb) !important;
+        color: var(--accent-deep, #4938b8) !important;
+        font-weight: 500 !important;
+        border-left: 3px solid var(--accent, #6c5ce7) !important;
+        padding-left: 7px !important;   /* compensa el border-left de 3px */
+    }
+    .st-key-graf_tipo_chips [data-testid="stButton"] > button[kind="primary"]::before,
+    .st-key-graf_tipo_chips .stButton > button[kind="primary"]::before {
+        background: var(--accent, #6c5ce7) !important;
     }
 
     /* =================================================================== */

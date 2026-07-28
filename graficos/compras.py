@@ -1701,6 +1701,41 @@ def _compras_evolucion_proveedores(d, col_prov, col_prod, col_cant,
     )
 
 
+# Rail derecho de Compras — cabecera "Compras / Gráficos" + secciones
+# agrupadas por categoría (variante 2). El id interno (izquierda de cada tupla)
+# es el string que consume el resto del dashboard; el label (derecha) es lo que
+# se pinta en el botón del rail.
+_COMPRAS_RAIL_CATEGORIAS = (
+    ("Dimensión", (("Familia",              "Familia"),
+                   ("Proveedor",            "Proveedor"),
+                   ("Evolución proveedor",  "Evolución prov."))),
+    ("Precios",   (("Precio top 10",        "Top 10"),
+                   ("Precio por compra",    "Por compra"),
+                   ("Precio vs año pasado", "Vs año pasado"))),
+    ("Cantidad",  (("Cantidad vs año pasado", "Vs año pasado"),
+                   ("Cantidad por producto",  "Por producto"))),
+    ("Más",       (("Semanal",              "Semanal"),
+                   ("Vs año anterior",      "Vs año ant."),
+                   ("Personalizado",        "Personalizado"),
+                   ("Tabla",                "Tabla"))),
+)
+
+_COMPRAS_RAIL_SVG_CART = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" '
+    'viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" '
+    'aria-hidden="true">'
+    '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>'
+    '<path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 '
+    '2-1.61L23 6H6"/></svg>'
+)
+
+
+def _compras_set_graf(opcion_id):
+    """Callback de los botones del rail: setea la selección ANTES del rerun."""
+    st.session_state["compras_graf_tipo"] = opcion_id
+
+
 def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
     """Dashboard dedicado de Compras: 5 gráficos con pestañas + 5 mini-tops."""
     col_fam    = _resolver(df_f, ["Familia", "Nombre Familia"])
@@ -1797,14 +1832,47 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                 "Cantidad por producto",
                 "Semanal", "Vs año anterior", "Personalizado", "Tabla"]
 
-    # Rail vertical fijo pegado al borde DERECHO (estilos.py): solo el nombre de
-    # cada sección, apilado verticalmente y siempre visible.
+    # Rail vertical fijo pegado al borde DERECHO (estilos.py): cabecera
+    # "Compras / Gráficos" + secciones agrupadas por categoría con dot delante
+    # de cada ítem. El activo lo marca `type="primary"` (accent-light + barra
+    # izquierda). La selección se persiste en compras_graf_tipo vía on_click,
+    # que corre antes del rerun.
+    sel_actual = st.session_state.get("compras_graf_tipo", opciones[0])
+    if sel_actual not in opciones:
+        sel_actual = opciones[0]
+        st.session_state["compras_graf_tipo"] = sel_actual
     with st.container(key="compras_tabs_row"):
+        st.markdown(
+            '<div class="rail-header">'
+            f'<span class="rail-icon">{_COMPRAS_RAIL_SVG_CART}</span>'
+            '<div class="rail-texts">'
+            '<span class="rail-title">Compras</span>'
+            '<span class="rail-sub">Gráficos</span>'
+            '</div></div>',
+            unsafe_allow_html=True,
+        )
         with st.container(key="graf_tipo_chips"):
-            graf = st.pills(
-                "Gráfico", opciones, default=opciones[0],
-                key="compras_graf_tipo", label_visibility="collapsed",
-            ) or opciones[0]
+            for i, (cat_nombre, items) in enumerate(_COMPRAS_RAIL_CATEGORIAS):
+                st.markdown(
+                    f'<div class="rail-cat-badge">{cat_nombre}</div>',
+                    unsafe_allow_html=True,
+                )
+                for opcion_id, opcion_label in items:
+                    slug = _slug(opcion_id)
+                    st.button(
+                        opcion_label,
+                        key=f"graf_btn_{slug}",
+                        type=("primary" if opcion_id == sel_actual
+                              else "secondary"),
+                        use_container_width=True,
+                        on_click=_compras_set_graf, args=(opcion_id,),
+                    )
+                if i < len(_COMPRAS_RAIL_CATEGORIAS) - 1:
+                    st.markdown('<div class="rail-sep"></div>',
+                                unsafe_allow_html=True)
+    graf = st.session_state.get("compras_graf_tipo", opciones[0])
+    if graf not in opciones:
+        graf = opciones[0]
 
     # Tabla: usa el mismo AgGrid de la vista Tabla, pero como una opción más
     # del selector. `d` ya viene filtrado por los chips Familia/Subfamilia.
