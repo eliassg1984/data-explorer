@@ -367,16 +367,20 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
            el stVerticalBlock, por eso la dirección FILA se fija sobre .st-key-...
            directamente (no sobre un bloque anidado). Valores verificados. */
         .st-key-chartcard_prov_prods { position: relative; }
+        /* Ícono de período pegado al lado del título (arriba-izquierda). El
+           texto de la fecha ya no ocupa sitio: vive en el tooltip nativo. */
         .st-key-topn_selfloat {
-            position: absolute; top: 6px; right: 16px; z-index: 21;
+            position: absolute; top: 4px; left: 14px; z-index: 21;
             width: auto !important;
         }
         .topn-selec {
-            font-size: 10px; line-height: 1; color: var(--text-muted);
-            white-space: nowrap;
+            font-size: 12px; line-height: 1; color: var(--text-muted);
+            cursor: help; opacity: 0.7;
         }
+        .topn-selec:hover { opacity: 1; }
+        /* Toggles en la MISMA fila del título, alineados a la derecha. */
         .st-key-topn_float {
-            position: absolute; top: 19px; right: 16px; z-index: 20;
+            position: absolute; top: 2px; right: 12px; z-index: 20;
             width: auto !important;
         }
         .st-key-topn_float > div { width: auto !important; }
@@ -384,16 +388,28 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             flex-direction: row !important;
             flex-wrap: nowrap !important;
             align-items: center !important;
-            gap: 8px !important;
+            gap: 6px !important;
             width: auto !important;
         }
         .st-key-topn_pills > div { width: auto !important; }
-        /* Reservar sitio a la derecha del título (se trunca con "…") y alto de
-           cabecera para alojar texto + controles sin pisar el gráfico. */
+        /* Cabecera compacta: título y controles en una sola línea. Se reduce
+           min-height y padding vertical para acercar el gráfico al título. */
         .st-key-chartcard_prov_prods .chart-card-hdr {
-            padding-right: 240px; min-height: 46px;
+            padding: 0 200px 0.35rem 32px;
+            min-height: 26px;
+            margin-bottom: 0.35rem;
+            font-size: 13px;
+            line-height: 1.25;
         }
         .st-key-topn_float [data-testid="stElementToolbar"] { display: none; }
+        /* Encoger los botones de los pills (Rango/Selección y 5/10/20). */
+        .st-key-topn_float [data-testid="stButtonGroup"] button {
+            min-height: 22px !important;
+            height: 22px !important;
+            padding: 0 8px !important;
+            font-size: 11px !important;
+            line-height: 1 !important;
+        }
 
         /* Ámbito de fecha (En rango / Todo) — en la cabecera del Panel B. */
         .st-key-chartcard_prov_prov_de_prod { position: relative; }
@@ -646,8 +662,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     _perf = st.session_state.get("compras_prov_perfocus")
                     if _perf is not None:
                         with st.container(key="topn_selfloat"):
-                            st.markdown(f'<div class="topn-selec">📅 {_perf}</div>',
-                                        unsafe_allow_html=True)
+                            st.markdown(
+                                f'<span class="topn-selec" title="Período seleccionado: {_perf}" '
+                                f'aria-label="Período seleccionado: {_perf}">📅</span>',
+                                unsafe_allow_html=True)
                     with st.container(key="topn_float"):
                         with st.container(key="topn_pills"):
                             _scope = st.pills(
