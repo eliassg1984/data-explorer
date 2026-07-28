@@ -466,26 +466,22 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
            como background-image sobre ::before del boton; gira 180 en hover y
            cuando el bloque esta abierto. La rotacion de estado la fija un
            <style> inyectado desde Python (mismo patron de .st-key-*). */
-        /* .st-key-*_wrap ES el stVerticalBlock (no un wrapper): lo giramos a
-           fila para que carrete y titulo queden en linea. */
-        .st-key-paneles_wrap,
-        .st-key-docs_wrap {
-            display: flex !important;
-            flex-direction: row !important;
-            align-items: center !important;
-            gap: 10px !important;
+        /* Row wrapper: la tarjeta mantiene ancho completo y el pestillo se
+           saca del flujo con position:absolute hacia la izquierda, cayendo
+           en el gutter entre el sidebar y la tarjeta. */
+        .st-key-paneles_row,
+        .st-key-docs_row {
+            position: relative !important;
             margin: 8px 0 10px;
-        }
-        /* Cada hijo directo se ajusta al contenido en vez de estirarse. */
-        .st-key-paneles_wrap > *,
-        .st-key-docs_wrap > * {
-            width: auto !important;
-            flex: 0 0 auto !important;
         }
         .st-key-latch_paneles,
         .st-key-latch_docs {
-            width: auto !important; flex: 0 0 auto !important;
+            position: absolute !important;
+            left: -62px !important;
+            top: 4px !important;
+            width: 52px !important;
             margin: 0 !important;
+            z-index: 5;
         }
         .st-key-latch_paneles button,
         .st-key-latch_docs button {
@@ -526,13 +522,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-latch_docs button:hover::before {
             transform: rotate(180deg);
         }
-        /* El stMarkdown que envuelve al titulo trae padding/margin propios
-           que empujan el texto hacia abajo — se los quitamos para que quede
-           en la misma linea base que el carrete. */
-        .st-key-paneles_wrap [data-testid="stMarkdownContainer"],
-        .st-key-paneles_wrap [data-testid="stMarkdownContainer"] > *,
-        .st-key-docs_wrap [data-testid="stMarkdownContainer"],
-        .st-key-docs_wrap [data-testid="stMarkdownContainer"] > * {
+        /* Titulo (solo visible con el pestillo cerrado): sin margen extra. */
+        .st-key-paneles_row [data-testid="stMarkdownContainer"],
+        .st-key-paneles_row [data-testid="stMarkdownContainer"] > *,
+        .st-key-docs_row [data-testid="stMarkdownContainer"],
+        .st-key-docs_row [data-testid="stMarkdownContainer"] > * {
             margin: 0 !important; padding: 0 !important;
             line-height: 1 !important;
         }
@@ -792,16 +786,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         f"{{transform:rotate({_rot});}}</style>",
         unsafe_allow_html=True,
     )
-    _col_lp, _col_cp = st.columns([1, 20], gap="small",
-                                   vertical_alignment="top")
-    with _col_lp:
+    with st.container(key="paneles_row"):
         with st.container(key="latch_paneles"):
             if st.button("⚓", key="cp_btn_paneles",
                          help="Abrir / cerrar el analisis de productos y "
                               "proveedores"):
                 st.session_state["cp_paneles_abierto"] = not _pan_ab
                 st.rerun(scope="fragment")
-    with _col_cp:
         if _pan_ab:
             _paneles_card()
         else:
@@ -830,15 +821,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         f"{{transform:rotate({_rot_d});}}</style>",
         unsafe_allow_html=True,
     )
-    _col_ld, _col_cd = st.columns([1, 20], gap="small",
-                                   vertical_alignment="top")
-    with _col_ld:
+    with st.container(key="docs_row"):
         with st.container(key="latch_docs"):
             if st.button("⚓", key="cp_btn_docs",
                          help="Abrir / cerrar el detalle de documentos"):
                 st.session_state["cp_docs_abierto"] = not _docs_ab
                 st.rerun()
-    with _col_cd:
         _bd = base[base["prov"].isin(top_provs)].copy()
         if not _docs_ab:
             st.markdown(
