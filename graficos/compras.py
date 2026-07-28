@@ -460,66 +460,35 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             transform-origin: left center;
             animation: unfoldRight 0.42s cubic-bezier(0.4, 0, 0.2, 1) backwards;
         }
-        /* Encabezado-toggle: el título ES el botón, con −/+ delante.
-           Se ve como texto plano (sin fondo ni borde), no como botón. */
-        .st-key-collapse_hdr_paneles button,
-        .st-key-collapse_hdr_docs button {
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            padding: 4px 0 !important;
-            min-height: 0 !important;
-            width: auto !important;
-            justify-content: flex-start !important;
-            color: var(--text-secondary, #71717a) !important;
-        }
-        .st-key-collapse_hdr_paneles button p,
-        .st-key-collapse_hdr_docs button p {
-            font-size: 13px !important;
-            font-weight: 600 !important;
-            text-align: left !important;
-            color: var(--text-secondary, #71717a) !important;
-        }
-        .st-key-collapse_hdr_paneles button:hover, .st-key-collapse_hdr_paneles button:hover p,
-        .st-key-collapse_hdr_docs button:hover, .st-key-collapse_hdr_docs button:hover p,
-        .st-key-collapse_hdr_paneles button:focus, .st-key-collapse_hdr_paneles button:focus p,
-        .st-key-collapse_hdr_docs button:focus, .st-key-collapse_hdr_docs button:focus p {
-            color: var(--accent, #6c5ce7) !important;
-        }
-        .st-key-collapse_hdr_paneles button:focus,
-        .st-key-collapse_hdr_docs button:focus,
-        .st-key-collapse_hdr_paneles button:active,
-        .st-key-collapse_hdr_docs button:active {
-            background: transparent !important;
-            box-shadow: none !important;
-            outline: none !important;
-        }
-
-        /* ── PESTILLO (carrete + titulo en linea) — bloque "Analisis de
-           productos y proveedores". El icono es un carrete SVG inyectado como
-           background-image sobre ::before del boton; gira 180 en hover y
+        /* ── PESTILLO (carrete + titulo en linea) — se usa en varios bloques:
+           "Analisis de productos y proveedores" (paneles A/B) y "Detalle de
+           documentos por proveedor". El icono es un carrete SVG inyectado
+           como background-image sobre ::before del boton; gira 180 en hover y
            cuando el bloque esta abierto. La rotacion de estado la fija un
            <style> inyectado desde Python (mismo patron de .st-key-*). */
-        /* .st-key-paneles_wrap ES el stVerticalBlock (no un wrapper): lo
-           giramos a fila para que carrete y titulo queden en linea. */
-        .st-key-paneles_wrap {
+        /* .st-key-*_wrap ES el stVerticalBlock (no un wrapper): lo giramos a
+           fila para que carrete y titulo queden en linea. */
+        .st-key-paneles_wrap,
+        .st-key-docs_wrap {
             display: flex !important;
             flex-direction: row !important;
             align-items: center !important;
             gap: 10px !important;
             margin: 8px 0 10px;
         }
-        /* Cada hijo directo (elementContainer / bloque interno) se ajusta al
-           contenido en vez de estirarse a full-width. */
-        .st-key-paneles_wrap > * {
+        /* Cada hijo directo se ajusta al contenido en vez de estirarse. */
+        .st-key-paneles_wrap > *,
+        .st-key-docs_wrap > * {
             width: auto !important;
             flex: 0 0 auto !important;
         }
-        .st-key-latch_paneles {
+        .st-key-latch_paneles,
+        .st-key-latch_docs {
             width: auto !important; flex: 0 0 auto !important;
             margin: 0 !important;
         }
-        .st-key-latch_paneles button {
+        .st-key-latch_paneles button,
+        .st-key-latch_docs button {
             display: inline-flex !important;
             align-items: center; justify-content: center;
             width: 36px !important; min-width: 36px !important;
@@ -531,31 +500,39 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             cursor: pointer !important;
             transition: background .15s, border-color .15s !important;
         }
-        .st-key-latch_paneles button:hover {
+        .st-key-latch_paneles button:hover,
+        .st-key-latch_docs button:hover {
             background: var(--bg-accent, #f0edfe) !important;
             border-color: #d4cdf7 !important;
         }
         .st-key-latch_paneles button:focus,
-        .st-key-latch_paneles button:active {
+        .st-key-latch_paneles button:active,
+        .st-key-latch_docs button:focus,
+        .st-key-latch_docs button:active {
             outline: none !important; box-shadow: none !important;
             background: var(--bg-accent, #f0edfe) !important;
         }
-        .st-key-latch_paneles button p { display: none !important; }
-        .st-key-latch_paneles button::before {
+        .st-key-latch_paneles button p,
+        .st-key-latch_docs button p { display: none !important; }
+        .st-key-latch_paneles button::before,
+        .st-key-latch_docs button::before {
             content: ""; display: block;
             width: 28px; height: 28px;
             background: center / contain no-repeat
                 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22' fill='none'><circle cx='11' cy='11' r='3' fill='%236c5ce7'/><ellipse cx='11' cy='4' rx='5' ry='2.5' fill='%236c5ce7' opacity='.85'/><ellipse cx='11' cy='18' rx='5' ry='2.5' fill='%236c5ce7' opacity='.85'/><rect x='8' y='4' width='6' height='14' fill='%236c5ce7' opacity='.45' rx='1'/><line x1='11' y1='4' x2='11' y2='18' stroke='%23ffffff' stroke-width='1' opacity='.4'/><line x1='11' y1='4' x2='6.5' y2='3' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='4' x2='15.5' y2='3' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='18' x2='6.5' y2='19' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='18' x2='15.5' y2='19' stroke='%23ffffff' stroke-width='.8' opacity='.5'/></svg>");
             transition: transform .55s cubic-bezier(.4, 0, .2, 1);
         }
-        .st-key-latch_paneles button:hover::before {
+        .st-key-latch_paneles button:hover::before,
+        .st-key-latch_docs button:hover::before {
             transform: rotate(180deg);
         }
         /* El stMarkdown que envuelve al titulo trae padding/margin propios
            que empujan el texto hacia abajo — se los quitamos para que quede
            en la misma linea base que el carrete. */
         .st-key-paneles_wrap [data-testid="stMarkdownContainer"],
-        .st-key-paneles_wrap [data-testid="stMarkdownContainer"] > * {
+        .st-key-paneles_wrap [data-testid="stMarkdownContainer"] > *,
+        .st-key-docs_wrap [data-testid="stMarkdownContainer"],
+        .st-key-docs_wrap [data-testid="stMarkdownContainer"] > * {
             margin: 0 !important; padding: 0 !important;
             line-height: 1 !important;
         }
@@ -839,15 +816,27 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
     if "cp_docs_abierto" not in st.session_state:
         st.session_state["cp_docs_abierto"] = True
-    # El titulo ES el toggle (mismo patron que Paneles): prefijo −/+ con NBSP
-    # (evita que Markdown lo lea como vineta y alinea + con −).
-    with st.container(key="collapse_hdr_docs"):
-        _docs_ab = st.session_state["cp_docs_abierto"]
-        if st.button(("−" if _docs_ab else "+")
-                     + f" Detalle de documentos por proveedor · vista {gran}",
-                     key="cp_btn_docs"):
-            st.session_state["cp_docs_abierto"] = not _docs_ab
-            st.rerun()
+    # -- Pestillo (carrete) + titulo en linea. Mismo patron que paneles A/B:
+    #    SVG del carrete pintado por CSS sobre ::before del boton; rotacion
+    #    de estado (abierto = 180) fijada por <style> inyectado.
+    _docs_ab = st.session_state["cp_docs_abierto"]
+    _rot_d = "180deg" if _docs_ab else "0deg"
+    st.markdown(
+        f"<style>.st-key-latch_docs button::before"
+        f"{{transform:rotate({_rot_d});}}</style>",
+        unsafe_allow_html=True,
+    )
+    with st.container(key="docs_wrap"):
+        with st.container(key="latch_docs"):
+            if st.button("⚓", key="cp_btn_docs",
+                         help="Abrir / cerrar el detalle de documentos"):
+                st.session_state["cp_docs_abierto"] = not _docs_ab
+                st.rerun()
+        st.markdown(
+            f'<div class="latch-title">Detalle de documentos por '
+            f'proveedor · vista {gran}</div>',
+            unsafe_allow_html=True,
+        )
     _bd = base[base["prov"].isin(top_provs)].copy()
     if st.session_state.get("cp_docs_abierto", True) and not _bd.empty:
         _fe = pd.to_datetime(_bd["fecha"], errors="coerce")
