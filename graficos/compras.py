@@ -491,8 +491,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-latch_docs button {
             display: inline-flex !important;
             align-items: center; justify-content: center;
-            width: 72px !important; min-width: 72px !important;
-            height: 72px !important; min-height: 72px !important;
+            width: 52px !important; min-width: 52px !important;
+            height: 52px !important; min-height: 52px !important;
             padding: 0 !important; margin: 0 !important;
             border: 0.5px solid transparent !important;
             border-radius: 8px !important;
@@ -517,7 +517,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-latch_paneles button::before,
         .st-key-latch_docs button::before {
             content: ""; display: block;
-            width: 56px; height: 56px;
+            width: 40px; height: 40px;
             background: center / contain no-repeat
                 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22' fill='none'><circle cx='11' cy='11' r='3' fill='%236c5ce7'/><ellipse cx='11' cy='4' rx='5' ry='2.5' fill='%236c5ce7' opacity='.85'/><ellipse cx='11' cy='18' rx='5' ry='2.5' fill='%236c5ce7' opacity='.85'/><rect x='8' y='4' width='6' height='14' fill='%236c5ce7' opacity='.45' rx='1'/><line x1='11' y1='4' x2='11' y2='18' stroke='%23ffffff' stroke-width='1' opacity='.4'/><line x1='11' y1='4' x2='6.5' y2='3' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='4' x2='15.5' y2='3' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='18' x2='6.5' y2='19' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='18' x2='15.5' y2='19' stroke='%23ffffff' stroke-width='.8' opacity='.5'/></svg>");
             transition: transform .55s cubic-bezier(.4, 0, .2, 1);
@@ -537,7 +537,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             line-height: 1 !important;
         }
         .latch-title {
-            font-size: 20px; font-weight: 600; line-height: 1;
+            font-size: 14px; font-weight: 600; line-height: 1;
             color: var(--accent, #6c5ce7); margin: 0; padding: 0;
             display: inline-flex; align-items: center;
         }
@@ -792,20 +792,23 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         f"{{transform:rotate({_rot});}}</style>",
         unsafe_allow_html=True,
     )
-    with st.container(key="paneles_wrap"):
+    _col_lp, _col_cp = st.columns([1, 20], gap="small",
+                                   vertical_alignment="top")
+    with _col_lp:
         with st.container(key="latch_paneles"):
             if st.button("⚓", key="cp_btn_paneles",
                          help="Abrir / cerrar el analisis de productos y "
                               "proveedores"):
                 st.session_state["cp_paneles_abierto"] = not _pan_ab
                 st.rerun(scope="fragment")
-        if not _pan_ab:
+    with _col_cp:
+        if _pan_ab:
+            _paneles_card()
+        else:
             st.markdown(
                 '<div class="latch-title">Analisis de productos y proveedores</div>',
                 unsafe_allow_html=True,
             )
-    if _pan_ab:
-        _paneles_card()
 
     # ── Tabla pivotable de documentos (debajo de los paneles A/B) ─────────
     # Cada fila es una línea de detalle (documento × producto). El usuario
@@ -827,114 +830,117 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         f"{{transform:rotate({_rot_d});}}</style>",
         unsafe_allow_html=True,
     )
-    with st.container(key="docs_wrap"):
+    _col_ld, _col_cd = st.columns([1, 20], gap="small",
+                                   vertical_alignment="top")
+    with _col_ld:
         with st.container(key="latch_docs"):
             if st.button("⚓", key="cp_btn_docs",
                          help="Abrir / cerrar el detalle de documentos"):
                 st.session_state["cp_docs_abierto"] = not _docs_ab
                 st.rerun()
+    with _col_cd:
+        _bd = base[base["prov"].isin(top_provs)].copy()
         if not _docs_ab:
             st.markdown(
                 f'<div class="latch-title">Detalle de documentos por '
                 f'proveedor · vista {gran}</div>',
                 unsafe_allow_html=True,
             )
-    _bd = base[base["prov"].isin(top_provs)].copy()
-    if st.session_state.get("cp_docs_abierto", True) and not _bd.empty:
-        _fe = pd.to_datetime(_bd["fecha"], errors="coerce")
-        _pv_docs = pd.DataFrame({
-            "Proveedor": _bd["prov"].astype(str).values,
-            # Fecha en ISO para orden correcto; se muestra dd/mm/yyyy en el front
-            "Fecha": _fe.dt.strftime("%Y-%m-%d").fillna("").values,
-            "Documento": (_bd["docu"].astype(str).values
-                          if col_docu else _bd.index.astype(str).values),
-            "Producto": _bd["prod"].astype(str).values,
-            "Periodo": _bd["per"].astype(str).values,
-            "Valor": _bd["valor"].astype(float).values,
-        })
+        elif not _bd.empty:
+            _fe = pd.to_datetime(_bd["fecha"], errors="coerce")
+            _pv_docs = pd.DataFrame({
+                "Proveedor": _bd["prov"].astype(str).values,
+                # Fecha en ISO para orden correcto; se muestra dd/mm/yyyy en el front
+                "Fecha": _fe.dt.strftime("%Y-%m-%d").fillna("").values,
+                "Documento": (_bd["docu"].astype(str).values
+                              if col_docu else _bd.index.astype(str).values),
+                "Producto": _bd["prod"].astype(str).values,
+                "Periodo": _bd["per"].astype(str).values,
+                "Valor": _bd["valor"].astype(float).values,
+            })
 
-        _pv_box = st.container(border=True, key="compras_prov_card_docs")
-        _pv_box.caption("Arrastra campos a Filas / Columnas / Valores en el panel "
-                        "derecho para pivotar. ▸ expande cada nivel.")
+            _pv_box = st.container(border=True, key="compras_prov_card_docs")
+            _pv_box.caption("Arrastra campos a Filas / Columnas / Valores en el panel "
+                            "derecho para pivotar. ▸ expande cada nivel.")
 
-        _fmt_soles = JsCode(
-            "function(p){ if(p.value==null) return ''; "
-            "return 'S/ ' + Math.round(p.value).toLocaleString('es-PE'); }")
-        _fmt_fecha = JsCode(
-            "function(p){ if(!p.value) return ''; "
-            "var s=String(p.value).split('-'); "
-            "return s.length===3 ? s[2]+'/'+s[1]+'/'+s[0] : p.value; }")
-        # Orden cronológico de las columnas de período en el pivote
-        _pivot_cmp = JsCode(
-            "function(a,b){ var o=" + json.dumps(periodos) + "; "
-            "return o.indexOf(a)-o.indexOf(b); }")
+            _fmt_soles = JsCode(
+                "function(p){ if(p.value==null) return ''; "
+                "return 'S/ ' + Math.round(p.value).toLocaleString('es-PE'); }")
+            _fmt_fecha = JsCode(
+                "function(p){ if(!p.value) return ''; "
+                "var s=String(p.value).split('-'); "
+                "return s.length===3 ? s[2]+'/'+s[1]+'/'+s[0] : p.value; }")
+            # Orden cronológico de las columnas de período en el pivote
+            _pivot_cmp = JsCode(
+                "function(a,b){ var o=" + json.dumps(periodos) + "; "
+                "return o.indexOf(a)-o.indexOf(b); }")
 
-        _col_defs_pv = [
-            {"field": "Proveedor", "rowGroup": True, "rowGroupIndex": 0,
-             "hide": True},
-            {"field": "Fecha", "rowGroup": True, "rowGroupIndex": 1,
-             "hide": True, "valueFormatter": _fmt_fecha},
-            {"field": "Documento", "rowGroup": True, "rowGroupIndex": 2,
-             "hide": True},
-            {"field": "Producto", "rowGroup": True, "rowGroupIndex": 3,
-             "hide": True},
-            {"field": "Periodo", "headerName": "Período", "pivot": True,
-             "hide": True, "pivotComparator": _pivot_cmp},
-            {"field": "Valor", "type": "numericColumn", "aggFunc": "sum",
-             "valueFormatter": _fmt_soles, "minWidth": 110},
-        ]
+            _col_defs_pv = [
+                {"field": "Proveedor", "rowGroup": True, "rowGroupIndex": 0,
+                 "hide": True},
+                {"field": "Fecha", "rowGroup": True, "rowGroupIndex": 1,
+                 "hide": True, "valueFormatter": _fmt_fecha},
+                {"field": "Documento", "rowGroup": True, "rowGroupIndex": 2,
+                 "hide": True},
+                {"field": "Producto", "rowGroup": True, "rowGroupIndex": 3,
+                 "hide": True},
+                {"field": "Periodo", "headerName": "Período", "pivot": True,
+                 "hide": True, "pivotComparator": _pivot_cmp},
+                {"field": "Valor", "type": "numericColumn", "aggFunc": "sum",
+                 "valueFormatter": _fmt_soles, "minWidth": 110},
+            ]
 
-        _grid_pv = {
-            "columnDefs": _col_defs_pv,
-            "defaultColDef": {
-                "resizable": True, "sortable": True, "filter": True,
-                "enableRowGroup": True, "enablePivot": True,
-                "enableValue": True, "minWidth": 110,
-            },
-            "pivotMode": True,
-            "groupDefaultExpanded": 0,
-            "autoGroupColumnDef": {
-                "headerName": "Proveedor / Fecha / Documento / Producto",
-                "minWidth": 300, "pinned": "left",
-                "cellRendererParams": {"suppressCount": True},
-            },
-            "grandTotalRow": "bottom",
-            "getRowStyle": JsCode(
-                "function(p){ if(p.node.footer && p.node.level===-1){ "
-                "return {'fontWeight':'600','background':'#EEEDFE',"
-                "'color':'#4938b8'}; } }"),
-            "sideBar": {
-                "toolPanels": [{
-                    "id": "columns",
-                    "labelDefault": "Columnas",
-                    "labelKey": "columns",
-                    "iconKey": "columns",
-                    "toolPanel": "agColumnsToolPanel",
-                }],
-                "position": "right",
-            },
-            "rowHeight": 30,
-            "headerHeight": 38,
-        }
-        with _pv_box:
-            AgGrid(
-                _pv_docs,
-                gridOptions=_grid_pv,
-                allow_unsafe_jscode=True,
-                theme="streamlit",
-                height=560,
-                enable_enterprise_modules=True,
-                fit_columns_on_grid_load=True,
-                key=f"cp_prov_pivot_docs_{gran}",
-            )
+            _grid_pv = {
+                "columnDefs": _col_defs_pv,
+                "defaultColDef": {
+                    "resizable": True, "sortable": True, "filter": True,
+                    "enableRowGroup": True, "enablePivot": True,
+                    "enableValue": True, "minWidth": 110,
+                },
+                "pivotMode": True,
+                "groupDefaultExpanded": 0,
+                "autoGroupColumnDef": {
+                    "headerName": "Proveedor / Fecha / Documento / Producto",
+                    "minWidth": 300, "pinned": "left",
+                    "cellRendererParams": {"suppressCount": True},
+                },
+                "grandTotalRow": "bottom",
+                "getRowStyle": JsCode(
+                    "function(p){ if(p.node.footer && p.node.level===-1){ "
+                    "return {'fontWeight':'600','background':'#EEEDFE',"
+                    "'color':'#4938b8'}; } }"),
+                "sideBar": {
+                    "toolPanels": [{
+                        "id": "columns",
+                        "labelDefault": "Columnas",
+                        "labelKey": "columns",
+                        "iconKey": "columns",
+                        "toolPanel": "agColumnsToolPanel",
+                    }],
+                    "position": "right",
+                },
+                "rowHeight": 30,
+                "headerHeight": 38,
+            }
+            with _pv_box:
+                AgGrid(
+                    _pv_docs,
+                    gridOptions=_grid_pv,
+                    allow_unsafe_jscode=True,
+                    theme="streamlit",
+                    height=560,
+                    enable_enterprise_modules=True,
+                    fit_columns_on_grid_load=True,
+                    key=f"cp_prov_pivot_docs_{gran}",
+                )
 
-            st.download_button(
-                "⬇ Descargar CSV",
-                data=_pv_docs.to_csv(index=False).encode("utf-8-sig"),
-                file_name=f"compras_documentos_{gran.lower()}.csv",
-                mime="text/csv",
-                key="cp_prov_resumen_dl",
-            )
+                st.download_button(
+                    "⬇ Descargar CSV",
+                    data=_pv_docs.to_csv(index=False).encode("utf-8-sig"),
+                    file_name=f"compras_documentos_{gran.lower()}.csv",
+                    mime="text/csv",
+                    key="cp_prov_resumen_dl",
+                )
 
 
 @st.fragment
