@@ -395,9 +395,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         /* Cabecera compacta: título y controles en una sola línea. Se reduce
            min-height y padding vertical para acercar el gráfico al título. */
         .st-key-chartcard_prov_prods .chart-card-hdr {
-            padding: 0 200px 0.35rem 32px;
-            min-height: 26px;
-            margin-bottom: 0.35rem;
+            padding: 0 200px 0.25rem 38px;
+            min-height: 24px;
+            margin-bottom: 0;
             font-size: 13px;
             line-height: 1.25;
         }
@@ -707,9 +707,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 text=_txt, textposition="outside", cliponaxis=False,
                                 hovertemplate="%{y}<extra></extra>",
                             ))
-                            _compras_layout(figa, alto=max(240, 34 * len(agg) + 80))
+                            _compras_layout(figa, alto=max(200, 30 * len(agg) + 40))
                             figa.update_xaxes(tickprefix="S/ ", tickformat=",.0f")
-                            figa.update_layout(margin=dict(l=10, r=140, t=12, b=10))
+                            figa.update_layout(margin=dict(l=10, r=140, t=2, b=10),
+                                               bargap=0.18)
                             _aevt = st.plotly_chart(
                                 figa, use_container_width=True,
                                 key=f"compras_g_prov_prods_{prov_focus}_{prod_focus}",
