@@ -500,9 +500,19 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
            background-image sobre ::before del boton; gira 180 en hover y
            cuando el bloque esta abierto. La rotacion de estado la fija un
            <style> inyectado desde Python (mismo patron de .st-key-*). */
-        .st-key-paneles_wrap {
-            display: flex; align-items: center; gap: 10px;
-            margin: 8px 0 10px;
+        .st-key-paneles_wrap { margin: 8px 0 10px; }
+        /* El bloque interno de stVerticalBlock es el flex real: lo giramos a
+           fila para que carrete y titulo queden en linea. */
+        .st-key-paneles_wrap [data-testid="stVerticalBlock"] {
+            flex-direction: row !important;
+            align-items: center !important;
+            gap: 10px !important;
+            width: auto !important;
+        }
+        /* Cada hijo directo (elementContainer) no debe estirarse al 100%. */
+        .st-key-paneles_wrap [data-testid="stVerticalBlock"] > div {
+            width: auto !important;
+            flex: 0 0 auto !important;
         }
         .st-key-latch_paneles {
             width: auto !important; flex: 0 0 auto; margin: 0 !important;
