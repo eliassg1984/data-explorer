@@ -367,10 +367,16 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
            el stVerticalBlock, por eso la dirección FILA se fija sobre .st-key-...
            directamente (no sobre un bloque anidado). Valores verificados. */
         .st-key-chartcard_prov_prods { position: relative; }
+        /* Matar el gap que Streamlit pone entre header y gráfico dentro del
+           stVerticalBlock. Sin esto, quedan ~16px de aire muertos. */
+        .st-key-chartcard_prov_prods [data-testid="stVerticalBlock"] {
+            gap: 0 !important;
+        }
         /* Ícono de período pegado al lado del título (arriba-izquierda). El
            texto de la fecha ya no ocupa sitio: vive en el tooltip nativo. */
         .st-key-topn_selfloat {
-            position: absolute; top: 4px; left: 14px; z-index: 21;
+            position: absolute; top: 0; left: 14px; z-index: 21;
+            height: 24px; display: flex; align-items: center;
             width: auto !important;
         }
         .topn-selec {
@@ -378,9 +384,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             cursor: help; opacity: 0.7;
         }
         .topn-selec:hover { opacity: 1; }
-        /* Toggles en la MISMA fila del título, alineados a la derecha. */
+        /* Toggles en la MISMA fila del título, centrados vertical. */
         .st-key-topn_float {
-            position: absolute; top: 2px; right: 12px; z-index: 20;
+            position: absolute; top: 0; right: 12px; z-index: 20;
+            height: 24px; display: flex; align-items: center;
             width: auto !important;
         }
         .st-key-topn_float > div { width: auto !important; }
@@ -395,11 +402,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         /* Cabecera compacta: título y controles en una sola línea. Se reduce
            min-height y padding vertical para acercar el gráfico al título. */
         .st-key-chartcard_prov_prods .chart-card-hdr {
-            padding: 0 200px 0.25rem 38px;
+            padding: 0 200px 0 38px;
             min-height: 24px;
-            margin-bottom: 0;
+            margin: 0 0 4px !important;
             font-size: 13px;
             line-height: 1.25;
+            display: flex;
+            align-items: center;
+            border-bottom: none;
         }
         .st-key-topn_float [data-testid="stElementToolbar"] { display: none; }
         /* Encoger los botones de los pills (Rango/Selección y 5/10/20). */
