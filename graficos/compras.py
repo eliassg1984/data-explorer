@@ -491,8 +491,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-latch_docs button {
             display: inline-flex !important;
             align-items: center; justify-content: center;
-            width: 36px !important; min-width: 36px !important;
-            height: 36px !important; min-height: 36px !important;
+            width: 72px !important; min-width: 72px !important;
+            height: 72px !important; min-height: 72px !important;
             padding: 0 !important; margin: 0 !important;
             border: 0.5px solid transparent !important;
             border-radius: 8px !important;
@@ -517,7 +517,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-latch_paneles button::before,
         .st-key-latch_docs button::before {
             content: ""; display: block;
-            width: 28px; height: 28px;
+            width: 56px; height: 56px;
             background: center / contain no-repeat
                 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22' fill='none'><circle cx='11' cy='11' r='3' fill='%236c5ce7'/><ellipse cx='11' cy='4' rx='5' ry='2.5' fill='%236c5ce7' opacity='.85'/><ellipse cx='11' cy='18' rx='5' ry='2.5' fill='%236c5ce7' opacity='.85'/><rect x='8' y='4' width='6' height='14' fill='%236c5ce7' opacity='.45' rx='1'/><line x1='11' y1='4' x2='11' y2='18' stroke='%23ffffff' stroke-width='1' opacity='.4'/><line x1='11' y1='4' x2='6.5' y2='3' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='4' x2='15.5' y2='3' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='18' x2='6.5' y2='19' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='18' x2='15.5' y2='19' stroke='%23ffffff' stroke-width='.8' opacity='.5'/></svg>");
             transition: transform .55s cubic-bezier(.4, 0, .2, 1);
@@ -537,7 +537,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             line-height: 1 !important;
         }
         .latch-title {
-            font-size: 16px; font-weight: 600; line-height: 1;
+            font-size: 20px; font-weight: 600; line-height: 1;
             color: var(--accent, #6c5ce7); margin: 0; padding: 0;
             display: inline-flex; align-items: center;
         }
@@ -799,10 +799,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                               "proveedores"):
                 st.session_state["cp_paneles_abierto"] = not _pan_ab
                 st.rerun(scope="fragment")
-        st.markdown(
-            '<div class="latch-title">Analisis de productos y proveedores</div>',
-            unsafe_allow_html=True,
-        )
+        if not _pan_ab:
+            st.markdown(
+                '<div class="latch-title">Analisis de productos y proveedores</div>',
+                unsafe_allow_html=True,
+            )
     if _pan_ab:
         _paneles_card()
 
@@ -832,11 +833,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                          help="Abrir / cerrar el detalle de documentos"):
                 st.session_state["cp_docs_abierto"] = not _docs_ab
                 st.rerun()
-        st.markdown(
-            f'<div class="latch-title">Detalle de documentos por '
-            f'proveedor · vista {gran}</div>',
-            unsafe_allow_html=True,
-        )
+        if not _docs_ab:
+            st.markdown(
+                f'<div class="latch-title">Detalle de documentos por '
+                f'proveedor · vista {gran}</div>',
+                unsafe_allow_html=True,
+            )
     _bd = base[base["prov"].isin(top_provs)].copy()
     if st.session_state.get("cp_docs_abierto", True) and not _bd.empty:
         _fe = pd.to_datetime(_bd["fecha"], errors="coerce")
