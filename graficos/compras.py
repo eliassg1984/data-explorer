@@ -495,40 +495,28 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             outline: none !important;
         }
 
-        /* ── PESTILLO LATERAL (ancla) — bloque "Analisis de productos y
-           proveedores". El ancla es el emoji del label: gira 180 al abrir.
-           Debajo, ::after muestra abrir/cerrar. El estado (rotacion + palabra)
-           lo fija un <style> inyectado desde Python (st.markdown NO ejecuta JS,
-           mismo patron de .st-key-*). El boton se estira al ancho de su columna
-           pero se topa a 44px, asi no se desborda en pantallas angostas. */
-        /* La tarjeta va full-width (flujo normal); el pestillo FLOTA en el
-           margen izquierdo (gutter ~80px del block-container) sin empujarla.
-           El wrap es el ancla de posicion. */
-        .st-key-paneles_wrap { position: relative; }
-        .st-key-latch_paneles {
-            position: absolute; top: 2px; left: -58px;
-            width: 44px !important; min-width: 44px !important;
-            margin: 0 !important; z-index: 10;
-            display: flex; align-items: flex-start; justify-content: center;
+        /* ── PESTILLO (carrete + titulo en linea) — bloque "Analisis de
+           productos y proveedores". El icono es un carrete SVG inyectado como
+           background-image sobre ::before del boton; gira 180 en hover y
+           cuando el bloque esta abierto. La rotacion de estado la fija un
+           <style> inyectado desde Python (mismo patron de .st-key-*). */
+        .st-key-paneles_wrap {
+            display: flex; align-items: center; gap: 10px;
+            margin: 8px 0 10px;
         }
-        /* En pantallas angostas no hay gutter: el pestillo vuelve al flujo,
-           apilado arriba del titulo. */
-        @media (max-width: 768px) {
-            .st-key-latch_paneles {
-                position: static !important; left: auto !important;
-                top: auto !important; margin: 0 0 6px 0 !important;
-            }
+        .st-key-latch_paneles {
+            width: auto !important; flex: 0 0 auto; margin: 0 !important;
         }
         .st-key-latch_paneles button {
-            display: flex !important; flex-direction: column;
-            align-items: center; justify-content: center; gap: 8px;
-            width: 100% !important; min-width: 0 !important;
-            max-width: 44px !important; min-height: 66px !important;
-            margin-top: 4px; padding: 12px 4px !important;
-            border: 0.5px solid var(--border, #e4e4e7) !important;
-            border-radius: 10px !important;
-            background: var(--surface-1, #fafafa) !important;
-            box-shadow: none !important;
+            display: inline-flex !important;
+            align-items: center; justify-content: center;
+            width: 30px !important; min-width: 30px !important;
+            height: 30px !important; min-height: 30px !important;
+            padding: 0 !important; margin: 0 !important;
+            border: 0.5px solid transparent !important;
+            border-radius: 6px !important;
+            background: transparent !important; box-shadow: none !important;
+            cursor: pointer !important;
             transition: background .15s, border-color .15s !important;
         }
         .st-key-latch_paneles button:hover {
@@ -538,24 +526,23 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-latch_paneles button:focus,
         .st-key-latch_paneles button:active {
             outline: none !important; box-shadow: none !important;
-            border-color: #d4cdf7 !important;
             background: var(--bg-accent, #f0edfe) !important;
         }
-        .st-key-latch_paneles button p {
-            font-size: 19px !important; line-height: 1 !important;
-            margin: 0 !important;
-            transition: transform .42s cubic-bezier(.4, 0, .2, 1);
+        .st-key-latch_paneles button p { display: none !important; }
+        .st-key-latch_paneles button::before {
+            content: ""; display: block;
+            width: 22px; height: 22px;
+            background: center / contain no-repeat
+                url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22' fill='none'><circle cx='11' cy='11' r='3' fill='%236c5ce7'/><ellipse cx='11' cy='4' rx='5' ry='2.5' fill='%236c5ce7' opacity='.85'/><ellipse cx='11' cy='18' rx='5' ry='2.5' fill='%236c5ce7' opacity='.85'/><rect x='8' y='4' width='6' height='14' fill='%236c5ce7' opacity='.45' rx='1'/><line x1='11' y1='4' x2='11' y2='18' stroke='%23ffffff' stroke-width='1' opacity='.4'/><line x1='11' y1='4' x2='6.5' y2='3' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='4' x2='15.5' y2='3' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='18' x2='6.5' y2='19' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='18' x2='15.5' y2='19' stroke='%23ffffff' stroke-width='.8' opacity='.5'/></svg>");
+            transition: transform .55s cubic-bezier(.4, 0, .2, 1);
         }
-        .st-key-latch_paneles button::after {
-            content: "abrir"; font-size: 10px; letter-spacing: .04em;
-            line-height: 1; writing-mode: vertical-rl; text-orientation: mixed;
-            transform: rotate(180deg); color: var(--text-muted, #a1a1aa);
+        .st-key-latch_paneles button:hover::before {
+            transform: rotate(180deg);
         }
-        .st-key-latch_paneles button:hover::after {
-            color: var(--accent, #6c5ce7);
+        .latch-title {
+            font-size: 15px; font-weight: 600;
+            color: var(--accent, #6c5ce7); margin: 0;
         }
-        .latch-title { font-size: 15px; font-weight: 600;
-                       color: var(--accent, #6c5ce7); margin: 6px 0 10px; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -797,22 +784,16 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         st.caption("Último precio = precio unitario de la compra más "
                                    "reciente. Verde = menor precio.")
 
-    # -- Pestillo (ancla) + titulo del bloque. El icono gira 180 y la palabra
-    #    abrir/cerrar cambia segun el estado, via CSS inyectado. El pestillo usa
-    #    scope="fragment" para no recargar toda la app (este drill ya vive en su
-    #    propio @st.fragment).
+    # -- Pestillo (carrete) + titulo en linea. El SVG del carrete lo pinta el
+    #    CSS sobre ::before del boton; aqui solo fijamos la rotacion del estado
+    #    (abierto = 180). scope="fragment" evita recargar toda la app.
     _pan_ab = st.session_state.get("cp_paneles_abierto", True)
     _rot = "180deg" if _pan_ab else "0deg"
-    _word = "cerrar" if _pan_ab else "abrir"
     st.markdown(
-        "<style>"
-        f".st-key-latch_paneles button p{{transform:rotate({_rot});}}"
-        f'.st-key-latch_paneles button::after{{content:"{_word}";}}'
-        "</style>",
+        f"<style>.st-key-latch_paneles button::before"
+        f"{{transform:rotate({_rot});}}</style>",
         unsafe_allow_html=True,
     )
-    # Wrap relativo: la tarjeta queda full-width (flujo normal) y el pestillo
-    # flota en el margen izquierdo (absolute) sin desplazarla.
     with st.container(key="paneles_wrap"):
         with st.container(key="latch_paneles"):
             if st.button("⚓", key="cp_btn_paneles",
@@ -824,8 +805,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             '<div class="latch-title">Analisis de productos y proveedores</div>',
             unsafe_allow_html=True,
         )
-        if _pan_ab:
-            _paneles_card()
+    if _pan_ab:
+        _paneles_card()
 
     # ── Tabla pivotable de documentos (debajo de los paneles A/B) ─────────
     # Cada fila es una línea de detalle (documento × producto). El usuario
