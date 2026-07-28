@@ -387,18 +387,22 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-chartcard_prov_prods {
             padding: 8px 12px !important;
         }
-        /* Ícono de período pegado al lado del título (arriba-izquierda). El
-           texto de la fecha ya no ocupa sitio: vive en el tooltip nativo. */
-        .st-key-topn_selfloat {
-            position: absolute; top: 0; left: 14px; z-index: 21;
-            height: 24px; display: flex; align-items: center;
-            width: auto !important;
+        /* Tooltip del período: aparece al posar el cursor sobre el botón
+           "Selección" (2º botón del primer button group). El valor viene de
+           la CSS variable --periodo-selec inyectada desde Python. */
+        .st-key-topn_pills > div:first-child [data-testid="stButtonGroup"]
+        button:nth-child(2) { position: relative; }
+        .st-key-topn_pills > div:first-child [data-testid="stButtonGroup"]
+        button:nth-child(2):hover::after {
+            content: var(--periodo-selec, "");
+            position: absolute; top: calc(100% + 4px); right: 0;
+            background: var(--text-primary, #262730);
+            color: var(--surface-2, #fff);
+            padding: 4px 8px; border-radius: 4px;
+            font-size: 11px; line-height: 1.2; white-space: nowrap;
+            z-index: 100; pointer-events: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
         }
-        .topn-selec {
-            font-size: 12px; line-height: 1; color: var(--text-muted);
-            cursor: help; opacity: 0.7;
-        }
-        .topn-selec:hover { opacity: 1; }
         /* Toggles en la MISMA fila del título, centrados vertical. */
         .st-key-topn_float {
             position: absolute; top: 0; right: 12px; z-index: 20;
@@ -417,9 +421,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         /* Cabecera compacta: título y controles en una sola línea. Se reduce
            min-height y padding vertical para acercar el gráfico al título. */
         .st-key-chartcard_prov_prods .chart-card-hdr {
-            padding: 0 200px 0 38px;
-            min-height: 24px;
-            margin: 0 0 4px !important;
+            padding: 0 200px 0 4px;
+            min-height: 22px;
+            margin: 0 !important;
             font-size: 13px;
             line-height: 1.25;
             display: flex;
@@ -686,11 +690,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     # ámbito arranca en "periodo" (el período de la barra clicada).
                     _perf = st.session_state.get("compras_prov_perfocus")
                     if _perf is not None:
-                        with st.container(key="topn_selfloat"):
-                            st.markdown(
-                                f'<span class="topn-selec" title="Período seleccionado: {_perf}" '
-                                f'aria-label="Período seleccionado: {_perf}">📅</span>',
-                                unsafe_allow_html=True)
+                        st.markdown(
+                            f'<style>.st-key-topn_pills {{ '
+                            f'--periodo-selec: "{_perf}"; }}</style>',
+                            unsafe_allow_html=True)
                     with st.container(key="topn_float"):
                         with st.container(key="topn_pills"):
                             _scope = st.pills(
