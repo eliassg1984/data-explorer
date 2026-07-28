@@ -367,10 +367,25 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
            el stVerticalBlock, por eso la dirección FILA se fija sobre .st-key-...
            directamente (no sobre un bloque anidado). Valores verificados. */
         .st-key-chartcard_prov_prods { position: relative; }
-        /* Matar el gap que Streamlit pone entre header y gráfico dentro del
-           stVerticalBlock. Sin esto, quedan ~16px de aire muertos. */
+        /* MATAR TODO espacio vertical entre header y gráfico: Streamlit
+           inyecta gap en stVerticalBlock + margins en cada stElementContainer
+           (uno para el markdown del título, otro para el plotly). */
+        .st-key-chartcard_prov_prods,
         .st-key-chartcard_prov_prods [data-testid="stVerticalBlock"] {
             gap: 0 !important;
+            row-gap: 0 !important;
+        }
+        .st-key-chartcard_prov_prods [data-testid="stElementContainer"],
+        .st-key-chartcard_prov_prods [data-testid="stMarkdownContainer"],
+        .st-key-chartcard_prov_prods [data-testid="stPlotlyChart"] {
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+        /* Reducir el padding interior de la card (era 15px por defecto). */
+        .st-key-chartcard_prov_prods {
+            padding: 8px 12px !important;
         }
         /* Ícono de período pegado al lado del título (arriba-izquierda). El
            texto de la fecha ya no ocupa sitio: vive en el tooltip nativo. */
