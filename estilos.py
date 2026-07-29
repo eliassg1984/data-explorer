@@ -576,7 +576,7 @@ def get_css():
         bottom: 0 !important;
         height: 100vh !important;
         z-index: 900 !important;
-        width: 130px !important;
+        width: 116px !important;
         overflow-x: hidden !important;
         overflow-y: auto !important;
         margin: 0 !important;
@@ -594,7 +594,7 @@ def get_css():
        el :has() detecta el rail dentro del contenedor principal. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row),
     .block-container:has(.st-key-compras_tabs_row) {
-        padding-right: 138px !important;
+        padding-right: 132px !important;   /* rail 116 + 16px de aire */
     }
 
     /* Cabecera del rail — icono + "Compras / Gráficos" */
@@ -666,7 +666,7 @@ def get_css():
        centrados dentro del alto nuevo. Scopeado con :has, no afecta a otros. */
     [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row) .st-key-fila_ajuste_top::before {
         height: 34px !important;
-        right: 130px !important;    /* que la franja no invada el rail derecho */
+        right: 116px !important;    /* que la franja no invada el rail derecho */
     }
     [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row) .st-key-fila_ajuste_top {
         padding-top: 2px !important;
