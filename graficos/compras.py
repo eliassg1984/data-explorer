@@ -421,12 +421,27 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             position: absolute; top: 6px; left: 6px; z-index: 21;
             width: auto !important;
         }
+        /* Variante "outline en tinte" (violeta claro con borde y texto oscuros).
+           Se lee como parte del reporte, no como un widget suelto. */
         .st-key-prov_pop_float [data-testid="stPopover"] button {
             min-width: 0 !important;
-            padding: 4px 12px !important;
+            padding: 5px 14px !important;
             font-size: 12px !important;
             font-weight: 500 !important;
             border-radius: 999px !important;
+            background: #EEEDFE !important;
+            color: #26215C !important;
+            border: 1px solid #AFA9EC !important;
+            box-shadow: none !important;
+            transition: background .12s, border-color .12s !important;
+        }
+        .st-key-prov_pop_float [data-testid="stPopover"] button:hover {
+            background: #DED9FA !important;
+            border-color: #7F77DD !important;
+        }
+        .st-key-prov_pop_float [data-testid="stPopover"] button[aria-expanded="true"] {
+            background: #DED9FA !important;
+            border-color: #534AB7 !important;
         }
         .st-key-gran_float [data-testid="stElementToolbar"] { display: none; }
         /* Ocultar la barra de herramientas del propio gráfico (fullscreen) */
