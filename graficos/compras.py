@@ -383,9 +383,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             padding-top: 0 !important;
             padding-bottom: 0 !important;
         }
-        /* Reducir el padding interior de la card (era 15px por defecto). */
+        /* Reducir el padding interior de la card (era 15px por defecto).
+           Padding-top mínimo para que el título quede alineado con los
+           botones absolutos de la derecha (que están anclados al top). */
         .st-key-chartcard_prov_prods {
-            padding: 8px 12px !important;
+            padding: 2px 12px 8px 12px !important;
         }
         /* Tooltip del período: aparece al posar el cursor sobre el botón
            "Selección" (2º botón del primer button group). El valor viene de
