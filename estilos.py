@@ -653,12 +653,14 @@ def get_css():
     }
 
     /* Subir las TARJETAS (no los chips fijos): recupera el hueco que dejó la
-       antigua barra horizontal de pestañas. Se aplica solo a los contenedores
-       que sí viven en el flujo del dashboard de Compras. */
+       antigua barra horizontal de pestañas y la franja blanca. Se aplica
+       solo a los contenedores que sí viven en el flujo del dashboard de
+       Compras. Ahora que la franja es transparente el gap se ve mas, por
+       eso -100 en vez de -60. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap,
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_izq_compras,
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_der_compras {
-        margin-top: -60px !important;
+        margin-top: -100px !important;
     }
 
 /* En Compras la franja blanca superior YA NO EXISTE — el ::before se
