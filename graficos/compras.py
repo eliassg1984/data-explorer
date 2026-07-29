@@ -932,8 +932,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             })
 
             _pv_box = st.container(border=True, key="compras_prov_card_docs")
-            _pv_box.caption("Arrastra campos a Filas / Columnas / Valores en el panel "
-                            "derecho para pivotar. ▸ expande cada nivel.")
 
             _fmt_soles = JsCode(
                 "function(p){ if(p.value==null) return ''; "
