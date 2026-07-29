@@ -283,10 +283,41 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             _txt.append(linea)
         return _txt
 
+    def _abrev_nombre(nombre, max_chars):
+        """Abrevia el nombre del proveedor segun ancho disponible.
+        - max<2: vacio (bar muy chica)
+        - 2:      2 primeras iniciales de palabras
+        - 3-5:    iniciales de todas las palabras significativas
+        - 6-14:   primera palabra
+        - >=15:   nombre completo (truncado con … si excede)
+        """
+        s = str(nombre).strip()
+        if max_chars < 2 or not s:
+            return ""
+        if len(s) <= max_chars:
+            return s
+        words = [w for w in s.split() if w and w.lower() not in
+                 ("de", "del", "la", "el", "los", "las", "y", "e", "s.a.c.",
+                  "sac", "s.a.", "sa", "e.i.r.l.", "eirl")]
+        if max_chars <= 5:
+            ini = "".join(w[0].upper() for w in words[:max_chars])
+            return ini[:max_chars] if len(ini) >= 2 else s[:max_chars]
+        if max_chars <= 14 and words:
+            first = words[0]
+            return first if len(first) <= max_chars else first[:max_chars - 1] + "…"
+        return s[:max_chars - 1] + "…"
+
     # Nota: la serie se calcula sobre TODOS los periodos y recien despues se
     # recorta a la ventana visible (_sl). Asi la variacion % de la primera
     # barra visible sigue comparando contra su periodo anterior real, aunque
     # ese periodo quede fuera de la ventana.
+    #
+    # Toggle "Nombres en barras": prepende el nombre abreviado del proveedor
+    # a la etiqueta de cada barra. El ancho de barra estimado depende de la
+    # ventana visible y de la cantidad de series → recalculado en cada render.
+    _show_names = st.session_state.get("cp_prov_show_names", False)
+    _ancho_barra_est_px = 1200 / max(1, len(_per_vis) * _n_series)
+    _max_chars = max(0, int(_ancho_barra_est_px / 6.5))  # ~6.5px por char a 11px
     fig = go.Figure()
     for i, prov in enumerate(orden_provs):
         grp = (base[base["prov"] == prov]
@@ -298,12 +329,20 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # Resaltar el proveedor en foco con opacidad plena; los demás, semitransparentes
         _opacity = 1.0 if (prov_focus is None or prov == prov_focus) else 0.30
 
+        _tags = _etiqueta_serie(list(grp.values))[_sl]
+        if _show_names:
+            _abbr = _abrev_nombre(prov, _max_chars)
+            if _abbr:
+                _prefix = (f"<b><span style='color:{_color};font-size:10px'>"
+                           f"{_abbr}</span></b><br>")
+                _tags = [(_prefix + t) if t else "" for t in _tags]
+
         fig.add_bar(
             x=_per_vis,
             y=grp.values[_sl],
             name=_compras_truncar(prov, 22),
             marker=dict(color=_color, opacity=_opacity),
-            text=_etiqueta_serie(list(grp.values))[_sl],
+            text=_tags,
             textposition="outside",
             textfont=dict(size=13),
             cliponaxis=False,
@@ -321,12 +360,17 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                      .groupby("per", as_index=False)["valor"].sum()
                      .set_index("per")["valor"]
                      .reindex(periodos, fill_value=0))
+        _tags_o = _etiqueta_serie(list(grp_otros.values))[_sl]
+        if _show_names and _max_chars >= 2:
+            _prefix_o = (f"<b><span style='color:#7a7a86;font-size:10px'>"
+                         f"Otros</span></b><br>")
+            _tags_o = [(_prefix_o + t) if t else "" for t in _tags_o]
         fig.add_bar(
             x=_per_vis,
             y=grp_otros.values[_sl],
             name="Otros",
             marker=dict(color=GRIS_BORDE, opacity=0.6),
-            text=_etiqueta_serie(list(grp_otros.values))[_sl],
+            text=_tags_o,
             textposition="outside",
             textfont=dict(size=13),
             cliponaxis=False,
@@ -717,6 +761,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     st.caption("Sin coincidencias.")
                 for _p in _vistos:
                     st.checkbox(_p, key="cp_prov_cb::" + str(_p))
+                st.divider()
+                st.toggle("Nombres en barras", key="cp_prov_show_names",
+                          value=False, help="Muestra el nombre del proveedor "
+                          "sobre cada barra. Se abrevia segun el ancho "
+                          "disponible.")
         with st.container(key="gran_float"):
             st.pills("Periodo", ["Semana", "Mes", "Año"], default="Mes",
                      key="compras_prov_gran", label_visibility="collapsed")
