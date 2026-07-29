@@ -545,80 +545,65 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             transform-origin: left center;
             animation: unfoldRight 0.42s cubic-bezier(0.4, 0, 0.2, 1) backwards;
         }
-        /* ── PESTILLO (carrete + titulo en linea) — se usa en varios bloques:
-           "Analisis de productos y proveedores" (paneles A/B) y "Detalle de
-           documentos por proveedor". El icono es un carrete SVG inyectado
-           como background-image sobre ::before del boton; gira 180 en hover y
-           cuando el bloque esta abierto. La rotacion de estado la fija un
-           <style> inyectado desde Python (mismo patron de .st-key-*). */
-        /* Row wrapper: la tarjeta mantiene ancho completo y el pestillo se
-           saca del flujo con position:absolute hacia la izquierda, cayendo
-           en el gutter entre el sidebar y la tarjeta. */
+        /* ── PESTILLO como PILL (icono + titulo en una misma capsula) ──
+           El boton ES el titulo: clic en cualquier parte del pill abre/cierra.
+           Se usa en "Analisis de productos y proveedores" (paneles A/B) y
+           "Detalle de documentos por proveedor". El icono (carrete SVG) va
+           como background-image en ::before, dentro del pill, a la izquierda
+           del texto del label. Cuando el bloque esta abierto el icono gira
+           180deg (rotacion inyectada desde Python con <style>). */
         .st-key-paneles_row,
         .st-key-docs_row {
-            position: relative !important;
-            margin: 8px 0 10px;
+            margin: 8px 0 6px;
         }
         .st-key-latch_paneles,
         .st-key-latch_docs {
-            position: absolute !important;
-            left: -50px !important;
-            top: 4px !important;
-            width: 52px !important;
-            margin: 0 !important;
-            z-index: 5;
+            width: auto !important;
+            margin: 0 0 8px 0 !important;
+            display: inline-block;
         }
         .st-key-latch_paneles button,
         .st-key-latch_docs button {
             display: inline-flex !important;
-            align-items: center; justify-content: center;
-            width: 52px !important; min-width: 52px !important;
-            height: 52px !important; min-height: 52px !important;
-            padding: 0 !important; margin: 0 !important;
-            border: 0.5px solid transparent !important;
-            border-radius: 8px !important;
-            background: transparent !important; box-shadow: none !important;
+            align-items: center; justify-content: flex-start;
+            gap: 8px !important;
+            width: auto !important; min-width: 0 !important;
+            height: auto !important; min-height: 0 !important;
+            padding: 6px 16px 6px 10px !important;
+            margin: 0 !important;
+            border: 0.5px solid #d4cdf7 !important;
+            border-radius: 999px !important;
+            background: #f0edfe !important; box-shadow: none !important;
             cursor: pointer !important;
             transition: background .15s, border-color .15s !important;
         }
         .st-key-latch_paneles button:hover,
         .st-key-latch_docs button:hover {
-            background: var(--bg-accent, #f0edfe) !important;
-            border-color: #d4cdf7 !important;
+            background: #e5e0fc !important;
+            border-color: #b9adf1 !important;
         }
         .st-key-latch_paneles button:focus,
         .st-key-latch_paneles button:active,
         .st-key-latch_docs button:focus,
         .st-key-latch_docs button:active {
             outline: none !important; box-shadow: none !important;
-            background: var(--bg-accent, #f0edfe) !important;
         }
+        /* Label del boton (el <p> que Streamlit inserta): tipografia del titulo. */
         .st-key-latch_paneles button p,
-        .st-key-latch_docs button p { display: none !important; }
+        .st-key-latch_docs button p {
+            display: inline !important;
+            font-size: 13px !important; font-weight: 500 !important;
+            line-height: 1 !important;
+            color: #4d3fb3 !important;
+            margin: 0 !important; padding: 0 !important;
+        }
         .st-key-latch_paneles button::before,
         .st-key-latch_docs button::before {
-            content: ""; display: block;
-            width: 40px; height: 40px;
+            content: ""; display: inline-block;
+            width: 16px; height: 16px; flex-shrink: 0;
             background: center / contain no-repeat
                 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22' fill='none'><circle cx='11' cy='11' r='3' fill='%236c5ce7'/><ellipse cx='11' cy='4' rx='5' ry='2.5' fill='%236c5ce7' opacity='.85'/><ellipse cx='11' cy='18' rx='5' ry='2.5' fill='%236c5ce7' opacity='.85'/><rect x='8' y='4' width='6' height='14' fill='%236c5ce7' opacity='.45' rx='1'/><line x1='11' y1='4' x2='11' y2='18' stroke='%23ffffff' stroke-width='1' opacity='.4'/><line x1='11' y1='4' x2='6.5' y2='3' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='4' x2='15.5' y2='3' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='18' x2='6.5' y2='19' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='18' x2='15.5' y2='19' stroke='%23ffffff' stroke-width='.8' opacity='.5'/></svg>");
             transition: transform .55s cubic-bezier(.4, 0, .2, 1);
-        }
-        .st-key-latch_paneles button:hover::before,
-        .st-key-latch_docs button:hover::before {
-            transform: rotate(180deg);
-        }
-        /* Titulo (solo visible con el pestillo cerrado): sin margen extra. */
-        .st-key-paneles_row [data-testid="stMarkdownContainer"],
-        .st-key-paneles_row [data-testid="stMarkdownContainer"] > *,
-        .st-key-docs_row [data-testid="stMarkdownContainer"],
-        .st-key-docs_row [data-testid="stMarkdownContainer"] > * {
-            margin: 0 !important; padding: 0 !important;
-            line-height: 1 !important;
-        }
-        .latch-title {
-            font-size: 14px; font-weight: 600; line-height: 1;
-            color: var(--accent, #6c5ce7); margin: 0; padding: 0;
-            display: inline-flex; align-items: center;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -863,18 +848,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     )
     with st.container(key="paneles_row"):
         with st.container(key="latch_paneles"):
-            if st.button("⚓", key="cp_btn_paneles",
+            if st.button("Analisis de productos y proveedores",
+                         key="cp_btn_paneles",
                          help="Abrir / cerrar el analisis de productos y "
                               "proveedores"):
                 st.session_state["cp_paneles_abierto"] = not _pan_ab
                 st.rerun(scope="fragment")
         if _pan_ab:
             _paneles_card()
-        else:
-            st.markdown(
-                '<div class="latch-title">Analisis de productos y proveedores</div>',
-                unsafe_allow_html=True,
-            )
 
     # ── Tabla pivotable de documentos (debajo de los paneles A/B) ─────────
     # Cada fila es una línea de detalle (documento × producto). El usuario
@@ -898,18 +879,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     )
     with st.container(key="docs_row"):
         with st.container(key="latch_docs"):
-            if st.button("⚓", key="cp_btn_docs",
+            if st.button(f"Detalle de documentos por proveedor · vista {gran}",
+                         key="cp_btn_docs",
                          help="Abrir / cerrar el detalle de documentos"):
                 st.session_state["cp_docs_abierto"] = not _docs_ab
                 st.rerun()
         _bd = base[base["prov"].isin(top_provs)].copy()
-        if not _docs_ab:
-            st.markdown(
-                f'<div class="latch-title">Detalle de documentos por '
-                f'proveedor · vista {gran}</div>',
-                unsafe_allow_html=True,
-            )
-        elif not _bd.empty:
+        if _docs_ab and not _bd.empty:
             _fe = pd.to_datetime(_bd["fecha"], errors="coerce")
             _pv_docs = pd.DataFrame({
                 "Proveedor": _bd["prov"].astype(str).values,
