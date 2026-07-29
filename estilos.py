@@ -855,16 +855,16 @@ def get_css():
     /* CHIPS DE FILTRO EN LA FRANJA BLANCA — Área / Familia / Ajuste /     */
     /* Ajuste valor.  Nivel 2, a la derecha del selector de vista.         */
     /* ================================================================== */
-    /* Sub-paso 2 del rediseño: los filtros suben al NIVEL 1 (fila del
-       título), a la izquierda del widget de fecha. El offset derecho deja
-       ~260px para la píldora de fecha (01/.. – ../..). Ajustable si roza. */
+    /* Filtros Familia / Subfamilia en el NIVEL 1: pegados a la IZQUIERDA,
+       alineados con el borde izquierdo de la tarjeta (offset 106px = rail
+       90 + 16 aire). La fecha se ancla al lado derecho (ver más abajo). */
     .st-key-chips_ajuste_tabla {
         position: fixed !important;
         top: 6px !important;
-        right: 280px !important;
-        left: auto !important;
+        left: 106px !important;
+        right: auto !important;
         width: auto !important;
-        max-width: calc(100vw - 90px - 620px) !important;
+        max-width: calc(100vw - 106px - 380px) !important;   /* deja aire para la fecha derecha */
         z-index: 23 !important;
         margin: 0 !important;
         padding: 0 !important;
@@ -961,14 +961,15 @@ def get_css():
     }
 
     /* =================================================================== */
-    /* FECHA EN EL HEADER — texto del rango a la IZQUIERDA de la franja.    */
-    /* Es el TRIGGER de un popover (Opción B): atajos + calendario manual.  */
+    /* FECHA EN EL HEADER — texto del rango a la DERECHA de la franja,      */
+    /* alineado con el borde derecho de la tarjeta (padding-right: 138px    */
+    /* en Compras). Es el TRIGGER de un popover: atajos + calendario.       */
     /* =================================================================== */
 .st-key-fecha_ajuste_pill {
     position: fixed !important;
     top: 8px !important;
-    left: 106px !important;         /* 90px (rail) + 16px margen */
-    right: auto !important;
+    left: auto !important;
+    right: 138px !important;        /* alineada con el borde derecho de la tarjeta */
     width: fit-content !important;
     z-index: 23 !important;
     margin: 0 !important;
@@ -983,7 +984,7 @@ def get_css():
     .st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
         box-sizing: border-box !important;
         min-width: 0 !important;
-        padding: 0 10px !important;
+        padding: 0 14px !important;
         border: none !important;
         border-bottom: 2px solid #7F77DD !important;
         border-radius: 4px 4px 0 0 !important;
@@ -992,7 +993,7 @@ def get_css():
         box-shadow: none !important;
         color: #101014 !important;
         font-weight: 700 !important;
-        font-size: 15px !important;
+        font-size: 17px !important;
         line-height: 1.2 !important;
         white-space: nowrap !important;
         min-height: calc(var(--cab-altura) - 8px) !important;
