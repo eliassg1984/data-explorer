@@ -660,21 +660,7 @@ def get_css():
         margin-top: -60px !important;
     }
 
-    /* Chart del drill Proveedor: cuando hay muchas series × periodos, el
-       figure recibe ancho fijo (Python) y este wrapper habilita SCROLL
-       HORIZONTAL para leer todas las barras sin apretujarlas. */
-    .st-key-compras_prov_chart_scroll {
-        overflow-x: auto !important;
-        overflow-y: hidden !important;
-        width: 100% !important;
-    }
-    .st-key-compras_prov_chart_scroll::-webkit-scrollbar { height: 8px !important; }
-    .st-key-compras_prov_chart_scroll::-webkit-scrollbar-thumb {
-        background: var(--scroll-thumb, #d6d6dd) !important;
-        border-radius: 4px !important;
-    }
-
-    /* Franja del título MÁS ANGOSTA en Compras: reduce la altura del fondo
+/* Franja del título MÁS ANGOSTA en Compras: reduce la altura del fondo
        blanco fijo (::before de fila_ajuste_top) y su padding. Los chips
        Familia/Subfamilia y la fecha (position:fixed a top:6px) se mantienen
        centrados dentro del alto nuevo. Scopeado con :has, no afecta a otros. */
