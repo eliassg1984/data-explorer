@@ -442,14 +442,49 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             line-height: 1 !important;
         }
 
-        /* Ámbito de fecha (En rango / Todo) — en la cabecera del Panel B. */
+        /* Ámbito de fecha (En rango / Todo) — en la cabecera del Panel B.
+           Se replican las mismas reglas de compactación del Panel A para
+           que titulo, toggles y contenido queden a la misma altura. */
         .st-key-chartcard_prov_prov_de_prod { position: relative; }
+        .st-key-chartcard_prov_prov_de_prod,
+        .st-key-chartcard_prov_prov_de_prod [data-testid="stVerticalBlock"] {
+            gap: 0 !important;
+            row-gap: 0 !important;
+        }
+        .st-key-chartcard_prov_prov_de_prod [data-testid="stElementContainer"],
+        .st-key-chartcard_prov_prov_de_prod [data-testid="stMarkdownContainer"] {
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+        .st-key-chartcard_prov_prov_de_prod {
+            padding: 2px 12px 8px 12px !important;
+        }
+        .st-key-chartcard_prov_prov_de_prod .chart-card-hdr {
+            padding: 0 140px 0 4px;
+            min-height: 22px;
+            margin: 0 !important;
+            font-size: 13px;
+            line-height: 1.25;
+            display: flex;
+            align-items: center;
+            border-bottom: none;
+        }
         .st-key-panelb_scope_float {
-            position: absolute; top: 10px; right: 16px; z-index: 20;
+            position: absolute; top: 0; right: 12px; z-index: 20;
+            height: 24px; display: flex; align-items: center;
             width: auto !important;
         }
-        .st-key-chartcard_prov_prov_de_prod .chart-card-hdr { padding-right: 140px; }
+        .st-key-panelb_scope_float > div { width: auto !important; }
         .st-key-panelb_scope_float [data-testid="stElementToolbar"] { display: none; }
+        .st-key-panelb_scope_float [data-testid="stButtonGroup"] button {
+            min-height: 22px !important;
+            height: 22px !important;
+            padding: 0 8px !important;
+            font-size: 11px !important;
+            line-height: 1 !important;
+        }
 
         /* ── Cápsula segmentada: unir las pills en un solo control ── */
         .st-key-gran_float [data-testid="stButtonGroup"],
