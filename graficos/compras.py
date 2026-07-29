@@ -1186,21 +1186,24 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 },
                 "rowHeight": 30,
                 "headerHeight": 38,
+                # autoHeight: el grid ocupa exactamente el alto que necesita.
+                # Se achica cuando hay pocas filas y crece al expandir sin
+                # scroll interno ni white space. Requiere desactivar la
+                # virtualizacion (ok con hasta ~200 filas totales, es el
+                # rango de este pivote).
+                "domLayout": "autoHeight",
             }
-            # Altura dinamica: se ajusta a la cantidad de proveedores
-            # visibles (filas de primer nivel) + header + fila Total + aire,
-            # capado a 560 para que al expandir un grupo grande no se dispare
-            # y aparezca el scroll interno propio del grid.
-            _n_provs_grid = int(_pv_docs["Proveedor"].nunique()) if len(_pv_docs) else 0
-            _h_dyn = 38 + 30 * (_n_provs_grid + 1) + 20   # header + provs + total + padding
-            _h_grid = max(180, min(560, _h_dyn))
+            # Con domLayout=autoHeight el grid maneja su propio alto; igual
+            # pasamos un height al wrapper (st_aggrid lo requiere) — se usa
+            # como TOPE del iframe para el caso teorico de expandir muchisimas
+            # filas. 900 = ~28 filas expandidas visibles sin scroll extra.
             with _pv_box:
                 AgGrid(
                     _pv_docs,
                     gridOptions=_grid_pv,
                     allow_unsafe_jscode=True,
                     theme="streamlit",
-                    height=_h_grid,
+                    height=900,
                     enable_enterprise_modules=True,
                     fit_columns_on_grid_load=True,
                     key=f"cp_prov_pivot_docs_{gran}_{_docs_inst}",
