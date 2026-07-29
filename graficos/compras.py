@@ -415,51 +415,31 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             background: #f0edfe !important; border-color: #d4cdf7 !important;
         }
         .st-key-win_nav button:disabled { opacity: .30 !important; }
-        /* Popover central: muestra cuantas agrupaciones se ven y las cambia.
-           Mas ancho que las flechas y sin borde marcado (es un lector, no
-           un boton de accion). */
-        .st-key-win_nav [data-testid="stPopover"] button {
-            width: auto !important; height: 24px !important;
-            padding: 0 9px !important;
-            font-size: 11px !important; font-weight: 400 !important;
-            color: #8a8a99 !important;
-            border-color: transparent !important;
-            background: rgba(255,255,255,0.82) !important;
-        }
-        .st-key-win_nav [data-testid="stPopover"] button:hover {
-            color: #6c5ce7 !important;
-            border-color: #d4cdf7 !important;
-        }
-        /* Panel del popover: angosto y sin aire de sobra. Se ancla con :has()
-           al container interno (el popover vive en un portal, fuera de
-           .st-key-win_nav), asi no afecta al popover de Proveedores. */
-        [data-testid="stPopoverBody"]:has(.st-key-win_size_opts) {
-            min-width: 0 !important; width: max-content !important;
-            max-width: 230px !important;
-            padding: 8px !important;
-        }
-        /* Opciones en FILA, como pills chicos (no botones a todo el ancho). */
-        .st-key-win_size_opts {
-            display: flex !important; flex-direction: row !important;
-            flex-wrap: wrap !important;
-            gap: 4px !important; row-gap: 4px !important;
-            width: auto !important;
-        }
-        .st-key-win_size_opts [data-testid="stElementContainer"] {
-            width: auto !important; margin: 0 !important;
-        }
-        .st-key-win_size_opts button {
+        /* Pills de tamano de ventana (Auto / 3 / 6 / 12 / Todo). Mismo alto
+           que las flechas, texto chico. El activo se resalta via <style>
+           inyectado por Python (cp_win_auto / cp_win_N / cp_win_all). */
+        .st-key-cp_win_auto button,
+        .st-key-cp_win_3    button,
+        .st-key-cp_win_6    button,
+        .st-key-cp_win_12   button,
+        .st-key-cp_win_24   button,
+        .st-key-cp_win_all  button {
             min-width: 0 !important; width: auto !important;
-            height: 26px !important;
-            padding: 0 10px !important;
+            height: 24px !important;
+            padding: 0 9px !important;
             border-radius: 999px !important;
             border: 0.5px solid var(--border, #e6e6e6) !important;
-            background: transparent !important;
-            color: var(--text-secondary, #6a6a76) !important;
-            font-size: 12px !important; font-weight: 400 !important;
+            background: rgba(255,255,255,0.82) !important;
+            color: #6a6a76 !important;
+            font-size: 11px !important; font-weight: 400 !important;
             line-height: 1 !important; box-shadow: none !important;
         }
-        .st-key-win_size_opts button:hover {
+        .st-key-cp_win_auto button:hover:not(:disabled),
+        .st-key-cp_win_3    button:hover:not(:disabled),
+        .st-key-cp_win_6    button:hover:not(:disabled),
+        .st-key-cp_win_12   button:hover:not(:disabled),
+        .st-key-cp_win_24   button:hover:not(:disabled),
+        .st-key-cp_win_all  button:hover:not(:disabled) {
             background: #f0edfe !important; border-color: #d4cdf7 !important;
             color: #4d3fb3 !important;
         }
@@ -769,19 +749,25 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             st.button("‹", key="cp_win_prev", disabled=_win_ini <= 0,
                       help="Periodos anteriores",
                       on_click=_win_mover, args=(-_ventana,))
-            with st.popover(f"{_ventana} de {_n_per}"):
-                # Container con key propio: el popover se renderiza en un
-                # portal, asi que este key es el unico anclaje fiable para
-                # el CSS que lo compacta (pills en fila, panel angosto).
-                with st.container(key="win_size_opts"):
-                    st.button(f"Auto {_ventana_auto}", key="cp_win_auto",
-                              on_click=_win_size, args=(None,))
-                    for _op in (3, 6, 12, 24):
-                        if _op < _n_per:
-                            st.button(str(_op), key=f"cp_win_{_op}",
-                                      on_click=_win_size, args=(_op,))
-                    st.button(f"Todo {_n_per}", key="cp_win_all",
-                              on_click=_win_size, args=(_n_per,))
+            # Pills de tamano inline (sin popover). El pill activo se marca
+            # via <style> inyectado con la key exacta (no se puede aplicar
+            # la clase :active desde Python porque Streamlit re-renderiza).
+            _sel_key = ("cp_win_auto" if _win_size_sel is None
+                        else "cp_win_all" if _win_size_sel == _n_per
+                        else f"cp_win_{int(_win_size_sel)}")
+            st.markdown(
+                f"<style>.st-key-{_sel_key} button{{"
+                f"background:#6c5ce7 !important;color:#fff !important;"
+                f"border-color:#6c5ce7 !important;}}</style>",
+                unsafe_allow_html=True)
+            st.button(f"Auto {_ventana_auto}", key="cp_win_auto",
+                      on_click=_win_size, args=(None,))
+            for _op in (3, 6, 12, 24):
+                if _op < _n_per:
+                    st.button(str(_op), key=f"cp_win_{_op}",
+                              on_click=_win_size, args=(_op,))
+            st.button(f"Todo {_n_per}", key="cp_win_all",
+                      on_click=_win_size, args=(_n_per,))
             st.button("›", key="cp_win_next", disabled=_win_ini >= _ini_max,
                       help="Periodos siguientes",
                       on_click=_win_mover, args=(_ventana,))
