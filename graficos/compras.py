@@ -277,16 +277,22 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             return f"S/ {v / 1_000:.1f}k"
         return f"S/ {v:.0f}"
 
-    def _etiqueta_serie(vals, pct_periodo=None):
-        """Texto por barra: total SIEMPRE encima + variación vs el período
-        ANTERIOR del mismo proveedor (▲ verde sube / ▼ rojo baja) + % de
-        participación en el período (semana/mes/año/día). La 1ª barra no
-        tiene anterior → solo total + % del período. Barras en 0 → sin
-        etiqueta.
+    # Sufijo para la línea '% del ...' según la granularidad activa. El
+    # usuario ve el nombre del segmento directamente, sin genérico 'período'.
+    _gran_suffix = {"Día": "del Día", "Semana": "de la Semana",
+                    "Mes": "del Mes", "Año": "del Año"}.get(gran, "del período")
 
-        pct_periodo: lista/array del mismo largo que vals con el % que la
-        barra representa del total del período (0-100). Si es None, no se
-        muestra esa línea (compatibilidad con otras llamadas).
+    def _etiqueta_serie(vals, pct_periodo=None, docs=None):
+        """Texto por barra: total SIEMPRE encima + variación vs el período
+        ANTERIOR del mismo proveedor (▲ verde sube / ▼ rojo baja) + cantidad
+        de documentos + % de participación en el período. La 1ª barra no
+        tiene anterior → solo total + docs + %. Barras en 0 → sin etiqueta.
+
+        pct_periodo: lista del mismo largo que vals con el % que la barra
+            representa del total del segmento (0-100). Si None, se omite.
+        docs: lista del mismo largo que vals con la cantidad de documentos
+            (facturas / comprobantes únicos) que respaldan cada barra. Si
+            None, se omite.
         """
         _txt = []
         for j, v in enumerate(vals):
@@ -300,11 +306,20 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 col = "#0F6E56" if chg >= 0 else "#A32D2D"
                 linea += (f"<br><span style='color:{col}'>"
                           f"{flecha}{abs(chg):.0f}%</span>")
+            # Tercera linea (gris chico): docs + % del segmento.
+            _foot = []
+            if docs is not None:
+                _n = docs[j]
+                if _n is not None and not pd.isna(_n) and _n > 0:
+                    _n = int(_n)
+                    _foot.append(f"{_n} doc" if _n == 1 else f"{_n} docs")
             if pct_periodo is not None:
                 _pp = pct_periodo[j]
                 if _pp is not None and not pd.isna(_pp):
-                    linea += (f"<br><span style='color:#6b6b78;font-size:10px'>"
-                              f"{_pp:.0f}% del período</span>")
+                    _foot.append(f"{_pp:.0f}% {_gran_suffix}")
+            if _foot:
+                linea += (f"<br><span style='color:#6b6b78;font-size:10px'>"
+                          + " · ".join(_foot) + "</span>")
             _txt.append(linea)
         return _txt
 
@@ -347,6 +362,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # seleccionados) para el % de participación en cada barra.
     _tot_por_periodo = (base.groupby("per")["valor"].sum()
                         .reindex(periodos, fill_value=0))
+    # Cantidad de documentos unicos por (prov, per). Solo si la columna docu
+    # existe y no esta vacia; si no, dejamos None y la etiqueta lo omite.
+    if "docu" in base.columns and (base["docu"].astype(str) != "").any():
+        _docs_por = (base.groupby(["prov", "per"])["docu"]
+                     .nunique().rename("n_docs"))
+    else:
+        _docs_por = None
     fig = go.Figure()
     for i, prov in enumerate(orden_provs):
         grp = (base[base["prov"] == prov]
@@ -362,7 +384,17 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # total del periodo es 0, deja None (etiqueta_serie lo ignora).
         _pct_per = [(g / t * 100) if t > 0 else None
                     for g, t in zip(grp.values, _tot_por_periodo.values)]
-        _tags = _etiqueta_serie(list(grp.values), pct_periodo=_pct_per)[_sl]
+        # Docs por bar (alineado con periodos): si el (prov, per) no aparece
+        # en el groupby -> reindex con fill_value=0 -> etiqueta lo omite.
+        if _docs_por is not None and prov in _docs_por.index.get_level_values(0):
+            _docs_prov = (_docs_por.loc[prov]
+                          .reindex(periodos, fill_value=0).astype(int))
+            _docs_lst = list(_docs_prov.values)
+        else:
+            _docs_lst = None
+        _tags = _etiqueta_serie(list(grp.values),
+                                pct_periodo=_pct_per,
+                                docs=_docs_lst)[_sl]
         if _show_names:
             _abbr = _abrev_nombre(prov, _max_chars)
             if _abbr:
