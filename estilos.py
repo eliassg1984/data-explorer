@@ -971,19 +971,20 @@ def get_css():
 }
 
     /* Trigger: anula la regla GLOBAL de pill (BOTÓN FILTROS, arriba) SOLO
-       aquí → el rango se ve como texto negro sin caja, con underline
-       SÓLIDO 3px acento (estilo "tab activo") pegado al borde INFERIOR
-       de la franja. min-height = --cab-altura - top(8px) + box-sizing
-       border-box → el border-bottom aterriza justo en el borde de la
-       franja en todos los reportes. */
+       aquí → texto sobre tinte violeta claro (gradient que sube desde
+       la base) + barra sólida 2px acento pegada al borde INFERIOR de
+       la franja. Se lee como "pestaña activa" muy sutil. min-height =
+       --cab-altura - top(8px) + box-sizing border-box → el border
+       aterriza justo en el borde de la franja en todos los reportes. */
     .st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
         box-sizing: border-box !important;
         min-width: 0 !important;
-        padding: 0 8px !important;
+        padding: 0 10px !important;
         border: none !important;
-        border-bottom: 3px solid #534AB7 !important;
-        border-radius: 0 !important;
-        background: transparent !important;
+        border-bottom: 2px solid #7F77DD !important;
+        border-radius: 4px 4px 0 0 !important;
+        background: linear-gradient(to top,
+            #EEEDFE 0%, rgba(238,237,254,0) 65%) !important;
         box-shadow: none !important;
         color: #101014 !important;
         font-weight: 700 !important;
@@ -995,13 +996,16 @@ def get_css():
         align-items: center !important;
     }
     .st-key-fecha_ajuste_pill [data-testid="stPopover"] button:hover {
-        background: rgba(0, 0, 0, 0.04) !important;
         border: none !important;
-        border-bottom: 3px solid #3C3489 !important;
+        border-bottom: 2px solid #534AB7 !important;
+        background: linear-gradient(to top,
+            #DED9FA 0%, rgba(222,217,250,0) 70%) !important;
         color: var(--accent-deep) !important;
     }
     .st-key-fecha_ajuste_pill [data-testid="stPopover"] button[aria-expanded="true"] {
-        border-bottom: 3px solid #26215C !important;
+        border-bottom: 2px solid #26215C !important;
+        background: linear-gradient(to top,
+            #DED9FA 0%, rgba(222,217,250,0) 75%) !important;
     }
     /* En Compras la franja es MAS BAJA (34px, no 50px) — el ::before
        la sobreescribe directamente pero --cab-altura sigue en 50.
