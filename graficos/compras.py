@@ -850,8 +850,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-paneles_row .st-key-latch_paneles {
             position: absolute !important;
             left: -50px !important;
-            top: 50% !important;
-            transform: translateY(-50%) !important;
+            top: 18px !important;
             margin: 0 !important; z-index: 5;
         }
         .st-key-paneles_row .st-key-latch_paneles button {
@@ -902,8 +901,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-docs_row .st-key-latch_docs {
             position: absolute !important;
             left: -50px !important;
-            top: 50% !important;
-            transform: translateY(-50%) !important;
+            top: 18px !important;
             margin: 0 !important; z-index: 5;
         }
         .st-key-docs_row .st-key-latch_docs button {
