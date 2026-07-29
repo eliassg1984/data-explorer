@@ -987,17 +987,18 @@ def get_css():
     .st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
         box-sizing: border-box !important;
         min-width: 0 !important;
-        padding: 0 14px !important;
+        padding: 0 16px !important;
         border: none !important;
-        border-bottom: 2px solid #7F77DD !important;
+        border-bottom: 2px solid #534AB7 !important;
         border-radius: 4px 4px 0 0 !important;
         background: linear-gradient(to top,
-            #EEEDFE 0%, rgba(238,237,254,0) 65%) !important;
+            #DED9FA 0%, rgba(222,217,250,0) 70%) !important;
         box-shadow: none !important;
-        color: #101014 !important;
-        font-weight: 700 !important;
-        font-size: 17px !important;
-        line-height: 1.2 !important;
+        color: #26215C !important;
+        font-weight: 800 !important;
+        font-size: 20px !important;
+        letter-spacing: -0.01em !important;
+        line-height: 1.15 !important;
         white-space: nowrap !important;
         min-height: calc(var(--cab-altura) - 8px) !important;
         display: inline-flex !important;
