@@ -315,19 +315,24 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         hovermode="closest",
     )
 
-    # Rangeslider por DENSIDAD (patrón BI: Power BI / Tableau).
-    # El chart siempre ocupa el 100% del contenedor (use_container_width=True).
-    # Cuando la densidad de barras haría que cada barra sea ilegible, activamos
-    # el rangeslider de Plotly con zoom inicial a los últimos N periodos —
-    # el usuario arrastra para ver el resto. Nunca scroll horizontal externo.
+    # Rangeslider SIEMPRE visible (patrón Google Finance / TradingView).
+    # El chart ocupa el 100% del contenedor (use_container_width=True) y el
+    # slider inferior queda disponible para zoom/pan en toda vista con >2
+    # periodos. Vista inicial: todos los periodos si caben legibles;
+    # si la densidad haría barras < 10 px, arrancamos con zoom a las últimas
+    # N para que sea legible desde el primer render.
     _n_series = len(orden_provs) + (1 if (_hay_otros and _otros_seleccionado) else 0)
     _ancho_plot_est = 1200                        # px aprox. de plot en desktop
     _ancho_barra_est = _ancho_plot_est / max(1, len(periodos) * _n_series)
-    if _ancho_barra_est < 10:                     # < 10 px por barra → apiñado
-        _ventana = max(6, min(12, int(_ancho_plot_est / (14 * _n_series))))
+    if len(periodos) > 2:
+        if _ancho_barra_est < 10:                 # apiñado → zoom inicial
+            _ventana = max(6, min(12, int(_ancho_plot_est / (14 * _n_series))))
+            _rango = [len(periodos) - _ventana - 0.5, len(periodos) - 0.5]
+        else:                                     # cabe todo → vista completa
+            _rango = [-0.5, len(periodos) - 0.5]
         fig.update_xaxes(
             rangeslider=dict(visible=True, thickness=0.07),
-            range=[len(periodos) - _ventana - 0.5, len(periodos) - 0.5],
+            range=_rango,
         )
 
     # ── Selector de granularidad FLOTANTE sobre el gráfico ────────────────
