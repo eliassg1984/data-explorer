@@ -1001,6 +1001,13 @@ def get_css():
     .st-key-fecha_ajuste_pill [data-testid="stPopover"] button[aria-expanded="true"] {
         border-bottom: 1px dashed #534AB7 !important;
     }
+    /* En Compras la franja es MAS BAJA (34px, no 50px) — el ::before
+       la sobreescribe directamente pero --cab-altura sigue en 50.
+       Aquí re-alineamos el underline al borde real de esa franja. */
+    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+        .st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
+        min-height: 26px !important;   /* 34px franja - 8px top */
+    }
 
     /* Panel del popover: se renderiza en un portal (fuera del contenedor),
        así que lo scopeamos por el contenedor keyed interno con :has(). */
