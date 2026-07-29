@@ -61,6 +61,8 @@ def _compras_mini_barras(serie, titulo, fmt="S/ {:,.0f}", alto=400):
 
 def _periodo_serie(fe, gran):
     """Serie de etiquetas de periodo (ordenables) según granularidad."""
+    if gran == "Día":
+        return fe.dt.strftime("%Y-%m-%d")
     if gran == "Semana":
         iso = fe.dt.isocalendar()
         return (iso["year"].astype("Int64").astype(str) + "-S"
@@ -105,6 +107,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         _k = "cp_prov_cb::" + str(_p)
         if _k not in st.session_state:
             st.session_state[_k] = (_p in _default_prov_sel)
+    # Nombres sobre las barras: TRUE por defecto (filtro principal para el
+    # usuario). Solo aplica en la primera visita; despues respeta la
+    # preferencia guardada por el toggle.
+    if "cp_prov_show_names" not in st.session_state:
+        st.session_state["cp_prov_show_names"] = True
 
     def _cp_set_topn(_n):
         """Marca solo los primeros _n proveedores (por valor). _n=0 → limpiar."""
@@ -144,7 +151,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
     # ── Calcular periodo ──────────────────────────────────────────────────
     fe_s = pd.to_datetime(base["fecha"], errors="coerce")
-    if gran == "Semana":
+    if gran == "Día":
+        base["_per_sort"] = fe_s.dt.strftime("%Y-%m-%d")
+        base["per"] = fe_s.dt.strftime("%d %b")
+        _mes_es = {'Jan':'Ene','Apr':'Abr','Aug':'Ago','Dec':'Dic'}
+        for _en, _es in _mes_es.items():
+            base["per"] = base["per"].str.replace(_en, _es)
+    elif gran == "Semana":
         _wstart = (fe_s - pd.to_timedelta(fe_s.dt.weekday, unit="D")).dt.normalize()
         _wend = _wstart + pd.Timedelta(days=6)
         base["_per_sort"] = _wstart.dt.strftime("%Y-%m-%d")   # clave de orden
@@ -264,10 +277,17 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             return f"S/ {v / 1_000:.1f}k"
         return f"S/ {v:.0f}"
 
-    def _etiqueta_serie(vals):
+    def _etiqueta_serie(vals, pct_periodo=None):
         """Texto por barra: total SIEMPRE encima + variación vs el período
-        ANTERIOR del mismo proveedor (▲ verde sube / ▼ rojo baja). La 1ª
-        barra no tiene anterior → solo total. Barras en 0 → sin etiqueta."""
+        ANTERIOR del mismo proveedor (▲ verde sube / ▼ rojo baja) + % de
+        participación en el período (semana/mes/año/día). La 1ª barra no
+        tiene anterior → solo total + % del período. Barras en 0 → sin
+        etiqueta.
+
+        pct_periodo: lista/array del mismo largo que vals con el % que la
+        barra representa del total del período (0-100). Si es None, no se
+        muestra esa línea (compatibilidad con otras llamadas).
+        """
         _txt = []
         for j, v in enumerate(vals):
             if v <= 0:
@@ -280,6 +300,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 col = "#0F6E56" if chg >= 0 else "#A32D2D"
                 linea += (f"<br><span style='color:{col}'>"
                           f"{flecha}{abs(chg):.0f}%</span>")
+            if pct_periodo is not None:
+                _pp = pct_periodo[j]
+                if _pp is not None and not pd.isna(_pp):
+                    linea += (f"<br><span style='color:#6b6b78;font-size:10px'>"
+                              f"{_pp:.0f}% del período</span>")
             _txt.append(linea)
         return _txt
 
@@ -315,9 +340,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # Toggle "Nombres en barras": prepende el nombre abreviado del proveedor
     # a la etiqueta de cada barra. El ancho de barra estimado depende de la
     # ventana visible y de la cantidad de series → recalculado en cada render.
-    _show_names = st.session_state.get("cp_prov_show_names", False)
+    _show_names = st.session_state.get("cp_prov_show_names", True)
     _ancho_barra_est_px = 1200 / max(1, len(_per_vis) * _n_series)
     _max_chars = max(0, int(_ancho_barra_est_px / 6.5))  # ~6.5px por char a 11px
+    # Totales por período (sobre TODA la base filtrada, no solo los provs
+    # seleccionados) para el % de participación en cada barra.
+    _tot_por_periodo = (base.groupby("per")["valor"].sum()
+                        .reindex(periodos, fill_value=0))
     fig = go.Figure()
     for i, prov in enumerate(orden_provs):
         grp = (base[base["prov"] == prov]
@@ -329,7 +358,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # Resaltar el proveedor en foco con opacidad plena; los demás, semitransparentes
         _opacity = 1.0 if (prov_focus is None or prov == prov_focus) else 0.30
 
-        _tags = _etiqueta_serie(list(grp.values))[_sl]
+        # % que esta barra representa del total del período (0-100). Si el
+        # total del periodo es 0, deja None (etiqueta_serie lo ignora).
+        _pct_per = [(g / t * 100) if t > 0 else None
+                    for g, t in zip(grp.values, _tot_por_periodo.values)]
+        _tags = _etiqueta_serie(list(grp.values), pct_periodo=_pct_per)[_sl]
         if _show_names:
             _abbr = _abrev_nombre(prov, _max_chars)
             if _abbr:
@@ -782,14 +815,16 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 unsafe_allow_html=True,
             )
             with st.popover("Proveedores", icon=":material/groups:"):
-                _bt = st.columns(4)
+                _bt = st.columns(5)
                 _bt[0].button("Top 3", key="cp_topn3", use_container_width=True,
                               on_click=_cp_set_topn, args=(3,))
                 _bt[1].button("Top 5", key="cp_topn5", use_container_width=True,
                               on_click=_cp_set_topn, args=(5,))
                 _bt[2].button("Top 10", key="cp_topn10", use_container_width=True,
                               on_click=_cp_set_topn, args=(10,))
-                _bt[3].button("Limpiar", key="cp_topnclr", use_container_width=True,
+                _bt[3].button("Todos", key="cp_topnall", use_container_width=True,
+                              on_click=_cp_set_topn, args=(len(_real_provs),))
+                _bt[4].button("Limpiar", key="cp_topnclr", use_container_width=True,
                               on_click=_cp_set_topn, args=(0,))
                 _q = st.text_input("Buscar", key="cp_prov_q",
                                    placeholder="Buscar proveedor por nombre...",
@@ -802,11 +837,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     st.checkbox(_p, key="cp_prov_cb::" + str(_p))
                 st.divider()
                 st.toggle("Nombres en barras", key="cp_prov_show_names",
-                          value=False, help="Muestra el nombre del proveedor "
+                          help="Muestra el nombre del proveedor "
                           "sobre cada barra. Se abrevia segun el ancho "
                           "disponible.")
         with st.container(key="gran_float"):
-            st.pills("Periodo", ["Semana", "Mes", "Año"], default="Mes",
+            st.pills("Periodo", ["Día", "Semana", "Mes", "Año"], default="Mes",
                      key="compras_prov_gran", label_visibility="collapsed")
         # Chart siempre responsive al contenedor (estándar BI). La densidad se
         # controla con la ventana de periodos (server-side) + flechas de
