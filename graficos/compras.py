@@ -193,15 +193,21 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # pierde (el zoom del rangeslider si se perdia, porque era estado del
     # navegador y Streamlit remonta el componente en cada rerun).
     #
-    # El tamano se adapta a la cantidad de series para que el ancho de barra
-    # siga siendo legible: mas proveedores -> menos agrupaciones a la vez.
-    # (~1200px de plot / 16px minimos por barra) / n_series, acotado a 4..12.
+    # El tamano por defecto se adapta a la cantidad de series para que el
+    # ancho de barra siga siendo legible: mas proveedores -> menos
+    # agrupaciones a la vez. (~1200px de plot / 16px minimos por barra) /
+    # n_series, acotado a 4..12. El usuario puede fijarlo a mano desde el
+    # popover de navegacion (cp_prov_win_size; None = automatico).
     _otros_mask = ~base["prov"].isin(top_provs)
     _hay_otros = _otros_mask.any()
     _otros_seleccionado = "Otros" in prov_multisel
     _n_series = len(orden_provs) + (1 if (_hay_otros and _otros_seleccionado) else 0)
-    _ventana = max(4, min(12, int(1200 / (16 * max(1, _n_series)))))
     _n_per = len(periodos)
+    _ventana_auto = max(4, min(12, int(1200 / (16 * max(1, _n_series)))))
+    _win_size_sel = st.session_state.get("cp_prov_win_size")   # None = auto
+    _ventana = (_ventana_auto if _win_size_sel is None
+                else min(int(_win_size_sel), _n_per))
+    _ventana = max(1, min(_ventana, _n_per))
     _ini_max = max(0, _n_per - _ventana)
     # Al cambiar granularidad / rango / densidad, reanclar al tramo mas
     # reciente (lo habitual en series de tiempo: interesa lo ultimo).
@@ -409,9 +415,20 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             background: #f0edfe !important; border-color: #d4cdf7 !important;
         }
         .st-key-win_nav button:disabled { opacity: .30 !important; }
-        .st-key-win_nav [data-testid="stMarkdownContainer"] p {
-            font-size: 11px !important; color: #8a8a99 !important;
-            margin: 0 6px !important; white-space: nowrap !important;
+        /* Popover central: muestra cuantas agrupaciones se ven y las cambia.
+           Mas ancho que las flechas y sin borde marcado (es un lector, no
+           un boton de accion). */
+        .st-key-win_nav [data-testid="stPopover"] button {
+            width: auto !important; height: 24px !important;
+            padding: 0 9px !important;
+            font-size: 11px !important; font-weight: 400 !important;
+            color: #8a8a99 !important;
+            border-color: transparent !important;
+            background: rgba(255,255,255,0.82) !important;
+        }
+        .st-key-win_nav [data-testid="stPopover"] button:hover {
+            color: #6c5ce7 !important;
+            border-color: #d4cdf7 !important;
         }
 
         /* Panel A — controles flotantes en la cabecera (Opción 1): DOS flotantes
@@ -705,23 +722,36 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             config={"displayModeBar": False,
                     "edits": {"legendPosition": True}},
         )
-        # Navegacion de la ventana de periodos. Solo aparece si hay mas
-        # periodos de los que entran. El indice vive en session_state, asi
-        # que clicar una barra NO lo mueve.
-        if _ini_max > 0:
-            def _win_mover(_delta):
-                st.session_state["cp_prov_win_ini"] = min(
-                    max(0, _win_ini + _delta), _ini_max)
+        # Navegacion de la ventana de periodos. El indice y el tamano viven en
+        # session_state, asi que clicar una barra NO los mueve. El popover
+        # central muestra cuantas agrupaciones se ven y permite cambiarlo.
+        def _win_mover(_delta):
+            st.session_state["cp_prov_win_ini"] = min(
+                max(0, _win_ini + _delta), _ini_max)
 
-            with st.container(key="win_nav"):
-                st.button("‹", key="cp_win_prev", disabled=_win_ini <= 0,
-                          help="Periodos anteriores",
-                          on_click=_win_mover, args=(-_ventana,))
-                st.markdown(
-                    f"{_win_ini + 1}–{_win_ini + len(_per_vis)} de {_n_per}")
-                st.button("›", key="cp_win_next", disabled=_win_ini >= _ini_max,
-                          help="Periodos siguientes",
-                          on_click=_win_mover, args=(_ventana,))
+        def _win_size(_n):
+            st.session_state["cp_prov_win_size"] = _n     # None = automatico
+
+        with st.container(key="win_nav"):
+            st.button("‹", key="cp_win_prev", disabled=_win_ini <= 0,
+                      help="Periodos anteriores",
+                      on_click=_win_mover, args=(-_ventana,))
+            with st.popover(f"{_ventana} de {_n_per}"):
+                st.caption("Agrupaciones visibles")
+                st.button(f"Automatico ({_ventana_auto})", key="cp_win_auto",
+                          use_container_width=True,
+                          on_click=_win_size, args=(None,))
+                for _op in (6, 12, 24):
+                    if _op <= _n_per:
+                        st.button(str(_op), key=f"cp_win_{_op}",
+                                  use_container_width=True,
+                                  on_click=_win_size, args=(_op,))
+                st.button(f"Todo ({_n_per})", key="cp_win_all",
+                          use_container_width=True,
+                          on_click=_win_size, args=(_n_per,))
+            st.button("›", key="cp_win_next", disabled=_win_ini >= _ini_max,
+                      help="Periodos siguientes",
+                      on_click=_win_mover, args=(_ventana,))
 
     # ── Paneles A y B ─────────────────────────────────────────────────────
     def _um_de(grp):
