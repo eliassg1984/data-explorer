@@ -660,7 +660,7 @@ def get_css():
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap,
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_izq_compras,
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_der_compras {
-        margin-top: -100px !important;
+        margin-top: -78px !important;
     }
 
 /* En Compras la franja blanca superior YA NO EXISTE — el ::before se
