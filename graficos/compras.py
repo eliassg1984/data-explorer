@@ -562,9 +562,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-latch_paneles,
         .st-key-latch_docs {
             position: absolute !important;
-            left: -62px !important;
+            left: -42px !important;
             top: 4px !important;
-            width: 52px !important;
+            width: 36px !important;
             margin: 0 !important;
             z-index: 5;
         }
@@ -572,8 +572,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-latch_docs button {
             display: inline-flex !important;
             align-items: center; justify-content: center;
-            width: 52px !important; min-width: 52px !important;
-            height: 52px !important; min-height: 52px !important;
+            width: 36px !important; min-width: 36px !important;
+            height: 44px !important; min-height: 44px !important;
             padding: 0 !important; margin: 0 !important;
             border: 0.5px solid transparent !important;
             border-radius: 8px !important;
@@ -598,7 +598,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-latch_paneles button::before,
         .st-key-latch_docs button::before {
             content: ""; display: block;
-            width: 40px; height: 40px;
+            width: 28px; height: 28px;
             background: center / contain no-repeat
                 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22' fill='none'><circle cx='11' cy='11' r='3' fill='%236c5ce7'/><ellipse cx='11' cy='4' rx='5' ry='2.5' fill='%236c5ce7' opacity='.85'/><ellipse cx='11' cy='18' rx='5' ry='2.5' fill='%236c5ce7' opacity='.85'/><rect x='8' y='4' width='6' height='14' fill='%236c5ce7' opacity='.45' rx='1'/><line x1='11' y1='4' x2='11' y2='18' stroke='%23ffffff' stroke-width='1' opacity='.4'/><line x1='11' y1='4' x2='6.5' y2='3' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='4' x2='15.5' y2='3' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='18' x2='6.5' y2='19' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='18' x2='15.5' y2='19' stroke='%23ffffff' stroke-width='.8' opacity='.5'/></svg>");
             transition: transform .55s cubic-bezier(.4, 0, .2, 1);
