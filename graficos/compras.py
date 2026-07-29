@@ -323,8 +323,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     _n_series = len(orden_provs) + (1 if (_hay_otros and _otros_seleccionado) else 0)
     _ancho_plot_est = 1200                        # px aprox. de plot en desktop
     _ancho_barra_est = _ancho_plot_est / max(1, len(periodos) * _n_series)
-    if _ancho_barra_est < 6:                      # < 6 px por barra → ilegible
-        _ventana = max(6, min(12, int(_ancho_plot_est / (10 * _n_series))))
+    if _ancho_barra_est < 10:                     # < 10 px por barra → apiñado
+        _ventana = max(6, min(12, int(_ancho_plot_est / (14 * _n_series))))
         fig.update_xaxes(
             rangeslider=dict(visible=True, thickness=0.07),
             range=[len(periodos) - _ventana - 0.5, len(periodos) - 0.5],
