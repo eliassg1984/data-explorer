@@ -643,7 +643,7 @@ def _chip_categorico(df_in, col, key, etiqueta):
     if not valores:
         return df_in, []
     _n = len(st.session_state.get(key) or [])
-    _lbl = f":material/filter_alt: {etiqueta} · {_n}" if _n else f":material/filter_alt: {etiqueta}"
+    _lbl = f":material/filter_alt: {etiqueta} :violet-badge[{_n}]" if _n else f":material/filter_alt: {etiqueta}"
     _estado = "on" if _n else "off"
     with st.container(key=f"chipwrap_{key}_{_estado}"):
         with st.popover(_lbl, use_container_width=True):

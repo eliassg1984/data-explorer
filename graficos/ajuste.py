@@ -623,7 +623,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
                                .astype(str).unique().tolist())
                 if areas:
                     _n_area = len(st.session_state.get("ajuste_graf_filtro_area") or [])
-                    _lbl_area = f"Área · {_n_area}" if _n_area else "Área"
+                    _lbl_area = f":material/filter_alt: Área :violet-badge[{_n_area}]" if _n_area else ":material/filter_alt: Área"
                     with st.popover(_lbl_area, use_container_width=True):
                         area_sel = st.pills(
                             "Área",
@@ -638,7 +638,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
                                   .astype(str).unique().tolist())
                 if familias:
                     _n_fam = len(st.session_state.get("ajuste_graf_filtro_familia") or [])
-                    _lbl_fam = f"Familia · {_n_fam}" if _n_fam else "Familia"
+                    _lbl_fam = f":material/category: Familia :violet-badge[{_n_fam}]" if _n_fam else ":material/category: Familia"
                     with st.popover(_lbl_fam, use_container_width=True):
                         fam_sel = st.pills(
                             "Familia",

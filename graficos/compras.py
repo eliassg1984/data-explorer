@@ -2142,7 +2142,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                 fams = sorted(df_f[col_fam].dropna().astype(str).unique().tolist())
                 if fams:
                     _n = len(st.session_state.get("compras_graf_filtro_fam") or [])
-                    _lbl = f"Familia · {_n}" if _n else "Familia"
+                    _lbl = f":material/category: Familia :violet-badge[{_n}]" if _n else ":material/category: Familia"
                     with st.popover(_lbl, use_container_width=True):
                         fam_sel = st.pills(
                             "Familia", fams, selection_mode="multi",
@@ -2157,7 +2157,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                 subs = sorted(_d_sub[col_subfam].dropna().astype(str).unique().tolist())
                 if subs:
                     _n = len(st.session_state.get("compras_graf_filtro_sub") or [])
-                    _lbl = f"Subfamilia · {_n}" if _n else "Subfamilia"
+                    _lbl = f":material/account_tree: Subfamilia :violet-badge[{_n}]" if _n else ":material/account_tree: Subfamilia"
                     with st.popover(_lbl, use_container_width=True):
                         sub_sel = st.pills(
                             "Subfamilia", subs, selection_mode="multi",

@@ -38,7 +38,7 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None):
                 areas = sorted(df_f[col_area].dropna().astype(str).unique().tolist())
                 if areas:
                     _n = len(st.session_state.get("inv_graf_filtro_area") or [])
-                    _lbl = f"Área · {_n}" if _n else "Área"
+                    _lbl = f":material/filter_alt: Área :violet-badge[{_n}]" if _n else ":material/filter_alt: Área"
                     with st.popover(_lbl, use_container_width=True):
                         area_sel = st.pills(
                             "Área", areas, selection_mode="multi",
@@ -50,7 +50,7 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None):
                 fams = sorted(df_f[col_fam].dropna().astype(str).unique().tolist())
                 if fams:
                     _n = len(st.session_state.get("inv_graf_filtro_fam") or [])
-                    _lbl = f"Familia · {_n}" if _n else "Familia"
+                    _lbl = f":material/category: Familia :violet-badge[{_n}]" if _n else ":material/category: Familia"
                     with st.popover(_lbl, use_container_width=True):
                         fam_sel = st.pills(
                             "Familia", fams, selection_mode="multi",

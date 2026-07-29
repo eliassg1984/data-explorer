@@ -883,28 +883,44 @@ def get_css():
         flex: 0 1 auto !important;
         min-width: 0 !important;
     }
-    /* Ancho uniforme (en vez de ajustarse al largo de cada texto) + tono
-       lavanda que los resalta levemente, a juego con el resto de la webapp. */
+    /* Opción A: cuadrado lavanda con icono + badge morado. Ancho automático
+       para que el badge del count quepa sin recortar; esquinas 4px. */
     .st-key-chips_ajuste_tabla [data-testid="stPopover"] button {
         min-width: 0 !important;
-        width: 132px !important;
-        min-height: 26px !important;
-        height: 26px !important;
+        width: auto !important;
+        min-height: 28px !important;
+        height: 28px !important;
         padding: 3px 10px !important;
         font-size: 12px !important;
+        font-weight: 500 !important;
         background: var(--accent-tint) !important;
         border: 1px solid var(--border-lavender) !important;
+        border-radius: 4px !important;
         color: var(--accent-deep) !important;
         overflow: hidden !important;
-        gap: 4px !important;
+        gap: 6px !important;
     }
     .st-key-chips_ajuste_tabla [data-testid="stPopover"] button p {
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         white-space: nowrap !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
     }
     .st-key-chips_ajuste_tabla [data-testid="stPopover"] button [data-testid="stIconMaterial"] {
-        font-size: 14px !important;
+        font-size: 15px !important;
+    }
+    /* Badge del count (Streamlit :violet-badge[N] dentro del label) */
+    .st-key-chips_ajuste_tabla [data-testid="stPopover"] button [data-testid="stBadge"] {
+        background: var(--accent) !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 3px !important;
+        font-size: 10px !important;
+        font-weight: 700 !important;
+        padding: 1px 6px !important;
+        line-height: 1.4 !important;
     }
     .st-key-chips_ajuste_tabla [data-testid="stPopover"] button:hover {
         background: var(--accent-light) !important;

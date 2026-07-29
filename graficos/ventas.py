@@ -684,7 +684,7 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
         if not opts:
             return []
         _n = len(st.session_state.get(key) or [])
-        _lbl = f"{label} · {_n}" if _n else label
+        _lbl = f":material/filter_alt: {label} :violet-badge[{_n}]" if _n else f":material/filter_alt: {label}"
         with st.popover(_lbl, use_container_width=True):
             return st.pills(label, opts, selection_mode="multi",
                             key=key, label_visibility="collapsed") or []
@@ -703,7 +703,7 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
                 subs = sorted(_dd[col_sub].dropna().astype(str).unique().tolist())
                 if subs:
                     _n = len(st.session_state.get("ventas_graf_filtro_sub") or [])
-                    _lbl = f"Sub Grupo · {_n}" if _n else "Sub Grupo"
+                    _lbl = f":material/account_tree: Sub Grupo :violet-badge[{_n}]" if _n else ":material/account_tree: Sub Grupo"
                     with st.popover(_lbl, use_container_width=True):
                         sub_sel = st.pills(
                             "Sub Grupo", subs, selection_mode="multi",
