@@ -384,10 +384,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             padding-bottom: 0 !important;
         }
         /* Reducir el padding interior de la card (era 15px por defecto).
-           Padding-top mínimo para que el título quede alineado con los
-           botones absolutos de la derecha (que están anclados al top). */
+           Padding-top 0 para que el titulo pegue arriba y su centro
+           coincida con el centro de los botones absolutos (top:0, h:24). */
         .st-key-chartcard_prov_prods {
-            padding: 2px 12px 8px 12px !important;
+            padding: 0 12px 8px 12px !important;
         }
         /* Tooltip del período: aparece al posar el cursor sobre el botón
            "Selección" (2º botón del primer button group). El valor viene de
@@ -424,7 +424,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
            min-height y padding vertical para acercar el gráfico al título. */
         .st-key-chartcard_prov_prods .chart-card-hdr {
             padding: 0 200px 0 4px;
-            min-height: 22px;
+            min-height: 24px;
             margin: 0 !important;
             font-size: 13px;
             line-height: 1.25;
