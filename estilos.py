@@ -701,7 +701,9 @@ def get_css():
         margin: 0 !important;
     }
     /* Cada ítem del rail: botón estilo lista, sin borde ni fondo por defecto.
-       Un dot a la izquierda (::before) precede al texto. */
+       Un dot a la izquierda (::before) precede al texto. border-left:3px
+       transparent reservado en base = el texto no se corre cuando pasa a
+       activo (activo reemplaza el transparent por accent). */
     .st-key-graf_tipo_chips [data-testid="stButton"] > button,
     .st-key-graf_tipo_chips .stButton > button {
         display: flex !important;
@@ -711,9 +713,10 @@ def get_css():
         width: 100% !important;
         min-height: 0 !important;
         border: none !important;
+        border-left: 3px solid transparent !important;
         border-radius: 0 !important;
         background: transparent !important;
-        padding: 5px 10px !important;
+        padding: 5px 10px 5px 7px !important;   /* 7 + border 3 = 10 alineado */
         gap: 7px !important;
         color: var(--text-secondary, #71717a) !important;
         font-weight: 400 !important;
@@ -726,16 +729,28 @@ def get_css():
         content: "" !important;
         width: 5px !important;
         height: 5px !important;
+        min-width: 5px !important;
         border-radius: 50% !important;
         background: var(--border-strong, #c8c8d0) !important;
-        flex-shrink: 0 !important;
+        flex: 0 0 auto !important;
         display: inline-block !important;
     }
-    .st-key-graf_tipo_chips [data-testid="stButton"] > button p,
+    /* Wrapper del label — NO expandirse (si crece con flex:1 el texto queda
+       flotando al centro del hueco sobrante). Anclarlo al dot. */
     .st-key-graf_tipo_chips [data-testid="stButton"] > button [data-testid="stMarkdownContainer"],
-    .st-key-graf_tipo_chips .stButton > button p,
     .st-key-graf_tipo_chips .stButton > button [data-testid="stMarkdownContainer"] {
+        flex: 0 1 auto !important;
+        width: auto !important;
+        max-width: 100% !important;
+        display: block !important;
+        text-align: left !important;
         margin: 0 !important;
+    }
+    .st-key-graf_tipo_chips [data-testid="stButton"] > button p,
+    .st-key-graf_tipo_chips .stButton > button p {
+        margin: 0 !important;
+        padding: 0 !important;
+        display: block !important;
         font-size: 11px !important;
         line-height: 1.25 !important;
         white-space: normal !important;
@@ -745,17 +760,16 @@ def get_css():
     }
     .st-key-graf_tipo_chips [data-testid="stButton"] > button:hover,
     .st-key-graf_tipo_chips .stButton > button:hover {
-        background: var(--accent-light, #e7e3fb) !important;
+        background: var(--accent-tint, #f0edfe) !important;   /* hover suave */
         color: var(--accent-deep, #4938b8) !important;
     }
     /* Activo: kind="primary" del st.button */
     .st-key-graf_tipo_chips [data-testid="stButton"] > button[kind="primary"],
     .st-key-graf_tipo_chips .stButton > button[kind="primary"] {
-        background: var(--accent-light, #e7e3fb) !important;
+        background: var(--accent-light, #e7e3fb) !important;   /* activo saturado */
         color: var(--accent-deep, #4938b8) !important;
         font-weight: 500 !important;
-        border-left: 3px solid var(--accent, #6c5ce7) !important;
-        padding-left: 7px !important;   /* compensa el border-left de 3px */
+        border-left-color: var(--accent, #6c5ce7) !important;  /* pinta el reservado */
     }
     .st-key-graf_tipo_chips [data-testid="stButton"] > button[kind="primary"]::before,
     .st-key-graf_tipo_chips .stButton > button[kind="primary"]::before {
