@@ -327,19 +327,28 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # periodos. Vista inicial: todos los periodos si caben legibles;
     # si la densidad haría barras < 10 px, arrancamos con zoom a las últimas
     # N para que sea legible desde el primer render.
+    #
+    # PRESERVAR EL ZOOM AL CLICAR UNA BARRA: solo fijamos range= la PRIMERA
+    # vez que se ve una granularidad (o al cambiar Semana/Mes/Año). En los
+    # reruns por clic NO tocamos range → junto con uirevision (constante por
+    # granularidad) Plotly conserva el zoom/pan que hizo el usuario. Si se
+    # fijara range en cada rerun, Plotly lo trata como "orden de la app" y
+    # pisa el zoom del usuario aunque el valor sea idéntico.
     _n_series = len(orden_provs) + (1 if (_hay_otros and _otros_seleccionado) else 0)
     _ancho_plot_est = 1200                        # px aprox. de plot en desktop
     _ancho_barra_est = _ancho_plot_est / max(1, len(periodos) * _n_series)
+    _reset_zoom = st.session_state.get("cp_prov_gran_prev") != gran
+    st.session_state["cp_prov_gran_prev"] = gran
     if len(periodos) > 2:
-        if _ancho_barra_est < 10:                 # apiñado → zoom inicial
-            _ventana = max(6, min(12, int(_ancho_plot_est / (14 * _n_series))))
-            _rango = [len(periodos) - _ventana - 0.5, len(periodos) - 0.5]
-        else:                                     # cabe todo → vista completa
-            _rango = [-0.5, len(periodos) - 0.5]
-        fig.update_xaxes(
-            rangeslider=dict(visible=True, thickness=0.07),
-            range=_rango,
-        )
+        _xaxis_upd = dict(rangeslider=dict(visible=True, thickness=0.07))
+        if _reset_zoom:                           # solo 1er render / cambio gran
+            if _ancho_barra_est < 10:             # apiñado → zoom inicial
+                _ventana = max(6, min(12, int(_ancho_plot_est / (14 * _n_series))))
+                _xaxis_upd["range"] = [len(periodos) - _ventana - 0.5,
+                                       len(periodos) - 0.5]
+            else:                                 # cabe todo → vista completa
+                _xaxis_upd["range"] = [-0.5, len(periodos) - 0.5]
+        fig.update_xaxes(**_xaxis_upd)
 
     # ── Selector de granularidad FLOTANTE sobre el gráfico ────────────────
     # El contenedor "compras_prov_card_chart" es posición relativa; dentro,
