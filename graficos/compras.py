@@ -340,7 +340,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # Margen superior mínimo: el gráfico sube dentro de la tarjeta y elimina
         # la franja vacía sobre las barras (los flotantes Proveedores/Periodo se
         # superponen encima; van con fondo semitransparente y no molestan).
-        margin=dict(l=10, r=10, t=6, b=10),
+        margin=dict(l=10, r=10, t=6, b=36),
         xaxis=dict(type="category", tickangle=0),
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f"),
         # Leyenda VERTICAL flotando DENTRO del área (x<=1 → Plotly no reserva
@@ -395,30 +395,31 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
            leve para leerse como "chips apoyados" sobre el grafico, no como
            pills sueltos. */
         .st-key-win_nav {
-            position: absolute; bottom: 6px; right: 10px; z-index: 20;
+            position: absolute; bottom: 4px; right: 10px; z-index: 20;
             width: auto !important;
             display: flex !important; flex-direction: row !important;
             align-items: center !important;
-            gap: 3px !important;
-            padding: 3px 4px !important;
+            gap: 2px !important;
+            padding: 1px 2px !important;
             background: rgba(255,255,255,0.55) !important;
             backdrop-filter: blur(4px);
-            border-radius: 8px !important;
+            border-radius: 6px !important;
         }
         .st-key-win_nav [data-testid="stElementToolbar"] { display: none; }
         .st-key-win_nav [data-testid="stElementContainer"] { width: auto !important; }
         /* Estilo base compartido: rectangulo con esquinas suaves + sombra
            leve. Mismo alto para flechas y pills → se leen como una sola
-           barra homogenea. */
+           barra homogenea. Compacto verticalmente (18px) para no invadir
+           la fila de las etiquetas del eje X. */
         .st-key-win_nav button {
-            min-width: 24px !important; width: auto !important;
-            height: 24px !important;
-            padding: 0 8px !important;
-            border-radius: 5px !important;
+            min-width: 20px !important; width: auto !important;
+            height: 18px !important;
+            padding: 0 6px !important;
+            border-radius: 4px !important;
             border: 0.5px solid rgba(0,0,0,0.06) !important;
             background: #ffffff !important;
             color: #5a5a6a !important;
-            font-size: 12px !important; font-weight: 400 !important;
+            font-size: 10.5px !important; font-weight: 400 !important;
             line-height: 1 !important;
             box-shadow: 0 1px 2px rgba(15,15,30,0.06),
                         0 1px 1px rgba(15,15,30,0.04) !important;
@@ -436,10 +437,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         /* Flechas: mas chicas en X, glifo mas grande. */
         .st-key-cp_win_prev button,
         .st-key-cp_win_next button {
-            width: 24px !important;
+            width: 20px !important;
             padding: 0 !important;
             color: #6c5ce7 !important;
-            font-size: 14px !important;
+            font-size: 12px !important;
         }
 
         /* Panel A — controles flotantes en la cabecera (Opción 1): DOS flotantes
