@@ -562,7 +562,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-latch_paneles,
         .st-key-latch_docs {
             position: absolute !important;
-            left: -54px !important;
+            left: -50px !important;
             top: 4px !important;
             width: 52px !important;
             margin: 0 !important;
