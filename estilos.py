@@ -987,22 +987,28 @@ def get_css():
     .st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
         box-sizing: border-box !important;
         min-width: 0 !important;
-        padding: 0 16px !important;
+        padding: 0 18px !important;
         border: none !important;
-        border-bottom: 2px solid #534AB7 !important;
-        border-radius: 4px 4px 0 0 !important;
+        border-bottom: 3px solid #534AB7 !important;
+        border-radius: 6px 6px 0 0 !important;
         background: linear-gradient(to top,
-            #DED9FA 0%, rgba(222,217,250,0) 70%) !important;
+            #C7C0F5 0%, rgba(199,192,245,0) 78%) !important;
         box-shadow: none !important;
-        color: #26215C !important;
+        color: #1B1745 !important;
         font-weight: 800 !important;
-        font-size: 20px !important;
+        font-size: 22px !important;
         letter-spacing: -0.01em !important;
         line-height: 1.15 !important;
         white-space: nowrap !important;
         min-height: calc(var(--cab-altura) - 8px) !important;
         display: inline-flex !important;
         align-items: center !important;
+        gap: 8px !important;
+    }
+    /* Icono material (calendar_month) del popover: color acento + tamano */
+    .st-key-fecha_ajuste_pill [data-testid="stPopover"] button [data-testid="stIconMaterial"] {
+        color: #534AB7 !important;
+        font-size: 22px !important;
     }
     .st-key-fecha_ajuste_pill [data-testid="stPopover"] button:hover {
         border: none !important;

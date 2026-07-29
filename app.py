@@ -447,7 +447,8 @@ if True:
                 _atajos = atajos_rango(_hoy, (fecha_min_full, fecha_max_full))
 
                 with st.container(key="fecha_ajuste_pill"):
-                    with st.popover(_label_fecha, use_container_width=False):
+                    with st.popover(_label_fecha, use_container_width=False,
+                                    icon=":material/calendar_month:"):
                         # Contenedor keyed → permite scopear el ancho del panel
                         # por CSS aunque el popover se renderice en un portal.
                         with st.container(key="fecha_panel"):
