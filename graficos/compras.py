@@ -443,6 +443,26 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             background: #DED9FA !important;
             border-color: #534AB7 !important;
         }
+        /* Icono material (grupos) del popover: color acento */
+        .st-key-prov_pop_float [data-testid="stPopover"] button [data-testid="stIconMaterial"] {
+            color: #534AB7 !important;
+            font-size: 16px !important;
+            margin-right: 4px !important;
+        }
+        /* Badge con el numero de proveedores: se inyecta el valor via
+           ::after con content dinamico desde Python (ver _cp_badge_count) */
+        .st-key-prov_pop_float [data-testid="stPopover"] button
+            [data-testid="stMarkdownContainer"] p::after {
+            content: var(--cp-prov-count, "");
+            background: #534AB7;
+            color: #EEEDFE;
+            border-radius: 999px;
+            padding: 1px 8px;
+            font-size: 11px;
+            font-weight: 500;
+            margin-left: 8px;
+            line-height: 1.4;
+        }
         .st-key-gran_float [data-testid="stElementToolbar"] { display: none; }
         /* Ocultar la barra de herramientas del propio gráfico (fullscreen) */
         .st-key-compras_prov_card_chart > div > [data-testid="stElementToolbar"] { display: none; }
@@ -757,7 +777,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         with st.container(key="prov_pop_float"):
             _sel_now = [p for p in _todos_provs_temp
                         if st.session_state.get("cp_prov_cb::" + str(p))]
-            with st.popover(f"Proveedores ({len(_sel_now)})"):
+            # Numero como badge: se inyecta via CSS var (::after lo pinta).
+            # Sin cuenta → badge vacio. La CSS var vive scoped al contenedor.
+            st.markdown(
+                f"<style>.st-key-prov_pop_float "
+                f"{{ --cp-prov-count: '{len(_sel_now)}'; }}</style>",
+                unsafe_allow_html=True,
+            )
+            with st.popover("Proveedores", icon=":material/groups:"):
                 _bt = st.columns(4)
                 _bt[0].button("Top 3", key="cp_topn3", use_container_width=True,
                               on_click=_cp_set_topn, args=(3,))
