@@ -1229,6 +1229,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                               if col_docu else _bd.index.astype(str).values),
                 "Producto": _bd["prod"].astype(str).values,
                 "Periodo": _bd["per"].astype(str).values,
+                "Cantidad": _bd["cant"].astype(float).values,
+                "Precio Unitario": (_bd["punit"].astype(float).values
+                                    if col_punit else np.nan),
                 "Valor": _bd["valor"].astype(float).values,
             })
 
@@ -1237,6 +1240,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             _fmt_soles = JsCode(
                 "function(p){ if(p.value==null) return ''; "
                 "return 'S/ ' + Math.round(p.value).toLocaleString('es-PE'); }")
+            _fmt_pu = JsCode(
+                "function(p){ if(p.value==null || isNaN(p.value)) return ''; "
+                "return 'S/ ' + Number(p.value).toLocaleString('es-PE',"
+                "{minimumFractionDigits:2, maximumFractionDigits:2}); }")
+            _fmt_qty = JsCode(
+                "function(p){ if(p.value==null || isNaN(p.value)) return ''; "
+                "return Number(p.value).toLocaleString('es-PE',"
+                "{maximumFractionDigits:2}); }")
             _fmt_fecha = JsCode(
                 "function(p){ if(!p.value) return ''; "
                 "var s=String(p.value).split('-'); "
@@ -1257,6 +1268,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                  "hide": True},
                 {"field": "Periodo", "headerName": "Período", "pivot": True,
                  "hide": True, "pivotComparator": _pivot_cmp},
+                # Orden de columnas de valor: Cantidad -> Precio Unitario -> Valor.
+                # AgGrid respeta el orden de declaracion en pivot mode.
+                {"field": "Cantidad", "type": "numericColumn", "aggFunc": "sum",
+                 "valueFormatter": _fmt_qty, "minWidth": 100},
+                {"field": "Precio Unitario", "type": "numericColumn",
+                 "aggFunc": "avg", "valueFormatter": _fmt_pu, "minWidth": 110},
                 {"field": "Valor", "type": "numericColumn", "aggFunc": "sum",
                  "valueFormatter": _fmt_soles, "minWidth": 110},
             ]
