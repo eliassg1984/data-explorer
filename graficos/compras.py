@@ -2124,15 +2124,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
         sel_actual = opciones[0]
         st.session_state["compras_graf_tipo"] = sel_actual
     with st.container(key="compras_tabs_row"):
-        st.markdown(
-            '<div class="rail-header">'
-            f'<span class="rail-icon">{_COMPRAS_RAIL_SVG_CART}</span>'
-            '<div class="rail-texts">'
-            '<span class="rail-title">Compras</span>'
-            '<span class="rail-sub">Gráficos</span>'
-            '</div></div>',
-            unsafe_allow_html=True,
-        )
+        # Cabecera del rail (icono + "Compras / Gráficos") eliminada: el rail
+        # arranca directo con la primera categoria para ganar aire vertical.
         with st.container(key="graf_tipo_chips"):
             for i, (cat_nombre, items) in enumerate(_COMPRAS_RAIL_CATEGORIAS):
                 st.markdown(

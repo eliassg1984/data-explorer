@@ -571,17 +571,18 @@ def get_css():
     /* =================================================================== */
     .st-key-compras_tabs_row {
         position: fixed !important;
-        top: 0 !important;
+        /* Rail arranca a la altura de la tarjeta (por debajo de la topbar de
+           Streamlit + la fila de chips/fecha), no desde el borde superior. */
+        top: 60px !important;
         right: 0 !important;
         bottom: 0 !important;
-        height: 100vh !important;
+        height: calc(100vh - 60px) !important;
         z-index: 900 !important;
         width: 84px !important;
         overflow-x: hidden !important;
         overflow-y: auto !important;
         margin: 0 !important;
-        /* padding-top clara la topbar (48px), la cabecera del rail arranca justo debajo */
-        padding: 48px 0 16px 0 !important;
+        padding: 8px 0 16px 0 !important;
         background: var(--bg-card, #ffffff) !important;
         border-left: 1px solid var(--border) !important;
         border-radius: 0 !important;       /* franja plana, no pastilla */
@@ -660,11 +661,14 @@ def get_css():
         margin-top: -60px !important;
     }
 
-/* Franja del título MÁS ANGOSTA en Compras: reduce la altura del fondo
-       blanco fijo (::before de fila_ajuste_top) y su padding. Los chips
-       Familia/Subfamilia y la fecha (position:fixed a top:6px) se mantienen
-       centrados dentro del alto nuevo. Scopeado con :has, no afecta a otros. */
+/* En Compras la franja blanca superior YA NO EXISTE — el ::before se
+       vuelve transparente (sin fondo, sin border-bottom, sin shadow) para
+       que los chips Familia/Subfamilia y la fecha floten directo sobre el
+       fondo gris del canvas. Scopeado con :has, no afecta a otros reportes. */
     [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row) .st-key-fila_ajuste_top::before {
+        background: transparent !important;
+        border-bottom: none !important;
+        box-shadow: none !important;
         height: 34px !important;
         right: 84px !important;    /* que la franja no invada el rail derecho */
     }
