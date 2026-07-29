@@ -841,9 +841,30 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     #    (abierto = 180). scope="fragment" evita recargar toda la app.
     _pan_ab = st.session_state.get("cp_paneles_abierto", True)
     _rot = "180deg" if _pan_ab else "0deg"
+    # Cuando el bloque esta ABIERTO, el pill se colapsa a solo el icono
+    # en el gutter izquierdo (position:absolute) y la tarjeta ocupa el
+    # ancho completo a su derecha. Cuando esta CERRADO, el pill queda
+    # inline con el texto del titulo visible.
+    _collapse_css = ("""
+        .st-key-paneles_row { position: relative !important; }
+        .st-key-paneles_row .st-key-latch_paneles {
+            position: absolute !important;
+            left: -50px !important; top: 4px !important;
+            margin: 0 !important; z-index: 5;
+        }
+        .st-key-paneles_row .st-key-latch_paneles button {
+            padding: 8px !important; border-radius: 8px !important;
+        }
+        .st-key-paneles_row .st-key-latch_paneles button p {
+            display: none !important;
+        }
+        .st-key-paneles_row .st-key-latch_paneles button::before {
+            width: 24px !important; height: 24px !important;
+        }
+    """ if _pan_ab else "")
     st.markdown(
         f"<style>.st-key-latch_paneles button::before"
-        f"{{transform:rotate({_rot});}}</style>",
+        f"{{transform:rotate({_rot});}}{_collapse_css}</style>",
         unsafe_allow_html=True,
     )
     with st.container(key="paneles_row"):
@@ -872,9 +893,28 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     #    de estado (abierto = 180) fijada por <style> inyectado.
     _docs_ab = st.session_state["cp_docs_abierto"]
     _rot_d = "180deg" if _docs_ab else "0deg"
+    # Mismo patron que paneles A/B: abierto -> icono chico en gutter;
+    # cerrado -> pill inline con titulo visible.
+    _collapse_docs_css = ("""
+        .st-key-docs_row { position: relative !important; }
+        .st-key-docs_row .st-key-latch_docs {
+            position: absolute !important;
+            left: -50px !important; top: 4px !important;
+            margin: 0 !important; z-index: 5;
+        }
+        .st-key-docs_row .st-key-latch_docs button {
+            padding: 8px !important; border-radius: 8px !important;
+        }
+        .st-key-docs_row .st-key-latch_docs button p {
+            display: none !important;
+        }
+        .st-key-docs_row .st-key-latch_docs button::before {
+            width: 24px !important; height: 24px !important;
+        }
+    """ if _docs_ab else "")
     st.markdown(
         f"<style>.st-key-latch_docs button::before"
-        f"{{transform:rotate({_rot_d});}}</style>",
+        f"{{transform:rotate({_rot_d});}}{_collapse_docs_css}</style>",
         unsafe_allow_html=True,
     )
     with st.container(key="docs_row"):
