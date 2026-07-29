@@ -972,14 +972,16 @@ def get_css():
 
     /* Trigger: anula la regla GLOBAL de pill (BOTÓN FILTROS, arriba) SOLO
        aquí → el rango se ve como texto negro sin caja, con underline
-       dashed pegado al borde INFERIOR de la franja (no bajo el baseline).
-       min-height = --cab-altura - top(8px) → el border-bottom aterriza
-       justo en el borde de la franja en todos los reportes. */
+       SÓLIDO 3px acento (estilo "tab activo") pegado al borde INFERIOR
+       de la franja. min-height = --cab-altura - top(8px) + box-sizing
+       border-box → el border-bottom aterriza justo en el borde de la
+       franja en todos los reportes. */
     .st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
+        box-sizing: border-box !important;
         min-width: 0 !important;
         padding: 0 8px !important;
         border: none !important;
-        border-bottom: 1px dashed #AFA9EC !important;
+        border-bottom: 3px solid #534AB7 !important;
         border-radius: 0 !important;
         background: transparent !important;
         box-shadow: none !important;
@@ -995,11 +997,11 @@ def get_css():
     .st-key-fecha_ajuste_pill [data-testid="stPopover"] button:hover {
         background: rgba(0, 0, 0, 0.04) !important;
         border: none !important;
-        border-bottom: 1px dashed #7F77DD !important;
+        border-bottom: 3px solid #3C3489 !important;
         color: var(--accent-deep) !important;
     }
     .st-key-fecha_ajuste_pill [data-testid="stPopover"] button[aria-expanded="true"] {
-        border-bottom: 1px dashed #534AB7 !important;
+        border-bottom: 3px solid #26215C !important;
     }
     /* En Compras la franja es MAS BAJA (34px, no 50px) — el ::before
        la sobreescribe directamente pero --cab-altura sigue en 50.
