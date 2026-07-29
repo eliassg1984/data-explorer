@@ -594,7 +594,7 @@ def get_css():
        el :has() detecta el rail dentro del contenedor principal. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row),
     .block-container:has(.st-key-compras_tabs_row) {
-        padding-right: 132px !important;   /* rail 116 + 16px de aire */
+        padding-right: 138px !important;   /* rail 116 + 22px de aire, tarjeta original */
     }
 
     /* Cabecera del rail — icono + "Compras / Gráficos" */
