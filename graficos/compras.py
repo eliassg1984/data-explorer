@@ -671,38 +671,35 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             border-left: 1px solid rgba(49,51,63,0.15) !important;
         }
 
-        /* ── TARJETAS COLAPSABLES: animacion unfold (drill Proveedor) ── */
+        /* ── TARJETAS COLAPSABLES: animacion unfold (drill Proveedor) ──
+           IMPORTANTE: NO usar scaleX/scaleY/rotate en el contenedor. Al
+           remontar plotly/aggrid/dataframe con key nueva, esos componentes
+           miden el ancho durante la animacion; si el transform reduce el
+           tamano visual, el getBoundingClientRect devuelve ~0 y el
+           componente renderiza con columnas/chart colapsados. Usamos solo
+           opacity + translate para que el ancho real del contenedor
+           permanezca intacto durante toda la animacion. */
         @keyframes unfoldDown {
-            0%   { transform: perspective(600px) scaleY(0) rotateX(-90deg);
-                   opacity: 0; }
-            65%  { transform: perspective(600px) scaleY(1.04) rotateX(3deg);
-                   opacity: 1; }
-            100% { transform: perspective(600px) scaleY(1) rotateX(0deg);
-                   opacity: 1; }
+            0%   { opacity: 0; transform: translateY(-8px); }
+            100% { opacity: 1; transform: translateY(0); }
         }
         /* La animacion se aplica DIRECTO a la tarjeta por su key estable.
            Streamlit reutiliza el nodo DOM mientras sigue abierta, asi que el
            unfold solo corre al montarse (oculta->visible), no en cada rerun.
-           fill-mode backwards: arranca colapsada y al terminar no deja
-           transform residual (evita texto borroso). NO usamos <script>
-           porque st.markdown NO ejecuta JS. */
+           fill-mode backwards: arranca invisible y al terminar no deja
+           transform residual. NO usamos <script> porque st.markdown NO
+           ejecuta JS. */
         /* Bloque docs: se despliega hacia ABAJO. */
         .st-key-compras_prov_card_docs {
-            transform-origin: top center;
-            animation: unfoldDown 0.38s cubic-bezier(0.4, 0, 0.2, 1) backwards;
+            animation: unfoldDown 0.32s cubic-bezier(0.4, 0, 0.2, 1) backwards;
         }
         /* Bloque paneles: se despliega hacia la DERECHA (sale del pestillo). */
         @keyframes unfoldRight {
-            0%   { transform: perspective(700px) scaleX(0) rotateY(90deg);
-                   opacity: 0; }
-            65%  { transform: perspective(700px) scaleX(1.03) rotateY(-4deg);
-                   opacity: 1; }
-            100% { transform: perspective(700px) scaleX(1) rotateY(0deg);
-                   opacity: 1; }
+            0%   { opacity: 0; transform: translateX(-14px); }
+            100% { opacity: 1; transform: translateX(0); }
         }
         .st-key-compras_prov_card_paneles {
-            transform-origin: left center;
-            animation: unfoldRight 0.42s cubic-bezier(0.4, 0, 0.2, 1) backwards;
+            animation: unfoldRight 0.32s cubic-bezier(0.4, 0, 0.2, 1) backwards;
         }
         /* ── PESTILLO como PILL (icono + titulo en una misma capsula) ──
            El boton ES el titulo: clic en cualquier parte del pill abre/cierra.
