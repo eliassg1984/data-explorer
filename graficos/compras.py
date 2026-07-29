@@ -388,60 +388,58 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         /* Ocultar la barra de herramientas del propio gráfico (fullscreen) */
         .st-key-compras_prov_card_chart > div > [data-testid="stElementToolbar"] { display: none; }
 
-        /* Navegacion de ventana: flechas ‹ › abajo-derecha, flotando (no
-           suman alto a la tarjeta). El key de un container SIN borde ES el
-           stVerticalBlock, por eso la direccion FILA se fija aqui directo. */
+        /* Navegacion de ventana: flechas ‹ › + pills de tamano en la misma
+           fila, abajo-derecha, flotando (no suman alto a la tarjeta). El
+           key de un container SIN borde ES el stVerticalBlock, por eso la
+           direccion FILA se fija aqui directo. Los controles tienen sombra
+           leve para leerse como "chips apoyados" sobre el grafico, no como
+           pills sueltos. */
         .st-key-win_nav {
             position: absolute; bottom: 6px; right: 10px; z-index: 20;
             width: auto !important;
             display: flex !important; flex-direction: row !important;
             align-items: center !important;
-            gap: 2px !important;
+            gap: 3px !important;
+            padding: 3px 4px !important;
+            background: rgba(255,255,255,0.55) !important;
+            backdrop-filter: blur(4px);
+            border-radius: 8px !important;
         }
         .st-key-win_nav [data-testid="stElementToolbar"] { display: none; }
         .st-key-win_nav [data-testid="stElementContainer"] { width: auto !important; }
+        /* Estilo base compartido: rectangulo con esquinas suaves + sombra
+           leve. Mismo alto para flechas y pills → se leen como una sola
+           barra homogenea. */
         .st-key-win_nav button {
-            min-width: 0 !important;
-            width: 26px !important; height: 24px !important;
-            padding: 0 !important;
-            border-radius: 6px !important;
-            border: 0.5px solid var(--border, #e6e6e6) !important;
-            background: rgba(255,255,255,0.82) !important;
-            color: #6c5ce7 !important;
-            font-size: 13px !important; line-height: 1 !important;
-            box-shadow: none !important;
+            min-width: 24px !important; width: auto !important;
+            height: 24px !important;
+            padding: 0 8px !important;
+            border-radius: 5px !important;
+            border: 0.5px solid rgba(0,0,0,0.06) !important;
+            background: #ffffff !important;
+            color: #5a5a6a !important;
+            font-size: 12px !important; font-weight: 400 !important;
+            line-height: 1 !important;
+            box-shadow: 0 1px 2px rgba(15,15,30,0.06),
+                        0 1px 1px rgba(15,15,30,0.04) !important;
+            transition: background .12s, color .12s, box-shadow .12s !important;
         }
         .st-key-win_nav button:hover:not(:disabled) {
-            background: #f0edfe !important; border-color: #d4cdf7 !important;
-        }
-        .st-key-win_nav button:disabled { opacity: .30 !important; }
-        /* Pills de tamano de ventana (Auto / 3 / 6 / 12 / Todo). Mismo alto
-           que las flechas, texto chico. El activo se resalta via <style>
-           inyectado por Python (cp_win_auto / cp_win_N / cp_win_all). */
-        .st-key-cp_win_auto button,
-        .st-key-cp_win_3    button,
-        .st-key-cp_win_6    button,
-        .st-key-cp_win_12   button,
-        .st-key-cp_win_24   button,
-        .st-key-cp_win_all  button {
-            min-width: 0 !important; width: auto !important;
-            height: 24px !important;
-            padding: 0 9px !important;
-            border-radius: 999px !important;
-            border: 0.5px solid var(--border, #e6e6e6) !important;
-            background: rgba(255,255,255,0.82) !important;
-            color: #6a6a76 !important;
-            font-size: 11px !important; font-weight: 400 !important;
-            line-height: 1 !important; box-shadow: none !important;
-        }
-        .st-key-cp_win_auto button:hover:not(:disabled),
-        .st-key-cp_win_3    button:hover:not(:disabled),
-        .st-key-cp_win_6    button:hover:not(:disabled),
-        .st-key-cp_win_12   button:hover:not(:disabled),
-        .st-key-cp_win_24   button:hover:not(:disabled),
-        .st-key-cp_win_all  button:hover:not(:disabled) {
-            background: #f0edfe !important; border-color: #d4cdf7 !important;
+            background: #f0edfe !important;
             color: #4d3fb3 !important;
+            box-shadow: 0 2px 4px rgba(76,60,180,0.14) !important;
+        }
+        .st-key-win_nav button:disabled {
+            opacity: .35 !important;
+            box-shadow: none !important;
+        }
+        /* Flechas: mas chicas en X, glifo mas grande. */
+        .st-key-cp_win_prev button,
+        .st-key-cp_win_next button {
+            width: 24px !important;
+            padding: 0 !important;
+            color: #6c5ce7 !important;
+            font-size: 14px !important;
         }
 
         /* Panel A — controles flotantes en la cabecera (Opción 1): DOS flotantes
@@ -758,11 +756,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             st.markdown(
                 f"<style>.st-key-{_sel_key} button{{"
                 f"background:#6c5ce7 !important;color:#fff !important;"
-                f"border-color:#6c5ce7 !important;}}</style>",
+                f"border-color:#6c5ce7 !important;"
+                f"box-shadow:0 2px 5px rgba(76,60,180,0.28),"
+                f"inset 0 1px 0 rgba(255,255,255,0.18) !important;}}</style>",
                 unsafe_allow_html=True)
             st.button(f"Auto {_ventana_auto}", key="cp_win_auto",
                       on_click=_win_size, args=(None,))
-            for _op in (3, 6, 12, 24):
+            for _op in (2, 3, 6, 12, 24):
                 if _op < _n_per:
                     st.button(str(_op), key=f"cp_win_{_op}",
                               on_click=_win_size, args=(_op,))
