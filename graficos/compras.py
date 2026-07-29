@@ -313,6 +313,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     bgcolor="rgba(255,255,255,0.78)",
                     bordercolor="rgba(0,0,0,0.12)", borderwidth=1),
         hovermode="closest",
+        # uirevision estable (solo cambia con la granularidad): al clicar una
+        # barra se dispara on_select="rerun" y se reenvía el figure; con
+        # uirevision constante Plotly CONSERVA el zoom/pan del rangeslider que
+        # hizo el usuario en vez de resetearlo al range inicial. Al cambiar
+        # Semana/Mes/Año sí cambia → se resetea (los datos son otros).
+        uirevision=_chart_key,
     )
 
     # Rangeslider SIEMPRE visible (patrón Google Finance / TradingView).
