@@ -971,12 +971,16 @@ def get_css():
 }
 
     /* Trigger: anula la regla GLOBAL de pill (BOTÓN FILTROS, arriba) SOLO
-       aquí → el rango se ve como texto negro en negrita, sin caja. */
+       aquí → el rango se ve como texto negro sin caja, con underline
+       dashed pegado al borde INFERIOR de la franja (no bajo el baseline).
+       min-height = --cab-altura - top(8px) → el border-bottom aterriza
+       justo en el borde de la franja en todos los reportes. */
     .st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
         min-width: 0 !important;
-        padding: 4px 8px !important;
+        padding: 0 8px !important;
         border: none !important;
-        border-radius: 8px !important;
+        border-bottom: 1px dashed #AFA9EC !important;
+        border-radius: 0 !important;
         background: transparent !important;
         box-shadow: none !important;
         color: #101014 !important;
@@ -984,11 +988,18 @@ def get_css():
         font-size: 15px !important;
         line-height: 1.2 !important;
         white-space: nowrap !important;
+        min-height: calc(var(--cab-altura) - 8px) !important;
+        display: inline-flex !important;
+        align-items: center !important;
     }
     .st-key-fecha_ajuste_pill [data-testid="stPopover"] button:hover {
         background: rgba(0, 0, 0, 0.04) !important;
         border: none !important;
+        border-bottom: 1px dashed #7F77DD !important;
         color: var(--accent-deep) !important;
+    }
+    .st-key-fecha_ajuste_pill [data-testid="stPopover"] button[aria-expanded="true"] {
+        border-bottom: 1px dashed #534AB7 !important;
     }
 
     /* Panel del popover: se renderiza en un portal (fuera del contenedor),
