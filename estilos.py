@@ -856,15 +856,16 @@ def get_css():
     /* Ajuste valor.  Nivel 2, a la derecha del selector de vista.         */
     /* ================================================================== */
     /* Filtros Familia / Subfamilia en el NIVEL 1: pegados a la IZQUIERDA,
-       alineados con el borde izquierdo de la tarjeta (offset 106px = rail
-       90 + 16 aire). La fecha se ancla al lado derecho (ver más abajo). */
+       alineados con el borde izquierdo de la TARJETA (no del rail). El
+       block-container tiene padding-left ~60px encima del rail (90px),
+       de ahi los ~154px. La fecha se ancla al lado derecho (más abajo). */
     .st-key-chips_ajuste_tabla {
         position: fixed !important;
         top: 6px !important;
-        left: 106px !important;
+        left: 154px !important;
         right: auto !important;
         width: auto !important;
-        max-width: calc(100vw - 106px - 380px) !important;   /* deja aire para la fecha derecha */
+        max-width: calc(100vw - 154px - 380px) !important;   /* deja aire para la fecha derecha */
         z-index: 23 !important;
         margin: 0 !important;
         padding: 0 !important;
