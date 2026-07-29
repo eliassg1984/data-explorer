@@ -921,7 +921,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                                bargap=0.18)
                             _aevt = st.plotly_chart(
                                 figa, use_container_width=True,
-                                key=f"compras_g_prov_prods_{prov_focus}_{prod_focus}",
+                                key=f"compras_g_prov_prods_{prov_focus}_{prod_focus}_{_pan_inst}",
                                 on_select="rerun", selection_mode="points",
                                 config={"displayModeBar": False},
                             )
@@ -999,7 +999,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                        na_rep="—")
                                .apply(_hl, axis=0))
                         st.dataframe(sty, hide_index=True, use_container_width=True,
-                                     height=min(430, 60 + 34 * len(tabla)))
+                                     height=min(430, 60 + 34 * len(tabla)),
+                                     key=f"cp_prov_prov_de_prod_tbl_{_pan_inst}")
                         st.caption("Último precio = precio unitario de la compra más "
                                    "reciente. Verde = menor precio.")
 
@@ -1007,6 +1008,16 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     #    CSS sobre ::before del boton; aqui solo fijamos la rotacion del estado
     #    (abierto = 180). scope="fragment" evita recargar toda la app.
     _pan_ab = st.session_state.get("cp_paneles_abierto", True)
+    # Instance id: se incrementa cada vez que el bloque pasa de cerrado a
+    # abierto. Se anade al key de los componentes hijos (plotly / aggrid /
+    # dataframe) para forzar REMOUNT limpio al reabrir. Sin esto, Streamlit
+    # reusa los nodos DOM y los componentes internos no se re-miden el
+    # ancho del contenedor -> chart vacio, tabla con columnas colapsadas.
+    if _pan_ab and not st.session_state.get("cp_paneles_prev_ab", False):
+        st.session_state["cp_paneles_inst"] = (
+            st.session_state.get("cp_paneles_inst", 0) + 1)
+    st.session_state["cp_paneles_prev_ab"] = _pan_ab
+    _pan_inst = st.session_state.get("cp_paneles_inst", 0)
     _rot = "180deg" if _pan_ab else "0deg"
     # Cuando el bloque esta ABIERTO, el pill se colapsa a solo el icono
     # en el gutter izquierdo (position:absolute) y la tarjeta ocupa el
@@ -1060,6 +1071,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     #    SVG del carrete pintado por CSS sobre ::before del boton; rotacion
     #    de estado (abierto = 180) fijada por <style> inyectado.
     _docs_ab = st.session_state["cp_docs_abierto"]
+    # Instance id (mismo patron que paneles A/B): fuerza remount del AgGrid
+    # cada vez que el bloque se reabre, para que fit_columns_on_grid_load
+    # vuelva a medir el ancho del contenedor.
+    if _docs_ab and not st.session_state.get("cp_docs_prev_ab", False):
+        st.session_state["cp_docs_inst"] = (
+            st.session_state.get("cp_docs_inst", 0) + 1)
+    st.session_state["cp_docs_prev_ab"] = _docs_ab
+    _docs_inst = st.session_state.get("cp_docs_inst", 0)
     _rot_d = "180deg" if _docs_ab else "0deg"
     # Mismo patron que paneles A/B: abierto -> icono chico en gutter;
     # cerrado -> pill inline con titulo visible.
@@ -1177,7 +1196,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     height=560,
                     enable_enterprise_modules=True,
                     fit_columns_on_grid_load=True,
-                    key=f"cp_prov_pivot_docs_{gran}",
+                    key=f"cp_prov_pivot_docs_{gran}_{_docs_inst}",
                 )
 
                 st.download_button(
