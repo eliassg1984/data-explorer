@@ -430,6 +430,39 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             color: #6c5ce7 !important;
             border-color: #d4cdf7 !important;
         }
+        /* Panel del popover: angosto y sin aire de sobra. Se ancla con :has()
+           al container interno (el popover vive en un portal, fuera de
+           .st-key-win_nav), asi no afecta al popover de Proveedores. */
+        [data-testid="stPopoverBody"]:has(.st-key-win_size_opts) {
+            min-width: 0 !important; width: max-content !important;
+            max-width: 230px !important;
+            padding: 8px !important;
+        }
+        /* Opciones en FILA, como pills chicos (no botones a todo el ancho). */
+        .st-key-win_size_opts {
+            display: flex !important; flex-direction: row !important;
+            flex-wrap: wrap !important;
+            gap: 4px !important; row-gap: 4px !important;
+            width: auto !important;
+        }
+        .st-key-win_size_opts [data-testid="stElementContainer"] {
+            width: auto !important; margin: 0 !important;
+        }
+        .st-key-win_size_opts button {
+            min-width: 0 !important; width: auto !important;
+            height: 26px !important;
+            padding: 0 10px !important;
+            border-radius: 999px !important;
+            border: 0.5px solid var(--border, #e6e6e6) !important;
+            background: transparent !important;
+            color: var(--text-secondary, #6a6a76) !important;
+            font-size: 12px !important; font-weight: 400 !important;
+            line-height: 1 !important; box-shadow: none !important;
+        }
+        .st-key-win_size_opts button:hover {
+            background: #f0edfe !important; border-color: #d4cdf7 !important;
+            color: #4d3fb3 !important;
+        }
 
         /* Panel A — controles flotantes en la cabecera (Opción 1): DOS flotantes
            absolutos apilados a la derecha — un texto chico con la selección
@@ -737,18 +770,18 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                       help="Periodos anteriores",
                       on_click=_win_mover, args=(-_ventana,))
             with st.popover(f"{_ventana} de {_n_per}"):
-                st.caption("Agrupaciones visibles")
-                st.button(f"Automatico ({_ventana_auto})", key="cp_win_auto",
-                          use_container_width=True,
-                          on_click=_win_size, args=(None,))
-                for _op in (6, 12, 24):
-                    if _op <= _n_per:
-                        st.button(str(_op), key=f"cp_win_{_op}",
-                                  use_container_width=True,
-                                  on_click=_win_size, args=(_op,))
-                st.button(f"Todo ({_n_per})", key="cp_win_all",
-                          use_container_width=True,
-                          on_click=_win_size, args=(_n_per,))
+                # Container con key propio: el popover se renderiza en un
+                # portal, asi que este key es el unico anclaje fiable para
+                # el CSS que lo compacta (pills en fila, panel angosto).
+                with st.container(key="win_size_opts"):
+                    st.button(f"Auto {_ventana_auto}", key="cp_win_auto",
+                              on_click=_win_size, args=(None,))
+                    for _op in (3, 6, 12, 24):
+                        if _op < _n_per:
+                            st.button(str(_op), key=f"cp_win_{_op}",
+                                      on_click=_win_size, args=(_op,))
+                    st.button(f"Todo {_n_per}", key="cp_win_all",
+                              on_click=_win_size, args=(_n_per,))
             st.button("›", key="cp_win_next", disabled=_win_ini >= _ini_max,
                       help="Periodos siguientes",
                       on_click=_win_mover, args=(_ventana,))
