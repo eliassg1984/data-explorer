@@ -735,16 +735,23 @@ def get_css():
         flex: 0 0 auto !important;
         display: inline-block !important;
     }
-    /* Wrapper del label — NO expandirse (si crece con flex:1 el texto queda
-       flotando al centro del hueco sobrante). Anclarlo al dot. */
+    /* Wrappers del label — NO expandirse (si crecen con flex:1 el texto queda
+       flotando al centro del hueco sobrante). Streamlit mete un <div emotion>
+       intermedio entre el <button> y el stMarkdownContainer, con display:flex
+       y justify-content:center por default → hay que aplanar TODOS los div
+       descendientes del botón. */
+    .st-key-graf_tipo_chips [data-testid="stButton"] > button > div,
+    .st-key-graf_tipo_chips .stButton > button > div,
     .st-key-graf_tipo_chips [data-testid="stButton"] > button [data-testid="stMarkdownContainer"],
     .st-key-graf_tipo_chips .stButton > button [data-testid="stMarkdownContainer"] {
+        display: block !important;             /* deja al <p> tomar su ancho */
         flex: 0 1 auto !important;
         width: auto !important;
         max-width: 100% !important;
-        display: block !important;
         text-align: left !important;
+        justify-content: flex-start !important;
         margin: 0 !important;
+        padding: 0 !important;
     }
     .st-key-graf_tipo_chips [data-testid="stButton"] > button p,
     .st-key-graf_tipo_chips .stButton > button p {
