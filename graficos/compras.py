@@ -186,6 +186,36 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
     orden_provs = top_provs  # de mayor a menor valor total
 
+    # ── Ventana de periodos (paginacion server-side) ──────────────────────
+    # En vez de zoom client-side (rangeslider), la cantidad de agrupaciones
+    # visibles se decide en Python y el desplazamiento vive en session_state.
+    # Ventaja clave: clicar una barra dispara un rerun, pero la ventana NO se
+    # pierde (el zoom del rangeslider si se perdia, porque era estado del
+    # navegador y Streamlit remonta el componente en cada rerun).
+    #
+    # El tamano se adapta a la cantidad de series para que el ancho de barra
+    # siga siendo legible: mas proveedores -> menos agrupaciones a la vez.
+    # (~1200px de plot / 16px minimos por barra) / n_series, acotado a 4..12.
+    _otros_mask = ~base["prov"].isin(top_provs)
+    _hay_otros = _otros_mask.any()
+    _otros_seleccionado = "Otros" in prov_multisel
+    _n_series = len(orden_provs) + (1 if (_hay_otros and _otros_seleccionado) else 0)
+    _ventana = max(4, min(12, int(1200 / (16 * max(1, _n_series)))))
+    _n_per = len(periodos)
+    _ini_max = max(0, _n_per - _ventana)
+    # Al cambiar granularidad / rango / densidad, reanclar al tramo mas
+    # reciente (lo habitual en series de tiempo: interesa lo ultimo).
+    _win_sig = f"{gran}|{_n_per}|{_ventana}"
+    if st.session_state.get("cp_prov_win_sig") != _win_sig:
+        st.session_state["cp_prov_win_sig"] = _win_sig
+        st.session_state["cp_prov_win_ini"] = _ini_max
+    # Clamp de bounds justo antes de usarlo (el rango pudo cambiar de tamano).
+    _win_ini = min(max(0, st.session_state.get("cp_prov_win_ini", _ini_max)),
+                   _ini_max)
+    st.session_state["cp_prov_win_ini"] = _win_ini
+    _per_vis = periodos[_win_ini:_win_ini + _ventana]
+    _sl = slice(_win_ini, _win_ini + _ventana)
+
     # ── Procesar clic ANTES de dibujar ────────────────────────────────────
     # Leemos la selección que Streamlit guardó en session_state[chart_key] en
     # la interacción previa. Así actualizamos el foco y construimos el figure
@@ -199,9 +229,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # Período (barra) clicado: x de la selección, con fallback al índice.
         _per_click = _mp.get("x")
         if _per_click is None:
+            # El indice es relativo a las barras DIBUJADAS (ventana visible).
             _pi = _mp.get("point_index", _mp.get("point_number"))
-            if _pi is not None and 0 <= _pi < len(periodos):
-                _per_click = periodos[_pi]
+            if _pi is not None and 0 <= _pi < len(_per_vis):
+                _per_click = _per_vis[_pi]
         if _cn is not None and 0 <= _cn < len(orden_provs):
             _clicked = orden_provs[_cn]
             # Dedup por (proveedor, período) para no reprocesar el mismo clic.
@@ -246,6 +277,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             _txt.append(linea)
         return _txt
 
+    # Nota: la serie se calcula sobre TODOS los periodos y recien despues se
+    # recorta a la ventana visible (_sl). Asi la variacion % de la primera
+    # barra visible sigue comparando contra su periodo anterior real, aunque
+    # ese periodo quede fuera de la ventana.
     fig = go.Figure()
     for i, prov in enumerate(orden_provs):
         grp = (base[base["prov"] == prov]
@@ -258,15 +293,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         _opacity = 1.0 if (prov_focus is None or prov == prov_focus) else 0.30
 
         fig.add_bar(
-            x=periodos,
-            y=grp.values,
+            x=_per_vis,
+            y=grp.values[_sl],
             name=_compras_truncar(prov, 22),
             marker=dict(color=_color, opacity=_opacity),
-            text=_etiqueta_serie(list(grp.values)),
+            text=_etiqueta_serie(list(grp.values))[_sl],
             textposition="outside",
             textfont=dict(size=13),
             cliponaxis=False,
-            customdata=[[prov, _pct]] * len(periodos),
+            customdata=[[prov, _pct]] * len(_per_vis),
             hovertemplate=(
                 "<b>%{customdata[0]}</b>  %{x}<br>"
                 "S/ %{y:,.0f} · %{customdata[1]:.1f}%"
@@ -275,20 +310,17 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         )
 
     # "Otros" proveedores agrupados (gris) — solo si el usuario lo pidió
-    _otros_mask = ~base["prov"].isin(top_provs)
-    _hay_otros = _otros_mask.any()
-    _otros_seleccionado = "Otros" in prov_multisel
     if _hay_otros and _otros_seleccionado:
         grp_otros = (base[_otros_mask]
                      .groupby("per", as_index=False)["valor"].sum()
                      .set_index("per")["valor"]
                      .reindex(periodos, fill_value=0))
         fig.add_bar(
-            x=periodos,
-            y=grp_otros.values,
+            x=_per_vis,
+            y=grp_otros.values[_sl],
             name="Otros",
             marker=dict(color=GRIS_BORDE, opacity=0.6),
-            text=_etiqueta_serie(list(grp_otros.values)),
+            text=_etiqueta_serie(list(grp_otros.values))[_sl],
             textposition="outside",
             textfont=dict(size=13),
             cliponaxis=False,
@@ -313,42 +345,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     bgcolor="rgba(255,255,255,0.78)",
                     bordercolor="rgba(0,0,0,0.12)", borderwidth=1),
         hovermode="closest",
-        # uirevision estable (solo cambia con la granularidad): al clicar una
-        # barra se dispara on_select="rerun" y se reenvía el figure; con
-        # uirevision constante Plotly CONSERVA el zoom/pan del rangeslider que
-        # hizo el usuario en vez de resetearlo al range inicial. Al cambiar
-        # Semana/Mes/Año sí cambia → se resetea (los datos son otros).
+        # uirevision estable: evita que Plotly reinicie estado de UI propio
+        # (p. ej. leyenda arrastrada) en cada rerun por clic.
         uirevision=_chart_key,
     )
 
-    # Rangeslider SIEMPRE visible (patrón Google Finance / TradingView).
-    # El chart ocupa el 100% del contenedor (use_container_width=True) y el
-    # slider inferior queda disponible para zoom/pan en toda vista con >2
-    # periodos. Vista inicial: todos los periodos si caben legibles;
-    # si la densidad haría barras < 10 px, arrancamos con zoom a las últimas
-    # N para que sea legible desde el primer render.
-    #
-    # PRESERVAR EL ZOOM AL CLICAR UNA BARRA: solo fijamos range= la PRIMERA
-    # vez que se ve una granularidad (o al cambiar Semana/Mes/Año). En los
-    # reruns por clic NO tocamos range → junto con uirevision (constante por
-    # granularidad) Plotly conserva el zoom/pan que hizo el usuario. Si se
-    # fijara range en cada rerun, Plotly lo trata como "orden de la app" y
-    # pisa el zoom del usuario aunque el valor sea idéntico.
-    _n_series = len(orden_provs) + (1 if (_hay_otros and _otros_seleccionado) else 0)
-    _ancho_plot_est = 1200                        # px aprox. de plot en desktop
-    _ancho_barra_est = _ancho_plot_est / max(1, len(periodos) * _n_series)
-    _reset_zoom = st.session_state.get("cp_prov_gran_prev") != gran
-    st.session_state["cp_prov_gran_prev"] = gran
-    if len(periodos) > 2:
-        _xaxis_upd = dict(rangeslider=dict(visible=True, thickness=0.07))
-        if _reset_zoom:                           # solo 1er render / cambio gran
-            if _ancho_barra_est < 10:             # apiñado → zoom inicial
-                _ventana = max(6, min(12, int(_ancho_plot_est / (14 * _n_series))))
-                _xaxis_upd["range"] = [len(periodos) - _ventana - 0.5,
-                                       len(periodos) - 0.5]
-            else:                                 # cabe todo → vista completa
-                _xaxis_upd["range"] = [-0.5, len(periodos) - 0.5]
-        fig.update_xaxes(**_xaxis_upd)
+    # Sin rangeslider: la navegacion es server-side (ventana + flechas), asi
+    # sobrevive al clic en una barra. Eso ademas libera el alto que ocupaba el
+    # slider, que ahora queda para las barras.
 
     # ── Selector de granularidad FLOTANTE sobre el gráfico ────────────────
     # El contenedor "compras_prov_card_chart" es posición relativa; dentro,
@@ -377,6 +381,38 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-gran_float [data-testid="stElementToolbar"] { display: none; }
         /* Ocultar la barra de herramientas del propio gráfico (fullscreen) */
         .st-key-compras_prov_card_chart > div > [data-testid="stElementToolbar"] { display: none; }
+
+        /* Navegacion de ventana: flechas ‹ › abajo-derecha, flotando (no
+           suman alto a la tarjeta). El key de un container SIN borde ES el
+           stVerticalBlock, por eso la direccion FILA se fija aqui directo. */
+        .st-key-win_nav {
+            position: absolute; bottom: 6px; right: 10px; z-index: 20;
+            width: auto !important;
+            display: flex !important; flex-direction: row !important;
+            align-items: center !important;
+            gap: 2px !important;
+        }
+        .st-key-win_nav [data-testid="stElementToolbar"] { display: none; }
+        .st-key-win_nav [data-testid="stElementContainer"] { width: auto !important; }
+        .st-key-win_nav button {
+            min-width: 0 !important;
+            width: 26px !important; height: 24px !important;
+            padding: 0 !important;
+            border-radius: 6px !important;
+            border: 0.5px solid var(--border, #e6e6e6) !important;
+            background: rgba(255,255,255,0.82) !important;
+            color: #6c5ce7 !important;
+            font-size: 13px !important; line-height: 1 !important;
+            box-shadow: none !important;
+        }
+        .st-key-win_nav button:hover:not(:disabled) {
+            background: #f0edfe !important; border-color: #d4cdf7 !important;
+        }
+        .st-key-win_nav button:disabled { opacity: .30 !important; }
+        .st-key-win_nav [data-testid="stMarkdownContainer"] p {
+            font-size: 11px !important; color: #8a8a99 !important;
+            margin: 0 6px !important; white-space: nowrap !important;
+        }
 
         /* Panel A — controles flotantes en la cabecera (Opción 1): DOS flotantes
            absolutos apilados a la derecha — un texto chico con la selección
@@ -655,9 +691,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         with st.container(key="gran_float"):
             st.pills("Periodo", ["Semana", "Mes", "Año"], default="Mes",
                      key="compras_prov_gran", label_visibility="collapsed")
-        # Chart siempre responsive al contenedor (estándar BI). Cuando la
-        # densidad requiere navegación, se usa el rangeslider de Plotly
-        # activado arriba — nunca scroll horizontal externo.
+        # Chart siempre responsive al contenedor (estándar BI). La densidad se
+        # controla con la ventana de periodos (server-side) + flechas de
+        # navegación — nunca scroll horizontal externo ni zoom client-side.
         st.plotly_chart(
             fig,
             use_container_width=True,
@@ -669,6 +705,23 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             config={"displayModeBar": False,
                     "edits": {"legendPosition": True}},
         )
+        # Navegacion de la ventana de periodos. Solo aparece si hay mas
+        # periodos de los que entran. El indice vive en session_state, asi
+        # que clicar una barra NO lo mueve.
+        if _ini_max > 0:
+            def _win_mover(_delta):
+                st.session_state["cp_prov_win_ini"] = min(
+                    max(0, _win_ini + _delta), _ini_max)
+
+            with st.container(key="win_nav"):
+                st.button("‹", key="cp_win_prev", disabled=_win_ini <= 0,
+                          help="Periodos anteriores",
+                          on_click=_win_mover, args=(-_ventana,))
+                st.markdown(
+                    f"{_win_ini + 1}–{_win_ini + len(_per_vis)} de {_n_per}")
+                st.button("›", key="cp_win_next", disabled=_win_ini >= _ini_max,
+                          help="Periodos siguientes",
+                          on_click=_win_mover, args=(_ventana,))
 
     # ── Paneles A y B ─────────────────────────────────────────────────────
     def _um_de(grp):
