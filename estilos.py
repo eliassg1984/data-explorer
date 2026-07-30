@@ -1098,10 +1098,14 @@ def get_css():
         transform: translateX(-50%) !important;
         max-width: calc(100vw - 154px - 131px - 380px) !important;
     }
-    /* Fondo blanco (en vez del tinte lavanda) para los chips en Compras. */
+    /* Fondo blanco (en vez del tinte lavanda) + más espacio interno a la
+       derecha (chip más ancho y con aire tras el texto/badge). */
     [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
         .st-key-chips_ajuste_tabla [data-testid="stPopover"] button {
         background: #ffffff !important;
+        min-width: 140px !important;
+        padding-right: 22px !important;
+        justify-content: flex-start !important;
     }
     [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
         .st-key-chips_ajuste_tabla [data-testid="stPopover"] button:hover {
