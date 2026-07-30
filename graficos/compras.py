@@ -485,9 +485,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
            sin tocar la fuente ni la ubicación originales. */
         .st-key-gran_float [data-testid="stButtonGroup"] button {
             min-height: 0 !important;
-            padding-top: 2px !important;
-            padding-bottom: 2px !important;
-            line-height: 1.35 !important;
+            height: auto !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            line-height: 1.2 !important;
         }
         /* Popover de proveedores flotando arriba-IZQUIERDA (compacto) */
         .st-key-prov_pop_float {
