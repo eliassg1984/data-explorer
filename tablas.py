@@ -19,31 +19,6 @@ from tema import (
 # FUNCIONES AUXILIARES
 # ===========================================================================
 
-# Snippet JS: reescribe los headers de columnas pivote (p.ej. "sum(Cantidad)")
-# a 2 líneas — agregación en MAYÚSCULA arriba + nombre del campo abajo,
-# separados por '\n'. Se aplica vía API (getPivotResultColumns + refreshHeader)
-# porque en streamlit-aggrid la opción processPivotResultColDef no alcanza a
-# las columnas pivote generadas. Es idempotente (al reescribir, el header deja
-# de matchear 'agg(campo)'), por lo que no genera bucles al refrescar.
-# Abre 'function(params){ try{ ... }catch(e){}' — el llamador CIERRA con '}'
-# (y puede intercalar código extra antes del cierre).
-_RENOMBRA_PIVOTE_JS = (
-    "function(params){try{"
-    "var api=params.api;"
-    "var cols=(api.getPivotResultColumns?api.getPivotResultColumns():null)||[];"
-    "var changed=false;"
-    "for(var i=0;i<cols.length;i++){"
-    "  var cd=cols[i].getColDef();"
-    "  var h=String(cd.headerName||'');"
-    "  var m=h.match(/^(\\w+)\\((.*)\\)$/);"
-    "  if(m){cd.headerName=m[1].toUpperCase()+'\\n'+m[2];"
-    "        cd.headerTooltip=m[1]+'('+m[2]+')';changed=true;}"
-    "}"
-    "if(changed)api.refreshHeader();"
-    "}catch(e){}"
-)
-
-
 # Palabras que en español van en minúscula dentro de un título
 # (salvo si son la primera palabra).
 _MINUS_TITULO = {"de", "del", "la", "el", "los", "las", "y", "o",
@@ -1674,13 +1649,8 @@ def renderizar_aggrid_compras(df_grid: pd.DataFrame, font_px: int = 14):
         suppressAggFuncInHeader=True,
         onGridSizeChanged=JsCode(
             "function(params){ params.api.sizeColumnsToFit(); }"),
-        # Reescribe los headers de columnas pivote a 2 líneas (SUM / campo) via
-        # API — NO por processPivotResultColDef, que en esta versión de
-        # streamlit-aggrid no llega a las columnas generadas. Idempotente: al
-        # reescribir, el header deja de matchear 'agg(campo)', así no hay bucle.
-        onFirstDataRendered=JsCode(_RENOMBRA_PIVOTE_JS
-                                   + "params.api.autoSizeAllColumns();}"),
-        onColumnEverythingChanged=JsCode(_RENOMBRA_PIVOTE_JS + "}"),
+        onFirstDataRendered=JsCode(
+            "function(params){ params.api.autoSizeAllColumns(); }"),
         onToolPanelVisibleChanged=JsCode(
             "function(params){"
             "    try{"
@@ -1697,24 +1667,12 @@ def renderizar_aggrid_compras(df_grid: pd.DataFrame, font_px: int = 14):
         ),
         pivotMode=True,
         groupDefaultExpanded=0,
-        pivotHeaderHeight=int(font_px * 2 + 14),
     )
     gb.configure_pagination(
         enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
     grid_options = gb.build()
 
     custom_css = _css_base(font_px)
-    # Headers pivote en 2 líneas (misma regla que el otro renderizador).
-    custom_css[".ag-header-cell-text"] = {
-        "white-space": "pre-line !important",
-        "line-height": "1.15 !important",
-    }
-    custom_css[".ag-header-cell-text::first-line"] = {
-        "font-size": "9.5px !important",
-        "font-weight": "500 !important",
-        "letter-spacing": "0.06em !important",
-        "color": "#a2a2ad !important",
-    }
     custom_css[".ag-row-even"] = {"background-color": BLANCO + " !important"}
     custom_css[".ag-row-odd"]  = {"background-color": BLANCO + " !important"}
     custom_css[".ag-root-wrapper"].update({
@@ -1746,21 +1704,16 @@ def renderizar_aggrid_compras(df_grid: pd.DataFrame, font_px: int = 14):
     custom_css[".ag-header-cell-text"].update({
         "color": ACENTO_TEXTO_OSCURO + " !important",
         "font-weight": "500",
-        # pre-line honra el '\n' que inserta la reescritura de headers pivote
-        # (agg arriba / campo abajo); display:block permite que ::first-line
-        # estilice la línea de la agregación. El centrado vertical lo aporta
-        # el flex de .ag-header-cell-label (abajo).
-        "white-space": "pre-line !important",
+        "white-space": "normal !important",
         "overflow": "visible !important",
         "text-overflow": "clip !important",
-        "line-height": "1.2 !important",
+        "line-height": "1.25 !important",
         "overflow-wrap": "break-word",
-        "display": "block",
+        "display": "flex",
+        "align-items": "center",
         "text-align": "center",
     })
     custom_css[".ag-header-cell-label"] = {
-        "display": "flex !important",
-        "align-items": "center !important",
         "white-space": "normal !important",
         "overflow": "visible !important",
         "align-items": "center",
@@ -1954,15 +1907,15 @@ def renderizar_tabla_compras(df_grid: pd.DataFrame, font_px: int = 14):
         suppressAggFuncInHeader=True,
         onGridSizeChanged=JsCode(
             "function(params){params.api.sizeColumnsToFit();}"),
-        onFirstDataRendered=JsCode(
-            _RENOMBRA_PIVOTE_JS
-            + "params.api.autoSizeAllColumns();"
-            + ("try{var bc=new BroadcastChannel('_perf_aggrid');"
-               "bc.postMessage({event:'firstDataRendered',"
-               f"ms:{_js_ms},rowCount:null,ts:Date.now(),reporte:'Compras'}});"
-               "bc.close();}catch(e){}}")
-        ),
-        onColumnEverythingChanged=JsCode(_RENOMBRA_PIVOTE_JS + "}"),
+        onFirstDataRendered=JsCode(f"""
+            function(params){{
+                params.api.autoSizeAllColumns();
+                try{{var bc=new BroadcastChannel('_perf_aggrid');
+                    bc.postMessage({{event:'firstDataRendered',
+                        ms:{_js_ms},rowCount:null,ts:Date.now(),reporte:'Compras'}});
+                    bc.close();}}catch(e){{}}
+            }}
+        """),
         onToolPanelVisibleChanged=JsCode("""
             function(params){
                 try{
@@ -1979,7 +1932,6 @@ def renderizar_tabla_compras(df_grid: pd.DataFrame, font_px: int = 14):
         """),
         pivotMode=True,
         groupDefaultExpanded=0,
-        pivotHeaderHeight=int(font_px * 2 + 14),
     )
     gb.configure_pagination(
         enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
@@ -1987,19 +1939,6 @@ def renderizar_tabla_compras(df_grid: pd.DataFrame, font_px: int = 14):
 
     # ── CSS: base + overrides del tema material (idéntico a Inventario) ───
     custom_css = _css_base(font_px)
-    # Headers de columnas pivote en 2 líneas: agregación (SUM/AVG) pequeña
-    # arriba, nombre del campo debajo. El \n del headerName se respeta con
-    # white-space: pre-line; la primera línea se estiliza vía ::first-line.
-    custom_css[".ag-header-cell-text"] = {
-        "white-space": "pre-line !important",
-        "line-height": "1.15 !important",
-    }
-    custom_css[".ag-header-cell-text::first-line"] = {
-        "font-size": "9.5px !important",
-        "font-weight": "500 !important",
-        "letter-spacing": "0.06em !important",
-        "color": "#a2a2ad !important",
-    }
     custom_css[".ag-row-even"] = {"background-color": f"{BLANCO} !important"}
     custom_css[".ag-row-odd"]  = {"background-color": f"{BLANCO} !important"}
     custom_css[".ag-root-wrapper"].update({
@@ -2028,15 +1967,14 @@ def renderizar_tabla_compras(df_grid: pd.DataFrame, font_px: int = 14):
     })
     custom_css[".ag-header-cell-text"].update({
         "color": f"{ACENTO_TEXTO_OSCURO} !important", "font-weight": "500",
-        "white-space": "pre-line !important", "overflow": "visible !important",
-        "text-overflow": "clip !important", "line-height": "1.2 !important",
-        "overflow-wrap": "break-word", "display": "block",
-        "text-align": "center",
+        "white-space": "normal !important", "overflow": "visible !important",
+        "text-overflow": "clip !important", "line-height": "1.25 !important",
+        "overflow-wrap": "break-word", "display": "flex",
+        "align-items": "center", "text-align": "center",
     })
     custom_css[".ag-header-cell-label"] = {
-        "display": "flex !important", "align-items": "center !important",
         "white-space": "normal !important",
-        "overflow": "visible !important",
+        "overflow": "visible !important", "align-items": "center",
     }
     custom_css[".ag-row-pinned"].update({
         "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",

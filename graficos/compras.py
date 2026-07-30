@@ -1325,6 +1325,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 },
                 "pivotMode": True,
                 "groupDefaultExpanded": 0,
+                # Quita el envoltorio 'sum(...)' / 'avg(...)' de los headers de
+                # las columnas pivote: se muestra solo el nombre del campo
+                # (Cantidad, Precio Unitario, Valor). Mismo criterio que la
+                # tabla de Ajuste de Inventario.
+                "suppressAggFuncInHeader": True,
                 "autoGroupColumnDef": {
                     "headerName": "Proveedor / Fecha / Documento / Producto",
                     "minWidth": 300, "pinned": "left",
