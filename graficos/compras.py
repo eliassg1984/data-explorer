@@ -491,10 +491,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-prov_pop_float [data-testid="stPopover"] button {
             min-width: 0 !important;
             min-height: 0 !important;
-            padding: 1px 10px !important;    /* contenedor más delgado */
+            padding: 2px 10px !important;    /* contenedor un poco más delgado */
             font-size: 11px !important;      /* fuente igual que antes */
             font-weight: 500 !important;
-            line-height: 1.25 !important;
+            line-height: 1.35 !important;
             border-radius: 4px !important;   /* cuadrado, no cápsula */
             background: #F7F6FE !important;
             color: #534AB7 !important;
