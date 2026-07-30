@@ -483,20 +483,20 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         }
         /* Popover de proveedores flotando arriba-IZQUIERDA (compacto) */
         .st-key-prov_pop_float {
-            position: absolute; top: 6px; left: 6px; z-index: 21;
+            position: absolute; top: 14px; left: 16px; z-index: 21;
             width: auto !important;
         }
         /* Variante "outline en tinte" (violeta claro con borde y texto oscuros).
-           Se lee como parte del reporte, no como un widget suelto. */
+           Contraste bajo: fondo casi blanco con leve tinte, borde tenue. */
         .st-key-prov_pop_float [data-testid="stPopover"] button {
             min-width: 0 !important;
-            padding: 5px 14px !important;
-            font-size: 12px !important;
+            padding: 3px 10px !important;
+            font-size: 11px !important;
             font-weight: 500 !important;
             border-radius: 4px !important;   /* cuadrado, no cápsula */
-            background: #EEEDFE !important;
-            color: #26215C !important;
-            border: 1px solid #AFA9EC !important;
+            background: #F7F6FE !important;
+            color: #534AB7 !important;
+            border: 1px solid #E4E1F5 !important;
             box-shadow: none !important;
             transition: background .12s, border-color .12s !important;
         }
@@ -510,8 +510,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         }
         /* Icono material (grupos) del popover: color acento */
         .st-key-prov_pop_float [data-testid="stPopover"] button [data-testid="stIconMaterial"] {
-            color: #534AB7 !important;
-            font-size: 16px !important;
+            color: #7F77DD !important;
+            font-size: 14px !important;
             margin-right: 4px !important;
         }
         /* Badge con el numero de proveedores: se inyecta el valor via
