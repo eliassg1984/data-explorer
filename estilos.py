@@ -684,13 +684,23 @@ def get_css():
         border-bottom: none !important;
         padding: 0 !important;
     }
-    /* Compactar el gap por defecto del vertical block: cada ítem del rail
-       vive apilado sin separación adicional entre botones. */
-    .st-key-graf_tipo_chips > [data-testid="stVerticalBlock"] {
-        gap: 0 !important;
+    /* Aplanar TODOS los wrappers verticales que Streamlit mete alrededor de
+       cada botón (stVerticalBlock, stElementContainer, stButton, y las divs
+       emotion intermedias). Sin esto quedan ~10-14px de padding invisible
+       por ítem que multiplican el alto del rail y obligan a scrollear. */
+    .st-key-graf_tipo_chips [data-testid="stVerticalBlock"],
+    .st-key-graf_tipo_chips [data-testid="stVerticalBlockBorderWrapper"] {
+        gap: 0 !important; row-gap: 0 !important;
+        margin: 0 !important; padding: 0 !important;
     }
-    .st-key-graf_tipo_chips [data-testid="stElementContainer"] {
-        margin: 0 !important;
+    .st-key-graf_tipo_chips [data-testid="stElementContainer"],
+    .st-key-graf_tipo_chips [data-testid="stButton"],
+    .st-key-graf_tipo_chips [data-testid="element-container"] {
+        margin: 0 !important; padding: 0 !important;
+        min-height: 0 !important;
+    }
+    .st-key-graf_tipo_chips [data-testid="stElementContainer"] > div {
+        margin: 0 !important; padding: 0 !important;
     }
     /* Cada ítem del rail: botón estilo lista, sin borde ni fondo por defecto.
        Un dot a la izquierda (::before) precede al texto. border-left:3px
