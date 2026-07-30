@@ -478,8 +478,16 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         /* La leyenda se movió a la derecha (vertical); la banda superior solo
            tiene popover (izq) + toggle (der), alineados arriba. */
         .st-key-gran_float {
-            position: absolute; top: 6px; right: 6px; z-index: 20;
+            position: absolute; top: 14px; right: 16px; z-index: 20;
             width: auto !important;
+        }
+        /* Contenedor de las pills Día/Semana/Mes/Año: más delgado,
+           mismo espíritu que el chip de Proveedores. */
+        .st-key-gran_float [data-testid="stButtonGroup"] button {
+            min-height: 0 !important;
+            padding: 2px 12px !important;
+            font-size: 11px !important;
+            line-height: 1.35 !important;
         }
         /* Popover de proveedores flotando arriba-IZQUIERDA (compacto) */
         .st-key-prov_pop_float {
