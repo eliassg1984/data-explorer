@@ -490,10 +490,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
            Contraste bajo: fondo casi blanco con leve tinte, borde tenue. */
         .st-key-prov_pop_float [data-testid="stPopover"] button {
             min-width: 0 !important;
-            padding: 1px 8px !important;
-            font-size: 10.5px !important;
+            padding: 3px 10px !important;
+            font-size: 11px !important;
             font-weight: 500 !important;
-            line-height: 1.3 !important;
             border-radius: 4px !important;   /* cuadrado, no cápsula */
             background: #F7F6FE !important;
             color: #534AB7 !important;
@@ -512,8 +511,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         /* Icono material (grupos) del popover: color acento */
         .st-key-prov_pop_float [data-testid="stPopover"] button [data-testid="stIconMaterial"] {
             color: #7F77DD !important;
-            font-size: 12px !important;
-            margin-right: 3px !important;
+            font-size: 14px !important;
+            margin-right: 4px !important;
         }
         /* Badge con el numero de proveedores: se inyecta el valor via
            ::after con content dinamico desde Python (ver _cp_badge_count) */
@@ -523,10 +522,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             background: #534AB7;
             color: #EEEDFE;
             border-radius: 3px;
-            padding: 0 6px;
-            font-size: 10px;
+            padding: 1px 8px;
+            font-size: 11px;
             font-weight: 500;
-            margin-left: 6px;
+            margin-left: 8px;
             line-height: 1.4;
         }
         .st-key-gran_float [data-testid="stElementToolbar"] { display: none; }
