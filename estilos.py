@@ -1052,11 +1052,11 @@ def get_css():
     /* Scopeado con :has(.st-key-compras_tabs_row) → no afecta otros       */
     /* reportes.                                                           */
     /* ================================================================== */
-    /* Solo cambia la POSICIÓN: fecha pegada al borde izquierdo de la tarjeta.
-       El estilo (tamaño, color, gradiente) queda intacto. */
+    /* Solo cambia la POSICIÓN: fecha alineada con el borde izquierdo de la
+       tarjeta (block-container padding-left ~16px sobre el rail 90px + aire). */
     [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
         .st-key-fecha_ajuste_pill {
-        left: 154px !important;
+        left: 175px !important;
         right: auto !important;
     }
 
