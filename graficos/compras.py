@@ -576,7 +576,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
            al hover de toda la tarjeta). Sigue interactuable porque opacity:0
            conserva pointer-events. */
         .st-key-compras_prov_card_chart .js-plotly-plot .legend {
-            opacity: 0 !important;
+            opacity: 0.1 !important;
             transition: opacity .22s ease-in-out !important;
         }
         .st-key-compras_prov_card_chart .js-plotly-plot .legend:hover {
