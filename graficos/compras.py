@@ -492,7 +492,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         /* La leyenda se movió a la derecha (vertical); la banda superior solo
            tiene popover (izq) + toggle (der), alineados arriba. */
         .st-key-gran_float {
-            position: absolute; top: 6px; right: 6px; z-index: 20;
+            position: absolute; top: 6px; right: 6px; z-index: 5;
             width: auto !important;
         }
         /* Contenedor de las pills Día/Semana/Mes/Año: solo más delgado,
@@ -506,7 +506,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         }
         /* Popover de proveedores flotando arriba-IZQUIERDA (compacto) */
         .st-key-prov_pop_float {
-            position: absolute; top: 14px; left: 16px; z-index: 21;
+            position: absolute; top: 14px; left: 16px; z-index: 5;
             width: auto !important;
         }
         /* Variante "outline en tinte" (violeta claro con borde y texto oscuros).
@@ -737,7 +737,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             border-bottom: none;
         }
         .st-key-panelb_scope_float {
-            position: absolute; top: 0; right: 12px; z-index: 20;
+            position: absolute; top: 0; right: 12px; z-index: 5;
             height: 24px; display: flex; align-items: center;
             width: auto !important;
         }
