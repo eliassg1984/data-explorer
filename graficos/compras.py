@@ -571,14 +571,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         /* Ocultar la barra de herramientas del propio gráfico (fullscreen) */
         .st-key-compras_prov_card_chart > div > [data-testid="stElementToolbar"] { display: none; }
 
-        /* Leyenda del gráfico Plotly: casi invisible en reposo, se hace opaca
-           al acercar el cursor a la tarjeta (o directo a la leyenda). Deja
-           respirar el gráfico sin perder el acceso a la leyenda. */
+        /* Leyenda del gráfico Plotly: totalmente transparente en reposo. Solo
+           se hace opaca cuando el cursor pasa DIRECTO sobre la leyenda (no
+           al hover de toda la tarjeta). Sigue interactuable porque opacity:0
+           conserva pointer-events. */
         .st-key-compras_prov_card_chart .js-plotly-plot .legend {
-            opacity: 0.18 !important;
+            opacity: 0 !important;
             transition: opacity .22s ease-in-out !important;
         }
-        .st-key-compras_prov_card_chart:hover .js-plotly-plot .legend,
         .st-key-compras_prov_card_chart .js-plotly-plot .legend:hover {
             opacity: 1 !important;
         }
