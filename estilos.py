@@ -644,12 +644,12 @@ def get_css():
         color: var(--text-muted, #a2a2ad) !important;
         text-transform: uppercase !important;
         letter-spacing: 0.1em !important;
-        padding: 7px 10px 3px !important;
+        padding: 4px 10px 1px !important;
     }
     .st-key-compras_tabs_row .rail-sep {
         height: 0.5px !important;
         background: var(--border, #e6e6ea) !important;
-        margin: 4px 8px !important;
+        margin: 2px 8px !important;
     }
 
     /* Subir las TARJETAS (no los chips fijos): recupera el hueco que dejó la
@@ -708,7 +708,7 @@ def get_css():
         border-left: 3px solid transparent !important;
         border-radius: 0 !important;
         background: transparent !important;
-        padding: 3px 10px 3px 7px !important;   /* 7 + border 3 = 10 alineado */
+        padding: 1px 10px 1px 7px !important;   /* 7 + border 3 = 10 alineado */
         gap: 0 !important;
         color: var(--text-secondary, #71717a) !important;
         font-weight: 400 !important;
@@ -746,7 +746,7 @@ def get_css():
         padding: 0 !important;
         display: block !important;
         font-size: 11px !important;
-        line-height: 1.25 !important;
+        line-height: 1.15 !important;
         white-space: normal !important;
         text-align: left !important;
         font-weight: inherit !important;
