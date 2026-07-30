@@ -708,24 +708,19 @@ def get_css():
         border-left: 3px solid transparent !important;
         border-radius: 0 !important;
         background: transparent !important;
-        padding: 5px 10px 5px 7px !important;   /* 7 + border 3 = 10 alineado */
-        gap: 7px !important;
+        padding: 3px 10px 3px 7px !important;   /* 7 + border 3 = 10 alineado */
+        gap: 0 !important;
         color: var(--text-secondary, #71717a) !important;
         font-weight: 400 !important;
         box-shadow: none !important;
         position: relative !important;
         transition: background 0.12s !important;
     }
+    /* Viñeta eliminada — la barra izquierda de acento (border-left activo)
+       ya marca el ítem seleccionado; el dot sumaba ruido sin agregar info. */
     .st-key-graf_tipo_chips [data-testid="stButton"] > button::before,
     .st-key-graf_tipo_chips .stButton > button::before {
-        content: "" !important;
-        width: 5px !important;
-        height: 5px !important;
-        min-width: 5px !important;
-        border-radius: 50% !important;
-        background: var(--border-strong, #c8c8d0) !important;
-        flex: 0 0 auto !important;
-        display: inline-block !important;
+        display: none !important;
     }
     /* Wrappers del label — NO expandirse (si crecen con flex:1 el texto queda
        flotando al centro del hueco sobrante). Streamlit mete un <div emotion>
@@ -769,10 +764,6 @@ def get_css():
         color: var(--accent-deep, #4938b8) !important;
         font-weight: 500 !important;
         border-left-color: var(--accent, #6c5ce7) !important;  /* pinta el reservado */
-    }
-    .st-key-graf_tipo_chips [data-testid="stButton"] > button[kind="primary"]::before,
-    .st-key-graf_tipo_chips .stButton > button[kind="primary"]::before {
-        background: var(--accent, #6c5ce7) !important;
     }
 
     /* =================================================================== */
