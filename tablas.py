@@ -1668,8 +1668,21 @@ def renderizar_aggrid_compras(df_grid: pd.DataFrame, font_px: int = 14):
         pivotMode=True,
         groupDefaultExpanded=0,
         # Headers de columnas pivote en 2 líneas: agregación (SUM/AVG…) arriba,
-        # nombre del campo abajo. Separo con \n; el CSS de abajo activa el wrap.
+        # nombre del campo abajo. Se registra en AMBAS APIs para cubrir
+        # distintas versiones de AgGrid (processSecondaryColDef v<30,
+        # processPivotResultColDef v30+).
         processPivotResultColDef=JsCode("""
+            function(colDef) {
+                var h = String(colDef.headerName || '');
+                var m = h.match(/^(\\w+)\\((.*)\\)$/);
+                if (m) {
+                    colDef.headerName = m[1].toUpperCase() + '\\n' + m[2];
+                    colDef.headerTooltip = m[1] + '(' + m[2] + ')';
+                }
+                return colDef;
+            }
+        """),
+        processSecondaryColDef=JsCode("""
             function(colDef) {
                 var h = String(colDef.headerName || '');
                 var m = h.match(/^(\\w+)\\((.*)\\)$/);
@@ -1688,12 +1701,11 @@ def renderizar_aggrid_compras(df_grid: pd.DataFrame, font_px: int = 14):
 
     custom_css = _css_base(font_px)
     # Headers pivote en 2 líneas (misma regla que el otro renderizador).
-    custom_css[".ag-pivot-on .ag-header-cell-text"] = {
+    custom_css[".ag-header-cell-text"] = {
         "white-space": "pre-line !important",
         "line-height": "1.15 !important",
-        "text-align": "right !important",
     }
-    custom_css[".ag-pivot-on .ag-header-cell-text::first-line"] = {
+    custom_css[".ag-header-cell-text::first-line"] = {
         "font-size": "9.5px !important",
         "font-weight": "500 !important",
         "letter-spacing": "0.06em !important",
@@ -1959,8 +1971,21 @@ def renderizar_tabla_compras(df_grid: pd.DataFrame, font_px: int = 14):
         pivotMode=True,
         groupDefaultExpanded=0,
         # Headers de columnas pivote en 2 líneas: agregación (SUM/AVG…) arriba,
-        # nombre del campo abajo. Separo con \n; el CSS de abajo activa el wrap.
+        # nombre del campo abajo. Se registra en AMBAS APIs para cubrir
+        # distintas versiones de AgGrid (processSecondaryColDef v<30,
+        # processPivotResultColDef v30+).
         processPivotResultColDef=JsCode("""
+            function(colDef) {
+                var h = String(colDef.headerName || '');
+                var m = h.match(/^(\\w+)\\((.*)\\)$/);
+                if (m) {
+                    colDef.headerName = m[1].toUpperCase() + '\\n' + m[2];
+                    colDef.headerTooltip = m[1] + '(' + m[2] + ')';
+                }
+                return colDef;
+            }
+        """),
+        processSecondaryColDef=JsCode("""
             function(colDef) {
                 var h = String(colDef.headerName || '');
                 var m = h.match(/^(\\w+)\\((.*)\\)$/);
@@ -1982,12 +2007,11 @@ def renderizar_tabla_compras(df_grid: pd.DataFrame, font_px: int = 14):
     # Headers de columnas pivote en 2 líneas: agregación (SUM/AVG) pequeña
     # arriba, nombre del campo debajo. El \n del headerName se respeta con
     # white-space: pre-line; la primera línea se estiliza vía ::first-line.
-    custom_css[".ag-pivot-on .ag-header-cell-text"] = {
+    custom_css[".ag-header-cell-text"] = {
         "white-space": "pre-line !important",
         "line-height": "1.15 !important",
-        "text-align": "right !important",
     }
-    custom_css[".ag-pivot-on .ag-header-cell-text::first-line"] = {
+    custom_css[".ag-header-cell-text::first-line"] = {
         "font-size": "9.5px !important",
         "font-weight": "500 !important",
         "letter-spacing": "0.06em !important",
