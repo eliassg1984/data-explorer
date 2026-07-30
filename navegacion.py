@@ -116,10 +116,20 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
 
 .st-key-nav_rail [data-testid="stVerticalBlock"] {{
     display:flex !important; flex-direction:column !important;
-    align-items:center !important; gap:6px !important;
+    align-items:center !important; gap:3px !important;
     width:100% !important;
     flex:1 1 auto !important;
-    padding:14px 0 14px 0 !important;
+    min-height:0 !important;           /* clave para que overflow-y pueda scrollear */
+    overflow-y:auto !important;        /* C · scroll interno si no entran todos */
+    overflow-x:hidden !important;
+    scrollbar-width:thin !important;
+    padding:8px 0 8px 0 !important;
+}}
+.st-key-nav_rail [data-testid="stVerticalBlock"]::-webkit-scrollbar {{
+    width:4px !important;
+}}
+.st-key-nav_rail [data-testid="stVerticalBlock"]::-webkit-scrollbar-thumb {{
+    background:rgba(0,0,0,0.15) !important; border-radius:2px !important;
 }}
 
 /* CONTENEDORES DE BOTONES: los 3 niveles centran su contenido */
@@ -135,13 +145,14 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
    Reposo: icono gris. Hover: tinte lavanda. Activo: píldora lavanda con
    icono índigo, como el ítem activo del sidebar de CallAI. */
 .st-key-nav_rail [class*="st-key-navbtn_"] button {{
-    width:{RAIL_ANCHO - 16}px !important; height:62px !important; min-height:62px !important;
+    width:{RAIL_ANCHO - 16}px !important; height:50px !important; min-height:50px !important;
     margin:0 auto !important;
     padding:0 !important;
-    border:none !important; border-radius:12px !important;
+    border:none !important; border-radius:10px !important;
     background:transparent !important; color:#85858f !important;
     display:flex !important; align-items:center !important; justify-content:center !important;
     transition:background .2s, color .2s !important;
+    flex-shrink:0 !important;
 }}
 .st-key-nav_rail [class*="st-key-navbtn_"] button:hover {{
     background:{LAVANDA_FONDO} !important; color:{ACENTO} !important;
@@ -163,7 +174,7 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
    (cuando va inline en el label junto a la etiqueta). Cubrimos ambos. */
 .st-key-nav_rail [class*="st-key-navbtn_"] button [data-testid="stIconMaterial"],
 .st-key-nav_rail [class*="st-key-navbtn_"] button p > span {{
-    font-size:27px !important; line-height:1 !important;
+    font-size:22px !important; line-height:1 !important;
 }}
 
 /* Botón de refresco, al fondo del rail */
