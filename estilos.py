@@ -584,8 +584,8 @@ def get_css():
         margin: 0 !important;
         padding: 8px 0 16px 0 !important;
         background: var(--bg-card, #ffffff) !important;
-        border-left: 1px solid var(--border) !important;
-        border-radius: 0 !important;       /* franja plana, no pastilla */
+        border: 1px solid var(--border) !important;
+        border-radius: 12px !important;    /* mismas esquinas que la tarjeta */
         box-shadow: none !important;       /* sin sombra: integrada al borde */
         scrollbar-width: none !important;
     }
