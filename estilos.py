@@ -574,7 +574,7 @@ def get_css():
         /* Rail arranca a la altura de la tarjeta (por debajo de la topbar de
            Streamlit + la fila de chips/fecha), no desde el borde superior. */
         top: 60px !important;
-        right: 0 !important;
+        right: 15px !important;            /* despega del scrollbar del navegador */
         bottom: 0 !important;
         height: calc(100vh - 60px) !important;
         z-index: 900 !important;
@@ -595,7 +595,7 @@ def get_css():
        el :has() detecta el rail dentro del contenedor principal. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row),
     .block-container:has(.st-key-compras_tabs_row) {
-        padding-right: 138px !important;   /* rail 116 + 22px de aire, tarjeta original */
+        padding-right: 153px !important;   /* rail 116 + 22px de aire + 15px offset del rail */
     }
 
     /* Cabecera del rail — icono + "Compras / Gráficos" */
