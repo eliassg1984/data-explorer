@@ -918,7 +918,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 unsafe_allow_html=True)
             st.button(f"Auto {_ventana_auto}", key="cp_win_auto",
                       on_click=_win_size, args=(None,))
-            for _op in (2, 3, 6, 12, 24):
+            for _op in (1, 2, 3, 6, 12, 24):
                 if _op < _n_per:
                     st.button(str(_op), key=f"cp_win_{_op}",
                               on_click=_win_size, args=(_op,))
