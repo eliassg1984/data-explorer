@@ -1052,41 +1052,12 @@ def get_css():
     /* Scopeado con :has(.st-key-compras_tabs_row) → no afecta otros       */
     /* reportes.                                                           */
     /* ================================================================== */
+    /* Solo cambia la POSICIÓN: fecha pegada al borde izquierdo de la tarjeta.
+       El estilo (tamaño, color, gradiente) queda intacto. */
     [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
         .st-key-fecha_ajuste_pill {
         left: 154px !important;
         right: auto !important;
-    }
-    /* Fecha en Compras: chip pequeño, fondo blanco, mismo look que los
-       chips Familia/Subfamilia — no la "pestaña activa" gigante. */
-    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
-        .st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
-        min-height: 28px !important;
-        height: 28px !important;
-        padding: 3px 12px !important;
-        font-size: 12px !important;
-        font-weight: 500 !important;
-        letter-spacing: 0 !important;
-        border: 1px solid var(--border-lavender, #CECBF6) !important;
-        border-radius: 4px !important;
-        background: #ffffff !important;
-        color: var(--accent-deep, #26215C) !important;
-        box-shadow: none !important;
-    }
-    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
-        .st-key-fecha_ajuste_pill [data-testid="stPopover"] button:hover {
-        background: var(--accent-tint, #EEEDFE) !important;
-        border-color: var(--accent, #6c5ce7) !important;
-    }
-    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
-        .st-key-fecha_ajuste_pill [data-testid="stPopover"] button[aria-expanded="true"] {
-        background: var(--accent-tint, #EEEDFE) !important;
-        border-color: var(--accent-deep, #534AB7) !important;
-    }
-    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
-        .st-key-fecha_ajuste_pill [data-testid="stPopover"] button [data-testid="stIconMaterial"] {
-        color: var(--accent, #6c5ce7) !important;
-        font-size: 15px !important;
     }
 
     /* Chips Familia/Subfamilia CENTRADOS en el ancho de la tarjeta
