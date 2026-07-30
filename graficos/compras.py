@@ -318,8 +318,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 if _pp is not None and not pd.isna(_pp):
                     _foot.append(f"{_pp:.0f}% {_gran_suffix}")
             if _foot:
-                linea += (f"<br><span style='color:#6b6b78;font-size:10px'>"
-                          + " · ".join(_foot) + "</span>")
+                linea += "".join(
+                    f"<br><span style='color:#6b6b78;font-size:11.5px'>{_p}</span>"
+                    for _p in _foot
+                )
             _txt.append(linea)
         return _txt
 
@@ -402,6 +404,16 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                            f"{_abbr}</span></b><br>")
                 _tags = [(_prefix + t) if t else "" for t in _tags]
 
+        # customdata por barra: [prov, pct_total_prov, docs_barra, pct_periodo_barra]
+        # para que el tooltip repita la misma info que el rótulo sobre la barra.
+        _docs_lst_vis = list(_docs_lst)[_sl] if _docs_lst else [None] * len(_per_vis)
+        _pct_per_vis = list(_pct_per)[_sl] if _pct_per else [None] * len(_per_vis)
+        _cd = [
+            [prov, _pct,
+             int(_d) if _d and not pd.isna(_d) else 0,
+             float(_p) if _p is not None and not pd.isna(_p) else 0.0]
+            for _d, _p in zip(_docs_lst_vis, _pct_per_vis)
+        ]
         fig.add_bar(
             x=_per_vis,
             y=grp.values[_sl],
@@ -411,10 +423,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             textposition="outside",
             textfont=dict(size=13),
             cliponaxis=False,
-            customdata=[[prov, _pct]] * len(_per_vis),
+            customdata=_cd,
             hovertemplate=(
                 "<b>%{customdata[0]}</b>  %{x}<br>"
-                "S/ %{y:,.0f} · %{customdata[1]:.1f}%"
+                "S/ %{y:,.0f} · %{customdata[1]:.1f}%<br>"
+                "%{customdata[2]} docs · %{customdata[3]:.0f}% "
+                + _gran_suffix +
                 "<extra></extra>"
             ),
         )
@@ -1009,7 +1023,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             _scope = st.pills(
                                 "Ámbito de período", ["rango", "periodo"],
                                 default="periodo",
-                                format_func=lambda v: ("Todo el rango"
+                                format_func=lambda v: ("Rango"
                                                        if v == "rango" else "Selección"),
                                 key="compras_prov_prod_scope",
                                 label_visibility="collapsed",
