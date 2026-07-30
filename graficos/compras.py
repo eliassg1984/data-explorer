@@ -108,10 +108,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         if _k not in st.session_state:
             st.session_state[_k] = (_p in _default_prov_sel)
     # Nombres sobre las barras: TRUE por defecto (filtro principal para el
-    # usuario). Solo aplica en la primera visita; despues respeta la
-    # preferencia guardada por el toggle.
-    if "cp_prov_show_names" not in st.session_state:
+    # usuario). El seed corre una vez por sesión — bumping el key del flag
+    # resetea sesiones antiguas que hayan quedado con False.
+    if not st.session_state.get("_cp_show_names_seed_v2"):
         st.session_state["cp_prov_show_names"] = True
+        st.session_state["_cp_show_names_seed_v2"] = True
 
     def _cp_set_topn(_n):
         """Marca solo los primeros _n proveedores (por valor). _n=0 → limpiar."""
