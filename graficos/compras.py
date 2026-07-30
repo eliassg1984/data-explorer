@@ -493,7 +493,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             padding: 5px 14px !important;
             font-size: 12px !important;
             font-weight: 500 !important;
-            border-radius: 999px !important;
+            border-radius: 4px !important;   /* cuadrado, no cápsula */
             background: #EEEDFE !important;
             color: #26215C !important;
             border: 1px solid #AFA9EC !important;
@@ -521,7 +521,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             content: var(--cp-prov-count, "");
             background: #534AB7;
             color: #EEEDFE;
-            border-radius: 999px;
+            border-radius: 3px;
             padding: 1px 8px;
             font-size: 11px;
             font-weight: 500;

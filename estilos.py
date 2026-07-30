@@ -1046,6 +1046,68 @@ def get_css():
         min-height: 26px !important;   /* 34px franja - 8px top */
     }
 
+    /* ================================================================== */
+    /* COMPRAS: fecha a la IZQUIERDA (alineada con la tarjeta) y chips     */
+    /* Familia/Subfamilia al CENTRO con fondo blanco.                      */
+    /* Scopeado con :has(.st-key-compras_tabs_row) → no afecta otros       */
+    /* reportes.                                                           */
+    /* ================================================================== */
+    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+        .st-key-fecha_ajuste_pill {
+        left: 154px !important;
+        right: auto !important;
+    }
+    /* Fecha en Compras: chip pequeño, fondo blanco, mismo look que los
+       chips Familia/Subfamilia — no la "pestaña activa" gigante. */
+    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+        .st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
+        min-height: 28px !important;
+        height: 28px !important;
+        padding: 3px 12px !important;
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        letter-spacing: 0 !important;
+        border: 1px solid var(--border-lavender, #CECBF6) !important;
+        border-radius: 4px !important;
+        background: #ffffff !important;
+        color: var(--accent-deep, #26215C) !important;
+        box-shadow: none !important;
+    }
+    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+        .st-key-fecha_ajuste_pill [data-testid="stPopover"] button:hover {
+        background: var(--accent-tint, #EEEDFE) !important;
+        border-color: var(--accent, #6c5ce7) !important;
+    }
+    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+        .st-key-fecha_ajuste_pill [data-testid="stPopover"] button[aria-expanded="true"] {
+        background: var(--accent-tint, #EEEDFE) !important;
+        border-color: var(--accent-deep, #534AB7) !important;
+    }
+    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+        .st-key-fecha_ajuste_pill [data-testid="stPopover"] button [data-testid="stIconMaterial"] {
+        color: var(--accent, #6c5ce7) !important;
+        font-size: 15px !important;
+    }
+
+    /* Chips Familia/Subfamilia CENTRADOS en el ancho de la tarjeta
+       (154px izquierda ↔ 131px derecha por el rail 116 + 15). */
+    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+        .st-key-chips_ajuste_tabla {
+        left: calc((154px + (100vw - 131px)) / 2) !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        max-width: calc(100vw - 154px - 131px - 380px) !important;
+    }
+    /* Fondo blanco (en vez del tinte lavanda) para los chips en Compras. */
+    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+        .st-key-chips_ajuste_tabla [data-testid="stPopover"] button {
+        background: #ffffff !important;
+    }
+    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+        .st-key-chips_ajuste_tabla [data-testid="stPopover"] button:hover {
+        background: var(--accent-tint, #EEEDFE) !important;
+    }
+
     /* Panel del popover: se renderiza en un portal (fuera del contenedor),
        así que lo scopeamos por el contenedor keyed interno con :has(). */
     [data-testid="stPopoverBody"]:has(.st-key-fecha_panel) {
