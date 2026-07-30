@@ -568,8 +568,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
            la fila de las etiquetas del eje X. */
         .st-key-win_nav button {
             min-width: 20px !important; width: auto !important;
-            height: 17px !important;
-            min-height: 17px !important;
+            height: 17.5px !important;
+            min-height: 17.5px !important;
             padding: 0 6px !important;
             border-radius: 4px !important;
             border: 0.5px solid rgba(0,0,0,0.06) !important;
