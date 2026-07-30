@@ -492,11 +492,24 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         /* La leyenda se movió a la derecha (vertical); la banda superior solo
            tiene popover (izq) + toggle (der), alineados arriba. */
         .st-key-gran_float {
-            position: absolute; top: 6px; right: 6px; z-index: 5;
+            position: absolute; top: 14px; right: 16px; z-index: 5;
             width: auto !important;
+            /* Aplanar todo lo que Streamlit mete arriba del ButtonGroup
+               (label oculto, padding del stElementContainer). Sin esto el
+               grupo de pills queda ~14px más abajo que la fila de proveedores. */
+            padding: 0 !important; margin: 0 !important;
+            line-height: 0 !important;
+        }
+        .st-key-gran_float [data-testid="stElementContainer"],
+        .st-key-gran_float [data-testid="stElementContainer"] > div,
+        .st-key-gran_float [data-testid="stVerticalBlock"] {
+            padding: 0 !important; margin: 0 !important; gap: 0 !important;
         }
         /* Contenedor de las pills Día/Semana/Mes/Año: solo más delgado,
            sin tocar la fuente ni la ubicación originales. */
+        .st-key-gran_float [data-testid="stButtonGroup"] {
+            margin: 0 !important; padding: 0 !important;
+        }
         .st-key-gran_float [data-testid="stButtonGroup"] button {
             min-height: 0 !important;
             height: auto !important;
