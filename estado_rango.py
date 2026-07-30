@@ -107,6 +107,7 @@ def atajos_rango(hoy, bounds):
 
     lunes = hoy - datetime.timedelta(days=hoy.weekday())
     crudos = [
+        ("todo", "Todo", (min_b, max_b)),
         ("semana", "Esta semana", (lunes, lunes + datetime.timedelta(days=6))),
         ("mes", "Este mes", (hoy.replace(day=1), _fin_de_mes(hoy))),
         ("d30", "Últimos 30 días",
