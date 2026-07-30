@@ -1074,7 +1074,7 @@ def get_css():
     [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
         .st-key-chips_ajuste_tabla [data-testid="stPopover"] button {
         background: #ffffff !important;
-        min-width: 140px !important;
+        min-width: 230px !important;   /* ≈ ancho del widget de fecha */
         padding-right: 22px !important;
         justify-content: flex-start !important;
     }
