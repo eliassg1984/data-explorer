@@ -685,15 +685,26 @@ def get_css():
         padding: 0 !important;
     }
     /* NUCLEAR: cero margin/padding/gap en TODO descendiente del rail excepto
-       el <button> (que abajo recupera su padding real). Cubre stVerticalBlock,
-       stVerticalBlockBorderWrapper, stElementContainer, stButton, .stButton,
-       y las <div> emotion sin data-testid que Streamlit intercala. */
-    .st-key-graf_tipo_chips *:not(button):not(p):not(span):not(.rail-cat-badge):not(.rail-sep) {
+       el <button> y el texto. Especificidad reforzada duplicando la clase del
+       contenedor (.st-key-graf_tipo_chips.st-key-graf_tipo_chips) para ganarle
+       a cualquier regla base de Streamlit con clase única + !important. */
+    .st-key-graf_tipo_chips.st-key-graf_tipo_chips
+        *:not(button):not(p):not(span):not(.rail-cat-badge):not(.rail-sep) {
         margin: 0 !important;
         padding: 0 !important;
         gap: 0 !important;
         row-gap: 0 !important;
         min-height: 0 !important;
+        min-width: 0 !important;
+    }
+    /* El wrapper directo del rail también: sin gap entre hijos (categorías +
+       botones). Streamlit lo aplica al stVerticalBlock, pero el div raíz
+       .st-key-graf_tipo_chips también puede tener display:flex con gap. */
+    .st-key-graf_tipo_chips.st-key-graf_tipo_chips {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0 !important;
+        row-gap: 0 !important;
     }
     /* Cada ítem del rail: botón estilo lista, sin borde ni fondo por defecto.
        Un dot a la izquierda (::before) precede al texto. border-left:3px
