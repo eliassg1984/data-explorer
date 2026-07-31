@@ -788,65 +788,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         }
         .st-key-gran_float [data-testid="stButtonGroup"] button:not(:first-child),
         .st-key-topn_float [data-testid="stButtonGroup"] button:not(:first-child),
-        /* ── Fase 2: tarjetas ricas del Panel B (proveedores del producto). ── */
-        .st-key-chartcard_prov_prov_de_prod .sbc-wrap {
-            display: flex; flex-direction: column; gap: 6px;
-            padding: 4px 0 6px;
-        }
-        .st-key-chartcard_prov_prov_de_prod .sbc {
-            background: #ffffff;
-            border: 0.5px solid var(--border, #e6e6ea);
-            border-radius: 6px;
-            padding: 8px 10px;
-            transition: border-color .12s;
-        }
-        .st-key-chartcard_prov_prov_de_prod .sbc:hover {
-            border-color: var(--border-strong, #c8c8d0);
-        }
-        .st-key-chartcard_prov_prov_de_prod .sbc-line1 {
-            display: flex; align-items: center; gap: 6px;
-            margin-bottom: 4px;
-        }
-        .st-key-chartcard_prov_prov_de_prod .sbc-sw {
-            width: 8px; height: 8px; border-radius: 2px;
-            flex-shrink: 0; display: inline-block;
-        }
-        .st-key-chartcard_prov_prov_de_prod .sbc-name {
-            flex: 1;
-            color: var(--text-primary, #18181d);
-            font-size: 11.5px; font-weight: 500;
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-            min-width: 0;
-        }
-        .st-key-chartcard_prov_prov_de_prod .sbc-total {
-            color: #534AB7;
-            font-size: 11px; font-weight: 500;
-            font-variant-numeric: tabular-nums;
-            flex-shrink: 0;
-        }
-        .st-key-chartcard_prov_prov_de_prod .sbc-line2 {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
-            gap: 3px 8px;
-            font-size: 10px;
-        }
-        .st-key-chartcard_prov_prov_de_prod .sbc-cell {
-            display: flex; flex-direction: column;
-            min-width: 0;
-        }
-        .st-key-chartcard_prov_prov_de_prod .sbc-lab {
-            color: var(--text-muted, #a2a2ad);
-            text-transform: uppercase; letter-spacing: 0.03em;
-            font-size: 8.5px; line-height: 1;
-            margin-bottom: 1px;
-        }
-        .st-key-chartcard_prov_prov_de_prod .sbc-val {
-            font-variant-numeric: tabular-nums;
-            line-height: 1.2;
-            color: var(--text-primary, #18181d);
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-        }
-
         .st-key-panelb_scope_float [data-testid="stButtonGroup"] button:not(:first-child) {
             border-left: 1px solid rgba(49,51,63,0.15) !important;
         }
@@ -1177,10 +1118,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             st.caption("📅 Todo el histórico — ignora el filtro "
                                        "de fecha de arriba.")
                         sub2 = _srcB[_srcB["prod"] == prod_focus]
-                        # Mapa prov→color heredado del ranking del top chart (así
-                        # el swatch de cada card matchea la barra de arriba).
-                        _cmap = {p: PALETA_CALLAI[i % len(PALETA_CALLAI)]
-                                 for i, p in enumerate(orden_provs)}
                         filas = []
                         for prov, grp in sub2.groupby("prov"):
                             g2 = grp
@@ -1191,82 +1128,43 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             ult = (g2["punit"].iloc[-1]
                                    if (col_punit and len(g2)
                                        and pd.notna(g2["punit"].iloc[-1])) else np.nan)
-                            _cant = float(grp["cant"].sum())
-                            _tot = float((grp["punit"] * grp["cant"]).sum()
-                                         if col_punit else 0.0)
                             filas.append({
-                                "prov":     prov,
-                                "precio":   ult,
-                                "fecha":    (_uf.strftime("%d/%m/%Y")
-                                             if _uf is not None else "—"),
-                                "cant":     _cant,
-                                "um":       (_um_de(grp).strip() if col_um else ""),
-                                "total":    _tot,
-                                "color":    _cmap.get(prov, "#888887"),
+                                "Proveedor":     prov,
+                                "Último precio": ult,
+                                "Últ. compra":   (_uf.strftime("%d/%m/%Y")
+                                                  if _uf is not None else "—"),
+                                "Cant. acum.":   grp["cant"].sum(),
+                                "Unid":          (_um_de(grp).strip() if col_um else ""),
                             })
-                        # Orden por cantidad acumulada (comportamiento previo).
-                        filas.sort(key=lambda r: r["cant"], reverse=True)
-                        # Menor precio → resalte verde (comportamiento previo).
-                        _precios = [r["precio"] for r in filas
-                                    if pd.notna(r["precio"])]
-                        _min = min(_precios) if _precios else None
+                        tabla = pd.DataFrame(filas).sort_values("Cant. acum.", ascending=False)
+                        _orden = ["Proveedor", "Último precio", "Últ. compra",
+                                  "Cant. acum.", "Unid"]
+                        if not col_um:
+                            _orden.remove("Unid")
+                            tabla = tabla.drop(columns=["Unid"])
+                        if not col_fecha:
+                            _orden.remove("Últ. compra")
+                            tabla = tabla.drop(columns=["Últ. compra"])
+                        tabla = tabla[_orden]
+                        _min = (tabla["Último precio"].min()
+                                if tabla["Último precio"].notna().any() else None)
 
-                        def _fmt_soles(v):
-                            return (f"S/ {v:,.2f}" if pd.notna(v) else "—")
+                        def _hl(col):
+                            if col.name != "Último precio" or _min is None:
+                                return ["" for _ in col]
+                            return ["color:#15803d;font-weight:600"
+                                    if (pd.notna(v) and v == _min) else "" for v in col]
 
-                        def _fmt_int(v):
-                            return f"{v:,.0f}" if v else "0"
-
-                        _rows_html = []
-                        for r in filas:
-                            _es_min = (_min is not None and pd.notna(r["precio"])
-                                       and r["precio"] == _min)
-                            _precio_html = _fmt_soles(r["precio"])
-                            if _es_min:
-                                _precio_html = (f"<span style='color:#0F6E56;"
-                                                f"font-weight:600'>"
-                                                f"{_precio_html}</span>")
-                            _cells = []
-                            if col_fecha:
-                                _cells.append(
-                                    "<div class='sbc-cell'>"
-                                    "<div class='sbc-lab'>Últ. compra</div>"
-                                    f"<div class='sbc-val'>{r['fecha']}</div>"
-                                    "</div>")
-                            _cells.append(
-                                "<div class='sbc-cell'>"
-                                "<div class='sbc-lab'>Últ. precio</div>"
-                                f"<div class='sbc-val'>{_precio_html}</div>"
-                                "</div>")
-                            _cells.append(
-                                "<div class='sbc-cell'>"
-                                "<div class='sbc-lab'>Cant. acum.</div>"
-                                f"<div class='sbc-val'>{_fmt_int(r['cant'])}</div>"
-                                "</div>")
-                            if col_um:
-                                _cells.append(
-                                    "<div class='sbc-cell'>"
-                                    "<div class='sbc-lab'>UM</div>"
-                                    f"<div class='sbc-val'>{r['um'] or '—'}</div>"
-                                    "</div>")
-                            _rows_html.append(
-                                "<div class='sbc'>"
-                                "  <div class='sbc-line1'>"
-                                f"    <span class='sbc-sw' style='background:{r['color']}'></span>"
-                                f"    <span class='sbc-name' title=\"{r['prov']}\">{r['prov']}</span>"
-                                f"    <span class='sbc-total'>{_fmt_soles(r['total'])}</span>"
-                                "  </div>"
-                                f"  <div class='sbc-line2'>{''.join(_cells)}</div>"
-                                "</div>"
-                            )
-                        st.markdown(
-                            "<div class='sbc-wrap'>"
-                            + "".join(_rows_html) +
-                            "</div>",
-                            unsafe_allow_html=True,
-                        )
-                        st.caption("Último precio = precio unitario de la compra "
-                                   "más reciente. Verde = menor precio.")
+                        sty = (tabla.style
+                               .format({"Último precio": "S/ {:,.2f}",
+                                        "Cant. acum.": "{:,.0f}"},
+                                       na_rep="—")
+                               .apply(_hl, axis=0))
+                        st.dataframe(sty, hide_index=True, use_container_width=True,
+                                     height=min(430, 60 + 34 * len(tabla)),
+                                     key=f"cp_prov_prov_de_prod_tbl_{_pan_inst}")
+                        st.caption("Último precio = precio unitario de la compra más "
+                                   "reciente. Verde = menor precio.")
 
     # -- Pestillo (carrete) + titulo en linea. El SVG del carrete lo pinta el
     #    CSS sobre ::before del boton; aqui solo fijamos la rotacion del estado
