@@ -657,9 +657,13 @@ def get_css():
        solo a los contenedores que sí viven en el flujo del dashboard de
        Compras. Ahora que la franja es transparente el gap se ve mas, por
        eso -100 en vez de -60. */
+    /* Solo la PRIMERA tarjeta sube bajo el rail. En Compras es
+       compras_prov_drill_wrap; en Ajuste (ahora APILADO) es la tarjeta izq
+       (gráfico principal). La tarjeta der (panel de análisis) NO lleva el
+       jalón: va en flujo debajo, y un -68px extra la solaparía con la de
+       arriba. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap,
-    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_izq_compras,
-    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_der_compras {
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_"] {
         margin-top: -68px !important;
     }
 
@@ -858,8 +862,7 @@ def get_css():
         /* Sin el rail fijo arriba, la vieja compensación negativa de las
            tarjetas dejaría un solape: se neutraliza. */
         [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap,
-        [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_izq_compras,
-        [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_der_compras {
+        [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_"] {
             margin-top: 0 !important;
         }
         /* La franja superior ya no debe esquivar el rail (que ya no está a
