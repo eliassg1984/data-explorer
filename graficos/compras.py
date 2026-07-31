@@ -839,7 +839,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-compras_prov_card_docs {
             animation: unfoldDown 0.32s cubic-bezier(0.4, 0, 0.2, 1) backwards;
         }
-        /* Bloque paneles: se despliega hacia la DERECHA (sale del pestillo). */
+        /* Bloque paneles: entra deslizando desde la izquierda al enfocar. */
         @keyframes unfoldRight {
             0%   { opacity: 0; transform: translateX(-14px); }
             100% { opacity: 1; transform: translateX(0); }
@@ -847,13 +847,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         .st-key-compras_prov_card_paneles {
             animation: unfoldRight 0.32s cubic-bezier(0.4, 0, 0.2, 1) backwards;
         }
-        /* ── PILL morado: mismo lenguaje visual para dos botones distintos ──
-           - "Detalle de documentos por proveedor" (latch_docs): pestillo que
-             abre/cierra, con icono de carrete SVG en ::before a la izquierda
-             del label, girado 180deg cuando esta abierto (rotacion inyectada
-             desde Python con <style>).
-           - X del detalle A/B (cp_close_paneles): sin icono. El detalle A/B ya
-             no tiene pestillo — lo abre el clic en la barra y lo cierra la X. */
+        /* ── PESTILLO como PILL: solo queda el de "Detalle de documentos por
+           proveedor" (latch_docs). El boton ES el titulo: clic en cualquier
+           parte del pill abre/cierra. El icono (carrete SVG) va como
+           background-image en ::before, a la izquierda del label, y gira
+           180deg cuando el bloque esta abierto (rotacion inyectada desde
+           Python con <style>). El detalle A/B ya no tiene pestillo ni boton
+           de cerrar: lo abre y lo cierra el clic en la barra. */
         .st-key-docs_row {
             margin: 8px 0 6px;
         }
@@ -861,34 +861,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
            aparte). El margen negativo se come parte del gap de 1rem que el
            bloque vertical de Streamlit mete entre hermanos. */
         .st-key-paneles_row {
-            position: relative !important;
             margin: -10px 0 6px !important;
         }
-        /* X del detalle A/B: gutter izquierdo (el borde superior derecho de la
-           tarjeta ya lo ocupan las pills En rango/Todo del Panel B). */
-        .st-key-paneles_row .st-key-cp_close_paneles {
-            position: absolute !important;
-            left: -50px !important;
-            top: 18px !important;
-            margin: 0 !important; z-index: 5; width: auto !important;
-        }
-        .st-key-cp_close_paneles button {
-            padding: 4px 10px !important; border-radius: 8px !important;
-            min-height: 0 !important; line-height: 1 !important;
-        }
-        .st-key-cp_close_paneles button p {
-            font-size: 15px !important; font-weight: 500 !important;
-            line-height: 1 !important; margin: 0 !important;
-            color: #4d3fb3 !important;
-        }
-        .st-key-cp_close_paneles button:hover p { color: #b02a2a !important; }
-        .st-key-cp_close_paneles,
         .st-key-latch_docs {
             width: auto !important;
             margin: 0 0 8px 0 !important;
             display: inline-block;
         }
-        .st-key-cp_close_paneles button,
         .st-key-latch_docs button {
             display: inline-flex !important;
             align-items: center; justify-content: flex-start;
@@ -903,19 +882,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             cursor: pointer !important;
             transition: background .15s, border-color .15s !important;
         }
-        .st-key-cp_close_paneles button:hover,
         .st-key-latch_docs button:hover {
             background: #e5e0fc !important;
             border-color: #b9adf1 !important;
         }
-        .st-key-cp_close_paneles button:focus,
-        .st-key-cp_close_paneles button:active,
         .st-key-latch_docs button:focus,
         .st-key-latch_docs button:active {
             outline: none !important; box-shadow: none !important;
         }
         /* Label del boton (el <p> que Streamlit inserta): tipografia del titulo. */
-        .st-key-cp_close_paneles button p,
         .st-key-latch_docs button p {
             display: inline !important;
             font-size: 13px !important; font-weight: 500 !important;
@@ -1251,8 +1226,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         st.caption("Último precio = precio unitario de la compra más "
                                    "reciente. Verde = menor precio.")
 
-    # -- Visibilidad del detalle A/B = hay proveedor en foco. Sin pestillo: la
-    #    barra lo abre y la X lo cierra, igual que el drill del mockup.
+    # -- Visibilidad del detalle A/B = hay proveedor en foco. Sin pestillo y sin
+    #    boton de cerrar: la barra lo abre y esa misma barra lo cierra (el
+    #    toggle vive en el procesado de clic, arriba).
     _pan_ab = prov_focus is not None
     # Instance id: se incrementa cada vez que el bloque pasa de cerrado a
     # abierto. Se anade al key de los componentes hijos (plotly / aggrid /
@@ -1265,26 +1241,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     st.session_state["cp_paneles_prev_ab"] = _pan_ab
     _pan_inst = st.session_state.get("cp_paneles_inst", 0)
 
-    def _cp_cerrar_detalle():
-        """X del detalle: limpia el foco -> se cierra A/B y el chart vuelve a
-        360. Tambien limpia `compras_prov_last_click`: sin eso, el dedup de
-        clics (arriba) veria el mismo (proveedor, periodo) al volver a clicar
-        esa barra y descartaria el clic — el detalle no reabriria."""
-        st.session_state["compras_prov_focus"]      = None
-        st.session_state["compras_prov_prodfocus"]  = None
-        st.session_state["compras_prov_perfocus"]   = None
-        st.session_state["compras_prov_last_click"] = None
-
-    # (El CSS de la X y del pegado al chart vive en el <style> estatico de
-    #  arriba. Inyectarlo aqui con un st.markdown propio metia un
-    #  stElementContainer vacio justo entre las dos tarjetas: alto 0, pero el
-    #  gap de 1rem del bloque vertical igual se aplicaba -> ~16px de aire.)
+    # (El CSS del pegado al chart vive en el <style> estatico de arriba.
+    #  Inyectarlo aqui con un st.markdown propio metia un stElementContainer
+    #  vacio justo entre las dos tarjetas: alto 0, pero el gap de 1rem del
+    #  bloque vertical igual se aplicaba -> ~16px de aire.)
     with st.container(key="paneles_row"):
         if _pan_ab:
-            with st.container(key="cp_close_paneles"):
-                st.button("✕", key="cp_btn_cerrar_paneles",
-                          help="Cerrar el detalle y quitar el foco del proveedor",
-                          on_click=_cp_cerrar_detalle)
             _paneles_card()
 
     # ── Tabla pivotable de documentos (debajo de los paneles A/B) ─────────
