@@ -283,11 +283,18 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     _gran_suffix = {"Día": "del Día", "Semana": "de la Semana",
                     "Mes": "del Mes", "Año": "del Año"}.get(gran, "del período")
 
-    # Con un proveedor en foco el chart baja a 180px y la etiqueta de 4 líneas
-    # (valor + variación + docs + % del período) se come ~60px, que es casi
-    # todo el aire de las barras. En foco se recorta a 2 líneas: valor y
-    # variación. Nada se pierde — docs y % siguen en el hover, que ya los trae.
-    _lab_compacta = prov_focus is not None
+    # Etiqueta compacta (recorta docs + % del período, deja valor + variación)
+    # en dos casos:
+    #  · Hay un proveedor en foco → el chart baja a 180px y la etiqueta de 4
+    #    líneas se come casi todo el aire de las barras.
+    #  · Las barras son ANGOSTAS (muchas series y/o períodos) → una etiqueta de
+    #    4 líneas no cabe sobre una barra de ~50px y plotly la recorta, dejando
+    #    solo el valor visible (se veía "incompleta"). El ancho de barra
+    #    estimado (mismo cálculo que la abreviación de nombres, 245px de plot
+    #    útil / nº de barras) por debajo de ~78px activa el modo compacto.
+    # En ambos casos docs y % siguen en el hover, que ya los trae.
+    _ancho_barra_lbl = 245 / max(1, len(_per_vis) * _n_series)
+    _lab_compacta = (prov_focus is not None) or (_ancho_barra_lbl < 78)
 
     def _etiqueta_serie(vals, pct_periodo=None, docs=None):
         """Texto por barra: total SIEMPRE encima + variación vs el período
@@ -370,16 +377,16 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # a la etiqueta de cada barra. El ancho de barra estimado depende de la
     # ventana visible y de la cantidad de series → recalculado en cada render.
     _show_names = st.session_state.get("cp_prov_show_names", True)
-    # Ancho de barra estimado para decidir cuánto abreviar el nombre. El plot
-    # NO mide 1200px (ese era un supuesto de desktop): en móvil ronda 345px y,
-    # descontando el espacio entre barras (~30%), el ancho ÚTIL por barra es
-    # menor. Se usa ~245 como referencia del ancho útil total → en móvil con 3
-    # series cada nombre cae a su primera palabra (legible) en vez de mostrarse
-    # completo y que plotly lo achique para encajarlo. Con 1-2 series (barras
-    # anchas) sigue habiendo sitio para el nombre más largo. En desktop el plot
-    # es más ancho, así que abrevia un poco antes de lo estricto — pero la
-    # leyenda y el hover siempre traen el nombre completo.
-    _ancho_barra_est_px = 245 / max(1, len(_per_vis) * _n_series)
+    # Ancho de barra estimado para decidir cuánto abreviar el nombre (mismo
+    # valor ya calculado arriba para _lab_compacta). El plot NO mide 1200px
+    # (supuesto de desktop): en móvil ronda 345px y, descontando el espacio
+    # entre barras (~30%), el ancho ÚTIL por barra es menor. Con ~245 de
+    # referencia, en móvil con 3 series cada nombre cae a su primera palabra
+    # (legible) en vez de mostrarse completo y que plotly lo achique. Con 1-2
+    # series (barras anchas) sigue habiendo sitio para el nombre más largo. En
+    # desktop el plot es más ancho, así que abrevia un poco antes de lo
+    # estricto — pero la leyenda y el hover siempre traen el nombre completo.
+    _ancho_barra_est_px = _ancho_barra_lbl
     _max_chars = max(0, int(_ancho_barra_est_px / 6.5))  # ~6.5px por char a 11px
     # Totales por período (sobre TODA la base filtrada, no solo los provs
     # seleccionados) para el % de participación en cada barra.
