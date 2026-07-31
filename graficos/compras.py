@@ -1252,7 +1252,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             # que esa grilla dibuja una raya por producto que
                             # cruza el rotulo. Se apaga.
                             figa.update_yaxes(showgrid=False)
-                            figa.update_xaxes(tickprefix="S/ ", tickformat=",.0f")
+                            # Eje X oculto: cada barra ya lleva su valor como
+                            # texto (S/ ... · ... KG), asi que la escala de
+                            # ticks (S/ 0, S/ 20,000...) era redundante y solo
+                            # sumaba ruido al pie del panel.
+                            figa.update_xaxes(visible=False)
                             # bargap = aire entre filas, como fraccion del alto
                             # de fila (22px). 0.35 -> barra de ~14px, mismo
                             # grosor que antes pero con menos aire arriba/abajo.
