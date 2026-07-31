@@ -334,6 +334,18 @@ html body [data-testid="stMain"] { overflow-x: clip !important; }
     html body .block-container {
         padding-top: 108px !important;  /* banda fija (104px) + colchón mínimo */
     }
+    /* Compras: en móvil los filtros Familia/Subfamilia YA NO son fijos (fluyen
+       en el documento), así que la única cosa fija arriba es el pill de fecha
+       (fecha_ajuste_pill, bottom ~50px). La reserva global de 108px deja ~55px
+       de banda vacía bajo la fecha. Se recorta a 58px (fecha 50 + 8 de aire).
+       Scopeado con :has(.st-key-compras_tabs_row) + mayor especificidad (html
+       body + :has) para ganarle a la regla global de arriba. */
+    html body [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+        [data-testid="stMainBlockContainer"],
+    html body [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+        .block-container {
+        padding-top: 58px !important;
+    }
 }
 </style>
 """
