@@ -12,8 +12,8 @@ import streamlit as st
 from tema import ACENTO, GRIS_BORDE, SERIE_PRINCIPAL, TEXTO_PRINCIPAL
 from utils import _norm
 from graficos.base import (
-    PALETA_CALLAI, _card, _compras_layout, _compras_truncar, _resolver, _slug,
-    renderizar_graficos_genericos,
+    PALETA_CALLAI, _card, _compras_layout, _compras_truncar, _render_rail,
+    _resolver, _slug, renderizar_graficos_genericos,
 )
 from graficos.constructor import _constructor_grafico
 
@@ -2427,11 +2427,6 @@ _COMPRAS_RAIL_SVG_CART = (
 )
 
 
-def _compras_set_graf(opcion_id):
-    """Callback de los botones del rail: setea la selección ANTES del rerun."""
-    st.session_state["compras_graf_tipo"] = opcion_id
-
-
 def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
     """Dashboard dedicado de Compras: 5 gráficos con pestañas + 5 mini-tops."""
     col_fam    = _resolver(df_f, ["Familia", "Nombre Familia"])
@@ -2528,38 +2523,10 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
                 "Cantidad por producto",
                 "Semanal", "Vs año anterior", "Personalizado", "Tabla"]
 
-    # Rail vertical fijo pegado al borde DERECHO (estilos.py): cabecera
-    # "Compras / Gráficos" + secciones agrupadas por categoría con dot delante
-    # de cada ítem. El activo lo marca `type="primary"` (accent-light + barra
-    # izquierda). La selección se persiste en compras_graf_tipo vía on_click,
-    # que corre antes del rerun.
-    sel_actual = st.session_state.get("compras_graf_tipo", opciones[0])
-    if sel_actual not in opciones:
-        sel_actual = opciones[0]
-        st.session_state["compras_graf_tipo"] = sel_actual
-    with st.container(key="compras_tabs_row"):
-        # Cabecera del rail (icono + "Compras / Gráficos") eliminada: el rail
-        # arranca directo con la primera categoria para ganar aire vertical.
-        with st.container(key="graf_tipo_chips"):
-            for i, (cat_nombre, items) in enumerate(_COMPRAS_RAIL_CATEGORIAS):
-                st.markdown(
-                    f'<div class="rail-cat-badge">{cat_nombre}</div>',
-                    unsafe_allow_html=True,
-                )
-                for opcion_id, opcion_label in items:
-                    slug = _slug(opcion_id)
-                    st.button(
-                        opcion_label,
-                        key=f"graf_btn_{slug}",
-                        type=("primary" if opcion_id == sel_actual
-                              else "secondary"),
-                        use_container_width=True,
-                        on_click=_compras_set_graf, args=(opcion_id,),
-                    )
-                if i < len(_COMPRAS_RAIL_CATEGORIAS) - 1:
-                    st.markdown('<div class="rail-sep"></div>',
-                                unsafe_allow_html=True)
-    graf = st.session_state.get("compras_graf_tipo", opciones[0])
+    # Rail vertical fijo al borde DERECHO (componente compartido _render_rail):
+    # selector de tipo de gráfico agrupado por categoría. El activo se marca
+    # con type="primary"; la selección se persiste en compras_graf_tipo.
+    graf = _render_rail(_COMPRAS_RAIL_CATEGORIAS, "compras_graf_tipo")
     if graf not in opciones:
         graf = opciones[0]
 

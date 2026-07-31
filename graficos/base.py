@@ -25,6 +25,60 @@ def _slug(texto):
     return re.sub(r"\W+", "_", str(texto)).strip("_").lower()
 
 
+def _rail_set(state_key, opcion_id):
+    """Callback de los botones del rail: fija la selección ANTES del rerun."""
+    st.session_state[state_key] = opcion_id
+
+
+def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
+    """Rail vertical fijo al borde DERECHO — selector de tipo de gráfico.
+
+    Componente COMPARTIDO: es el layout estándar de los dashboards (Compras,
+    Ajuste, …). El rail, la franja superior, la posición de la fecha y el
+    padding del contenido los activa el CSS de estilos.py scopeado a
+    `:has(.st-key-compras_tabs_row)`. Esa key es HISTÓRICA (nació en Compras)
+    pero hoy es LA KEY DEL RAIL COMPARTIDO — no renombrar sin actualizar sus
+    ~40 referencias en estilos.py/navegacion.py.
+
+    Parámetros
+      · categorias: `((nombre_categoria, ((id, label), …)), …)`. `nombre` puede
+        ser "" para omitir el badge de categoría (rail plano de una sección).
+      · state_key: clave de session_state donde se persiste la selección.
+      · btn_prefix: prefijo de las keys de los botones (único por reporte si dos
+        rails pudieran coexistir; hoy solo hay un reporte activo por vez).
+
+    Devuelve el id de la opción seleccionada (persistida en session_state, así
+    sobrevive al rerun del clic sin doble render).
+    """
+    _todos = [oid for _, items in categorias for oid, _ in items]
+    if not _todos:
+        return None
+    sel = st.session_state.get(state_key)
+    if sel not in _todos:
+        sel = _todos[0]
+        st.session_state[state_key] = sel
+    with st.container(key="compras_tabs_row"):
+        with st.container(key="graf_tipo_chips"):
+            for i, (cat_nombre, items) in enumerate(categorias):
+                if cat_nombre:
+                    st.markdown(
+                        f'<div class="rail-cat-badge">{cat_nombre}</div>',
+                        unsafe_allow_html=True,
+                    )
+                for oid, label in items:
+                    st.button(
+                        label,
+                        key=f"{btn_prefix}{_slug(oid)}",
+                        type=("primary" if oid == sel else "secondary"),
+                        use_container_width=True,
+                        on_click=_rail_set, args=(state_key, oid),
+                    )
+                if i < len(categorias) - 1:
+                    st.markdown('<div class="rail-sep"></div>',
+                                unsafe_allow_html=True)
+    return st.session_state.get(state_key, _todos[0])
+
+
 @contextmanager
 def _card(key, titulo: str = "", titulo_arriba: bool = False):
     """Card nativo para un gráfico. `key` debe ser único por rerun.
