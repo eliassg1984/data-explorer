@@ -1160,6 +1160,23 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         st.markdown(f"<style>{_anim_css}</style>", unsafe_allow_html=True)
         st.session_state["cp_chart_alto_prev"] = _alto_chart
 
+        # Config del chart. En DESKTOP el modebar va oculto (vista BI limpia).
+        # En MÓVIL se activa el modebar pero SOLO para conservar el botón de
+        # pantalla completa (⛶) que Streamlit inyecta en él: se quitan todos los
+        # botones estándar de Plotly (zoom/pan/lasso/descarga…) y queda el ⛶.
+        # Tocándolo el gráfico llena la pantalla; girando el teléfono a
+        # horizontal las etiquetas caben holgadas y el hover trae el detalle.
+        # displaylogo off para no meter el logo de Plotly.
+        _cfg_chart = {"edits": {"legendPosition": True}, "displaylogo": False}
+        if _es_movil():
+            _cfg_chart["displayModeBar"] = True
+            _cfg_chart["modeBarButtonsToRemove"] = [
+                "zoom2d", "pan2d", "select2d", "lasso2d", "zoomIn2d",
+                "zoomOut2d", "autoScale2d", "resetScale2d", "toImage",
+            ]
+        else:
+            _cfg_chart["displayModeBar"] = False
+
         # Chart siempre responsive al contenedor (estándar BI). La densidad se
         # controla con la ventana de periodos (server-side) + flechas de
         # navegación — nunca scroll horizontal externo ni zoom client-side.
@@ -1172,8 +1189,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 selection_mode="points",
                 # edits.legendPosition: permite ARRASTRAR la leyenda con el cursor.
                 # Ojo: la posición no persiste (al reejecutar vuelve a y=0.82).
-                config={"displayModeBar": False,
-                        "edits": {"legendPosition": True}},
+                config=_cfg_chart,
             )
         # Navegacion de la ventana de periodos. El indice y el tamano viven en
         # session_state, asi que clicar una barra NO los mueve. El popover
