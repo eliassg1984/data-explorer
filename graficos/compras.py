@@ -840,10 +840,34 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
              desde Python con <style>).
            - X del detalle A/B (cp_close_paneles): sin icono. El detalle A/B ya
              no tiene pestillo — lo abre el clic en la barra y lo cierra la X. */
-        .st-key-paneles_row,
         .st-key-docs_row {
             margin: 8px 0 6px;
         }
+        /* El detalle A/B va PEGADO al chart (es su continuacion, no un bloque
+           aparte). El margen negativo se come parte del gap de 1rem que el
+           bloque vertical de Streamlit mete entre hermanos. */
+        .st-key-paneles_row {
+            position: relative !important;
+            margin: -10px 0 6px !important;
+        }
+        /* X del detalle A/B: gutter izquierdo (el borde superior derecho de la
+           tarjeta ya lo ocupan las pills En rango/Todo del Panel B). */
+        .st-key-paneles_row .st-key-cp_close_paneles {
+            position: absolute !important;
+            left: -50px !important;
+            top: 18px !important;
+            margin: 0 !important; z-index: 5; width: auto !important;
+        }
+        .st-key-cp_close_paneles button {
+            padding: 4px 10px !important; border-radius: 8px !important;
+            min-height: 0 !important; line-height: 1 !important;
+        }
+        .st-key-cp_close_paneles button p {
+            font-size: 15px !important; font-weight: 500 !important;
+            line-height: 1 !important; margin: 0 !important;
+            color: #4d3fb3 !important;
+        }
+        .st-key-cp_close_paneles button:hover p { color: #b02a2a !important; }
         .st-key-cp_close_paneles,
         .st-key-latch_docs {
             width: auto !important;
@@ -962,21 +986,22 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # ya es el final. overflow:hidden solo hace falta al CRECER (el chart
         # grande desbordaria); al encoger el wrapper solo sobra aire, y evitarlo
         # deja los tooltips de plotly sin recortar.
+        # El st.markdown se emite SIEMPRE (con <style> vacio si no toca animar):
+        # un elemento condicional cambiaria la cuenta de hijos del bloque y el
+        # gap de 1rem haria saltar la tarjeta 16px al enfocar/desenfocar.
         _alto_prev = st.session_state.get("cp_chart_alto_prev", _alto_chart)
+        _anim_css = ""
         if _alto_prev != _alto_chart:
             st.session_state["cp_chart_anim_n"] = (
                 st.session_state.get("cp_chart_anim_n", 0) + 1)
             _an = st.session_state["cp_chart_anim_n"]
             _ovf = ("overflow:hidden;" if _alto_chart > _alto_prev else "")
-            st.markdown(
-                f"<style>"
+            _anim_css = (
                 f"@keyframes cpChartH{_an}{{"
                 f"from{{height:{_alto_prev}px;}}to{{height:{_alto_chart}px;}}}}"
                 f".st-key-cp_chart_wrap{{{_ovf}"
-                f"animation:cpChartH{_an} .35s cubic-bezier(.2,.7,.2,1);}}"
-                f"</style>",
-                unsafe_allow_html=True,
-            )
+                f"animation:cpChartH{_an} .35s cubic-bezier(.2,.7,.2,1);}}")
+        st.markdown(f"<style>{_anim_css}</style>", unsafe_allow_html=True)
         st.session_state["cp_chart_alto_prev"] = _alto_chart
 
         # Chart siempre responsive al contenedor (estándar BI). La densidad se
@@ -1236,30 +1261,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         st.session_state["compras_prov_perfocus"]   = None
         st.session_state["compras_prov_last_click"] = None
 
-    # La X vive en el gutter izquierdo (donde estaba el pestillo): el borde
-    # superior derecho de la tarjeta ya lo ocupan las pills En rango/Todo del
-    # Panel B (panelb_scope_float, absolute a right:12px).
-    st.markdown("""
-        <style>
-        .st-key-paneles_row { position: relative !important; }
-        .st-key-paneles_row .st-key-cp_close_paneles {
-            position: absolute !important;
-            left: -50px !important;
-            top: 18px !important;
-            margin: 0 !important; z-index: 5; width: auto !important;
-        }
-        .st-key-cp_close_paneles button {
-            padding: 4px 10px !important; border-radius: 8px !important;
-            min-height: 0 !important; line-height: 1 !important;
-        }
-        .st-key-cp_close_paneles button p {
-            font-size: 15px !important; font-weight: 500 !important;
-            line-height: 1 !important; margin: 0 !important;
-            color: #4d3fb3 !important;
-        }
-        .st-key-cp_close_paneles button:hover p { color: #b02a2a !important; }
-        </style>
-    """, unsafe_allow_html=True)
+    # (El CSS de la X y del pegado al chart vive en el <style> estatico de
+    #  arriba. Inyectarlo aqui con un st.markdown propio metia un
+    #  stElementContainer vacio justo entre las dos tarjetas: alto 0, pero el
+    #  gap de 1rem del bloque vertical igual se aplicaba -> ~16px de aire.)
     with st.container(key="paneles_row"):
         if _pan_ab:
             with st.container(key="cp_close_paneles"):
