@@ -966,6 +966,50 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22' fill='none'><circle cx='11' cy='11' r='3' fill='%236c5ce7'/><ellipse cx='11' cy='4' rx='5' ry='2.5' fill='%236c5ce7' opacity='.85'/><ellipse cx='11' cy='18' rx='5' ry='2.5' fill='%236c5ce7' opacity='.85'/><rect x='8' y='4' width='6' height='14' fill='%236c5ce7' opacity='.45' rx='1'/><line x1='11' y1='4' x2='11' y2='18' stroke='%23ffffff' stroke-width='1' opacity='.4'/><line x1='11' y1='4' x2='6.5' y2='3' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='4' x2='15.5' y2='3' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='18' x2='6.5' y2='19' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='18' x2='15.5' y2='19' stroke='%23ffffff' stroke-width='.8' opacity='.5'/></svg>");
             transition: transform .55s cubic-bezier(.4, 0, .2, 1);
         }
+
+        /* ══════════════════════════════════════════════════════════════
+           MÓVIL: los controles flotantes de este drill son position:absolute
+           sobre las tarjetas — pensados para desktop. En viewport angosto se
+           enciman con el título de su tarjeta o desbordan el ancho. Se sacan
+           del posicionamiento absoluto y fluyen como una fila propia bajo el
+           título/gráfico. Nada se encima; a cambio la tarjeta crece un poco
+           en alto, barato en móvil.
+           ── Dos breakpoints, por qué distintos:
+           · Paneles A/B viven en st.columns(2), que colapsa a 1 columna recién
+             por debajo de ~640px. ENTRE 640 y 900px cada panel es media
+             pantalla y su título + los 5 pills ya no caben en la cabecera →
+             el fix de topn_float/panelb_scope_float aplica desde 900px.
+           · El gráfico principal (y su win_nav / floats de tope) es de ancho
+             completo: solo se aprieta de verdad por debajo de ~640px.
+           ══════════════════════════════════════════════════════════════ */
+        @media (max-width: 900px) {
+            /* Panel A: Rango/Selección + 5/10/20 — bajo el título.
+               Panel B: En rango/Todo — bajo el título. */
+            .st-key-topn_float,
+            .st-key-panelb_scope_float {
+                position: static !important;
+                height: auto !important;
+                width: 100% !important;
+                margin: 2px 0 6px !important;
+                justify-content: flex-start !important;
+            }
+        }
+        @media (max-width: 640px) {
+            /* Navegación de periodos: fluye bajo el gráfico y puede envolver
+               en dos filas en vez de cortarse. */
+            .st-key-win_nav {
+                position: static !important;
+                width: 100% !important;
+                margin: 4px 0 0 0 !important;
+                flex-wrap: wrap !important;
+                justify-content: flex-start !important;
+            }
+            /* Los dos floats del tope del gráfico (popover Proveedores a la
+               izq. y pills de periodo a la der.) sí caben, pero se bajan un
+               poco para no montar la leyenda en anchos muy chicos. */
+            .st-key-prov_pop_float { top: 8px !important; left: 8px !important; }
+            .st-key-gran_float { top: 8px !important; right: 8px !important; }
+        }
         </style>
     """, unsafe_allow_html=True)
 
