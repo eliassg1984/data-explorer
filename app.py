@@ -17,7 +17,7 @@ from estado_rango import (
     clave_rango, asegurar_rango, debug_estado_rango,
     atajos_rango, aplicar_atajo,
 )
-from inyecciones import inject_error_overlay, inject_element_inspector, inject_footer_actualizacion, inject_calendario_es
+from inyecciones import inject_error_overlay, inject_element_inspector, inject_footer_actualizacion, inject_calendario_es, inject_fullscreen_app
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_aggrid_compras
 from graficos import renderizar_graficos_reporte, render_vista_pills
 from asistente import inject_asistente
@@ -57,6 +57,7 @@ inject_css()
 inject_error_overlay()
 inject_element_inspector()
 inject_calendario_es()
+inject_fullscreen_app()   # botón ⛶ pantalla completa (móvil)
 
 perf.start()                                                                # ⚡ PERF
 

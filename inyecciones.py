@@ -1106,6 +1106,72 @@ def inject_pagination_v2():
 
 
 # ===========================================================================
+# BOTÓN PANTALLA COMPLETA DE LA APP (Fullscreen API sobre documentElement)
+# ===========================================================================
+
+def inject_fullscreen_app():
+    """Botón flotante ⛶ que pone TODA la webapp en pantalla completa — el
+    equivalente web de F11 (Fullscreen API sobre document.documentElement).
+    Un toque entra, otro toque o Esc sale. Solo visible en móvil (en desktop ya
+    está F11 del teclado). Android y desktop lo soportan; iPhone Safari NO
+    (limitación de Apple) → ahí no hay efecto. Mismo patrón que
+    inject_maximize_aggrid, pero sobre el documento padre completo en vez del
+    iframe de la tabla: el botón vive en el padre y su onclick pide fullscreen
+    del documentElement (la activación de usuario del clic es válida)."""
+    components.html("""
+    <script>
+    (function(){
+      var win = window.parent, doc = win.document;
+      var BTN = 'app-fs-btn', STY = 'app-fs-style', tries = 0, MAX = 40;
+      function fsOn(){ return doc.fullscreenElement || doc.webkitFullscreenElement || null; }
+      function toggle(){
+        if (fsOn()){
+          var ex = doc.exitFullscreen || doc.webkitExitFullscreen;
+          if (ex) ex.call(doc);
+          return;
+        }
+        var el = doc.documentElement;
+        var req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (req) req.call(el);
+      }
+      function ensureStyle(){
+        if (doc.getElementById(STY)) return;
+        var s = doc.createElement('style'); s.id = STY;
+        s.textContent =
+          '#' + BTN + '{position:fixed;z-index:2147483000;' +
+          'bottom:calc(var(--nav-movil-alto,60px) + 12px);left:12px;' +
+          'width:40px;height:40px;padding:0;border:none;border-radius:50%;' +
+          'cursor:pointer;background:#6c5ce7;color:#fff;font-size:18px;' +
+          'line-height:40px;text-align:center;display:none;' +
+          'box-shadow:0 3px 10px rgba(76,60,180,.35);}' +
+          '#' + BTN + ':active{transform:scale(.94);}' +
+          '@media (max-width:900px){#' + BTN + '{display:block;}}';
+        doc.head.appendChild(s);
+      }
+      function ensureBtn(){
+        if (doc.getElementById(BTN)) return;
+        var b = doc.createElement('button');
+        b.id = BTN; b.type = 'button';
+        b.title = 'Pantalla completa';
+        b.setAttribute('aria-label', 'Pantalla completa');
+        b.innerHTML = '\\u26F6';
+        b.onclick = toggle;
+        doc.body.appendChild(b);
+        doc.addEventListener('fullscreenchange', function(){
+          b.innerHTML = fsOn() ? '\\u2715' : '\\u26F6';
+        });
+      }
+      function check(){
+        if (doc.body && doc.head){ ensureStyle(); ensureBtn(); }
+        else if (tries++ < MAX) setTimeout(check, 250);
+      }
+      check();
+    })();
+    </script>
+    """, height=0)
+
+
+# ===========================================================================
 # BOTÓN MAXIMIZAR AGGRID — TODOS LOS REPORTES (NUEVA VERSIÓN CON FULLSCREEN API)
 # ===========================================================================
 
