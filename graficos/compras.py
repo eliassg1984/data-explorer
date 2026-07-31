@@ -457,7 +457,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             hovertemplate="Otros · %{x}<br>S/ %{y:,.0f}<extra></extra>",
         )
 
-    _compras_layout(fig, alto=360)
+    # Alto del chart principal: se encoge cuando hay un proveedor en foco para
+    # dar aire al detalle de abajo. El figure se dibuja YA al alto final; la
+    # transicion la hace el wrapper (ver _cp_anim_css mas abajo).
+    _alto_chart = 220 if prov_focus is not None else 360
+    _compras_layout(fig, alto=_alto_chart)
     fig.update_layout(
 
         barmode="group",
@@ -568,8 +572,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             line-height: 1.4;
         }
         .st-key-gran_float [data-testid="stElementToolbar"] { display: none; }
-        /* Ocultar la barra de herramientas del propio gráfico (fullscreen) */
-        .st-key-compras_prov_card_chart > div > [data-testid="stElementToolbar"] { display: none; }
+        /* Ocultar la barra de herramientas del propio gráfico (fullscreen).
+           Sin `> div >`: el chart vive dentro de cp_chart_wrap (un nivel más
+           abajo) y el selector directo dejaba de matchear. */
+        .st-key-compras_prov_card_chart [data-testid="stElementToolbar"] { display: none; }
+        /* Wrapper del chart: solo existe para animar el alto (ver más abajo).
+           Aplanado para no meter aire extra dentro de la tarjeta. */
+        .st-key-cp_chart_wrap {
+            padding: 0 !important; margin: 0 !important; gap: 0 !important;
+        }
 
         /* Leyenda del gráfico Plotly: totalmente transparente en reposo. Solo
            se hace opaca cuando el cursor pasa DIRECTO sobre la leyenda (no
@@ -927,20 +938,57 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         with st.container(key="gran_float"):
             st.pills("Periodo", ["Día", "Semana", "Mes", "Año"], default="Mes",
                      key="compras_prov_gran", label_visibility="collapsed")
+        # -- Transicion del alto del chart (360 <-> 220) ---------------------
+        # Plotly reescribe el SVG con el alto nuevo de golpe: entre 360 y 220 no
+        # hay estado intermedio que el navegador pueda interpolar, y `transition`
+        # no sirve (el alto lo escribe plotly.js inline en px, y el wrapper esta
+        # en height:auto, que no es animable). Lo que SI se anima es el hueco:
+        # el figure se dibuja ya al alto final y el wrapper colapsa de un alto al
+        # otro con @keyframes (declara ambos extremos, no necesita valor previo).
+        # El ojo lee "el chart se encogio y el detalle subio".
+        #
+        # Dos condiciones para que funcione:
+        #  1) nombre de animacion UNICO por transicion. El key de plotly es
+        #     estable (ver arriba), asi que el nodo no se remonta; reaplicar el
+        #     mismo animation-name a un nodo vivo no reinicia nada.
+        #  2) emitir el CSS SOLO en el rerun donde el alto cambio. Si no, cada
+        #     clic en un producto del Panel A repetiria el encogido.
+        # Sin `forwards`: al terminar, el wrapper vuelve a su alto natural, que
+        # ya es el final. overflow:hidden solo hace falta al CRECER (el chart
+        # grande desbordaria); al encoger el wrapper solo sobra aire, y evitarlo
+        # deja los tooltips de plotly sin recortar.
+        _alto_prev = st.session_state.get("cp_chart_alto_prev", _alto_chart)
+        if _alto_prev != _alto_chart:
+            st.session_state["cp_chart_anim_n"] = (
+                st.session_state.get("cp_chart_anim_n", 0) + 1)
+            _an = st.session_state["cp_chart_anim_n"]
+            _ovf = ("overflow:hidden;" if _alto_chart > _alto_prev else "")
+            st.markdown(
+                f"<style>"
+                f"@keyframes cpChartH{_an}{{"
+                f"from{{height:{_alto_prev}px;}}to{{height:{_alto_chart}px;}}}}"
+                f".st-key-cp_chart_wrap{{{_ovf}"
+                f"animation:cpChartH{_an} .35s cubic-bezier(.2,.7,.2,1);}}"
+                f"</style>",
+                unsafe_allow_html=True,
+            )
+        st.session_state["cp_chart_alto_prev"] = _alto_chart
+
         # Chart siempre responsive al contenedor (estándar BI). La densidad se
         # controla con la ventana de periodos (server-side) + flechas de
         # navegación — nunca scroll horizontal externo ni zoom client-side.
-        st.plotly_chart(
-            fig,
-            use_container_width=True,
-            key=_chart_key,
-            on_select="rerun",
-            selection_mode="points",
-            # edits.legendPosition: permite ARRASTRAR la leyenda con el cursor.
-            # Ojo: la posición no persiste (al reejecutar vuelve a y=0.82).
-            config={"displayModeBar": False,
-                    "edits": {"legendPosition": True}},
-        )
+        with st.container(key="cp_chart_wrap"):
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                key=_chart_key,
+                on_select="rerun",
+                selection_mode="points",
+                # edits.legendPosition: permite ARRASTRAR la leyenda con el cursor.
+                # Ojo: la posición no persiste (al reejecutar vuelve a y=0.82).
+                config={"displayModeBar": False,
+                        "edits": {"legendPosition": True}},
+            )
         # Navegacion de la ventana de periodos. El indice y el tamano viven en
         # session_state, asi que clicar una barra NO los mueve. El popover
         # central muestra cuantas agrupaciones se ven y permite cambiarlo.
