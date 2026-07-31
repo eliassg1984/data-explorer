@@ -1239,6 +1239,14 @@ def get_css():
             width: auto !important;
             min-width: 0 !important;
         }
+        /* Apretar el aire vertical entre la fecha (fija arriba) y la fila de
+           filtros. En producción el gap es ~32px; se jala la fila hacia arriba
+           con margen negativo para dejar ~14px, sin tocar la fecha (bottom
+           ~50px). Arrastra también todo lo de abajo → el gráfico sube. */
+        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+            .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
+            margin-top: -18px !important;
+        }
     }
 
     /* Panel del popover: se renderiza en un portal (fuera del contenedor),
