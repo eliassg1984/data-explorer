@@ -415,8 +415,11 @@ if True:
         with col_titulo:
             # Título oculto por pedido: en su lugar van las pestañas
             # Gráficos/Tabla (misma key vista_seg_<reporte> → mismo estado).
-            # Requerimientos no tiene esas pestañas.
-            if reporte != "Requerimientos" and reporte != "Compras":
+            # Requerimientos no las tiene. Compras y Ajuste usan el RAIL
+            # derecho (la "Tabla" es un item del rail), así que tampoco
+            # dibujan estas pills.
+            if reporte not in ("Requerimientos", "Compras",
+                               "Ajuste de Inventario"):
                 render_vista_pills(reporte, default=_vista_default)
         with col_fecha_top:
             if _franja_con_fecha:
@@ -849,19 +852,25 @@ def _render_contenido():
     elif reporte == "Requerimientos":
         _render_requerimientos(df_f, col_fecha, grupos_sel, cols_mostrar, font_px, cfg)
 
-    # ── RESTO DE REPORTES (incluye Ajuste de Inventario) ────────────────────
+    # ── AJUSTE DE INVENTARIO — layout con rail derecho (como Compras) ───────
+    elif reporte == "Ajuste de Inventario":
+        # Sin pills Gráficos/Tabla: el rail (dentro de graficos/ajuste.py) es
+        # el selector, y "Tabla" es un item más. La tabla la sabe armar app.py
+        # (usa cols_mostrar/font_px/etc.), así que se inyecta como callback:
+        # el rail decide CUÁNDO mostrarla, app.py CÓMO.
+        def _ajuste_tabla_cb():
+            df_tabla = _filtros_chips_franja(df_f)
+            if df_tabla.empty:
+                st.info("Ningún registro coincide con los filtros seleccionados.")
+            else:
+                _render_tabla(df_tabla)
+
+        renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df,
+                                    tabla_cb=_ajuste_tabla_cb)
+
+    # ── RESTO DE REPORTES (Salidas, R. Base, R. Venta, Ventas, …) ──────────
     else:
-        if True:
-            # ── Ajuste de Inventario — cabecera completa DENTRO del fragment ─
-            #
-            # Toda la lógica de layout (tabs + segmented) vive aquí para que
-            # el fragment sea autónomo. La fecha se ha movido a la franja
-            # superior (fuera del fragmento) para que siempre esté visible.
-
-            # 1) Auto-detectar ámbito (Del periodo / Histórico) según rango.
-            # 2) El selector Tabla/Gráficos se dibuja arriba, en la franja.
-            vista = st.session_state.get(f"vista_seg_{reporte}", _vista_default) or _vista_default
-
+        vista = st.session_state.get(f"vista_seg_{reporte}", _vista_default) or _vista_default
         if vista == "Tabla":
             df_tabla = _filtros_chips_franja(df_f)
             if df_tabla.empty:

@@ -20,7 +20,23 @@ from tema import (
     PALETA_SERIES, SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
 )
 from graficos.base import (
-    _card, _layout, _resolver, _slug, _wrap_cat, renderizar_graficos_genericos,
+    _card, _layout, _render_rail, _resolver, _slug, _wrap_cat,
+    renderizar_graficos_genericos,
+)
+
+
+# Rail derecho de Ajuste (mismo componente compartido que Compras). El id
+# (izquierda) es el string que consume el dispatch de gráficos; el label
+# (derecha) es lo que se pinta en el botón. "Tabla" es un item más del rail
+# (misma idea que Compras): al elegirlo se renderiza la tabla AgGrid vía el
+# callback `tabla_cb` que inyecta app.py.
+_AJUSTE_RAIL_CATEGORIAS = (
+    ("Composición", (("Cascada",        "Cascada"),
+                     ("Mapa de calor",  "Mapa de calor"),
+                     ("Distribución",   "Distribución"))),
+    ("Tiempo",      (("Evolución",           "Evolución"),
+                     ("Comparativa mensual", "Comparativa"))),
+    ("Datos",       (("Tabla",          "Tabla"),)),
 )
 
 
@@ -561,9 +577,9 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             st.dataframe(out_df, hide_index=True, use_container_width=True)
 
 
-def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
+def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None):
     """
-    Gráficos de Ajuste de Inventario — layout de dos contenedores.
+    Gráficos de Ajuste de Inventario — layout con rail derecho (estándar).
 
     Estructura:
       · Filtros Área y Familia como st.multiselect (dropdowns colapsados),
@@ -599,6 +615,24 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
             "Mostrando explorador genérico."
         )
         renderizar_graficos_genericos(df_f, nombre_reporte)
+        return
+
+    # ── Rail derecho (selector de gráfico + "Tabla") ─────────────────────
+    # Reemplaza a las pills Gráficos/Tabla (que app.py ya no dibuja para
+    # Ajuste) y a las pills de tipo de gráfico que vivían dentro de la
+    # tarjeta. Mismo componente compartido que Compras.
+    graf = _render_rail(_AJUSTE_RAIL_CATEGORIAS, "ajuste_graf_tipo",
+                        btn_prefix="aj_rail_btn_")
+
+    # "Tabla" = item del rail: se delega en el callback que inyecta app.py
+    # (renderiza sus 4 chips propios + la AgGrid). El rail ya quedó dibujado
+    # arriba, así que el usuario puede volver a un gráfico. Corta acá para no
+    # dibujar los chips/gráficos de la vista Gráficos.
+    if graf == "Tabla":
+        if tabla_cb is not None:
+            tabla_cb()
+        else:
+            st.info("La tabla no está disponible en este contexto.")
         return
 
     # ── Ámbito: se lee de session_state; app.py es la fuente de verdad ───
@@ -674,56 +708,36 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None):
         st.info("No hay datos para los filtros seleccionados.")
         return
 
-    # ── Opciones de gráfico según ámbito (SIN iconos, punto 3) ───────────
-    opciones = [
-        "Cascada", "Mapa de calor", "Distribución",
-        "Evolución", "Comparativa mensual",
-    ]
+    # ── LAYOUT APILADO (estándar rail): gráfico principal ARRIBA, panel de
+    #    análisis ABAJO. El tipo de gráfico ya lo eligió el rail (`graf`); las
+    #    pills de tipo que vivían dentro de la tarjeta se eliminaron. Las keys
+    #    siguen empezando con "ajuste_graf_card_" para heredar su CSS.
+    _card_izq = st.container(
+        border=True, key=f"ajuste_graf_card_izq_{_slug(ambito)}",
+    )
+    with _card_izq:
+        # Render del gráfico elegido en el rail (solo uno por rerun)
+        if graf == "Evolución":
+            _graf_evolucion_ajuste(d, col_fecha, col_familia,
+                                   col_ajuste_val, col_valorizado)
+        elif graf == "Comparativa mensual":
+            _graf_comparativa_mensual(d, col_fecha, col_ajuste_val)
+        elif graf == "Cascada":
+            _graf_waterfall_ajuste(d, col_familia, col_area, col_ajuste_val,
+                                   col_producto=col_producto,
+                                   col_valorizado=col_valorizado,
+                                   col_cantidad=col_cantidad)
+        elif graf == "Mapa de calor":
+            _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val)
+        elif graf == "Distribución":
+            _graf_distribucion_ajuste(d, col_familia, col_area,
+                                      col_ajuste_val, col_producto)
 
-    # ── DOS CONTENEDORES BLANCOS lado a lado ─────────────────────────────
-    # Las keys empiezan con "ajuste_graf_card_", así el selector
-    # div[class*="st-key-ajuste_graf_card_"] de estilos.py las cubre.
-    col_izq, col_der = st.columns([1.7, 1])
-
-    with col_izq:
-        _card_izq = st.container(
-            border=True, key=f"ajuste_graf_card_izq_{_slug(ambito)}",
+    _card_der = st.container(
+        border=True, key=f"ajuste_graf_card_der_{_slug(ambito)}",
+    )
+    with _card_der:
+        _panel_analisis_ajuste(
+            d, col_familia, col_area, col_ajuste_val,
+            col_producto, col_valorizado, col_cantidad, ambito,
         )
-        with _card_izq:
-            # Chips de tipo de gráfico DENTRO del contenedor, arriba
-            graf = st.pills(
-                "Gráfico",
-                opciones,
-                default=opciones[0],
-                key=f"ajuste_graf_tipo_{ambito}",
-                label_visibility="collapsed",
-            )
-            if not graf:
-                graf = opciones[0]
-
-            # Render del gráfico elegido (solo uno por rerun)
-            if graf == "Evolución":
-                _graf_evolucion_ajuste(d, col_fecha, col_familia,
-                                       col_ajuste_val, col_valorizado)
-            elif graf == "Comparativa mensual":
-                _graf_comparativa_mensual(d, col_fecha, col_ajuste_val)
-            elif graf == "Cascada":
-                _graf_waterfall_ajuste(d, col_familia, col_area, col_ajuste_val,
-                                       col_producto=col_producto,
-                                       col_valorizado=col_valorizado,
-                                       col_cantidad=col_cantidad)
-            elif graf == "Mapa de calor":
-                _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val)
-            elif graf == "Distribución":
-                _graf_distribucion_ajuste(d, col_familia, col_area,
-                                          col_ajuste_val, col_producto)
-
-    with col_der:
-        _card_der = st.container(
-            border=True, key=f"ajuste_graf_card_der_{_slug(ambito)}",
-        )
-        with _card_der:
-            _panel_analisis_ajuste(
-                d, col_familia, col_area, col_ajuste_val,
-                col_producto, col_valorizado, col_cantidad, ambito,
-            )

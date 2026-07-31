@@ -79,7 +79,7 @@ _DASHBOARDS = {
 }
 
 
-def renderizar_graficos_reporte(df_f, reporte, cfg, df_full=None):
+def renderizar_graficos_reporte(df_f, reporte, cfg, df_full=None, tabla_cb=None):
     """Punto de entrada de la vista Gráficos.
 
     Si el reporte tiene un dashboard dedicado, delega. Si no, usa el motor
@@ -87,10 +87,18 @@ def renderizar_graficos_reporte(df_f, reporte, cfg, df_full=None):
 
     df_full: DataFrame sin el filtro de fecha aplicado (opcional).
         Solo Ajuste lo usa (pestaña Histórico); los demás lo ignoran.
+    tabla_cb: callable sin args que renderiza la tabla AgGrid del reporte.
+        Lo usan los dashboards con rail donde "Tabla" es un item (hoy Ajuste;
+        el patrón estándar a futuro). Los demás lo ignoran.
     """
     render = _DASHBOARDS.get(reporte)
     if render is not None:
-        render(df_f, reporte, df_full=df_full)
+        # Solo los dashboards migrados al rail aceptan tabla_cb; el resto
+        # conserva su firma antigua (la vista Tabla la maneja app.py).
+        if reporte == "Ajuste de Inventario":
+            render(df_f, reporte, df_full=df_full, tabla_cb=tabla_cb)
+        else:
+            render(df_f, reporte, df_full=df_full)
         return
 
     # Motor genérico config-driven (para reportes sin dashboard dedicado)
