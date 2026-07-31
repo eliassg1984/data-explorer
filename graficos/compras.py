@@ -459,12 +459,16 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
     # Alto del chart principal: se encoge cuando hay un proveedor en foco para
     # dar aire al detalle de abajo. El figure se dibuja YA al alto final; la
-    # transicion la hace el wrapper (ver _cp_anim_css mas abajo).
+    # transicion la hace el wrapper (ver _anim_css mas abajo).
     #
     # El foco manda las dos cosas a la vez: abre el detalle A/B y encoge el
     # chart. Cerrar con la X limpia el foco -> el detalle se va y el chart
     # vuelve a 360 en el mismo rerun.
-    _alto_chart = 220 if prov_focus is not None else 360
+    #
+    # 180 en foco: el piso practico son las etiquetas sobre las barras (valor +
+    # variacion + docs + % del periodo = 4 lineas, ~60px). Para bajar mas hay
+    # que acortarlas o esconderlas en foco, como hace el mockup.
+    _alto_chart = 180 if prov_focus is not None else 360
     _compras_layout(fig, alto=_alto_chart)
     fig.update_layout(
 
