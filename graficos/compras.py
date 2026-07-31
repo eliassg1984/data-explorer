@@ -1146,8 +1146,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             # cruza el rotulo. Se apaga.
                             figa.update_yaxes(showgrid=False)
                             figa.update_xaxes(tickprefix="S/ ", tickformat=",.0f")
+                            # bargap = aire entre filas, como fraccion del alto
+                            # de fila (30px). 0.5 -> barra de ~15px. El alto
+                            # total del chart no cambia: se adelgaza la barra,
+                            # no se aprieta la lista.
                             figa.update_layout(margin=dict(l=10, r=140, t=2, b=10),
-                                               bargap=0.18)
+                                               bargap=0.5)
                             _aevt = st.plotly_chart(
                                 figa, use_container_width=True,
                                 key=f"compras_g_prov_prods_{prov_focus}_{prod_focus}_{_pan_inst}",
