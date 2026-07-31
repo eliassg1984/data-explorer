@@ -40,6 +40,26 @@ _AJUSTE_RAIL_CATEGORIAS = (
 )
 
 
+def _layout_aj(**overrides):
+    """`_layout` con el look del estándar del rail (igual que Compras).
+
+    Solo cambia dos cosas respecto al `_layout` genérico para que los gráficos
+    de Ajuste combinen con la tarjeta como en Compras:
+      · plot_bgcolor TRANSPARENTE — funde con el fondo de la tarjeta en vez de
+        pintar una caja blanca dentro.
+      · grilla del eje X oculta (Compras solo conserva la del eje Y).
+    La paleta ya es común (PALETA_SERIES). El color SEMÁNTICO de cada gráfico
+    (verde/rojo del waterfall, colorscale del mapa de calor, etc.) se conserva:
+    es propio del tipo de gráfico, no del tema. No se toca el `_layout`
+    compartido para no restilizar Ventas/Inventario/Receta."""
+    lay = _layout(**overrides)
+    lay["plot_bgcolor"] = "rgba(0,0,0,0)"
+    _xaxis = dict(lay.get("xaxis", {}))
+    _xaxis["showgrid"] = False
+    lay["xaxis"] = _xaxis
+    return lay
+
+
 def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valorizado):
     """Serie temporal con range-selector + range-slider + eje dual opcional."""
     if not col_fecha:
@@ -90,7 +110,7 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
         annotation_position="top right",
     )
 
-    fig.update_layout(**_layout(
+    fig.update_layout(**_layout_aj(
         xaxis=dict(
             gridcolor=GRIS_BORDE,
             rangeselector=dict(
@@ -137,7 +157,7 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
                 hovertemplate="Valorizado: S/ %{y:,.2f}<extra></extra>",
             ), secondary_y=True)
 
-            fig2.update_layout(**_layout(
+            fig2.update_layout(**_layout_aj(
                 title="Ajuste vs Valorizado total",
                 hovermode="x unified",
                 legend=dict(orientation="h", y=1.05, x=0),
@@ -181,7 +201,7 @@ def _graf_comparativa_mensual(df, col_fecha, col_ajuste_val):
         textposition="outside",
         hovertemplate="%{x|%b %Y}<br><b>S/ %{y:,.2f}</b><extra></extra>",
     ))
-    fig.update_layout(**_layout(
+    fig.update_layout(**_layout_aj(
         xaxis=dict(dtick="M1", tickformat="%b %Y", gridcolor=GRIS_BORDE),
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f", gridcolor=GRIS_BORDE),
         showlegend=False, height=360,
@@ -248,7 +268,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         )),
         hovertemplate="%{x}<br><b>S/ %{y:,.2f}</b><extra></extra>",
     ))
-    fig.update_layout(**_layout(
+    fig.update_layout(**_layout_aj(
         title=f"Cascada de ajuste valorizado por {grp_col}",
         xaxis=dict(tickangle=-35, gridcolor=GRIS_BORDE),
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f", gridcolor=GRIS_BORDE),
@@ -457,7 +477,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val):
             "Ajuste: <b>S/ %{z:,.2f}</b><extra></extra>"
         ),
     ))
-    fig.update_layout(**_layout(
+    fig.update_layout(**_layout_aj(
         title="Mapa de calor: ajuste valorizado por Familia × Área",
         xaxis=dict(tickangle=-30, side="bottom", gridcolor=GRIS_BORDE),
         yaxis=dict(autorange="reversed", gridcolor=GRIS_BORDE, showticklabels=True),
@@ -501,7 +521,7 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             )
             fig.add_hline(y=0, line_dash="dash", line_color="#ef4444",
                           annotation_text="Cero", annotation_position="top right")
-            fig.update_layout(**_layout(
+            fig.update_layout(**_layout_aj(
                 showlegend=False,
                 xaxis=dict(tickangle=-30, gridcolor=GRIS_BORDE),
                 yaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
@@ -518,7 +538,7 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             )
             fig.add_vline(x=0, line_dash="dash", line_color="#ef4444",
                           annotation_text="Cero")
-            fig.update_layout(**_layout(
+            fig.update_layout(**_layout_aj(
                 xaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
                 yaxis=dict(gridcolor=GRIS_BORDE),
             ))
@@ -545,7 +565,7 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
         fig2.add_vline(x=mediana, line_dash="dash", line_color="#16a34a",
                        annotation_text=f"Mediana S/ {mediana:,.0f}",
                        annotation_font_color="#16a34a")
-        fig2.update_layout(**_layout(
+        fig2.update_layout(**_layout_aj(
             title="Histograma de frecuencias",
             xaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE,
                        title="Ajuste Valorizado"),
