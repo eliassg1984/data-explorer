@@ -283,11 +283,20 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     _gran_suffix = {"Día": "del Día", "Semana": "de la Semana",
                     "Mes": "del Mes", "Año": "del Año"}.get(gran, "del período")
 
+    # Con un proveedor en foco el chart baja a 180px y la etiqueta de 4 líneas
+    # (valor + variación + docs + % del período) se come ~60px, que es casi
+    # todo el aire de las barras. En foco se recorta a 2 líneas: valor y
+    # variación. Nada se pierde — docs y % siguen en el hover, que ya los trae.
+    _lab_compacta = prov_focus is not None
+
     def _etiqueta_serie(vals, pct_periodo=None, docs=None):
         """Texto por barra: total SIEMPRE encima + variación vs el período
         ANTERIOR del mismo proveedor (▲ verde sube / ▼ rojo baja) + cantidad
         de documentos + % de participación en el período. La 1ª barra no
         tiene anterior → solo total + docs + %. Barras en 0 → sin etiqueta.
+
+        Con `_lab_compacta` (hay proveedor en foco) se omiten las dos líneas
+        grises del pie: el chart está a 180px y no hay alto para ellas.
 
         pct_periodo: lista del mismo largo que vals con el % que la barra
             representa del total del segmento (0-100). Si None, se omite.
@@ -295,6 +304,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             (facturas / comprobantes únicos) que respaldan cada barra. Si
             None, se omite.
         """
+        if _lab_compacta:
+            docs, pct_periodo = None, None
         _txt = []
         for j, v in enumerate(vals):
             if v <= 0:
@@ -465,9 +476,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # chart. Cerrar con la X limpia el foco -> el detalle se va y el chart
     # vuelve a 360 en el mismo rerun.
     #
-    # 180 en foco: el piso practico son las etiquetas sobre las barras (valor +
-    # variacion + docs + % del periodo = 4 lineas, ~60px). Para bajar mas hay
-    # que acortarlas o esconderlas en foco, como hace el mockup.
+    # 180 en foco: cabe porque la etiqueta se recorta a 2 lineas en ese estado
+    # (ver _lab_compacta). Con las 4 lineas del estado normal no entraria.
     _alto_chart = 180 if prov_focus is not None else 360
     _compras_layout(fig, alto=_alto_chart)
     fig.update_layout(
