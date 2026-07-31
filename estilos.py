@@ -781,6 +781,82 @@ def get_css():
     }
 
     /* =================================================================== */
+    /* RAIL EN MÓVIL (<=900px): el rail vertical fijo de 84px + el          */
+    /* padding-right de 153px se comen casi la mitad de un viewport de      */
+    /* 375px. En móvil el rail deja de estar fijo y se vuelve una tira      */
+    /* horizontal scrollable arriba del dashboard; los botones quedan en    */
+    /* fila (chips) y el contenido recupera todo el ancho. Scopeado con     */
+    /* :has(.st-key-compras_tabs_row) → no afecta otros reportes.           */
+    /* =================================================================== */
+    @media (max-width: 900px) {
+        /* El contenido recupera el ancho: fuera la reserva del rail. */
+        [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row),
+        .block-container:has(.st-key-compras_tabs_row) {
+            padding-right: 1rem !important;
+        }
+        /* Rail: de columna fija a tira horizontal en el flujo del documento. */
+        .st-key-compras_tabs_row {
+            position: static !important;
+            width: 100% !important;
+            height: auto !important;
+            top: auto !important; right: auto !important; bottom: auto !important;
+            z-index: auto !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            padding: 4px !important;
+            margin: 0 0 8px 0 !important;
+            border-radius: 10px !important;
+        }
+        /* Botones en fila, ancho por contenido, scroll horizontal. */
+        .st-key-graf_tipo_chips.st-key-graf_tipo_chips {
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            align-items: stretch !important;
+            gap: 2px !important;
+            overflow-x: auto !important;
+        }
+        /* Las categorías y separadores verticales no aplican en horizontal. */
+        .st-key-compras_tabs_row .rail-cat-badge,
+        .st-key-compras_tabs_row .rail-sep {
+            display: none !important;
+        }
+        /* Cada botón: chip auto-ancho, texto en una línea, sin cortarse. */
+        .st-key-graf_tipo_chips [data-testid="stButton"],
+        .st-key-graf_tipo_chips .stButton {
+            width: auto !important; flex: 0 0 auto !important;
+        }
+        .st-key-graf_tipo_chips [data-testid="stButton"] > button,
+        .st-key-graf_tipo_chips .stButton > button {
+            width: auto !important;
+            white-space: nowrap !important;
+            border-left: none !important;
+            border-radius: 999px !important;
+            padding: 5px 12px !important;
+            background: var(--surface-1, #f6f7f9) !important;
+        }
+        .st-key-graf_tipo_chips [data-testid="stButton"] > button[kind="primary"],
+        .st-key-graf_tipo_chips .stButton > button[kind="primary"] {
+            border-left: none !important;
+        }
+        .st-key-graf_tipo_chips [data-testid="stButton"] > button p,
+        .st-key-graf_tipo_chips .stButton > button p {
+            white-space: nowrap !important;
+        }
+        /* Sin el rail fijo arriba, la vieja compensación negativa de las
+           tarjetas dejaría un solape: se neutraliza. */
+        [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap,
+        [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_izq_compras,
+        [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_der_compras {
+            margin-top: 0 !important;
+        }
+        /* La franja superior ya no debe esquivar el rail (que ya no está a
+           la derecha): que ocupe todo el ancho. */
+        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row) .st-key-fila_ajuste_top::before {
+            right: 0 !important;
+        }
+    }
+
+    /* =================================================================== */
     /* BOTÓN FILTROS (popover) — a juego, grande y con contorno índigo      */
     /* =================================================================== */
     [data-testid="stPopover"] button {
