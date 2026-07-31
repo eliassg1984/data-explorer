@@ -820,6 +820,19 @@ def get_css():
         .st-key-compras_tabs_row .rail-sep {
             display: none !important;
         }
+        /* El bug del "encimado": los verdaderos flex-items de la fila NO son
+           los <button>, son los stElementContainer que Streamlit envuelve
+           alrededor de cada uno. Con flex-shrink:1 (default) se comprimen a
+           casi cero y el texto se corta ("Fa", "P", "Tt"...). Se fijan a
+           flex:0 0 auto (no encoger) + width:auto (medir por contenido) para
+           que la fila DESBORDE y aparezca el scroll horizontal en su lugar. */
+        .st-key-graf_tipo_chips.st-key-graf_tipo_chips > div,
+        .st-key-graf_tipo_chips.st-key-graf_tipo_chips
+            > [data-testid="stElementContainer"] {
+            flex: 0 0 auto !important;
+            width: auto !important;
+            max-width: none !important;
+        }
         /* Cada botón: chip auto-ancho, texto en una línea, sin cortarse. */
         .st-key-graf_tipo_chips [data-testid="stButton"],
         .st-key-graf_tipo_chips .stButton {
