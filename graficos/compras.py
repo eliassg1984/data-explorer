@@ -1491,6 +1491,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # columnas = Período (Semana/Mes/Año), valor = suma. Gran total al pie.
     import json  # noqa: E402
     from st_aggrid import AgGrid, JsCode  # noqa: E402
+    from inyecciones import inject_maximize_aggrid  # noqa: E402
 
     if "cp_docs_abierto" not in st.session_state:
         st.session_state["cp_docs_abierto"] = True
@@ -1657,6 +1658,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     fit_columns_on_grid_load=True,
                     key=f"cp_prov_pivot_docs_{gran}_{_docs_inst}",
                 )
+                # Botón ⛶ de pantalla completa nativa (mismo patrón que las
+                # tablas de tablas.py): ancla el ⛶ en el riel de la tabla y usa
+                # la Fullscreen API sobre el iframe. En móvil se toca y se gira
+                # el teléfono a horizontal para ver todas las columnas; Esc / ✕
+                # restauran. Como el drill de Proveedor tiene UN solo AgGrid,
+                # buscarIframe() da con este.
+                inject_maximize_aggrid()
 
                 st.download_button(
                     "⬇ Descargar CSV",
