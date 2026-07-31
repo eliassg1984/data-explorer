@@ -460,7 +460,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # Alto del chart principal: se encoge cuando hay un proveedor en foco para
     # dar aire al detalle de abajo. El figure se dibuja YA al alto final; la
     # transicion la hace el wrapper (ver _cp_anim_css mas abajo).
-    _alto_chart = 220 if prov_focus is not None else 360
+    #
+    # Condicion = foco Y paneles abiertos. El chart solo cede espacio si abajo
+    # hay algo que ocuparlo: cerrar el pestillo de los paneles A/B devuelve el
+    # chart a 360 aunque el proveedor siga en foco (al reabrirlo vuelve a 220).
+    # Sin esto el detalle se cerraba pero el chart se quedaba chico.
+    _alto_chart = (220 if (prov_focus is not None
+                           and st.session_state.get("cp_paneles_abierto", True))
+                   else 360)
     _compras_layout(fig, alto=_alto_chart)
     fig.update_layout(
 
