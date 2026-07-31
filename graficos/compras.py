@@ -817,6 +817,65 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             border-left: 1px solid rgba(49,51,63,0.15) !important;
         }
 
+        /* ── Panel B: tarjetas por proveedor (reemplaza el st.dataframe) ──
+           Reemplaza la tabla de 5 columnas por un stack de tarjetas: swatch
+           del color del proveedor (matchea con la barra del chart principal)
+           + nombre + total S/, y debajo un grid con las 4 metricas
+           (Últ. compra, Precio unit., Cantidad, UM). En mobile el grid pasa a
+           2 columnas; en desktop cabe en fila. La tarjeta con el menor precio
+           lleva un borde izquierdo verde y el precio en verde. */
+        .pb-cards {
+            display: flex; flex-direction: column; gap: 6px;
+            margin: 4px 0 8px;
+        }
+        .pb-card {
+            background: #fff; border: 0.5px solid #e6e6ea;
+            border-left: 3px solid transparent;
+            border-radius: 6px; padding: 7px 10px;
+        }
+        .pb-card.is-min { border-left-color: #15803d; }
+        .pb-card .line1 {
+            display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+        }
+        .pb-card .sw {
+            width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
+        }
+        .pb-card .name {
+            flex: 1; min-width: 0;
+            color: #18181d; font-size: 12px; font-weight: 500;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .pb-card .total {
+            color: #534AB7; font-size: 11.5px; font-weight: 500;
+            font-variant-numeric: tabular-nums; flex-shrink: 0;
+        }
+        .pb-card .grid {
+            display: grid; grid-template-columns: repeat(4, 1fr);
+            gap: 4px 10px; font-size: 11px;
+        }
+        .pb-card .cell {
+            display: flex; align-items: baseline; gap: 5px; min-width: 0;
+        }
+        .pb-card .cell .lab {
+            color: #a2a2ad; text-transform: uppercase;
+            letter-spacing: 0.03em; font-size: 9.5px; flex-shrink: 0;
+        }
+        .pb-card .cell .val {
+            color: #18181d; font-variant-numeric: tabular-nums;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .pb-card .pu { font-weight: 500; }
+        .pb-card .pu.pu-min { color: #15803d; font-weight: 600; }
+        /* Grid a 2 columnas en anchos chicos: cuando la card mide <= 380px
+           (mockup mobile). Container query, con fallback por ancho de
+           viewport para navegadores sin soporte. */
+        @container (max-width: 380px) {
+            .pb-card .grid { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 900px) {
+            .pb-card .grid { grid-template-columns: 1fr 1fr; }
+        }
+
         /* ── TARJETAS COLAPSABLES: animacion unfold (drill Proveedor) ──
            IMPORTANTE: NO usar scaleX/scaleY/rotate en el contenedor. Al
            remontar plotly/aggrid/dataframe con key nueva, esos componentes
@@ -1055,14 +1114,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         return (" " + m.iat[0]) if len(m) and m.iat[0] not in ("", "nan") else ""
 
     def _base_prov_de(_src):
-        """Base mínima (prov/prod/punit/cant/um/fecha) para la tabla del
-        Panel B, a partir de cualquier df origen (`d` filtrado por fecha o
-        `d_full` con todo el histórico)."""
+        """Base mínima (prov/prod/valor/punit/cant/um/fecha) para el Panel B,
+        a partir de cualquier df origen (`d` filtrado por fecha o `d_full` con
+        todo el histórico). `valor` es necesario para el total de la tarjeta."""
         _b = pd.DataFrame({
             "prov":  _src[col_prov].astype(str).values,
             "prod":  (_src[col_prod].astype(str).values if col_prod else "—"),
             "cant":  (pd.to_numeric(_src[col_cant], errors="coerce").fillna(0).values
                       if col_cant else 0.0),
+            "valor": pd.to_numeric(_src[col_valor], errors="coerce").fillna(0).values,
             "punit": (pd.to_numeric(_src[col_punit], errors="coerce").values
                       if col_punit else np.nan),
             "um":    (_src[col_um].astype(str).values if col_um else ""),
@@ -1191,6 +1251,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             st.caption("📅 Todo el histórico — ignora el filtro "
                                        "de fecha de arriba.")
                         sub2 = _srcB[_srcB["prod"] == prod_focus]
+                        # Color por proveedor: los del top toman su color de la
+                        # paleta (el mismo que en el chart principal); los que
+                        # no estan en top -> gris. Asi el swatch de la tarjeta
+                        # matchea con la barra de arriba.
+                        _color_map = {p: PALETA_CALLAI[i % len(PALETA_CALLAI)]
+                                      for i, p in enumerate(top_provs)}
                         filas = []
                         for prov, grp in sub2.groupby("prov"):
                             g2 = grp
@@ -1202,42 +1268,70 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                    if (col_punit and len(g2)
                                        and pd.notna(g2["punit"].iloc[-1])) else np.nan)
                             filas.append({
-                                "Proveedor":     prov,
-                                "Último precio": ult,
-                                "Últ. compra":   (_uf.strftime("%d/%m/%Y")
-                                                  if _uf is not None else "—"),
-                                "Cant. acum.":   grp["cant"].sum(),
-                                "Unid":          (_um_de(grp).strip() if col_um else ""),
+                                "prov":  prov,
+                                "color": _color_map.get(prov, GRIS_BORDE),
+                                "total": float(grp["valor"].sum()),
+                                "ult_p": ult,
+                                "ult_f": (_uf.strftime("%d/%m/%Y")
+                                          if _uf is not None else None),
+                                "cant":  float(grp["cant"].sum()),
+                                "um":    (_um_de(grp).strip() if col_um else ""),
                             })
-                        tabla = pd.DataFrame(filas).sort_values("Cant. acum.", ascending=False)
-                        _orden = ["Proveedor", "Último precio", "Últ. compra",
-                                  "Cant. acum.", "Unid"]
-                        if not col_um:
-                            _orden.remove("Unid")
-                            tabla = tabla.drop(columns=["Unid"])
-                        if not col_fecha:
-                            _orden.remove("Últ. compra")
-                            tabla = tabla.drop(columns=["Últ. compra"])
-                        tabla = tabla[_orden]
-                        _min = (tabla["Último precio"].min()
-                                if tabla["Último precio"].notna().any() else None)
+                        # Orden por total desc — la tarjeta principal arriba,
+                        # igual que el mockup (VIBEJ / LEON / LA CESTA...).
+                        filas.sort(key=lambda r: r["total"], reverse=True)
+                        _precios = [r["ult_p"] for r in filas
+                                    if pd.notna(r["ult_p"])]
+                        _min = min(_precios) if _precios else None
 
-                        def _hl(col):
-                            if col.name != "Último precio" or _min is None:
-                                return ["" for _ in col]
-                            return ["color:#15803d;font-weight:600"
-                                    if (pd.notna(v) and v == _min) else "" for v in col]
+                        def _esc(s):
+                            return (str(s).replace("&", "&amp;")
+                                    .replace("<", "&lt;").replace(">", "&gt;"))
 
-                        sty = (tabla.style
-                               .format({"Último precio": "S/ {:,.2f}",
-                                        "Cant. acum.": "{:,.0f}"},
-                                       na_rep="—")
-                               .apply(_hl, axis=0))
-                        st.dataframe(sty, hide_index=True, use_container_width=True,
-                                     height=min(430, 60 + 34 * len(tabla)),
-                                     key=f"cp_prov_prov_de_prod_tbl_{_pan_inst}")
-                        st.caption("Último precio = precio unitario de la compra más "
-                                   "reciente. Verde = menor precio.")
+                        def _fmt_soles(v):
+                            if v is None or pd.isna(v):
+                                return "—"
+                            if v >= 1000:
+                                return f"S/ {v/1000:.1f}k"
+                            return f"S/ {v:,.0f}"
+
+                        _cards = []
+                        for r in filas:
+                            _es_min = (_min is not None and pd.notna(r["ult_p"])
+                                       and r["ult_p"] == _min)
+                            _pu_txt = ("—" if pd.isna(r["ult_p"])
+                                       else f"S/ {r['ult_p']:,.2f}")
+                            _pu_cls = " pu-min" if _es_min else ""
+                            _cells = [
+                                ("Últ.",  r["ult_f"] or "—"),
+                                ("P.U.",  f'<span class="pu{_pu_cls}">{_pu_txt}</span>'),
+                                ("Cant.", f"{r['cant']:,.0f}"),
+                            ]
+                            if col_um and r["um"]:
+                                _cells.append(("UM", _esc(r["um"])))
+                            _grid = "".join(
+                                f'<div class="cell"><span class="lab">{lab}</span>'
+                                f'<span class="val">{val}</span></div>'
+                                for lab, val in _cells
+                            )
+                            _cards.append(
+                                f'<div class="pb-card{"  is-min" if _es_min else ""}">'
+                                f'<div class="line1">'
+                                f'<span class="sw" style="background:{r["color"]}"></span>'
+                                f'<span class="name" title="{_esc(r["prov"])}">'
+                                f'{_esc(r["prov"])}</span>'
+                                f'<span class="total">{_fmt_soles(r["total"])}</span>'
+                                f'</div>'
+                                f'<div class="grid">{_grid}</div>'
+                                f'</div>'
+                            )
+                        st.markdown(
+                            '<div class="pb-cards">' + "".join(_cards) + '</div>',
+                            unsafe_allow_html=True,
+                        )
+                        if _min is not None:
+                            st.caption("Último precio = precio unitario de la compra "
+                                       "más reciente. Verde = menor precio.")
 
     # -- Visibilidad del detalle A/B = hay proveedor en foco. Sin pestillo y sin
     #    boton de cerrar: la barra lo abre y esa misma barra lo cierra (el
