@@ -867,6 +867,11 @@ def get_css():
         [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row) .st-key-fila_ajuste_top::before {
             right: 0 !important;
         }
+
+        /* (El fix móvil de los filtros Familia/Subfamilia vive MÁS ABAJO, justo
+           después de las reglas de desktop que lo centran/estiran: al tener la
+           misma especificidad, debe ir después en el archivo para ganar por
+           orden de fuente. Ver bloque "chips_ajuste_tabla — reset móvil".) */
     }
 
     /* =================================================================== */
@@ -1175,6 +1180,34 @@ def get_css():
     [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
         .st-key-chips_ajuste_tabla [data-testid="stPopover"] button:hover {
         background: var(--accent-tint, #EEEDFE) !important;
+    }
+
+    /* ── chips_ajuste_tabla — reset móvil ──────────────────────────────────
+       Las reglas de arriba centran el bar (left/transform) y lo acotan con
+       max-width:calc(100vw-665px) — que se vuelve NEGATIVA (→ colapsa a 0)
+       por debajo de 665px — y estiran cada popover a min-width:230px. En
+       móvil el rail deja de ser fijo pero :has(.st-key-compras_tabs_row)
+       SIGUE matcheando, así que esas reglas se cuelan y rompen el bar (chip
+       estirado con un vacío al lado, o bar colapsado). Se neutralizan aquí:
+       misma especificidad que las de arriba, pero DESPUÉS en el archivo para
+       ganar por orden de fuente dentro del media query. */
+    /* Clase duplicada (.st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla)
+       para subir la especificidad por encima de TODAS las reglas de desktop
+       de arriba y ganar sin depender del orden de fuente. */
+    @media (max-width: 900px) {
+        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+            .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
+            left: auto !important;
+            transform: none !important;
+            max-width: none !important;
+            width: auto !important;
+        }
+        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+            .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
+            [data-testid="stPopover"] button {
+            min-width: 0 !important;
+            padding-right: 12px !important;
+        }
     }
 
     /* Panel del popover: se renderiza en un portal (fuera del contenedor),
