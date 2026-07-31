@@ -1004,11 +1004,31 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 flex-wrap: wrap !important;
                 justify-content: flex-start !important;
             }
-            /* Los dos floats del tope del gráfico (popover Proveedores a la
-               izq. y pills de periodo a la der.) sí caben, pero se bajan un
-               poco para no montar la leyenda en anchos muy chicos. */
-            .st-key-prov_pop_float { top: 8px !important; left: 8px !important; }
-            .st-key-gran_float { top: 8px !important; right: 8px !important; }
+            /* Controles del tope del gráfico. En desktop flotan absolutos
+               sobre la esquina del plot (Proveedores a la izq., pills de
+               periodo a la der.); en 375px sus anchos se cruzan y se solapan.
+               En móvil dejan de flotar y fluyen como fila de controles ARRIBA
+               del gráfico, apilados: Proveedores en su línea, y la
+               granularidad como segmentado a ancho completo (4 segmentos
+               iguales = tap targets grandes). Nada se encima; el plot baja un
+               poco, que en móvil es barato. */
+            .st-key-prov_pop_float,
+            .st-key-gran_float {
+                position: static !important;
+                top: auto !important; left: auto !important; right: auto !important;
+                width: 100% !important;
+                margin: 0 0 6px 0 !important;
+            }
+            /* Granularidad Día/Semana/Mes/Año a ancho completo, segmentos que
+               se reparten el ancho por igual. */
+            .st-key-gran_float [data-testid="stButtonGroup"] {
+                width: 100% !important;
+                display: flex !important;
+            }
+            .st-key-gran_float [data-testid="stButtonGroup"] button {
+                flex: 1 1 0 !important;
+                min-width: 0 !important;
+            }
         }
         </style>
     """, unsafe_allow_html=True)
