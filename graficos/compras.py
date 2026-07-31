@@ -457,11 +457,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             hovertemplate="Otros · %{x}<br>S/ %{y:,.0f}<extra></extra>",
         )
 
-    # Fase 1 del rediseño del drill: cuando hay un proveedor en foco el
-    # gráfico principal se encoge para dar aire al detalle de abajo — sigue
-    # visible como contexto/mini-comparativa pero no domina la vista.
-    _alto_chart = 220 if prov_focus is not None else 360
-    _compras_layout(fig, alto=_alto_chart)
+    _compras_layout(fig, alto=360)
     fig.update_layout(
 
         barmode="group",
