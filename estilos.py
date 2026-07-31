@@ -1208,6 +1208,17 @@ def get_css():
             min-width: 0 !important;
             padding-right: 12px !important;
         }
+        /* Fecha alineada a la IZQUIERDA en móvil. La regla de desktop
+           (:has(...) .st-key-fecha_ajuste_pill { left:175px }, para dejar
+           sitio al rail lateral) se cuela porque :has(...) sigue matcheando
+           con el rail horizontal. Aquí se vuelve a left:12px (clase duplicada
+           para ganar especificidad) → la fecha se alinea con el borde
+           izquierdo, igual que los filtros: los tres se leen como un grupo. */
+        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+            .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill {
+            left: 12px !important;
+            right: auto !important;
+        }
     }
 
     /* Panel del popover: se renderiza en un portal (fuera del contenedor),
