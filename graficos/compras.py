@@ -1138,6 +1138,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 hovertemplate="%{y}<extra></extra>",
                             ))
                             _compras_layout(figa, alto=max(200, 30 * len(agg) + 40))
+                            # _compras_layout enciende la grilla del eje Y, que
+                            # es lo correcto en barras VERTICALES (lineas de
+                            # referencia detras de las barras). Aqui las barras
+                            # son horizontales: el eje Y es el categorico, asi
+                            # que esa grilla dibuja una raya por producto que
+                            # cruza el rotulo. Se apaga.
+                            figa.update_yaxes(showgrid=False)
                             figa.update_xaxes(tickprefix="S/ ", tickformat=",.0f")
                             figa.update_layout(margin=dict(l=10, r=140, t=2, b=10),
                                                bargap=0.18)
