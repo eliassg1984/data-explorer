@@ -370,7 +370,16 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # a la etiqueta de cada barra. El ancho de barra estimado depende de la
     # ventana visible y de la cantidad de series → recalculado en cada render.
     _show_names = st.session_state.get("cp_prov_show_names", True)
-    _ancho_barra_est_px = 1200 / max(1, len(_per_vis) * _n_series)
+    # Ancho de barra estimado para decidir cuánto abreviar el nombre. El plot
+    # NO mide 1200px (ese era un supuesto de desktop): en móvil ronda 345px y,
+    # descontando el espacio entre barras (~30%), el ancho ÚTIL por barra es
+    # menor. Se usa ~245 como referencia del ancho útil total → en móvil con 3
+    # series cada nombre cae a su primera palabra (legible) en vez de mostrarse
+    # completo y que plotly lo achique para encajarlo. Con 1-2 series (barras
+    # anchas) sigue habiendo sitio para el nombre más largo. En desktop el plot
+    # es más ancho, así que abrevia un poco antes de lo estricto — pero la
+    # leyenda y el hover siempre traen el nombre completo.
+    _ancho_barra_est_px = 245 / max(1, len(_per_vis) * _n_series)
     _max_chars = max(0, int(_ancho_barra_est_px / 6.5))  # ~6.5px por char a 11px
     # Totales por período (sobre TODA la base filtrada, no solo los provs
     # seleccionados) para el % de participación en cada barra.
