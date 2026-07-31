@@ -1137,7 +1137,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 text=_txt, textposition="outside", cliponaxis=False,
                                 hovertemplate="%{y}<extra></extra>",
                             ))
-                            _compras_layout(figa, alto=max(200, 30 * len(agg) + 40))
+                            # 30px por fila -> 22px: menos aire vertical entre
+                            # barras, sin tocar el grosor. La lista se compacta
+                            # (con Top 20 el chart baja de ~640 a ~480px).
+                            _compras_layout(figa, alto=max(180, 22 * len(agg) + 40))
                             # _compras_layout enciende la grilla del eje Y, que
                             # es lo correcto en barras VERTICALES (lineas de
                             # referencia detras de las barras). Aqui las barras
@@ -1147,11 +1150,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             figa.update_yaxes(showgrid=False)
                             figa.update_xaxes(tickprefix="S/ ", tickformat=",.0f")
                             # bargap = aire entre filas, como fraccion del alto
-                            # de fila (30px). 0.5 -> barra de ~15px. El alto
-                            # total del chart no cambia: se adelgaza la barra,
-                            # no se aprieta la lista.
+                            # de fila (22px). 0.35 -> barra de ~14px, mismo
+                            # grosor que antes pero con menos aire arriba/abajo.
                             figa.update_layout(margin=dict(l=10, r=140, t=2, b=10),
-                                               bargap=0.5)
+                                               bargap=0.35)
                             _aevt = st.plotly_chart(
                                 figa, use_container_width=True,
                                 key=f"compras_g_prov_prods_{prov_focus}_{prod_focus}_{_pan_inst}",
