@@ -1636,24 +1636,23 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 },
                 "rowHeight": 30,
                 "headerHeight": 38,
-                # autoHeight: el grid ocupa exactamente el alto que necesita.
-                # Se achica cuando hay pocas filas y crece al expandir sin
-                # scroll interno ni white space. Requiere desactivar la
-                # virtualizacion (ok con hasta ~200 filas totales, es el
-                # rango de este pivote).
-                "domLayout": "autoHeight",
+                # domLayout NORMAL (no autoHeight): el grid tiene un viewport de
+                # alto fijo con scroll interno. Es lo que permite hacer scroll en
+                # PANTALLA COMPLETA — el _FS_CSS_IFRAME fuerza el grid a 100vh y
+                # confía en el ag-body-viewport para desplazarse. Con autoHeight
+                # el grid crecía al contenido y en fullscreen quedaba clippeado
+                # sin scroll (mismo criterio que las tablas de Ajuste, que usan
+                # normal + paginación y sí scrollean maximizadas).
             }
-            # Con domLayout=autoHeight el grid maneja su propio alto; igual
-            # pasamos un height al wrapper (st_aggrid lo requiere) — se usa
-            # como TOPE del iframe para el caso teorico de expandir muchisimas
-            # filas. 900 = ~28 filas expandidas visibles sin scroll extra.
+            # Alto del iframe inline (no fullscreen). En fullscreen lo sobrescribe
+            # _FS_CSS_IFRAME a 100vh. 460 ≈ 14 filas visibles con scroll interno.
             with _pv_box:
                 AgGrid(
                     _pv_docs,
                     gridOptions=_grid_pv,
                     allow_unsafe_jscode=True,
                     theme="streamlit",
-                    height=900,
+                    height=460,
                     enable_enterprise_modules=True,
                     fit_columns_on_grid_load=True,
                     key=f"cp_prov_pivot_docs_{gran}_{_docs_inst}",
