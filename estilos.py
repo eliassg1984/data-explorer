@@ -1219,6 +1219,26 @@ def get_css():
             left: 12px !important;
             right: auto !important;
         }
+        /* Familia + Subfamilia PEGADOS a la izquierda. La regla móvil de
+           Ajuste (2×2, más abajo) fuerza las columnas a 50% width, lo que en
+           Compras (solo 2 filtros) deja a Subfamilia flotando al centro con
+           un hueco. Aquí se empacan a contenido, juntas a la izquierda, para
+           que fecha + Familia + Subfamilia se lean como un bloque ordenado.
+           Clase duplicada + :has para ganar a la regla 2×2 sin importar el
+           orden de fuente. */
+        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+            .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
+            [data-testid="stHorizontalBlock"] {
+            justify-content: flex-start !important;
+            gap: 8px !important;
+        }
+        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+            .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
+            [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+            flex: 0 0 auto !important;
+            width: auto !important;
+            min-width: 0 !important;
+        }
     }
 
     /* Panel del popover: se renderiza en un portal (fuera del contenedor),
