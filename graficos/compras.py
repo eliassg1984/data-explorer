@@ -788,57 +788,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         }
         .st-key-gran_float [data-testid="stButtonGroup"] button:not(:first-child),
         .st-key-topn_float [data-testid="stButtonGroup"] button:not(:first-child),
-        /* ── Fase 3: chip sticky de contexto + KPIs del proveedor en foco. ── */
-        .st-key-compras_prov_card_paneles .prov-chip {
-            position: sticky; top: 50px; z-index: 5;
-            display: flex; align-items: center; gap: 10px;
-            padding: 6px 12px;
-            background: #EEEDFE;
-            border: 1px solid #CECBF6;
-            border-radius: 8px;
-            font-size: 12px; color: #26215C;
-            margin: -6px 0 10px 0;
-            box-shadow: 0 1px 3px rgba(76,60,180,0.08);
-        }
-        .st-key-compras_prov_card_paneles .prov-chip-sw {
-            width: 12px; height: 12px; border-radius: 3px;
-            flex-shrink: 0; display: inline-block;
-        }
-        .st-key-compras_prov_card_paneles .prov-chip-name {
-            flex: 1; font-weight: 500;
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-            min-width: 0;
-        }
-        .st-key-compras_prov_card_paneles .prov-chip-total {
-            color: #534AB7; font-weight: 500;
-            font-variant-numeric: tabular-nums;
-            flex-shrink: 0;
-        }
-        .st-key-compras_prov_card_paneles .prov-kpis {
-            display: grid; grid-template-columns: 1fr 1fr;
-            gap: 10px; margin-bottom: 12px;
-        }
-        .st-key-compras_prov_card_paneles .prov-kpi {
-            padding: 10px 12px;
-            background: #ffffff;
-            border: 0.5px solid #e6e6ea;
-            border-radius: 6px;
-        }
-        .st-key-compras_prov_card_paneles .prov-kpi-lab {
-            font-size: 9.5px; color: #a2a2ad;
-            text-transform: uppercase; letter-spacing: 0.05em;
-            margin-bottom: 2px;
-        }
-        .st-key-compras_prov_card_paneles .prov-kpi-val {
-            font-size: 17px; font-weight: 500;
-            color: #18181d; line-height: 1.1;
-            font-variant-numeric: tabular-nums;
-        }
-        .st-key-compras_prov_card_paneles .prov-kpi-sub {
-            font-size: 10.5px; color: #5f5f6a;
-            margin-top: 2px;
-        }
-
         /* ── Fase 2: tarjetas ricas del Panel B (proveedores del producto). ── */
         .st-key-chartcard_prov_prov_de_prod .sbc-wrap {
             display: flex; flex-direction: column; gap: 6px;
@@ -1127,44 +1076,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     #    la columna body (abajo) solo si el pestillo esta abierto.
     def _paneles_card():
         with st.container(border=True, key="compras_prov_card_paneles"):
-            # ── Fase 3: chip sticky de contexto + KPIs del proveedor ─────────
-            # Solo cuando hay un proveedor en foco. El chip queda pegado arriba
-            # al scrollear dentro del canvas — mantiene visible qué se explora.
-            if prov_focus is not None:
-                _pf = base[base["prov"] == prov_focus]
-                _pf_total = float(_pf["valor"].sum())
-                _pf_docs = (int(_pf["docu"].astype(str).replace("nan", "")
-                                .loc[lambda s: s != ""].nunique())
-                            if "docu" in _pf.columns else 0)
-                _pf_ticket = (_pf_total / _pf_docs) if _pf_docs else 0.0
-                _pf_prods = (int(_pf["prod"].nunique())
-                             if "prod" in _pf.columns else 0)
-                _pf_color = (PALETA_CALLAI[orden_provs.index(prov_focus)
-                             % len(PALETA_CALLAI)]
-                             if prov_focus in orden_provs else "#6c5ce7")
-                _sfmt = lambda v: f"S/ {v:,.0f}"
-                st.markdown(
-                    "<div class='prov-chip'>"
-                    f"  <span class='prov-chip-sw' style='background:{_pf_color}'></span>"
-                    f"  <span class='prov-chip-name' title=\"{prov_focus}\">{prov_focus}</span>"
-                    f"  <span class='prov-chip-total'>{_sfmt(_pf_total)}"
-                    f" · {_pf_docs} docs</span>"
-                    "</div>"
-                    "<div class='prov-kpis'>"
-                    "  <div class='prov-kpi'>"
-                    "    <div class='prov-kpi-lab'>Total en período</div>"
-                    f"    <div class='prov-kpi-val'>{_sfmt(_pf_total)}</div>"
-                    f"    <div class='prov-kpi-sub'>{_pf_docs} documentos</div>"
-                    "  </div>"
-                    "  <div class='prov-kpi'>"
-                    "    <div class='prov-kpi-lab'>Ticket promedio</div>"
-                    f"    <div class='prov-kpi-val'>{_sfmt(_pf_ticket)}</div>"
-                    f"    <div class='prov-kpi-sub'>{_pf_prods} productos distintos</div>"
-                    "  </div>"
-                    "</div>",
-                    unsafe_allow_html=True,
-                )
-
             pa, pb = st.columns(2)
 
             # Panel A: Top N productos del proveedor en foco
