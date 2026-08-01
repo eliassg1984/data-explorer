@@ -514,7 +514,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                        tickfont=dict(size=10)),
                             showlegend=False,
                             height=380,
-                            bargap=0.65,
+                            bargap=0.25,
                             margin=dict(l=4, r=50, t=10, b=10),
                         ))
                         st.plotly_chart(
