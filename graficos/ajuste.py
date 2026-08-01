@@ -333,6 +333,40 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         title_html += (f"<br><span style='font-size:12px;font-weight:400;"
                        f"color:#8a8a8a'>{insight}</span>")
 
+    # Tooltip enriquecido: al hover sobre una familia, top 10 de sus
+    # productos por |ajuste|. Requiere col_producto; si no está, tooltip
+    # queda como antes (solo peso).
+    _tops_por_fam = {}
+    if col_producto and col_producto in df.columns:
+        for _fam in agg[grp_col].tolist():
+            _sub = df[df[grp_col].astype(str) == str(_fam)]
+            if _sub.empty:
+                _tops_por_fam[str(_fam)] = ""
+                continue
+            _t = (_sub.groupby(col_producto, as_index=False)[col_ajuste_val]
+                  .sum())
+            _t["_abs"] = _t[col_ajuste_val].abs()
+            _t = _t.sort_values("_abs", ascending=False).head(10)
+            _lines = []
+            for i, (_, row) in enumerate(_t.iterrows(), 1):
+                _nom = str(row[col_producto])
+                if len(_nom) > 32:
+                    _nom = _nom[:29] + "…"
+                _lines.append(f"{i}. {_nom} — S/ {row[col_ajuste_val]:,.0f}")
+            _tops_por_fam[str(_fam)] = "<br>".join(_lines)
+
+    _cd = []
+    for _fam, _p in zip(agg[grp_col].tolist(), pesos):
+        _cd.append([_p, _tops_por_fam.get(str(_fam), "")])
+    _cd.append([100.0, ""])  # TOTAL
+
+    _hover_familias = ("<b>%{x}</b><br>S/ %{y:,.2f}"
+                       "<br>Peso: %{customdata[0]:.1f}%")
+    if col_producto and col_producto in df.columns:
+        _hover_familias += ("<br>─────────────<br>"
+                            "<b>Top productos</b><br>%{customdata[1]}")
+    _hover_familias += "<extra></extra>"
+
     fig = go.Figure(go.Waterfall(
         orientation="v",
         measure=["relative"] * len(agg) + ["total"],
@@ -343,12 +377,9 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         connector=dict(line=dict(color="#9aa0a6", width=1.5, dash="solid")),
         increasing=dict(marker=dict(color="rgba(108,92,231,0.85)")),
         decreasing=dict(marker=dict(color="rgba(239,68,68,0.85)")),
-        totals=dict(marker=dict(
-            color=ACENTO_TEXTO_OSCURO if total >= 0 else "#ef4444",
-        )),
-        customdata=[[p] for p in pesos] + [[100.0]],
-        hovertemplate=("%{x}<br><b>S/ %{y:,.2f}</b>"
-                       "<br>Peso: %{customdata[0]:.1f}%<extra></extra>"),
+        totals=dict(marker=dict(color="#374151")),
+        customdata=_cd,
+        hovertemplate=_hover_familias,
     ))
     fig.update_layout(**_layout_aj(
         title=title_html,
