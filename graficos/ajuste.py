@@ -233,7 +233,7 @@ def _graf_comparativa_mensual(df, col_fecha, col_ajuste_val):
 
 def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                            col_producto=None, col_valorizado=None,
-                           col_cantidad=None):
+                           col_cantidad=None, df_full=None, col_fecha=None):
     """Cascada (Waterfall) por familia/área — SOLO el gráfico.
 
     Los análisis complementarios (Faltantes, Sobrantes, Extremos, etc.) que
@@ -383,13 +383,81 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                             "<b>Top productos</b><br>%{customdata[1]}")
     _hover_familias += "<extra></extra>"
 
+    # ── Enriquecimientos por familia (para badge + 5 líneas de labels) ─
+    # n_skus, top producto (nombre + monto + % que aporta a la familia),
+    # y delta vs periodo anterior (mismo tamaño de ventana, inmediatamente
+    # antes). El delta requiere df_full + col_fecha; si no vienen, se omite.
+    _n_skus = {}
+    _top_prod = {}  # fam -> (nombre_truncado, valor, pct_familia)
+    if col_producto and col_producto in df.columns:
+        for _fam in agg[grp_col].tolist():
+            _s = df[df[grp_col].astype(str) == str(_fam)]
+            _n_skus[str(_fam)] = int(_s[col_producto].nunique())
+            _tp = (_s.groupby(col_producto, as_index=False)[col_ajuste_val]
+                   .sum())
+            _tp["_abs"] = _tp[col_ajuste_val].abs()
+            _tp = _tp.sort_values("_abs", ascending=False).head(1)
+            if not _tp.empty:
+                _nom = str(_tp[col_producto].iloc[0])
+                if len(_nom) > 20:
+                    _nom = _nom[:19] + "…"
+                _val = float(_tp[col_ajuste_val].iloc[0])
+                _vfam = float(_s[col_ajuste_val].sum()) or 1.0
+                _pctf = abs(_val) / max(abs(_vfam), 1e-9) * 100
+                _top_prod[str(_fam)] = (_nom, _val, _pctf)
+
+    _delta = {}  # fam -> ("up"/"down", pct_magnitud)
+    if (df_full is not None and col_fecha
+            and col_fecha in df.columns and col_fecha in df_full.columns):
+        _f = pd.to_datetime(df[col_fecha], errors="coerce").dropna()
+        if not _f.empty:
+            _fmin, _fmax = _f.min(), _f.max()
+            _dur = _fmax - _fmin
+            _pmax = _fmin - pd.Timedelta(days=1)
+            _pmin = _pmax - _dur
+            _dp = df_full.copy()
+            _dp[col_fecha] = pd.to_datetime(_dp[col_fecha], errors="coerce")
+            _dp = _dp[(_dp[col_fecha] >= _pmin) & (_dp[col_fecha] <= _pmax)]
+            if not _dp.empty and grp_col in _dp.columns:
+                _pa = _dp.groupby(grp_col)[col_ajuste_val].sum().to_dict()
+                for _fam in agg[grp_col].tolist():
+                    _pv = float(_pa.get(_fam, 0))
+                    _cv = float(agg[agg[grp_col] == _fam]
+                                [col_ajuste_val].iloc[0])
+                    if abs(_pv) > 1e-6:
+                        _pctm = (abs(_cv) - abs(_pv)) / abs(_pv) * 100
+                        _dir = "down" if _pctm > 0 else "up"
+                        _delta[str(_fam)] = (_dir, abs(_pctm))
+
+    # Semáforo por familia — umbrales sobre |peso| (% de |total ajuste|)
+    def _badge_for(peso, val):
+        if val >= 0:
+            return ("▲ SOBRANTE", "#0F6E56", "#E1F5EE")
+        if peso >= 40:
+            return ("⚠ CRÍTICO", "#A32D2D", "#FCEBEB")
+        if peso >= 20:
+            return ("● ALERTA", "#854F0B", "#FAEEDA")
+        if peso >= 5:
+            return ("● MENOR", "#5F5E5A", "#F1EFE8")
+        return ("✓ OK", "#5F5E5A", "#F1EFE8")
+
+    # Top y (data coords) de cada barra — para anclar el badge encima
+    _cum = 0.0
+    _tops = []
+    for _v in agg[col_ajuste_val].tolist():
+        _tops.append(max(_cum, _cum + _v))
+        _cum += _v
+    _tops.append(max(0.0, total))  # barra TOTAL
+
     fig = go.Figure(go.Waterfall(
         orientation="v",
         measure=["relative"] * len(agg) + ["total"],
         x=agg[grp_col].tolist() + ["TOTAL"],
         y=agg[col_ajuste_val].tolist() + [None],
-        text=text_barras,
-        textposition="outside",
+        # text vacío: los labels se dibujan como annotations posicionadas
+        # manualmente (5 líneas + badge no caben en el `text` de una barra).
+        text=[""] * (len(agg) + 1),
+        textposition="none",
         connector=dict(line=dict(color="#9aa0a6", width=1.5, dash="solid")),
         increasing=dict(marker=dict(color="rgba(108,92,231,0.85)")),
         decreasing=dict(marker=dict(color="rgba(239,68,68,0.85)")),
@@ -397,15 +465,117 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         customdata=_cd,
         hovertemplate=_hover_familias,
     ))
+
+    # ── Annotations: badge arriba + hasta 5 líneas debajo de cada barra ─
+    # Estrategia: yref="paper" y=0 (línea del eje X) con yshift en píxeles.
+    # Así no dependemos del rango del eje Y (que cambia con exclusiones).
+    _anns = []
+    _cats_all = agg[grp_col].tolist() + ["TOTAL"]
+    for _i, _cat in enumerate(_cats_all):
+        _is_total = (_i == len(agg))
+        if _is_total:
+            _val = total
+            _peso = 100.0
+        else:
+            _val = float(agg[col_ajuste_val].iloc[_i])
+            _peso = float(pesos[_i])
+
+        # Badge (arriba de la barra)
+        if _is_total:
+            _btxt, _bfg, _bbg = "TOTAL", "#0b0b0b", "#F1EFE8"
+        else:
+            _btxt, _bfg, _bbg = _badge_for(_peso, _val)
+        _anns.append(dict(
+            x=_cat, y=_tops[_i], xref="x", yref="y",
+            yanchor="bottom", yshift=8,
+            text=f"<b>{_btxt}</b>", showarrow=False,
+            bgcolor=_bbg, bordercolor=_bfg, borderwidth=0.5,
+            borderpad=3, font=dict(size=9, color=_bfg),
+        ))
+
+        # Línea 1 — monto (grande)
+        _mcol = ("#0b0b0b" if _is_total
+                 else ("#0F6E56" if _val > 0 else "#A32D2D"))
+        _anns.append(dict(
+            x=_cat, y=0, xref="x", yref="paper",
+            yanchor="top", yshift=-8,
+            text=f"<b>S/ {_val:,.0f}</b>", showarrow=False,
+            font=dict(size=12, color=_mcol),
+        ))
+
+        # Línea 2 — % del total + nº SKUs
+        _pct_txt = ("<1%" if (not _is_total and _peso < 0.5)
+                    else f"{_peso:.0f}%")
+        _l2 = f"{_pct_txt} del total"
+        _n = _n_skus.get(str(_cat))
+        if _is_total and _n_skus:
+            _n = sum(_n_skus.values())
+        if _n:
+            _l2 += f" · {_n} SKUs"
+        _anns.append(dict(
+            x=_cat, y=0, xref="x", yref="paper",
+            yanchor="top", yshift=-26,
+            text=_l2, showarrow=False,
+            font=dict(size=10, color="#8a8a8a"),
+        ))
+
+        # Líneas 3 y 4 — TOP producto de la familia (si aplica)
+        _tp = _top_prod.get(str(_cat))
+        if _tp and not _is_total:
+            _tnom, _tval, _tpct = _tp
+            _tcol = "#0F6E56" if _val > 0 else "#A32D2D"
+            _anns.append(dict(
+                x=_cat, y=0, xref="x", yref="paper",
+                yanchor="top", yshift=-44,
+                text=f"<b>TOP: {_tnom.upper()}</b>", showarrow=False,
+                font=dict(size=9, color=_tcol),
+            ))
+            _anns.append(dict(
+                x=_cat, y=0, xref="x", yref="paper",
+                yanchor="top", yshift=-56,
+                text=f"S/ {_tval:,.0f} · {_tpct:.0f}% familia",
+                showarrow=False,
+                font=dict(size=9, color="#52514e"),
+            ))
+
+        # Línea 5 — delta vs periodo anterior (si aplica)
+        _dl = _delta.get(str(_cat))
+        if _dl and not _is_total:
+            _dir, _dpct = _dl
+            _arrow = "↓" if _dir == "down" else "↑"
+            _dcol = "#A32D2D" if _dir == "down" else "#0F6E56"
+            _anns.append(dict(
+                x=_cat, y=0, xref="x", yref="paper",
+                yanchor="top", yshift=-74,
+                text=f"<b>{_arrow} {_dpct:.0f}% vs anterior</b>",
+                showarrow=False,
+                font=dict(size=10, color=_dcol),
+            ))
+
+        # Línea 6 — nombre de la familia (reemplaza al tick del eje)
+        _ctxt = str(_cat)
+        if len(_ctxt) > 14:
+            _mid = _ctxt.rfind(" ", 0, 14)
+            if _mid > 0:
+                _ctxt = _ctxt[:_mid] + "<br>" + _ctxt[_mid+1:]
+        _anns.append(dict(
+            x=_cat, y=0, xref="x", yref="paper",
+            yanchor="top", yshift=-94,
+            text=_ctxt, showarrow=False,
+            font=dict(size=10, color="#52514e"),
+        ))
+
     fig.update_layout(**_layout_aj(
         title=title_html,
-        xaxis=dict(tickangle=-35, gridcolor=GRIS_BORDE),
+        # showticklabels=False: los nombres los pinta la annotation "Línea 6".
+        xaxis=dict(tickangle=0, gridcolor=GRIS_BORDE,
+                   showticklabels=False),
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f", gridcolor=GRIS_BORDE),
-        showlegend=False, height=380, waterfallgap=0.5,
+        showlegend=False, height=560, waterfallgap=0.5,
+        # margin.b=180 reserva espacio para las 5 líneas + nombre de familia.
+        margin=dict(l=60, r=30, t=80, b=180),
+        annotations=_anns,
     ))
-    _xcats = agg[grp_col].tolist() + ["TOTAL"]
-    fig.update_xaxes(tickmode="array", tickvals=_xcats,
-                     ticktext=_wrap_cat(_xcats))
 
     # ── Drill: clic en una familia → top-N de productos abajo ─────────────
     # Categorías clickeables (todas menos "TOTAL"). El foco vive en
@@ -1077,7 +1247,8 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
             _graf_waterfall_ajuste(d, col_familia, col_area, col_ajuste_val,
                                    col_producto=col_producto,
                                    col_valorizado=col_valorizado,
-                                   col_cantidad=col_cantidad)
+                                   col_cantidad=col_cantidad,
+                                   df_full=df_full, col_fecha=col_fecha)
         elif graf == "Mapa de calor":
             _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val)
         elif graf == "Distribución":
