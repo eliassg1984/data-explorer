@@ -1583,7 +1583,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     key=f"cp_prov_pivot_docs_{gran}_{_docs_inst}",
                 )
                 # Botón ⛶ de pantalla completa nativa (mismo patrón que las
-                # tablas de tablas.py): ancla el ⛶ en el riel de la tabla y usa
+                # tablas de tablas/): ancla el ⛶ en el riel de la tabla y usa
                 # la Fullscreen API sobre el iframe. En móvil se toca y se gira
                 # el teléfono a horizontal para ver todas las columnas; Esc / ✕
                 # restauran. Como el drill de Proveedor tiene UN solo AgGrid,
