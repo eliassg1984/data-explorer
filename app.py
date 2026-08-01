@@ -836,7 +836,7 @@ def _render_contenido():
     # ── COMPRAS ─────────────────────────────────────────────────────────────
     if reporte == "Compras":
         # Compras no usa G/T en la franja: la Tabla es una opción más dentro
-        # del selector de tipo de gráfico (ver graficos/compras.py). Los chips
+        # del selector de tipo de gráfico (ver graficos/compras/). Los chips
         # Familia/Subfamilia viven dentro de compras.py y se aplican por igual
         # a los gráficos y a la Tabla.
         renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)

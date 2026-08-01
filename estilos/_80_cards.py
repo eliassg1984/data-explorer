@@ -73,7 +73,7 @@ CSS = """    /* ================================================================
        Ahí SÍ queremos ver cada bloque bordeado (gráfico, paneles A/B,
        tabla) — el usuario lo pidió así (2026-07-25). Por eso el
        container externo de ese caso se declara SIN `border=True` en
-       graficos/compras.py, y cada bloque interno lleva su propio
+       graficos/compras/proveedor.py, y cada bloque interno lleva su propio
        `border=True`. Así las reglas de abajo no le aplican (no hay
        nada que anular).
 
@@ -135,7 +135,7 @@ CSS = """    /* ================================================================
     /* por el gris del app. Cada bloque declara su key con prefijo           */
     /* `compras_prov_card_` y esta regla les pinta el fondo blanco propio.   */
     /*                                                                       */
-    /* No tocar sin revisar `_compras_proveedor_drill` en graficos/compras.py*/
+    /* No tocar sin revisar `_compras_proveedor_drill` en graficos/compras/proveedor.py*/
     /* =================================================================== */
     div[class*="st-key-compras_prov_card_"] {
         background: var(--surface-2, #ffffff) !important;
