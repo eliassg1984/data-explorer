@@ -496,69 +496,117 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                     st.info("No hay una columna adecuada para desglosar "
                             "esta familia.")
                 else:
-                    _sub = (_det.groupby(dim, as_index=False)[col_ajuste_val]
-                            .sum())
+                    # Trae área y cantidad al agrupado si están disponibles,
+                    # para poder mostrarlos junto al producto/monto.
+                    # `first` asume 1 área por producto (cierto en esta data);
+                    # si el drill vino desde área, el subtítulo de área sería
+                    # redundante y se omite.
+                    _has_cant = bool(col_cantidad
+                                     and col_cantidad in _det.columns)
+                    _has_area = bool(col_area and col_area in _det.columns
+                                     and col_area != dim
+                                     and col_area != grp_col)
+                    _agg_map = {col_ajuste_val: "sum"}
+                    if _has_cant:
+                        _agg_map[col_cantidad] = "sum"
+                    if _has_area:
+                        _agg_map[col_area] = "first"
+                    _sub = _det.groupby(dim, as_index=False).agg(_agg_map)
                     _sub["_abs"] = _sub[col_ajuste_val].abs()
-                    _sub = _sub.sort_values("_abs", ascending=False).head(int(topn))
+                    _sub = _sub.sort_values(
+                        "_abs", ascending=False).head(int(topn))
                     if _sub.empty or _sub["_abs"].sum() == 0:
                         st.info("Sin datos para el drill de esta familia.")
                     else:
-                        # Barras horizontales, mayor arriba, color por signo.
-                        _sub = _sub.sort_values(col_ajuste_val, ascending=True)
-                        _colors = ["rgba(108,92,231,0.85)"
-                                   if v >= 0 else "rgba(239,68,68,0.85)"
-                                   for v in _sub[col_ajuste_val]]
-                        # Truncar nombres largos para el panel angosto.
-                        _y_labels = [(str(n)[:34] + "…") if len(str(n)) > 35
-                                     else str(n)
-                                     for n in _sub[dim].tolist()]
-                        fig_d = go.Figure(go.Bar(
-                            x=_sub[col_ajuste_val].tolist(),
-                            y=_y_labels,
-                            orientation="h",
-                            marker=dict(color=_colors),
-                            text=[f"S/ {v:,.0f}" for v in _sub[col_ajuste_val]],
-                            # textposition='auto': Plotly pone el label
-                            # dentro cuando la barra es grande y fuera
-                            # cuando es chica. Con 'outside' + cliponaxis
-                            # las barras largas dibujaban el label encima
-                            # del eje X.
-                            textposition="auto",
-                            insidetextanchor="end",
-                            hovertemplate=("%{y}<br><b>S/ %{x:,.2f}</b>"
-                                           "<extra></extra>"),
-                        ))
-                        fig_d.update_layout(**_layout_aj(
-                            # title_text='': evita el literal "undefined" que
-                            # sale al pasar title=None en algunas versiones
-                            # de Plotly.
-                            title_text="",
-                            xaxis=dict(tickprefix="S/ ", tickformat=",.0f",
-                                       gridcolor=GRIS_BORDE, zeroline=True,
-                                       zerolinecolor=GRIS_BORDE,
-                                       # nticks=4: evita "-15,000 -10,000
-                                       # -5,000 0" apretados y superpuestos.
-                                       nticks=4),
-                            # showticklabels=True: _layout oculta el Y por
-                            # default; aquí Y son NOMBRES de producto, no
-                            # valores — hay que forzarlos.
-                            yaxis=dict(gridcolor=GRIS_BORDE,
-                                       showticklabels=True,
-                                       automargin=True,
-                                       tickfont=dict(size=10)),
-                            showlegend=False,
-                            # Altura proporcional al nº de barras: cada fila
-                            # recibe ~26px fijos (antes 380px repartidos entre
-                            # todas → filas altas y barras gordas con top 5).
-                            # Con filas cortas, barra y hueco se achican juntos.
-                            height=max(180, 26 * len(_sub) + 60),
-                            bargap=0.35,
-                            margin=dict(l=4, r=12, t=10, b=10),
-                        ))
-                        st.plotly_chart(
-                            fig_d, use_container_width=True,
-                            key=f"ajuste_cascada_drill_{_slug(focus)}",
-                        )
+                        # Split: sobrantes arriba (verde), faltantes abajo
+                        # (rojo). Cada bloque con su propio eje X — mata la
+                        # comparación cruzada de escala pero rescata a los
+                        # sobrantes chicos de ser todos "pills" idénticos
+                        # cuando conviven con faltantes grandes.
+                        _pos = _sub[_sub[col_ajuste_val] > 0].sort_values(
+                            col_ajuste_val, ascending=True)
+                        _neg = _sub[_sub[col_ajuste_val] < 0].sort_values(
+                            col_ajuste_val, ascending=False)
+
+                        def _fig_split(_df, color_bar):
+                            _labels = []
+                            _texts = []
+                            for _, _r in _df.iterrows():
+                                _nom = str(_r[dim])
+                                if len(_nom) > 34:
+                                    _nom = _nom[:34] + "…"
+                                if _has_area:
+                                    _labels.append(
+                                        f"{_nom}<br>"
+                                        f"<span style='font-size:9px;"
+                                        f"color:#8a8a8a'>"
+                                        f"{_r[col_area]}</span>"
+                                    )
+                                else:
+                                    _labels.append(_nom)
+                                _t = f"S/ {_r[col_ajuste_val]:,.0f}"
+                                if _has_cant:
+                                    _t += f" · {int(_r[col_cantidad]):,} und"
+                                _texts.append(_t)
+                            _fig = go.Figure(go.Bar(
+                                x=_df[col_ajuste_val].tolist(),
+                                y=_labels, orientation="h",
+                                marker=dict(color=color_bar),
+                                text=_texts,
+                                textposition="auto",
+                                insidetextanchor="end",
+                                hovertemplate=("%{y}<br>"
+                                               "<b>S/ %{x:,.2f}</b>"
+                                               "<extra></extra>"),
+                            ))
+                            _fig.update_layout(**_layout_aj(
+                                title_text="",
+                                xaxis=dict(tickprefix="S/ ",
+                                           tickformat=",.0f",
+                                           gridcolor=GRIS_BORDE,
+                                           zeroline=True,
+                                           zerolinecolor=GRIS_BORDE,
+                                           nticks=4),
+                                yaxis=dict(gridcolor=GRIS_BORDE,
+                                           showticklabels=True,
+                                           automargin=True,
+                                           tickfont=dict(size=10)),
+                                showlegend=False,
+                                # Filas ~36px para el label de 2 líneas
+                                # (producto + área). Si no hay área, sigue
+                                # cómodo.
+                                height=max(140, 36 * len(_df) + 40),
+                                bargap=0.35,
+                                margin=dict(l=4, r=12, t=6, b=10),
+                            ))
+                            return _fig
+
+                        if not _pos.empty:
+                            st.markdown(
+                                "<div style='font-size:11px;font-weight:500;"
+                                "color:#0F6E56;letter-spacing:0.5px;"
+                                "margin:4px 0 -8px 0'>SOBRANTES</div>",
+                                unsafe_allow_html=True,
+                            )
+                            st.plotly_chart(
+                                _fig_split(_pos, "rgba(29,158,117,0.85)"),
+                                use_container_width=True,
+                                key=("ajuste_cascada_drill_pos_"
+                                     f"{_slug(focus)}"),
+                            )
+                        if not _neg.empty:
+                            st.markdown(
+                                "<div style='font-size:11px;font-weight:500;"
+                                "color:#A32D2D;letter-spacing:0.5px;"
+                                "margin:4px 0 -8px 0'>FALTANTES</div>",
+                                unsafe_allow_html=True,
+                            )
+                            st.plotly_chart(
+                                _fig_split(_neg, "rgba(239,68,68,0.85)"),
+                                use_container_width=True,
+                                key=("ajuste_cascada_drill_neg_"
+                                     f"{_slug(focus)}"),
+                            )
         else:
             st.caption("💡 Clic en una barra para ver su top "
                        "de productos.")
