@@ -411,9 +411,13 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             col_g, col_d = st.container(), None
 
         with col_g:
+            # Key incluye el foco: al cambiar de foco (o volver a None) la
+            # key cambia y Streamlit RECREA el widget desde cero, limpiando
+            # la selection persistente. Sin esto la selection sobrevive al
+            # rerun y provoca un toggle infinito (parpadeo).
             evt = st.plotly_chart(
                 fig, use_container_width=True,
-                key="ajuste_cascada_chart",
+                key=f"ajuste_cascada_chart_{focus or 'none'}",
                 on_select="rerun", selection_mode="points",
             )
         # Extraer punto clicado (tolerante a formato).
