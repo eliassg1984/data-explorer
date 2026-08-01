@@ -7,6 +7,13 @@ Este fichero existe para que cualquier persona **o IA** entienda el proyecto
 en 2 minutos y no rompa nada al modificarlo. Si cambias la estructura,
 actualiza este documento en el mismo commit.
 
+> **Nota sobre el uso con IA:** los asistentes cargan `CLAUDE.md`
+> automáticamente en cada sesión; este fichero **no**, solo lo leen si van a
+> buscarlo. Por eso `CLAUDE.md` es un resumen corto que apunta aquí. Lo que
+> deba conocerse *siempre* va en `CLAUDE.md`; el detalle completo vive aquí.
+> Si agregas una regla nueva abajo y es de las que muerden seguido, deja una
+> línea en `CLAUDE.md` que apunte a ella.
+
 ## Mapa de ficheros
 
 | Fichero | Trabajo (uno solo) |
@@ -161,3 +168,27 @@ salvo `icono`):
    ```python
    _layout = {k: v for k, v in _LAYOUT_BASE.items() if k not in ("xaxis", "yaxis")}
    fig.update_layout(**_layout, xaxis=dict(...), yaxis=dict(...))
+   ```
+
+6. **CSS por key: acotar al widget, nunca colgar del contenedor.** En
+   `estilos.py` las reglas matchean por prefijo de key. Un selector
+   descendiente como
+   `div[class*="st-key-<contenedor>_"] [data-testid="stButtonGroup"]`
+   captura **todo** widget de ese tipo dentro del contenedor, incluidos los
+   que se agreguen meses después — y desde el `.py` no hay ninguna pista de
+   que ese acoplamiento existe.
+   Motivo (bug real, 2026-08-01): una regla escrita para unos "chips de tipo
+   de gráfico" siguió viva después de que esos chips se eliminaran, y le
+   impuso forma de globo al selector "Top 5/10/20" del drill de la cascada.
+   Cambiar `st.pills` por `st.segmented_control` no cambió nada: ambos rinden
+   el mismo DOM `stButtonGroup`, así que la regla los alcanzaba igual.
+   **Regla:** el estilo de un widget puntual se acota a SU key
+   (`.st-key-<key_del_widget>`). Solo cuelga del contenedor lo que de verdad
+   deba aplicar a todos sus descendientes, presentes y futuros.
+   Es la misma lección que la regla #2 (paneles AgGrid), en otro escenario:
+   un selector sin acotar termina pisando algo que no era su objetivo.
+
+7. **Antes de estilar o agregar un widget, `grep` `estilos.py` por el prefijo
+   de key del contenedor donde vive.** Es el paso que convierte la regla #6 en
+   costumbre. Si un cambio de widget "no se ve", casi siempre hay una regla
+   del contenedor ganándole.
