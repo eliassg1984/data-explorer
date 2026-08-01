@@ -1,0 +1,365 @@
+"""estilos._00_base - Fundaciones: @import de la fuente, paleta :root, geometria de la cabecera fija, ocultado del chrome de Streamlit y resets globales de widgets. Todo lo demas asume que esto ya se aplico.
+
+Extraido de estilos.py (lineas 109-467 del original).
+El orden respecto a estilos/__init__.py es parte del comportamiento del CSS.
+"""
+
+CSS = """    <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
+
+    /* ============ PALETA DE COLORES — TEMA CALLAI (Lavender Indigo) ============ */
+    :root {
+        --bg-primary: #f6f6f8;      /* lienzo general */
+        --bg-secondary: #ffffff;
+        --bg-sidebar: #ffffff;      /* sidebar blanco estilo CallAI */
+        --bg-card: #ffffff;
+        --bg-hover: #f0edfe;        /* hover lavanda suave */
+        --text-primary: #18181d;    /* casi negro */
+        --text-secondary: #71717a;
+        --text-muted: #a2a2ad;
+        --accent: #6c5ce7;          /* Lavender Indigo */
+        --accent-hover: #5a4ad9;
+        --accent-deep: #4938b8;
+        --accent-light: #e7e3fb;    /* lavanda 100 */
+        --accent-tint: #f0edfe;     /* lavanda 50 */
+        --border: #e6e6eb;
+        --success: #16a34a;
+        --success-bg: #f0fdf4;
+        --warning: #f97316;
+        --warning-bg: #fff7ed;
+        --warning-border: #fdba74;
+        --warning-text: #c2410c;
+        --danger: #ef4444;
+        --danger-bg: #fee2e2;
+        --danger-border: #fca5a5;
+        --danger-text: #991b1b;
+        --border-lavender: #d4cdf7; /* borde lavanda de pastillas/inputs */
+        --icon-muted: #85858f;
+        --focus-lavender: #b9aff2;  /* borde de foco/selección */
+        --line-soft: #f1f1f4;
+        --exit-hover: #52525c;
+        --scroll-thumb: #d6d6dd;
+        --shadow: 0 1px 3px rgba(16, 16, 20, 0.05), 0 1px 2px rgba(16, 16, 20, 0.04);
+        --shadow-md: 0 4px 6px rgba(16, 16, 20, 0.05), 0 2px 4px rgba(16, 16, 20, 0.03);
+
+        /* ==================================================================
+           GEOMETRÍA DE LA CABECERA FIJA — AJUSTE DE INVENTARIO
+           Única fuente de verdad de la franja blanca superior. Todos los
+           elementos fijados (banda, pestañas, chips) y la compensación del
+           contenido derivan de estas variables. NUNCA escribir estos px
+           sueltos en otras reglas; consumir siempre la variable.
+           Mapa completo de knobs: ver arquitectura.md § Cabecera fija.
+           ================================================================== */
+        /* Franja de UN SOLO NIVEL (título + filtros + fecha). Los tabs
+           Gráficos/Tabla salieron de la banda al canvas, así que la altura
+           baja de 104px (2 niveles) a ~50px (1 nivel). Ajustable en preview. */
+        --cab-altura: 50px;
+        --cab-nivel1-top: 30px;
+        --cab-nivel2-top: 52px;   /* legacy: ya no hay nivel 2 en la banda */
+        --cab-offset-contenido: 58px;
+
+        /* ==================================================================
+           BARRA INFERIOR DE NAVEGACIÓN EN MÓVIL (bottom nav)
+           Debe coincidir con NAV_MOVIL_ALTO en navegacion.py (60px).
+           ================================================================== */
+        --nav-movil-alto: 60px;
+    }
+
+    /* ============ HEADER NATIVO + ESPACIO SUPERIOR ============ */
+    header[data-testid="stHeader"],
+    .stAppHeader {
+        background: transparent !important;
+        border-bottom: none !important;
+        box-shadow: none !important;
+        height: 0 !important;
+        min-height: 0 !important;
+    }
+
+    /* PADDING SUPERIOR — DEFAULT GLOBAL (nivel 1 de 3).
+       Jerarquía documentada en ARQUITECTURA.md:
+         1) Este default global (1.5rem).
+         2) Override POR SECCIÓN en navegacion.py (p.ej. _CSS_AJUSTE, 0.85rem).
+         3) Override MÓVIL en el @media (max-width: 768px) de este fichero. */
+    .stMainBlockContainer,
+    [data-testid="stMainBlockContainer"],
+    .block-container {
+        padding-top: 1.5rem !important;
+    }
+
+    [data-testid="stSidebarHeader"] {
+        height: 2rem !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+
+    /* ============ IFRAMES INVISIBLES (por defecto) ============ */
+    [data-testid="stIFrame"] {
+        height: 0 !important;
+        min-height: 0 !important;
+        display: block !important;
+    }
+    [data-testid="stElementContainer"]:has([data-testid="stIFrame"]) {
+        height: 0 !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* ============ EXCEPCIÓN: PANEL DE RENDIMIENTO DEL NAVEGADOR ============ */
+    .st-key-perf_browser_expander [data-testid="stIFrame"] {
+        height: 300px !important;
+        min-height: 300px !important;
+        display: block !important;
+    }
+    .st-key-perf_browser_expander [data-testid="stElementContainer"]:has([data-testid="stIFrame"]) {
+        height: auto !important;
+        min-height: 300px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+    }
+
+    /* ============ BOTÓN PARA EXPANDIR EL SIDEBAR ============ */
+    [data-testid*="SidebarCollaps"],
+    [data-testid="collapsedControl"],
+    [data-testid*="xpandSidebar"] {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    /* ============ ESTILOS BASE ============ */
+    [data-testid="stAppViewContainer"] {
+        background: var(--bg-primary);
+    }
+
+    h1 {
+        margin-bottom: 0.2rem !important;
+        padding-top: 0 !important;
+        color: var(--text-primary) !important;
+        font-size: 1.6rem !important;
+        font-weight: 700 !important;
+    }
+
+    [data-testid="stSidebar"] {
+        background: var(--bg-sidebar);
+        border-right: 1px solid var(--border);
+    }
+
+    html, body, [class*="css"] {
+        font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        color: var(--text-primary);
+    }
+
+    h2, h3 {
+        color: var(--text-primary) !important;
+        font-weight: 600 !important;
+    }
+
+    h4 {
+        color: var(--accent) !important;
+        font-weight: 600 !important;
+    }
+
+    label {
+        color: var(--text-secondary) !important;
+        font-size: 0.78rem !important;
+        text-transform: uppercase;
+        font-weight: 600 !important;
+    }
+
+    /* ============ INPUTS Y BOTONES ============ */
+    .stSelectbox > div > div,
+    .stMultiSelect > div > div,
+    .stDateInput > div > div {
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+    }
+
+    .stSelectbox > div > div:hover,
+    .stMultiSelect > div > div:hover {
+        border-color: var(--accent) !important;
+    }
+
+    button[kind="secondary"] {
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text-primary) !important;
+        border-radius: 8px !important;
+    }
+
+    button[kind="secondary"]:hover {
+        background: var(--bg-hover) !important;
+        border-color: var(--accent) !important;
+    }
+
+    button[kind="primary"] {
+        background: var(--accent) !important;
+        border: none !important;
+        color: white !important;
+        border-radius: 10px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 1px 2px rgba(108, 92, 231, 0.28) !important;
+    }
+
+    button[kind="primary"]:hover {
+        background: var(--accent-hover) !important;
+    }
+
+    /* ============ EXPANDER ============ */
+    .streamlit-expanderHeader {
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        color: var(--text-primary) !important;
+    }
+
+    .streamlit-expanderContent {
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border) !important;
+        border-top: none !important;
+        border-radius: 0 0 8px 8px !important;
+    }
+
+    /* ============ CAPTION Y ALERTAS ============ */
+    .stCaption {
+        color: var(--text-muted) !important;
+    }
+
+    .stWarning {
+        background: var(--warning-bg) !important;
+        border: 1px solid var(--warning-border) !important;
+        color: var(--warning-text) !important;
+        border-radius: 8px !important;
+    }
+
+    .stInfo {
+        background: var(--accent-light) !important;
+        border: 1px solid var(--focus-lavender) !important;
+        color: var(--accent-deep) !important;
+        border-radius: 8px !important;
+    }
+
+    .stError {
+        background: var(--danger-bg) !important;
+        border: 1px solid var(--danger-border) !important;
+        color: var(--danger-text) !important;
+        border-radius: 8px !important;
+    }
+
+    /* ============ SIDEBAR NAV ============ */
+    [data-testid="stSidebar"] .nav-link {
+        background: var(--bg-secondary) !important;
+        color: var(--text-secondary) !important;
+        border: 1px solid var(--border) !important;
+    }
+
+    [data-testid="stSidebar"] .nav-link:hover {
+        background: var(--bg-hover) !important;
+        color: var(--accent-hover) !important;
+        border-color: var(--focus-lavender) !important;
+    }
+
+    [data-testid="stSidebar"] .nav-link-selected {
+        background: var(--accent) !important;
+        color: var(--bg-secondary) !important;
+        border-color: var(--accent) !important;
+    }
+
+    /* ============ AGGRID - ANCHO COMPLETO ============ */
+    .ag-root-wrapper {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .ag-body-viewport {
+        overflow-x: auto !important;
+    }
+
+    /* ============ CONTROL DE TAMAÑO EN SIDEBAR ============ */
+    [data-testid="stSidebar"] .stSlider {
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+
+    /* ============ MÓVIL — LAYOUT GENERAL ============ */
+    @media screen and (max-width: 768px) {
+        header[data-testid="stHeader"] {
+            background: transparent !important;
+            box-shadow: none !important;
+            border-bottom: none !important;
+        }
+
+        [data-testid="stAppViewContainer"] {
+            padding-top: 0 !important;
+            margin-top: 0 !important;
+        }
+
+        [data-testid="stMain"] {
+            padding: 0.5rem 0.5rem !important;
+            margin-top: 0 !important;
+        }
+
+        .block-container,
+        .stMainBlockContainer {
+            padding: 0.5rem !important;
+            margin-top: 0 !important;
+            gap: 0 !important;
+        }
+
+        [data-testid="stHorizontalBlock"] {
+            flex-direction: column !important;
+        }
+        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+        [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+            min-width: 100% !important;
+        }
+
+        [data-testid="stSidebar"] {
+            max-height: 100vh;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            -webkit-overflow-scrolling: touch;
+            background: var(--bg-sidebar) !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        [data-testid="stSidebarUserContent"] {
+            padding: 12px 8px !important;
+        }
+
+        [data-testid="stSidebarCollapsedControl"] button,
+        [data-testid="stExpandSidebarButton"] button,
+        [data-testid="collapsedControl"] button {
+            width: 44px !important;
+            height: 44px !important;
+            min-height: 44px !important;
+            padding: 8px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+
+        h1 {
+            font-size: 1.3rem !important;
+            margin-top: 0 !important;
+            padding-top: 0.5rem !important;
+        }
+        h2 { font-size: 1.1rem !important; }
+        h3 { font-size: 1rem !important; }
+        label { font-size: 0.7rem !important; }
+
+        .stApp { padding: 0 !important; }
+
+        button {
+            min-height: 44px !important;
+            padding: 10px 16px !important;
+            font-size: 0.9rem !important;
+        }
+    }
+"""

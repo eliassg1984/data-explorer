@@ -22,7 +22,7 @@ actualiza este documento en el mismo commit.
 | `data.py` | Carga de datos: DuckDB + httpfs leyendo parquets de R2 (secrets). Sistema de refresco bajo demanda vía R2. |
 | `tablas.py` | Renderizado de tablas AgGrid: `renderizar_aggrid_desktop`, `renderizar_aggrid_movil`, `renderizar_aggrid_compras`, `renderizar_tabla_compras` (legacy). |
 | `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `render_vista_pills`. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), `ajuste.py`, `compras.py`, `ventas.py`, `inventario.py` (v2), `constructor.py` (Power BI, usado por Compras), `legacy.py` (Inventario v1, respaldo no re-exportado). **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
-| `estilos.py` | CSS global de la app Streamlit (chips, tabs, píldora de fecha, iframes, toasts...). |
+| `estilos/` | **Paquete del CSS global** (refactor 2026-08-01; antes un `estilos.py` de 1.700 líneas). `__init__.py` mantiene la API pública (`TAM_FUENTE`, `get_css`, `inject_css`) y concatena las secciones. Una sección por módulo, con prefijo numérico que marca el orden: `_00_base`, `_10_vista`, `_20_compras_rail`, `_30_filtros`, `_40_ajuste_franja`, `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`, `_90_franja_inferior`, `_99_movil`. **El orden de `_SECCIONES` es parte del comportamiento**: hay `!important` en ambos lados de varios conflictos, así que gana la regla que va DESPUÉS — por eso `_99_movil` cierra. |
 | `navegacion.py` | Rail lateral, topbar y CSS por sección (`_CSS_AJUSTE`). Botón de refresco aislado en su propio `@st.fragment`. |
 | `inyecciones.py` | Funciones `inject_*`: JS/HTML inyectado (overlay de errores, inspector de elementos, health-check del grid, paginación v2 con números y salto, maximizar AgGrid con Fullscreen API, altura dinámica del grid, fix panel columnas de Ajuste). |
 | `tema.py` | **Paleta de colores con nombre, definida UNA vez.** Todos los demás importan de aquí. |
@@ -124,11 +124,12 @@ salvo `icono`):
    - **`tema.py`** (Python) — para colores usados desde código Python:
      `navegacion.py` (f-strings), `graficos.py` (Plotly), diccionarios
      `custom_css` de AgGrid. Se importa: `from tema import ACENTO, ...`.
-   - **`:root` de `estilos.py`** (CSS) — para el CSS global inyectado como
-     string. Ese bloque define variables (`--accent`, `--border`...) y el
-     resto del fichero las usa con `var(--...)`. Es la fuente única del CSS.
+   - **`:root` de `estilos/_00_base.py`** (CSS) — para el CSS global inyectado
+     como string. Ese bloque define variables (`--accent`, `--border`...) y
+     todos los demás módulos de `estilos/` las usan con `var(--...)`. Es la
+     fuente única del CSS.
    Ambas tienen los MISMOS valores a propósito. No se pueden fusionar en una
-   sola (Python y CSS son mundos distintos; el CSS de `estilos.py` no es
+   sola (Python y CSS son mundos distintos; el CSS de `estilos/` no es
    f-string y meter Python exigiría escapar todas las llaves `{}`).
    **Regla al cambiar un color:** actualizarlo en las DOS caras si aplica a
    ambas. Motivo del refactor: había 100+ colores repetidos a mano; cambiar
@@ -171,7 +172,7 @@ salvo `icono`):
    ```
 
 6. **CSS por key: acotar al widget, nunca colgar del contenedor.** En
-   `estilos.py` las reglas matchean por prefijo de key. Un selector
+   `estilos/` las reglas matchean por prefijo de key. Un selector
    descendiente como
    `div[class*="st-key-<contenedor>_"] [data-testid="stButtonGroup"]`
    captura **todo** widget de ese tipo dentro del contenedor, incluidos los
@@ -188,7 +189,7 @@ salvo `icono`):
    Es la misma lección que la regla #2 (paneles AgGrid), en otro escenario:
    un selector sin acotar termina pisando algo que no era su objetivo.
 
-7. **Antes de estilar o agregar un widget, `grep` `estilos.py` por el prefijo
+7. **Antes de estilar o agregar un widget, `grep` `estilos/` por el prefijo
    de key del contenedor donde vive.** Es el paso que convierte la regla #6 en
    costumbre. Si un cambio de widget "no se ve", casi siempre hay una regla
    del contenedor ganándole.

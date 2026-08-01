@@ -11,15 +11,32 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 ## Flujo de trabajo
 
 - Push directo a `main`. No hay staging: se valida en Streamlit Cloud.
-- El preview local **no toma cambios de `estilos.py`** al navegar — hay que
+- El preview local **no toma cambios de `estilos/`** al navegar — hay que
   reiniciar el server para verificar estilos.
 - Cada cambio se pushea y se confirma explícitamente. Si algo NO se pusheó,
   decirlo — si no, se diagnostican "conflictos" que no existen.
 
-## Antes de agregar un widget dentro de una tarjeta: grep `estilos.py`
+## El CSS vive en `estilos/`, una sección por módulo
+
+`estilos/` es un paquete (antes era un `estilos.py` de 1.700 líneas). La API
+pública no cambió: `from estilos import TAM_FUENTE, inject_css`.
+
+Cada sección tiene su módulo, con prefijo numérico que marca el orden:
+`_00_base` → `_10_vista` → `_20_compras_rail` → `_30_filtros` →
+`_40_ajuste_franja` → `_50_fecha` → `_60_calendario` → `_70_chrome` →
+`_80_cards` → `_90_franja_inferior` → `_99_movil`.
+
+**El orden de `_SECCIONES` en `__init__.py` es parte del comportamiento**, no
+estética: hay `!important` en ambos lados de varios conflictos, así que gana
+la regla que aparece DESPUÉS. `_99_movil` va último a propósito.
+
+Para cambiar un estilo, ubica la sección por el nombre del módulo. Para
+agregar una, crea el módulo y súmalo a `_SECCIONES` en la posición correcta.
+
+## Antes de agregar un widget dentro de una tarjeta: grep `estilos/`
 
 El CSS de la app **matchea por prefijo de key**, no por widget. Muchas reglas
-en `estilos.py` son selectores descendientes:
+son selectores descendientes:
 
 ```css
 div[class*="st-key-<prefijo>_"] [data-testid="stButtonGroup"] button { ... }
@@ -29,7 +46,7 @@ Eso captura **todo** widget descendiente, incluidos los que agregues después.
 Un `st.pills` nuevo dentro de esa tarjeta hereda el estilo sin que nada en el
 `.py` lo insinúe.
 
-**Regla:** antes de agregar o restilizar un widget, `grep` en `estilos.py` por
+**Regla:** antes de agregar o restilizar un widget, `grep` en `estilos/` por
 el prefijo de key del contenedor donde vive. Si el estilo es para un widget
 puntual, acótalo a su key propia, no al contenedor.
 
@@ -41,7 +58,7 @@ no es el widget — es una regla CSS del contenedor. Ambos rinden el mismo DOM
 
 Dos caras de la misma paleta, hay que mantener ambas:
 - `tema.py` (Python) → Plotly, f-strings, `custom_css` de AgGrid.
-- `:root` en `estilos.py` (CSS) → todo el CSS global, vía `var(--...)`.
+- `:root` en `estilos/_00_base.py` (CSS) → todo el CSS global, vía `var(--...)`.
 
 Detalle en `arquitectura.md` § Reglas #1.
 
