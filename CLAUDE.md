@@ -94,6 +94,24 @@ Detalle en `arquitectura.md` § Reglas #1.
 (`_DASHBOARDS = {reporte: render_fn}`). **Agregar un dashboard = crear
 `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** No cadenas de if/elif.
 
+## Auditar el layout antes de proponer píxeles
+
+La app **sí corre en local** en modo demo (`data.py::_datos_demo` cuando no
+hay secrets R2). Levantarla con `streamlit run app.py` o el preview del
+editor y usar `herramientas/auditar_layout.js`:
+
+1. En DevTools → Console, pegar el contenido del archivo.
+2. Llamar `auditar()`. Reporta ancho útil, contenedores por altura, alertas
+   de los que superan umbrales, outliers dentro de una misma familia de key
+   y desborde horizontal — todo con selectores para saltar al elemento.
+
+Antes de discutir por qué "algo se ve grande", medir. `auditar()` responde
+en 10 segundos y evita ida-y-vuelta de deploys + capturas.
+
+También existe el inspector propio: **`?debug=1` en la URL o `Alt+I`**
+activa `inject_element_inspector` (tooltip con selectores y estilos al
+pasar el cursor) más el panel de diagnóstico.
+
 ## Al terminar un cambio estructural
 
 Actualiza `arquitectura.md` en el mismo commit. Si el cambio enseñó algo que
