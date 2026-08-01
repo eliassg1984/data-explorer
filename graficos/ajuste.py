@@ -513,8 +513,12 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                        automargin=True,
                                        tickfont=dict(size=10)),
                             showlegend=False,
-                            height=380,
-                            bargap=0.25,
+                            # Altura proporcional al nº de barras: cada fila
+                            # recibe ~26px fijos (antes 380px repartidos entre
+                            # todas → filas altas y barras gordas con top 5).
+                            # Con filas cortas, barra y hueco se achican juntos.
+                            height=max(180, 26 * len(_sub) + 60),
+                            bargap=0.35,
                             margin=dict(l=4, r=50, t=10, b=10),
                         ))
                         st.plotly_chart(
