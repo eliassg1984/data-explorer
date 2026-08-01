@@ -102,31 +102,6 @@ CSS = """    /* ================================================================
         box-shadow: none !important;
     }
 
-    /* Pills de EXCLUSIÓN de la cascada de Ajuste ("Excluir top N").
-       Forma de píldora redonda, para diferenciarse del selector de vista.
-
-       ACOTADO A SU PROPIA KEY, a propósito. Antes esta regla colgaba del
-       contenedor (`st-key-ajuste_graf_card_izq_ [data-testid=stButtonGroup]`)
-       y capturaba CUALQUIER grupo de botones dentro de la tarjeta, incluidos
-       los que se agregaran después: el selector "Top 5/10/20" del drill nació
-       con este mismo globo sin que nada en ajuste.py lo insinuara, y cambiarlo
-       a st.segmented_control no sirvió de nada (mismo DOM stButtonGroup).
-       Su comentario además describía unos "chips de tipo de gráfico" que ya
-       se habían eliminado (ver ajuste.py, nota del layout apilado).
-       Si necesitas este look en otro widget, añade SU key a esta regla —
-       no vuelvas a colgarla del contenedor. */
-    .st-key-ajuste_cascada_excl_top [data-testid="stButtonGroup"] {
-        gap: 8px !important;
-        flex-wrap: wrap !important;
-        margin-bottom: 8px !important;
-    }
-    .st-key-ajuste_cascada_excl_top [data-testid="stButtonGroup"] button {
-        min-height: 36px !important;
-        padding: 8px 14px !important;
-        font-size: 13px !important;
-        border-radius: 999px !important;
-    }
-
     /* =================================================================== */
     /* TARJETAS DEL DRILL DE PROVEEDOR (Compras)                             */
     /*                                                                       */

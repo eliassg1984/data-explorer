@@ -264,21 +264,42 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         _prods_ranked = _rank[col_producto].astype(str).tolist()
         _todos_prods = sorted(_prod_s.dropna().unique().tolist())
 
-        c_top, c_mul = st.columns([1.8, 3])
-        with c_top:
-            _top_ex = st.pills(
-                "Excluir top (por |ajuste|)",
-                [0, 1, 3, 5, 8, 10],
-                default=0, key="ajuste_cascada_excl_top",
-                format_func=lambda n: "Ninguno" if n == 0 else f"Top {n}",
-            )
-            _top_ex = int(_top_ex or 0)
-        with c_mul:
-            _manual = st.multiselect(
-                "Excluir productos específicos", _todos_prods,
-                key="ajuste_cascada_excl_manual",
-                placeholder="Elige productos a excluir (ej. errores de data)…",
-            )
+        # Los dos controles viven dentro de un popover: se usan para corregir
+        # errores de captura, no en cada análisis, así que no merecen ocupar
+        # ancho fijo arriba del gráfico. El badge del label muestra cuántos
+        # productos quedan excluidos aunque el popover esté cerrado.
+        #
+        # El count se lee de session_state ANTES de dibujar los widgets: el
+        # label se arma arriba, pero las keys son las mismas de adentro, así
+        # que tras el primer rerun el número ya es el correcto (mismo patrón
+        # que los chips de filtro en app.py).
+        _n_top = int(st.session_state.get("ajuste_cascada_excl_top") or 0)
+        _n_man = len(st.session_state.get("ajuste_cascada_excl_manual") or [])
+        _n_prev = len(set(_prods_ranked[:_n_top]) |
+                      set(st.session_state.get("ajuste_cascada_excl_manual")
+                          or []))
+        _lbl = ":material/filter_alt_off: Excluir productos"
+        if _n_prev:
+            _lbl += f" :violet-badge[{_n_prev}]"
+
+        # Columna angosta: el popover no debe estirarse a todo el ancho.
+        c_pop, _ = st.columns([1, 3])
+        with c_pop:
+            with st.popover(_lbl, use_container_width=True):
+                _top_ex = st.select_slider(
+                    "Excluir el top N por |ajuste|",
+                    options=[0, 1, 3, 5, 8, 10],
+                    value=0, key="ajuste_cascada_excl_top",
+                    format_func=lambda n: "Ninguno" if n == 0 else f"Top {n}",
+                    help="Quita los N productos de mayor ajuste absoluto — "
+                         "sirve cuando un error de captura domina la cascada.",
+                )
+                _top_ex = int(_top_ex or 0)
+                _manual = st.multiselect(
+                    "…o elegir productos puntuales", _todos_prods,
+                    key="ajuste_cascada_excl_manual",
+                    placeholder="Buscar producto…",
+                )
 
         if _top_ex > 0:
             excluidos.update(_prods_ranked[:_top_ex])
@@ -286,11 +307,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
 
         if excluidos:
             df = df[~df[col_producto].astype(str).isin(excluidos)]
-            _lst = sorted(excluidos)
-            _prev = ", ".join(_lst[:3])
-            _extra = "" if len(_lst) <= 3 else f" (+{len(_lst) - 3} más)"
-            st.caption(f"⚠️ {len(_lst)} producto(s) excluido(s): "
-                       f"{_prev}{_extra}")
 
     agg = (df.groupby(grp_col, as_index=False)[col_ajuste_val]
            .sum().sort_values(col_ajuste_val))
