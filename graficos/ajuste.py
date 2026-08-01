@@ -249,8 +249,54 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         st.info("Se necesita columna de familia o área para el gráfico de cascada.")
         return
 
+    # ── Controles de exclusión (arriba del card) ───────────────────────
+    # Errores manuales en la data (ej. un producto con faltante enorme)
+    # pueden dominar la cascada. El usuario puede excluir por top N o por
+    # producto puntual; el filtro se aplica al df antes de calcular agg.
+    excluidos = set()
+    if col_producto and col_producto in df.columns:
+        _prod_s = df[col_producto].astype(str)
+        # Ranking global por |ajuste| — el "top faltantes+sobrantes".
+        _rank = (df.groupby(col_producto, as_index=False)[col_ajuste_val]
+                 .sum())
+        _rank["_abs"] = _rank[col_ajuste_val].abs()
+        _rank = _rank.sort_values("_abs", ascending=False)
+        _prods_ranked = _rank[col_producto].astype(str).tolist()
+        _todos_prods = sorted(_prod_s.dropna().unique().tolist())
+
+        c_top, c_mul = st.columns([1.8, 3])
+        with c_top:
+            _top_ex = st.pills(
+                "Excluir top (por |ajuste|)",
+                [0, 1, 3, 5, 8, 10],
+                default=0, key="ajuste_cascada_excl_top",
+                format_func=lambda n: "Ninguno" if n == 0 else f"Top {n}",
+            )
+            _top_ex = int(_top_ex or 0)
+        with c_mul:
+            _manual = st.multiselect(
+                "Excluir productos específicos", _todos_prods,
+                key="ajuste_cascada_excl_manual",
+                placeholder="Elige productos a excluir (ej. errores de data)…",
+            )
+
+        if _top_ex > 0:
+            excluidos.update(_prods_ranked[:_top_ex])
+        excluidos.update(str(p) for p in _manual)
+
+        if excluidos:
+            df = df[~df[col_producto].astype(str).isin(excluidos)]
+            _lst = sorted(excluidos)
+            _prev = ", ".join(_lst[:3])
+            _extra = "" if len(_lst) <= 3 else f" (+{len(_lst) - 3} más)"
+            st.caption(f"⚠️ {len(_lst)} producto(s) excluido(s): "
+                       f"{_prev}{_extra}")
+
     agg = (df.groupby(grp_col, as_index=False)[col_ajuste_val]
            .sum().sort_values(col_ajuste_val))
+    if agg.empty:
+        st.info("No queda nada para graficar después de las exclusiones.")
+        return
     total = float(agg[col_ajuste_val].sum())
 
     # Peso relativo (sobre suma de |valores|): siempre suma 100%, no se
