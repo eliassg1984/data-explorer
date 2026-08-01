@@ -21,7 +21,7 @@ actualiza este documento en el mismo commit.
 | `app.py` | Orquestador: navegación, filtros, fragmentos, llama a los renderizadores. |
 | `data.py` | Carga de datos: DuckDB + httpfs leyendo parquets de R2 (secrets). Sistema de refresco bajo demanda vía R2. |
 | `tablas/` | **Paquete de tablas AgGrid** (refactor 2026-08-01; antes un `tablas.py` de 2.028 líneas). `__init__.py` re-exporta la API pública. `_css.py` (CSS de grid y paneles), `_config.py` (estilos de celda/fila, sidebar, totales), `desktop.py` (`renderizar_aggrid_desktop`), `movil.py` (`renderizar_aggrid_movil`), `compras.py` (`renderizar_aggrid_compras` + `renderizar_tabla_compras`, esta última legacy y sin uso). |
-| `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `render_vista_pills`. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), `ajuste.py`, `ventas.py`, `inventario.py` (v2), `constructor.py` (Power BI, usado por Compras), `legacy.py` (Inventario v1, respaldo no re-exportado). **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py` — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
+| `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `render_vista_pills`. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), `ajuste.py` (ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10), `ventas.py`, `inventario.py` (v2), `constructor.py` (Power BI, usado por Compras), `legacy.py` (Inventario v1, respaldo no re-exportado). **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py` — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
 | `estilos/` | **Paquete del CSS global** (refactor 2026-08-01; antes un `estilos.py` de 1.700 líneas). `__init__.py` mantiene la API pública (`TAM_FUENTE`, `get_css`, `inject_css`) y concatena las secciones. Una sección por módulo, con prefijo numérico que marca el orden: `_00_base`, `_10_vista`, `_20_compras_rail`, `_30_filtros`, `_40_ajuste_franja`, `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`, `_90_franja_inferior`, `_99_movil`. **El orden de `_SECCIONES` es parte del comportamiento**: hay `!important` en ambos lados de varios conflictos, así que gana la regla que va DESPUÉS — por eso `_99_movil` cierra. |
 | `navegacion.py` | Rail lateral, topbar y CSS por sección (`_CSS_AJUSTE`). Botón de refresco aislado en su propio `@st.fragment`. |
 | `inyecciones/` | **Paquete de JS/HTML inyectado** (refactor 2026-08-01; antes un `inyecciones.py` de 1.813 líneas). `_fragmentos.py` (CSS/JS compartido), `grid.py` (salud, altura, maximizar, panel de columnas), `paginacion.py`, `inspector.py` (herramienta de desarrollo), `varios.py` (overlay de errores, fullscreen, footer, calendario). Ninguna función depende de otra: las únicas dependencias internas apuntan a las constantes de `_fragmentos.py`. |
@@ -193,3 +193,33 @@ salvo `icono`):
    de key del contenedor donde vive.** Es el paso que convierte la regla #6 en
    costumbre. Si un cambio de widget "no se ve", casi siempre hay una regla
    del contenedor ganándole.
+
+8. **Nunca `align-items: center` en un `stHorizontalBlock` que hace de fila
+   de tabla.** Con `center` las `stColumn` dejan de estirarse y colapsan a la
+   altura del hijo más chico — en el bug real, 6px de columna con 30px de
+   contenido adentro. Como el overflow queda `visible`, el texto se sigue
+   viendo pero **las filas se pisan entre sí**, y en el DOM la altura muere
+   varios niveles arriba del contenido (la cadena entera reporta 6px mientras
+   `stMarkdownContainer` reporta 30px), así que el síntoma no apunta a la
+   causa.
+   **Regla:** el alto de la fila lo fija `min-height` en el
+   `stHorizontalBlock`; el centrado vertical va DENTRO de cada celda
+   (`stMarkdownContainer` con `display:flex; justify-content:center`), que es
+   HTML propio y no pelea con el layout de Streamlit.
+   Motivo (bug real, 2026-08-01): la cascada de Ajuste como tabla de filas.
+
+9. **Un bloque que aparece/desaparece necesita un *instance id* en las keys
+   de sus hijos.** Al pasar de cerrado a abierto, Streamlit reusa los nodos
+   DOM; Plotly y AgGrid no re-miden el ancho del contenedor y salen vacíos o
+   con columnas colapsadas. Se incrementa un contador en `session_state` en
+   cada apertura y se anexa a la key de cada hijo para forzar remount limpio.
+   Está en el drill de Proveedor de Compras (`compras/proveedor.py`) y en el
+   de la cascada de Ajuste (`ajuste.py`).
+
+10. **Los datos demo no traen las columnas de Ajuste** (`AJUSTE VALORIZADO`
+    y compañía), así que la vista cae al explorador genérico y la cascada no
+    se puede verificar levantando la app. Para tocarla, montar un harness
+    con datos sintéticos que llame directo a `_graf_waterfall_ajuste` y
+    levantarlo como segunda config en `.claude/launch.json`. Medir con JS
+    (`getBoundingClientRect` + `scrollHeight`) encuentra los colapsos de
+    layout que una captura de pantalla no delata.
