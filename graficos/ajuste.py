@@ -389,6 +389,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     # antes). El delta requiere df_full + col_fecha; si no vienen, se omite.
     _n_skus = {}
     _top_prod = {}  # fam -> (nombre_truncado, valor, pct_familia)
+    _conc3 = {}     # fam -> % que concentran los 3 productos mayores
     if col_producto and col_producto in df.columns:
         for _fam in agg[grp_col].tolist():
             _s = df[df[grp_col].astype(str) == str(_fam)]
@@ -396,15 +397,30 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             _tp = (_s.groupby(col_producto, as_index=False)[col_ajuste_val]
                    .sum())
             _tp["_abs"] = _tp[col_ajuste_val].abs()
-            _tp = _tp.sort_values("_abs", ascending=False).head(1)
+            _tp = _tp.sort_values("_abs", ascending=False)
+            _abs_fam = float(_tp["_abs"].sum())
+            if _abs_fam > 1e-9 and len(_tp) > 3:
+                _conc3[str(_fam)] = (float(_tp["_abs"].head(3).sum())
+                                     / _abs_fam * 100)
             if not _tp.empty:
                 _nom = str(_tp[col_producto].iloc[0])
-                if len(_nom) > 20:
-                    _nom = _nom[:19] + "…"
+                if len(_nom) > 24:
+                    _nom = _nom[:23] + "…"
                 _val = float(_tp[col_ajuste_val].iloc[0])
-                _vfam = float(_s[col_ajuste_val].sum()) or 1.0
-                _pctf = abs(_val) / max(abs(_vfam), 1e-9) * 100
+                _pctf = (float(_tp["_abs"].iloc[0]) / _abs_fam * 100
+                         if _abs_fam > 1e-9 else 0.0)
                 _top_prod[str(_fam)] = (_nom, _val, _pctf)
+
+    # % del ajuste sobre el valorizado de la propia familia — responde
+    # "¿es grave PARA ESTA familia?", que el % del total no contesta.
+    _pct_val = {}
+    if col_valorizado and col_valorizado in df.columns:
+        _vv = df.groupby(grp_col)[col_valorizado].sum()
+        for _fam in agg[grp_col].tolist():
+            _base = float(_vv.get(_fam, 0) or 0)
+            if abs(_base) > 1e-6:
+                _cv = float(agg[agg[grp_col] == _fam][col_ajuste_val].iloc[0])
+                _pct_val[str(_fam)] = _cv / _base * 100
 
     _delta = {}  # fam -> ("up"/"down", pct_magnitud)
     if (df_full is not None and col_fecha
@@ -459,9 +475,13 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         _val = total if _is_total else float(agg[col_ajuste_val].iloc[_i])
         _peso = 100.0 if _is_total else float(pesos[_i])
 
+        # Bloque izquierdo: 3 líneas. Lo que antes eran 5 líneas apiladas
+        # obligaba a filas de 86px; el delta y el % sobre valorizado se
+        # movieron al canal derecho (junto al badge) para que la fila baje
+        # a ~58px sin perder información.
         _nom_fam = str(_cat)
-        if len(_nom_fam) > 26:
-            _nom_fam = _nom_fam[:25] + "…"
+        if len(_nom_fam) > 28:
+            _nom_fam = _nom_fam[:27] + "…"
         _lineas = [f"<b>{_nom_fam}</b>"]
 
         # % del total + nº SKUs
@@ -473,29 +493,18 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         if _n:
             _l2 += f" · {_n} SKUs"
         _lineas.append(
-            f"<span style='font-size:10px;color:#8a8a8a'>{_l2}</span>")
+            f"<span style='font-size:9px;color:#8a8a8a'>{_l2}</span>")
 
-        # TOP producto (nombre + aporte)
+        # TOP producto — nombre y aporte en UNA línea (antes eran dos)
         _tp = _top_prod.get(str(_cat))
         if _tp and not _is_total:
             _tnom, _tval, _tpct = _tp
             _tcol = "#0F6E56" if _val > 0 else "#A32D2D"
             _lineas.append(
                 f"<span style='font-size:9px;color:{_tcol}'>"
-                f"TOP: {_tnom.upper()}</span>")
-            _lineas.append(
-                f"<span style='font-size:9px;color:#52514e'>"
-                f"S/ {_tval:,.0f} · {_tpct:.0f}% familia</span>")
-
-        # Delta vs periodo anterior
-        _dl = _delta.get(str(_cat))
-        if _dl and not _is_total:
-            _dir, _dpct = _dl
-            _arrow = "↓" if _dir == "down" else "↑"
-            _dcol = "#A32D2D" if _dir == "down" else "#0F6E56"
-            _lineas.append(
-                f"<span style='font-size:10px;color:{_dcol}'>"
-                f"{_arrow} {_dpct:.0f}% vs anterior</span>")
+                f"▸ {_tnom.upper()}</span>"
+                f"<span style='font-size:9px;color:#8a8a8a'>"
+                f"  {_tpct:.0f}%</span>")
 
         _ticktext.append("<br>".join(_lineas))
 
@@ -518,9 +527,10 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                      .replace("%{y:,.2f}", "%{x:,.2f}"),
     ))
 
-    # Badges: columna fija en el margen derecho (xref="paper" x=1). Anclados
-    # al papel y no al valor, no hay forma de que se pisen con las barras ni
-    # entre sí — cada uno vive en su propia fila.
+    # Canal derecho (xref="paper" x=1): badge arriba, y debajo el delta vs
+    # periodo anterior y el % sobre el valorizado de la familia. Anclados al
+    # papel y no al valor, no hay forma de que se pisen con las barras ni
+    # entre sí — cada fila tiene su propio tramo vertical.
     _anns = []
     for _i, _cat in enumerate(_cats_all):
         _is_total = (_i == len(agg))
@@ -531,11 +541,42 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                 float(pesos[_i]), float(agg[col_ajuste_val].iloc[_i]))
         _anns.append(dict(
             x=1.0, y=_cat, xref="paper", yref="y",
-            xanchor="left", xshift=10,
+            xanchor="left", xshift=10, yshift=15,
             text=f"<b>{_btxt}</b>", showarrow=False,
             bgcolor=_bbg, bordercolor=_bfg, borderwidth=0.5,
-            borderpad=3, font=dict(size=9, color=_bfg),
+            borderpad=2, font=dict(size=9, color=_bfg),
         ))
+
+        # Delta vs periodo anterior
+        _dl = _delta.get(str(_cat))
+        if _dl and not _is_total:
+            _dir, _dpct = _dl
+            _arrow = "↓" if _dir == "down" else "↑"
+            _dcol = "#A32D2D" if _dir == "down" else "#0F6E56"
+            _anns.append(dict(
+                x=1.0, y=_cat, xref="paper", yref="y",
+                xanchor="left", xshift=12, yshift=0,
+                text=f"{_arrow} {_dpct:.0f}% vs ant.", showarrow=False,
+                font=dict(size=9, color=_dcol),
+            ))
+
+        # % sobre el valorizado de la familia + concentración top-3
+        _pv = _pct_val.get(str(_cat))
+        if _pv is not None and not _is_total:
+            _anns.append(dict(
+                x=1.0, y=_cat, xref="paper", yref="y",
+                xanchor="left", xshift=12, yshift=-13,
+                text=f"{_pv:+.1f}% s/val", showarrow=False,
+                font=dict(size=9, color="#52514e"),
+            ))
+        _c3 = _conc3.get(str(_cat))
+        if _c3 is not None and not _is_total:
+            _anns.append(dict(
+                x=1.0, y=_cat, xref="paper", yref="y",
+                xanchor="left", xshift=12, yshift=-26,
+                text=f"top3 = {_c3:.0f}%", showarrow=False,
+                font=dict(size=9, color="#8a8a8a"),
+            ))
 
     fig.update_layout(**_layout_aj(
         title=title_html,
@@ -546,13 +587,15 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         # autorange reversed: la familia con mayor faltante queda ARRIBA
         # (agg viene ordenado ascendente por valor).
         yaxis=dict(gridcolor=GRIS_BORDE, showticklabels=True,
-                   autorange="reversed", tickfont=dict(size=11)),
+                   autorange="reversed", tickfont=dict(size=10)),
         showlegend=False,
-        # Cada fila necesita ~86px para las 5 líneas del bloque de texto.
-        height=86 * len(_cats_all) + 110,
-        waterfallgap=0.45,
-        # l=260 para el bloque de texto; r=110 para la columna de badges.
-        margin=dict(l=260, r=110, t=80, b=40),
+        # 58px por fila: alcanza para las 3 líneas del bloque izquierdo y
+        # para los 3 renglones del canal derecho, que ocupan lo mismo.
+        height=58 * len(_cats_all) + 90,
+        # waterfallgap alto = barras finas (mayor hueco entre filas).
+        waterfallgap=0.72,
+        # l=230 bloque de texto; r=125 canal derecho (badge + 2 renglones).
+        margin=dict(l=230, r=125, t=70, b=40),
         annotations=_anns,
     ))
 
