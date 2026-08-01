@@ -282,10 +282,10 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         if _n_prev:
             _lbl += f" :violet-badge[{_n_prev}]"
 
-        # Columna angosta: el popover no debe estirarse a todo el ancho.
-        c_pop, _ = st.columns([1, 3])
-        with c_pop:
-            with st.popover(_lbl, use_container_width=True):
+        # use_container_width=False: el popover toma solo su ancho natural
+        # y no deja un rectangulo vacio al costado (antes vivia en un
+        # st.columns([1,3]) y el otro 75% quedaba en blanco).
+        with st.popover(_lbl, use_container_width=False):
                 _top_ex = st.select_slider(
                     "Excluir el top N por |ajuste|",
                     options=[0, 1, 3, 5, 8, 10],
@@ -512,16 +512,27 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                             orientation="h",
                             marker=dict(color=_colors),
                             text=[f"S/ {v:,.0f}" for v in _sub[col_ajuste_val]],
-                            textposition="outside",
-                            cliponaxis=False,
+                            # textposition='auto': Plotly pone el label
+                            # dentro cuando la barra es grande y fuera
+                            # cuando es chica. Con 'outside' + cliponaxis
+                            # las barras largas dibujaban el label encima
+                            # del eje X.
+                            textposition="auto",
+                            insidetextanchor="end",
                             hovertemplate=("%{y}<br><b>S/ %{x:,.2f}</b>"
                                            "<extra></extra>"),
                         ))
                         fig_d.update_layout(**_layout_aj(
-                            title=None,
+                            # title_text='': evita el literal "undefined" que
+                            # sale al pasar title=None en algunas versiones
+                            # de Plotly.
+                            title_text="",
                             xaxis=dict(tickprefix="S/ ", tickformat=",.0f",
                                        gridcolor=GRIS_BORDE, zeroline=True,
-                                       zerolinecolor=GRIS_BORDE),
+                                       zerolinecolor=GRIS_BORDE,
+                                       # nticks=4: evita "-15,000 -10,000
+                                       # -5,000 0" apretados y superpuestos.
+                                       nticks=4),
                             # showticklabels=True: _layout oculta el Y por
                             # default; aquí Y son NOMBRES de producto, no
                             # valores — hay que forzarlos.
