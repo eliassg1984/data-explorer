@@ -441,139 +441,118 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             return ("● MENOR", "#5F5E5A", "#F1EFE8")
         return ("✓ OK", "#5F5E5A", "#F1EFE8")
 
-    # Top y (data coords) de cada barra — para anclar el badge encima
-    _cum = 0.0
-    _tops = []
-    for _v in agg[col_ajuste_val].tolist():
-        _tops.append(max(_cum, _cum + _v))
-        _cum += _v
-    _tops.append(max(0.0, total))  # barra TOTAL
-
-    fig = go.Figure(go.Waterfall(
-        orientation="v",
-        measure=["relative"] * len(agg) + ["total"],
-        x=agg[grp_col].tolist() + ["TOTAL"],
-        y=agg[col_ajuste_val].tolist() + [None],
-        # text vacío: los labels se dibujan como annotations posicionadas
-        # manualmente (5 líneas + badge no caben en el `text` de una barra).
-        text=[""] * (len(agg) + 1),
-        textposition="none",
-        connector=dict(line=dict(color="#9aa0a6", width=1.5, dash="solid")),
-        increasing=dict(marker=dict(color="rgba(108,92,231,0.85)")),
-        decreasing=dict(marker=dict(color="rgba(239,68,68,0.85)")),
-        totals=dict(marker=dict(color="#374151")),
-        customdata=_cd,
-        hovertemplate=_hover_familias,
-    ))
-
-    # ── Annotations: badge arriba + hasta 5 líneas debajo de cada barra ─
-    # Estrategia: yref="paper" y=0 (línea del eje X) con yshift en píxeles.
-    # Así no dependemos del rango del eje Y (que cambia con exclusiones).
-    _anns = []
+    # ── Cascada HORIZONTAL: una familia por FILA ───────────────────────
+    # En vertical las 5 líneas de contexto no entran: con 7 familias cada
+    # columna mide ~90px y los nombres de producto reales pasan de 30
+    # caracteres, así que las etiquetas se pisaban entre sí. Horizontal le
+    # da a cada familia el ancho completo del margen izquierdo (~250px)
+    # para su bloque de texto. Se pierde la metáfora de "escalera cayendo"
+    # pero la lógica acumulativa (y los conectores) se mantiene.
     _cats_all = agg[grp_col].tolist() + ["TOTAL"]
+
+    # Bloque multilínea del eje Y: Plotly acepta <br> y <span style> en
+    # ticktext, así que las 4 líneas de contexto van ahí en vez de como
+    # annotations sueltas (que es lo que se superponía).
+    _ticktext = []
     for _i, _cat in enumerate(_cats_all):
         _is_total = (_i == len(agg))
-        if _is_total:
-            _val = total
-            _peso = 100.0
-        else:
-            _val = float(agg[col_ajuste_val].iloc[_i])
-            _peso = float(pesos[_i])
+        _val = total if _is_total else float(agg[col_ajuste_val].iloc[_i])
+        _peso = 100.0 if _is_total else float(pesos[_i])
 
-        # Badge (arriba de la barra)
-        if _is_total:
-            _btxt, _bfg, _bbg = "TOTAL", "#0b0b0b", "#F1EFE8"
-        else:
-            _btxt, _bfg, _bbg = _badge_for(_peso, _val)
-        _anns.append(dict(
-            x=_cat, y=_tops[_i], xref="x", yref="y",
-            yanchor="bottom", yshift=8,
-            text=f"<b>{_btxt}</b>", showarrow=False,
-            bgcolor=_bbg, bordercolor=_bfg, borderwidth=0.5,
-            borderpad=3, font=dict(size=9, color=_bfg),
-        ))
+        _nom_fam = str(_cat)
+        if len(_nom_fam) > 26:
+            _nom_fam = _nom_fam[:25] + "…"
+        _lineas = [f"<b>{_nom_fam}</b>"]
 
-        # Línea 1 — monto (grande)
-        _mcol = ("#0b0b0b" if _is_total
-                 else ("#0F6E56" if _val > 0 else "#A32D2D"))
-        _anns.append(dict(
-            x=_cat, y=0, xref="x", yref="paper",
-            yanchor="top", yshift=-8,
-            text=f"<b>S/ {_val:,.0f}</b>", showarrow=False,
-            font=dict(size=12, color=_mcol),
-        ))
-
-        # Línea 2 — % del total + nº SKUs
+        # % del total + nº SKUs
         _pct_txt = ("<1%" if (not _is_total and _peso < 0.5)
                     else f"{_peso:.0f}%")
         _l2 = f"{_pct_txt} del total"
-        _n = _n_skus.get(str(_cat))
-        if _is_total and _n_skus:
-            _n = sum(_n_skus.values())
+        _n = sum(_n_skus.values()) if (_is_total and _n_skus) \
+            else _n_skus.get(str(_cat))
         if _n:
             _l2 += f" · {_n} SKUs"
-        _anns.append(dict(
-            x=_cat, y=0, xref="x", yref="paper",
-            yanchor="top", yshift=-26,
-            text=_l2, showarrow=False,
-            font=dict(size=10, color="#8a8a8a"),
-        ))
+        _lineas.append(
+            f"<span style='font-size:10px;color:#8a8a8a'>{_l2}</span>")
 
-        # Líneas 3 y 4 — TOP producto de la familia (si aplica)
+        # TOP producto (nombre + aporte)
         _tp = _top_prod.get(str(_cat))
         if _tp and not _is_total:
             _tnom, _tval, _tpct = _tp
             _tcol = "#0F6E56" if _val > 0 else "#A32D2D"
-            _anns.append(dict(
-                x=_cat, y=0, xref="x", yref="paper",
-                yanchor="top", yshift=-44,
-                text=f"<b>TOP: {_tnom.upper()}</b>", showarrow=False,
-                font=dict(size=9, color=_tcol),
-            ))
-            _anns.append(dict(
-                x=_cat, y=0, xref="x", yref="paper",
-                yanchor="top", yshift=-56,
-                text=f"S/ {_tval:,.0f} · {_tpct:.0f}% familia",
-                showarrow=False,
-                font=dict(size=9, color="#52514e"),
-            ))
+            _lineas.append(
+                f"<span style='font-size:9px;color:{_tcol}'>"
+                f"TOP: {_tnom.upper()}</span>")
+            _lineas.append(
+                f"<span style='font-size:9px;color:#52514e'>"
+                f"S/ {_tval:,.0f} · {_tpct:.0f}% familia</span>")
 
-        # Línea 5 — delta vs periodo anterior (si aplica)
+        # Delta vs periodo anterior
         _dl = _delta.get(str(_cat))
         if _dl and not _is_total:
             _dir, _dpct = _dl
             _arrow = "↓" if _dir == "down" else "↑"
             _dcol = "#A32D2D" if _dir == "down" else "#0F6E56"
-            _anns.append(dict(
-                x=_cat, y=0, xref="x", yref="paper",
-                yanchor="top", yshift=-74,
-                text=f"<b>{_arrow} {_dpct:.0f}% vs anterior</b>",
-                showarrow=False,
-                font=dict(size=10, color=_dcol),
-            ))
+            _lineas.append(
+                f"<span style='font-size:10px;color:{_dcol}'>"
+                f"{_arrow} {_dpct:.0f}% vs anterior</span>")
 
-        # Línea 6 — nombre de la familia (reemplaza al tick del eje)
-        _ctxt = str(_cat)
-        if len(_ctxt) > 14:
-            _mid = _ctxt.rfind(" ", 0, 14)
-            if _mid > 0:
-                _ctxt = _ctxt[:_mid] + "<br>" + _ctxt[_mid+1:]
+        _ticktext.append("<br>".join(_lineas))
+
+    fig = go.Figure(go.Waterfall(
+        orientation="h",
+        measure=["relative"] * len(agg) + ["total"],
+        y=_cats_all,
+        x=agg[col_ajuste_val].tolist() + [None],
+        # Solo el monto: el % ya vive en el bloque multilínea del eje Y,
+        # repetirlo al lado de la barra es ruido.
+        text=[f"<b>S/ {v:,.0f}</b>" for v in agg[col_ajuste_val]]
+             + [f"<b>S/ {total:,.0f}</b>"],
+        textposition="outside",
+        connector=dict(line=dict(color="#9aa0a6", width=1.5, dash="solid")),
+        increasing=dict(marker=dict(color="rgba(108,92,231,0.85)")),
+        decreasing=dict(marker=dict(color="rgba(239,68,68,0.85)")),
+        totals=dict(marker=dict(color="#374151")),
+        customdata=_cd,
+        hovertemplate=_hover_familias.replace("%{x}", "%{y}")
+                                     .replace("%{y:,.2f}", "%{x:,.2f}"),
+    ))
+
+    # Badges: columna fija en el margen derecho (xref="paper" x=1). Anclados
+    # al papel y no al valor, no hay forma de que se pisen con las barras ni
+    # entre sí — cada uno vive en su propia fila.
+    _anns = []
+    for _i, _cat in enumerate(_cats_all):
+        _is_total = (_i == len(agg))
+        if _is_total:
+            _btxt, _bfg, _bbg = "TOTAL", "#0b0b0b", "#F1EFE8"
+        else:
+            _btxt, _bfg, _bbg = _badge_for(
+                float(pesos[_i]), float(agg[col_ajuste_val].iloc[_i]))
         _anns.append(dict(
-            x=_cat, y=0, xref="x", yref="paper",
-            yanchor="top", yshift=-94,
-            text=_ctxt, showarrow=False,
-            font=dict(size=10, color="#52514e"),
+            x=1.0, y=_cat, xref="paper", yref="y",
+            xanchor="left", xshift=10,
+            text=f"<b>{_btxt}</b>", showarrow=False,
+            bgcolor=_bbg, bordercolor=_bfg, borderwidth=0.5,
+            borderpad=3, font=dict(size=9, color=_bfg),
         ))
 
     fig.update_layout(**_layout_aj(
         title=title_html,
-        # showticklabels=False: los nombres los pinta la annotation "Línea 6".
-        xaxis=dict(tickangle=0, gridcolor=GRIS_BORDE,
-                   showticklabels=False),
-        yaxis=dict(tickprefix="S/ ", tickformat=",.0f", gridcolor=GRIS_BORDE),
-        showlegend=False, height=560, waterfallgap=0.5,
-        # margin.b=180 reserva espacio para las 5 líneas + nombre de familia.
-        margin=dict(l=60, r=30, t=80, b=180),
+        xaxis=dict(tickprefix="S/ ", tickformat=",.0f",
+                   gridcolor=GRIS_BORDE),
+        # showticklabels=True: en horizontal el eje Y son NOMBRES (el bloque
+        # multilínea), no valores — `_layout` los oculta por default.
+        # autorange reversed: la familia con mayor faltante queda ARRIBA
+        # (agg viene ordenado ascendente por valor).
+        yaxis=dict(gridcolor=GRIS_BORDE, showticklabels=True,
+                   autorange="reversed", tickfont=dict(size=11)),
+        showlegend=False,
+        # Cada fila necesita ~86px para las 5 líneas del bloque de texto.
+        height=86 * len(_cats_all) + 110,
+        waterfallgap=0.45,
+        # l=260 para el bloque de texto; r=110 para la columna de badges.
+        margin=dict(l=260, r=110, t=80, b=40),
         annotations=_anns,
     ))
 
@@ -616,7 +595,9 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         except Exception:
             _pt = None
         if _pt is not None:
-            _x = _pt.get("x")
+            # Cascada horizontal: la CATEGORÍA vive en `y` (en `x` va el
+            # valor). Se lee `y` primero y se cae a `x` por compatibilidad.
+            _x = _pt.get("y") if _pt.get("y") is not None else _pt.get("x")
             if _x is not None and str(_x) != "TOTAL":
                 _clicked = str(_x)
                 # Toggle: mismo → apagar; distinto → cambiar foco.
