@@ -253,26 +253,62 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
            .sum().sort_values(col_ajuste_val))
     total = float(agg[col_ajuste_val].sum())
 
+    # Peso relativo (sobre suma de |valores|): siempre suma 100%, no se
+    # confunde con signos mezclados (una barra + y varias -). El signo lo
+    # comunica el color de la barra.
+    abs_sum = float(agg[col_ajuste_val].abs().sum()) or 1.0
+    pesos = [abs(v) / abs_sum * 100 for v in agg[col_ajuste_val]]
+
+    def _fmt_pct(p):
+        if p < 0.5:
+            return "<1%"
+        return f"{p:.0f}%"
+
+    text_barras = [
+        f"S/ {v:,.0f}<br>"
+        f"<span style='font-size:10px;opacity:0.65'>{_fmt_pct(p)}</span>"
+        for v, p in zip(agg[col_ajuste_val], pesos)
+    ] + [f"<b>S/ {total:,.0f}</b>"]
+
+    # Insight automático: si un item concentra mucho, decirlo en el título.
+    top_peso = max(pesos) if pesos else 0.0
+    top_idx = pesos.index(top_peso) if pesos else None
+    top_nombre = (str(agg[grp_col].iloc[top_idx]).upper()
+                  if top_idx is not None else "")
+    if top_peso >= 60:
+        insight = f"{top_nombre} concentra el {top_peso:.0f}% del ajuste"
+    elif top_peso >= 40:
+        insight = f"{top_nombre} explica el {top_peso:.0f}% del ajuste"
+    else:
+        insight = None
+
+    title_html = f"Cascada de ajuste valorizado por {grp_col}"
+    if insight:
+        title_html += (f"<br><span style='font-size:12px;font-weight:400;"
+                       f"color:#8a8a8a'>{insight}</span>")
+
     fig = go.Figure(go.Waterfall(
         orientation="v",
         measure=["relative"] * len(agg) + ["total"],
         x=agg[grp_col].tolist() + ["TOTAL"],
         y=agg[col_ajuste_val].tolist() + [None],
-        text=[f"S/ {v:,.0f}" for v in agg[col_ajuste_val]] + [f"S/ {total:,.0f}"],
+        text=text_barras,
         textposition="outside",
-        connector=dict(line=dict(color=GRIS_BORDE, width=1, dash="dot")),
+        connector=dict(line=dict(color="#9aa0a6", width=1.5, dash="solid")),
         increasing=dict(marker=dict(color="rgba(108,92,231,0.85)")),
         decreasing=dict(marker=dict(color="rgba(239,68,68,0.85)")),
         totals=dict(marker=dict(
             color=ACENTO_TEXTO_OSCURO if total >= 0 else "#ef4444",
         )),
-        hovertemplate="%{x}<br><b>S/ %{y:,.2f}</b><extra></extra>",
+        customdata=[[p] for p in pesos] + [[100.0]],
+        hovertemplate=("%{x}<br><b>S/ %{y:,.2f}</b>"
+                       "<br>Peso: %{customdata[0]:.1f}%<extra></extra>"),
     ))
     fig.update_layout(**_layout_aj(
-        title=f"Cascada de ajuste valorizado por {grp_col}",
+        title=title_html,
         xaxis=dict(tickangle=-35, gridcolor=GRIS_BORDE),
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f", gridcolor=GRIS_BORDE),
-        showlegend=False, height=360,
+        showlegend=False, height=380,
     ))
     _xcats = agg[grp_col].tolist() + ["TOTAL"]
     fig.update_xaxes(tickmode="array", tickvals=_xcats,
