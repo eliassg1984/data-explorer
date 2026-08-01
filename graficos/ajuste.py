@@ -313,8 +313,113 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     _xcats = agg[grp_col].tolist() + ["TOTAL"]
     fig.update_xaxes(tickmode="array", tickvals=_xcats,
                      ticktext=_wrap_cat(_xcats))
+
+    # ── Drill: clic en una familia → top-N de productos abajo ─────────────
+    # Categorías clickeables (todas menos "TOTAL"). El foco vive en
+    # session_state; clic en la misma barra que ya está en foco lo apaga
+    # (toggle), igual que el drill de Proveedor en Compras.
+    _cats_clic = agg[grp_col].astype(str).tolist()
+    _focus_key = "ajuste_cascada_focus"
+    focus = st.session_state.get(_focus_key)
+    if focus not in _cats_clic:
+        focus = None
+        st.session_state[_focus_key] = None
+
     with _card("cascada", "Cascada por familia"):
-        st.plotly_chart(fig, use_container_width=True)
+        evt = st.plotly_chart(
+            fig, use_container_width=True,
+            key="ajuste_cascada_chart",
+            on_select="rerun", selection_mode="points",
+        )
+        # Extraer punto clicado (tolerante a formato).
+        _pt = None
+        try:
+            _sel = getattr(evt, "selection", None) or (
+                evt.get("selection") if isinstance(evt, dict) else None)
+            _pts = (_sel or {}).get("points", [])
+            _pt = _pts[0] if _pts else None
+        except Exception:
+            _pt = None
+        if _pt is not None:
+            _x = _pt.get("x")
+            if _x is not None and str(_x) != "TOTAL":
+                _clicked = str(_x)
+                # Toggle: mismo → apagar; distinto → cambiar foco.
+                _new = None if _clicked == focus else _clicked
+                if _new != focus:
+                    st.session_state[_focus_key] = _new
+                    st.rerun()
+
+        # ── Panel de drill (solo si hay foco) ──────────────────────────
+        if focus:
+            _det = df[df[grp_col].astype(str) == focus]
+            # Dimensión a mostrar: producto si existe, si no la otra
+            # (área/familia). Nombre humano para el header.
+            dim = col_producto or (col_area if grp_col == col_familia
+                                   else col_familia)
+            dim_lbl = "producto" if dim == col_producto else str(dim).lower()
+
+            hdr_l, hdr_c, hdr_r = st.columns([3, 1.4, 1])
+            with hdr_l:
+                st.markdown(
+                    f"**{focus}** — top {dim_lbl}s por |ajuste valorizado|"
+                )
+            with hdr_c:
+                topn = st.pills(
+                    "Top", [5, 10, 20], default=10,
+                    key="ajuste_cascada_topn",
+                    label_visibility="collapsed",
+                ) or 10
+            with hdr_r:
+                if st.button("↩ Cerrar", key="ajuste_cascada_cerrar",
+                             use_container_width=True):
+                    st.session_state[_focus_key] = None
+                    st.rerun()
+
+            if not dim or dim not in _det.columns:
+                st.info("No hay una columna adecuada para desglosar "
+                        "esta familia.")
+            else:
+                _sub = (_det.groupby(dim, as_index=False)[col_ajuste_val]
+                        .sum())
+                _sub["_abs"] = _sub[col_ajuste_val].abs()
+                _sub = _sub.sort_values("_abs", ascending=False).head(int(topn))
+                if _sub.empty or _sub["_abs"].sum() == 0:
+                    st.info("Sin datos para el drill de esta familia.")
+                else:
+                    # Barras horizontales, mayor arriba, color por signo.
+                    _sub = _sub.sort_values(col_ajuste_val, ascending=True)
+                    _colors = ["rgba(108,92,231,0.85)"
+                               if v >= 0 else "rgba(239,68,68,0.85)"
+                               for v in _sub[col_ajuste_val]]
+                    fig_d = go.Figure(go.Bar(
+                        x=_sub[col_ajuste_val].tolist(),
+                        y=_sub[dim].astype(str).tolist(),
+                        orientation="h",
+                        marker=dict(color=_colors),
+                        text=[f"S/ {v:,.0f}" for v in _sub[col_ajuste_val]],
+                        textposition="outside",
+                        cliponaxis=False,
+                        hovertemplate=("%{y}<br><b>S/ %{x:,.2f}</b>"
+                                       "<extra></extra>"),
+                    ))
+                    fig_d.update_layout(**_layout_aj(
+                        title=None,
+                        xaxis=dict(tickprefix="S/ ", tickformat=",.0f",
+                                   gridcolor=GRIS_BORDE, zeroline=True,
+                                   zerolinecolor=GRIS_BORDE),
+                        yaxis=dict(gridcolor=GRIS_BORDE),
+                        showlegend=False,
+                        height=max(220, 30 * len(_sub) + 80),
+                        margin=dict(l=10, r=70, t=10, b=10),
+                    ))
+                    st.plotly_chart(
+                        fig_d, use_container_width=True,
+                        key=f"ajuste_cascada_drill_{_slug(focus)}",
+                    )
+        else:
+            st.caption("💡 Clic en una barra para ver su top "
+                       "de productos.")
 
 
 def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
