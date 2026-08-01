@@ -274,7 +274,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         # que tras el primer rerun el número ya es el correcto (mismo patrón
         # que los chips de filtro en app.py).
         _n_top = int(st.session_state.get("ajuste_cascada_excl_top") or 0)
-        _n_man = len(st.session_state.get("ajuste_cascada_excl_manual") or [])
         _n_prev = len(set(_prods_ranked[:_n_top]) |
                       set(st.session_state.get("ajuste_cascada_excl_manual")
                           or []))
@@ -321,18 +320,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     abs_sum = float(agg[col_ajuste_val].abs().sum()) or 1.0
     pesos = [abs(v) / abs_sum * 100 for v in agg[col_ajuste_val]]
 
-    def _fmt_pct(p):
-        if p < 0.5:
-            return "<1%"
-        return f"{p:.0f}%"
-
-    text_barras = [
-        f"S/ {v:,.0f}<br>"
-        f"<span style='font-size:10px;opacity:0.65'>{_fmt_pct(p)}</span>"
-        for v, p in zip(agg[col_ajuste_val], pesos)
-    ] + [f"<b>S/ {total:,.0f}</b>"]
-
-    # Insight automático: si un item concentra mucho, decirlo en el título.
+    # Insight automático: si un item concentra mucho, decirlo en el subtítulo.
     top_peso = max(pesos) if pesos else 0.0
     top_idx = pesos.index(top_peso) if pesos else None
     top_nombre = (str(agg[grp_col].iloc[top_idx]).upper()
@@ -344,46 +332,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     else:
         insight = None
 
-    title_html = f"Cascada de ajuste valorizado por {grp_col}"
-    if insight:
-        title_html += (f"<br><span style='font-size:12px;font-weight:400;"
-                       f"color:#8a8a8a'>{insight}</span>")
-
-    # Tooltip enriquecido: al hover sobre una familia, top 10 de sus
-    # productos por |ajuste|. Requiere col_producto; si no está, tooltip
-    # queda como antes (solo peso).
-    _tops_por_fam = {}
-    if col_producto and col_producto in df.columns:
-        for _fam in agg[grp_col].tolist():
-            _sub = df[df[grp_col].astype(str) == str(_fam)]
-            if _sub.empty:
-                _tops_por_fam[str(_fam)] = ""
-                continue
-            _t = (_sub.groupby(col_producto, as_index=False)[col_ajuste_val]
-                  .sum())
-            _t["_abs"] = _t[col_ajuste_val].abs()
-            _t = _t.sort_values("_abs", ascending=False).head(10)
-            _lines = []
-            for i, (_, row) in enumerate(_t.iterrows(), 1):
-                _nom = str(row[col_producto])
-                if len(_nom) > 32:
-                    _nom = _nom[:29] + "…"
-                _lines.append(f"{i}. {_nom} — S/ {row[col_ajuste_val]:,.0f}")
-            _tops_por_fam[str(_fam)] = "<br>".join(_lines)
-
-    _cd = []
-    for _fam, _p in zip(agg[grp_col].tolist(), pesos):
-        _cd.append([_p, _tops_por_fam.get(str(_fam), "")])
-    _cd.append([100.0, ""])  # TOTAL
-
-    _hover_familias = ("<b>%{x}</b><br>S/ %{y:,.2f}"
-                       "<br>Peso: %{customdata[0]:.1f}%")
-    if col_producto and col_producto in df.columns:
-        _hover_familias += ("<br>─────────────<br>"
-                            "<b>Top productos</b><br>%{customdata[1]}")
-    _hover_familias += "<extra></extra>"
-
-    # ── Enriquecimientos por familia (para badge + 5 líneas de labels) ─
+    # ── Enriquecimientos por familia (para las celdas de la tabla) ─────
     # n_skus, top producto (nombre + monto + % que aporta a la familia),
     # y delta vs periodo anterior (mismo tamaño de ventana, inmediatamente
     # antes). El delta requiere df_full + col_fecha; si no vienen, se omite.
@@ -421,6 +370,12 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             if abs(_base) > 1e-6:
                 _cv = float(agg[agg[grp_col] == _fam][col_ajuste_val].iloc[0])
                 _pct_val[str(_fam)] = _cv / _base * 100
+        # La fila TOTAL usa el valorizado de TODO el df, no la suma de los
+        # % por familia (que no es un promedio válido: cada uno tiene base
+        # distinta).
+        _base_tot = float(df[col_valorizado].sum() or 0)
+        if abs(_base_tot) > 1e-6:
+            _pct_val["TOTAL"] = total / _base_tot * 100
 
     _delta = {}  # fam -> ("up"/"down", pct_magnitud)
     if (df_full is not None and col_fecha
@@ -457,147 +412,131 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             return ("● MENOR", "#5F5E5A", "#F1EFE8")
         return ("✓ OK", "#5F5E5A", "#F1EFE8")
 
-    # ── Cascada HORIZONTAL: una familia por FILA ───────────────────────
-    # En vertical las 5 líneas de contexto no entran: con 7 familias cada
-    # columna mide ~90px y los nombres de producto reales pasan de 30
-    # caracteres, así que las etiquetas se pisaban entre sí. Horizontal le
-    # da a cada familia el ancho completo del margen izquierdo (~250px)
-    # para su bloque de texto. Se pierde la metáfora de "escalera cayendo"
-    # pero la lógica acumulativa (y los conectores) se mantiene.
-    _cats_all = agg[grp_col].tolist() + ["TOTAL"]
+    # ── Cascada como TABLA de filas ────────────────────────────────────
+    # Una cascada horizontal ES una tabla con barras flotantes: cada barra
+    # arranca donde terminó la de arriba. Renderizarla como tabla (en vez de
+    # como go.Waterfall) resuelve de raíz el solapamiento de etiquetas que
+    # tenía la versión vertical: cada dato vive en su propia celda, no
+    # compite por el mismo tramo de eje.
+    #
+    # Geometría acumulada: para cada familia el par (lo, hi) marca dónde
+    # empieza y termina su barra en el eje de valores. `_dmin/_dmax` fijan
+    # el dominio para poder expresar todo en % (responsive, sin píxeles).
+    _filas = []
+    _run = 0.0
+    for _i in range(len(agg)):
+        _v = float(agg[col_ajuste_val].iloc[_i])
+        _filas.append({"cat": str(agg[grp_col].iloc[_i]), "val": _v,
+                       "lo": _run, "hi": _run + _v, "peso": float(pesos[_i]),
+                       "total": False})
+        _run += _v
+    _filas.append({"cat": "TOTAL", "val": total,
+                   "lo": min(0.0, total), "hi": max(0.0, total),
+                   "peso": 100.0, "total": True})
 
-    # Bloque multilínea del eje Y: Plotly acepta <br> y <span style> en
-    # ticktext, así que las 4 líneas de contexto van ahí en vez de como
-    # annotations sueltas (que es lo que se superponía).
-    _ticktext = []
-    for _i, _cat in enumerate(_cats_all):
-        _is_total = (_i == len(agg))
-        _val = total if _is_total else float(agg[col_ajuste_val].iloc[_i])
-        _peso = 100.0 if _is_total else float(pesos[_i])
+    _bordes = [0.0] + [f["lo"] for f in _filas] + [f["hi"] for f in _filas]
+    _dmin, _dmax = min(_bordes), max(_bordes)
+    _span = (_dmax - _dmin) or 1.0
 
-        # Bloque izquierdo: 3 líneas. Lo que antes eran 5 líneas apiladas
-        # obligaba a filas de 86px; el delta y el % sobre valorizado se
-        # movieron al canal derecho (junto al badge) para que la fila baje
-        # a ~58px sin perder información.
-        _nom_fam = str(_cat)
-        if len(_nom_fam) > 28:
-            _nom_fam = _nom_fam[:27] + "…"
-        _lineas = [f"<b>{_nom_fam}</b>"]
+    for _idx, _f in enumerate(_filas):
+        _lo, _hi = min(_f["lo"], _f["hi"]), max(_f["lo"], _f["hi"])
+        _f["left_pct"] = (_lo - _dmin) / _span * 100
+        _f["w_pct"] = max((_hi - _lo) / _span * 100, 0.4)  # mínimo visible
+        # Conector: línea vertical fina donde terminó la barra anterior.
+        _f["conn_pct"] = (((_filas[_idx - 1]["hi"] - _dmin) / _span * 100)
+                          if _idx > 0 and not _f["total"] else None)
 
-        # % del total + nº SKUs
-        _pct_txt = ("<1%" if (not _is_total and _peso < 0.5)
-                    else f"{_peso:.0f}%")
-        _l2 = f"{_pct_txt} del total"
-        _n = sum(_n_skus.values()) if (_is_total and _n_skus) \
-            else _n_skus.get(str(_cat))
-        if _n:
-            _l2 += f" · {_n} SKUs"
-        _lineas.append(
-            f"<span style='font-size:9px;color:#8a8a8a'>{_l2}</span>")
-
-        # TOP producto — nombre y aporte en UNA línea (antes eran dos)
-        _tp = _top_prod.get(str(_cat))
-        if _tp and not _is_total:
+    def _celda_familia(f):
+        """Primera columna: nombre + línea de contexto (TOP, SKUs, top3)."""
+        _nom = f["cat"]
+        if len(_nom) > 30:
+            _nom = _nom[:29] + "…"
+        _piezas = []
+        _tp = _top_prod.get(f["cat"])
+        if _tp and not f["total"]:
             _tnom, _tval, _tpct = _tp
-            _tcol = "#0F6E56" if _val > 0 else "#A32D2D"
-            _lineas.append(
-                f"<span style='font-size:9px;color:{_tcol}'>"
-                f"▸ {_tnom.upper()}</span>"
-                f"<span style='font-size:9px;color:#8a8a8a'>"
-                f"  {_tpct:.0f}%</span>")
-
-        _ticktext.append("<br>".join(_lineas))
-
-    fig = go.Figure(go.Waterfall(
-        orientation="h",
-        measure=["relative"] * len(agg) + ["total"],
-        y=_cats_all,
-        x=agg[col_ajuste_val].tolist() + [None],
-        # Solo el monto: el % ya vive en el bloque multilínea del eje Y,
-        # repetirlo al lado de la barra es ruido.
-        text=[f"<b>S/ {v:,.0f}</b>" for v in agg[col_ajuste_val]]
-             + [f"<b>S/ {total:,.0f}</b>"],
-        textposition="outside",
-        connector=dict(line=dict(color="#9aa0a6", width=1.5, dash="solid")),
-        increasing=dict(marker=dict(color="rgba(108,92,231,0.85)")),
-        decreasing=dict(marker=dict(color="rgba(239,68,68,0.85)")),
-        totals=dict(marker=dict(color="#374151")),
-        customdata=_cd,
-        hovertemplate=_hover_familias.replace("%{x}", "%{y}")
-                                     .replace("%{y:,.2f}", "%{x:,.2f}"),
-    ))
-
-    # Canal derecho (xref="paper" x=1): badge arriba, y debajo el delta vs
-    # periodo anterior y el % sobre el valorizado de la familia. Anclados al
-    # papel y no al valor, no hay forma de que se pisen con las barras ni
-    # entre sí — cada fila tiene su propio tramo vertical.
-    _anns = []
-    for _i, _cat in enumerate(_cats_all):
-        _is_total = (_i == len(agg))
-        if _is_total:
-            _btxt, _bfg, _bbg = "TOTAL", "#0b0b0b", "#F1EFE8"
+            _tcol = "#0F6E56" if f["val"] > 0 else "#A32D2D"
+            _piezas.append(f"▸ {_tnom.upper()} "
+                           f"<span style='color:{_tcol}'>{_tpct:.0f}%</span>")
+        _n = (sum(_n_skus.values()) if (f["total"] and _n_skus)
+              else _n_skus.get(f["cat"]))
+        if _n:
+            _piezas.append(f"{_n} SKU" + ("s" if _n != 1 else ""))
+        _c3 = _conc3.get(f["cat"])
+        if _c3 is not None and not f["total"]:
+            _piezas.append(f"top3 {_c3:.0f}%")
+        _peso_txt = ("<1%" if (not f["total"] and f["peso"] < 0.5)
+                     else f"{f['peso']:.0f}%")
+        if f["total"]:
+            _piezas.insert(0, f"{len(agg)} familias")
         else:
-            _btxt, _bfg, _bbg = _badge_for(
-                float(pesos[_i]), float(agg[col_ajuste_val].iloc[_i]))
-        _anns.append(dict(
-            x=1.0, y=_cat, xref="paper", yref="y",
-            xanchor="left", xshift=10, yshift=15,
-            text=f"<b>{_btxt}</b>", showarrow=False,
-            bgcolor=_bbg, bordercolor=_bfg, borderwidth=0.5,
-            borderpad=2, font=dict(size=9, color=_bfg),
-        ))
+            _piezas.insert(0, f"{_peso_txt} del total")
+        _sub = " · ".join(_piezas)
+        _peso_nom = "500" if f["total"] else "400"
+        return (f"<div style='font-weight:{_peso_nom};color:#0b0b0b;"
+                f"font-size:13px;line-height:1.25'>{_nom}</div>"
+                f"<div style='font-size:10px;color:#8a8a8a;"
+                f"line-height:1.3;margin-top:1px'>{_sub}</div>")
 
-        # Delta vs periodo anterior
-        _dl = _delta.get(str(_cat))
-        if _dl and not _is_total:
+    def _celda_monto(f):
+        """Segunda columna: monto y delta vs periodo anterior."""
+        _col = "#0F6E56" if f["val"] > 0 else "#A32D2D"
+        _sig = "+" if f["val"] > 0 else "-"
+        _html = (f"<div style='color:{_col};font-weight:500;font-size:13px;"
+                 f"font-variant-numeric:tabular-nums;line-height:1.25'>"
+                 f"{_sig}S/ {abs(f['val']):,.0f}</div>")
+        _dl = _delta.get(f["cat"])
+        if _dl and not f["total"]:
             _dir, _dpct = _dl
             _arrow = "↓" if _dir == "down" else "↑"
             _dcol = "#A32D2D" if _dir == "down" else "#0F6E56"
-            _anns.append(dict(
-                x=1.0, y=_cat, xref="paper", yref="y",
-                xanchor="left", xshift=12, yshift=0,
-                text=f"{_arrow} {_dpct:.0f}% vs ant.", showarrow=False,
-                font=dict(size=9, color=_dcol),
-            ))
+            _html += (f"<div style='font-size:10px;color:{_dcol};"
+                      f"line-height:1.3;margin-top:1px'>"
+                      f"{_arrow} {_dpct:.0f}% vs ant.</div>")
+        return _html
 
-        # % sobre el valorizado de la familia + concentración top-3
-        _pv = _pct_val.get(str(_cat))
-        if _pv is not None and not _is_total:
-            _anns.append(dict(
-                x=1.0, y=_cat, xref="paper", yref="y",
-                xanchor="left", xshift=12, yshift=-13,
-                text=f"{_pv:+.1f}% s/val", showarrow=False,
-                font=dict(size=9, color="#52514e"),
-            ))
-        _c3 = _conc3.get(str(_cat))
-        if _c3 is not None and not _is_total:
-            _anns.append(dict(
-                x=1.0, y=_cat, xref="paper", yref="y",
-                xanchor="left", xshift=12, yshift=-26,
-                text=f"top3 = {_c3:.0f}%", showarrow=False,
-                font=dict(size=9, color="#8a8a8a"),
-            ))
+    def _celda_barra(f):
+        """Tercera columna: la barra flotante + su conector."""
+        _bg = ("#888780" if f["total"]
+               else ("#1BAF7A" if f["val"] > 0 else "#E24B4A"))
+        _alto = 13 if f["total"] else 11
+        _conn = ""
+        if f["conn_pct"] is not None:
+            _conn = (f"<div style='position:absolute;left:{f['conn_pct']:.2f}%;"
+                     f"top:0;width:1px;height:7px;background:#c3c2b7'></div>")
+        return (f"<div style='position:relative;height:22px;width:100%'>"
+                f"<div style='position:absolute;left:0;right:0;top:50%;"
+                f"height:1px;background:#e1e0d9'></div>{_conn}"
+                f"<div style='position:absolute;left:{f['left_pct']:.2f}%;"
+                f"width:{f['w_pct']:.2f}%;top:{(22-_alto)//2}px;"
+                f"height:{_alto}px;background:{_bg};border-radius:3px'></div>"
+                f"</div>")
 
-    fig.update_layout(**_layout_aj(
-        title=title_html,
-        xaxis=dict(tickprefix="S/ ", tickformat=",.0f",
-                   gridcolor=GRIS_BORDE),
-        # showticklabels=True: en horizontal el eje Y son NOMBRES (el bloque
-        # multilínea), no valores — `_layout` los oculta por default.
-        # autorange reversed: la familia con mayor faltante queda ARRIBA
-        # (agg viene ordenado ascendente por valor).
-        yaxis=dict(gridcolor=GRIS_BORDE, showticklabels=True,
-                   autorange="reversed", tickfont=dict(size=10)),
-        showlegend=False,
-        # 58px por fila: alcanza para las 3 líneas del bloque izquierdo y
-        # para los 3 renglones del canal derecho, que ocupan lo mismo.
-        height=58 * len(_cats_all) + 90,
-        # waterfallgap alto = barras finas (mayor hueco entre filas).
-        waterfallgap=0.72,
-        # l=230 bloque de texto; r=125 canal derecho (badge + 2 renglones).
-        margin=dict(l=230, r=125, t=70, b=40),
-        annotations=_anns,
-    ))
+    def _celda_pctval(f):
+        """Cuarta columna: % del ajuste sobre el valorizado de la familia."""
+        _pv = _pct_val.get(f["cat"])
+        if _pv is None:
+            return ("<div style='font-size:12px;color:#c3c2b7;"
+                    "text-align:right'>—</div>")
+        _col = "#0F6E56" if _pv > 0 else "#A32D2D"
+        return (f"<div style='font-size:12px;color:{_col};text-align:right;"
+                f"font-variant-numeric:tabular-nums'>{_pv:+.1f}%</div>")
+
+    def _celda_badge(f):
+        """Quinta columna: el semáforo."""
+        if f["total"]:
+            _txt, _fg, _bg = "Total", "#5F5E5A", "#F1EFE8"
+        else:
+            _txt, _fg, _bg = _badge_for(f["peso"], f["val"])
+            # _badge_for devuelve "⚠ CRÍTICO"; en la tabla el símbolo sobra
+            # (el color ya lo dice) y va en capitalize — salvo "OK", que
+            # .capitalize() convertiría en "Ok".
+            _txt = _txt.split(" ", 1)[-1]
+            _txt = _txt if _txt == "OK" else _txt.capitalize()
+        return (f"<div style='text-align:right'><span style='display:inline-"
+                f"block;padding:2px 7px;border-radius:999px;font-size:10px;"
+                f"font-weight:500;background:{_bg};color:{_fg}'>"
+                f"{_txt}</span></div>")
 
     # ── Drill: clic en una familia → top-N de productos abajo ─────────────
     # Categorías clickeables (todas menos "TOTAL"). El foco vive en
@@ -610,47 +549,120 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         focus = None
         st.session_state[_focus_key] = None
 
+    # CSS de la tabla. Vive acá (y no en estilos/) porque está scopeado a
+    # las keys de esta tabla, mismo criterio que el CSS del drill de
+    # Proveedor en Compras. Comprime el gap vertical que Streamlit mete
+    # entre st.columns y hace que el botón del gutter parezca una celda.
+    st.markdown("""<style>
+    div[class*="st-key-ajcas_fila_"] { border-bottom: 0.5px solid #e1e0d9; }
+    div[class*="st-key-ajcas_fila_"] div[data-testid="stVerticalBlock"]
+        { gap: 0 !important; }
+    /* OJO: nada de `align-items: center` acá. Con center las columnas
+       dejan de estirarse y colapsan a ~6px con 30px de contenido adentro
+       (overflow visible => las filas se pisan entre sí). El alto lo fija
+       min-height y el centrado vertical va DENTRO de cada celda, abajo. */
+    div[class*="st-key-ajcas_fila_"] div[data-testid="stHorizontalBlock"]
+        { gap: 0.4rem !important; min-height: 38px; }
+    div[class*="st-key-ajcas_fila_"] p { margin: 0 !important; }
+    div[class*="st-key-ajcas_fila_"] [data-testid="stMarkdownContainer"]
+        { display: flex; flex-direction: column; justify-content: center;
+          min-height: 34px; }
+    div[class*="st-key-ajcas_btn_"] button {
+        border: none !important; background: transparent !important;
+        color: #b4b2a9 !important; padding: 0 !important;
+        min-height: 26px !important; font-size: 13px !important; }
+    div[class*="st-key-ajcas_btn_"] button:hover {
+        color: #534AB7 !important; background: transparent !important; }
+    div[class*="st-key-ajcas_btn_"] button[kind="primary"] {
+        color: #534AB7 !important; }
+    </style>""", unsafe_allow_html=True)
+
     with _card("cascada", "Cascada por familia"):
-        # Layout responsivo: sin foco la cascada ocupa todo el ancho;
-        # con foco se abre un panel derecho con el drill (60/40 aprox).
+        # Encabezado: título + insight a la izquierda, resumen a la derecha.
+        _n_falt = int((agg[col_ajuste_val] < 0).sum())
+        _resumen = (f"{len(agg)} {grp_col.lower()}s · {_n_falt} con faltante"
+                    f" · neto <span style='color:"
+                    f"{'#A32D2D' if total < 0 else '#0F6E56'};"
+                    f"font-weight:500'>S/ {total:,.0f}</span>")
+        st.markdown(
+            f"<div style='display:flex;justify-content:space-between;"
+            f"align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:10px'>"
+            f"<span style='font-size:14px;font-weight:500;color:#0b0b0b'>"
+            f"Ajuste valorizado por {grp_col.lower()}"
+            + (f"<span style='font-size:11px;font-weight:400;color:#8a8a8a'>"
+               f" — {insight}</span>" if insight else "")
+            + f"</span>"
+              f"<span style='font-size:11px;color:#8a8a8a'>{_resumen}</span>"
+              f"</div>", unsafe_allow_html=True)
+
+        # Cabecera de la tabla
+        st.markdown(
+            "<div style='display:flex;font-size:10px;color:#8a8a8a;"
+            "text-transform:uppercase;letter-spacing:.05em;"
+            "padding:0 0 6px 0;border-bottom:0.5px solid #e1e0d9'>"
+            "<div style='width:4%'></div>"
+            "<div style='width:30%'>Familia</div>"
+            "<div style='width:17%'>Ajuste</div>"
+            "<div style='width:28%'>Cascada acumulada</div>"
+            "<div style='width:10%;text-align:right'>s/ val</div>"
+            "<div style='width:11%;text-align:right'>Estado</div>"
+            "</div>", unsafe_allow_html=True)
+
+        # Una fila por familia. El gutter izquierdo lleva el botón que
+        # prende/apaga el foco — una tabla HTML no emite eventos de clic,
+        # así que el disparador tiene que ser un widget de Streamlit.
+        for _f in _filas:
+            _es_foco = (not _f["total"]) and _f["cat"] == focus
+            with st.container(key=f"ajcas_fila_{_slug(_f['cat'])}"):
+                _c = st.columns([0.04, 0.30, 0.17, 0.28, 0.10, 0.11])
+                with _c[0]:
+                    if not _f["total"]:
+                        if st.button(
+                            "▾" if _es_foco else "▸",
+                            key=f"ajcas_btn_{_slug(_f['cat'])}",
+                            help=("Cerrar el detalle" if _es_foco
+                                  else f"Ver productos de {_f['cat']}"),
+                            type="primary" if _es_foco else "secondary",
+                        ):
+                            st.session_state[_focus_key] = (
+                                None if _es_foco else _f["cat"])
+                            st.rerun()
+                for _col, _fn in zip(_c[1:], (_celda_familia, _celda_monto,
+                                              _celda_barra, _celda_pctval,
+                                              _celda_badge)):
+                    with _col:
+                        st.markdown(_fn(_f), unsafe_allow_html=True)
+
+        # Leyenda
+        st.markdown(
+            "<div style='display:flex;gap:14px;flex-wrap:wrap;font-size:10px;"
+            "color:#8a8a8a;margin-top:8px'>"
+            "<span><span style='display:inline-block;width:9px;height:9px;"
+            "border-radius:2px;background:#E24B4A'></span> Faltante</span>"
+            "<span><span style='display:inline-block;width:9px;height:9px;"
+            "border-radius:2px;background:#1BAF7A'></span> Sobrante</span>"
+            "<span><span style='display:inline-block;width:9px;height:9px;"
+            "border-radius:2px;background:#888780'></span> Total neto</span>"
+            "<span>Cada barra arranca donde terminó la anterior.</span>"
+            "</div>", unsafe_allow_html=True)
+
+        # ── Panel de drill (solo si hay foco) — DEBAJO de la tabla ─────
+        # Mismo patrón que `_paneles_card()` del drill de Proveedor en
+        # Compras: el panel no existe sin foco, y el mismo control que lo
+        # abrió lo cierra.
         if focus:
-            col_g, col_d = st.columns([1.55, 1])
-        else:
-            col_g, col_d = st.container(), None
+            # Instance id: se incrementa cada vez que el panel pasa de
+            # cerrado a abierto y se anexa a las keys de los charts. Sin
+            # esto Streamlit reusa los nodos DOM, Plotly no re-mide el
+            # ancho del contenedor y el gráfico sale vacío. Mismo bug (y
+            # misma solución) que en el drill de Proveedor de Compras.
+            if not st.session_state.get("ajcas_panel_prev", False):
+                st.session_state["ajcas_panel_inst"] = (
+                    st.session_state.get("ajcas_panel_inst", 0) + 1)
+            st.session_state["ajcas_panel_prev"] = True
+            _inst = st.session_state.get("ajcas_panel_inst", 0)
 
-        with col_g:
-            # Key incluye el foco: al cambiar de foco (o volver a None) la
-            # key cambia y Streamlit RECREA el widget desde cero, limpiando
-            # la selection persistente. Sin esto la selection sobrevive al
-            # rerun y provoca un toggle infinito (parpadeo).
-            evt = st.plotly_chart(
-                fig, use_container_width=True,
-                key=f"ajuste_cascada_chart_{focus or 'none'}",
-                on_select="rerun", selection_mode="points",
-            )
-        # Extraer punto clicado (tolerante a formato).
-        _pt = None
-        try:
-            _sel = getattr(evt, "selection", None) or (
-                evt.get("selection") if isinstance(evt, dict) else None)
-            _pts = (_sel or {}).get("points", [])
-            _pt = _pts[0] if _pts else None
-        except Exception:
-            _pt = None
-        if _pt is not None:
-            # Cascada horizontal: la CATEGORÍA vive en `y` (en `x` va el
-            # valor). Se lee `y` primero y se cae a `x` por compatibilidad.
-            _x = _pt.get("y") if _pt.get("y") is not None else _pt.get("x")
-            if _x is not None and str(_x) != "TOTAL":
-                _clicked = str(_x)
-                # Toggle: mismo → apagar; distinto → cambiar foco.
-                _new = None if _clicked == focus else _clicked
-                if _new != focus:
-                    st.session_state[_focus_key] = _new
-                    st.rerun()
-
-        # ── Panel de drill (solo si hay foco) — a la derecha ───────────
-        if focus and col_d is not None:
+            col_d = st.container(border=True, key="ajcas_panel_drill")
             _det = df[df[grp_col].astype(str) == focus]
             # Dimensión a mostrar: producto si existe, si no la otra
             # (área/familia). Nombre humano para el header.
@@ -775,35 +787,45 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                             ))
                             return _fig
 
-                        if not _pos.empty:
-                            st.markdown(
-                                "<div style='font-size:11px;font-weight:500;"
-                                "color:#0F6E56;letter-spacing:0.5px;"
-                                "margin:4px 0 -8px 0'>SOBRANTES</div>",
-                                unsafe_allow_html=True,
-                            )
-                            st.plotly_chart(
-                                _fig_split(_pos, "rgba(29,158,117,0.85)"),
-                                use_container_width=True,
-                                key=("ajuste_cascada_drill_pos_"
-                                     f"{_slug(focus)}"),
-                            )
-                        if not _neg.empty:
+                        # Al vivir abajo (y no en un panel al 40%), el drill
+                        # tiene todo el ancho: faltantes y sobrantes van
+                        # lado a lado en vez de apilados.
+                        _pa, _pb = st.columns(2)
+                        with _pa:
                             st.markdown(
                                 "<div style='font-size:11px;font-weight:500;"
                                 "color:#A32D2D;letter-spacing:0.5px;"
                                 "margin:4px 0 -8px 0'>FALTANTES</div>",
                                 unsafe_allow_html=True,
                             )
-                            st.plotly_chart(
-                                _fig_split(_neg, "rgba(239,68,68,0.85)"),
-                                use_container_width=True,
-                                key=("ajuste_cascada_drill_neg_"
-                                     f"{_slug(focus)}"),
+                            if _neg.empty:
+                                st.caption("Sin faltantes en esta familia.")
+                            else:
+                                st.plotly_chart(
+                                    _fig_split(_neg, "rgba(239,68,68,0.85)"),
+                                    use_container_width=True,
+                                    key=("ajuste_cascada_drill_neg_"
+                                         f"{_slug(focus)}_{_inst}"),
+                                )
+                        with _pb:
+                            st.markdown(
+                                "<div style='font-size:11px;font-weight:500;"
+                                "color:#0F6E56;letter-spacing:0.5px;"
+                                "margin:4px 0 -8px 0'>SOBRANTES</div>",
+                                unsafe_allow_html=True,
                             )
+                            if _pos.empty:
+                                st.caption("Sin sobrantes en esta familia.")
+                            else:
+                                st.plotly_chart(
+                                    _fig_split(_pos, "rgba(29,158,117,0.85)"),
+                                    use_container_width=True,
+                                    key=("ajuste_cascada_drill_pos_"
+                                         f"{_slug(focus)}_{_inst}"),
+                                )
         else:
-            st.caption("💡 Clic en una barra para ver su top "
-                       "de productos.")
+            st.session_state["ajcas_panel_prev"] = False
+            st.caption("💡 Usá el ▸ de cada fila para ver sus productos.")
 
 
 def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
