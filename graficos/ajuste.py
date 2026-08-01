@@ -463,8 +463,8 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                  help="Cerrar el drill"):
                         st.session_state[_focus_key] = None
                         st.rerun()
-                topn = st.segmented_control(
-                    "Top", [5, 10, 20], default=10,
+                topn = st.selectbox(
+                    "Top", [5, 10, 20], index=1,
                     key="ajuste_cascada_topn",
                     label_visibility="collapsed",
                     format_func=lambda n: f"Top {n}",
