@@ -501,10 +501,17 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                             xaxis=dict(tickprefix="S/ ", tickformat=",.0f",
                                        gridcolor=GRIS_BORDE, zeroline=True,
                                        zerolinecolor=GRIS_BORDE),
-                            yaxis=dict(gridcolor=GRIS_BORDE),
+                            # showticklabels=True: _layout oculta el Y por
+                            # default; aquí Y son NOMBRES de producto, no
+                            # valores — hay que forzarlos.
+                            yaxis=dict(gridcolor=GRIS_BORDE,
+                                       showticklabels=True,
+                                       automargin=True,
+                                       tickfont=dict(size=10)),
                             showlegend=False,
-                            height=380,  # alineado con la cascada
-                            margin=dict(l=10, r=50, t=10, b=10),
+                            height=380,
+                            bargap=0.45,
+                            margin=dict(l=4, r=50, t=10, b=10),
                         ))
                         st.plotly_chart(
                             fig_d, use_container_width=True,
