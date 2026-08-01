@@ -467,10 +467,16 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             with col_d:
                 hdr_l, hdr_r = st.columns([4, 1])
                 with hdr_l:
+                    _total_focus = float(
+                        df[df[grp_col].astype(str) == focus][col_ajuste_val].sum()
+                    )
+                    _color_total = "#A32D2D" if _total_focus < 0 else "#0F6E56"
                     st.markdown(
                         f"**{focus}**<br>"
                         f"<span style='font-size:11px;color:#8a8a8a'>"
-                        f"top {dim_lbl}s por |ajuste valorizado|</span>",
+                        f"top {dim_lbl}s · faltante total "
+                        f"<span style='color:{_color_total};font-weight:500'>"
+                        f"S/ {_total_focus:,.0f}</span></span>",
                         unsafe_allow_html=True,
                     )
                 with hdr_r:
@@ -479,8 +485,8 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                  help="Cerrar el drill"):
                         st.session_state[_focus_key] = None
                         st.rerun()
-                topn = st.selectbox(
-                    "Top", [5, 10, 20], index=1,
+                topn = st.pills(
+                    "Top", [5, 10, 20], default=10,
                     key="ajuste_cascada_topn",
                     label_visibility="collapsed",
                     format_func=lambda n: f"Top {n}",
@@ -503,7 +509,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                    if v >= 0 else "rgba(239,68,68,0.85)"
                                    for v in _sub[col_ajuste_val]]
                         # Truncar nombres largos para el panel angosto.
-                        _y_labels = [(str(n)[:22] + "…") if len(str(n)) > 23
+                        _y_labels = [(str(n)[:34] + "…") if len(str(n)) > 35
                                      else str(n)
                                      for n in _sub[dim].tolist()]
                         fig_d = go.Figure(go.Bar(
@@ -547,7 +553,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                             # Con filas cortas, barra y hueco se achican juntos.
                             height=max(180, 26 * len(_sub) + 60),
                             bargap=0.35,
-                            margin=dict(l=4, r=50, t=10, b=10),
+                            margin=dict(l=4, r=90, t=10, b=10),
                         ))
                         st.plotly_chart(
                             fig_d, use_container_width=True,
