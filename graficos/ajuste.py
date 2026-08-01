@@ -551,7 +551,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                             _fig = go.Figure(go.Bar(
                                 x=_df[col_ajuste_val].tolist(),
                                 y=_labels, orientation="h",
-                                marker=dict(color=color_bar),
+                                marker=dict(color=color_bar, cornerradius=4),
                                 text=_texts,
                                 textposition="auto",
                                 insidetextanchor="end",
