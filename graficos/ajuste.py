@@ -385,7 +385,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         title=title_html,
         xaxis=dict(tickangle=-35, gridcolor=GRIS_BORDE),
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f", gridcolor=GRIS_BORDE),
-        showlegend=False, height=380, waterfallgap=0.75,
+        showlegend=False, height=380, waterfallgap=0.5,
     ))
     _xcats = agg[grp_col].tolist() + ["TOTAL"]
     fig.update_xaxes(tickmode="array", tickvals=_xcats,
@@ -514,7 +514,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                        tickfont=dict(size=10)),
                             showlegend=False,
                             height=380,
-                            bargap=0.45,
+                            bargap=0.65,
                             margin=dict(l=4, r=50, t=10, b=10),
                         ))
                         st.plotly_chart(
