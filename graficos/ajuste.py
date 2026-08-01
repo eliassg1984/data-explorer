@@ -553,7 +553,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                             # Con filas cortas, barra y hueco se achican juntos.
                             height=max(180, 26 * len(_sub) + 60),
                             bargap=0.35,
-                            margin=dict(l=4, r=90, t=10, b=10),
+                            margin=dict(l=4, r=12, t=10, b=10),
                         ))
                         st.plotly_chart(
                             fig_d, use_container_width=True,
