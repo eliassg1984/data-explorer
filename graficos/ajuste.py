@@ -463,10 +463,11 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                  help="Cerrar el drill"):
                         st.session_state[_focus_key] = None
                         st.rerun()
-                topn = st.pills(
+                topn = st.segmented_control(
                     "Top", [5, 10, 20], default=10,
                     key="ajuste_cascada_topn",
                     label_visibility="collapsed",
+                    format_func=lambda n: f"Top {n}",
                 ) or 10
 
                 if not dim or dim not in _det.columns:
