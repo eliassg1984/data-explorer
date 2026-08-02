@@ -35,7 +35,7 @@ from graficos.base import (
 # (misma idea que Compras): al elegirlo se renderiza la tabla AgGrid vía el
 # callback `tabla_cb` que inyecta app.py.
 _AJUSTE_RAIL_CATEGORIAS = (
-    ("Composición", (("Cascada",        "Cascada"),
+    ("Visual", (("Cascada",        "Cascada"),
                      ("Mapa de calor",  "Mapa de calor"),
                      ("Distribución",   "Distribución"))),
     ("Tiempo",      (("Evolución",           "Evolución"),
