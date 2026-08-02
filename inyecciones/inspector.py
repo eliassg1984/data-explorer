@@ -277,7 +277,10 @@ def inject_element_inspector():
             tip.id = 'el-inspector-tip';
             tip.style.cssText = [
                 'position:fixed',
-                'pointer-events:none',
+                // pointer-events:auto para poder scrollear la rueda del mouse
+                // adentro; congelamos el contenido cuando el cursor entra en
+                // el tooltip (ver mousemove handler)
+                'pointer-events:auto',
                 'z-index:2147483647',
                 // #101014: fondo casi negro del INSPECTOR (herramienta interna
                 // de depuracion). Excepcion intencional.
@@ -290,8 +293,10 @@ def inject_element_inspector():
                 'white-space:pre',
                 'opacity:0',
                 'transition:opacity 0.1s',
-                'max-width:420px',
-                'overflow:hidden',
+                'max-width:480px',
+                'max-height:60vh',
+                'overflow-y:auto',
+                'overflow-x:hidden',
                 'box-shadow:0 3px 12px rgba(0,0,0,0.5)'
             ].join(';');
             doc.body.appendChild(tip);
@@ -576,6 +581,9 @@ def inject_element_inspector():
                     resaltarEl(null, null);
                     return;
                 }
+                // congelar contenido mientras el cursor esta sobre el tooltip
+                // (asi se puede leer y scrollear sin que salte al widget de al lado)
+                if (tip.contains(e.target) || e.target === tip) return;
 
                 var el = e.target;
                 var etiqueta = null;
@@ -615,6 +623,8 @@ def inject_element_inspector():
                 var ctxCod  = buscarCodigo(ctxKey);
                 var ctxEst  = buscarEstilos(ctxKey);
                 var ctxRel  = padreYHermanos(el);
+                var medidas = medirElemento(ctxCont ? ctxCont.el : el);
+                var pagina  = contextoPagina();
                 var extras  = [];
                 if (ctxKey)         extras.push('  ' + 'codigo   : ' + (ctxCod || '(no encontrado)'));
                 if (ctxEst.length)  extras.push('  ' + 'estilos  : ' + ctxEst.join(', '));
@@ -622,10 +632,18 @@ def inject_element_inspector():
                 if (ctxRel.padre)   extras.push('  ' + 'padre    : ' + ctxRel.padre);
                 if (ctxRel.hermanos && ctxRel.hermanos.length)
                                     extras.push('  ' + 'hermanos : ' + ctxRel.hermanos.join(', '));
-                extras.push('  ' + '[C] copiar para IA');
+                if (medidas) {
+                    extras.push('  ' + 'tamano   : ' + medidas.tamano);
+                    var eM = medidas.estilos, partesM = [];
+                    for (var pp in eM) { if (eM[pp] && eM[pp] !== 'none' && eM[pp] !== '0px') partesM.push(pp + '=' + eM[pp]); }
+                    if (partesM.length) extras.push('  ' + 'estilos-computados:\\n     ' + partesM.join('\\n     '));
+                }
+                if (pagina) {
+                    extras.push('  ' + 'reporte  : ' + pagina.reporte);
+                    extras.push('  ' + 'viewport : ' + pagina.viewport);
+                }
+                extras.push('  ' + '[C] copiar para IA (incluye analisis de conflictos CSS)');
                 var etiquetaFinal = etiqueta + '\\n' + extras.join('\\n');
-                var medidas = medirElemento(ctxCont ? ctxCont.el : el);
-                var pagina  = contextoPagina();
                 // conflictos: calculo diferido (solo al copiar) - es O(reglas*props), no queremos correrlo en cada mousemove
                 win.__inspectorUltimo = {
                     etiqueta: etiqueta, key: ctxKey,
