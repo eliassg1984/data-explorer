@@ -15,15 +15,23 @@ NO escribe `st.session_state` directamente: todo pasa por `estado_rango`
 callback `on_click`, que implementa la máquina de dos clics y solo publica
 el rango cuando ya hay dos fechas.
 
-Restricción de layout que condiciona el diseño
-----------------------------------------------
-Streamlit admite UN solo nivel de anidado de `st.columns`. Este calendario
-se dibuja dentro de la columna derecha del popover, así que ya está en el
-nivel permitido: no se puede hacer `columns(2)` (un mes en cada una) y
-dentro `columns(7)` (los días). Por eso los dos meses se dibujan en UNA
-fila de 15 columnas — 7 días + separador + 7 días — y cada columna apila
-sus semanas verticalmente. El resultado visual es la grilla; la estructura
-es plana.
+Dos restricciones que condicionan el diseño
+-------------------------------------------
+1. Streamlit admite UN solo nivel de anidado de `st.columns`. Este
+   calendario se dibuja dentro de la columna derecha del popover, así que
+   ya está en el nivel permitido: no se puede hacer `columns(2)` (un mes en
+   cada una) y dentro `columns(7)` (los días). Por eso los dos meses
+   comparten una fila de 15 columnas: 7 días + separador + 7 días.
+
+2. Se dibuja una `st.columns` por SEMANA, no una sola para todo el mes.
+   Apilar los días dentro de cada columna era más simple, pero cualquier
+   diferencia de alto entre un botón y un hueco se acumulaba y las semanas
+   terminaban desfasadas. Con una fila por semana, cada fila es su propio
+   flex row y no puede desalinearse.
+
+El gap de `st.columns` (1rem aun con `gap="small"`) se aprieta por CSS en
+`estilos/_65_calendario_doble.py`: con 15 columnas se comía ~224px y los
+números de dos dígitos se partían en dos líneas.
 """
 
 import calendar as _cal
@@ -118,55 +126,69 @@ def render_calendario_doble(clave, bounds, reporte=None,
             st.session_state[k_ancla] = _sumar_meses(ancla, 1)
             st.rerun()
 
-    # ── Grilla: 7 columnas [+ separador + 7] (ver docstring) ─────────────
-    _spec = ([1] * 7 + [0.35] + [1] * 7) if dos else [1] * 7
-    cols = st.columns(_spec, gap="small")
+    # ── Grilla, FILA POR FILA ────────────────────────────────────────────
+    # Una `st.columns` por SEMANA, no una sola para todo el mes. Apilar los
+    # días dentro de cada columna parecía más simple, pero cualquier
+    # diferencia de alto entre un botón y un hueco se acumulaba y las
+    # semanas terminaban desfasadas entre sí. Con una fila por semana, cada
+    # fila es su propio flex row y no puede desalinearse.
+    _spec = ([1] * 7 + [0.3] + [1] * 7) if dos else [1] * 7
+    _off_der = 8
 
-    # Cabeceras de día de la semana
-    for _off in ((0, 8) if dos else (0,)):
+    hoy = datetime.date.today()
+    sem_izq = _semanas(izq.year, izq.month)
+    sem_der = _semanas(der.year, der.month) if dos else []
+
+    def _celda(col, mes, dia):
+        with col:
+            if dia == 0:
+                st.markdown("<div class='cal-hueco'></div>",
+                            unsafe_allow_html=True)
+                return
+            fecha = datetime.date(mes.year, mes.month, dia)
+            fuera = ((min_b is not None and fecha < min_b) or
+                     (max_b is not None and fecha > max_b))
+
+            # Estado → sufijo de key. El CSS pinta por sufijo, mismo
+            # patrón que los chipwrap_*_on del proyecto.
+            if pendiente is not None:
+                extremo = (fecha == pendiente)
+                dentro = False
+            else:
+                extremo = fecha in (ini, fin)
+                dentro = bool(ini and fin and ini < fecha < fin)
+            suf = "_sel" if extremo else ("_rng" if dentro else "")
+            if fecha == hoy and not extremo:
+                suf += "_hoy"
+
+            st.button(
+                str(dia),
+                key=f"{prefijo}d_{clave}_{fecha.isoformat()}{suf}",
+                disabled=fuera,
+                use_container_width=True,
+                on_click=aplicar_clic_dia,
+                args=(clave, fecha, reporte, usa_carga_rango),
+            )
+
+    # Cabecera de días de la semana (su propia fila)
+    _hd = st.columns(_spec, gap="small")
+    for _off in ((0, _off_der) if dos else (0,)):
         for _j, _d in enumerate(_DIAS):
-            with cols[_off + _j]:
+            with _hd[_off + _j]:
                 st.markdown(f"<div class='cal-dow'>{_d}</div>",
                             unsafe_allow_html=True)
 
-    hoy = datetime.date.today()
-
-    def _pintar_mes(mes, offset):
-        for semana in _semanas(mes.year, mes.month):
-            for _j, _dia in enumerate(semana):
-                with cols[offset + _j]:
-                    if _dia == 0:
-                        st.markdown("<div class='cal-hueco'></div>",
-                                    unsafe_allow_html=True)
-                        continue
-                    fecha = datetime.date(mes.year, mes.month, _dia)
-                    fuera = ((min_b is not None and fecha < min_b) or
-                             (max_b is not None and fecha > max_b))
-
-                    # Estado → sufijo de key. El CSS pinta por sufijo, mismo
-                    # patrón que los chipwrap_*_on del proyecto.
-                    if pendiente is not None:
-                        extremo = (fecha == pendiente)
-                        dentro = False
-                    else:
-                        extremo = fecha in (ini, fin)
-                        dentro = bool(ini and fin and ini < fecha < fin)
-                    suf = "_sel" if extremo else ("_rng" if dentro else "")
-                    if fecha == hoy and not extremo:
-                        suf += "_hoy"
-
-                    st.button(
-                        str(_dia),
-                        key=f"{prefijo}d_{clave}_{fecha.isoformat()}{suf}",
-                        disabled=fuera,
-                        use_container_width=True,
-                        on_click=aplicar_clic_dia,
-                        args=(clave, fecha, reporte, usa_carga_rango),
-                    )
-
-    _pintar_mes(izq, 0)
-    if dos:
-        _pintar_mes(der, 8)
+    # Los meses no tienen la misma cantidad de semanas: se itera al mayor y
+    # el que se queda corto rellena con huecos.
+    for _r in range(max(len(sem_izq), len(sem_der) if dos else 0)):
+        _fila = st.columns(_spec, gap="small")
+        _sem = sem_izq[_r] if _r < len(sem_izq) else [0] * 7
+        for _j in range(7):
+            _celda(_fila[_j], izq, _sem[_j])
+        if dos:
+            _sem2 = sem_der[_r] if _r < len(sem_der) else [0] * 7
+            for _j in range(7):
+                _celda(_fila[_off_der + _j], der, _sem2[_j])
 
     # Pista del estado de la selección: sin esto, tras el primer clic no hay
     # nada que explique por qué el rango todavía no cambió.

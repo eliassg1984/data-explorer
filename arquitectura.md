@@ -251,6 +251,17 @@ salvo `icono`):
     (7 días + separador + 7 días) y apilar las semanas *dentro* de cada
     columna: la estructura queda plana y el resultado visual sigue siendo
     la grilla. Ver `calendario.py`.
+    **Dos trampas más de la misma grilla, ambas vistas en pantalla:**
+    - *Apilar dentro de la columna desalinea.* La primera versión metía las
+      6 semanas dentro de cada columna. Cualquier diferencia de alto entre
+      un botón y un hueco se acumula y las semanas terminan desfasadas. Hay
+      que emitir una `st.columns` **por fila**; así cada semana es su
+      propio flex row y no puede desalinearse.
+    - *El `gap` se come el ancho.* `st.columns` mete 1rem entre columnas aun
+      con `gap="small"`. Con 15 columnas son ~224px: a cada día le quedaban
+      ~25px y los números de dos dígitos se partían en dos líneas. Se
+      aprieta por CSS acotando con `:has()` a la fila de la grilla, para no
+      tocar el split [atajos | calendario], que sí quiere su aire.
 
 13. **El clic de Plotly no se puede simular desde JS.** Su hitbox no
     reacciona a `dispatchEvent(new MouseEvent('click'))`, así que un drill

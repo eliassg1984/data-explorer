@@ -457,10 +457,10 @@ if True:
                         # Contenedor keyed → permite scopear el ancho del panel
                         # por CSS aunque el popover se renderice en un portal.
                         with st.container(key="fecha_panel"):
-                            # 1 / 3.4: el calendario propio dibuja DOS meses
+                            # 1 / 4.6: el calendario propio dibuja DOS meses
                             # (14 columnas de días), así que necesita bastante
                             # más ancho que los botones de atajo.
-                            _c_atajos, _c_cal = st.columns([1, 3.4])
+                            _c_atajos, _c_cal = st.columns([1, 4.6])
                             with _c_atajos:
                                 st.caption("Atajos")
                                 for _ca, _et, _rg in _atajos:

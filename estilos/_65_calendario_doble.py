@@ -59,6 +59,17 @@ CSS = """    /* ================================================================
         background: transparent !important;
         color: var(--text-primary) !important;
         transition: background .12s ease, color .12s ease !important;
+        /* nowrap: sin esto "10" se parte en "1" y "0" cuando la columna
+           queda angosta. overflow visible para que igual se lea. */
+        white-space: nowrap !important;
+        overflow: visible !important;
+    }
+    /* El <p> interno del label también hereda el ancho: mismo tratamiento. */
+    div[class*="st-key-cald_"] button p {
+        white-space: nowrap !important;
+        font-size: 12px !important;
+        line-height: 1 !important;
+        margin: 0 !important;
     }
     div[class*="st-key-cald_"] button:hover {
         background: var(--accent-tint) !important;
@@ -115,9 +126,22 @@ CSS = """    /* ================================================================
         opacity: .3 !important;
     }
 
-    /* La grilla no necesita el gap vertical que Streamlit mete entre
-       elementos apilados dentro de una columna. */
+    /* GAPS: Streamlit mete 1rem entre columnas aun con gap="small". Con 15
+       columnas eso se come ~224px de ancho y a cada día le quedan ~25px —
+       los números se partían en dos líneas. Se aprieta a 2px.
+       Se acota a la fila de la GRILLA (la que tiene botones de día) para no
+       tocar el split [atajos | calendario], que sí quiere su aire. */
+    .st-key-fecha_panel div[data-testid="stHorizontalBlock"]:has(
+        div[class*="st-key-cald_"]) {
+        gap: 2px !important;
+    }
+    /* La cabecera Lu..Do no tiene botones, así que el :has() de arriba no la
+       alcanza: se la aprieta por su propia clase. */
+    .st-key-fecha_panel div[data-testid="stHorizontalBlock"]:has(.cal-dow) {
+        gap: 2px !important;
+    }
+    /* Sin gap vertical entre semanas. */
     .st-key-fecha_panel div[data-testid="stVerticalBlock"] {
-        gap: 0.15rem !important;
+        gap: 0.1rem !important;
     }
 """
