@@ -110,7 +110,12 @@ en 10 segundos y evita ida-y-vuelta de deploys + capturas.
 
 También existe el inspector propio: **`?debug=1` en la URL o `Alt+I`**
 activa `inject_element_inspector` (tooltip con selectores y estilos al
-pasar el cursor) más el panel de diagnóstico.
+pasar el cursor) más el panel de diagnóstico. El tooltip incluye
+`codigo` (archivo:línea donde está declarada la key, buscado en `app.py`
++ `graficos/` + `tablas/`), `estilos` (archivos de `estilos/` que
+matchean el prefijo de la key), `padre` y `hermanos` (contenedores
+`st-key-*` adyacentes en el DOM). Tecla **C** copia todo eso al
+portapapeles como un bloque listo para pegar a la IA.
 
 ## Al terminar un cambio estructural
 

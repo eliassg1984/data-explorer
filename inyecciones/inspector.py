@@ -4,7 +4,52 @@ Permite senalar un elemento en la pagina y ver sus selectores y estilos. Es
 la inyeccion mas grande del paquete y no participa del render normal.
 """
 
+import json
+import re
+from functools import lru_cache
+from pathlib import Path
+
 import streamlit.components.v1 as components
+
+_RAIZ = Path(__file__).resolve().parent.parent
+_KEY_PY = re.compile(r"""key\s*=\s*['"]([A-Za-z0-9_]+)['"]""")
+_KEY_CSS = re.compile(r"st-key-([A-Za-z0-9_]+)")
+
+
+@lru_cache(maxsize=1)
+def _mapas_desarrollador() -> tuple[str, str]:
+    """Devuelve (mapa_codigo_json, mapa_estilos_json) para inyectar en el JS.
+
+    mapa_codigo : {key_exacta -> "archivo:linea"}  (primer match gana)
+    mapa_estilos: {key_o_prefijo -> ["archivo_estilo.py", ...]}
+    """
+    mapa_codigo: dict[str, str] = {}
+    fuentes_py = [_RAIZ / "app.py"]
+    fuentes_py += sorted((_RAIZ / "graficos").glob("*.py"))
+    fuentes_py += sorted((_RAIZ / "graficos" / "compras").glob("*.py")) if (_RAIZ / "graficos" / "compras").exists() else []
+    fuentes_py += sorted((_RAIZ / "tablas").glob("*.py")) if (_RAIZ / "tablas").exists() else []
+    for archivo in fuentes_py:
+        try:
+            for i, linea in enumerate(archivo.read_text(encoding="utf-8").splitlines(), 1):
+                for k in _KEY_PY.findall(linea):
+                    if k not in mapa_codigo:
+                        mapa_codigo[k] = f"{archivo.relative_to(_RAIZ).as_posix()}:{i}"
+        except OSError:
+            continue
+
+    mapa_estilos: dict[str, list[str]] = {}
+    for archivo in sorted((_RAIZ / "estilos").glob("*.py")):
+        try:
+            texto = archivo.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        rel = archivo.relative_to(_RAIZ).as_posix()
+        for k in set(_KEY_CSS.findall(texto)):
+            mapa_estilos.setdefault(k, [])
+            if rel not in mapa_estilos[k]:
+                mapa_estilos[k].append(rel)
+
+    return json.dumps(mapa_codigo), json.dumps(mapa_estilos)
 
 
 def inject_element_inspector():
@@ -20,11 +65,77 @@ def inject_element_inspector():
     iframe de AgGrid, así que sus var(--x) SÍ resuelven contra el :root de
     estilos.py. Se mantienen tal cual.
     """
+    mapa_codigo, mapa_estilos = _mapas_desarrollador()
     components.html("""
     <script>
     (function() {
         var win = window.parent;
         var doc = win.document;
+
+        win.__inspectorMapaCodigo  = __MAPA_CODIGO__;
+        win.__inspectorMapaEstilos = __MAPA_ESTILOS__;
+
+        function buscarCodigo(key) {
+            if (!key) return '';
+            return win.__inspectorMapaCodigo[key] || '';
+        }
+        function buscarEstilos(key) {
+            if (!key) return [];
+            var m = win.__inspectorMapaEstilos;
+            var vistos = {};
+            var res = [];
+            // match exacto + prefijos progresivos (vista_cards_kpi_1 -> vista_cards_kpi -> vista_cards -> vista)
+            var partes = key.split('_');
+            for (var i = partes.length; i >= 1; i--) {
+                var p = partes.slice(0, i).join('_');
+                var arr = m[p];
+                if (arr) {
+                    for (var j = 0; j < arr.length; j++) {
+                        if (!vistos[arr[j]]) { vistos[arr[j]] = 1; res.push(arr[j]); }
+                    }
+                }
+            }
+            return res;
+        }
+        function keyDeElemento(el) {
+            if (!el || !el.className || !el.className.toString) return '';
+            var m = /st-key-([A-Za-z0-9_]+)/.exec(el.className.toString());
+            return m ? m[1] : '';
+        }
+        function contenedorConKey(el) {
+            var cur = el;
+            while (cur && cur !== doc.body) {
+                var k = keyDeElemento(cur);
+                if (k) return { el: cur, key: k };
+                cur = cur.parentElement;
+            }
+            return null;
+        }
+        function padreYHermanos(el) {
+            var mio = contenedorConKey(el);
+            if (!mio) return { padre: '', hermanos: [] };
+            var arriba = contenedorConKey(mio.el.parentElement);
+            if (!arriba) return { padre: '', hermanos: [] };
+            var hermanos = [];
+            var candidatos = arriba.el.querySelectorAll('[class*="st-key-"]');
+            for (var i = 0; i < candidatos.length; i++) {
+                // solo hermanos DIRECTOS de nuestro contenedor, no descendientes
+                if (candidatos[i].parentElement !== arriba.el) continue;
+                var k = keyDeElemento(candidatos[i]);
+                if (k && k !== mio.key) hermanos.push(k);
+            }
+            return { padre: arriba.key, hermanos: hermanos.slice(0, 6) };
+        }
+        function bloqueParaIA(etiqueta, key, ctx) {
+            var lines = ['--- copiar para IA ---'];
+            lines.push('Widget key: ' + (key || '(sin key)'));
+            if (ctx.codigo)   lines.push('Declarado en: ' + ctx.codigo);
+            if (ctx.estilos && ctx.estilos.length) lines.push('Estilos: ' + ctx.estilos.join(', '));
+            if (ctx.padre)    lines.push('Padre: st-key-' + ctx.padre);
+            if (ctx.hermanos && ctx.hermanos.length) lines.push('Hermanos: ' + ctx.hermanos.join(', '));
+            if (etiqueta) lines.push('Detalle:\\n' + etiqueta);
+            return lines.join('\\n');
+        }
 
         function inspectorActivo() {
             return new URL(win.location.href).searchParams.get('debug') === '1';
@@ -67,7 +178,7 @@ def inject_element_inspector():
                 'padding:5px 10px','border-radius:20px','display:none',
                 'align-items:center','gap:6px','box-shadow:0 2px 8px rgba(0,0,0,0.3)'
             ].join(';');
-            badge.innerHTML = 'Inspector ON &nbsp;<span style="opacity:.6;font-weight:400">Alt+I para desactivar</span>';
+            badge.innerHTML = 'Inspector ON &nbsp;<span style="opacity:.6;font-weight:400">C copiar &middot; Alt+I salir</span>';
             doc.body.appendChild(badge);
         }
 
@@ -368,7 +479,27 @@ def inject_element_inspector():
             }
 
             if (etiqueta) {
-                tip.textContent = etiqueta;
+                // enriquecemos con codigo/estilos/padre/hermanos derivados del key del ancestro
+                var ctxCont = contenedorConKey(el);
+                var ctxKey  = ctxCont ? ctxCont.key : '';
+                var ctxCod  = buscarCodigo(ctxKey);
+                var ctxEst  = buscarEstilos(ctxKey);
+                var ctxRel  = padreYHermanos(el);
+                var extras  = [];
+                if (ctxKey)         extras.push('  ' + 'codigo   : ' + (ctxCod || '(no encontrado)'));
+                if (ctxEst.length)  extras.push('  ' + 'estilos  : ' + ctxEst.join(', '));
+                else if (ctxKey)    extras.push('  ' + 'estilos  : (sin regla propia en estilos/)');
+                if (ctxRel.padre)   extras.push('  ' + 'padre    : ' + ctxRel.padre);
+                if (ctxRel.hermanos && ctxRel.hermanos.length)
+                                    extras.push('  ' + 'hermanos : ' + ctxRel.hermanos.join(', '));
+                extras.push('  ' + '[C] copiar para IA');
+                var etiquetaFinal = etiqueta + '\\n' + extras.join('\\n');
+                win.__inspectorUltimo = {
+                    etiqueta: etiqueta, key: ctxKey,
+                    ctx: { codigo: ctxCod, estilos: ctxEst,
+                           padre: ctxRel.padre, hermanos: ctxRel.hermanos }
+                };
+                tip.textContent = etiquetaFinal;
                 tip.style.opacity = '1';
                 var x = e.clientX + 16;
                 var y = e.clientY - 10;
@@ -394,6 +525,30 @@ def inject_element_inspector():
             });
 
             doc.addEventListener('keydown', function(e) {
+                if ((e.key === 'c' || e.key === 'C') && !e.altKey && !e.ctrlKey && !e.metaKey
+                    && inspectorActivo() && win.__inspectorUltimo) {
+                    var t = e.target;
+                    var tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+                    if (tag === 'input' || tag === 'textarea' || (t && t.isContentEditable)) return;
+                    var u = win.__inspectorUltimo;
+                    var texto = bloqueParaIA(u.etiqueta, u.key, u.ctx);
+                    var ok = function() {
+                        var b = doc.getElementById('el-inspector-badge');
+                        if (!b) return;
+                        var prev = b.innerHTML;
+                        b.innerHTML = 'Copiado al portapapeles';
+                        setTimeout(function(){ b.innerHTML = prev; }, 1200);
+                    };
+                    if (win.navigator.clipboard && win.navigator.clipboard.writeText) {
+                        win.navigator.clipboard.writeText(texto).then(ok, function(){});
+                    } else {
+                        var ta = doc.createElement('textarea');
+                        ta.value = texto; doc.body.appendChild(ta);
+                        ta.select(); try { doc.execCommand('copy'); ok(); } catch(_){}
+                        doc.body.removeChild(ta);
+                    }
+                    return;
+                }
                 if (e.altKey && (e.key === 'i' || e.key === 'I')) {
                     var url = new URL(win.location.href);
                     if (url.searchParams.get('debug') === '1') {
@@ -420,4 +575,5 @@ def inject_element_inspector():
 
     })();
     </script>
-    """, height=0, scrolling=False)
+    """.replace("__MAPA_CODIGO__", mapa_codigo).replace("__MAPA_ESTILOS__", mapa_estilos),
+        height=0, scrolling=False)
