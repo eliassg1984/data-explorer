@@ -1125,11 +1125,36 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
             thickness=8, len=0.75, outlinewidth=0,
             ticks="outside", ticklen=3, tickcolor=GRIS_BORDE,
         ),
+        # hoverinfo="skip": el hover (y el clic) los maneja la capa de
+        # puntos invisible de abajo, no el heatmap.
+        hoverinfo="skip",
+    ))
+
+    # ── Capa de clic: un punto invisible en el centro de cada celda ───────
+    # `go.Heatmap` NO es una traza seleccionable en Plotly: `on_select`
+    # jamás recibe puntos de ella, así que el clic sobre el mapa no hacía
+    # nada. La solución estándar es superponer un `go.Scatter` (que sí es
+    # seleccionable) con un punto por celda y opacidad 0. Como además lleva
+    # el hovertemplate, el tooltip sigue saliendo igual que antes.
+    _pts_x, _pts_y, _pts_cd = [], [], []
+    for _i, _fam in enumerate(pivot.index.tolist()):
+        for _j, _area in enumerate(pivot.columns.tolist()):
+            _pts_x.append(_area)
+            _pts_y.append(_fam)
+            _pts_cd.append([float(pivot.values[_i][_j])])
+
+    fig.add_trace(go.Scatter(
+        x=_pts_x, y=_pts_y, mode="markers",
+        # size generoso: con hovermode="closest" define el radio de captura
+        # del clic. Chico deja zonas muertas entre celdas.
+        marker=dict(size=28, opacity=0, color=ACENTO),
+        customdata=_pts_cd,
         hovertemplate=(
             "<b>%{y}</b><br>"
             "Área: <b>%{x}</b><br>"
-            "Ajuste: <b>S/ %{z:,.2f}</b><extra></extra>"
+            "Ajuste: <b>S/ %{customdata[0]:,.2f}</b><extra></extra>"
         ),
+        showlegend=False,
     ))
 
     # Valores dentro de cada celda como ANNOTATIONS, no como `texttemplate`:
@@ -1165,6 +1190,9 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         height=min(560, max(240, len(pivot.index) * 38 + 110)),
         margin=dict(l=10, r=10, t=50, b=20),
         annotations=_anns_hm,
+        # closest: el clic resuelve al punto invisible más cercano, así no
+        # quedan zonas muertas entre celdas.
+        hovermode="closest",
     ))
     # plot_bgcolor pinta lo que se ve POR DEBAJO de las celdas — es decir,
     # los gaps de xgap/ygap. `_layout_aj` lo fuerza transparente (queda el
@@ -1216,7 +1244,16 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     if _hm_punto is not None:
         _fam_sel = _hm_punto.get("y")   # Familia clicada
         _area_sel = _hm_punto.get("x")  # Área clicada
-        _val_sel = _hm_punto.get("z")   # Valor de la celda
+        # El valor se lee del pivot, no del evento: los puntos de un
+        # `go.Scatter` no traen `z`, y el `customdata` no siempre llega
+        # completo según la versión de Streamlit.
+        _val_sel = 0.0
+        try:
+            _val_sel = float(pivot.loc[_fam_sel, _area_sel])
+        except Exception:
+            _cd_evt = _hm_punto.get("customdata")
+            if isinstance(_cd_evt, (list, tuple)) and _cd_evt:
+                _val_sel = float(_cd_evt[0])
 
         if _fam_sel and _area_sel:
             _det = df[

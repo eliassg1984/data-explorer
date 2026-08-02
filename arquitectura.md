@@ -223,3 +223,29 @@ salvo `icono`):
     levantarlo como segunda config en `.claude/launch.json`. Medir con JS
     (`getBoundingClientRect` + `scrollHeight`) encuentra los colapsos de
     layout que una captura de pantalla no delata.
+
+11. **`go.Heatmap` NO es una traza seleccionable: `on_select` nunca recibe
+    sus puntos.** El cableado se ve correcto (`on_select="rerun"`,
+    `selection_mode="points"`, lectura de `selection.points`) y aun así el
+    clic no hace nada — no hay error, simplemente la selección llega vacía
+    siempre. Lo mismo vale para otras trazas no seleccionables.
+    **Solución:** superponer un `go.Scatter` con un punto por celda y
+    `marker.opacity = 0`, que sí es seleccionable. Va acompañado de:
+    - `hoverinfo="skip"` en el heatmap y el `hovertemplate` rico en el
+      scatter, para que el tooltip lo sirva una sola capa;
+    - `hovermode="closest"` en el layout y un `marker.size` generoso
+      (~28), que es lo que define el radio de captura del clic — chico deja
+      zonas muertas entre celdas;
+    - leer el valor del `pivot` con la familia/área clicadas, **no** del
+      evento: los puntos de un scatter no traen `z`.
+    Implementado en `_graf_heatmap_ajuste` (`ajuste.py`).
+
+12. **El clic de Plotly no se puede simular desde JS.** Su hitbox no
+    reacciona a `dispatchEvent(new MouseEvent('click'))`, así que un drill
+    basado en `on_select` no se verifica desde el navegador con las
+    herramientas de inspección. Lo que sí funciona: llamar a la función de
+    render desde Python con `st.plotly_chart` monkeypatcheado para devolver
+    una selección falsa (`{'points': [{'x': ..., 'y': ...}]}`) y capturar
+    lo que se dibuja. Eso valida toda la lógica del drill; lo único que
+    queda sin cubrir es que el evento real llegue, que es exactamente lo
+    que la regla #11 explica cómo romper.
