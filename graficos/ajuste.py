@@ -1090,43 +1090,96 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val):
         index=col_familia, columns=col_area,
         values=col_ajuste_val, aggfunc="sum", fill_value=0,
     )
-    text_mat = [[f"S/ {v:,.0f}" for v in row] for row in pivot.values]
+    # Escala simétrica: el 0 queda SIEMPRE en el centro del degradado, así
+    # un faltante y un sobrante del mismo tamaño se ven igual de intensos.
+    # Sin esto, zmid solo centra el color pero el rango sigue sesgado al
+    # lado que tenga el extremo mayor.
+    _vmax = float(abs(pivot.values).max()) or 1.0
 
     fig = go.Figure(go.Heatmap(
         z=pivot.values,
         x=pivot.columns.tolist(),
         y=pivot.index.tolist(),
-        text=text_mat,
-        texttemplate="%{text}",
-        textfont=dict(size=10, color=TEXTO_PRINCIPAL),
+        # xgap/ygap: separa las celdas en baldosas. Sin esto el mapa se lee
+        # como un bloque continuo y cuesta seguir filas y columnas.
+        xgap=3, ygap=3,
         colorscale=[
-            [0.0,  "#ef4444"],
-            [0.45, "#fff7ed"],
-            [0.5,  GRIS_FONDO],
-            [0.55, "#f0fdf4"],
-            [1.0,  "#16a34a"],
+            [0.00, ERROR],
+            [0.35, ERROR_FONDO],
+            [0.50, BLANCO],
+            [0.65, EXITO_FONDO],
+            [1.00, EXITO],
         ],
-        zmid=0,
-        colorbar=dict(title="Ajuste S/", tickformat=",.0f"),
+        zmin=-_vmax, zmax=_vmax, zmid=0,
+        colorbar=dict(
+            title=dict(text="Ajuste S/", font=dict(size=10,
+                                                   color=GRIS_TEXTO)),
+            tickformat=",.0f", tickfont=dict(size=9, color=GRIS_TEXTO_SUAVE),
+            thickness=8, len=0.75, outlinewidth=0,
+            ticks="outside", ticklen=3, tickcolor=GRIS_BORDE,
+        ),
         hovertemplate=(
             "<b>%{y}</b><br>"
             "Área: <b>%{x}</b><br>"
             "Ajuste: <b>S/ %{z:,.2f}</b><extra></extra>"
         ),
     ))
+
+    # Valores dentro de cada celda como ANNOTATIONS, no como `texttemplate`:
+    # `textfont` es una sola config para toda la traza, así que el texto
+    # oscuro quedaba ilegible sobre las celdas saturadas de los extremos.
+    # Con annotations el color se decide celda por celda según intensidad.
+    _anns_hm = []
+    for _i, _fam in enumerate(pivot.index.tolist()):
+        for _j, _area in enumerate(pivot.columns.tolist()):
+            _v = float(pivot.values[_i][_j])
+            # Los ceros se omiten: son la mayoría y solo agregan ruido.
+            if abs(_v) < 0.5:
+                continue
+            _int = abs(_v) / _vmax
+            _fg = BLANCO if _int > 0.55 else GRIS_TEXTO_MEDIO
+            _anns_hm.append(dict(
+                x=_area, y=_fam, xref="x", yref="y",
+                text=f"{_v:,.0f}", showarrow=False,
+                font=dict(size=9.5, color=_fg,
+                          family="ui-monospace, monospace"),
+            ))
+
     fig.update_layout(**_layout_aj(
-        title="Mapa de calor: ajuste valorizado por Familia × Área",
-        xaxis=dict(tickangle=-30, side="bottom", gridcolor=GRIS_BORDE),
-        yaxis=dict(autorange="reversed", gridcolor=GRIS_BORDE, showticklabels=True),
-        # Evita que una lista larga de familias convierta el gráfico en una
-        # sección más alta que la ventana.
-        height=min(400, max(320, len(pivot.index) * 32 + 100)),
+        title_text="",   # el título ya lo pone la tarjeta
+        xaxis=dict(tickangle=0, side="top", gridcolor=GRIS_BORDE,
+                   showgrid=False, ticks="",
+                   tickfont=dict(size=10, color=GRIS_TEXTO)),
+        yaxis=dict(autorange="reversed", gridcolor=GRIS_BORDE,
+                   showgrid=False, ticks="", showticklabels=True,
+                   tickfont=dict(size=10, color=GRIS_TEXTO_MEDIO)),
+        # Alto por fila en vez de tope fijo: con el tope de 400px las
+        # celdas se aplastaban cuando había muchas familias.
+        height=min(560, max(240, len(pivot.index) * 38 + 110)),
+        margin=dict(l=10, r=10, t=50, b=20),
+        annotations=_anns_hm,
     ))
     _xcats = [str(c) for c in pivot.columns.tolist()]
     fig.update_xaxes(tickmode="array", tickvals=_xcats,
                      ticktext=_wrap_cat(_xcats))
 
+    # Subtítulo con la peor combinación: el dato que se busca en un mapa de
+    # calor es "dónde está el punto rojo", y decirlo evita rastrearlo a ojo.
+    _peor_v = float(pivot.values.min())
+    _sub_hm = ""
+    if _peor_v < 0:
+        _pos = pivot.values.argmin()
+        _pf = pivot.index[_pos // len(pivot.columns)]
+        _pa = pivot.columns[_pos % len(pivot.columns)]
+        _sub_hm = (f"<span style='font-size:11px;color:{GRIS_TEXTO_SUAVE}'>"
+                   f"Mayor faltante: <b style='color:{DANGER_TEXT}'>{_pf}</b>"
+                   f" en <b style='color:{DANGER_TEXT}'>{_pa}</b> · "
+                   f"S/ {_peor_v:,.0f}</span>")
+
     with _card("heatmap", "Mapa de calor"):
+        if _sub_hm:
+            st.markdown(f"<div style='margin:-4px 0 6px 0'>{_sub_hm}</div>",
+                        unsafe_allow_html=True)
         st.plotly_chart(fig, use_container_width=True)
 
     with st.expander("📋 Tabla pivot Familia × Área"):
