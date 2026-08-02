@@ -171,7 +171,7 @@ if st.query_params.get("debug"):
         except PackageNotFoundError:
             return "?"
 
-    with st.expander("🔧 Diagnóstico de entorno", expanded=True):
+    with st.expander("🔧 Diagnóstico de entorno", expanded=False):
         st.json({
             "python": sys.version.split()[0],
             "streamlit": _ver("streamlit"),
@@ -183,8 +183,8 @@ if st.query_params.get("debug"):
             "reporte": reporte,
         })
 
-    perf.render_panel(expanded=True)                                        # ⚡ PERF
-    perf.render_browser_panel()                                             # ⚡ PERF browser
+    perf.render_panel(expanded=False)                                       # ⚡ PERF
+    perf.render_browser_panel(expanded=False)                               # ⚡ PERF browser
 
 
 # ===========================================================================
