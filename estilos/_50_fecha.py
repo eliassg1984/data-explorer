@@ -177,8 +177,12 @@ CSS = """    /* ================================================================
 
     /* Panel del popover: se renderiza en un portal (fuera del contenedor),
        así que lo scopeamos por el contenedor keyed interno con :has(). */
+    /* min-width 720px: st.date_input con rango muestra DOS meses lado a
+       lado si tiene ~600px libres. Con los 380px anteriores + los atajos
+       comiendo la columna izquierda, al calendario le quedaban ~230px y
+       Streamlit lo colapsaba a un solo mes. */
     [data-testid="stPopoverBody"]:has(.st-key-fecha_panel) {
-        min-width: 380px !important;
+        min-width: 720px !important;
     }
     /* Botones de atajo: compactos, alineados a la izquierda. */
     .st-key-fecha_panel [data-testid="stColumn"]:first-child button {
