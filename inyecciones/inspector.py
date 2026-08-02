@@ -167,6 +167,54 @@ def inject_element_inspector():
             }
             return '';
         }
+        function cadenaTestids(el) {
+            var out = [];
+            var cur = el;
+            while (cur && cur !== doc.body && out.length < 8) {
+                var t = cur.getAttribute && cur.getAttribute('data-testid');
+                if (t) out.push(t);
+                cur = cur.parentElement;
+            }
+            return out;
+        }
+        function clasesElemento(el) {
+            if (!el || !el.classList) return [];
+            var arr = [];
+            for (var i = 0; i < el.classList.length; i++) arr.push(el.classList[i]);
+            return arr;
+        }
+        function reglasQueMatchean(el) {
+            // Devuelve {archivo -> [selectores...]} de reglas en estilos/*.py que matchean el elemento.
+            // Sirve para verificar rapido si el CSS declarado esta o no aplicando.
+            if (!el || !el.matches) return {};
+            var acumulado = {};
+            var sheets = doc.styleSheets;
+            for (var s = 0; s < sheets.length; s++) {
+                var rules = null;
+                try { rules = sheets[s].cssRules; } catch(e) { continue; }
+                if (!rules) continue;
+                for (var r = 0; r < rules.length; r++) {
+                    var rule = rules[r];
+                    if (!rule.selectorText) continue;
+                    var sels = rule.selectorText.split(',');
+                    var matcheantes = [];
+                    for (var si = 0; si < sels.length; si++) {
+                        var st = sels[si].trim();
+                        try { if (el.matches(st)) matcheantes.push(st); } catch(_){}
+                    }
+                    if (!matcheantes.length) continue;
+                    var arch = archivoDeSelector(rule.selectorText);
+                    if (!arch) continue;
+                    acumulado[arch] = acumulado[arch] || [];
+                    for (var k = 0; k < matcheantes.length; k++) {
+                        var sn = matcheantes[k];
+                        if (sn.length > 80) sn = sn.slice(0, 77) + '...';
+                        if (acumulado[arch].indexOf(sn) === -1) acumulado[arch].push(sn);
+                    }
+                }
+            }
+            return acumulado;
+        }
         function analizarConflictos(el) {
             if (!el || !el.matches) return [];
             var propsPorRegla = {}; // prop -> [{val, imp, sel, archivo}]
@@ -243,7 +291,7 @@ def inject_element_inspector():
             }
             return out;
         }
-        function bloqueParaIA(etiqueta, key, ctx, medidas, pagina, conflictos) {
+        function bloqueParaIA(etiqueta, key, ctx, medidas, pagina, conflictos, matcheantes, extras2) {
             var lines = ['--- copiar para IA ---'];
             lines.push('Widget key: ' + (key || '(sin key)'));
             if (ctx.codigo)   lines.push('Declarado en: ' + ctx.codigo);
@@ -260,6 +308,25 @@ def inject_element_inspector():
                 lines.push('URL: ' + pagina.url);
                 lines.push('Reporte activo: ' + pagina.reporte);
                 lines.push('Viewport: ' + pagina.viewport);
+            }
+            if (extras2) {
+                if (extras2.testids && extras2.testids.length)
+                    lines.push('Cadena de data-testid (elemento -> raiz): ' + extras2.testids.join(' > '));
+                if (extras2.clases && extras2.clases.length)
+                    lines.push('Clases: ' + extras2.clases.join(' '));
+            }
+            if (matcheantes) {
+                var archs = Object.keys(matcheantes);
+                if (archs.length) {
+                    lines.push('Reglas de estilos/ que matchean este elemento:');
+                    for (var a = 0; a < archs.length; a++) {
+                        var sel = matcheantes[archs[a]];
+                        lines.push('  ' + archs[a] + ' (' + sel.length + ' regla' + (sel.length > 1 ? 's' : '') + '):');
+                        for (var si2 = 0; si2 < sel.length && si2 < 4; si2++)
+                            lines.push('     ' + sel[si2]);
+                        if (sel.length > 4) lines.push('     ...(' + (sel.length - 4) + ' mas)');
+                    }
+                }
             }
             var flat = formatearConflictos(conflictos);
             for (var i = 0; i < flat.length; i++) lines.push(flat[i]);
@@ -346,8 +413,10 @@ def inject_element_inspector():
                 }
                 var u = win.__inspectorUltimo;
                 var conflictos = [];
-                try { conflictos = analizarConflictos(u.elemento); } catch(_){}
-                var texto = bloqueParaIA(u.etiqueta, u.key, u.ctx, u.medidas, u.pagina, conflictos);
+                var matcheantes = {};
+                try { conflictos  = analizarConflictos(u.elementoOriginal || u.elemento); } catch(_){}
+                try { matcheantes = reglasQueMatchean(u.elementoOriginal || u.elemento); } catch(_){}
+                var texto = bloqueParaIA(u.etiqueta, u.key, u.ctx, u.medidas, u.pagina, conflictos, matcheantes, u.extras2);
                 copiarTexto(texto,
                     function(){ status.textContent = 'Copiado (' + texto.length + ' chars)'; status.style.color = '#5DCAA5'; setTimeout(function(){ status.textContent=''; }, 1800); },
                     function(){ status.textContent = 'No pude copiar - abre consola para ver texto'; status.style.color = '#F0997B'; win.console && win.console.log('[INSPECTOR COPY]\\n' + texto); setTimeout(function(){ status.textContent=''; }, 3000); }
@@ -678,6 +747,8 @@ def inject_element_inspector():
                 var ctxRel  = padreYHermanos(el);
                 var medidas = medirElemento(ctxCont ? ctxCont.el : el);
                 var pagina  = contextoPagina();
+                var testids = cadenaTestids(el);
+                var clases  = clasesElemento(el);
                 var extras  = [];
                 if (ctxKey)         extras.push('  ' + 'codigo   : ' + (ctxCod || '(no encontrado)'));
                 if (ctxEst.length)  extras.push('  ' + 'estilos  : ' + ctxEst.join(', '));
@@ -695,15 +766,20 @@ def inject_element_inspector():
                     extras.push('  ' + 'reporte  : ' + pagina.reporte);
                     extras.push('  ' + 'viewport : ' + pagina.viewport);
                 }
-                extras.push('  ' + '[C] copiar para IA (incluye analisis de conflictos CSS)');
+                if (testids.length) extras.push('  ' + 'testids  : ' + testids.join(' > '));
+                if (clases.length)  extras.push('  ' + 'clases   : ' + clases.join(' '));
+                extras.push('  ' + '[C] copiar para IA (incluye conflictos + reglas matcheantes)');
                 var etiquetaFinal = etiqueta + '\\n' + extras.join('\\n');
-                // conflictos: calculo diferido (solo al copiar) - es O(reglas*props), no queremos correrlo en cada mousemove
+                // conflictos y reglasQueMatchean: calculo diferido (solo al copiar) - son O(reglas*props),
+                // no queremos correrlos en cada mousemove.
                 win.__inspectorUltimo = {
                     etiqueta: etiqueta, key: ctxKey,
                     ctx: { codigo: ctxCod, estilos: ctxEst,
                            padre: ctxRel.padre, hermanos: ctxRel.hermanos },
                     medidas: medidas, pagina: pagina,
-                    elemento: (ctxCont ? ctxCont.el : el)
+                    extras2: { testids: testids, clases: clases },
+                    elemento: (ctxCont ? ctxCont.el : el),
+                    elementoOriginal: el
                 };
                 var pre = doc.getElementById('el-inspector-text');
                 if (pre) pre.textContent = etiquetaFinal;
