@@ -915,7 +915,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                 )
         else:
             st.session_state["ajcas_panel_prev"] = False
-            st.caption("💡 Usá el ▸ de cada fila para ver sus productos.")
 
 
 def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
