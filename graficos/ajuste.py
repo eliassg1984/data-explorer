@@ -284,7 +284,15 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         # use_container_width=False: el popover toma solo su ancho natural
         # y no deja un rectangulo vacio al costado (antes vivia en un
         # st.columns([1,3]) y el otro 75% quedaba en blanco).
-        with st.popover(_lbl, use_container_width=False):
+        #
+        # El wrapper con key existe SOLO para poder acotar el CSS: hay una
+        # regla global sin acotar en estilos/_30_filtros.py
+        # (`[data-testid="stPopover"] button`) que le impone 180px de ancho
+        # minimo y 14px/26px de padding a TODOS los popovers. Este control
+        # es secundario (corrige errores de captura, no se usa en cada
+        # analisis), asi que se lo achica aca en vez de tocar el global.
+        with st.container(key="ajcas_excl_wrap"), \
+                st.popover(_lbl, use_container_width=False):
                 _top_ex = st.select_slider(
                     "Excluir el top N por |ajuste|",
                     options=[0, 1, 3, 5, 8, 10],
@@ -554,6 +562,25 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     # Proveedor en Compras. Comprime el gap vertical que Streamlit mete
     # entre st.columns y hace que el botón del gutter parezca una celda.
     st.markdown("""<style>
+    /* Popover "Excluir productos": achica el boton que la regla global de
+       estilos/_30_filtros.py deja en 180px de ancho y 15px de fuente. */
+    .st-key-ajcas_excl_wrap [data-testid="stPopover"] button {
+        min-width: 0 !important; padding: 2px 10px !important;
+        font-size: 11px !important; font-weight: 400 !important;
+        /* min-height propio: Streamlit fija 40px y es lo que mantenia el
+           boton alto aun con el padding y la fuente ya reducidos. */
+        min-height: 0 !important; height: 26px !important;
+        line-height: 1 !important;
+        border-width: 1px !important; color: #5F5E5A !important; }
+    .st-key-ajcas_excl_wrap [data-testid="stPopover"] button div,
+    .st-key-ajcas_excl_wrap [data-testid="stPopover"] button span
+        { line-height: 1 !important; }
+    .st-key-ajcas_excl_wrap [data-testid="stPopover"] button p
+        { font-size: 11px !important; }
+    .st-key-ajcas_excl_wrap [data-testid="stPopover"] button
+        [data-testid="stIconMaterial"]
+        { font-size: 13px !important; width: 13px !important;
+          height: 13px !important; }
     div[class*="st-key-ajcas_fila_"] { border-bottom: 0.5px solid #e1e0d9; }
     div[class*="st-key-ajcas_fila_"] div[data-testid="stVerticalBlock"]
         { gap: 0 !important; }
