@@ -646,7 +646,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     div[class*="st-key-ajcas_btn_"] button {{
         border: none !important; background: transparent !important;
         color: {GRIS_TEXTO_SUAVE} !important; padding: 0 !important;
-        min-height: 26px !important; font-size: 11px !important;
+        min-height: 34px !important; font-size: 18px !important;
         transition: color .12s ease, transform .12s ease !important; }}
     div[class*="st-key-ajcas_btn_"] button:hover {{
         color: {ACENTO} !important; background: transparent !important;
