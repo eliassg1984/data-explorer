@@ -687,9 +687,32 @@ def inject_element_inspector():
                 return '[nav] nav\\n  reporte: ' + rname + '\\n  estado : ' + (rActive ? 'activo OK' : 'inactivo');
             }
 
+            var railBadge = el.closest('.rail-cat-badge');
+            if (railBadge) {
+                return '[titulo] titulo de seccion del rail\\n  texto: ' + railBadge.innerText.trim();
+            }
+            var railSep = el.closest('.rail-sep');
+            if (railSep) {
+                return '[sep] separador del rail (decorativo)';
+            }
+
             var caption = el.closest('[data-testid="stCaptionContainer"]');
             if (caption) {
                 return '[i] caption\\n  ' + caption.textContent.trim().slice(0, 80);
+            }
+
+            // FALLBACK: si esta dentro de un st-key-* pero no reconocimos el tipo,
+            // igual mostramos un tooltip minimo con el tag/texto. Asi cualquier
+            // elemento dentro de la app da AL MENOS los datos de contexto (key,
+            // codigo, estilos, cadena) que son lo que mas sirve para pedirle a la IA.
+            var cont = el.closest('[class*="st-key-"]');
+            if (cont) {
+                var tag = (el.tagName || 'DIV').toLowerCase();
+                var txt = (el.innerText || '').trim().replace(/\\s+/g, ' ');
+                if (txt.length > 60) txt = txt.slice(0, 57) + '...';
+                var lines = ['[' + tag + '] elemento generico'];
+                if (txt) lines.push('  texto: ' + txt);
+                return lines.join('\\n');
             }
 
             return null;
