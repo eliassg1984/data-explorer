@@ -132,13 +132,54 @@ def inject_element_inspector():
             }
             return { padre: arriba.key, hermanos: hermanos.slice(0, 6) };
         }
-        function bloqueParaIA(etiqueta, key, ctx) {
+        function medirElemento(el) {
+            if (!el || !el.getBoundingClientRect) return null;
+            var r = el.getBoundingClientRect();
+            var cs = win.getComputedStyle(el);
+            var pick = function(p) { return (cs.getPropertyValue(p) || '').trim(); };
+            return {
+                tamano: Math.round(r.width) + ' x ' + Math.round(r.height) + ' px',
+                estilos: {
+                    'font-size'   : pick('font-size'),
+                    'color'       : pick('color'),
+                    'background'  : pick('background-color'),
+                    'padding'     : pick('padding'),
+                    'margin'      : pick('margin'),
+                    'border-radius': pick('border-radius')
+                }
+            };
+        }
+        function contextoPagina() {
+            try {
+                var u = new URL(win.location.href);
+                var reporte = u.searchParams.get('reporte') || u.searchParams.get('r') || '(no en URL)';
+                var w = win.innerWidth || 0;
+                var modo = w < 640 ? 'movil' : (w < 1024 ? 'tablet' : 'desktop');
+                return {
+                    url: u.pathname + (u.search || ''),
+                    reporte: reporte,
+                    viewport: w + ' px (' + modo + ')'
+                };
+            } catch(e) { return { url: '?', reporte: '?', viewport: '?' }; }
+        }
+        function bloqueParaIA(etiqueta, key, ctx, medidas, pagina) {
             var lines = ['--- copiar para IA ---'];
             lines.push('Widget key: ' + (key || '(sin key)'));
             if (ctx.codigo)   lines.push('Declarado en: ' + ctx.codigo);
             if (ctx.estilos && ctx.estilos.length) lines.push('Estilos: ' + ctx.estilos.join(', '));
             if (ctx.padre)    lines.push('Padre: st-key-' + ctx.padre);
             if (ctx.hermanos && ctx.hermanos.length) lines.push('Hermanos: ' + ctx.hermanos.join(', '));
+            if (medidas) {
+                lines.push('Tamano actual: ' + medidas.tamano);
+                var e = medidas.estilos, partes = [];
+                for (var p in e) { if (e[p] && e[p] !== 'none' && e[p] !== '0px') partes.push(p + '=' + e[p]); }
+                if (partes.length) lines.push('Estilos computados: ' + partes.join(' | '));
+            }
+            if (pagina) {
+                lines.push('URL: ' + pagina.url);
+                lines.push('Reporte activo: ' + pagina.reporte);
+                lines.push('Viewport: ' + pagina.viewport);
+            }
             if (etiqueta) lines.push('Detalle:\\n' + etiqueta);
             return lines.join('\\n');
         }
@@ -500,10 +541,13 @@ def inject_element_inspector():
                                     extras.push('  ' + 'hermanos : ' + ctxRel.hermanos.join(', '));
                 extras.push('  ' + '[C] copiar para IA');
                 var etiquetaFinal = etiqueta + '\\n' + extras.join('\\n');
+                var medidas = medirElemento(ctxCont ? ctxCont.el : el);
+                var pagina  = contextoPagina();
                 win.__inspectorUltimo = {
                     etiqueta: etiqueta, key: ctxKey,
                     ctx: { codigo: ctxCod, estilos: ctxEst,
-                           padre: ctxRel.padre, hermanos: ctxRel.hermanos }
+                           padre: ctxRel.padre, hermanos: ctxRel.hermanos },
+                    medidas: medidas, pagina: pagina
                 };
                 tip.textContent = etiquetaFinal;
                 tip.style.opacity = '1';
@@ -537,7 +581,7 @@ def inject_element_inspector():
                     var tag = t && t.tagName ? t.tagName.toLowerCase() : '';
                     if (tag === 'input' || tag === 'textarea' || (t && t.isContentEditable)) return;
                     var u = win.__inspectorUltimo;
-                    var texto = bloqueParaIA(u.etiqueta, u.key, u.ctx);
+                    var texto = bloqueParaIA(u.etiqueta, u.key, u.ctx, u.medidas, u.pagina);
                     var ok = function() {
                         var b = doc.getElementById('el-inspector-badge');
                         if (!b) return;
