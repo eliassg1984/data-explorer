@@ -518,8 +518,10 @@ if st.query_params.get("debug"):
     if "columnas" in cfg and faltan_cols:
         st.caption("⚠️ Columnas no encontradas: " + ", ".join(faltan_cols))
     # Verdad del estado del rango (contrastar contra overlay y calendario si
-    # se sospecha un desync). Acceder con ?debug=1 en la URL.
-    debug_estado_rango()
+    # se sospecha un desync). Aparece solo con ?diagnostico=1 en la URL para
+    # que la app se vea como produccion mientras se usa el inspector (?debug=1).
+    if st.query_params.get("diagnostico"):
+        debug_estado_rango()
 
 
 # ===========================================================================
