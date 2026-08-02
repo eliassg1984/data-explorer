@@ -110,7 +110,10 @@ en 10 segundos y evita ida-y-vuelta de deploys + capturas.
 
 También existe el inspector propio: **`?debug=1` en la URL o `Alt+I`**
 activa `inject_element_inspector` (tooltip con selectores y estilos al
-pasar el cursor) más el panel de diagnóstico. El tooltip incluye
+pasar el cursor). El inspector NO agrega elementos visibles en la página
+— se ve como producción. Para los paneles de diagnóstico de
+entorno/performance usar **`?diagnostico=1`** (independiente de debug).
+Se pueden combinar: `?debug=1&diagnostico=1`. El tooltip incluye
 `codigo` (archivo:línea donde está declarada la key, buscado en `app.py`
 + `graficos/` + `tablas/`), `estilos` (archivos de `estilos/` que
 matchean el prefijo de la key), `padre` y `hermanos` (contenedores

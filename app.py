@@ -161,7 +161,7 @@ if modo_demo:
     st.caption("🧪 MODO DEMO — datos de ejemplo (no hay conexión a R2). "
                "Configura los secrets R2_* para usar datos reales.")
 
-if st.query_params.get("debug"):
+if st.query_params.get("diagnostico"):
     import sys
     from importlib.metadata import version, PackageNotFoundError
 
