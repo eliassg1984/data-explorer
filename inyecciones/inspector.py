@@ -683,24 +683,47 @@ def inject_element_inspector():
                     var t = e.target;
                     var tag = t && t.tagName ? t.tagName.toLowerCase() : '';
                     if (tag === 'input' || tag === 'textarea' || (t && t.isContentEditable)) return;
+                    e.preventDefault();
                     var u = win.__inspectorUltimo;
                     var conflictos = [];
                     try { conflictos = analizarConflictos(u.elemento); } catch(_){}
                     var texto = bloqueParaIA(u.etiqueta, u.key, u.ctx, u.medidas, u.pagina, conflictos);
-                    var ok = function() {
+
+                    var badgeFeedback = function(msg, color) {
                         var b = doc.getElementById('el-inspector-badge');
-                        if (!b) return;
-                        var prev = b.innerHTML;
-                        b.innerHTML = 'Copiado al portapapeles';
-                        setTimeout(function(){ b.innerHTML = prev; }, 1200);
+                        if (!b) { win.alert(msg); return; }
+                        var prev = b.innerHTML, prevBg = b.style.background;
+                        b.innerHTML = msg;
+                        if (color) b.style.background = color;
+                        setTimeout(function(){ b.innerHTML = prev; b.style.background = prevBg; }, 1500);
                     };
-                    if (win.navigator.clipboard && win.navigator.clipboard.writeText) {
-                        win.navigator.clipboard.writeText(texto).then(ok, function(){});
-                    } else {
+                    var ok       = function() { badgeFeedback('Copiado (' + texto.length + ' chars)'); };
+                    var fallback = function() {
+                        // fallback via textarea + execCommand
                         var ta = doc.createElement('textarea');
-                        ta.value = texto; doc.body.appendChild(ta);
-                        ta.select(); try { doc.execCommand('copy'); ok(); } catch(_){}
+                        ta.value = texto;
+                        ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+                        doc.body.appendChild(ta);
+                        ta.focus(); ta.select();
+                        var okExec = false;
+                        try { okExec = doc.execCommand('copy'); } catch(_) {}
                         doc.body.removeChild(ta);
+                        if (okExec) ok();
+                        else {
+                            // ultimo recurso: pego el texto en un textarea visible para copia manual
+                            var big = doc.createElement('textarea');
+                            big.value = texto;
+                            big.style.cssText = 'position:fixed;top:20px;right:20px;width:420px;height:280px;z-index:2147483647;padding:10px;font:12px monospace;background:#101014;color:#CECBF6;border:1px solid #7F77DD;border-radius:6px';
+                            doc.body.appendChild(big);
+                            big.focus(); big.select();
+                            badgeFeedback('Ctrl+C para copiar (auto fallo)', '#993535');
+                            setTimeout(function(){ if (big.parentNode) big.parentNode.removeChild(big); }, 8000);
+                        }
+                    };
+                    if (win.navigator.clipboard && win.navigator.clipboard.writeText && win.isSecureContext) {
+                        win.navigator.clipboard.writeText(texto).then(ok, fallback);
+                    } else {
+                        fallback();
                     }
                     return;
                 }
