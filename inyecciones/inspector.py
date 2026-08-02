@@ -167,6 +167,18 @@ def inject_element_inspector():
             }
             return '';
         }
+        function cadenaKeys(el) {
+            // recorre desde el elemento hasta el body coleccionando todos los st-key-*
+            // asi se ve exactamente el anidamiento de contenedores keyed en el DOM real.
+            var out = [];
+            var cur = el;
+            while (cur && cur !== doc.body && out.length < 12) {
+                var k = keyDeElemento(cur);
+                if (k && out.indexOf(k) === -1) out.push(k);
+                cur = cur.parentElement;
+            }
+            return out;
+        }
         function cadenaTestids(el) {
             var out = [];
             var cur = el;
@@ -208,7 +220,7 @@ def inject_element_inspector():
                     acumulado[arch] = acumulado[arch] || [];
                     for (var k = 0; k < matcheantes.length; k++) {
                         var sn = matcheantes[k];
-                        if (sn.length > 80) sn = sn.slice(0, 77) + '...';
+                        if (sn.length > 200) sn = sn.slice(0, 197) + '...';
                         if (acumulado[arch].indexOf(sn) === -1) acumulado[arch].push(sn);
                     }
                 }
@@ -310,10 +322,12 @@ def inject_element_inspector():
                 lines.push('Viewport: ' + pagina.viewport);
             }
             if (extras2) {
+                if (extras2.keysCad && extras2.keysCad.length)
+                    lines.push('Cadena de contenedores st-key (elemento -> raiz): ' + extras2.keysCad.join(' > '));
                 if (extras2.testids && extras2.testids.length)
                     lines.push('Cadena de data-testid (elemento -> raiz): ' + extras2.testids.join(' > '));
                 if (extras2.clases && extras2.clases.length)
-                    lines.push('Clases: ' + extras2.clases.join(' '));
+                    lines.push('Clases del elemento hovereado (NO de contenedores): ' + extras2.clases.join(' '));
             }
             if (matcheantes) {
                 var archs = Object.keys(matcheantes);
@@ -749,6 +763,7 @@ def inject_element_inspector():
                 var pagina  = contextoPagina();
                 var testids = cadenaTestids(el);
                 var clases  = clasesElemento(el);
+                var keysCad = cadenaKeys(el);
                 var extras  = [];
                 if (ctxKey)         extras.push('  ' + 'codigo   : ' + (ctxCod || '(no encontrado)'));
                 if (ctxEst.length)  extras.push('  ' + 'estilos  : ' + ctxEst.join(', '));
@@ -766,8 +781,9 @@ def inject_element_inspector():
                     extras.push('  ' + 'reporte  : ' + pagina.reporte);
                     extras.push('  ' + 'viewport : ' + pagina.viewport);
                 }
-                if (testids.length) extras.push('  ' + 'testids  : ' + testids.join(' > '));
-                if (clases.length)  extras.push('  ' + 'clases   : ' + clases.join(' '));
+                if (keysCad.length) extras.push('  ' + 'cadena-keys (elem->raiz): ' + keysCad.join(' > '));
+                if (testids.length) extras.push('  ' + 'cadena-testids: ' + testids.join(' > '));
+                if (clases.length)  extras.push('  ' + 'clases-del-elem: ' + clases.join(' '));
                 extras.push('  ' + '[C] copiar para IA (incluye conflictos + reglas matcheantes)');
                 var etiquetaFinal = etiqueta + '\\n' + extras.join('\\n');
                 // conflictos y reglasQueMatchean: calculo diferido (solo al copiar) - son O(reglas*props),
@@ -777,7 +793,7 @@ def inject_element_inspector():
                     ctx: { codigo: ctxCod, estilos: ctxEst,
                            padre: ctxRel.padre, hermanos: ctxRel.hermanos },
                     medidas: medidas, pagina: pagina,
-                    extras2: { testids: testids, clases: clases },
+                    extras2: { testids: testids, clases: clases, keysCad: keysCad },
                     elemento: (ctxCont ? ctxCont.el : el),
                     elementoOriginal: el
                 };
