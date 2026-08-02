@@ -17,23 +17,33 @@ _KEY_CSS = re.compile(r"st-key-([A-Za-z0-9_]+)")
 
 
 @lru_cache(maxsize=1)
-def _mapas_desarrollador() -> tuple[str, str]:
-    """Devuelve (mapa_codigo_json, mapa_estilos_json) para inyectar en el JS.
+def _mapas_desarrollador() -> tuple[str, str, str]:
+    """Devuelve (mapa_codigo_json, mapa_estilos_json, mapa_snippets_json).
 
-    mapa_codigo : {key_exacta -> "archivo:linea"}  (primer match gana)
-    mapa_estilos: {key_o_prefijo -> ["archivo_estilo.py", ...]}
+    mapa_codigo  : {key_exacta -> "archivo:linea"}  (primer match gana)
+    mapa_estilos : {key_o_prefijo -> ["archivo_estilo.py", ...]}
+    mapa_snippets: {key_exacta -> "snippet 5 lineas"}  (contexto Python)
     """
     mapa_codigo: dict[str, str] = {}
+    mapa_snippets: dict[str, str] = {}
     fuentes_py = [_RAIZ / "app.py"]
     fuentes_py += sorted((_RAIZ / "graficos").glob("*.py"))
     fuentes_py += sorted((_RAIZ / "graficos" / "compras").glob("*.py")) if (_RAIZ / "graficos" / "compras").exists() else []
     fuentes_py += sorted((_RAIZ / "tablas").glob("*.py")) if (_RAIZ / "tablas").exists() else []
     for archivo in fuentes_py:
         try:
-            for i, linea in enumerate(archivo.read_text(encoding="utf-8").splitlines(), 1):
+            lineas = archivo.read_text(encoding="utf-8").splitlines()
+            for i, linea in enumerate(lineas, 1):
                 for k in _KEY_PY.findall(linea):
                     if k not in mapa_codigo:
                         mapa_codigo[k] = f"{archivo.relative_to(_RAIZ).as_posix()}:{i}"
+                        start = max(0, i - 3)
+                        end = min(len(lineas), i + 2)
+                        snippet_lines = []
+                        for j in range(start, end):
+                            prefix = ">>>" if j == i - 1 else "   "
+                            snippet_lines.append(f"{prefix} {j+1:>4}| {lineas[j]}")
+                        mapa_snippets[k] = "\n".join(snippet_lines)
         except OSError:
             continue
 
@@ -55,7 +65,7 @@ def _mapas_desarrollador() -> tuple[str, str]:
             if rel not in mapa_estilos[k_norm]:
                 mapa_estilos[k_norm].append(rel)
 
-    return json.dumps(mapa_codigo), json.dumps(mapa_estilos)
+    return json.dumps(mapa_codigo), json.dumps(mapa_estilos), json.dumps(mapa_snippets)
 
 
 def inject_element_inspector():
@@ -71,7 +81,7 @@ def inject_element_inspector():
     iframe de AgGrid, así que sus var(--x) SÍ resuelven contra el :root de
     estilos.py. Se mantienen tal cual.
     """
-    mapa_codigo, mapa_estilos = _mapas_desarrollador()
+    mapa_codigo, mapa_estilos, mapa_snippets = _mapas_desarrollador()
     components.html("""
     <script>
     (function() {
@@ -80,10 +90,15 @@ def inject_element_inspector():
 
         win.__inspectorMapaCodigo  = __MAPA_CODIGO__;
         win.__inspectorMapaEstilos = __MAPA_ESTILOS__;
+        win.__inspectorMapaSnippets = __MAPA_SNIPPETS__;
 
         function buscarCodigo(key) {
             if (!key) return '';
             return win.__inspectorMapaCodigo[key] || '';
+        }
+        function buscarSnippet(key) {
+            if (!key) return '';
+            return win.__inspectorMapaSnippets[key] || '';
         }
         function buscarEstilos(key) {
             if (!key) return [];
@@ -196,8 +211,7 @@ def inject_element_inspector():
             return arr;
         }
         function reglasQueMatchean(el) {
-            // Devuelve {archivo -> [selectores...]} de reglas en estilos/*.py que matchean el elemento.
-            // Sirve para verificar rapido si el CSS declarado esta o no aplicando.
+            // Devuelve {archivo -> [{sel, props}]} de reglas en estilos/*.py que matchean el elemento.
             if (!el || !el.matches) return {};
             var acumulado = {};
             var sheets = doc.styleSheets;
@@ -207,7 +221,7 @@ def inject_element_inspector():
                 if (!rules) continue;
                 for (var r = 0; r < rules.length; r++) {
                     var rule = rules[r];
-                    if (!rule.selectorText) continue;
+                    if (!rule.selectorText || !rule.style) continue;
                     var sels = rule.selectorText.split(',');
                     var matcheantes = [];
                     for (var si = 0; si < sels.length; si++) {
@@ -218,10 +232,16 @@ def inject_element_inspector():
                     var arch = archivoDeSelector(rule.selectorText);
                     if (!arch) continue;
                     acumulado[arch] = acumulado[arch] || [];
+                    var props = rule.style.cssText || '';
+                    if (props.length > 300) props = props.slice(0, 297) + '...';
                     for (var k = 0; k < matcheantes.length; k++) {
                         var sn = matcheantes[k];
                         if (sn.length > 200) sn = sn.slice(0, 197) + '...';
-                        if (acumulado[arch].indexOf(sn) === -1) acumulado[arch].push(sn);
+                        var yaExiste = false;
+                        for (var q = 0; q < acumulado[arch].length; q++) {
+                            if (acumulado[arch][q].sel === sn) { yaExiste = true; break; }
+                        }
+                        if (!yaExiste) acumulado[arch].push({sel: sn, props: props});
                     }
                 }
             }
@@ -303,6 +323,25 @@ def inject_element_inspector():
             }
             return out;
         }
+        function layoutPadre(el) {
+            var cont = contenedorConKey(el);
+            if (!cont) return '';
+            var padre = cont.el.parentElement;
+            if (!padre) return '';
+            var cs = win.getComputedStyle(padre);
+            var d = cs.display || '';
+            var info = 'display=' + d;
+            if (d.indexOf('flex') !== -1) {
+                info += ' | flex-direction=' + (cs.flexDirection || '');
+                info += ' | gap=' + (cs.gap || '0px');
+                info += ' | align-items=' + (cs.alignItems || '');
+            }
+            if (d.indexOf('grid') !== -1) {
+                info += ' | grid-template-columns=' + (cs.gridTemplateColumns || '');
+                info += ' | gap=' + (cs.gap || '0px');
+            }
+            return info;
+        }
         function bloqueParaIA(etiqueta, key, ctx, medidas, pagina, conflictos, matcheantes, extras2) {
             var lines = ['--- copiar para IA ---'];
             lines.push('Widget key: ' + (key || '(sin key)'));
@@ -328,22 +367,27 @@ def inject_element_inspector():
                     lines.push('Cadena de data-testid (elemento -> raiz): ' + extras2.testids.join(' > '));
                 if (extras2.clases && extras2.clases.length)
                     lines.push('Clases del elemento hovereado (NO de contenedores): ' + extras2.clases.join(' '));
+                if (extras2.layoutPadre)
+                    lines.push('Layout del padre: ' + extras2.layoutPadre);
             }
             if (matcheantes) {
                 var archs = Object.keys(matcheantes);
                 if (archs.length) {
                     lines.push('Reglas de estilos/ que matchean este elemento:');
                     for (var a = 0; a < archs.length; a++) {
-                        var sel = matcheantes[archs[a]];
-                        lines.push('  ' + archs[a] + ' (' + sel.length + ' regla' + (sel.length > 1 ? 's' : '') + '):');
-                        for (var si2 = 0; si2 < sel.length && si2 < 4; si2++)
-                            lines.push('     ' + sel[si2]);
-                        if (sel.length > 4) lines.push('     ...(' + (sel.length - 4) + ' mas)');
+                        var reglas = matcheantes[archs[a]];
+                        lines.push('  ' + archs[a] + ' (' + reglas.length + ' regla' + (reglas.length > 1 ? 's' : '') + '):');
+                        for (var si2 = 0; si2 < reglas.length && si2 < 4; si2++) {
+                            lines.push('     ' + reglas[si2].sel);
+                            if (reglas[si2].props) lines.push('       { ' + reglas[si2].props + ' }');
+                        }
+                        if (reglas.length > 4) lines.push('     ...(' + (reglas.length - 4) + ' mas)');
                     }
                 }
             }
             var flat = formatearConflictos(conflictos);
             for (var i = 0; i < flat.length; i++) lines.push(flat[i]);
+            if (ctx.snippet) lines.push('Codigo Python (contexto):\\n' + ctx.snippet);
             if (etiqueta) lines.push('Detalle:\\n' + etiqueta);
             return lines.join('\\n');
         }
@@ -811,12 +855,16 @@ def inject_element_inspector():
                 var etiquetaFinal = etiqueta + '\\n' + extras.join('\\n');
                 // conflictos y reglasQueMatchean: calculo diferido (solo al copiar) - son O(reglas*props),
                 // no queremos correrlos en cada mousemove.
+                var ctxSnippet = buscarSnippet(ctxKey);
+                var lp = layoutPadre(el);
                 win.__inspectorUltimo = {
                     etiqueta: etiqueta, key: ctxKey,
                     ctx: { codigo: ctxCod, estilos: ctxEst,
-                           padre: ctxRel.padre, hermanos: ctxRel.hermanos },
+                           padre: ctxRel.padre, hermanos: ctxRel.hermanos,
+                           snippet: ctxSnippet },
                     medidas: medidas, pagina: pagina,
-                    extras2: { testids: testids, clases: clases, keysCad: keysCad },
+                    extras2: { testids: testids, clases: clases, keysCad: keysCad,
+                               layoutPadre: lp },
                     elemento: (ctxCont ? ctxCont.el : el),
                     elementoOriginal: el
                 };
@@ -884,5 +932,5 @@ def inject_element_inspector():
 
     })();
     </script>
-    """.replace("__MAPA_CODIGO__", mapa_codigo).replace("__MAPA_ESTILOS__", mapa_estilos),
+    """.replace("__MAPA_CODIGO__", mapa_codigo).replace("__MAPA_ESTILOS__", mapa_estilos).replace("__MAPA_SNIPPETS__", mapa_snippets),
         height=0, scrolling=False)
