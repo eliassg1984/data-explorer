@@ -1080,8 +1080,15 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
             )
 
 
-def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val):
-    """Mapa de calor familia × área con escala divergente centrada en cero."""
+def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
+                         col_producto=None):
+    """Mapa de calor familia × área con escala divergente centrada en cero.
+
+    Clic en una celda → drill abajo con los productos de esa combinación
+    Familia × Área, faltantes y sobrantes lado a lado (mismo patrón que el
+    drill de la cascada). `col_producto` es opcional: sin él, el mapa sigue
+    siendo interactivo pero el drill avisa que no puede desglosar.
+    """
     if not col_familia or not col_area:
         st.info("Se necesitan columnas de familia y área para el mapa de calor.")
         return
@@ -1140,7 +1147,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val):
             _fg = BLANCO if _int > 0.55 else GRIS_TEXTO_MEDIO
             _anns_hm.append(dict(
                 x=_area, y=_fam, xref="x", yref="y",
-                text=f"{_v:,.0f}", showarrow=False,
+                text=f"S/ {_v:,.0f}", showarrow=False,
                 font=dict(size=9.5, color=_fg,
                           family="ui-monospace, monospace"),
             ))
@@ -1185,19 +1192,134 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val):
         if _sub_hm:
             st.markdown(f"<div style='margin:-4px 0 6px 0'>{_sub_hm}</div>",
                         unsafe_allow_html=True)
-        st.plotly_chart(fig, use_container_width=True)
-
-    with st.expander("📋 Tabla pivot Familia × Área"):
-        st.dataframe(
-            pivot.style
-                 .format("S/ {:,.2f}")
-                 .background_gradient(
-                     cmap="RdYlGn", axis=None,
-                     vmin=float(pivot.values.min()),
-                     vmax=float(pivot.values.max()),
-                 ),
-            use_container_width=True,
+        # key ESTÁTICA a propósito: la selección de plotly persiste entre
+        # reruns y aquí eso es lo deseado — clic en una celda muestra su
+        # drill y ese drill sigue visible aunque se cambie el Top N. No hay
+        # toggle (no re-procesamos el clic para prender/apagar foco), así que
+        # no aplica el patrón de "foco en la key" de la cascada.
+        _hm_evt = st.plotly_chart(
+            fig, use_container_width=True,
+            key="heatmap_ajuste",
+            on_select="rerun", selection_mode="points",
         )
+
+    # ── Drill: clic en una celda → productos de esa Familia × Área ────────
+    _hm_punto = None
+    try:
+        _sel = getattr(_hm_evt, "selection", None) or (
+            _hm_evt.get("selection") if isinstance(_hm_evt, dict) else None)
+        _pts = (_sel or {}).get("points", [])
+        _hm_punto = _pts[0] if _pts else None
+    except Exception:
+        _hm_punto = None
+
+    if _hm_punto is not None:
+        _fam_sel = _hm_punto.get("y")   # Familia clicada
+        _area_sel = _hm_punto.get("x")  # Área clicada
+        _val_sel = _hm_punto.get("z")   # Valor de la celda
+
+        if _fam_sel and _area_sel:
+            _det = df[
+                (df[col_familia].astype(str) == str(_fam_sel)) &
+                (df[col_area].astype(str) == str(_area_sel))
+            ]
+            _cell_slug = f"{_slug(str(_fam_sel))}_{_slug(str(_area_sel))}"
+
+            _color_total = (DANGER_TEXT if (_val_sel or 0) < 0
+                            else CELDA_POS_TEXTO)
+            st.markdown(
+                f"**{_fam_sel}** × **{_area_sel}** · "
+                f"<span style='color:{_color_total};font-weight:600'>"
+                f"S/ {(_val_sel or 0):,.0f}</span> · "
+                f"{len(_det)} registros",
+                unsafe_allow_html=True,
+            )
+
+            if col_producto and col_producto in _det.columns:
+                _topn = st.pills(
+                    "Top", [5, 10, 20], default=10,
+                    key="hm_drill_topn",
+                    label_visibility="collapsed",
+                    format_func=lambda n: f"Top {n}",
+                ) or 10
+
+                _sub_prod = (
+                    _det.groupby(col_producto, as_index=False)[col_ajuste_val]
+                    .sum()
+                )
+                _sub_prod["_abs"] = _sub_prod[col_ajuste_val].abs()
+                _sub_prod = _sub_prod.sort_values(
+                    "_abs", ascending=False).head(int(_topn))
+
+                _neg = _sub_prod[_sub_prod[col_ajuste_val] < 0].sort_values(
+                    col_ajuste_val, ascending=False)
+                _pos = _sub_prod[_sub_prod[col_ajuste_val] > 0].sort_values(
+                    col_ajuste_val)
+
+                def _fig_drill(_df_d, _color_bar):
+                    _fig = go.Figure(go.Bar(
+                        x=_df_d[col_ajuste_val].tolist(),
+                        y=_df_d[col_producto].astype(str).tolist(),
+                        orientation="h",
+                        marker=dict(color=_color_bar, cornerradius=4),
+                        text=[f"S/ {v:,.0f}" for v in _df_d[col_ajuste_val]],
+                        textposition="auto",
+                        insidetextanchor="end",
+                        hovertemplate=("%{y}<br><b>S/ %{x:,.2f}</b>"
+                                       "<extra></extra>"),
+                    ))
+                    _fig.update_layout(**_layout_aj(
+                        title_text="",
+                        xaxis=dict(tickprefix="S/ ", tickformat=",.0f",
+                                   gridcolor=GRIS_BORDE, zeroline=True,
+                                   zerolinecolor=GRIS_BORDE, nticks=4),
+                        yaxis=dict(showticklabels=True, automargin=True,
+                                   tickfont=dict(size=10)),
+                        showlegend=False,
+                        height=max(140, 36 * len(_df_d) + 40),
+                        bargap=0.35,
+                        margin=dict(l=4, r=12, t=6, b=10),
+                    ))
+                    return _fig
+
+                _pa, _pb = st.columns(2)
+                with _pa:
+                    st.markdown(
+                        f"<div style='font-size:9px;font-weight:600;"
+                        f"color:{DANGER_TEXT};letter-spacing:.08em;"
+                        f"text-transform:uppercase;margin:4px 0 -8px 0'>"
+                        f"Faltantes</div>",
+                        unsafe_allow_html=True,
+                    )
+                    if _neg.empty:
+                        st.caption("Sin faltantes.")
+                    else:
+                        # key con la celda: al cambiar de celda, Streamlit
+                        # remonta el chart en vez de reusar el nodo DOM (que
+                        # deja el chart sin re-medir el ancho → vacío).
+                        st.plotly_chart(
+                            _fig_drill(_neg, ERROR),
+                            use_container_width=True,
+                            key=f"hm_drill_neg_{_cell_slug}",
+                        )
+                with _pb:
+                    st.markdown(
+                        f"<div style='font-size:9px;font-weight:600;"
+                        f"color:{CELDA_POS_TEXTO};letter-spacing:.08em;"
+                        f"text-transform:uppercase;margin:4px 0 -8px 0'>"
+                        f"Sobrantes</div>",
+                        unsafe_allow_html=True,
+                    )
+                    if _pos.empty:
+                        st.caption("Sin sobrantes.")
+                    else:
+                        st.plotly_chart(
+                            _fig_drill(_pos, EXITO),
+                            use_container_width=True,
+                            key=f"hm_drill_pos_{_cell_slug}",
+                        )
+            else:
+                st.caption("No hay columna de producto para desglosar.")
 
 
 def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_producto):
@@ -1444,7 +1566,8 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
                                    col_cantidad=col_cantidad,
                                    df_full=df_full, col_fecha=col_fecha)
         elif graf == "Mapa de calor":
-            _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val)
+            _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val,
+                                 col_producto=col_producto)
         elif graf == "Distribución":
             _graf_distribucion_ajuste(d, col_familia, col_area,
                                       col_ajuste_val, col_producto)
