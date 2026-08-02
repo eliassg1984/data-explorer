@@ -118,7 +118,6 @@ from ._30_filtros import CSS as _CSS_FILTROS
 from ._40_ajuste_franja import CSS as _CSS_AJUSTE_FRANJA
 from ._50_fecha import CSS as _CSS_FECHA
 from ._60_calendario import CSS as _CSS_CALENDARIO
-from ._65_calendario_doble import CSS as _CSS_CALENDARIO_DOBLE
 from ._70_chrome import CSS as _CSS_CHROME
 from ._80_cards import CSS as _CSS_CARDS
 from ._90_franja_inferior import CSS as _CSS_FRANJA_INFERIOR
@@ -134,7 +133,6 @@ _SECCIONES = (
     _CSS_AJUSTE_FRANJA,
     _CSS_FECHA,
     _CSS_CALENDARIO,
-    _CSS_CALENDARIO_DOBLE,
     _CSS_CHROME,
     _CSS_CARDS,
     _CSS_FRANJA_INFERIOR,

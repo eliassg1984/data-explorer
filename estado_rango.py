@@ -141,54 +141,8 @@ def aplicar_atajo(clave, rango, reporte=None, usa_carga_rango=False):
     """
     rango = tuple(rango)
     st.session_state[clave] = rango
-    # Un atajo cancela cualquier primer clic pendiente del calendario: si no,
-    # ese clic viejo se combinaría con el próximo y daría un rango absurdo.
-    st.session_state[clave_borrador(clave)] = None
     if usa_carga_rango and reporte is not None:
         st.session_state[f"rango_carga_ok_{reporte}"] = rango
-
-
-def clave_borrador(clave):
-    """Clave del BORRADOR del calendario doble (1er clic pendiente).
-
-    El calendario propio necesita recordar la fecha del primer clic mientras
-    espera el segundo. Ese estado NO va en la clave del rango: dejarlo ahí
-    pondría a la app en "selección a medias" (rango de 1 fecha) y el loader
-    y los gráficos verían un rango incompleto entre clic y clic. El borrador
-    es estado local del calendario; el rango real solo se escribe cuando ya
-    hay dos fechas.
-    """
-    return f"cal_borrador_{clave}"
-
-
-def aplicar_clic_dia(clave, dia, reporte=None, usa_carga_rango=False):
-    """Callback `on_click` de un día del calendario doble.
-
-    Máquina de dos clics:
-      1er clic  → guarda `dia` en el borrador; el rango NO se toca.
-      2do clic  → escribe el rango ordenado (min, max) y limpia el borrador.
-
-    Como `aplicar_atajo`, corre ANTES del rerun, así el resto del script ve
-    el valor nuevo. Es el otro punto autorizado a escribir la clave del
-    rango (junto a `asegurar_rango` y `aplicar_atajo`).
-    """
-    k_draft = clave_borrador(clave)
-    pendiente = st.session_state.get(k_draft)
-
-    if pendiente is None:
-        st.session_state[k_draft] = dia
-        return
-
-    rango = (min(pendiente, dia), max(pendiente, dia))
-    st.session_state[k_draft] = None
-    st.session_state[clave] = rango
-    if usa_carga_rango and reporte is not None:
-        st.session_state[f"rango_carga_ok_{reporte}"] = rango
-
-
-def limpiar_borrador(clave):
-    """Descarta un primer clic pendiente (lo usan los atajos)."""
-    st.session_state[clave_borrador(clave)] = None
 
 
 def debug_estado_rango():

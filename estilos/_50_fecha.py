@@ -177,11 +177,8 @@ CSS = """    /* ================================================================
 
     /* Panel del popover: se renderiza en un portal (fuera del contenedor),
        así que lo scopeamos por el contenedor keyed interno con :has(). */
-    /* 880px: el calendario propio dibuja DOS meses = 14 columnas de días
-       más los atajos a la izquierda. Con los 380px de antes (cuando había
-       un st.date_input de un solo mes) los días quedaban ilegibles. */
     [data-testid="stPopoverBody"]:has(.st-key-fecha_panel) {
-        min-width: 880px !important;
+        min-width: 380px !important;
     }
     /* Botones de atajo: compactos, alineados a la izquierda. */
     .st-key-fecha_panel [data-testid="stColumn"]:first-child button {

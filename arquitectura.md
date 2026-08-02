@@ -25,8 +25,6 @@ actualiza este documento en el mismo commit.
 | `estilos/` | **Paquete del CSS global** (refactor 2026-08-01; antes un `estilos.py` de 1.700 líneas). `__init__.py` mantiene la API pública (`TAM_FUENTE`, `get_css`, `inject_css`) y concatena las secciones. Una sección por módulo, con prefijo numérico que marca el orden: `_00_base`, `_10_vista`, `_20_compras_rail`, `_30_filtros`, `_40_ajuste_franja`, `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`, `_90_franja_inferior`, `_99_movil`. **El orden de `_SECCIONES` es parte del comportamiento**: hay `!important` en ambos lados de varios conflictos, así que gana la regla que va DESPUÉS — por eso `_99_movil` cierra. |
 | `navegacion.py` | Rail lateral, topbar y CSS por sección (`_CSS_AJUSTE`). Botón de refresco aislado en su propio `@st.fragment`. |
 | `inyecciones/` | **Paquete de JS/HTML inyectado** (refactor 2026-08-01; antes un `inyecciones.py` de 1.813 líneas). `_fragmentos.py` (CSS/JS compartido), `grid.py` (salud, altura, maximizar, panel de columnas), `paginacion.py`, `inspector.py` (herramienta de desarrollo), `varios.py` (overlay de errores, fullscreen, footer, calendario). Ninguna función depende de otra: las únicas dependencias internas apuntan a las constantes de `_fragmentos.py`. |
-| `estado_rango.py` | **DUEÑO ÚNICO del rango de fechas de la franja.** Nadie escribe la clave del rango fuera de aquí: `clave_rango` (qué clave usa el reporte), `asegurar_rango` (siembra + clamp a bounds), `aplicar_atajo` y `aplicar_clic_dia` (los dos callbacks que publican un rango). Ver su docstring: centralizarlo fue lo que mató los desyncs overlay ≠ calendario ≠ datos. |
-| `calendario.py` | **Calendario propio de DOS meses** (grilla de `st.button` por día) para el popover de fecha. Existe porque `st.date_input` dibuja UN solo mes y es un componente React precompilado: no hay CSS que lo desdoble. Escribe vía `estado_rango.aplicar_clic_dia` (máquina de dos clics con borrador). En móvil cae a un mes. Su CSS vive en `estilos/_65_calendario_doble.py`. |
 | `tema.py` | **Paleta de colores con nombre, definida UNA vez.** Todos los demás importan de aquí. |
 | `inspector.py` | Herramienta de verificación de datos crudos: busca, filtra por fecha, radiografía de columnas, detección de columnas duplicadas. |
 | `perf.py` | Diagnóstico de rendimiento por rerun (activado con `?debug=1`). Singleton `perf` con fases, fragments y BroadcastChannel hacia el navegador. |
@@ -242,28 +240,7 @@ salvo `icono`):
       evento: los puntos de un scatter no traen `z`.
     Implementado en `_graf_heatmap_ajuste` (`ajuste.py`).
 
-12. **`st.columns` admite UN solo nivel de anidado.** Una grilla que ya vive
-    dentro de una columna no puede volver a partirse en columnas y luego
-    otra vez — Streamlit lanza "Columns can only be placed inside other
-    columns up to one level of nesting". Es lo que impide dibujar el
-    calendario doble como `columns(2)` (un mes por lado) → `columns(7)`
-    (los días). **Salida:** aplanar. Una sola fila de 15 columnas
-    (7 días + separador + 7 días) y apilar las semanas *dentro* de cada
-    columna: la estructura queda plana y el resultado visual sigue siendo
-    la grilla. Ver `calendario.py`.
-    **Dos trampas más de la misma grilla, ambas vistas en pantalla:**
-    - *Apilar dentro de la columna desalinea.* La primera versión metía las
-      6 semanas dentro de cada columna. Cualquier diferencia de alto entre
-      un botón y un hueco se acumula y las semanas terminan desfasadas. Hay
-      que emitir una `st.columns` **por fila**; así cada semana es su
-      propio flex row y no puede desalinearse.
-    - *El `gap` se come el ancho.* `st.columns` mete 1rem entre columnas aun
-      con `gap="small"`. Con 15 columnas son ~224px: a cada día le quedaban
-      ~25px y los números de dos dígitos se partían en dos líneas. Se
-      aprieta por CSS acotando con `:has()` a la fila de la grilla, para no
-      tocar el split [atajos | calendario], que sí quiere su aire.
-
-13. **El clic de Plotly no se puede simular desde JS.** Su hitbox no
+12. **El clic de Plotly no se puede simular desde JS.** Su hitbox no
     reacciona a `dispatchEvent(new MouseEvent('click'))`, así que un drill
     basado en `on_select` no se verifica desde el navegador con las
     herramientas de inspección. Lo que sí funciona: llamar a la función de

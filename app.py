@@ -17,7 +17,6 @@ from estado_rango import (
     clave_rango, asegurar_rango, debug_estado_rango,
     atajos_rango, aplicar_atajo,
 )
-from calendario import render_calendario_doble
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_footer_actualizacion, inject_calendario_es, inject_fullscreen_app
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_aggrid_compras
 from graficos import renderizar_graficos_reporte, render_vista_pills
@@ -457,10 +456,7 @@ if True:
                         # Contenedor keyed → permite scopear el ancho del panel
                         # por CSS aunque el popover se renderice en un portal.
                         with st.container(key="fecha_panel"):
-                            # 1 / 4.6: el calendario propio dibuja DOS meses
-                            # (14 columnas de días), así que necesita bastante
-                            # más ancho que los botones de atajo.
-                            _c_atajos, _c_cal = st.columns([1, 4.6])
+                            _c_atajos, _c_cal = st.columns([1, 1.5])
                             with _c_atajos:
                                 st.caption("Atajos")
                                 for _ca, _et, _rg in _atajos:
@@ -473,15 +469,13 @@ if True:
                                     )
                             with _c_cal:
                                 st.caption("Rango manual")
-                                # Calendario propio de DOS meses: st.date_input
-                                # solo dibuja uno y no hay CSS que lo desdoble
-                                # (componente React precompilado). Escribe el
-                                # rango vía estado_rango, igual que los atajos.
-                                render_calendario_doble(
-                                    _k_rango_franja,
-                                    (fecha_min_full, fecha_max_full),
-                                    reporte=reporte,
-                                    usa_carga_rango=_usa_carga_rango,
+                                st.date_input(
+                                    "Rango a Evaluar",
+                                    min_value=fecha_min_full,
+                                    max_value=fecha_max_full,
+                                    format="DD/MM/YYYY",
+                                    key=_k_rango_franja,
+                                    label_visibility="collapsed",
                                 )
 
         # Las pestañas Gráficos/Tabla se movieron FUERA de la franja, a una
