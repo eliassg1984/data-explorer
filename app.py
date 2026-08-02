@@ -456,11 +456,7 @@ if True:
                         # Contenedor keyed → permite scopear el ancho del panel
                         # por CSS aunque el popover se renderice en un portal.
                         with st.container(key="fecha_panel"):
-                            # 1 / 2.6: los atajos son botones cortos y no
-                            # necesitan ancho; el calendario, en cambio,
-                            # requiere ~600px para desplegar dos meses lado
-                            # a lado (si no, Streamlit lo colapsa a uno).
-                            _c_atajos, _c_cal = st.columns([1, 2.6])
+                            _c_atajos, _c_cal = st.columns([1, 1.5])
                             with _c_atajos:
                                 st.caption("Atajos")
                                 for _ca, _et, _rg in _atajos:
