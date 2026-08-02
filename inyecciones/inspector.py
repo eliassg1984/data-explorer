@@ -45,9 +45,15 @@ def _mapas_desarrollador() -> tuple[str, str]:
             continue
         rel = archivo.relative_to(_RAIZ).as_posix()
         for k in set(_KEY_CSS.findall(texto)):
-            mapa_estilos.setdefault(k, [])
-            if rel not in mapa_estilos[k]:
-                mapa_estilos[k].append(rel)
+            # el CSS suele usar prefijos con "_" final (ej. [class*="st-key-chartcard_"]);
+            # la búsqueda del inspector va probando prefijos sin el "_" final, así que
+            # normalizamos acá para que "chartcard_" (CSS) matchee con "chartcard" (búsqueda).
+            k_norm = k.rstrip("_")
+            if not k_norm:
+                continue
+            mapa_estilos.setdefault(k_norm, [])
+            if rel not in mapa_estilos[k_norm]:
+                mapa_estilos[k_norm].append(rel)
 
     return json.dumps(mapa_codigo), json.dumps(mapa_estilos)
 
