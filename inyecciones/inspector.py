@@ -342,6 +342,19 @@ def inject_element_inspector():
             }
             return info;
         }
+        function boxPadre(el) {
+            var cont = contenedorConKey(el);
+            if (!cont) return '';
+            var padre = cont.el.parentElement;
+            if (!padre) return '';
+            var cs = win.getComputedStyle(padre);
+            var m = cs.margin || (cs.marginTop + ' ' + cs.marginRight + ' ' + cs.marginBottom + ' ' + cs.marginLeft);
+            var p = cs.padding || (cs.paddingTop + ' ' + cs.paddingRight + ' ' + cs.paddingBottom + ' ' + cs.paddingLeft);
+            var partes = [];
+            if (m && m !== '0px' && m !== '0px 0px 0px 0px') partes.push('margin=' + m);
+            if (p && p !== '0px' && p !== '0px 0px 0px 0px') partes.push('padding=' + p);
+            return partes.join(' | ');
+        }
         function bloqueParaIA(etiqueta, key, ctx, medidas, pagina, conflictos, matcheantes, extras2) {
             var lines = ['--- copiar para IA ---'];
             lines.push('Widget key: ' + (key || '(sin key)'));
@@ -369,6 +382,8 @@ def inject_element_inspector():
                     lines.push('Clases del elemento hovereado (NO de contenedores): ' + extras2.clases.join(' '));
                 if (extras2.layoutPadre)
                     lines.push('Layout del padre: ' + extras2.layoutPadre);
+                if (extras2.boxPadre)
+                    lines.push('Box del padre: ' + extras2.boxPadre);
             }
             if (matcheantes) {
                 var archs = Object.keys(matcheantes);
@@ -857,6 +872,7 @@ def inject_element_inspector():
                 // no queremos correrlos en cada mousemove.
                 var ctxSnippet = buscarSnippet(ctxKey);
                 var lp = layoutPadre(el);
+                var bp = boxPadre(el);
                 win.__inspectorUltimo = {
                     etiqueta: etiqueta, key: ctxKey,
                     ctx: { codigo: ctxCod, estilos: ctxEst,
@@ -864,7 +880,7 @@ def inject_element_inspector():
                            snippet: ctxSnippet },
                     medidas: medidas, pagina: pagina,
                     extras2: { testids: testids, clases: clases, keysCad: keysCad,
-                               layoutPadre: lp },
+                               layoutPadre: lp, boxPadre: bp },
                     elemento: (ctxCont ? ctxCont.el : el),
                     elementoOriginal: el
                 };
