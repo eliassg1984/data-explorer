@@ -149,6 +149,69 @@ def inject_element_inspector():
                 }
             };
         }
+        function archivoDeSelector(selectorText) {
+            // Extrae la key mas larga del selector y la mapea a estilos/*.py.
+            // Devuelve string o '' si no se pudo atribuir.
+            var m = /st-key-([A-Za-z0-9_]+)/g;
+            var mejor = '', match;
+            while ((match = m.exec(selectorText)) !== null) {
+                var k = match[1].replace(/_+$/, '');
+                if (k.length > mejor.length) mejor = k;
+            }
+            if (!mejor) return '';
+            var map = win.__inspectorMapaEstilos;
+            var partes = mejor.split('_');
+            for (var i = partes.length; i >= 1; i--) {
+                var p = partes.slice(0, i).join('_');
+                if (map[p]) return map[p].join('+');
+            }
+            return '';
+        }
+        function analizarConflictos(el) {
+            if (!el || !el.matches) return [];
+            var propsPorRegla = {}; // prop -> [{val, imp, sel, archivo}]
+            var sheets = doc.styleSheets;
+            for (var s = 0; s < sheets.length; s++) {
+                var rules = null;
+                try { rules = sheets[s].cssRules; } catch(e) { continue; } // cross-origin
+                if (!rules) continue;
+                for (var r = 0; r < rules.length; r++) {
+                    var rule = rules[r];
+                    if (!rule.selectorText || !rule.style) continue;
+                    // el.matches falla con selectores raros; try/catch por selector individual
+                    var sels = rule.selectorText.split(',');
+                    var matched = false;
+                    for (var si = 0; si < sels.length; si++) {
+                        try { if (el.matches(sels[si].trim())) { matched = true; break; } } catch(_){}
+                    }
+                    if (!matched) continue;
+                    var arch = archivoDeSelector(rule.selectorText);
+                    for (var pi = 0; pi < rule.style.length; pi++) {
+                        var prop = rule.style[pi];
+                        var val  = rule.style.getPropertyValue(prop).trim();
+                        var imp  = rule.style.getPropertyPriority(prop) === 'important';
+                        propsPorRegla[prop] = propsPorRegla[prop] || [];
+                        propsPorRegla[prop].push({ val: val, imp: imp, sel: rule.selectorText.slice(0, 80), archivo: arch });
+                    }
+                }
+            }
+            var conflictos = [];
+            for (var p in propsPorRegla) {
+                var list = propsPorRegla[p];
+                if (list.length < 2) continue;
+                // deduplico valores identicos - si todas las reglas ponen el mismo valor no es conflicto real
+                var valoresUnicos = {};
+                for (var k = 0; k < list.length; k++) valoresUnicos[list[k].val + '|' + list[k].imp] = 1;
+                if (Object.keys(valoresUnicos).length < 2) continue;
+                var ganador = list[list.length - 1]; // ultima que matcheo suele ganar (aprox)
+                conflictos.push({
+                    prop: p, cantidad: list.length,
+                    ganador: ganador,
+                    otros: list.slice(0, -1)
+                });
+            }
+            return conflictos.slice(0, 8); // limitar ruido
+        }
         function contextoPagina() {
             try {
                 var u = new URL(win.location.href);
@@ -162,7 +225,25 @@ def inject_element_inspector():
                 };
             } catch(e) { return { url: '?', reporte: '?', viewport: '?' }; }
         }
-        function bloqueParaIA(etiqueta, key, ctx, medidas, pagina) {
+        function formatearConflictos(conf) {
+            if (!conf || !conf.length) return [];
+            var out = ['Conflictos CSS (mismo elemento, mismas propiedades):'];
+            for (var i = 0; i < conf.length; i++) {
+                var c = conf[i];
+                var linea = '  ' + c.prop + ' - ' + c.cantidad + ' reglas | gana: ' +
+                            c.ganador.val + (c.ganador.imp ? ' !important' : '') +
+                            (c.ganador.archivo ? ' (' + c.ganador.archivo + ')' : '');
+                out.push(linea);
+                for (var j = 0; j < c.otros.length && j < 2; j++) {
+                    var o = c.otros[j];
+                    out.push('     pierde: ' + o.val + (o.imp ? ' !important' : '') +
+                             (o.archivo ? ' (' + o.archivo + ')' : '') +
+                             ' | sel: ' + o.sel);
+                }
+            }
+            return out;
+        }
+        function bloqueParaIA(etiqueta, key, ctx, medidas, pagina, conflictos) {
             var lines = ['--- copiar para IA ---'];
             lines.push('Widget key: ' + (key || '(sin key)'));
             if (ctx.codigo)   lines.push('Declarado en: ' + ctx.codigo);
@@ -180,6 +261,8 @@ def inject_element_inspector():
                 lines.push('Reporte activo: ' + pagina.reporte);
                 lines.push('Viewport: ' + pagina.viewport);
             }
+            var flat = formatearConflictos(conflictos);
+            for (var i = 0; i < flat.length; i++) lines.push(flat[i]);
             if (etiqueta) lines.push('Detalle:\\n' + etiqueta);
             return lines.join('\\n');
         }
@@ -543,11 +626,13 @@ def inject_element_inspector():
                 var etiquetaFinal = etiqueta + '\\n' + extras.join('\\n');
                 var medidas = medirElemento(ctxCont ? ctxCont.el : el);
                 var pagina  = contextoPagina();
+                // conflictos: calculo diferido (solo al copiar) - es O(reglas*props), no queremos correrlo en cada mousemove
                 win.__inspectorUltimo = {
                     etiqueta: etiqueta, key: ctxKey,
                     ctx: { codigo: ctxCod, estilos: ctxEst,
                            padre: ctxRel.padre, hermanos: ctxRel.hermanos },
-                    medidas: medidas, pagina: pagina
+                    medidas: medidas, pagina: pagina,
+                    elemento: (ctxCont ? ctxCont.el : el)
                 };
                 tip.textContent = etiquetaFinal;
                 tip.style.opacity = '1';
@@ -581,7 +666,9 @@ def inject_element_inspector():
                     var tag = t && t.tagName ? t.tagName.toLowerCase() : '';
                     if (tag === 'input' || tag === 'textarea' || (t && t.isContentEditable)) return;
                     var u = win.__inspectorUltimo;
-                    var texto = bloqueParaIA(u.etiqueta, u.key, u.ctx, u.medidas, u.pagina);
+                    var conflictos = [];
+                    try { conflictos = analizarConflictos(u.elemento); } catch(_){}
+                    var texto = bloqueParaIA(u.etiqueta, u.key, u.ctx, u.medidas, u.pagina, conflictos);
                     var ok = function() {
                         var b = doc.getElementById('el-inspector-badge');
                         if (!b) return;
