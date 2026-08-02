@@ -18,6 +18,10 @@ import streamlit as st
 from tema import (
     ACENTO, ACENTO_TEXTO_OSCURO, GRIS_BORDE, GRIS_FONDO,
     PALETA_SERIES, SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
+    BLANCO, CELDA_ALERTA_FONDO, CELDA_ALERTA_TEXTO, CELDA_POS_TEXTO,
+    DANGER_TEXT, ERROR, ERROR_FONDO, EXITO, EXITO_FONDO,
+    GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE,
+    LAVANDA_FONDO, LAVANDA_SELECCION,
 )
 from graficos.base import (
     _card, _layout, _render_rail, _resolver, _slug, _wrap_cat,
@@ -411,14 +415,14 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     # Semáforo por familia — umbrales sobre |peso| (% de |total ajuste|)
     def _badge_for(peso, val):
         if val >= 0:
-            return ("▲ SOBRANTE", "#0F6E56", "#E1F5EE")
+            return ("▲ SOBRANTE", CELDA_POS_TEXTO, EXITO_FONDO)
         if peso >= 40:
-            return ("⚠ CRÍTICO", "#A32D2D", "#FCEBEB")
+            return ("⚠ CRÍTICO", DANGER_TEXT, ERROR_FONDO)
         if peso >= 20:
-            return ("● ALERTA", "#854F0B", "#FAEEDA")
+            return ("● ALERTA", CELDA_ALERTA_TEXTO, CELDA_ALERTA_FONDO)
         if peso >= 5:
-            return ("● MENOR", "#5F5E5A", "#F1EFE8")
-        return ("✓ OK", "#5F5E5A", "#F1EFE8")
+            return ("● MENOR", GRIS_TEXTO, GRIS_FONDO)
+        return ("✓ OK", GRIS_TEXTO, GRIS_FONDO)
 
     # ── Cascada como TABLA de filas ────────────────────────────────────
     # Una cascada horizontal ES una tabla con barras flotantes: cada barra
@@ -454,6 +458,12 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         _f["conn_pct"] = (((_filas[_idx - 1]["hi"] - _dmin) / _span * 100)
                           if _idx > 0 and not _f["total"] else None)
 
+    # Colores semánticos de la tabla, todos desde tema.py (regla #1: nunca
+    # un #hex suelto). `_tono` devuelve el par (texto, barra) según el signo.
+    def _tono(v):
+        return ((CELDA_POS_TEXTO, EXITO) if v > 0
+                else (DANGER_TEXT, ERROR))
+
     def _celda_familia(f):
         """Primera columna: nombre + línea de contexto (TOP, SKUs, top3)."""
         _nom = f["cat"]
@@ -463,9 +473,11 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         _tp = _top_prod.get(f["cat"])
         if _tp and not f["total"]:
             _tnom, _tval, _tpct = _tp
-            _tcol = "#0F6E56" if f["val"] > 0 else "#A32D2D"
-            _piezas.append(f"▸ {_tnom.upper()} "
-                           f"<span style='color:{_tcol}'>{_tpct:.0f}%</span>")
+            _tcol = _tono(f["val"])[0]
+            _piezas.append(
+                f"<span style='color:{GRIS_TEXTO_MEDIO}'>{_tnom.upper()}</span>"
+                f" <span style='color:{_tcol};font-weight:500'>"
+                f"{_tpct:.0f}%</span>")
         _n = (sum(_n_skus.values()) if (f["total"] and _n_skus)
               else _n_skus.get(f["cat"]))
         if _n:
@@ -473,67 +485,82 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         _c3 = _conc3.get(f["cat"])
         if _c3 is not None and not f["total"]:
             _piezas.append(f"top3 {_c3:.0f}%")
-        _peso_txt = ("<1%" if (not f["total"] and f["peso"] < 0.5)
+        _peso_txt = ("&lt;1%" if (not f["total"] and f["peso"] < 0.5)
                      else f"{f['peso']:.0f}%")
         if f["total"]:
             _piezas.insert(0, f"{len(agg)} familias")
         else:
-            _piezas.insert(0, f"{_peso_txt} del total")
-        _sub = " · ".join(_piezas)
-        _peso_nom = "500" if f["total"] else "400"
-        return (f"<div style='font-weight:{_peso_nom};color:#0b0b0b;"
-                f"font-size:13px;line-height:1.25'>{_nom}</div>"
-                f"<div style='font-size:10px;color:#8a8a8a;"
-                f"line-height:1.3;margin-top:1px'>{_sub}</div>")
+            _piezas.insert(0, f"<b style='font-weight:500'>{_peso_txt}</b>"
+                              f" del total")
+        # Separador fino en vez de "·": menos ruido entre piezas.
+        _sep = f"<span style='color:{GRIS_BORDE};padding:0 5px'>|</span>"
+        _sub = _sep.join(_piezas)
+        _peso_nom = "600" if f["total"] else "500"
+        _ls = "0.02em" if f["total"] else "0"
+        return (f"<div style='font-weight:{_peso_nom};color:{TEXTO_PRINCIPAL};"
+                f"font-size:12.5px;line-height:1.2;letter-spacing:{_ls};"
+                f"white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>"
+                f"{_nom}</div>"
+                f"<div style='font-size:9.5px;color:{GRIS_TEXTO_SUAVE};"
+                f"line-height:1.35;margin-top:2px;white-space:nowrap;"
+                f"overflow:hidden;text-overflow:ellipsis'>{_sub}</div>")
 
     def _celda_monto(f):
         """Segunda columna: monto y delta vs periodo anterior."""
-        _col = "#0F6E56" if f["val"] > 0 else "#A32D2D"
-        _sig = "+" if f["val"] > 0 else "-"
-        _html = (f"<div style='color:{_col};font-weight:500;font-size:13px;"
-                 f"font-variant-numeric:tabular-nums;line-height:1.25'>"
+        _col = GRIS_TEXTO_MEDIO if f["total"] else _tono(f["val"])[0]
+        _sig = "+" if f["val"] > 0 else "−"      # menos tipográfico, no guion
+        _html = (f"<div style='color:{_col};font-weight:600;font-size:13px;"
+                 f"font-variant-numeric:tabular-nums;line-height:1.2;"
+                 f"letter-spacing:-0.01em'>"
                  f"{_sig}S/ {abs(f['val']):,.0f}</div>")
         _dl = _delta.get(f["cat"])
         if _dl and not f["total"]:
             _dir, _dpct = _dl
-            _arrow = "↓" if _dir == "down" else "↑"
-            _dcol = "#A32D2D" if _dir == "down" else "#0F6E56"
-            _html += (f"<div style='font-size:10px;color:{_dcol};"
-                      f"line-height:1.3;margin-top:1px'>"
-                      f"{_arrow} {_dpct:.0f}% vs ant.</div>")
+            _arrow = "▲" if _dir == "down" else "▼"   # ▲ = empeora
+            _dcol = DANGER_TEXT if _dir == "down" else CELDA_POS_TEXTO
+            _html += (f"<div style='font-size:9.5px;color:{_dcol};"
+                      f"line-height:1.35;margin-top:2px;"
+                      f"font-variant-numeric:tabular-nums'>"
+                      f"<span style='font-size:7px;vertical-align:1px'>"
+                      f"{_arrow}</span> {_dpct:.0f}% vs ant.</div>")
         return _html
 
     def _celda_barra(f):
         """Tercera columna: la barra flotante + su conector."""
-        _bg = ("#888780" if f["total"]
-               else ("#1BAF7A" if f["val"] > 0 else "#E24B4A"))
-        _alto = 13 if f["total"] else 11
+        _bg = GRIS_TEXTO_MEDIO if f["total"] else _tono(f["val"])[1]
+        _alto = 12 if f["total"] else 9
         _conn = ""
         if f["conn_pct"] is not None:
-            _conn = (f"<div style='position:absolute;left:{f['conn_pct']:.2f}%;"
-                     f"top:0;width:1px;height:7px;background:#c3c2b7'></div>")
+            _conn = (f"<div style='position:absolute;"
+                     f"left:{f['conn_pct']:.2f}%;top:3px;bottom:3px;"
+                     f"width:1px;background:{GRIS_BORDE}'></div>")
+        # El carril (fondo tenue de punta a punta) hace que la barra se lea
+        # como posicionada DENTRO de una escala, no flotando en el vacío.
         return (f"<div style='position:relative;height:22px;width:100%'>"
                 f"<div style='position:absolute;left:0;right:0;top:50%;"
-                f"height:1px;background:#e1e0d9'></div>{_conn}"
+                f"transform:translateY(-50%);height:{_alto}px;"
+                f"background:{GRIS_FONDO};border-radius:999px'></div>{_conn}"
                 f"<div style='position:absolute;left:{f['left_pct']:.2f}%;"
-                f"width:{f['w_pct']:.2f}%;top:{(22-_alto)//2}px;"
-                f"height:{_alto}px;background:{_bg};border-radius:3px'></div>"
-                f"</div>")
+                f"width:{f['w_pct']:.2f}%;top:50%;"
+                f"transform:translateY(-50%);"
+                f"height:{_alto}px;background:{_bg};border-radius:999px'>"
+                f"</div></div>")
 
     def _celda_pctval(f):
         """Cuarta columna: % del ajuste sobre el valorizado de la familia."""
         _pv = _pct_val.get(f["cat"])
         if _pv is None:
-            return ("<div style='font-size:12px;color:#c3c2b7;"
-                    "text-align:right'>—</div>")
-        _col = "#0F6E56" if _pv > 0 else "#A32D2D"
-        return (f"<div style='font-size:12px;color:{_col};text-align:right;"
-                f"font-variant-numeric:tabular-nums'>{_pv:+.1f}%</div>")
+            return (f"<div style='font-size:11.5px;color:{GRIS_BORDE};"
+                    f"text-align:right'>—</div>")
+        _col = _tono(_pv)[0]
+        return (f"<div style='font-size:11.5px;color:{_col};text-align:right;"
+                f"font-weight:500;font-variant-numeric:tabular-nums'>"
+                f"{_pv:+.1f}%</div>")
 
     def _celda_badge(f):
         """Quinta columna: el semáforo."""
         if f["total"]:
-            _txt, _fg, _bg = "Total", "#5F5E5A", "#F1EFE8"
+            _txt, _fg, _bg = "Total", GRIS_TEXTO, GRIS_FONDO
         else:
             _txt, _fg, _bg = _badge_for(f["peso"], f["val"])
             # _badge_for devuelve "⚠ CRÍTICO"; en la tabla el símbolo sobra
@@ -542,9 +569,9 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             _txt = _txt.split(" ", 1)[-1]
             _txt = _txt if _txt == "OK" else _txt.capitalize()
         return (f"<div style='text-align:right'><span style='display:inline-"
-                f"block;padding:2px 7px;border-radius:999px;font-size:10px;"
-                f"font-weight:500;background:{_bg};color:{_fg}'>"
-                f"{_txt}</span></div>")
+                f"block;padding:2.5px 8px;border-radius:999px;font-size:9.5px;"
+                f"font-weight:600;letter-spacing:0.02em;background:{_bg};"
+                f"color:{_fg};white-space:nowrap'>{_txt}</span></div>")
 
     # ── Drill: clic en una familia → top-N de productos abajo ─────────────
     # Categorías clickeables (todas menos "TOTAL"). El foco vive en
@@ -561,86 +588,120 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     # las keys de esta tabla, mismo criterio que el CSS del drill de
     # Proveedor en Compras. Comprime el gap vertical que Streamlit mete
     # entre st.columns y hace que el botón del gutter parezca una celda.
-    st.markdown("""<style>
+    st.markdown(f"""<style>
     /* Popover "Excluir productos": achica el boton que la regla global de
        estilos/_30_filtros.py deja en 180px de ancho y 15px de fuente. */
-    .st-key-ajcas_excl_wrap [data-testid="stPopover"] button {
+    .st-key-ajcas_excl_wrap [data-testid="stPopover"] button {{
         min-width: 0 !important; padding: 2px 10px !important;
         font-size: 11px !important; font-weight: 400 !important;
         /* min-height propio: Streamlit fija 40px y es lo que mantenia el
            boton alto aun con el padding y la fuente ya reducidos. */
         min-height: 0 !important; height: 26px !important;
         line-height: 1 !important;
-        border-width: 1px !important; color: #5F5E5A !important; }
+        border-width: 1px !important; color: {GRIS_TEXTO} !important; }}
     .st-key-ajcas_excl_wrap [data-testid="stPopover"] button div,
     .st-key-ajcas_excl_wrap [data-testid="stPopover"] button span
-        { line-height: 1 !important; }
+        {{ line-height: 1 !important; }}
     .st-key-ajcas_excl_wrap [data-testid="stPopover"] button p
-        { font-size: 11px !important; }
+        {{ font-size: 11px !important; }}
     .st-key-ajcas_excl_wrap [data-testid="stPopover"] button
         [data-testid="stIconMaterial"]
-        { font-size: 13px !important; width: 13px !important;
-          height: 13px !important; }
-    div[class*="st-key-ajcas_fila_"] { border-bottom: 0.5px solid #e1e0d9; }
+        {{ font-size: 13px !important; width: 13px !important;
+          height: 13px !important; }}
+    /* ── Filas de la tabla ─────────────────────────────────────────── */
+    div[class*="st-key-ajcas_fila_"] {{
+        border-bottom: 1px solid {GRIS_LINEA};
+        /* El padding negativo compensa el gap del gutter para que el
+           resaltado de hover llegue al borde de la tarjeta. */
+        margin: 0 -6px; padding: 0 6px;
+        border-radius: 6px;
+        transition: background .12s ease; }}
+    div[class*="st-key-ajcas_fila_"]:hover {{ background: {LAVANDA_SELECCION}; }}
+    /* Fila en foco: fondo lavanda + barra de acento a la izquierda. El
+       sufijo _on en la key es el mismo patron que usan los chipwrap_*_on
+       de estilos/_40_ajuste_franja.py. */
+    div[class*="st-key-ajcas_fila_"][class*="_on"] {{
+        background: {LAVANDA_FONDO};
+        box-shadow: inset 2px 0 0 {ACENTO}; }}
+    div[class*="st-key-ajcas_fila_"][class*="_on"]:hover {{
+        background: {LAVANDA_FONDO}; }}
+    /* Fila TOTAL: cierra la tabla, no participa del hover. */
+    div[class*="st-key-ajcas_fila_total"] {{
+        border-bottom: none; border-top: 1.5px solid {GRIS_BORDE};
+        margin-top: 2px; background: transparent !important;
+        box-shadow: none !important; }}
     div[class*="st-key-ajcas_fila_"] div[data-testid="stVerticalBlock"]
-        { gap: 0 !important; }
+        {{ gap: 0 !important; }}
     /* OJO: nada de `align-items: center` acá. Con center las columnas
        dejan de estirarse y colapsan a ~6px con 30px de contenido adentro
        (overflow visible => las filas se pisan entre sí). El alto lo fija
        min-height y el centrado vertical va DENTRO de cada celda, abajo. */
     div[class*="st-key-ajcas_fila_"] div[data-testid="stHorizontalBlock"]
-        { gap: 0.4rem !important; min-height: 38px; }
-    div[class*="st-key-ajcas_fila_"] p { margin: 0 !important; }
+        {{ gap: 0.4rem !important; min-height: 40px; }}
+    div[class*="st-key-ajcas_fila_"] p {{ margin: 0 !important; }}
     div[class*="st-key-ajcas_fila_"] [data-testid="stMarkdownContainer"]
-        { display: flex; flex-direction: column; justify-content: center;
-          min-height: 34px; }
-    div[class*="st-key-ajcas_btn_"] button {
+        {{ display: flex; flex-direction: column; justify-content: center;
+          min-height: 36px; }}
+    /* ── Chevron del gutter ────────────────────────────────────────── */
+    div[class*="st-key-ajcas_btn_"] button {{
         border: none !important; background: transparent !important;
-        color: #b4b2a9 !important; padding: 0 !important;
-        min-height: 26px !important; font-size: 13px !important; }
-    div[class*="st-key-ajcas_btn_"] button:hover {
-        color: #534AB7 !important; background: transparent !important; }
-    div[class*="st-key-ajcas_btn_"] button[kind="primary"] {
-        color: #534AB7 !important; }
+        color: {GRIS_TEXTO_SUAVE} !important; padding: 0 !important;
+        min-height: 26px !important; font-size: 11px !important;
+        transition: color .12s ease, transform .12s ease !important; }}
+    div[class*="st-key-ajcas_btn_"] button:hover {{
+        color: {ACENTO} !important; background: transparent !important;
+        transform: scale(1.25); }}
+    div[class*="st-key-ajcas_btn_"] button[kind="primary"] {{
+        color: {ACENTO} !important; }}
     </style>""", unsafe_allow_html=True)
 
     with _card("cascada", "Cascada por familia"):
         # Encabezado: título + insight a la izquierda, resumen a la derecha.
         _n_falt = int((agg[col_ajuste_val] < 0).sum())
-        _resumen = (f"{len(agg)} {grp_col.lower()}s · {_n_falt} con faltante"
-                    f" · neto <span style='color:"
-                    f"{'#A32D2D' if total < 0 else '#0F6E56'};"
-                    f"font-weight:500'>S/ {total:,.0f}</span>")
+        _col_neto = DANGER_TEXT if total < 0 else CELDA_POS_TEXTO
+        _resumen = (f"{len(agg)} {grp_col.lower()}s"
+                    f"<span style='color:{GRIS_BORDE};padding:0 6px'>|</span>"
+                    f"{_n_falt} con faltante"
+                    f"<span style='color:{GRIS_BORDE};padding:0 6px'>|</span>"
+                    f"neto <span style='color:{_col_neto};font-weight:600;"
+                    f"font-variant-numeric:tabular-nums'>"
+                    f"S/ {total:,.0f}</span>")
         st.markdown(
             f"<div style='display:flex;justify-content:space-between;"
-            f"align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:10px'>"
-            f"<span style='font-size:14px;font-weight:500;color:#0b0b0b'>"
+            f"align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:12px'>"
+            f"<span style='font-size:14px;font-weight:600;"
+            f"color:{TEXTO_PRINCIPAL};letter-spacing:-0.01em'>"
             f"Ajuste valorizado por {grp_col.lower()}"
-            + (f"<span style='font-size:11px;font-weight:400;color:#8a8a8a'>"
-               f" — {insight}</span>" if insight else "")
+            + (f"<span style='font-size:11px;font-weight:400;"
+               f"color:{GRIS_TEXTO_SUAVE}'> — {insight}</span>"
+               if insight else "")
             + f"</span>"
-              f"<span style='font-size:11px;color:#8a8a8a'>{_resumen}</span>"
+              f"<span style='font-size:11px;color:{GRIS_TEXTO_SUAVE}'>"
+              f"{_resumen}</span>"
               f"</div>", unsafe_allow_html=True)
 
         # Cabecera de la tabla
         st.markdown(
-            "<div style='display:flex;font-size:10px;color:#8a8a8a;"
-            "text-transform:uppercase;letter-spacing:.05em;"
-            "padding:0 0 6px 0;border-bottom:0.5px solid #e1e0d9'>"
-            "<div style='width:4%'></div>"
-            "<div style='width:30%'>Familia</div>"
-            "<div style='width:17%'>Ajuste</div>"
-            "<div style='width:28%'>Cascada acumulada</div>"
-            "<div style='width:10%;text-align:right'>s/ val</div>"
-            "<div style='width:11%;text-align:right'>Estado</div>"
-            "</div>", unsafe_allow_html=True)
+            f"<div style='display:flex;font-size:9px;color:{GRIS_TEXTO_SUAVE};"
+            f"text-transform:uppercase;letter-spacing:.08em;font-weight:600;"
+            f"padding:0 0 7px 0;border-bottom:1px solid {GRIS_BORDE}'>"
+            f"<div style='width:4%'></div>"
+            f"<div style='width:30%'>Familia</div>"
+            f"<div style='width:17%'>Ajuste</div>"
+            f"<div style='width:28%'>Cascada acumulada</div>"
+            f"<div style='width:10%;text-align:right'>s/ val</div>"
+            f"<div style='width:11%;text-align:right'>Estado</div>"
+            f"</div>", unsafe_allow_html=True)
 
         # Una fila por familia. El gutter izquierdo lleva el botón que
         # prende/apaga el foco — una tabla HTML no emite eventos de clic,
         # así que el disparador tiene que ser un widget de Streamlit.
         for _f in _filas:
             _es_foco = (not _f["total"]) and _f["cat"] == focus
-            with st.container(key=f"ajcas_fila_{_slug(_f['cat'])}"):
+            # Sufijo _on en la key = fila resaltada (patrón chipwrap_*_on).
+            with st.container(
+                    key=f"ajcas_fila_{_slug(_f['cat'])}"
+                        + ("_on" if _es_foco else "")):
                 _c = st.columns([0.04, 0.30, 0.17, 0.28, 0.10, 0.11])
                 with _c[0]:
                     if not _f["total"]:
@@ -661,17 +722,19 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                         st.markdown(_fn(_f), unsafe_allow_html=True)
 
         # Leyenda
+        def _punto(color, txt):
+            return (f"<span style='display:inline-flex;align-items:center;"
+                    f"gap:5px'><span style='display:inline-block;width:8px;"
+                    f"height:8px;border-radius:999px;background:{color}'>"
+                    f"</span>{txt}</span>")
         st.markdown(
-            "<div style='display:flex;gap:14px;flex-wrap:wrap;font-size:10px;"
-            "color:#8a8a8a;margin-top:8px'>"
-            "<span><span style='display:inline-block;width:9px;height:9px;"
-            "border-radius:2px;background:#E24B4A'></span> Faltante</span>"
-            "<span><span style='display:inline-block;width:9px;height:9px;"
-            "border-radius:2px;background:#1BAF7A'></span> Sobrante</span>"
-            "<span><span style='display:inline-block;width:9px;height:9px;"
-            "border-radius:2px;background:#888780'></span> Total neto</span>"
-            "<span>Cada barra arranca donde terminó la anterior.</span>"
-            "</div>", unsafe_allow_html=True)
+            f"<div style='display:flex;gap:16px;flex-wrap:wrap;"
+            f"font-size:9.5px;color:{GRIS_TEXTO_SUAVE};margin-top:10px'>"
+            + _punto(ERROR, "Faltante") + _punto(EXITO, "Sobrante")
+            + _punto(GRIS_TEXTO_MEDIO, "Total neto")
+            + f"<span style='color:{GRIS_BORDE}'>|</span>"
+              f"<span>Cada barra arranca donde terminó la anterior</span>"
+              f"</div>", unsafe_allow_html=True)
 
         # ── Panel de drill (solo si hay foco) — DEBAJO de la tabla ─────
         # Mismo patrón que `_paneles_card()` del drill de Proveedor en
@@ -703,10 +766,11 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                     _total_focus = float(
                         df[df[grp_col].astype(str) == focus][col_ajuste_val].sum()
                     )
-                    _color_total = "#A32D2D" if _total_focus < 0 else "#0F6E56"
+                    _color_total = (DANGER_TEXT if _total_focus < 0
+                                    else CELDA_POS_TEXTO)
                     st.markdown(
                         f"**{focus}**<br>"
-                        f"<span style='font-size:11px;color:#8a8a8a'>"
+                        f"<span style='font-size:11px;color:{GRIS_TEXTO_SUAVE}'>"
                         f"top {dim_lbl}s · faltante total "
                         f"<span style='color:{_color_total};font-weight:500'>"
                         f"S/ {_total_focus:,.0f}</span></span>",
@@ -772,7 +836,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                     _labels.append(
                                         f"{_nom}<br>"
                                         f"<span style='font-size:9px;"
-                                        f"color:#8a8a8a'>"
+                                        f"color:{GRIS_TEXTO_SUAVE}'>"
                                         f"{_r[col_area]}</span>"
                                     )
                                 else:
@@ -818,34 +882,33 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                         # tiene todo el ancho: faltantes y sobrantes van
                         # lado a lado en vez de apilados.
                         _pa, _pb = st.columns(2)
-                        with _pa:
+                        def _titulo_split(txt, color):
                             st.markdown(
-                                "<div style='font-size:11px;font-weight:500;"
-                                "color:#A32D2D;letter-spacing:0.5px;"
-                                "margin:4px 0 -8px 0'>FALTANTES</div>",
+                                f"<div style='font-size:9px;font-weight:600;"
+                                f"color:{color};letter-spacing:.08em;"
+                                f"text-transform:uppercase;"
+                                f"margin:4px 0 -8px 0'>{txt}</div>",
                                 unsafe_allow_html=True,
                             )
+
+                        with _pa:
+                            _titulo_split("Faltantes", DANGER_TEXT)
                             if _neg.empty:
                                 st.caption("Sin faltantes en esta familia.")
                             else:
                                 st.plotly_chart(
-                                    _fig_split(_neg, "rgba(239,68,68,0.85)"),
+                                    _fig_split(_neg, ERROR),
                                     use_container_width=True,
                                     key=("ajuste_cascada_drill_neg_"
                                          f"{_slug(focus)}_{_inst}"),
                                 )
                         with _pb:
-                            st.markdown(
-                                "<div style='font-size:11px;font-weight:500;"
-                                "color:#0F6E56;letter-spacing:0.5px;"
-                                "margin:4px 0 -8px 0'>SOBRANTES</div>",
-                                unsafe_allow_html=True,
-                            )
+                            _titulo_split("Sobrantes", CELDA_POS_TEXTO)
                             if _pos.empty:
                                 st.caption("Sin sobrantes en esta familia.")
                             else:
                                 st.plotly_chart(
-                                    _fig_split(_pos, "rgba(29,158,117,0.85)"),
+                                    _fig_split(_pos, EXITO),
                                     use_container_width=True,
                                     key=("ajuste_cascada_drill_pos_"
                                          f"{_slug(focus)}_{_inst}"),
