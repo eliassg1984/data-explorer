@@ -1159,6 +1159,11 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val):
         margin=dict(l=10, r=10, t=50, b=20),
         annotations=_anns_hm,
     ))
+    # plot_bgcolor pinta lo que se ve POR DEBAJO de las celdas — es decir,
+    # los gaps de xgap/ygap. `_layout_aj` lo fuerza transparente (queda el
+    # blanco de la tarjeta y la grilla desaparecía: celda blanca sobre gap
+    # blanco). Con un gris tenue los gaps se leen como líneas de grilla.
+    fig.update_layout(plot_bgcolor=GRIS_BORDE)
     _xcats = [str(c) for c in pivot.columns.tolist()]
     fig.update_xaxes(tickmode="array", tickvals=_xcats,
                      ticktext=_wrap_cat(_xcats))
