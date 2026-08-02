@@ -655,7 +655,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         color: {ACENTO} !important; }}
     </style>""", unsafe_allow_html=True)
 
-    with _card("cascada", "Cascada por familia"):
+    with _card("cascada"):
         # Encabezado: título + insight a la izquierda, resumen a la derecha.
         _n_falt = int((agg[col_ajuste_val] < 0).sum())
         _col_neto = DANGER_TEXT if total < 0 else CELDA_POS_TEXTO
