@@ -26,7 +26,7 @@ def _mapas_desarrollador() -> tuple[str, str, str]:
     """
     mapa_codigo: dict[str, str] = {}
     mapa_snippets: dict[str, str] = {}
-    fuentes_py = [_RAIZ / "app.py"]
+    fuentes_py = sorted(p for p in _RAIZ.glob("*.py") if not p.name.startswith("_"))
     fuentes_py += sorted((_RAIZ / "graficos").glob("*.py"))
     fuentes_py += sorted((_RAIZ / "graficos" / "compras").glob("*.py")) if (_RAIZ / "graficos" / "compras").exists() else []
     fuentes_py += sorted((_RAIZ / "tablas").glob("*.py")) if (_RAIZ / "tablas").exists() else []
