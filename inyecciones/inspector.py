@@ -14,38 +14,116 @@ import streamlit.components.v1 as components
 _RAIZ = Path(__file__).resolve().parent.parent
 _KEY_PY = re.compile(r"""key\s*=\s*['"]([A-Za-z0-9_]+)['"]""")
 _KEY_CSS = re.compile(r"st-key-([A-Za-z0-9_]+)")
+# def / async def top-level (indent 0). Captura el nombre.
+_DEF_TOP = re.compile(r"^(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+
+
+def _funcion_contenedora(lineas: list[str], linea_1based: int) -> tuple[str, int, int]:
+    """Para una linea dada (1-based), devuelve (nombre_func, ini, fin) top-level.
+    Si la linea no cae dentro de ningun `def` de nivel 0, devuelve ('', 0, 0).
+    """
+    idx = linea_1based - 1
+    # def anterior de nivel 0
+    ini_def = -1
+    for j in range(idx, -1, -1):
+        m = _DEF_TOP.match(lineas[j])
+        if m:
+            ini_def = j
+            nombre = m.group(1)
+            break
+    if ini_def < 0:
+        return ("", 0, 0)
+    # fin = ultima linea antes del proximo top-level (def/class/asignacion) o EOF
+    fin = len(lineas)
+    for j in range(ini_def + 1, len(lineas)):
+        ln = lineas[j]
+        if not ln.strip():
+            continue
+        # nueva declaracion top-level = corta el bloque
+        if ln[0] not in (" ", "\t", ")", "]", "#"):
+            fin = j
+            break
+    # recortar lineas en blanco finales
+    while fin > ini_def + 1 and not lineas[fin - 1].strip():
+        fin -= 1
+    return (nombre, ini_def + 1, fin)
 
 
 @lru_cache(maxsize=1)
-def _mapas_desarrollador() -> tuple[str, str, str]:
-    """Devuelve (mapa_codigo_json, mapa_estilos_json, mapa_snippets_json).
+def _mapas_desarrollador() -> tuple[str, str, str, str, str]:
+    """Devuelve (mapa_codigo, mapa_estilos, mapa_snippets, mapa_funcion, mapa_refs).
 
-    mapa_codigo  : {key_exacta -> "archivo:linea"}  (primer match gana)
+    mapa_codigo  : {key -> "archivo:linea"}  (primer match gana)
     mapa_estilos : {key_o_prefijo -> ["archivo_estilo.py", ...]}
-    mapa_snippets: {key_exacta -> "snippet 5 lineas"}  (contexto Python)
+    mapa_snippets: {key -> "snippet 5 lineas"}
+    mapa_funcion : {key -> "nombre_func (archivo:ini-fin)"}
+    mapa_refs    : {key -> ["archivo:linea", ...] otras referencias al nombre_func}
     """
     mapa_codigo: dict[str, str] = {}
     mapa_snippets: dict[str, str] = {}
+    mapa_funcion: dict[str, str] = {}
+    # (nombre_func, archivo_def) por key -> se usa para calcular refs despues
+    key_a_func: dict[str, tuple[str, str]] = {}
+
     fuentes_py = sorted(p for p in _RAIZ.glob("*.py") if not p.name.startswith("_"))
     fuentes_py += sorted((_RAIZ / "graficos").glob("*.py"))
     fuentes_py += sorted((_RAIZ / "graficos" / "compras").glob("*.py")) if (_RAIZ / "graficos" / "compras").exists() else []
     fuentes_py += sorted((_RAIZ / "tablas").glob("*.py")) if (_RAIZ / "tablas").exists() else []
+
+    # cache: {archivo -> [lineas]} para no releer al buscar refs
+    contenido_por_archivo: dict[str, list[str]] = {}
+
     for archivo in fuentes_py:
         try:
             lineas = archivo.read_text(encoding="utf-8").splitlines()
-            for i, linea in enumerate(lineas, 1):
-                for k in _KEY_PY.findall(linea):
-                    if k not in mapa_codigo:
-                        mapa_codigo[k] = f"{archivo.relative_to(_RAIZ).as_posix()}:{i}"
-                        start = max(0, i - 3)
-                        end = min(len(lineas), i + 2)
-                        snippet_lines = []
-                        for j in range(start, end):
-                            prefix = ">>>" if j == i - 1 else "   "
-                            snippet_lines.append(f"{prefix} {j+1:>4}| {lineas[j]}")
-                        mapa_snippets[k] = "\n".join(snippet_lines)
         except OSError:
             continue
+        rel = archivo.relative_to(_RAIZ).as_posix()
+        contenido_por_archivo[rel] = lineas
+        for i, linea in enumerate(lineas, 1):
+            for k in _KEY_PY.findall(linea):
+                if k not in mapa_codigo:
+                    mapa_codigo[k] = f"{rel}:{i}"
+                    start = max(0, i - 3)
+                    end = min(len(lineas), i + 2)
+                    snippet_lines = []
+                    for j in range(start, end):
+                        prefix = ">>>" if j == i - 1 else "   "
+                        snippet_lines.append(f"{prefix} {j+1:>4}| {lineas[j]}")
+                    mapa_snippets[k] = "\n".join(snippet_lines)
+                    # funcion contenedora
+                    nombre, ini, fin = _funcion_contenedora(lineas, i)
+                    if nombre:
+                        mapa_funcion[k] = f"{nombre} ({rel}:{ini}-{fin})"
+                        key_a_func[k] = (nombre, rel)
+
+    # Referencias: por cada key con func, buscar el nombre en todos los .py
+    # excepto en la propia linea de definicion. Evita ruido acotando a `\bNAME\b`.
+    mapa_refs: dict[str, list[str]] = {}
+    # cachear regex por nombre reutilizable entre keys que comparten funcion
+    refs_por_nombre: dict[tuple[str, str], list[str]] = {}
+    for k, (nombre, archivo_def) in key_a_func.items():
+        clave = (nombre, archivo_def)
+        if clave in refs_por_nombre:
+            mapa_refs[k] = refs_por_nombre[clave]
+            continue
+        patron = re.compile(rf"\b{re.escape(nombre)}\b")
+        refs: list[str] = []
+        for rel, lineas_a in contenido_por_archivo.items():
+            for i, linea in enumerate(lineas_a, 1):
+                if not patron.search(linea):
+                    continue
+                # saltar la propia def
+                m = _DEF_TOP.match(linea)
+                if m and m.group(1) == nombre and rel == archivo_def:
+                    continue
+                refs.append(f"{rel}:{i}")
+                if len(refs) >= 8:
+                    break
+            if len(refs) >= 8:
+                break
+        refs_por_nombre[clave] = refs
+        mapa_refs[k] = refs
 
     mapa_estilos: dict[str, list[str]] = {}
     for archivo in sorted((_RAIZ / "estilos").glob("*.py")):
@@ -55,9 +133,6 @@ def _mapas_desarrollador() -> tuple[str, str, str]:
             continue
         rel = archivo.relative_to(_RAIZ).as_posix()
         for k in set(_KEY_CSS.findall(texto)):
-            # el CSS suele usar prefijos con "_" final (ej. [class*="st-key-chartcard_"]);
-            # la búsqueda del inspector va probando prefijos sin el "_" final, así que
-            # normalizamos acá para que "chartcard_" (CSS) matchee con "chartcard" (búsqueda).
             k_norm = k.rstrip("_")
             if not k_norm:
                 continue
@@ -65,7 +140,13 @@ def _mapas_desarrollador() -> tuple[str, str, str]:
             if rel not in mapa_estilos[k_norm]:
                 mapa_estilos[k_norm].append(rel)
 
-    return json.dumps(mapa_codigo), json.dumps(mapa_estilos), json.dumps(mapa_snippets)
+    return (
+        json.dumps(mapa_codigo),
+        json.dumps(mapa_estilos),
+        json.dumps(mapa_snippets),
+        json.dumps(mapa_funcion),
+        json.dumps(mapa_refs),
+    )
 
 
 def inject_element_inspector():
@@ -81,7 +162,7 @@ def inject_element_inspector():
     iframe de AgGrid, así que sus var(--x) SÍ resuelven contra el :root de
     estilos.py. Se mantienen tal cual.
     """
-    mapa_codigo, mapa_estilos, mapa_snippets = _mapas_desarrollador()
+    mapa_codigo, mapa_estilos, mapa_snippets, mapa_funcion, mapa_refs = _mapas_desarrollador()
     components.html("""
     <script>
     (function() {
@@ -91,6 +172,8 @@ def inject_element_inspector():
         win.__inspectorMapaCodigo  = __MAPA_CODIGO__;
         win.__inspectorMapaEstilos = __MAPA_ESTILOS__;
         win.__inspectorMapaSnippets = __MAPA_SNIPPETS__;
+        win.__inspectorMapaFuncion = __MAPA_FUNCION__;
+        win.__inspectorMapaRefs    = __MAPA_REFS__;
 
         function buscarCodigo(key) {
             if (!key) return '';
@@ -99,6 +182,14 @@ def inject_element_inspector():
         function buscarSnippet(key) {
             if (!key) return '';
             return win.__inspectorMapaSnippets[key] || '';
+        }
+        function buscarFuncion(key) {
+            if (!key) return '';
+            return win.__inspectorMapaFuncion[key] || '';
+        }
+        function buscarRefs(key) {
+            if (!key) return [];
+            return win.__inspectorMapaRefs[key] || [];
         }
         function buscarEstilos(key) {
             if (!key) return [];
@@ -359,6 +450,8 @@ def inject_element_inspector():
             var lines = ['--- copiar para IA ---'];
             lines.push('Widget key: ' + (key || '(sin key)'));
             if (ctx.codigo)   lines.push('Declarado en: ' + ctx.codigo);
+            if (ctx.funcion)  lines.push('Funcion: ' + ctx.funcion);
+            if (ctx.refs && ctx.refs.length) lines.push('Referencias (' + ctx.refs.length + '): ' + ctx.refs.join(', '));
             if (ctx.estilos && ctx.estilos.length) lines.push('Estilos: ' + ctx.estilos.join(', '));
             if (ctx.padre)    lines.push('Padre: st-key-' + ctx.padre);
             if (ctx.hermanos && ctx.hermanos.length) lines.push('Hermanos: ' + ctx.hermanos.join(', '));
@@ -846,8 +939,12 @@ def inject_element_inspector():
                 var testids = cadenaTestids(el);
                 var clases  = clasesElemento(el);
                 var keysCad = cadenaKeys(el);
+                var ctxFunc = buscarFuncion(ctxKey);
+                var ctxRefs = buscarRefs(ctxKey);
                 var extras  = [];
                 if (ctxKey)         extras.push('  ' + 'codigo   : ' + (ctxCod || '(no encontrado)'));
+                if (ctxFunc)        extras.push('  ' + 'funcion  : ' + ctxFunc);
+                if (ctxRefs.length) extras.push('  ' + 'refs (' + ctxRefs.length + '): ' + ctxRefs.join(', '));
                 if (ctxEst.length)  extras.push('  ' + 'estilos  : ' + ctxEst.join(', '));
                 else if (ctxKey)    extras.push('  ' + 'estilos  : (sin regla propia en estilos/)');
                 if (ctxRel.padre)   extras.push('  ' + 'padre    : ' + ctxRel.padre);
@@ -877,7 +974,8 @@ def inject_element_inspector():
                     etiqueta: etiqueta, key: ctxKey,
                     ctx: { codigo: ctxCod, estilos: ctxEst,
                            padre: ctxRel.padre, hermanos: ctxRel.hermanos,
-                           snippet: ctxSnippet },
+                           snippet: ctxSnippet,
+                           funcion: ctxFunc, refs: ctxRefs },
                     medidas: medidas, pagina: pagina,
                     extras2: { testids: testids, clases: clases, keysCad: keysCad,
                                layoutPadre: lp, boxPadre: bp },
@@ -948,5 +1046,5 @@ def inject_element_inspector():
 
     })();
     </script>
-    """.replace("__MAPA_CODIGO__", mapa_codigo).replace("__MAPA_ESTILOS__", mapa_estilos).replace("__MAPA_SNIPPETS__", mapa_snippets),
+    """.replace("__MAPA_CODIGO__", mapa_codigo).replace("__MAPA_ESTILOS__", mapa_estilos).replace("__MAPA_SNIPPETS__", mapa_snippets).replace("__MAPA_FUNCION__", mapa_funcion).replace("__MAPA_REFS__", mapa_refs),
         height=0, scrolling=False)
