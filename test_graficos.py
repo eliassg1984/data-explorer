@@ -168,6 +168,8 @@ def main():
             (df_min, "FECHA APERTURA INVENTARIO", None, "AJUSTE VALORIZADO", None)),
         ("waterfall (Cascada)", _aj._graf_waterfall_ajuste,
             (df, "FAMILIA", "AREA", "AJUSTE VALORIZADO")),
+        ("heatmap (Mapa de calor)", _aj._graf_heatmap_ajuste,
+            (df, "FAMILIA", "AREA", "AJUSTE VALORIZADO")),
         ("distribucion (box por familia)", _aj._graf_distribucion_ajuste,
             (df, "FAMILIA", "AREA", "AJUSTE VALORIZADO", "NOMBRE PRODUCTO")),
         ("distribucion (rama else: histograma)", _aj._graf_distribucion_ajuste,

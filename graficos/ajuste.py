@@ -36,6 +36,7 @@ from graficos.base import (
 # callback `tabla_cb` que inyecta app.py.
 _AJUSTE_RAIL_CATEGORIAS = (
     ("Visual", (("Cascada",        "Cascada"),
+                     ("Mapa de calor",  "Mapa de calor"),
                      ("Distribución",   "Distribución"))),
     ("Tiempo",      (("Evolución",           "Evolución"),
                      ("Comparativa mensual", "Comparativa"))),
@@ -1078,6 +1079,283 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
             )
 
 
+def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
+                         col_producto=None):
+    """Mapa de calor familia × área con escala divergente centrada en cero.
+
+    Clic en una celda → drill abajo con los productos de esa combinación
+    Familia × Área, faltantes y sobrantes lado a lado (mismo patrón que el
+    drill de la cascada). `col_producto` es opcional: sin él, el mapa sigue
+    siendo interactivo pero el drill avisa que no puede desglosar.
+    """
+    if not col_familia or not col_area:
+        st.info("Se necesitan columnas de familia y área para el mapa de calor.")
+        return
+
+    pivot = df.pivot_table(
+        index=col_familia, columns=col_area,
+        values=col_ajuste_val, aggfunc="sum", fill_value=0,
+    )
+    # Escala simétrica: el 0 queda SIEMPRE en el centro del degradado, así
+    # un faltante y un sobrante del mismo tamaño se ven igual de intensos.
+    # Sin esto, zmid solo centra el color pero el rango sigue sesgado al
+    # lado que tenga el extremo mayor.
+    _vmax = float(abs(pivot.values).max()) or 1.0
+
+    fig = go.Figure(go.Heatmap(
+        z=pivot.values,
+        x=pivot.columns.tolist(),
+        y=pivot.index.tolist(),
+        # xgap/ygap: separa las celdas en baldosas. Sin esto el mapa se lee
+        # como un bloque continuo y cuesta seguir filas y columnas.
+        xgap=3, ygap=3,
+        colorscale=[
+            [0.00, ERROR],
+            [0.35, ERROR_FONDO],
+            [0.50, BLANCO],
+            [0.65, EXITO_FONDO],
+            [1.00, EXITO],
+        ],
+        zmin=-_vmax, zmax=_vmax, zmid=0,
+        colorbar=dict(
+            title=dict(text="Ajuste S/", font=dict(size=10,
+                                                   color=GRIS_TEXTO)),
+            tickformat=",.0f", tickfont=dict(size=9, color=GRIS_TEXTO_SUAVE),
+            thickness=8, len=0.75, outlinewidth=0,
+            ticks="outside", ticklen=3, tickcolor=GRIS_BORDE,
+        ),
+        # hoverinfo="skip": el hover (y el clic) los maneja la capa de
+        # puntos invisible de abajo, no el heatmap.
+        hoverinfo="skip",
+    ))
+
+    # ── Capa de clic: un punto invisible en el centro de cada celda ───────
+    # `go.Heatmap` NO es una traza seleccionable en Plotly: `on_select`
+    # jamás recibe puntos de ella, así que el clic sobre el mapa no hacía
+    # nada. La solución estándar es superponer un `go.Scatter` (que sí es
+    # seleccionable) con un punto por celda y opacidad 0. Como además lleva
+    # el hovertemplate, el tooltip sigue saliendo igual que antes.
+    _pts_x, _pts_y, _pts_cd = [], [], []
+    for _i, _fam in enumerate(pivot.index.tolist()):
+        for _j, _area in enumerate(pivot.columns.tolist()):
+            _pts_x.append(_area)
+            _pts_y.append(_fam)
+            _pts_cd.append([float(pivot.values[_i][_j])])
+
+    fig.add_trace(go.Scatter(
+        x=_pts_x, y=_pts_y, mode="markers",
+        # size generoso: con hovermode="closest" define el radio de captura
+        # del clic. Chico deja zonas muertas entre celdas.
+        marker=dict(size=28, opacity=0, color=ACENTO),
+        customdata=_pts_cd,
+        hovertemplate=(
+            "<b>%{y}</b><br>"
+            "Área: <b>%{x}</b><br>"
+            "Ajuste: <b>S/ %{customdata[0]:,.2f}</b><extra></extra>"
+        ),
+        showlegend=False,
+    ))
+
+    # Valores dentro de cada celda como ANNOTATIONS, no como `texttemplate`:
+    # `textfont` es una sola config para toda la traza, así que el texto
+    # oscuro quedaba ilegible sobre las celdas saturadas de los extremos.
+    # Con annotations el color se decide celda por celda según intensidad.
+    _anns_hm = []
+    for _i, _fam in enumerate(pivot.index.tolist()):
+        for _j, _area in enumerate(pivot.columns.tolist()):
+            _v = float(pivot.values[_i][_j])
+            # Los ceros se omiten: son la mayoría y solo agregan ruido.
+            if abs(_v) < 0.5:
+                continue
+            _int = abs(_v) / _vmax
+            _fg = BLANCO if _int > 0.55 else GRIS_TEXTO_MEDIO
+            _anns_hm.append(dict(
+                x=_area, y=_fam, xref="x", yref="y",
+                text=f"S/ {_v:,.0f}", showarrow=False,
+                font=dict(size=9.5, color=_fg,
+                          family="ui-monospace, monospace"),
+            ))
+
+    fig.update_layout(**_layout_aj(
+        title_text="",   # el título ya lo pone la tarjeta
+        xaxis=dict(tickangle=0, side="top", gridcolor=GRIS_BORDE,
+                   showgrid=False, ticks="",
+                   tickfont=dict(size=10, color=GRIS_TEXTO)),
+        yaxis=dict(autorange="reversed", gridcolor=GRIS_BORDE,
+                   showgrid=False, ticks="", showticklabels=True,
+                   tickfont=dict(size=10, color=GRIS_TEXTO_MEDIO)),
+        # Alto por fila en vez de tope fijo: con el tope de 400px las
+        # celdas se aplastaban cuando había muchas familias.
+        height=min(560, max(240, len(pivot.index) * 38 + 110)),
+        margin=dict(l=10, r=10, t=50, b=20),
+        annotations=_anns_hm,
+        # closest: el clic resuelve al punto invisible más cercano, así no
+        # quedan zonas muertas entre celdas.
+        hovermode="closest",
+    ))
+    # plot_bgcolor pinta lo que se ve POR DEBAJO de las celdas — es decir,
+    # los gaps de xgap/ygap. `_layout_aj` lo fuerza transparente (queda el
+    # blanco de la tarjeta y la grilla desaparecía: celda blanca sobre gap
+    # blanco). Con un gris tenue los gaps se leen como líneas de grilla.
+    fig.update_layout(plot_bgcolor=GRIS_BORDE)
+    _xcats = [str(c) for c in pivot.columns.tolist()]
+    fig.update_xaxes(tickmode="array", tickvals=_xcats,
+                     ticktext=_wrap_cat(_xcats))
+
+    # Subtítulo con la peor combinación: el dato que se busca en un mapa de
+    # calor es "dónde está el punto rojo", y decirlo evita rastrearlo a ojo.
+    _peor_v = float(pivot.values.min())
+    _sub_hm = ""
+    if _peor_v < 0:
+        _pos = pivot.values.argmin()
+        _pf = pivot.index[_pos // len(pivot.columns)]
+        _pa = pivot.columns[_pos % len(pivot.columns)]
+        _sub_hm = (f"<span style='font-size:11px;color:{GRIS_TEXTO_SUAVE}'>"
+                   f"Mayor faltante: <b style='color:{DANGER_TEXT}'>{_pf}</b>"
+                   f" en <b style='color:{DANGER_TEXT}'>{_pa}</b> · "
+                   f"S/ {_peor_v:,.0f}</span>")
+
+    with _card("heatmap", "Mapa de calor"):
+        if _sub_hm:
+            st.markdown(f"<div style='margin:-4px 0 6px 0'>{_sub_hm}</div>",
+                        unsafe_allow_html=True)
+        # key ESTÁTICA a propósito: la selección de plotly persiste entre
+        # reruns y aquí eso es lo deseado — clic en una celda muestra su
+        # drill y ese drill sigue visible aunque se cambie el Top N. No hay
+        # toggle (no re-procesamos el clic para prender/apagar foco), así que
+        # no aplica el patrón de "foco en la key" de la cascada.
+        _hm_evt = st.plotly_chart(
+            fig, use_container_width=True,
+            key="heatmap_ajuste",
+            on_select="rerun", selection_mode="points",
+        )
+
+    # ── Drill: clic en una celda → productos de esa Familia × Área ────────
+    _hm_punto = None
+    try:
+        _sel = getattr(_hm_evt, "selection", None) or (
+            _hm_evt.get("selection") if isinstance(_hm_evt, dict) else None)
+        _pts = (_sel or {}).get("points", [])
+        _hm_punto = _pts[0] if _pts else None
+    except Exception:
+        _hm_punto = None
+
+    if _hm_punto is not None:
+        _fam_sel = _hm_punto.get("y")   # Familia clicada
+        _area_sel = _hm_punto.get("x")  # Área clicada
+        # El valor se lee del pivot, no del evento: los puntos de un
+        # `go.Scatter` no traen `z`, y el `customdata` no siempre llega
+        # completo según la versión de Streamlit.
+        _val_sel = 0.0
+        try:
+            _val_sel = float(pivot.loc[_fam_sel, _area_sel])
+        except Exception:
+            _cd_evt = _hm_punto.get("customdata")
+            if isinstance(_cd_evt, (list, tuple)) and _cd_evt:
+                _val_sel = float(_cd_evt[0])
+
+        if _fam_sel and _area_sel:
+            _det = df[
+                (df[col_familia].astype(str) == str(_fam_sel)) &
+                (df[col_area].astype(str) == str(_area_sel))
+            ]
+            _cell_slug = f"{_slug(str(_fam_sel))}_{_slug(str(_area_sel))}"
+
+            _color_total = (DANGER_TEXT if (_val_sel or 0) < 0
+                            else CELDA_POS_TEXTO)
+            st.markdown(
+                f"**{_fam_sel}** × **{_area_sel}** · "
+                f"<span style='color:{_color_total};font-weight:600'>"
+                f"S/ {(_val_sel or 0):,.0f}</span> · "
+                f"{len(_det)} registros",
+                unsafe_allow_html=True,
+            )
+
+            if col_producto and col_producto in _det.columns:
+                _topn = st.pills(
+                    "Top", [5, 10, 20], default=10,
+                    key="hm_drill_topn",
+                    label_visibility="collapsed",
+                    format_func=lambda n: f"Top {n}",
+                ) or 10
+
+                _sub_prod = (
+                    _det.groupby(col_producto, as_index=False)[col_ajuste_val]
+                    .sum()
+                )
+                _sub_prod["_abs"] = _sub_prod[col_ajuste_val].abs()
+                _sub_prod = _sub_prod.sort_values(
+                    "_abs", ascending=False).head(int(_topn))
+
+                _neg = _sub_prod[_sub_prod[col_ajuste_val] < 0].sort_values(
+                    col_ajuste_val, ascending=False)
+                _pos = _sub_prod[_sub_prod[col_ajuste_val] > 0].sort_values(
+                    col_ajuste_val)
+
+                def _fig_drill(_df_d, _color_bar):
+                    _fig = go.Figure(go.Bar(
+                        x=_df_d[col_ajuste_val].tolist(),
+                        y=_df_d[col_producto].astype(str).tolist(),
+                        orientation="h",
+                        marker=dict(color=_color_bar, cornerradius=4),
+                        text=[f"S/ {v:,.0f}" for v in _df_d[col_ajuste_val]],
+                        textposition="auto",
+                        insidetextanchor="end",
+                        hovertemplate=("%{y}<br><b>S/ %{x:,.2f}</b>"
+                                       "<extra></extra>"),
+                    ))
+                    _fig.update_layout(**_layout_aj(
+                        title_text="",
+                        xaxis=dict(tickprefix="S/ ", tickformat=",.0f",
+                                   gridcolor=GRIS_BORDE, zeroline=True,
+                                   zerolinecolor=GRIS_BORDE, nticks=4),
+                        yaxis=dict(showticklabels=True, automargin=True,
+                                   tickfont=dict(size=10)),
+                        showlegend=False,
+                        height=max(140, 36 * len(_df_d) + 40),
+                        bargap=0.35,
+                        margin=dict(l=4, r=12, t=6, b=10),
+                    ))
+                    return _fig
+
+                _pa, _pb = st.columns(2)
+                with _pa:
+                    st.markdown(
+                        f"<div style='font-size:9px;font-weight:600;"
+                        f"color:{DANGER_TEXT};letter-spacing:.08em;"
+                        f"text-transform:uppercase;margin:4px 0 -8px 0'>"
+                        f"Faltantes</div>",
+                        unsafe_allow_html=True,
+                    )
+                    if _neg.empty:
+                        st.caption("Sin faltantes.")
+                    else:
+                        # key con la celda: al cambiar de celda, Streamlit
+                        # remonta el chart en vez de reusar el nodo DOM (que
+                        # deja el chart sin re-medir el ancho → vacío).
+                        st.plotly_chart(
+                            _fig_drill(_neg, ERROR),
+                            use_container_width=True,
+                            key=f"hm_drill_neg_{_cell_slug}",
+                        )
+                with _pb:
+                    st.markdown(
+                        f"<div style='font-size:9px;font-weight:600;"
+                        f"color:{CELDA_POS_TEXTO};letter-spacing:.08em;"
+                        f"text-transform:uppercase;margin:4px 0 -8px 0'>"
+                        f"Sobrantes</div>",
+                        unsafe_allow_html=True,
+                    )
+                    if _pos.empty:
+                        st.caption("Sin sobrantes.")
+                    else:
+                        st.plotly_chart(
+                            _fig_drill(_pos, EXITO),
+                            use_container_width=True,
+                            key=f"hm_drill_pos_{_cell_slug}",
+                        )
+            else:
+                st.caption("No hay columna de producto para desglosar.")
 
 
 def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_producto):
@@ -1186,7 +1464,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
         Si por algún motivo no está seteado (p. ej. se llama fuera de la
         vista Ajuste), cae a «Del periodo».
       · Contenedor IZQUIERDO (grande): chips de tipo de gráfico arriba
-        (Cascada / Distribución  ó  Evolución /
+        (Cascada / Mapa de calor / Distribución  ó  Evolución /
         Comparativa mensual) SIN iconos, y el gráfico elegido debajo.
       · Contenedor DERECHO: `_panel_analisis_ajuste` renderiza pestañas
         (st.tabs) con una mini-tabla a la vez.
@@ -1323,6 +1601,9 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
                                    col_valorizado=col_valorizado,
                                    col_cantidad=col_cantidad,
                                    df_full=df_full, col_fecha=col_fecha)
+        elif graf == "Mapa de calor":
+            _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val,
+                                 col_producto=col_producto)
         elif graf == "Distribución":
             _graf_distribucion_ajuste(d, col_familia, col_area,
                                       col_ajuste_val, col_producto)
