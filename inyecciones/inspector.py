@@ -16,6 +16,15 @@ _KEY_PY = re.compile(r"""key\s*=\s*['"]([A-Za-z0-9_]+)['"]""")
 _KEY_CSS = re.compile(r"st-key-([A-Za-z0-9_]+)")
 # def / async def top-level (indent 0). Captura el nombre.
 _DEF_TOP = re.compile(r"^(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+# key=f"PREFIX_{...}" — detecta helpers que construyen keys con f-string.
+_KEY_FSTRING = re.compile(r"""key\s*=\s*f['"]([A-Za-z0-9]+)_\{""")
+
+
+def _slug_py(s: str) -> str:
+    """Slug equivalente a graficos.base._slug: minúsculas, no-alfanum → '_'."""
+    import unicodedata
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-zA-Z0-9]+", "_", s).strip("_").lower()
 # st.caption("..."), st.button("..."), st.markdown("..."), etc.
 # Solo capturamos el PRIMER argumento string literal (label/texto principal).
 _ST_TEXTO = re.compile(
@@ -80,15 +89,11 @@ def _norm_texto(s: str) -> str:
 
 
 @lru_cache(maxsize=1)
-def _mapas_desarrollador() -> tuple[str, str, str, str, str, str]:
-    """Devuelve (mapa_codigo, mapa_estilos, mapa_snippets, mapa_funcion, mapa_refs, mapa_texto).
+def _mapas_desarrollador() -> tuple[str, str, str, str, str, str, str]:
+    """Devuelve mapas serializados a JSON:
+      codigo, estilos, snippets, funcion, refs, texto, construido.
 
-    mapa_codigo  : {key -> "archivo:linea"}  (primer match gana)
-    mapa_estilos : {key_o_prefijo -> ["archivo_estilo.py", ...]}
-    mapa_snippets: {key -> "snippet 5 lineas"}
-    mapa_funcion : {key -> "nombre_func (archivo:ini-fin)"}
-    mapa_refs    : {key -> ["archivo:linea", ...] otras referencias al nombre_func}
-    mapa_texto   : {texto_normalizado -> "archivo:linea"}  literales st.XXX("...")
+    mapa_construido: {key -> "helper(args) — archivo:linea"}  keys f-string
     """
     mapa_codigo: dict[str, str] = {}
     mapa_snippets: dict[str, str] = {}
@@ -163,6 +168,47 @@ def _mapas_desarrollador() -> tuple[str, str, str, str, str, str]:
         refs_por_nombre[clave] = refs
         mapa_refs[k] = refs
 
+    # Helpers que construyen keys con f-string (ej: _card usa key=f"chartcard_{...}").
+    # Los registramos por PREFIX → nombre_helper, y luego buscamos sus callers
+    # para reconstruir la key que va a producir cada llamada literal.
+    helpers_por_prefix: dict[str, list[str]] = {}
+    for rel, lineas_a in contenido_por_archivo.items():
+        for i, linea in enumerate(lineas_a, 1):
+            m = _KEY_FSTRING.search(linea)
+            if not m:
+                continue
+            prefix = m.group(1) + "_"
+            nombre, _ini, _fin, _ = _funcion_contenedora(lineas_a, i)
+            if not nombre:
+                continue
+            arr = helpers_por_prefix.setdefault(prefix, [])
+            if nombre not in arr:
+                arr.append(nombre)
+
+    # Para cada helper, busca callers helper("arg1", "arg2") y computa la key
+    # esperada = PREFIX + _slug(arg1). Solo captura callers con literales
+    # (skip variables). El result mapea key_esperada -> 'helper("arg1","arg2") - archivo:linea'.
+    mapa_construido: dict[str, str] = {}
+    for prefix, helpers in helpers_por_prefix.items():
+        for helper in helpers:
+            patron = re.compile(
+                rf'\b{re.escape(helper)}\s*\(\s*[\'"]([^\'"]+)[\'"]'
+                rf'(?:\s*,\s*[\'"]([^\'"]+)[\'"])?'
+            )
+            for rel, lineas_a in contenido_por_archivo.items():
+                for i, linea in enumerate(lineas_a, 1):
+                    m = patron.search(linea)
+                    if not m:
+                        continue
+                    arg1 = m.group(1)
+                    arg2 = m.group(2) or ""
+                    key_esperada = prefix + _slug_py(arg1)
+                    if key_esperada in mapa_construido:
+                        continue
+                    call = (f'{helper}("{arg1}", "{arg2}")' if arg2
+                            else f'{helper}("{arg1}")')
+                    mapa_construido[key_esperada] = f"{call} — {rel}:{i}"
+
     mapa_estilos: dict[str, list[str]] = {}
     for archivo in sorted((_RAIZ / "estilos").glob("*.py")):
         try:
@@ -185,6 +231,7 @@ def _mapas_desarrollador() -> tuple[str, str, str, str, str, str]:
         json.dumps(mapa_funcion),
         json.dumps(mapa_refs),
         json.dumps(mapa_texto),
+        json.dumps(mapa_construido),
     )
 
 
@@ -201,7 +248,7 @@ def inject_element_inspector():
     iframe de AgGrid, así que sus var(--x) SÍ resuelven contra el :root de
     estilos.py. Se mantienen tal cual.
     """
-    mapa_codigo, mapa_estilos, mapa_snippets, mapa_funcion, mapa_refs, mapa_texto = _mapas_desarrollador()
+    mapa_codigo, mapa_estilos, mapa_snippets, mapa_funcion, mapa_refs, mapa_texto, mapa_construido = _mapas_desarrollador()
     # session_state: snapshot no cacheado (cambia cada rerun). Se serializa a
     # str truncado — solo para inspección; nunca para persistir.
     import streamlit as st
@@ -231,8 +278,14 @@ def inject_element_inspector():
         win.__inspectorMapaSnippets = __MAPA_SNIPPETS__;
         win.__inspectorMapaFuncion = __MAPA_FUNCION__;
         win.__inspectorMapaRefs    = __MAPA_REFS__;
-        win.__inspectorMapaTexto   = __MAPA_TEXTO__;
-        win.__inspectorSS          = __MAPA_SS__;
+        win.__inspectorMapaTexto     = __MAPA_TEXTO__;
+        win.__inspectorMapaConstruido = __MAPA_CONSTRUIDO__;
+        win.__inspectorSS            = __MAPA_SS__;
+
+        function buscarConstruido(key) {
+            if (!key) return '';
+            return win.__inspectorMapaConstruido[key] || '';
+        }
 
         function buscarPorTexto(txt) {
             // Busca el innerText normalizado en el indice de literales st.XXX("...").
@@ -539,6 +592,7 @@ def inject_element_inspector():
             var lines = ['--- copiar para IA ---'];
             lines.push('Widget key: ' + (key || '(sin key)'));
             if (ctx.codigo)   lines.push('Declarado en: ' + ctx.codigo);
+            if (ctx.construido) lines.push('Contenedor construido por: ' + ctx.construido);
             if (ctx.origenTexto && ctx.origenTexto !== ctx.codigo)
                               lines.push('Origen del texto: ' + ctx.origenTexto);
             if (ctx.funcion)  lines.push('Funcion: ' + ctx.funcion);
@@ -1035,6 +1089,7 @@ def inject_element_inspector():
                 var ctxFunc = buscarFuncion(ctxKey);
                 var ctxRefs = buscarRefs(ctxKey);
                 var ctxSS   = buscarSS(ctxKey);
+                var ctxConstruido = buscarConstruido(ctxKey);
                 // Origen del texto: si el widget tiene texto visible (caption,
                 // button, p) y matchea un literal st.XXX("...") del codebase.
                 var ctxOrigenTxt = '';
@@ -1053,7 +1108,8 @@ def inject_element_inspector():
                                  padre: ctxRel.padre, hermanos: ctxRel.hermanos,
                                  snippet: ctxSnippet,
                                  funcion: ctxFunc, refs: ctxRefs, ss: ctxSS,
-                                 origenTexto: ctxOrigenTxt };
+                                 origenTexto: ctxOrigenTxt,
+                                 construido: ctxConstruido };
                 var extras2Hover = { testids: testids, clases: clases, keysCad: keysCad,
                                      layoutPadre: lp, boxPadre: bp };
                 var etiquetaFinal = bloqueParaIA(etiqueta, ctxKey, ctxHover, medidas,
@@ -1135,5 +1191,5 @@ def inject_element_inspector():
 
     })();
     </script>
-    """.replace("__MAPA_CODIGO__", mapa_codigo).replace("__MAPA_ESTILOS__", mapa_estilos).replace("__MAPA_SNIPPETS__", mapa_snippets).replace("__MAPA_FUNCION__", mapa_funcion).replace("__MAPA_REFS__", mapa_refs).replace("__MAPA_TEXTO__", mapa_texto).replace("__MAPA_SS__", mapa_ss),
+    """.replace("__MAPA_CODIGO__", mapa_codigo).replace("__MAPA_ESTILOS__", mapa_estilos).replace("__MAPA_SNIPPETS__", mapa_snippets).replace("__MAPA_FUNCION__", mapa_funcion).replace("__MAPA_REFS__", mapa_refs).replace("__MAPA_TEXTO__", mapa_texto).replace("__MAPA_CONSTRUIDO__", mapa_construido).replace("__MAPA_SS__", mapa_ss),
         height=0, scrolling=False)
