@@ -988,37 +988,22 @@ def inject_element_inspector():
                 var ctxFunc = buscarFuncion(ctxKey);
                 var ctxRefs = buscarRefs(ctxKey);
                 var ctxSS   = buscarSS(ctxKey);
-                var extras  = [];
-                if (ctxKey)         extras.push('  ' + 'codigo   : ' + (ctxCod || '(no encontrado)'));
-                if (ctxFunc)        extras.push('  ' + 'funcion  : ' + ctxFunc);
-                if (ctxRefs.length) extras.push('  ' + 'refs (' + ctxRefs.length + '): ' + ctxRefs.join(', '));
-                if (ctxSS !== '')   extras.push('  ' + 'session_state: ' + ctxSS);
-                if (ctxEst.length)  extras.push('  ' + 'estilos  : ' + ctxEst.join(', '));
-                else if (ctxKey)    extras.push('  ' + 'estilos  : (sin regla propia en estilos/)');
-                if (ctxRel.padre)   extras.push('  ' + 'padre    : ' + ctxRel.padre);
-                if (ctxRel.hermanos && ctxRel.hermanos.length)
-                                    extras.push('  ' + 'hermanos : ' + ctxRel.hermanos.join(', '));
-                if (medidas) {
-                    extras.push('  ' + 'tamano   : ' + medidas.tamano);
-                    if (medidas.coords) extras.push('  ' + 'coords   : ' + medidas.coords);
-                    var eM = medidas.estilos, partesM = [];
-                    for (var pp in eM) { if (eM[pp] && eM[pp] !== 'none' && eM[pp] !== '0px') partesM.push(pp + '=' + eM[pp]); }
-                    if (partesM.length) extras.push('  ' + 'estilos-computados:\\n     ' + partesM.join('\\n     '));
-                }
-                if (pagina) {
-                    extras.push('  ' + 'reporte  : ' + pagina.reporte);
-                    extras.push('  ' + 'viewport : ' + pagina.viewport);
-                }
-                if (keysCad.length) extras.push('  ' + 'cadena-keys (elem->raiz): ' + keysCad.join(' > '));
-                if (testids.length) extras.push('  ' + 'cadena-testids: ' + testids.join(' > '));
-                if (clases.length)  extras.push('  ' + 'clases-del-elem: ' + clases.join(' '));
-                extras.push('  ' + '[C] copiar para IA (incluye conflictos + reglas matcheantes)');
-                var etiquetaFinal = etiqueta + '\\n' + extras.join('\\n');
                 // conflictos y reglasQueMatchean: calculo diferido (solo al copiar) - son O(reglas*props),
                 // no queremos correrlos en cada mousemove.
                 var ctxSnippet = buscarSnippet(ctxKey);
                 var lp = layoutPadre(el);
                 var bp = boxPadre(el);
+                // Tooltip = mismo formato que "copiar para IA", pero sin
+                // conflictos/reglas-que-matchean (esos se computan al pulsar C).
+                var ctxHover = { codigo: ctxCod, estilos: ctxEst,
+                                 padre: ctxRel.padre, hermanos: ctxRel.hermanos,
+                                 snippet: ctxSnippet,
+                                 funcion: ctxFunc, refs: ctxRefs, ss: ctxSS };
+                var extras2Hover = { testids: testids, clases: clases, keysCad: keysCad,
+                                     layoutPadre: lp, boxPadre: bp };
+                var etiquetaFinal = bloqueParaIA(etiqueta, ctxKey, ctxHover, medidas,
+                                                 pagina, null, null, extras2Hover)
+                                    + '\\n[C] copiar para IA (incluye conflictos + reglas matcheantes)';
                 win.__inspectorUltimo = {
                     etiqueta: etiqueta, key: ctxKey,
                     ctx: { codigo: ctxCod, estilos: ctxEst,
