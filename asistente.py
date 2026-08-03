@@ -264,28 +264,38 @@ def _inject_css():
     st.session_state["_ai_css_inyectado"] = True
     st.markdown(f"""
     <style>
-    /* Wrapper que aloja el popover del asistente — fijado abajo-derecha. */
+    /* Wrapper del asistente — tab fijo en el borde derecho, centrado vertical. */
     .st-key-ai_float_wrap {{
         position: fixed !important;
-        bottom: 24px !important;
-        right: 24px !important;
+        top: 50% !important;
+        right: 0 !important;
+        transform: translateY(-50%) !important;
         z-index: 999990 !important;
         width: auto !important;
     }}
-    /* El trigger del popover: burbuja circular con el color de marca. */
+    /* Trigger: tab pegado al borde derecho (esquinas redondeadas solo a la izq). */
     .st-key-ai_float_wrap [data-testid="stPopover"] > div > button {{
-        border-radius: 999px !important;
-        min-height: 52px !important;
-        padding: 0 18px !important;
+        border-radius: 12px 0 0 12px !important;
+        min-height: 48px !important;
+        padding: 0 14px 0 16px !important;
         background: {ACENTO} !important;
         color: {BLANCO} !important;
         border: none !important;
-        box-shadow: 0 4px 16px rgba(108,92,231,0.35) !important;
+        box-shadow: -2px 2px 12px rgba(108,92,231,0.30) !important;
         font-weight: 600 !important;
     }}
     .st-key-ai_float_wrap [data-testid="stPopover"] > div > button:hover {{
         background: {ACENTO_FUERTE} !important;
-        transform: translateY(-1px);
+        transform: translateX(-3px);
+    }}
+    /* Ocultar la flecha expand_more — no aporta en un tab lateral. */
+    .st-key-ai_float_wrap [data-testid="stPopoverButton"] [aria-hidden="true"] {{
+        display: none !important;
+    }}
+    /* Cuando el rail de Compras/Ajuste está activo, el tab del asistente se
+       desplaza a la izquierda para no taparlo. */
+    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row) .st-key-ai_float_wrap {{
+        right: 100px !important;
     }}
     /* Interior del popover: un poco más ancho para el chat. */
     div[data-testid="stPopoverBody"] {{
