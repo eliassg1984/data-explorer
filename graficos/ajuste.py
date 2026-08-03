@@ -1215,7 +1215,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                    f" en <b style='color:{DANGER_TEXT}'>{_pa}</b> · "
                    f"S/ {_peor_v:,.0f}</span>")
 
-    with _card("heatmap", "Mapa de calor"):
+    with _card("heatmap"):
         if _sub_hm:
             st.markdown(f"<div style='margin:-4px 0 6px 0'>{_sub_hm}</div>",
                         unsafe_allow_html=True)
