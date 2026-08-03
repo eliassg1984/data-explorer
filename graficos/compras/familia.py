@@ -76,7 +76,7 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
         focus_fam, focus_sub = None, None
 
     desglose = "Total familia"
-    nav = st.columns([1.1, 1.5, 1.4, 3])
+    nav = st.columns([1.1, 1.5, 1.4])
     with nav[0]:
         if st.button("↩ Todas", key="cf_bc_all", use_container_width=True,
                      disabled=(focus_fam is None)):
@@ -96,11 +96,6 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
             desglose = st.pills("Desglose", ["Total familia", "Por subfamilia"],
                                 default="Total familia", key="compras_fam_desglose",
                                 label_visibility="collapsed") or "Total familia"
-    with nav[3]:
-        _ruta = ("Todas" + (f" › {focus_fam}" if focus_fam else "")
-                 + (f" › {focus_sub}" if focus_sub else ""))
-        st.caption(f"📂 {_ruta}  ·  clic en las barras para bajar de nivel")
-
     # ── Barras en el tiempo (serie = familia o subfamilia) ──────────────
     if focus_fam is None:
         tb, serie_col, titulo_ser = base, "fam", "familia"
