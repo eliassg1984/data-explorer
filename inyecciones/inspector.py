@@ -16,6 +16,17 @@ _KEY_PY = re.compile(r"""key\s*=\s*['"]([A-Za-z0-9_]+)['"]""")
 _KEY_CSS = re.compile(r"st-key-([A-Za-z0-9_]+)")
 # def / async def top-level (indent 0). Captura el nombre.
 _DEF_TOP = re.compile(r"^(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+# st.caption("..."), st.button("..."), st.markdown("..."), etc.
+# Solo capturamos el PRIMER argumento string literal (label/texto principal).
+_ST_TEXTO = re.compile(
+    r"""st\.(caption|button|markdown|write|info|warning|error|success|
+            title|header|subheader|toast|link_button|download_button|pills|
+            segmented_control|radio|selectbox|multiselect|toggle|checkbox|
+            text_input|text_area|number_input|date_input|time_input|
+            slider|select_slider|color_picker|chat_input|badge|metric)
+        \s*\(\s*(?:f\s*)?['"]([^'"\n]{2,80})['"]""",
+    re.VERBOSE,
+)
 
 
 def _funcion_contenedora(lineas: list[str], linea_1based: int) -> tuple[str, int, int, bool]:
@@ -61,19 +72,28 @@ def _funcion_contenedora(lineas: list[str], linea_1based: int) -> tuple[str, int
     return (nombre, ini_def + 1, fin, es_fragment)
 
 
+def _norm_texto(s: str) -> str:
+    """Normaliza texto para comparar: minúsculas y whitespace colapsado.
+    Se usa para matchear el innerText de un elemento (que puede tener saltos
+    de linea y iconos Material) contra el string literal del codigo."""
+    return " ".join(s.lower().split())
+
+
 @lru_cache(maxsize=1)
-def _mapas_desarrollador() -> tuple[str, str, str, str, str]:
-    """Devuelve (mapa_codigo, mapa_estilos, mapa_snippets, mapa_funcion, mapa_refs).
+def _mapas_desarrollador() -> tuple[str, str, str, str, str, str]:
+    """Devuelve (mapa_codigo, mapa_estilos, mapa_snippets, mapa_funcion, mapa_refs, mapa_texto).
 
     mapa_codigo  : {key -> "archivo:linea"}  (primer match gana)
     mapa_estilos : {key_o_prefijo -> ["archivo_estilo.py", ...]}
     mapa_snippets: {key -> "snippet 5 lineas"}
     mapa_funcion : {key -> "nombre_func (archivo:ini-fin)"}
     mapa_refs    : {key -> ["archivo:linea", ...] otras referencias al nombre_func}
+    mapa_texto   : {texto_normalizado -> "archivo:linea"}  literales st.XXX("...")
     """
     mapa_codigo: dict[str, str] = {}
     mapa_snippets: dict[str, str] = {}
     mapa_funcion: dict[str, str] = {}
+    mapa_texto: dict[str, str] = {}
     # (nombre_func, archivo_def) por key -> se usa para calcular refs despues
     key_a_func: dict[str, tuple[str, str]] = {}
 
@@ -93,6 +113,11 @@ def _mapas_desarrollador() -> tuple[str, str, str, str, str]:
         rel = archivo.relative_to(_RAIZ).as_posix()
         contenido_por_archivo[rel] = lineas
         for i, linea in enumerate(lineas, 1):
+            # textos literales de st.XXX("...") — indice inverso texto->ubicacion
+            for m_txt in _ST_TEXTO.finditer(linea):
+                txt_norm = _norm_texto(m_txt.group(2))
+                if txt_norm and txt_norm not in mapa_texto:
+                    mapa_texto[txt_norm] = f"{rel}:{i}"
             for k in _KEY_PY.findall(linea):
                 if k not in mapa_codigo:
                     mapa_codigo[k] = f"{rel}:{i}"
@@ -159,6 +184,7 @@ def _mapas_desarrollador() -> tuple[str, str, str, str, str]:
         json.dumps(mapa_snippets),
         json.dumps(mapa_funcion),
         json.dumps(mapa_refs),
+        json.dumps(mapa_texto),
     )
 
 
@@ -175,7 +201,7 @@ def inject_element_inspector():
     iframe de AgGrid, así que sus var(--x) SÍ resuelven contra el :root de
     estilos.py. Se mantienen tal cual.
     """
-    mapa_codigo, mapa_estilos, mapa_snippets, mapa_funcion, mapa_refs = _mapas_desarrollador()
+    mapa_codigo, mapa_estilos, mapa_snippets, mapa_funcion, mapa_refs, mapa_texto = _mapas_desarrollador()
     # session_state: snapshot no cacheado (cambia cada rerun). Se serializa a
     # str truncado — solo para inspección; nunca para persistir.
     import streamlit as st
@@ -205,7 +231,26 @@ def inject_element_inspector():
         win.__inspectorMapaSnippets = __MAPA_SNIPPETS__;
         win.__inspectorMapaFuncion = __MAPA_FUNCION__;
         win.__inspectorMapaRefs    = __MAPA_REFS__;
+        win.__inspectorMapaTexto   = __MAPA_TEXTO__;
         win.__inspectorSS          = __MAPA_SS__;
+
+        function buscarPorTexto(txt) {
+            // Busca el innerText normalizado en el indice de literales st.XXX("...").
+            // Devuelve "archivo:linea" o ''.
+            if (!txt) return '';
+            var norm = txt.toLowerCase().replace(/\\s+/g, ' ').trim();
+            if (!norm || norm.length < 2 || norm.length > 100) return '';
+            // Quitar iconos Material (palabras de una sola raiz al final tipo "expand_more")
+            norm = norm.replace(/\\s+(expand_more|expand_less|arrow_drop_down|check|close)$/g, '');
+            var m = win.__inspectorMapaTexto;
+            if (m[norm]) return m[norm];
+            // Match parcial: si el innerText contiene el literal como prefijo/substring.
+            // Barato porque el indice suele tener <300 entradas.
+            for (var k in m) {
+                if (norm.indexOf(k) !== -1) return m[k];
+            }
+            return '';
+        }
 
         function buscarCodigo(key) {
             if (!key) return '';
@@ -494,6 +539,8 @@ def inject_element_inspector():
             var lines = ['--- copiar para IA ---'];
             lines.push('Widget key: ' + (key || '(sin key)'));
             if (ctx.codigo)   lines.push('Declarado en: ' + ctx.codigo);
+            if (ctx.origenTexto && ctx.origenTexto !== ctx.codigo)
+                              lines.push('Origen del texto: ' + ctx.origenTexto);
             if (ctx.funcion)  lines.push('Funcion: ' + ctx.funcion);
             if (ctx.refs && ctx.refs.length) lines.push('Referencias (' + ctx.refs.length + '): ' + ctx.refs.join(', '));
             if (ctx.ss !== undefined && ctx.ss !== '')  lines.push('session_state[' + key + '] = ' + ctx.ss);
@@ -988,6 +1035,13 @@ def inject_element_inspector():
                 var ctxFunc = buscarFuncion(ctxKey);
                 var ctxRefs = buscarRefs(ctxKey);
                 var ctxSS   = buscarSS(ctxKey);
+                // Origen del texto: si el widget tiene texto visible (caption,
+                // button, p) y matchea un literal st.XXX("...") del codebase.
+                var ctxOrigenTxt = '';
+                try {
+                    var _txt = (el.innerText || '').trim();
+                    if (_txt) ctxOrigenTxt = buscarPorTexto(_txt);
+                } catch(_) {}
                 // conflictos y reglasQueMatchean: calculo diferido (solo al copiar) - son O(reglas*props),
                 // no queremos correrlos en cada mousemove.
                 var ctxSnippet = buscarSnippet(ctxKey);
@@ -998,7 +1052,8 @@ def inject_element_inspector():
                 var ctxHover = { codigo: ctxCod, estilos: ctxEst,
                                  padre: ctxRel.padre, hermanos: ctxRel.hermanos,
                                  snippet: ctxSnippet,
-                                 funcion: ctxFunc, refs: ctxRefs, ss: ctxSS };
+                                 funcion: ctxFunc, refs: ctxRefs, ss: ctxSS,
+                                 origenTexto: ctxOrigenTxt };
                 var extras2Hover = { testids: testids, clases: clases, keysCad: keysCad,
                                      layoutPadre: lp, boxPadre: bp };
                 var etiquetaFinal = bloqueParaIA(etiqueta, ctxKey, ctxHover, medidas,
@@ -1080,5 +1135,5 @@ def inject_element_inspector():
 
     })();
     </script>
-    """.replace("__MAPA_CODIGO__", mapa_codigo).replace("__MAPA_ESTILOS__", mapa_estilos).replace("__MAPA_SNIPPETS__", mapa_snippets).replace("__MAPA_FUNCION__", mapa_funcion).replace("__MAPA_REFS__", mapa_refs).replace("__MAPA_SS__", mapa_ss),
+    """.replace("__MAPA_CODIGO__", mapa_codigo).replace("__MAPA_ESTILOS__", mapa_estilos).replace("__MAPA_SNIPPETS__", mapa_snippets).replace("__MAPA_FUNCION__", mapa_funcion).replace("__MAPA_REFS__", mapa_refs).replace("__MAPA_TEXTO__", mapa_texto).replace("__MAPA_SS__", mapa_ss),
         height=0, scrolling=False)
