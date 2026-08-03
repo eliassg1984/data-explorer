@@ -18,13 +18,14 @@ _KEY_CSS = re.compile(r"st-key-([A-Za-z0-9_]+)")
 _DEF_TOP = re.compile(r"^(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 
 
-def _funcion_contenedora(lineas: list[str], linea_1based: int) -> tuple[str, int, int]:
-    """Para una linea dada (1-based), devuelve (nombre_func, ini, fin) top-level.
-    Si la linea no cae dentro de ningun `def` de nivel 0, devuelve ('', 0, 0).
+def _funcion_contenedora(lineas: list[str], linea_1based: int) -> tuple[str, int, int, bool]:
+    """Para una linea dada (1-based), devuelve (nombre_func, ini, fin, es_fragment).
+    `es_fragment`: True si la función tiene @st.fragment (o @fragment) arriba.
+    Si la linea no cae dentro de ningun `def` de nivel 0, devuelve ('', 0, 0, False).
     """
     idx = linea_1based - 1
-    # def anterior de nivel 0
     ini_def = -1
+    nombre = ""
     for j in range(idx, -1, -1):
         m = _DEF_TOP.match(lineas[j])
         if m:
@@ -32,21 +33,32 @@ def _funcion_contenedora(lineas: list[str], linea_1based: int) -> tuple[str, int
             nombre = m.group(1)
             break
     if ini_def < 0:
-        return ("", 0, 0)
-    # fin = ultima linea antes del proximo top-level (def/class/asignacion) o EOF
+        return ("", 0, 0, False)
+    # decoradores inmediatamente arriba del def
+    es_fragment = False
+    j = ini_def - 1
+    while j >= 0:
+        ln = lineas[j].strip()
+        if not ln or ln.startswith("#"):
+            j -= 1
+            continue
+        if ln.startswith("@"):
+            if "fragment" in ln:
+                es_fragment = True
+            j -= 1
+            continue
+        break
     fin = len(lineas)
     for j in range(ini_def + 1, len(lineas)):
         ln = lineas[j]
         if not ln.strip():
             continue
-        # nueva declaracion top-level = corta el bloque
         if ln[0] not in (" ", "\t", ")", "]", "#"):
             fin = j
             break
-    # recortar lineas en blanco finales
     while fin > ini_def + 1 and not lineas[fin - 1].strip():
         fin -= 1
-    return (nombre, ini_def + 1, fin)
+    return (nombre, ini_def + 1, fin, es_fragment)
 
 
 @lru_cache(maxsize=1)
@@ -92,9 +104,10 @@ def _mapas_desarrollador() -> tuple[str, str, str, str, str]:
                         snippet_lines.append(f"{prefix} {j+1:>4}| {lineas[j]}")
                     mapa_snippets[k] = "\n".join(snippet_lines)
                     # funcion contenedora
-                    nombre, ini, fin = _funcion_contenedora(lineas, i)
+                    nombre, ini, fin, es_frag = _funcion_contenedora(lineas, i)
                     if nombre:
-                        mapa_funcion[k] = f"{nombre} ({rel}:{ini}-{fin})"
+                        tag = " [@st.fragment]" if es_frag else ""
+                        mapa_funcion[k] = f"{nombre} ({rel}:{ini}-{fin}){tag}"
                         key_a_func[k] = (nombre, rel)
 
     # Referencias: por cada key con func, buscar el nombre en todos los .py
@@ -163,6 +176,24 @@ def inject_element_inspector():
     estilos.py. Se mantienen tal cual.
     """
     mapa_codigo, mapa_estilos, mapa_snippets, mapa_funcion, mapa_refs = _mapas_desarrollador()
+    # session_state: snapshot no cacheado (cambia cada rerun). Se serializa a
+    # str truncado — solo para inspección; nunca para persistir.
+    import streamlit as st
+    _ss_snapshot: dict[str, str] = {}
+    try:
+        for _k, _v in st.session_state.items():
+            if not isinstance(_k, str) or _k.startswith("_"):
+                continue
+            try:
+                _s = repr(_v)
+            except Exception:
+                _s = f"<{type(_v).__name__}>"
+            if len(_s) > 80:
+                _s = _s[:77] + "..."
+            _ss_snapshot[_k] = _s
+    except Exception:
+        pass
+    mapa_ss = json.dumps(_ss_snapshot)
     components.html("""
     <script>
     (function() {
@@ -174,6 +205,7 @@ def inject_element_inspector():
         win.__inspectorMapaSnippets = __MAPA_SNIPPETS__;
         win.__inspectorMapaFuncion = __MAPA_FUNCION__;
         win.__inspectorMapaRefs    = __MAPA_REFS__;
+        win.__inspectorSS          = __MAPA_SS__;
 
         function buscarCodigo(key) {
             if (!key) return '';
@@ -190,6 +222,11 @@ def inject_element_inspector():
         function buscarRefs(key) {
             if (!key) return [];
             return win.__inspectorMapaRefs[key] || [];
+        }
+        function buscarSS(key) {
+            if (!key) return '';
+            var ss = win.__inspectorSS;
+            return ss.hasOwnProperty(key) ? ss[key] : '';
         }
         function buscarEstilos(key) {
             if (!key) return [];
@@ -243,8 +280,15 @@ def inject_element_inspector():
             var r = el.getBoundingClientRect();
             var cs = win.getComputedStyle(el);
             var pick = function(p) { return (cs.getPropertyValue(p) || '').trim(); };
+            // Coords absolutas (viewport). En cliente los top/left CSS pueden mentir
+            // por transform/position del padre; getBoundingClientRect es la verdad.
+            var coords = 'top=' + Math.round(r.top) + ' left=' + Math.round(r.left) +
+                         ' right=' + Math.round(r.right) + ' bottom=' + Math.round(r.bottom);
+            var vw = win.innerWidth, vh = win.innerHeight;
+            var visible = (r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw);
             return {
                 tamano: Math.round(r.width) + ' x ' + Math.round(r.height) + ' px',
+                coords: coords + (visible ? '' : ' (FUERA DEL VIEWPORT)'),
                 estilos: {
                     'font-size'   : pick('font-size'),
                     'color'       : pick('color'),
@@ -452,11 +496,13 @@ def inject_element_inspector():
             if (ctx.codigo)   lines.push('Declarado en: ' + ctx.codigo);
             if (ctx.funcion)  lines.push('Funcion: ' + ctx.funcion);
             if (ctx.refs && ctx.refs.length) lines.push('Referencias (' + ctx.refs.length + '): ' + ctx.refs.join(', '));
+            if (ctx.ss !== undefined && ctx.ss !== '')  lines.push('session_state[' + key + '] = ' + ctx.ss);
             if (ctx.estilos && ctx.estilos.length) lines.push('Estilos: ' + ctx.estilos.join(', '));
             if (ctx.padre)    lines.push('Padre: st-key-' + ctx.padre);
             if (ctx.hermanos && ctx.hermanos.length) lines.push('Hermanos: ' + ctx.hermanos.join(', '));
             if (medidas) {
                 lines.push('Tamano actual: ' + medidas.tamano);
+                if (medidas.coords) lines.push('Coords viewport: ' + medidas.coords);
                 var e = medidas.estilos, partes = [];
                 for (var p in e) { if (e[p] && e[p] !== 'none' && e[p] !== '0px') partes.push(p + '=' + e[p]); }
                 if (partes.length) lines.push('Estilos computados: ' + partes.join(' | '));
@@ -941,10 +987,12 @@ def inject_element_inspector():
                 var keysCad = cadenaKeys(el);
                 var ctxFunc = buscarFuncion(ctxKey);
                 var ctxRefs = buscarRefs(ctxKey);
+                var ctxSS   = buscarSS(ctxKey);
                 var extras  = [];
                 if (ctxKey)         extras.push('  ' + 'codigo   : ' + (ctxCod || '(no encontrado)'));
                 if (ctxFunc)        extras.push('  ' + 'funcion  : ' + ctxFunc);
                 if (ctxRefs.length) extras.push('  ' + 'refs (' + ctxRefs.length + '): ' + ctxRefs.join(', '));
+                if (ctxSS !== '')   extras.push('  ' + 'session_state: ' + ctxSS);
                 if (ctxEst.length)  extras.push('  ' + 'estilos  : ' + ctxEst.join(', '));
                 else if (ctxKey)    extras.push('  ' + 'estilos  : (sin regla propia en estilos/)');
                 if (ctxRel.padre)   extras.push('  ' + 'padre    : ' + ctxRel.padre);
@@ -952,6 +1000,7 @@ def inject_element_inspector():
                                     extras.push('  ' + 'hermanos : ' + ctxRel.hermanos.join(', '));
                 if (medidas) {
                     extras.push('  ' + 'tamano   : ' + medidas.tamano);
+                    if (medidas.coords) extras.push('  ' + 'coords   : ' + medidas.coords);
                     var eM = medidas.estilos, partesM = [];
                     for (var pp in eM) { if (eM[pp] && eM[pp] !== 'none' && eM[pp] !== '0px') partesM.push(pp + '=' + eM[pp]); }
                     if (partesM.length) extras.push('  ' + 'estilos-computados:\\n     ' + partesM.join('\\n     '));
@@ -975,7 +1024,7 @@ def inject_element_inspector():
                     ctx: { codigo: ctxCod, estilos: ctxEst,
                            padre: ctxRel.padre, hermanos: ctxRel.hermanos,
                            snippet: ctxSnippet,
-                           funcion: ctxFunc, refs: ctxRefs },
+                           funcion: ctxFunc, refs: ctxRefs, ss: ctxSS },
                     medidas: medidas, pagina: pagina,
                     extras2: { testids: testids, clases: clases, keysCad: keysCad,
                                layoutPadre: lp, boxPadre: bp },
@@ -1046,5 +1095,5 @@ def inject_element_inspector():
 
     })();
     </script>
-    """.replace("__MAPA_CODIGO__", mapa_codigo).replace("__MAPA_ESTILOS__", mapa_estilos).replace("__MAPA_SNIPPETS__", mapa_snippets).replace("__MAPA_FUNCION__", mapa_funcion).replace("__MAPA_REFS__", mapa_refs),
+    """.replace("__MAPA_CODIGO__", mapa_codigo).replace("__MAPA_ESTILOS__", mapa_estilos).replace("__MAPA_SNIPPETS__", mapa_snippets).replace("__MAPA_FUNCION__", mapa_funcion).replace("__MAPA_REFS__", mapa_refs).replace("__MAPA_SS__", mapa_ss),
         height=0, scrolling=False)
