@@ -10,10 +10,25 @@ import streamlit as st
 
 
 from tema import ACENTO, GRIS_BORDE
-from graficos.base import PALETA_CALLAI, _card, _compras_layout, _compras_truncar, _resolver, renderizar_graficos_genericos
+from graficos.base import (
+    PALETA_CALLAI, _card, _compras_layout, _compras_truncar, _render_rail,
+    _resolver, renderizar_graficos_genericos,
+)
 
 _MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
              "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+
+# Rail vertical fijo al borde DERECHO (componente compartido _render_rail,
+# ver graficos/base.py) — reemplaza el st.pills que vivia ANTES en medio
+# del dashboard. Mismo patron que Compras/Ajuste.
+_VENTAS_RAIL_CATEGORIAS = (
+    ("Tiempo",   (("Venta por día",              "Por día"),
+                  ("Familia/Subfamilia semanal",  "Semanal"),
+                  ("Histórica subfamilia",        "Histórica"))),
+    ("Análisis", (("Matriz agrupada",     "Matriz"),
+                  ("Ranking & FoodCost",  "Ranking"))),
+    ("Datos",    (("Tabla",  "Tabla"),)),
+)
 
 
 @st.fragment
@@ -640,9 +655,14 @@ def _ventas_ranking_foodcost(d, col_venta, col_costo, col_cant,
         st.caption("Mostrando top 30 productos por venta actual.")
 
 
-def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
+def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None):
     """Dashboard de Ventas: venta por día, familia/subfamilia por semana,
-    e histórica de subfamilia. Columnas reales del parquet de ventas."""
+    e histórica de subfamilia. Columnas reales del parquet de ventas.
+
+    `tabla_cb`: callback que arma la Tabla (inyectado por app.py — igual que
+    Ajuste). Se le pasa `d`, el df YA filtrado por los chips propios de
+    Ventas (Grupo/Sub Grupo/Canal/Servicio) — reusarlo evita que la Tabla
+    tenga un estado de filtros distinto al de los gráficos."""
     col_venta = _resolver(df_f, ["Venta Item Ddocumento", "Venta_Item_Ddocumento",
                                  "Neto Total Item Ddocumento", "Venta"])
     col_fam   = _resolver(df_f, ["Grupo"])
@@ -729,13 +749,15 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None):
 
     _venta = pd.to_numeric(d[col_venta], errors="coerce").fillna(0)
 
-    opciones = ["Venta por día", "Familia/Subfamilia semanal",
-                "Histórica subfamilia", "Matriz agrupada",
-                "Ranking & FoodCost"]
+    graf = _render_rail(_VENTAS_RAIL_CATEGORIAS, "ventas_graf_tipo",
+                        btn_prefix="ventas_rail_btn_")
 
-    graf = st.pills("Gráfico", opciones, default=opciones[0],
-                    key="ventas_graf_tipo",
-                    label_visibility="collapsed") or opciones[0]
+    if graf == "Tabla":
+        if tabla_cb is not None:
+            tabla_cb(d)
+        else:
+            st.info("La tabla no está disponible en este contexto.")
+        return
 
     with st.container(border=True, key="ajuste_graf_card_izq_ventas"):
 

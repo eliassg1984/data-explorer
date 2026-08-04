@@ -433,11 +433,11 @@ if True:
         with col_titulo:
             # Título oculto por pedido: en su lugar van las pestañas
             # Gráficos/Tabla (misma key vista_seg_<reporte> → mismo estado).
-            # Requerimientos no las tiene. Compras y Ajuste usan el RAIL
-            # derecho (la "Tabla" es un item del rail), así que tampoco
+            # Requerimientos no las tiene. Compras, Ajuste y Ventas usan el
+            # RAIL derecho (la "Tabla" es un item del rail), así que tampoco
             # dibujan estas pills.
             if reporte not in ("Requerimientos", "Compras",
-                               "Ajuste de Inventario"):
+                               "Ajuste de Inventario", "Ventas"):
                 render_vista_pills(reporte, default=_vista_default)
         with col_fecha_top:
             if _franja_con_fecha:
@@ -888,7 +888,23 @@ def _render_contenido():
         renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df,
                                     tabla_cb=_ajuste_tabla_cb)
 
-    # ── RESTO DE REPORTES (Salidas, R. Base, R. Venta, Ventas, …) ──────────
+    # ── VENTAS — layout con rail derecho (como Ajuste) ──────────────────────
+    elif reporte == "Ventas":
+        # A diferencia de Ajuste, Ventas filtra su propio df ANTES de llegar
+        # acá (chips Grupo/Sub Grupo/Canal/Servicio, dentro de
+        # graficos/ventas.py) — el callback recibe `d` YA filtrado y solo
+        # tiene que dibujar la tabla con él, para no tener un segundo estado
+        # de filtros independiente del de los gráficos.
+        def _ventas_tabla_cb(d):
+            if d.empty:
+                st.info("Ningún registro coincide con los filtros seleccionados.")
+            else:
+                _render_tabla(d)
+
+        renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df,
+                                    tabla_cb=_ventas_tabla_cb)
+
+    # ── RESTO DE REPORTES (Salidas, R. Base, R. Venta, …) ────────────────────
     else:
         vista = st.session_state.get(f"vista_seg_{reporte}", _vista_default) or _vista_default
         if vista == "Tabla":
