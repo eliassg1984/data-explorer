@@ -33,17 +33,21 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         gran = st.pills("Agrupar por", ["Semana", "Mes", "Año"],
-                        default="Mes", key="compras_fam_gran") or "Mes"
+                        default="Mes", key="compras_fam_gran",
+                        label_visibility="collapsed") or "Mes"
     with c2:
         vista = st.pills("Vista", ["Apilado", "Agrupado"],
-                         default="Apilado", key="compras_fam_vista") or "Apilado"
+                         default="Apilado", key="compras_fam_vista",
+                         label_visibility="collapsed") or "Apilado"
     with c3:
         _meas = ["Valor S/"] + (["Cantidad"] if col_cant else [])
         meas = st.pills("Medir", _meas, default="Valor S/",
-                        key="compras_fam_meas") or "Valor S/"
+                        key="compras_fam_meas",
+                        label_visibility="collapsed") or "Valor S/"
     with c4:
         topn = st.pills("Top", [5, 10, 20], default=10,
-                        key="compras_fam_topn") or 10
+                        key="compras_fam_topn",
+                        label_visibility="collapsed") or 10
 
     es_valor = (meas == "Valor S/")
     fe = pd.to_datetime(d[col_fecha], errors="coerce")
