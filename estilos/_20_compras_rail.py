@@ -116,11 +116,12 @@ CSS = """    /* ================================================================
        fondo gris del canvas. Scopeado con :has(.st-key-app_reporte_compras)
        — un marker inyectado desde app.py cuando reporte=="Compras". Antes
        usaba :has(.st-key-compras_tabs_row), pero esa key es del rail
-       compartido y matcheaba tambien Ajuste. Ver arquitectura.md regla #16. */
+       compartido y matcheaba tambien Ajuste. Ver arquitectura.md regla #16.
+
+       La transparencia ya es el DEFAULT (estilos/_40_ajuste_franja.py) —
+       aca solo quedan los 2 ajustes que Compras necesita de mas por tener
+       el rail derecho: franja mas baja y que no invada el rail. */
     [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras) .st-key-fila_ajuste_top::before {
-        background: transparent !important;
-        border-bottom: none !important;
-        box-shadow: none !important;
         height: 34px !important;
         right: 84px !important;    /* que la franja no invada el rail derecho */
     }

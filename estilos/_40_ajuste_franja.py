@@ -1,7 +1,16 @@
-"""estilos._40_ajuste_franja - Franja blanca superior de Ajuste de Inventario y los chips de filtro que viven en ella (Area / Familia / Ajuste).
+"""estilos._40_ajuste_franja - Franja superior TRANSPARENTE (todos los reportes)
+y los chips de filtro que viven en ella (Area / Familia / Ajuste / lo que
+aplique por reporte).
 
 Extraido de estilos.py (lineas 898-1083 del original).
 El orden respecto a estilos/__init__.py es parte del comportamiento del CSS.
+
+La franja es transparente por DEFECTO desde 2026-08-04 (antes solo lo era
+en Compras/Ajuste via overrides :has() — ver arquitectura.md regla #16 y
+el commit que generalizo esto). Compras tiene su PROPIO override adicional
+en estilos/_20_compras_rail.py (achica la franja a 34px y corre el right
+por su rail) porque ya tiene el rail derecho; el resto de reportes usa
+--cab-altura (50px) tal cual.
 """
 
 CSS = """    /* =================================================================== */
@@ -25,23 +34,10 @@ CSS = """    /* ================================================================
         left: 90px !important;      /* comienza inmediatamente tras el rail */
         right: 0 !important;
         height: var(--cab-altura) !important;
-        background: #ffffff !important;
-        border-bottom: 1px solid var(--border) !important;
-        box-shadow: 0 2px 4px rgba(16, 16, 20, 0.04) !important;
-        z-index: 0 !important;
-    }
-    /* En Ajuste de Inventario, igual que en Compras, la franja blanca se
-       vuelve TRANSPARENTE: los chips (Área/Familia) y la fecha flotan sobre el
-       fondo gris del canvas. Solo se anulan las 3 props VISIBLES (fondo, borde,
-       sombra); alto/left/right/z-index se dejan en el default de arriba — el
-       ::before es fixed y decorativo, así que su geometría ya no importa una
-       vez invisible, y tocarla podría mover el layout sin necesidad. Scopeado
-       al marker app_reporte_ajuste_de_inventario (ver arquitectura.md regla
-       #16); la regla gemela de Compras vive en estilos/_20_compras_rail.py. */
-    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_ajuste_de_inventario) .st-key-fila_ajuste_top::before {
         background: transparent !important;
         border-bottom: none !important;
         box-shadow: none !important;
+        z-index: 0 !important;
     }
     .st-key-fila_ajuste_top > * {
         position: relative !important;
