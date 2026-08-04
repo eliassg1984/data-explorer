@@ -7,8 +7,9 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+from plotly.subplots import make_subplots
 
-
+from data import cargar as _cargar_reporte
 from tema import ACENTO, GRIS_BORDE
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, _render_rail,
@@ -23,6 +24,7 @@ _MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
 # del dashboard. Mismo patron que Compras/Ajuste.
 _VENTAS_RAIL_CATEGORIAS = (
     ("Tiempo",   (("Venta por día",              "Por día"),
+                  ("Venta vs Compra",            "Vs Compra"),
                   ("Familia/Subfamilia semanal",  "Semanal"),
                   ("Histórica subfamilia",        "Histórica"))),
     ("Análisis", (("Matriz agrupada",     "Matriz"),
@@ -106,6 +108,97 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
     )
     st.plotly_chart(fig, use_container_width=True, key="ventas_g_dia")
+
+
+def _ventas_cargar_compra_diaria(dia_min, dia_max):
+    """Compra por día, acotada a [dia_min, dia_max] (el rango de días que
+    ya tiene la vista de Ventas). Carga compras.parquet APARTE — Ventas y
+    Compras son reportes independientes, sin llave compartida más que la
+    fecha, así que esto es el gasto TOTAL en compras ese día, no el costo
+    de lo que se vendió ese día (una compra de insumos no se vende
+    necesariamente el mismo día). Sirve para comparar flujo de compra vs
+    venta, no como margen exacto por transacción. Los chips de Ventas
+    (Grupo/Sub Grupo/Canal/Servicio) no aplican acá: son categorías de
+    venta, sin equivalente en compras.parquet.
+    Retorna None si compras.parquet no está disponible o le faltan las
+    columnas de fecha/valor (mismo criterio de resolución que
+    graficos/compras/__init__.py)."""
+    df_c = _cargar_reporte("compras.parquet")
+    if df_c is None or df_c.empty:
+        return None
+    col_fecha_c = _resolver(df_c, ["Fecha_documento", "Fecha documento",
+                                   "Fecha_registro", "Fecha registro", "FECHA"])
+    col_valor_c = _resolver(df_c, ["Valor_compra", "Valor compra",
+                                   "Importe Total", "Valorizado"])
+    if not col_fecha_c or not col_valor_c:
+        return None
+    _fe = pd.to_datetime(df_c[col_fecha_c], errors="coerce").dt.normalize()
+    _val = pd.to_numeric(df_c[col_valor_c], errors="coerce").fillna(0)
+    g_c = pd.DataFrame({"dia": _fe, "compra": _val}).dropna(subset=["dia"])
+    g_c = g_c[(g_c["dia"] >= dia_min) & (g_c["dia"] <= dia_max)]
+    if g_c.empty:
+        return None
+    return g_c.groupby("dia", as_index=False)["compra"].sum()
+
+
+@st.fragment
+def _ventas_venta_compra_dia(g, hay_costo, hay_compra, hay_pax):
+    """'Venta vs Compra' — línea de Venta/Costo/Compra arriba + barras de
+    Pax abajo en un subplot separado (mismo espíritu que un gráfico
+    bursátil: precio arriba, volumen abajo). A diferencia de "Venta por
+    día" (barras, Pax en eje secundario), esta vista es toda líneas y dos
+    paneles — vive aparte para no tocar la vista que ya se usaba."""
+    _opts = ["Venta"]
+    if hay_costo:
+        _opts.append("Costo")
+    if hay_compra:
+        _opts.append("Compra")
+    sel = st.pills(
+        "Métricas", _opts, selection_mode="multi", default=list(_opts),
+        key="ventas_vc_metricas", label_visibility="collapsed",
+    ) or ["Venta"]
+
+    rows = 2 if hay_pax else 1
+    row_heights = [0.72, 0.28] if hay_pax else [1.0]
+    fig = make_subplots(rows=rows, cols=1, shared_xaxes=True,
+                        row_heights=row_heights, vertical_spacing=0.06)
+
+    _colores = {"Venta": ACENTO, "Costo": PALETA_CALLAI[1], "Compra": PALETA_CALLAI[2]}
+    for _serie, _col in (("Venta", "venta"), ("Costo", "costo"), ("Compra", "compra")):
+        if _serie in sel and _col in g.columns:
+            fig.add_trace(go.Scatter(
+                x=g["dia"], y=g[_col], name=_serie, mode="lines+markers",
+                line=dict(color=_colores[_serie], width=2.2),
+                marker=dict(size=5),
+                hovertemplate=("%{x|%d/%m/%Y}<br>" + _serie
+                               + ": S/ %{y:,.2f}<extra></extra>"),
+            ), row=1, col=1)
+
+    if hay_pax:
+        fig.add_trace(go.Bar(
+            x=g["dia"], y=g["pax"], name="Pax",
+            marker=dict(color=GRIS_BORDE),
+            hovertemplate="%{x|%d/%m/%Y}<br>Pax: %{y:,.0f}<extra></extra>",
+        ), row=2, col=1)
+
+    _compras_layout(fig, alto=560 if hay_pax else 460)
+    fig.update_layout(
+        title="Venta vs Compra por día",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+    )
+    fig.update_xaxes(
+        type="date", tickmode="linear", tick0=g["dia"].min(),
+        dtick=86400000.0, tickformat="%d/%m", tickangle=-45,
+        tickfont=dict(size=10), row=rows, col=1,
+    )
+    fig.update_yaxes(tickprefix="S/ ", tickformat=",.0f", row=1, col=1)
+    if hay_pax:
+        fig.update_yaxes(tickformat=",.0f", title="Pax", row=2, col=1)
+    if not hay_compra:
+        st.caption("Sin datos de Compra para este rango de fechas (o a "
+                   "compras.parquet le faltan las columnas de fecha/valor) "
+                   "— se omite esa serie.")
+    st.plotly_chart(fig, use_container_width=True, key="ventas_g_vc_dia")
 
 
 @st.fragment
@@ -801,6 +894,51 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                 st.info("Sin fechas válidas en el rango.")
             else:
                 _ventas_grafico_dia(g, col_costo, col_pax)
+
+        # ── 1b) Venta vs Compra por día (líneas arriba, Pax en barras abajo) ─
+        # Vista aparte de "Venta por día": mismo espíritu que un gráfico
+        # bursátil (precio arriba, volumen abajo). Compra viene de
+        # compras.parquet, un reporte independiente — ver el docstring de
+        # _ventas_cargar_compra_diaria sobre qué significa (y qué NO significa)
+        # cruzarlo por fecha con Venta.
+        elif graf == "Venta vs Compra" and col_fecha:
+            _fe = pd.to_datetime(d[col_fecha], errors="coerce").dt.normalize()
+
+            _base = pd.DataFrame({"dia": _fe, "venta": _venta})
+            if col_costo:
+                _base["costo"] = pd.to_numeric(d[col_costo], errors="coerce").fillna(0)
+            _base = _base.dropna(subset=["dia"])
+            _agg = {c: "sum" for c in _base.columns if c != "dia"}
+            g = _base.groupby("dia", as_index=False).agg(_agg).sort_values("dia")
+
+            if col_pax:
+                _pdf = pd.DataFrame({
+                    "dia": _fe,
+                    "pax": pd.to_numeric(d[col_pax], errors="coerce").fillna(0),
+                })
+                if col_pedido:
+                    _pdf["ped"] = d[col_pedido].astype(str)
+                    _pdf = _pdf.dropna(subset=["dia"])
+                    _pax_dia = (_pdf.groupby(["dia", "ped"], as_index=False)["pax"]
+                                .max()
+                                .groupby("dia", as_index=False)["pax"].sum())
+                else:
+                    _pdf = _pdf.dropna(subset=["dia"])
+                    _pax_dia = _pdf.groupby("dia", as_index=False)["pax"].sum()
+                g = g.merge(_pax_dia, on="dia", how="left")
+                g["pax"] = g["pax"].fillna(0)
+
+            if g.empty:
+                st.info("Sin fechas válidas en el rango.")
+            else:
+                g_compra = _ventas_cargar_compra_diaria(g["dia"].min(), g["dia"].max())
+                hay_compra = g_compra is not None
+                if hay_compra:
+                    g = g.merge(g_compra, on="dia", how="left")
+                    g["compra"] = g["compra"].fillna(0)
+                _ventas_venta_compra_dia(
+                    g, hay_costo=bool(col_costo), hay_compra=hay_compra,
+                    hay_pax=bool(col_pax))
 
         # ── 2) Venta por familia/subfamilia por semana ──────────────────
         elif graf == "Familia/Subfamilia semanal" and col_fecha and col_fam:

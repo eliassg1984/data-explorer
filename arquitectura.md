@@ -451,3 +451,51 @@ salvo `icono`):
     columnas propias, sumale su rama en `_datos_demo` en el mismo commit**
     — si no, nadie puede verificar el layout en local sin secrets R2 (ver
     "Auditar el layout" en `CLAUDE.md`).
+
+22. **Un dashboard puede cargar el parquet de OTRO reporte — primer caso:
+    "Venta vs Compra" en Ventas (2026-08-04)** (`graficos/ventas.py`).
+    Hasta ahora cada dashboard vivía enteramente dentro de los datos de su
+    propio reporte (`df_f`); esta vista es la primera excepción: llama
+    `data.cargar("compras.parquet")` directamente (no hay `df_f` de Compras
+    disponible en el contexto de Ventas) y agrega el valor de compra por
+    día, acotado al rango de fechas que ya tiene la vista de Ventas
+    (`_ventas_cargar_compra_diaria`). **Es un cruce por FECHA únicamente**
+    — Compras y Ventas no comparten ninguna llave — así que "Compra" es el
+    gasto TOTAL en compras ese día, NO el costo de lo que se vendió ese día
+    (una compra de insumos no se vende necesariamente el mismo día). Si
+    compras.parquet no tiene datos en el rango, o le faltan las columnas
+    de fecha/valor, la serie se omite en silencio (con un `st.caption`
+    explicando por qué) — no rompe el resto del gráfico. Como `cargar()`
+    ya cachea con `@st.cache_data`, este segundo load no es más caro que
+    visitar el reporte Compras por separado.
+    La vista es NUEVA (`("Venta vs Compra", "Vs Compra")` en
+    `_VENTAS_RAIL_CATEGORIAS`), no reemplaza "Venta por día" — mismo
+    espíritu que un gráfico bursátil (líneas de Venta/Costo/Compra arriba,
+    Pax en barras en un subplot separado abajo, vía
+    `plotly.subplots.make_subplots`), a diferencia de "Venta por día" que
+    usa barras agrupadas + Pax en eje secundario. Con Costo/Compra/Pax
+    ausentes, cae a un gráfico de una sola línea (Venta) sin romperse.
+    **Datos demo de Ventas:** no existían (`ventas.parquet` caía en la
+    rama genérica y por eso el dashboard entero mostraba el explorador
+    genérico en modo demo — un gap preexistente, no de este cambio). Se
+    agregó una rama dedicada con las columnas reales (`Fec Reg Documento`,
+    `Venta Item Ddocumento`, `Precio Costo`, `Cant Pax`, `Llave Local
+    Pedido`, `Grupo`, `Sub Grupo`, `Nomb Item Venta`,
+    `Cantidad Item Ddocumento`) — con una particularidad: **Ventas usa
+    `carga_por_rango`, así que a diferencia de TODOS los demás datos demo
+    (fechas fijas en 2024/2025), este ancla las fechas a `pd.Timestamp.now()`**.
+    Si no fuera así, la carga inicial (rango por defecto "01-del-mes-actual
+    → hoy") no encontraría ninguna fila y la app cortaría con "no se
+    pudieron cargar los datos" antes de llegar a ningún dashboard.
+    **Bug preexistente descubierto de paso (no corregido, solo documentado):**
+    `data.py::_cargar_rango_cacheable`, rama demo, filtra por una columna
+    llamada literalmente `"Fecha"` (`col = "Fecha" if "Fecha" in df.columns
+    else None`) — funciona por coincidencia con la rama demo genérica
+    (que sí se llama así) pero NO reconoce `"Fec Reg Documento"` (el
+    nombre real de Ventas) ni ninguna otra variante. Efecto: en modo demo,
+    el date-picker de Ventas es cosmético — la carga siempre devuelve el
+    dataset completo sin importar el rango elegido. No afecta producción
+    (ahí si usa el nombre real de columna vía DuckDB). Si alguna vez hace
+    falta que el rango sí filtre en demo, hay que resolver la columna con
+    `buscar_columna`/`_resolver` en vez de comparar el string fijo
+    `"Fecha"`.

@@ -286,7 +286,37 @@ def _datos_demo(archivo, filas=60):
         df["Valor Neto"] = (cant * precio).round(2)
         return df
 
-    # Reportes genéricos (Compras, Ventas, Requerimientos, etc.)
+    if archivo == "ventas.parquet":
+        # Ventas usa carga_por_rango (ver REPORTES): el rango por defecto es
+        # "01-del-mes-actual -> hoy", así que a diferencia del resto de los
+        # demos (fechas fijas en el pasado) este ancla al día de HOY o la
+        # carga inicial devuelve 0 filas y la app corta con "no se pudieron
+        # cargar los datos" antes de llegar a ningún dashboard.
+        n_pedidos = 40
+        fechas_pedido = pd.date_range(end=pd.Timestamp.now().normalize(),
+                                      periods=n_pedidos, freq="D")
+        pax_pedido = rng.integers(1, 12, n_pedidos)
+        lineas_pedido = rng.integers(1, 5, n_pedidos)
+        filas = []
+        for i in range(n_pedidos):
+            for _ in range(lineas_pedido[i]):
+                filas.append({
+                    "Fec Reg Documento": fechas_pedido[i],
+                    "Llave Local Pedido": f"PED{i:04d}",
+                    "Cant Pax": int(pax_pedido[i]),
+                    "Nomb Item Venta": f"Producto demo {rng.integers(0, 50):03d}",
+                    "Grupo": rng.choice(["Comida", "Bebida", "Postre"]),
+                    "Sub Grupo": rng.choice(["Tipo A", "Tipo B"]),
+                    "Cantidad Item Ddocumento": int(rng.integers(1, 5)),
+                })
+        df = pd.DataFrame(filas)
+        precio = rng.uniform(10, 80, len(df)).round(2)
+        df["Venta Item Ddocumento"] = (df["Cantidad Item Ddocumento"] * precio).round(2)
+        df["Precio Costo"] = (df["Venta Item Ddocumento"]
+                              * rng.uniform(0.25, 0.45, len(df))).round(2)
+        return df
+
+    # Reportes genéricos (Compras, Requerimientos, etc.)
     cant = rng.integers(1, 200, n)
     precio = rng.uniform(1, 80, n).round(2)
     df = pd.DataFrame({
