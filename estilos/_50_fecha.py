@@ -9,13 +9,20 @@ ver app.py). Debajo de 901px se mantiene el estilo "tab" original (degradado
 + borde inferior, posición vía _99_movil.py) sin cambios — no se tocó el
 móvil de ningún reporte en esta generalización.
 
-Compras es la única excepción con un addendum propio (scopeado
-:has(.st-key-app_reporte_compras)): min-width:230px en sus chips porque
-sabe que son exactamente 2 (Familia/Subfamilia). El resto de reportes deja
-que los chips midan su contenido — pueden ser más de 2 (ej. Ajuste con
-Área/Familia/Ajuste/Ajuste Valorizado) y forzar un ancho fijo ahí
+Compras, Inventario Valorizado y Salidas comparten un addendum propio
+(scopeado :has(.st-key-app_reporte_<slug>), uno por reporte): min-width:230px
+en sus chips porque los tres saben que tienen EXACTAMENTE 2 chips de filtro
+(Compras: Familia/Subfamilia; Inventario: Área/Familia; Salidas: Sub
+Almacén/Familia — el toggle de Métrica de Salidas no es un chip-popover, así
+que el selector `[data-testid="stPopover"] button` no lo alcanza y queda
+afuera). El resto de reportes deja que los chips midan su contenido —
+pueden ser más de 2 (ej. Ajuste con Área/Familia/Ajuste/Ajuste Valorizado,
+o Ventas con Grupo/Sub Grupo/Canal/Servicio) y forzar un ancho fijo ahí
 desbordaría. Ninguno usa la key del rail (compras_tabs_row) — esa es
 compartida entre reportes y filtraba mal. Ver arquitectura.md regla #16.
+Antes de sumar un reporte nuevo a esta lista: contar cuántos
+`st.popover(...)` de chip tiene en su franja — si son más de 2, NO
+agregarlo (ver regla #21 en arquitectura.md).
 
 Extraido de estilos.py (lineas 1084-1280 del original).
 El orden respecto a estilos/__init__.py es parte del comportamiento del CSS.
@@ -144,11 +151,17 @@ CSS = """    /* ================================================================
             [data-testid="stPopover"] button:hover {
             background: var(--accent-tint, #EEEDFE) !important;
         }
-        /* Addendum solo Compras: sabe que son exactamente 2 chips
-           (Familia/Subfamilia) y les fuerza un ancho uniforme parejo al
-           de la fecha. El resto de reportes deja que cada chip mida su
-           contenido (pueden ser más de 2 — ej. Ajuste). */
+        /* Addendum de los reportes con EXACTAMENTE 2 chips de filtro
+           (Compras, Inventario Valorizado, Salidas): ancho uniforme parejo
+           al de la fecha. El resto deja que cada chip mida su contenido
+           (pueden ser más de 2 — ej. Ajuste con 4, Ventas con 4). */
         [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
+            .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
+            [data-testid="stPopover"] button,
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_inventario_valorizado)
+            .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
+            [data-testid="stPopover"] button,
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_salidas)
             .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
             [data-testid="stPopover"] button {
             min-width: 230px !important;

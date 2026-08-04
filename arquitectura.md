@@ -334,12 +334,15 @@ salvo `icono`):
     había dos bloques casi-duplicados scopeados con `:has(.st-key-app_reporte_compras)`
     y `:has(.st-key-app_reporte_ajuste_de_inventario)`; se colapsaron en uno
     solo (gated `@media (min-width: 901px)`, sin scope de reporte) porque los
-    8 reportes comparten los mismos containers (regla #16). Compras conserva
-    un addendum propio — sabe que tiene exactamente 2 chips (Familia/Subfamilia)
-    y les fuerza `min-width:230px`; el resto deja que cada chip mida su
-    contenido, porque puede haber más de 2 (Ajuste tiene 4). El móvil
-    (`max-width:900px`) no se tocó en esta generalización: sigue siendo el
-    estilo "tab" original en todos los reportes.
+    8 reportes comparten los mismos containers (regla #16). Compras,
+    Inventario Valorizado y Salidas (desde 2026-08-04) conservan un addendum
+    propio — cada uno sabe que tiene exactamente 2 chips-popover de filtro
+    (Compras: Familia/Subfamilia; Inventario: Área/Familia; Salidas: Sub
+    Almacén/Familia) y les fuerza `min-width:230px`; el resto deja que cada
+    chip mida su contenido, porque puede haber más de 2 (Ajuste tiene 4,
+    Ventas tiene 4). El móvil (`max-width:900px`) no se tocó en esta
+    generalización: sigue siendo el estilo "tab" original en todos los
+    reportes.
     **Regla:** si agregás una regla que hoy solo aplica a Compras o Ajuste
     sobre `fila_ajuste_top`/`fecha_ajuste_pill`/`chips_ajuste_tabla`,
     preguntate primero si en realidad es universal (va en el bloque sin
