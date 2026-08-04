@@ -16,6 +16,7 @@ Estructura:
                           Era un compras.py de 2.835 líneas hasta 2026-08-01.
         ventas.py      → dashboard Ventas (ranking FoodCost, matriz agrupada)
         inventario.py  → dashboard Inventario Valorizado (v2)
+        salidas.py     → dashboard Salidas (evolución + subalmacén + tipo)
         constructor.py → constructor estilo Power BI (usado por Compras)
         legacy.py      → Inventario Valorizado v1 (respaldo, no en la ruta activa)
 
@@ -42,6 +43,7 @@ from graficos.ajuste import renderizar_graficos_ajuste                # noqa: F4
 from graficos.compras import renderizar_graficos_compras              # noqa: F401
 from graficos.inventario import renderizar_graficos_inventario        # noqa: F401
 from graficos.recetaventa import renderizar_graficos_recetaventa      # noqa: F401
+from graficos.salidas import renderizar_graficos_salidas              # noqa: F401
 from graficos.ventas import renderizar_graficos_ventas                # noqa: F401
 # legacy.renderizar_graficos NO se re-exporta: ya no se usa desde fuera.
 
@@ -63,6 +65,7 @@ _DASHBOARDS = {
     "Compras":               renderizar_graficos_compras,
     "Inventario Valorizado": renderizar_graficos_inventario,
     "Receta Venta":          renderizar_graficos_recetaventa,
+    "Salidas":               renderizar_graficos_salidas,
     "Ventas":                renderizar_graficos_ventas,
 }
 
@@ -77,20 +80,21 @@ def renderizar_graficos_reporte(df_f, reporte, cfg, df_full=None, tabla_cb=None)
         Solo Ajuste lo usa (pestaña Histórico); los demás lo ignoran.
     tabla_cb: callback que renderiza la tabla AgGrid del reporte. Lo usan
         los dashboards con rail donde "Tabla" es un item más (hoy Ajuste,
-        Ventas, Inventario Valorizado y Receta Venta; el patrón estándar a
-        futuro). Los demás lo ignoran. La FIRMA del callback la decide cada
-        dashboard (documentado en su docstring): Ajuste y Receta Venta lo
-        llaman sin args (no tienen chips propios — usan los genéricos de
-        app.py); Ventas e Inventario Valorizado le pasan `d` — el df ya
-        filtrado por sus propios chips (dentro de cada módulo) para que la
-        Tabla no tenga un estado de filtros distinto al de los gráficos.
+        Ventas, Inventario Valorizado, Receta Venta y Salidas; el patrón
+        estándar a futuro). Los demás lo ignoran. La FIRMA del callback la
+        decide cada dashboard (documentado en su docstring): Ajuste y
+        Receta Venta lo llaman sin args (no tienen chips propios — usan
+        los genéricos de app.py); Ventas, Inventario Valorizado y Salidas
+        le pasan `d` — el df ya filtrado por sus propios chips (dentro de
+        cada módulo) para que la Tabla no tenga un estado de filtros
+        distinto al de los gráficos.
     """
     render = _DASHBOARDS.get(reporte)
     if render is not None:
         # Solo los dashboards migrados al rail aceptan tabla_cb; el resto
         # conserva su firma antigua (la vista Tabla la maneja app.py).
         if reporte in ("Ajuste de Inventario", "Ventas",
-                      "Inventario Valorizado", "Receta Venta"):
+                      "Inventario Valorizado", "Receta Venta", "Salidas"):
             render(df_f, reporte, df_full=df_full, tabla_cb=tabla_cb)
         else:
             render(df_f, reporte, df_full=df_full)

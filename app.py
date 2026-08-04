@@ -645,15 +645,6 @@ def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, fon
         )
 
 
-def _es_moneda(nombre):
-    n = str(nombre).lower()
-    return any(k in n for k in ("importe", "total", "monto", "precio", "costo", "unitario"))
-
-def _es_cantidad(nombre):
-    n = str(nombre).lower()
-    return any(k in n for k in ("cantidad", "unidades", "qty", "stock"))
-
-
 # ===========================================================================
 # CHIPS DE FILTRO EXTERNOS — Tabla de Ajuste de Inventario
 # ===========================================================================
@@ -778,28 +769,6 @@ def _render_tabla(df_data=None):
             _df[cols_finales], grupos_sel, cols_mostrar, reporte, font_px,
             cols_visibles=cols_visibles,
         )
-
-
-def _render_kpis_salidas(df_data):
-    """Renderiza las métricas KPI para el reporte de Salidas."""
-    cols_imp = [c for c in df_data.columns
-                if pd.api.types.is_numeric_dtype(df_data[c]) and _es_moneda(c)]
-    cols_cnt = [c for c in df_data.columns
-                if pd.api.types.is_numeric_dtype(df_data[c]) and _es_cantidad(c)]
-    n_kpi = min(4, 1 + len(cols_imp[:2]) + len(cols_cnt[:1]))
-    kpis = st.columns(n_kpi)
-    kpis[0].metric("📄 Registros", f"{len(df_data):,}")
-    ki = 1
-    for c in cols_imp[:2]:
-        if ki >= n_kpi:
-            break
-        kpis[ki].metric(f"💰 {c}", f"S/ {df_data[c].sum():,.2f}")
-        ki += 1
-    for c in cols_cnt[:1]:
-        if ki >= n_kpi:
-            break
-        kpis[ki].metric(f"📦 {c}", f"{int(df_data[c].sum()):,}")
-        ki += 1
 
 
 # ===========================================================================
@@ -927,7 +896,22 @@ def _render_contenido():
         renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df,
                                     tabla_cb=_recetaventa_tabla_cb)
 
-    # ── RESTO DE REPORTES (Salidas, R. Base, …) — sin dashboard propio ───────
+    # ── SALIDAS — layout con rail derecho (como Ventas/Inventario) ──────────
+    elif reporte == "Salidas":
+        # Igual que Ventas/Inventario: el callback recibe `d`, ya filtrado
+        # por los chips propios (Sub Almacén/Familia, dentro de
+        # graficos/salidas.py) — así la Tabla no tiene un estado de filtros
+        # distinto al de los gráficos.
+        def _salidas_tabla_cb(d):
+            if d.empty:
+                st.info("Ningún registro coincide con los filtros seleccionados.")
+            else:
+                _render_tabla(d)
+
+        renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df,
+                                    tabla_cb=_salidas_tabla_cb)
+
+    # ── RESTO DE REPORTES (Receta Base, …) — sin dashboard propio ───────────
     else:
         # Mismo rail que el resto, con 2 items en vez del selector Gráficos/
         # Tabla que vivía en la franja: "Gráficos" cae al explorador genérico

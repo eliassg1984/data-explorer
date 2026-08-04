@@ -90,14 +90,16 @@ REPORTES = {
         "label_corto": "Salidas",
         "archivo": "salidas.parquet",
         "icono": "box-arrow-up",
-        # NOTA: estos nombres deben coincidir con las columnas reales de
-        # salidas.parquet. Si alguno no existe, la app solo muestra un aviso
-        # (no se rompe) y puedes ajustarlo aquí.
-        "filtros_cat": ["Nombre Area", "Nombre Familia"],
+        # Columnas confirmadas contra el parquet real (2026-08-04): destino
+        # de la salida es "Sub Almacen" (no "Nombre Area" — no hay tal
+        # columna en este reporte), cantidad/valorizado son "Cant Salida" /
+        # "Valor Neto", y el tipo de salida es "Tipo Descargo".
+        "fecha": "Fecha registro",
+        "filtros_cat": ["Sub Almacen", "Nombre Familia"],
         "buscador": "Nombre Producto",
-        "agrupar": ["Nombre Area", "Nombre Familia"],
+        "agrupar": ["Sub Almacen", "Nombre Familia", "Tipo Descargo"],
         "columnas_movil": [
-            "Nombre Producto", "Cantidad", "Importe Total", "Nombre Area",
+            "Nombre Producto", "Cant Salida", "Valor Neto", "Sub Almacen",
         ],
         "columnas_fijas_movil": 2,
     },
@@ -266,7 +268,23 @@ def _datos_demo(archivo, filas=60):
         df["Valorizado total"] = (df["Stock al Dia"] * df["Precio Promedio"]).round(2)
         return df
 
-    # Reportes genéricos (Compras, Ventas, Salidas, Requerimientos, etc.)
+    if archivo == "salidas.parquet":
+        cant = rng.integers(1, 60, n)
+        precio = rng.uniform(1, 80, n).round(2)
+        df = pd.DataFrame({
+            "Fecha registro": pd.date_range("2025-01-01", periods=n, freq="D"),
+            "Codigo Producto": [f"P{i:05d}" for i in range(n)],
+            "Nombre Producto": [f"Producto demo {i:03d}" for i in range(n)],
+            "Sub Almacen": rng.choice(["Cocina", "Bar", "Almacén Central", "Salón"], n),
+            "Nombre Familia": rng.choice(["Carnes", "Bebidas", "Verduras", "Abarrotes"], n),
+            "Tipo Descargo": rng.choice(["Consumo Interno", "Merma", "Transferencia"], n,
+                                        p=[0.55, 0.2, 0.25]),
+            "Cant Salida": cant,
+        })
+        df["Valor Neto"] = (cant * precio).round(2)
+        return df
+
+    # Reportes genéricos (Compras, Ventas, Requerimientos, etc.)
     cant = rng.integers(1, 200, n)
     precio = rng.uniform(1, 80, n).round(2)
     df = pd.DataFrame({

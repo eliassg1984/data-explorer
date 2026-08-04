@@ -21,7 +21,7 @@ actualiza este documento en el mismo commit.
 | `app.py` | Orquestador: navegación, filtros, fragmentos, llama a los renderizadores. |
 | `data.py` | Carga de datos: DuckDB + httpfs leyendo parquets de R2 (secrets). Sistema de refresco bajo demanda vía R2. |
 | `tablas/` | **Paquete de tablas AgGrid** (refactor 2026-08-01; antes un `tablas.py` de 2.028 líneas). `__init__.py` re-exporta la API pública. `_css.py` (CSS de grid y paneles), `_config.py` (estilos de celda/fila, sidebar, totales), `desktop.py` (`renderizar_aggrid_desktop`), `movil.py` (`renderizar_aggrid_movil`), `compras.py` (`renderizar_aggrid_compras` + `renderizar_tabla_compras`, esta última legacy y sin uso). |
-| `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `render_vista_pills`. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), `ajuste.py` (ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10), `ventas.py`, `inventario.py` (v2), `constructor.py` (Power BI, usado por Compras), `legacy.py` (Inventario v1, respaldo no re-exportado). **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py` — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
+| `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), `ajuste.py` (ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10), `ventas.py`, `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras), `legacy.py` (Inventario v1, respaldo no re-exportado). **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py` — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
 | `estilos/` | **Paquete del CSS global** (refactor 2026-08-01; antes un `estilos.py` de 1.700 líneas). `__init__.py` mantiene la API pública (`TAM_FUENTE`, `get_css`, `inject_css`) y concatena las secciones. Una sección por módulo, con prefijo numérico que marca el orden: `_00_base`, `_10_vista`, `_20_compras_rail`, `_30_filtros`, `_40_ajuste_franja`, `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`, `_90_franja_inferior`, `_99_movil`. **El orden de `_SECCIONES` es parte del comportamiento**: hay `!important` en ambos lados de varios conflictos, así que gana la regla que va DESPUÉS — por eso `_99_movil` cierra. |
 | `navegacion.py` | Rail lateral, topbar y CSS por sección (`_CSS_AJUSTE`). Botón de refresco aislado en su propio `@st.fragment`. |
 | `inyecciones/` | **Paquete de JS/HTML inyectado** (refactor 2026-08-01; antes un `inyecciones.py` de 1.813 líneas). `_fragmentos.py` (CSS/JS compartido), `grid.py` (salud, altura, maximizar, panel de columnas), `paginacion.py`, `inspector.py` (herramienta de desarrollo), `varios.py` (overlay de errores, fullscreen, footer, calendario). Ninguna función depende de otra: las únicas dependencias internas apuntan a las constantes de `_fragmentos.py`. |
@@ -350,19 +350,21 @@ salvo `icono`):
     — antes solo Compras y Ajuste. `render_vista_pills` (pestañas Gráficos/
     Tabla sueltas en la franja) se ELIMINÓ de `graficos/__init__.py`: ya no
     tiene caller. Si un reporte tiene dashboard propio (Ajuste, Compras,
-    Ventas, Inventario Valorizado, Receta Venta), "Tabla" es un item más del
-    rail. Si NO tiene dashboard (Salidas, Receta Base), el rail tiene 2 items
-    genéricos ("Gráficos" → `renderizar_graficos_reporte` sin entrada en
-    `_DASHBOARDS`, cae al explorador; "Tabla" → AgGrid). Requerimientos
-    (tabla pivote propia, sin graficos) tiene un rail de 1 solo item.
+    Ventas, Inventario Valorizado, Receta Venta, Salidas — desde 2026-08-04),
+    "Tabla" es un item más del rail. Si NO tiene dashboard (Receta Base), el
+    rail tiene 2 items genéricos ("Gráficos" → `renderizar_graficos_reporte`
+    sin entrada en `_DASHBOARDS`, cae al explorador; "Tabla" → AgGrid).
+    Requerimientos (tabla pivote propia, sin graficos) tiene un rail de 1
+    solo item.
     **El callback `tabla_cb` no tiene firma fija — cada dashboard documenta
     la suya en su docstring:**
     - Sin chips propios (Ajuste, Receta Venta): `tabla_cb()` sin args — usan
       los filtros genéricos que arma app.py (`_filtros_chips_franja`).
-    - Con chips propios (Ventas, Inventario Valorizado): `tabla_cb(d)` — se
-      les pasa el df YA filtrado por sus propios chips (definidos dentro del
-      módulo del dashboard), para que la Tabla no tenga un estado de filtros
-      distinto al de los gráficos. Ver `graficos/__init__.py::renderizar_graficos_reporte`.
+    - Con chips propios (Ventas, Inventario Valorizado, Salidas): `tabla_cb(d)`
+      — se les pasa el df YA filtrado por sus propios chips (definidos dentro
+      del módulo del dashboard), para que la Tabla no tenga un estado de
+      filtros distinto al de los gráficos. Ver
+      `graficos/__init__.py::renderizar_graficos_reporte`.
     **Antes de agregar un dashboard nuevo:** decidí si va a tener chips de
     filtro propios (entonces `tabla_cb(d)`) o no (entonces `tabla_cb()`) —
     mezclar los dos estilos en un mismo dashboard es la fuente de bugs más
@@ -414,3 +416,34 @@ salvo `icono`):
     de cuartiles/outliers tampoco lo lee un usuario de negocio sin
     entrenamiento — reemplazado por un strip plot (`px.strip`) coloreado por
     signo (rojo = faltante, verde = sobrante), sin estadística que explicar.
+
+21. **Columnas reales de `salidas.parquet` confirmadas 2026-08-04** (antes
+    `data.py` traía un supuesto sin verificar, con nota explícita de que
+    podía estar mal): `Fecha registro`, `Cant Salida`, `Valor Neto`,
+    `Tipo Descargo`, `Sub Almacen`, `Nombre Producto`. **No hay columna
+    `Nombre Area` en Salidas** — el destino de la salida es `Sub Almacen`
+    (a diferencia de Inventario/Ajuste, que sí usan `Nombre Area`); `Nombre
+    Familia` se mantiene sin confirmar contra el parquet real, con el mismo
+    fallback silencioso que el resto de `filtros_cat` (ver tabla de
+    "Configuración de reportes" arriba — si la columna no existe, el chip
+    correspondiente simplemente no aparece).
+    Con esas columnas, Salidas pasó de explorador genérico de un solo
+    gráfico a dashboard propio (`graficos/salidas.py`, mismo patrón que
+    `inventario.py`: chips Sub Almacén/Familia en la franja + toggle de
+    métrica Cantidad/Valorizado + rail con Evolución/Subalmacén/Tipo
+    descargo/Cruce/Top productos + Tabla). La granularidad Día/Semana/Mes/Año
+    de la vista Evolución reusa `_periodo_serie` de
+    `graficos/compras/_comun.py` (importado vía `graficos.compras`, que ya
+    la re-exporta para `test_graficos.py`) en vez de reimplementar el
+    cálculo de periodo.
+    **Datos demo:** `_datos_demo` (`data.py`) no tenía rama propia para
+    `salidas.parquet` — caía en la rama genérica con columnas que YA NO
+    coinciden (`Cantidad`/`Importe Total`/`Nombre Area` en vez de los
+    nombres reales de arriba), lo que hacía imposible probar el dashboard
+    en el preview local sin datos reales. Se agregó una rama dedicada
+    (mismo criterio que `inventariovalorizado.parquet`) con las columnas
+    reales, incluida `Tipo Descargo` con 3 valores de ejemplo (Consumo
+    Interno/Merma/Transferencia). **Si agregás un dashboard nuevo con
+    columnas propias, sumale su rama en `_datos_demo` en el mismo commit**
+    — si no, nadie puede verificar el layout en local sin secrets R2 (ver
+    "Auditar el layout" en `CLAUDE.md`).
