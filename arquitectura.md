@@ -299,3 +299,30 @@ salvo `icono`):
     `_20_compras_rail.py` no se veía y el diagnóstico apuntó al padre
     keyed / al inspector — cuando el problema era el cache sirviendo CSS
     viejo.
+
+16. **Keys "de reporte" vs keys "de componente compartido": no confundir al
+    scopear CSS con `:has()`.** Varias keys tienen nombres que sugieren un
+    reporte (`compras_tabs_row`, `chips_ajuste_tabla`, `fila_ajuste_top`)
+    pero en realidad son de componentes REUSADOS entre reportes:
+    - `compras_tabs_row` es la key del rail COMPARTIDO (Compras + Ajuste)
+      — ver el docstring en `graficos/base.py::_render_rail`.
+    - `chips_ajuste_tabla` es el contenedor de chips-filtro y se usa en
+      TODOS los reportes (Compras, Ajuste, Ventas, Inventario…).
+    - `fila_ajuste_top` es la franja superior de todos los reportes.
+
+    Consecuencia: un `:has(.st-key-compras_tabs_row) .st-key-chips_ajuste_tabla { transform: translateX(-50%) }`
+    pensado como "solo Compras" también matchea Ajuste y desplaza los chips
+    246px a la izquierda en el reporte equivocado (bug real 2026-08-03).
+
+    **Regla:** para scopear una regla a un reporte específico, usar el
+    marker `.st-key-app_reporte_<slug>` que `app.py` inyecta después de
+    determinar el reporte activo (`compras`, `ajuste_de_inventario`,
+    `ventas`, `inventario`, `requerimientos`). Ejemplo:
+    ```css
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
+        .st-key-chips_ajuste_tabla { ... }
+    ```
+    Cuando la regla SÍ es del componente compartido (p.ej. el rail en
+    móvil), sí conviene mantener `:has(.st-key-compras_tabs_row)` porque
+    describe "cuando el rail existe", no "cuando estamos en Compras" —
+    documentar el intent en el comentario para el próximo lector.

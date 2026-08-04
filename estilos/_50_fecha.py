@@ -1,4 +1,9 @@
-"""estilos._50_fecha - Pill de fecha del header y su variante de Compras (alineada a la izquierda, scopeada con :has(.st-key-compras_tabs_row)).
+"""estilos._50_fecha - Pill de fecha del header y su variante de Compras.
+
+La variante de Compras (fecha a la izquierda + chips centrados con fondo
+blanco) va scopeada con :has(.st-key-app_reporte_compras), NO con la key
+del rail (compras_tabs_row) — esa es compartida con Ajuste y filtraba mal.
+Ver arquitectura.md regla #16.
 
 Extraido de estilos.py (lineas 1084-1280 del original).
 El orden respecto a estilos/__init__.py es parte del comportamiento del CSS.
@@ -66,7 +71,7 @@ CSS = """    /* ================================================================
     /* En Compras la franja es MAS BAJA (34px, no 50px) — el ::before
        la sobreescribe directamente pero --cab-altura sigue en 50.
        Aquí re-alineamos el underline al borde real de esa franja. */
-    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
         .st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
         min-height: 26px !important;   /* 34px franja - 8px top */
     }
@@ -74,12 +79,12 @@ CSS = """    /* ================================================================
     /* ================================================================== */
     /* COMPRAS: fecha a la IZQUIERDA (alineada con la tarjeta) y chips     */
     /* Familia/Subfamilia al CENTRO con fondo blanco.                      */
-    /* Scopeado con :has(.st-key-compras_tabs_row) → no afecta otros       */
+    /* Scopeado con :has(.st-key-app_reporte_compras) → no afecta otros       */
     /* reportes.                                                           */
     /* ================================================================== */
     /* Solo cambia la POSICIÓN: fecha alineada con el borde izquierdo de la
        tarjeta (block-container padding-left ~16px sobre el rail 90px + aire). */
-    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
         .st-key-fecha_ajuste_pill {
         left: 175px !important;
         right: auto !important;
@@ -87,7 +92,7 @@ CSS = """    /* ================================================================
 
     /* Chips Familia/Subfamilia CENTRADOS en el ancho de la tarjeta
        (154px izquierda ↔ 131px derecha por el rail 116 + 15). */
-    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
         .st-key-chips_ajuste_tabla {
         left: calc((154px + (100vw - 131px)) / 2) !important;
         right: auto !important;
@@ -96,14 +101,14 @@ CSS = """    /* ================================================================
     }
     /* Fondo blanco (en vez del tinte lavanda) + más espacio interno a la
        derecha (chip más ancho y con aire tras el texto/badge). */
-    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
         .st-key-chips_ajuste_tabla [data-testid="stPopover"] button {
         background: #ffffff !important;
         min-width: 230px !important;   /* ≈ ancho del widget de fecha */
         padding-right: 22px !important;
         justify-content: flex-start !important;
     }
-    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
         .st-key-chips_ajuste_tabla [data-testid="stPopover"] button:hover {
         background: var(--accent-tint, #EEEDFE) !important;
     }
@@ -112,7 +117,7 @@ CSS = """    /* ================================================================
        Las reglas de arriba centran el bar (left/transform) y lo acotan con
        max-width:calc(100vw-665px) — que se vuelve NEGATIVA (→ colapsa a 0)
        por debajo de 665px — y estiran cada popover a min-width:230px. En
-       móvil el rail deja de ser fijo pero :has(.st-key-compras_tabs_row)
+       móvil el rail deja de ser fijo pero :has(.st-key-app_reporte_compras)
        SIGUE matcheando, así que esas reglas se cuelan y rompen el bar (chip
        estirado con un vacío al lado, o bar colapsado). Se neutralizan aquí:
        misma especificidad que las de arriba, pero DESPUÉS en el archivo para
@@ -121,14 +126,14 @@ CSS = """    /* ================================================================
        para subir la especificidad por encima de TODAS las reglas de desktop
        de arriba y ganar sin depender del orden de fuente. */
     @media (max-width: 900px) {
-        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
             .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
             left: auto !important;
             transform: none !important;
             max-width: none !important;
             width: auto !important;
         }
-        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
             .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
             [data-testid="stPopover"] button {
             min-width: 0 !important;
@@ -140,7 +145,7 @@ CSS = """    /* ================================================================
            con el rail horizontal. Aquí se vuelve a left:12px (clase duplicada
            para ganar especificidad) → la fecha se alinea con el borde
            izquierdo, igual que los filtros: los tres se leen como un grupo. */
-        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
             .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill {
             left: 12px !important;
             right: auto !important;
@@ -152,13 +157,13 @@ CSS = """    /* ================================================================
            que fecha + Familia + Subfamilia se lean como un bloque ordenado.
            Clase duplicada + :has para ganar a la regla 2×2 sin importar el
            orden de fuente. */
-        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
             .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
             [data-testid="stHorizontalBlock"] {
             justify-content: flex-start !important;
             gap: 8px !important;
         }
-        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
             .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
             [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
             flex: 0 0 auto !important;
@@ -169,7 +174,7 @@ CSS = """    /* ================================================================
            filtros. En producción el gap es ~32px; se jala la fila hacia arriba
            con margen negativo para dejar ~14px, sin tocar la fecha (bottom
            ~50px). Arrastra también todo lo de abajo → el gráfico sube. */
-        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
             .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
             margin-top: -18px !important;
         }

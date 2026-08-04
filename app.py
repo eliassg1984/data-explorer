@@ -130,6 +130,20 @@ inject_navegacion(REPORTES, reporte, mostrar_inspector=bool(st.query_params.get(
 
 cfg = REPORTES[reporte]
 
+# Marker de reporte activo en el DOM. Div vacio con la clase que Streamlit
+# usaria para st.container(key="..."), inyectado via st.markdown para no
+# ocupar altura. El CSS lo usa con :has() para scopear reglas a un reporte
+# especifico. Nace porque muchas keys "de compras" son en realidad de
+# componentes compartidos (compras_tabs_row del rail, chips_ajuste_tabla,
+# fila_ajuste_top): scopear con :has(.st-key-compras_tabs_row) se pensaba
+# como "solo Compras" pero tambien matcheaba en Ajuste y otros reportes que
+# usan el mismo rail. Ver arquitectura.md regla #16.
+_reporte_slug = reporte.lower().replace(" ", "_")
+st.markdown(
+    f'<div class="st-key-app_reporte_{_reporte_slug}" style="display:none"></div>',
+    unsafe_allow_html=True,
+)
+
 # ── VIGILAR REFRESCO PENDIENTE ──
 # Se llama SIEMPRE (aunque no haya nada pendiente todavía): así el fragment
 # queda montado desde el principio, escuchando solo con su propio run_every=4.

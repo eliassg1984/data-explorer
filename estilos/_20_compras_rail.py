@@ -113,15 +113,18 @@ CSS = """    /* ================================================================
 /* En Compras la franja blanca superior YA NO EXISTE — el ::before se
        vuelve transparente (sin fondo, sin border-bottom, sin shadow) para
        que los chips Familia/Subfamilia y la fecha floten directo sobre el
-       fondo gris del canvas. Scopeado con :has, no afecta a otros reportes. */
-    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row) .st-key-fila_ajuste_top::before {
+       fondo gris del canvas. Scopeado con :has(.st-key-app_reporte_compras)
+       — un marker inyectado desde app.py cuando reporte=="Compras". Antes
+       usaba :has(.st-key-compras_tabs_row), pero esa key es del rail
+       compartido y matcheaba tambien Ajuste. Ver arquitectura.md regla #16. */
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras) .st-key-fila_ajuste_top::before {
         background: transparent !important;
         border-bottom: none !important;
         box-shadow: none !important;
         height: 34px !important;
         right: 84px !important;    /* que la franja no invada el rail derecho */
     }
-    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row) .st-key-fila_ajuste_top {
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras) .st-key-fila_ajuste_top {
         padding-top: 2px !important;
     }
 
@@ -233,7 +236,11 @@ CSS = """    /* ================================================================
     /* 375px. En móvil el rail deja de estar fijo y se vuelve una tira      */
     /* horizontal scrollable arriba del dashboard; los botones quedan en    */
     /* fila (chips) y el contenido recupera todo el ancho. Scopeado con     */
-    /* :has(.st-key-compras_tabs_row) → no afecta otros reportes.           */
+    /* :has(.st-key-compras_tabs_row) — la key del RAIL COMPARTIDO, asi     */
+    /* aplica en Compras y Ajuste (ambos usan el rail) y no en Ventas /     */
+    /* Inventario / Requerimientos (que no lo usan). Esto es correcto: es   */
+    /* comportamiento "del rail", no "del reporte Compras" — para lo        */
+    /* segundo se usa :has(.st-key-app_reporte_compras). Ver regla #16.     */
     /* =================================================================== */
     @media (max-width: 900px) {
         /* El contenido recupera el ancho: fuera la reserva del rail. */
@@ -309,8 +316,9 @@ CSS = """    /* ================================================================
             margin-top: 0 !important;
         }
         /* La franja superior ya no debe esquivar el rail (que ya no está a
-           la derecha): que ocupe todo el ancho. */
-        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row) .st-key-fila_ajuste_top::before {
+           la derecha): que ocupe todo el ancho. Scopeado a app_reporte_compras
+           por el mismo motivo que la regla desktop de arriba. */
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras) .st-key-fila_ajuste_top::before {
             right: 0 !important;
         }
 

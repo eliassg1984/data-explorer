@@ -362,4 +362,13 @@ CSS = """    <style>
             font-size: 0.9rem !important;
         }
     }
+
+    /* Marker del reporte activo (ver app.py + arquitectura.md regla #16):
+       el div vive dentro de un stElementContainer que Streamlit envuelve;
+       el div en si ya tiene display:none pero el wrapper del elemento sigue
+       ocupando margin/padding vertical. Aca colapsamos el stElementContainer
+       entero cuando su unico proposito es contener el marker. */
+    [data-testid="stElementContainer"]:has(> [data-testid="stMarkdown"] [class*="st-key-app_reporte_"]) {
+        display: none !important;
+    }
 """
