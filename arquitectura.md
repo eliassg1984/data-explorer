@@ -420,13 +420,14 @@ salvo `icono`):
 21. **Columnas reales de `salidas.parquet` confirmadas 2026-08-04** (antes
     `data.py` traía un supuesto sin verificar, con nota explícita de que
     podía estar mal): `Fecha registro`, `Cant Salida`, `Valor Neto`,
-    `Tipo Descargo`, `Sub Almacen`, `Nombre Producto`. **No hay columna
+    `Tipo Descargo`, `Sub Almacen`, `Nombre Producto`, `Nombre Familia`,
+    `Nombre SubFamilia` (jerarquía `Nombre Familia` > `Nombre SubFamilia` >
+    `Nombre Producto`, igual que en Inventario). **No hay columna
     `Nombre Area` en Salidas** — el destino de la salida es `Sub Almacen`
-    (a diferencia de Inventario/Ajuste, que sí usan `Nombre Area`); `Nombre
-    Familia` se mantiene sin confirmar contra el parquet real, con el mismo
-    fallback silencioso que el resto de `filtros_cat` (ver tabla de
-    "Configuración de reportes" arriba — si la columna no existe, el chip
-    correspondiente simplemente no aparece).
+    (a diferencia de Inventario/Ajuste, que sí usan `Nombre Area`).
+    `Nombre SubFamilia` no tiene chip propio (el pedido original era
+    filtro de Área/Familia nada más) pero sí está en `agrupar`, para que
+    la Tabla pueda agruparse por ella.
     Con esas columnas, Salidas pasó de explorador genérico de un solo
     gráfico a dashboard propio (`graficos/salidas.py`, mismo patrón que
     `inventario.py`: chips Sub Almacén/Familia en la franja + toggle de

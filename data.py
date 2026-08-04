@@ -93,11 +93,12 @@ REPORTES = {
         # Columnas confirmadas contra el parquet real (2026-08-04): destino
         # de la salida es "Sub Almacen" (no "Nombre Area" — no hay tal
         # columna en este reporte), cantidad/valorizado son "Cant Salida" /
-        # "Valor Neto", y el tipo de salida es "Tipo Descargo".
+        # "Valor Neto", el tipo de salida es "Tipo Descargo", y la jerarquía
+        # de producto es Nombre Familia > Nombre SubFamilia > Nombre Producto.
         "fecha": "Fecha registro",
         "filtros_cat": ["Sub Almacen", "Nombre Familia"],
         "buscador": "Nombre Producto",
-        "agrupar": ["Sub Almacen", "Nombre Familia", "Tipo Descargo"],
+        "agrupar": ["Sub Almacen", "Nombre Familia", "Nombre SubFamilia", "Tipo Descargo"],
         "columnas_movil": [
             "Nombre Producto", "Cant Salida", "Valor Neto", "Sub Almacen",
         ],
@@ -277,6 +278,7 @@ def _datos_demo(archivo, filas=60):
             "Nombre Producto": [f"Producto demo {i:03d}" for i in range(n)],
             "Sub Almacen": rng.choice(["Cocina", "Bar", "Almacén Central", "Salón"], n),
             "Nombre Familia": rng.choice(["Carnes", "Bebidas", "Verduras", "Abarrotes"], n),
+            "Nombre SubFamilia": rng.choice(["Tipo A", "Tipo B", "Tipo C"], n),
             "Tipo Descargo": rng.choice(["Consumo Interno", "Merma", "Transferencia"], n,
                                         p=[0.55, 0.2, 0.25]),
             "Cant Salida": cant,
