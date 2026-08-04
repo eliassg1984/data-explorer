@@ -18,6 +18,13 @@ _KEY_CSS = re.compile(r"st-key-([A-Za-z0-9_]+)")
 _DEF_TOP = re.compile(r"^(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 # key=f"PREFIX_{...}" — detecta helpers que construyen keys con f-string.
 _KEY_FSTRING = re.compile(r"""key\s*=\s*f['"]([A-Za-z0-9]+)_\{""")
+# <var>key<var> = f"PREFIX_{...}"  o  key=f"PREFIX_{...}" — keys dinamicas
+# armadas con f-string. Captura el PREFIJO ESTATICO COMPLETO (incluye los '_'
+# internos y el '_' final) hasta la primera interpolacion {. Sirve de fallback
+# por prefijo cuando la key exacta no existe en el codigo (se arma en runtime,
+# ej: _tkey = f"compras_g_fam_time_{focus}_{gran}_{rst}").
+_KEY_FSTRING_PREFIJO = re.compile(
+    r"""\b(\w*key\w*)\s*=\s*f['"]([A-Za-z0-9_]+)\{""", re.IGNORECASE)
 
 
 def _slug_py(s: str) -> str:
@@ -89,11 +96,13 @@ def _norm_texto(s: str) -> str:
 
 
 @lru_cache(maxsize=1)
-def _mapas_desarrollador() -> tuple[str, str, str, str, str, str, str]:
+def _mapas_desarrollador() -> tuple[str, str, str, str, str, str, str, str]:
     """Devuelve mapas serializados a JSON:
-      codigo, estilos, snippets, funcion, refs, texto, construido.
+      codigo, estilos, snippets, funcion, refs, texto, construido, prefijos.
 
     mapa_construido: {key -> "helper(args) — archivo:linea"}  keys f-string
+    mapa_prefijos:   {prefijo_ -> {codigo, snippet, funcion, refs}} fallback
+                     por prefijo para keys dinamicas (f-string con vars runtime).
     """
     mapa_codigo: dict[str, str] = {}
     mapa_snippets: dict[str, str] = {}
@@ -101,6 +110,10 @@ def _mapas_desarrollador() -> tuple[str, str, str, str, str, str, str]:
     mapa_texto: dict[str, str] = {}
     # (nombre_func, archivo_def) por key -> se usa para calcular refs despues
     key_a_func: dict[str, tuple[str, str]] = {}
+    # Fallback por prefijo para keys dinamicas (f-string). prefijo -> registro
+    # {codigo, snippet, funcion}. Los refs se calculan luego junto con los de key.
+    mapa_prefijos: dict[str, dict] = {}
+    prefijo_a_func: dict[str, tuple[str, str]] = {}
 
     fuentes_py = sorted(p for p in _RAIZ.glob("*.py") if not p.name.startswith("_"))
     fuentes_py += sorted((_RAIZ / "graficos").glob("*.py"))
@@ -139,17 +152,38 @@ def _mapas_desarrollador() -> tuple[str, str, str, str, str, str, str]:
                         tag = " [@st.fragment]" if es_frag else ""
                         mapa_funcion[k] = f"{nombre} ({rel}:{ini}-{fin}){tag}"
                         key_a_func[k] = (nombre, rel)
+            # keys dinamicas por f-string: registrar el prefijo estatico como
+            # fallback (ej: _tkey = f"compras_g_fam_time_{...}" -> prefijo
+            # "compras_g_fam_time_"). Gana el prefijo mas largo en el lookup JS.
+            for m_fs in _KEY_FSTRING_PREFIJO.finditer(linea):
+                pref = m_fs.group(2)
+                if not pref or pref in mapa_prefijos:
+                    continue
+                start = max(0, i - 3)
+                end = min(len(lineas), i + 2)
+                snippet_lines = []
+                for j in range(start, end):
+                    prefix = ">>>" if j == i - 1 else "   "
+                    snippet_lines.append(f"{prefix} {j+1:>4}| {lineas[j]}")
+                reg = {"codigo": f"{rel}:{i}", "snippet": "\n".join(snippet_lines),
+                       "funcion": ""}
+                nombre, ini, fin, es_frag = _funcion_contenedora(lineas, i)
+                if nombre:
+                    tag = " [@st.fragment]" if es_frag else ""
+                    reg["funcion"] = f"{nombre} ({rel}:{ini}-{fin}){tag}"
+                    prefijo_a_func[pref] = (nombre, rel)
+                mapa_prefijos[pref] = reg
 
     # Referencias: por cada key con func, buscar el nombre en todos los .py
     # excepto en la propia linea de definicion. Evita ruido acotando a `\bNAME\b`.
     mapa_refs: dict[str, list[str]] = {}
     # cachear regex por nombre reutilizable entre keys que comparten funcion
     refs_por_nombre: dict[tuple[str, str], list[str]] = {}
-    for k, (nombre, archivo_def) in key_a_func.items():
+
+    def _refs_de(nombre: str, archivo_def: str) -> list[str]:
         clave = (nombre, archivo_def)
         if clave in refs_por_nombre:
-            mapa_refs[k] = refs_por_nombre[clave]
-            continue
+            return refs_por_nombre[clave]
         patron = re.compile(rf"\b{re.escape(nombre)}\b")
         refs: list[str] = []
         for rel, lineas_a in contenido_por_archivo.items():
@@ -166,7 +200,13 @@ def _mapas_desarrollador() -> tuple[str, str, str, str, str, str, str]:
             if len(refs) >= 8:
                 break
         refs_por_nombre[clave] = refs
-        mapa_refs[k] = refs
+        return refs
+
+    for k, (nombre, archivo_def) in key_a_func.items():
+        mapa_refs[k] = _refs_de(nombre, archivo_def)
+    # refs para los prefijos dinamicos (mismo cache por nombre de funcion)
+    for pref, (nombre, archivo_def) in prefijo_a_func.items():
+        mapa_prefijos[pref]["refs"] = _refs_de(nombre, archivo_def)
 
     # Helpers que construyen keys con f-string (ej: _card usa key=f"chartcard_{...}").
     # Los registramos por PREFIX → nombre_helper, y luego buscamos sus callers
@@ -232,6 +272,7 @@ def _mapas_desarrollador() -> tuple[str, str, str, str, str, str, str]:
         json.dumps(mapa_refs),
         json.dumps(mapa_texto),
         json.dumps(mapa_construido),
+        json.dumps(mapa_prefijos),
     )
 
 
@@ -248,7 +289,7 @@ def inject_element_inspector():
     iframe de AgGrid, así que sus var(--x) SÍ resuelven contra el :root de
     estilos.py. Se mantienen tal cual.
     """
-    mapa_codigo, mapa_estilos, mapa_snippets, mapa_funcion, mapa_refs, mapa_texto, mapa_construido = _mapas_desarrollador()
+    mapa_codigo, mapa_estilos, mapa_snippets, mapa_funcion, mapa_refs, mapa_texto, mapa_construido, mapa_prefijos = _mapas_desarrollador()
     # session_state: snapshot no cacheado (cambia cada rerun). Se serializa a
     # str truncado — solo para inspección; nunca para persistir.
     import streamlit as st
@@ -899,6 +940,7 @@ def inject_element_inspector():
             tip.innerHTML =
                 '<div id="el-inspector-btnrow" style="position:sticky;top:-7px;background:#101014;padding:4px 0 6px;margin:-1px 0 6px;border-bottom:1px solid #3C3489;display:flex;gap:6px;z-index:1;pointer-events:auto">' +
                 '  <button id="el-inspector-copiar" style="background:#3C3489;color:#fff;border:0;padding:5px 10px;border-radius:4px;cursor:pointer;font:600 11px/1 sans-serif">Copiar para IA</button>' +
+                '  <button id="el-inspector-pin" title="Clic derecho sobre un elemento hace lo mismo" style="background:#2A2A35;color:#fff;border:0;padding:5px 10px;border-radius:4px;cursor:pointer;font:600 11px/1 sans-serif">\\uD83D\\uDCCC Fijar</button>' +
                 '  <span id="el-inspector-status" style="color:#5DCAA5;font:11px/1.4 sans-serif;align-self:center"></span>' +
                 '</div>' +
                 '<pre id="el-inspector-text" style="margin:0;font:12px/1.55 \\'Courier New\\',monospace;color:var(--border);white-space:pre-wrap"></pre>';
@@ -906,6 +948,7 @@ def inject_element_inspector():
 
             var boton = doc.getElementById('el-inspector-copiar');
             var status = doc.getElementById('el-inspector-status');
+            var pinBtn = doc.getElementById('el-inspector-pin');
             boton.addEventListener('click', function(ev) {
                 ev.preventDefault(); ev.stopPropagation();
                 if (!win.__inspectorUltimo) {
@@ -957,6 +1000,11 @@ def inject_element_inspector():
                     function(){ status.textContent = 'No pude copiar - abre consola para ver texto'; status.style.color = '#F0997B'; win.console && win.console.log('[INSPECTOR COPY]\\n' + texto); setTimeout(function(){ status.textContent=''; }, 3000); }
                 );
             });
+
+            pinBtn.addEventListener('click', function(ev) {
+                ev.preventDefault(); ev.stopPropagation();
+                win.__inspectorTogglePin && win.__inspectorTogglePin();
+            });
         }
 
         var badge = doc.getElementById('el-inspector-badge');
@@ -970,7 +1018,7 @@ def inject_element_inspector():
                 'padding:5px 10px','border-radius:20px','display:none',
                 'align-items:center','gap:6px','box-shadow:0 2px 8px rgba(0,0,0,0.3)'
             ].join(';');
-            badge.innerHTML = 'Inspector ON &nbsp;<span style="opacity:.6;font-weight:400">C copiar &middot; Alt+I salir</span>';
+            badge.innerHTML = 'Inspector ON &nbsp;<span style="opacity:.6;font-weight:400">C copiar &middot; clic-derecho fija &middot; Alt+I salir</span>';
             doc.body.appendChild(badge);
         }
 
@@ -1305,6 +1353,45 @@ def inject_element_inspector():
         if (win.__inspectorPopstateHandler) {
             win.removeEventListener('popstate', win.__inspectorPopstateHandler);
         }
+        if (win.__inspectorContextMenuHandler) {
+            doc.removeEventListener('contextmenu', win.__inspectorContextMenuHandler);
+        }
+
+        // Fijado: clic derecho (o el boton "Fijar") congela el tooltip actual
+        // para poder moverse hasta el boton "Copiar" sin que desaparezca —
+        // mousemove deja de tocar contenido/posicion mientras esta fijado.
+        if (win.__inspectorPinned === undefined) win.__inspectorPinned = false;
+
+        win.__inspectorTogglePin = function(forzarOff) {
+            var tipEl = doc.getElementById('el-inspector-tip');
+            var pinBtnEl = doc.getElementById('el-inspector-pin');
+            var pinear = forzarOff ? false : !win.__inspectorPinned;
+            if (pinear && !win.__inspectorUltimo) return; // nada que fijar
+            win.__inspectorPinned = pinear;
+            if (tipEl) tipEl.style.pointerEvents = pinear ? 'auto' : 'none';
+            if (pinBtnEl) {
+                pinBtnEl.textContent = pinear ? '\\uD83D\\uDCCC Fijado (clic para soltar)' : '\\uD83D\\uDCCC Fijar';
+                pinBtnEl.style.background = pinear ? '#3C3489' : '#2A2A35';
+            }
+            if (!pinear && tipEl) tipEl.style.opacity = '0'; // el proximo mousemove lo re-muestra si corresponde
+        };
+
+        win.__inspectorContextMenuHandler = function(e) {
+            if (!inspectorActivo()) return;
+            var tipEl = doc.getElementById('el-inspector-tip');
+            if (!tipEl) return;
+            if (win.__inspectorPinned) {
+                e.preventDefault();
+                win.__inspectorTogglePin(true);
+                // recalcular de inmediato en la posicion actual del cursor,
+                // si no queda invisible hasta el proximo mousemove real
+                if (win.__inspectorMouseMoveHandler) win.__inspectorMouseMoveHandler(e);
+                return;
+            }
+            if (!win.__inspectorUltimo) return; // no hay nada bajo el cursor para fijar
+            e.preventDefault();
+            win.__inspectorTogglePin();
+        };
 
         win.__inspectorMouseMoveHandler = function(e) {
               try {
@@ -1315,6 +1402,7 @@ def inject_element_inspector():
                     resaltarEl(null, null);
                     return;
                 }
+                if (win.__inspectorPinned) return; // fijado: no tocar contenido/posicion
                 // congelar contenido mientras el cursor esta sobre el tooltip
                 // (asi se puede leer y scrollear sin que salte al widget de al lado)
                 if (tip.contains(e.target) || e.target === tip) return;
@@ -1442,6 +1530,7 @@ def inject_element_inspector():
             };
 
             win.__inspectorMouseLeaveHandler = function() {
+                if (win.__inspectorPinned) return; // fijado: se queda visible aunque el cursor salga
                 var tip = doc.getElementById('el-inspector-tip');
                 if (tip) tip.style.opacity = '0';
                 resaltarEl(null, null);
@@ -1458,6 +1547,10 @@ def inject_element_inspector():
                     if (btn) btn.click();
                     return;
                 }
+                if (e.key === 'Escape' && win.__inspectorPinned) {
+                    win.__inspectorTogglePin(true);
+                    return;
+                }
                 if (e.altKey && (e.key === 'i' || e.key === 'I')) {
                     var url = new URL(win.location.href);
                     if (url.searchParams.get('debug') === '1') {
@@ -1469,6 +1562,7 @@ def inject_element_inspector():
                     var badge = doc.getElementById('el-inspector-badge');
                     if (badge) badge.style.display = inspectorActivo() ? 'flex' : 'none';
                     if (!inspectorActivo()) {
+                        if (win.__inspectorPinned) win.__inspectorTogglePin(true);
                         var tip = doc.getElementById('el-inspector-tip');
                         if (tip) tip.style.opacity = '0';
                         resaltarEl(null, null);
@@ -1481,6 +1575,7 @@ def inject_element_inspector():
             doc.addEventListener('mousemove', win.__inspectorMouseMoveHandler, true);
             doc.addEventListener('mouseleave', win.__inspectorMouseLeaveHandler);
             doc.addEventListener('keydown', win.__inspectorKeydownHandler);
+            doc.addEventListener('contextmenu', win.__inspectorContextMenuHandler);
             win.addEventListener('popstate', win.__inspectorPopstateHandler);
 
             // pushState monkey-patch: solo la PRIMERA vez, para no encadenar
@@ -1498,5 +1593,5 @@ def inject_element_inspector():
 
     })();
     </script>
-    """.replace("__MAPA_CODIGO__", mapa_codigo).replace("__MAPA_ESTILOS__", mapa_estilos).replace("__MAPA_SNIPPETS__", mapa_snippets).replace("__MAPA_FUNCION__", mapa_funcion).replace("__MAPA_REFS__", mapa_refs).replace("__MAPA_TEXTO__", mapa_texto).replace("__MAPA_CONSTRUIDO__", mapa_construido).replace("__MAPA_SS__", mapa_ss),
+    """.replace("__MAPA_CODIGO__", mapa_codigo).replace("__MAPA_ESTILOS__", mapa_estilos).replace("__MAPA_SNIPPETS__", mapa_snippets).replace("__MAPA_FUNCION__", mapa_funcion).replace("__MAPA_REFS__", mapa_refs).replace("__MAPA_TEXTO__", mapa_texto).replace("__MAPA_CONSTRUIDO__", mapa_construido).replace("__MAPA_PREFIJOS__", mapa_prefijos).replace("__MAPA_SS__", mapa_ss),
         height=0, scrolling=False)
