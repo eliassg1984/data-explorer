@@ -391,3 +391,26 @@ salvo `icono`):
     re-escribiéndose justo al leerlo) dejó Ajuste y Compras en blanco, sin
     rail, durante una hora. Es la hermana de la regla #15: las dos son formas
     en que `cache_data` sirve algo que ya no corresponde.
+
+20. **Boxplot/histograma con datos mayoritariamente en cero: filtrar el cero
+    ANTES de graficar, no después.** En `_graf_distribucion_ajuste`
+    (`graficos/ajuste.py`), como en un inventario normal la mayoría de
+    productos NO tiene diferencia, `AJUSTE VALORIZADO` viene con >50% ceros.
+    Eso rompe dos tipos de gráfico de forma distinta:
+    - `px.box`: si q1 = mediana = q3 = 0 (el caso típico con >50% ceros), la
+      caja tiene ancho cero y es invisible — Plotly clasifica como "outlier"
+      cualquier punto fuera de una cerca (`fence`) calculada sobre un rango
+      intercuartílico de 0, así que hasta diferencias chicas (S/ 50) se
+      dibujan como puntos sueltos flotando. El usuario ve una nube de puntos
+      sin caja y no entiende qué está viendo.
+    - `go.Histogram`: el bin de 0 concentra la mayoría de las filas y
+      domina la escala; las líneas verticales de Cero/Media/Mediana caen casi
+      en el mismo x y sus anotaciones de texto quedan superpuestas e
+      ilegibles.
+    **Regla:** para vistas de "distribución", excluir las filas en cero ANTES
+    de construir la figura (`df[df[col] != 0]`), no confiar en que el tipo de
+    gráfico las absorba. El conteo de filas excluidas se muestra como texto
+    (`st.caption`) aparte, no se pierde. De paso, un boxplot con vocabulario
+    de cuartiles/outliers tampoco lo lee un usuario de negocio sin
+    entrenamiento — reemplazado por un strip plot (`px.strip`) coloreado por
+    signo (rojo = faltante, verde = sobrante), sin estadística que explicar.

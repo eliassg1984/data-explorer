@@ -1181,33 +1181,54 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
 
 
 def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_producto):
-    """Box plot con outliers visibles + histograma con líneas estadísticas."""
+    """Strip plot coloreado (faltante/sobrante) + histograma, ambos excluyendo
+    los ajustes en cero.
+
+    Con >50% de productos en S/ 0 (lo normal en un inventario), un boxplot
+    colapsa q1=mediana=q3 en una línea invisible y solo deja ver puntos
+    sueltos sin caja, y un histograma amontona todo en un pico que tapa las
+    líneas de media/mediana/cero. Filtrar el cero antes de graficar es lo
+    que deja ver la distribución real; el conteo de productos sin ajuste se
+    muestra aparte como texto, no se pierde."""
     col_izq, col_der = st.columns(2)
     grp = col_familia or col_area
 
+    n_total = len(df)
+    df_nz = df[df[col_ajuste_val] != 0]
+    n_nz = len(df_nz)
+
+    if df_nz.empty:
+        st.info("Ningún producto tuvo ajuste distinto de cero en este rango.")
+        return
+
     with col_izq:
-        if grp and grp in df.columns:
-            fig = px.box(
-                df, x=grp, y=col_ajuste_val, color=grp,
-                color_discrete_sequence=PALETA_SERIES,
+        st.caption(f"{n_nz} de {n_total} productos con diferencia")
+        if grp and grp in df_nz.columns:
+            d = df_nz.copy()
+            d["_signo"] = d[col_ajuste_val].lt(0).map(
+                {True: "Faltante", False: "Sobrante"})
+            fig = px.strip(
+                d, x=grp, y=col_ajuste_val, color="_signo",
+                color_discrete_map={"Faltante": ERROR, "Sobrante": EXITO},
                 title=f"Distribución del ajuste por {grp}",
-                points="outliers",
-                labels={col_ajuste_val: "Ajuste S/", grp: ""},
+                labels={col_ajuste_val: "Ajuste S/", grp: "", "_signo": ""},
             )
-            fig.add_hline(y=0, line_dash="dash", line_color="#ef4444",
+            fig.add_hline(y=0, line_dash="dot", line_color=GRIS_TEXTO_SUAVE,
                           annotation_text="Cero", annotation_position="top right")
             fig.update_layout(**_layout_aj(
-                showlegend=False,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                            xanchor="right", x=1, title=None),
                 xaxis=dict(tickangle=-30, gridcolor=GRIS_BORDE),
                 yaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
             ))
-            fig.update_traces(hovertemplate="%{x}<br>S/ %{y:,.2f}<extra></extra>")
-            _xcats = list(pd.unique(df[grp].astype(str)))
+            fig.update_traces(marker=dict(size=7),
+                              hovertemplate="%{x}<br>S/ %{y:,.2f}<extra></extra>")
+            _xcats = list(pd.unique(d[grp].astype(str)))
             fig.update_xaxes(tickmode="array", tickvals=_xcats,
                              ticktext=_wrap_cat(_xcats))
         else:
             fig = px.histogram(
-                df, x=col_ajuste_val, nbins=30,
+                df_nz, x=col_ajuste_val, nbins=30,
                 title="Distribución de ajustes valorizados",
                 color_discrete_sequence=[SERIE_PRINCIPAL],
             )
@@ -1221,12 +1242,13 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             st.plotly_chart(fig, use_container_width=True)
 
     with col_der:
-        media   = float(df[col_ajuste_val].mean())
-        mediana = float(df[col_ajuste_val].median())
+        st.caption(f"{n_total - n_nz} productos en cero, excluidos del cálculo")
+        media   = float(df_nz[col_ajuste_val].mean())
+        mediana = float(df_nz[col_ajuste_val].median())
 
         fig2 = go.Figure()
         fig2.add_trace(go.Histogram(
-            x=df[col_ajuste_val], nbinsx=30,
+            x=df_nz[col_ajuste_val], nbinsx=30,
             name="Frecuencia",
             marker_color=SERIE_PRINCIPAL, opacity=0.75,
             hovertemplate="Valor: S/ %{x:,.2f}<br>Frecuencia: %{y}<extra></extra>",
