@@ -326,3 +326,27 @@ salvo `icono`):
     móvil), sí conviene mantener `:has(.st-key-compras_tabs_row)` porque
     describe "cuando el rail existe", no "cuando estamos en Compras" —
     documentar el intent en el comentario para el próximo lector.
+
+17. **`@st.cache_data` NO debe envolver la función que devuelve `None`/vacío
+    ante un fallo transitorio: cachea el fracaso.** `cache_data` guarda
+    CUALQUIER return, indexado por los args. Si `cargar(archivo)` capturaba la
+    excepción y devolvía `None`, ese `None` quedaba cacheado `ttl=3600` → el
+    reporte se veía vacío **1 hora entera**, sin reintentar R2, aunque el
+    parquet ya estuviera perfecto. Y como `app.py` hace `st.stop()` cuando
+    `df is None`, el corte se lleva puesto también el rail derecho y las
+    franjas — el síntoma parece "se rompió media app" cuando es solo un
+    `None` pegajoso en cache.
+    **Regla:** separar la lectura en dos capas:
+    - `_*_cacheable()` con `@st.cache_data`: cachea SOLO el éxito. Si algo
+      falla, **lanza** (una corrida que lanza excepción no se cachea).
+    - wrapper público SIN cache: llama a la interna en `try/except` y traduce
+      el fallo a `None` (contrato histórico de los callers). Como el fallo vive
+      en el wrapper no cacheado, cada rerun reintenta de verdad: F5 recupera.
+    Aplica a `cargar`, `cargar_rango`, `rango_fechas` en `data.py`. Ojo con la
+    distinción fino: un `None` que es RESULTADO válido (p.ej. `rango_fechas`
+    cuando el parquet no tiene fechas) SÍ es cacheable — solo la EXCEPCIÓN debe
+    quedar fuera del cache.
+    Motivo (bug real, 2026-08-04): un blip de R2 (o el parquet
+    re-escribiéndose justo al leerlo) dejó Ajuste y Compras en blanco, sin
+    rail, durante una hora. Es la hermana de la regla #15: las dos son formas
+    en que `cache_data` sirve algo que ya no corresponde.
