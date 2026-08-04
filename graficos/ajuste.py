@@ -253,14 +253,11 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         st.info("Se necesita columna de familia o área para el gráfico de cascada.")
         return
 
-    # ── Controles de exclusión (arriba del card) ───────────────────────
-    # Errores manuales en la data (ej. un producto con faltante enorme)
-    # pueden dominar la cascada. El usuario puede excluir por top N o por
-    # producto puntual; el filtro se aplica al df antes de calcular agg.
+    # ── Preparar lista de productos para el popover de exclusión ──────────
+    # (Se calcula aquí, antes del card, porque _lbl lo necesita para el badge)
     excluidos = set()
     if col_producto and col_producto in df.columns:
         _prod_s = df[col_producto].astype(str)
-        # Ranking global por |ajuste| — el "top faltantes+sobrantes".
         _rank = (df.groupby(col_producto, as_index=False)[col_ajuste_val]
                  .sum())
         _rank["_abs"] = _rank[col_ajuste_val].abs()
@@ -268,15 +265,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         _prods_ranked = _rank[col_producto].astype(str).tolist()
         _todos_prods = sorted(_prod_s.dropna().unique().tolist())
 
-        # Los dos controles viven dentro de un popover: se usan para corregir
-        # errores de captura, no en cada análisis, así que no merecen ocupar
-        # ancho fijo arriba del gráfico. El badge del label muestra cuántos
-        # productos quedan excluidos aunque el popover esté cerrado.
-        #
-        # El count se lee de session_state ANTES de dibujar los widgets: el
-        # label se arma arriba, pero las keys son las mismas de adentro, así
-        # que tras el primer rerun el número ya es el correcto (mismo patrón
-        # que los chips de filtro en app.py).
         _n_top = int(st.session_state.get("ajuste_cascada_excl_top") or 0)
         _n_prev = len(set(_prods_ranked[:_n_top]) |
                       set(st.session_state.get("ajuste_cascada_excl_manual")
@@ -285,39 +273,17 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         if _n_prev:
             _lbl += f" :violet-badge[{_n_prev}]"
 
-        # use_container_width=False: el popover toma solo su ancho natural
-        # y no deja un rectangulo vacio al costado (antes vivia en un
-        # st.columns([1,3]) y el otro 75% quedaba en blanco).
-        #
-        # El wrapper con key existe SOLO para poder acotar el CSS: hay una
-        # regla global sin acotar en estilos/_30_filtros.py
-        # (`[data-testid="stPopover"] button`) que le impone 180px de ancho
-        # minimo y 14px/26px de padding a TODOS los popovers. Este control
-        # es secundario (corrige errores de captura, no se usa en cada
-        # analisis), asi que se lo achica aca en vez de tocar el global.
-        with st.container(key="ajcas_excl_wrap"), \
-                st.popover(_lbl, use_container_width=False):
-                _top_ex = st.select_slider(
-                    "Excluir el top N por |ajuste|",
-                    options=[0, 1, 3, 5, 8, 10],
-                    value=0, key="ajuste_cascada_excl_top",
-                    format_func=lambda n: "Ninguno" if n == 0 else f"Top {n}",
-                    help="Quita los N productos de mayor ajuste absoluto — "
-                         "sirve cuando un error de captura domina la cascada.",
-                )
-                _top_ex = int(_top_ex or 0)
-                _manual = st.multiselect(
-                    "…o elegir productos puntuales", _todos_prods,
-                    key="ajuste_cascada_excl_manual",
-                    placeholder="Buscar producto…",
-                )
-
-        if _top_ex > 0:
-            excluidos.update(_prods_ranked[:_top_ex])
-        excluidos.update(str(p) for p in _manual)
+        # Aplicar exclusiones al df (leyendo el estado ya comprometido)
+        if _n_top > 0:
+            excluidos.update(_prods_ranked[:_n_top])
+        _manual_prev = st.session_state.get("ajuste_cascada_excl_manual") or []
+        excluidos.update(str(p) for p in _manual_prev)
 
         if excluidos:
             df = df[~df[col_producto].astype(str).isin(excluidos)]
+    else:
+        _todos_prods = []
+        _lbl = ":material/filter_alt_off: Excluir productos"
 
     agg = (df.groupby(grp_col, as_index=False)[col_ajuste_val]
            .sum().sort_values(col_ajuste_val))
@@ -326,13 +292,9 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         return
     total = float(agg[col_ajuste_val].sum())
 
-    # Peso relativo (sobre suma de |valores|): siempre suma 100%, no se
-    # confunde con signos mezclados (una barra + y varias -). El signo lo
-    # comunica el color de la barra.
     abs_sum = float(agg[col_ajuste_val].abs().sum()) or 1.0
     pesos = [abs(v) / abs_sum * 100 for v in agg[col_ajuste_val]]
 
-    # Insight automático: si un item concentra mucho, decirlo en el subtítulo.
     top_peso = max(pesos) if pesos else 0.0
     top_idx = pesos.index(top_peso) if pesos else None
     top_nombre = (str(agg[grp_col].iloc[top_idx]).upper()
@@ -344,13 +306,10 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     else:
         insight = None
 
-    # ── Enriquecimientos por familia (para las celdas de la tabla) ─────
-    # n_skus, top producto (nombre + monto + % que aporta a la familia),
-    # y delta vs periodo anterior (mismo tamaño de ventana, inmediatamente
-    # antes). El delta requiere df_full + col_fecha; si no vienen, se omite.
+    # ── Enriquecimientos por familia ──────────────────────────────────────
     _n_skus = {}
-    _top_prod = {}  # fam -> (nombre_truncado, valor, pct_familia)
-    _conc3 = {}     # fam -> % que concentran los 3 productos mayores
+    _top_prod = {}
+    _conc3 = {}
     if col_producto and col_producto in df.columns:
         for _fam in agg[grp_col].tolist():
             _s = df[df[grp_col].astype(str) == str(_fam)]
@@ -372,8 +331,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                          if _abs_fam > 1e-9 else 0.0)
                 _top_prod[str(_fam)] = (_nom, _val, _pctf)
 
-    # % del ajuste sobre el valorizado de la propia familia — responde
-    # "¿es grave PARA ESTA familia?", que el % del total no contesta.
     _pct_val = {}
     if col_valorizado and col_valorizado in df.columns:
         _vv = df.groupby(grp_col)[col_valorizado].sum()
@@ -382,14 +339,11 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             if abs(_base) > 1e-6:
                 _cv = float(agg[agg[grp_col] == _fam][col_ajuste_val].iloc[0])
                 _pct_val[str(_fam)] = _cv / _base * 100
-        # La fila TOTAL usa el valorizado de TODO el df, no la suma de los
-        # % por familia (que no es un promedio válido: cada uno tiene base
-        # distinta).
         _base_tot = float(df[col_valorizado].sum() or 0)
         if abs(_base_tot) > 1e-6:
             _pct_val["TOTAL"] = total / _base_tot * 100
 
-    _delta = {}  # fam -> ("up"/"down", pct_magnitud)
+    _delta = {}
     if (df_full is not None and col_fecha
             and col_fecha in df.columns and col_fecha in df_full.columns):
         _f = pd.to_datetime(df[col_fecha], errors="coerce").dropna()
@@ -412,7 +366,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                         _dir = "down" if _pctm > 0 else "up"
                         _delta[str(_fam)] = (_dir, abs(_pctm))
 
-    # Semáforo por familia — umbrales sobre |peso| (% de |total ajuste|)
     def _badge_for(peso, val):
         if val >= 0:
             return ("▲ SOBRANTE", CELDA_POS_TEXTO, EXITO_FONDO)
@@ -424,16 +377,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             return ("● MENOR", GRIS_TEXTO, GRIS_FONDO)
         return ("✓ OK", GRIS_TEXTO, GRIS_FONDO)
 
-    # ── Cascada como TABLA de filas ────────────────────────────────────
-    # Una cascada horizontal ES una tabla con barras flotantes: cada barra
-    # arranca donde terminó la de arriba. Renderizarla como tabla (en vez de
-    # como go.Waterfall) resuelve de raíz el solapamiento de etiquetas que
-    # tenía la versión vertical: cada dato vive en su propia celda, no
-    # compite por el mismo tramo de eje.
-    #
-    # Geometría acumulada: para cada familia el par (lo, hi) marca dónde
-    # empieza y termina su barra en el eje de valores. `_dmin/_dmax` fijan
-    # el dominio para poder expresar todo en % (responsive, sin píxeles).
+    # ── Cascada como TABLA de filas ────────────────────────────────────────
     _filas = []
     _run = 0.0
     for _i in range(len(agg)):
@@ -453,19 +397,15 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     for _idx, _f in enumerate(_filas):
         _lo, _hi = min(_f["lo"], _f["hi"]), max(_f["lo"], _f["hi"])
         _f["left_pct"] = (_lo - _dmin) / _span * 100
-        _f["w_pct"] = max((_hi - _lo) / _span * 100, 0.4)  # mínimo visible
-        # Conector: línea vertical fina donde terminó la barra anterior.
+        _f["w_pct"] = max((_hi - _lo) / _span * 100, 0.4)
         _f["conn_pct"] = (((_filas[_idx - 1]["hi"] - _dmin) / _span * 100)
                           if _idx > 0 and not _f["total"] else None)
 
-    # Colores semánticos de la tabla, todos desde tema.py (regla #1: nunca
-    # un #hex suelto). `_tono` devuelve el par (texto, barra) según el signo.
     def _tono(v):
         return ((CELDA_POS_TEXTO, EXITO) if v > 0
                 else (DANGER_TEXT, ERROR))
 
     def _celda_familia(f):
-        """Primera columna: nombre + línea de contexto (TOP, SKUs, top3)."""
         _nom = f["cat"]
         if len(_nom) > 30:
             _nom = _nom[:29] + "…"
@@ -492,7 +432,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         else:
             _piezas.insert(0, f"<b style='font-weight:500'>{_peso_txt}</b>"
                               f" del total")
-        # Separador fino en vez de "·": menos ruido entre piezas.
         _sep = f"<span style='color:{GRIS_BORDE};padding:0 5px'>|</span>"
         _sub = _sep.join(_piezas)
         _peso_nom = "600" if f["total"] else "500"
@@ -506,9 +445,8 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                 f"overflow:hidden;text-overflow:ellipsis'>{_sub}</div>")
 
     def _celda_monto(f):
-        """Segunda columna: monto y delta vs periodo anterior."""
         _col = GRIS_TEXTO_MEDIO if f["total"] else _tono(f["val"])[0]
-        _sig = "+" if f["val"] > 0 else "−"      # menos tipográfico, no guion
+        _sig = "+" if f["val"] > 0 else "−"
         _html = (f"<div style='color:{_col};font-weight:600;font-size:13px;"
                  f"font-variant-numeric:tabular-nums;line-height:1.2;"
                  f"letter-spacing:-0.01em'>"
@@ -516,7 +454,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         _dl = _delta.get(f["cat"])
         if _dl and not f["total"]:
             _dir, _dpct = _dl
-            _arrow = "▲" if _dir == "down" else "▼"   # ▲ = empeora
+            _arrow = "▲" if _dir == "down" else "▼"
             _dcol = DANGER_TEXT if _dir == "down" else CELDA_POS_TEXTO
             _html += (f"<div style='font-size:9.5px;color:{_dcol};"
                       f"line-height:1.35;margin-top:2px;"
@@ -526,7 +464,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         return _html
 
     def _celda_barra(f):
-        """Tercera columna: la barra flotante + su conector."""
         _bg = GRIS_TEXTO_MEDIO if f["total"] else _tono(f["val"])[1]
         _alto = 12 if f["total"] else 9
         _conn = ""
@@ -534,8 +471,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             _conn = (f"<div style='position:absolute;"
                      f"left:{f['conn_pct']:.2f}%;top:3px;bottom:3px;"
                      f"width:1px;background:{GRIS_BORDE}'></div>")
-        # El carril (fondo tenue de punta a punta) hace que la barra se lea
-        # como posicionada DENTRO de una escala, no flotando en el vacío.
         return (f"<div style='position:relative;height:22px;width:100%'>"
                 f"<div style='position:absolute;left:0;right:0;top:50%;"
                 f"transform:translateY(-50%);height:{_alto}px;"
@@ -547,7 +482,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                 f"</div></div>")
 
     def _celda_pctval(f):
-        """Cuarta columna: % del ajuste sobre el valorizado de la familia."""
         _pv = _pct_val.get(f["cat"])
         if _pv is None:
             return (f"<div style='font-size:11.5px;color:{GRIS_BORDE};"
@@ -558,14 +492,10 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                 f"{_pv:+.1f}%</div>")
 
     def _celda_badge(f):
-        """Quinta columna: el semáforo."""
         if f["total"]:
             _txt, _fg, _bg = "Total", GRIS_TEXTO, GRIS_FONDO
         else:
             _txt, _fg, _bg = _badge_for(f["peso"], f["val"])
-            # _badge_for devuelve "⚠ CRÍTICO"; en la tabla el símbolo sobra
-            # (el color ya lo dice) y va en capitalize — salvo "OK", que
-            # .capitalize() convertiría en "Ok".
             _txt = _txt.split(" ", 1)[-1]
             _txt = _txt if _txt == "OK" else _txt.capitalize()
         return (f"<div style='text-align:right'><span style='display:inline-"
@@ -574,9 +504,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                 f"color:{_fg};white-space:nowrap'>{_txt}</span></div>")
 
     # ── Drill: clic en una familia → top-N de productos abajo ─────────────
-    # Categorías clickeables (todas menos "TOTAL"). El foco vive en
-    # session_state; clic en la misma barra que ya está en foco lo apaga
-    # (toggle), igual que el drill de Proveedor en Compras.
     _cats_clic = agg[grp_col].astype(str).tolist()
     _focus_key = "ajuste_cascada_focus"
     focus = st.session_state.get(_focus_key)
@@ -584,18 +511,12 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         focus = None
         st.session_state[_focus_key] = None
 
-    # CSS de la tabla. Vive acá (y no en estilos/) porque está scopeado a
-    # las keys de esta tabla, mismo criterio que el CSS del drill de
-    # Proveedor en Compras. Comprime el gap vertical que Streamlit mete
-    # entre st.columns y hace que el botón del gutter parezca una celda.
     st.markdown(f"""<style>
     /* Popover "Excluir productos": achica el boton que la regla global de
        estilos/_30_filtros.py deja en 180px de ancho y 15px de fuente. */
     .st-key-ajcas_excl_wrap [data-testid="stPopover"] button {{
         min-width: 0 !important; padding: 2px 10px !important;
         font-size: 11px !important; font-weight: 400 !important;
-        /* min-height propio: Streamlit fija 40px y es lo que mantenia el
-           boton alto aun con el padding y la fuente ya reducidos. */
         min-height: 0 !important; height: 26px !important;
         line-height: 1 !important;
         border-width: 1px !important; color: {GRIS_TEXTO} !important; }}
@@ -611,31 +532,21 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     /* ── Filas de la tabla ─────────────────────────────────────────── */
     div[class*="st-key-ajcas_fila_"] {{
         border-bottom: 1px solid {GRIS_LINEA};
-        /* El padding negativo compensa el gap del gutter para que el
-           resaltado de hover llegue al borde de la tarjeta. */
         margin: 0 -6px; padding: 0 6px;
         border-radius: 6px;
         transition: background .12s ease; }}
     div[class*="st-key-ajcas_fila_"]:hover {{ background: {LAVANDA_SELECCION}; }}
-    /* Fila en foco: fondo lavanda + barra de acento a la izquierda. El
-       sufijo _on en la key es el mismo patron que usan los chipwrap_*_on
-       de estilos/_40_ajuste_franja.py. */
     div[class*="st-key-ajcas_fila_"][class*="_on"] {{
         background: {LAVANDA_FONDO};
         box-shadow: inset 2px 0 0 {ACENTO}; }}
     div[class*="st-key-ajcas_fila_"][class*="_on"]:hover {{
         background: {LAVANDA_FONDO}; }}
-    /* Fila TOTAL: cierra la tabla, no participa del hover. */
     div[class*="st-key-ajcas_fila_total"] {{
         border-bottom: none; border-top: 1.5px solid {GRIS_BORDE};
         margin-top: 2px; background: transparent !important;
         box-shadow: none !important; }}
     div[class*="st-key-ajcas_fila_"] div[data-testid="stVerticalBlock"]
         {{ gap: 0 !important; }}
-    /* OJO: nada de `align-items: center` acá. Con center las columnas
-       dejan de estirarse y colapsan a ~6px con 30px de contenido adentro
-       (overflow visible => las filas se pisan entre sí). El alto lo fija
-       min-height y el centrado vertical va DENTRO de cada celda, abajo. */
     div[class*="st-key-ajcas_fila_"] div[data-testid="stHorizontalBlock"]
         {{ gap: 0.4rem !important; min-height: 40px; }}
     div[class*="st-key-ajcas_fila_"] p {{ margin: 0 !important; }}
@@ -656,7 +567,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     </style>""", unsafe_allow_html=True)
 
     with _card("cascada"):
-        # Encabezado: título + insight a la izquierda, resumen a la derecha.
+        # ── CAMBIO 2: encabezado en dos columnas (título izq + popover der) ──
         _n_falt = int((agg[col_ajuste_val] < 0).sum())
         _col_neto = DANGER_TEXT if total < 0 else CELDA_POS_TEXTO
         _resumen = (f"{len(agg)} {grp_col.lower()}s"
@@ -666,17 +577,36 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                     f"neto <span style='color:{_col_neto};font-weight:600;"
                     f"font-variant-numeric:tabular-nums'>"
                     f"S/ {total:,.0f}</span>")
-        st.markdown(
-            f"<div style='display:flex;justify-content:space-between;"
-            f"align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:12px'>"
-            f"<span style='font-size:14px;font-weight:600;"
-            f"color:{TEXTO_PRINCIPAL};letter-spacing:-0.01em'>"
-            f"Ajuste valorizado por {grp_col.lower()}"
-            + (f"<span style='font-size:11px;font-weight:400;"
-               f"color:{GRIS_TEXTO_SUAVE}'> — {insight}</span>"
-               if insight else "")
-            + f"</span>"
-              f"</div>", unsafe_allow_html=True)
+
+        _col_titulo, _col_excl = st.columns([6, 1])
+        with _col_titulo:
+            st.markdown(
+                f"<div style='font-size:14px;font-weight:600;"
+                f"color:{TEXTO_PRINCIPAL};letter-spacing:-0.01em;"
+                f"padding:4px 0 10px 0'>"
+                f"Ajuste valorizado por {grp_col.lower()}"
+                + (f"<span style='font-size:11px;font-weight:400;"
+                   f"color:{GRIS_TEXTO_SUAVE}'> — {insight}</span>"
+                   if insight else "")
+                + f"</div>", unsafe_allow_html=True)
+        with _col_excl:
+            if col_producto and col_producto in df.columns:
+                with st.container(key="ajcas_excl_wrap"), \
+                        st.popover(_lbl, use_container_width=False):
+                    _top_ex = st.select_slider(
+                        "Excluir el top N por |ajuste|",
+                        options=[0, 1, 3, 5, 8, 10],
+                        value=0, key="ajuste_cascada_excl_top",
+                        format_func=lambda n: "Ninguno" if n == 0 else f"Top {n}",
+                        help="Quita los N productos de mayor ajuste absoluto — "
+                             "sirve cuando un error de captura domina la cascada.",
+                    )
+                    _top_ex = int(_top_ex or 0)
+                    _manual = st.multiselect(
+                        "…o elegir productos puntuales", _todos_prods,
+                        key="ajuste_cascada_excl_manual",
+                        placeholder="Buscar producto…",
+                    )
 
         # Cabecera de la tabla
         st.markdown(
@@ -691,12 +621,9 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             f"<div style='width:11%;text-align:right'>Estado</div>"
             f"</div>", unsafe_allow_html=True)
 
-        # Una fila por familia. El gutter izquierdo lleva el botón que
-        # prende/apaga el foco — una tabla HTML no emite eventos de clic,
-        # así que el disparador tiene que ser un widget de Streamlit.
+        # Una fila por familia.
         for _f in _filas:
             _es_foco = (not _f["total"]) and _f["cat"] == focus
-            # Sufijo _on en la key = fila resaltada (patrón chipwrap_*_on).
             with st.container(
                     key=f"ajcas_fila_{_slug(_f['cat'])}"
                         + ("_on" if _es_foco else "")):
@@ -734,16 +661,8 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
               f"<span>Cada barra arranca donde terminó la anterior</span>"
               f"</div>", unsafe_allow_html=True)
 
-        # ── Panel de drill (solo si hay foco) — DEBAJO de la tabla ─────
-        # Mismo patrón que `_paneles_card()` del drill de Proveedor en
-        # Compras: el panel no existe sin foco, y el mismo control que lo
-        # abrió lo cierra.
+        # ── Panel de drill (solo si hay foco) ─────────────────────────────
         if focus:
-            # Instance id: se incrementa cada vez que el panel pasa de
-            # cerrado a abierto y se anexa a las keys de los charts. Sin
-            # esto Streamlit reusa los nodos DOM, Plotly no re-mide el
-            # ancho del contenedor y el gráfico sale vacío. Mismo bug (y
-            # misma solución) que en el drill de Proveedor de Compras.
             if not st.session_state.get("ajcas_panel_prev", False):
                 st.session_state["ajcas_panel_inst"] = (
                     st.session_state.get("ajcas_panel_inst", 0) + 1)
@@ -752,8 +671,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
 
             col_d = st.container(border=True, key="ajcas_panel_drill")
             _det = df[df[grp_col].astype(str) == focus]
-            # Dimensión a mostrar: producto si existe, si no la otra
-            # (área/familia). Nombre humano para el header.
             dim = col_producto or (col_area if grp_col == col_familia
                                    else col_familia)
             dim_lbl = "producto" if dim == col_producto else str(dim).lower()
@@ -791,11 +708,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                     st.info("No hay una columna adecuada para desglosar "
                             "esta familia.")
                 else:
-                    # Trae área y cantidad al agrupado si están disponibles,
-                    # para poder mostrarlos junto al producto/monto.
-                    # `first` asume 1 área por producto (cierto en esta data);
-                    # si el drill vino desde área, el subtítulo de área sería
-                    # redundante y se omite.
                     _has_cant = bool(col_cantidad
                                      and col_cantidad in _det.columns)
                     _has_area = bool(col_area and col_area in _det.columns
@@ -813,11 +725,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                     if _sub.empty or _sub["_abs"].sum() == 0:
                         st.info("Sin datos para el drill de esta familia.")
                     else:
-                        # Split: sobrantes arriba (verde), faltantes abajo
-                        # (rojo). Cada bloque con su propio eje X — mata la
-                        # comparación cruzada de escala pero rescata a los
-                        # sobrantes chicos de ser todos "pills" idénticos
-                        # cuando conviven con faltantes grandes.
                         _pos = _sub[_sub[col_ajuste_val] > 0].sort_values(
                             col_ajuste_val, ascending=True)
                         _neg = _sub[_sub[col_ajuste_val] < 0].sort_values(
@@ -867,18 +774,12 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                            automargin=True,
                                            tickfont=dict(size=10)),
                                 showlegend=False,
-                                # Filas ~36px para el label de 2 líneas
-                                # (producto + área). Si no hay área, sigue
-                                # cómodo.
                                 height=max(140, 36 * len(_df) + 40),
                                 bargap=0.35,
                                 margin=dict(l=4, r=12, t=6, b=10),
                             ))
                             return _fig
 
-                        # Al vivir abajo (y no en un panel al 40%), el drill
-                        # tiene todo el ancho: faltantes y sobrantes van
-                        # lado a lado en vez de apilados.
                         _pa, _pb = st.columns(2)
                         def _titulo_split(txt, color):
                             st.markdown(
@@ -918,27 +819,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
 def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
                            col_producto, col_valorizado, col_cantidad,
                            ambito):
-    """Panel derecho: UNA mini-tabla analítica a la vez, en pestañas.
-
-    Vive dentro del contenedor blanco derecho de la vista Gráficos de
-    Ajuste. Usa st.tabs (8 pestañas); si no caben en el ancho, Streamlit
-    aplica scroll horizontal automáticamente. Para añadir un mini-gráfico
-    nuevo: sumar el nombre a `tab_names` y su bloque `with tabs[i]:`.
-
-    Las 8 vistas responden a preguntas distintas del mismo df activo:
-      0. Faltantes por familia (top 5 negativos)
-      1. Sobrantes por familia (top 5 positivos)
-      2. Productos críticos (top 10 negativos, nivel producto)
-      3. Ranking por área (+ % sobre |total|)
-      4. Resumen de familia (N productos, ajuste, % s/ valorizado)
-      5. Movimientos extremos (top+bottom en una tabla)
-      6. Ranking por valorizado
-      7. Ranking por cantidad (unidades)
-
-    `ambito` se mantiene en la firma por si más adelante se usa para
-    diferenciar contenido entre «Del periodo» e «Histórico»; hoy no lo
-    necesita (las pestañas son las mismas para ambos).
-    """
+    """Panel derecho: UNA mini-tabla analítica a la vez, en pestañas."""
     grp_col = col_familia or col_area
     if not grp_col:
         st.info("Se necesita familia o área para el panel analítico.")
@@ -969,21 +850,18 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
         df_[col] = df_[col].map(lambda v: f"{int(v):,}")
         return df_
 
-    # 0 — Faltantes por familia
     with tabs[0]:
         st.caption("Top 5 faltantes")
         neg = agg.nsmallest(5, col_ajuste_val)[[grp_col, col_ajuste_val]]
         st.dataframe(_fmt_soles(neg, col_ajuste_val),
                      hide_index=True, use_container_width=True)
 
-    # 1 — Sobrantes por familia
     with tabs[1]:
         st.caption("Top 5 sobrantes")
         pos = agg.nlargest(5, col_ajuste_val)[[grp_col, col_ajuste_val]]
         st.dataframe(_fmt_soles(pos, col_ajuste_val),
                      hide_index=True, use_container_width=True)
 
-    # 2 — Productos críticos (top 10 negativos, nivel producto)
     with tabs[2]:
         if col_producto and col_producto in df.columns:
             st.caption("Top 10 productos más negativos")
@@ -998,7 +876,6 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
         else:
             st.caption("No hay columna de producto en el reporte.")
 
-    # 3 — Ranking por área
     with tabs[3]:
         if col_area and col_area in df.columns:
             area_agg = (df.groupby(col_area, as_index=False)[col_ajuste_val]
@@ -1014,7 +891,6 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
         else:
             st.caption("No hay columna de área en el reporte.")
 
-    # 4 — Resumen familia (todas las familias, N productos + ajuste + %)
     with tabs[4]:
         if col_producto and col_producto in df.columns:
             resumen = (df.groupby(grp_col)
@@ -1039,10 +915,9 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
         st.dataframe(_fmt_soles(resumen, col_ajuste_val),
                      hide_index=True, use_container_width=True)
 
-    # 5 — Movimientos extremos (5 más rojos + 5 más verdes en una tabla)
     with tabs[5]:
         neg5 = agg.nsmallest(5, col_ajuste_val)
-        pos5 = agg.nlargest(5, col_ajuste_val)[::-1]  # descendente
+        pos5 = agg.nlargest(5, col_ajuste_val)[::-1]
         sep = pd.DataFrame({grp_col: ["———"], col_ajuste_val: [0.0]})
         extremos = pd.concat([neg5, sep, pos5], ignore_index=True)
         extremos[col_ajuste_val] = extremos[col_ajuste_val].map(
@@ -1051,7 +926,6 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
         st.dataframe(extremos[[grp_col, col_ajuste_val]],
                      hide_index=True, use_container_width=True)
 
-    # 6 — Ranking por valorizado (familias ordenadas por valorizado total)
     with tabs[6]:
         if col_valorizado and col_valorizado in df.columns:
             val_agg = (df.groupby(grp_col, as_index=False)[col_valorizado]
@@ -1062,7 +936,6 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
         else:
             st.caption("No hay columna de valorizado en el reporte.")
 
-    # 7 — Ranking por cantidad (ajuste en unidades, no en soles)
     with tabs[7]:
         if col_cantidad and col_cantidad in df.columns:
             cant_agg = (df.groupby(grp_col, as_index=False)[col_cantidad]
@@ -1079,13 +952,7 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
 
 def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                          col_producto=None):
-    """Mapa de calor familia × área con escala divergente centrada en cero.
-
-    Clic en una celda → drill abajo con los productos de esa combinación
-    Familia × Área, faltantes y sobrantes lado a lado (mismo patrón que el
-    drill de la cascada). `col_producto` es opcional: sin él, el mapa sigue
-    siendo interactivo pero el drill avisa que no puede desglosar.
-    """
+    """Mapa de calor familia × área con escala divergente centrada en cero."""
     if not col_familia or not col_area:
         st.info("Se necesitan columnas de familia y área para el mapa de calor.")
         return
@@ -1094,18 +961,12 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         index=col_familia, columns=col_area,
         values=col_ajuste_val, aggfunc="sum", fill_value=0,
     )
-    # Escala simétrica: el 0 queda SIEMPRE en el centro del degradado, así
-    # un faltante y un sobrante del mismo tamaño se ven igual de intensos.
-    # Sin esto, zmid solo centra el color pero el rango sigue sesgado al
-    # lado que tenga el extremo mayor.
     _vmax = float(abs(pivot.values).max()) or 1.0
 
     fig = go.Figure(go.Heatmap(
         z=pivot.values,
         x=pivot.columns.tolist(),
         y=pivot.index.tolist(),
-        # xgap/ygap: separa las celdas en baldosas. Sin esto el mapa se lee
-        # como un bloque continuo y cuesta seguir filas y columnas.
         xgap=3, ygap=3,
         colorscale=[
             [0.00, ERROR],
@@ -1122,17 +983,9 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
             thickness=8, len=0.75, outlinewidth=0,
             ticks="outside", ticklen=3, tickcolor=GRIS_BORDE,
         ),
-        # hoverinfo="skip": el hover (y el clic) los maneja la capa de
-        # puntos invisible de abajo, no el heatmap.
         hoverinfo="skip",
     ))
 
-    # ── Capa de clic: un punto invisible en el centro de cada celda ───────
-    # `go.Heatmap` NO es una traza seleccionable en Plotly: `on_select`
-    # jamás recibe puntos de ella, así que el clic sobre el mapa no hacía
-    # nada. La solución estándar es superponer un `go.Scatter` (que sí es
-    # seleccionable) con un punto por celda y opacidad 0. Como además lleva
-    # el hovertemplate, el tooltip sigue saliendo igual que antes.
     _pts_x, _pts_y, _pts_cd = [], [], []
     for _i, _fam in enumerate(pivot.index.tolist()):
         for _j, _area in enumerate(pivot.columns.tolist()):
@@ -1142,8 +995,6 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
 
     fig.add_trace(go.Scatter(
         x=_pts_x, y=_pts_y, mode="markers",
-        # size generoso: con hovermode="closest" define el radio de captura
-        # del clic. Chico deja zonas muertas entre celdas.
         marker=dict(size=28, opacity=0, color=ACENTO),
         customdata=_pts_cd,
         hovertemplate=(
@@ -1154,15 +1005,10 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         showlegend=False,
     ))
 
-    # Valores dentro de cada celda como ANNOTATIONS, no como `texttemplate`:
-    # `textfont` es una sola config para toda la traza, así que el texto
-    # oscuro quedaba ilegible sobre las celdas saturadas de los extremos.
-    # Con annotations el color se decide celda por celda según intensidad.
     _anns_hm = []
     for _i, _fam in enumerate(pivot.index.tolist()):
         for _j, _area in enumerate(pivot.columns.tolist()):
             _v = float(pivot.values[_i][_j])
-            # Los ceros se omiten: son la mayoría y solo agregan ruido.
             if abs(_v) < 0.5:
                 continue
             _int = abs(_v) / _vmax
@@ -1175,33 +1021,23 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
             ))
 
     fig.update_layout(**_layout_aj(
-        title_text="",   # el título ya lo pone la tarjeta
+        title_text="",
         xaxis=dict(tickangle=0, side="top", gridcolor=GRIS_BORDE,
                    showgrid=False, ticks="",
                    tickfont=dict(size=10, color=GRIS_TEXTO)),
         yaxis=dict(autorange="reversed", gridcolor=GRIS_BORDE,
                    showgrid=False, ticks="", showticklabels=True,
                    tickfont=dict(size=10, color=GRIS_TEXTO_MEDIO)),
-        # Alto por fila en vez de tope fijo: con el tope de 400px las
-        # celdas se aplastaban cuando había muchas familias.
         height=min(560, max(240, len(pivot.index) * 38 + 110)),
         margin=dict(l=10, r=10, t=50, b=20),
         annotations=_anns_hm,
-        # closest: el clic resuelve al punto invisible más cercano, así no
-        # quedan zonas muertas entre celdas.
         hovermode="closest",
     ))
-    # plot_bgcolor pinta lo que se ve POR DEBAJO de las celdas — es decir,
-    # los gaps de xgap/ygap. `_layout_aj` lo fuerza transparente (queda el
-    # blanco de la tarjeta y la grilla desaparecía: celda blanca sobre gap
-    # blanco). Con un gris tenue los gaps se leen como líneas de grilla.
     fig.update_layout(plot_bgcolor=GRIS_BORDE)
     _xcats = [str(c) for c in pivot.columns.tolist()]
     fig.update_xaxes(tickmode="array", tickvals=_xcats,
                      ticktext=_wrap_cat(_xcats))
 
-    # Subtítulo con la peor combinación: el dato que se busca en un mapa de
-    # calor es "dónde está el punto rojo", y decirlo evita rastrearlo a ojo.
     _peor_v = float(pivot.values.min())
     _sub_hm = ""
     if _peor_v < 0:
@@ -1217,18 +1053,12 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         if _sub_hm:
             st.markdown(f"<div style='margin:-4px 0 6px 0'>{_sub_hm}</div>",
                         unsafe_allow_html=True)
-        # key ESTÁTICA a propósito: la selección de plotly persiste entre
-        # reruns y aquí eso es lo deseado — clic en una celda muestra su
-        # drill y ese drill sigue visible aunque se cambie el Top N. No hay
-        # toggle (no re-procesamos el clic para prender/apagar foco), así que
-        # no aplica el patrón de "foco en la key" de la cascada.
         _hm_evt = st.plotly_chart(
             fig, use_container_width=True,
             key="heatmap_ajuste",
             on_select="rerun", selection_mode="points",
         )
 
-    # ── Drill: clic en una celda → productos de esa Familia × Área ────────
     _hm_punto = None
     try:
         _sel = getattr(_hm_evt, "selection", None) or (
@@ -1239,11 +1069,8 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         _hm_punto = None
 
     if _hm_punto is not None:
-        _fam_sel = _hm_punto.get("y")   # Familia clicada
-        _area_sel = _hm_punto.get("x")  # Área clicada
-        # El valor se lee del pivot, no del evento: los puntos de un
-        # `go.Scatter` no traen `z`, y el `customdata` no siempre llega
-        # completo según la versión de Streamlit.
+        _fam_sel = _hm_punto.get("y")
+        _area_sel = _hm_punto.get("x")
         _val_sel = 0.0
         try:
             _val_sel = float(pivot.loc[_fam_sel, _area_sel])
@@ -1328,9 +1155,6 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                     if _neg.empty:
                         st.caption("Sin faltantes.")
                     else:
-                        # key con la celda: al cambiar de celda, Streamlit
-                        # remonta el chart en vez de reusar el nodo DOM (que
-                        # deja el chart sin re-medir el ancho → vacío).
                         st.plotly_chart(
                             _fig_drill(_neg, ERROR),
                             use_container_width=True,
@@ -1451,26 +1275,6 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
 def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None):
     """
     Gráficos de Ajuste de Inventario — layout con rail derecho (estándar).
-
-    Estructura:
-      · Filtros Área y Familia como st.multiselect (dropdowns colapsados),
-        FUERA del contenedor grande. Cada uno con su propio label.
-      · El segmented «Del periodo / Histórico» y su auto-detección por
-        rango viven ahora en `app.py` (fila superior, junto al widget de
-        fecha). Esta función solo LEE el ámbito desde:
-            st.session_state["ajuste_graf_ambito"]
-        Si por algún motivo no está seteado (p. ej. se llama fuera de la
-        vista Ajuste), cae a «Del periodo».
-      · Contenedor IZQUIERDO (grande): chips de tipo de gráfico arriba
-        (Cascada / Mapa de calor / Distribución  ó  Evolución /
-        Comparativa mensual) SIN iconos, y el gráfico elegido debajo.
-      · Contenedor DERECHO: `_panel_analisis_ajuste` renderiza pestañas
-        (st.tabs) con una mini-tabla a la vez.
-      · «Del periodo»  → usa df_f (respeta el rango aplicado).
-      · «Histórico»    → usa df_full acotado al AÑO ACTUAL.
-
-    Nota: df_full es opcional; si no se pasa, se usa df_f también para
-    Histórico (compatibilidad con llamadas antiguas).
     """
     col_fecha      = _resolver(df_f, ["FECHA APERTURA INVENTARIO", "FECHA", "MES"])
     col_familia    = _resolver(df_f, ["FAMILIA", "Nombre Familia", "NOMBRE FAMILIA"])
@@ -1488,17 +1292,9 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
         renderizar_graficos_genericos(df_f, nombre_reporte)
         return
 
-    # ── Rail derecho (selector de gráfico + "Tabla") ─────────────────────
-    # Reemplaza a las pills Gráficos/Tabla (que app.py ya no dibuja para
-    # Ajuste) y a las pills de tipo de gráfico que vivían dentro de la
-    # tarjeta. Mismo componente compartido que Compras.
     graf = _render_rail(_AJUSTE_RAIL_CATEGORIAS, "ajuste_graf_tipo",
                         btn_prefix="aj_rail_btn_")
 
-    # "Tabla" = item del rail: se delega en el callback que inyecta app.py
-    # (renderiza sus 4 chips propios + la AgGrid). El rail ya quedó dibujado
-    # arriba, así que el usuario puede volver a un gráfico. Corta acá para no
-    # dibujar los chips/gráficos de la vista Gráficos.
     if graf == "Tabla":
         if tabla_cb is not None:
             tabla_cb()
@@ -1506,19 +1302,8 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
             st.info("La tabla no está disponible en este contexto.")
         return
 
-    # ── Ámbito: se lee de session_state; app.py es la fuente de verdad ───
-    # Todas las visualizaciones respetan el rango de fecha seleccionado.
-    # Se eliminó el selector «Del periodo / Histórico».
     ambito = "actual"
 
-    # ── FILTROS FUERA DEL CONTENEDOR: Área y Familia (popover desplegable) ─
-    # Cada filtro es un botón compacto (chip) que al hacer clic abre un
-    # popover con pills multi-selección adentro. Cuando está cerrado NO
-    # ocupa espacio vertical. El label del botón muestra cuántos ítems
-    # están seleccionados (o "Área" / "Familia" si no hay filtro activo).
-    # DISEÑO UNIFICADO: los chips van en la FRANJA blanca superior
-    # (mismo contenedor y CSS fijo que los chips de la vista Tabla,
-    # que no se renderizan en Gráficos, así que no hay colisión).
     area_sel, fam_sel = [], []
     with st.container(key="chips_ajuste_tabla"):
         col_ff_area, col_ff_fam, _ = st.columns([1, 1, 4])
@@ -1553,8 +1338,6 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
                             label_visibility="collapsed",
                         ) or []
 
-
-    # ── Datos según ámbito ───────────────────────────────────────────────
     if ambito == "Histórico":
         base = df_full if df_full is not None else df_f
         anio_actual = _dt.date.today().year
@@ -1569,7 +1352,6 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     else:
         d = df_f
 
-    # ── Aplicar filtros externos de Área y Familia ───────────────────────
     if area_sel and col_area and col_area in d.columns:
         d = d[d[col_area].astype(str).isin(area_sel)]
     if fam_sel and col_familia and col_familia in d.columns:
@@ -1579,15 +1361,10 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
         st.info("No hay datos para los filtros seleccionados.")
         return
 
-    # ── LAYOUT APILADO (estándar rail): gráfico principal ARRIBA, panel de
-    #    análisis ABAJO. El tipo de gráfico ya lo eligió el rail (`graf`); las
-    #    pills de tipo que vivían dentro de la tarjeta se eliminaron. Las keys
-    #    siguen empezando con "ajuste_graf_card_" para heredar su CSS.
     _card_izq = st.container(
         border=True, key=f"ajuste_graf_card_izq_{_slug(ambito)}",
     )
     with _card_izq:
-        # Render del gráfico elegido en el rail (solo uno por rerun)
         if graf == "Evolución":
             _graf_evolucion_ajuste(d, col_fecha, col_familia,
                                    col_ajuste_val, col_valorizado)
