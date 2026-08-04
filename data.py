@@ -287,26 +287,68 @@ def _datos_demo(archivo, filas=60):
 # ===========================================================================
 
 @st.cache_data(ttl=3600)
+def _cargar_cacheable(archivo):
+    """Lectura pura del parquet. Si falla, LANZA — así @st.cache_data NO cachea
+    el fracaso. Ver `cargar()` para el porqué de este split."""
+    # ── Modo demo: sin credenciales R2 → datos sintéticos en memoria ──
+    if not secrets_disponibles():
+        return _datos_demo(archivo)
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    url = f"s3://{bucket}/{archivo}"
+    return con.execute(f"SELECT * FROM read_parquet('{url}')").df()
+
+
 def cargar(archivo):
     """
     Carga un archivo parquet desde R2.
     Si no hay secrets de R2, devuelve datos demo en su lugar.
     Retorna el DataFrame o None si hay error.
+
+    IMPORTANTE — por qué NO está cacheada esta capa (y sí la de adentro):
+    @st.cache_data guarda CUALQUIER return, incluido un None. Si esta función
+    fuese la cacheada y devolviese None ante un blip transitorio de R2 (timeout,
+    o el parquet re-escribiéndose justo al leerlo), ese None quedaba cacheado
+    ttl=3600 → 1 HORA sin datos, sin reintentar, aunque R2 ya estuviera sano.
+    Es exactamente el bug que dejó Ajuste/Compras en blanco. Al separar:
+      - _cargar_cacheable() cachea SOLO el éxito (si falla, lanza y no se guarda),
+      - este wrapper (no cacheado) traduce el fallo a None cada rerun,
+    un blip afecta solo ese rerun: F5 reintenta.
     """
-    # ── Modo demo: sin credenciales R2 → datos sintéticos en memoria ──
-    if not secrets_disponibles():
-        return _datos_demo(archivo)
     try:
-        con = get_conn()
-        bucket = st.secrets["R2_BUCKET"]
-        url = f"s3://{bucket}/{archivo}"
-        return con.execute(f"SELECT * FROM read_parquet('{url}')").df()
+        return _cargar_cacheable(archivo)
     except Exception as e:
         st.error(f"Error cargando {archivo}: {str(e)}")
         return None
 
 
 @st.cache_data(ttl=3600)
+def _cargar_rango_cacheable(archivo, col_fecha, ini, fin):
+    """Lectura filtrada por rango. Si falla, LANZA — @st.cache_data no cachea el
+    fracaso. Ver `cargar()` para el porqué del split cacheada/wrapper."""
+    # ── Modo demo: sin credenciales R2 → datos sintéticos filtrados ──
+    if not secrets_disponibles():
+        df = _datos_demo(archivo)
+        col = "Fecha" if "Fecha" in df.columns else None
+        if col:
+            m = (df[col].dt.date >= ini) & (df[col].dt.date <= fin)
+            return df[m]
+        return df
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    url = f"s3://{bucket}/{archivo}"
+    expr = (
+        f'COALESCE('
+        f'TRY_CAST("{col_fecha}" AS DATE), '
+        f'TRY_CAST(TRY_STRPTIME(CAST("{col_fecha}" AS VARCHAR), \'%d/%m/%Y\') AS DATE)'
+        f')'
+    )
+    return con.execute(
+        f"SELECT * FROM read_parquet('{url}') WHERE {expr} BETWEEN ? AND ?",
+        [ini, fin],
+    ).df()
+
+
 def cargar_rango(archivo, col_fecha, ini, fin):
     """
     Como cargar(), pero filtrando por fecha DENTRO de DuckDB, antes de
@@ -318,35 +360,45 @@ def cargar_rango(archivo, col_fecha, ini, fin):
 
     Maneja col_fecha tanto si es DATE/TIMESTAMP real como si viene como
     texto tipo '05/07/2026' (dd/mm/yyyy): COALESCE de dos intentos de cast.
+
+    No cacheada a propósito (la capa interna sí): un fallo transitorio NO debe
+    quedar cacheado 1h como None. Mismo patrón que cargar().
     """
-    # ── Modo demo: sin credenciales R2 → datos sintéticos filtrados ──
-    if not secrets_disponibles():
-        df = _datos_demo(archivo)
-        col = "Fecha" if "Fecha" in df.columns else None
-        if col:
-            m = (df[col].dt.date >= ini) & (df[col].dt.date <= fin)
-            return df[m]
-        return df
     try:
-        con = get_conn()
-        bucket = st.secrets["R2_BUCKET"]
-        url = f"s3://{bucket}/{archivo}"
-        expr = (
-            f'COALESCE('
-            f'TRY_CAST("{col_fecha}" AS DATE), '
-            f'TRY_CAST(TRY_STRPTIME(CAST("{col_fecha}" AS VARCHAR), \'%d/%m/%Y\') AS DATE)'
-            f')'
-        )
-        return con.execute(
-            f"SELECT * FROM read_parquet('{url}') WHERE {expr} BETWEEN ? AND ?",
-            [ini, fin],
-        ).df()
+        return _cargar_rango_cacheable(archivo, col_fecha, ini, fin)
     except Exception as e:
         st.error(f"Error cargando {archivo}: {str(e)}")
         return None
 
 
 @st.cache_data(ttl=3600)
+def _rango_fechas_cacheable(archivo, col_fecha):
+    """MIN/MAX de la fecha. Si falla, LANZA (no se cachea). El None de 'no hay
+    fechas' SÍ es cacheable — es un resultado válido, no un error."""
+    if not secrets_disponibles():
+        df = _datos_demo(archivo)
+        col = "Fecha" if "Fecha" in df.columns else None
+        if col is not None and not df.empty:
+            return df[col].min().date(), df[col].max().date()
+        return None
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    url = f"s3://{bucket}/{archivo}"
+    expr = (
+        f'COALESCE('
+        f'TRY_CAST("{col_fecha}" AS DATE), '
+        f'TRY_CAST(TRY_STRPTIME(CAST("{col_fecha}" AS VARCHAR), \'%d/%m/%Y\') AS DATE)'
+        f')'
+    )
+    fila = con.execute(
+        f"SELECT MIN({expr}) AS a, MAX({expr}) AS b "
+        f"FROM read_parquet('{url}')"
+    ).fetchone()
+    if fila and fila[0] is not None and fila[1] is not None:
+        return fila[0], fila[1]
+    return None
+
+
 def rango_fechas(archivo, col_fecha):
     """(min, max) de la columna de fecha del parquet, vía un agregado en
     DuckDB (MIN/MAX) que NO materializa las filas. Sirve para fijar los
@@ -355,29 +407,11 @@ def rango_fechas(archivo, col_fecha):
     Retorna (datetime.date, datetime.date) o None si falla / no hay datos.
     Maneja col_fecha como DATE/TIMESTAMP real o como texto dd/mm/yyyy,
     igual que cargar_rango().
+
+    No cacheada (la capa interna sí): un fallo transitorio de R2 no debe quedar
+    cacheado como None 1h y romper el date-picker. Mismo patrón que cargar().
     """
-    if not secrets_disponibles():
-        df = _datos_demo(archivo)
-        col = "Fecha" if "Fecha" in df.columns else None
-        if col is not None and not df.empty:
-            return df[col].min().date(), df[col].max().date()
-        return None
     try:
-        con = get_conn()
-        bucket = st.secrets["R2_BUCKET"]
-        url = f"s3://{bucket}/{archivo}"
-        expr = (
-            f'COALESCE('
-            f'TRY_CAST("{col_fecha}" AS DATE), '
-            f'TRY_CAST(TRY_STRPTIME(CAST("{col_fecha}" AS VARCHAR), \'%d/%m/%Y\') AS DATE)'
-            f')'
-        )
-        fila = con.execute(
-            f"SELECT MIN({expr}) AS a, MAX({expr}) AS b "
-            f"FROM read_parquet('{url}')"
-        ).fetchone()
-        if fila and fila[0] is not None and fila[1] is not None:
-            return fila[0], fila[1]
-        return None
+        return _rango_fechas_cacheable(archivo, col_fecha)
     except Exception:
         return None

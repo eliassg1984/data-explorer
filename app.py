@@ -250,7 +250,10 @@ with perf.phase("cargar()"):                                                # �
     else:
         df = cargar(cfg["archivo"])
 if df is None or df.empty:
-    st.warning("No se pudieron cargar los datos o el archivo está vacío.")
+    # Ya no es un estado "pegajoso": el fallo de lectura no se cachea (ver
+    # data.py::cargar), así que reintentar realmente vuelve a golpear R2.
+    st.warning("No se pudieron cargar los datos o el archivo está vacío. "
+               "Reintentá en unos segundos (F5).")
     perf.end()                                                              # ⚡ PERF
     st.stop()
 
