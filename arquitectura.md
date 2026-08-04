@@ -327,7 +327,25 @@ salvo `icono`):
     describe "cuando el rail existe", no "cuando estamos en Compras" —
     documentar el intent en el comentario para el próximo lector.
 
-17. **`@st.cache_data` NO debe envolver la función que devuelve `None`/vacío
+17. **La franja transparente + fecha-pill-izquierda + chips-centrados-blancos
+    es el DEFAULT para los 8 reportes desde 2026-08-04** (`estilos/_40_ajuste_franja.py`
+    y `estilos/_50_fecha.py`), no una particularidad de Compras/Ajuste. Antes
+    había dos bloques casi-duplicados scopeados con `:has(.st-key-app_reporte_compras)`
+    y `:has(.st-key-app_reporte_ajuste_de_inventario)`; se colapsaron en uno
+    solo (gated `@media (min-width: 901px)`, sin scope de reporte) porque los
+    8 reportes comparten los mismos containers (regla #16). Compras conserva
+    un addendum propio — sabe que tiene exactamente 2 chips (Familia/Subfamilia)
+    y les fuerza `min-width:230px`; el resto deja que cada chip mida su
+    contenido, porque puede haber más de 2 (Ajuste tiene 4). El móvil
+    (`max-width:900px`) no se tocó en esta generalización: sigue siendo el
+    estilo "tab" original en todos los reportes.
+    **Regla:** si agregás una regla que hoy solo aplica a Compras o Ajuste
+    sobre `fila_ajuste_top`/`fecha_ajuste_pill`/`chips_ajuste_tabla`,
+    preguntate primero si en realidad es universal (va en el bloque sin
+    scope) antes de scopearla con `:has(.st-key-app_reporte_*)` — scopear de
+    más es cómo se llega a los casi-duplicados que se acaban de eliminar.
+
+18. **`@st.cache_data` NO debe envolver la función que devuelve `None`/vacío
     ante un fallo transitorio: cachea el fracaso.** `cache_data` guarda
     CUALQUIER return, indexado por los args. Si `cargar(archivo)` capturaba la
     excepción y devolvía `None`, ese `None` quedaba cacheado `ttl=3600` → el
