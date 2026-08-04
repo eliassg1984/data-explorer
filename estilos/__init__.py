@@ -140,7 +140,7 @@ _SECCIONES = (
 )
 
 
-@st.cache_data
+
 def get_css():
     """Retorna el CSS completo como string (cacheado para no reinyectar)."""
     # El envoltorio ('\n' inicial y '\n    ' final) reproduce exactamente el
