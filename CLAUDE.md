@@ -117,8 +117,15 @@ Se pueden combinar: `?debug=1&diagnostico=1`. El tooltip incluye
 `codigo` (archivo:línea donde está declarada la key, buscado en `app.py`
 + `graficos/` + `tablas/`), `estilos` (archivos de `estilos/` que
 matchean el prefijo de la key), `padre` y `hermanos` (contenedores
-`st-key-*` adyacentes en el DOM). Tecla **C** copia todo eso al
-portapapeles como un bloque listo para pegar a la IA.
+`st-key-*` adyacentes en el DOM), los **pseudo-elementos `::before`/
+`::after` computados** (clave para las bandas que se pintan enteras en un
+pseudo, que `el.matches()` no puede alcanzar), el **reporte activo real**
+leído del marker `st-key-app_reporte_<slug>` del DOM (no del query
+`?reporte=`, que suele faltar), y las **franjas fijas** superior/inferior
+(pseudo + `pointer-events:none`) vía fallback por coordenadas. Al copiar
+con **C** se agregan además las **variables CSS** que usa el elemento con
+su **valor numérico actual** resuelto (`--cab-altura = 50px`). Tecla **C**
+copia todo eso al portapapeles como un bloque listo para pegar a la IA.
 
 ## Al terminar un cambio estructural
 

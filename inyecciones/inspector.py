@@ -371,7 +371,9 @@ def inject_element_inspector():
                 var k = keyDeElemento(candidatos[i]);
                 if (k && k !== mio.key) hermanos.push(k);
             }
-            return { padre: arriba.key, hermanos: hermanos.slice(0, 6) };
+            var mostrados = hermanos.slice(0, 12);
+            if (hermanos.length > 12) mostrados.push('(+' + (hermanos.length - 12) + ' mas)');
+            return { padre: arriba.key, hermanos: mostrados };
         }
         function medirElemento(el) {
             if (!el || !el.getBoundingClientRect) return null;
@@ -507,6 +509,105 @@ def inject_element_inspector():
             }
             return acumulado;
         }
+        function pseudoInfo(el, cual) {
+            // Estilos COMPUTADOS de ::before / ::after. Clave para bandas del
+            // proyecto (.st-key-fila_ajuste_top::before, .stApp::after) que se
+            // pintan enteras en un pseudo: el.matches() no puede matchear un
+            // selector de pseudo, asi que reglasQueMatchean() nunca las ve. Aca
+            // leemos el resultado ya resuelto. Devuelve string formateado o ''.
+            if (!el) return '';
+            var cs;
+            try { cs = win.getComputedStyle(el, cual); } catch(_) { return ''; }
+            if (!cs) return '';
+            var content = (cs.getPropertyValue('content') || '').trim();
+            // Pseudo ausente => content 'none' (o 'normal'). content:"" existente
+            // computa como '""' (con comillas): truthy y != none/normal.
+            if (!content || content === 'none' || content === 'normal') return '';
+            var interesantes = ['content','position','top','right','bottom','left',
+                'width','height','background-color','border-top','border-bottom',
+                'box-shadow','transform','z-index','margin','padding'];
+            var defaults = {
+                'position':'static','top':'auto','right':'auto','bottom':'auto',
+                'left':'auto','width':'auto','height':'auto',
+                'background-color':'rgba(0, 0, 0, 0)','box-shadow':'none',
+                'transform':'none','z-index':'auto','margin':'0px','padding':'0px'
+            };
+            var partes = [];
+            for (var i = 0; i < interesantes.length; i++) {
+                var k = interesantes[i];
+                var v = (cs.getPropertyValue(k) || '').trim();
+                if (!v) continue;
+                if (k === 'content') { partes.push('content=' + v); continue; }
+                if (defaults.hasOwnProperty(k) && v === defaults[k]) continue;
+                if (v === '0px' || v === 'none' || v === 'auto') continue;
+                if ((k === 'border-top' || k === 'border-bottom') && v.indexOf('0px') === 0) continue;
+                partes.push(k + '=' + v);
+            }
+            return partes.join(' | ');
+        }
+
+        function nombresVarsRoot() {
+            // Nombres de todas las custom props definidas en reglas :root
+            // (estilos/_00_base.py). Se escanea una vez y se cachea en win:
+            // los NOMBRES son estables entre reruns (los valores se resuelven
+            // frescos cada vez, por si cambian con tema/breakpoint).
+            if (win.__inspectorVarsRoot) return win.__inspectorVarsRoot;
+            var nombres = {};
+            var sheets = doc.styleSheets;
+            for (var s = 0; s < sheets.length; s++) {
+                var rules = null;
+                try { rules = sheets[s].cssRules; } catch(e) { continue; }
+                if (!rules) continue;
+                for (var r = 0; r < rules.length; r++) {
+                    var rule = rules[r];
+                    if (!rule.selectorText || !rule.style) continue;
+                    if (rule.selectorText.indexOf(':root') === -1) continue;
+                    for (var pi = 0; pi < rule.style.length; pi++) {
+                        var prop = rule.style[pi];
+                        if (prop.indexOf('--') === 0) nombres[prop] = 1;
+                    }
+                }
+            }
+            win.__inspectorVarsRoot = Object.keys(nombres);
+            return win.__inspectorVarsRoot;
+        }
+
+        function varsEnTexto(el, texto) {
+            // Extrae var(--x) del texto CSS AUTORADO (cssText de las reglas que
+            // matchean, que preserva el var() sin resolver) y devuelve cada una
+            // con su valor numerico ACTUAL, resuelto contra el elemento (las
+            // custom props cascadean, asi que el valor efectivo puede diferir
+            // del :root si un ancestro la redefine). Responde a: "usa
+            // var(--cab-altura) pero no se cuanto vale ahora".
+            if (!texto) return [];
+            var re = /var\\(\\s*(--[A-Za-z0-9_-]+)/g, m, vistos = {}, out = [];
+            var base = el || doc.documentElement;
+            var cs = win.getComputedStyle(base);
+            while ((m = re.exec(texto)) !== null) {
+                var nombre = m[1];
+                if (vistos[nombre]) continue;
+                vistos[nombre] = 1;
+                var val = (cs.getPropertyValue(nombre) || '').trim();
+                out.push(nombre + ' = ' + (val || '(sin valor)'));
+            }
+            return out;
+        }
+
+        function reporteActivoDOM() {
+            // Reporte activo REAL, leido del marker que app.py inyecta
+            // (.st-key-app_reporte_<slug>). Mas fiable que el query ?reporte=,
+            // que suele faltar cuando entras con solo ?debug=1. El slug importa
+            // porque el CSS scopeado por :has(.st-key-app_reporte_*) depende de el.
+            var nodos = doc.querySelectorAll('[class*="st-key-app_reporte_"]');
+            for (var i = 0; i < nodos.length; i++) {
+                var cn = nodos[i].className;
+                if (!cn || !cn.toString) continue;
+                var m = /st-key-app_reporte_([A-Za-z0-9_]+)/.exec(cn.toString());
+                if (m) return m[1];
+            }
+            return '';
+        }
+
         function analizarConflictos(el) {
             if (!el || !el.matches) return [];
             var propsPorRegla = {}; // prop -> [{val, imp, sel, archivo}]
@@ -555,7 +656,16 @@ def inject_element_inspector():
         function contextoPagina() {
             try {
                 var u = new URL(win.location.href);
-                var reporte = u.searchParams.get('reporte') || u.searchParams.get('r') || '(no en URL)';
+                // Fuente de verdad: el marker del DOM (app.py). El query solo se
+                // usa como respaldo/etiqueta si el DOM no lo trae.
+                var domRep = reporteActivoDOM();
+                var urlRep = u.searchParams.get('reporte') || u.searchParams.get('r') || '';
+                var reporte;
+                if (domRep) {
+                    reporte = domRep + ' (slug DOM' + (urlRep ? '' : '; no en URL') + ')';
+                } else {
+                    reporte = urlRep || '(desconocido)';
+                }
                 var w = win.innerWidth || 0;
                 var modo = w < 640 ? 'movil' : (w < 1024 ? 'tablet' : 'desktop');
                 return {
@@ -686,6 +796,12 @@ def inject_element_inspector():
                     lines.push('Box del padre (DOM directo): ' + extras2.boxPadre);
                 if (extras2.boxPadreKey)
                     lines.push('Estilos computados del padre (st-key): ' + extras2.boxPadreKey);
+                if (extras2.pseudoBefore)
+                    lines.push('Pseudo ::before (computado): { ' + extras2.pseudoBefore + ' }');
+                if (extras2.pseudoAfter)
+                    lines.push('Pseudo ::after (computado): { ' + extras2.pseudoAfter + ' }');
+                if (extras2.varsCSS && extras2.varsCSS.length)
+                    lines.push('Variables CSS usadas (valor actual): ' + extras2.varsCSS.join(' | '));
             }
             function _volcarMatcheantes(header, dict) {
                 if (!dict) return;
@@ -818,6 +934,23 @@ def inject_element_inspector():
                 if (u.extras2) for (var _k in u.extras2) extras2Copia[_k] = u.extras2[_k];
                 extras2Copia.matcheantesPadreKey = matcheantesPadreKey;
                 extras2Copia.padreKeyNombre = (u.ctx && u.ctx.padre) || '';
+                // Variables CSS: junto el cssText AUTORADO de las reglas que
+                // matchean (preserva los var() sin resolver) y las resuelvo
+                // contra el elemento. Aca (al copiar) ya tengo matcheantes.
+                try {
+                    var _textoReglas = '';
+                    for (var _a in matcheantes) {
+                        for (var _q = 0; _q < matcheantes[_a].length; _q++)
+                            _textoReglas += ' ' + (matcheantes[_a][_q].props || '');
+                    }
+                    if (matcheantesPadreKey) {
+                        for (var _a2 in matcheantesPadreKey) {
+                            for (var _q2 = 0; _q2 < matcheantesPadreKey[_a2].length; _q2++)
+                                _textoReglas += ' ' + (matcheantesPadreKey[_a2][_q2].props || '');
+                        }
+                    }
+                    extras2Copia.varsCSS = varsEnTexto(elBase, _textoReglas);
+                } catch(_) {}
                 var texto = bloqueParaIA(u.etiqueta, u.key, u.ctx, u.medidas, u.pagina, conflictos, matcheantes, extras2Copia);
                 copiarTexto(texto,
                     function(){ status.textContent = 'Copiado (' + texto.length + ' chars)'; status.style.color = '#5DCAA5'; setTimeout(function(){ status.textContent=''; }, 1800); },
@@ -1253,6 +1386,13 @@ def inject_element_inspector():
                 var lp = layoutPadre(el);
                 var bp = boxPadre(el);
                 var bpk = boxPadreKey(el);
+                // Pseudo-elementos del contenedor keyed (ahi viven los ::before/
+                // ::after del proyecto). Baratos: dos getComputedStyle. Las vars
+                // resueltas se agregan solo al copiar (necesitan las reglas
+                // matcheantes, que son O(reglas*props) y van diferidas a la C).
+                var elPseudo = ctxCont ? ctxCont.el : el;
+                var pBefore = pseudoInfo(elPseudo, '::before');
+                var pAfter  = pseudoInfo(elPseudo, '::after');
                 // Tooltip = mismo formato que "copiar para IA", pero sin
                 // conflictos/reglas-que-matchean (esos se computan al pulsar C).
                 var ctxHover = { codigo: ctxCod, estilos: ctxEst,
@@ -1262,7 +1402,8 @@ def inject_element_inspector():
                                  origenTexto: ctxOrigenTxt,
                                  construido: ctxConstruido };
                 var extras2Hover = { testids: testids, clases: clases, keysCad: keysCad,
-                                     layoutPadre: lp, boxPadre: bp, boxPadreKey: bpk };
+                                     layoutPadre: lp, boxPadre: bp, boxPadreKey: bpk,
+                                     pseudoBefore: pBefore, pseudoAfter: pAfter };
                 var etiquetaFinal = bloqueParaIA(etiqueta, ctxKey, ctxHover, medidas,
                                                  pagina, null, null, extras2Hover)
                                     + '\\n[C] copiar para IA (incluye conflictos + reglas matcheantes)';
@@ -1274,7 +1415,8 @@ def inject_element_inspector():
                            funcion: ctxFunc, refs: ctxRefs, ss: ctxSS },
                     medidas: medidas, pagina: pagina,
                     extras2: { testids: testids, clases: clases, keysCad: keysCad,
-                               layoutPadre: lp, boxPadre: bp, boxPadreKey: bpk },
+                               layoutPadre: lp, boxPadre: bp, boxPadreKey: bpk,
+                               pseudoBefore: pBefore, pseudoAfter: pAfter },
                     elemento: (ctxCont ? ctxCont.el : el),
                     elementoOriginal: el
                 };
