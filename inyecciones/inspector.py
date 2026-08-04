@@ -1116,10 +1116,27 @@ def inject_element_inspector():
             } else { elActual = null; }
         }
 
-        if (!win.__inspectorListeners) {
-            win.__inspectorListeners = true;
+        // Los listeners se registran en window.parent (el documento de la app)
+        // pero las funciones que los implementan viven en el CONTEXTO del iframe
+        // que components.html() crea. En cada rerun de Streamlit, ese iframe se
+        // destruye y se crea uno nuevo — los listeners viejos quedan colgados
+        // apuntando a funciones muertas del iframe descartado, y el tooltip
+        // deja de responder. Por eso guardamos las referencias en win y en cada
+        // rerun removemos los viejos e instalamos los del iframe actual.
+        if (win.__inspectorMouseMoveHandler) {
+            doc.removeEventListener('mousemove', win.__inspectorMouseMoveHandler, true);
+        }
+        if (win.__inspectorMouseLeaveHandler) {
+            doc.removeEventListener('mouseleave', win.__inspectorMouseLeaveHandler);
+        }
+        if (win.__inspectorKeydownHandler) {
+            doc.removeEventListener('keydown', win.__inspectorKeydownHandler);
+        }
+        if (win.__inspectorPopstateHandler) {
+            win.removeEventListener('popstate', win.__inspectorPopstateHandler);
+        }
 
-            doc.addEventListener('mousemove', function(e) {
+        win.__inspectorMouseMoveHandler = function(e) {
               try {
                 var tip = doc.getElementById('el-inspector-tip');
                 if (!tip) return;
@@ -1236,15 +1253,15 @@ def inject_element_inspector():
               } catch(err) {
                 if (win.__logErr) win.__logErr('Inspector mousemove: ' + err.message);
               }
-            }, true);
+            };
 
-            doc.addEventListener('mouseleave', function() {
+            win.__inspectorMouseLeaveHandler = function() {
                 var tip = doc.getElementById('el-inspector-tip');
                 if (tip) tip.style.opacity = '0';
                 resaltarEl(null, null);
-            });
+            };
 
-            doc.addEventListener('keydown', function(e) {
+            win.__inspectorKeydownHandler = function(e) {
                 if ((e.key === 'c' || e.key === 'C') && !e.altKey && !e.ctrlKey && !e.metaKey
                     && inspectorActivo() && win.__inspectorUltimo) {
                     var t = e.target;
@@ -1271,13 +1288,27 @@ def inject_element_inspector():
                         resaltarEl(null, null);
                     }
                 }
-            });
+            };
 
-            var _push = win.history.pushState.bind(win.history);
-            win.history.pushState = function() { _push.apply(win.history, arguments); actualizarBadge(); };
-            win.addEventListener('popstate', actualizarBadge);
+            win.__inspectorPopstateHandler = actualizarBadge;
 
-        }
+            doc.addEventListener('mousemove', win.__inspectorMouseMoveHandler, true);
+            doc.addEventListener('mouseleave', win.__inspectorMouseLeaveHandler);
+            doc.addEventListener('keydown', win.__inspectorKeydownHandler);
+            win.addEventListener('popstate', win.__inspectorPopstateHandler);
+
+            // pushState monkey-patch: solo la PRIMERA vez, para no encadenar
+            // wrappers infinitos rerun tras rerun. El wrapper original queda
+            // valido porque llama a actualizarBadge por nombre — la variable
+            // se resuelve contra el scope actual en cada llamada.
+            if (!win.__inspectorPushStatePatched) {
+                win.__inspectorPushStatePatched = true;
+                var _push = win.history.pushState.bind(win.history);
+                win.history.pushState = function() {
+                    _push.apply(win.history, arguments);
+                    if (win.__inspectorPopstateHandler) win.__inspectorPopstateHandler();
+                };
+            }
 
     })();
     </script>
