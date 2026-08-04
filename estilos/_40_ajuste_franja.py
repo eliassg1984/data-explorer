@@ -30,6 +30,19 @@ CSS = """    /* ================================================================
         box-shadow: 0 2px 4px rgba(16, 16, 20, 0.04) !important;
         z-index: 0 !important;
     }
+    /* En Ajuste de Inventario, igual que en Compras, la franja blanca se
+       vuelve TRANSPARENTE: los chips (Área/Familia) y la fecha flotan sobre el
+       fondo gris del canvas. Solo se anulan las 3 props VISIBLES (fondo, borde,
+       sombra); alto/left/right/z-index se dejan en el default de arriba — el
+       ::before es fixed y decorativo, así que su geometría ya no importa una
+       vez invisible, y tocarla podría mover el layout sin necesidad. Scopeado
+       al marker app_reporte_ajuste_de_inventario (ver arquitectura.md regla
+       #16); la regla gemela de Compras vive en estilos/_20_compras_rail.py. */
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_ajuste_de_inventario) .st-key-fila_ajuste_top::before {
+        background: transparent !important;
+        border-bottom: none !important;
+        box-shadow: none !important;
+    }
     .st-key-fila_ajuste_top > * {
         position: relative !important;
         z-index: 1 !important;
