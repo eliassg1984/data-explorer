@@ -46,25 +46,11 @@ from graficos.ventas import renderizar_graficos_ventas                # noqa: F4
 # legacy.renderizar_graficos NO se re-exporta: ya no se usa desde fuera.
 
 
-# ---------------------------------------------------------------------------
-# API pública "manual" — widgets/utilidades UI que no encajan en un dashboard.
-# ---------------------------------------------------------------------------
-
-def render_vista_pills(reporte, default="Gráficos"):
-    """Pills Gráficos/Tabla (mismo widget/estilo que la banda superior).
-
-    Se envuelve en el contenedor vistatabs_<reporte> para heredar el CSS de
-    pestañas subrayadas. Usa la key vista_seg_<reporte> (fuente única).
-    """
-    _op = {"Gráficos": ":material/monitoring: Gráficos",
-           "Tabla":    ":material/table_rows: Tabla"}
-    with st.container(key=f"vistatabs_{reporte}"):
-        v = st.pills(
-            "Vista", options=list(_op.keys()),
-            format_func=lambda o: _op[o], default=default,
-            label_visibility="collapsed", key=f"vista_seg_{reporte}",
-        )
-    return v or default
+# render_vista_pills() (pestañas Gráficos/Tabla en la franja) se eliminó
+# 2026-08-04: desde que los 8 reportes usan el rail derecho compartido (ver
+# _render_rail en graficos/base.py — "Tabla" es un item más del rail), ya
+# no queda ningún caller. Si hace falta un selector Gráficos/Tabla suelto
+# de nuevo, buscar esta función en el historial de git antes de reescribirla.
 
 
 # ---------------------------------------------------------------------------

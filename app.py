@@ -19,7 +19,8 @@ from estado_rango import (
 )
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_footer_actualizacion, inject_calendario_es, inject_fullscreen_app
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_aggrid_compras
-from graficos import renderizar_graficos_reporte, render_vista_pills
+from graficos import renderizar_graficos_reporte
+from graficos.base import _render_rail
 from asistente import inject_asistente
 from navegacion import inject_navegacion
 from perf import perf                                                       # ⚡ PERF
@@ -431,16 +432,13 @@ if True:
             [3, 1.15], vertical_alignment="center",
         )
         with col_titulo:
-            # Título oculto por pedido: en su lugar van las pestañas
-            # Gráficos/Tabla (misma key vista_seg_<reporte> → mismo estado).
-            # Requerimientos no las tiene. Compras, Ajuste, Ventas,
-            # Inventario Valorizado y Receta Venta usan el RAIL derecho (la
-            # "Tabla" es un item del rail), así que tampoco dibujan estas
-            # pills.
-            if reporte not in ("Requerimientos", "Compras",
-                               "Ajuste de Inventario", "Ventas",
-                               "Inventario Valorizado", "Receta Venta"):
-                render_vista_pills(reporte, default=_vista_default)
+            # Título oculto por pedido. Antes acá vivían las pestañas
+            # Gráficos/Tabla (render_vista_pills) — desde que los 8 reportes
+            # usan el RAIL derecho (la "Tabla" es un item más del rail, ver
+            # más abajo en _render_contenido), esta columna quedó vacía a
+            # propósito: nada que dibujar, el layout de 2 columnas se
+            # mantiene por cómo se posiciona la fecha (col_fecha_top, fixed).
+            pass
         with col_fecha_top:
             if _franja_con_fecha:
                 try:
@@ -864,6 +862,10 @@ def _render_contenido():
 
     # ── REQUERIMIENTOS ───────────────────────────────────────────────────────
     elif reporte == "Requerimientos":
+        # No tiene vista de gráficos (tabla pivote propia, sin equivalente
+        # en graficos/) — el rail lleva un solo item para el mismo chrome
+        # (franja transparente, padding reservado) que el resto de reportes.
+        _render_rail((("", (("Tabla", "Tabla"),)),), "requerimientos_rail_sel")
         _render_requerimientos(df_f, col_fecha, grupos_sel, cols_mostrar, font_px, cfg)
 
     # ── AJUSTE DE INVENTARIO — layout con rail derecho (como Compras) ───────
@@ -925,10 +927,19 @@ def _render_contenido():
         renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df,
                                     tabla_cb=_recetaventa_tabla_cb)
 
-    # ── RESTO DE REPORTES (Salidas, R. Base, …) ──────────────────────────────
+    # ── RESTO DE REPORTES (Salidas, R. Base, …) — sin dashboard propio ───────
     else:
-        vista = st.session_state.get(f"vista_seg_{reporte}", _vista_default) or _vista_default
-        if vista == "Tabla":
+        # Mismo rail que el resto, con 2 items en vez del selector Gráficos/
+        # Tabla que vivía en la franja: "Gráficos" cae al explorador genérico
+        # (renderizar_graficos_reporte sin dashboard registrado en
+        # _DASHBOARDS), "Tabla" arma la AgGrid. El orden respeta
+        # REPORTES_INICIO_TABLA (Receta Base arrancaba en Tabla).
+        _opciones_rail = (("Tabla", "Tabla"), ("Gráficos", "Gráficos"))
+        if _vista_default != "Tabla":
+            _opciones_rail = (("Gráficos", "Gráficos"), ("Tabla", "Tabla"))
+        graf = _render_rail((("", _opciones_rail),),
+                            f"rail_sel_{reporte.replace(' ', '_')}")
+        if graf == "Tabla":
             df_tabla = _filtros_chips_franja(df_f)
             if df_tabla.empty:
                 st.info("Ningún registro coincide con los filtros seleccionados.")
@@ -939,11 +950,6 @@ def _render_contenido():
 
     perf.fragment_end("_render_contenido")                                  # ⚡ PERF
 
-
-# ── Pestañas Gráficos/Tabla ──────────────────────────────────────────────────
-# Ahora viven DENTRO de la franja superior (col_titulo, más arriba), en el
-# hueco que dejó el título. Requerimientos no tiene pestañas; Compras dibuja
-# su propio G/T dentro de la fila de pestañas de tipo (graficos.py).
 
 # ── Llamada al fragment ──────────────────────────────────────────────────────
 _render_contenido()
