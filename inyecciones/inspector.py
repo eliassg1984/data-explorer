@@ -753,10 +753,15 @@ def inject_element_inspector():
             tip.id = 'el-inspector-tip';
             tip.style.cssText = [
                 'position:fixed',
-                // pointer-events:auto para poder scrollear la rueda del mouse
-                // adentro; congelamos el contenido cuando el cursor entra en
-                // el tooltip (ver mousemove handler)
-                'pointer-events:auto',
+                // pointer-events:none en el contenedor: el cursor "atraviesa"
+                // visualmente el tooltip, asi mousemove sigue apuntando al
+                // elemento debajo y no se congela cuando la caja del tooltip
+                // (que crecio mucho con los bloques del padre) engulle al
+                // cursor. Los hijos que necesitan click (btnrow) reactivan
+                // pointer-events:auto en su propio style inline.
+                // Trade-off: se pierde scroll con la rueda dentro del tooltip,
+                // pero el bloque completo ya se copia con la tecla C.
+                'pointer-events:none',
                 'z-index:2147483647',
                 // #101014: fondo casi negro del INSPECTOR (herramienta interna
                 // de depuracion). Excepcion intencional.
@@ -776,7 +781,7 @@ def inject_element_inspector():
                 'box-shadow:0 3px 12px rgba(0,0,0,0.5)'
             ].join(';');
             tip.innerHTML =
-                '<div id="el-inspector-btnrow" style="position:sticky;top:-7px;background:#101014;padding:4px 0 6px;margin:-1px 0 6px;border-bottom:1px solid #3C3489;display:flex;gap:6px;z-index:1">' +
+                '<div id="el-inspector-btnrow" style="position:sticky;top:-7px;background:#101014;padding:4px 0 6px;margin:-1px 0 6px;border-bottom:1px solid #3C3489;display:flex;gap:6px;z-index:1;pointer-events:auto">' +
                 '  <button id="el-inspector-copiar" style="background:#3C3489;color:#fff;border:0;padding:5px 10px;border-radius:4px;cursor:pointer;font:600 11px/1 sans-serif">Copiar para IA</button>' +
                 '  <span id="el-inspector-status" style="color:#5DCAA5;font:11px/1.4 sans-serif;align-self:center"></span>' +
                 '</div>' +
