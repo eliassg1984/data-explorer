@@ -384,17 +384,44 @@ def inject_element_inspector():
                          ' right=' + Math.round(r.right) + ' bottom=' + Math.round(r.bottom);
             var vw = win.innerWidth, vh = win.innerHeight;
             var visible = (r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw);
+            var est = {
+                'font-size'   : pick('font-size'),
+                'color'       : pick('color'),
+                'background'  : pick('background-color'),
+                'padding'     : pick('padding'),
+                'margin'      : pick('margin'),
+                'border-radius': pick('border-radius')
+            };
+            // Desglose de margin por lado cuando cualquiera sea no cero (incluye
+            // negativos). El shorthand 'margin' se filtra despues por ser '0px' y
+            // dejaba invisibles los margenes negativos como margin-top:-110px, que
+            // son la explicacion habitual de "por que este elemento se pega arriba".
+            var lados = ['margin-top','margin-right','margin-bottom','margin-left'];
+            var hayMargen = false;
+            for (var li = 0; li < lados.length; li++) {
+                var v = pick(lados[li]);
+                if (v && v !== '0px') hayMargen = true;
+            }
+            if (hayMargen) {
+                for (var lj = 0; lj < lados.length; lj++) est[lados[lj]] = pick(lados[lj]);
+            }
+            // Position/top/left/transform: si el elemento esta posicionado o
+            // trasladado explicitamente, importan para explicar donde termino.
+            var pos = pick('position');
+            if (pos && pos !== 'static') {
+                est['position'] = pos;
+                var offs = ['top','right','bottom','left'];
+                for (var oi = 0; oi < offs.length; oi++) {
+                    var ov = pick(offs[oi]);
+                    if (ov && ov !== 'auto' && ov !== '0px') est[offs[oi]] = ov;
+                }
+            }
+            var tr = pick('transform');
+            if (tr && tr !== 'none') est['transform'] = tr;
             return {
                 tamano: Math.round(r.width) + ' x ' + Math.round(r.height) + ' px',
                 coords: coords + (visible ? '' : ' (FUERA DEL VIEWPORT)'),
-                estilos: {
-                    'font-size'   : pick('font-size'),
-                    'color'       : pick('color'),
-                    'background'  : pick('background-color'),
-                    'padding'     : pick('padding'),
-                    'margin'      : pick('margin'),
-                    'border-radius': pick('border-radius')
-                }
+                estilos: est
             };
         }
         function archivoDeSelector(selectorText) {
@@ -575,18 +602,51 @@ def inject_element_inspector():
             }
             return info;
         }
+        function estilosCajaDe(nodo) {
+            // Devuelve string tipo "margin-top=-110px | position=absolute | transform=..."
+            // solo con las propiedades que EXPLICAN posicion/tamano y no son default.
+            // Usado por boxPadre (DOM directo) y boxPadreKey (ancestro keyed).
+            if (!nodo) return '';
+            var cs = win.getComputedStyle(nodo);
+            var partes = [];
+            var lados = ['margin-top','margin-right','margin-bottom','margin-left',
+                         'padding-top','padding-right','padding-bottom','padding-left'];
+            for (var i = 0; i < lados.length; i++) {
+                var v = (cs.getPropertyValue(lados[i]) || '').trim();
+                if (v && v !== '0px') partes.push(lados[i] + '=' + v);
+            }
+            var pos = (cs.getPropertyValue('position') || '').trim();
+            if (pos && pos !== 'static') {
+                partes.push('position=' + pos);
+                var offs = ['top','right','bottom','left'];
+                for (var oi = 0; oi < offs.length; oi++) {
+                    var ov = (cs.getPropertyValue(offs[oi]) || '').trim();
+                    if (ov && ov !== 'auto' && ov !== '0px') partes.push(offs[oi] + '=' + ov);
+                }
+            }
+            var tr = (cs.getPropertyValue('transform') || '').trim();
+            if (tr && tr !== 'none') partes.push('transform=' + tr);
+            var ov2 = (cs.getPropertyValue('overflow') || '').trim();
+            if (ov2 && ov2 !== 'visible') partes.push('overflow=' + ov2);
+            var z = (cs.getPropertyValue('z-index') || '').trim();
+            if (z && z !== 'auto' && z !== '0') partes.push('z-index=' + z);
+            return partes.join(' | ');
+        }
         function boxPadre(el) {
             var cont = contenedorConKey(el);
             if (!cont) return '';
-            var padre = cont.el.parentElement;
-            if (!padre) return '';
-            var cs = win.getComputedStyle(padre);
-            var m = cs.margin || (cs.marginTop + ' ' + cs.marginRight + ' ' + cs.marginBottom + ' ' + cs.marginLeft);
-            var p = cs.padding || (cs.paddingTop + ' ' + cs.paddingRight + ' ' + cs.paddingBottom + ' ' + cs.paddingLeft);
-            var partes = [];
-            if (m && m !== '0px' && m !== '0px 0px 0px 0px') partes.push('margin=' + m);
-            if (p && p !== '0px' && p !== '0px 0px 0px 0px') partes.push('padding=' + p);
-            return partes.join(' | ');
+            return estilosCajaDe(cont.el.parentElement);
+        }
+        function boxPadreKey(el) {
+            // Estilos computados del ANCESTRO KEYED (el que aparece como "Padre:
+            // st-key-X"), no del parentElement DOM directo. Reglas en estilos/
+            // que aplican margin/position al wrapper viven aca: si no lo dumpeamos,
+            // el "por que se pega arriba" queda invisible.
+            var mio = contenedorConKey(el);
+            if (!mio) return '';
+            var arriba = contenedorConKey(mio.el.parentElement);
+            if (!arriba) return '';
+            return estilosCajaDe(arriba.el);
         }
         function bloqueParaIA(etiqueta, key, ctx, medidas, pagina, conflictos, matcheantes, extras2) {
             var lines = ['--- copiar para IA ---'];
@@ -623,7 +683,9 @@ def inject_element_inspector():
                 if (extras2.layoutPadre)
                     lines.push('Layout del padre: ' + extras2.layoutPadre);
                 if (extras2.boxPadre)
-                    lines.push('Box del padre: ' + extras2.boxPadre);
+                    lines.push('Box del padre (DOM directo): ' + extras2.boxPadre);
+                if (extras2.boxPadreKey)
+                    lines.push('Estilos computados del padre (st-key): ' + extras2.boxPadreKey);
             }
             if (matcheantes) {
                 var archs = Object.keys(matcheantes);
@@ -1102,6 +1164,7 @@ def inject_element_inspector():
                 var ctxSnippet = buscarSnippet(ctxKey);
                 var lp = layoutPadre(el);
                 var bp = boxPadre(el);
+                var bpk = boxPadreKey(el);
                 // Tooltip = mismo formato que "copiar para IA", pero sin
                 // conflictos/reglas-que-matchean (esos se computan al pulsar C).
                 var ctxHover = { codigo: ctxCod, estilos: ctxEst,
@@ -1111,7 +1174,7 @@ def inject_element_inspector():
                                  origenTexto: ctxOrigenTxt,
                                  construido: ctxConstruido };
                 var extras2Hover = { testids: testids, clases: clases, keysCad: keysCad,
-                                     layoutPadre: lp, boxPadre: bp };
+                                     layoutPadre: lp, boxPadre: bp, boxPadreKey: bpk };
                 var etiquetaFinal = bloqueParaIA(etiqueta, ctxKey, ctxHover, medidas,
                                                  pagina, null, null, extras2Hover)
                                     + '\\n[C] copiar para IA (incluye conflictos + reglas matcheantes)';
@@ -1123,7 +1186,7 @@ def inject_element_inspector():
                            funcion: ctxFunc, refs: ctxRefs, ss: ctxSS },
                     medidas: medidas, pagina: pagina,
                     extras2: { testids: testids, clases: clases, keysCad: keysCad,
-                               layoutPadre: lp, boxPadre: bp },
+                               layoutPadre: lp, boxPadre: bp, boxPadreKey: bpk },
                     elemento: (ctxCont ? ctxCont.el : el),
                     elementoOriginal: el
                 };
