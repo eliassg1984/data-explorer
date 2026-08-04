@@ -249,3 +249,53 @@ salvo `icono`):
     lo que se dibuja. Eso valida toda la lógica del drill; lo único que
     queda sin cubrir es que el evento real llegue, que es exactamente lo
     que la regla #11 explica cómo romper.
+
+13. **Verificar el layout SIEMPRE al ancho real del usuario.** Un intento de
+    calendario propio de dos meses (revertido, 2026-08-02) se veía perfecto
+    midiendo a 1280px y llegaba roto al usuario, que trabaja con la ventana
+    a media pantalla. Antes de dar por bueno un layout, `resize_window` al
+    ancho chico *y* al grande. Lo que se aprendió de ese intento, por si
+    alguien vuelve a construir una grilla de widgets:
+    - **`st.columns` admite UN solo nivel de anidado.** No se puede hacer
+      `columns(2)` y dentro `columns(7)`. Hay que aplanar a una sola fila
+      con todas las columnas.
+    - **Por debajo de ~640px de viewport Streamlit APILA todas las
+      `st.columns`** (su propio breakpoint). Una grilla se convierte en una
+      lista vertical salvo que se fuerce `flex-direction: row`.
+    - **El `gap` entre columnas es 1rem aun con `gap="small"`.** Con 15
+      columnas son ~224px que se comen el ancho útil.
+    - **Apilar elementos dentro de cada columna desalinea las filas**:
+      cualquier diferencia de alto se acumula. Una `st.columns` por fila.
+    - **`:has()` baja a CUALQUIER profundidad**, así que
+      `columna:has(.marcador)` también matchea la columna contenedora y
+      desaparece todo. Hay que usar cadenas de hijo directo con la
+      profundidad exacta, medida en el DOM.
+    - **La detección móvil por User-Agent y los `@media` por ancho de
+      ventana DIVERGEN** en una ventana angosta de escritorio: el UA dice
+      "desktop" y el CSS aplica el tope móvil. El layout se decide por CSS,
+      nunca por UA (ya estaba en `CLAUDE.md`; acá costó un rediseño entero).
+
+14. **`st.date_input` dibuja UN solo mes y no hay forma de desdoblarlo:** es
+    un componente React precompilado. Las librerías externas
+    (`streamlit-date-picker` y similares) sí muestran dos meses, pero
+    Streamlit las encierra en un iframe dimensionado al input (~398x60) y su
+    desplegable (~576x330) queda recortado. Y con la ventana a media
+    pantalla dos meses no entran de ninguna manera: necesitan ~600px. Si el
+    requisito vuelve a aparecer, la pregunta previa es a qué ancho de
+    ventana trabaja quien lo pide.
+
+15. **`@st.cache_data` sobre una función que concatena constantes de
+    submódulos NO se invalida cuando esas constantes cambian.** El hash mira
+    los args (aquí ninguno) y el source de la función misma, no el contenido
+    de los `_CSS_*` importados. Resultado en el preview: se edita
+    `estilos/_20_compras_rail.py`, se guarda, el navegador rerender —
+    y `get_css()` devuelve el string del proceso anterior. El CSS "nuevo"
+    nunca se inyecta, así que la regla parece no aplicar cuando en realidad
+    ni siquiera se sirvió. Por eso `get_css()` en `estilos/__init__.py` **no
+    lleva caché**: el join de 11 strings es microsegundos y ganar recarga en
+    caliente vale más. Si alguien ve el decorador y quiere "optimizar",
+    releer esta regla antes.
+    Motivo (bug real, 2026-08-03): un `margin-top` cambiado en
+    `_20_compras_rail.py` no se veía y el diagnóstico apuntó al padre
+    keyed / al inspector — cuando el problema era el cache sirviendo CSS
+    viejo.

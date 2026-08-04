@@ -687,20 +687,27 @@ def inject_element_inspector():
                 if (extras2.boxPadreKey)
                     lines.push('Estilos computados del padre (st-key): ' + extras2.boxPadreKey);
             }
-            if (matcheantes) {
-                var archs = Object.keys(matcheantes);
-                if (archs.length) {
-                    lines.push('Reglas de estilos/ que matchean este elemento:');
-                    for (var a = 0; a < archs.length; a++) {
-                        var reglas = matcheantes[archs[a]];
-                        lines.push('  ' + archs[a] + ' (' + reglas.length + ' regla' + (reglas.length > 1 ? 's' : '') + '):');
-                        for (var si2 = 0; si2 < reglas.length && si2 < 4; si2++) {
-                            lines.push('     ' + reglas[si2].sel);
-                            if (reglas[si2].props) lines.push('       { ' + reglas[si2].props + ' }');
-                        }
-                        if (reglas.length > 4) lines.push('     ...(' + (reglas.length - 4) + ' mas)');
+            function _volcarMatcheantes(header, dict) {
+                if (!dict) return;
+                var archs = Object.keys(dict);
+                if (!archs.length) return;
+                lines.push(header);
+                for (var a = 0; a < archs.length; a++) {
+                    var reglas = dict[archs[a]];
+                    lines.push('  ' + archs[a] + ' (' + reglas.length + ' regla' + (reglas.length > 1 ? 's' : '') + '):');
+                    for (var si2 = 0; si2 < reglas.length && si2 < 4; si2++) {
+                        lines.push('     ' + reglas[si2].sel);
+                        if (reglas[si2].props) lines.push('       { ' + reglas[si2].props + ' }');
                     }
+                    if (reglas.length > 4) lines.push('     ...(' + (reglas.length - 4) + ' mas)');
                 }
+            }
+            _volcarMatcheantes('Reglas de estilos/ que matchean este elemento:', matcheantes);
+            if (extras2 && extras2.matcheantesPadreKey) {
+                var _lbl = extras2.padreKeyNombre
+                    ? ('Reglas de estilos/ que matchean el padre (st-key-' + extras2.padreKeyNombre + '):')
+                    : 'Reglas de estilos/ que matchean el padre (st-key):';
+                _volcarMatcheantes(_lbl, extras2.matcheantesPadreKey);
             }
             var flat = formatearConflictos(conflictos);
             for (var i = 0; i < flat.length; i++) lines.push(flat[i]);
@@ -789,9 +796,24 @@ def inject_element_inspector():
                 var u = win.__inspectorUltimo;
                 var conflictos = [];
                 var matcheantes = {};
-                try { conflictos  = analizarConflictos(u.elementoOriginal || u.elemento); } catch(_){}
-                try { matcheantes = reglasQueMatchean(u.elementoOriginal || u.elemento); } catch(_){}
-                var texto = bloqueParaIA(u.etiqueta, u.key, u.ctx, u.medidas, u.pagina, conflictos, matcheantes, u.extras2);
+                var matcheantesPadreKey = null;
+                var elBase = u.elementoOriginal || u.elemento;
+                try { conflictos  = analizarConflictos(elBase); } catch(_){}
+                try { matcheantes = reglasQueMatchean(elBase); } catch(_){}
+                // Reglas que le aplican al ancestro keyed (el reportado como
+                // "Padre: st-key-X"). Sin esto se ve el margin negativo del
+                // padre en los estilos computados pero no queda claro que
+                // regla de estilos/ lo produce.
+                try {
+                    var _mio = contenedorConKey(elBase);
+                    var _up  = _mio ? contenedorConKey(_mio.el.parentElement) : null;
+                    if (_up) matcheantesPadreKey = reglasQueMatchean(_up.el);
+                } catch(_){}
+                var extras2Copia = {};
+                if (u.extras2) for (var _k in u.extras2) extras2Copia[_k] = u.extras2[_k];
+                extras2Copia.matcheantesPadreKey = matcheantesPadreKey;
+                extras2Copia.padreKeyNombre = (u.ctx && u.ctx.padre) || '';
+                var texto = bloqueParaIA(u.etiqueta, u.key, u.ctx, u.medidas, u.pagina, conflictos, matcheantes, extras2Copia);
                 copiarTexto(texto,
                     function(){ status.textContent = 'Copiado (' + texto.length + ' chars)'; status.style.color = '#5DCAA5'; setTimeout(function(){ status.textContent=''; }, 1800); },
                     function(){ status.textContent = 'No pude copiar - abre consola para ver texto'; status.style.color = '#F0997B'; win.console && win.console.log('[INSPECTOR COPY]\\n' + texto); setTimeout(function(){ status.textContent=''; }, 3000); }

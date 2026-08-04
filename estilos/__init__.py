@@ -140,14 +140,20 @@ _SECCIONES = (
 )
 
 
-
 def get_css():
-    """Retorna el CSS completo como string (cacheado para no reinyectar)."""
-    # El envoltorio ('\n' inicial y '\n    ' final) reproduce exactamente el
-    # string literal que devolvia la version de un solo bloque.
+    """Retorna el CSS completo como string.
+
+    NO cachear con @st.cache_data: los _CSS_* son constantes importadas de
+    submodulos; st.cache_data hashea el source de get_css y sus args (aca
+    ninguno), pero no invalida cuando cambia el contenido de un submodulo
+    editado. Resultado: en el preview las ediciones a estilos/_*.py quedan
+    invisibles porque get_css devuelve el string cacheado del proceso
+    anterior. El join de 11 strings es microsegundos; no vale la pena
+    cachear a cambio de perder recarga en caliente.
+    """
     return "\n" + "\n".join(_SECCIONES) + "\n    "
 
 
 def inject_css():
-    """Inyecta el CSS cacheado en la app."""
+    """Inyecta el CSS global en la app."""
     st.markdown(get_css(), unsafe_allow_html=True)
