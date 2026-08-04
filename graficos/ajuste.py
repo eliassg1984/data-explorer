@@ -676,8 +676,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                f"color:{GRIS_TEXTO_SUAVE}'> — {insight}</span>"
                if insight else "")
             + f"</span>"
-              f"<span style='font-size:11px;color:{GRIS_TEXTO_SUAVE}'>"
-              f"{_resumen}</span>"
               f"</div>", unsafe_allow_html=True)
 
         # Cabecera de la tabla
