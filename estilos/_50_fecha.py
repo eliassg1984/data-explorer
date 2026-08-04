@@ -1,8 +1,14 @@
-"""estilos._50_fecha - Pill de fecha del header y su variante de Compras.
+"""estilos._50_fecha - Pill de fecha del header y su variante de Compras/Ajuste.
 
-La variante de Compras (fecha a la izquierda + chips centrados con fondo
-blanco) va scopeada con :has(.st-key-app_reporte_compras), NO con la key
-del rail (compras_tabs_row) — esa es compartida con Ajuste y filtraba mal.
+La variante de fecha a la izquierda + chips centrados con fondo blanco
+corre en Compras Y en Ajuste de Inventario. Compras va scopeada con
+:has(.st-key-app_reporte_compras) (incluye su propio reset móvil, ver
+mas abajo); Ajuste tiene su BLOQUE PROPIO mas abajo, solo en desktop
+(min-width:901px) — Ajuste ya trae su propia grilla 2x2 para chips en
+móvil (definida en _40_ajuste_franja.py) y no se quiso arriesgar a
+romperla sin poder verla en modo demo (falta la columna "ajuste
+valorizado" — ver CLAUDE.md). Ninguno usa la key del rail
+(compras_tabs_row) — esa es compartida entre reportes y filtraba mal.
 Ver arquitectura.md regla #16.
 
 Extraido de estilos.py (lineas 1084-1280 del original).
@@ -211,6 +217,71 @@ CSS = """    /* ================================================================
         [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
             .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
             margin-top: -18px !important;
+        }
+    }
+
+    /* ================================================================== */
+    /* AJUSTE DE INVENTARIO: mismo tratamiento que Compras (fecha a la     */
+    /* izquierda + chips centrados/blancos) — SOLO DESKTOP.                */
+    /* Se scopea aparte de Compras (no se suma al :has() de arriba) porque */
+    /* Ajuste ya tiene su propia grilla 2x2 para chips en móvil            */
+    /* (_40_ajuste_franja.py) y esta no se pudo ver renderizada en modo    */
+    /* demo local (falta la columna "ajuste valorizado" → cae al          */
+    /* explorador genérico, ver CLAUDE.md) — se prefirió no arriesgar a    */
+    /* romperla a ciegas reutilizando el reset móvil de Compras.           */
+    /* ================================================================== */
+    @media (min-width: 901px) {
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_ajuste_de_inventario)
+            .st-key-fecha_ajuste_pill {
+            left: 175px !important;
+            right: auto !important;
+        }
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_ajuste_de_inventario)
+            .st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
+            min-height: 28px !important;
+            box-sizing: border-box !important;
+            padding: 0 14px !important;
+            border: none !important;
+            border-radius: 999px !important;
+            background: var(--accent) !important;
+            box-shadow: none !important;
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            font-size: 13px !important;
+            letter-spacing: normal !important;
+        }
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_ajuste_de_inventario)
+            .st-key-fecha_ajuste_pill [data-testid="stPopover"] button [data-testid="stIconMaterial"] {
+            color: #ffffff !important;
+            font-size: 15px !important;
+        }
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_ajuste_de_inventario)
+            .st-key-fecha_ajuste_pill [data-testid="stPopover"] button:hover {
+            border: none !important;
+            background: var(--accent-hover) !important;
+            color: #ffffff !important;
+        }
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_ajuste_de_inventario)
+            .st-key-fecha_ajuste_pill [data-testid="stPopover"] button[aria-expanded="true"] {
+            border: none !important;
+            background: var(--accent-deep) !important;
+        }
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_ajuste_de_inventario)
+            .st-key-chips_ajuste_tabla {
+            left: calc((154px + (100vw - 131px)) / 2) !important;
+            right: auto !important;
+            transform: translateX(-50%) !important;
+            max-width: calc(100vw - 154px - 131px - 380px) !important;
+        }
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_ajuste_de_inventario)
+            .st-key-chips_ajuste_tabla [data-testid="stPopover"] button {
+            background: #ffffff !important;
+            padding-right: 22px !important;
+            justify-content: flex-start !important;
+        }
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_ajuste_de_inventario)
+            .st-key-chips_ajuste_tabla [data-testid="stPopover"] button:hover {
+            background: var(--accent-tint, #EEEDFE) !important;
         }
     }
 
