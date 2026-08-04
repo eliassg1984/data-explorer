@@ -74,7 +74,7 @@ CSS = """    /* ================================================================
        de ahi los ~154px. La fecha se ancla al lado derecho (más abajo). */
     .st-key-chips_ajuste_tabla {
         position: fixed !important;
-        top: 6px !important;
+        top: 8px !important;
         left: 154px !important;
         right: auto !important;
         width: auto !important;
