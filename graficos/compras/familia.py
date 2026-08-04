@@ -136,7 +136,7 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
         barmode="stack" if vista == "Apilado" else "group",
         yaxis=dict(tickprefix=_pref, tickformat=",.0f"),
         legend=dict(orientation="h", y=-0.22, x=0, font=dict(size=10)))
-    fig.update_xaxes(type="category", tickangle=-45)
+    fig.update_xaxes(type="category", tickangle=0)
     # Muchos periodos → rangeslider para deslizar horizontal + ventana inicial
     # (últimos ~12). El usuario arrastra el slider para ver periodos anteriores.
     if len(periodos) > 12:
