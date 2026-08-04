@@ -90,20 +90,20 @@ def renderizar_graficos_reporte(df_f, reporte, cfg, df_full=None, tabla_cb=None)
     df_full: DataFrame sin el filtro de fecha aplicado (opcional).
         Solo Ajuste lo usa (pestaña Histórico); los demás lo ignoran.
     tabla_cb: callback que renderiza la tabla AgGrid del reporte. Lo usan
-        los dashboards con rail donde "Tabla" es un item más (hoy Ajuste y
-        Ventas; el patrón estándar a futuro). Los demás lo ignoran. La FIRMA
-        del callback la decide cada dashboard (documentado en su docstring):
-        Ajuste lo llama sin args (sus chips viven en app.py, aparte del
-        rail); Ventas le pasa `d` — el df ya filtrado por sus propios chips
-        (Grupo/Sub Grupo/Canal/Servicio, dentro de graficos/ventas.py) para
-        que la Tabla no tenga un estado de filtros distinto al de los
-        gráficos.
+        los dashboards con rail donde "Tabla" es un item más (hoy Ajuste,
+        Ventas e Inventario Valorizado; el patrón estándar a futuro). Los
+        demás lo ignoran. La FIRMA del callback la decide cada dashboard
+        (documentado en su docstring): Ajuste lo llama sin args (sus chips
+        viven en app.py, aparte del rail); Ventas e Inventario Valorizado
+        le pasan `d` — el df ya filtrado por sus propios chips (dentro de
+        cada módulo) para que la Tabla no tenga un estado de filtros
+        distinto al de los gráficos.
     """
     render = _DASHBOARDS.get(reporte)
     if render is not None:
         # Solo los dashboards migrados al rail aceptan tabla_cb; el resto
         # conserva su firma antigua (la vista Tabla la maneja app.py).
-        if reporte in ("Ajuste de Inventario", "Ventas"):
+        if reporte in ("Ajuste de Inventario", "Ventas", "Inventario Valorizado"):
             render(df_f, reporte, df_full=df_full, tabla_cb=tabla_cb)
         else:
             render(df_f, reporte, df_full=df_full)

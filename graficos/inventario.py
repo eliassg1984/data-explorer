@@ -10,10 +10,32 @@ import streamlit as st
 
 
 from tema import ACENTO, TEXTO_PRINCIPAL
-from graficos.base import PALETA_CALLAI, _compras_layout, _compras_truncar, _resolver, renderizar_graficos_genericos
+from graficos.base import (
+    PALETA_CALLAI, _compras_layout, _compras_truncar, _render_rail,
+    _resolver, renderizar_graficos_genericos,
+)
 
-def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None):
-    """Dashboard de Inventario Valorizado: 4 gráficos + 2 mini-tops."""
+# Rail vertical fijo al borde DERECHO (componente compartido _render_rail,
+# ver graficos/base.py) — reemplaza el st.pills que vivia ANTES adentro del
+# card izquierdo. El panel "mini-tops" (Mayor cantidad/Precio mas alto) NO
+# es una opcion del rail: es un panel FIJO, siempre visible junto al grafico
+# elegido (ver col_der mas abajo) — no es parte del selector de tipo.
+_INVENTARIO_RAIL_CATEGORIAS = (
+    ("Vista", (("Área y familia",            "Área y familia"),
+               ("Torta familias",            "Torta"),
+               ("Top por área (valor)",      "Top valor"),
+               ("Top por área (cantidad)",   "Top cantidad"))),
+    ("Datos", (("Tabla", "Tabla"),)),
+)
+
+
+def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=None):
+    """Dashboard de Inventario Valorizado: 4 gráficos + 2 mini-tops.
+
+    `tabla_cb`: callback que arma la Tabla (inyectado por app.py). Se le
+    pasa `d` — el df ya filtrado por los chips propios (Área/Familia) —
+    igual que Ventas, para no tener un estado de filtros distinto entre
+    Tabla y gráficos."""
     col_area  = _resolver(df_f, ["Nombre Area", "NOMBRE AREA", "Area"])
     col_fam   = _resolver(df_f, ["Nombre Familia", "NOMBRE FAMILIA", "Familia"])
     col_prod  = _resolver(df_f, ["Nombre Producto", "NOMBRE PRODUCTO", "Producto"])
@@ -71,18 +93,20 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None):
     _cant = (pd.to_numeric(d[col_cant], errors="coerce").fillna(0)
              if col_cant else None)
 
-    opciones = ["Área y familia", "Torta familias",
-                "Top por área (valor)", "Top por área (cantidad)"]
+    graf = _render_rail(_INVENTARIO_RAIL_CATEGORIAS, "inv_graf_tipo",
+                        btn_prefix="inv_rail_btn_")
+
+    if graf == "Tabla":
+        if tabla_cb is not None:
+            tabla_cb(d)
+        else:
+            st.info("La tabla no está disponible en este contexto.")
+        return
 
     col_izq, col_der = st.columns([1.7, 1])
 
     with col_izq:
         with st.container(border=True, key="ajuste_graf_card_izq_inv"):
-            graf = st.pills(
-                "Gráfico", opciones, default=opciones[0],
-                key="inv_graf_tipo", label_visibility="collapsed",
-            ) or opciones[0]
-
             if graf == "Área y familia" and col_area and col_fam:
                 g = (pd.DataFrame({"area": d[col_area].astype(str),
                                    "fam": d[col_fam].astype(str),

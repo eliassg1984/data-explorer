@@ -433,11 +433,12 @@ if True:
         with col_titulo:
             # Título oculto por pedido: en su lugar van las pestañas
             # Gráficos/Tabla (misma key vista_seg_<reporte> → mismo estado).
-            # Requerimientos no las tiene. Compras, Ajuste y Ventas usan el
-            # RAIL derecho (la "Tabla" es un item del rail), así que tampoco
-            # dibujan estas pills.
+            # Requerimientos no las tiene. Compras, Ajuste, Ventas e
+            # Inventario Valorizado usan el RAIL derecho (la "Tabla" es un
+            # item del rail), así que tampoco dibujan estas pills.
             if reporte not in ("Requerimientos", "Compras",
-                               "Ajuste de Inventario", "Ventas"):
+                               "Ajuste de Inventario", "Ventas",
+                               "Inventario Valorizado"):
                 render_vista_pills(reporte, default=_vista_default)
         with col_fecha_top:
             if _franja_con_fecha:
@@ -860,14 +861,6 @@ def _render_contenido():
         # a los gráficos y a la Tabla.
         renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
 
-    # ── INVENTARIO VALORIZADO ────────────────────────────────────────────────
-    elif reporte == "Inventario Valorizado":
-        vista = st.session_state.get(f"vista_seg_{reporte}", _vista_default) or _vista_default
-        if vista == "Tabla":
-            _render_tabla(_filtros_chips_franja(df_f))
-        else:
-            renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
-
     # ── REQUERIMIENTOS ───────────────────────────────────────────────────────
     elif reporte == "Requerimientos":
         _render_requerimientos(df_f, col_fecha, grupos_sel, cols_mostrar, font_px, cfg)
@@ -903,6 +896,19 @@ def _render_contenido():
 
         renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df,
                                     tabla_cb=_ventas_tabla_cb)
+
+    # ── INVENTARIO VALORIZADO — layout con rail derecho (como Ventas) ───────
+    elif reporte == "Inventario Valorizado":
+        # Mismo patrón que Ventas: el callback recibe `d`, ya filtrado por
+        # los chips propios (Área/Familia, dentro de graficos/inventario.py).
+        def _inventario_tabla_cb(d):
+            if d.empty:
+                st.info("Ningún registro coincide con los filtros seleccionados.")
+            else:
+                _render_tabla(d)
+
+        renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df,
+                                    tabla_cb=_inventario_tabla_cb)
 
     # ── RESTO DE REPORTES (Salidas, R. Base, R. Venta, …) ────────────────────
     else:
