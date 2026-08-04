@@ -304,8 +304,9 @@ salvo `icono`):
     scopear CSS con `:has()`.** Varias keys tienen nombres que sugieren un
     reporte (`compras_tabs_row`, `chips_ajuste_tabla`, `fila_ajuste_top`)
     pero en realidad son de componentes REUSADOS entre reportes:
-    - `compras_tabs_row` es la key del rail COMPARTIDO (Compras + Ajuste)
-      — ver el docstring en `graficos/base.py::_render_rail`.
+    - `compras_tabs_row` es la key del rail COMPARTIDO — desde 2026-08-04
+      lo usan los 8 reportes (antes solo Compras + Ajuste), ver el
+      docstring en `graficos/base.py::_render_rail` y la regla #17.
     - `chips_ajuste_tabla` es el contenedor de chips-filtro y se usa en
       TODOS los reportes (Compras, Ajuste, Ventas, Inventario…).
     - `fila_ajuste_top` es la franja superior de todos los reportes.
@@ -345,7 +346,29 @@ salvo `icono`):
     scope) antes de scopearla con `:has(.st-key-app_reporte_*)` — scopear de
     más es cómo se llega a los casi-duplicados que se acaban de eliminar.
 
-18. **`@st.cache_data` NO debe envolver la función que devuelve `None`/vacío
+18. **Los 8 reportes usan el rail derecho (`_render_rail`) desde 2026-08-04**
+    — antes solo Compras y Ajuste. `render_vista_pills` (pestañas Gráficos/
+    Tabla sueltas en la franja) se ELIMINÓ de `graficos/__init__.py`: ya no
+    tiene caller. Si un reporte tiene dashboard propio (Ajuste, Compras,
+    Ventas, Inventario Valorizado, Receta Venta), "Tabla" es un item más del
+    rail. Si NO tiene dashboard (Salidas, Receta Base), el rail tiene 2 items
+    genéricos ("Gráficos" → `renderizar_graficos_reporte` sin entrada en
+    `_DASHBOARDS`, cae al explorador; "Tabla" → AgGrid). Requerimientos
+    (tabla pivote propia, sin graficos) tiene un rail de 1 solo item.
+    **El callback `tabla_cb` no tiene firma fija — cada dashboard documenta
+    la suya en su docstring:**
+    - Sin chips propios (Ajuste, Receta Venta): `tabla_cb()` sin args — usan
+      los filtros genéricos que arma app.py (`_filtros_chips_franja`).
+    - Con chips propios (Ventas, Inventario Valorizado): `tabla_cb(d)` — se
+      les pasa el df YA filtrado por sus propios chips (definidos dentro del
+      módulo del dashboard), para que la Tabla no tenga un estado de filtros
+      distinto al de los gráficos. Ver `graficos/__init__.py::renderizar_graficos_reporte`.
+    **Antes de agregar un dashboard nuevo:** decidí si va a tener chips de
+    filtro propios (entonces `tabla_cb(d)`) o no (entonces `tabla_cb()`) —
+    mezclar los dos estilos en un mismo dashboard es la fuente de bugs más
+    probable acá.
+
+19. **`@st.cache_data` NO debe envolver la función que devuelve `None`/vacío
     ante un fallo transitorio: cachea el fracaso.** `cache_data` guarda
     CUALQUIER return, indexado por los args. Si `cargar(archivo)` capturaba la
     excepción y devolvía `None`, ese `None` quedaba cacheado `ttl=3600` → el
