@@ -28,7 +28,20 @@ from tema import (
     ACENTO, BLANCO, GRIS_BORDE, PALETA_SERIES, SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
 )
 from graficos.base import (
-    _card, _layout, _resolver, _wrap_cat, renderizar_graficos_genericos,
+    _card, _layout, _render_rail, _resolver, _wrap_cat,
+    renderizar_graficos_genericos,
+)
+
+# Rail vertical fijo al borde DERECHO (componente compartido _render_rail,
+# ver graficos/base.py) — reemplaza el st.pills que vivia ANTES adentro del
+# card. El selector "Medir por" (Costo/Cantidad) y el selectbox de Plato NO
+# son parte del rail: son parametros de CADA grafico (Tabla no los usa).
+_RECETAVENTA_RAIL_CATEGORIAS = (
+    ("Vista", (("Sankey por plato",        "Sankey"),
+               ("Composición del plato",   "Composición"),
+               ("Ranking de platos",       "Ranking"),
+               ("Ingredientes clave",      "Ingredientes"))),
+    ("Datos", (("Tabla", "Tabla"),)),
 )
 
 
@@ -219,8 +232,13 @@ def _ingredientes_clave(d, col_plato, col_item, col_valor, es_soles):
 
 
 # ─── Punto de entrada público ───────────────────────────────────────────────
-def renderizar_graficos_recetaventa(df_f, nombre_reporte, df_full=None):
-    """Dashboard de Receta Venta. df_full se ignora (catálogo sin fecha)."""
+def renderizar_graficos_recetaventa(df_f, nombre_reporte, df_full=None, tabla_cb=None):
+    """Dashboard de Receta Venta. df_full se ignora (catálogo sin fecha).
+
+    `tabla_cb`: callback que arma la Tabla (inyectado por app.py), llamado
+    SIN args — igual que Ajuste: este dashboard no tiene chips propios de
+    filtro (a diferencia de Ventas/Inventario), así que la Tabla usa los
+    filtros genéricos que ya arma app.py."""
     col_plato = _resolver(df_f, ["Nomb Plato", "Nombre Plato", "PLATO", "Plato"])
     col_item = _resolver(df_f, ["Item Rv", "Item RV", "ITEM RV", "Item",
                                 "Nombre Item", "Insumo", "Ingrediente",
@@ -237,6 +255,16 @@ def renderizar_graficos_recetaventa(df_f, nombre_reporte, df_full=None):
             "Mostrando explorador genérico."
         )
         renderizar_graficos_genericos(df_f, nombre_reporte)
+        return
+
+    graf = _render_rail(_RECETAVENTA_RAIL_CATEGORIAS, "rv_graf_tipo",
+                        btn_prefix="rv_rail_btn_")
+
+    if graf == "Tabla":
+        if tabla_cb is not None:
+            tabla_cb()
+        else:
+            st.info("La tabla no está disponible en este contexto.")
         return
 
     # ── Métrica del ancho/valor: Total (costo) o Cantidad ────────────────
@@ -260,15 +288,7 @@ def renderizar_graficos_recetaventa(df_f, nombre_reporte, df_full=None):
     plato_rico = str(totales.idxmax()) if not totales.empty else (platos[0] if platos else "")
     idx_def = platos.index(plato_rico) if plato_rico in platos else 0
 
-    # ── Chips de tipo de gráfico (uno a la vez) ──────────────────────────
-    opciones = ["Sankey por plato", "Composición del plato",
-                "Ranking de platos", "Ingredientes clave"]
     with st.container(border=True, key="rv_graf_card"):
-        graf = st.pills("Gráfico", opciones, default=opciones[0],
-                        key="rv_graf_tipo", label_visibility="collapsed")
-        if not graf:
-            graf = opciones[0]
-
         # El selector de plato solo aparece para las vistas por plato.
         plato = None
         if graf in ("Sankey por plato", "Composición del plato"):

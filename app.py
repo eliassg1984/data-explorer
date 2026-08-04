@@ -433,12 +433,13 @@ if True:
         with col_titulo:
             # Título oculto por pedido: en su lugar van las pestañas
             # Gráficos/Tabla (misma key vista_seg_<reporte> → mismo estado).
-            # Requerimientos no las tiene. Compras, Ajuste, Ventas e
-            # Inventario Valorizado usan el RAIL derecho (la "Tabla" es un
-            # item del rail), así que tampoco dibujan estas pills.
+            # Requerimientos no las tiene. Compras, Ajuste, Ventas,
+            # Inventario Valorizado y Receta Venta usan el RAIL derecho (la
+            # "Tabla" es un item del rail), así que tampoco dibujan estas
+            # pills.
             if reporte not in ("Requerimientos", "Compras",
                                "Ajuste de Inventario", "Ventas",
-                               "Inventario Valorizado"):
+                               "Inventario Valorizado", "Receta Venta"):
                 render_vista_pills(reporte, default=_vista_default)
         with col_fecha_top:
             if _franja_con_fecha:
@@ -910,7 +911,21 @@ def _render_contenido():
         renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df,
                                     tabla_cb=_inventario_tabla_cb)
 
-    # ── RESTO DE REPORTES (Salidas, R. Base, R. Venta, …) ────────────────────
+    # ── RECETA VENTA — layout con rail derecho (como Ajuste) ────────────────
+    elif reporte == "Receta Venta":
+        # Sin chips propios (a diferencia de Ventas/Inventario): igual que
+        # Ajuste, el callback usa los filtros genéricos que ya arma app.py.
+        def _recetaventa_tabla_cb():
+            df_tabla = _filtros_chips_franja(df_f)
+            if df_tabla.empty:
+                st.info("Ningún registro coincide con los filtros seleccionados.")
+            else:
+                _render_tabla(df_tabla)
+
+        renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df,
+                                    tabla_cb=_recetaventa_tabla_cb)
+
+    # ── RESTO DE REPORTES (Salidas, R. Base, …) ──────────────────────────────
     else:
         vista = st.session_state.get(f"vista_seg_{reporte}", _vista_default) or _vista_default
         if vista == "Tabla":
