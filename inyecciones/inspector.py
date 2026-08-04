@@ -1106,6 +1106,43 @@ def inject_element_inspector():
             return null;
         }
 
+        function franjaEnCoords(x, y) {
+            // Fallback para las franjas fijas superior/inferior. Ambas se pintan
+            // con pseudo-elementos (::before / ::after) y/o llevan pointer-events:
+            // none, asi que e.target nunca cae en su nodo real. Al hoverear su
+            // area visual, mapeamos manualmente al st-key correspondiente para
+            // que el usuario pueda copiar contexto y decirle a la IA "esta zona".
+            var vh = win.innerHeight;
+            var vw = win.innerWidth;
+            // Rail izquierdo (~90px). Fuera del rail = a partir de x=90.
+            var xUtil = x >= 90;
+            if (!xUtil) return null;
+            // Franja superior: 0..var(--cab-altura). Leemos la variable en runtime
+            // para no hardcodear el 50px por si cambia en base.
+            var altoCab = 50;
+            try {
+                var v = win.getComputedStyle(doc.documentElement)
+                          .getPropertyValue('--cab-altura').trim();
+                if (v.endsWith('px')) altoCab = parseFloat(v) || 50;
+            } catch(_){}
+            if (y >= 0 && y <= altoCab) {
+                var f = doc.querySelector('.st-key-fila_ajuste_top');
+                if (f) return { el: f, etiqueta:
+                    '[franja] Franja superior fija\\n' +
+                    '  pintada por: .st-key-fila_ajuste_top::before (position:fixed)\\n' +
+                    '  nota: pseudo-elemento — el mouse no lo toca; contexto por ubicacion' };
+            }
+            // Franja inferior: ultimos ~42px (coincide con altura .stApp::after).
+            if (y >= vh - 42 && y <= vh && x <= vw) {
+                var f2 = doc.querySelector('.st-key-footer_actualizacion');
+                if (f2) return { el: f2, etiqueta:
+                    '[franja] Franja inferior fija (hora de actualizacion)\\n' +
+                    '  pintada por: .stApp::after (position:fixed) + .st-key-footer_actualizacion\\n' +
+                    '  nota: pointer-events:none — el mouse la atraviesa; contexto por ubicacion' };
+            }
+            return null;
+        }
+
         var elActual = null;
         function resaltarEl(el, etiqueta) {
             if (elActual) { elActual.style.outline = ''; elActual.style.outlineOffset = ''; }
@@ -1175,6 +1212,13 @@ def inject_element_inspector():
                     try { etiqueta = labelDe(cursor, e.clientX, e.clientY); } catch(err) { etiqueta = null; }
                     if (etiqueta) { el = cursor; break; }
                     cursor = cursor.parentElement;
+                }
+                if (!etiqueta) {
+                    // Franjas fijas (superior/inferior) — nunca son e.target
+                    // porque son pseudo-elementos y/o pointer-events:none.
+                    var fj = null;
+                    try { fj = franjaEnCoords(e.clientX, e.clientY); } catch(err) { fj = null; }
+                    if (fj) { el = fj.el; etiqueta = fj.etiqueta; }
                 }
                 if (etiqueta) resaltarEl(el, etiqueta);
                 else resaltarEl(null, null);
