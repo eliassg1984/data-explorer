@@ -70,10 +70,44 @@ CSS = """    /* ================================================================
     }
     /* En Compras la franja es MAS BAJA (34px, no 50px) — el ::before
        la sobreescribe directamente pero --cab-altura sigue en 50.
-       Aquí re-alineamos el underline al borde real de esa franja. */
+       Aquí re-alineamos el underline al borde real de esa franja.
+
+       Ademas, en Compras la fecha comparte fila (top:8px) con los chips
+       Familia/Subfamilia (ver mas abajo y estilos/_40_ajuste_franja.py) —
+       el look de "tab" (degradado + borde inferior) queda de cuando vivia
+       sola en la franja opaca y ya no combina con esos chips. Se reemplaza
+       por un PILL SOLIDO color acento: mismo alto que los chips (26px)
+       para leerse como parte del mismo grupo, pero lleno para anclar
+       visualmente el control mas importante de la fila. */
     [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
         .st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
-        min-height: 26px !important;   /* 34px franja - 8px top */
+        min-height: 28px !important;   /* alto real de los chips vecinos (con su borde de 1px) */
+        box-sizing: border-box !important;
+        padding: 0 14px !important;
+        border: none !important;
+        border-radius: 999px !important;
+        background: var(--accent) !important;
+        box-shadow: none !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+        font-size: 13px !important;
+        letter-spacing: normal !important;
+    }
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
+        .st-key-fecha_ajuste_pill [data-testid="stPopover"] button [data-testid="stIconMaterial"] {
+        color: #ffffff !important;
+        font-size: 15px !important;
+    }
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
+        .st-key-fecha_ajuste_pill [data-testid="stPopover"] button:hover {
+        border: none !important;
+        background: var(--accent-hover) !important;
+        color: #ffffff !important;
+    }
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
+        .st-key-fecha_ajuste_pill [data-testid="stPopover"] button[aria-expanded="true"] {
+        border: none !important;
+        background: var(--accent-deep) !important;
     }
 
     /* ================================================================== */
