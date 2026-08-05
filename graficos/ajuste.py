@@ -621,48 +621,9 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             f"<div style='width:11%;text-align:right'>Estado</div>"
             f"</div>", unsafe_allow_html=True)
 
-        # Una fila por familia.
-        for _f in _filas:
-            _es_foco = (not _f["total"]) and _f["cat"] == focus
-            with st.container(
-                    key=f"ajcas_fila_{_slug(_f['cat'])}"
-                        + ("_on" if _es_foco else "")):
-                _c = st.columns([0.04, 0.30, 0.17, 0.28, 0.10, 0.11])
-                with _c[0]:
-                    if not _f["total"]:
-                        if st.button(
-                            "▾" if _es_foco else "▸",
-                            key=f"ajcas_btn_{_slug(_f['cat'])}",
-                            help=("Cerrar el detalle" if _es_foco
-                                  else f"Ver productos de {_f['cat']}"),
-                            type="primary" if _es_foco else "secondary",
-                        ):
-                            st.session_state[_focus_key] = (
-                                None if _es_foco else _f["cat"])
-                            st.rerun()
-                for _col, _fn in zip(_c[1:], (_celda_familia, _celda_monto,
-                                              _celda_barra, _celda_pctval,
-                                              _celda_badge)):
-                    with _col:
-                        st.markdown(_fn(_f), unsafe_allow_html=True)
-
-        # Leyenda
-        def _punto(color, txt):
-            return (f"<span style='display:inline-flex;align-items:center;"
-                    f"gap:5px'><span style='display:inline-block;width:8px;"
-                    f"height:8px;border-radius:999px;background:{color}'>"
-                    f"</span>{txt}</span>")
-        st.markdown(
-            f"<div style='display:flex;gap:16px;flex-wrap:wrap;"
-            f"font-size:9.5px;color:{GRIS_TEXTO_SUAVE};margin-top:10px'>"
-            + _punto(ERROR, "Faltante") + _punto(EXITO, "Sobrante")
-            + _punto(GRIS_TEXTO_MEDIO, "Total neto")
-            + f"<span style='color:{GRIS_BORDE}'>|</span>"
-              f"<span>Cada barra arranca donde terminó la anterior</span>"
-              f"</div>", unsafe_allow_html=True)
-
-        # ── Panel de drill (solo si hay foco) ─────────────────────────────
-        if focus:
+        def _render_drill(focus_cat):
+            """Panel de drill: se llama inline, justo debajo de la fila
+            de la familia clickeada (no al final de la tabla)."""
             if not st.session_state.get("ajcas_panel_prev", False):
                 st.session_state["ajcas_panel_inst"] = (
                     st.session_state.get("ajcas_panel_inst", 0) + 1)
@@ -670,7 +631,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             _inst = st.session_state.get("ajcas_panel_inst", 0)
 
             col_d = st.container(border=True, key="ajcas_panel_drill")
-            _det = df[df[grp_col].astype(str) == focus]
+            _det = df[df[grp_col].astype(str) == focus_cat]
             dim = col_producto or (col_area if grp_col == col_familia
                                    else col_familia)
             dim_lbl = "producto" if dim == col_producto else str(dim).lower()
@@ -679,12 +640,12 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                 hdr_l, hdr_r = st.columns([4, 1])
                 with hdr_l:
                     _total_focus = float(
-                        df[df[grp_col].astype(str) == focus][col_ajuste_val].sum()
+                        df[df[grp_col].astype(str) == focus_cat][col_ajuste_val].sum()
                     )
                     _color_total = (DANGER_TEXT if _total_focus < 0
                                     else CELDA_POS_TEXTO)
                     st.markdown(
-                        f"**{focus}**<br>"
+                        f"**{focus_cat}**<br>"
                         f"<span style='font-size:11px;color:{GRIS_TEXTO_SUAVE}'>"
                         f"top {dim_lbl}s · faltante total "
                         f"<span style='color:{_color_total};font-weight:500'>"
@@ -799,7 +760,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                     _fig_split(_neg, ERROR),
                                     use_container_width=True,
                                     key=("ajuste_cascada_drill_neg_"
-                                         f"{_slug(focus)}_{_inst}"),
+                                         f"{_slug(focus_cat)}_{_inst}"),
                                 )
                         with _pb:
                             _titulo_split("Sobrantes", CELDA_POS_TEXTO)
@@ -810,9 +771,54 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                     _fig_split(_pos, EXITO),
                                     use_container_width=True,
                                     key=("ajuste_cascada_drill_pos_"
-                                         f"{_slug(focus)}_{_inst}"),
+                                         f"{_slug(focus_cat)}_{_inst}"),
                                 )
-        else:
+
+        # Una fila por familia. El drill de la familia clickeada se
+        # inserta justo debajo de su fila (no al final de la tabla).
+        for _f in _filas:
+            _es_foco = (not _f["total"]) and _f["cat"] == focus
+            with st.container(
+                    key=f"ajcas_fila_{_slug(_f['cat'])}"
+                        + ("_on" if _es_foco else "")):
+                _c = st.columns([0.04, 0.30, 0.17, 0.28, 0.10, 0.11])
+                with _c[0]:
+                    if not _f["total"]:
+                        if st.button(
+                            "▾" if _es_foco else "▸",
+                            key=f"ajcas_btn_{_slug(_f['cat'])}",
+                            help=("Cerrar el detalle" if _es_foco
+                                  else f"Ver productos de {_f['cat']}"),
+                            type="primary" if _es_foco else "secondary",
+                        ):
+                            st.session_state[_focus_key] = (
+                                None if _es_foco else _f["cat"])
+                            st.rerun()
+                for _col, _fn in zip(_c[1:], (_celda_familia, _celda_monto,
+                                              _celda_barra, _celda_pctval,
+                                              _celda_badge)):
+                    with _col:
+                        st.markdown(_fn(_f), unsafe_allow_html=True)
+
+            if _es_foco:
+                _render_drill(_f["cat"])
+
+        # Leyenda
+        def _punto(color, txt):
+            return (f"<span style='display:inline-flex;align-items:center;"
+                    f"gap:5px'><span style='display:inline-block;width:8px;"
+                    f"height:8px;border-radius:999px;background:{color}'>"
+                    f"</span>{txt}</span>")
+        st.markdown(
+            f"<div style='display:flex;gap:16px;flex-wrap:wrap;"
+            f"font-size:9.5px;color:{GRIS_TEXTO_SUAVE};margin-top:10px'>"
+            + _punto(ERROR, "Faltante") + _punto(EXITO, "Sobrante")
+            + _punto(GRIS_TEXTO_MEDIO, "Total neto")
+            + f"<span style='color:{GRIS_BORDE}'>|</span>"
+              f"<span>Cada barra arranca donde terminó la anterior</span>"
+              f"</div>", unsafe_allow_html=True)
+
+        if not focus:
             st.session_state["ajcas_panel_prev"] = False
 
 
