@@ -143,11 +143,14 @@ def _ventas_cargar_compra_diaria(dia_min, dia_max):
 
 @st.fragment
 def _ventas_venta_compra_dia(g, hay_costo, hay_compra, hay_pax):
-    """'Venta vs Compra' — línea de Venta/Costo/Compra arriba + barras de
-    Pax abajo en un subplot separado (mismo espíritu que un gráfico
-    bursátil: precio arriba, volumen abajo). A diferencia de "Venta por
-    día" (barras, Pax en eje secundario), esta vista es toda líneas y dos
-    paneles — vive aparte para no tocar la vista que ya se usaba."""
+    """'Venta vs Compra' — línea de Venta/Costo/Compra arriba (normalizadas
+    a % de variación desde el primer día del rango, con badge de color al
+    final de cada línea) + barras de Pax abajo en un subplot separado.
+    Mismo espíritu que un gráfico bursátil: % arriba con crosshair, volumen
+    abajo. A diferencia de "Venta por día" (barras, valores en S/, Pax en
+    eje secundario), esta vista normaliza a % — Venta/Costo/Compra tienen
+    escalas muy distintas en soles, así que compararlas en % desde el
+    mismo punto de partida es lo que las hace legibles juntas."""
     _opts = ["Venta"]
     if hay_costo:
         _opts.append("Costo")
@@ -166,13 +169,29 @@ def _ventas_venta_compra_dia(g, hay_costo, hay_compra, hay_pax):
     _colores = {"Venta": ACENTO, "Costo": PALETA_CALLAI[1], "Compra": PALETA_CALLAI[2]}
     for _serie, _col in (("Venta", "venta"), ("Costo", "costo"), ("Compra", "compra")):
         if _serie in sel and _col in g.columns:
+            serie = g[_col]
+            # % de variación desde el primer valor != 0 del rango (si todo
+            # el rango es cero, no hay base válida: se muestra plano en 0%
+            # en vez de dividir por cero).
+            _base = next((v for v in serie if v), None)
+            pct = (serie / _base - 1) * 100 if _base else serie * 0
             fig.add_trace(go.Scatter(
-                x=g["dia"], y=g[_col], name=_serie, mode="lines+markers",
+                x=g["dia"], y=pct, name=_serie, mode="lines",
                 line=dict(color=_colores[_serie], width=2.2),
-                marker=dict(size=5),
                 hovertemplate=("%{x|%d/%m/%Y}<br>" + _serie
-                               + ": S/ %{y:,.2f}<extra></extra>"),
+                               + ": %{y:+.2f}%<extra></extra>"),
             ), row=1, col=1)
+            # Badge de color al final de la línea con el % acumulado del
+            # rango — como el "+110,71%" de la referencia. Sin bordes
+            # redondeados (Plotly no los soporta en anotaciones), pero
+            # mismo color de fondo que la línea + texto blanco.
+            fig.add_annotation(
+                x=g["dia"].iloc[-1], y=pct.iloc[-1], row=1, col=1,
+                text=f"{pct.iloc[-1]:+.2f}%", showarrow=False,
+                xanchor="left", xshift=8, align="left",
+                bgcolor=_colores[_serie], borderpad=4,
+                font=dict(color="white", size=11, family="DM Sans, sans-serif"),
+            )
 
     if hay_pax:
         fig.add_trace(go.Bar(
@@ -183,15 +202,37 @@ def _ventas_venta_compra_dia(g, hay_costo, hay_compra, hay_pax):
 
     _compras_layout(fig, alto=560 if hay_pax else 460)
     fig.update_layout(
-        title="Venta vs Compra por día",
+        title="Venta vs Compra por día (% de variación desde el inicio del rango)",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+        margin=dict(l=10, r=64, t=30, b=10),
+        # Crosshair al pasar el mouse: línea vertical punteada que cruza
+        # ambos paneles (spikemode="across") + fecha en el eje X + un
+        # tooltip único con el valor de cada serie en esa fecha
+        # (hovermode="x unified"). Es la aproximación nativa de Plotly al
+        # crosshair-con-badges-en-el-borde de la referencia: los badges de
+        # la imagen SIGUEN al cursor en tiempo real, algo que Plotly no
+        # ofrece sin JS custom (ver arquitectura.md — CLAUDE.md prohíbe JS
+        # inyectado por markdown; haría falta un componente aparte). Este
+        # tooltip unificado da la misma información (fecha + % de cada
+        # serie), agrupada en un solo cuadro junto al cursor en vez de
+        # flotando en el borde derecho.
+        hovermode="x unified",
     )
     fig.update_xaxes(
         type="date", tickmode="linear", tick0=g["dia"].min(),
         dtick=86400000.0, tickformat="%d/%m", tickangle=-45,
         tickfont=dict(size=10), row=rows, col=1,
     )
-    fig.update_yaxes(tickprefix="S/ ", tickformat=",.0f", row=1, col=1)
+    # Spikes en TODAS las filas (no solo la de abajo): con shared_xaxes las
+    # X están "matched", pero cada eje decide por su cuenta si dibuja su
+    # propia línea de crosshair — si solo se lo pedís al de abajo, pasar el
+    # mouse por el panel de arriba (Venta/Costo/Compra) no muestra la cruz.
+    fig.update_xaxes(
+        showspikes=True, spikemode="across", spikesnap="cursor",
+        spikedash="dot", spikethickness=1, spikecolor=GRIS_BORDE,
+    )
+    fig.update_yaxes(ticksuffix="%", tickformat=",.2f", zeroline=True,
+                     zerolinecolor=GRIS_BORDE, row=1, col=1)
     if hay_pax:
         fig.update_yaxes(tickformat=",.0f", title="Pax", row=2, col=1)
     if not hay_compra:

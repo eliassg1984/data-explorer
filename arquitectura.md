@@ -499,3 +499,35 @@ salvo `icono`):
     falta que el rango sí filtre en demo, hay que resolver la columna con
     `buscar_columna`/`_resolver` en vez de comparar el string fijo
     `"Fecha"`.
+
+23. **`showspikes` en subplots hay que pedirlo en CADA eje X, no en uno
+    solo** (`graficos/ventas.py::_ventas_venta_compra_dia`). Con
+    `make_subplots(shared_xaxes=True)` los ejes X quedan "matched" (mismo
+    rango/zoom), pero cada uno decide por su cuenta si DIBUJA su propia
+    línea de crosshair — pedir `showspikes=True` solo en la fila de abajo
+    (donde vive el formato de fecha/ticks compartido) hace que la cruz
+    vertical no aparezca al pasar el mouse por el panel de arriba. Hay que
+    separar el `fig.update_xaxes(...)` en dos llamadas: una con `row=` para
+    lo que sí debe ser exclusivo de una fila (formato de fecha, ticks), y
+    otra SIN `row=` (aplica a todos los ejes X del figure) para
+    `showspikes`/`spikemode="across"`/`spikedash`. Se verificó disparando
+    un `mousemove` sintético sobre el `.js-plotly-plot` y contando
+    `.spikeline` en el DOM — con un solo eje configurado aparecía 1 línea
+    (solo en el panel de abajo); con los dos, aparecen 2 (una por panel,
+    cruzando el gráfico entero como en la referencia bursátil).
+    De paso: **Venta/Costo/Compra se normalizan a % de variación desde el
+    primer valor != 0 del rango** (no S/), con un `fig.add_annotation`
+    (badge de color, sin bordes redondeados — Plotly no los soporta en
+    anotaciones) al final de cada línea mostrando el % acumulado — mismo
+    propósito que el "Comparar con" de un gráfico bursátil: Venta/Costo/
+    Compra tienen escalas en soles muy distintas entre sí, así que
+    compararlas en valor absoluto en el mismo eje no dice mucho; en % desde
+    el mismo punto de partida sí. Los badges "flotantes que siguen al
+    cursor" de la referencia (el valor cambia en tiempo real sobre cada
+    línea al mover el mouse) NO tienen equivalente nativo en Plotly — eso
+    requeriría JS custom enganchado al evento `plotly_hover`, que este
+    proyecto no usa en ningún lado (`st.markdown` no ejecuta `<script>`,
+    ver regla de `CLAUDE.md`). Lo que sí es nativo y se usó en su lugar:
+    `hovermode="x unified"` — un único tooltip con el valor de cada serie
+    en la fecha del cursor, agrupado junto al cursor en vez de flotando en
+    el borde derecho.
