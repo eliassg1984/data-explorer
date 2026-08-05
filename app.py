@@ -304,14 +304,18 @@ with perf.phase("df.copy() + to_datetime"):                                 # �
             # derivadas (string, no datetime, para que el header de cada
             # columna pivoteada salga legible sin depender de un
             # valueFormatter) son las que hay que arrastrar en su lugar
-            # -- pero SOLO si no existen ya (data.py:27 ya lista "MES"
+            # -- "Mes" SOLO si no existe ya (data.py:27 ya lista "MES"
             # como columna candidata para el gráfico genérico, señal de
-            # que el parquet real podría traerla; no duplicar).
+            # que el parquet real podría traerla con año+mes, no duplicar).
+            # "Día" SIEMPRE se crea: si el parquet ya trae algo llamado
+            # DIA, confirmado con captura real, es el día DEL MES suelto
+            # (1-31, sin mes/año) -- mezclaría el "1" de agosto con el "1"
+            # de septiembre en el mismo pivote. No sirve para esto aunque
+            # el nombre coincida, así que no se chequea si ya existe.
             if not buscar_columna(df_f, "MES", "Mes"):
                 df_f[f"{col_fecha} (Mes)"] = (
                     df_f[col_fecha].dt.to_period("M").astype(str))
-            if not buscar_columna(df_f, "DIA", "DÍA", "Dia", "Día"):
-                df_f[f"{col_fecha} (Día)"] = df_f[col_fecha].dt.date.astype(str)
+            df_f[f"{col_fecha} (Día)"] = df_f[col_fecha].dt.date.astype(str)
 
 @st.cache_data
 def get_columnas_sugeridas(df_f, col_fecha, cat_cols, col_busc, cfg):
