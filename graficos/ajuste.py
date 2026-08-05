@@ -646,12 +646,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         def _render_drill(focus_cat):
             """Panel de drill: se llama inline, justo debajo de la fila
             de la familia clickeada (no al final de la tabla)."""
-            if not st.session_state.get("ajcas_panel_prev", False):
-                st.session_state["ajcas_panel_inst"] = (
-                    st.session_state.get("ajcas_panel_inst", 0) + 1)
-            st.session_state["ajcas_panel_prev"] = True
-            _inst = st.session_state.get("ajcas_panel_inst", 0)
-
             col_d = st.container(border=True, key="ajcas_panel_drill")
             _det = df[df[grp_col].astype(str) == focus_cat]
             dim = col_producto or (col_area if grp_col == col_familia
@@ -698,61 +692,65 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                             or _agg_dim[col_ajuste_val].abs().sum() == 0):
                         st.info("Sin datos para el drill de esta familia.")
                     else:
-                        def _fig_split(_df, color_bar):
-                            _labels = []
-                            _texts = []
+                        def _filas_split_html(_df, color_bar):
+                            """Mini barras de progreso (riel + relleno), no
+                            un gráfico Plotly — mismo patrón que la columna
+                            Cascada acumulada de la tabla principal. El
+                            relleno normaliza contra el mayor |ajuste| de
+                            ESTE sub-listado (no del total de la familia)."""
+                            _max_abs = float(
+                                _df[col_ajuste_val].abs().max()) or 1.0
+                            _filas_html = []
                             for _, _r in _df.iterrows():
                                 _nom = str(_r[dim])
-                                if len(_nom) > 34:
-                                    _nom = _nom[:34] + "…"
-                                if _has_area:
-                                    _labels.append(
-                                        f"{_nom}<br>"
-                                        f"<span style='font-size:9px;"
-                                        f"color:{GRIS_TEXTO_SUAVE}'>"
-                                        f"{_r[col_area]}</span>"
-                                    )
-                                else:
-                                    _labels.append(_nom)
+                                if len(_nom) > 32:
+                                    _nom = _nom[:31] + "…"
+                                _sub = (
+                                    f"<div style='font-size:8.5px;"
+                                    f"color:{GRIS_TEXTO_SUAVE};white-space:"
+                                    f"nowrap;overflow:hidden;text-overflow:"
+                                    f"ellipsis'>{_r[col_area]}</div>"
+                                    if _has_area else "")
+                                _pct = max(
+                                    abs(float(_r[col_ajuste_val]))
+                                    / _max_abs * 100, 3)
                                 _t = f"S/ {_r[col_ajuste_val]:,.0f}"
                                 if _has_cant:
                                     _t += f" · {int(_r[col_cantidad]):,}"
-                                    _um = str(_r[col_unidad]).strip() if _has_um else ""
+                                    _um = (str(_r[col_unidad]).strip()
+                                           if _has_um else "")
                                     if _um and _um.lower() != "nan":
                                         _t += f" {_um}"
-                                _texts.append(_t)
-                            _fig = go.Figure(go.Bar(
-                                x=_df[col_ajuste_val].tolist(),
-                                y=_labels, orientation="h",
-                                marker=dict(color=color_bar, cornerradius=4),
-                                text=_texts,
-                                textposition="auto",
-                                insidetextanchor="end",
-                                hovertemplate=("%{y}<br>"
-                                               "<b>S/ %{x:,.2f}</b>"
-                                               "<extra></extra>"),
-                            ))
-                            _fig.update_layout(**_layout_aj(
-                                title_text="",
-                                xaxis=dict(tickprefix="S/ ",
-                                           tickformat=",.0f",
-                                           zeroline=True,
-                                           zerolinecolor=GRIS_BORDE,
-                                           showticklabels=False),
-                                # showgrid=False: en horizontal el eje Y son
-                                # los nombres de producto, no una escala —
-                                # su grilla quedaba como rayas horizontales
-                                # cruzando barras cortas y su texto.
-                                yaxis=dict(showgrid=False,
-                                           showticklabels=True,
-                                           automargin=True,
-                                           tickfont=dict(size=10)),
-                                showlegend=False,
-                                height=max(140, 36 * len(_df) + 40),
-                                bargap=0.35,
-                                margin=dict(l=4, r=12, t=6, b=6),
-                            ))
-                            return _fig
+                                _tcol = _tono(float(_r[col_ajuste_val]))[0]
+                                _filas_html.append(
+                                    f"<div style='display:flex;"
+                                    f"align-items:center;gap:8px;"
+                                    f"padding:3px 0'>"
+                                    f"<div style='width:38%;min-width:0;"
+                                    f"flex-shrink:0;overflow:hidden'>"
+                                    f"<div style='font-size:10.5px;"
+                                    f"color:{TEXTO_PRINCIPAL};white-space:"
+                                    f"nowrap;overflow:hidden;text-overflow:"
+                                    f"ellipsis'>{_nom}</div>{_sub}</div>"
+                                    f"<div style='flex:1;position:relative;"
+                                    f"height:16px;min-width:0'>"
+                                    f"<div style='position:absolute;left:0;"
+                                    f"right:0;top:50%;transform:"
+                                    f"translateY(-50%);height:7px;"
+                                    f"background:{GRIS_FONDO};"
+                                    f"border-radius:999px'></div>"
+                                    f"<div style='position:absolute;left:0;"
+                                    f"width:{_pct:.1f}%;top:50%;transform:"
+                                    f"translateY(-50%);height:7px;"
+                                    f"background:{color_bar};"
+                                    f"border-radius:999px'></div></div>"
+                                    f"<div style='flex-shrink:0;"
+                                    f"text-align:right;font-size:10px;"
+                                    f"font-weight:600;color:{_tcol};"
+                                    f"font-variant-numeric:tabular-nums;"
+                                    f"white-space:nowrap'>{_t}</div>"
+                                    f"</div>")
+                            return "".join(_filas_html)
 
                         def _header_split(txt, color, key):
                             """Título de la columna + su propio Top N, en la
@@ -779,34 +777,29 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                             _topn_neg = _header_split(
                                 "Faltantes", DANGER_TEXT,
                                 "ajuste_cascada_topn_neg")
+                            # ascending=True: el más negativo (mayor
+                            # magnitud) primero en el DataFrame -> primero
+                            # en el HTML -> arriba de la lista.
                             _neg = (_agg_dim[_agg_dim[col_ajuste_val] < 0]
                                     .nsmallest(int(_topn_neg), col_ajuste_val)
-                                    .sort_values(col_ajuste_val, ascending=False))
+                                    .sort_values(col_ajuste_val, ascending=True))
                             if _neg.empty:
                                 st.caption("Sin faltantes en esta familia.")
                             else:
-                                st.plotly_chart(
-                                    _fig_split(_neg, ERROR),
-                                    use_container_width=True,
-                                    key=("ajuste_cascada_drill_neg_"
-                                         f"{_slug(focus_cat)}_{_inst}"),
-                                )
+                                st.markdown(_filas_split_html(_neg, ERROR),
+                                           unsafe_allow_html=True)
                         with _pb:
                             _topn_pos = _header_split(
                                 "Sobrantes", CELDA_POS_TEXTO,
                                 "ajuste_cascada_topn_pos")
                             _pos = (_agg_dim[_agg_dim[col_ajuste_val] > 0]
                                     .nlargest(int(_topn_pos), col_ajuste_val)
-                                    .sort_values(col_ajuste_val, ascending=True))
+                                    .sort_values(col_ajuste_val, ascending=False))
                             if _pos.empty:
                                 st.caption("Sin sobrantes en esta familia.")
                             else:
-                                st.plotly_chart(
-                                    _fig_split(_pos, EXITO),
-                                    use_container_width=True,
-                                    key=("ajuste_cascada_drill_pos_"
-                                         f"{_slug(focus_cat)}_{_inst}"),
-                                )
+                                st.markdown(_filas_split_html(_pos, EXITO),
+                                           unsafe_allow_html=True)
 
         # Una fila por familia. El drill de la familia clickeada se
         # inserta justo debajo de su fila (no al final de la tabla).
@@ -850,9 +843,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             + f"<span style='color:{GRIS_BORDE}'>|</span>"
               f"<span>Cada barra arranca donde terminó la anterior</span>"
               f"</div>", unsafe_allow_html=True)
-
-        if not focus:
-            st.session_state["ajcas_panel_prev"] = False
 
 
 def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
@@ -1123,7 +1113,6 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                 (df[col_familia].astype(str) == str(_fam_sel)) &
                 (df[col_area].astype(str) == str(_area_sel))
             ]
-            _cell_slug = f"{_slug(str(_fam_sel))}_{_slug(str(_area_sel))}"
 
             _color_total = (DANGER_TEXT if (_val_sel or 0) < 0
                             else CELDA_POS_TEXTO)
@@ -1151,36 +1140,60 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                 _sub_prod = _sub_prod.sort_values(
                     "_abs", ascending=False).head(int(_topn))
 
+                # ascending: True para negativos (el mas negativo primero
+                # -> arriba en el HTML), False para positivos (el mayor
+                # primero) -- el HTML renderiza top-a-bottom en el orden
+                # del DataFrame, al reves de como Plotly ubicaba las
+                # categorias en un bar horizontal.
                 _neg = _sub_prod[_sub_prod[col_ajuste_val] < 0].sort_values(
-                    col_ajuste_val, ascending=False)
+                    col_ajuste_val, ascending=True)
                 _pos = _sub_prod[_sub_prod[col_ajuste_val] > 0].sort_values(
-                    col_ajuste_val)
+                    col_ajuste_val, ascending=False)
 
-                def _fig_drill(_df_d, _color_bar):
-                    _fig = go.Figure(go.Bar(
-                        x=_df_d[col_ajuste_val].tolist(),
-                        y=_df_d[col_producto].astype(str).tolist(),
-                        orientation="h",
-                        marker=dict(color=_color_bar, cornerradius=4),
-                        text=[f"S/ {v:,.0f}" for v in _df_d[col_ajuste_val]],
-                        textposition="auto",
-                        insidetextanchor="end",
-                        hovertemplate=("%{y}<br><b>S/ %{x:,.2f}</b>"
-                                       "<extra></extra>"),
-                    ))
-                    _fig.update_layout(**_layout_aj(
-                        title_text="",
-                        xaxis=dict(tickprefix="S/ ", tickformat=",.0f",
-                                   zeroline=True, zerolinecolor=GRIS_BORDE,
-                                   showticklabels=False),
-                        yaxis=dict(showgrid=False, showticklabels=True,
-                                   automargin=True, tickfont=dict(size=10)),
-                        showlegend=False,
-                        height=max(140, 36 * len(_df_d) + 40),
-                        bargap=0.35,
-                        margin=dict(l=4, r=12, t=6, b=6),
-                    ))
-                    return _fig
+                def _filas_drill_html(_df_d, _color_bar):
+                    """Mini barras de progreso (riel + relleno) — mismo
+                    patron que la columna Cascada acumulada, en vez de un
+                    grafico Plotly de barras gruesas."""
+                    if _df_d.empty:
+                        return ""
+                    _max_abs = float(
+                        _df_d[col_ajuste_val].abs().max()) or 1.0
+                    _filas_html = []
+                    for _, _r in _df_d.iterrows():
+                        _nom = str(_r[col_producto])
+                        if len(_nom) > 32:
+                            _nom = _nom[:31] + "…"
+                        _pct = max(
+                            abs(float(_r[col_ajuste_val])) / _max_abs * 100,
+                            3)
+                        _tcol = (DANGER_TEXT if _r[col_ajuste_val] < 0
+                                 else CELDA_POS_TEXTO)
+                        _filas_html.append(
+                            f"<div style='display:flex;align-items:center;"
+                            f"gap:8px;padding:3px 0'>"
+                            f"<div style='width:38%;min-width:0;"
+                            f"flex-shrink:0;overflow:hidden'>"
+                            f"<div style='font-size:10.5px;"
+                            f"color:{TEXTO_PRINCIPAL};white-space:nowrap;"
+                            f"overflow:hidden;text-overflow:ellipsis'>"
+                            f"{_nom}</div></div>"
+                            f"<div style='flex:1;position:relative;"
+                            f"height:16px;min-width:0'>"
+                            f"<div style='position:absolute;left:0;"
+                            f"right:0;top:50%;transform:translateY(-50%);"
+                            f"height:7px;background:{GRIS_FONDO};"
+                            f"border-radius:999px'></div>"
+                            f"<div style='position:absolute;left:0;"
+                            f"width:{_pct:.1f}%;top:50%;transform:"
+                            f"translateY(-50%);height:7px;"
+                            f"background:{_color_bar};"
+                            f"border-radius:999px'></div></div>"
+                            f"<div style='flex-shrink:0;text-align:right;"
+                            f"font-size:10px;font-weight:600;"
+                            f"color:{_tcol};font-variant-numeric:"
+                            f"tabular-nums;white-space:nowrap'>"
+                            f"S/ {_r[col_ajuste_val]:,.0f}</div></div>")
+                    return "".join(_filas_html)
 
                 _pa, _pb = st.columns(2)
                 with _pa:
@@ -1194,11 +1207,8 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                     if _neg.empty:
                         st.caption("Sin faltantes.")
                     else:
-                        st.plotly_chart(
-                            _fig_drill(_neg, ERROR),
-                            use_container_width=True,
-                            key=f"hm_drill_neg_{_cell_slug}",
-                        )
+                        st.markdown(_filas_drill_html(_neg, ERROR),
+                                   unsafe_allow_html=True)
                 with _pb:
                     st.markdown(
                         f"<div style='font-size:9px;font-weight:600;"
@@ -1210,11 +1220,8 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                     if _pos.empty:
                         st.caption("Sin sobrantes.")
                     else:
-                        st.plotly_chart(
-                            _fig_drill(_pos, EXITO),
-                            use_container_width=True,
-                            key=f"hm_drill_pos_{_cell_slug}",
-                        )
+                        st.markdown(_filas_drill_html(_pos, EXITO),
+                                   unsafe_allow_html=True)
             else:
                 st.caption("No hay columna de producto para desglosar.")
 
