@@ -296,6 +296,22 @@ with perf.phase("df.copy() + to_datetime"):                                 # �
     df_f = df.copy()
     if col_fecha:
         df_f[col_fecha] = pd.to_datetime(df_f[col_fecha], errors="coerce")
+        if reporte == "Ajuste de Inventario":
+            # FECHA APERTURA INVENTARIO trae hora al minuto -- el "Modo
+            # pivote" de AG Grid pivotea por el valor EXACTO de la
+            # columna que se arrastre a "Column Labels", así que pivotear
+            # la fecha cruda da una columna por minuto. Estas columnas
+            # derivadas (string, no datetime, para que el header de cada
+            # columna pivoteada salga legible sin depender de un
+            # valueFormatter) son las que hay que arrastrar en su lugar
+            # -- pero SOLO si no existen ya (data.py:27 ya lista "MES"
+            # como columna candidata para el gráfico genérico, señal de
+            # que el parquet real podría traerla; no duplicar).
+            if not buscar_columna(df_f, "MES", "Mes"):
+                df_f[f"{col_fecha} (Mes)"] = (
+                    df_f[col_fecha].dt.to_period("M").astype(str))
+            if not buscar_columna(df_f, "DIA", "DÍA", "Dia", "Día"):
+                df_f[f"{col_fecha} (Día)"] = df_f[col_fecha].dt.date.astype(str)
 
 @st.cache_data
 def get_columnas_sugeridas(df_f, col_fecha, cat_cols, col_busc, cfg):
