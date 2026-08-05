@@ -736,18 +736,21 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                 title_text="",
                                 xaxis=dict(tickprefix="S/ ",
                                            tickformat=",.0f",
-                                           gridcolor=GRIS_BORDE,
                                            zeroline=True,
                                            zerolinecolor=GRIS_BORDE,
-                                           nticks=4),
-                                yaxis=dict(gridcolor=GRIS_BORDE,
+                                           showticklabels=False),
+                                # showgrid=False: en horizontal el eje Y son
+                                # los nombres de producto, no una escala —
+                                # su grilla quedaba como rayas horizontales
+                                # cruzando barras cortas y su texto.
+                                yaxis=dict(showgrid=False,
                                            showticklabels=True,
                                            automargin=True,
                                            tickfont=dict(size=10)),
                                 showlegend=False,
                                 height=max(140, 36 * len(_df) + 40),
                                 bargap=0.35,
-                                margin=dict(l=4, r=12, t=6, b=10),
+                                margin=dict(l=4, r=12, t=6, b=6),
                             ))
                             return _fig
 
@@ -1168,14 +1171,14 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                     _fig.update_layout(**_layout_aj(
                         title_text="",
                         xaxis=dict(tickprefix="S/ ", tickformat=",.0f",
-                                   gridcolor=GRIS_BORDE, zeroline=True,
-                                   zerolinecolor=GRIS_BORDE, nticks=4),
-                        yaxis=dict(showticklabels=True, automargin=True,
-                                   tickfont=dict(size=10)),
+                                   zeroline=True, zerolinecolor=GRIS_BORDE,
+                                   showticklabels=False),
+                        yaxis=dict(showgrid=False, showticklabels=True,
+                                   automargin=True, tickfont=dict(size=10)),
                         showlegend=False,
                         height=max(140, 36 * len(_df_d) + 40),
                         bargap=0.35,
-                        margin=dict(l=4, r=12, t=6, b=10),
+                        margin=dict(l=4, r=12, t=6, b=6),
                     ))
                     return _fig
 
