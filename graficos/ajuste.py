@@ -604,30 +604,11 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             _det = df[df[grp_col].astype(str) == focus_cat]
             dim = col_producto or (col_area if grp_col == col_familia
                                    else col_familia)
-            dim_lbl = "producto" if dim == col_producto else str(dim).lower()
 
+            # Sin título/subtítulo/botón "cerrar": el panel vive pegado a la
+            # fila con foco, que ya muestra familia + monto. Cerrar es el
+            # mismo chevron (▾) que lo abrió.
             with col_d:
-                hdr_l, hdr_r = st.columns([4, 1])
-                with hdr_l:
-                    _total_focus = float(
-                        df[df[grp_col].astype(str) == focus_cat][col_ajuste_val].sum()
-                    )
-                    _color_total = (DANGER_TEXT if _total_focus < 0
-                                    else CELDA_POS_TEXTO)
-                    st.markdown(
-                        f"**{focus_cat}**<br>"
-                        f"<span style='font-size:11px;color:{GRIS_TEXTO_SUAVE}'>"
-                        f"top {dim_lbl}s · faltante total "
-                        f"<span style='color:{_color_total};font-weight:500'>"
-                        f"S/ {_total_focus:,.0f}</span></span>",
-                        unsafe_allow_html=True,
-                    )
-                with hdr_r:
-                    if st.button("✕", key="ajuste_cascada_cerrar",
-                                 use_container_width=True,
-                                 help="Cerrar el drill"):
-                        st.session_state[_focus_key] = None
-                        st.rerun()
                 topn = st.pills(
                     "Top", [5, 10, 20], default=10,
                     key="ajuste_cascada_topn",
