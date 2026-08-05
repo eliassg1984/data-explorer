@@ -556,3 +556,41 @@ salvo `icono`):
     ÚNICO precisamente porque este tipo de lectura hardcodeada, suelta en
     otro archivo, es la fuente histórica de los desyncs (overlay ≠
     calendario ≠ datos) que el módulo existe para evitar.
+
+25. **Tabla dinámica de Ajuste (`graficos/ajuste.py::_graf_pivote_fecha_ajuste`,
+    rail "Por fecha de corte") — por qué NO usa el "Modo pivote" nativo de
+    AG Grid** (`tablas/_config.py::_config_sidebar`, que sí existe y está
+    montado y funcional para Ajuste). El pivote nativo de AG Grid pivotea
+    UNA columna a elección del usuario (ahí Fecha → columnas), pero el
+    punto central de esta vista es comparar cada columna (fecha de corte)
+    contra su vecina para pintar flecha+color de tendencia por fila — eso
+    necesitaría un `cellRenderer` JsCode a medida con acceso a las
+    columnas vecinas del mismo `params.data`, bastante más frágil que
+    resolverlo del lado Python. Se pre-pivotea con `pandas.pivot_table`
+    (una llamada por nivel: familia / familia+subfamilia /
+    familia+subfamilia+producto) y se renderiza HTML propio — mismo
+    patrón que el resto de filas de `ajuste.py` (`st.columns` para el
+    botón chevron real + `st.markdown` con el resto de la fila).
+    Árbol expandible con DOS sets independientes en `session_state`
+    (`ajuste_pivote_exp_fam`, `ajuste_pivote_exp_sub`) — a diferencia del
+    drill de foco único de la Cascada (una sola fila a la vez), acá
+    conviene poder tener varias familias/subfamilias abiertas al mismo
+    tiempo para comparar entre ramas del árbol.
+    Detalles de implementación que costó acertar a la primera:
+    - El color del texto (signo: faltante/sobrante) y el color de la
+      flecha (tendencia: mejoró/empeoró) son DOS señales independientes
+      que pueden no coincidir (un faltante que mejora sigue en rojo pero
+      con flecha verde) — iban en la MISMA clase CSS al principio y la
+      cascada de especificidad hacía que la flecha heredara el color del
+      signo en vez de tener el suyo propio. Selector `.up .ar`/`.down .ar`
+      (descendiente, más específico), nunca clases sueltas combinadas.
+    - Los meses de `pd.Timestamp.strftime('%b')` salen en inglés (locale
+      del sistema, no de la app) — tabla `_MESES_ABR_ES` propia en vez de
+      `strftime`, mismo problema que ya tiene `%b` en los `tickformat` de
+      Plotly de otros gráficos de este archivo (no corregido ahí, pero
+      documentado acá para no repetir la sorpresa).
+    - El Total de cada fila suma solo los cortes de fecha MOSTRADOS (hay
+      un tope de 6 columnas; con más, se acota a los últimos 6 y se avisa
+      con un caption) — nunca el rango completo aunque esté recortado en
+      pantalla, para que el número de la columna Total siempre cuadre con
+      lo que se ve, sin un total "fantasma" que sume fechas invisibles.

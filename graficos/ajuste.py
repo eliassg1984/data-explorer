@@ -39,7 +39,8 @@ _AJUSTE_RAIL_CATEGORIAS = (
                      ("Mapa de calor",  "Mapa de calor"),
                      ("Distribución",   "Distribución"))),
     ("Tiempo",      (("Evolución",           "Evolución"),
-                     ("Comparativa mensual", "Comparativa"))),
+                     ("Comparativa mensual", "Comparativa"),
+                     ("Por fecha de corte",  "Por fecha"))),
     ("Datos",       (("Tabla",          "Tabla"),)),
 )
 
@@ -250,6 +251,290 @@ def _graf_comparativa_mensual(df, col_fecha, col_ajuste_val):
                 f"ajuste neto S/ {detalle[col_ajuste_val].sum():,.2f}"
             )
             st.dataframe(detalle, use_container_width=True)
+
+
+_MESES_ABR_ES = ("ene", "feb", "mar", "abr", "may", "jun",
+                 "jul", "ago", "set", "oct", "nov", "dic")
+
+
+def _fmt_corte(fecha):
+    """'02-ago' en vez de '02-Aug' — strftime('%b') usa el locale del
+    sistema (inglés en Streamlit Cloud), y esta app es en español."""
+    _ts = pd.Timestamp(fecha)
+    return f"{_ts.day:02d}-{_MESES_ABR_ES[_ts.month - 1]}"
+
+
+def _graf_pivote_fecha_ajuste(df, col_familia, col_ajuste_val, col_producto,
+                              col_cantidad, col_fecha):
+    """Tabla dinámica: Familia > Subfamilia > Producto como filas
+    expandibles, una fecha de corte por grupo de columnas (Ajuste
+    Valorizado + Cantidad) con flecha + color de tendencia vs. el corte
+    anterior.
+
+    No usa el "Modo pivote" nativo de AG Grid (ver tablas/_config.py,
+    pensado para Ajuste): ese pivotea UNA columna a elección del usuario,
+    pero comparar cada columna contra su vecina por fila —el punto
+    central de esta vista— necesitaría un cellRenderer JsCode a medida.
+    Se pre-pivotea con pandas (`pivot_table`) y se renderiza HTML propio,
+    mismo patrón que el resto de filas de este archivo."""
+    if not (col_familia and col_fecha and col_producto and col_ajuste_val):
+        st.info("Se necesita familia, fecha, producto y ajuste valorizado "
+                "para la tabla dinámica.")
+        return
+
+    # Subfamilia no viene resuelta desde renderizar_graficos_ajuste (nadie
+    # más la usa en este archivo) — mismos candidatos que
+    # graficos/compras/__init__.py::col_subfam, para no reinventar nombres.
+    col_subfamilia = _resolver(df, ["Subfamilia", "Nombre Subfamilia"])
+    _has_sub = bool(col_subfamilia and col_subfamilia in df.columns)
+    _has_cant = bool(col_cantidad and col_cantidad in df.columns)
+
+    d = df.copy()
+    d[col_fecha] = pd.to_datetime(d[col_fecha], errors="coerce")
+    _req = [col_fecha, col_familia, col_producto] + (
+        [col_subfamilia] if _has_sub else [])
+    d = d.dropna(subset=_req)
+    if d.empty:
+        st.info("Sin datos para la tabla dinámica en el rango seleccionado.")
+        return
+
+    _cortes_todos = sorted(d[col_fecha].dropna().unique())
+    _MAX_CORTES = 6
+    _recortado = len(_cortes_todos) > _MAX_CORTES
+    _cortes = _cortes_todos[-_MAX_CORTES:] if _recortado else _cortes_todos
+    if not _cortes:
+        st.info("Sin fechas de corte en el rango seleccionado.")
+        return
+    # El Total de cada fila suma solo los cortes MOSTRADOS (no todo el
+    # rango) -- así siempre cuadra con lo que se ve en pantalla.
+    d = d[d[col_fecha].isin(_cortes)]
+
+    def _pivotear(cols_grupo):
+        _val = d.pivot_table(index=cols_grupo, columns=col_fecha,
+                             values=col_ajuste_val, aggfunc="sum",
+                             fill_value=0.0)
+        _cant = (d.pivot_table(index=cols_grupo, columns=col_fecha,
+                               values=col_cantidad, aggfunc="sum",
+                               fill_value=0.0)
+                 if _has_cant else None)
+        return _val, _cant
+
+    _cols_sub = [col_familia, col_subfamilia] if _has_sub else None
+    _cols_prod = ([col_familia, col_subfamilia, col_producto] if _has_sub
+                  else [col_familia, col_producto])
+
+    _val_fam, _cant_fam = _pivotear([col_familia])
+    _val_sub, _cant_sub = _pivotear(_cols_sub) if _has_sub else (None, None)
+    _val_prod, _cant_prod = _pivotear(_cols_prod)
+
+    _fams = _val_fam.sum(axis=1).sort_values().index.tolist()
+
+    _exp_fam = st.session_state.setdefault("ajuste_pivote_exp_fam", set())
+    _exp_sub = st.session_state.setdefault("ajuste_pivote_exp_sub", set())
+
+    def _sig(v):
+        return "+" if v > 0 else ("−" if v < 0 else "")
+
+    def _col_signo(v):
+        if v > 0:
+            return CELDA_POS_TEXTO
+        if v < 0:
+            return DANGER_TEXT
+        return GRIS_TEXTO
+
+    def _celda_corte(v, v_prev, es_primero, cantidad):
+        _col = _col_signo(v)
+        _txt = f"{_sig(v)}S/ {abs(v):,.0f}"
+        _flecha = ""
+        if not es_primero and v != v_prev:
+            _fcol, _fg = (EXITO, "▲") if v > v_prev else (ERROR, "▼")
+            _flecha = (f"<span style='color:{_fcol};font-size:8px;"
+                       f"margin-right:2px'>{_fg}</span>")
+        _html = (f"<div style='color:{_col};font-weight:500;"
+                 f"font-variant-numeric:tabular-nums'>{_flecha}{_txt}</div>")
+        if cantidad is not None:
+            _html += (f"<div style='color:{GRIS_TEXTO_SUAVE};font-size:"
+                      f"9.5px;font-variant-numeric:tabular-nums'>"
+                      f"{_sig(cantidad)}{abs(cantidad):,.0f}</div>")
+        return _html
+
+    _ancho_nombre = max(34 - (len(_cortes) * 1.5), 18)
+    _ancho_corte = (100 - _ancho_nombre - 13) / len(_cortes)
+
+    def _fila_html(nombre, indent_px, val_row, cant_row, tot_val, tot_cant,
+                   negrita=False):
+        _peso = "600" if negrita else "500"
+        _piezas = [
+            f"<div style='width:{_ancho_nombre}%;padding-left:{indent_px}px;"
+            f"overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+            f"font-weight:{_peso};color:{TEXTO_PRINCIPAL};font-size:12px'>"
+            f"{nombre}</div>"
+        ]
+        for _i, _c in enumerate(_cortes):
+            _v = float(val_row.get(_c, 0.0))
+            _v_prev = float(val_row.get(_cortes[_i - 1], 0.0)) if _i > 0 else 0.0
+            _cant = float(cant_row.get(_c, 0.0)) if cant_row is not None else None
+            _piezas.append(
+                f"<div style='width:{_ancho_corte}%;text-align:right'>"
+                f"{_celda_corte(_v, _v_prev, _i == 0, _cant)}</div>"
+            )
+        _cant_tot_html = (
+            f"<div style='font-size:9.5px;color:{GRIS_TEXTO_SUAVE};"
+            f"font-weight:400'>{_sig(tot_cant)}{abs(tot_cant):,.0f}</div>"
+            if tot_cant is not None else "")
+        _piezas.append(
+            f"<div style='width:13%;text-align:right;font-weight:600;"
+            f"color:{ACENTO_TEXTO_OSCURO}'>{_sig(tot_val)}S/ "
+            f"{abs(tot_val):,.0f}{_cant_tot_html}</div>"
+        )
+        return (f"<div style='display:flex;align-items:center;gap:4px;"
+                f"padding:5px 0'>{''.join(_piezas)}</div>")
+
+    with _card("pivote_fecha"):
+        st.markdown(
+            f"<div style='font-size:14px;font-weight:500;"
+            f"color:{TEXTO_PRINCIPAL};margin-bottom:2px'>"
+            f"Ajuste por fecha de corte</div>",
+            unsafe_allow_html=True,
+        )
+        if _recortado:
+            st.caption(
+                f"Mostrando los últimos {_MAX_CORTES} cortes de "
+                f"{len(_cortes_todos)} en el rango — acotá el rango de "
+                f"fecha (arriba) para ver otros."
+            )
+        else:
+            st.markdown("<div style='margin-bottom:8px'></div>",
+                        unsafe_allow_html=True)
+
+        _hdr = ["<div style='width:{}%'></div>".format(_ancho_nombre)]
+        for _c in _cortes:
+            _hdr.append(
+                f"<div style='width:{_ancho_corte}%;text-align:right;"
+                f"font-size:10px;color:{GRIS_TEXTO_SUAVE};font-weight:600;"
+                f"text-transform:uppercase'>"
+                f"{_fmt_corte(_c)}</div>"
+            )
+        _hdr.append(
+            f"<div style='width:13%;text-align:right;font-size:10px;"
+            f"color:{ACENTO_TEXTO_OSCURO};font-weight:600;"
+            f"text-transform:uppercase'>Total</div>"
+        )
+        st.markdown(
+            f"<div style='display:flex;gap:4px;padding:0 0 6px 0;"
+            f"border-bottom:1px solid {GRIS_BORDE}'>{''.join(_hdr)}</div>",
+            unsafe_allow_html=True,
+        )
+
+        for _fam in _fams:
+            _fam_abierta = _fam in _exp_fam
+            _tot_fam_val = float(_val_fam.loc[_fam].sum())
+            _tot_fam_cant = float(_cant_fam.loc[_fam].sum()) if _has_cant else None
+            _c0, _c1 = st.columns([0.04, 0.96])
+            with _c0:
+                if st.button("▾" if _fam_abierta else "▸",
+                            key=f"ajpiv_fam_{_slug(str(_fam))}",
+                            help="Colapsar" if _fam_abierta else "Expandir"):
+                    (_exp_fam.discard if _fam_abierta else _exp_fam.add)(_fam)
+                    st.rerun()
+            with _c1:
+                st.markdown(
+                    _fila_html(str(_fam), 0, _val_fam.loc[_fam],
+                              _cant_fam.loc[_fam] if _has_cant else None,
+                              _tot_fam_val, _tot_fam_cant, negrita=True),
+                    unsafe_allow_html=True,
+                )
+
+            if not _fam_abierta:
+                continue
+
+            if not _has_sub:
+                # Sin subfamilia: directo a top 10 productos de la familia.
+                if _fam not in _val_prod.index.get_level_values(0):
+                    continue
+                _prods_fam = _val_prod.loc[[_fam]]
+                _orden = _prods_fam.sum(axis=1).abs().sort_values(
+                    ascending=False).head(10).index
+                for _key in _orden:
+                    _prod = _key[-1]
+                    _tv = float(_val_prod.loc[_key].sum())
+                    _tc = float(_cant_prod.loc[_key].sum()) if _has_cant else None
+                    st.markdown(
+                        _fila_html(str(_prod), 20, _val_prod.loc[_key],
+                                  _cant_prod.loc[_key] if _has_cant else None,
+                                  _tv, _tc),
+                        unsafe_allow_html=True,
+                    )
+                continue
+
+            if _fam not in _val_sub.index.get_level_values(0):
+                continue
+            _subs_fam = sorted(
+                _val_sub.loc[_fam].index.tolist(),
+                key=lambda s: _val_sub.loc[(_fam, s)].sum())
+
+            for _sub in _subs_fam:
+                _sub_key = f"{_fam}||{_sub}"
+                _sub_abierta = _sub_key in _exp_sub
+                _tot_sub_val = float(_val_sub.loc[(_fam, _sub)].sum())
+                _tot_sub_cant = (float(_cant_sub.loc[(_fam, _sub)].sum())
+                                if _has_cant else None)
+                _sc0, _sc1 = st.columns([0.04, 0.96])
+                with _sc0:
+                    if st.button(
+                            "▾" if _sub_abierta else "▸",
+                            key=f"ajpiv_sub_{_slug(str(_fam))}_{_slug(str(_sub))}",
+                            help="Colapsar" if _sub_abierta else "Ver productos"):
+                        (_exp_sub.discard if _sub_abierta else _exp_sub.add)(_sub_key)
+                        st.rerun()
+                with _sc1:
+                    st.markdown(
+                        _fila_html(str(_sub), 20, _val_sub.loc[(_fam, _sub)],
+                                  _cant_sub.loc[(_fam, _sub)] if _has_cant else None,
+                                  _tot_sub_val, _tot_sub_cant),
+                        unsafe_allow_html=True,
+                    )
+
+                if not _sub_abierta:
+                    continue
+                if (_fam, _sub) not in _val_prod.index.droplevel(-1):
+                    continue
+                _prods_sub = _val_prod.loc[(_fam, _sub)]
+                _orden_p = _prods_sub.sum(axis=1).abs().sort_values(
+                    ascending=False).head(10).index
+                for _p in _orden_p:
+                    _key = (_fam, _sub, _p)
+                    _tv = float(_val_prod.loc[_key].sum())
+                    _tc = float(_cant_prod.loc[_key].sum()) if _has_cant else None
+                    st.markdown(
+                        _fila_html(str(_p), 40, _val_prod.loc[_key],
+                                  _cant_prod.loc[_key] if _has_cant else None,
+                                  _tv, _tc),
+                        unsafe_allow_html=True,
+                    )
+
+        _tot_gen_val = float(_val_fam.sum().sum())
+        _tot_gen_cant = float(_cant_fam.sum().sum()) if _has_cant else None
+        _tg0, _tg1 = st.columns([0.04, 0.96])
+        with _tg1:
+            st.markdown(
+                _fila_html("TOTAL GENERAL", 0, _val_fam.sum(axis=0),
+                          _cant_fam.sum(axis=0) if _has_cant else None,
+                          _tot_gen_val, _tot_gen_cant, negrita=True),
+                unsafe_allow_html=True,
+            )
+
+        st.markdown(
+            f"<div style='display:flex;gap:14px;flex-wrap:wrap;"
+            f"font-size:9.5px;color:{GRIS_TEXTO_SUAVE};margin-top:10px'>"
+            f"<span><span style='color:{EXITO}'>▲</span> mejoró</span>"
+            f"<span><span style='color:{ERROR}'>▼</span> empeoró</span>"
+            f"<span style='color:{GRIS_BORDE}'>|</span>"
+            f"<span>vs. la fecha de corte anterior — el color del texto "
+            f"es el signo (faltante/sobrante), independiente de la "
+            f"flecha</span></div>",
+            unsafe_allow_html=True,
+        )
 
 
 def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
@@ -1474,6 +1759,9 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
         elif graf == "Distribución":
             _graf_distribucion_ajuste(d, col_familia, col_area,
                                       col_ajuste_val, col_producto)
+        elif graf == "Por fecha de corte":
+            _graf_pivote_fecha_ajuste(d, col_familia, col_ajuste_val,
+                                      col_producto, col_cantidad, col_fecha)
 
     _card_der = st.container(
         border=True, key=f"ajuste_graf_card_der_{_slug(ambito)}",
