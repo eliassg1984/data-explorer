@@ -628,11 +628,24 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                     _agg_map = {col_ajuste_val: "sum"}
                     if _has_cant:
                         _agg_map[col_cantidad] = "sum"
-                    if _has_area:
-                        _agg_map[col_area] = "first"
                     if _has_um:
                         _agg_map[col_unidad] = "first"
                     _agg_dim = _det.groupby(dim, as_index=False).agg(_agg_map)
+                    if _has_area:
+                        # "first" mostraba el área de la primera fila del
+                        # producto, sin importar si ahí el ajuste era 0 —
+                        # con varias áreas por producto (Almacén Central,
+                        # Producción, Pruebas...) etiquetaba con la que no
+                        # tenía nada de movimiento. Se toma el área de la
+                        # fila con mayor |ajuste| para ese producto, que es
+                        # la que realmente explica el monto mostrado.
+                        _area_top = (
+                            _det[[dim, col_area, col_ajuste_val]]
+                            .assign(_abs=lambda x: x[col_ajuste_val].abs())
+                            .sort_values("_abs", ascending=False)
+                            .drop_duplicates(subset=[dim])[[dim, col_area]]
+                        )
+                        _agg_dim = _agg_dim.merge(_area_top, on=dim, how="left")
 
                     if (_agg_dim.empty
                             or _agg_dim[col_ajuste_val].abs().sum() == 0):
