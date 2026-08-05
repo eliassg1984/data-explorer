@@ -390,6 +390,31 @@ def _graf_pivote_fecha_ajuste(df, col_familia, col_ajuste_val, col_producto,
         return (f"<div style='display:flex;align-items:center;gap:4px;"
                 f"padding:5px 0'>{''.join(_piezas)}</div>")
 
+    # Cabecera pegajosa: se ancla justo debajo de la franja superior fija
+    # (título + fecha), que ya ocupa de --cab-nivel1-top a +--cab-altura.
+    # z-index por debajo de esa franja (20) para no taparla si algo se
+    # solapa en el borde.
+    #
+    # OJO — el sticky va en el PADRE, no en `.st-key-ajpiv_header`: todo
+    # `st.container(key=...)` queda envuelto por Streamlit en un
+    # `stLayoutWrapper` invisible (sin key propia) que es hijo directo de
+    # `stMain`/`stMainBlockContainer`/etc. Puesto en el propio div con key,
+    # el sticky no engancha (se movía 1:1 con el scroll pese a que
+    # `getComputedStyle` ya marcaba `position: sticky` — se verificó
+    # scroll a scroll con getBoundingClientRect, no alcanza con leer el
+    # estilo computado). Puesto en el wrapper vía `:has()`, sí engancha
+    # -- confirmado con tres posiciones de scroll distintas quedando fijo
+    # en el mismo top. Ver arquitectura.md regla #25 (sumar caso).
+    st.markdown(f"""<style>
+    div:has(> .st-key-ajpiv_header) {{
+        position: sticky !important;
+        top: calc(var(--cab-nivel1-top, 30px) + var(--cab-altura, 50px))
+             !important;
+        z-index: 5 !important;
+        background: {BLANCO} !important;
+    }}
+    </style>""", unsafe_allow_html=True)
+
     with _card("pivote_fecha"):
         st.markdown(
             f"<div style='font-size:14px;font-weight:500;"
@@ -420,11 +445,13 @@ def _graf_pivote_fecha_ajuste(df, col_familia, col_ajuste_val, col_producto,
             f"color:{ACENTO_TEXTO_OSCURO};font-weight:600;"
             f"text-transform:uppercase'>Total</div>"
         )
-        st.markdown(
-            f"<div style='display:flex;gap:4px;padding:0 0 6px 0;"
-            f"border-bottom:1px solid {GRIS_BORDE}'>{''.join(_hdr)}</div>",
-            unsafe_allow_html=True,
-        )
+        with st.container(key="ajpiv_header"):
+            st.markdown(
+                f"<div style='display:flex;gap:4px;padding:6px 0;"
+                f"border-bottom:1px solid {GRIS_BORDE}'>"
+                f"{''.join(_hdr)}</div>",
+                unsafe_allow_html=True,
+            )
 
         for _fam in _fams:
             _fam_abierta = _fam in _exp_fam

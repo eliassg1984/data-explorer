@@ -594,3 +594,14 @@ salvo `icono`):
       con un caption) — nunca el rango completo aunque esté recortado en
       pantalla, para que el número de la columna Total siempre cuadre con
       lo que se ve, sin un total "fantasma" que sume fechas invisibles.
+    - **`position: sticky` en un `st.container(key=...)` no engancha
+      puesto en la key propia** — hay que ponerlo en el PADRE. Todo
+      `st.container(key=...)` queda envuelto por Streamlit en un
+      `stLayoutWrapper` invisible (sin key propia) que es el que realmente
+      necesita `position: sticky`; puesto en `.st-key-<key>` directamente,
+      `getComputedStyle` marca `position: sticky` igual (parece que
+      "prendió"), pero se mueve 1:1 con el scroll — solo se detecta
+      scrolleando y comparando `getBoundingClientRect()` en al menos DOS
+      puntos de scroll distintos, no alcanza con leer el estilo computado
+      una sola vez. Selector para llegar al wrapper sin tocar el HTML que
+      genera Streamlit: `div:has(> .st-key-<key>) { position: sticky; ... }`.
