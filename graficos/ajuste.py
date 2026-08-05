@@ -237,16 +237,17 @@ def _graf_comparativa_mensual(df, col_fecha, col_ajuste_val):
 
 def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                            col_producto=None, col_valorizado=None,
-                           col_cantidad=None, df_full=None, col_fecha=None):
+                           col_cantidad=None, df_full=None, col_fecha=None,
+                           col_unidad=None):
     """Cascada (Waterfall) por familia/área — SOLO el gráfico.
 
     Los análisis complementarios (Faltantes, Sobrantes, Extremos, etc.) que
     antes vivían aquí como 8 tabs se movieron a `_panel_analisis_ajuste`,
     que renderiza el contenedor derecho de la vista Gráficos de Ajuste.
 
-    `col_producto`, `col_valorizado` y `col_cantidad` se mantienen en la
-    firma por compatibilidad (test_graficos.py y llamadas existentes las
-    pasan); ya no se usan aquí.
+    `col_unidad` es la unidad de Kardex por producto (Kg, Und, Lt...) — se
+    usa solo en el texto de las barras del drill; si no se resuelve, la
+    barra muestra la cantidad sin sufijo (nunca el genérico "und").
     """
     grp_col = col_familia or col_area
     if not grp_col:
@@ -499,6 +500,16 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         [data-testid="stIconMaterial"]
         {{ font-size: 13px !important; width: 13px !important;
           height: 13px !important; }}
+    /* Pills "Top N" del drill: la version default de st.pills queda grande
+       (heredada del tamano de fuente global). Se achica solo esta key. */
+    .st-key-ajuste_cascada_topn [data-testid="stButtonGroup"] {{
+        gap: 4px !important; }}
+    .st-key-ajuste_cascada_topn [data-testid="stButtonGroup"] button[role="radio"] {{
+        min-width: 0 !important; padding: 1px 10px !important;
+        min-height: 0 !important; height: 24px !important;
+        line-height: 1 !important; border-width: 1px !important; }}
+    .st-key-ajuste_cascada_topn [data-testid="stButtonGroup"] button[role="radio"] p {{
+        font-size: 11px !important; line-height: 1 !important; margin: 0 !important; }}
     /* ── Filas de la tabla ─────────────────────────────────────────── */
     div[class*="st-key-ajcas_fila_"] {{
         border-bottom: 1px solid {GRIS_LINEA};
@@ -625,11 +636,15 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                     _has_area = bool(col_area and col_area in _det.columns
                                      and col_area != dim
                                      and col_area != grp_col)
+                    _has_um = bool(col_unidad and col_unidad in _det.columns
+                                   and col_unidad != dim)
                     _agg_map = {col_ajuste_val: "sum"}
                     if _has_cant:
                         _agg_map[col_cantidad] = "sum"
                     if _has_area:
                         _agg_map[col_area] = "first"
+                    if _has_um:
+                        _agg_map[col_unidad] = "first"
                     _sub = _det.groupby(dim, as_index=False).agg(_agg_map)
                     _sub["_abs"] = _sub[col_ajuste_val].abs()
                     _sub = _sub.sort_values(
@@ -660,7 +675,10 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                     _labels.append(_nom)
                                 _t = f"S/ {_r[col_ajuste_val]:,.0f}"
                                 if _has_cant:
-                                    _t += f" · {int(_r[col_cantidad]):,} und"
+                                    _t += f" · {int(_r[col_cantidad]):,}"
+                                    _um = str(_r[col_unidad]).strip() if _has_um else ""
+                                    if _um and _um.lower() != "nan":
+                                        _t += f" {_um}"
                                 _texts.append(_t)
                             _fig = go.Figure(go.Bar(
                                 x=_df[col_ajuste_val].tolist(),
@@ -1262,6 +1280,12 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     col_valorizado = _resolver(df_f, ["VALORIZADO TOTAL", "VALORIZADO", "VALORIZADOTOTAL"])
     col_producto   = _resolver(df_f, ["NOMBRE PRODUCTO", "PRODUCTO", "DESCRIPCION"])
     col_cantidad   = _resolver(df_f, ["AJUSTE", "CANTIDAD AJUSTE", "CANTIDAD"])
+    # Misma lista de candidatos que graficos/compras/__init__.py::col_um —
+    # la unidad real de Kardex (Kg, Und, Lt...), no un sufijo inventado.
+    col_unidad     = _resolver(df_f, ["Unidad de Ingreso", "Unidad_de_ingreso",
+                                      "Unidad Ingreso", "Unidad Kardex", "Unidad_medida",
+                                      "Unidad medida", "Unidad de medida", "Unidad_compra",
+                                      "Unidad compra", "Unidad", "UM", "Und"])
 
     if not col_ajuste_val:
         st.warning(
@@ -1354,7 +1378,8 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
                                    col_producto=col_producto,
                                    col_valorizado=col_valorizado,
                                    col_cantidad=col_cantidad,
-                                   df_full=df_full, col_fecha=col_fecha)
+                                   df_full=df_full, col_fecha=col_fecha,
+                                   col_unidad=col_unidad)
         elif graf == "Mapa de calor":
             _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val,
                                  col_producto=col_producto)
