@@ -495,15 +495,17 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         [data-testid="stIconMaterial"]
         {{ font-size: 13px !important; width: 13px !important;
           height: 13px !important; }}
-    /* Pills "Top N" del drill: la version default de st.pills queda grande
-       (heredada del tamano de fuente global). Se achica solo esta key. */
-    .st-key-ajuste_cascada_topn [data-testid="stButtonGroup"] {{
-        gap: 4px !important; }}
-    .st-key-ajuste_cascada_topn [data-testid="stButtonGroup"] button[role="radio"] {{
+    /* Pills "Top N" del drill (una para Faltantes, otra para Sobrantes —
+       keys ajuste_cascada_topn_neg/_pos, por eso el match es por prefijo).
+       La version default de st.pills queda grande (hereda el tamano de
+       fuente global); se achica solo este par de keys. */
+    div[class*="st-key-ajuste_cascada_topn_"] [data-testid="stButtonGroup"] {{
+        gap: 4px !important; justify-content: flex-end !important; }}
+    div[class*="st-key-ajuste_cascada_topn_"] [data-testid="stButtonGroup"] button[role="radio"] {{
         min-width: 0 !important; padding: 1px 10px !important;
         min-height: 0 !important; height: 24px !important;
         line-height: 1 !important; border-width: 1px !important; }}
-    .st-key-ajuste_cascada_topn [data-testid="stButtonGroup"] button[role="radio"] p {{
+    div[class*="st-key-ajuste_cascada_topn_"] [data-testid="stButtonGroup"] button[role="radio"] p {{
         font-size: 11px !important; line-height: 1 !important; margin: 0 !important; }}
     /* ── Filas de la tabla ─────────────────────────────────────────── */
     div[class*="st-key-ajcas_fila_"] {{
@@ -612,13 +614,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             # fila con foco, que ya muestra familia + monto. Cerrar es el
             # mismo chevron (▾) que lo abrió.
             with col_d:
-                topn = st.pills(
-                    "Top", [5, 10, 20], default=10,
-                    key="ajuste_cascada_topn",
-                    label_visibility="collapsed",
-                    format_func=lambda n: f"Top {n}",
-                ) or 10
-
                 if not dim or dim not in _det.columns:
                     st.info("No hay una columna adecuada para desglosar "
                             "esta familia.")
@@ -637,18 +632,12 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                         _agg_map[col_area] = "first"
                     if _has_um:
                         _agg_map[col_unidad] = "first"
-                    _sub = _det.groupby(dim, as_index=False).agg(_agg_map)
-                    _sub["_abs"] = _sub[col_ajuste_val].abs()
-                    _sub = _sub.sort_values(
-                        "_abs", ascending=False).head(int(topn))
-                    if _sub.empty or _sub["_abs"].sum() == 0:
+                    _agg_dim = _det.groupby(dim, as_index=False).agg(_agg_map)
+
+                    if (_agg_dim.empty
+                            or _agg_dim[col_ajuste_val].abs().sum() == 0):
                         st.info("Sin datos para el drill de esta familia.")
                     else:
-                        _pos = _sub[_sub[col_ajuste_val] > 0].sort_values(
-                            col_ajuste_val, ascending=True)
-                        _neg = _sub[_sub[col_ajuste_val] < 0].sort_values(
-                            col_ajuste_val, ascending=False)
-
                         def _fig_split(_df, color_bar):
                             _labels = []
                             _texts = []
@@ -702,18 +691,34 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                             ))
                             return _fig
 
-                        _pa, _pb = st.columns(2)
-                        def _titulo_split(txt, color):
-                            st.markdown(
-                                f"<div style='font-size:9px;font-weight:600;"
-                                f"color:{color};letter-spacing:.08em;"
-                                f"text-transform:uppercase;"
-                                f"margin:4px 0 -8px 0'>{txt}</div>",
-                                unsafe_allow_html=True,
-                            )
+                        def _header_split(txt, color, key):
+                            """Título de la columna + su propio Top N, en la
+                            misma fila — Faltantes y Sobrantes ya no
+                            comparten un único selector."""
+                            _hl, _hr = st.columns(
+                                [1, 1], vertical_alignment="center")
+                            with _hl:
+                                st.markdown(
+                                    f"<div style='font-size:9px;font-weight:600;"
+                                    f"color:{color};letter-spacing:.08em;"
+                                    f"text-transform:uppercase'>{txt}</div>",
+                                    unsafe_allow_html=True,
+                                )
+                            with _hr:
+                                return st.pills(
+                                    "Top", [5, 10, 20], default=10, key=key,
+                                    label_visibility="collapsed",
+                                    format_func=lambda n: f"Top {n}",
+                                ) or 10
 
+                        _pa, _pb = st.columns(2)
                         with _pa:
-                            _titulo_split("Faltantes", DANGER_TEXT)
+                            _topn_neg = _header_split(
+                                "Faltantes", DANGER_TEXT,
+                                "ajuste_cascada_topn_neg")
+                            _neg = (_agg_dim[_agg_dim[col_ajuste_val] < 0]
+                                    .nsmallest(int(_topn_neg), col_ajuste_val)
+                                    .sort_values(col_ajuste_val, ascending=False))
                             if _neg.empty:
                                 st.caption("Sin faltantes en esta familia.")
                             else:
@@ -724,7 +729,12 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                          f"{_slug(focus_cat)}_{_inst}"),
                                 )
                         with _pb:
-                            _titulo_split("Sobrantes", CELDA_POS_TEXTO)
+                            _topn_pos = _header_split(
+                                "Sobrantes", CELDA_POS_TEXTO,
+                                "ajuste_cascada_topn_pos")
+                            _pos = (_agg_dim[_agg_dim[col_ajuste_val] > 0]
+                                    .nlargest(int(_topn_pos), col_ajuste_val)
+                                    .sort_values(col_ajuste_val, ascending=True))
                             if _pos.empty:
                                 st.caption("Sin sobrantes en esta familia.")
                             else:
