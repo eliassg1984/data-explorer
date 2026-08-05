@@ -33,18 +33,24 @@ import datetime
 import streamlit as st
 
 
-def clave_rango(reporte, usa_carga_rango, es_ajuste):
+def clave_rango(reporte, usa_carga_rango, es_ajuste, categoria_ajuste=None):
     """Clave canónica de session_state para el rango de `reporte`.
 
     - carga_por_rango → misma clave que el loader R2 (`rango_carga_*`), así
       el date-picker controla directamente qué se descarga.
-    - Ajuste de Inventario → clave histórica que graficos.py también lee.
+    - Ajuste de Inventario → una clave POR CATEGORÍA de gráfico
+      ("visual" o "tiempo", ver graficos.ajuste.categoria_rango_ajuste).
+      Cascada/Mapa de calor/Distribución/Tabla funcionan mejor acotados a
+      un período; Evolución/Comparativa necesitan varios meses o un año —
+      antes compartían una sola clave y se pisaban el rango entre sí.
+      `categoria_ajuste=None` (categoría aún no resuelta, p.ej. primer
+      render) cae en "visual" por ser la categoría por defecto del rail.
     - resto → clave de filtro local.
     """
     if usa_carga_rango:
         return f"rango_carga_{reporte}"
     if es_ajuste:
-        return "ajuste_rango_aplicado"
+        return f"ajuste_rango_aplicado_{categoria_ajuste or 'visual'}"
     return f"rango_franja_{reporte}"
 
 

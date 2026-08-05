@@ -21,6 +21,7 @@ from inyecciones import inject_error_overlay, inject_element_inspector, inject_f
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_aggrid_compras
 from graficos import renderizar_graficos_reporte
 from graficos.base import _render_rail
+from graficos.ajuste import categoria_rango_ajuste
 from asistente import inject_asistente
 from navegacion import inject_navegacion
 from perf import perf                                                       # ⚡ PERF
@@ -165,7 +166,8 @@ if _archivo_actual:
 # ===========================================================================
 if st.session_state.get("_reporte_anterior") != reporte:
     st.session_state["_reporte_anterior"] = reporte
-    st.session_state.pop("ajuste_rango_aplicado", None)
+    st.session_state.pop("ajuste_rango_aplicado_visual", None)
+    st.session_state.pop("ajuste_rango_aplicado_tiempo", None)
 
 
 # ===========================================================================
@@ -406,7 +408,17 @@ perf.start_phase("Ajuste top row")                                          # �
 # DISEÑO UNIFICADO: la franja fija (título + fecha + pestañas) aplica a
 # TODOS los reportes. El rango de fecha vive en una clave por reporte
 # Clave del rango de la franja — vía DUEÑO ÚNICO (ver estado_rango.py).
-_k_rango_franja = clave_rango(reporte, _usa_carga_rango, es_ajuste)
+# Ajuste: cada categoría del rail (visual/tiempo) recuerda su propio rango
+# por separado (ver graficos.ajuste.categoria_rango_ajuste) — se resuelve
+# ANTES de clave_rango() porque "ajuste_graf_tipo" ya quedó escrito en
+# session_state por el on_click del rail en el rerun anterior. None (nunca
+# se clickeó el rail todavía) cae en "visual" adentro de la función.
+_categoria_ajuste_rango = (
+    categoria_rango_ajuste(st.session_state.get("ajuste_graf_tipo"))
+    if es_ajuste else None
+)
+_k_rango_franja = clave_rango(reporte, _usa_carga_rango, es_ajuste,
+                              categoria_ajuste=_categoria_ajuste_rango)
 _franja_con_fecha = bool(col_fecha) and fecha_min_full is not None
 if True:
     # INVARIANTE: sembrar el default Y recortar a bounds AQUÍ, justo antes de
@@ -790,28 +802,6 @@ def _selector_vista():
             key=f"vista_seg_{reporte}",
         )
     return vista or "Gráficos"
-
-
-# ===========================================================================
-# AJUSTE DE INVENTARIO — auto-detección de ámbito Del periodo / Histórico
-# ===========================================================================
-# Regla: si el rango aplicado cae dentro del MISMO mes calendario, el ámbito
-# por defecto es «Del periodo»; si cruza meses, «Histórico». La detección se
-# calcula ANTES de renderizar el segmented para que el widget se dibuje con
-# el valor correcto ya en session_state. El usuario puede sobreescribirlo
-# manualmente después; solo se fuerza cuando cambia el rango entre reruns.
-#
-# El ámbito lo LEE `graficos.py` desde `st.session_state["ajuste_graf_ambito"]`,
-# nunca lo escribe. Fuente única de verdad: este bloque.
-def _calcular_ajuste_ambito_auto():
-    """Devuelve el ámbito que corresponde al rango actual del popover."""
-    _rango = st.session_state.get("ajuste_rango_aplicado")
-    if isinstance(_rango, (tuple, list)) and len(_rango) == 2:
-        _ini, _fin = _rango
-        if _ini.year == _fin.year and _ini.month == _fin.month:
-            return "Del periodo"
-        return "Histórico"
-    return "Del periodo"
 
 
 # ===========================================================================

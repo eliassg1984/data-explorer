@@ -44,6 +44,23 @@ _AJUSTE_RAIL_CATEGORIAS = (
 )
 
 
+def categoria_rango_ajuste(graf_id):
+    """A qué categoría de rango de fecha pertenece un item del rail de
+    Ajuste: "tiempo" (Evolución/Comparativa — necesitan varios meses o un
+    año para decir algo) o "visual" (Cascada/Mapa de calor/Distribución/
+    Tabla — snapshot de un período, tiene sentido acotado a un mes).
+
+    `app.py` usa esto para decidir qué clave de `session_state` lee/escribe
+    la franja de fecha (`ajuste_rango_aplicado_visual` vs `_tiempo`, ver
+    `estado_rango.clave_rango`) — así cada categoría recuerda su propio
+    rango sin pisar al otro. Única fuente de verdad: `_AJUSTE_RAIL_CATEGORIAS`
+    de arriba; si se agrega un item nuevo al rail, esto no hay que tocarlo."""
+    for cat_nombre, items in _AJUSTE_RAIL_CATEGORIAS:
+        if cat_nombre == "Tiempo" and any(oid == graf_id for oid, _ in items):
+            return "tiempo"
+    return "visual"
+
+
 def _layout_aj(**overrides):
     """`_layout` con el look del estándar del rail (igual que Compras).
 

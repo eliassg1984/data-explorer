@@ -19,6 +19,7 @@ actualiza este documento en el mismo commit.
 | Fichero | Trabajo (uno solo) |
 |---|---|
 | `app.py` | Orquestador: navegación, filtros, fragmentos, llama a los renderizadores. |
+| `estado_rango.py` | **Dueño único** del rango de fechas de la franja superior (`clave_rango`, `asegurar_rango`, `atajos_rango`, `aplicar_atajo`). Nadie escribe la clave del rango fuera de este módulo — ver regla #24. |
 | `data.py` | Carga de datos: DuckDB + httpfs leyendo parquets de R2 (secrets). Sistema de refresco bajo demanda vía R2. |
 | `tablas/` | **Paquete de tablas AgGrid** (refactor 2026-08-01; antes un `tablas.py` de 2.028 líneas). `__init__.py` re-exporta la API pública. `_css.py` (CSS de grid y paneles), `_config.py` (estilos de celda/fila, sidebar, totales), `desktop.py` (`renderizar_aggrid_desktop`), `movil.py` (`renderizar_aggrid_movil`), `compras.py` (`renderizar_aggrid_compras` + `renderizar_tabla_compras`, esta última legacy y sin uso). |
 | `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), `ajuste.py` (ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10), `ventas.py`, `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras), `legacy.py` (Inventario v1, respaldo no re-exportado). **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py` — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
@@ -531,3 +532,27 @@ salvo `icono`):
     `hovermode="x unified"` — un único tooltip con el valor de cada serie
     en la fecha del cursor, agrupado junto al cursor en vez de flotando en
     el borde derecho.
+
+24. **Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una
+    por "familia" de gráfico** (`estado_rango.py::clave_rango` +
+    `graficos/ajuste.py::categoria_rango_ajuste`). Ajuste de Inventario
+    tiene gráficos que solo dicen algo con un período acotado (Cascada,
+    Mapa de calor, Distribución — snapshot de un mes) y otros que solo
+    dicen algo con varios meses o un año (Evolución, Comparativa mensual —
+    tendencia). Antes compartían una única clave (`ajuste_rango_aplicado`)
+    y cambiar de pestaña en el rail les pisaba el rango entre sí. Se separó
+    en `ajuste_rango_aplicado_visual` / `_tiempo`, elegida por
+    `categoria_rango_ajuste(ajuste_graf_tipo)` — cada categoría del rail
+    recuerda su propio rango. `categoria_rango_ajuste` deriva la categoría
+    de `_AJUSTE_RAIL_CATEGORIAS` (única fuente de verdad: agregar un ítem
+    nuevo al rail no exige tocar el mapeo).
+    **Al tocar esto de nuevo, grepear el nombre viejo de la clave antes de
+    borrarlo** — no todos los lugares que la leen pasan por la variable
+    calculada: `app.py` tenía un `st.session_state.pop("ajuste_rango_
+    aplicado", ...)` hardcodeado al cambiar de reporte, y una función
+    `_calcular_ajuste_ambito_auto()` que la leía con el string suelto (esa
+    función resultó ser código muerto — sin ningún caller en todo el
+    repo — y se eliminó en el mismo commit). `estado_rango.py` es DUEÑO
+    ÚNICO precisamente porque este tipo de lectura hardcodeada, suelta en
+    otro archivo, es la fuente histórica de los desyncs (overlay ≠
+    calendario ≠ datos) que el módulo existe para evitar.
