@@ -20,7 +20,7 @@ from tema import (
     PALETA_SERIES, SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
     BLANCO, CELDA_ALERTA_FONDO, CELDA_ALERTA_TEXTO, CELDA_POS_TEXTO,
     DANGER_TEXT, ERROR, ERROR_FONDO, EXITO, EXITO_FONDO,
-    GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE,
+    GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE,
     LAVANDA_FONDO, LAVANDA_SELECCION,
 )
 from graficos.base import (
@@ -359,6 +359,20 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             return ("● MENOR", GRIS_TEXTO, GRIS_FONDO)
         return ("✓ OK", GRIS_TEXTO, GRIS_FONDO)
 
+    def _severidad_slug(peso, val):
+        """Mismos umbrales que _badge_for, pero como slug para la key del
+        `st.container` de la fila — así el CSS le pinta un matiz de fondo
+        acorde a la severidad (ver bloque <style> más abajo)."""
+        if val >= 0:
+            return "sobrante"
+        if peso >= 40:
+            return "critico"
+        if peso >= 20:
+            return "alerta"
+        if peso >= 5:
+            return "menor"
+        return "ok"
+
     # ── Cascada como TABLA de filas (sin fila TOTAL: sus datos viven en
     #    los KPIs junto al título, no en una fila más) ─────────────────────
     _filas = []
@@ -471,6 +485,18 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         focus = None
         st.session_state[_focus_key] = None
 
+    def _hex_rgba(hexcolor, alpha):
+        """hex de tema.py -> rgba() con transparencia — para el matiz de
+        fondo de las filas no se puede usar el fondo sólido del badge
+        (ERROR_FONDO etc.), queda muy fuerte para una fila entera."""
+        h = hexcolor.lstrip("#")
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return f"rgba({r},{g},{b},{alpha})"
+
+    _tint_critico = _hex_rgba(ERROR, 0.06)
+    _tint_alerta = _hex_rgba(CELDA_ALERTA_TEXTO, 0.07)
+    _tint_sobrante = _hex_rgba(EXITO, 0.055)
+
     st.markdown(f"""<style>
     /* Popover "Excluir productos": achica el boton que la regla global de
        estilos/_30_filtros.py deja en 180px de ancho y 15px de fuente. */
@@ -501,18 +527,28 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         line-height: 1 !important; border-width: 1px !important; }}
     div[class*="st-key-ajuste_cascada_topn_"] [data-testid="stButtonGroup"] button[role="radio"] p {{
         font-size: 11px !important; line-height: 1 !important; margin: 0 !important; }}
-    /* ── Filas de la tabla ─────────────────────────────────────────── */
+    /* ── Filas de la tabla: tarjetas con matiz por severidad, no líneas
+       divisorias ─────────────────────────────────────────────────────── */
     div[class*="st-key-ajcas_fila_"] {{
-        border-bottom: 1px solid {GRIS_LINEA};
-        margin: 0 -6px; padding: 0 6px;
-        border-radius: 6px;
+        margin: 0 -6px 4px -6px; padding: 3px 6px;
+        border-radius: 8px;
         transition: background .12s ease; }}
-    div[class*="st-key-ajcas_fila_"]:hover {{ background: {LAVANDA_SELECCION}; }}
+    div[class*="st-key-ajcas_fila_"][class*="_critico"] {{
+        background: {_tint_critico} !important; }}
+    div[class*="st-key-ajcas_fila_"][class*="_alerta"] {{
+        background: {_tint_alerta} !important; }}
+    div[class*="st-key-ajcas_fila_"][class*="_sobrante"] {{
+        background: {_tint_sobrante} !important; }}
+    div[class*="st-key-ajcas_fila_"][class*="_menor"],
+    div[class*="st-key-ajcas_fila_"][class*="_ok"] {{
+        background: {GRIS_FONDO} !important; }}
+    div[class*="st-key-ajcas_fila_"]:hover {{
+        background: {LAVANDA_SELECCION} !important; }}
     div[class*="st-key-ajcas_fila_"][class*="_on"] {{
-        background: {LAVANDA_FONDO};
+        background: {LAVANDA_FONDO} !important;
         box-shadow: inset 2px 0 0 {ACENTO}; }}
     div[class*="st-key-ajcas_fila_"][class*="_on"]:hover {{
-        background: {LAVANDA_FONDO}; }}
+        background: {LAVANDA_FONDO} !important; }}
     div[class*="st-key-ajcas_fila_"] div[data-testid="stVerticalBlock"]
         {{ gap: 0 !important; }}
     div[class*="st-key-ajcas_fila_"] div[data-testid="stHorizontalBlock"]
@@ -535,44 +571,44 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     </style>""", unsafe_allow_html=True)
 
     with _card("cascada"):
-        # ── Título + KPIs de los totales (antes vivían en la fila TOTAL de
-        #    la tabla) en la misma línea; popover de exclusión a la derecha ──
-        def _kpi_chip(lbl, val, tono=None):
-            if tono is None:
-                _bg, _fg, _fg_val = GRIS_FONDO, GRIS_TEXTO_SUAVE, TEXTO_PRINCIPAL
-            else:
-                _fg = _tono(tono)[0]
-                _bg = ERROR_FONDO if tono < 0 else EXITO_FONDO
-                _fg_val = _fg
-            return (f"<div style='display:inline-flex;flex-direction:column;"
-                    f"gap:1px;padding:4px 10px;border-radius:8px;"
-                    f"background:{_bg}'>"
-                    f"<span style='font-size:8.5px;color:{_fg};"
-                    f"text-transform:uppercase;letter-spacing:.06em;"
-                    f"font-weight:500'>{lbl}</span>"
-                    f"<span style='font-size:12.5px;font-weight:600;"
-                    f"color:{_fg_val};font-variant-numeric:tabular-nums'>"
-                    f"{val}</span></div>")
+        # ── Título + totales (antes vivían en la fila TOTAL de la tabla)
+        #    como texto simple en la misma línea — sin cajas, para no
+        #    competir en peso visual con el título. Popover de exclusión
+        #    a la derecha. ──────────────────────────────────────────────
+        def _kpi_sep(txt="|"):
+            return f"<span style='color:{GRIS_BORDE};padding:0 2px'>{txt}</span>"
 
-        _kpis = (f"<span style='font-size:14px;font-weight:600;"
-                 f"color:{TEXTO_PRINCIPAL};letter-spacing:-0.01em;"
-                 f"white-space:nowrap'>Ajuste valorizado por "
-                 f"{grp_col.lower()}</span>")
-        _kpis += _kpi_chip("Familias", f"{len(agg)}")
+        _kpis = (f"<span style='font-size:13px;font-weight:500;"
+                 f"color:{GRIS_TEXTO_MEDIO};white-space:nowrap'>"
+                 f"Ajuste valorizado por {grp_col.lower()}</span>")
+        _kpis += _kpi_sep()
+        _kpis += (f"<span style='color:{GRIS_TEXTO_SUAVE}'>"
+                  f"{len(agg)} {grp_col.lower()}s</span>")
         if _n_skus:
-            _kpis += _kpi_chip("SKUs", f"{sum(_n_skus.values()):,}")
+            _kpis += _kpi_sep("·")
+            _kpis += (f"<span style='color:{GRIS_TEXTO_SUAVE}'>"
+                      f"{sum(_n_skus.values()):,} SKUs</span>")
         _sig_tot = "+" if total > 0 else "−"
-        _kpis += _kpi_chip("Ajuste neto", f"{_sig_tot}S/ {abs(total):,.0f}",
-                           tono=total)
+        _col_tot = _tono(total)[0]
+        _kpis += _kpi_sep()
+        _kpis += (f"<span style='color:{GRIS_TEXTO_SUAVE}'>neto</span> "
+                  f"<span style='color:{_col_tot};font-weight:600;"
+                  f"font-variant-numeric:tabular-nums'>"
+                  f"{_sig_tot}S/ {abs(total):,.0f}</span>")
         if _kpi_pct_total is not None:
-            _kpis += _kpi_chip("% s/ total", f"{_kpi_pct_total:+.1f}%",
-                               tono=_kpi_pct_total)
+            _col_pct = _tono(_kpi_pct_total)[0]
+            _kpis += _kpi_sep("·")
+            _kpis += (f"<span style='color:{_col_pct};font-weight:600;"
+                      f"font-variant-numeric:tabular-nums'>"
+                      f"{_kpi_pct_total:+.1f}%</span>"
+                      f"<span style='color:{GRIS_TEXTO_SUAVE}'> s/ total</span>")
 
         _col_titulo, _col_excl = st.columns([6, 1])
         with _col_titulo:
             st.markdown(
-                f"<div style='display:flex;align-items:center;"
-                f"flex-wrap:wrap;gap:10px;padding:2px 0 10px 0'>{_kpis}</div>",
+                f"<div style='display:flex;align-items:baseline;"
+                f"flex-wrap:wrap;gap:8px;padding:2px 0 10px 0;"
+                f"font-size:11.5px'>{_kpis}</div>",
                 unsafe_allow_html=True)
         with _col_excl:
             if col_producto and col_producto in df.columns:
@@ -773,8 +809,9 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         # inserta justo debajo de su fila (no al final de la tabla).
         for _f in _filas:
             _es_foco = _f["cat"] == focus
+            _sev = _severidad_slug(_f["peso"], _f["val"])
             with st.container(
-                    key=f"ajcas_fila_{_slug(_f['cat'])}"
+                    key=f"ajcas_fila_{_slug(_f['cat'])}_{_sev}"
                         + ("_on" if _es_foco else "")):
                 _c = st.columns([0.04, 0.26, 0.13, 0.22, 0.11, 0.11, 0.13])
                 with _c[0]:
