@@ -306,30 +306,15 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     else:
         insight = None
 
-    # ── Enriquecimientos por familia ──────────────────────────────────────
+    # ── Enriquecimiento por familia ────────────────────────────────────────
+    # Solo el conteo de SKUs: alimenta el "N SKUs" de la fila TOTAL. El
+    # producto top y la concentración top3 se sacaron del subtítulo por
+    # ruido visual — no se calculan más.
     _n_skus = {}
-    _top_prod = {}
-    _conc3 = {}
     if col_producto and col_producto in df.columns:
         for _fam in agg[grp_col].tolist():
             _s = df[df[grp_col].astype(str) == str(_fam)]
             _n_skus[str(_fam)] = int(_s[col_producto].nunique())
-            _tp = (_s.groupby(col_producto, as_index=False)[col_ajuste_val]
-                   .sum())
-            _tp["_abs"] = _tp[col_ajuste_val].abs()
-            _tp = _tp.sort_values("_abs", ascending=False)
-            _abs_fam = float(_tp["_abs"].sum())
-            if _abs_fam > 1e-9 and len(_tp) > 3:
-                _conc3[str(_fam)] = (float(_tp["_abs"].head(3).sum())
-                                     / _abs_fam * 100)
-            if not _tp.empty:
-                _nom = str(_tp[col_producto].iloc[0])
-                if len(_nom) > 24:
-                    _nom = _nom[:23] + "…"
-                _val = float(_tp[col_ajuste_val].iloc[0])
-                _pctf = (float(_tp["_abs"].iloc[0]) / _abs_fam * 100
-                         if _abs_fam > 1e-9 else 0.0)
-                _top_prod[str(_fam)] = (_nom, _val, _pctf)
 
     _pct_val = {}
     if col_valorizado and col_valorizado in df.columns:
@@ -409,31 +394,16 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         _nom = f["cat"]
         if len(_nom) > 30:
             _nom = _nom[:29] + "…"
-        _piezas = []
-        _tp = _top_prod.get(f["cat"])
-        if _tp and not f["total"]:
-            _tnom, _tval, _tpct = _tp
-            _tcol = _tono(f["val"])[0]
-            _piezas.append(
-                f"<span style='color:{GRIS_TEXTO_MEDIO}'>{_tnom.upper()}</span>"
-                f" <span style='color:{_tcol};font-weight:500'>"
-                f"{_tpct:.0f}%</span>")
-        _n = (sum(_n_skus.values()) if (f["total"] and _n_skus)
-              else _n_skus.get(f["cat"]))
-        if _n:
-            _piezas.append(f"{_n} SKU" + ("s" if _n != 1 else ""))
-        _c3 = _conc3.get(f["cat"])
-        if _c3 is not None and not f["total"]:
-            _piezas.append(f"top3 {_c3:.0f}%")
-        _peso_txt = ("&lt;1%" if (not f["total"] and f["peso"] < 0.5)
-                     else f"{f['peso']:.0f}%")
         if f["total"]:
-            _piezas.insert(0, f"{len(agg)} familias")
+            _piezas = [f"{len(agg)} familias"]
+            _n = sum(_n_skus.values()) if _n_skus else None
+            if _n:
+                _piezas.append(f"{_n} SKU" + ("s" if _n != 1 else ""))
+            _sep = f"<span style='color:{GRIS_BORDE};padding:0 5px'>|</span>"
+            _sub = _sep.join(_piezas)
         else:
-            _piezas.insert(0, f"<b style='font-weight:500'>{_peso_txt}</b>"
-                              f" del total")
-        _sep = f"<span style='color:{GRIS_BORDE};padding:0 5px'>|</span>"
-        _sub = _sep.join(_piezas)
+            _peso_txt = ("&lt;1%" if f["peso"] < 0.5 else f"{f['peso']:.0f}%")
+            _sub = f"<b style='font-weight:500'>{_peso_txt}</b> del total"
         _peso_nom = "600" if f["total"] else "500"
         _ls = "0.02em" if f["total"] else "0"
         return (f"<div style='font-weight:{_peso_nom};color:{TEXTO_PRINCIPAL};"
