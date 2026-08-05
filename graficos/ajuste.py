@@ -306,17 +306,24 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             _s = df[df[grp_col].astype(str) == str(_fam)]
             _n_skus[str(_fam)] = int(_s[col_producto].nunique())
 
+    # "S/ val" = ajuste de la familia sobre SU PROPIO valorizado.
+    # "% total" = el mismo ajuste sobre el valorizado TOTAL (todas las
+    # familias) — son bases distintas a propósito, no van a coincidir.
     _pct_val = {}
+    _pct_val_total = {}
+    _kpi_pct_total = None
     if col_valorizado and col_valorizado in df.columns:
         _vv = df.groupby(grp_col)[col_valorizado].sum()
+        _base_tot = float(df[col_valorizado].sum() or 0)
         for _fam in agg[grp_col].tolist():
+            _cv = float(agg[agg[grp_col] == _fam][col_ajuste_val].iloc[0])
             _base = float(_vv.get(_fam, 0) or 0)
             if abs(_base) > 1e-6:
-                _cv = float(agg[agg[grp_col] == _fam][col_ajuste_val].iloc[0])
                 _pct_val[str(_fam)] = _cv / _base * 100
-        _base_tot = float(df[col_valorizado].sum() or 0)
+            if abs(_base_tot) > 1e-6:
+                _pct_val_total[str(_fam)] = _cv / _base_tot * 100
         if abs(_base_tot) > 1e-6:
-            _pct_val["TOTAL"] = total / _base_tot * 100
+            _kpi_pct_total = total / _base_tot * 100
 
     _delta = {}
     if (df_full is not None and col_fecha
@@ -352,18 +359,15 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             return ("● MENOR", GRIS_TEXTO, GRIS_FONDO)
         return ("✓ OK", GRIS_TEXTO, GRIS_FONDO)
 
-    # ── Cascada como TABLA de filas ────────────────────────────────────────
+    # ── Cascada como TABLA de filas (sin fila TOTAL: sus datos viven en
+    #    los KPIs junto al título, no en una fila más) ─────────────────────
     _filas = []
     _run = 0.0
     for _i in range(len(agg)):
         _v = float(agg[col_ajuste_val].iloc[_i])
         _filas.append({"cat": str(agg[grp_col].iloc[_i]), "val": _v,
-                       "lo": _run, "hi": _run + _v, "peso": float(pesos[_i]),
-                       "total": False})
+                       "lo": _run, "hi": _run + _v, "peso": float(pesos[_i])})
         _run += _v
-    _filas.append({"cat": "TOTAL", "val": total,
-                   "lo": min(0.0, total), "hi": max(0.0, total),
-                   "peso": 100.0, "total": True})
 
     _bordes = [0.0] + [f["lo"] for f in _filas] + [f["hi"] for f in _filas]
     _dmin, _dmax = min(_bordes), max(_bordes)
@@ -374,32 +378,18 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         _f["left_pct"] = (_lo - _dmin) / _span * 100
         _f["w_pct"] = max((_hi - _lo) / _span * 100, 0.4)
         _f["conn_pct"] = (((_filas[_idx - 1]["hi"] - _dmin) / _span * 100)
-                          if _idx > 0 and not _f["total"] else None)
+                          if _idx > 0 else None)
 
     def _tono(v):
         return ((CELDA_POS_TEXTO, EXITO) if v > 0
                 else (DANGER_TEXT, ERROR))
 
     def _celda_familia(f):
+        # Nombre + "X% del total" en la misma línea (no apilado abajo) —
+        # el nombre cede espacio primero si no entra.
         _nom = f["cat"]
         if len(_nom) > 30:
             _nom = _nom[:29] + "…"
-        if f["total"]:
-            _piezas = [f"{len(agg)} familias"]
-            _n = sum(_n_skus.values()) if _n_skus else None
-            if _n:
-                _piezas.append(f"{_n} SKU" + ("s" if _n != 1 else ""))
-            _sep = f"<span style='color:{GRIS_BORDE};padding:0 5px'>|</span>"
-            _sub = _sep.join(_piezas)
-            return (f"<div style='font-weight:600;color:{TEXTO_PRINCIPAL};"
-                    f"font-size:12.5px;line-height:1.2;letter-spacing:0.02em;"
-                    f"white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>"
-                    f"{_nom}</div>"
-                    f"<div style='font-size:9.5px;color:{GRIS_TEXTO_SUAVE};"
-                    f"line-height:1.35;margin-top:2px;white-space:nowrap;"
-                    f"overflow:hidden;text-overflow:ellipsis'>{_sub}</div>")
-        # Fila de familia: nombre + "X% del total" en la misma línea (no
-        # apilado abajo) — el nombre cede espacio primero si no entra.
         _peso_txt = ("&lt;1%" if f["peso"] < 0.5 else f"{f['peso']:.0f}%")
         return (f"<div style='display:flex;align-items:baseline;gap:6px;"
                 f"overflow:hidden'>"
@@ -411,14 +401,14 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                 f"</div>")
 
     def _celda_monto(f):
-        _col = GRIS_TEXTO_MEDIO if f["total"] else _tono(f["val"])[0]
+        _col = _tono(f["val"])[0]
         _sig = "+" if f["val"] > 0 else "−"
         _html = (f"<div style='color:{_col};font-weight:600;font-size:13px;"
                  f"font-variant-numeric:tabular-nums;line-height:1.2;"
                  f"letter-spacing:-0.01em'>"
                  f"{_sig}S/ {abs(f['val']):,.0f}</div>")
         _dl = _delta.get(f["cat"])
-        if _dl and not f["total"]:
+        if _dl:
             _dir, _dpct = _dl
             _arrow = "▲" if _dir == "down" else "▼"
             _dcol = DANGER_TEXT if _dir == "down" else CELDA_POS_TEXTO
@@ -430,8 +420,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         return _html
 
     def _celda_barra(f):
-        _bg = GRIS_TEXTO_MEDIO if f["total"] else _tono(f["val"])[1]
-        _alto = 12 if f["total"] else 9
+        _bg = _tono(f["val"])[1]
         _conn = ""
         if f["conn_pct"] is not None:
             _conn = (f"<div style='position:absolute;"
@@ -439,31 +428,36 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                      f"width:1px;background:{GRIS_BORDE}'></div>")
         return (f"<div style='position:relative;height:22px;width:100%'>"
                 f"<div style='position:absolute;left:0;right:0;top:50%;"
-                f"transform:translateY(-50%);height:{_alto}px;"
+                f"transform:translateY(-50%);height:9px;"
                 f"background:{GRIS_FONDO};border-radius:999px'></div>{_conn}"
                 f"<div style='position:absolute;left:{f['left_pct']:.2f}%;"
                 f"width:{f['w_pct']:.2f}%;top:50%;"
                 f"transform:translateY(-50%);"
-                f"height:{_alto}px;background:{_bg};border-radius:999px'>"
+                f"height:9px;background:{_bg};border-radius:999px'>"
                 f"</div></div>")
 
-    def _celda_pctval(f):
-        _pv = _pct_val.get(f["cat"])
-        if _pv is None:
-            return (f"<div style='font-size:11.5px;color:{GRIS_BORDE};"
-                    f"text-align:right'>—</div>")
-        _col = _tono(_pv)[0]
-        return (f"<div style='font-size:11.5px;color:{_col};text-align:right;"
-                f"font-weight:500;font-variant-numeric:tabular-nums'>"
-                f"{_pv:+.1f}%</div>")
+    def _celda_pct(valores):
+        """Fábrica: misma pinta de celda-%, distinta fuente de datos
+        (S/ val = base propia de la familia; % total = base valorizado
+        total). Evita duplicar el HTML dos veces."""
+        def _fn(f):
+            _pv = valores.get(f["cat"])
+            if _pv is None:
+                return (f"<div style='font-size:11.5px;color:{GRIS_BORDE};"
+                        f"text-align:right'>—</div>")
+            _col = _tono(_pv)[0]
+            return (f"<div style='font-size:11.5px;color:{_col};"
+                    f"text-align:right;font-weight:500;"
+                    f"font-variant-numeric:tabular-nums'>{_pv:+.1f}%</div>")
+        return _fn
+
+    _celda_pctval = _celda_pct(_pct_val)
+    _celda_pcttotal = _celda_pct(_pct_val_total)
 
     def _celda_badge(f):
-        if f["total"]:
-            _txt, _fg, _bg = "Total", GRIS_TEXTO, GRIS_FONDO
-        else:
-            _txt, _fg, _bg = _badge_for(f["peso"], f["val"])
-            _txt = _txt.split(" ", 1)[-1]
-            _txt = _txt if _txt == "OK" else _txt.capitalize()
+        _txt, _fg, _bg = _badge_for(f["peso"], f["val"])
+        _txt = _txt.split(" ", 1)[-1]
+        _txt = _txt if _txt == "OK" else _txt.capitalize()
         return (f"<div style='text-align:right'><span style='display:inline-"
                 f"block;padding:2.5px 8px;border-radius:999px;font-size:9.5px;"
                 f"font-weight:600;letter-spacing:0.02em;background:{_bg};"
@@ -519,10 +513,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         box-shadow: inset 2px 0 0 {ACENTO}; }}
     div[class*="st-key-ajcas_fila_"][class*="_on"]:hover {{
         background: {LAVANDA_FONDO}; }}
-    div[class*="st-key-ajcas_fila_total"] {{
-        border-bottom: none; border-top: 1.5px solid {GRIS_BORDE};
-        margin-top: 2px; background: transparent !important;
-        box-shadow: none !important; }}
     div[class*="st-key-ajcas_fila_"] div[data-testid="stVerticalBlock"]
         {{ gap: 0 !important; }}
     div[class*="st-key-ajcas_fila_"] div[data-testid="stHorizontalBlock"]
@@ -545,25 +535,45 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     </style>""", unsafe_allow_html=True)
 
     with _card("cascada"):
-        # ── CAMBIO 2: encabezado en dos columnas (título izq + popover der) ──
-        _n_falt = int((agg[col_ajuste_val] < 0).sum())
-        _col_neto = DANGER_TEXT if total < 0 else CELDA_POS_TEXTO
-        _resumen = (f"{len(agg)} {grp_col.lower()}s"
-                    f"<span style='color:{GRIS_BORDE};padding:0 6px'>|</span>"
-                    f"{_n_falt} con faltante"
-                    f"<span style='color:{GRIS_BORDE};padding:0 6px'>|</span>"
-                    f"neto <span style='color:{_col_neto};font-weight:600;"
-                    f"font-variant-numeric:tabular-nums'>"
-                    f"S/ {total:,.0f}</span>")
+        # ── Título + KPIs de los totales (antes vivían en la fila TOTAL de
+        #    la tabla) en la misma línea; popover de exclusión a la derecha ──
+        def _kpi_chip(lbl, val, tono=None):
+            if tono is None:
+                _bg, _fg, _fg_val = GRIS_FONDO, GRIS_TEXTO_SUAVE, TEXTO_PRINCIPAL
+            else:
+                _fg = _tono(tono)[0]
+                _bg = ERROR_FONDO if tono < 0 else EXITO_FONDO
+                _fg_val = _fg
+            return (f"<div style='display:inline-flex;flex-direction:column;"
+                    f"gap:1px;padding:4px 10px;border-radius:8px;"
+                    f"background:{_bg}'>"
+                    f"<span style='font-size:8.5px;color:{_fg};"
+                    f"text-transform:uppercase;letter-spacing:.06em;"
+                    f"font-weight:500'>{lbl}</span>"
+                    f"<span style='font-size:12.5px;font-weight:600;"
+                    f"color:{_fg_val};font-variant-numeric:tabular-nums'>"
+                    f"{val}</span></div>")
+
+        _kpis = (f"<span style='font-size:14px;font-weight:600;"
+                 f"color:{TEXTO_PRINCIPAL};letter-spacing:-0.01em;"
+                 f"white-space:nowrap'>Ajuste valorizado por "
+                 f"{grp_col.lower()}</span>")
+        _kpis += _kpi_chip("Familias", f"{len(agg)}")
+        if _n_skus:
+            _kpis += _kpi_chip("SKUs", f"{sum(_n_skus.values()):,}")
+        _sig_tot = "+" if total > 0 else "−"
+        _kpis += _kpi_chip("Ajuste neto", f"{_sig_tot}S/ {abs(total):,.0f}",
+                           tono=total)
+        if _kpi_pct_total is not None:
+            _kpis += _kpi_chip("% s/ total", f"{_kpi_pct_total:+.1f}%",
+                               tono=_kpi_pct_total)
 
         _col_titulo, _col_excl = st.columns([6, 1])
         with _col_titulo:
             st.markdown(
-                f"<div style='font-size:14px;font-weight:600;"
-                f"color:{TEXTO_PRINCIPAL};letter-spacing:-0.01em;"
-                f"padding:4px 0 10px 0'>"
-                f"Ajuste valorizado por {grp_col.lower()}"
-                f"</div>", unsafe_allow_html=True)
+                f"<div style='display:flex;align-items:center;"
+                f"flex-wrap:wrap;gap:10px;padding:2px 0 10px 0'>{_kpis}</div>",
+                unsafe_allow_html=True)
         with _col_excl:
             if col_producto and col_producto in df.columns:
                 with st.container(key="ajcas_excl_wrap"), \
@@ -589,11 +599,12 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             f"text-transform:uppercase;letter-spacing:.08em;font-weight:600;"
             f"padding:0 0 7px 0;border-bottom:1px solid {GRIS_BORDE}'>"
             f"<div style='width:4%'></div>"
-            f"<div style='width:30%'>Familia</div>"
-            f"<div style='width:17%'>Ajuste</div>"
-            f"<div style='width:28%'>Cascada acumulada</div>"
-            f"<div style='width:10%;text-align:right'>s/ val</div>"
-            f"<div style='width:11%;text-align:right'>Estado</div>"
+            f"<div style='width:26%'>Familia</div>"
+            f"<div style='width:13%'>Ajuste</div>"
+            f"<div style='width:22%'>Cascada acumulada</div>"
+            f"<div style='width:11%;text-align:right'>s/ val</div>"
+            f"<div style='width:11%;text-align:right'>% total</div>"
+            f"<div style='width:13%;text-align:right'>Estado</div>"
             f"</div>", unsafe_allow_html=True)
 
         def _render_drill(focus_cat):
@@ -761,26 +772,25 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         # Una fila por familia. El drill de la familia clickeada se
         # inserta justo debajo de su fila (no al final de la tabla).
         for _f in _filas:
-            _es_foco = (not _f["total"]) and _f["cat"] == focus
+            _es_foco = _f["cat"] == focus
             with st.container(
                     key=f"ajcas_fila_{_slug(_f['cat'])}"
                         + ("_on" if _es_foco else "")):
-                _c = st.columns([0.04, 0.30, 0.17, 0.28, 0.10, 0.11])
+                _c = st.columns([0.04, 0.26, 0.13, 0.22, 0.11, 0.11, 0.13])
                 with _c[0]:
-                    if not _f["total"]:
-                        if st.button(
-                            "▾" if _es_foco else "▸",
-                            key=f"ajcas_btn_{_slug(_f['cat'])}",
-                            help=("Cerrar el detalle" if _es_foco
-                                  else f"Ver productos de {_f['cat']}"),
-                            type="primary" if _es_foco else "secondary",
-                        ):
-                            st.session_state[_focus_key] = (
-                                None if _es_foco else _f["cat"])
-                            st.rerun()
+                    if st.button(
+                        "▾" if _es_foco else "▸",
+                        key=f"ajcas_btn_{_slug(_f['cat'])}",
+                        help=("Cerrar el detalle" if _es_foco
+                              else f"Ver productos de {_f['cat']}"),
+                        type="primary" if _es_foco else "secondary",
+                    ):
+                        st.session_state[_focus_key] = (
+                            None if _es_foco else _f["cat"])
+                        st.rerun()
                 for _col, _fn in zip(_c[1:], (_celda_familia, _celda_monto,
                                               _celda_barra, _celda_pctval,
-                                              _celda_badge)):
+                                              _celda_pcttotal, _celda_badge)):
                     with _col:
                         st.markdown(_fn(_f), unsafe_allow_html=True)
 
@@ -797,7 +807,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             f"<div style='display:flex;gap:16px;flex-wrap:wrap;"
             f"font-size:9.5px;color:{GRIS_TEXTO_SUAVE};margin-top:10px'>"
             + _punto(ERROR, "Faltante") + _punto(EXITO, "Sobrante")
-            + _punto(GRIS_TEXTO_MEDIO, "Total neto")
             + f"<span style='color:{GRIS_BORDE}'>|</span>"
               f"<span>Cada barra arranca donde terminó la anterior</span>"
               f"</div>", unsafe_allow_html=True)
