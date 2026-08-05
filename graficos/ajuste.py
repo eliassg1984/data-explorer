@@ -296,17 +296,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     abs_sum = float(agg[col_ajuste_val].abs().sum()) or 1.0
     pesos = [abs(v) / abs_sum * 100 for v in agg[col_ajuste_val]]
 
-    top_peso = max(pesos) if pesos else 0.0
-    top_idx = pesos.index(top_peso) if pesos else None
-    top_nombre = (str(agg[grp_col].iloc[top_idx]).upper()
-                  if top_idx is not None else "")
-    if top_peso >= 60:
-        insight = f"{top_nombre} concentra el {top_peso:.0f}% del ajuste"
-    elif top_peso >= 40:
-        insight = f"{top_nombre} explica el {top_peso:.0f}% del ajuste"
-    else:
-        insight = None
-
     # ── Enriquecimiento por familia ────────────────────────────────────────
     # Solo el conteo de SKUs: alimenta el "N SKUs" de la fila TOTAL. El
     # producto top y la concentración top3 se sacaron del subtítulo por
@@ -402,18 +391,24 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                 _piezas.append(f"{_n} SKU" + ("s" if _n != 1 else ""))
             _sep = f"<span style='color:{GRIS_BORDE};padding:0 5px'>|</span>"
             _sub = _sep.join(_piezas)
-        else:
-            _peso_txt = ("&lt;1%" if f["peso"] < 0.5 else f"{f['peso']:.0f}%")
-            _sub = f"<b style='font-weight:500'>{_peso_txt}</b> del total"
-        _peso_nom = "600" if f["total"] else "500"
-        _ls = "0.02em" if f["total"] else "0"
-        return (f"<div style='font-weight:{_peso_nom};color:{TEXTO_PRINCIPAL};"
-                f"font-size:12.5px;line-height:1.2;letter-spacing:{_ls};"
-                f"white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>"
-                f"{_nom}</div>"
-                f"<div style='font-size:9.5px;color:{GRIS_TEXTO_SUAVE};"
-                f"line-height:1.35;margin-top:2px;white-space:nowrap;"
-                f"overflow:hidden;text-overflow:ellipsis'>{_sub}</div>")
+            return (f"<div style='font-weight:600;color:{TEXTO_PRINCIPAL};"
+                    f"font-size:12.5px;line-height:1.2;letter-spacing:0.02em;"
+                    f"white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>"
+                    f"{_nom}</div>"
+                    f"<div style='font-size:9.5px;color:{GRIS_TEXTO_SUAVE};"
+                    f"line-height:1.35;margin-top:2px;white-space:nowrap;"
+                    f"overflow:hidden;text-overflow:ellipsis'>{_sub}</div>")
+        # Fila de familia: nombre + "X% del total" en la misma línea (no
+        # apilado abajo) — el nombre cede espacio primero si no entra.
+        _peso_txt = ("&lt;1%" if f["peso"] < 0.5 else f"{f['peso']:.0f}%")
+        return (f"<div style='display:flex;align-items:baseline;gap:6px;"
+                f"overflow:hidden'>"
+                f"<span style='font-weight:500;color:{TEXTO_PRINCIPAL};"
+                f"font-size:12.5px;white-space:nowrap;overflow:hidden;"
+                f"text-overflow:ellipsis;min-width:0;flex:0 1 auto'>{_nom}</span>"
+                f"<span style='font-size:10.5px;color:{GRIS_TEXTO_SUAVE};"
+                f"white-space:nowrap;flex-shrink:0'>{_peso_txt} del total</span>"
+                f"</div>")
 
     def _celda_monto(f):
         _col = GRIS_TEXTO_MEDIO if f["total"] else _tono(f["val"])[0]
@@ -566,10 +561,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                 f"color:{TEXTO_PRINCIPAL};letter-spacing:-0.01em;"
                 f"padding:4px 0 10px 0'>"
                 f"Ajuste valorizado por {grp_col.lower()}"
-                + (f"<span style='font-size:11px;font-weight:400;"
-                   f"color:{GRIS_TEXTO_SUAVE}'> — {insight}</span>"
-                   if insight else "")
-                + f"</div>", unsafe_allow_html=True)
+                f"</div>", unsafe_allow_html=True)
         with _col_excl:
             if col_producto and col_producto in df.columns:
                 with st.container(key="ajcas_excl_wrap"), \
