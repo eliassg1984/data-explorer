@@ -269,6 +269,38 @@ def _datos_demo(archivo, filas=60):
         df["Valorizado total"] = (df["Stock al Dia"] * df["Precio Promedio"]).round(2)
         return df
 
+    if archivo == "ajusteinventario.parquet":
+        # Nombres en MAYUSCULAS como el parquet real (por eso _titulo_es
+        # existe: convierte "STOCK AL CIERRE" -> "Stock al Cierre" en las
+        # cabeceras). FECHA APERTURA INVENTARIO trae hora al minuto, igual
+        # que en produccion: es lo que obliga a las columnas derivadas
+        # (Mes)/(Dia) de app.py para el Modo pivote.
+        n = 240
+        fechas = pd.to_datetime("2024-02-29") + pd.to_timedelta(
+            rng.integers(0, 90, n) * 1440 + rng.integers(0, 1440, n), unit="m")
+        cierre = rng.uniform(0, 400, n).round(2)
+        # ~55% sin diferencia (el caso real dominante), el resto falta o sobra.
+        delta = np.where(rng.random(n) < 0.55, 0.0,
+                         rng.uniform(-40, 40, n).round(2))
+        precio = rng.uniform(0.5, 120, n).round(2)
+        df = pd.DataFrame({
+            "FECHA APERTURA INVENTARIO": fechas,
+            "AREA": rng.choice(["Cocina", "Bar", "Almacén", "Salón"], n),
+            "FAMILIA": rng.choice(["Carnes", "Bebidas", "Verduras",
+                                   "Abarrotes", "Lácteos"], n),
+            "SUBFAMILIA": rng.choice(["Tipo A", "Tipo B", "Tipo C"], n),
+            "CODIGO PRODUCTO": [f"P{i % 80:05d}" for i in range(n)],
+            "PRODUCTO": [f"Producto demo {i % 80:03d}" for i in range(n)],
+            "UNIDAD MEDIDA": rng.choice(["UND", "KG", "LT"], n),
+            "PRECIO PROMEDIO": precio,
+            "STOCK AL CIERRE": cierre,
+        })
+        df["STOCK DECLARADO"] = (cierre + delta).round(2)
+        df["AJUSTE"] = delta.round(2)
+        df["AJUSTE VALORIZADO"] = (df["AJUSTE"] * precio).round(2)
+        df["VALORIZADO TOTAL"] = (cierre * precio).round(2)
+        return df
+
     if archivo == "salidas.parquet":
         cant = rng.integers(1, 60, n)
         precio = rng.uniform(1, 80, n).round(2)

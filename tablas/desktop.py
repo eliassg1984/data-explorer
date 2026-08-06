@@ -399,9 +399,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                     and _c not in _valores_ini and _c not in _grupos_ini):
                 gb.configure_column(_c, aggFunc=None)
 
-        for _c in df_grid.columns:
-            gb.configure_column(_c, headerName=_titulo_es(_c))
-
         # ── Quitar del panel de Filtros las columnas que se manejan con chips externos ──
         col_area = buscar_columna(df_grid, "Nombre Area", "Area", "AREA")
         col_fam = buscar_columna(df_grid, "Nombre Familia", "Familia", "FAMILIA")
@@ -410,6 +407,16 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         for _c in df_grid.columns:
             if _c in (col_area, col_fam, col_aj, col_ajval):
                 gb.configure_column(_c, suppressFiltersToolPanel=True)
+
+        # Cabeceras en "Nombre Propio": VA ÚLTIMO A PROPÓSITO. El
+        # configure_column de st_aggrid reconstruye el colDef con
+        # headerName = nombre del campo cuando no se le pasa header_name,
+        # así que CUALQUIER configure_column posterior pisa el título en
+        # español. Estaba antes del loop de suppressFiltersToolPanel y por
+        # eso AJUSTE / AJUSTE VALORIZADO / AREA / FAMILIA salían en
+        # MAYÚSCULAS mientras el resto salía capitalizado.
+        for _c in df_grid.columns:
+            gb.configure_column(_c, headerName=_titulo_es(_c))
 
         opciones_grid["pivotMode"] = True
         opciones_grid["groupDefaultExpanded"] = 0

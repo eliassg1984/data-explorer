@@ -465,6 +465,25 @@ def inject_fix_column_panel_ajuste():
                 var items = sidebar.querySelectorAll(
                     '.ag-virtual-list-item'
                 );
+
+                // AG Grid dibuja la lista virtual UNA vez, con el panel
+                // todavia oculto (display:none -> viewport de alto 0), asi
+                // que calcula 0 filas visibles y no la vuelve a dibujar al
+                // abrirlo: el panel Columnas (y el de Modo pivote) aparecen
+                // VACIOS aunque el contenedor sepa que hay N columnas.
+                // Un evento scroll sobre el viewport dispara drawVirtualRows
+                // con el alto ya real y las pastillas aparecen.
+                if (!items.length) {
+                    var viewport = sidebar.querySelector(
+                        '.ag-virtual-list-viewport'
+                    );
+                    if (viewport) {
+                        viewport.dispatchEvent(new Event('scroll'));
+                        items = sidebar.querySelectorAll(
+                            '.ag-virtual-list-item'
+                        );
+                    }
+                }
                 if (!items.length) return;
 
                 // Soltar el alto que dejó la corrida ANTERIOR antes de volver a medir.

@@ -217,13 +217,17 @@ salvo `icono`):
    Está en el drill de Proveedor de Compras (`compras/proveedor.py`) y en el
    de la cascada de Ajuste (`ajuste.py`).
 
-10. **Los datos demo no traen las columnas de Ajuste** (`AJUSTE VALORIZADO`
-    y compañía), así que la vista cae al explorador genérico y la cascada no
-    se puede verificar levantando la app. Para tocarla, montar un harness
-    con datos sintéticos que llame directo a `_graf_waterfall_ajuste` y
-    levantarlo como segunda config en `.claude/launch.json`. Medir con JS
-    (`getBoundingClientRect` + `scrollHeight`) encuentra los colapsos de
-    layout que una captura de pantalla no delata.
+10. **Ajuste SÍ se puede verificar en local desde 2026-08-05.**
+    `data.py::_datos_demo` tiene rama propia para `ajusteinventario.parquet`
+    (240 filas, columnas en MAYÚSCULAS como el parquet real, fecha con hora
+    al minuto). Antes no la tenía: sin `AJUSTE VALORIZADO` la vista caía al
+    explorador genérico y el item "Tabla" del rail no llegaba a existir, así
+    que ni la cascada ni la tabla se podían mirar levantando la app.
+    Al agregar o cambiar un demo, **reiniciar el server**: `@st.cache_data`
+    envuelve `_cargar_cacheable`, no `_datos_demo`, así que editar el demo
+    no invalida nada y se sigue sirviendo el df viejo.
+    Medir con JS (`getBoundingClientRect` + `scrollHeight`) encuentra los
+    colapsos de layout que una captura de pantalla no delata.
 
 11. **`go.Heatmap` NO es una traza seleccionable: `on_select` nunca recibe
     sus puntos.** El cableado se ve correcto (`on_select="rerun"`,
@@ -605,3 +609,42 @@ salvo `icono`):
       puntos de scroll distintos, no alcanza con leer el estilo computado
       una sola vez. Selector para llegar al wrapper sin tocar el HTML que
       genera Streamlit: `div:has(> .st-key-<key>) { position: sticky; ... }`.
+
+26. **`GridOptionsBuilder.configure_column()` PISA el `headerName` cada vez
+    que se lo llama sin `header_name`.** No hace merge parcial: reconstruye
+    el colDef con `{"headerName": field, "field": field}` y recién después
+    aplica los kwargs. O sea, cualquier `configure_column(c, loQueSea=...)`
+    posterior devuelve la cabecera al nombre crudo del campo.
+    **Regla:** el loop que pone las cabeceras en español (`_titulo_es`) va
+    ÚLTIMO en `tablas/desktop.py`, después de todo otro `configure_column`.
+    Motivo (bug real, 2026-08-05): el loop de `suppressFiltersToolPanel`
+    corría después y dejaba `AJUSTE`, `AJUSTE VALORIZADO`, `AREA` y
+    `FAMILIA` en MAYÚSCULAS mientras el resto de la tabla salía en "Nombre
+    Propio" — se veía en la cabecera y en las pastillas de "Modo pivote".
+
+27. **La fila de totales suma por DEFAULT toda columna numérica; la lista
+    negra es la excepción.** `_fila_totales` clasificaba por palabra clave
+    (valorizado/total/…, precio/promedio/…, stock) y lo que no matcheaba
+    quedaba en `None` → celda vacía. Así, `AJUSTE` —la métrica que da
+    nombre al reporte— no tenía total. Ahora el default de una numérica es
+    sumar y `_NO_SUMABLE` (códigos y partes de fecha) decide qué no.
+    La comparación es por **palabra completa**, no por "contiene": con
+    substring `Cantidad` matchea `id` y `Tamaño` matchea `ano`. Y los
+    acentos se quitan ANTES de partir en palabras, o `Año` se parte en
+    ("A", "o") y nunca matchea.
+    Pendiente conocido: la fila es `pinnedTopRowData`, dato estático — los
+    filtros internos de AG Grid (panel "Filtros", cabecera) no la
+    recalculan. Los chips de arriba sí, porque filtran el df en Python.
+
+28. **Los paneles "Columnas" y "Modo pivote" abrían VACÍOS la primera vez.**
+    AG Grid dibuja su lista virtual una sola vez, con el panel todavía
+    `display:none` (viewport de alto 0) → calcula 0 filas visibles y no la
+    redibuja al abrirlo. El contenedor sí sabe cuántas hay
+    (`aria-label="Column List 15 Columnas"`), pero no renderiza ítems.
+    No era el CSS del proyecto: se reproduce con el `custom_css`
+    deshabilitado, y pasaba en todos los reportes, no solo Ajuste.
+    **Solución** (en `inject_fix_column_panel_ajuste`): si al reposicionar
+    no hay ítems, un `dispatchEvent(new Event('scroll'))` sobre
+    `.ag-virtual-list-viewport` fuerza el `drawVirtualRows` con el alto ya
+    real. Importa porque `cols_visibles` oculta columnas a propósito y ese
+    panel es la única vía para reactivarlas.
