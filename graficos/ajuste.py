@@ -887,6 +887,46 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         transform: scale(1.25); }}
     div[class*="st-key-ajcas_btn_"] button[kind="primary"] {{
         color: {ACENTO} !important; }}
+    /* ── Tooltip del título ────────────────────────────────────────────
+       "Cada barra arranca donde terminó la anterior" vivía como leyenda
+       fija al pie de la cascada, junto a los puntos Faltante/Sobrante.
+       Ambos se sacaron: el color de las barras y los badges de Estado ya
+       dicen faltante/sobrante, y la nota de la cascada acumulada es una
+       aclaración de una sola vez — no merece ocupar una fila permanente.
+       Ahora se muestra al pasar el cursor sobre el título.
+       El texto va en un <span> anidado y NO en un data-* + content:
+       attr(): el sanitizador de markdown de Streamlit no garantiza que
+       sobrevivan los atributos custom, las clases sí (mismo patrón que
+       .titulo-ajuste-reporte / .ultima-actualizacion).
+       :active además de :hover → en táctil no hay hover; con esto el
+       globo aparece mientras se mantiene el dedo sobre el título. */
+    .ajcas-tip {{ position: relative; cursor: help; }}
+    .ajcas-tip-i {{
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 12px; height: 12px; margin-left: 5px;
+        border: 1px solid {GRIS_BORDE}; border-radius: 999px;
+        color: {GRIS_TEXTO_SUAVE}; font-size: 8.5px; font-weight: 700;
+        font-style: italic; line-height: 1; vertical-align: 1px;
+        transition: color .12s ease, border-color .12s ease; }}
+    .ajcas-tip:hover .ajcas-tip-i, .ajcas-tip:active .ajcas-tip-i {{
+        color: {ACENTO}; border-color: {ACENTO}; }}
+    .ajcas-tip-txt {{
+        position: absolute; left: 0; top: calc(100% + 7px); z-index: 40;
+        padding: 6px 9px; border-radius: 7px;
+        background: {TEXTO_PRINCIPAL}; color: {BLANCO};
+        font-size: 10.5px; font-weight: 500; line-height: 1.35;
+        white-space: nowrap; letter-spacing: 0.01em;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
+        opacity: 0; visibility: hidden; transform: translateY(-3px);
+        pointer-events: none;
+        transition: opacity .14s ease, transform .14s ease,
+                    visibility .14s ease; }}
+    .ajcas-tip:hover .ajcas-tip-txt, .ajcas-tip:active .ajcas-tip-txt {{
+        opacity: 1; visibility: visible; transform: translateY(0); }}
+    /* En pantallas angostas el globo no puede desbordar a la derecha. */
+    @media (max-width: 768px) {{
+        .ajcas-tip-txt {{ white-space: normal; width: min(240px, 70vw); }}
+    }}
     </style>""", unsafe_allow_html=True)
 
     with _card("cascada"):
@@ -897,9 +937,18 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         def _kpi_sep(txt="|"):
             return f"<span style='color:{GRIS_BORDE};padding:0 2px'>{txt}</span>"
 
-        _kpis = (f"<span style='font-size:13px;font-weight:500;"
-                 f"color:{GRIS_TEXTO_MEDIO};white-space:nowrap'>"
-                 f"Ajuste valorizado por {grp_col.lower()}</span>")
+        # El título es además el disparador del tooltip que explica la
+        # cascada acumulada (ver el bloque .ajcas-tip en el <style> de
+        # arriba). white-space:nowrap va en el texto, NO en el .ajcas-tip:
+        # si envolviera al globo, el override móvil que lo deja fluir en
+        # varias líneas no tendría efecto.
+        _kpis = (f"<span class='ajcas-tip' style='font-size:13px;"
+                 f"font-weight:500;color:{GRIS_TEXTO_MEDIO}'>"
+                 f"<span style='white-space:nowrap'>"
+                 f"Ajuste valorizado por {grp_col.lower()}</span>"
+                 f"<span class='ajcas-tip-i'>i</span>"
+                 f"<span class='ajcas-tip-txt'>Cada barra arranca donde "
+                 f"terminó la anterior</span></span>")
         _sig_tot = "+" if total > 0 else "−"
         _col_tot = _tono(total)[0]
         _kpis += _kpi_sep()
@@ -1142,19 +1191,9 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             if _es_foco:
                 _render_drill(_f["cat"])
 
-        # Leyenda
-        def _punto(color, txt):
-            return (f"<span style='display:inline-flex;align-items:center;"
-                    f"gap:5px'><span style='display:inline-block;width:8px;"
-                    f"height:8px;border-radius:999px;background:{color}'>"
-                    f"</span>{txt}</span>")
-        st.markdown(
-            f"<div style='display:flex;gap:16px;flex-wrap:wrap;"
-            f"font-size:9.5px;color:{GRIS_TEXTO_SUAVE};margin-top:10px'>"
-            + _punto(ERROR, "Faltante") + _punto(EXITO, "Sobrante")
-            + f"<span style='color:{GRIS_BORDE}'>|</span>"
-              f"<span>Cada barra arranca donde terminó la anterior</span>"
-              f"</div>", unsafe_allow_html=True)
+        # Sin leyenda al pie: los puntos Faltante/Sobrante eran redundantes
+        # con el color de las barras y la columna Estado, y la nota de la
+        # cascada acumulada pasó a ser el tooltip del título (.ajcas-tip).
 
 
 def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
