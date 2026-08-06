@@ -939,9 +939,20 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
        El aire se recorta ACÁ y no en el padding del div del título: ese
        div vive solo en la columna izquierda, así que tocarlo movía el
        título 2px más que al popover y los descentraba entre sí
-       (verificado midiendo ambos rects). */
+       (verificado midiendo ambos rects).
+
+       row-gap: las filas de familia son hijas directas de este flex, así
+       que lo que las separa es el gap del contenedor (16px por defecto
+       en Streamlit) MÁS el margin-bottom de 4px de cada fila — 20px
+       medidos. Con 6px quedan a 10px. Es un solo número para las tres
+       separaciones de la card: título→cabecera 27→17, cabecera→1ª fila
+       16→6, fila→fila 20→10, y la card baja de 214 a 184px (entran más
+       familias sin scrollear). Si hay que separar SOLO las filas sin
+       tocar el resto, el knob es el margin-bottom de
+       st-key-ajcas_fila_, no este gap. */
     div[class*="st-key-chartcard_cascada"] {{
-        padding-top: 4px !important; }}
+        padding-top: 4px !important;
+        row-gap: 6px !important; }}
     </style>""", unsafe_allow_html=True)
 
     with _card("cascada"):
