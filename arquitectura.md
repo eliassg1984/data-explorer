@@ -643,8 +643,40 @@ salvo `icono`):
     (`aria-label="Column List 15 Columnas"`), pero no renderiza ítems.
     No era el CSS del proyecto: se reproduce con el `custom_css`
     deshabilitado, y pasaba en todos los reportes, no solo Ajuste.
-    **Solución** (en `inject_fix_column_panel_ajuste`): si al reposicionar
-    no hay ítems, un `dispatchEvent(new Event('scroll'))` sobre
+    **Solución** (en `inject_fix_column_panel_ajuste`): si el panel abre sin
+    ítems, un `dispatchEvent(new Event('scroll'))` sobre
     `.ag-virtual-list-viewport` fuerza el `drawVirtualRows` con el alto ya
     real. Importa porque `cols_visibles` oculta columnas a propósito y ese
     panel es la única vía para reactivarlas.
+
+29. **No reposicionar a mano los ítems de una lista virtual de AG Grid: hay
+    que declararle el alto de fila y dejarla trabajar.** La lista está
+    VIRTUALIZADA — al scrollear descarta los ítems fuera de pantalla y
+    reposiciona el resto con SU alto de fila. Un JS que mida las pastillas y
+    reescriba `top`/`height` pelea contra eso en cada scroll.
+    Síntoma (bug real, 2026-08-05): el scroll del panel Columnas "se
+    resistía". Lo que pasaba: AG Grid virtualizaba a 24px y el JS apilaba a
+    38px; al scrollear AG Grid se quedaba con ~7 ítems, el JS los re-apilaba
+    desde `top:0` (así que la lista arrancaba por la mitad) y encogía el
+    contenedor a 266px — por debajo del viewport de 375px, o sea sin
+    overflow → **`scrollTop` volvía a 0 solo** y las primeras filas
+    desaparecían.
+    **Solución:** `--ag-list-item-height` (ver `_ALTO_FILA_PANEL` en
+    `tablas/desktop.py`) y borrar el reposicionado. Las pastillas ya son de
+    alto fijo (label con `nowrap` + `ellipsis`), así que un valor uniforme
+    es correcto; si algún día tuvieran alto variable, la respuesta NO es
+    volver al JS, es forzarlas a alto fijo.
+    **Dónde va la variable — esto es lo que cuesta encontrar:** AG Grid la
+    lee de un div `.ag-measurement-container` que cuelga del div de TEMA
+    (`ag-theme-params-N`), no del `.ag-root-wrapper` ni del `.ag-side-bar`.
+    Puesta en cualquiera de esos dos no la ve. Y tampoco alcanza con
+    ponerla en `html`/`body`: el div de tema DECLARA la variable, y una
+    declaración propia le gana a lo heredado sin importar la especificidad
+    del ancestro. Hay que pisarla en ese mismo elemento, y como el sufijo
+    `-N` se genera por instancia, se matchea por prefijo:
+    `[class*="ag-theme-params-"]` (especificidad 0,1,0 contra el `:where()`
+    de 0,0,0 del tema).
+    **Cómo verificarlo** sin adivinar: leer
+    `getComputedStyle(document.querySelector('.ag-measurement-container'))
+    .getPropertyValue('--ag-list-item-height')` dentro del iframe. Si no
+    dice lo que pusiste, AG Grid tampoco lo está viendo.

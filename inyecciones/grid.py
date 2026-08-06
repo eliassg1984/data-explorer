@@ -437,15 +437,29 @@ def inject_dynamic_grid_height(offset_px: int = 260, min_px: int = 320):
     """, height=0)
 def inject_fix_column_panel_ajuste():
     """
-    Fix para el panel Columnas de Ajuste de Inventario:
-    AgGrid calcula top:N*32px al montar (tema material, 32px por defecto).
-    Las pastillas miden ~52px, así que se enciman.
-    Este JS entra al iframe y recalcula el top de cada ítem según su
-    altura real medida en el DOM, sin tocar la virtualización.
-    Se re-ejecuta cada vez que el panel abre (MutationObserver).
+    Fuerza el PRIMER dibujado de la lista virtual de los paneles laterales
+    (Columnas y Modo pivote).
 
-    NOTA — colores: esta función NO inyecta CSS, solo reposiciona con JS.
-    No aplica la migración del punto 4.
+    AG Grid dibuja esa lista una sola vez, con el panel todavía oculto
+    (`display:none` → viewport de alto 0): calcula 0 filas visibles y no la
+    vuelve a dibujar al abrirlo, así que el panel aparece VACÍO aunque el
+    contenedor sepa cuántas columnas hay (`aria-label="Column List N"`).
+    Un `scroll` sobre el viewport dispara su `drawVirtualRows` con el alto
+    ya real y las pastillas aparecen. Se re-ejecuta cada vez que el panel
+    abre (MutationObserver sobre `data-active-panel`).
+
+    OJO — esto NO reposiciona ítems. Hasta 2026-08-05 medía la altura real
+    de cada pastilla y reescribía su `top`/`height` y el alto del contenedor.
+    Eso peleaba contra la virtualización: AG Grid descarta los ítems fuera de
+    pantalla al scrollear, así que el reposicionado re-apilaba desde `top:0`
+    SOLO a los sobrevivientes y encogía el contenedor por debajo del
+    viewport → el scroll rebotaba a 0 y se perdían filas. El alto de fila
+    ahora se declara una vez, en CSS (`--ag-list-item-height` en la raíz del
+    grid, ver `_ALTO_FILA_PANEL` en tablas/desktop.py), que es de donde AG
+    Grid lo lee para virtualizar. Ver arquitectura.md #29.
+
+    NOTA — colores: esta función NO inyecta CSS. No aplica la migración del
+    punto 4.
     """
     components.html("""
     <script>
@@ -462,59 +476,13 @@ def inject_fix_column_panel_ajuste():
                 );
                 if (!sidebar) return;
 
-                var items = sidebar.querySelectorAll(
-                    '.ag-virtual-list-item'
+                if (sidebar.querySelectorAll('.ag-virtual-list-item').length) {
+                    return;   // ya dibujada: no tocar nada
+                }
+                var viewport = sidebar.querySelector(
+                    '.ag-virtual-list-viewport'
                 );
-
-                // AG Grid dibuja la lista virtual UNA vez, con el panel
-                // todavia oculto (display:none -> viewport de alto 0), asi
-                // que calcula 0 filas visibles y no la vuelve a dibujar al
-                // abrirlo: el panel Columnas (y el de Modo pivote) aparecen
-                // VACIOS aunque el contenedor sepa que hay N columnas.
-                // Un evento scroll sobre el viewport dispara drawVirtualRows
-                // con el alto ya real y las pastillas aparecen.
-                if (!items.length) {
-                    var viewport = sidebar.querySelector(
-                        '.ag-virtual-list-viewport'
-                    );
-                    if (viewport) {
-                        viewport.dispatchEvent(new Event('scroll'));
-                        items = sidebar.querySelectorAll(
-                            '.ag-virtual-list-item'
-                        );
-                    }
-                }
-                if (!items.length) return;
-
-                // Soltar el alto que dejó la corrida ANTERIOR antes de volver a medir.
-                items.forEach(function(item) {
-                    item.style.removeProperty('height');
-                });
-                void sidebar.offsetHeight;   // forzar reflow antes de medir
-
-                var topAcum = 0;
-                items.forEach(function(item) {
-                    // Leer altura REAL del contenido (la pastilla con su padding/margin)
-                    var inner = item.firstElementChild;
-                    var alturaReal = inner
-                        ? inner.getBoundingClientRect().height
-                        : item.getBoundingClientRect().height;
-
-                    // Margen mínimo entre pastillas
-                    var alturaSlot = alturaReal + 4;
-
-                    item.style.setProperty('top', topAcum + 'px', 'important');
-                    item.style.setProperty('height', alturaSlot + 'px', 'important');
-                    topAcum += alturaSlot;
-                });
-
-                // Ajustar altura total del container para que el scroll funcione
-                var container = sidebar.querySelector('.ag-virtual-list-container');
-                if (container) {
-                    container.style.setProperty(
-                        'height', topAcum + 'px', 'important'
-                    );
-                }
+                if (viewport) viewport.dispatchEvent(new Event('scroll'));
             });
         }
 

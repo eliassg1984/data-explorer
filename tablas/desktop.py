@@ -16,6 +16,16 @@ from tablas._config import _config_sidebar, _estilo_fila, _estilos_celda, _fila_
 from tablas._css import _css_base, _css_franjas_sidebar
 
 
+# Alto de cada fila de las listas virtuales de los paneles laterales
+# (Columnas / Modo pivote). La pastilla mide 34px (padding 6px + borde 1px +
+# label de 13px con nowrap) y los 4px restantes son la separación.
+# Este número lo comparten TRES cosas y tienen que coincidir o el scroll se
+# rompe: la variable --ag-list-item-height (con la que AG Grid virtualiza),
+# la altura del .ag-virtual-list-item en el DOM, y nada más — desde
+# 2026-08-05 ya no hay JS reposicionando ítems (ver arquitectura.md #29).
+_ALTO_FILA_PANEL = 38
+
+
 def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14, cols_visibles=None):
     """Renderiza la tabla AgGrid en vista desktop con formato financiero y diseño premium.
 
@@ -554,16 +564,31 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         # inactivos (bug de "paneles uno al costado del otro").
         custom_css.update(_css_franjas_sidebar())
 
-        custom_css[
-            ".ag-side-bar[data-active-panel='columns'], "
-            ".ag-side-bar[data-active-panel='pivotePanel']"
-        ] = {"--ag-list-item-height": "62px !important"}
+        # Alto de fila de las listas virtuales (panel Columnas / Modo pivote).
+        #
+        # EL SELECTOR IMPORTA. AG Grid no lee esta variable del elemento que
+        # uno esperaría: cuelga un div `.ag-measurement-container` del div de
+        # TEMA (`ag-theme-params-N`, hermano/padre del .ag-root-wrapper) y lee
+        # ahí. Puesta en `.ag-side-bar` no la ve; en `.ag-root-wrapper`
+        # tampoco. El nombre lleva un sufijo numérico generado por instancia,
+        # así que se matchea por prefijo.
+        # Tampoco sirve ponerla en html/body: el div de tema DECLARA la
+        # variable (`:where(.ag-theme-params-N){--ag-list-item-height:…}`) y
+        # una declaración propia le gana a lo heredado, sea cual sea la
+        # especificidad del ancestro. Hay que pisarla en ese mismo elemento
+        # (`[class*=...]` tiene especificidad 0,1,0 y `:where()` tiene 0,0,0).
+        #
+        # Las pastillas son de alto FIJO (label con nowrap + ellipsis), así
+        # que un valor uniforme es correcto.
+        custom_css['[class*="ag-theme-params-"]'] = {
+            "--ag-list-item-height": f"{_ALTO_FILA_PANEL}px",
+        }
 
         custom_css[
             ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-item, "
             ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-item"
         ] = {
-            "height": "62px !important",
+            "height": f"{_ALTO_FILA_PANEL}px !important",
             "overflow": "visible !important",
         }
 
