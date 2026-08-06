@@ -703,3 +703,31 @@ salvo `icono`):
     Compras/Ajuste — medía 68px con el `width:100%` puesto solo en el
     `<button>`; los 84px (ancho real del rail) solo llegaron tras fijar
     `min-width:0` en el botón y `width:100%` en el `stLayoutWrapper`.
+
+31. **Botón `inline-flex` (trigger de `st.popover`) dentro de un contenedor
+    en flujo `block`: el WRAPPER mide más de alto que el `<button>`, aunque
+    el botón tenga `height` fija.** `height: 26px !important` en el
+    `<button>` fija SU altura, no la del contenedor que lo envuelve.
+    Streamlit intercala un `div` sin key (ni testid) entre
+    `[data-testid="stPopover"]` y el `<button>`, y ese div queda en
+    `display:block`: un hijo inline-level (el botón, aunque sea
+    `inline-flex`) dentro de un flujo en bloque arma su propia línea de
+    texto (strut) con el `line-height` HEREDADO — 1.6 por defecto acá —
+    que agrega aire arriba/abajo del botón sin que el botón mismo lo
+    reporte. Solo se detecta midiendo el WRAPPER (el nodo con la key, o
+    `[data-testid="stPopover"]`) con `getBoundingClientRect`; el `<button>`
+    solo sigue reportando los 26px que su CSS le pide.
+    Motivo (bug real, 2026-08-06): `.st-key-ajcas_excl_wrap` ("Excluir
+    productos" de la cascada de Ajuste) — botón a 26px por CSS, wrapper a
+    33px por el strut heredado; 7px de aire "invisibles" que lo hacían ver
+    más alto de lo que su propio CSS pedía.
+    **Regla:** `line-height: 0` en el ancestro `[data-testid="stPopover"]`
+    (se hereda hacia el div anónimo intermedio sin tener que tocarlo).
+    Complementaria: sin `white-space: nowrap` en el `<p>` del label, el
+    mismo botón compacto puede partir el texto en 2 líneas si la columna
+    que lo aloja se angosta (`st.columns([N, 1])` no reserva un ancho
+    mínimo) — ahí la `height` fija de verdad se rompe: el contenido
+    desborda el box de 26px y el wrapper mide bastante más (44px
+    verificado forzando la columna a 70px) en vez de recortar o
+    mantenerse en una línea. Los dos ajustes viven juntos en
+    `graficos/ajuste.py::_graf_waterfall_ajuste`.
