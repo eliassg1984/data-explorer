@@ -927,6 +927,21 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     @media (max-width: 768px) {{
         .ajcas-tip-txt {{ white-space: normal; width: min(240px, 70vw); }}
     }}
+    /* ── Aire sobre el título ───────────────────────────────────────────
+       Medido en el DOM: quedaban 18px entre el borde de la card y el
+       título — 15px del padding-top que Streamlit le da por defecto a
+       st.container(border=True) más 2px del div del título. Se recorta
+       el padding SUPERIOR (los laterales siguen en 15px) para que el
+       título suba sin desalinearse del popover "Excluir productos": los
+       dos viven en el mismo stHorizontalBlock, así que mover la card los
+       sube juntos. Acotado a chartcard_cascada — el resto de las cards
+       de gráficos conserva su padding.
+       El aire se recorta ACÁ y no en el padding del div del título: ese
+       div vive solo en la columna izquierda, así que tocarlo movía el
+       título 2px más que al popover y los descentraba entre sí
+       (verificado midiendo ambos rects). */
+    div[class*="st-key-chartcard_cascada"] {{
+        padding-top: 8px !important; }}
     </style>""", unsafe_allow_html=True)
 
     with _card("cascada"):
