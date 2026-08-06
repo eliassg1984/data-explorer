@@ -818,7 +818,17 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
 
     st.markdown(f"""<style>
     /* Popover "Excluir productos": achica el boton que la regla global de
-       estilos/_30_filtros.py deja en 180px de ancho y 15px de fuente. */
+       estilos/_30_filtros.py deja en 180px de ancho y 15px de fuente.
+       El wrapper [data-testid="stPopover"] mide 33px aunque el boton mide
+       26px: como el boton es inline-flex dentro de un div en block-flow,
+       arma una linea de texto propia (strut) con el line-height heredado
+       (1.6 por defecto) y le agrega ~7px "fantasma" arriba/abajo. Se
+       resetea a 0 aqui, en el ancestro, para que el wrapper abrace el
+       boton sin ese aire. white-space:nowrap evita que "Excluir
+       productos" parta en 2 lineas si la columna [6,1] se angosta (eso
+       si crecia el boton bastante mas alla de los 33px). */
+    .st-key-ajcas_excl_wrap [data-testid="stPopover"] {{
+        line-height: 0; }}
     .st-key-ajcas_excl_wrap [data-testid="stPopover"] button {{
         min-width: 0 !important; padding: 2px 10px !important;
         font-size: 11px !important; font-weight: 400 !important;
@@ -829,7 +839,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     .st-key-ajcas_excl_wrap [data-testid="stPopover"] button span
         {{ line-height: 1 !important; }}
     .st-key-ajcas_excl_wrap [data-testid="stPopover"] button p
-        {{ font-size: 11px !important; }}
+        {{ font-size: 11px !important; white-space: nowrap !important; }}
     .st-key-ajcas_excl_wrap [data-testid="stPopover"] button
         [data-testid="stIconMaterial"]
         {{ font-size: 13px !important; width: 13px !important;
