@@ -124,6 +124,81 @@ CSS = """    /* ================================================================
             width: calc(50% - 8px) !important;
         }
 
+        /* Cascada de Ajuste (graficos/ajuste.py): la fila de familia usa
+           st.columns([gutter, familia, ajuste, barra, s/val, %total,
+           estado]) — 6 columnas + gutter no entran en un teléfono. Se
+           reordena a 2 líneas por nth-child (Streamlit no da una key
+           propia a cada columna, hay que apuntar por posición):
+             línea 1 → gutter · familia (crece) · estado (badge)
+             línea 2 → ajuste · s/val · %total (33% cada uno)
+           La barra "Cascada acumulada" (columna 4) se oculta entera: a
+           este ancho una barra de ~15px no comunica nada, es ruido.
+           OJO — Streamlit fija el ancho de cada columna con una clase
+           emotion propia (`.st-emotion-cache-xxxx { flex-basis: calc(N%
+           - 1rem) }`), y "width/flex-basis: auto !important" NO le gana
+           (el contenido interno se sigue estirando al 100%). Hay que
+           fijar `width` Y `min-width` Y `max-width` a un valor concreto
+           (mismo patrón que ya usan los chips de arriba), nunca dejarlo
+           en "auto". Verificado con getBoundingClientRect en 375px: sin
+           esto, las 6 columnas caían cada una en su propia línea en vez
+           de compartir 2.
+           SEGUNDA TRAMPA — Streamlit ya cambia `flex-direction` de la
+           fila a `column` en su propio responsive nativo por debajo de
+           cierto ancho (apila los st.columns uno debajo del otro por
+           defecto). `flex-wrap: wrap` sin forzar `flex-direction: row`
+           envuelve en el eje vertical (columnas lado a lado si se pasan
+           de ALTO), no en el horizontal — por eso cada item seguía
+           cayendo en su propia línea aunque el ancho ya sobraba. */
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] {
+            flex-direction: row !important;
+            flex-wrap: wrap !important;
+        }
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(1),
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(1) {
+            order: 1 !important;
+            flex: 0 0 28px !important;
+            width: 28px !important; min-width: 28px !important; max-width: 28px !important;
+        }
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(2),
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(2) {
+            order: 2 !important;
+            flex: 1 1 auto !important;
+            width: auto !important; min-width: 90px !important; max-width: 55% !important;
+        }
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(7),
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(7) {
+            order: 3 !important;
+            flex: 0 0 76px !important;
+            width: 76px !important; min-width: 76px !important; max-width: 76px !important;
+        }
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(4),
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(4) {
+            display: none !important;
+        }
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(3),
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(3),
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(5),
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(5),
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(6),
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(6) {
+            flex: 1 1 calc(33.33% - 6px) !important;
+            width: calc(33.33% - 6px) !important;
+            min-width: calc(33.33% - 6px) !important;
+            max-width: calc(33.33% - 6px) !important;
+        }
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(3),
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(3) {
+            order: 4 !important;
+        }
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(5),
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(5) {
+            order: 5 !important;
+        }
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(6),
+        div[class*="st-key-ajcas_fila_"] [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(6) {
+            order: 6 !important;
+        }
+
         /* Franja inferior + footer: se apoyan sobre la barra nav móvil */
         .stApp::after {
             left: 0 !important;
