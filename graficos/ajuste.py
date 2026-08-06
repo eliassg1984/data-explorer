@@ -625,16 +625,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     abs_sum = float(agg[col_ajuste_val].abs().sum()) or 1.0
     pesos = [abs(v) / abs_sum * 100 for v in agg[col_ajuste_val]]
 
-    # ── Enriquecimiento por familia ────────────────────────────────────────
-    # Solo el conteo de SKUs: alimenta el "N SKUs" de la fila TOTAL. El
-    # producto top y la concentración top3 se sacaron del subtítulo por
-    # ruido visual — no se calculan más.
-    _n_skus = {}
-    if col_producto and col_producto in df.columns:
-        for _fam in agg[grp_col].tolist():
-            _s = df[df[grp_col].astype(str) == str(_fam)]
-            _n_skus[str(_fam)] = int(_s[col_producto].nunique())
-
     # "S/ val" = ajuste de la familia sobre SU PROPIO valorizado.
     # "% total" = el mismo ajuste sobre el valorizado TOTAL (todas las
     # familias) — son bases distintas a propósito, no van a coincidir.
@@ -910,13 +900,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         _kpis = (f"<span style='font-size:13px;font-weight:500;"
                  f"color:{GRIS_TEXTO_MEDIO};white-space:nowrap'>"
                  f"Ajuste valorizado por {grp_col.lower()}</span>")
-        _kpis += _kpi_sep()
-        _kpis += (f"<span style='color:{GRIS_TEXTO_SUAVE}'>"
-                  f"{len(agg)} {grp_col.lower()}s</span>")
-        if _n_skus:
-            _kpis += _kpi_sep("·")
-            _kpis += (f"<span style='color:{GRIS_TEXTO_SUAVE}'>"
-                      f"{sum(_n_skus.values()):,} SKUs</span>")
         _sig_tot = "+" if total > 0 else "−"
         _col_tot = _tono(total)[0]
         _kpis += _kpi_sep()
