@@ -64,7 +64,7 @@ CSS = """    /* ================================================================
            esquina superior (no hay nav-rail: la barra de nav vive abajo). */
         .st-key-fecha_ajuste_pill {
             position: fixed !important;
-            top: 8px !important;
+            top: 5px !important;
             left: 12px !important;
             right: auto !important;
             margin: 0 !important;
@@ -77,8 +77,12 @@ CSS = """    /* ================================================================
            vez de bajar el min-width porque las medidas cambian: en
            escritorio el pill mide 28px para emparejar con los chips
            vecinos; en móvil no hay chips al lado y 28px queda chico para
-           tocar, así que va 34px (top 8px + 34 = 42 dentro de los 50px de
-           --cab-altura → aire parejo arriba y abajo).
+           tocar, así que va 34px de min-height — aunque el contenido real
+           (ícono + texto) lo estira a ~40px medidos en vivo, no 34.
+           2026-08-06: top bajado de 8px a 5px ("subir un poco" el pill) —
+           con la altura real de 40px, 5px arriba + 5px abajo queda parejo
+           dentro de los 50px de --cab-altura. Si el contenido cambia de
+           alto, medir de nuevo antes de asumir que sigue centrado.
            OJO: esta sección va ÚLTIMA en _SECCIONES, así que con la misma
            especificidad que la regla base ya le gana; no hace falta el
            truco de clase duplicada (.st-key-X.st-key-X) que usa el bloque
