@@ -18,7 +18,7 @@ Regla viva (arquitectura.md #4): si dos inject_* comparten espacio o elemento,
 la interaccion se documenta en AMBAS.
 """
 
-from inyecciones.grid import (inject_dynamic_grid_height, inject_fix_column_panel_ajuste, inject_grid_health_check, inject_maximize_aggrid)  # noqa: F401
+from inyecciones.grid import (inject_dynamic_grid_height, inject_filtros_grid, inject_fix_column_panel_ajuste, inject_grid_health_check, inject_maximize_aggrid)  # noqa: F401
 from inyecciones.paginacion import (inject_pagination_v2)  # noqa: F401
 from inyecciones.inspector import (inject_element_inspector)  # noqa: F401
 from inyecciones.varios import (inject_alinear_cabecera_ajuste, inject_calendario_es, inject_error_overlay, inject_footer_actualizacion, inject_fullscreen_app)  # noqa: F401

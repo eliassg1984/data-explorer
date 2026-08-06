@@ -4,10 +4,13 @@ La mas completa: formato financiero, totales al pie, panel lateral de
 columnas, paginacion y maximizado.
 """
 
+import hashlib
+import json
+
 import pandas as pd
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 from utils import _norm, buscar_columna, LOCALE_ES
-from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid, inject_dynamic_grid_height, inject_fix_column_panel_ajuste, inject_alinear_cabecera_ajuste
+from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid, inject_dynamic_grid_height, inject_fix_column_panel_ajuste, inject_alinear_cabecera_ajuste, inject_filtros_grid
 from perf import perf
 from tema import (
     ACENTO, ACENTO_FUERTE, ACENTO_TEXTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA_FONDO, ADVERTENCIA_TEXTO, BLANCO, CELDA_ALERTA_FONDO, CELDA_ALERTA_TEXTO, CELDA_NEG_FONDO, CELDA_POS_TEXTO, DANGER_TEXT, ERROR_FONDO, EXIT_HOVER, GRIS_BORDE, GRIS_FONDO, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE, ICON_MUTED, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FILA, LAVANDA_FILA_ALT, LAVANDA_FOCO, LAVANDA_FONDO, LAVANDA_MEDIO, LAVANDA_SELECCION, SCROLL_THUMB, TEXTO_PRINCIPAL,
@@ -26,12 +29,26 @@ from tablas._css import _css_base, _css_franjas_sidebar
 _ALTO_FILA_PANEL = 38
 
 
-def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14, cols_visibles=None):
+def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14,
+                              cols_visibles=None, df_totales=None, filtros_grid=None):
     """Renderiza la tabla AgGrid en vista desktop con formato financiero y diseño premium.
 
     cols_visibles: lista de columnas que arrancan VISIBLES. El resto se oculta
     por defecto y el usuario las activa desde la barra lateral (panel "Columnas").
     Si es None, se muestran todas.
+
+    filtros_grid: filterModel de AG Grid (dict) para aplicar EN EL NAVEGADOR en
+        vez de filtrar el DataFrame en Python. Cuando viene, `df_grid` llega SIN
+        filtrar por esos criterios y el filtro se manda por el puente
+        (`inject_filtros_grid`). Es 5-6x mas rapido porque no cambia la
+        identidad de las filas y AG Grid no reagrupa (arquitectura.md #33/#34).
+        Si es None, comportamiento clasico: se dibuja lo que venga en df_grid.
+
+    df_totales: DataFrame a usar SOLO para la fila de totales. Va de la mano de
+        `filtros_grid`: como df_grid llega sin filtrar, el total se calcula
+        aparte sobre el df que Python si filtro. Asi la fila de totales sigue
+        siendo `pinnedTopRowData` con su estilo de siempre y muestra el total
+        de lo filtrado, igual que antes del cambio. Si es None, se usa df_grid.
     """
 
     # DISEÑO UNIFICADO: todos los reportes usan el estilo plano de Ajuste
@@ -230,7 +247,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                    if pd.api.types.is_numeric_dtype(df_grid[c]) and "stock" in _norm(c)]
 
     primera_col = list(df_grid.columns)[0] if len(df_grid.columns) > 0 else None
-    fila_totales = _fila_totales(df_grid, cols_valor, cols_precio, cols_stock, primera_col)
+    # Con filtros_grid, df_grid viene SIN filtrar (el filtro lo aplica el
+    # navegador), asi que el total se calcula sobre el df que Python si filtro.
+    _df_tot = df_totales if df_totales is not None else df_grid
+    fila_totales = _fila_totales(_df_tot, cols_valor, cols_precio, cols_stock, primera_col)
 
     get_row_style = _estilo_fila(col_stock, df_grid, es_inventario, quitar_fondos)
     _sidebar_cfg = _config_sidebar(mostrar_pivot=True, es_ajuste=True)
@@ -258,6 +278,42 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         "tooltipShowDelay": 300,
         "getRowStyle": get_row_style,
         "suppressAggFuncInHeader": True,
+        # ── Filtro EXTERNO: el que aplican los chips ─────────────────────
+        # Se usa filtro externo y NO un filterModel por columna porque las
+        # columnas de los chips (AREA, FAMILIA) son rowGroup + hide: AG Grid
+        # DESCARTA el modelo de un set filter en ese caso -- verificado
+        # llamando setFilterModel a mano, getFilterModel devuelve {}.
+        # De paso el filtro externo COMPONE con los filtros propios de la
+        # grilla en vez de reemplazarlos, que es lo que haria setFilterModel.
+        # El spec lo deja `inject_filtros_grid` en window.__filtroExterno.
+        "isExternalFilterPresent": JsCode("""
+            function() {
+                var s = window.__filtroExterno;
+                return !!(s && Object.keys(s).length);
+            }
+        """),
+        "doesExternalFilterPass": JsCode("""
+            function(node) {
+                var s = window.__filtroExterno;
+                if (!s || !node.data) return true;
+                for (var col in s) {
+                    var c = s[col], v = node.data[col];
+                    if (c.tipo === 'set') {
+                        if (c.valores.indexOf(String(v)) === -1) return false;
+                    } else if (c.tipo === 'num') {
+                        var n = Number(v);
+                        if (isNaN(n)) return false;
+                        if (c.op === 'ne' && n === c.valor) return false;
+                        if (c.op === 'lt' && !(n <  c.valor)) return false;
+                        if (c.op === 'gt' && !(n >  c.valor)) return false;
+                    } else if (c.tipo === 'abs_gte') {
+                        var a = Math.abs(Number(v));
+                        if (isNaN(a) || a < c.valor) return false;
+                    }
+                }
+                return true;
+            }
+        """),
         "onGridSizeChanged": JsCode("function(params) { params.api.sizeColumnsToFit(); }"),
         "onGridReady": JsCode(f"""
             function(params) {{
@@ -271,6 +327,34 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 // Es lo que permitio medir el costo por interaccion
                 // (arquitectura.md #33). Vive dentro del iframe del grid.
                 try {{ window.__agApi = params.api; }} catch(e) {{}}
+
+                // Puente de filtros: escucha los modelos que manda
+                // inject_filtros_grid y los aplica SIN que cambien los datos.
+                // Ver arquitectura.md #34 y el docstring de esa inyeccion.
+                try {{
+                    if (!window.__filtrosCh) {{
+                        window.__filtrosCh = new BroadcastChannel('_filtros_grid');
+                        window.__filtrosCh.onmessage = function(ev) {{
+                            var m = ev.data;
+                            if (!m || m.tipo !== 'aplicar') return;
+                            try {{
+                                // Un sello ya aplicado se acusa igual (para que
+                                // el emisor deje de reintentar) pero NO se
+                                // vuelve a aplicar: setFilterModel cuesta
+                                // ~130 ms y la mayoria de los reruns no cambian
+                                // los filtros.
+                                if (window.__ultimoSello !== m.sello) {{
+                                    window.__filtroExterno = m.modelo || {{}};
+                                    window.__agApi.onFilterChanged();
+                                    window.__ultimoSello = m.sello;
+                                }}
+                                var ack = new BroadcastChannel('_filtros_grid_ack');
+                                ack.postMessage({{sello: m.sello}});
+                                ack.close();
+                            }} catch(e) {{}}
+                        }};
+                    }}
+                }} catch(e) {{}}
                 try {{
                     var ms = {_js_ms_desde_carga};
                     var bc = new BroadcastChannel('_perf_aggrid');
@@ -426,7 +510,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         col_ajval = buscar_columna(df_grid, "Ajuste Valorizado", "AJUSTE VALORIZADO")
         for _c in df_grid.columns:
             if _c in (col_area, col_fam, col_aj, col_ajval):
+                # suppressFiltersToolPanel las esconde del panel "Filtros"
+                # PERO el filtro sigue funcionando: es lo que permite que el
+                # puente les aplique un filterModel sin que aparezcan dos
+                # controles para lo mismo (el chip y la pastilla del panel).
                 gb.configure_column(_c, suppressFiltersToolPanel=True)
+
 
         # Cabeceras en "Nombre Propio": VA ÚLTIMO A PROPÓSITO. El
         # configure_column de st_aggrid reconstruye el colDef con
@@ -679,3 +768,12 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     inject_dynamic_grid_height(offset_px=260, min_px=320)
     inject_fix_column_panel_ajuste()
     inject_alinear_cabecera_ajuste()
+
+    if filtros_grid is not None:
+        # El sello identifica al modelo: si no cambio respecto del rerun
+        # anterior el grid lo acusa pero no lo re-aplica (setFilterModel cuesta
+        # ~130 ms y casi ningun rerun cambia los filtros).
+        _sello = hashlib.md5(
+            json.dumps(filtros_grid, sort_keys=True).encode()
+        ).hexdigest()[:12]
+        inject_filtros_grid(filtros_grid, _sello)

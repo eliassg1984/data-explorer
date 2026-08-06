@@ -529,3 +529,97 @@ def inject_fix_column_panel_ajuste():
     })();
     </script>
     """, height=0)
+
+
+def inject_filtros_grid(modelo, sello):
+    """Puente Streamlit -> AG Grid para aplicar filtros SIN reenviar datos.
+
+    POR QUE EXISTE (arquitectura.md #33/#34): filtrar en Python obliga a
+    mandar otro rowData, y como st_aggrid define getRowId sobre un contador
+    posicional (`::auto_unique_id::`), al filtrar la fila 0 pasa a ser otro
+    producto -> AG Grid no puede reusar ningun nodo y reagrupa todo de cero
+    (700-900 ms con 10k filas y los 5 niveles de Ajuste). Aplicando el mismo
+    filtro con `setFilterModel` sobre los datos intactos cuesta 120-150 ms.
+
+    POR QUE UN CANAL Y NO gridOptions: el frontend de st_aggrid solo
+    re-aplica gridOptions cuando cambio `gridOptions.rowData`, y con
+    serializacion Arrow rowData NUNCA viaja ahi (es un argumento aparte), asi
+    que un filterModel puesto en gridOptions se ignora en silencio. Verificado
+    leyendo su `componentDidUpdate`. El canal es la unica via.
+
+    CONTRA LA FALLA SILENCIOSA: un filtro que no se aplica es peor que uno
+    lento -- el usuario ve numeros que cree filtrados y no lo estan. Por eso
+    el grid ACUSA RECIBO por un segundo canal; si el acuse no llega, esto
+    pinta un aviso visible en la pagina en vez de callarse.
+
+    `sello` identifica el modelo: el grid ignora un sello ya aplicado (evita
+    pagar 130 ms en cada rerun que no cambio los filtros) y el acuse lo
+    devuelve para que el emisor sepa que ESE modelo entro.
+    """
+    cfg_js = (
+        "var MODELO = " + json.dumps(modelo or {}) + ";\n"
+        "var SELLO  = " + json.dumps(str(sello)) + ";\n"
+    )
+    components.html("""
+    <script>
+    (function(){
+        """ + cfg_js + """
+        var win = window.parent;
+        var AVISO_ID = '_aviso_filtros_grid';
+        var intentos = 0, MAX = 40, aplicado = false;
+
+        function quitarAviso() {
+            try {
+                var el = win.document.getElementById(AVISO_ID);
+                if (el) el.remove();
+            } catch(e) {}
+        }
+        function mostrarAviso() {
+            try {
+                if (win.document.getElementById(AVISO_ID)) return;
+                var d = win.document.createElement('div');
+                d.id = AVISO_ID;
+                d.textContent = 'Los filtros no se aplicaron a la tabla. '
+                              + 'Recarga la pagina (F5).';
+                d.style.cssText = 'position:fixed;z-index:2147483647;top:8px;'
+                    + 'left:50%;transform:translateX(-50%);background:#b3261e;'
+                    + 'color:#fff;padding:8px 16px;border-radius:8px;'
+                    + 'font:500 13px system-ui,sans-serif;'
+                    + 'box-shadow:0 2px 10px rgba(0,0,0,.25)';
+                win.document.body.appendChild(d);
+            } catch(e) {}
+        }
+
+        var ack;
+        try {
+            ack = new BroadcastChannel('_filtros_grid_ack');
+            ack.onmessage = function(ev) {
+                if (ev.data && ev.data.sello === SELLO) {
+                    aplicado = true;
+                    quitarAviso();
+                    try { ack.close(); } catch(e) {}
+                }
+            };
+        } catch(e) {}
+
+        function enviar() {
+            if (aplicado) return;
+            try {
+                var ch = new BroadcastChannel('_filtros_grid');
+                ch.postMessage({tipo: 'aplicar', modelo: MODELO, sello: SELLO});
+                ch.close();
+            } catch(e) {}
+            intentos++;
+            // Reintenta porque el grid puede no haber corrido su onGridReady
+            // todavia (primer render): sin reintento el primer filtro se
+            // perderia. 40 x 150 ms = 6 s de margen.
+            if (intentos < MAX) {
+                win.setTimeout(enviar, 150);
+            } else if (!aplicado) {
+                mostrarAviso();
+            }
+        }
+        enviar();
+    })();
+    </script>
+    """, height=0)

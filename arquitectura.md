@@ -817,3 +817,47 @@ salvo `icono`):
     `::auto_unique_id::` y AG Grid las colapsa en UNA sola. El grid
     reporta 10.000 filas empujadas y 1 hoja, y los tiempos que salen no
     significan nada. Hay que renumerar el id a mano.
+
+34. **Los chips de Ajuste filtran en el NAVEGADOR, no en Python.** Es el
+    cambio de 2026-08-06 contra la lentitud al tocar un filtro. Python sigue
+    dibujando los mismos chips en el mismo lugar; lo que cambió es qué se
+    hace con la selección.
+
+    **El flujo:** `_filtros_chips_ajuste_tabla` devuelve `(df_filtrado,
+    spec)`. El `df_filtrado` alimenta SOLO la fila de totales; a la grilla le
+    llega el df SIN filtrar y el `spec` viaja por un BroadcastChannel
+    (`inject_filtros_grid` → `onGridReady`), que lo deja en
+    `window.__filtroExterno` y llama a `onFilterChanged()`.
+
+    **Por qué el canal y no `gridOptions`:** el frontend de st_aggrid solo
+    re-aplica `gridOptions` cuando cambió `gridOptions.rowData`, y con
+    serialización Arrow rowData NUNCA viaja ahí (va como argumento aparte).
+    Un `filterModel` puesto en `gridOptions` se ignora en silencio.
+    Verificado leyendo su `componentDidUpdate`.
+
+    **Por qué filtro EXTERNO y no `setFilterModel`:** las columnas de los
+    chips (AREA, FAMILIA) son `rowGroup` + `hide`, y en ese caso AG Grid
+    DESCARTA el modelo de un set filter — llamando `setFilterModel` a mano,
+    `getFilterModel()` devuelve `{}`. El filtro externo no depende de
+    columnas, y de yapa COMPONE con los filtros propios de la grilla en vez
+    de reemplazarlos.
+
+    **Top N:** no hay predicado "las n mayores", así que Python calcula el
+    umbral (`|valor| >= t`) y filtra con ESE MISMO criterio. Así el total y
+    la tabla no pueden discrepar; el precio es que con empates justo en el
+    borde pueden entrar más de n filas.
+
+    **Contra la falla silenciosa:** un filtro que no se aplica es peor que
+    uno lento — el usuario ve números que cree filtrados. El grid acusa
+    recibo por un segundo canal y el emisor reintenta 40 veces cada 150 ms
+    (el primer render puede llegar antes del `onGridReady`); si tras 6 s no
+    hay acuse, pinta un aviso rojo fijo en la página.
+
+    **El sello** (md5 del spec) evita re-aplicar el filtro en los reruns que
+    no lo cambiaron: `onFilterChanged` cuesta ~130 ms y la mayoría de los
+    reruns no tocan los chips.
+
+    Verificado con 240 filas: los datos NO se reenvían (240 hojas en el grid
+    con el filtro puesto), Top 10 deja pasar exactamente 10, y la fila de
+    totales de Python coincide al céntimo con la suma de las filas que pasan
+    el filtro en el navegador.

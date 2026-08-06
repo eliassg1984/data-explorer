@@ -727,9 +727,15 @@ def _chip_categorico(df_in, col, key, etiqueta):
 def _chip_numerico(df_in, col, key, etiqueta, opciones=None):
     """Chip-popover single-select para una columna numérica.
     Opciones: Todos / Con ajuste (≠0) / Faltantes (<0) / Sobrantes (>0)
-    / Top 10 / Top 20. Top N = filas de mayor magnitud (|valor|)."""
+    / Top 10 / Top 20. Top N = filas de mayor magnitud (|valor|).
+
+    Devuelve (df_filtrado, condicion_aggrid). La condición es el filtro
+    equivalente para AG Grid, que aplica el navegador sobre los datos sin
+    filtrar; el df filtrado se sigue usando para la fila de totales.
+    AMBOS usan el MISMO criterio (para Top N, un umbral en vez de .head(n))
+    para que el total no pueda discrepar de lo que muestra la tabla."""
     if not col or col not in df_in.columns:
-        return df_in
+        return df_in, None
     if opciones is None:
         opciones = ["Todos", "Faltantes", "Sobrantes", "Top 10", "Top 20"]
     _prev = st.session_state.get(key) or "Todos"
@@ -743,55 +749,82 @@ def _chip_numerico(df_in, col, key, etiqueta, opciones=None):
             ) or "Todos"
     serie = pd.to_numeric(df_in[col], errors="coerce")
     if sel == "Con ajuste":
-        return df_in[serie.fillna(0) != 0]
+        return df_in[serie.fillna(0) != 0], {"tipo": "num", "op": "ne", "valor": 0}
     if sel == "Faltantes":
-        return df_in[serie < 0]
+        return df_in[serie < 0], {"tipo": "num", "op": "lt", "valor": 0}
     if sel == "Sobrantes":
-        return df_in[serie > 0]
+        return df_in[serie > 0], {"tipo": "num", "op": "gt", "valor": 0}
     if sel in ("Top 10", "Top 20"):
         n = 10 if sel == "Top 10" else 20
-        idx = serie.abs().sort_values(ascending=False).head(n).index
-        return df_in.loc[idx]
-    return df_in
+        magnitudes = serie.abs().dropna()
+        if magnitudes.empty:
+            return df_in, None
+        # Umbral en vez de .head(n): es lo expresable como predicado. Con
+        # empates justo en el borde pueden entrar mas de n filas, pero Python
+        # usa el MISMO umbral, asi que tabla y totales nunca discrepan.
+        umbral = float(magnitudes.nlargest(n).min())
+        return df_in[serie.abs() >= umbral], {"tipo": "abs_gte", "valor": umbral}
+    return df_in, None
 
 
 def _filtros_chips_ajuste_tabla(df_in):
-    """Fila de chips-cápsula ARRIBA de la tabla de Ajuste. Filtra df_in en
-    Python (Área, Familia, Ajuste, Ajuste Valorizado) y devuelve el df."""
+    """Fila de chips-cápsula ARRIBA de la tabla de Ajuste.
+
+    Devuelve (df_filtrado, filterModel). El df filtrado alimenta la fila de
+    totales; el filterModel se lo lleva el navegador para filtrar la tabla sin
+    reenviar datos (ver arquitectura.md #34). Los chips NO se movieron: siguen
+    siendo los mismos widgets en el mismo contenedor, solo cambió qué se hace
+    con su selección."""
     col_area  = buscar_columna(df_in, "Nombre Area", "Area", "AREA")
     col_fam   = buscar_columna(df_in, "Nombre Familia", "Familia", "FAMILIA")
     col_aj    = buscar_columna(df_in, "Ajuste", "AJUSTE", "Cantidad Ajuste")
     col_ajval = buscar_columna(df_in, "Ajuste Valorizado", "AJUSTE VALORIZADO")
 
+    modelo = {}
     with st.container(key="chips_ajuste_tabla"):
         c1, c2, c3, c4 = st.columns([1, 1, 1, 1.2])
         with c1:
-            df_in, _ = _chip_categorico(df_in, col_area,
-                                        "ajuste_tabla_filtro_area", "Área")
+            df_in, _sel = _chip_categorico(df_in, col_area,
+                                           "ajuste_tabla_filtro_area", "Área")
+            if _sel:
+                modelo[col_area] = {"tipo": "set",
+                                    "valores": [str(v) for v in _sel]}
         with c2:
-            df_in, _ = _chip_categorico(df_in, col_fam,
-                                        "ajuste_tabla_filtro_familia", "Familia")
+            df_in, _sel = _chip_categorico(df_in, col_fam,
+                                           "ajuste_tabla_filtro_familia", "Familia")
+            if _sel:
+                modelo[col_fam] = {"tipo": "set",
+                                   "valores": [str(v) for v in _sel]}
         with c3:
-            df_in = _chip_numerico(
+            df_in, _cond = _chip_numerico(
                 df_in, col_aj,
                 "ajuste_tabla_filtro_ajuste", "Ajuste",
                 opciones=["Todos", "Con ajuste", "Faltantes",
                           "Sobrantes", "Top 10", "Top 20"],
             )
+            if _cond:
+                modelo[col_aj] = _cond
         with c4:
-            df_in = _chip_numerico(df_in, col_ajval,
-                                   "ajuste_tabla_filtro_ajusteval", "Ajuste Valor.")
-    return df_in
+            df_in, _cond = _chip_numerico(df_in, col_ajval,
+                                          "ajuste_tabla_filtro_ajusteval",
+                                          "Ajuste Valor.")
+            if _cond:
+                modelo[col_ajval] = _cond
+    return df_in, modelo
 
 
 def _filtros_chips_franja(df_in):
     """Chips de filtro de la franja para el reporte activo: Ajuste usa sus
     4 chips propios; el resto muestra sus filtros categóricos (cfg) como
-    cápsulas equivalentes."""
+    cápsulas equivalentes.
+
+    Devuelve (df_filtrado, filterModel). Solo Ajuste usa hoy el filterModel
+    (filtrado en el navegador); los demás reportes ignoran el segundo valor y
+    siguen filtrando en Python como siempre."""
     if es_ajuste:
         return _filtros_chips_ajuste_tabla(df_in)
     if not cat_cols:
-        return df_in
+        return df_in, {}
     with st.container(key="chips_ajuste_tabla"):
         _cols = st.columns([1] * len(cat_cols))
         for _cc, _col in zip(_cols, cat_cols):
@@ -799,14 +832,18 @@ def _filtros_chips_franja(df_in):
                 df_in, _ = _chip_categorico(
                     df_in, _col,
                     f"chip_franja_{reporte.replace(' ', '_')}_{_col}", _col)
-    return df_in
+    return df_in, {}
 
 
 # ===========================================================================
 # RENDERIZADO DE TABLA (con df opcional para los chips)
 # ===========================================================================
-def _render_tabla(df_data=None):
-    """Renderiza la tabla AgGrid (desktop o móvil)."""
+def _render_tabla(df_data=None, df_totales=None, filtros_grid=None):
+    """Renderiza la tabla AgGrid (desktop o móvil).
+
+    df_totales/filtros_grid: ver el docstring de renderizar_aggrid_desktop.
+    Van juntos — cuando el filtro lo aplica el navegador, df_data llega sin
+    filtrar y df_totales es el que Python sí filtró."""
     _df = df_f if df_data is None else df_data
     if usa_vista_movil and tiene_config_movil:
         st.caption("📱 Vista móvil • Desliza para más columnas • Mantén presionado para menú")
@@ -822,6 +859,8 @@ def _render_tabla(df_data=None):
         renderizar_aggrid_desktop(
             _df[cols_finales], grupos_sel, cols_mostrar, reporte, font_px,
             cols_visibles=cols_visibles,
+            df_totales=(None if df_totales is None else df_totales[cols_finales]),
+            filtros_grid=filtros_grid,
         )
 
 
@@ -876,11 +915,15 @@ def _render_contenido():
         # (usa cols_mostrar/font_px/etc.), así que se inyecta como callback:
         # el rail decide CUÁNDO mostrarla, app.py CÓMO.
         def _ajuste_tabla_cb():
-            df_tabla = _filtros_chips_franja(df_f)
+            # df_tabla = lo que Python filtró (alimenta la fila de totales);
+            # df_f = sin filtrar por chips, es lo que cruza al navegador.
+            # El navegador aplica `modelo` con setFilterModel, que NO cambia la
+            # identidad de las filas y por eso no reagrupa (arquitectura.md #34).
+            df_tabla, modelo = _filtros_chips_franja(df_f)
             if df_tabla.empty:
                 st.info("Ningún registro coincide con los filtros seleccionados.")
             else:
-                _render_tabla(df_tabla)
+                _render_tabla(df_f, df_totales=df_tabla, filtros_grid=modelo)
 
         renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df,
                                     tabla_cb=_ajuste_tabla_cb)
@@ -919,7 +962,7 @@ def _render_contenido():
         # Sin chips propios (a diferencia de Ventas/Inventario): igual que
         # Ajuste, el callback usa los filtros genéricos que ya arma app.py.
         def _recetaventa_tabla_cb():
-            df_tabla = _filtros_chips_franja(df_f)
+            df_tabla, _ = _filtros_chips_franja(df_f)
             if df_tabla.empty:
                 st.info("Ningún registro coincide con los filtros seleccionados.")
             else:
@@ -956,7 +999,7 @@ def _render_contenido():
         graf = _render_rail((("", _opciones_rail),),
                             f"rail_sel_{reporte.replace(' ', '_')}")
         if graf == "Tabla":
-            df_tabla = _filtros_chips_franja(df_f)
+            df_tabla, _ = _filtros_chips_franja(df_f)
             if df_tabla.empty:
                 st.info("Ningún registro coincide con los filtros seleccionados.")
             else:
