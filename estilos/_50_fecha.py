@@ -5,9 +5,12 @@ fondo blanco es el comportamiento por DEFECTO en desktop (min-width:901px)
 desde 2026-08-04 — antes solo corría en Compras/Ajuste via overrides
 :has() por separado; se generalizó porque los 8 reportes comparten los
 mismos containers (fila_ajuste_top, fecha_ajuste_pill, chips_ajuste_tabla,
-ver app.py). Debajo de 901px se mantiene el estilo "tab" original (degradado
-+ borde inferior, posición vía _99_movil.py) sin cambios — no se tocó el
-móvil de ningún reporte en esta generalización.
+ver app.py). El estilo "tab" original (degradado + borde inferior) es la
+regla BASE de este módulo, y desde 2026-08-05 solo se ve en la franja
+769-900px: móvil (<=768px) replica el pill sólido acento en _99_movil.py
+con sus propias medidas (34px de alto en vez de 28px — allá no hay chips
+vecinos con los que emparejar). Si algún día se cubre esa franja de tablet,
+la regla base queda muerta.
 
 Compras, Inventario Valorizado y Salidas comparten un addendum propio
 (scopeado :has(.st-key-app_reporte_<slug>), uno por reporte): min-width:230px
