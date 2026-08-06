@@ -1,8 +1,10 @@
 """asistente.py — Asistente flotante de IA (Groq / GPT-OSS 120B) con búsqueda web.
 
 Diseño:
-- st.popover como burbuja flotante en la esquina inferior derecha
-  (fijado con CSS position:fixed en el container ai_float_wrap).
+- st.popover flotante (position:fixed sobre el container ai_float_wrap):
+  por defecto es un tab pegado al borde derecho, centrado vertical. Con el
+  rail de Compras/Ajuste presente y en desktop pasa a ser la CABECERA del
+  rail (misma columna y ancho, en la banda de 50px que hay encima).
 - @st.fragment: al enviar un mensaje, solo re-ejecuta el asistente
   — la tabla, gráficos y filtros del reporte NO se recargan.
 - Cliente Groq (GPT-OSS 120B) para sintetizar respuestas. La key vive en
@@ -292,10 +294,75 @@ def _inject_css():
     .st-key-ai_float_wrap [data-testid="stPopoverButton"] [aria-hidden="true"] {{
         display: none !important;
     }}
-    /* Cuando el rail de Compras/Ajuste está activo, el tab del asistente se
-       desplaza a la izquierda para no taparlo. */
-    [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row) .st-key-ai_float_wrap {{
-        right: 100px !important;
+    /* Con el rail de Compras/Ajuste activo (solo desktop): el asistente deja
+       de ser tab lateral y pasa a ser la CABECERA del rail — misma columna
+       (right 15px, mismo ancho 84px), dentro de la banda superior libre
+       (--cab-altura = 50px) que queda ENCIMA del rail (que arranca en 60px).
+       En desktop la fecha se va a la izquierda (_50_fecha, @media 901px), así
+       que esa esquina está vacía. En <=900px el rail se vuelve tira
+       horizontal: ahí no tocamos nada y el asistente sigue siendo el tab
+       centrado del borde derecho. */
+    @media (min-width: 901px) {{
+        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row) .st-key-ai_float_wrap {{
+            top: 12px !important;
+            right: 15px !important;    /* mismo eje que el rail */
+            width: 84px !important;    /* mismo ancho que el rail */
+            transform: none !important;
+            /* El wrap es el flex column de Streamlit con align-items:start →
+               el hijo se mide por contenido (68px) y no llena los 84px. */
+            align-items: stretch !important;
+        }}
+        /* stLayoutWrapper (hijo directo del wrap) trae width:fit-content de
+           Streamlit — con eso align-items:stretch no hace nada (stretch solo
+           gana cuando el ancho es auto). Sin esta línea el trigger queda a
+           68px (el ancho del texto) en vez de los 84px del rail. */
+        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+            .st-key-ai_float_wrap [data-testid="stLayoutWrapper"] {{
+            width: 100% !important;
+        }}
+        /* El trigger deja de ser "tab" violeta (llamaba de más siendo un
+           control que se usa poco, justo arriba de la navegación real del
+           rail): pastilla del ancho del rail, MISMO LENGUAJE VISUAL que un
+           ítem inactivo del rail (transparente, texto secundario, sin
+           sombra) — se lee como parte del rail, no como un CTA. */
+        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+            .st-key-ai_float_wrap [data-testid="stPopover"] > div > button {{
+            width: 100% !important;
+            /* Sin esto el botón mide 180px: hay una regla global
+               [data-testid="stPopover"] button {{ min-width: 180px !important }}
+               (los popovers de filtros) que le gana al width:100%. */
+            min-width: 0 !important;
+            min-height: 34px !important;
+            padding: 0 4px !important;
+            border-radius: 10px !important;
+            justify-content: center !important;
+            background: transparent !important;
+            color: var(--text-secondary, #71717a) !important;
+            border: none !important;
+            box-shadow: none !important;
+            font-weight: 500 !important;
+        }}
+        /* El label vive en un <p> con su propio font-size: hay que bajarlo acá
+           o "Asistente" no entra en los 84px del rail. Color heredado del
+           botón (texto secundario) — nada de negrita fuerte. */
+        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+            .st-key-ai_float_wrap [data-testid="stPopover"] > div > button p {{
+            font-size: 10.5px !important;
+            font-weight: 500 !important;
+            line-height: 1.15 !important;
+            white-space: nowrap !important;
+            margin: 0 !important;
+            color: inherit !important;
+        }}
+        /* Hover: mismo tinte lavanda suave que usan los ítems del rail al
+           pasar el cursor — nunca el violeta sólido (eso quedó reservado
+           para el ítem activo de la navegación real). */
+        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
+            .st-key-ai_float_wrap [data-testid="stPopover"] > div > button:hover {{
+            background: var(--accent-tint, #f0edfe) !important;
+            color: var(--accent-deep, #4938b8) !important;
+            transform: none !important;
+        }}
     }}
     /* Interior del popover: un poco más ancho para el chat. */
     div[data-testid="stPopoverBody"] {{

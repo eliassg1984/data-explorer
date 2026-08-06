@@ -948,7 +948,7 @@ def _render_contenido():
 # ── Llamada al fragment ──────────────────────────────────────────────────────
 _render_contenido()
 
-# ── Asistente flotante IA (burbuja abajo-derecha) ────────────────────────────
+# ── Asistente flotante IA (tab derecho; cabecera del rail si hay rail) ───────
 try:
     inject_asistente(reporte_activo=reporte, df_contexto=df_f)
 except Exception:
