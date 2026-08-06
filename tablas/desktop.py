@@ -261,6 +261,16 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         "onGridSizeChanged": JsCode("function(params) { params.api.sizeColumnsToFit(); }"),
         "onGridReady": JsCode(f"""
             function(params) {{
+                // Handle de la API para diagnostico. Sin esto NO se puede
+                // medir nada de AG Grid desde afuera: la api vive en el state
+                // de React y no hay otra via de acceso. Con esto, desde la
+                // consola del padre:
+                //   var f = [...document.querySelectorAll('iframe')]
+                //             .find(x => (x.title||'').includes('agGrid'));
+                //   f.contentWindow.__agApi.setGridOption('rowData', d)
+                // Es lo que permitio medir el costo por interaccion
+                // (arquitectura.md #33). Vive dentro del iframe del grid.
+                try {{ window.__agApi = params.api; }} catch(e) {{}}
                 try {{
                     var ms = {_js_ms_desde_carga};
                     var bc = new BroadcastChannel('_perf_aggrid');

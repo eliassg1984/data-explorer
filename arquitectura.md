@@ -785,3 +785,35 @@ salvo `icono`):
     0 !important; }`. Verificar SIEMPRE midiendo `stElementContainer` (el
     flex-item real que consume el `row-gap`), no el div visual — el div
     visual miente porque su `overflow` es `visible` por default.
+
+33. **Dónde se va el tiempo de la tabla, medido (2026-08-06, 10k filas,
+    Ajuste con sus 5 niveles de agrupación).** Los números salieron de la
+    API real de AG Grid, expuesta como `window.__agApi` en `onGridReady`
+    (`tablas/desktop.py`) — sin ese handle no hay forma de medir: la api
+    vive en el state de React del componente.
+
+    | operación | ms |
+    |---|---|
+    | **clic de chip hoy** — re-empujar `rowData` | **700–900** |
+    | `setFilterModel()` sin tocar los datos | **120–150** |
+    | primera carga (en frío) | ~1.800 |
+    | `autoSizeAllColumns()` (solo 1ª vez) | 50–145 |
+    | `sizeColumnsToFit()` | 0,3–1,3 |
+    | `pivotMode` ON vs OFF | **sin diferencia** |
+
+    Conclusiones que contradicen lo que parecía a simple vista:
+    - **`pivotMode: True` no cuesta nada.** Parecía sospechoso porque se
+      fija incondicionalmente sin columnas pivoteadas; medido, da igual.
+    - **Lo caro es reagrupar cuando cambia la identidad de las filas.**
+      st_aggrid define `getRowId` sobre `::auto_unique_id::`, un contador
+      posicional. Empujar los MISMOS datos cuesta ~10-20 ms (AG Grid
+      reusa los nodos por id); empujar un subconjunto filtrado —donde el
+      id 0 ya es otro producto— cuesta 700-900 ms.
+    - Por eso filtrar en Python es caro y filtrar con `setFilterModel` es
+      5-6× más barato: el segundo no toca la identidad de las filas.
+
+    **Trampa al medir esto:** si generás filas sintéticas clonando una
+    existente con `Object.assign`, todas heredan el mismo
+    `::auto_unique_id::` y AG Grid las colapsa en UNA sola. El grid
+    reporta 10.000 filas empujadas y 1 hoja, y los tiempos que salen no
+    significan nada. Hay que renumerar el id a mano.
