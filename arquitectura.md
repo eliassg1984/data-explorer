@@ -731,3 +731,27 @@ salvo `icono`):
     verificado forzando la columna a 70px) en vez de recortar o
     mantenerse en una línea. Los dos ajustes viven juntos en
     `graficos/ajuste.py::_graf_waterfall_ajuste`.
+
+32. **El coste por rerun de la tabla se paga en CADA cambio de filtro, no
+    solo al abrir.** Medido a 10k filas en Ajuste (2026-08-06): un chip
+    dispara un rerun del fragment, la fecha dispara uno COMPLETO (re-ejecuta
+    las 8 inyecciones de nivel superior — cada `components.html` es un
+    iframe que se vuelve a montar —, navegación y asistente), y en ambos
+    casos el df entero se vuelve a serializar y AG Grid rearma su árbol de
+    grupos desde cero. Tres trampas de Python que salieron de ahí, las tres
+    reutilizables:
+    - **`@st.cache_data` hashea CADA argumento.** Pasarle el DataFrame a una
+      función que solo mira nombres de columna costaba 126 ms por rerun;
+      pasándole `tuple(df.columns)` baja a ~1 ms. Si la función no necesita
+      los datos, no le pases los datos.
+    - **`.dt.date` en un filtro materializa un `datetime.date` de Python por
+      fila.** El filtro de rango pasó de 27 ms a 3,7 ms comparando contra
+      `pd.Timestamp`. El límite superior va como `< fin + 1 día` (no
+      `<= fin`) para que el rango siga siendo inclusivo cuando la columna
+      trae hora, que es el caso de `FECHA APERTURA INVENTARIO`.
+    - **`pd.to_datetime()` recorre igual una columna que YA es datetime**
+      (38 ms): guarda con `is_datetime64_any_dtype` antes.
+    Y una que va al revés de lo que uno supondría: para derivar el mes,
+    `dt.to_period("M").astype(str)` (18 ms) le gana por lejos a
+    `dt.strftime("%Y-%m")` (396 ms); para el día es al revés, `strftime`
+    (14 ms) le gana a `dt.date.astype(str)` (61 ms). No unificarlos.

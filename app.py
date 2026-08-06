@@ -295,7 +295,11 @@ if "buscador" in cfg and cfg["buscador"] and not col_busc:
 with perf.phase("df.copy() + to_datetime"):                                 # ⚡ PERF
     df_f = df.copy()
     if col_fecha:
-        df_f[col_fecha] = pd.to_datetime(df_f[col_fecha], errors="coerce")
+        # La guarda NO es cosmetica: to_datetime sobre una columna que YA es
+        # datetime igual recorre todo (38 ms cada rerun con 10k filas), y esta
+        # ruta se ejecuta en cada cambio de fecha.
+        if not pd.api.types.is_datetime64_any_dtype(df_f[col_fecha]):
+            df_f[col_fecha] = pd.to_datetime(df_f[col_fecha], errors="coerce")
         if reporte == "Ajuste de Inventario":
             # FECHA APERTURA INVENTARIO trae hora al minuto -- el "Modo
             # pivote" de AG Grid pivotea por el valor EXACTO de la
@@ -315,13 +319,24 @@ with perf.phase("df.copy() + to_datetime"):                                 # �
             if not buscar_columna(df_f, "MES", "Mes"):
                 df_f[f"{col_fecha} (Mes)"] = (
                     df_f[col_fecha].dt.to_period("M").astype(str))
-            df_f[f"{col_fecha} (Día)"] = df_f[col_fecha].dt.date.astype(str)
+            # strftime y NO .dt.date.astype(str): el segundo materializa un
+            # datetime.date de Python por fila (61 ms vs 14 ms con 10k).
+            # Ojo que para (Mes) es al reves -- to_period gana por lejos --,
+            # asi que no "unificar" los dos a strftime.
+            df_f[f"{col_fecha} (Día)"] = df_f[col_fecha].dt.strftime("%Y-%m-%d")
 
 @st.cache_data
-def get_columnas_sugeridas(df_f, col_fecha, cat_cols, col_busc, cfg):
-    todas_cols = df_f.columns.tolist()
+def get_columnas_sugeridas(todas_cols, col_fecha, cat_cols, col_busc, cfg):
+    """OJO con el primer parametro: recibe los NOMBRES de columna, no el
+    DataFrame. @st.cache_data hashea cada argumento, y hashear el df entero
+    costaba 126 ms por rerun (10k filas) para una funcion que solo mira
+    nombres. Con una tupla de strings el hash es ~1 ms."""
+    todas_cols = list(todas_cols)
     if "columnas" in cfg:
-        sugeridas, faltan_cols = resolver_columnas(df_f, cfg["columnas"])
+        # resolver_columnas/buscar_columna solo usan df.columns, asi que un
+        # frame vacio con esos nombres alcanza y no arrastra los datos.
+        sugeridas, faltan_cols = resolver_columnas(
+            pd.DataFrame(columns=todas_cols), cfg["columnas"])
     else:
         faltan_cols = []
         sugeridas = []
@@ -334,7 +349,7 @@ def get_columnas_sugeridas(df_f, col_fecha, cat_cols, col_busc, cfg):
     return sugeridas, faltan_cols, todas_cols
 
 sugeridas, faltan_cols, todas_cols = get_columnas_sugeridas(
-    df_f, col_fecha, cat_cols, col_busc, cfg
+    tuple(df_f.columns), col_fecha, cat_cols, col_busc, cfg
 )
 
 if "agrupar" in cfg:
@@ -549,9 +564,16 @@ if True:
         _rango_apl = st.session_state.get(_k_rango_franja)
         if isinstance(_rango_apl, (tuple, list)) and len(_rango_apl) == 2 and all(_rango_apl):
             _ini_apl, _fin_apl = _rango_apl
+            # Comparar contra Timestamps, NO contra .dt.date: eso ultimo
+            # materializa un datetime.date de Python por fila (27 ms vs 3.7 ms
+            # con 10k) y es justo la linea que corre en cada cambio de rango.
+            # El limite superior va como "< fin + 1 dia" para que el rango siga
+            # siendo INCLUSIVO aunque la columna traiga hora (que es el caso de
+            # FECHA APERTURA INVENTARIO): con "<= fin" se perderia todo lo
+            # posterior a la medianoche del ultimo dia.
             df_f = df_f[
-                (df_f[col_fecha].dt.date >= _ini_apl) &
-                (df_f[col_fecha].dt.date <= _fin_apl)
+                (df_f[col_fecha] >= pd.Timestamp(_ini_apl)) &
+                (df_f[col_fecha] < pd.Timestamp(_fin_apl) + pd.Timedelta(days=1))
             ]
 perf.end_phase("Ajuste top row")                                            # ⚡ PERF
 
