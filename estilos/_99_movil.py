@@ -76,15 +76,16 @@ CSS = """    /* ================================================================
            porque aquel bloque nunca cruzó el breakpoint. Se replica acá en
            vez de bajar el min-width porque las medidas cambian: en
            escritorio el pill mide 28px para emparejar con los chips
-           vecinos; en móvil no hay chips al lado y 28px queda chico para
-           tocar, así que va 34px (altura real medida en vivo, coincide
-           con el min-height — la primera medición tras el load dio 40px
-           pero era transitoria, de una pasada de layout que aún no había
-           asentado el tamaño final).
+           vecinos; en móvil no hay chips al lado, así que originalmente
+           iba mas alto (34px) para el touch target.
            2026-08-06: top bajado de 8px -> 5px -> 1px -> 0 ("dejalo
            pegado", a pedido, en varias pasadas) — pegado al borde
            superior real de la franja (el ::before de fila_ajuste_top
-           arranca en top:0), ya no centrado (antes 8+8 parejo).
+           arranca en top:0), ya no centrado (antes 8+8 parejo). Despues
+           "mas delgado" a pedido: min-height 34px -> 30px (mismo motivo
+           de touch target, pero ya no tan holgado). Si en algun momento
+           hace falta volver a agrandar el area de toque, subir esto, no
+           el padding (es 0 arriba/abajo a proposito).
            OJO: esta sección va ÚLTIMA en _SECCIONES, así que con la misma
            especificidad que la regla base ya le gana; no hace falta el
            truco de clase duplicada (.st-key-X.st-key-X) que usa el bloque
@@ -92,7 +93,7 @@ CSS = """    /* ================================================================
            tienen que redefinirse — si no, la base los devuelve al
            degradado apenas se tocan. */
         .st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
-            min-height: 34px !important;
+            min-height: 30px !important;
             box-sizing: border-box !important;
             padding: 0 14px !important;
             border: none !important;
