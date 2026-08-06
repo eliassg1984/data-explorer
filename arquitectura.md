@@ -755,3 +755,33 @@ salvo `icono`):
     `dt.to_period("M").astype(str)` (18 ms) le gana por lejos a
     `dt.strftime("%Y-%m")` (396 ms); para el día es al revés, `strftime`
     (14 ms) le gana a `dt.date.astype(str)` (61 ms). No unificarlos.
+
+33. **`st.markdown(..., unsafe_allow_html=True)` cuyo HTML arranca con un tag
+    de bloque (`<div>`, no `<span>`/`<p>`) hereda un `margin-bottom: -16px`
+    nativo de Streamlit en `stMarkdownContainer`, pensado para cancelar el
+    margen de un `<p>` que en este caso no existe.** CommonMark reconoce
+    `<div ...>` al inicio de la línea como "bloque HTML crudo" y NO lo
+    envuelve en `<p>` — el `-16px` que Streamlit aplica (para neutralizar el
+    `margin-bottom` de ~1em que traería un `<p>` normal) no tiene nada que
+    cancelar ahí, y resta 16px directo a la altura que ve el
+    `stElementContainer` padre. El contenido se sigue pintando a su alto
+    real (`overflow: visible`), pero el flex padre reparte su `row-gap`
+    según la altura que CREE que tiene ese hijo — si el `row-gap` del
+    contenedor es menor a 16px, el resultado es overlap real sobre el
+    siguiente hermano, no solo espacio apretado.
+    Motivo (bug real, 2026-08-06): cabecera de la tabla de Ajuste (`Familia
+    | Ajuste | Cascada acumulada | …`, `graficos/ajuste.py`) — con el
+    `row-gap` de la card en el default de Streamlit (16px) el número daba 0
+    y nadie lo notó; al bajar `row-gap` a 6px (regla "aire sobre el
+    título", mismo archivo) el bug pasó a pintar el `border-bottom` de la
+    cabecera 10px DENTRO de la primera fila. Medido con
+    `getBoundingClientRect`: `stElementContainer` reportaba 6.4px de alto
+    con contenido de 22.4px pintado encima.
+    **Regla:** si el HTML de un `st.markdown` empieza con un tag de bloque
+    y esa card usa un `row-gap` propio (no el default de Streamlit), sumale
+    una clase propia al tag raíz (sobrevive el sanitizador, igual que
+    `.ajcas-tip`) y anulá el `-16px` nativo apuntando a
+    `[data-testid="stMarkdownContainer"]:has(> .tu-clase) { margin-bottom:
+    0 !important; }`. Verificar SIEMPRE midiendo `stElementContainer` (el
+    flex-item real que consume el `row-gap`), no el div visual — el div
+    visual miente porque su `overflow` es `visible` por default.

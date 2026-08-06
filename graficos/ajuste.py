@@ -955,14 +955,37 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
        que lo que las separa es el gap del contenedor (16px por defecto
        en Streamlit) MÁS el margin-bottom de 4px de cada fila — 20px
        medidos. Con 6px quedan a 10px. Es un solo número para las tres
-       separaciones de la card: título→cabecera 27→17, cabecera→1ª fila
-       16→6, fila→fila 20→10, y la card baja de 214 a 184px (entran más
-       familias sin scrollear). Si hay que separar SOLO las filas sin
-       tocar el resto, el knob es el margin-bottom de
-       st-key-ajcas_fila_, no este gap. */
+       separaciones de la card: título→cabecera 27→17, fila→fila 20→10,
+       y la card baja de 214 a 184px (entran más familias sin
+       scrollear). Si hay que separar SOLO las filas sin tocar el
+       resto, el knob es el margin-bottom de st-key-ajcas_fila_, no
+       este gap.
+
+       cabecera→1ª fila NO sigue esa cuenta — ver el fix de .ajcas-head
+       de abajo: con el gap en 16px (default) el numero daba 0 gap "por
+       suerte"; al bajar a 6px paso a ser overlap negativo real. */
     div[class*="st-key-chartcard_cascada"] {{
         padding-top: 4px !important;
         row-gap: 6px !important; }}
+    /* ── Cabecera de la tabla se comía la 1ª fila (regla nueva, ver
+       arquitectura.md) ──────────────────────────────────────────────
+       stMarkdownContainer trae de Streamlit un margin-bottom:-16px
+       nativo (compensa el margin de un <p> normal, que aca no existe
+       porque el HTML empieza con <div> y CommonMark lo trata como
+       bloque HTML crudo, sin envolverlo en <p>). Ese -16px le resta
+       16px a la altura que ve el flex padre (chartcard_cascada) para
+       ESTE item -> el border-bottom del header (visualmente 22px de
+       alto) queda pintado bien por debajo de donde el flex cree que
+       termina el item, montado sobre la fila siguiente.
+       Medido en vivo: stElementContainer quedaba en 6.4px de alto
+       aunque el contenido pintaba 22.4px. Fix: cancelar el -16px nativo
+       SOLO en el stMarkdownContainer que envuelve a .ajcas-head (la
+       clase sobrevive al sanitizador, ver comentario junto al
+       st.markdown de la cabecera). Sin esto, cualquier st.markdown con
+       <div> como tag raiz (no <span>/<p>) en esta card puede pisar lo
+       que venga despues. */
+    [data-testid="stMarkdownContainer"]:has(> .ajcas-head) {{
+        margin-bottom: 0 !important; }}
     </style>""", unsafe_allow_html=True)
 
     with _card("cascada"):
@@ -1027,8 +1050,12 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                     )
 
         # Cabecera de la tabla
+        # class="ajcas-head": necesaria para el fix de margen de abajo (ver
+        # regla en el <style> de arriba / arquitectura.md) — sobrevive al
+        # sanitizador de markdown igual que .ajcas-tip (linea ~909).
         st.markdown(
-            f"<div style='display:flex;font-size:9px;color:{GRIS_TEXTO_SUAVE};"
+            f"<div class='ajcas-head' style='display:flex;font-size:9px;"
+            f"color:{GRIS_TEXTO_SUAVE};"
             f"text-transform:uppercase;letter-spacing:.08em;font-weight:600;"
             f"padding:0 0 7px 0;border-bottom:1px solid {GRIS_BORDE}'>"
             f"<div style='width:4%'></div>"
