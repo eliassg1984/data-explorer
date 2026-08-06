@@ -941,7 +941,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
        título 2px más que al popover y los descentraba entre sí
        (verificado midiendo ambos rects). */
     div[class*="st-key-chartcard_cascada"] {{
-        padding-top: 8px !important; }}
+        padding-top: 4px !important; }}
     </style>""", unsafe_allow_html=True)
 
     with _card("cascada"):
