@@ -77,12 +77,13 @@ CSS = """    /* ================================================================
            vez de bajar el min-width porque las medidas cambian: en
            escritorio el pill mide 28px para emparejar con los chips
            vecinos; en móvil no hay chips al lado y 28px queda chico para
-           tocar, así que va 34px de min-height — aunque el contenido real
-           (ícono + texto) lo estira a ~40px medidos en vivo, no 34.
-           2026-08-06: top bajado de 8px a 5px ("subir un poco" el pill) —
-           con la altura real de 40px, 5px arriba + 5px abajo queda parejo
-           dentro de los 50px de --cab-altura. Si el contenido cambia de
-           alto, medir de nuevo antes de asumir que sigue centrado.
+           tocar, así que va 34px (altura real medida en vivo, coincide
+           con el min-height — la primera medición tras el load dio 40px
+           pero era transitoria, de una pasada de layout que aún no había
+           asentado el tamaño final).
+           2026-08-06: top bajado de 8px a 5px ("subir un poco" el pill) a
+           pedido — deja de estar centrado a propósito (5px arriba / 11px
+           abajo dentro de los 50px de --cab-altura, antes 8+8 parejo).
            OJO: esta sección va ÚLTIMA en _SECCIONES, así que con la misma
            especificidad que la regla base ya le gana; no hace falta el
            truco de clase duplicada (.st-key-X.st-key-X) que usa el bloque
