@@ -110,7 +110,7 @@ CSS = """    /* ================================================================
         margin-top: -60px !important;
     }
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_"] {
-        margin-top: -70px !important;
+        margin-top: -80px !important;
     }
 
 /* En Compras la franja blanca superior YA NO EXISTE — el ::before se
