@@ -104,10 +104,13 @@ CSS = """    /* ================================================================
        compras_prov_drill_wrap; en Ajuste (ahora APILADO) es la tarjeta izq
        (gráfico principal). La tarjeta der (panel de análisis) NO lleva el
        jalón: va en flujo debajo, y un -68px extra la solaparía con la de
-       arriba. */
-    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap,
-    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_"] {
+       arriba. Reglas separadas (mismo valor base -60px) para poder afinar
+       cada tarjeta por su lado sin mover la otra. */
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap {
         margin-top: -60px !important;
+    }
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_"] {
+        margin-top: -70px !important;
     }
 
 /* En Compras la franja blanca superior YA NO EXISTE — el ::before se
