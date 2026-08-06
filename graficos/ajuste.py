@@ -1454,21 +1454,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     fig.update_xaxes(tickmode="array", tickvals=_xcats,
                      ticktext=_wrap_cat(_xcats))
 
-    _peor_v = float(pivot.values.min())
-    _sub_hm = ""
-    if _peor_v < 0:
-        _pos = pivot.values.argmin()
-        _pf = pivot.index[_pos // len(pivot.columns)]
-        _pa = pivot.columns[_pos % len(pivot.columns)]
-        _sub_hm = (f"<span style='font-size:11px;color:{GRIS_TEXTO_SUAVE}'>"
-                   f"Mayor faltante: <b style='color:{DANGER_TEXT}'>{_pf}</b>"
-                   f" en <b style='color:{DANGER_TEXT}'>{_pa}</b> · "
-                   f"S/ {_peor_v:,.0f}</span>")
-
     with _card("heatmap"):
-        if _sub_hm:
-            st.markdown(f"<div style='margin:-4px 0 6px 0'>{_sub_hm}</div>",
-                        unsafe_allow_html=True)
         _hm_evt = st.plotly_chart(
             fig, use_container_width=True,
             key="heatmap_ajuste",
