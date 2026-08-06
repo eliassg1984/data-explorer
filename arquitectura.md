@@ -680,3 +680,26 @@ salvo `icono`):
     `getComputedStyle(document.querySelector('.ag-measurement-container'))
     .getPropertyValue('--ag-list-item-height')` dentro del iframe. Si no
     dice lo que pusiste, AG Grid tampoco lo está viendo.
+
+30. **Ensanchar un `st.popover` (o cualquier botón) a `width:100%` dentro de
+    un `st.container(key=...)` choca con DOS anchos que Streamlit fija por
+    su cuenta, en capas distintas:**
+    - El `<button>` de todo popover trae `[data-testid="stPopover"] button
+      { min-width: 180px !important }` — una regla global (usada por los
+      popovers de filtros). Un `width:100% !important` propio NO le gana:
+      `min-width` puede vencer a `width` aunque ambos sean `!important`.
+      Hace falta `min-width: 0 !important` explícito en el propio botón.
+    - El envoltorio `[data-testid="stLayoutWrapper"]` (hijo directo de
+      `st.container`) trae `width: fit-content` — con eso, `align-items:
+      stretch` en el flex-column padre NO HACE NADA: `stretch` solo gana
+      cuando el ancho del hijo es `auto`, y `fit-content` no es `auto`.
+      Hace falta `width: 100% !important` explícito en el propio
+      `stLayoutWrapper`.
+    Sin las dos correcciones, el botón queda del ancho de su texto (medido
+    por `getBoundingClientRect`, no por `getComputedStyle` — ver
+    [[flujo-trabajo-ui]] sobre transiciones) aunque el CSS "debería" haberlo
+    estirado. Caso real: el trigger del asistente (`asistente.py`,
+    `.st-key-ai_float_wrap`) reposicionado como cabecera del rail de
+    Compras/Ajuste — medía 68px con el `width:100%` puesto solo en el
+    `<button>`; los 84px (ancho real del rail) solo llegaron tras fijar
+    `min-width:0` en el botón y `width:100%` en el `stLayoutWrapper`.
