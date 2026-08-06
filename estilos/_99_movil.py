@@ -64,7 +64,7 @@ CSS = """    /* ================================================================
            esquina superior (no hay nav-rail: la barra de nav vive abajo). */
         .st-key-fecha_ajuste_pill {
             position: fixed !important;
-            top: 1px !important;
+            top: 0 !important;
             left: 12px !important;
             right: auto !important;
             margin: 0 !important;
@@ -81,10 +81,10 @@ CSS = """    /* ================================================================
            con el min-height — la primera medición tras el load dio 40px
            pero era transitoria, de una pasada de layout que aún no había
            asentado el tamaño final).
-           2026-08-06: top bajado de 8px a 5px y luego a 1px ("subir un
-           poco" el pill, a pedido, en dos pasadas) — deja de estar
-           centrado a propósito (1px arriba / 15px abajo dentro de los
-           50px de --cab-altura, antes 8+8 parejo).
+           2026-08-06: top bajado de 8px -> 5px -> 1px -> 0 ("dejalo
+           pegado", a pedido, en varias pasadas) — pegado al borde
+           superior real de la franja (el ::before de fila_ajuste_top
+           arranca en top:0), ya no centrado (antes 8+8 parejo).
            OJO: esta sección va ÚLTIMA en _SECCIONES, así que con la misma
            especificidad que la regla base ya le gana; no hace falta el
            truco de clase duplicada (.st-key-X.st-key-X) que usa el bloque
