@@ -1033,7 +1033,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
        de abajo: con el gap en 16px (default) el numero daba 0 gap "por
        suerte"; al bajar a 6px paso a ser overlap negativo real. */
     div[class*="st-key-chartcard_cascada"] {{
-        padding-top: 4px !important;
+        padding-top: 0px !important;
         row-gap: 6px !important; }}
     /* ── Cabecera de la tabla se comía la 1ª fila (regla nueva, ver
        arquitectura.md) ──────────────────────────────────────────────
@@ -1058,14 +1058,12 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
 
     with _card("cascada"):
         # ── Título + KPIs (antes vivían en la fila TOTAL de la tabla)
-        #    2026-08-07, a pedido: más grandes y centrados (dentro de su
-        #    columna — la columna del popover de la derecha corre el
-        #    centro real un poco; se acepta el corrimiento leve a cambio
-        #    de no sacar el popover de esta fila, ver arquitectura.md si
-        #    hace falta el centrado exacto en el futuro). Los KPIs van
-        #    cada uno en su propia cápsula tonalizada por signo, no como
-        #    texto plano separado por "|" — así se distinguen del título
-        #    de un vistazo en lugar de leerse como una sola frase.────────
+        #    2026-08-07: alineados a la izquierda dentro de su columna
+        #    (antes centrados, a pedido — ver git log si hace falta
+        #    volver). Los KPIs van cada uno en su propia cápsula
+        #    tonalizada por signo, no como texto plano separado por "|"
+        #    — así se distinguen del título de un vistazo en lugar de
+        #    leerse como una sola frase.────────
 
         # El título es además el disparador del tooltip que explica la
         # cascada acumulada (ver el bloque .ajcas-tip en el <style> de
@@ -1113,7 +1111,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         with _col_titulo:
             st.markdown(
                 f"<div style='display:flex;align-items:center;"
-                f"justify-content:center;flex-wrap:wrap;gap:12px;"
+                f"justify-content:flex-start;flex-wrap:wrap;gap:12px;"
                 f"padding:6px 0 14px 0'>"
                 f"{_titulo_html}{_kpi_neto_html}{_kpi_pct_html}</div>",
                 unsafe_allow_html=True)
