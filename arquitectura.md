@@ -396,6 +396,22 @@ salvo `icono`):
     ver `arquitectura.md`/CLAUDE.md § "Auditar el layout antes de proponer
     píxeles".
 
+    **2026-08-07 — la franja de 34px de Compras se universalizó.** Compras
+    tenía su propia franja más baja (34px en vez de 50px) con `top:3px` en
+    `fecha_ajuste_pill`/`chips_ajuste_tabla` para que no asomaran por el
+    borde inferior (ver el fix del 2026-08-06 arriba). Se pidió el mismo
+    look para los 8 reportes: ahora `.st-key-fila_ajuste_top::before` es
+    `34px` en desktop (`_40_ajuste_franja.py`, dentro de un
+    `@media(min-width:901px)` — **fijo en px, no se tocó la variable
+    `--cab-altura`**, que sigue en 50px porque también alimenta el pill
+    "tab" de la franja 769-900px) y `top:3px` vive en el bloque
+    `@media(min-width:901px)` de `_50_fecha.py` para ambos elementos. El
+    override propio de Compras en `_20_compras_rail.py` se eliminó (quedó
+    idéntico al default); solo le queda su `padding-top:2px` en el
+    wrapper, que es otra cosa (espaciado del rail, no la franja). **Los
+    dos números (34px / top:3px) van acoplados** — si se vuelve a tocar
+    uno, revisar el otro.
+
 18. **Los 8 reportes usan el rail derecho (`_render_rail`) desde 2026-08-04**
     — antes solo Compras y Ajuste. `render_vista_pills` (pestañas Gráficos/
     Tabla sueltas en la franja) se ELIMINÓ de `graficos/__init__.py`: ya no

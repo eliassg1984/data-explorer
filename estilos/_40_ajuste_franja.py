@@ -44,6 +44,15 @@ padding-right, el mismo que reserva el rail de _20_compras_rail.py:41,
 + ~10px de margen exterior de Streamlit). Los dos son CONSTANTES fijas,
 no dependen del viewport — por eso ahora es left:170px / right:163px en
 vez de un calc(). Ver el comentario en el bloque CSS de mas abajo.
+
+2026-08-07, 4ta vuelta: Compras tenia su propia franja de 34px (contra
+los 50px del resto) para que fecha_ajuste_pill/chips_ajuste_tabla no
+asomaran por el borde inferior (ver el commit del fix de overflow). Gusto
+mas que el default de 50px, asi que se universalizo: los 8 reportes usan
+34px en desktop (>=901px) ahora, y el override propio de Compras en
+_20_compras_rail.py se elimino por quedar identico al default. Ver el
+comentario junto al @media(min-width:901px) del bloque CSS de mas abajo
+para el detalle (por que 34px va fijo y no se toco --cab-altura).
 """
 
 CSS = """    /* =================================================================== */
@@ -91,6 +100,23 @@ CSS = """    /* ================================================================
         border-top: none !important;
         box-shadow: 0 6px 18px rgba(16, 16, 20, 0.10) !important;
         z-index: 0 !important;
+    }
+    /* 2026-08-07: 34px (en vez de var(--cab-altura)=50px) para los 8
+       reportes en desktop — Compras lo estrenó (necesitaba una franja más
+       baja por su rail derecho), gustó más así, y se universalizó. Fijo en
+       px y NO tocando la variable --cab-altura a propósito: esa variable
+       también alimenta el pill "tab" de la franja 769-900px en
+       _50_fecha.py (calc(var(--cab-altura) - 8px)), que no se tocó y sigue
+       pensado para 50px — cambiar la variable en vez de este valor puntual
+       lo hubiera roto de rebote. Acoplado con el top:3px de
+       fecha_ajuste_pill/chips_ajuste_tabla en _50_fecha.py — no cambiar
+       uno sin el otro. El override propio de Compras en
+       _20_compras_rail.py se sacó porque ahora es idéntico al default.
+       Ver arquitectura.md regla #17. */
+    @media (min-width: 901px) {
+        .st-key-fila_ajuste_top::before {
+            height: 34px !important;
+        }
     }
     .st-key-fila_ajuste_top > * {
         position: relative !important;

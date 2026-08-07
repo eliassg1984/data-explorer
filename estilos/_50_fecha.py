@@ -12,6 +12,16 @@ con sus propias medidas (34px de alto en vez de 28px — allá no hay chips
 vecinos con los que emparejar). Si algún día se cubre esa franja de tablet,
 la regla base queda muerta.
 
+2026-08-07: el `top:3px` del bloque desktop (antes 8px) — Compras lo
+estrenó para su franja de 34px, gustó, y se universalizó junto con el
+alto de la franja (ver _40_ajuste_franja.py::before, también 34px ahora
+en los 8 reportes). Antes de esto el bloque desktop solo tocaba
+left/right/transform/max-width; top:8px venía sin tocar de la regla BASE
+de arriba (pensada para la franja "tab" de 769-900px, no para el pill
+sólido de escritorio). Si se vuelve a tocar la altura de la franja,
+recordar que top:3px y esa altura están acoplados — no cambiar una sin
+la otra (ver arquitectura.md regla #17).
+
 Compras, Inventario Valorizado y Salidas comparten un addendum propio
 (scopeado :has(.st-key-app_reporte_<slug>), uno por reporte): min-width:230px
 en sus chips porque los tres saben que tienen EXACTAMENTE 2 chips de filtro
@@ -104,7 +114,17 @@ CSS = """    /* ================================================================
     /* reporte sigue como estaba, con la posición de _99_movil.py).        */
     /* ================================================================== */
     @media (min-width: 901px) {
+        /* top:3px (antes 8px, heredado de la regla base de arriba): antes
+           SOLO Compras lo tenía, junto con su franja de 34px (el default
+           de 50px no lo necesitaba — con top:8px sobraban 14px abajo). El
+           2026-08-07 se universalizaron LOS DOS JUNTOS (acá el top, en
+           _40_ajuste_franja.py::before el alto de 34px) porque el look
+           más ceñido de Compras gustó más que el margen suelto del
+           default viejo. No se probó top:3px solo contra la franja de
+           50px — van acoplados, no cambiar uno sin el otro. Ver docstring
+           del módulo y arquitectura.md regla #17. */
         .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill {
+            top: 3px !important;
             left: 175px !important;
             right: auto !important;
         }
@@ -139,6 +159,7 @@ CSS = """    /* ================================================================
             background: var(--accent-deep) !important;
         }
         .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
+            top: 3px !important;
             left: calc((154px + (100vw - 131px)) / 2) !important;
             right: auto !important;
             transform: translateX(-50%) !important;
