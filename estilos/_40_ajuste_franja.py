@@ -29,31 +29,42 @@ de borde a borde (left:90px a right:0) y dejaba dos zonas SIEMPRE vacias
 con fondo blanco encima — antes del pill de fecha (el titulo que viviria
 ahi esta oculto por pedido) y despues del cluster de chips (que en
 desktop vive centrado, no pegado al borde derecho). Paso de "franja" a
-"tarjeta que cuelga del borde superior": left:160px (pegado al pill de
-fecha) y right:calc(50vw - 300px) (se angosta hacia el centro, con la
-misma logica de centrado que ya usa chips_ajuste_tabla). Ver el comentario
-en el bloque CSS de mas abajo para el detalle completo.
+"tarjeta que cuelga del borde superior" con left/right aproximados
+(centrado con chips_ajuste_tabla via calc(50vw - 300px)).
+
+2026-08-06, 3ra vuelta (mismo dia): el aproximado no bastaba — se pidio
+alinear la tarjeta con el CONTENEDOR DEL GRAFICO (.st-key-ajuste_graf_
+card_izq_<reporte>), no con el cluster de chips. En vez de adivinar otro
+numero, se midio en vivo (preview local, getBoundingClientRect +
+getComputedStyle) el borde real de esa tarjeta en Compras y Ventas, en
+2 anchos de viewport distintos: siempre left=170px (=90px rail + 80px,
+el padding-left DEFAULT de Streamlit para .block-container — no es un
+valor que este codigo fije a mano) y siempre right~163px (=153px de
+padding-right, el mismo que reserva el rail de _20_compras_rail.py:41,
++ ~10px de margen exterior de Streamlit). Los dos son CONSTANTES fijas,
+no dependen del viewport — por eso ahora es left:170px / right:163px en
+vez de un calc(). Ver el comentario en el bloque CSS de mas abajo.
 """
 
 CSS = """    /* =================================================================== */
     /* FILA SUPERIOR DE AJUSTE DE INVENTARIO                                */
     /* =================================================================== */
-    /* FRANJA "CRISTAL ESMERILADO" — YA NO es de borde a borde (2026-08-06,  */
-    /* 2da vuelta): son dos zonas SIEMPRE vacías las que quedaban con fondo  */
-    /* blanco sin nada encima — izquierda (90-160px: el título vive acá     */
-    /* pero está oculto por pedido, ver app.py::col_titulo) y derecha (todo */
-    /* lo que sobra a la derecha del cluster de chips, que en desktop vive  */
-    /* centrado, no pegado al borde). Ahora es una tarjeta que CUELGA del   */
-    /* borde superior (solo redondea las esquinas de ABAJO) y se angosta   */
-    /* hacia el centro en vez de llegar a right:0. `right` usa la MISMA     */
-    /* lógica de centrado que ya usa chips_ajuste_tabla en _50_fecha.py     */
-    /* (centro ≈ 50vw+11.5px): así la tarjeta se re-centra con el cluster   */
-    /* real en vez de quedar a un ancho fijo que se desalinea al cambiar el */
-    /* viewport. No es un abrazo píxel-perfecto (el pill de fecha mide      */
-    /* distinto según el rango elegido, y eso no se puede leer en CSS puro  */
-    /* sin JS) pero deja MUCHO menos aire vacío que antes. Mobile define su */
-    /* propio right (ver _99_movil.py) porque este calc() da negativo por   */
-    /* debajo de los ~600px de ancho. Ver docstring del módulo y            */
+    /* FRANJA "CRISTAL ESMERILADO" — alineada con el CONTENEDOR DEL GRÁFICO  */
+    /* (.st-key-ajuste_graf_card_izq_<reporte>), no con el rail ni con un    */
+    /* centrado aproximado. left:170px / right:163px son el borde REAL de   */
+    /* esa tarjeta, medido en vivo (preview local, getBoundingClientRect +  */
+    /* getComputedStyle) en Compras y Ventas, en 2 anchos de viewport:       */
+    /*   left  = 170px = 90px del rail + 80px de padding-left DEFAULT de    */
+    /*           Streamlit en .block-container (Streamlit lo pone solo,     */
+    /*           este código no lo fija — si Streamlit cambia ese default   */
+    /*           en una actualización, hay que volver a medir).             */
+    /*   right = 163px = 153px de padding-right (la misma reserva del rail  */
+    /*           de compras_tabs_row, ver _20_compras_rail.py:41) + ~10px   */
+    /*           de margen exterior de Streamlit.                           */
+    /* Las esquinas de abajo se redondean (cuelga del borde superior, no    */
+    /* border-radius arriba). Mobile define su PROPIO left/right (ver       */
+    /* _99_movil.py): ahí no hay rail izquierdo ni tarjeta con la que       */
+    /* alinearse de la misma forma. Ver docstring del módulo y              */
     /* arquitectura.md #17.                                                 */
     .st-key-fila_ajuste_top {
         position: sticky !important;
@@ -69,8 +80,8 @@ CSS = """    /* ================================================================
         position: fixed !important;
         top: 0 !important;
         bottom: auto !important;
-        left: 160px !important;                  /* pegado al pill de fecha, no al rail */
-        right: calc(50vw - 300px) !important;     /* se achica hacia el centro del cluster de chips */
+        left: 170px !important;    /* = borde izquierdo real de la tarjeta del gráfico */
+        right: 163px !important;   /* = borde derecho real de la tarjeta del gráfico */
         height: var(--cab-altura) !important;
         border-radius: 0 0 14px 14px !important;  /* cuelga del borde superior: solo esquinas de abajo */
         background: rgba(255, 255, 255, 0.62) !important;

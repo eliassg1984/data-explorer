@@ -379,6 +379,23 @@ salvo `icono`):
     override "de más" en un selector más específico puede anular un ajuste
     nuevo de la regla base sin que se note hasta mirar la especificidad.
 
+    **2026-08-06, 3ra vuelta — alinear con la tarjeta, no adivinar.** El
+    `calc(50vw - 300px)` de la vuelta anterior era una aproximación
+    (centrar con `chips_ajuste_tabla`); se pidió alinear en cambio con el
+    borde real de `.st-key-ajuste_graf_card_izq_<reporte>` (el contenedor
+    del gráfico). En vez de sumar otro número a ojo, se midió en vivo con
+    el preview local (`getBoundingClientRect` + `getComputedStyle`, Compras
+    y Ventas, 2 anchos de viewport): el borde de esa tarjeta es
+    `left:170px` / `right:163px` — dos CONSTANTES fijas (90px rail + 80px
+    padding-left default de `.block-container` que pone Streamlit solo;
+    153px padding-right del rail + ~10px de margen exterior), no un
+    cálculo relativo al viewport. Confirmado con `getComputedStyle` en 2
+    reportes × 2 anchos: coincide exacto en los 4 casos. Moraleja para la
+    próxima vez que se "sienta" que algo no está alineado: medir el
+    elemento real con JS en el preview ANTES de proponer otro número —
+    ver `arquitectura.md`/CLAUDE.md § "Auditar el layout antes de proponer
+    píxeles".
+
 18. **Los 8 reportes usan el rail derecho (`_render_rail`) desde 2026-08-04**
     — antes solo Compras y Ajuste. `render_vista_pills` (pestañas Gráficos/
     Tabla sueltas en la franja) se ELIMINÓ de `graficos/__init__.py`: ya no

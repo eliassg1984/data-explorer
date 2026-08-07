@@ -50,14 +50,14 @@ CSS = """    /* ================================================================
            estén static, porque son flex items — y los ponía sobre la banda. */
         .st-key-fila_ajuste_top::before {
             left: 0 !important;
-            /* El default (_40_ajuste_franja.py) angosta la franja hacia el
-               centro con right: calc(50vw - 300px) para no ocupar todo el
-               ancho en desktop — a este breakpoint ese calc() ya da
-               NEGATIVO (50vw < 300px por debajo de los ~600px), lo que
-               empujaría el borde derecho de la tarjeta fuera del viewport.
-               En móvil no hay cluster centrado que abrazar (la fecha queda
-               sola a la izquierda, sin chips al lado — ver más abajo), así
-               que se vuelve a border a border como antes del 2026-08-06. */
+            /* El default (_40_ajuste_franja.py) alinea left:170px/right:163px
+               con el borde real de la tarjeta del gráfico en desktop (rail
+               90px + padding-left 80px de Streamlit / padding-right 153px
+               del rail). En móvil no hay rail izquierdo (nav es barra
+               inferior) ni esa tarjeta con la que alinearse igual — la
+               fecha queda sola a la izquierda, sin chips al lado (ver más
+               abajo) — así que la franja vuelve a ir de borde a borde,
+               como antes del 2026-08-06. */
             right: 0 !important;
             z-index: 15 !important;
         }
