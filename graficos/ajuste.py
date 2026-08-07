@@ -16,7 +16,7 @@ from plotly.subplots import make_subplots
 import streamlit as st
 
 from tema import (
-    ACENTO, ACENTO_TEXTO_OSCURO, GRIS_BORDE, GRIS_FONDO,
+    ACENTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA, GRIS_BORDE, GRIS_FONDO,
     PALETA_SERIES, SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
     BLANCO, CELDA_ALERTA_FONDO, CELDA_ALERTA_TEXTO, CELDA_POS_TEXTO,
     DANGER_TEXT, ERROR, ERROR_FONDO, ESCALA_CONTINUA, EXITO, EXITO_FONDO,
@@ -2387,34 +2387,52 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                 st.dataframe(_det_fmt, hide_index=True, use_container_width=True)
 
     with col_der:
-        st.caption(f"{n_total - n_nz} productos en cero, excluidos del cálculo")
         media   = float(df_nz[col_ajuste_val].mean())
         mediana = float(df_nz[col_ajuste_val].median())
 
+        # Uno o dos ajustes puntuales muy grandes estiran el eje y aplastan
+        # el grueso de la distribución (que vive cerca de cero) en 1-2
+        # barras. Se acota la vista al percentil 1-99 (ampliado si hiciera
+        # falta para no dejar fuera a la media o la mediana) y esos outliers
+        # se cuentan aparte como texto — mismo criterio que el conteo de cero.
+        p_lo, p_hi = df_nz[col_ajuste_val].quantile([0.01, 0.99])
+        p_lo = min(p_lo, media, mediana, 0.0)
+        p_hi = max(p_hi, media, mediana, 0.0)
+        d_hist = df_nz[df_nz[col_ajuste_val].between(p_lo, p_hi)]
+        n_fuera = n_nz - len(d_hist)
+
+        _cap = f"{n_total - n_nz} productos en cero, excluidos del cálculo"
+        if n_fuera:
+            _cap += f" · {n_fuera} outliers fuera de este rango"
+        st.caption(_cap)
+
         fig2 = go.Figure()
         fig2.add_trace(go.Histogram(
-            x=df_nz[col_ajuste_val], nbinsx=30,
+            x=d_hist[col_ajuste_val], nbinsx=30,
             name="Frecuencia",
             marker_color=SERIE_PRINCIPAL, opacity=0.75,
             hovertemplate="Valor: S/ %{x:,.2f}<br>Frecuencia: %{y}<extra></extra>",
         ))
-        fig2.add_vline(x=0, line_dash="solid", line_color="#ef4444", line_width=2,
-                       annotation_text="Cero", annotation_font_color="#ef4444")
-        fig2.add_vline(x=media, line_dash="dot", line_color="#f97316",
-                       annotation_text=f"Media S/ {media:,.0f}",
-                       annotation_font_color="#f97316",
-                       annotation_position="top left")
-        fig2.add_vline(x=mediana, line_dash="dash", line_color="#16a34a",
-                       annotation_text=f"Mediana S/ {mediana:,.0f}",
-                       annotation_font_color="#16a34a")
+        fig2.add_vline(x=0, line_dash="solid", line_color=ERROR, line_width=2)
+        fig2.add_vline(x=media, line_dash="dot", line_color=ADVERTENCIA, line_width=2)
+        fig2.add_vline(x=mediana, line_dash="dash", line_color=EXITO, line_width=2)
         fig2.update_layout(**_layout_aj(
             title="Histograma de frecuencias",
             xaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE,
-                       title="Ajuste Valorizado"),
+                       title="Ajuste Valorizado", range=[p_lo, p_hi]),
             yaxis=dict(title="Frecuencia", gridcolor=GRIS_BORDE),
             hovermode="x",
         ))
         with _card("dist_hist", "Histograma"):
+            st.markdown(
+                f"<div style='display:flex;gap:16px;font-size:11px;"
+                f"font-weight:600;margin:0 0 4px 2px'>"
+                f"<span style='color:{ERROR}'>● Cero</span>"
+                f"<span style='color:{ADVERTENCIA}'>● Media S/ {media:,.0f}</span>"
+                f"<span style='color:{EXITO}'>● Mediana S/ {mediana:,.0f}</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
             st.plotly_chart(fig2, use_container_width=True)
 
     if col_producto and col_producto in df.columns:

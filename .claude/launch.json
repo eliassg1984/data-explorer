@@ -1,0 +1,41 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "app",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "streamlit", "run", "app.py", "--server.headless=true", "--server.port=8503"],
+      "port": 8503
+    },
+    {
+      "name": "app-8504",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "streamlit", "run", "app.py", "--server.headless=true", "--server.port=8504"],
+      "port": 8504
+    },
+    {
+      "name": "app-8505",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "streamlit", "run", "app.py", "--server.headless=true", "--server.port=8505"],
+      "port": 8505
+    },
+    {
+      "name": "app-8506",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "streamlit", "run", "app.py", "--server.headless=true", "--server.port=8506"],
+      "port": 8506
+    },
+    {
+      "name": "app-8507",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "streamlit", "run", "app.py", "--server.headless=true", "--server.port=8507"],
+      "port": 8507
+    },
+    {
+      "name": "app-8508",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "streamlit", "run", "app.py", "--server.headless=true", "--server.port=8508"],
+      "port": 8508
+    }
+  ]
+}
