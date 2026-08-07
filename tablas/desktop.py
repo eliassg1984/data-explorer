@@ -459,24 +459,33 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
 
     # DISEÑO UNIFICADO: el atributo data-active-panel (del que dependen
     # TODOS los estilos de pastillas/toggles del sidebar) se marca en
-    # todos los reportes, no solo en Ajuste.
-    if True:
-        opciones_grid["onToolPanelVisibleChanged"] = JsCode("""
-            function(params) {
-                try {
-                    var open = (params.api && params.api.getOpenedToolPanel)
-                        ? params.api.getOpenedToolPanel() : null;
-                    var sb = document.querySelector('.ag-side-bar');
-                    if (sb) sb.setAttribute('data-active-panel', open || '');
+    # todos los reportes, no solo en Ajuste. Esto sí es universal a
+    # propósito (a diferencia del bloque de agrupación/pivote de abajo).
+    opciones_grid["onToolPanelVisibleChanged"] = JsCode("""
+        function(params) {
+            try {
+                var open = (params.api && params.api.getOpenedToolPanel)
+                    ? params.api.getOpenedToolPanel() : null;
+                var sb = document.querySelector('.ag-side-bar');
+                if (sb) sb.setAttribute('data-active-panel', open || '');
 
-                    window.clearTimeout(window.__ajusteFitTimer);
-                    window.__ajusteFitTimer = window.setTimeout(function() {
-                        try { params.api.sizeColumnsToFit(); } catch(e) {}
-                    }, 150);
-                } catch(e) {}
-            }
-        """)
+                window.clearTimeout(window.__ajusteFitTimer);
+                window.__ajusteFitTimer = window.setTimeout(function() {
+                    try { params.api.sizeColumnsToFit(); } catch(e) {}
+                }, 150);
+            } catch(e) {}
+        }
+    """)
 
+    # Agrupación + pivote por defecto: SOLO Ajuste — su "cascada" vive de
+    # esto (Familia > Subfamilia > Producto agrupados, Precio/Stock/Ajuste
+    # como values). Hasta 2026-08-07 vivía en un `if True:` que lo aplicaba
+    # a TODOS los reportes (arquitectura.md #40): con pivotMode=True forzado
+    # y 0 rowGroups reales en reportes cuyas columnas no matchean estos
+    # nombres, AG Grid colapsaba la grilla entera (Ventas: 0 columnas/0
+    # filas mostradas; Inventario Valorizado: 1 sola fila agregada). Grep
+    # `es_ajuste` antes de volver a ensanchar este bloque.
+    if es_ajuste:
         _grupos_ini = []
         for _term in ("Familia", "Subfamilia", "Producto", "Unidad Medida", "Area"):
             _rc = buscar_columna(df_grid, _term)
@@ -503,32 +512,34 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                     and _c not in _valores_ini and _c not in _grupos_ini):
                 gb.configure_column(_c, aggFunc=None)
 
-        # ── Quitar del panel de Filtros las columnas que se manejan con chips externos ──
-        col_area = buscar_columna(df_grid, "Nombre Area", "Area", "AREA")
-        col_fam = buscar_columna(df_grid, "Nombre Familia", "Familia", "FAMILIA")
-        col_aj = buscar_columna(df_grid, "Ajuste", "AJUSTE")
-        col_ajval = buscar_columna(df_grid, "Ajuste Valorizado", "AJUSTE VALORIZADO")
-        for _c in df_grid.columns:
-            if _c in (col_area, col_fam, col_aj, col_ajval):
-                # suppressFiltersToolPanel las esconde del panel "Filtros"
-                # PERO el filtro sigue funcionando: es lo que permite que el
-                # puente les aplique un filterModel sin que aparezcan dos
-                # controles para lo mismo (el chip y la pastilla del panel).
-                gb.configure_column(_c, suppressFiltersToolPanel=True)
-
-
-        # Cabeceras en "Nombre Propio": VA ÚLTIMO A PROPÓSITO. El
-        # configure_column de st_aggrid reconstruye el colDef con
-        # headerName = nombre del campo cuando no se le pasa header_name,
-        # así que CUALQUIER configure_column posterior pisa el título en
-        # español. Estaba antes del loop de suppressFiltersToolPanel y por
-        # eso AJUSTE / AJUSTE VALORIZADO / AREA / FAMILIA salían en
-        # MAYÚSCULAS mientras el resto salía capitalizado.
-        for _c in df_grid.columns:
-            gb.configure_column(_c, headerName=_titulo_es(_c))
-
         opciones_grid["pivotMode"] = True
         opciones_grid["groupDefaultExpanded"] = 0
+
+    # ── Quitar del panel de Filtros las columnas que se manejan con chips
+    # externos ── universal: cualquier reporte cuyos chips filtren Área/
+    # Familia/Ajuste, no solo Ajuste de Inventario (Inventario Valorizado y
+    # Salidas también filtran Área/Familia por chip — ver REPORTES en data.py).
+    col_area = buscar_columna(df_grid, "Nombre Area", "Area", "AREA")
+    col_fam = buscar_columna(df_grid, "Nombre Familia", "Familia", "FAMILIA")
+    col_aj = buscar_columna(df_grid, "Ajuste", "AJUSTE")
+    col_ajval = buscar_columna(df_grid, "Ajuste Valorizado", "AJUSTE VALORIZADO")
+    for _c in df_grid.columns:
+        if _c in (col_area, col_fam, col_aj, col_ajval):
+            # suppressFiltersToolPanel las esconde del panel "Filtros"
+            # PERO el filtro sigue funcionando: es lo que permite que el
+            # puente les aplique un filterModel sin que aparezcan dos
+            # controles para lo mismo (el chip y la pastilla del panel).
+            gb.configure_column(_c, suppressFiltersToolPanel=True)
+
+    # Cabeceras en "Nombre Propio": VA ÚLTIMO A PROPÓSITO (universal). El
+    # configure_column de st_aggrid reconstruye el colDef con
+    # headerName = nombre del campo cuando no se le pasa header_name,
+    # así que CUALQUIER configure_column posterior pisa el título en
+    # español. Estaba antes del loop de suppressFiltersToolPanel y por
+    # eso AJUSTE / AJUSTE VALORIZADO / AREA / FAMILIA salían en
+    # MAYÚSCULAS mientras el resto salía capitalizado.
+    for _c in df_grid.columns:
+        gb.configure_column(_c, headerName=_titulo_es(_c))
 
     gb.configure_grid_options(**opciones_grid)
     if es_salidas:

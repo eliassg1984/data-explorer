@@ -1057,3 +1057,41 @@ salvo `icono`):
     otro), no asumir que `execCommand` salva a `writeText` — ambos dependen
     de foco de documento. El único fallback verdaderamente robusto es dejar
     el texto seleccionado y pedir el atajo de teclado real.
+
+40. **`renderizar_aggrid_desktop` es COMPARTIDO por todos los reportes —
+    un `if True:` ahí adentro es "para todos", no "para Ajuste", aunque el
+    contenido de adentro sea 100% de Ajuste.** Bug real (2026-08-07,
+    encontrado auditando la tabla de Inventario Valorizado antes de
+    agregarle checkbox de selección): el bloque de agrupación por defecto
+    (`_grupos_ini`: Familia/Subfamilia/Producto/Unidad Medida/Area →
+    `rowGroup=True`) y `pivotMode=True` forzado — pensados para la cascada
+    de **Ajuste de Inventario** — vivían bajo `if True:` en vez de
+    `if es_ajuste:`. El comentario que justificaba el `if True:` ("el
+    atributo data-active-panel... se marca en todos los reportes") era
+    cierto solo para el callback `onToolPanelVisibleChanged` que abre ese
+    bloque — pero el resto del código quedó adentro por accidente de cómo
+    estaba organizado el `if`, no porque debiera aplicar a todos.
+    Consecuencia, verificada en vivo con `getDisplayedRowCount()`/
+    `getAllDisplayedColumns()` vía la API expuesta en `onGridReady`
+    (`window.__agApi`, ver regla #33): con `pivotMode=True` y CERO
+    `rowGroup` reales (las columnas de Ventas/Inventario Valorizado no
+    matchean "Familia"/"Producto"/etc. de Ajuste), AG Grid colapsa la
+    grilla a solo las columnas con `aggFunc` activo — Ventas quedaba en
+    **0 columnas, 0 filas mostradas** (con 18 filas reales en el modelo);
+    Inventario Valorizado en **1 sola fila agregada** (con 60 reales).
+    Nadie lo había notado porque la mayoría de los reportes se navegan por
+    Gráficos, no por "Tabla".
+    Fix: separar el `if True:` en 3 partes — `onToolPanelVisibleChanged`
+    queda universal (es lo único que el comentario original pedía);
+    `_grupos_ini`/`_valores_ini`/`pivotMode=True`/`groupDefaultExpanded=0`
+    pasan a `if es_ajuste:`; `suppressFiltersToolPanel` (columnas con chip
+    externo) y el header-casing a "Nombre Propio" quedan universales (son
+    genuinamente aplicables a cualquier reporte, no son el bug).
+    **Regla:** un `if True:`/flag "unificado" dentro de una función
+    compartida por reportes es sospechoso por definición — antes de
+    ensancharlo, verificar CADA sub-bloque de adentro contra el reporte
+    para el que nació, no asumir que el comentario de arriba cubre todo lo
+    que sigue. Verificación real: `getDisplayedRowCount()` +
+    `getAllDisplayedColumns()`/`isPivotMode()` vía `window.__agApi`, no
+    "se ve bien" a ojo — con 0-1 filas visibles el grid renderiza sin
+    error ninguno, no hay excepción que lo delate.
