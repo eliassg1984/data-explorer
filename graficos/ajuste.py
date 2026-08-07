@@ -844,8 +844,17 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
        (1.6 por defecto) y le agrega ~7px "fantasma" arriba/abajo. Se
        resetea a 0 aqui, en el ancestro, para que el wrapper abrace el
        boton sin ese aire. white-space:nowrap evita que "Excluir
-       productos" parta en 2 lineas si la columna [6,1] se angosta (eso
-       si crecia el boton bastante mas alla de los 33px). */
+       productos" parta en 2 lineas si la columna se angosta (eso si
+       crecia el boton bastante mas alla de los 33px).
+       align-items:center en el wrapper mismo para centrar el boton
+       horizontal dentro de la columna del medio — a pedido. Es
+       align-items y NO justify-content porque stVerticalBlock (la
+       clase que Streamlit le pone a este container) ya viene con
+       flex-direction:column: en ese eje, justify-content mueve
+       VERTICAL (verificado midiendo — con justify-content:center el
+       boton no se movia un pixel del borde izquierdo). */
+    .st-key-ajcas_excl_wrap {{
+        align-items: center; }}
     .st-key-ajcas_excl_wrap [data-testid="stPopover"] {{
         line-height: 0; }}
     .st-key-ajcas_excl_wrap [data-testid="stPopover"] button {{
@@ -1014,15 +1023,13 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
        dos viven en el mismo stHorizontalBlock, así que mover la card los
        sube juntos. Acotado a chartcard_cascada — el resto de las cards
        de gráficos conserva su padding.
-       El aire se recorta primero ACÁ y no en el padding del div del
-       título: ese div vive solo en la columna izquierda, así que
-       tocarlo movía el título 2px más que al popover y los
-       descentraba entre sí (verificado midiendo ambos rects). Con el
-       padding del container ya en 0 (a pedido, para subir más el
-       título), se bajó también el padding-top de ese div (6px→0px)
-       — el popover ya quedaba ~9px más arriba por el align-items:
-       center del row (alturas distintas título/cápsulas), así que el
-       desalineo extra que suma esto es marginal.
+       El aire se recorta primero ACÁ y no en el padding de las
+       columnas de título/KPIs: tocarlo ahí las desalineaba entre sí
+       (verificado midiendo rects). 2026-08-07, a pedido: título,
+       popover "Excluir productos" y KPIs pasan de columnas [6,1]
+       (título+KPIs compartían una sola, centrados) a 3 columnas
+       iguales — título a la izquierda, popover al medio, KPIs a la
+       derecha. Cada una resetea su padding-top a 0 por separado.
 
        row-gap: las filas de familia son hijas directas de este flex, así
        que lo que las separa es el gap del contenedor (16px por defecto
@@ -1063,8 +1070,10 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
 
     with _card("cascada"):
         # ── Título + KPIs (antes vivían en la fila TOTAL de la tabla)
-        #    2026-08-07: alineados a la izquierda dentro de su columna
-        #    (antes centrados, a pedido — ver git log si hace falta
+        #    2026-08-07, a pedido: título / popover "Excluir productos" /
+        #    KPIs en 3 columnas iguales — título a la izquierda, popover
+        #    al medio, KPIs a la derecha (antes título+KPIs centrados
+        #    juntos en una sola columna — ver git log si hace falta
         #    volver). Los KPIs van cada uno en su propia cápsula
         #    tonalizada por signo, no como texto plano separado por "|"
         #    — así se distinguen del título de un vistazo en lugar de
@@ -1112,13 +1121,11 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                 f"<span style='font-size:11.5px;color:{_col_pct};opacity:.65'>"
                 f"s/ total</span>"))
 
-        _col_titulo, _col_excl = st.columns([6, 1])
+        _col_titulo, _col_excl, _col_kpis = st.columns(3)
         with _col_titulo:
             st.markdown(
                 f"<div style='display:flex;align-items:center;"
-                f"justify-content:flex-start;flex-wrap:wrap;gap:12px;"
-                f"padding:0 0 14px 0'>"
-                f"{_titulo_html}{_kpi_neto_html}{_kpi_pct_html}</div>",
+                f"padding:0 0 14px 0'>{_titulo_html}</div>",
                 unsafe_allow_html=True)
         with _col_excl:
             if col_producto and col_producto in df.columns:
@@ -1138,6 +1145,12 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                         key="ajuste_cascada_excl_manual",
                         placeholder="Buscar producto…",
                     )
+        with _col_kpis:
+            st.markdown(
+                f"<div style='display:flex;align-items:center;"
+                f"justify-content:flex-end;flex-wrap:wrap;gap:12px;"
+                f"padding:0 0 14px 0'>{_kpi_neto_html}{_kpi_pct_html}</div>",
+                unsafe_allow_html=True)
 
         # Cabecera de la tabla
         # class="ajcas-head": necesaria para el fix de margen de abajo (ver
