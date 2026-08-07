@@ -110,7 +110,7 @@ CSS = """    /* ================================================================
         margin-top: -60px !important;
     }
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_"] {
-        margin-top: -80px !important;
+        margin-top: -65px !important;
     }
     /* Excepción: Salidas mete una fila de KPIs (st.metric x3) EN FLUJO justo
        arriba de esta tarjeta — a diferencia de Ajuste/Compras/Ventas/
