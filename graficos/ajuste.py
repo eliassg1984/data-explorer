@@ -1579,6 +1579,10 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                     f"<br>Tendencia ({len(_vals)} cortes): {_spark} {_flecha}"
                 )
 
+    # Título al pie del mapa. Uno solo para las dos vistas (escritorio usa
+    # _card, móvil emite la clase a mano) para que no se despeguen.
+    _TITULO_HM = "Mapa Ajuste Valorizado"
+
     # Separación entre celdas, en px. Es lo único que las despega entre sí, y
     # como se ve del color de plot_bgcolor (BLANCO), son LOS CANALES BLANCOS
     # que le dan aire a la grilla — la perilla para que respire más o menos.
@@ -1954,21 +1958,20 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                         ],
                     },
                 )
-            st.caption(
-                "El resalte marca los 3 ajustes más fuertes en cada "
-                "sentido. «TOTAL» resume y no participa de la escala."
-            )
+            # Mismo título al pie que en escritorio. Móvil no usa _card, así
+            # que se emite la MISMA clase a mano para que se vean igual.
+            st.markdown(f'<p class="chart-card-pie">{_TITULO_HM}</p>',
+                        unsafe_allow_html=True)
     else:
-        with _card("heatmap"):
+        # El título va al PIE (default de _card): antes acá había un
+        # st.caption explicando el resalte y la fila TOTAL. Se saca por
+        # pedido -- el gráfico se explica solo y el texto largo competía
+        # con la grilla.
+        with _card("heatmap", _TITULO_HM):
             _hm_evt = st.plotly_chart(
                 fig, use_container_width=True,
                 key="heatmap_ajuste",
                 on_select="rerun", selection_mode="points",
-            )
-            st.caption(
-                "El resalte marca los 3 ajustes más fuertes en cada sentido — "
-                "el resto de la grilla se atenúa. «TOTAL» resume la fila o "
-                "columna y no participa de la escala de color."
             )
 
     _hm_punto = None

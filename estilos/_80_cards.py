@@ -35,6 +35,28 @@ CSS = """    /* ================================================================
         border-bottom-right-radius: inherit;
     }
 
+    /* Título al PIE de _card() -- el default cuando no se pide
+       titulo_arriba. La clase la emitía graficos/base.py::_card desde
+       siempre pero no tenía estilo (nadie la usaba: los tres callers de
+       Compras pasan titulo_arriba=True), así que salía como un párrafo
+       suelto. Estrenada 2026-08-07 por el mapa de calor de Ajuste. */
+    .chart-card-pie {
+        margin: 0.55rem 0 0;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--border);
+        /* !important SOLO en font-size: Streamlit trae una regla
+           `.stMarkdown p` (0,1,1) que le gana a esta clase (0,1,0) y
+           dejaba el título en 16px. El resto de propiedades no las toca
+           nadie, así que van sin forzar. Mismo tamaño que
+           .chart-card-hdr para que los títulos arriba y al pie estén en
+           la misma escala. */
+        font-size: 13px !important;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--accent-deep);
+        text-align: center;
+    }
+
     /* Cabecera de _card(titulo_arriba=True): título arriba + divisoria.
        Solo se emite en las tarjetas de Compras que lo piden; el resto
        de dashboards conserva su título al pie (.chart-card-pie). */
