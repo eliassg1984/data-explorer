@@ -1117,3 +1117,43 @@ salvo `icono`):
     call site quedó apuntando a un objeto sin `.clear`, y no tira error de
     import ni de tipos: revienta recién en la rama que ejecuta ese
     `.clear()`, en producción.
+
+42. **`_graf_heatmap_ajuste` (Mapa de calor de Ajuste) tiene DOS modos —
+    Ajuste Valorizado (signado) y Valorizado Total (magnitud) — elegidos
+    con un `st.pills` (key `hm_ajuste_modo`) que solo aparece si
+    `col_valorizado` existe en el df.** Agregado 2026-08-07 a pedido: el
+    heatmap original asumía signo siempre (colorscale divergente
+    ERROR→LAVANDA→EXITO, semáforo rojo/verde en la franja TOTAL y en el
+    drill). El toggle resuelve una única `col_metrica` (= col_ajuste_val o
+    col_valorizado según el modo) ANTES de construir el pivot, y de ahí en
+    adelante toda la función lee `col_metrica` — no debería quedar ningún
+    uso directo de `col_ajuste_val` después de esa línea (verificar con
+    grep si se retoca).
+    Lo que cambia con el modo (todo gateado por `_modo_val`):
+      · colorscale/zmin/zmax/zmid del trace base — divergente centrada en
+        cero vs. `ESCALA_CONTINUA` (la misma escala que ya usan los mapas
+        de calor de Compras en `constructor.py`) anclada en cero.
+      · título del colorbar y del card ("Ajuste S/"/"Mapa Ajuste
+        Valorizado" vs. "Valorizado S/"/"Mapa Valorizado Total").
+      · color de fila/columna TOTAL, anillo del top-3 y popup del drill:
+        semáforo DANGER_TEXT/CELDA_POS_TEXTO en modo Ajuste,
+        ACENTO/ACENTO_TEXTO_OSCURO (neutro) en modo Valorizado — un total
+        siempre positivo no es "bueno", es una magnitud, y leerlo en verde
+        confundiría las dos ideas.
+      · leyenda móvil Faltante/Sobrante: se omite en modo Valorizado (no
+        hay negativos que explicar).
+      · drill de producto: split Faltantes/Sobrantes (modo Ajuste) vs. un
+        solo ranking "Top productos" (modo Valorizado) — en Valorizado
+        `_neg` siempre sale vacío, así que mantener el split ahí sería un
+        panel muerto.
+    El top-3 resaltado (`_top_pos`/`_top_neg`) NO necesitó rama: con
+    `col_valorizado` siempre ≥ 0, `_top_neg` da vacío solo y `_top_pos` ya
+    es "los 3 valores más altos" — el mismo código sirve para los dos
+    modos sin tocarlo.
+    Verificado con clicks reales en el preview local (ambos modos,
+    desktop y móvil, leyendo `gd.data`/`gd.layout` del `.js-plotly-plot`
+    vía JS) y con `st.plotly_chart`/`st.pills` monkeypatcheados para
+    ejercitar el drill sin depender de un clic real sobre Plotly (regla
+    #12) — `test_graficos.py` sigue pasando con la llamada posicional
+    vieja (sin `col_valorizado`), que es justamente el fallback cuando el
+    df no trae esa columna.

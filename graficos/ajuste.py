@@ -19,7 +19,7 @@ from tema import (
     ACENTO, ACENTO_TEXTO_OSCURO, GRIS_BORDE, GRIS_FONDO,
     PALETA_SERIES, SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
     BLANCO, CELDA_ALERTA_FONDO, CELDA_ALERTA_TEXTO, CELDA_POS_TEXTO,
-    DANGER_TEXT, ERROR, ERROR_FONDO, EXITO, EXITO_FONDO,
+    DANGER_TEXT, ERROR, ERROR_FONDO, ESCALA_CONTINUA, EXITO, EXITO_FONDO,
     GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE,
     LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FONDO, LAVANDA_SELECCION,
     AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS, AJUSTE_POS_TEXTO,
@@ -1498,8 +1498,11 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
 
 
 def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
-                         col_producto=None, col_fecha=None, df_full=None):
-    """Mapa de calor familia × área con escala divergente centrada en cero.
+                         col_producto=None, col_fecha=None, df_full=None,
+                         col_valorizado=None):
+    """Mapa de calor familia × área — modo Ajuste (signado, divergente) o
+    Valorizado Total (siempre positivo, secuencial), elegido con un
+    `st.pills` al tope del gráfico.
 
     Tres capas sobre el heatmap base — se combinan en el mismo trace / el
     mismo click-drill, no son gráficos aparte:
@@ -1507,10 +1510,12 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         categorías extra con z=None (no participan del colorscale/_vmax:
         si entraran, un total podría superar a la celda individual más
         extrema y le robaría saturación al resto del mapa).
-      · Top 3 resaltado: los 3 ajustes más fuertes en cada signo quedan a
-        color; el resto de las celdas con dato se atenúa con un segundo
-        trace Heatmap semitransparente encima (mismas categorías/xgap/ygap
-        que el trace base -> calza celda a celda sin cuentas de píxeles).
+      · Top 3 resaltado: los 3 valores más fuertes de cada signo quedan a
+        color (en modo Valorizado, sin negativos, son directamente los 3
+        más altos); el resto de las celdas con dato se atenúa con un
+        segundo trace Heatmap semitransparente encima (mismas categorías/
+        xgap/ygap que el trace base -> calza celda a celda sin cuentas de
+        píxeles).
       · Tendencia: el trace invisible de hover ya existía para el tooltip;
         ahora suma un sparkline de caracteres Unicode con los últimos
         cortes de `df_full` (hovertemplate sigue siendo texto plano, no
@@ -1521,9 +1526,25 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         st.info("Se necesitan columnas de familia y área para el mapa de calor.")
         return
 
+    # ── Modo Ajuste Valorizado (signado) vs Valorizado Total (magnitud) —
+    #    mismo heatmap, cambia la columna que se pivotea y todo lo que
+    #    depende del signo más abajo (colorscale, franja TOTAL, leyenda
+    #    móvil, drill). Sin col_valorizado en el df, ni se ofrece el
+    #    selector: se comporta exactamente como antes. ─────────────────────
+    _hay_valorizado = bool(col_valorizado and col_valorizado in df.columns)
+    _modo_val = False
+    if _hay_valorizado:
+        _modo = st.pills(
+            "Modo mapa de calor", ["Ajuste Valorizado", "Valorizado Total"],
+            default="Ajuste Valorizado", key="hm_ajuste_modo",
+            label_visibility="collapsed",
+        ) or "Ajuste Valorizado"
+        _modo_val = (_modo == "Valorizado Total")
+    col_metrica = col_valorizado if _modo_val else col_ajuste_val
+
     pivot = df.pivot_table(
         index=col_familia, columns=col_area,
-        values=col_ajuste_val, aggfunc="sum", fill_value=0,
+        values=col_metrica, aggfunc="sum", fill_value=0,
     )
     if pivot.empty:
         st.info("No hay datos para el mapa de calor en el rango seleccionado.")
@@ -1595,7 +1616,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         if not _dfe.empty:
             _piv_t = _dfe.pivot_table(
                 index=[col_familia, col_area], columns=col_fecha,
-                values=col_ajuste_val, aggfunc="sum", fill_value=0.0,
+                values=col_metrica, aggfunc="sum", fill_value=0.0,
             )
             _cortes_cols = sorted(_piv_t.columns)[-_N_CORTES:]
             for _key in _piv_t.index:
@@ -1614,7 +1635,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
 
     # Título al pie del mapa. Uno solo para las dos vistas (escritorio usa
     # _card, móvil emite la clase a mano) para que no se despeguen.
-    _TITULO_HM = "Mapa Ajuste Valorizado"
+    _TITULO_HM = "Mapa Valorizado Total" if _modo_val else "Mapa Ajuste Valorizado"
 
     # Separación entre celdas, en px. Es lo único que las despega entre sí, y
     # como se ve del color de plot_bgcolor (BLANCO), son LOS CANALES BLANCOS
@@ -1636,21 +1657,35 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     # es escaso) y se reemplaza por una leyenda HTML de 3 puntos, fija arriba
     # del área que se scrollea -- no tiene sentido que la referencia de color
     # se scrollee junto con los datos.
-    fig = go.Figure(go.Heatmap(
-        z=_z_full, x=_x_labels, y=_y_labels,
-        xgap=_GAP, ygap=_GAP,
-        colorscale=[
+    # ── Colorscale: divergente centrada en cero para Ajuste (el signo
+    #    importa: faltante/sobrante) vs secuencial anclada en cero para
+    #    Valorizado Total (magnitud, nunca negativo) — ESCALA_CONTINUA es
+    #    la misma escala que ya usan los mapas de calor de Compras
+    #    (graficos/constructor.py) para "valor -> intensidad". ────────────
+    if _modo_val:
+        _colorscale_hm = ESCALA_CONTINUA
+        _zmin_hm, _zmax_hm, _zmid_hm = 0.0, _vmax, None
+        _colorbar_titulo = "Valorizado S/"
+    else:
+        _colorscale_hm = [
             [0.00, ERROR],
             [0.35, ERROR_FONDO],
             [0.50, LAVANDA_SELECCION],
             [0.65, EXITO_FONDO],
             [1.00, EXITO],
-        ],
-        zmin=-_vmax, zmax=_vmax, zmid=0,
+        ]
+        _zmin_hm, _zmax_hm, _zmid_hm = -_vmax, _vmax, 0
+        _colorbar_titulo = "Ajuste S/"
+
+    fig = go.Figure(go.Heatmap(
+        z=_z_full, x=_x_labels, y=_y_labels,
+        xgap=_GAP, ygap=_GAP,
+        colorscale=_colorscale_hm,
+        zmin=_zmin_hm, zmax=_zmax_hm, zmid=_zmid_hm,
         showscale=not _movil,
         colorbar=dict(
-            title=dict(text="Ajuste S/", font=dict(size=10,
-                                                   color=GRIS_TEXTO)),
+            title=dict(text=_colorbar_titulo, font=dict(size=10,
+                                                        color=GRIS_TEXTO)),
             tickformat=",.0f", tickfont=dict(size=9, color=GRIS_TEXTO_SUAVE),
             thickness=8, len=0.75, outlinewidth=0,
             ticks="outside", ticklen=3, tickcolor=GRIS_BORDE,
@@ -1689,6 +1724,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
             _pts_y.append(_fam)
             _pts_cd.append([_val, _spark_map.get((_fam, _area), "")])
 
+    _hover_lbl = "Valorizado" if _modo_val else "Ajuste"
     fig.add_trace(go.Scatter(
         x=_pts_x, y=_pts_y, mode="markers",
         marker=dict(size=28, opacity=0, color=ACENTO),
@@ -1696,7 +1732,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         hovertemplate=(
             "<b>%{y}</b><br>"
             "Área: <b>%{x}</b><br>"
-            "Ajuste: <b>S/ %{customdata[0]:,.2f}</b>"
+            + _hover_lbl + ": <b>S/ %{customdata[0]:,.2f}</b>"
             "%{customdata[1]}"
             "<extra></extra>"
         ),
@@ -1727,28 +1763,33 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
 
     # ── Fila/columna TOTAL: negrita (el mini-lenguaje de anotaciones de
     #    Plotly soporta <b>) + una línea divisoria fina que las separa de
-    #    los datos reales, sin decorar celda por celda. ───────────────────
+    #    los datos reales, sin decorar celda por celda. En modo Valorizado
+    #    el total es casi siempre positivo — el semáforo rojo/verde ahí
+    #    leería como "bueno/malo" cuando es solo una magnitud, así que ese
+    #    modo usa el índigo de las cabeceras de grupo en su lugar. ────────
+    def _color_total_hm(v):
+        if _modo_val:
+            return ACENTO_TEXTO_OSCURO
+        return DANGER_TEXT if v < 0 else CELDA_POS_TEXTO
+
     for _i, _fam in enumerate(_fams):
         _v = float(_row_tot.iloc[_i])
-        _tcolor = DANGER_TEXT if _v < 0 else CELDA_POS_TEXTO
         _anns_hm.append(dict(
             x="TOTAL", y=_fam, xref="x", yref="y",
             text=f"<b>S/ {_v:,.0f}</b>", showarrow=False,
-            font=dict(size=_tot_font, color=_tcolor, family="ui-monospace, monospace"),
+            font=dict(size=_tot_font, color=_color_total_hm(_v), family="ui-monospace, monospace"),
         ))
     for _j, _area in enumerate(_areas):
         _v = float(_col_tot.iloc[_j])
-        _tcolor = DANGER_TEXT if _v < 0 else CELDA_POS_TEXTO
         _anns_hm.append(dict(
             x=_area, y="TOTAL", xref="x", yref="y",
             text=f"<b>S/ {_v:,.0f}</b>", showarrow=False,
-            font=dict(size=_tot_font, color=_tcolor, family="ui-monospace, monospace"),
+            font=dict(size=_tot_font, color=_color_total_hm(_v), family="ui-monospace, monospace"),
         ))
-    _tcolor_gran = DANGER_TEXT if _grand_tot < 0 else CELDA_POS_TEXTO
     _anns_hm.append(dict(
         x="TOTAL", y="TOTAL", xref="x", yref="y",
         text=f"<b>S/ {_grand_tot:,.0f}</b>", showarrow=False,
-        font=dict(size=_grand_font, color=_tcolor_gran, family="ui-monospace, monospace"),
+        font=dict(size=_grand_font, color=_color_total_hm(_grand_tot), family="ui-monospace, monospace"),
     ))
 
     # ── Filas/columnas fijas en px para móvil (_ROWPX/_TOPM/_BOTM/_COLPX) --
@@ -1838,12 +1879,15 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                   x0=0, x1=1, y0=_n - _INSET, y1=_n - _INSET,
                   line=dict(color=ACENTO, width=2))
     # Anillo de foco en las celdas del top 3 — el trace de apagado bajó el
-    # resto, esto hace que las que quedan arriba salten a la vista.
+    # resto, esto hace que las que quedan arriba salten a la vista. En modo
+    # Valorizado todas son positivas (no hay "top_neg"): el anillo va en el
+    # acento de marca en vez del semáforo rojo/verde de Ajuste.
     for _i, _j, _v in _top_pos + _top_neg:
+        _color_anillo = ACENTO if _modo_val else (EXITO if _v > 0 else ERROR)
         fig.add_shape(
             type="rect", xref="x", yref="y",
             x0=_j - 0.47, x1=_j + 0.47, y0=_i - 0.47, y1=_i + 0.47,
-            line=dict(color=EXITO if _v > 0 else ERROR, width=2),
+            line=dict(color=_color_anillo, width=2),
             fillcolor="rgba(0,0,0,0)", layer="above",
         )
     _xcats = [str(c) for c in _x_labels]
@@ -1958,21 +2002,26 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         }}
         </style>""", unsafe_allow_html=True)
 
+        # Leyenda de signo (Faltante/Sobrante) solo tiene sentido en modo
+        # Ajuste — en Valorizado Total todas las celdas son positivas.
+        _leyenda_signo = "" if _modo_val else (
+            f"<div style='display:flex;gap:12px;font-size:9.5px;"
+            f"color:{GRIS_TEXTO};margin-bottom:8px'>"
+            f"<span><span style='display:inline-block;width:8px;"
+            f"height:8px;border-radius:2px;background:{ERROR};"
+            f"margin-right:4px;vertical-align:-1px'></span>Faltante</span>"
+            f"<span><span style='display:inline-block;width:8px;"
+            f"height:8px;border-radius:2px;background:{EXITO};"
+            f"margin-right:4px;vertical-align:-1px'></span>Sobrante</span>"
+            f"</div>"
+        )
         with _card("heatmap"):
             st.markdown(
                 f"<div style='display:flex;align-items:center;gap:5px;"
                 f"font-size:10.5px;font-weight:600;"
                 f"color:{ACENTO_TEXTO_OSCURO};margin-bottom:6px'>"
                 f"Deslizá para ver las {_m} áreas &rarr;</div>"
-                f"<div style='display:flex;gap:12px;font-size:9.5px;"
-                f"color:{GRIS_TEXTO};margin-bottom:8px'>"
-                f"<span><span style='display:inline-block;width:8px;"
-                f"height:8px;border-radius:2px;background:{ERROR};"
-                f"margin-right:4px;vertical-align:-1px'></span>Faltante</span>"
-                f"<span><span style='display:inline-block;width:8px;"
-                f"height:8px;border-radius:2px;background:{EXITO};"
-                f"margin-right:4px;vertical-align:-1px'></span>Sobrante</span>"
-                f"</div>",
+                + _leyenda_signo,
                 unsafe_allow_html=True,
             )
             with st.container(key="hm_movil_scroll"):
@@ -2037,8 +2086,9 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                 (df[col_area].astype(str) == str(_area_sel))
             ]
 
-            _color_total = (DANGER_TEXT if (_val_sel or 0) < 0
-                            else CELDA_POS_TEXTO)
+            _color_total = (ACENTO_TEXTO_OSCURO if _modo_val else
+                           (DANGER_TEXT if (_val_sel or 0) < 0
+                            else CELDA_POS_TEXTO))
             st.markdown(
                 f"**{_fam_sel}** × **{_area_sel}** · "
                 f"<span style='color:{_color_total};font-weight:600'>"
@@ -2092,22 +2142,12 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                 ) or 10
 
                 _sub_prod = (
-                    _det.groupby(col_producto, as_index=False)[col_ajuste_val]
+                    _det.groupby(col_producto, as_index=False)[col_metrica]
                     .sum()
                 )
-                _sub_prod["_abs"] = _sub_prod[col_ajuste_val].abs()
+                _sub_prod["_abs"] = _sub_prod[col_metrica].abs()
                 _sub_prod = _sub_prod.sort_values(
                     "_abs", ascending=False).head(int(_topn))
-
-                # ascending: True para negativos (el mas negativo primero
-                # -> arriba en el HTML), False para positivos (el mayor
-                # primero) -- el HTML renderiza top-a-bottom en el orden
-                # del DataFrame, al reves de como Plotly ubicaba las
-                # categorias en un bar horizontal.
-                _neg = _sub_prod[_sub_prod[col_ajuste_val] < 0].sort_values(
-                    col_ajuste_val, ascending=True)
-                _pos = _sub_prod[_sub_prod[col_ajuste_val] > 0].sort_values(
-                    col_ajuste_val, ascending=False)
 
                 def _filas_drill_html(_df_d, _color_bar):
                     """Mini barras de progreso (riel + relleno) — mismo
@@ -2116,17 +2156,18 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                     if _df_d.empty:
                         return ""
                     _max_abs = float(
-                        _df_d[col_ajuste_val].abs().max()) or 1.0
+                        _df_d[col_metrica].abs().max()) or 1.0
                     _filas_html = []
                     for _, _r in _df_d.iterrows():
                         _nom = str(_r[col_producto])
                         if len(_nom) > 32:
                             _nom = _nom[:31] + "…"
                         _pct = max(
-                            abs(float(_r[col_ajuste_val])) / _max_abs * 100,
+                            abs(float(_r[col_metrica])) / _max_abs * 100,
                             3)
-                        _tcol = (DANGER_TEXT if _r[col_ajuste_val] < 0
-                                 else CELDA_POS_TEXTO)
+                        _tcol = (ACENTO_TEXTO_OSCURO if _modo_val else
+                                 (DANGER_TEXT if _r[col_metrica] < 0
+                                  else CELDA_POS_TEXTO))
                         _filas_html.append(
                             f"<div style='display:flex;align-items:center;"
                             f"gap:8px;padding:3px 0'>"
@@ -2151,36 +2192,59 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                             f"font-size:10px;font-weight:600;"
                             f"color:{_tcol};font-variant-numeric:"
                             f"tabular-nums;white-space:nowrap'>"
-                            f"S/ {_r[col_ajuste_val]:,.0f}</div></div>")
+                            f"S/ {_r[col_metrica]:,.0f}</div></div>")
                     return "".join(_filas_html)
 
-                _pa, _pb = st.columns(2)
-                with _pa:
+                if _modo_val:
+                    # Sin signo que separar: un solo ranking, no el split
+                    # Faltantes/Sobrantes de más abajo.
                     st.markdown(
                         f"<div style='font-size:9px;font-weight:600;"
-                        f"color:{DANGER_TEXT};letter-spacing:.08em;"
+                        f"color:{ACENTO_TEXTO_OSCURO};letter-spacing:.08em;"
                         f"text-transform:uppercase;margin:4px 0 -8px 0'>"
-                        f"Faltantes</div>",
+                        f"Top productos</div>",
                         unsafe_allow_html=True,
                     )
-                    if _neg.empty:
-                        st.caption("Sin faltantes.")
-                    else:
-                        st.markdown(_filas_drill_html(_neg, ERROR),
-                                   unsafe_allow_html=True)
-                with _pb:
-                    st.markdown(
-                        f"<div style='font-size:9px;font-weight:600;"
-                        f"color:{CELDA_POS_TEXTO};letter-spacing:.08em;"
-                        f"text-transform:uppercase;margin:4px 0 -8px 0'>"
-                        f"Sobrantes</div>",
-                        unsafe_allow_html=True,
-                    )
-                    if _pos.empty:
-                        st.caption("Sin sobrantes.")
-                    else:
-                        st.markdown(_filas_drill_html(_pos, EXITO),
-                                   unsafe_allow_html=True)
+                    st.markdown(_filas_drill_html(_sub_prod, ACENTO),
+                               unsafe_allow_html=True)
+                else:
+                    # ascending: True para negativos (el mas negativo primero
+                    # -> arriba en el HTML), False para positivos (el mayor
+                    # primero) -- el HTML renderiza top-a-bottom en el orden
+                    # del DataFrame, al reves de como Plotly ubicaba las
+                    # categorias en un bar horizontal.
+                    _neg = _sub_prod[_sub_prod[col_metrica] < 0].sort_values(
+                        col_metrica, ascending=True)
+                    _pos = _sub_prod[_sub_prod[col_metrica] > 0].sort_values(
+                        col_metrica, ascending=False)
+
+                    _pa, _pb = st.columns(2)
+                    with _pa:
+                        st.markdown(
+                            f"<div style='font-size:9px;font-weight:600;"
+                            f"color:{DANGER_TEXT};letter-spacing:.08em;"
+                            f"text-transform:uppercase;margin:4px 0 -8px 0'>"
+                            f"Faltantes</div>",
+                            unsafe_allow_html=True,
+                        )
+                        if _neg.empty:
+                            st.caption("Sin faltantes.")
+                        else:
+                            st.markdown(_filas_drill_html(_neg, ERROR),
+                                       unsafe_allow_html=True)
+                    with _pb:
+                        st.markdown(
+                            f"<div style='font-size:9px;font-weight:600;"
+                            f"color:{CELDA_POS_TEXTO};letter-spacing:.08em;"
+                            f"text-transform:uppercase;margin:4px 0 -8px 0'>"
+                            f"Sobrantes</div>",
+                            unsafe_allow_html=True,
+                        )
+                        if _pos.empty:
+                            st.caption("Sin sobrantes.")
+                        else:
+                            st.markdown(_filas_drill_html(_pos, EXITO),
+                                       unsafe_allow_html=True)
             else:
                 st.caption("No hay columna de producto para desglosar.")
 
@@ -2413,7 +2477,8 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
         elif graf == "Mapa de calor":
             _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val,
                                  col_producto=col_producto,
-                                 col_fecha=col_fecha, df_full=df_full)
+                                 col_fecha=col_fecha, df_full=df_full,
+                                 col_valorizado=col_valorizado)
         elif graf == "Distribución":
             _graf_distribucion_ajuste(d, col_familia, col_area,
                                       col_ajuste_val, col_producto)
