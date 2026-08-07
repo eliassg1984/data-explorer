@@ -1024,3 +1024,36 @@ salvo `icono`):
     `getBoundingClientRect()` de la fila de KPIs vs. la tarjeta — el `top`
     de la tarjeta debe caer DESPUÉS del `bottom` de lo que esté arriba, con
     margen positivo.
+
+39. **Inspector (`?debug=1`): clic derecho solo FIJABA el tooltip, nunca
+    copiaba — y encima el copiado automático puede fallar silencioso.**
+    Bug real (2026-08-07): un usuario reportó "clic derecho para copiar no
+    copia". El código nunca prometió eso: clic derecho llamaba a
+    `__inspectorTogglePin()` (congela el tooltip para poder llegar al botón
+    sin que desaparezca), y copiar era SOLO tecla `C` o el botón "Copiar
+    para IA" — la pista estaba en el badge inferior ("clic-derecho fija"),
+    pero es un texto de 11px fácil de no leer. Fix: clic derecho ahora fija
+    Y COPIA en el mismo gesto (`win.__inspectorEjecutarCopia`, extraída del
+    listener del botón para que la compartan botón/tecla `C`/clic derecho;
+    ver comentario "se reasigna en `win` en cada rerun" un poco más abajo
+    en el archivo — mismo motivo que `TogglePin`/`ContextMenuHandler`). El
+    botón "Fijar" standalone se dejó pin-only a propósito, para cuando se
+    quiere mirar sin copiar todavía.
+    Segundo hallazgo, verificado en vivo (no en local: solo se reproduce en
+    Streamlit Cloud, que envuelve la app en un iframe propio — el
+    `components.html` de `inspector.py` agrega un SEGUNDO nivel anidado):
+    `navigator.clipboard.writeText()` puede rechazar con
+    `NotAllowedError: Document is not focused`, y el fallback a
+    `execCommand('copy')` está sujeto a la misma restricción de foco — así
+    que ambas capas de `copiarTexto()` pueden fallar juntas por la misma
+    causa. Antes, ese fallo total solo dejaba un mensaje de 3s ("abre
+    consola") y el texto en `console.log`. Ahora, si las dos fallan, el
+    texto del `<pre>` queda SELECCIONADO (`window.getSelection()` +
+    `Range`) para que un `Ctrl+C` físico del usuario funcione siempre — un
+    gesto real de teclado no está sujeto a la misma gate de foco/activación
+    que una llamada scripteada.
+    **Regla:** en cualquier fallback de clipboard dentro de un iframe
+    anidado (Streamlit Cloud SIEMPRE mete uno; `components.html` agrega
+    otro), no asumir que `execCommand` salva a `writeText` — ambos dependen
+    de foco de documento. El único fallback verdaderamente robusto es dejar
+    el texto seleccionado y pedir el atajo de teclado real.

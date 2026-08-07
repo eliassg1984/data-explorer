@@ -940,7 +940,7 @@ def inject_element_inspector():
             tip.innerHTML =
                 '<div id="el-inspector-btnrow" style="position:sticky;top:-7px;background:#101014;padding:4px 0 6px;margin:-1px 0 6px;border-bottom:1px solid #3C3489;display:flex;gap:6px;z-index:1;pointer-events:auto">' +
                 '  <button id="el-inspector-copiar" style="background:#3C3489;color:#fff;border:0;padding:5px 10px;border-radius:4px;cursor:pointer;font:600 11px/1 sans-serif">Copiar para IA</button>' +
-                '  <button id="el-inspector-pin" title="Clic derecho sobre un elemento hace lo mismo" style="background:#2A2A35;color:#fff;border:0;padding:5px 10px;border-radius:4px;cursor:pointer;font:600 11px/1 sans-serif">\\uD83D\\uDCCC Fijar</button>' +
+                '  <button id="el-inspector-pin" title="Clic derecho sobre un elemento fija Y copia (este boton solo fija)" style="background:#2A2A35;color:#fff;border:0;padding:5px 10px;border-radius:4px;cursor:pointer;font:600 11px/1 sans-serif">\\uD83D\\uDCCC Fijar</button>' +
                 '  <span id="el-inspector-status" style="color:#5DCAA5;font:11px/1.4 sans-serif;align-self:center"></span>' +
                 '</div>' +
                 '<pre id="el-inspector-text" style="margin:0;font:12px/1.55 \\'Courier New\\',monospace;color:var(--border);white-space:pre-wrap"></pre>';
@@ -951,54 +951,7 @@ def inject_element_inspector():
             var pinBtn = doc.getElementById('el-inspector-pin');
             boton.addEventListener('click', function(ev) {
                 ev.preventDefault(); ev.stopPropagation();
-                if (!win.__inspectorUltimo) {
-                    status.textContent = 'Primero pasa el mouse por un elemento';
-                    status.style.color = '#F0997B';
-                    setTimeout(function(){ status.textContent=''; }, 1800);
-                    return;
-                }
-                var u = win.__inspectorUltimo;
-                var conflictos = [];
-                var matcheantes = {};
-                var matcheantesPadreKey = null;
-                var elBase = u.elementoOriginal || u.elemento;
-                try { conflictos  = analizarConflictos(elBase); } catch(_){}
-                try { matcheantes = reglasQueMatchean(elBase); } catch(_){}
-                // Reglas que le aplican al ancestro keyed (el reportado como
-                // "Padre: st-key-X"). Sin esto se ve el margin negativo del
-                // padre en los estilos computados pero no queda claro que
-                // regla de estilos/ lo produce.
-                try {
-                    var _mio = contenedorConKey(elBase);
-                    var _up  = _mio ? contenedorConKey(_mio.el.parentElement) : null;
-                    if (_up) matcheantesPadreKey = reglasQueMatchean(_up.el);
-                } catch(_){}
-                var extras2Copia = {};
-                if (u.extras2) for (var _k in u.extras2) extras2Copia[_k] = u.extras2[_k];
-                extras2Copia.matcheantesPadreKey = matcheantesPadreKey;
-                extras2Copia.padreKeyNombre = (u.ctx && u.ctx.padre) || '';
-                // Variables CSS: junto el cssText AUTORADO de las reglas que
-                // matchean (preserva los var() sin resolver) y las resuelvo
-                // contra el elemento. Aca (al copiar) ya tengo matcheantes.
-                try {
-                    var _textoReglas = '';
-                    for (var _a in matcheantes) {
-                        for (var _q = 0; _q < matcheantes[_a].length; _q++)
-                            _textoReglas += ' ' + (matcheantes[_a][_q].props || '');
-                    }
-                    if (matcheantesPadreKey) {
-                        for (var _a2 in matcheantesPadreKey) {
-                            for (var _q2 = 0; _q2 < matcheantesPadreKey[_a2].length; _q2++)
-                                _textoReglas += ' ' + (matcheantesPadreKey[_a2][_q2].props || '');
-                        }
-                    }
-                    extras2Copia.varsCSS = varsEnTexto(elBase, _textoReglas);
-                } catch(_) {}
-                var texto = bloqueParaIA(u.etiqueta, u.key, u.ctx, u.medidas, u.pagina, conflictos, matcheantes, extras2Copia);
-                copiarTexto(texto,
-                    function(){ status.textContent = 'Copiado (' + texto.length + ' chars)'; status.style.color = '#5DCAA5'; setTimeout(function(){ status.textContent=''; }, 1800); },
-                    function(){ status.textContent = 'No pude copiar - abre consola para ver texto'; status.style.color = '#F0997B'; win.console && win.console.log('[INSPECTOR COPY]\\n' + texto); setTimeout(function(){ status.textContent=''; }, 3000); }
-                );
+                win.__inspectorEjecutarCopia && win.__inspectorEjecutarCopia();
             });
 
             pinBtn.addEventListener('click', function(ev) {
@@ -1018,7 +971,7 @@ def inject_element_inspector():
                 'padding:5px 10px','border-radius:20px','display:none',
                 'align-items:center','gap:6px','box-shadow:0 2px 8px rgba(0,0,0,0.3)'
             ].join(';');
-            badge.innerHTML = 'Inspector ON &nbsp;<span style="opacity:.6;font-weight:400">C copiar &middot; clic-derecho fija &middot; Alt+I salir</span>';
+            badge.innerHTML = 'Inspector ON &nbsp;<span style="opacity:.6;font-weight:400">C copiar &middot; clic-derecho fija y copia &middot; Alt+I salir</span>';
             doc.body.appendChild(badge);
         }
 
@@ -1360,6 +1313,10 @@ def inject_element_inspector():
         // Fijado: clic derecho (o el boton "Fijar") congela el tooltip actual
         // para poder moverse hasta el boton "Copiar" sin que desaparezca —
         // mousemove deja de tocar contenido/posicion mientras esta fijado.
+        // Clic derecho ADEMAS copia en el mismo gesto (ver __inspectorEjecutarCopia
+        // mas abajo) — asi "clic derecho" por si solo ya resuelve el caso de uso
+        // mas comun. El boton "Fijar" se deja aparte para cuando se quiere mirar
+        // sin copiar todavia.
         if (win.__inspectorPinned === undefined) win.__inspectorPinned = false;
 
         win.__inspectorTogglePin = function(forzarOff) {
@@ -1374,6 +1331,85 @@ def inject_element_inspector():
                 pinBtnEl.style.background = pinear ? '#3C3489' : '#2A2A35';
             }
             if (!pinear && tipEl) tipEl.style.opacity = '0'; // el proximo mousemove lo re-muestra si corresponde
+        };
+
+        // Logica de copiado compartida por el boton "Copiar para IA", la tecla
+        // C y el clic derecho. Se reasigna en win en cada rerun por el mismo
+        // motivo que TogglePin/ContextMenuHandler: el realm del iframe de
+        // components.html que la definio pudo haber sido destruido por un
+        // rerun anterior (ver comentario grande mas abajo).
+        win.__inspectorEjecutarCopia = function() {
+            var status = doc.getElementById('el-inspector-status');
+            if (!win.__inspectorUltimo) {
+                if (status) {
+                    status.textContent = 'Primero pasa el mouse por un elemento';
+                    status.style.color = '#F0997B';
+                    setTimeout(function(){ status.textContent=''; }, 1800);
+                }
+                return;
+            }
+            var u = win.__inspectorUltimo;
+            var conflictos = [];
+            var matcheantes = {};
+            var matcheantesPadreKey = null;
+            var elBase = u.elementoOriginal || u.elemento;
+            try { conflictos  = analizarConflictos(elBase); } catch(_){}
+            try { matcheantes = reglasQueMatchean(elBase); } catch(_){}
+            // Reglas que le aplican al ancestro keyed (el reportado como
+            // "Padre: st-key-X"). Sin esto se ve el margin negativo del
+            // padre en los estilos computados pero no queda claro que
+            // regla de estilos/ lo produce.
+            try {
+                var _mio = contenedorConKey(elBase);
+                var _up  = _mio ? contenedorConKey(_mio.el.parentElement) : null;
+                if (_up) matcheantesPadreKey = reglasQueMatchean(_up.el);
+            } catch(_){}
+            var extras2Copia = {};
+            if (u.extras2) for (var _k in u.extras2) extras2Copia[_k] = u.extras2[_k];
+            extras2Copia.matcheantesPadreKey = matcheantesPadreKey;
+            extras2Copia.padreKeyNombre = (u.ctx && u.ctx.padre) || '';
+            // Variables CSS: junto el cssText AUTORADO de las reglas que
+            // matchean (preserva los var() sin resolver) y las resuelvo
+            // contra el elemento. Aca (al copiar) ya tengo matcheantes.
+            try {
+                var _textoReglas = '';
+                for (var _a in matcheantes) {
+                    for (var _q = 0; _q < matcheantes[_a].length; _q++)
+                        _textoReglas += ' ' + (matcheantes[_a][_q].props || '');
+                }
+                if (matcheantesPadreKey) {
+                    for (var _a2 in matcheantesPadreKey) {
+                        for (var _q2 = 0; _q2 < matcheantesPadreKey[_a2].length; _q2++)
+                            _textoReglas += ' ' + (matcheantesPadreKey[_a2][_q2].props || '');
+                    }
+                }
+                extras2Copia.varsCSS = varsEnTexto(elBase, _textoReglas);
+            } catch(_) {}
+            var texto = bloqueParaIA(u.etiqueta, u.key, u.ctx, u.medidas, u.pagina, conflictos, matcheantes, extras2Copia);
+            copiarTexto(texto,
+                function(){
+                    if (status) { status.textContent = 'Copiado (' + texto.length + ' chars)'; status.style.color = '#5DCAA5'; setTimeout(function(){ status.textContent=''; }, 1800); }
+                },
+                function(){
+                    // Clipboard API y execCommand fallaron (comun en el iframe
+                    // anidado de Streamlit Cloud si el documento perdio el
+                    // foco). Ultimo recurso: dejar el texto SELECCIONADO para
+                    // que un Ctrl+C fisico del usuario funcione — eso es un
+                    // gesto real, no sujeto a las mismas restricciones.
+                    if (status) { status.textContent = 'Automatico bloqueado: texto seleccionado, Ctrl+C'; status.style.color = '#F0997B'; }
+                    win.console && win.console.log('[INSPECTOR COPY]\\n' + texto);
+                    try {
+                        var preEl = doc.getElementById('el-inspector-text');
+                        if (preEl) {
+                            var range = doc.createRange();
+                            range.selectNodeContents(preEl);
+                            var sel = win.getSelection();
+                            sel.removeAllRanges();
+                            sel.addRange(range);
+                        }
+                    } catch(_){}
+                }
+            );
         };
 
         win.__inspectorContextMenuHandler = function(e) {
@@ -1391,6 +1427,7 @@ def inject_element_inspector():
             if (!win.__inspectorUltimo) return; // no hay nada bajo el cursor para fijar
             e.preventDefault();
             win.__inspectorTogglePin();
+            win.__inspectorEjecutarCopia && win.__inspectorEjecutarCopia(); // un solo gesto: fija Y copia
         };
 
         win.__inspectorMouseMoveHandler = function(e) {

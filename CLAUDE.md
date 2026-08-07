@@ -125,7 +125,13 @@ leído del marker `st-key-app_reporte_<slug>` del DOM (no del query
 (pseudo + `pointer-events:none`) vía fallback por coordenadas. Al copiar
 con **C** se agregan además las **variables CSS** que usa el elemento con
 su **valor numérico actual** resuelto (`--cab-altura = 50px`). Tecla **C**
-copia todo eso al portapapeles como un bloque listo para pegar a la IA.
+copia todo eso al portapapeles como un bloque listo para pegar a la IA;
+**clic derecho** sobre el elemento hace lo mismo en un solo gesto (fija el
+tooltip y copia — el botón "Fijar" standalone solo fija). Si el copiado
+automático falla (frecuente en Streamlit Cloud: la app corre en un iframe
+propio y `components.html` mete un segundo nivel anidado — ver
+`arquitectura.md` § Reglas #39), el texto queda seleccionado para un
+`Ctrl+C` manual en vez de fallar en silencio.
 
 ## Al terminar un cambio estructural
 
