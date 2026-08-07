@@ -996,3 +996,31 @@ salvo `icono`):
       desbordar, forzar un `<div>` ancho de prueba para poder mover
       `scrollLeft` y confirmar que la columna no se mueve mientras el resto
       sí.
+
+38. **El `margin-top: -80px` de `[class*="st-key-ajuste_graf_card_izq_"]`
+    (`estilos/_20_compras_rail.py`) asume que arriba de esa tarjeta NO hay
+    contenido en flujo — solo chips.** Nació para Ajuste/Compras: tras quitar
+    la vieja barra de pestañas horizontal, quedaba un hueco vacío entre los
+    chips fijos y la tarjeta, y el negativo lo recuperaba subiendo la
+    tarjeta bajo el rail (que es `position:fixed`, no ocupa espacio en el
+    flujo). El selector es un wildcard por prefijo de key
+    (`ajuste_graf_card_izq_<reporte>`), así que aplica a TODOS los
+    dashboards que comparten ese patrón de tarjeta — hoy Ajuste, Compras,
+    Ventas, Inventario y Salidas.
+    Salidas (agregado 2026-08-04, después de que naciera el -80px) metió
+    una fila de KPIs (`st.metric` × 3) EN FLUJO justo arriba de la tarjeta.
+    Ahí sí hay contenido real donde antes había hueco vacío: el -80px se
+    comía la fila de KPIs y el título del gráfico (visible p. ej. en el
+    donut de "Tipo descargo") quedaba pintado encima de REGISTROS/
+    CANTIDAD/VALORIZADO. Fix: selector de la MISMA especificidad
+    (`.st-key-ajuste_graf_card_izq_sal` en vez del wildcard) puesto DESPUÉS
+    del wildcard en el mismo archivo, `margin-top: 0`. Con `!important` en
+    ambos lados, gana el que va después — no hace falta subir
+    especificidad.
+    **Corolario:** si un dashboard nuevo (o uno existente) agrega contenido
+    en flujo entre los chips y su `ajuste_graf_card_izq_<reporte>` bajo el
+    rail compartido, hay que repetir esta excepción para su key — el
+    wildcard no lo sabe y el solape se repite. Verificación real (no visual):
+    `getBoundingClientRect()` de la fila de KPIs vs. la tarjeta — el `top`
+    de la tarjeta debe caer DESPUÉS del `bottom` de lo que esté arriba, con
+    margen positivo.

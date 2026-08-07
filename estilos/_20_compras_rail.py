@@ -112,6 +112,18 @@ CSS = """    /* ================================================================
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_"] {
         margin-top: -80px !important;
     }
+    /* Excepción: Salidas mete una fila de KPIs (st.metric x3) EN FLUJO justo
+       arriba de esta tarjeta — a diferencia de Ajuste/Compras/Ventas/
+       Inventario, donde encima solo hay chips y el -80px recupera un hueco
+       vacío. En Salidas no hay tal hueco: el -80px se comía la fila de
+       KPIs, y el título del Plotly (p.ej. el donut de "Tipo descargo")
+       quedaba pintado ENCIMA de los números de REGISTROS/CANTIDAD/
+       VALORIZADO (ver arquitectura.md regla #38). Selector con la MISMA
+       especificidad que el de arriba + !important en ambos → gana por ir
+       DESPUÉS en el archivo (ver convención de _SECCIONES). */
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_izq_sal {
+        margin-top: 0 !important;
+    }
 
 /* Compras hereda el cristal esmerilado del DEFAULT
        (estilos/_40_ajuste_franja.py) sin duplicar nada — scopeado con
