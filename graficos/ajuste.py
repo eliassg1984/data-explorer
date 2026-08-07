@@ -2249,7 +2249,9 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                 st.caption("No hay columna de producto para desglosar.")
 
 
-def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_producto):
+def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_producto,
+                              col_codigo=None, col_cantidad=None, col_fecha=None,
+                              col_unidad=None):
     """Strip plot coloreado (faltante/sobrante) + histograma, ambos excluyendo
     los ajustes en cero.
 
@@ -2258,7 +2260,15 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
     sueltos sin caja, y un histograma amontona todo en un pico que tapa las
     líneas de media/mediana/cero. Filtrar el cero antes de graficar es lo
     que deja ver la distribución real; el conteo de productos sin ajuste se
-    muestra aparte como texto, no se pierde."""
+    muestra aparte como texto, no se pierde.
+
+    Con `col_producto` resuelto, el hover se enriquece (vía `custom_data`)
+    con código/área/cantidad/fecha, y clic + selección (caja o lazo, barra
+    del gráfico) arma una tabla de detalle abajo — mismo patrón
+    `on_select="rerun"` que ya usa `_graf_comparativa_mensual`. La key del
+    chart es estática a propósito: la selección solo pinta la tabla de
+    abajo, no realimenta el propio gráfico, así que no aplica la trampa de
+    key dinámica de arquitectura.md (selección con toggle infinito)."""
     col_izq, col_der = st.columns(2)
     grp = col_familia or col_area
 
@@ -2272,15 +2282,44 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
 
     with col_izq:
         st.caption(f"{n_nz} de {n_total} productos con diferencia")
-        if grp and grp in df_nz.columns:
+        _es_strip = bool(grp and grp in df_nz.columns)
+        _hay_prod = _es_strip and bool(col_producto and col_producto in df_nz.columns)
+
+        if _es_strip:
             d = df_nz.copy()
             d["_signo"] = d[col_ajuste_val].lt(0).map(
                 {True: "Faltante", False: "Sobrante"})
+
+            _cd_cols = None
+            if _hay_prod:
+                def _col_o_vacia(col):
+                    return (d[col].astype(str) if (col and col in d.columns)
+                            else pd.Series([""] * len(d), index=d.index))
+
+                d["_hover_prod"] = _col_o_vacia(col_producto)
+                d["_hover_cod"] = _col_o_vacia(col_codigo)
+                d["_hover_area"] = _col_o_vacia(col_area)
+                d["_hover_cant"] = (d[col_cantidad] if
+                                    (col_cantidad and col_cantidad in d.columns)
+                                    else float("nan"))
+                d["_hover_um"] = (
+                    " " + d[col_unidad].fillna("").astype(str)
+                    if (col_unidad and col_unidad in d.columns) else "")
+                if col_fecha and col_fecha in d.columns:
+                    _fecha_dt = pd.to_datetime(d[col_fecha], errors="coerce")
+                    d["_hover_fecha"] = _fecha_dt.map(
+                        lambda x: _fmt_corte(x) if pd.notna(x) else "")
+                else:
+                    d["_hover_fecha"] = ""
+                _cd_cols = ["_hover_prod", "_hover_cod", "_hover_area",
+                           "_hover_cant", "_hover_um", "_hover_fecha"]
+
             fig = px.strip(
                 d, x=grp, y=col_ajuste_val, color="_signo",
                 color_discrete_map={"Faltante": ERROR, "Sobrante": EXITO},
                 title=f"Distribución del ajuste por {grp}",
                 labels={col_ajuste_val: "Ajuste S/", grp: "", "_signo": ""},
+                custom_data=_cd_cols,
             )
             fig.add_hline(y=0, line_dash="dot", line_color=GRIS_TEXTO_SUAVE,
                           annotation_text="Cero", annotation_position="top right")
@@ -2290,8 +2329,19 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                 xaxis=dict(tickangle=-30, gridcolor=GRIS_BORDE),
                 yaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
             ))
-            fig.update_traces(marker=dict(size=7),
-                              hovertemplate="%{x}<br>S/ %{y:,.2f}<extra></extra>")
+            if _hay_prod:
+                _linea_ajuste = "Ajuste: <b>S/ %{y:,.2f}</b>"
+                if col_cantidad and col_cantidad in d.columns:
+                    _linea_ajuste += " (%{customdata[3]:+.1f}%{customdata[4]})"
+                _hovertemplate = "<br>".join([
+                    "<b>%{customdata[0]}</b>",
+                    "%{customdata[1]} · %{x} · %{customdata[2]}",
+                    _linea_ajuste,
+                    "Corte: %{customdata[5]}",
+                ]) + "<extra></extra>"
+            else:
+                _hovertemplate = "%{x}<br>S/ %{y:,.2f}<extra></extra>"
+            fig.update_traces(marker=dict(size=7), hovertemplate=_hovertemplate)
             _xcats = list(pd.unique(d[grp].astype(str)))
             fig.update_xaxes(tickmode="array", tickvals=_xcats,
                              ticktext=_wrap_cat(_xcats))
@@ -2307,8 +2357,34 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                 xaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
                 yaxis=dict(gridcolor=GRIS_BORDE),
             ))
+
         with _card("dist_grupo", "Distribución por grupo"):
-            st.plotly_chart(fig, use_container_width=True)
+            _evento_dist = st.plotly_chart(
+                fig, use_container_width=True, key="ajuste_dist_strip",
+                on_select="rerun" if _hay_prod else "ignore",
+                selection_mode=["points", "box", "lasso"],
+            )
+
+        if _hay_prod:
+            _puntos = ((_evento_dist or {}).get("selection", {}) or {}).get("points", [])
+            if _puntos:
+                _filas = []
+                for _p in _puntos:
+                    _cd = _p.get("customdata") or []
+                    _filas.append({
+                        "Producto": _cd[0] if len(_cd) > 0 else "",
+                        grp: _p.get("x"),
+                        "Ajuste S/": _p.get("y"),
+                        "Cantidad": _cd[3] if len(_cd) > 3 else None,
+                        "Corte": _cd[5] if len(_cd) > 5 else "",
+                    })
+                _det = pd.DataFrame(_filas).sort_values("Ajuste S/")
+                _total = float(_det["Ajuste S/"].sum())
+                st.caption(f"{len(_det)} seleccionados · ajuste neto S/ {_total:,.2f}")
+                _det_fmt = _det.copy()
+                _det_fmt["Ajuste S/"] = _det_fmt["Ajuste S/"].map(
+                    lambda v: f"S/ {v:,.2f}")
+                st.dataframe(_det_fmt, hide_index=True, use_container_width=True)
 
     with col_der:
         st.caption(f"{n_total - n_nz} productos en cero, excluidos del cálculo")
@@ -2373,6 +2449,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     col_ajuste_val = _resolver(df_f, ["AJUSTE VALORIZADO", "AJUSTEVALORIZADO"])
     col_valorizado = _resolver(df_f, ["VALORIZADO TOTAL", "VALORIZADO", "VALORIZADOTOTAL"])
     col_producto   = _resolver(df_f, ["NOMBRE PRODUCTO", "PRODUCTO", "DESCRIPCION"])
+    col_codigo     = _resolver(df_f, ["CODIGO PRODUCTO", "Codigo Producto", "COD PRODUCTO"])
     col_cantidad   = _resolver(df_f, ["AJUSTE", "CANTIDAD AJUSTE", "CANTIDAD"])
     # Misma lista de candidatos que graficos/compras/__init__.py::col_um —
     # la unidad real de Kardex (Kg, Und, Lt...), no un sufijo inventado.
@@ -2481,7 +2558,11 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
                                  col_valorizado=col_valorizado)
         elif graf == "Distribución":
             _graf_distribucion_ajuste(d, col_familia, col_area,
-                                      col_ajuste_val, col_producto)
+                                      col_ajuste_val, col_producto,
+                                      col_codigo=col_codigo,
+                                      col_cantidad=col_cantidad,
+                                      col_fecha=col_fecha,
+                                      col_unidad=col_unidad)
         elif graf == "Por fecha de corte":
             _graf_pivote_fecha_ajuste(d, col_familia, col_ajuste_val,
                                       col_producto, col_cantidad, col_fecha)

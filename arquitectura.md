@@ -1157,3 +1157,26 @@ salvo `icono`):
     #12) — `test_graficos.py` sigue pasando con la llamada posicional
     vieja (sin `col_valorizado`), que es justamente el fallback cuando el
     df no trae esa columna.
+
+43. **`st.plotly_chart(..., selection_mode="points")` NO agrega las
+    herramientas de caja/lazo al modebar — solo habilita clic en UN punto
+    individual.** Bug real (2026-08-07), encontrado recién al probar en el
+    navegador (no en `test_graficos.py`, que no ejecuta JS): el strip plot
+    de `_graf_distribucion_ajuste` (Distribución) quedó con
+    `on_select="rerun", selection_mode="points"` para armar una tabla de
+    detalle a partir de una selección — funcionaba para clic simple, pero
+    el modebar no mostraba "Box Select" ni "Lasso Select" (se verificó
+    leyendo `gd.querySelectorAll('.modebar-btn')` vía JS: solo aparecían
+    Zoom/Pan/Autoscale). `selection_mode` acepta una lista — hay que pedir
+    explícitamente los modos de arrastre: `selection_mode=["points", "box",
+    "lasso"]`. Con eso, el modebar sí ofrece Box/Lasso Select y arrastrar
+    selecciona múltiples puntos superpuestos (caso de uso real: clusters
+    densos como ALIMENTOS en el strip, donde un clic no alcanza para
+    distinguir puntos).
+    **Regla:** si el objetivo es dejar seleccionar un GRUPO de puntos
+    (no un solo clic), `selection_mode` tiene que incluir `"box"` y/o
+    `"lasso"` explícitamente — `"points"` solo no los agrega. Verificar
+    con un drag real (o simulando `mousedown`/`mousemove`/`mouseup` sobre
+    `gd.querySelector('.nsewdrag')` vía JS si no se puede hacer clic real),
+    no alcanza con que `test_graficos.py` pase — ese test solo construye
+    la figura, no ejercita el modebar.
