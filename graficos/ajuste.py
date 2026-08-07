@@ -2268,7 +2268,17 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
     `on_select="rerun"` que ya usa `_graf_comparativa_mensual`. La key del
     chart es estática a propósito: la selección solo pinta la tabla de
     abajo, no realimenta el propio gráfico, así que no aplica la trampa de
-    key dinámica de arquitectura.md (selección con toggle infinito)."""
+    key dinámica de arquitectura.md (selección con toggle infinito).
+
+    El histograma (derecha) tiene el mismo click→tabla, pero SIN
+    custom_data sobre el propio `go.Histogram`: es una traza agregada
+    (barras = bins, no filas) y `on_select` sobre ella es territorio no
+    verificado — mismo riesgo que `go.Heatmap` (regla #11 de
+    arquitectura.md, selección que nunca llega, sin error). Se reutiliza
+    esa solución: overlay de `go.Scatter` invisible (opacity=0), un punto
+    por bin a media altura, con el rango `[lo, hi]` de ese bin en
+    `customdata`. El click/drag selecciona el punto invisible, no la
+    barra; el rango de su customdata filtra `df_nz` directo en pandas."""
     col_izq, col_der = st.columns(2)
     grp = col_familia or col_area
 
@@ -2398,6 +2408,8 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
         p_lo, p_hi = df_nz[col_ajuste_val].quantile([0.01, 0.99])
         p_lo = min(p_lo, media, mediana, 0.0)
         p_hi = max(p_hi, media, mediana, 0.0)
+        if p_hi <= p_lo:
+            p_hi = p_lo + 1.0
         d_hist = df_nz[df_nz[col_ajuste_val].between(p_lo, p_hi)]
         n_fuera = n_nz - len(d_hist)
 
@@ -2406,13 +2418,31 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             _cap += f" · {n_fuera} outliers fuera de este rango"
         st.caption(_cap)
 
+        _hay_prod_hist = bool(col_producto and col_producto in df_nz.columns)
+        _n_bins = 30
+        _paso = (p_hi - p_lo) / _n_bins
+        _bordes = [p_lo + i * _paso for i in range(_n_bins + 1)]
+
         fig2 = go.Figure()
         fig2.add_trace(go.Histogram(
-            x=d_hist[col_ajuste_val], nbinsx=30,
+            x=d_hist[col_ajuste_val],
+            xbins=dict(start=p_lo, end=p_hi, size=_paso),
             name="Frecuencia",
             marker_color=SERIE_PRINCIPAL, opacity=0.75,
             hovertemplate="Valor: S/ %{x:,.2f}<br>Frecuencia: %{y}<extra></extra>",
         ))
+        if _hay_prod_hist:
+            _bins_cat = pd.cut(d_hist[col_ajuste_val], bins=_bordes,
+                               include_lowest=True)
+            _conteo = (_bins_cat.value_counts(sort=False)
+                       .reindex(_bins_cat.cat.categories, fill_value=0))
+            fig2.add_trace(go.Scatter(
+                x=[iv.mid for iv in _conteo.index],
+                y=[c / 2 for c in _conteo.to_numpy()],
+                mode="markers", marker=dict(size=20, opacity=0),
+                customdata=[(iv.left, iv.right) for iv in _conteo.index],
+                hoverinfo="skip", showlegend=False,
+            ))
         fig2.add_vline(x=0, line_dash="solid", line_color=ERROR, line_width=2)
         fig2.add_vline(x=media, line_dash="dot", line_color=ADVERTENCIA, line_width=2)
         fig2.add_vline(x=mediana, line_dash="dash", line_color=EXITO, line_width=2)
@@ -2421,7 +2451,8 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             xaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE,
                        title="Ajuste Valorizado", range=[p_lo, p_hi]),
             yaxis=dict(title="Frecuencia", gridcolor=GRIS_BORDE),
-            hovermode="x",
+            hovermode="closest",
+            showlegend=False,
         ))
         with _card("dist_hist", "Histograma"):
             st.markdown(
@@ -2433,7 +2464,38 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                 f"</div>",
                 unsafe_allow_html=True,
             )
-            st.plotly_chart(fig2, use_container_width=True)
+            _evento_hist = st.plotly_chart(
+                fig2, use_container_width=True, key="ajuste_dist_hist",
+                on_select="rerun" if _hay_prod_hist else "ignore",
+                selection_mode=["points", "box"],
+            )
+
+        if _hay_prod_hist:
+            _puntos_hist = ((_evento_hist or {}).get("selection", {}) or {}).get("points", [])
+            _mask = pd.Series(False, index=df_nz.index)
+            for _p in _puntos_hist:
+                _cd = _p.get("customdata") or []
+                if len(_cd) == 2:
+                    _mask |= df_nz[col_ajuste_val].between(_cd[0], _cd[1])
+            _sel_hist = df_nz[_mask]
+            if not _sel_hist.empty:
+                _det2 = pd.DataFrame({"Producto": _sel_hist[col_producto]})
+                if grp and grp in _sel_hist.columns:
+                    _det2[grp] = _sel_hist[grp]
+                _det2["Ajuste S/"] = _sel_hist[col_ajuste_val]
+                if col_cantidad and col_cantidad in _sel_hist.columns:
+                    _det2["Cantidad"] = _sel_hist[col_cantidad]
+                if col_fecha and col_fecha in _sel_hist.columns:
+                    _fecha_dt2 = pd.to_datetime(_sel_hist[col_fecha], errors="coerce")
+                    _det2["Corte"] = _fecha_dt2.map(
+                        lambda x: _fmt_corte(x) if pd.notna(x) else "")
+                _det2 = _det2.sort_values("Ajuste S/")
+                _total2 = float(_det2["Ajuste S/"].sum())
+                st.caption(f"{len(_det2)} seleccionados · ajuste neto S/ {_total2:,.2f}")
+                _det2_fmt = _det2.copy()
+                _det2_fmt["Ajuste S/"] = _det2_fmt["Ajuste S/"].map(
+                    lambda v: f"S/ {v:,.2f}")
+                st.dataframe(_det2_fmt, hide_index=True, use_container_width=True)
 
     if col_producto and col_producto in df.columns:
         umbral = float(df[col_ajuste_val].quantile(0.05))

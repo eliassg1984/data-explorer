@@ -1180,3 +1180,37 @@ salvo `icono`):
     `gd.querySelector('.nsewdrag')` vía JS si no se puede hacer clic real),
     no alcanza con que `test_graficos.py` pase — ese test solo construye
     la figura, no ejercita el modebar.
+
+44. **`go.Histogram` — selectabilidad NO verificada, mismo riesgo que la
+    regla #11 (`go.Heatmap`).** Al agregar click/selección al "Histograma
+    de frecuencias" de Ajuste (Distribución, 2026-08-07), no se pudo
+    confirmar si `on_select` sobre una traza `go.Histogram` recibe algo
+    real o queda silenciosamente vacío como el Heatmap: el panel Browser
+    de esa sesión no compone frames, así que `computer{action:
+    "screenshot"}` tira timeout y por lo tanto `left_click`/
+    `left_click_drag` por coordenada fallan ("requires a prior
+    screenshot"). Solo los clics por `ref` de `read_page` funcionan, y las
+    barras de un histograma no aparecen como refs individuales en el
+    árbol de accesibilidad (son `<path>` de SVG sin rol ARIA) — no hay
+    forma de ejercitar un clic o arrastre real sobre una barra concreta
+    en ese entorno.
+    **Solución: reusar la regla #11 sin modificarla.** Overlay de
+    `go.Scatter` invisible (`marker.opacity=0`, `size=20`), un punto por
+    bin calculado a mano (`pd.cut` sobre bordes fijos) — el `go.Histogram`
+    visible recibe esos mismos bordes vía `xbins=dict(start,end,size)`
+    explícito (NO `nbinsx`) para que el overlay coincida pixel a pixel
+    con las barras. Cada punto va a **media altura de su propio bin**, no
+    al tope: al tope, solo un arrastre que llega hasta arriba lo atrapa;
+    a mitad de altura tolera un rango más amplio de arrastre vertical
+    (compromiso simple sin apilar varios puntos por bin). El `customdata`
+    de cada punto lleva el rango `[lo, hi]` de ESE bin; al seleccionar se
+    filtra `df_nz` por ese rango directo en pandas — no depende de que
+    Plotly devuelva las filas originales de una traza agregada.
+    **Lo que sí se pudo verificar sin browser real:** `test_graficos.py`
+    (construcción, ambas ramas) + un script aparte con `st.plotly_chart`
+    monkeypatcheado para devolver `{'points': [{'customdata': (lo, hi)}]}`
+    (método de la regla #12), que confirmó que el filtro pandas aísla
+    exactamente la fila esperada. Lo que queda sin cubrir, igual que en
+    la regla #12: que el evento de selección real llegue del navegador al
+    clickear/arrastrar sobre el overlay — verificar a mano en Cloud tras
+    el deploy antes de asumirlo funcionando.
