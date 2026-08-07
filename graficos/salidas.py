@@ -55,11 +55,16 @@ def renderizar_graficos_salidas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         renderizar_graficos_genericos(df_f, nombre_reporte)
         return
 
-    # ── Filtros Sub Almacén / Familia + Métrica como chips en la franja ───
+    # ── Filtros Sub Almacén / Familia como chips en la franja ─────────────
+    # Métrica fija en "Valorizado" (2026-08-07): el toggle Valorizado/
+    # Cantidad se sacó de la franja a pedido — Salidas siempre reporta en
+    # soles. `col_cant` queda como fallback silencioso solo si algún día
+    # faltara la columna de valor (mismo criterio que el resto del archivo:
+    # no romper si el parquet cambia), pero no hay UI para elegir Cantidad.
     sub_sel, fam_sel = [], []
-    _opciones_metrica = (["Valorizado"] if col_val else []) + (["Cantidad"] if col_cant else [])
+    metrica = "Valorizado" if col_val else "Cantidad"
     with st.container(key="chips_ajuste_tabla"):
-        c1, c2, c3, _ = st.columns([1, 1, 1, 2])
+        c1, c2, _ = st.columns([1, 1, 4])
         with c1:
             if col_sub:
                 subs = sorted(df_f[col_sub].dropna().astype(str).unique().tolist())
@@ -86,12 +91,6 @@ def renderizar_graficos_salidas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                             key="sal_graf_filtro_fam",
                             label_visibility="collapsed",
                         ) or []
-        with c3:
-            metrica = st.pills(
-                "Métrica", _opciones_metrica,
-                default=_opciones_metrica[0], key="sal_graf_metrica",
-                label_visibility="collapsed",
-            ) or _opciones_metrica[0]
 
     d = df_f
     if sub_sel and col_sub:
