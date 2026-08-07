@@ -9,27 +9,13 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from tema import ACENTO, TEXTO_PRINCIPAL
-from graficos.base import _compras_truncar, _slug
+from graficos.base import _compras_truncar, _es_movil, _slug
 
-
-def _es_movil():
-    """True si el request viene de un teléfono/tablet, leyendo el User-Agent
-    del header (server-side, sin JS ni rerun). Se usa para decisiones que
-    Plotly dibuja en el servidor y no puede adaptar al ancho real de pantalla
-    (p. ej. cuánto abreviar los nombres sobre las barras): en móvil el plot es
-    ~345px y en desktop ~700px+, así que el mismo texto cabe o no según el
-    dispositivo. Ante la duda (sin header o UA raro) asume desktop, que es el
-    caso con más espacio. Cacheado por sesión."""
-    _c = st.session_state.get("_es_movil_cache")
-    if _c is not None:
-        return _c
-    try:
-        ua = (st.context.headers.get("User-Agent", "") or "").lower()
-    except Exception:
-        ua = ""
-    _m = any(k in ua for k in ("mobile", "android", "iphone", "ipad", "ipod"))
-    st.session_state["_es_movil_cache"] = _m
-    return _m
+# `_es_movil` vivía definida acá; se movió a graficos/base.py (2026-08-07,
+# ver su docstring) porque graficos/ajuste.py la necesitó también. El import
+# de arriba la reexporta bajo el mismo nombre, así que nada que hiciera
+# `from graficos.compras._comun import _es_movil` (proveedor.py, __init__.py)
+# se entera del movimiento.
 
 
 def _first_point(evt):

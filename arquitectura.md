@@ -955,3 +955,44 @@ salvo `icono`):
     Ver `graficos/ajuste.py::_graf_heatmap_ajuste` (totales + resalte del
     top 3 + tendencia, las tres capas conviven en el mismo trace/mismo
     click-drill).
+
+36. **`margin` de un `go.Heatmap` no se respeta al píxel — medir, no
+    calcular.** Con `margin=dict(t=50, b=18)` explícito y `automargin=False`
+    en el eje que lo estaba pisando, el rect de fondo del heatmap (medido
+    con `getBoundingClientRect()` en vivo) arrancaba en `y=42` (no 50) y
+    medía 16px más de alto que `height - margin.t - margin.b`. Patrón: cada
+    margen pedido queda ~8px más chico que el valor puesto, así que el área
+    de trazado real crece por los dos lados combinados. Si algo depende de
+    que una fila/columna del heatmap mida un número exacto de píxeles (ver
+    regla #35, la columna de familia en HTML del mapa de calor en móvil),
+    hay que restar ese excedente del `height`/`width` pedido, NO asumir
+    `height - margin.t - margin.b` — y volver a medir si cambia la versión
+    de Plotly o `_layout_aj`, no dar por sentado que el offset sigue siendo
+    16.
+
+37. **Columna fija mientras el resto scrollea, mezclando HTML propio + un
+    gráfico de Plotly: se arman como flex-items hermanos, no como capas
+    superpuestas.** El mapa de calor de Ajuste en móvil (11 áreas no entran
+    en ~345px) resuelve "que la familia no se pierda de vista al scrollear"
+    así:
+    - La columna de familia se saca del heatmap (`yaxis.showticklabels =
+      False`) y se arma aparte en un `st.markdown` con divs de altura fija
+      (mismo `_ROWPX`/`_TOPM` que usa el layout del gráfico — ver regla
+      #36 para por qué esos números no son los que uno pondría a ojo).
+    - Ambos —la columna HTML y el `st.plotly_chart` (con
+      `use_container_width=False` y ancho explícito, para que desborde a
+      propósito)— viven como hijos DIRECTOS de un mismo
+      `st.container(key=...)`, forzado a `display:flex; flex-direction:row;
+      overflow-x:auto` por CSS. Un elemento simple (`st.markdown`,
+      `st.plotly_chart`) cuelga su `stElementContainer` directo del
+      `st.container` padre sin el wrapper intermedio que sí aparece cuando
+      se anida un `st.container(key=...)` DENTRO de otro (ver regla #25) —
+      por eso acá el sticky sí engancha poniéndolo en el propio
+      `stElementContainer` (vía `:has()` sobre una clase marcador metida en
+      el HTML, no una key nueva).
+    - Verificación real, no de estilo computado (misma lección que la regla
+      #25): `scrollEl.scrollLeft = N` y comparar `getBoundingClientRect()`
+      de la columna antes/después. Si el dataset de la sesión no alcanza a
+      desbordar, forzar un `<div>` ancho de prueba para poder mover
+      `scrollLeft` y confirmar que la columna no se mueve mientras el resto
+      sí.

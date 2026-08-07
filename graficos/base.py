@@ -25,6 +25,32 @@ def _slug(texto):
     return re.sub(r"\W+", "_", str(texto)).strip("_").lower()
 
 
+def _es_movil():
+    """True si el request viene de un teléfono/tablet, leyendo el User-Agent
+    del header (server-side, sin JS ni rerun). Se usa para decisiones que
+    Plotly dibuja en el servidor y no puede adaptar al ancho real de pantalla
+    (p. ej. cuánto abreviar los nombres sobre las barras, o si un heatmap
+    ancho se renderiza a su tamaño completo y se scrollea en vez de achicarse
+    hasta ser ilegible). Ante la duda (sin header o UA raro) asume desktop,
+    que es el caso con más espacio. Cacheado por sesión.
+
+    Vivía en graficos/compras/_comun.py (nació ahí para las etiquetas de
+    barra de Proveedor) — se movió acá el 2026-08-07 al necesitarlo también
+    graficos/ajuste.py para el mapa de calor: es infraestructura compartida,
+    no algo propio de Compras. compras/_comun.py reexporta este mismo símbolo
+    para no romper sus imports existentes."""
+    _c = st.session_state.get("_es_movil_cache")
+    if _c is not None:
+        return _c
+    try:
+        ua = (st.context.headers.get("User-Agent", "") or "").lower()
+    except Exception:
+        ua = ""
+    _m = any(k in ua for k in ("mobile", "android", "iphone", "ipad", "ipod"))
+    st.session_state["_es_movil_cache"] = _m
+    return _m
+
+
 def _rail_set(state_key, opcion_id):
     """Callback de los botones del rail: fija la selección ANTES del rerun."""
     st.session_state[state_key] = opcion_id

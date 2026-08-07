@@ -24,7 +24,7 @@ from tema import (
     LAVANDA_FONDO, LAVANDA_SELECCION,
 )
 from graficos.base import (
-    _card, _layout, _render_rail, _resolver, _slug, _wrap_cat,
+    _card, _es_movil, _layout, _render_rail, _resolver, _slug, _wrap_cat,
     renderizar_graficos_genericos,
 )
 
@@ -1476,13 +1476,26 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     _areas = pivot.columns.tolist()
     _n, _m = len(_fams), len(_areas)
 
-    # ── Tamaño de fuente adaptado al ancho: con pocas áreas (columnas) hay
-    #    aire de sobra y los números pueden crecer; con las 11 áreas reales
-    #    de Ajuste el mismo tamaño se pisaría con la celda vecina. Mismo
-    #    espíritu que la altura adaptada a _n más abajo. ───────────────────
-    _cell_font = 12 if _m <= 6 else (11 if _m <= 9 else 9.5)
-    _tot_font = _cell_font + 1
-    _grand_font = _cell_font + 1.5
+    # ── Móvil: el heatmap NO se achica a como dé lugar (con 11 áreas + Total
+    #    ilegible a cualquier tamaño de letra) — se renderiza a su ancho real
+    #    y se scrollea, con la columna de familia fijada aparte en HTML (ver
+    #    más abajo). Plotly dibuja en el servidor y no puede adaptarse al
+    #    viewport real, así que la decisión se toma acá con el mismo
+    #    _es_movil() que ya usa Compras para sus etiquetas de barra. ───────
+    _movil = _es_movil()
+
+    # ── Tamaño de fuente: en desktop se adapta al ancho (pocas áreas ->
+    #    números grandes; las 11 reales -> se achica para no pisar la celda
+    #    vecina). En móvil no hace falta adaptar nada -- cada columna ya
+    #    tiene un ancho fijo generoso (ver _ancho_col_movil más abajo), así
+    #    que el tamaño es plano. Mismo espíritu que la altura adaptada a _n
+    #    más abajo. ───────────────────────────────────────────────────────
+    if _movil:
+        _cell_font, _tot_font, _grand_font = 11, 12, 12.5
+    else:
+        _cell_font = 12 if _m <= 6 else (11 if _m <= 9 else 9.5)
+        _tot_font = _cell_font + 1
+        _grand_font = _cell_font + 1.5
 
     # ── Top 3 por signo (mismo criterio que _badge_for en la Cascada: manda
     #    el valor absoluto) — decide qué celdas se resaltan y cuáles atenúa
@@ -1551,6 +1564,10 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     _z_full = [row + [None] for row in pivot.values.tolist()]
     _z_full.append([None] * (_m + 1))
 
+    # En móvil la colorbar se saca del gráfico (compite por un ancho que ya
+    # es escaso) y se reemplaza por una leyenda HTML de 3 puntos, fija arriba
+    # del área que se scrollea -- no tiene sentido que la referencia de color
+    # se scrollee junto con los datos.
     fig = go.Figure(go.Heatmap(
         z=_z_full, x=_x_labels, y=_y_labels,
         xgap=3, ygap=3,
@@ -1562,6 +1579,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
             [1.00, EXITO],
         ],
         zmin=-_vmax, zmax=_vmax, zmid=0,
+        showscale=not _movil,
         colorbar=dict(
             title=dict(text="Ajuste S/", font=dict(size=10,
                                                    color=GRIS_TEXTO)),
@@ -1661,16 +1679,44 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         font=dict(size=_grand_font, color=_tcolor_gran, family="ui-monospace, monospace"),
     ))
 
+    # ── Filas/columnas fijas en px para móvil (_ROWPX/_TOPM/_BOTM/_COLPX) --
+    # nombradas acá porque la columna de familia "aparte" (HTML, sticky) que
+    # se arma más abajo tiene que calzar EXACTO con la altura de fila que ve
+    # Plotly: mismo _ROWPX en los dos lados, sin el clamp min/max que usa el
+    # alto de escritorio (con ese clamp una grilla chica dejaría de medir
+    # _ROWPX por fila y la columna HTML se desalinearía). ────────────────────
+    _ROWPX, _TOPM, _BOTM, _COLPX = 40, 50, 18, 64
+    if _movil:
+        # -16: medido en vivo con getBoundingClientRect(). El área de
+        # trazado real (el rect de fondo del heatmap) sale 16px más alta
+        # que "height - margin.t - margin.b" -- Plotly no respeta el
+        # margen pedido al pixel (con t=50/b=18 el rect de fondo arrancaba
+        # en y=42 y medía 16px más de lo esperado), y esos 16px "de más" se
+        # reparten estirando las categorías existentes en vez de sumar una
+        # fila -- por eso la fila TOTAL quedaba cada vez más lejos de su
+        # label en HTML a medida que crecía el número de familias. Restar
+        # acá compensa exactamente eso: con la resta, el rect de fondo mide
+        # (_n+1)*_ROWPX de punta a punta, fila por fila, sin dato de por
+        # medio. Si algún día cambia _layout_aj o la versión de Plotly,
+        # volver a medir (no asumir que sigue siendo 16).
+        _alto = (_n + 1) * _ROWPX + _TOPM + _BOTM - 16
+        _ancho = (_m + 1) * _COLPX + 12
+    else:
+        _alto = min(560, max(240, (_n + 1) * 38 + 110))
+        _ancho = None  # use_container_width=True gobierna el ancho
+
     fig.update_layout(**_layout_aj(
         title_text="",
         xaxis=dict(tickangle=0, side="top", gridcolor=GRIS_BORDE,
                    showgrid=False, ticks="",
-                   tickfont=dict(size=11, color=GRIS_TEXTO)),
+                   tickfont=dict(size=11 if not _movil else 10.5, color=GRIS_TEXTO)),
         yaxis=dict(autorange="reversed", gridcolor=GRIS_BORDE,
-                   showgrid=False, ticks="", showticklabels=True,
+                   showgrid=False, ticks="", showticklabels=not _movil,
                    tickfont=dict(size=11, color=GRIS_TEXTO_MEDIO)),
-        height=min(560, max(240, (_n + 1) * 38 + 110)),
-        margin=dict(l=10, r=10, t=50, b=20),
+        width=_ancho,
+        height=_alto,
+        margin=dict(l=(10 if not _movil else 6), r=(10 if not _movil else 6),
+                    t=_TOPM, b=_BOTM),
         annotations=_anns_hm,
         hovermode="closest",
     ))
@@ -1700,6 +1746,19 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     _xcats = [str(c) for c in _x_labels]
     fig.update_xaxes(tickmode="array", tickvals=_xcats,
                      ticktext=_wrap_cat(_xcats))
+    if _movil:
+        # automargin=True (forzado por graficos.base._layout para TODOS los
+        # gráficos) recalcula el margen superior según el contenido real de
+        # las etiquetas del eje X -- exactamente lo que NO puede pasar acá:
+        # la columna de familia en HTML de más abajo asume un _TOPM/_ROWPX
+        # fijos para calzar fila a fila con el heatmap. Con automargin
+        # prendido, medido en vivo, el área de trazado terminaba 16px más
+        # alta de lo esperado y la columna HTML se desalineaba de la fila
+        # TOTAL para abajo. Se apaga SOLO en móvil (desktop no depende de
+        # una alineación externa, así que conserva el comportamiento ya
+        # probado) -- va DESPUÉS de _layout_aj porque esa función lo fuerza
+        # a True incondicionalmente.
+        fig.update_xaxes(automargin=False)
 
     # ── Bordes redondeados en TODO el mapa de calor (pedido 2026-08-07) ──
     # go.Heatmap no tiene un cornerradius como go.Bar, así que se redondea
@@ -1727,17 +1786,118 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     }
     </style>""", unsafe_allow_html=True)
 
-    with _card("heatmap"):
-        _hm_evt = st.plotly_chart(
-            fig, use_container_width=True,
-            key="heatmap_ajuste",
-            on_select="rerun", selection_mode="points",
+    if _movil:
+        # ── Columna de familia "aparte", en HTML, fija a la izquierda del
+        #    contenedor que se scrollea horizontalmente. Plotly no tiene
+        #    equivalente a position:sticky DENTRO de un mismo SVG -- no hay
+        #    forma de dejar una franja fija mientras el resto del gráfico
+        #    se desliza -- así que la columna de nombres se saca del
+        #    heatmap (yaxis.showticklabels=False más arriba) y se arma acá
+        #    al lado, calzada fila a fila con el mismo _ROWPX/_TOPM que usa
+        #    el layout del gráfico. Si alguno de los dos cambia, el otro
+        #    tiene que cambiar junto (por eso comparten las constantes en
+        #    vez de números sueltos a cada lado). ─────────────────────────
+        _ANCHO_LABELS = 84
+        # -8px: medido en vivo con getBoundingClientRect() -- el bloque de
+        # markdown de la columna de labels arranca 8px más abajo que el rect
+        # de fondo del heatmap aunque los dos sean flex items hermanos con
+        # align-items:flex-start (differencia de padding/margin nativo entre
+        # stMarkdownContainer y el elemento de Plotly). Sin este ajuste, la
+        # primera fila de nombres queda corrida respecto a la primera fila
+        # de datos y el desfase se arrastra fila a fila.
+        _rows_html = f"<div style='height:{_TOPM - 8}px'></div>"
+        for _fam in _fams:
+            _rows_html += (
+                f"<div style='height:{_ROWPX}px;display:flex;"
+                f"align-items:center;justify-content:flex-end;"
+                f"padding-right:7px;font-size:10.5px;font-weight:500;"
+                f"color:{GRIS_TEXTO_MEDIO};white-space:nowrap;"
+                f"overflow:hidden;text-overflow:ellipsis'>{_fam}</div>"
+            )
+        _rows_html += (
+            f"<div style='height:{_ROWPX}px;display:flex;"
+            f"align-items:center;justify-content:flex-end;"
+            f"padding-right:7px;font-size:11px;font-weight:700;"
+            f"color:{TEXTO_PRINCIPAL}'>TOTAL</div>"
         )
-        st.caption(
-            "El resalte marca los 3 ajustes más fuertes en cada sentido — "
-            "el resto de la grilla se atenúa. «TOTAL» resume la fila o "
-            "columna y no participa de la escala de color."
-        )
+
+        # El sticky va en el ANCESTRO stElementContainer del markdown (vía
+        # :has(), no en la propia key) -- mismo motivo que el sticky header
+        # de _graf_pivote_fecha_ajuste (arquitectura.md regla #25): puesto
+        # directo en el div con key no engancha con el scroll.
+        st.markdown(f"""<style>
+        .st-key-hm_movil_scroll {{
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: flex-start !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 4px;
+        }}
+        div[data-testid="stElementContainer"]:has(.hm-movil-labels) {{
+            position: sticky !important;
+            left: 0 !important;
+            z-index: 3 !important;
+            flex: 0 0 auto !important;
+            width: {_ANCHO_LABELS}px !important;
+            background: {BLANCO} !important;
+            box-shadow: 3px 0 6px -3px rgba(24,24,29,.12);
+        }}
+        .st-key-hm_movil_scroll .st-key-heatmap_ajuste {{
+            flex: 0 0 auto !important;
+            width: auto !important;
+        }}
+        </style>""", unsafe_allow_html=True)
+
+        with _card("heatmap"):
+            st.markdown(
+                f"<div style='display:flex;align-items:center;gap:5px;"
+                f"font-size:10.5px;font-weight:600;"
+                f"color:{ACENTO_TEXTO_OSCURO};margin-bottom:6px'>"
+                f"Deslizá para ver las {_m} áreas &rarr;</div>"
+                f"<div style='display:flex;gap:12px;font-size:9.5px;"
+                f"color:{GRIS_TEXTO};margin-bottom:8px'>"
+                f"<span><span style='display:inline-block;width:8px;"
+                f"height:8px;border-radius:2px;background:{ERROR};"
+                f"margin-right:4px;vertical-align:-1px'></span>Faltante</span>"
+                f"<span><span style='display:inline-block;width:8px;"
+                f"height:8px;border-radius:2px;background:{EXITO};"
+                f"margin-right:4px;vertical-align:-1px'></span>Sobrante</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+            with st.container(key="hm_movil_scroll"):
+                st.markdown(f"<div class='hm-movil-labels'>{_rows_html}</div>",
+                           unsafe_allow_html=True)
+                _hm_evt = st.plotly_chart(
+                    fig, use_container_width=False,
+                    key="heatmap_ajuste",
+                    on_select="rerun", selection_mode="points",
+                    config={
+                        "displayModeBar": True, "displaylogo": False,
+                        "modeBarButtonsToRemove": [
+                            "zoom2d", "pan2d", "select2d", "lasso2d",
+                            "zoomIn2d", "zoomOut2d", "autoScale2d",
+                            "resetScale2d", "toImage",
+                        ],
+                    },
+                )
+            st.caption(
+                "El resalte marca los 3 ajustes más fuertes en cada "
+                "sentido. «TOTAL» resume y no participa de la escala."
+            )
+    else:
+        with _card("heatmap"):
+            _hm_evt = st.plotly_chart(
+                fig, use_container_width=True,
+                key="heatmap_ajuste",
+                on_select="rerun", selection_mode="points",
+            )
+            st.caption(
+                "El resalte marca los 3 ajustes más fuertes en cada sentido — "
+                "el resto de la grilla se atenúa. «TOTAL» resume la fila o "
+                "columna y no participa de la escala de color."
+            )
 
     _hm_punto = None
     try:
