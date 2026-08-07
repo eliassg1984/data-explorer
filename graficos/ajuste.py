@@ -21,7 +21,7 @@ from tema import (
     BLANCO, CELDA_ALERTA_FONDO, CELDA_ALERTA_TEXTO, CELDA_POS_TEXTO,
     DANGER_TEXT, ERROR, ERROR_FONDO, EXITO, EXITO_FONDO,
     GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE,
-    LAVANDA_FONDO, LAVANDA_SELECCION,
+    LAVANDA_CABECERA_GRUPO, LAVANDA_FONDO, LAVANDA_SELECCION,
 )
 from graficos.base import (
     _card, _es_movil, _layout, _render_rail, _resolver, _slug, _wrap_cat,
@@ -1725,15 +1725,41 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     # el mapa; con la marca en vez de un gris neutro deja de leerse como
     # planilla de cálculo genérica.
     fig.update_layout(plot_bgcolor=LAVANDA_FONDO)
-    # Divisorias antes de la fila/columna TOTAL — xref/yref="paper" en el
-    # eje que no corresponde para que cada línea cubra todo el alto/ancho
-    # del área de trazado sin importar cuántas familias/áreas haya.
+    # ── Franja de TOTALES ────────────────────────────────────────────────
+    # Antes la fila/columna TOTAL solo se distinguía por una línea gris de
+    # 1.5px: se leía como una celda más de la grilla. Ahora llevan fondo
+    # propio en LAVANDA_CABECERA_GRUPO — el MISMO tono que la fila de
+    # totales de la tabla AgGrid (tablas/desktop.py) — para que las dos
+    # vistas del reporte hablen el mismo idioma visual, y un borde de
+    # ACENTO como el de allá.
+    #
+    # El "espacio" sale del inset de 0.06 de categoría: la franja arranca
+    # en _m-0.44 en vez de _m-0.5, así que entre el último dato y los
+    # totales se asoma el plot_bgcolor como canaleta. Se hace con inset y
+    # NO agregando una categoría vacía al eje, porque las anotaciones y el
+    # trace de apagado indexan por posición de categoría — una categoría
+    # fantasma correría todos esos índices.
+    #
+    # layer="below" las deja por debajo de los traces; las celdas TOTAL
+    # tienen z=None, así que no hay nada del heatmap que las tape.
+    _INSET = 0.44
+    for _ejes, _pos in (
+        (dict(xref="x", yref="paper"),
+         dict(x0=_m - _INSET, x1=_m + 0.5, y0=0, y1=1)),
+        (dict(xref="paper", yref="y"),
+         dict(x0=0, x1=1, y0=_n - _INSET, y1=_n + 0.5)),
+    ):
+        fig.add_shape(type="rect", **_ejes, **_pos,
+                      fillcolor=LAVANDA_CABECERA_GRUPO,
+                      line=dict(width=0), layer="below")
+    # Borde de acento en el canto de la franja (no en _m-0.5: va pegado a
+    # la franja para que la canaleta quede del lado de los datos).
     fig.add_shape(type="line", xref="x", yref="paper",
-                  x0=_m - 0.5, x1=_m - 0.5, y0=0, y1=1,
-                  line=dict(color=GRIS_TEXTO_SUAVE, width=1.5))
+                  x0=_m - _INSET, x1=_m - _INSET, y0=0, y1=1,
+                  line=dict(color=ACENTO, width=2))
     fig.add_shape(type="line", xref="paper", yref="y",
-                  x0=0, x1=1, y0=_n - 0.5, y1=_n - 0.5,
-                  line=dict(color=GRIS_TEXTO_SUAVE, width=1.5))
+                  x0=0, x1=1, y0=_n - _INSET, y1=_n - _INSET,
+                  line=dict(color=ACENTO, width=2))
     # Anillo de foco en las celdas del top 3 — el trace de apagado bajó el
     # resto, esto hace que las que quedan arriba salten a la vista.
     for _i, _j, _v in _top_pos + _top_neg:
@@ -1814,11 +1840,17 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                 f"color:{GRIS_TEXTO_MEDIO};white-space:nowrap;"
                 f"overflow:hidden;text-overflow:ellipsis'>{_fam}</div>"
             )
+        # La etiqueta TOTAL lleva el MISMO fondo y borde que la franja de
+        # totales del heatmap (ver la seccion "Franja de TOTALES"): en movil
+        # esta columna es HTML aparte del grafico, asi que sin esto la franja
+        # se cortaria justo donde empieza el nombre de la fila.
         _rows_html += (
             f"<div style='height:{_ROWPX}px;display:flex;"
             f"align-items:center;justify-content:flex-end;"
             f"padding-right:7px;font-size:11px;font-weight:700;"
-            f"color:{TEXTO_PRINCIPAL}'>TOTAL</div>"
+            f"background:{LAVANDA_CABECERA_GRUPO};"
+            f"border-top:2px solid {ACENTO};"
+            f"color:{ACENTO_TEXTO_OSCURO}'>TOTAL</div>"
         )
 
         # El sticky va en el ANCESTRO stElementContainer del markdown (vía
