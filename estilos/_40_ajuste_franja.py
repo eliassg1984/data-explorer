@@ -1,22 +1,37 @@
-"""estilos._40_ajuste_franja - Franja superior TRANSPARENTE (todos los reportes)
-y los chips de filtro que viven en ella (Area / Familia / Ajuste / lo que
-aplique por reporte).
+"""estilos._40_ajuste_franja - Franja superior "cristal esmerilado" (todos
+los reportes) y los chips de filtro que viven en ella (Area / Familia /
+Ajuste / lo que aplique por reporte).
 
 Extraido de estilos.py (lineas 898-1083 del original).
 El orden respecto a estilos/__init__.py es parte del comportamiento del CSS.
 
-La franja es transparente por DEFECTO desde 2026-08-04 (antes solo lo era
-en Compras/Ajuste via overrides :has() — ver arquitectura.md regla #16 y
-el commit que generalizo esto). Compras tiene su PROPIO override adicional
-en estilos/_20_compras_rail.py (achica la franja a 34px y corre el right
-por su rail) porque ya tiene el rail derecho; el resto de reportes usa
---cab-altura (50px) tal cual.
+La franja fue transparente por DEFECTO entre 2026-08-04 y 2026-08-06 (antes
+de eso solo lo era en Compras/Ajuste via overrides :has() — ver
+arquitectura.md regla #16 y el commit que generalizo esto). Se cambio a
+"cristal esmerilado" (blanco translucido + backdrop-filter: blur) el
+2026-08-06: fecha_ajuste_pill y chips_ajuste_tabla son position:fixed SIN
+fondo propio, asi que al hacer scroll quedaban flotando sobre lo que sea
+que hubiera debajo (reportado con capturas — se veian "en el aire"). El
+blur no necesita JS: al ser la franja position:fixed, el navegador
+desenfoca en cada frame lo que este compuesto detras. Fallback en
+navegadores sin backdrop-filter: el rgba(255,255,255,.62) de base ya deja
+una banda translucida legible, sin blur pero sin romperse. Ver
+arquitectura.md regla #17.
+
+Compras tiene su PROPIO override adicional en estilos/_20_compras_rail.py
+(achica la franja a 34px y corre el right por su rail) porque ya tiene el
+rail derecho; el resto de reportes usa --cab-altura (50px) tal cual. Ese
+override solo toca height/right — el fondo lo hereda de la regla base de
+aca abajo, asi que Compras recibe el cristal esmerilado sin duplicar nada.
 """
 
 CSS = """    /* =================================================================== */
     /* FILA SUPERIOR DE AJUSTE DE INVENTARIO                                */
     /* =================================================================== */
-    /* FRANJA BLANCA SUPERIOR — banda de borde a borde tras título + fecha. */
+    /* FRANJA "CRISTAL ESMERILADO" — banda de borde a borde tras título +   */
+    /* fecha. Blanco translúcido + blur: ancla la fecha/chips (fixed, sin   */
+    /* fondo propio) a una superficie en vez de dejarlos flotar sobre la    */
+    /* tabla al scrollear. Ver docstring del módulo y arquitectura.md #17.  */
     .st-key-fila_ajuste_top {
         position: sticky !important;
         top: var(--cab-nivel1-top) !important;
@@ -34,9 +49,11 @@ CSS = """    /* ================================================================
         left: 90px !important;      /* comienza inmediatamente tras el rail */
         right: 0 !important;
         height: var(--cab-altura) !important;
-        background: transparent !important;
-        border-bottom: none !important;
-        box-shadow: none !important;
+        background: rgba(255, 255, 255, 0.62) !important;
+        backdrop-filter: blur(14px) saturate(1.6) !important;
+        -webkit-backdrop-filter: blur(14px) saturate(1.6) !important;
+        border-bottom: 1px solid rgba(230, 230, 235, 0.7) !important;
+        box-shadow: 0 4px 14px rgba(16, 16, 20, 0.05) !important;
         z-index: 0 !important;
     }
     .st-key-fila_ajuste_top > * {

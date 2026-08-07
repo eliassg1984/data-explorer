@@ -354,6 +354,16 @@ salvo `icono`):
     scope) antes de scopearla con `:has(.st-key-app_reporte_*)` — scopear de
     más es cómo se llega a los casi-duplicados que se acaban de eliminar.
 
+    **2026-08-06 — la franja dejó de ser transparente.** `fecha_ajuste_pill`
+    y `chips_ajuste_tabla` son `position:fixed` sin fondo propio; sin nada
+    detrás quedaban flotando sobre la tabla al hacer scroll (reportado con
+    capturas — se veían "en el aire"). El `::before` de `fila_ajuste_top`
+    (`estilos/_40_ajuste_franja.py`) ahora es "cristal esmerilado": blanco
+    translúcido (`rgba(255,255,255,.62)`) + `backdrop-filter: blur(14px)`.
+    Como el override de Compras (`_20_compras_rail.py`) solo toca
+    `height`/`right` de ese mismo `::before`, hereda el fondo nuevo sin
+    tocarlo — sigue valiendo "si es universal, va en la regla base".
+
 18. **Los 8 reportes usan el rail derecho (`_render_rail`) desde 2026-08-04**
     — antes solo Compras y Ajuste. `render_vista_pills` (pestañas Gráficos/
     Tabla sueltas en la franja) se ELIMINÓ de `graficos/__init__.py`: ya no
