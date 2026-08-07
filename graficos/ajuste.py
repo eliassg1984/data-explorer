@@ -816,6 +816,15 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     _tint_alerta = _hex_rgba(CELDA_ALERTA_TEXTO, 0.07)
     _tint_sobrante = _hex_rgba(EXITO, 0.055)
 
+    def _tono_capsula(v):
+        """(texto, fondo, borde) para las cápsulas de KPI del título —
+        mismo fondo que ya usan los badges de Estado (EXITO_FONDO/
+        ERROR_FONDO en _badge_for), con un borde sutil vía _hex_rgba
+        para que la forma se note sin competir con la tabla de abajo."""
+        if v > 0:
+            return (CELDA_POS_TEXTO, EXITO_FONDO, _hex_rgba(EXITO, 0.35))
+        return (DANGER_TEXT, ERROR_FONDO, _hex_rgba(ERROR, 0.35))
+
     st.markdown(f"""<style>
     /* Popover "Excluir productos": achica el boton que la regla global de
        estilos/_30_filtros.py deja en 180px de ancho y 15px de fuente.
@@ -1555,6 +1564,13 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                     f"<br>Tendencia ({len(_vals)} cortes): {_spark} {_flecha}"
                 )
 
+    # Separación entre celdas, en px. Es lo único que las despega entre sí, y
+    # como se ve del color de plot_bgcolor (BLANCO), son LOS CANALES BLANCOS
+    # que le dan aire a la grilla — la perilla para que respire más o menos.
+    # Lo comparten el trace base y el de apagado: tienen que ser el mismo
+    # número o el atenuado no calza con la celda que atenúa.
+    _GAP = 6
+
     # ── z con borde "TOTAL" en None: mismo trace, la categoría extra al
     #    final de cada eje hace que Plotly le reserve un carril del mismo
     #    ancho que cualquier otra categoría — no hace falta un subplot
@@ -1570,7 +1586,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     # se scrollee junto con los datos.
     fig = go.Figure(go.Heatmap(
         z=_z_full, x=_x_labels, y=_y_labels,
-        xgap=3, ygap=3,
+        xgap=_GAP, ygap=_GAP,
         colorscale=[
             [0.00, ERROR],
             [0.35, ERROR_FONDO],
@@ -1594,16 +1610,20 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     #    con dato que NO están en el top 3 — mismas categorías/gaps que el
     #    trace base (comparten eje -> Plotly las alinea por el nombre de la
     #    categoría, no hace falta calcular píxeles). Top 3 y celdas vacías
-    #    quedan en None, sin tocar. Color lavanda (no gris plano) para que
-    #    combine con el plot_bgcolor de más abajo -- misma familia de tono
-    #    que el resto de "apagados" de la marca (LAVANDA_FONDO/SELECCION),
-    #    no un gris genérico de planilla. ───────────────────────────────
+    #    quedan en None, sin tocar. Color lavanda (no gris plano) porque es
+    #    el tono de "apagado" de la marca, el mismo que LAVANDA_FONDO/
+    #    SELECCION, y no un gris genérico de planilla. Va semitransparente
+    #    sobre el BLANCO del fondo, así que la celda atenuada sigue dejando
+    #    ver de qué signo era. ───────────────────────────────────────────
     _z_dim = [[None] * _m for _ in range(_n)]
     for _i, _j, _v in _celdas:
         if (_i, _j) not in _top_set:
             _z_dim[_i][_j] = 1
     fig.add_trace(go.Heatmap(
-        z=_z_dim, x=_areas, y=_fams, xgap=3, ygap=3,
+        # MISMO _GAP que el trace base: si no coinciden, el rectangulo de
+        # apagado no calza con la celda que atenua y se derrama sobre los
+        # canales blancos.
+        z=_z_dim, x=_areas, y=_fams, xgap=_GAP, ygap=_GAP,
         zmin=0, zmax=1,
         colorscale=[[0, "rgba(240,237,254,.8)"], [1, "rgba(240,237,254,.8)"]],
         showscale=False, hoverinfo="skip",
@@ -1720,11 +1740,16 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         annotations=_anns_hm,
         hovermode="closest",
     ))
-    # plot_bgcolor lavanda (no gris) -- es lo que se asoma por los xgap/ygap
-    # de 3px entre celdas, así que termina siendo el tono "de fondo" de todo
-    # el mapa; con la marca en vez de un gris neutro deja de leerse como
-    # planilla de cálculo genérica.
-    fig.update_layout(plot_bgcolor=LAVANDA_FONDO)
+    # plot_bgcolor BLANCO: es lo que se asoma por los xgap/ygap, o sea el
+    # color de los canales entre celdas y del hueco donde no hay dato.
+    #
+    # Estuvo en LAVANDA_FONDO por marca, pero con las celdas ya tenidas de
+    # lavanda (el 0.50 de la colorscale) y el trace de apagado tambien
+    # lavanda, el conjunto quedaba lavanda sobre lavanda sobre lavanda: sin
+    # un tono neutro que corte, la grilla se apelmazaba y se leia manchada.
+    # El blanco NO es "menos marca": es lo que deja respirar al lavanda para
+    # que se lea como color, y de paso hace resaltar la franja de totales.
+    fig.update_layout(plot_bgcolor=BLANCO)
     # ── Franja de TOTALES ────────────────────────────────────────────────
     # Antes la fila/columna TOTAL solo se distinguía por una línea gris de
     # 1.5px: se leía como una celda más de la grilla. Ahora llevan fondo
