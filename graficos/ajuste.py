@@ -1028,46 +1028,61 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     </style>""", unsafe_allow_html=True)
 
     with _card("cascada"):
-        # ── Título + totales (antes vivían en la fila TOTAL de la tabla)
-        #    como texto simple en la misma línea — sin cajas, para no
-        #    competir en peso visual con el título. Popover de exclusión
-        #    a la derecha. ──────────────────────────────────────────────
-        def _kpi_sep(txt="|"):
-            return f"<span style='color:{GRIS_BORDE};padding:0 2px'>{txt}</span>"
+        # ── Título + KPIs (antes vivían en la fila TOTAL de la tabla)
+        #    2026-08-07, a pedido: más grandes y centrados (dentro de su
+        #    columna — la columna del popover de la derecha corre el
+        #    centro real un poco; se acepta el corrimiento leve a cambio
+        #    de no sacar el popover de esta fila, ver arquitectura.md si
+        #    hace falta el centrado exacto en el futuro). Los KPIs van
+        #    cada uno en su propia cápsula tonalizada por signo, no como
+        #    texto plano separado por "|" — así se distinguen del título
+        #    de un vistazo en lugar de leerse como una sola frase.────────
 
         # El título es además el disparador del tooltip que explica la
         # cascada acumulada (ver el bloque .ajcas-tip en el <style> de
         # arriba). white-space:nowrap va en el texto, NO en el .ajcas-tip:
         # si envolviera al globo, el override móvil que lo deja fluir en
         # varias líneas no tendría efecto.
-        _kpis = (f"<span class='ajcas-tip' style='font-size:13px;"
-                 f"font-weight:500;color:{GRIS_TEXTO_MEDIO}'>"
-                 f"<span style='white-space:nowrap'>"
-                 f"Ajuste valorizado por {grp_col.lower()}</span>"
-                 f"<span class='ajcas-tip-i'>i</span>"
-                 f"<span class='ajcas-tip-txt'>Cada barra arranca donde "
-                 f"terminó la anterior</span></span>")
+        _titulo_html = (
+            f"<span class='ajcas-tip' style='font-size:15.5px;"
+            f"font-weight:600;color:{GRIS_TEXTO_MEDIO}'>"
+            f"<span style='white-space:nowrap'>"
+            f"Ajuste valorizado por {grp_col.lower()}</span>"
+            f"<span class='ajcas-tip-i'>i</span>"
+            f"<span class='ajcas-tip-txt'>Cada barra arranca donde "
+            f"terminó la anterior</span></span>")
+
+        def _capsula(fg, bg, borde, contenido):
+            return (f"<span style='display:inline-flex;align-items:"
+                    f"baseline;gap:6px;background:{bg};border:1px solid "
+                    f"{borde};border-radius:999px;padding:5px 14px;"
+                    f"color:{fg}'>{contenido}</span>")
+
         _sig_tot = "+" if total > 0 else "−"
-        _col_tot = _tono(total)[0]
-        _kpis += _kpi_sep()
-        _kpis += (f"<span style='color:{GRIS_TEXTO_SUAVE}'>neto</span> "
-                  f"<span style='color:{_col_tot};font-weight:600;"
-                  f"font-variant-numeric:tabular-nums'>"
-                  f"{_sig_tot}S/ {abs(total):,.0f}</span>")
+        _col_tot, _bg_tot, _bd_tot = _tono_capsula(total)
+        _kpi_neto_html = _capsula(_col_tot, _bg_tot, _bd_tot, (
+            f"<span style='font-size:11.5px;color:{GRIS_TEXTO_SUAVE}'>"
+            f"neto</span> <span style='font-size:15px;font-weight:700;"
+            f"font-variant-numeric:tabular-nums'>"
+            f"{_sig_tot}S/ {abs(total):,.0f}</span>"))
+
+        _kpi_pct_html = ""
         if _kpi_pct_total is not None:
-            _col_pct = _tono(_kpi_pct_total)[0]
-            _kpis += _kpi_sep("·")
-            _kpis += (f"<span style='color:{_col_pct};font-weight:600;"
-                      f"font-variant-numeric:tabular-nums'>"
-                      f"{_kpi_pct_total:+.1f}%</span>"
-                      f"<span style='color:{GRIS_TEXTO_SUAVE}'> s/ total</span>")
+            _col_pct, _bg_pct, _bd_pct = _tono_capsula(_kpi_pct_total)
+            _kpi_pct_html = _capsula(_col_pct, _bg_pct, _bd_pct, (
+                f"<span style='font-size:15px;font-weight:700;"
+                f"font-variant-numeric:tabular-nums'>"
+                f"{_kpi_pct_total:+.1f}%</span> "
+                f"<span style='font-size:11.5px;color:{GRIS_TEXTO_SUAVE}'>"
+                f"s/ total</span>"))
 
         _col_titulo, _col_excl = st.columns([6, 1])
         with _col_titulo:
             st.markdown(
-                f"<div style='display:flex;align-items:baseline;"
-                f"flex-wrap:wrap;gap:8px;padding:2px 0 10px 0;"
-                f"font-size:11.5px'>{_kpis}</div>",
+                f"<div style='display:flex;align-items:center;"
+                f"justify-content:center;flex-wrap:wrap;gap:12px;"
+                f"padding:6px 0 14px 0'>"
+                f"{_titulo_html}{_kpi_neto_html}{_kpi_pct_html}</div>",
                 unsafe_allow_html=True)
         with _col_excl:
             if col_producto and col_producto in df.columns:
