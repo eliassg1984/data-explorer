@@ -1146,10 +1146,16 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                         placeholder="Buscar producto…",
                     )
         with _col_kpis:
+            # margin-top negativo: el padding-top de esta fila ya esta en 0
+            # (igual que titulo y popover, ver comentario "Aire sobre el
+            # titulo" arriba), asi que para subir SOLO los KPIs un poco mas
+            # no queda otro knob que despegarlos con margen negativo — a
+            # pedido, se acepta el desalineo extra con titulo/popover.
             st.markdown(
                 f"<div style='display:flex;align-items:center;"
                 f"justify-content:flex-end;flex-wrap:wrap;gap:12px;"
-                f"padding:0 0 14px 0'>{_kpi_neto_html}{_kpi_pct_html}</div>",
+                f"margin-top:-4px;padding:0 0 14px 0'>"
+                f"{_kpi_neto_html}{_kpi_pct_html}</div>",
                 unsafe_allow_html=True)
 
         # Cabecera de la tabla
