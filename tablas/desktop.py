@@ -63,6 +63,10 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     es_salidas = (reporte == "Salidas")
     es_requerimientos = (reporte == "Requerimientos")
     es_ajuste = (reporte == "Ajuste de Inventario")
+    # OJO: es_inventario (arriba) es "true para todos" desde el DISEÑO
+    # UNIFICADO — no significa "es el reporte Inventario Valorizado". Ese es
+    # este flag de acá, para las 2 columnas de % + checkbox de este reporte.
+    es_inventario_valorizado = (reporte == "Inventario Valorizado")
 
     col_producto   = buscar_columna(df_grid, "Nombre Producto", "producto", "descripcion")
     col_stock      = buscar_columna(df_grid, "Stock al dia", "Stock al Dia", "stock")
@@ -85,6 +89,37 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 max_valorizado = m
         except Exception:
             pass
+
+    # ── Inventario Valorizado: 2 columnas de % + checkbox de selección ────
+    # "Participación %" = valor / suma TOTAL de la columna (estática, no
+    # depende de nada que el usuario haga). "Selección %" nace con el mismo
+    # número, pero es solo la SEMILLA: su valueGetter (más abajo, junto al
+    # resto de la config de este flag) la recalcula en el navegador contra
+    # la suma de las filas con checkbox marcado, sin rerun de Streamlit.
+    # Van en df_grid (no en un dict aparte) porque necesitan ser columnas
+    # reales para que GridOptionsBuilder.from_dataframe les arme un colDef.
+    col_participacion = None
+    col_seleccion = None
+    if es_inventario_valorizado and col_valorizado and col_valorizado in df_grid.columns:
+        _total_general = float(
+            pd.to_numeric(df_grid[col_valorizado], errors="coerce").fillna(0).sum()
+        )
+        col_participacion = "Participación %"
+        col_seleccion = "Selección %"
+        if _total_general > 0:
+            df_grid[col_participacion] = (
+                pd.to_numeric(df_grid[col_valorizado], errors="coerce").fillna(0)
+                / _total_general * 100
+            )
+        else:
+            df_grid[col_participacion] = 0.0
+        df_grid[col_seleccion] = df_grid[col_participacion]
+        # cols_visibles llega calculado desde app.py contra el df SIN estas
+        # 2 columnas (no existían todavía) — sin esto, la sección de abajo
+        # ("cols_visibles is not None") las ocultaría por defecto. Copia
+        # nueva: no mutar la lista del caller.
+        if cols_visibles is not None:
+            cols_visibles = list(cols_visibles) + [col_participacion, col_seleccion]
 
     gb = GridOptionsBuilder.from_dataframe(df_grid)
     _opciones_col_def = dict(
@@ -540,6 +575,93 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     # MAYÚSCULAS mientras el resto salía capitalizado.
     for _c in df_grid.columns:
         gb.configure_column(_c, headerName=_titulo_es(_c))
+
+    if es_inventario_valorizado and col_participacion and col_seleccion:
+        _col_val_esc = str(col_valorizado).replace("\\", "\\\\").replace('"', '\\"')
+        _col_sel_esc = str(col_seleccion).replace("\\", "\\\\").replace('"', '\\"')
+
+        # Misma barra lavanda que valorizado_bar_style (_config.py), pero
+        # escalada 0-100 directo (la columna YA es un porcentaje, no hace
+        # falta normalizar contra un máximo). Una sola función para las 2
+        # columnas: el "–" con value null cubre "Selección %" mientras no
+        # haya nada marcado (Participación % siempre tiene valor).
+        _pct_bar_style = JsCode(f"""
+            function(params) {{
+                var base = {{ textAlign: 'right', fontWeight: '500', paddingRight: '12px' }};
+                if (params.node && params.node.rowPinned) {{
+                    return Object.assign({{}}, base, {{ fontWeight: '800' }});
+                }}
+                if (params.value === null || params.value === undefined) return base;
+                var pct = Math.max(0, Math.min(100, Number(params.value)));
+                return Object.assign({{}}, base, {{
+                    backgroundImage: 'linear-gradient(to right, {LAVANDA_BORDE} 0%, {LAVANDA_BORDE} ' + pct + '%, transparent ' + pct + '%, transparent 100%)',
+                    backgroundRepeat: 'no-repeat',
+                    backgroundSize: '100% 80%',
+                    backgroundPosition: 'left center',
+                }});
+            }}
+        """)
+        _pct_formatter = JsCode("""
+            function(params) {
+                if (params.value === null || params.value === undefined) return '–';
+                return Number(params.value).toLocaleString('es-PE',
+                    { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+            }
+        """)
+
+        gb.configure_column(
+            col_participacion, headerName=col_participacion,
+            aggFunc="sum", type=["numericColumn"], minWidth=150,
+            enableRowGroup=False, enablePivot=False,
+            cellStyle=_pct_bar_style, valueFormatter=_pct_formatter,
+        )
+        gb.configure_column(
+            col_seleccion, headerName=col_seleccion,
+            aggFunc=None, type=["numericColumn"], minWidth=150,
+            enableRowGroup=False, enablePivot=False,
+            cellStyle=_pct_bar_style, valueFormatter=_pct_formatter,
+            # Recalcula en vivo contra la suma de getSelectedNodes(). Sin
+            # selección → null → el formatter de arriba pinta "–". Nodos de
+            # grupo (sin .data) se saltan solos, así groupSelectsChildren no
+            # duplica la suma cuando se marca la fila padre.
+            valueGetter=JsCode(f"""
+                function(params) {{
+                    if (!params.data || (params.node && params.node.rowPinned)) return null;
+                    var val = Number(params.data["{_col_val_esc}"]);
+                    if (isNaN(val)) return null;
+                    var nodes = (params.api && params.api.getSelectedNodes)
+                        ? params.api.getSelectedNodes() : [];
+                    if (!nodes || nodes.length === 0) return null;
+                    var suma = 0;
+                    nodes.forEach(function(n) {{
+                        if (n.data) {{
+                            var v = Number(n.data["{_col_val_esc}"]);
+                            if (!isNaN(v)) suma += v;
+                        }}
+                    }});
+                    if (suma <= 0) return null;
+                    return (val / suma) * 100;
+                }}
+            """),
+        )
+
+        # Checkbox en la primera columna (Nombre Producto, ya pinneada a la
+        # izquierda por configure_selection: toma el primer colId de
+        # columnDefs, que hoy es ese por el reorden de "prioridad" de arriba).
+        gb.configure_selection(
+            "multiple", use_checkbox=True, header_checkbox=True,
+            header_checkbox_filtered_only=True,
+        )
+        # AG Grid no sabe que un valueGetter "cambió" (no depende de ningún
+        # field propio) — sin este refreshCells forzado tras cada click de
+        # checkbox, "Selección %" se queda pintada con el valor anterior.
+        opciones_grid["onSelectionChanged"] = JsCode(f"""
+            function(params) {{
+                try {{
+                    params.api.refreshCells({{ columns: ['{_col_sel_esc}'], force: true }});
+                }} catch(e) {{}}
+            }}
+        """)
 
     gb.configure_grid_options(**opciones_grid)
     if es_salidas:
