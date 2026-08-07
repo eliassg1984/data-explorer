@@ -1441,8 +1441,25 @@ def _panel_analisis_ajuste(df, col_familia, col_area, col_ajuste_val,
 
 
 def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
-                         col_producto=None):
-    """Mapa de calor familia × área con escala divergente centrada en cero."""
+                         col_producto=None, col_fecha=None, df_full=None):
+    """Mapa de calor familia × área con escala divergente centrada en cero.
+
+    Tres capas sobre el heatmap base — se combinan en el mismo trace / el
+    mismo click-drill, no son gráficos aparte:
+      · Totales al borde: fila/columna "TOTAL" agregadas al pivot como
+        categorías extra con z=None (no participan del colorscale/_vmax:
+        si entraran, un total podría superar a la celda individual más
+        extrema y le robaría saturación al resto del mapa).
+      · Top 3 resaltado: los 3 ajustes más fuertes en cada signo quedan a
+        color; el resto de las celdas con dato se atenúa con un segundo
+        trace Heatmap semitransparente encima (mismas categorías/xgap/ygap
+        que el trace base -> calza celda a celda sin cuentas de píxeles).
+      · Tendencia: el trace invisible de hover ya existía para el tooltip;
+        ahora suma un sparkline de caracteres Unicode con los últimos
+        cortes de `df_full` (hovertemplate sigue siendo texto plano, no
+        hace falta JS). El click-drill, más rico, agrega un mini gráfico
+        de líneas real en vez de pelear con el tooltip nativo.
+    """
     if not col_familia or not col_area:
         st.info("Se necesitan columnas de familia y área para el mapa de calor.")
         return
@@ -1451,12 +1468,83 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         index=col_familia, columns=col_area,
         values=col_ajuste_val, aggfunc="sum", fill_value=0,
     )
+    if pivot.empty:
+        st.info("No hay datos para el mapa de calor en el rango seleccionado.")
+        return
     _vmax = float(abs(pivot.values).max()) or 1.0
+    _fams = pivot.index.tolist()
+    _areas = pivot.columns.tolist()
+    _n, _m = len(_fams), len(_areas)
+
+    # ── Top 3 por signo (mismo criterio que _badge_for en la Cascada: manda
+    #    el valor absoluto) — decide qué celdas se resaltan y cuáles atenúa
+    #    el trace de "apagado" de más abajo. ───────────────────────────────
+    _celdas = [(i, j, float(pivot.values[i][j]))
+               for i in range(_n) for j in range(_m)
+               if abs(pivot.values[i][j]) >= 0.5]
+    _top_pos = sorted((c for c in _celdas if c[2] > 0), key=lambda c: -c[2])[:3]
+    _top_neg = sorted((c for c in _celdas if c[2] < 0), key=lambda c: c[2])[:3]
+    _top_set = {(i, j) for i, j, _ in _top_pos + _top_neg}
+
+    # ── Totales de fila/columna — mismo pivot, fuera de _vmax a propósito
+    #    (ver docstring). ─────────────────────────────────────────────────
+    _row_tot = pivot.sum(axis=1)
+    _col_tot = pivot.sum(axis=0)
+    _grand_tot = float(pivot.values.sum())
+
+    # ── Tendencia por celda: últimos cortes de df_full (no solo el rango
+    #    filtrado) — mismo espíritu que el delta de la Cascada, mirar más
+    #    atrás que el rango activo para decir "cómo veníamos llegando". La
+    #    columna de fecha ya está en el df (la usan Evolución y la tabla
+    #    dinámica); esto es un groupby más, no una fuente de datos nueva.
+    #    Acotado a 120 días hacia atrás para no pivotear el historial
+    #    completo en cada rerun. ───────────────────────────────────────────
+    _BLOQUES = "▁▂▃▄▅▆▇█"
+    _N_CORTES = 7
+    _spark_map = {}
+    _piv_t = None
+    if col_fecha and df_full is not None and col_fecha in df_full.columns:
+        _dfe = df_full.copy()
+        _dfe[col_fecha] = pd.to_datetime(_dfe[col_fecha], errors="coerce")
+        _fmax = None
+        if col_fecha in df.columns:
+            _fserie = pd.to_datetime(df[col_fecha], errors="coerce").dropna()
+            _fmax = _fserie.max() if not _fserie.empty else None
+        if _fmax is not None:
+            _dfe = _dfe[(_dfe[col_fecha] <= _fmax) &
+                       (_dfe[col_fecha] >= _fmax - pd.Timedelta(days=120))]
+        _dfe = _dfe.dropna(subset=[col_fecha, col_familia, col_area])
+        if not _dfe.empty:
+            _piv_t = _dfe.pivot_table(
+                index=[col_familia, col_area], columns=col_fecha,
+                values=col_ajuste_val, aggfunc="sum", fill_value=0.0,
+            )
+            _cortes_cols = sorted(_piv_t.columns)[-_N_CORTES:]
+            for _key in _piv_t.index:
+                _vals = [float(_piv_t.loc[_key, c]) for c in _cortes_cols]
+                if len(_vals) < 2:
+                    continue
+                _lo, _hi = min(_vals), max(_vals)
+                _rng = (_hi - _lo) or 1.0
+                _spark = "".join(
+                    _BLOQUES[min(7, int((v - _lo) / _rng * 8))] for v in _vals
+                )
+                _flecha = "▲" if _vals[-1] >= _vals[-2] else "▼"
+                _spark_map[_key] = (
+                    f"<br>Tendencia ({len(_vals)} cortes): {_spark} {_flecha}"
+                )
+
+    # ── z con borde "TOTAL" en None: mismo trace, la categoría extra al
+    #    final de cada eje hace que Plotly le reserve un carril del mismo
+    #    ancho que cualquier otra categoría — no hace falta un subplot
+    #    aparte para alinear fila/columna de totales con la grilla. ───────
+    _x_labels = _areas + ["TOTAL"]
+    _y_labels = _fams + ["TOTAL"]
+    _z_full = [row + [None] for row in pivot.values.tolist()]
+    _z_full.append([None] * (_m + 1))
 
     fig = go.Figure(go.Heatmap(
-        z=pivot.values,
-        x=pivot.columns.tolist(),
-        y=pivot.index.tolist(),
+        z=_z_full, x=_x_labels, y=_y_labels,
         xgap=3, ygap=3,
         colorscale=[
             [0.00, ERROR],
@@ -1476,12 +1564,29 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         hoverinfo="skip",
     ))
 
+    # ── Trace de "apagado": Heatmap semitransparente encima de las celdas
+    #    con dato que NO están en el top 3 — mismas categorías/gaps que el
+    #    trace base (comparten eje -> Plotly las alinea por el nombre de la
+    #    categoría, no hace falta calcular píxeles). Top 3 y celdas vacías
+    #    quedan en None, sin tocar. ───────────────────────────────────────
+    _z_dim = [[None] * _m for _ in range(_n)]
+    for _i, _j, _v in _celdas:
+        if (_i, _j) not in _top_set:
+            _z_dim[_i][_j] = 1
+    fig.add_trace(go.Heatmap(
+        z=_z_dim, x=_areas, y=_fams, xgap=3, ygap=3,
+        zmin=0, zmax=1,
+        colorscale=[[0, "rgba(246,246,248,.72)"], [1, "rgba(246,246,248,.72)"]],
+        showscale=False, hoverinfo="skip",
+    ))
+
     _pts_x, _pts_y, _pts_cd = [], [], []
-    for _i, _fam in enumerate(pivot.index.tolist()):
-        for _j, _area in enumerate(pivot.columns.tolist()):
+    for _i, _fam in enumerate(_fams):
+        for _j, _area in enumerate(_areas):
+            _val = float(pivot.values[_i][_j])
             _pts_x.append(_area)
             _pts_y.append(_fam)
-            _pts_cd.append([float(pivot.values[_i][_j])])
+            _pts_cd.append([_val, _spark_map.get((_fam, _area), "")])
 
     fig.add_trace(go.Scatter(
         x=_pts_x, y=_pts_y, mode="markers",
@@ -1490,25 +1595,60 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         hovertemplate=(
             "<b>%{y}</b><br>"
             "Área: <b>%{x}</b><br>"
-            "Ajuste: <b>S/ %{customdata[0]:,.2f}</b><extra></extra>"
+            "Ajuste: <b>S/ %{customdata[0]:,.2f}</b>"
+            "%{customdata[1]}"
+            "<extra></extra>"
         ),
         showlegend=False,
     ))
 
+    # ── Anotaciones de celdas con dato: top 3 a full color (blanco si el
+    #    fondo queda oscuro), el resto en gris — el trace de apagado ya
+    #    bajó el fondo, el texto tiene que acompañar o queda un número
+    #    nítido sobre un fondo apagado (contradice el gesto). ─────────────
     _anns_hm = []
-    for _i, _fam in enumerate(pivot.index.tolist()):
-        for _j, _area in enumerate(pivot.columns.tolist()):
+    for _i, _fam in enumerate(_fams):
+        for _j, _area in enumerate(_areas):
             _v = float(pivot.values[_i][_j])
             if abs(_v) < 0.5:
                 continue
-            _int = abs(_v) / _vmax
-            _fg = BLANCO if _int > 0.55 else GRIS_TEXTO_MEDIO
+            if (_i, _j) in _top_set:
+                _int = abs(_v) / _vmax
+                _fg = BLANCO if _int > 0.55 else GRIS_TEXTO_MEDIO
+            else:
+                _fg = GRIS_TEXTO_SUAVE
             _anns_hm.append(dict(
                 x=_area, y=_fam, xref="x", yref="y",
                 text=f"S/ {_v:,.0f}", showarrow=False,
                 font=dict(size=9.5, color=_fg,
                           family="ui-monospace, monospace"),
             ))
+
+    # ── Fila/columna TOTAL: negrita (el mini-lenguaje de anotaciones de
+    #    Plotly soporta <b>) + una línea divisoria fina que las separa de
+    #    los datos reales, sin decorar celda por celda. ───────────────────
+    for _i, _fam in enumerate(_fams):
+        _v = float(_row_tot.iloc[_i])
+        _tcolor = DANGER_TEXT if _v < 0 else CELDA_POS_TEXTO
+        _anns_hm.append(dict(
+            x="TOTAL", y=_fam, xref="x", yref="y",
+            text=f"<b>S/ {_v:,.0f}</b>", showarrow=False,
+            font=dict(size=10, color=_tcolor, family="ui-monospace, monospace"),
+        ))
+    for _j, _area in enumerate(_areas):
+        _v = float(_col_tot.iloc[_j])
+        _tcolor = DANGER_TEXT if _v < 0 else CELDA_POS_TEXTO
+        _anns_hm.append(dict(
+            x=_area, y="TOTAL", xref="x", yref="y",
+            text=f"<b>S/ {_v:,.0f}</b>", showarrow=False,
+            font=dict(size=10, color=_tcolor, family="ui-monospace, monospace"),
+        ))
+    _tcolor_gran = DANGER_TEXT if _grand_tot < 0 else CELDA_POS_TEXTO
+    _anns_hm.append(dict(
+        x="TOTAL", y="TOTAL", xref="x", yref="y",
+        text=f"<b>S/ {_grand_tot:,.0f}</b>", showarrow=False,
+        font=dict(size=10.5, color=_tcolor_gran, family="ui-monospace, monospace"),
+    ))
 
     fig.update_layout(**_layout_aj(
         title_text="",
@@ -1518,13 +1658,31 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         yaxis=dict(autorange="reversed", gridcolor=GRIS_BORDE,
                    showgrid=False, ticks="", showticklabels=True,
                    tickfont=dict(size=10, color=GRIS_TEXTO_MEDIO)),
-        height=min(560, max(240, len(pivot.index) * 38 + 110)),
+        height=min(560, max(240, (_n + 1) * 38 + 110)),
         margin=dict(l=10, r=10, t=50, b=20),
         annotations=_anns_hm,
         hovermode="closest",
     ))
     fig.update_layout(plot_bgcolor=GRIS_BORDE)
-    _xcats = [str(c) for c in pivot.columns.tolist()]
+    # Divisorias antes de la fila/columna TOTAL — xref/yref="paper" en el
+    # eje que no corresponde para que cada línea cubra todo el alto/ancho
+    # del área de trazado sin importar cuántas familias/áreas haya.
+    fig.add_shape(type="line", xref="x", yref="paper",
+                  x0=_m - 0.5, x1=_m - 0.5, y0=0, y1=1,
+                  line=dict(color=GRIS_TEXTO_SUAVE, width=1.5))
+    fig.add_shape(type="line", xref="paper", yref="y",
+                  x0=0, x1=1, y0=_n - 0.5, y1=_n - 0.5,
+                  line=dict(color=GRIS_TEXTO_SUAVE, width=1.5))
+    # Anillo de foco en las celdas del top 3 — el trace de apagado bajó el
+    # resto, esto hace que las que quedan arriba salten a la vista.
+    for _i, _j, _v in _top_pos + _top_neg:
+        fig.add_shape(
+            type="rect", xref="x", yref="y",
+            x0=_j - 0.47, x1=_j + 0.47, y0=_i - 0.47, y1=_i + 0.47,
+            line=dict(color=EXITO if _v > 0 else ERROR, width=2),
+            fillcolor="rgba(0,0,0,0)", layer="above",
+        )
+    _xcats = [str(c) for c in _x_labels]
     fig.update_xaxes(tickmode="array", tickvals=_xcats,
                      ticktext=_wrap_cat(_xcats))
 
@@ -1533,6 +1691,11 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
             fig, use_container_width=True,
             key="heatmap_ajuste",
             on_select="rerun", selection_mode="points",
+        )
+        st.caption(
+            "El resalte marca los 3 ajustes más fuertes en cada sentido — "
+            "el resto de la grilla se atenúa. «TOTAL» resume la fila o "
+            "columna y no participa de la escala de color."
         )
 
     _hm_punto = None
@@ -1547,6 +1710,10 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     if _hm_punto is not None:
         _fam_sel = _hm_punto.get("y")
         _area_sel = _hm_punto.get("x")
+        if _fam_sel == "TOTAL" or _area_sel == "TOTAL":
+            # Clic en la fila/columna resumen: no es una combinación real
+            # de familia × área, no hay detalle de producto que mostrar.
+            _fam_sel = _area_sel = None
         _val_sel = 0.0
         try:
             _val_sel = float(pivot.loc[_fam_sel, _area_sel])
@@ -1570,6 +1737,42 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                 f"{len(_det)} registros",
                 unsafe_allow_html=True,
             )
+
+            # ── Tendencia real (línea Plotly, no el sparkline de texto del
+            #    hover) — reusa el _piv_t ya calculado arriba, sin volver a
+            #    consultar df_full. Se omite si hay menos de 2 cortes o si
+            #    la combinación no aparece en el historial (p. ej. recién
+            #    empezó a tener ajustes esta semana). ───────────────────
+            if _piv_t is not None:
+                try:
+                    _serie = _piv_t.loc[(_fam_sel, _area_sel)].sort_index()
+                except KeyError:
+                    _serie = None
+                if _serie is not None and len(_serie) >= 2:
+                    _serie = _serie.iloc[-24:]
+                    _fig_t = go.Figure(go.Scatter(
+                        x=_serie.index, y=_serie.values,
+                        mode="lines+markers",
+                        line=dict(color=ACENTO, width=2),
+                        marker=dict(size=5),
+                        fill="tozeroy", fillcolor="rgba(108,92,231,0.08)",
+                        hovertemplate="%{x|%d/%m}<br>S/ %{y:,.0f}<extra></extra>",
+                    ))
+                    _fig_t.add_hline(y=0, line_dash="dot",
+                                     line_color=GRIS_BORDE, line_width=1)
+                    _fig_t.update_layout(
+                        height=90, margin=dict(l=4, r=4, t=4, b=18),
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        showlegend=False,
+                        xaxis=dict(showgrid=False,
+                                  tickfont=dict(size=8.5, color=GRIS_TEXTO_SUAVE)),
+                        yaxis=dict(visible=False),
+                    )
+                    st.plotly_chart(_fig_t, use_container_width=True,
+                                    config={"displayModeBar": False},
+                                    key=f"hm_trend_{_slug(str(_fam_sel))}_"
+                                        f"{_slug(str(_area_sel))}")
 
             if col_producto and col_producto in _det.columns:
                 _topn = st.pills(
@@ -1900,7 +2103,8 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
                                    col_unidad=col_unidad)
         elif graf == "Mapa de calor":
             _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val,
-                                 col_producto=col_producto)
+                                 col_producto=col_producto,
+                                 col_fecha=col_fecha, df_full=df_full)
         elif graf == "Distribución":
             _graf_distribucion_ajuste(d, col_familia, col_area,
                                       col_ajuste_val, col_producto)

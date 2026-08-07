@@ -903,3 +903,39 @@ salvo `icono`):
     con el filtro puesto), Top 10 deja pasar exactamente 10, y la fila de
     totales de Python coincide al céntimo con la suma de las filas que pasan
     el filtro en el navegador.
+
+35. **Fila/columna "TOTAL" en un `go.Heatmap` — categoría extra, no
+    subplot.** Para sumar un resumen de fila/columna sin `make_subplots`
+    (heatmap + barras con ejes compartidos es frágil: si el trace de barras
+    no referencia las MISMAS categorías en el MISMO orden, no calzan), la
+    fila/columna "TOTAL" se agrega como una categoría más en `x`/`y` con
+    `z=None` en esa posición. Plotly le reserva un carril del mismo ancho
+    que cualquier otra categoría — el total queda alineado sin calcular un
+    solo píxel a mano. `z=None` (no un valor real) es la parte que importa:
+    si el total entrara al cálculo de `zmin`/`zmax`, una fila que suma
+    varias celdas podría superar a la celda individual más extrema y le
+    robaría saturación al resto del mapa. El total se dibuja aparte
+    (anotaciones en negrita + una línea divisoria con `xref="x"` /
+    `yref="paper"` — así cubre toda la altura del área de trazado sin
+    importar cuántas categorías haya).
+
+    **Atenuar celdas sin tocar los datos:** un SEGUNDO trace `go.Heatmap`
+    semitransparente (un solo color en el `colorscale`, `z=1` donde hay que
+    atenuar y `z=None` donde no) encima del trace base, compartiendo eje
+    (misma categoría por NOMBRE — no hace falta el mismo orden de trace) y
+    mismos `xgap`/`ygap`. Más robusto que N `add_shape`: un trace en vez de
+    una lista de rects que hay que reposicionar a mano si cambia el número
+    de filas o columnas.
+
+    **Tendencia en el hover: texto, no gráfico.** `hovertemplate` de Plotly
+    es SOLO texto — la regla de siempre (`st.markdown` no ejecuta
+    `<script>`) también tumba la idea de un sparkline SVG dentro del
+    tooltip nativo sin un componente propio. Un sparkline de bloques
+    Unicode (`▁▂▃▄▅▆▇█`) calculado en Python y metido en `customdata` sí
+    funciona: es una cadena más para el hovertemplate. El detalle rico
+    (línea real, con fecha en el eje) va en el panel de click-drill, que ya
+    es contenido Streamlit normal y no pelea con esa limitación.
+
+    Ver `graficos/ajuste.py::_graf_heatmap_ajuste` (totales + resalte del
+    top 3 + tendencia, las tres capas conviven en el mismo trace/mismo
+    click-drill).
