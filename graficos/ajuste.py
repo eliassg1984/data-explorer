@@ -423,6 +423,7 @@ def _tabla_pivote_fecha_ajuste(df, col_familia, col_ajuste_val, col_producto,
         from tablas import renderizar_aggrid_pivote_ajuste
         renderizar_aggrid_pivote_ajuste(
             wide, periodos, col_familia, _sub, col_producto,
+            anio=anio_actual,
         )
 
 

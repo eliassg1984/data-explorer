@@ -740,6 +740,21 @@ salvo `icono`):
     integración completa con datos 2026 reales dentro de la app (eso
     recién se ve en Cloud, o cambiando la fecha del sistema).
 
+    **2026-08-07, misma tarde — el año como grupo de columna.** Pedido
+    real de uso: con solo "ene"/"feb"/... en la cabecera no quedaba claro
+    de qué año, aunque la vista solo muestre uno a la vez. En vez de
+    repetir el año en cada columna (`renderizar_aggrid_pivote_ajuste`
+    recibe `anio` opcional), va UNA vez como grupo de columna (`children`
+    en el colDef, la manera estándar de AG Grid de agrupar cabeceras) por
+    encima de los periodos — Total queda AFUERA del grupo a propósito, no
+    es "del año", es el cierre de la fila. `.ag-header-group-cell` no
+    tenía estilo propio en `tablas/_css.py` (nadie había agrupado columnas
+    en este grid todavía): se agregó lavanda (`LAVANDA_CABECERA_GRUPO`,
+    literal "fondo de cabeceras de grupo de columnas" en `tema.py`) SOLO
+    en `tablas/ajuste_pivote.py`, no en el CSS compartido — si otro grid
+    empieza a agrupar columnas y quiere el mismo look, recién ahí vale la
+    pena subirlo a `_css.py`.
+
 26. **`GridOptionsBuilder.configure_column()` PISA el `headerName` cada vez
     que se lo llama sin `header_name`.** No hace merge parcial: reconstruye
     el colDef con `{"headerName": field, "field": field}` y recién después

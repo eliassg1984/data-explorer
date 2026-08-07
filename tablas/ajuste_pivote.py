@@ -165,11 +165,17 @@ def _col_periodo(col_id, headerName, field_ajv, field_aj, es_total=False,
 
 def renderizar_aggrid_pivote_ajuste(df_wide, periodos, col_familia,
                                      col_subfamilia, col_producto,
-                                     font_px: int = 13):
+                                     font_px: int = 13, anio=None):
     """`df_wide`: una fila por Familia+Subfamilia+Producto, más las
     columnas de `periodos` (lista de dicts field_ajv/field_aj/label, en
     orden cronológico) y tot_ajv/tot_aj. Arma el grid: filas agrupadas
-    nativas + una columna sintética por periodo con celda compacta."""
+    nativas + una columna sintética por periodo con celda compacta.
+
+    `anio` (opcional): la vista siempre acota a UN año (ver
+    graficos/ajuste.py::_tabla_pivote_fecha_ajuste), así que en vez de
+    repetirlo en cada cabecera de periodo ("ene 2026", "feb 2026"...) va
+    UNA sola vez como grupo de columna por encima de Día/Semana/Mes --
+    Total queda afuera del grupo, es un cierre de fila, no parte del año."""
     gb = GridOptionsBuilder.from_dataframe(df_wide)
     gb.configure_default_column(
         resizable=True, sortable=True, filter=True, editable=False,
@@ -358,10 +364,20 @@ def renderizar_aggrid_pivote_ajuste(df_wide, periodos, col_familia,
     # construido porque GridOptionsBuilder.configure_column exige que la
     # columna ya exista como field del dataframe (ver arquitectura.md
     # regla #26) -- estas no tienen field, viven de valueGetter + aggFunc.
-    for i, p in enumerate(periodos):
-        grid_options["columnDefs"].append(_col_periodo(
-            f"periodo_{i}", p["label"], p["field_ajv"], p["field_aj"],
-        ))
+    _cols_periodo = [
+        _col_periodo(f"periodo_{i}", p["label"], p["field_ajv"], p["field_aj"])
+        for i, p in enumerate(periodos)
+    ]
+    if anio:
+        # El año va UNA vez como grupo de columna (no repetido en cada
+        # cabecera) -- Total queda afuera, no es parte del año, es el
+        # cierre de la fila.
+        grid_options["columnDefs"].append({
+            "groupId": f"anio_{anio}", "headerName": str(anio),
+            "children": _cols_periodo,
+        })
+    else:
+        grid_options["columnDefs"].extend(_cols_periodo)
     grid_options["columnDefs"].append(_col_periodo(
         _COL_TOTAL_ID, "Total", "tot_ajv", "tot_aj" if _tiene_aj else None,
         es_total=True, minWidth=110, pinned="right",
@@ -373,6 +389,20 @@ def renderizar_aggrid_pivote_ajuste(df_wide, periodos, col_familia,
         "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
         "border-top": f"2px solid {ACENTO} !important",
         "color": f"{ACENTO_TEXTO_OSCURO} !important",
+    }
+    # _css_grid ya estila .ag-header-cell (la fila de Día/Semana/Mes) en
+    # lavanda -- acá no había fila de GRUPO hasta agregar `anio`, así que
+    # nadie la había estilado todavía. Un tono más (LAVANDA_CABECERA_GRUPO,
+    # el mismo que ya usan las filas de grupo del árbol) la distingue de
+    # la fila de abajo sin desentonar.
+    custom_css[".ag-header-group-cell"] = {
+        "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
+        "border-bottom": f"1px solid {LAVANDA_BORDE} !important",
+    }
+    custom_css[".ag-header-group-cell-label"] = {
+        "color": f"{ACENTO_TEXTO_OSCURO} !important",
+        "font-weight": "600",
+        "justify-content": "center",
     }
 
     perf.set_df_info(df_wide, label="AgGrid (Ajuste pivote fecha)")
