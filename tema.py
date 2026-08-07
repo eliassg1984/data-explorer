@@ -116,6 +116,54 @@ ERROR_BORDE = "#fca5a5"
 """Rojo medio: borde de alerta de error."""
 
 # ═══════════════════════════════════════════════════════════════════════════
+# PALETA PASTEL — cascada de Ajuste de inventario (por familia)
+# Variante suave de ERROR/EXITO/CELDA_ALERTA_* de arriba, EXCLUSIVA de
+# graficos/ajuste.py::_graf_waterfall_ajuste (barra, badges de Estado,
+# cápsulas KPI del título + su drill). El resto de la app sigue usando
+# ERROR/EXITO/CELDA_ALERTA_* tal cual — no tocarlos si se reajusta esta
+# paleta acá.
+# ═══════════════════════════════════════════════════════════════════════════
+
+AJUSTE_NEG = "#d97a72"
+"""Terracota rosado: relleno de barra cuando el ajuste es negativo
+(faltante)."""
+
+AJUSTE_NEG_TEXTO = "#b3564c"
+"""Texto sobre AJUSTE_NEG: monto, %, delta vs. corte anterior."""
+
+AJUSTE_POS = "#74ab7e"
+"""Verde salvia: relleno de barra cuando el ajuste es positivo (sobrante)."""
+
+AJUSTE_POS_TEXTO = "#4a7d54"
+"""Texto sobre AJUSTE_POS: monto, %, badge Sobrante, cápsula KPI positiva."""
+
+AJUSTE_CRIT_FONDO = "#f7e3e1"
+"""Fondo del badge/cápsula 'Crítico' (peso ≥40% del ajuste total)."""
+
+AJUSTE_CRIT_TEXTO = "#a85950"
+"""Texto del badge/cápsula 'Crítico'."""
+
+AJUSTE_CRIT_BORDE = "#ecc6c1"
+"""Borde fino del badge 'Crítico' — el relleno pastel necesita un borde
+para no perderse contra el fondo blanco de la card."""
+
+AJUSTE_ALERTA_FONDO = "#f7ecd9"
+"""Fondo del badge 'Alerta' (peso 20-40%)."""
+
+AJUSTE_ALERTA_TEXTO = "#a9793f"
+"""Texto del badge 'Alerta'."""
+
+AJUSTE_ALERTA_BORDE = "#ecd8b3"
+"""Borde fino del badge 'Alerta'."""
+
+AJUSTE_SOB_FONDO = "#e8f3e9"
+"""Fondo del badge 'Sobrante' (ajuste positivo)."""
+
+AJUSTE_SOB_BORDE = "#c9e3cd"
+"""Borde fino del badge 'Sobrante'."""
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # LAVANDA DE FOCO
 # ═══════════════════════════════════════════════════════════════════════════
 

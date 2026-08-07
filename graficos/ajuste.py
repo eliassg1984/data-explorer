@@ -22,6 +22,10 @@ from tema import (
     DANGER_TEXT, ERROR, ERROR_FONDO, EXITO, EXITO_FONDO,
     GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE,
     LAVANDA_CABECERA_GRUPO, LAVANDA_FONDO, LAVANDA_SELECCION,
+    AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS, AJUSTE_POS_TEXTO,
+    AJUSTE_CRIT_FONDO, AJUSTE_CRIT_TEXTO, AJUSTE_CRIT_BORDE,
+    AJUSTE_ALERTA_FONDO, AJUSTE_ALERTA_TEXTO, AJUSTE_ALERTA_BORDE,
+    AJUSTE_SOB_FONDO, AJUSTE_SOB_BORDE,
 )
 from graficos.base import (
     _card, _es_movil, _layout, _render_rail, _resolver, _slug, _wrap_cat,
@@ -668,15 +672,19 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                         _delta[str(_fam)] = (_dir, abs(_pctm))
 
     def _badge_for(peso, val):
+        """(texto, fg, bg, borde) — Menor/OK sin borde (gris neutro, como
+        hoy); Crítico/Alerta/Sobrante llevan un borde fino pastel: con
+        relleno tan claro, el borde es lo que evita que se pierdan contra
+        el blanco de la card."""
         if val >= 0:
-            return ("▲ SOBRANTE", CELDA_POS_TEXTO, EXITO_FONDO)
+            return ("▲ SOBRANTE", AJUSTE_POS_TEXTO, AJUSTE_SOB_FONDO, AJUSTE_SOB_BORDE)
         if peso >= 40:
-            return ("⚠ CRÍTICO", DANGER_TEXT, ERROR_FONDO)
+            return ("⚠ CRÍTICO", AJUSTE_CRIT_TEXTO, AJUSTE_CRIT_FONDO, AJUSTE_CRIT_BORDE)
         if peso >= 20:
-            return ("● ALERTA", CELDA_ALERTA_TEXTO, CELDA_ALERTA_FONDO)
+            return ("● ALERTA", AJUSTE_ALERTA_TEXTO, AJUSTE_ALERTA_FONDO, AJUSTE_ALERTA_BORDE)
         if peso >= 5:
-            return ("● MENOR", GRIS_TEXTO, GRIS_FONDO)
-        return ("✓ OK", GRIS_TEXTO, GRIS_FONDO)
+            return ("● MENOR", GRIS_TEXTO, GRIS_FONDO, None)
+        return ("✓ OK", GRIS_TEXTO, GRIS_FONDO, None)
 
     def _severidad_slug(peso, val):
         """Mismos umbrales que _badge_for, pero como slug para la key del
@@ -714,8 +722,8 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                           if _idx > 0 else None)
 
     def _tono(v):
-        return ((CELDA_POS_TEXTO, EXITO) if v > 0
-                else (DANGER_TEXT, ERROR))
+        return ((AJUSTE_POS_TEXTO, AJUSTE_POS) if v > 0
+                else (AJUSTE_NEG_TEXTO, AJUSTE_NEG))
 
     def _celda_familia(f):
         # Nombre + "X% del total" en la misma línea (no apilado abajo) —
@@ -744,7 +752,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         if _dl:
             _dir, _dpct = _dl
             _arrow = "▲" if _dir == "down" else "▼"
-            _dcol = DANGER_TEXT if _dir == "down" else CELDA_POS_TEXTO
+            _dcol = AJUSTE_NEG_TEXTO if _dir == "down" else AJUSTE_POS_TEXTO
             _html += (f"<div style='font-size:9.5px;color:{_dcol};"
                       f"line-height:1.35;margin-top:2px;"
                       f"font-variant-numeric:tabular-nums'>"
@@ -788,13 +796,14 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     _celda_pcttotal = _celda_pct(_pct_val_total)
 
     def _celda_badge(f):
-        _txt, _fg, _bg = _badge_for(f["peso"], f["val"])
+        _txt, _fg, _bg, _bd = _badge_for(f["peso"], f["val"])
         _txt = _txt.split(" ", 1)[-1]
         _txt = _txt if _txt == "OK" else _txt.capitalize()
+        _borde = f"border:1px solid {_bd};" if _bd else "border:1px solid transparent;"
         return (f"<div style='text-align:right'><span style='display:inline-"
-                f"block;padding:2.5px 8px;border-radius:999px;font-size:9.5px;"
+                f"block;padding:1.5px 7px;border-radius:999px;font-size:9.5px;"
                 f"font-weight:600;letter-spacing:0.02em;background:{_bg};"
-                f"color:{_fg};white-space:nowrap'>{_txt}</span></div>")
+                f"{_borde}color:{_fg};white-space:nowrap'>{_txt}</span></div>")
 
     # ── Drill: clic en una familia → top-N de productos abajo ─────────────
     _cats_clic = agg[grp_col].astype(str).tolist()
@@ -807,23 +816,24 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     def _hex_rgba(hexcolor, alpha):
         """hex de tema.py -> rgba() con transparencia — para el matiz de
         fondo de las filas no se puede usar el fondo sólido del badge
-        (ERROR_FONDO etc.), queda muy fuerte para una fila entera."""
+        (AJUSTE_CRIT_FONDO etc.), queda muy fuerte para una fila entera."""
         h = hexcolor.lstrip("#")
         r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
         return f"rgba({r},{g},{b},{alpha})"
 
-    _tint_critico = _hex_rgba(ERROR, 0.06)
-    _tint_alerta = _hex_rgba(CELDA_ALERTA_TEXTO, 0.07)
-    _tint_sobrante = _hex_rgba(EXITO, 0.055)
+    _tint_critico = _hex_rgba(AJUSTE_NEG, 0.08)
+    _tint_alerta = _hex_rgba(AJUSTE_ALERTA_TEXTO, 0.09)
+    _tint_sobrante = _hex_rgba(AJUSTE_POS, 0.08)
 
     def _tono_capsula(v):
-        """(texto, fondo, borde) para las cápsulas de KPI del título —
-        mismo fondo que ya usan los badges de Estado (EXITO_FONDO/
-        ERROR_FONDO en _badge_for), con un borde sutil vía _hex_rgba
-        para que la forma se note sin competir con la tabla de abajo."""
+        """(texto, fondo) para las cápsulas KPI del título — estilo "fondo
+        sutil": mismo par texto/fondo que el badge de Estado equivalente
+        (Sobrante/Crítico en _badge_for), pero SIN el borde del badge — acá
+        la cápsula ya se distingue por vivir junto al título, no necesita
+        el refuerzo del borde."""
         if v > 0:
-            return (CELDA_POS_TEXTO, EXITO_FONDO, _hex_rgba(EXITO, 0.35))
-        return (DANGER_TEXT, ERROR_FONDO, _hex_rgba(ERROR, 0.35))
+            return (AJUSTE_POS_TEXTO, AJUSTE_SOB_FONDO)
+        return (AJUSTE_NEG_TEXTO, AJUSTE_CRIT_FONDO)
 
     st.markdown(f"""<style>
     /* Popover "Excluir productos": achica el boton que la regla global de
@@ -1052,28 +1062,32 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             f"<span class='ajcas-tip-txt'>Cada barra arranca donde "
             f"terminó la anterior</span></span>")
 
-        def _capsula(fg, bg, borde, contenido):
+        def _capsula(fg, bg, contenido):
+            """Estilo "fondo sutil": sin borde, esquinas 8px (no pill 999px)
+            — se lee como un resaltado detrás de la cifra, no como una
+            alerta. La etiqueta (neto / s·total) hereda `fg` a opacidad
+            reducida en vez del gris genérico, para que quede claro que es
+            parte de la misma cápsula."""
             return (f"<span style='display:inline-flex;align-items:"
-                    f"baseline;gap:6px;background:{bg};border:1px solid "
-                    f"{borde};border-radius:999px;padding:5px 14px;"
-                    f"color:{fg}'>{contenido}</span>")
+                    f"baseline;gap:6px;background:{bg};border-radius:8px;"
+                    f"padding:4px 10px;color:{fg}'>{contenido}</span>")
 
         _sig_tot = "+" if total > 0 else "−"
-        _col_tot, _bg_tot, _bd_tot = _tono_capsula(total)
-        _kpi_neto_html = _capsula(_col_tot, _bg_tot, _bd_tot, (
-            f"<span style='font-size:11.5px;color:{GRIS_TEXTO_SUAVE}'>"
+        _col_tot, _bg_tot = _tono_capsula(total)
+        _kpi_neto_html = _capsula(_col_tot, _bg_tot, (
+            f"<span style='font-size:11.5px;color:{_col_tot};opacity:.65'>"
             f"neto</span> <span style='font-size:15px;font-weight:700;"
             f"font-variant-numeric:tabular-nums'>"
             f"{_sig_tot}S/ {abs(total):,.0f}</span>"))
 
         _kpi_pct_html = ""
         if _kpi_pct_total is not None:
-            _col_pct, _bg_pct, _bd_pct = _tono_capsula(_kpi_pct_total)
-            _kpi_pct_html = _capsula(_col_pct, _bg_pct, _bd_pct, (
+            _col_pct, _bg_pct = _tono_capsula(_kpi_pct_total)
+            _kpi_pct_html = _capsula(_col_pct, _bg_pct, (
                 f"<span style='font-size:15px;font-weight:700;"
                 f"font-variant-numeric:tabular-nums'>"
                 f"{_kpi_pct_total:+.1f}%</span> "
-                f"<span style='font-size:11.5px;color:{GRIS_TEXTO_SUAVE}'>"
+                f"<span style='font-size:11.5px;color:{_col_pct};opacity:.65'>"
                 f"s/ total</span>"))
 
         _col_titulo, _col_excl = st.columns([6, 1])
@@ -1270,7 +1284,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                         _pa, _pb = st.columns(2)
                         with _pa:
                             _topn_neg = _header_split(
-                                "Faltantes", DANGER_TEXT,
+                                "Faltantes", AJUSTE_NEG_TEXTO,
                                 "ajuste_cascada_topn_neg")
                             # ascending=True: el más negativo (mayor
                             # magnitud) primero en el DataFrame -> primero
@@ -1281,11 +1295,11 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                             if _neg.empty:
                                 st.caption("Sin faltantes en esta familia.")
                             else:
-                                st.markdown(_filas_split_html(_neg, ERROR),
+                                st.markdown(_filas_split_html(_neg, AJUSTE_NEG),
                                            unsafe_allow_html=True)
                         with _pb:
                             _topn_pos = _header_split(
-                                "Sobrantes", CELDA_POS_TEXTO,
+                                "Sobrantes", AJUSTE_POS_TEXTO,
                                 "ajuste_cascada_topn_pos")
                             _pos = (_agg_dim[_agg_dim[col_ajuste_val] > 0]
                                     .nlargest(int(_topn_pos), col_ajuste_val)
@@ -1293,7 +1307,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                             if _pos.empty:
                                 st.caption("Sin sobrantes en esta familia.")
                             else:
-                                st.markdown(_filas_split_html(_pos, EXITO),
+                                st.markdown(_filas_split_html(_pos, AJUSTE_POS),
                                            unsafe_allow_html=True)
 
         # Una fila por familia. El drill de la familia clickeada se
