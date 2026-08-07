@@ -118,22 +118,34 @@ CSS = """    /* ================================================================
        :has(.st-key-app_reporte_compras), un marker inyectado desde app.py
        cuando reporte=="Compras". Antes usaba :has(.st-key-compras_tabs_row),
        pero esa key es del rail compartido y matcheaba tambien Ajuste. Ver
-       arquitectura.md regla #16.
+       arquitectura.md regla #16. El left:170px/right:163px del default ya
+       despegan la tarjeta del rail derecho de Compras (84px + 15px offset
+       = 99px) con margen de sobra, así que acá no hace falta tocarlos.
 
-       Solo queda 1 ajuste propio: franja mas baja (34px) porque el rail
-       de Compras empieza a los 60px y ya tiene su propia cabecera. El
-       viejo `right: 84px` (para no invadir el rail derecho) SE SACÓ el
-       2026-08-06: el nuevo default (right: calc(50vw - 300px), ver
-       _40_ajuste_franja.py) ya despega la tarjeta del rail (84px + 15px
-       offset = 99px) con margen de sobra en cualquier ancho >=901px, y
-       como este selector es MAS específico que el default (:has(...) de
-       más), el `right:84px` viejo le hubiera ganado y anulado el achique
-       justo en Compras — el reporte que lo pidió. */
+       Quedan 2 ajustes propios, los dos por la franja más baja (34px en
+       vez de 50px, porque el rail de Compras empieza a los 60px y ya
+       tiene su propia cabecera):
+
+       1) height: la franja en sí.
+       2) top de fecha_ajuste_pill / chips_ajuste_tabla: el default los
+          pone en top:8px, pensado para la franja de 50px (8 + 28 de alto
+          real del pill = 36, entra con 14px de sobra). En la franja de
+          34px de Compras eso se PASA por 2px (36 > 34) — confirmado
+          midiendo en producción con getComputedStyle: el botón real mide
+          28px (min-height:28px SÍ aplica), no es un problema de tamaño,
+          es que 34px de franja no le entran los 8px de top + 28px de
+          alto. Con top:3px queda centrado (3px arriba, ~3px abajo) y dejó
+          de asomar por el borde inferior redondeado. Reportado con
+          capturas (los pills se veían salidos de la franja) 2026-08-06. */
     [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras) .st-key-fila_ajuste_top::before {
         height: 34px !important;
     }
     [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras) .st-key-fila_ajuste_top {
         padding-top: 2px !important;
+    }
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras) .st-key-fecha_ajuste_pill,
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras) .st-key-chips_ajuste_tabla {
+        top: 3px !important;
     }
 
     .st-key-graf_tipo_chips {
