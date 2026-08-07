@@ -1014,10 +1014,15 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
        dos viven en el mismo stHorizontalBlock, así que mover la card los
        sube juntos. Acotado a chartcard_cascada — el resto de las cards
        de gráficos conserva su padding.
-       El aire se recorta ACÁ y no en el padding del div del título: ese
-       div vive solo en la columna izquierda, así que tocarlo movía el
-       título 2px más que al popover y los descentraba entre sí
-       (verificado midiendo ambos rects).
+       El aire se recorta primero ACÁ y no en el padding del div del
+       título: ese div vive solo en la columna izquierda, así que
+       tocarlo movía el título 2px más que al popover y los
+       descentraba entre sí (verificado midiendo ambos rects). Con el
+       padding del container ya en 0 (a pedido, para subir más el
+       título), se bajó también el padding-top de ese div (6px→0px)
+       — el popover ya quedaba ~9px más arriba por el align-items:
+       center del row (alturas distintas título/cápsulas), así que el
+       desalineo extra que suma esto es marginal.
 
        row-gap: las filas de familia son hijas directas de este flex, así
        que lo que las separa es el gap del contenedor (16px por defecto
@@ -1112,7 +1117,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             st.markdown(
                 f"<div style='display:flex;align-items:center;"
                 f"justify-content:flex-start;flex-wrap:wrap;gap:12px;"
-                f"padding:6px 0 14px 0'>"
+                f"padding:0 0 14px 0'>"
                 f"{_titulo_html}{_kpi_neto_html}{_kpi_pct_html}</div>",
                 unsafe_allow_html=True)
         with _col_excl:
