@@ -1476,6 +1476,14 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     _areas = pivot.columns.tolist()
     _n, _m = len(_fams), len(_areas)
 
+    # ── Tamaño de fuente adaptado al ancho: con pocas áreas (columnas) hay
+    #    aire de sobra y los números pueden crecer; con las 11 áreas reales
+    #    de Ajuste el mismo tamaño se pisaría con la celda vecina. Mismo
+    #    espíritu que la altura adaptada a _n más abajo. ───────────────────
+    _cell_font = 12 if _m <= 6 else (11 if _m <= 9 else 9.5)
+    _tot_font = _cell_font + 1
+    _grand_font = _cell_font + 1.5
+
     # ── Top 3 por signo (mismo criterio que _badge_for en la Cascada: manda
     #    el valor absoluto) — decide qué celdas se resaltan y cuáles atenúa
     #    el trace de "apagado" de más abajo. ───────────────────────────────
@@ -1549,7 +1557,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         colorscale=[
             [0.00, ERROR],
             [0.35, ERROR_FONDO],
-            [0.50, BLANCO],
+            [0.50, LAVANDA_SELECCION],
             [0.65, EXITO_FONDO],
             [1.00, EXITO],
         ],
@@ -1568,7 +1576,10 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     #    con dato que NO están en el top 3 — mismas categorías/gaps que el
     #    trace base (comparten eje -> Plotly las alinea por el nombre de la
     #    categoría, no hace falta calcular píxeles). Top 3 y celdas vacías
-    #    quedan en None, sin tocar. ───────────────────────────────────────
+    #    quedan en None, sin tocar. Color lavanda (no gris plano) para que
+    #    combine con el plot_bgcolor de más abajo -- misma familia de tono
+    #    que el resto de "apagados" de la marca (LAVANDA_FONDO/SELECCION),
+    #    no un gris genérico de planilla. ───────────────────────────────
     _z_dim = [[None] * _m for _ in range(_n)]
     for _i, _j, _v in _celdas:
         if (_i, _j) not in _top_set:
@@ -1576,7 +1587,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     fig.add_trace(go.Heatmap(
         z=_z_dim, x=_areas, y=_fams, xgap=3, ygap=3,
         zmin=0, zmax=1,
-        colorscale=[[0, "rgba(246,246,248,.72)"], [1, "rgba(246,246,248,.72)"]],
+        colorscale=[[0, "rgba(240,237,254,.8)"], [1, "rgba(240,237,254,.8)"]],
         showscale=False, hoverinfo="skip",
     ))
 
@@ -1620,7 +1631,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
             _anns_hm.append(dict(
                 x=_area, y=_fam, xref="x", yref="y",
                 text=f"S/ {_v:,.0f}", showarrow=False,
-                font=dict(size=9.5, color=_fg,
+                font=dict(size=_cell_font, color=_fg,
                           family="ui-monospace, monospace"),
             ))
 
@@ -1633,7 +1644,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         _anns_hm.append(dict(
             x="TOTAL", y=_fam, xref="x", yref="y",
             text=f"<b>S/ {_v:,.0f}</b>", showarrow=False,
-            font=dict(size=10, color=_tcolor, family="ui-monospace, monospace"),
+            font=dict(size=_tot_font, color=_tcolor, family="ui-monospace, monospace"),
         ))
     for _j, _area in enumerate(_areas):
         _v = float(_col_tot.iloc[_j])
@@ -1641,29 +1652,33 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         _anns_hm.append(dict(
             x=_area, y="TOTAL", xref="x", yref="y",
             text=f"<b>S/ {_v:,.0f}</b>", showarrow=False,
-            font=dict(size=10, color=_tcolor, family="ui-monospace, monospace"),
+            font=dict(size=_tot_font, color=_tcolor, family="ui-monospace, monospace"),
         ))
     _tcolor_gran = DANGER_TEXT if _grand_tot < 0 else CELDA_POS_TEXTO
     _anns_hm.append(dict(
         x="TOTAL", y="TOTAL", xref="x", yref="y",
         text=f"<b>S/ {_grand_tot:,.0f}</b>", showarrow=False,
-        font=dict(size=10.5, color=_tcolor_gran, family="ui-monospace, monospace"),
+        font=dict(size=_grand_font, color=_tcolor_gran, family="ui-monospace, monospace"),
     ))
 
     fig.update_layout(**_layout_aj(
         title_text="",
         xaxis=dict(tickangle=0, side="top", gridcolor=GRIS_BORDE,
                    showgrid=False, ticks="",
-                   tickfont=dict(size=10, color=GRIS_TEXTO)),
+                   tickfont=dict(size=11, color=GRIS_TEXTO)),
         yaxis=dict(autorange="reversed", gridcolor=GRIS_BORDE,
                    showgrid=False, ticks="", showticklabels=True,
-                   tickfont=dict(size=10, color=GRIS_TEXTO_MEDIO)),
+                   tickfont=dict(size=11, color=GRIS_TEXTO_MEDIO)),
         height=min(560, max(240, (_n + 1) * 38 + 110)),
         margin=dict(l=10, r=10, t=50, b=20),
         annotations=_anns_hm,
         hovermode="closest",
     ))
-    fig.update_layout(plot_bgcolor=GRIS_BORDE)
+    # plot_bgcolor lavanda (no gris) -- es lo que se asoma por los xgap/ygap
+    # de 3px entre celdas, así que termina siendo el tono "de fondo" de todo
+    # el mapa; con la marca en vez de un gris neutro deja de leerse como
+    # planilla de cálculo genérica.
+    fig.update_layout(plot_bgcolor=LAVANDA_FONDO)
     # Divisorias antes de la fila/columna TOTAL — xref/yref="paper" en el
     # eje que no corresponde para que cada línea cubra todo el alto/ancho
     # del área de trazado sin importar cuántas familias/áreas haya.
@@ -1685,6 +1700,32 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     _xcats = [str(c) for c in _x_labels]
     fig.update_xaxes(tickmode="array", tickvals=_xcats,
                      ticktext=_wrap_cat(_xcats))
+
+    # ── Bordes redondeados en TODO el mapa de calor (pedido 2026-08-07) ──
+    # go.Heatmap no tiene un cornerradius como go.Bar, así que se redondea
+    # por CSS en dos puntos del SVG que arma Plotly -- ambos son clases
+    # FIJAS (el id numérico que las acompaña cambia en cada render, por eso
+    # no se usa):
+    #   · clipPath.plotclip -- el rect que recorta la imagen de datos
+    #     (celdas + puntos de hover) al área de trazado. Redondearlo
+    #     redondea las celdas mismas, no solo lo que se ve detrás.
+    #   · .bglayer rect.bg -- el rect de plot_bgcolor que se asoma por los
+    #     xgap/ygap entre celdas. Va con radio +8px (mismo margen que deja
+    #     Plotly entre bg y plotclip, medido en vivo) para que los dos
+    #     bordes queden concéntricos en vez de que el de afuera asome una
+    #     esquina cuadrada detrás del redondeado de adentro.
+    # Acotado a .st-key-heatmap_ajuste: "plotclip"/"bg" son clases
+    # genéricas de Plotly y sin el prefijo redondearía TODOS los gráficos
+    # de la app (misma regla que el resto del CSS del proyecto: acotar al
+    # widget, nunca colgar del contenedor global).
+    st.markdown("""<style>
+    .st-key-heatmap_ajuste clipPath.plotclip rect {
+        rx: 14px; ry: 14px;
+    }
+    .st-key-heatmap_ajuste .bglayer rect.bg {
+        rx: 22px; ry: 22px;
+    }
+    </style>""", unsafe_allow_html=True)
 
     with _card("heatmap"):
         _hm_evt = st.plotly_chart(
