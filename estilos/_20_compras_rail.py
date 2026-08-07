@@ -113,20 +113,24 @@ CSS = """    /* ================================================================
         margin-top: -80px !important;
     }
 
-/* En Compras la franja blanca superior YA NO EXISTE — el ::before se
-       vuelve transparente (sin fondo, sin border-bottom, sin shadow) para
-       que los chips Familia/Subfamilia y la fecha floten directo sobre el
-       fondo gris del canvas. Scopeado con :has(.st-key-app_reporte_compras)
-       — un marker inyectado desde app.py cuando reporte=="Compras". Antes
-       usaba :has(.st-key-compras_tabs_row), pero esa key es del rail
-       compartido y matcheaba tambien Ajuste. Ver arquitectura.md regla #16.
+/* Compras hereda el cristal esmerilado del DEFAULT
+       (estilos/_40_ajuste_franja.py) sin duplicar nada — scopeado con
+       :has(.st-key-app_reporte_compras), un marker inyectado desde app.py
+       cuando reporte=="Compras". Antes usaba :has(.st-key-compras_tabs_row),
+       pero esa key es del rail compartido y matcheaba tambien Ajuste. Ver
+       arquitectura.md regla #16.
 
-       La transparencia ya es el DEFAULT (estilos/_40_ajuste_franja.py) —
-       aca solo quedan los 2 ajustes que Compras necesita de mas por tener
-       el rail derecho: franja mas baja y que no invada el rail. */
+       Solo queda 1 ajuste propio: franja mas baja (34px) porque el rail
+       de Compras empieza a los 60px y ya tiene su propia cabecera. El
+       viejo `right: 84px` (para no invadir el rail derecho) SE SACÓ el
+       2026-08-06: el nuevo default (right: calc(50vw - 300px), ver
+       _40_ajuste_franja.py) ya despega la tarjeta del rail (84px + 15px
+       offset = 99px) con margen de sobra en cualquier ancho >=901px, y
+       como este selector es MAS específico que el default (:has(...) de
+       más), el `right:84px` viejo le hubiera ganado y anulado el achique
+       justo en Compras — el reporte que lo pidió. */
     [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras) .st-key-fila_ajuste_top::before {
         height: 34px !important;
-        right: 84px !important;    /* que la franja no invada el rail derecho */
     }
     [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras) .st-key-fila_ajuste_top {
         padding-top: 2px !important;

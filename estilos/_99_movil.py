@@ -50,6 +50,15 @@ CSS = """    /* ================================================================
            estén static, porque son flex items — y los ponía sobre la banda. */
         .st-key-fila_ajuste_top::before {
             left: 0 !important;
+            /* El default (_40_ajuste_franja.py) angosta la franja hacia el
+               centro con right: calc(50vw - 300px) para no ocupar todo el
+               ancho en desktop — a este breakpoint ese calc() ya da
+               NEGATIVO (50vw < 300px por debajo de los ~600px), lo que
+               empujaría el borde derecho de la tarjeta fuera del viewport.
+               En móvil no hay cluster centrado que abrazar (la fecha queda
+               sola a la izquierda, sin chips al lado — ver más abajo), así
+               que se vuelve a border a border como antes del 2026-08-06. */
+            right: 0 !important;
             z-index: 15 !important;
         }
         .st-key-fila_ajuste_top > * {

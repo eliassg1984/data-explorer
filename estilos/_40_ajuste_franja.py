@@ -19,19 +19,42 @@ una banda translucida legible, sin blur pero sin romperse. Ver
 arquitectura.md regla #17.
 
 Compras tiene su PROPIO override adicional en estilos/_20_compras_rail.py
-(achica la franja a 34px y corre el right por su rail) porque ya tiene el
-rail derecho; el resto de reportes usa --cab-altura (50px) tal cual. Ese
-override solo toca height/right — el fondo lo hereda de la regla base de
-aca abajo, asi que Compras recibe el cristal esmerilado sin duplicar nada.
+(achica la franja a 34px) porque ya tiene el rail derecho; el resto de
+reportes usa --cab-altura (50px) tal cual. Ese override solo toca height —
+el fondo lo hereda de la regla base de aca abajo, asi que Compras recibe
+el cristal esmerilado sin duplicar nada.
+
+2026-08-06, 2da vuelta (mismo dia): el cristal esmerilado gusto, pero era
+de borde a borde (left:90px a right:0) y dejaba dos zonas SIEMPRE vacias
+con fondo blanco encima — antes del pill de fecha (el titulo que viviria
+ahi esta oculto por pedido) y despues del cluster de chips (que en
+desktop vive centrado, no pegado al borde derecho). Paso de "franja" a
+"tarjeta que cuelga del borde superior": left:160px (pegado al pill de
+fecha) y right:calc(50vw - 300px) (se angosta hacia el centro, con la
+misma logica de centrado que ya usa chips_ajuste_tabla). Ver el comentario
+en el bloque CSS de mas abajo para el detalle completo.
 """
 
 CSS = """    /* =================================================================== */
     /* FILA SUPERIOR DE AJUSTE DE INVENTARIO                                */
     /* =================================================================== */
-    /* FRANJA "CRISTAL ESMERILADO" — banda de borde a borde tras título +   */
-    /* fecha. Blanco translúcido + blur: ancla la fecha/chips (fixed, sin   */
-    /* fondo propio) a una superficie en vez de dejarlos flotar sobre la    */
-    /* tabla al scrollear. Ver docstring del módulo y arquitectura.md #17.  */
+    /* FRANJA "CRISTAL ESMERILADO" — YA NO es de borde a borde (2026-08-06,  */
+    /* 2da vuelta): son dos zonas SIEMPRE vacías las que quedaban con fondo  */
+    /* blanco sin nada encima — izquierda (90-160px: el título vive acá     */
+    /* pero está oculto por pedido, ver app.py::col_titulo) y derecha (todo */
+    /* lo que sobra a la derecha del cluster de chips, que en desktop vive  */
+    /* centrado, no pegado al borde). Ahora es una tarjeta que CUELGA del   */
+    /* borde superior (solo redondea las esquinas de ABAJO) y se angosta   */
+    /* hacia el centro en vez de llegar a right:0. `right` usa la MISMA     */
+    /* lógica de centrado que ya usa chips_ajuste_tabla en _50_fecha.py     */
+    /* (centro ≈ 50vw+11.5px): así la tarjeta se re-centra con el cluster   */
+    /* real en vez de quedar a un ancho fijo que se desalinea al cambiar el */
+    /* viewport. No es un abrazo píxel-perfecto (el pill de fecha mide      */
+    /* distinto según el rango elegido, y eso no se puede leer en CSS puro  */
+    /* sin JS) pero deja MUCHO menos aire vacío que antes. Mobile define su */
+    /* propio right (ver _99_movil.py) porque este calc() da negativo por   */
+    /* debajo de los ~600px de ancho. Ver docstring del módulo y            */
+    /* arquitectura.md #17.                                                 */
     .st-key-fila_ajuste_top {
         position: sticky !important;
         top: var(--cab-nivel1-top) !important;
@@ -46,14 +69,16 @@ CSS = """    /* ================================================================
         position: fixed !important;
         top: 0 !important;
         bottom: auto !important;
-        left: 90px !important;      /* comienza inmediatamente tras el rail */
-        right: 0 !important;
+        left: 160px !important;                  /* pegado al pill de fecha, no al rail */
+        right: calc(50vw - 300px) !important;     /* se achica hacia el centro del cluster de chips */
         height: var(--cab-altura) !important;
+        border-radius: 0 0 14px 14px !important;  /* cuelga del borde superior: solo esquinas de abajo */
         background: rgba(255, 255, 255, 0.62) !important;
         backdrop-filter: blur(14px) saturate(1.6) !important;
         -webkit-backdrop-filter: blur(14px) saturate(1.6) !important;
-        border-bottom: 1px solid rgba(230, 230, 235, 0.7) !important;
-        box-shadow: 0 4px 14px rgba(16, 16, 20, 0.05) !important;
+        border: 1px solid rgba(230, 230, 235, 0.7) !important;
+        border-top: none !important;
+        box-shadow: 0 6px 18px rgba(16, 16, 20, 0.10) !important;
         z-index: 0 !important;
     }
     .st-key-fila_ajuste_top > * {

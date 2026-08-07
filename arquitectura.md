@@ -360,9 +360,24 @@ salvo `icono`):
     capturas — se veían "en el aire"). El `::before` de `fila_ajuste_top`
     (`estilos/_40_ajuste_franja.py`) ahora es "cristal esmerilado": blanco
     translúcido (`rgba(255,255,255,.62)`) + `backdrop-filter: blur(14px)`.
-    Como el override de Compras (`_20_compras_rail.py`) solo toca
-    `height`/`right` de ese mismo `::before`, hereda el fondo nuevo sin
-    tocarlo — sigue valiendo "si es universal, va en la regla base".
+
+    **2026-08-06, misma tarde — de franja de borde a borde a tarjeta
+    centrada.** El cristal esmerilado gustó, pero iba `left:90px` a
+    `right:0` y dejaba dos zonas SIEMPRE vacías con fondo blanco encima
+    (antes del pill de fecha — ahí viviría el título, oculto por pedido,
+    ver `app.py::col_titulo` — y después del cluster de chips, que en
+    desktop vive centrado, no pegado al borde). Ahora `right` es
+    `calc(50vw - 300px)`, la misma lógica de centrado que ya usa
+    `chips_ajuste_tabla`, y las esquinas de abajo se redondean (cuelga del
+    borde superior en vez de ser una franja). El override de Compras
+    (`_20_compras_rail.py`) perdió su `right:84px` propio: por ser más
+    específico le ganaba al `calc()` nuevo y anulaba el achique en el
+    reporte que más lo pidió — ahora solo ajusta `height` (34px) y hereda
+    `right` del default. Móvil (`_99_movil.py`) fija su propio `right:0`
+    porque el `calc()` da negativo por debajo de los ~600px de ancho.
+    Sigue valiendo "si es universal, va en la regla base" — pero ojo: un
+    override "de más" en un selector más específico puede anular un ajuste
+    nuevo de la regla base sin que se note hasta mirar la especificidad.
 
 18. **Los 8 reportes usan el rail derecho (`_render_rail`) desde 2026-08-04**
     — antes solo Compras y Ajuste. `render_vista_pills` (pestañas Gráficos/
