@@ -1095,3 +1095,25 @@ salvo `icono`):
     `getAllDisplayedColumns()`/`isPivotMode()` vía `window.__agApi`, no
     "se ve bien" a ojo — con 0-1 filas visibles el grid renderiza sin
     error ninguno, no hay excepción que lo delate.
+
+41. **Un `.clear()` sobre una función cacheada solo existe si ESA función
+    tiene el `@st.cache_data` puesto encima — no alcanza con que el nombre
+    suene a "la función de carga".** Bug real (2026-08-07): `9b47294`
+    partió `cargar()` en `_cargar_cacheable()` (con `@st.cache_data`) +
+    `cargar()` wrapper sin decorar (para no cachear un `None` transitorio,
+    ver regla #19). `app.py::_vigilar_refresco` y
+    `navegacion.py::_fragment_boton_refresco` seguían llamando
+    `cargar.clear(archivo)` — `cargar` ya no tenía `.clear`, un método que
+    Streamlit inyecta solo en la función decorada. `AttributeError` en
+    producción, pero solo en la rama que corre cuando el refresco
+    confirma dato nuevo en R2 (o, en demo, al pulsar "Refrescar"), así que
+    no saltó hasta que un usuario lo disparó.
+    Fix: `data.py::limpiar_cache(archivo)` — único punto público que sabe
+    cuál es la función cacheada real (`_cargar_cacheable`) y la limpia; los
+    dos call sites llaman a esa función en vez de tocar `_cargar_cacheable`
+    directo.
+    **Regla:** tras partir una función cacheada en capa-cacheada +
+    wrapper, `grep` por `<nombre_wrapper>.clear(` en todo el repo — cada
+    call site quedó apuntando a un objeto sin `.clear`, y no tira error de
+    import ni de tipos: revienta recién en la rama que ejecuta ese
+    `.clear()`, en producción.
