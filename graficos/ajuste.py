@@ -1217,7 +1217,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                 if len(_nom) > 32:
                                     _nom = _nom[:31] + "…"
                                 _sub = (
-                                    f"<div style='font-size:8.5px;"
+                                    f"<div style='font-size:9.5px;"
                                     f"color:{GRIS_TEXTO_SUAVE};white-space:"
                                     f"nowrap;overflow:hidden;text-overflow:"
                                     f"ellipsis'>{_r[col_area]}</div>"
@@ -1239,7 +1239,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                     f"padding:3px 0'>"
                                     f"<div style='width:38%;min-width:0;"
                                     f"flex-shrink:0;overflow:hidden'>"
-                                    f"<div style='font-size:10.5px;"
+                                    f"<div style='font-size:11.5px;"
                                     f"color:{TEXTO_PRINCIPAL};white-space:"
                                     f"nowrap;overflow:hidden;text-overflow:"
                                     f"ellipsis'>{_nom}</div>{_sub}</div>"
@@ -1256,7 +1256,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                     f"background:{color_bar};"
                                     f"border-radius:999px'></div></div>"
                                     f"<div style='flex-shrink:0;"
-                                    f"text-align:right;font-size:10px;"
+                                    f"text-align:right;font-size:11px;"
                                     f"font-weight:600;color:{_tcol};"
                                     f"font-variant-numeric:tabular-nums;"
                                     f"white-space:nowrap'>{_t}</div>"
