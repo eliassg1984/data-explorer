@@ -10,7 +10,7 @@ import streamlit as st
 from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
 from data import (
     REPORTES, cargar, cargar_rango, rango_fechas, secrets_disponibles,
-    hay_dato_nuevo, fecha_ultima_actualizacion,
+    hay_dato_nuevo, fecha_ultima_actualizacion, limpiar_cache,
 )
 from estilos import TAM_FUENTE, inject_css
 from estado_rango import (
@@ -79,7 +79,7 @@ def _vigilar_refresco(archivo, clave_estado):
     transcurrido = (datetime.datetime.now(ZONA_PERU) - info["inicio"]).total_seconds()
 
     if hay_dato_nuevo(archivo, info["baseline"]):
-        cargar.clear(archivo)
+        limpiar_cache(archivo)
         st.session_state.pop(clave_estado, None)
         st.toast(f"✅ «{info['reporte']}» actualizado.", icon="✅")
         st.rerun(scope="app")

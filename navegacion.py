@@ -13,7 +13,7 @@ import base64
 import os
 import datetime
 from zoneinfo import ZoneInfo
-from data import solicitar_refresco, secrets_disponibles, fecha_ultima_actualizacion, cargar
+from data import solicitar_refresco, secrets_disponibles, fecha_ultima_actualizacion, limpiar_cache
 from tema import (
     ACENTO, LAVANDA_FONDO, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO,
     GRIS_BORDE, TEXTO_PRINCIPAL,
@@ -373,7 +373,7 @@ def _fragment_boton_refresco(reporte_activo, archivo):
         return
 
     if not secrets_disponibles():
-        cargar.clear(archivo)
+        limpiar_cache(archivo)
         st.toast("🧪 Modo demo: no hay datos reales para refrescar.", icon="🧪")
         return
 
