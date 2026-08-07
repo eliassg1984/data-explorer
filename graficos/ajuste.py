@@ -1144,7 +1144,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             f"<div class='ajcas-head' style='display:flex;font-size:9px;"
             f"color:{GRIS_TEXTO_SUAVE};"
             f"text-transform:uppercase;letter-spacing:.08em;font-weight:600;"
-            f"padding:0 0 7px 0;border-bottom:1px solid {GRIS_BORDE}'>"
+            f"padding:0 0 7px 0'>"
             f"<div style='width:4%'></div>"
             f"<div style='width:26%'>Familia</div>"
             f"<div style='width:13%'>Ajuste</div>"
