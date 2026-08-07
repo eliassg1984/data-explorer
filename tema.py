@@ -162,11 +162,6 @@ AJUSTE_SOB_FONDO = "#e8f3e9"
 AJUSTE_SOB_BORDE = "#c9e3cd"
 """Borde fino del badge 'Sobrante'."""
 
-AJUSTE_DRILL_BORDE = "#ecebf7"
-"""Borde casi invisible del panel de drill (Faltantes/Sobrantes): se
-funde con la fila de familia que lo abre en vez de leerse como una
-tarjeta aparte."""
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # LAVANDA DE FOCO

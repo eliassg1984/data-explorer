@@ -21,11 +21,11 @@ from tema import (
     BLANCO, CELDA_ALERTA_FONDO, CELDA_ALERTA_TEXTO, CELDA_POS_TEXTO,
     DANGER_TEXT, ERROR, ERROR_FONDO, EXITO, EXITO_FONDO,
     GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE,
-    LAVANDA_CABECERA_GRUPO, LAVANDA_FILA, LAVANDA_FONDO, LAVANDA_SELECCION,
+    LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FONDO, LAVANDA_SELECCION,
     AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS, AJUSTE_POS_TEXTO,
     AJUSTE_CRIT_FONDO, AJUSTE_CRIT_TEXTO, AJUSTE_CRIT_BORDE,
     AJUSTE_ALERTA_FONDO, AJUSTE_ALERTA_TEXTO, AJUSTE_ALERTA_BORDE,
-    AJUSTE_SOB_FONDO, AJUSTE_SOB_BORDE, AJUSTE_DRILL_BORDE,
+    AJUSTE_SOB_FONDO, AJUSTE_SOB_BORDE,
 )
 from graficos.base import (
     _card, _es_movil, _layout, _render_rail, _resolver, _slug, _wrap_cat,
@@ -924,28 +924,26 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         background: {LAVANDA_SELECCION} !important; }}
     div[class*="st-key-ajcas_fila_"][class*="_on"] {{
         background: {LAVANDA_FONDO} !important;
-        box-shadow: inset 2px 0 0 {ACENTO};
-        /* Esquina inferior a 0: la fila con foco siempre tiene el panel
-           de drill pegado debajo (ver más abajo) — con las 4 puntas
-           redondeadas quedaba un hueco visual en las de abajo. */
-        border-radius: 8px 8px 0 0 !important; }}
+        box-shadow: inset 2px 0 0 {ACENTO}; }}
     div[class*="st-key-ajcas_fila_"][class*="_on"]:hover {{
         background: {LAVANDA_FONDO} !important; }}
-    /* ── Panel de drill (Faltantes/Sobrantes): fusionado con la fila que
-       lo abre, no una tarjeta aparte — mismo patrón que
-       .st-key-ajuste_graf_card_ (ver estilos/_80_cards.py): el
-       fondo/borde/radius van en el div con la key, el borde nativo de
-       Streamlit (border=True) se anula en su hijo directo.
-       margin-top negativo compensa el row-gap:6px de chartcard_cascada
-       más el margin-bottom:4px de la fila (10px medidos) para que quede
-       ~1px de solape con la fila de arriba en vez de hueco visible. */
+    /* ── Panel de drill (Faltantes/Sobrantes): "línea guía + indent" —
+       sin caja propia (ni fondo ni borde alrededor). Un filete lavanda
+       de 2px a la izquierda continúa el acento morado de la fila con
+       foco, y el contenido queda indentado — mismo patrón visual que un
+       hilo de comentarios o un árbol de archivos ("esto cuelga de la
+       fila de arriba"). margin-top negativo achica el
+       row-gap:6px + margin-bottom:4px de la fila (10px de base) a un
+       espacio chico (~2px), sin llegar al solape que usaba la variante
+       fusionada — acá no hay bordes que calzar. */
     div[class*="st-key-ajcas_panel_drill"] {{
-        background: {LAVANDA_FILA} !important;
-        border: 1px solid {AJUSTE_DRILL_BORDE} !important;
-        border-radius: 0 0 10px 10px !important;
+        background: transparent !important;
+        border: none !important;
+        border-left: 2px solid {LAVANDA_BORDE} !important;
+        border-radius: 0 !important;
         box-shadow: none !important;
-        margin-top: -11px !important;
-        padding: 12px 16px 14px !important; }}
+        margin: -8px 0 4px 3px !important;
+        padding: 10px 8px 12px 20px !important; }}
     div[class*="st-key-ajcas_panel_drill"] > div {{
         border: none !important; }}
     div[class*="st-key-ajcas_fila_"] div[data-testid="stVerticalBlock"]
