@@ -88,6 +88,21 @@ Detalle en `arquitectura.md` § Reglas #1.
 - `_LAYOUT_BASE` no se puede desempacar con `**` si el `update_layout` define
   su propio `xaxis`/`yaxis`. Ver `arquitectura.md` § Reglas #5.
 
+## AgGrid — específicos de este proyecto
+
+- **Un `cellRenderer`/`innerRenderer` que devuelve un string de HTML no
+  pinta HTML acá — se ve como texto escapado.** `st_aggrid` usa
+  `ag-grid-react`; el atajo "vanilla" de AG Grid puro (función que
+  devuelve `'<div>...</div>'` o un `HTMLElement`) no está soportado (el
+  segundo caso directamente revienta con React error #31). Hace falta la
+  interfaz de Component: una `class` con `init(params)` que arma
+  `this.eGui` a mano (`createElement`/`textContent`) y `getGui()` que lo
+  devuelve. Detalle y ejemplo en `arquitectura.md` § Reglas #25.
+- **`api.getValue(colKey, rowNode)` no existe** en la versión de AG Grid
+  de este proyecto (34.3.1). Si un cellRenderer necesita el valor de OTRA
+  columna, resolverlo con `valueGetter` + `aggFunc` propio en vez de leer
+  una columna vecina en tiempo de render.
+
 ## Dashboards de gráficos
 
 `graficos/` es un paquete. `__init__.py` es solo el dispatcher

@@ -31,6 +31,10 @@ from graficos.base import (
     _card, _es_movil, _layout, _render_rail, _resolver, _slug, _wrap_cat,
     renderizar_graficos_genericos,
 )
+# _periodo_serie vive en graficos/compras/_comun.py; se reusa desde acá vía
+# graficos.compras (que ya la re-exporta para test_graficos.py) en vez de
+# duplicar el cálculo de granularidad Día/Semana/Mes.
+from graficos.compras import _periodo_serie
 
 
 # Rail derecho de Ajuste (mismo componente compartido que Compras). El id
@@ -268,303 +272,157 @@ def _fmt_corte(fecha):
     return f"{_ts.day:02d}-{_MESES_ABR_ES[_ts.month - 1]}"
 
 
-def _graf_pivote_fecha_ajuste(df, col_familia, col_ajuste_val, col_producto,
-                              col_cantidad, col_fecha):
-    """Tabla dinámica: Familia > Subfamilia > Producto como filas
-    expandibles, una fecha de corte por grupo de columnas (Ajuste
-    Valorizado + Cantidad) con flecha + color de tendencia vs. el corte
-    anterior.
+def _periodo_pivote_ajuste(fechas, gran):
+    """Clave ordenable + etiqueta corta de periodo para la tabla dinámica
+    de Ajuste, en las 3 granularidades del selector (Día/Semana/Mes). La
+    clave reusa `_periodo_serie` (graficos/compras/_comun.py, re-exportada
+    vía graficos.compras — "reusar desde ahí, no duplicar" per
+    arquitectura.md); la etiqueta es propia porque acá el mes va abreviado
+    en español (_MESES_ABR_ES) y Día/Semana no necesitan el año en la
+    cabecera de columna."""
+    clave = _periodo_serie(fechas, gran)
+    if gran == "Día":
+        etiqueta = (fechas.dt.day.astype(str).str.zfill(2) + "/"
+                    + fechas.dt.month.astype(str).str.zfill(2))
+    elif gran == "Semana":
+        etiqueta = "S" + fechas.dt.isocalendar().week.astype(str).str.zfill(2)
+    else:
+        etiqueta = fechas.dt.month.map(lambda m: _MESES_ABR_ES[m - 1])
+    return clave, etiqueta
 
-    No usa el "Modo pivote" nativo de AG Grid (ver tablas/_config.py,
-    pensado para Ajuste): ese pivotea UNA columna a elección del usuario,
-    pero comparar cada columna contra su vecina por fila —el punto
-    central de esta vista— necesitaría un cellRenderer JsCode a medida.
-    Se pre-pivotea con pandas (`pivot_table`) y se renderiza HTML propio,
-    mismo patrón que el resto de filas de este archivo."""
+
+def _armar_tabla_pivote_ajuste(df, col_familia, col_subfamilia, col_producto,
+                                col_fecha, col_ajuste, col_ajuste_val, gran,
+                                anio_actual):
+    """Pre-pivotea a un dataframe WIDE (una fila por Familia+Subfamilia+
+    Producto, columnas numéricas ajv_i/aj_i por periodo) para que
+    tablas.ajuste_pivote lo renderice con rowGroup nativo de AG Grid: el
+    árbol Familia > Subfamilia > Producto y sus totales por nivel salen
+    del propio grid (aggFunc="sum"), no hay que armarlos a mano como en la
+    versión HTML anterior.
+
+    Con granularidad "Mes" arma las 12 columnas del año FIJAS (Ene..Dic)
+    aunque los meses futuros no tengan filas todavía, para que la forma de
+    la tabla no cambie mes a mes. Con "Semana"/"Día" solo las columnas que
+    ya tienen datos — a diferencia de la versión anterior (tope de 6
+    cortes por el ancho fijo en %), acá el scroll horizontal nativo de AG
+    Grid banca bastantes más columnas sin achicarlas."""
+    clave, etiqueta = _periodo_pivote_ajuste(df[col_fecha], gran)
+    d = df.assign(_clave=clave, _etq=etiqueta)
+
+    if gran == "Mes":
+        orden = pd.DataFrame({
+            "_clave": [f"{anio_actual}-{m:02d}" for m in range(1, 13)],
+            "_etq": [_MESES_ABR_ES[m - 1] for m in range(1, 13)],
+        })
+    else:
+        orden = (d[["_clave", "_etq"]].drop_duplicates()
+                 .sort_values("_clave").reset_index(drop=True))
+    if orden.empty:
+        return None, []
+
+    grupo_cols = [col_familia] + (
+        [col_subfamilia] if col_subfamilia else []) + [col_producto]
+    piv_ajv = d.pivot_table(index=grupo_cols, columns="_clave",
+                            values=col_ajuste_val, aggfunc="sum",
+                            fill_value=0.0)
+    _tiene_aj = bool(col_ajuste and col_ajuste in d.columns)
+    piv_aj = (d.pivot_table(index=grupo_cols, columns="_clave",
+                            values=col_ajuste, aggfunc="sum", fill_value=0.0)
+              if _tiene_aj else None)
+
+    wide = pd.DataFrame(index=piv_ajv.index)
+    periodos = []
+    for i, fila in orden.iterrows():
+        clave_i, etq_i = fila["_clave"], fila["_etq"]
+        f_ajv = f"ajv_{i}"
+        wide[f_ajv] = piv_ajv[clave_i] if clave_i in piv_ajv.columns else 0.0
+        f_aj = None
+        if _tiene_aj:
+            f_aj = f"aj_{i}"
+            wide[f_aj] = piv_aj[clave_i] if clave_i in piv_aj.columns else 0.0
+        periodos.append({"field_ajv": f_ajv, "field_aj": f_aj, "label": etq_i})
+
+    wide["tot_ajv"] = wide[[p["field_ajv"] for p in periodos]].sum(axis=1)
+    if _tiene_aj:
+        wide["tot_aj"] = wide[[p["field_aj"] for p in periodos]].sum(axis=1)
+    return wide.reset_index(), periodos
+
+
+def _tabla_pivote_fecha_ajuste(df, col_familia, col_ajuste_val, col_producto,
+                                col_ajuste, col_fecha, col_area=None,
+                                area_sel=None, fam_sel=None):
+    """Tabla dinámica de Ajuste — AgGrid real (no HTML a mano): Familia >
+    Subfamilia > Producto como árbol nativo (expandir/colapsar de AG Grid),
+    columnas por periodo (Día/Semana/Mes) con Ajuste Valorizado + Ajuste
+    combinados en una celda compacta (tablas/ajuste_pivote.py).
+
+    Ignora a propósito el rango de fecha de la franja superior: siempre
+    parte del año EN CURSO completo, con el mismo patrón que la rama
+    "Histórico" de renderizar_graficos_ajuste (unas líneas más abajo) —
+    el pedido fue "mostrar por defecto toda la información del año en
+    curso" sin depender de qué rango haya elegido el usuario para
+    Evolución/Comparativa (categoría de rango compartida, ver
+    categoria_rango_ajuste). Por eso recibe `df` SIN filtrar por fecha
+    (df_full, no el `d` ya acotado por la franja superior); los chips de
+    Área/Familia sí se reaplican acá porque son propios de esta vista.
+
+    Ya no arma el árbol a mano ni compara cada columna con la anterior: la
+    flecha de tendencia de la versión vieja se pierde a propósito — un
+    pivote de verdad agrega por columna, no compara vecinas (ver
+    arquitectura.md, reemplazo de la regla #25)."""
     if not (col_familia and col_fecha and col_producto and col_ajuste_val):
         st.info("Se necesita familia, fecha, producto y ajuste valorizado "
                 "para la tabla dinámica.")
         return
 
-    # Subfamilia no viene resuelta desde renderizar_graficos_ajuste (nadie
-    # más la usa en este archivo) — mismos candidatos que
-    # graficos/compras/__init__.py::col_subfam, para no reinventar nombres.
     col_subfamilia = _resolver(df, ["Subfamilia", "Nombre Subfamilia"])
-    _has_sub = bool(col_subfamilia and col_subfamilia in df.columns)
-    _has_cant = bool(col_cantidad and col_cantidad in df.columns)
+    anio_actual = _dt.date.today().year
 
     d = df.copy()
     d[col_fecha] = pd.to_datetime(d[col_fecha], errors="coerce")
+    d = d[d[col_fecha].dt.year == anio_actual]
+    if area_sel and col_area and col_area in d.columns:
+        d = d[d[col_area].astype(str).isin(area_sel)]
+    if fam_sel and col_familia and col_familia in d.columns:
+        d = d[d[col_familia].astype(str).isin(fam_sel)]
+
     _req = [col_fecha, col_familia, col_producto] + (
-        [col_subfamilia] if _has_sub else [])
+        [col_subfamilia] if col_subfamilia and col_subfamilia in d.columns
+        else [])
     d = d.dropna(subset=_req)
-    if d.empty:
-        st.info("Sin datos para la tabla dinámica en el rango seleccionado.")
-        return
-
-    _cortes_todos = sorted(d[col_fecha].dropna().unique())
-    _MAX_CORTES = 6
-    _recortado = len(_cortes_todos) > _MAX_CORTES
-    _cortes = _cortes_todos[-_MAX_CORTES:] if _recortado else _cortes_todos
-    if not _cortes:
-        st.info("Sin fechas de corte en el rango seleccionado.")
-        return
-    # El Total de cada fila suma solo los cortes MOSTRADOS (no todo el
-    # rango) -- así siempre cuadra con lo que se ve en pantalla.
-    d = d[d[col_fecha].isin(_cortes)]
-
-    def _pivotear(cols_grupo):
-        _val = d.pivot_table(index=cols_grupo, columns=col_fecha,
-                             values=col_ajuste_val, aggfunc="sum",
-                             fill_value=0.0)
-        _cant = (d.pivot_table(index=cols_grupo, columns=col_fecha,
-                               values=col_cantidad, aggfunc="sum",
-                               fill_value=0.0)
-                 if _has_cant else None)
-        return _val, _cant
-
-    _cols_sub = [col_familia, col_subfamilia] if _has_sub else None
-    _cols_prod = ([col_familia, col_subfamilia, col_producto] if _has_sub
-                  else [col_familia, col_producto])
-
-    _val_fam, _cant_fam = _pivotear([col_familia])
-    _val_sub, _cant_sub = _pivotear(_cols_sub) if _has_sub else (None, None)
-    _val_prod, _cant_prod = _pivotear(_cols_prod)
-
-    _fams = _val_fam.sum(axis=1).sort_values().index.tolist()
-
-    _exp_fam = st.session_state.setdefault("ajuste_pivote_exp_fam", set())
-    _exp_sub = st.session_state.setdefault("ajuste_pivote_exp_sub", set())
-
-    def _sig(v):
-        return "+" if v > 0 else ("−" if v < 0 else "")
-
-    def _col_signo(v):
-        if v > 0:
-            return CELDA_POS_TEXTO
-        if v < 0:
-            return DANGER_TEXT
-        return GRIS_TEXTO
-
-    def _celda_corte(v, v_prev, es_primero, cantidad):
-        _col = _col_signo(v)
-        _txt = f"{_sig(v)}S/ {abs(v):,.0f}"
-        _flecha = ""
-        if not es_primero and v != v_prev:
-            _fcol, _fg = (EXITO, "▲") if v > v_prev else (ERROR, "▼")
-            _flecha = (f"<span style='color:{_fcol};font-size:8px;"
-                       f"margin-right:2px'>{_fg}</span>")
-        _html = (f"<div style='color:{_col};font-weight:500;"
-                 f"font-variant-numeric:tabular-nums'>{_flecha}{_txt}</div>")
-        if cantidad is not None:
-            _html += (f"<div style='color:{GRIS_TEXTO_SUAVE};font-size:"
-                      f"9.5px;font-variant-numeric:tabular-nums'>"
-                      f"{_sig(cantidad)}{abs(cantidad):,.0f}</div>")
-        return _html
-
-    _ancho_nombre = max(34 - (len(_cortes) * 1.5), 18)
-    _ancho_corte = (100 - _ancho_nombre - 13) / len(_cortes)
-
-    def _fila_html(nombre, indent_px, val_row, cant_row, tot_val, tot_cant,
-                   negrita=False):
-        _peso = "600" if negrita else "500"
-        _piezas = [
-            f"<div style='width:{_ancho_nombre}%;padding-left:{indent_px}px;"
-            f"overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
-            f"font-weight:{_peso};color:{TEXTO_PRINCIPAL};font-size:12px'>"
-            f"{nombre}</div>"
-        ]
-        for _i, _c in enumerate(_cortes):
-            _v = float(val_row.get(_c, 0.0))
-            _v_prev = float(val_row.get(_cortes[_i - 1], 0.0)) if _i > 0 else 0.0
-            _cant = float(cant_row.get(_c, 0.0)) if cant_row is not None else None
-            _piezas.append(
-                f"<div style='width:{_ancho_corte}%;text-align:right'>"
-                f"{_celda_corte(_v, _v_prev, _i == 0, _cant)}</div>"
-            )
-        _cant_tot_html = (
-            f"<div style='font-size:9.5px;color:{GRIS_TEXTO_SUAVE};"
-            f"font-weight:400'>{_sig(tot_cant)}{abs(tot_cant):,.0f}</div>"
-            if tot_cant is not None else "")
-        _piezas.append(
-            f"<div style='width:13%;text-align:right;font-weight:600;"
-            f"color:{ACENTO_TEXTO_OSCURO}'>{_sig(tot_val)}S/ "
-            f"{abs(tot_val):,.0f}{_cant_tot_html}</div>"
-        )
-        return (f"<div style='display:flex;align-items:center;gap:4px;"
-                f"padding:5px 0'>{''.join(_piezas)}</div>")
-
-    # Cabecera pegajosa: se ancla justo debajo de la franja superior fija
-    # (título + fecha), que ya ocupa de --cab-nivel1-top a +--cab-altura.
-    # z-index por debajo de esa franja (20) para no taparla si algo se
-    # solapa en el borde.
-    #
-    # OJO — el sticky va en el PADRE, no en `.st-key-ajpiv_header`: todo
-    # `st.container(key=...)` queda envuelto por Streamlit en un
-    # `stLayoutWrapper` invisible (sin key propia) que es hijo directo de
-    # `stMain`/`stMainBlockContainer`/etc. Puesto en el propio div con key,
-    # el sticky no engancha (se movía 1:1 con el scroll pese a que
-    # `getComputedStyle` ya marcaba `position: sticky` — se verificó
-    # scroll a scroll con getBoundingClientRect, no alcanza con leer el
-    # estilo computado). Puesto en el wrapper vía `:has()`, sí engancha
-    # -- confirmado con tres posiciones de scroll distintas quedando fijo
-    # en el mismo top. Ver arquitectura.md regla #25 (sumar caso).
-    st.markdown(f"""<style>
-    div:has(> .st-key-ajpiv_header) {{
-        position: sticky !important;
-        top: calc(var(--cab-nivel1-top, 30px) + var(--cab-altura, 50px))
-             !important;
-        z-index: 5 !important;
-        background: {BLANCO} !important;
-    }}
-    </style>""", unsafe_allow_html=True)
 
     with _card("pivote_fecha"):
         st.markdown(
             f"<div style='font-size:14px;font-weight:500;"
             f"color:{TEXTO_PRINCIPAL};margin-bottom:2px'>"
-            f"Ajuste por fecha de corte</div>",
+            f"Ajuste por fecha — año {anio_actual}</div>",
             unsafe_allow_html=True,
         )
-        if _recortado:
-            st.caption(
-                f"Mostrando los últimos {_MAX_CORTES} cortes de "
-                f"{len(_cortes_todos)} en el rango — acotá el rango de "
-                f"fecha (arriba) para ver otros."
-            )
-        else:
-            st.markdown("<div style='margin-bottom:8px'></div>",
-                        unsafe_allow_html=True)
-
-        _hdr = ["<div style='width:{}%'></div>".format(_ancho_nombre)]
-        for _c in _cortes:
-            _hdr.append(
-                f"<div style='width:{_ancho_corte}%;text-align:right;"
-                f"font-size:10px;color:{GRIS_TEXTO_SUAVE};font-weight:600;"
-                f"text-transform:uppercase'>"
-                f"{_fmt_corte(_c)}</div>"
-            )
-        _hdr.append(
-            f"<div style='width:13%;text-align:right;font-size:10px;"
-            f"color:{ACENTO_TEXTO_OSCURO};font-weight:600;"
-            f"text-transform:uppercase'>Total</div>"
+        st.caption(
+            f"Año {anio_actual} completo — no depende del rango de fecha "
+            f"de arriba. Los periodos futuros aparecen vacíos."
         )
-        with st.container(key="ajpiv_header"):
-            st.markdown(
-                f"<div style='display:flex;gap:4px;padding:6px 0;"
-                f"border-bottom:1px solid {GRIS_BORDE}'>"
-                f"{''.join(_hdr)}</div>",
-                unsafe_allow_html=True,
-            )
+        gran = st.pills("Agrupar columnas por", ["Día", "Semana", "Mes"],
+                        default="Mes", key="ajuste_pivote_gran") or "Mes"
 
-        for _fam in _fams:
-            _fam_abierta = _fam in _exp_fam
-            _tot_fam_val = float(_val_fam.loc[_fam].sum())
-            _tot_fam_cant = float(_cant_fam.loc[_fam].sum()) if _has_cant else None
-            _c0, _c1 = st.columns([0.04, 0.96])
-            with _c0:
-                if st.button("▾" if _fam_abierta else "▸",
-                            key=f"ajpiv_fam_{_slug(str(_fam))}",
-                            help="Colapsar" if _fam_abierta else "Expandir"):
-                    (_exp_fam.discard if _fam_abierta else _exp_fam.add)(_fam)
-                    st.rerun()
-            with _c1:
-                st.markdown(
-                    _fila_html(str(_fam), 0, _val_fam.loc[_fam],
-                              _cant_fam.loc[_fam] if _has_cant else None,
-                              _tot_fam_val, _tot_fam_cant, negrita=True),
-                    unsafe_allow_html=True,
-                )
+        if d.empty:
+            st.info(f"Sin datos de {anio_actual} para la tabla dinámica.")
+            return
 
-            if not _fam_abierta:
-                continue
+        _sub = (col_subfamilia
+                if col_subfamilia and col_subfamilia in d.columns else None)
+        wide, periodos = _armar_tabla_pivote_ajuste(
+            d, col_familia, _sub, col_producto, col_fecha, col_ajuste,
+            col_ajuste_val, gran, anio_actual,
+        )
+        if wide is None or wide.empty:
+            st.info(f"Sin datos de {anio_actual} para la tabla dinámica.")
+            return
 
-            if not _has_sub:
-                # Sin subfamilia: directo a top 10 productos de la familia.
-                if _fam not in _val_prod.index.get_level_values(0):
-                    continue
-                _prods_fam = _val_prod.loc[[_fam]]
-                _orden = _prods_fam.sum(axis=1).abs().sort_values(
-                    ascending=False).head(10).index
-                for _key in _orden:
-                    _prod = _key[-1]
-                    _tv = float(_val_prod.loc[_key].sum())
-                    _tc = float(_cant_prod.loc[_key].sum()) if _has_cant else None
-                    st.markdown(
-                        _fila_html(str(_prod), 20, _val_prod.loc[_key],
-                                  _cant_prod.loc[_key] if _has_cant else None,
-                                  _tv, _tc),
-                        unsafe_allow_html=True,
-                    )
-                continue
-
-            if _fam not in _val_sub.index.get_level_values(0):
-                continue
-            _subs_fam = sorted(
-                _val_sub.loc[_fam].index.tolist(),
-                key=lambda s: _val_sub.loc[(_fam, s)].sum())
-
-            for _sub in _subs_fam:
-                _sub_key = f"{_fam}||{_sub}"
-                _sub_abierta = _sub_key in _exp_sub
-                _tot_sub_val = float(_val_sub.loc[(_fam, _sub)].sum())
-                _tot_sub_cant = (float(_cant_sub.loc[(_fam, _sub)].sum())
-                                if _has_cant else None)
-                _sc0, _sc1 = st.columns([0.04, 0.96])
-                with _sc0:
-                    if st.button(
-                            "▾" if _sub_abierta else "▸",
-                            key=f"ajpiv_sub_{_slug(str(_fam))}_{_slug(str(_sub))}",
-                            help="Colapsar" if _sub_abierta else "Ver productos"):
-                        (_exp_sub.discard if _sub_abierta else _exp_sub.add)(_sub_key)
-                        st.rerun()
-                with _sc1:
-                    st.markdown(
-                        _fila_html(str(_sub), 20, _val_sub.loc[(_fam, _sub)],
-                                  _cant_sub.loc[(_fam, _sub)] if _has_cant else None,
-                                  _tot_sub_val, _tot_sub_cant),
-                        unsafe_allow_html=True,
-                    )
-
-                if not _sub_abierta:
-                    continue
-                if (_fam, _sub) not in _val_prod.index.droplevel(-1):
-                    continue
-                _prods_sub = _val_prod.loc[(_fam, _sub)]
-                _orden_p = _prods_sub.sum(axis=1).abs().sort_values(
-                    ascending=False).head(10).index
-                for _p in _orden_p:
-                    _key = (_fam, _sub, _p)
-                    _tv = float(_val_prod.loc[_key].sum())
-                    _tc = float(_cant_prod.loc[_key].sum()) if _has_cant else None
-                    st.markdown(
-                        _fila_html(str(_p), 40, _val_prod.loc[_key],
-                                  _cant_prod.loc[_key] if _has_cant else None,
-                                  _tv, _tc),
-                        unsafe_allow_html=True,
-                    )
-
-        _tot_gen_val = float(_val_fam.sum().sum())
-        _tot_gen_cant = float(_cant_fam.sum().sum()) if _has_cant else None
-        _tg0, _tg1 = st.columns([0.04, 0.96])
-        with _tg1:
-            st.markdown(
-                _fila_html("TOTAL GENERAL", 0, _val_fam.sum(axis=0),
-                          _cant_fam.sum(axis=0) if _has_cant else None,
-                          _tot_gen_val, _tot_gen_cant, negrita=True),
-                unsafe_allow_html=True,
-            )
-
-        st.markdown(
-            f"<div style='display:flex;gap:14px;flex-wrap:wrap;"
-            f"font-size:9.5px;color:{GRIS_TEXTO_SUAVE};margin-top:10px'>"
-            f"<span><span style='color:{EXITO}'>▲</span> mejoró</span>"
-            f"<span><span style='color:{ERROR}'>▼</span> empeoró</span>"
-            f"<span style='color:{GRIS_BORDE}'>|</span>"
-            f"<span>vs. la fecha de corte anterior — el color del texto "
-            f"es el signo (faltante/sobrante), independiente de la "
-            f"flecha</span></div>",
-            unsafe_allow_html=True,
+        from tablas import renderizar_aggrid_pivote_ajuste
+        renderizar_aggrid_pivote_ajuste(
+            wide, periodos, col_familia, _sub, col_producto,
         )
 
 
@@ -1997,8 +1855,8 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         )
 
         # El sticky va en el ANCESTRO stElementContainer del markdown (vía
-        # :has(), no en la propia key) -- mismo motivo que el sticky header
-        # de _graf_pivote_fecha_ajuste (arquitectura.md regla #25): puesto
+        # :has(), no en la propia key) -- mismo motivo que el resto de
+        # stickies de este archivo (arquitectura.md regla #25): puesto
         # directo en el div con key no engancha con el scroll.
         st.markdown(f"""<style>
         .st-key-hm_movil_scroll {{
@@ -2666,8 +2524,12 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
                                       col_fecha=col_fecha,
                                       col_unidad=col_unidad)
         elif graf == "Por fecha de corte":
-            _graf_pivote_fecha_ajuste(d, col_familia, col_ajuste_val,
-                                      col_producto, col_cantidad, col_fecha)
+            _tabla_pivote_fecha_ajuste(
+                df_full if df_full is not None else d,
+                col_familia, col_ajuste_val, col_producto, col_cantidad,
+                col_fecha, col_area=col_area, area_sel=area_sel,
+                fam_sel=fam_sel,
+            )
 
     _card_der = st.container(
         border=True, key=f"ajuste_graf_card_der_{_slug(ambito)}",

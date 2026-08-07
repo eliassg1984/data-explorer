@@ -21,7 +21,7 @@ actualiza este documento en el mismo commit.
 | `app.py` | Orquestador: navegación, filtros, fragmentos, llama a los renderizadores. |
 | `estado_rango.py` | **Dueño único** del rango de fechas de la franja superior (`clave_rango`, `asegurar_rango`, `atajos_rango`, `aplicar_atajo`). Nadie escribe la clave del rango fuera de este módulo — ver regla #24. |
 | `data.py` | Carga de datos: DuckDB + httpfs leyendo parquets de R2 (secrets). Sistema de refresco bajo demanda vía R2. |
-| `tablas/` | **Paquete de tablas AgGrid** (refactor 2026-08-01; antes un `tablas.py` de 2.028 líneas). `__init__.py` re-exporta la API pública. `_css.py` (CSS de grid y paneles), `_config.py` (estilos de celda/fila, sidebar, totales), `desktop.py` (`renderizar_aggrid_desktop`), `movil.py` (`renderizar_aggrid_movil`), `compras.py` (`renderizar_aggrid_compras` + `renderizar_tabla_compras`, esta última legacy y sin uso). |
+| `tablas/` | **Paquete de tablas AgGrid** (refactor 2026-08-01; antes un `tablas.py` de 2.028 líneas). `__init__.py` re-exporta la API pública. `_css.py` (CSS de grid y paneles), `_config.py` (estilos de celda/fila, sidebar, totales), `desktop.py` (`renderizar_aggrid_desktop`), `movil.py` (`renderizar_aggrid_movil`), `compras.py` (`renderizar_aggrid_compras` + `renderizar_tabla_compras`, esta última legacy y sin uso), `ajuste_pivote.py` (`renderizar_aggrid_pivote_ajuste`, tabla "Por fecha" de Ajuste de Inventario — ver regla #25). |
 | `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), `ajuste.py` (ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10), `ventas.py`, `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras), `legacy.py` (Inventario v1, respaldo no re-exportado). **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py` — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
 | `estilos/` | **Paquete del CSS global** (refactor 2026-08-01; antes un `estilos.py` de 1.700 líneas). `__init__.py` mantiene la API pública (`TAM_FUENTE`, `get_css`, `inject_css`) y concatena las secciones. Una sección por módulo, con prefijo numérico que marca el orden: `_00_base`, `_10_vista`, `_20_compras_rail`, `_30_filtros`, `_40_ajuste_franja`, `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`, `_90_franja_inferior`, `_99_movil`. **El orden de `_SECCIONES` es parte del comportamiento**: hay `!important` en ambos lados de varios conflictos, así que gana la regla que va DESPUÉS — por eso `_99_movil` cierra. |
 | `navegacion.py` | Rail lateral, topbar y CSS por sección (`_CSS_AJUSTE`). Botón de refresco aislado en su propio `@st.fragment`. |
@@ -619,54 +619,126 @@ salvo `icono`):
     otro archivo, es la fuente histórica de los desyncs (overlay ≠
     calendario ≠ datos) que el módulo existe para evitar.
 
-25. **Tabla dinámica de Ajuste (`graficos/ajuste.py::_graf_pivote_fecha_ajuste`,
-    rail "Por fecha de corte") — por qué NO usa el "Modo pivote" nativo de
-    AG Grid** (`tablas/_config.py::_config_sidebar`, que sí existe y está
-    montado y funcional para Ajuste). El pivote nativo de AG Grid pivotea
-    UNA columna a elección del usuario (ahí Fecha → columnas), pero el
-    punto central de esta vista es comparar cada columna (fecha de corte)
-    contra su vecina para pintar flecha+color de tendencia por fila — eso
-    necesitaría un `cellRenderer` JsCode a medida con acceso a las
-    columnas vecinas del mismo `params.data`, bastante más frágil que
-    resolverlo del lado Python. Se pre-pivotea con `pandas.pivot_table`
-    (una llamada por nivel: familia / familia+subfamilia /
-    familia+subfamilia+producto) y se renderiza HTML propio — mismo
-    patrón que el resto de filas de `ajuste.py` (`st.columns` para el
-    botón chevron real + `st.markdown` con el resto de la fila).
-    Árbol expandible con DOS sets independientes en `session_state`
-    (`ajuste_pivote_exp_fam`, `ajuste_pivote_exp_sub`) — a diferencia del
-    drill de foco único de la Cascada (una sola fila a la vez), acá
-    conviene poder tener varias familias/subfamilias abiertas al mismo
-    tiempo para comparar entre ramas del árbol.
-    Detalles de implementación que costó acertar a la primera:
-    - El color del texto (signo: faltante/sobrante) y el color de la
-      flecha (tendencia: mejoró/empeoró) son DOS señales independientes
-      que pueden no coincidir (un faltante que mejora sigue en rojo pero
-      con flecha verde) — iban en la MISMA clase CSS al principio y la
-      cascada de especificidad hacía que la flecha heredara el color del
-      signo en vez de tener el suyo propio. Selector `.up .ar`/`.down .ar`
-      (descendiente, más específico), nunca clases sueltas combinadas.
-    - Los meses de `pd.Timestamp.strftime('%b')` salen en inglés (locale
-      del sistema, no de la app) — tabla `_MESES_ABR_ES` propia en vez de
-      `strftime`, mismo problema que ya tiene `%b` en los `tickformat` de
-      Plotly de otros gráficos de este archivo (no corregido ahí, pero
-      documentado acá para no repetir la sorpresa).
-    - El Total de cada fila suma solo los cortes de fecha MOSTRADOS (hay
-      un tope de 6 columnas; con más, se acota a los últimos 6 y se avisa
-      con un caption) — nunca el rango completo aunque esté recortado en
-      pantalla, para que el número de la columna Total siempre cuadre con
-      lo que se ve, sin un total "fantasma" que sume fechas invisibles.
-    - **`position: sticky` en un `st.container(key=...)` no engancha
-      puesto en la key propia** — hay que ponerlo en el PADRE. Todo
-      `st.container(key=...)` queda envuelto por Streamlit en un
-      `stLayoutWrapper` invisible (sin key propia) que es el que realmente
-      necesita `position: sticky`; puesto en `.st-key-<key>` directamente,
-      `getComputedStyle` marca `position: sticky` igual (parece que
-      "prendió"), pero se mueve 1:1 con el scroll — solo se detecta
-      scrolleando y comparando `getBoundingClientRect()` en al menos DOS
-      puntos de scroll distintos, no alcanza con leer el estilo computado
-      una sola vez. Selector para llegar al wrapper sin tocar el HTML que
-      genera Streamlit: `div:has(> .st-key-<key>) { position: sticky; ... }`.
+25. **Tabla dinámica de Ajuste — reescrita 2026-08-07 como AG Grid real**
+    (`graficos/ajuste.py::_tabla_pivote_fecha_ajuste` +
+    `tablas/ajuste_pivote.py::renderizar_aggrid_pivote_ajuste`, rail "Por
+    fecha de corte"). Antes era HTML a mano (`st.columns` + `st.markdown`,
+    árbol con sets en `session_state`) con flecha de tendencia vs. el
+    corte anterior; se reemplazó por Familia > Subfamilia > Producto como
+    `rowGroup` nativo (árbol expandible de AG Grid, ya no botones ▸/▾
+    hechos a mano) + columnas por periodo (Día/Semana/Mes, `st.pills`) con
+    Ajuste Valorizado + Ajuste en una celda compacta. Pre-pivotea con
+    pandas (`_armar_tabla_pivote_ajuste`) a un dataframe WIDE — una fila
+    por Familia+Subfamilia+Producto, columnas `ajv_i`/`aj_i` por periodo —
+    y deja que AG Grid agrupe y sume; con Mes arma las 12 columnas del año
+    FIJAS (meses futuros vacíos) para que la tabla no cambie de forma mes
+    a mes, con Semana/Día solo las que ya tienen datos (sin el tope de 6
+    columnas de la versión vieja: el scroll horizontal nativo banca
+    bastantes más). Ignora a propósito el rango de fecha de la franja
+    superior — parte siempre de `df_full` acotado al año EN CURSO, mismo
+    patrón que la rama "Histórico" del mismo archivo.
+
+    **Se pierde la flecha de tendencia a propósito**: un pivote de verdad
+    agrega por columna, no compara una columna contra su vecina — esa
+    comparación necesitaría un cellRenderer con acceso a la columna de al
+    lado, el acoplamiento frágil que esta reescritura evita. Si hace falta
+    de nuevo, es una vista aparte, no un parche acá.
+
+    **No usa `pivotMode` nativo**: cada celda de periodo combina DOS
+    números (Ajuste Valorizado grande + Ajuste chico) de DOS columnas
+    fuente fijas por Python — pivotear de verdad con 2 valores activos da
+    2 columnas SEPARADAS por periodo (una opción de diseño descartada:
+    más nativa, pero el doble de columnas y sin la celda compacta). En
+    cambio cada periodo es una columna SINTÉTICA (`colId` propio, sin
+    `field`, agregada a mano a `grid_options["columnDefs"]` después de
+    `gb.build()` — `configure_column` exige que la columna YA exista como
+    field, regla #26) con `valueGetter` (arma `{ajv, aj}` por fila hoja) +
+    `aggFunc` propio en JS (suma ambos al agrupar, no el `"sum"` nativo) +
+    `comparator` propio (ordena por `.ajv` — el comparador default hace
+    `<`/`>`, que no sirve contra un objeto). El panel "Modo pivote" del
+    sidebar queda AFUERA a propósito (no solo apagado): arrastrar algo ahí
+    rompería la relación fija entre la columna y su periodo.
+
+    **`api.getValue(colKey, rowNode)` YA NO EXISTE** en la versión de AG
+    Grid de este proyecto (34.3.1, ver warning de consola con el número).
+    El diseño original leía la columna hermana oculta desde el
+    cellRenderer con esa llamada — tiraba "Component Error: params.api.getValue
+    is not a function", visible solo DENTRO del iframe del componente
+    (`doc.body.innerText` del iframe, no la consola de la ventana
+    principal). La reescritura con valueGetter+aggFunc de arriba no
+    depende de leer una columna vecina en absoluto, así que tampoco se
+    rompe si el reemplazo documentado (`api.getCellValue({colKey, rowNode})`)
+    cambia de nombre otra vez.
+
+    **Un cellRenderer-función que devuelve un STRING de HTML no se trata
+    como HTML acá — se ve como texto escapado** (los `<div style=...>`
+    literales en pantalla, confirmado leyendo `.innerHTML` del cell real:
+    el hijo es un text node, no un elemento). Devolver un `HTMLElement`
+    directo (`document.createElement(...)`) tampoco sirve: revienta con
+    "Minified React error #31: objects are not valid as a React child".
+    `st_aggrid` usa `ag-grid-react`, y ahí el atajo "vanilla" de AG Grid
+    puro (`function(params){ return 'string o Node'; }`) no está
+    soportado — hace falta la interfaz de Component completa: una
+    `class` con `init(params)` que arma `this.eGui` (con
+    `document.createElement` + `textContent`/`style.xxx`, nunca un string
+    de HTML) y `getGui()` que lo devuelve (`refresh` puede devolver
+    `false` sin drama). Mismo problema y misma solución hacía falta para
+    `groupRowRendererParams.innerRenderer` (pinta "ALIMENTOS (3) ·
+    S/ 260" en la fila de grupo).
+    **OJO — sospecha sin confirmar:** `tablas/desktop.py` tiene un
+    `innerRenderer` con el patrón viejo (función que devuelve un string)
+    para Inventario Valorizado; no se tocó en este cambio pero por este
+    mismo motivo es candidato a mostrar el HTML escapado en vez del
+    "Familia (n) · S/ valor" esperado — nadie lo había mirado de cerca
+    (mismo motivo que la regla #40: la mayoría navega por Gráficos, no
+    "Tabla"). Pendiente de verificar contra un grid real.
+
+    **`groupRowRendererParams.innerRenderer` va en las opciones del
+    grid, NO en `autoGroupColumnDef.cellRendererParams`.** Con
+    `groupDisplayType: "groupRows"` las filas de grupo se pintan con un
+    renderer de ANCHO COMPLETO aparte (`agGroupRowRenderer`); el
+    `cellRendererParams` de `autoGroupColumnDef` solo aplicaría con
+    `groupDisplayType: "singleColumn"`. Puesto en el lugar equivocado no
+    tira ningún error — la celda de grupo simplemente muestra el valor
+    crudo sin formatear, fácil de no notar si no se mira de cerca.
+
+    **Con 3 columnas en `rowGroup` (Familia, Subfamilia, Producto),
+    Producto queda como grupo de UN solo hijo** — un nivel más para
+    expandir sin información nueva (el "grupo" Producto solo contiene la
+    fila real, hay que abrirlo para ver lo mismo que ya decía su nombre).
+    Con Familia+Subfamilia como `rowGroup` y Producto como columna PROPIA
+    pinneada a la izquierda (no vía `autoGroupColumnDef.field`), el árbol
+    termina en el producto como fila hoja real. Se intentó primero
+    `autoGroupColumnDef.field=col_producto` para que la hoja mostrara el
+    nombre sin una columna extra: con `groupDisplayType: "groupRows"` las
+    filas hoja NO terminan pintando el auto-group column en absoluto
+    (queda en blanco, `getAllGridColumns()` ni siquiera lo lista) —
+    verificado en vivo, no se pudo confirmar por qué, solo que no
+    funciona.
+
+    **Verificación**: el demo de `ajusteinventario.parquet` tiene fechas
+    fijas en 2024 (regla #10) y esta vista filtra a propósito por año EN
+    CURSO — con el sistema en 2026 el demo no tiene ninguna fila que pase
+    el filtro, así que la vista "feliz" (con datos) no se puede ejercer
+    navegando la app real en este momento; solo el estado vacío
+    ("Sin datos de 2026...") se verificó ahí. Las dos mitades se
+    verificaron por separado: un script standalone (pandas puro, sin
+    Streamlit) que llama a `_armar_tabla_pivote_ajuste` con fechas 2026
+    sintéticas y compara sumas contra el dataframe original en las 3
+    granularidades; y una app Streamlit aislada de un archivo (temporal,
+    con su propio puerto en `.claude/launch.json`, borrada al terminar —
+    técnica de la regla #12) que llama a `renderizar_aggrid_pivote_ajuste`
+    directo con un dataframe wide armado a mano, inspeccionada vía
+    `window.__agApiPivoteAjuste` (expuesto en `onGridReady`, mismo
+    espíritu que `window.__agApi` de la regla #33) porque simular clics
+    de expandir con `dispatchEvent(new MouseEvent(...))` deja el estado
+    interno (`node.expanded`) en `true` pero NO recalcula las filas
+    mostradas (`getDisplayedRowCount()` no cambiaba) — hace falta
+    `api.onGroupExpandedOrCollapsed()` después de `setExpanded()` cuando
+    se llama a la API a mano en vez de por un clic real; un clic real del
+    usuario sí dispara ese refresh solo. No se pudo confirmar la
+    integración completa con datos 2026 reales dentro de la app (eso
+    recién se ve en Cloud, o cambiando la fecha del sistema).
 
 26. **`GridOptionsBuilder.configure_column()` PISA el `headerName` cada vez
     que se lo llama sin `header_name`.** No hace merge parcial: reconstruye
