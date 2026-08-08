@@ -1465,7 +1465,43 @@ salvo `icono`):
       vuelve a agendar en ese contexto. Arreglo: el `setInterval` de
       ~150ms es la fuente de verdad del tracking (llama a la misma
       función `sync()` que hace el resize del overlay), no solo un
-      "¿sigue vivo el pin?". `requestAnimationFrame` se reserva para
-      cuando de verdad hace falta fluidez a 60fps (arrastre activo de una
-      manija en fase A.2) y SIEMPRE como mejora encima del intervalo, no
-      como reemplazo.
+      "¿sigue vivo el pin?". En la práctica el arrastre de manijas (fase
+      A.2) tampoco necesitó `requestAnimationFrame`: aplicar el cambio
+      directo en cada evento `mousemove` ya se ve fluido y es más simple
+      — `requestAnimationFrame` queda descartado para este módulo, no
+      solo "reservado".
+
+47. **Un `width`/`height` con `!important` no alcanza para redimensionar
+    un item flex — hacen falta 3 propiedades más.** Encontrado
+    implementando las manijas de resize del modo diseño
+    (`inyecciones/diseno.py`, fase A.2) contra `st-key-chartcard_cascada`
+    (un `stVerticalBlock` real). Dos bloqueos DISTINTOS, ninguno se ve en
+    consola ni se resuelve agregando `!important` a la MISMA propiedad
+    que ya lo tiene:
+    - **Ancho:** el contenedor trae `max-width: 100%` (default de varios
+      wrappers de Streamlit/`estilos/`). `max-width` es una propiedad
+      DIFERENTE de `width` — clampea el resultado después de que el
+      cascade ya resolvió `width`, así que un `width:692px !important`
+      se queda clavado en el `max-width` resuelto (632px en este caso)
+      sin importar la prioridad de `width`.
+    - **Alto:** el padre es `display:flex; flex-direction:column` y el
+      elemento trae `flex: 1 1 0%` (flex-basis 0%). En el eje PRINCIPAL
+      del flex (acá vertical, por la columna), `flex-basis` reemplaza a
+      `height` en el algoritmo de layout — no es que pierda la cascada,
+      es que el layout de flex directamente no consulta `height` cuando
+      `flex-basis` no es `auto`.
+    - **Diagnóstico que sirvió:** comparar `el.style.getPropertyPriority('width')`
+      (confirma que el `!important` SÍ está en el atributo inline) contra
+      `getComputedStyle(el).width`/`el.offsetWidth` (el tamaño realmente
+      usado) — si difieren pese a la prioridad correcta, el problema no
+      es de cascada, es una propiedad hermana (`max-width`/`max-height`)
+      o el algoritmo de layout (`flex-basis`) ganándole por fuera del
+      cascade.
+    - **Arreglo:** antes de tocar `width`/`height`, neutralizar las tres
+      con `!important` también: `flex: none`, `max-width: none`,
+      `max-height: none`. Con eso, `width`/`height` sí controlan el
+      tamaño final. Sospecha para la próxima vez: cualquier control de
+      diseño que cambie tamaño/posición sobre un contenedor de Streamlit
+      (`stVerticalBlock`/`stColumn`/`stHorizontalBlock`, todos flex por
+      default) puede necesitar el mismo trío — no asumir que alcanza con
+      la propiedad que el usuario está tocando.
