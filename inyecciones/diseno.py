@@ -100,6 +100,7 @@ def inject_diseno_visual():
                     key: key,
                     cssTextOriginal: null,
                     cambios: {},
+                    cambiosBotones: {},
                     transformState: { translateX: 0, translateY: 0, rotateDeg: 0 },
                     bordeAncho: 0,
                     bordeColor: '#6c5ce7',
@@ -262,6 +263,29 @@ def inject_diseno_visual():
             }
         }
 
+        // Pills/segmented_control (st.pills, st.segmented_control): las
+        // opciones individuales NO tienen su propia st-key-* -- solo el
+        // grupo entero la tiene ([data-testid="stButtonGroup"] es el
+        // contenedor). Pinear "Apilado"/"Agrupado" pinea el grupo completo,
+        // asi que un control sobre `elemento` (el contenedor) nunca toca el
+        // borde/relleno VISIBLE de cada boton. Esto expone esos botones
+        // como destinos de estilo aparte, trackeados en cambiosBotones.
+        function botonesInternos(elemento) {
+            var nodos = elemento.querySelectorAll('[data-testid="stButtonGroup"] button');
+            return Array.prototype.slice.call(nodos);
+        }
+
+        function establecerCambioBotones(elemento, registro, prop, valor) {
+            var botones = botonesInternos(elemento);
+            if (valor === null) {
+                delete registro.cambiosBotones[prop];
+                botones.forEach(function(b) { b.style.removeProperty(prop); });
+            } else {
+                registro.cambiosBotones[prop] = valor;
+                botones.forEach(function(b) { b.style.setProperty(prop, valor, 'important'); });
+            }
+        }
+
         function aplicarTransform(elemento, registro) {
             var t = registro.transformState;
             if (t.translateX || t.translateY || t.rotateDeg) {
@@ -288,6 +312,18 @@ def inject_diseno_visual():
                 elemento.style.setProperty(prop, registro.cambios[prop], 'important');
             }
             aplicarTransform(elemento, registro);
+            // cambiosBotones: independiente de "ver original" del contenedor
+            // (arriba ya se corto con el return si esta activo) — se
+            // reaplica siempre que haya algo trackeado, aunque los botones
+            // reales sean nodos nuevos tras un rerun.
+            var botonesReap = botonesInternos(elemento);
+            if (botonesReap.length) {
+                for (var propB in registro.cambiosBotones) {
+                    for (var bi = 0; bi < botonesReap.length; bi++) {
+                        botonesReap[bi].style.setProperty(propB, registro.cambiosBotones[propB], 'important');
+                    }
+                }
+            }
         }
 
         // ---- arrastre: resize (bordes/esquina) y mover (nudge) ----
@@ -534,6 +570,36 @@ def inject_diseno_visual():
             }));
             bordeWrap.appendChild(inpBordeColor);
             panel.appendChild(filaControl('Borde completo', bordeWrap, bordeLbl));
+
+            // Pills/segmented_control: el borde VISIBLE de cada opcion vive
+            // en botones sin key propia, invisibles para el control de
+            // arriba (ese toca el contenedor). Solo se muestra si hay
+            // botones adentro -- en el caso comun (sin stButtonGroup) no
+            // agrega nada al panel.
+            var botonesDetectados = botonesInternos(elemento);
+            if (botonesDetectados.length) {
+                // Pasos de 1px: por debajo de 1px varios navegadores
+                // redondean el borde RENDERIZADO hacia arriba (0.5px se ve
+                // igual que 1px), asi que un paso mas fino séria falsa
+                // precision. "0" es un valor explicito (sin borde), no un
+                // remove-override — a diferencia de radio/padding/sombra del
+                // contenedor, acá no hay un "0 por defecto" util: el borde
+                // original YA es visible a proposito, y "adelgazar hasta
+                // nada" es un caso real, no un accidente.
+                var bbAncho = registro.cambiosBotones['border-width']
+                    ? numDe(registro.cambiosBotones['border-width'], 0)
+                    : numDe(win.getComputedStyle(botonesDetectados[0]).borderTopWidth, 0);
+                var inpBotonesBorde = rango(0, 4, 1, bbAncho);
+                var bbLbl = spanValor(Math.round(bbAncho) + 'px');
+                inpBotonesBorde.addEventListener('input', function() {
+                    var ctx = elementoActivo(); if (!ctx) return;
+                    var v = parseInt(inpBotonesBorde.value, 10);
+                    bbLbl.textContent = v + 'px';
+                    establecerCambioBotones(ctx.el, ctx.registro, 'border-width', v + 'px');
+                });
+                panel.appendChild(filaControl(
+                    'Borde de botones (' + botonesDetectados.length + ')', inpBotonesBorde, bbLbl));
+            }
 
             // sombra
             var inpSombra = rango(0, 4, 1, registro.sombraNivel);
