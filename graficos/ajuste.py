@@ -817,15 +817,24 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         color: {GRIS_TEXTO_SUAVE} !important; opacity: 1 !important; }}
     /* Scroll propio por columna (Faltantes / Sobrantes) en vez de dejar
        crecer la tarjeta con hasta 30 filas -- a pedido, 2026-08-08.
-       Scrollbar lo más discreta posible: fina, sin pista visible, y
-       gris clarito que recién se nota más al pasar el cursor. */
+       Scrollbar invisible por defecto (thumb transparente): aparece
+       recién al pasar el cursor por la lista, no queda prendida todo
+       el tiempo. No hay forma 100% CSS de mostrarla SOLO mientras se
+       arrastra (necesitaría JS, y st.markdown no lo ejecuta -- ver
+       CLAUDE.md); hover es la aproximación más cercana sin JS, y en la
+       práctica coincide: para scrollear con mouse/trackpad el cursor
+       ya tiene que estar encima. */
     .ajcas-lista-scroll {{
         max-height: 300px; overflow-y: auto;
-        scrollbar-width: thin; scrollbar-color: {GRIS_BORDE} transparent; }}
+        scrollbar-width: thin; scrollbar-color: transparent transparent;
+        transition: scrollbar-color .15s ease; }}
+    .ajcas-lista-scroll:hover {{
+        scrollbar-color: {GRIS_TEXTO_SUAVE} transparent; }}
     .ajcas-lista-scroll::-webkit-scrollbar {{ width: 5px; }}
     .ajcas-lista-scroll::-webkit-scrollbar-track {{ background: transparent; }}
     .ajcas-lista-scroll::-webkit-scrollbar-thumb {{
-        background: {GRIS_BORDE}; border-radius: 999px; }}
+        background: transparent; border-radius: 999px;
+        transition: background-color .15s ease; }}
     .ajcas-lista-scroll:hover::-webkit-scrollbar-thumb {{
         background: {GRIS_TEXTO_SUAVE}; }}
     /* ── Filas de la tabla: tarjetas con matiz por severidad, no líneas
@@ -846,23 +855,20 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     div[class*="st-key-ajcas_fila_"]:hover {{
         background: {LAVANDA_SELECCION} !important; }}
     div[class*="st-key-ajcas_fila_"][class*="_on"] {{
-        background: {LAVANDA_FONDO} !important;
-        box-shadow: inset 2px 0 0 {ACENTO}; }}
+        background: {LAVANDA_FONDO} !important; }}
     div[class*="st-key-ajcas_fila_"][class*="_on"]:hover {{
         background: {LAVANDA_FONDO} !important; }}
-    /* ── Panel de drill (Faltantes/Sobrantes): "línea guía + indent" —
-       sin caja propia (ni fondo ni borde alrededor). Un filete lavanda
-       de 2px a la izquierda continúa el acento morado de la fila con
-       foco, y el contenido queda indentado — mismo patrón visual que un
-       hilo de comentarios o un árbol de archivos ("esto cuelga de la
-       fila de arriba"). margin-top negativo achica el
-       row-gap:6px + margin-bottom:4px de la fila (10px de base) a un
-       espacio chico (~2px), sin llegar al solape que usaba la variante
-       fusionada — acá no hay bordes que calzar. */
+    /* ── Panel de drill (Faltantes/Sobrantes): sin caja propia (ni fondo
+       ni borde alrededor), solo indentado — a pedido (2026-08-08) se
+       saca el filete lavanda a la izquierda que antes "colgaba" del
+       acento de la fila con foco (y el inset box-shadow de esa fila,
+       arriba). margin-top negativo achica el row-gap:6px +
+       margin-bottom:4px de la fila (10px de base) a un espacio chico
+       (~2px), sin llegar al solape que usaba la variante fusionada —
+       acá no hay bordes que calzar. */
     div[class*="st-key-ajcas_panel_drill"] {{
         background: transparent !important;
         border: none !important;
-        border-left: 2px solid {LAVANDA_BORDE} !important;
         border-radius: 0 !important;
         box-shadow: none !important;
         margin: -8px 0 4px 3px !important;
