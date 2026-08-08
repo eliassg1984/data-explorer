@@ -348,7 +348,66 @@ def _datos_demo(archivo, filas=60):
                               * rng.uniform(0.25, 0.45, len(df))).round(2)
         return df
 
-    # Reportes genéricos (Compras, Requerimientos, etc.)
+    if archivo == "compras.parquet":
+        # Compras resuelve 12 columnas (ver graficos/compras/__init__.py) y
+        # sus drills se apagan uno por uno si falta alguna. Hasta el
+        # 2026-08-08 este reporte caía al bloque genérico de más abajo, que
+        # no trae Proveedor: el drill de Proveedor —el más grande del
+        # dashboard, 1.577 líneas— mostraba "Faltan columnas (Proveedor,
+        # Valor)" y NO se podía abrir en local. Es decir, no se podía tocar
+        # sin desplegar a producción para ver el resultado.
+        #
+        # El grano es el REAL: una fila por línea de documento de compra
+        # (un documento trae varias líneas, de un solo proveedor).
+        _provs = ["Distribuidora Andina", "Alimentos del Sur", "Frigorífico Lima",
+                  "Bebidas Perú", "Agro Import", "Comercial Río", "Lácteos Norte"]
+        _fams = {
+            "Carnes":    (["Res", "Cerdo", "Aves"],            ["KG"]),
+            "Bebidas":   (["Gaseosas", "Aguas", "Cervezas"],   ["UND", "LT"]),
+            "Verduras":  (["Hoja", "Raíz", "Fruto"],           ["KG"]),
+            "Abarrotes": (["Granos", "Aceites", "Conservas"],  ["KG", "UND"]),
+            "Lácteos":   (["Quesos", "Yogures"],               ["KG", "LT"]),
+        }
+        # Anclado a HOY (como ventas): el rango por defecto de la franja es
+        # 01-del-mes → hoy, así que con fechas fijas en el pasado el
+        # dashboard abriría vacío. 140 días dan Semana/Mes/Año con datos.
+        _n_docs = 150
+        _fechas_doc = pd.to_datetime(pd.Timestamp.now().normalize()) - pd.to_timedelta(
+            rng.integers(0, 140, _n_docs), unit="D")
+        filas = []
+        for _i in range(_n_docs):
+            # Proveedor y numero se fijan UNA vez por documento: sus lineas
+            # comparten ambos. Calcularlos dentro del bucle interno daria un
+            # documento distinto por linea y la tabla de documentos del drill
+            # mostraria 1 linea por comprobante, que no es el caso real.
+            _prov = _provs[int(rng.integers(0, len(_provs)))]
+            _num_doc = f"F{_i:04d}-{rng.integers(100, 999)}"
+            for _ in range(int(rng.integers(1, 6))):   # líneas del documento
+                _fam = list(_fams)[int(rng.integers(0, len(_fams)))]
+                _subs, _ums = _fams[_fam]
+                filas.append({
+                    "Fecha documento": _fechas_doc[_i],
+                    "Num Documento": _num_doc,
+                    "Nombre proveedor": _prov,
+                    "Nombre Familia": _fam,
+                    "Nombre Subfamilia": _subs[int(rng.integers(0, len(_subs)))],
+                    "Nombre producto": f"Producto demo {rng.integers(0, 60):03d}",
+                    "Unidad": _ums[int(rng.integers(0, len(_ums)))],
+                    "Cantidad compra": int(rng.integers(1, 80)),
+                })
+        df = pd.DataFrame(filas)
+        _punit = rng.uniform(2, 90, len(df)).round(2)
+        df["Precio unit"] = _punit
+        df["Valor compra"] = (df["Cantidad compra"] * _punit).round(2)
+        # Comparables del año anterior: columnas propias del parquet real,
+        # no derivadas de la fecha. ±35% sobre el valor/precio actual.
+        df["Valor año anterior"] = (
+            df["Valor compra"] * rng.uniform(0.65, 1.35, len(df))).round(2)
+        df["Ultimo precio unit"] = (
+            _punit * rng.uniform(0.8, 1.2, len(df))).round(2)
+        return df
+
+    # Reportes genéricos (Requerimientos, Receta Base/Venta, etc.)
     cant = rng.integers(1, 200, n)
     precio = rng.uniform(1, 80, n).round(2)
     df = pd.DataFrame({
