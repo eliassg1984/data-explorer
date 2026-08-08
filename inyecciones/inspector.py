@@ -971,16 +971,41 @@ def inject_element_inspector():
                 'padding:5px 10px','border-radius:20px','display:none',
                 'align-items:center','gap:6px','box-shadow:0 2px 8px rgba(0,0,0,0.3)'
             ].join(';');
-            badge.innerHTML = 'Inspector ON &nbsp;<span style="opacity:.6;font-weight:400">C copiar &middot; clic-derecho fija y copia &middot; T oculta tooltip &middot; Alt+I salir</span>&nbsp;<span id="el-inspector-silenciado-tag" style="display:none;background:rgba(255,255,255,.2);padding:2px 7px;border-radius:10px;font-weight:600">tooltip oculto</span>';
+            badge.innerHTML = 'Inspector ON' +
+                '&nbsp;<button id="el-inspector-silenciar-btn" style="background:rgba(255,255,255,.18);color:#fff;border:0;padding:3px 9px;border-radius:12px;cursor:pointer;font:600 11px/1.4 sans-serif">\\uD83D\\uDC41 Ocultar tooltip</button>' +
+                '&nbsp;<span style="opacity:.6;font-weight:400">C copiar &middot; clic-derecho fija y copia &middot; T oculta tooltip &middot; Alt+I salir</span>';
             doc.body.appendChild(badge);
+
+            var silenciarBtn = doc.getElementById('el-inspector-silenciar-btn');
+            silenciarBtn.addEventListener('click', function(ev) {
+                ev.preventDefault(); ev.stopPropagation();
+                win.__inspectorAlternarSilenciado && win.__inspectorAlternarSilenciado();
+            });
         }
 
         function actualizarBadge() {
             badge.style.display = inspectorActivo() ? 'flex' : 'none';
-            var tagSilenciado = doc.getElementById('el-inspector-silenciado-tag');
-            if (tagSilenciado) tagSilenciado.style.display = win.__inspectorTooltipSilenciado ? 'inline' : 'none';
+            var silenciarBtn = doc.getElementById('el-inspector-silenciar-btn');
+            if (silenciarBtn) {
+                silenciarBtn.textContent = win.__inspectorTooltipSilenciado
+                    ? '👁 Mostrar tooltip' : '👁 Ocultar tooltip';
+            }
         }
         actualizarBadge();
+
+        // Compartido por el boton del badge y el atajo Alt+T. Se reasigna en
+        // win en cada rerun (mismo motivo que __inspectorEjecutarCopia mas
+        // abajo: el realm del iframe que lo definio puede haber muerto).
+        win.__inspectorAlternarSilenciado = function() {
+            win.__inspectorTooltipSilenciado = !win.__inspectorTooltipSilenciado;
+            actualizarBadge();
+            // apagar de inmediato si se acaba de silenciar y no hay nada fijado
+            if (win.__inspectorTooltipSilenciado && !win.__inspectorPinned) {
+                var tipS = doc.getElementById('el-inspector-tip');
+                if (tipS) tipS.style.opacity = '0';
+                resaltarEl(null, null);
+            }
+        };
 
         function txt(el) { return el ? el.textContent.trim() : ''; }
 
@@ -1638,14 +1663,7 @@ def inject_element_inspector():
                     }
                 }
                 if (e.altKey && (e.key === 't' || e.key === 'T') && inspectorActivo()) {
-                    win.__inspectorTooltipSilenciado = !win.__inspectorTooltipSilenciado;
-                    actualizarBadge();
-                    // apagar de inmediato si se acaba de silenciar y no hay nada fijado
-                    if (win.__inspectorTooltipSilenciado && !win.__inspectorPinned) {
-                        var tipT = doc.getElementById('el-inspector-tip');
-                        if (tipT) tipT.style.opacity = '0';
-                        resaltarEl(null, null);
-                    }
+                    win.__inspectorAlternarSilenciado && win.__inspectorAlternarSilenciado();
                 }
             };
 
