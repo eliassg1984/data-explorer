@@ -971,12 +971,14 @@ def inject_element_inspector():
                 'padding:5px 10px','border-radius:20px','display:none',
                 'align-items:center','gap:6px','box-shadow:0 2px 8px rgba(0,0,0,0.3)'
             ].join(';');
-            badge.innerHTML = 'Inspector ON &nbsp;<span style="opacity:.6;font-weight:400">C copiar &middot; clic-derecho fija y copia &middot; Alt+I salir</span>';
+            badge.innerHTML = 'Inspector ON &nbsp;<span style="opacity:.6;font-weight:400">C copiar &middot; clic-derecho fija y copia &middot; T oculta tooltip &middot; Alt+I salir</span>&nbsp;<span id="el-inspector-silenciado-tag" style="display:none;background:rgba(255,255,255,.2);padding:2px 7px;border-radius:10px;font-weight:600">tooltip oculto</span>';
             doc.body.appendChild(badge);
         }
 
         function actualizarBadge() {
             badge.style.display = inspectorActivo() ? 'flex' : 'none';
+            var tagSilenciado = doc.getElementById('el-inspector-silenciado-tag');
+            if (tagSilenciado) tagSilenciado.style.display = win.__inspectorTooltipSilenciado ? 'inline' : 'none';
         }
         actualizarBadge();
 
@@ -1318,6 +1320,11 @@ def inject_element_inspector():
         // mas comun. El boton "Fijar" se deja aparte para cuando se quiere mirar
         // sin copiar todavia.
         if (win.__inspectorPinned === undefined) win.__inspectorPinned = false;
+        // Silenciar tooltip: Alt+T. Solo afecta la VISIBILIDAD del tooltip en
+        // hover pasivo — __inspectorUltimo se sigue actualizando igual (lo
+        // necesita el pin y el modo diseño), y un elemento FIJADO se sigue
+        // mostrando siempre, silenciado o no (ver __inspectorContextMenuHandler).
+        if (win.__inspectorTooltipSilenciado === undefined) win.__inspectorTooltipSilenciado = false;
 
         win.__inspectorTogglePin = function(forzarOff) {
             var tipEl = doc.getElementById('el-inspector-tip');
@@ -1427,6 +1434,21 @@ def inject_element_inspector():
             if (!win.__inspectorUltimo) return; // no hay nada bajo el cursor para fijar
             e.preventDefault();
             win.__inspectorTogglePin();
+            if (tipEl) {
+                // Fijar SIEMPRE muestra el tooltip, este silenciado (Alt+T) o
+                // no — es una accion deliberada, no hover pasivo. El
+                // contenido ya esta al dia (se actualiza en mousemove
+                // independiente del silenciado); acá solo hace falta
+                // revelarlo y ubicarlo en el cursor actual.
+                tipEl.style.opacity = '1';
+                var txp = e.clientX + 16, typ = e.clientY - 10;
+                var twp = tipEl.offsetWidth || 260, thp = tipEl.offsetHeight || 80;
+                if (txp + twp > win.innerWidth - 8) txp = e.clientX - twp - 16;
+                if (typ + thp > win.innerHeight - 8) typ = e.clientY - thp - 10;
+                if (typ < 6) typ = 6;
+                tipEl.style.left = txp + 'px';
+                tipEl.style.top = typ + 'px';
+            }
             win.__inspectorEjecutarCopia && win.__inspectorEjecutarCopia(); // un solo gesto: fija Y copia
         };
 
@@ -1548,16 +1570,26 @@ def inject_element_inspector():
                 var pre = doc.getElementById('el-inspector-text');
                 if (pre) pre.textContent = etiquetaFinal;
                 else tip.textContent = etiquetaFinal;
-                tip.style.opacity = '1';
-                var x = e.clientX + 16;
-                var y = e.clientY - 10;
-                var tw = tip.offsetWidth  || 260;
-                var th = tip.offsetHeight || 80;
-                if (x + tw > win.innerWidth  - 8) x = e.clientX - tw - 16;
-                if (y + th > win.innerHeight - 8) y = e.clientY - th - 10;
-                if (y < 6) y = 6;
-                tip.style.left = x + 'px';
-                tip.style.top  = y + 'px';
+                // Silenciado (Alt+T): el hover pasivo no muestra el tooltip
+                // (__inspectorUltimo ya se actualizo arriba igual, sin
+                // depender de esto). Este bloque nunca corre estando fijado
+                // — el handler ya retorna antes, mas arriba — así que fijar
+                // siempre revela el tooltip via __inspectorContextMenuHandler,
+                // no acá.
+                if (!win.__inspectorTooltipSilenciado) {
+                    tip.style.opacity = '1';
+                    var x = e.clientX + 16;
+                    var y = e.clientY - 10;
+                    var tw = tip.offsetWidth  || 260;
+                    var th = tip.offsetHeight || 80;
+                    if (x + tw > win.innerWidth  - 8) x = e.clientX - tw - 16;
+                    if (y + th > win.innerHeight - 8) y = e.clientY - th - 10;
+                    if (y < 6) y = 6;
+                    tip.style.left = x + 'px';
+                    tip.style.top  = y + 'px';
+                } else {
+                    tip.style.opacity = '0';
+                }
             } else {
                 tip.style.opacity = '0';
             }
@@ -1602,6 +1634,16 @@ def inject_element_inspector():
                         if (win.__inspectorPinned) win.__inspectorTogglePin(true);
                         var tip = doc.getElementById('el-inspector-tip');
                         if (tip) tip.style.opacity = '0';
+                        resaltarEl(null, null);
+                    }
+                }
+                if (e.altKey && (e.key === 't' || e.key === 'T') && inspectorActivo()) {
+                    win.__inspectorTooltipSilenciado = !win.__inspectorTooltipSilenciado;
+                    actualizarBadge();
+                    // apagar de inmediato si se acaba de silenciar y no hay nada fijado
+                    if (win.__inspectorTooltipSilenciado && !win.__inspectorPinned) {
+                        var tipT = doc.getElementById('el-inspector-tip');
+                        if (tipT) tipT.style.opacity = '0';
                         resaltarEl(null, null);
                     }
                 }
