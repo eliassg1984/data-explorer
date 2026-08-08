@@ -14,6 +14,30 @@ from datetime import datetime, timezone
 # ===========================================================================
 # CONFIGURACIÓN DE REPORTES
 # ===========================================================================
+# Claves que lee app.py (todas opcionales salvo `archivo`):
+#
+#   archivo, label_corto, icono      identidad del reporte
+#   fecha                            columna de fecha; None = sin filtro
+#   carga_por_rango                  filtra en DuckDB antes de materializar
+#   filtros_cat, buscador, agrupar   filtros genericos
+#   columnas                         columnas del selector (orden incluido)
+#   columnas_movil, columnas_fijas_movil   vista movil
+#   graficos                         motor generico config-driven
+#   tool                             no es un parquet, es una herramienta
+#
+#   columnas_iniciales       columnas que arrancan VISIBLES en la AgGrid; el
+#                            resto se activa desde el panel lateral. Sin esta
+#                            clave se muestran todas. Se resuelven con
+#                            buscar_columna, asi que el nombre no tiene que
+#                            coincidir exacto con el del parquet.
+#   derivar_periodo_pivote   crea columnas "<fecha> (Mes)" y "<fecha> (Dia)"
+#                            como STRING para el Modo pivote de AG Grid (ver
+#                            app.py). Solo lo necesitan los reportes cuya
+#                            fecha trae hora.
+#
+# Estas dos ultimas vivian como `if reporte == "..."` dentro de app.py hasta
+# el 2026-08-08. Son configuracion de DATOS, no de despacho: su sitio es este
+# dict, igual que columnas_movil.
 
 REPORTES = {
     "Ajuste de Inventario": {
@@ -22,6 +46,11 @@ REPORTES = {
         "icono": "sliders",
         "filtros_cat": [],  # Sin filtros de Área/Familia/Subfamilia en el popover
         "agrupar": [],      # Sin opción de "Agrupar por" en el popover
+        "columnas_iniciales": [
+            "Producto", "Precio Promedio", "Stock al Cierre",
+            "Stock Declarado", "Ajuste", "Ajuste Valorizado",
+        ],
+        "derivar_periodo_pivote": True,
         "graficos": [
             {"tipo": "line",
              "x": ["FECHA APERTURA INVENTARIO", "MES"],
@@ -58,6 +87,9 @@ REPORTES = {
         "buscador": "Nombre Producto",
         "fecha": None,
         "agrupar": ["Nombre Area", "Nombre Familia", "Nombre Subfamilia"],
+        "columnas_iniciales": [
+            "Nombre Producto", "Stock al Dia", "Nombre Area", "Valorizado total",
+        ],
         "columnas_movil": [
             "Nombre Producto", "Stock al dia", "Precio Promedio",
             "Valorizado total", "Nombre Area",

@@ -116,6 +116,18 @@ salvo `icono`):
 | `graficos` | list | Lista de dicts de configuración para `crear_grafico()` (tipo, x, y, color, título…). |
 | `columnas_movil` | list | Columnas visibles en vista móvil. |
 | `columnas_fijas_movil` | int | Número de columnas fijadas a la izquierda en vista móvil. |
+| `columnas_iniciales` | list | Columnas que arrancan VISIBLES en la AgGrid de escritorio; el resto se activa desde el panel lateral "Columnas". Ausente = se muestran todas las sugeridas. Se resuelven con `buscar_columna`, así que no hace falta clavar el nombre exacto del parquet. |
+| `carga_por_rango` | str | Columna de fecha por la que DuckDB filtra ANTES de materializar el DataFrame (para parquets grandes: nunca se bajan las 100k+ filas). Hoy solo Ventas. |
+| `derivar_periodo_pivote` | bool | Crea las columnas `"<fecha> (Mes)"` y `"<fecha> (Día)"` como **string** para el Modo pivote de AG Grid, que pivotea por el valor EXACTO de la columna: con la fecha cruda (que trae hora al minuto) saldría una columna por minuto. Solo lo necesitan los reportes cuya fecha lleva hora. |
+
+> `columnas_iniciales` y `derivar_periodo_pivote` vivían como
+> `if reporte == "..."` dentro de `app.py` hasta el 2026-08-08. Son
+> configuración de DATOS, no de despacho — su sitio es este dict. Tras
+> moverlas, en `app.py` quedan solo **dos** comparaciones por nombre de
+> reporte: `Requerimientos` (rama de despacho real, ver regla #50) y
+> `es_ajuste`, que NO es config de columnas sino el discriminante que
+> `clave_rango()` necesita para que el rail de Ajuste recuerde un rango por
+> categoría — vive en `estado_rango.py`, el dueño único del rango.
 
 ## Reglas del proyecto (aprendidas de bugs reales)
 

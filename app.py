@@ -215,9 +215,12 @@ if 'tabla_tam' not in st.session_state:
 
 
 # ===========================================================================
-# INSPECTOR: herramienta de verificación de datos crudos
+# HERRAMIENTAS: entradas de REPORTES que no son un parquet
 # ===========================================================================
-if reporte == "Inspector" or cfg.get("tool"):
+# `tool: True` en REPORTES. El `or reporte == "Inspector"` que acompañaba a
+# esta guarda era redundante — esa entrada ya lleva el flag — y ademas
+# ataba app.py al nombre de una herramienta concreta.
+if cfg.get("tool"):
     from inspector import render_inspector
     render_inspector()
     perf.end()                                                              # ⚡ PERF
@@ -301,7 +304,7 @@ with perf.phase("df.copy() + to_datetime"):                                 # �
         # ruta se ejecuta en cada cambio de fecha.
         if not pd.api.types.is_datetime64_any_dtype(df_f[col_fecha]):
             df_f[col_fecha] = pd.to_datetime(df_f[col_fecha], errors="coerce")
-        if reporte == "Ajuste de Inventario":
+        if cfg.get("derivar_periodo_pivote"):
             # FECHA APERTURA INVENTARIO trae hora al minuto -- el "Modo
             # pivote" de AG Grid pivotea por el valor EXACTO de la
             # columna que se arrastre a "Column Labels", así que pivotear
@@ -556,21 +559,12 @@ usa_vista_movil = st.session_state.forzar_movil
 tiene_config_movil = "columnas_movil" in cfg
 if not usa_vista_movil:
     cols_mostrar = todas_cols
-    if reporte == "Inventario Valorizado":
-        columnas_iniciales = ["Nombre Producto", "Stock al Dia", "Nombre Area", "Valorizado total"]
-        cols_visibles = []
-        for _c in columnas_iniciales:
-            _real = buscar_columna(df_f, _c)
-            if _real and _real not in cols_visibles:
-                cols_visibles.append(_real)
-    elif reporte == "Ajuste de Inventario":
-        columnas_iniciales = ["Producto", "Precio Promedio", "Stock al Cierre",
-                              "Stock Declarado", "Ajuste", "Ajuste Valorizado"]
-        cols_visibles = []
-        for _c in columnas_iniciales:
-            _real = buscar_columna(df_f, _c)
-            if _real and _real not in cols_visibles:
-                cols_visibles.append(_real)
+    # Columnas que arrancan visibles. Sin `columnas_iniciales` en REPORTES se
+    # muestran todas las sugeridas. resolver_columnas ya hace lo que antes
+    # eran dos bucles idénticos aquí: resuelve el nombre real, descarta las
+    # que no existen y deduplica conservando el orden.
+    if cfg.get("columnas_iniciales"):
+        cols_visibles, _ = resolver_columnas(df_f, cfg["columnas_iniciales"])
     else:
         cols_visibles = sugeridas
 else:
