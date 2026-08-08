@@ -146,11 +146,25 @@ def _cell_renderer_combinado(es_total=False):
     """)
 
 
+def _ancho_header_periodo(label, minimo=92, base=58, por_caracter=7):
+    """Ancho mínimo a partir del largo de la etiqueta. "ene"/"S01" entran
+    en el mínimo de siempre (pensado para 3 caracteres + iconos de orden/
+    filtro/menú), pero Corte trae etiquetas bien más largas ("15-16 ene",
+    "30 jul - 2 ago") que ese mínimo fijo no alcanzaba a mostrar completas
+    — se veían cortadas ("1...") aunque el dato entero cupiera en la
+    celda de abajo. `base`/`por_caracter` son una estimación a ojo del
+    ancho de fuente de la cabecera (11px) más los tres iconos; no hace
+    falta que sea exacta, solo que crezca con el largo real del texto."""
+    return max(minimo, base + len(str(label)) * por_caracter)
+
+
 def _col_periodo(col_id, headerName, field_ajv, field_aj, es_total=False,
-                 minWidth=92, pinned=None):
+                 minWidth=None, pinned=None):
     d = {
         "colId": col_id, "headerName": headerName,
-        "type": ["numericColumn"], "minWidth": minWidth,
+        "headerTooltip": headerName,
+        "type": ["numericColumn"],
+        "minWidth": minWidth if minWidth is not None else _ancho_header_periodo(headerName),
         "sortable": True, "resizable": True, "filter": "agNumberColumnFilter",
         "valueGetter": _value_getter_periodo(field_ajv, field_aj),
         "aggFunc": _agg_func_combinado(),

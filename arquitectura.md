@@ -787,6 +787,20 @@ salvo `icono`):
     parte de render (AgGrid) no cambió nada: sigue recibiendo la misma
     forma de `periodos`/`wide` sin importar cómo se calculó la clave.
 
+    **2026-08-07, más tarde — las etiquetas de Corte quedaban cortadas**
+    (`tablas/ajuste_pivote.py::_col_periodo`). El `minWidth=92` fijo de
+    las columnas de periodo estaba pensado para "ene"/"S01" (3
+    caracteres); una etiqueta de Corte como "30 jul - 2 ago" (14
+    caracteres) no entraba junto con los iconos de orden/filtro/menú de
+    la cabecera y se veía como "1..." — el dato de la celda estaba
+    completo, solo la cabecera lo escondía. `_ancho_header_periodo(label)`
+    calcula el mínimo a partir del largo real de la etiqueta (una
+    estimación a ojo de px-por-carácter, no hace falta exacta) en vez de
+    un número fijo pensado para el caso más corto. Se agregó de paso
+    `headerTooltip` con el mismo texto, por las dudas de que una etiqueta
+    todavía más larga (un corte que cruza de año, si alguna vez pasa)
+    vuelva a necesitar más que el ancho calculado.
+
 26. **`GridOptionsBuilder.configure_column()` PISA el `headerName` cada vez
     que se lo llama sin `header_name`.** No hace merge parcial: reconstruye
     el colDef con `{"headerName": field, "field": field}` y recién después
