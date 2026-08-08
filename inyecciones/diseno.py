@@ -30,9 +30,40 @@ sobre el overlay, y radio de borde / padding / borde completo / sombra /
 `win.__disenoState.porKey[key]` para poder reaplicarlo defensivamente en
 cada ejecución del script (arquitectura.md #46: los estilos inline
 sobreviven un rerun real, pero el iframe/listeners no).
+
+Fase B agrega tipografía (tamaño, peso, alineación, subrayado, espaciado
+entre letras, rotar) y color por rol (texto / fondo / borde, tres filas de
+swatches independientes — nunca un acento único). Primer uso de datos
+Python reales en este módulo: la paleta se importa de `tema.py` y se
+serializa al script igual que `_mapas_desarrollador()` en inspector.py
+(`json.dumps` + placeholder), para no hardcodear hex sueltos (CLAUDE.md
+"nunca un #hex suelto").
 """
 
+import json
+
 import streamlit.components.v1 as components
+
+from tema import (
+    ACENTO, ACENTO_FUERTE, ACENTO_TEXTO_OSCURO,
+    EXITO, ADVERTENCIA, ERROR,
+    AJUSTE_POS, AJUSTE_NEG,
+    TEXTO_PRINCIPAL, GRIS_TEXTO, BLANCO,
+)
+
+_PALETA = [
+    {"hex": ACENTO, "nombre": "Acento"},
+    {"hex": ACENTO_FUERTE, "nombre": "Acento fuerte"},
+    {"hex": ACENTO_TEXTO_OSCURO, "nombre": "Indigo oscuro"},
+    {"hex": EXITO, "nombre": "Exito"},
+    {"hex": ADVERTENCIA, "nombre": "Advertencia"},
+    {"hex": ERROR, "nombre": "Error"},
+    {"hex": AJUSTE_POS, "nombre": "Ajuste positivo"},
+    {"hex": AJUSTE_NEG, "nombre": "Ajuste negativo"},
+    {"hex": TEXTO_PRINCIPAL, "nombre": "Texto principal"},
+    {"hex": GRIS_TEXTO, "nombre": "Gris texto"},
+    {"hex": BLANCO, "nombre": "Blanco"},
+]
 
 
 def inject_diseno_visual():
@@ -41,6 +72,7 @@ def inject_diseno_visual():
     (function() {
         var win = window.parent;
         var doc = win.document;
+        var PALETA = __PALETA__;
 
         function disenoActivo() {
             var u = new URL(win.location.href);
@@ -320,6 +352,36 @@ def inject_diseno_visual():
         var SOMBRAS = ['', '0 1px 3px rgba(16,16,20,.14)', '0 4px 10px rgba(16,16,20,.18)',
                        '0 8px 20px rgba(16,16,20,.22)', '0 16px 34px rgba(16,16,20,.28)'];
 
+        function seccion(titulo) {
+            var div = doc.createElement('div');
+            div.style.cssText = 'font-size:10px;letter-spacing:.04em;color:#6f6f7a;text-transform:uppercase;margin:16px 0 4px;padding-top:10px;border-top:1px solid #2a2a35';
+            div.textContent = titulo;
+            return div;
+        }
+
+        function construirSwatches(valorActual, onPick) {
+            var wrap = doc.createElement('div');
+            wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;margin-top:6px';
+            var botones = [];
+            var actualNorm = (valorActual || '').toLowerCase();
+            PALETA.forEach(function(c) {
+                var b = doc.createElement('button');
+                b.title = c.nombre;
+                var seleccionado = c.hex.toLowerCase() === actualNorm;
+                b.style.cssText = 'width:20px;height:20px;border-radius:4px;border:0;padding:0;cursor:pointer;background:' + c.hex
+                    + (seleccionado ? ';outline:2px solid #fff;outline-offset:1px' : '');
+                b.addEventListener('click', function() {
+                    botones.forEach(function(x) { x.style.outline = ''; });
+                    b.style.outline = '2px solid #fff';
+                    b.style.outlineOffset = '1px';
+                    onPick(c.hex);
+                });
+                botones.push(b);
+                wrap.appendChild(b);
+            });
+            return wrap;
+        }
+
         function construirControles(key, elemento, registro) {
             panel.innerHTML = '';
             panel.style.whiteSpace = 'normal';
@@ -399,6 +461,12 @@ def inject_diseno_visual():
             });
             var bordeWrap = doc.createElement('div');
             bordeWrap.appendChild(inpBordeAncho);
+            bordeWrap.appendChild(construirSwatches(registro.bordeColor, function(hex) {
+                var ctx = elementoActivo(); if (!ctx) return;
+                ctx.registro.bordeColor = hex;
+                inpBordeColor.value = hex;
+                aplicarBorde(ctx);
+            }));
             bordeWrap.appendChild(inpBordeColor);
             panel.appendChild(filaControl('Borde completo', bordeWrap, bordeLbl));
 
@@ -413,6 +481,119 @@ def inject_diseno_visual():
                     ctx.registro.sombraNivel === 0 ? null : SOMBRAS[ctx.registro.sombraNivel]);
             });
             panel.appendChild(filaControl('Sombra', inpSombra, sombraLbl));
+
+            // ---- tipografía ----
+            panel.appendChild(seccion('Tipografía'));
+
+            var fsVal = registro.cambios['font-size']
+                ? numDe(registro.cambios['font-size'], 14)
+                : numDe(win.getComputedStyle(elemento).fontSize, 14);
+            var inpFs = rango(10, 32, 1, fsVal);
+            var fsLbl = spanValor(Math.round(fsVal) + 'px');
+            inpFs.addEventListener('input', function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                var v = parseInt(inpFs.value, 10);
+                fsLbl.textContent = v + 'px';
+                establecerCambio(ctx.el, ctx.registro, 'font-size', v + 'px');
+            });
+            panel.appendChild(filaControl('Tamaño de letra', inpFs, fsLbl));
+
+            var PESOS = [['400', 'Normal'], ['600', 'Semibold'], ['700', 'Bold']];
+            var pesoWrap = doc.createElement('div');
+            pesoWrap.style.cssText = 'display:flex;gap:4px;margin-top:6px';
+            var pesoBotones = [];
+            var pesoActual = registro.cambios['font-weight'] || String(numDe(win.getComputedStyle(elemento).fontWeight, 400));
+            PESOS.forEach(function(par) {
+                var b = doc.createElement('button');
+                b.textContent = par[1];
+                b.style.cssText = 'flex:1;background:' + (par[0] === pesoActual ? '#3C3489' : '#1c1c24') + ';color:#fff;border:1px solid #34343f;border-radius:4px;padding:5px 2px;font:11px sans-serif;cursor:pointer';
+                b.addEventListener('click', function() {
+                    var ctx = elementoActivo(); if (!ctx) return;
+                    establecerCambio(ctx.el, ctx.registro, 'font-weight', par[0]);
+                    pesoBotones.forEach(function(x) { x.style.background = '#1c1c24'; });
+                    b.style.background = '#3C3489';
+                });
+                pesoBotones.push(b);
+                pesoWrap.appendChild(b);
+            });
+            panel.appendChild(filaControl('Peso', pesoWrap, spanValor('')));
+
+            var ALINEACIONES = [['left', 'Izq'], ['center', 'Centro'], ['right', 'Der']];
+            var alinWrap = doc.createElement('div');
+            alinWrap.style.cssText = 'display:flex;gap:4px;margin-top:6px';
+            var alinBotones = [];
+            var alinActual = registro.cambios['text-align'] || win.getComputedStyle(elemento).textAlign;
+            ALINEACIONES.forEach(function(par) {
+                var b = doc.createElement('button');
+                b.textContent = par[1];
+                b.style.cssText = 'flex:1;background:' + (par[0] === alinActual ? '#3C3489' : '#1c1c24') + ';color:#fff;border:1px solid #34343f;border-radius:4px;padding:5px 2px;font:11px sans-serif;cursor:pointer';
+                b.addEventListener('click', function() {
+                    var ctx = elementoActivo(); if (!ctx) return;
+                    establecerCambio(ctx.el, ctx.registro, 'text-align', par[0]);
+                    alinBotones.forEach(function(x) { x.style.background = '#1c1c24'; });
+                    b.style.background = '#3C3489';
+                });
+                alinBotones.push(b);
+                alinWrap.appendChild(b);
+            });
+            panel.appendChild(filaControl('Alineación', alinWrap, spanValor('')));
+
+            var subrayadoActivo = (registro.cambios['text-decoration'] === 'underline');
+            var btnSubrayado = doc.createElement('button');
+            btnSubrayado.style.cssText = 'width:100%;color:#fff;border:1px solid #34343f;border-radius:4px;padding:6px;font:11px sans-serif;cursor:pointer;margin-top:6px';
+            function pintarSubrayado() {
+                btnSubrayado.textContent = subrayadoActivo ? 'Subrayado: on' : 'Subrayado: off';
+                btnSubrayado.style.background = subrayadoActivo ? '#3C3489' : '#1c1c24';
+            }
+            pintarSubrayado();
+            btnSubrayado.addEventListener('click', function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                subrayadoActivo = !subrayadoActivo;
+                establecerCambio(ctx.el, ctx.registro, 'text-decoration', subrayadoActivo ? 'underline' : 'none');
+                pintarSubrayado();
+            });
+            panel.appendChild(filaControl('Subrayado', btnSubrayado, spanValor('')));
+
+            var lsVal = registro.cambios['letter-spacing'] ? numDe(registro.cambios['letter-spacing'], 0) : 0;
+            var inpLs = rango(-1, 6, 0.5, lsVal);
+            var lsLbl = spanValor(lsVal + 'px');
+            inpLs.addEventListener('input', function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                var v = parseFloat(inpLs.value);
+                lsLbl.textContent = v + 'px';
+                establecerCambio(ctx.el, ctx.registro, 'letter-spacing', v === 0 ? null : v + 'px');
+            });
+            panel.appendChild(filaControl('Espaciado entre letras', inpLs, lsLbl));
+
+            var inpRot = rango(-45, 45, 1, registro.transformState.rotateDeg);
+            var rotLbl = spanValor(registro.transformState.rotateDeg + '°');
+            inpRot.addEventListener('input', function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                var v = parseInt(inpRot.value, 10);
+                rotLbl.textContent = v + '°';
+                ctx.registro.transformState.rotateDeg = v;
+                aplicarTransform(ctx.el, ctx.registro);
+            });
+            panel.appendChild(filaControl('Rotar (orientación)', inpRot, rotLbl));
+
+            // ---- color por rol ----
+            panel.appendChild(seccion('Color'));
+
+            var colorTextoActual = registro.cambios['color'] || null;
+            var colorTextoLbl = spanValor(colorTextoActual || 'sin cambio');
+            panel.appendChild(filaControl('Texto', construirSwatches(colorTextoActual, function(hex) {
+                var ctx = elementoActivo(); if (!ctx) return;
+                establecerCambio(ctx.el, ctx.registro, 'color', hex);
+                colorTextoLbl.textContent = hex;
+            }), colorTextoLbl));
+
+            var colorFondoActual = registro.cambios['background-color'] || null;
+            var colorFondoLbl = spanValor(colorFondoActual || 'sin cambio');
+            panel.appendChild(filaControl('Fondo', construirSwatches(colorFondoActual, function(hex) {
+                var ctx = elementoActivo(); if (!ctx) return;
+                establecerCambio(ctx.el, ctx.registro, 'background-color', hex);
+                colorFondoLbl.textContent = hex;
+            }), colorFondoLbl));
 
             // ver original
             var btnOriginal = doc.createElement('button');
@@ -493,4 +674,4 @@ def inject_diseno_visual():
 
     })();
     </script>
-    """, height=0, scrolling=False)
+    """.replace("__PALETA__", json.dumps(_PALETA)), height=0, scrolling=False)
