@@ -241,7 +241,7 @@ with perf.phase("cargar()"):                                                # �
         # Dueño único del estado (ver estado_rango.py). Aquí aún no conocemos
         # los bounds del parquet (se calculan tras cargar), así que solo
         # SEMBRAMOS el default; el recorte a bounds ocurre más abajo.
-        _k_rango = clave_rango(reporte, usa_carga_rango=True, es_ajuste=False)
+        _k_rango = clave_rango(reporte, usa_carga_rango=True)
         _k_rango_ok = f"rango_carga_ok_{reporte}"   # último rango 2-tupla válido
         asegurar_rango(_k_rango, default=(_hoy_c.replace(day=1), _hoy_c))
         _rc = st.session_state.get(_k_rango)
@@ -378,7 +378,7 @@ if _usa_carga_rango and col_fecha:
         # el rango guardado a [min, max] (el default 01-mes→hoy puede exceder
         # el máximo real si la data no llega hasta hoy → date_input fallaría).
         asegurar_rango(
-            clave_rango(reporte, usa_carga_rango=True, es_ajuste=False),
+            clave_rango(reporte, usa_carga_rango=True),
             default=(fecha_min_full, fecha_max_full),
             bounds=(fecha_min_full, fecha_max_full),
             reporte=reporte, usa_carga_rango=True,
@@ -404,14 +404,19 @@ perf.start_phase("Ajuste top row")                                          # �
 # Ajuste: cada categoría del rail (visual/tiempo) recuerda su propio rango
 # por separado (ver graficos.ajuste.categoria_rango_ajuste) — se resuelve
 # ANTES de clave_rango() porque "ajuste_graf_tipo" ya quedó escrito en
-# session_state por el on_click del rail en el rerun anterior. None (nunca
-# se clickeó el rail todavía) cae en "visual" adentro de la función.
+# session_state por el on_click del rail en el rerun anterior. Si el rail
+# no se clickeó todavía, categoria_rango_ajuste(None) devuelve "visual",
+# que es la categoría por defecto.
+#
+# La categoría es AHORA el único discriminante que ve clave_rango(): None
+# = este reporte no separa rango por categoría. Los demás reportes no la
+# pasan y caen a su clave de franja.
 _categoria_ajuste_rango = (
     categoria_rango_ajuste(st.session_state.get("ajuste_graf_tipo"))
     if es_ajuste else None
 )
-_k_rango_franja = clave_rango(reporte, _usa_carga_rango, es_ajuste,
-                              categoria_ajuste=_categoria_ajuste_rango)
+_k_rango_franja = clave_rango(reporte, _usa_carga_rango,
+                              categoria=_categoria_ajuste_rango)
 _franja_con_fecha = bool(col_fecha) and fecha_min_full is not None
 # INVARIANTE: sembrar el default Y recortar a bounds AQUÍ, justo antes de
 # dibujar el widget en este mismo render. Nunca clampear después del

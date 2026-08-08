@@ -33,24 +33,35 @@ import datetime
 import streamlit as st
 
 
-def clave_rango(reporte, usa_carga_rango, es_ajuste, categoria_ajuste=None):
+def clave_rango(reporte, usa_carga_rango, categoria=None):
     """Clave canónica de session_state para el rango de `reporte`.
 
     - carga_por_rango → misma clave que el loader R2 (`rango_carga_*`), así
       el date-picker controla directamente qué se descarga.
-    - Ajuste de Inventario → una clave POR CATEGORÍA de gráfico
-      ("visual" o "tiempo", ver graficos.ajuste.categoria_rango_ajuste).
-      Cascada/Mapa de calor/Distribución/Tabla funcionan mejor acotados a
-      un período; Evolución/Comparativa necesitan varios meses o un año —
-      antes compartían una sola clave y se pisaban el rango entre sí.
-      `categoria_ajuste=None` (categoría aún no resuelta, p.ej. primer
-      render) cae en "visual" por ser la categoría por defecto del rail.
+    - `categoria` → una clave POR CATEGORÍA de gráfico. Hoy solo lo usa
+      Ajuste de Inventario, con "visual" o "tiempo" (ver
+      graficos.ajuste.categoria_rango_ajuste): Cascada/Mapa de calor/
+      Distribución/Tabla funcionan mejor acotados a un período, mientras
+      Evolución/Comparativa necesitan varios meses o un año — antes
+      compartían una sola clave y se pisaban el rango entre sí.
     - resto → clave de filtro local.
+
+    Hasta el 2026-08-08 esta función recibía TAMBIÉN un `es_ajuste`, que
+    era redundante: `categoria_rango_ajuste()` nunca devuelve None, así
+    que la categoría llegaba no-nula exactamente cuando el flag era True.
+    Peor que redundante, permitía estados contradictorios que nada
+    detectaba (es_ajuste=True con categoria=None, o al revés). Ahora la
+    categoría es el único discriminante: si viene, hay clave por
+    categoría; si no, no la hay.
     """
     if usa_carga_rango:
         return f"rango_carga_{reporte}"
-    if es_ajuste:
-        return f"ajuste_rango_aplicado_{categoria_ajuste or 'visual'}"
+    if categoria:
+        # OJO: esta clave NO lleva el reporte. Hoy no colisiona porque solo
+        # Ajuste usa categorías Y app.py limpia estas claves al cambiar de
+        # reporte. Si un segundo reporte adopta rango por categoría, hay que
+        # meter `reporte` en la clave — y entonces esa limpieza sobra.
+        return f"ajuste_rango_aplicado_{categoria}"
     return f"rango_franja_{reporte}"
 
 
