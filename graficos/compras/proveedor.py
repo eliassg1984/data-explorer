@@ -675,8 +675,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         button:nth-child(2):hover::after {
             content: var(--periodo-selec, "");
             position: absolute; top: calc(100% + 4px); right: 0;
-            background: var(--text-primary, #262730);
-            color: var(--surface-2, #fff);
+            background: var(--text-primary);
+            color: var(--bg-card);
             padding: 4px 8px; border-radius: 4px;
             font-size: 11px; line-height: 1.2; white-space: nowrap;
             z-index: 100; pointer-events: none;
@@ -771,7 +771,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             border: 1px solid rgba(49,51,63,0.2);
             border-radius: 999px;
             overflow: hidden;
-            background: var(--background-color, #fff);
+            /* Antes: var(--background-color), que NO existe en el :root de
+               este proyecto (es un nombre del tema de Streamlit). La
+               propiedad quedaba invalida y la capsula salia transparente en
+               vez de solida. Sin verificar en local: los datos demo de
+               compras.parquet no traen Proveedor/Valor, asi que este drill
+               no se puede abrir sin R2. */
+            background: var(--bg-card);
         }
         .st-key-gran_float [data-testid="stButtonGroup"] button,
         .st-key-topn_float [data-testid="stButtonGroup"] button,

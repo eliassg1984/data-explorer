@@ -173,7 +173,7 @@ CSS = """    /* ================================================================
         }
         .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
             [data-testid="stPopover"] button:hover {
-            background: var(--accent-tint, #EEEDFE) !important;
+            background: var(--accent-tint) !important;
         }
         /* Addendum de los reportes con EXACTAMENTE 2 chips de filtro
            (Compras, Inventario Valorizado, Salidas): ancho uniforme parejo

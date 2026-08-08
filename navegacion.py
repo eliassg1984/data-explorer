@@ -300,7 +300,7 @@ html body .stApp { padding-top: 0 !important; }
 html body [data-testid="stMainBlockContainer"],
 html body .stMainBlockContainer,
 html body .block-container {
-    padding-top: var(--cab-offset-contenido, 128px) !important;
+    padding-top: var(--cab-offset-contenido) !important;
 }
 
 /* 4) CLAVE: colapsar los contenedores "invisibles" que se apilan arriba

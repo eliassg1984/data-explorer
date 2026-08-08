@@ -337,7 +337,7 @@ def _inject_css():
             border-radius: 10px !important;
             justify-content: center !important;
             background: transparent !important;
-            color: var(--text-secondary, #71717a) !important;
+            color: var(--text-secondary) !important;
             border: none !important;
             box-shadow: none !important;
             font-weight: 500 !important;
@@ -359,8 +359,8 @@ def _inject_css():
            para el ítem activo de la navegación real). */
         [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
             .st-key-ai_float_wrap [data-testid="stPopover"] > div > button:hover {{
-            background: var(--accent-tint, #f0edfe) !important;
-            color: var(--accent-deep, #4938b8) !important;
+            background: var(--accent-tint) !important;
+            color: var(--accent-deep) !important;
             transform: none !important;
         }}
     }}

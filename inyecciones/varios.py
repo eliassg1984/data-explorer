@@ -113,7 +113,7 @@ def inject_fullscreen_app():
         var s = doc.createElement('style'); s.id = STY;
         s.textContent =
           '#' + BTN + '{position:fixed;z-index:2147483000;' +
-          'bottom:calc(var(--nav-movil-alto,60px) + 12px);left:12px;' +
+          'bottom:calc(var(--nav-movil-alto) + 12px);left:12px;' +
           'width:40px;height:40px;padding:0;border:none;border-radius:50%;' +
           'cursor:pointer;background:#6c5ce7;color:#fff;font-size:18px;' +
           'line-height:40px;text-align:center;display:none;' +

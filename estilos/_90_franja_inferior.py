@@ -55,7 +55,7 @@ CSS = """    /* ================================================================
     .st-key-footer_actualizacion .ultima-actualizacion {
         margin: 0 !important;
         font-size: 12px !important;
-        color: var(--text-muted, #9aa0a6) !important;
+        color: var(--text-muted) !important;
         white-space: nowrap !important;
     }
 """

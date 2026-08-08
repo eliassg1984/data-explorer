@@ -26,7 +26,7 @@ CSS = """    /* ================================================================
         overflow-y: auto !important;
         margin: 0 !important;
         padding: 8px 0 16px 0 !important;
-        background: var(--bg-card, #ffffff) !important;
+        background: var(--bg-card) !important;
         border: 1px solid var(--border) !important;
         border-radius: 12px !important;    /* mismas esquinas que la tarjeta */
         box-shadow: none !important;       /* sin sombra: integrada al borde */
@@ -41,57 +41,18 @@ CSS = """    /* ================================================================
         padding-right: 153px !important;   /* rail 116 + 22px de aire + 15px offset del rail */
     }
 
-    /* Cabecera del rail — icono + "Compras / Gráficos" */
-    .st-key-compras_tabs_row .rail-header {
-        background: var(--surface-1, #f6f7f9) !important;
-        border-bottom: 0.5px solid var(--border) !important;
-        padding: 10px 10px 8px !important;
-        display: flex !important;
-        align-items: center !important;
-        gap: 8px !important;
-        margin: 0 0 6px 0 !important;
-    }
-    .st-key-compras_tabs_row .rail-header .rail-icon {
-        display: inline-flex !important;
-        align-items: center !important;
-        color: var(--accent, #6c5ce7) !important;
-        flex-shrink: 0 !important;
-    }
-    .st-key-compras_tabs_row .rail-header .rail-icon svg {
-        display: block !important;
-    }
-    .st-key-compras_tabs_row .rail-header .rail-texts {
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 1px !important;
-        min-width: 0 !important;
-    }
-    .st-key-compras_tabs_row .rail-header .rail-title {
-        font-size: 10.5px !important;
-        font-weight: 500 !important;
-        color: var(--text-primary, #18181d) !important;
-        line-height: 1.2 !important;
-    }
-    .st-key-compras_tabs_row .rail-header .rail-sub {
-        font-size: 9px !important;
-        color: var(--text-muted, #a2a2ad) !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.06em !important;
-        line-height: 1.2 !important;
-    }
-
     /* Badge de categoría + separador entre secciones */
     .st-key-compras_tabs_row .rail-cat-badge {
         font-size: 8.5px !important;
         font-weight: 600 !important;
-        color: var(--text-muted, #a2a2ad) !important;
+        color: var(--text-muted) !important;
         text-transform: uppercase !important;
         letter-spacing: 0.1em !important;
         padding: 4px 10px 1px !important;
     }
     .st-key-compras_tabs_row .rail-sep {
         height: 0.5px !important;
-        background: var(--border, #e6e6ea) !important;
+        background: var(--border) !important;
         margin: 2px 8px !important;
     }
 
@@ -196,7 +157,7 @@ CSS = """    /* ================================================================
         background: transparent !important;
         padding: 1px 10px 1px 7px !important;   /* 7 + border 3 = 10 alineado */
         gap: 0 !important;
-        color: var(--text-secondary, #71717a) !important;
+        color: var(--text-secondary) !important;
         font-weight: 400 !important;
         box-shadow: none !important;
         position: relative !important;
@@ -240,16 +201,16 @@ CSS = """    /* ================================================================
     }
     .st-key-graf_tipo_chips [data-testid="stButton"] > button:hover,
     .st-key-graf_tipo_chips .stButton > button:hover {
-        background: var(--accent-tint, #f0edfe) !important;   /* hover suave */
-        color: var(--accent-deep, #4938b8) !important;
+        background: var(--accent-tint) !important;   /* hover suave */
+        color: var(--accent-deep) !important;
     }
     /* Activo: kind="primary" del st.button */
     .st-key-graf_tipo_chips [data-testid="stButton"] > button[kind="primary"],
     .st-key-graf_tipo_chips .stButton > button[kind="primary"] {
-        background: var(--accent-light, #e7e3fb) !important;   /* activo saturado */
-        color: var(--accent-deep, #4938b8) !important;
+        background: var(--accent-light) !important;   /* activo saturado */
+        color: var(--accent-deep) !important;
         font-weight: 500 !important;
-        border-left-color: var(--accent, #6c5ce7) !important;  /* pinta el reservado */
+        border-left-color: var(--accent) !important;  /* pinta el reservado */
     }
 
     /* =================================================================== */
@@ -321,7 +282,7 @@ CSS = """    /* ================================================================
             border-left: none !important;
             border-radius: 999px !important;
             padding: 5px 12px !important;
-            background: var(--surface-1, #f6f7f9) !important;
+            background: var(--bg-primary) !important;
         }
         .st-key-graf_tipo_chips [data-testid="stButton"] > button[kind="primary"],
         .st-key-graf_tipo_chips .stButton > button[kind="primary"] {

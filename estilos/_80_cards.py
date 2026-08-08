@@ -24,8 +24,8 @@ CSS = """    /* ================================================================
         font-size: 11px;
         font-weight: 600;
         color: var(--accent);
-        background: var(--accent-tint, #EEEDFE);
-        border-top: 1px solid var(--accent, #7F77DD);
+        background: var(--accent-tint);
+        border-top: 1px solid var(--accent);
         text-transform: uppercase;
         letter-spacing: 0.08em;
         padding: 8px 1.5rem;
@@ -103,7 +103,7 @@ CSS = """    /* ================================================================
        "clásicos" (Familia/Evolución) o a los del drill Proveedor.
        ============================================================ */
     div[class*="st-key-ajuste_graf_card_"] {
-        background: var(--surface-2, #ffffff) !important;
+        background: var(--bg-card) !important;
         border: none !important;                    /* look plano: sin borde de Streamlit */
         border-radius: 20px !important;
         padding: 16px 18px;
@@ -135,7 +135,7 @@ CSS = """    /* ================================================================
     /* No tocar sin revisar `_compras_proveedor_drill` en graficos/compras/proveedor.py*/
     /* =================================================================== */
     div[class*="st-key-compras_prov_card_"] {
-        background: var(--surface-2, #ffffff) !important;
+        background: var(--bg-card) !important;
         border: none !important;
         border-radius: 20px !important;
         padding: 16px 18px;
