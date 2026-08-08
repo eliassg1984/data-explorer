@@ -1505,3 +1505,53 @@ salvo `icono`):
       (`stVerticalBlock`/`stColumn`/`stHorizontalBlock`, todos flex por
       default) puede necesitar el mismo trío — no asumir que alcanza con
       la propiedad que el usuario está tocando.
+
+48. **`st.pills`/`segmented_control`/`st.popover`/`st.button` guardan la key
+    en un WRAPPER de layout — lo visualmente real (borde, relleno,
+    tipografía, color) vive en el/los `<button>` de adentro, que no tienen
+    key propia.** Encontrado extendiendo el modo diseño
+    (`inyecciones/diseno.py`) contra `st.pills("Vista", ["Agrupado",
+    "Apilado"], key="compras_cant_vista")` y contra el popover "Excluir
+    productos" (`ajcas_excl_wrap`, `graficos/ajuste.py`). Pinear cualquiera
+    de los dos pinea el WRAPPER — un control que solo toca `elemento` no
+    tiene efecto visible (el wrapper es invisible) o solo agrega espacio
+    vacío alrededor de un botón que sigue viéndose igual.
+    - **Criterio de redirección — por ÁREA, no por "hay un botón adentro":**
+      una tarjeta grande (`chartcard_cascada`) tiene botones de expandir ▸
+      salpicados por sus filas; redirigir ahí por la sola presencia de un
+      `<button>` pintaría las flechitas al cambiar el fondo de la tarjeta.
+      Solo redirige cuando el/los botones ocupan >=60% del ancho (suma, se
+      reparten la fila) o del alto (máximo, comparten la fila) del propio
+      elemento pineado — es decir, cuando el elemento ES básicamente el
+      botón, no un contenedor mayor que de casualidad tiene alguno adentro.
+    - **Padding/tamaño de letra sobre el botón redirigido no crecían nada
+      por sí solos:** los botones de Streamlit traen `box-sizing:border-box`
+      con `width`/`height` explícitos (`getComputedStyle` los mostraba en
+      píxeles concretos, no `auto`) — el padding se comía espacio de
+      adentro en vez de agrandar la caja hacia afuera. Liberar a
+      `width:auto; height:auto` (con `!important`) recién entonces deja que
+      la caja responda al padding/tamaño de letra.
+    - **El hallazgo más caro de diagnosticar — `transition: all 0.15s` del
+      propio botón peleaba con el `setInterval` de 150ms del modo diseño:**
+      un `!important` inline con el valor y la prioridad correctos
+      (confirmado leyendo `style.getPropertyPriority` directo, no solo el
+      texto de `cssText`) SEGUÍA sin reflejarse en `getComputedStyle` —
+      border-radius clavado en `999px`, background-color clavado en blanco,
+      padding clavado en el valor original. Se descartaron uno por uno:
+      nodo reemplazado (marca custom en el elemento, sigue el mismo tras
+      reruns y esperas), Shadow DOM (no hay), CSS `@layer` (no hay ninguna
+      en las hojas de estilo). La causa real: la duración de la transición
+      del botón (0.15s) coincide casi exacto con el intervalo de reaplicado
+      defensivo (150ms) — cada tick REINICIA la transición antes de que
+      termine de llegar al valor nuevo, así que el navegador queda
+      perpetuamente a mitad de camino, pegado cerca del valor ORIGINAL.
+      Nada de esto tira error: se ve como "mi cambio no hizo nada".
+      **Arreglo:** `transition: none !important` sobre el/los elementos
+      destino ANTES de tocar cualquier propiedad animable — una sola vez
+      por key (`registro.transicionNeutralizada`), reaplicado en cada tick
+      igual que el resto. Sospecha para la próxima vez: si un control de
+      diseño no tiene efecto visible pese a que el inline `!important` está
+      confirmado presente con el valor y la prioridad correctos, revisar
+      `getComputedStyle(el).transitionProperty/-Duration` antes de seguir
+      buscando por el lado de la cascada — el problema puede ser de tiempo
+      (reaplicado vs. duración de transición), no de especificidad.

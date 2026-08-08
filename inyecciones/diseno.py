@@ -45,6 +45,26 @@ ocupa lugar aunque no haya nada que ajustar todavía". Colapsar/expandir es
 una preferencia de sesión (`win.__disenoState.panelColapsado`), no depende
 de la key pineada; el overlay y las manijas del elemento pineado siguen
 funcionando igual con el panel colapsado.
+
+Los controles de ESTILO (todo salvo tamaño/posición/flex — ver
+PROPS_GEOMETRIA) no escriben siempre sobre `elemento`: `destinosDeEstilo()`
+redirige a los `<button>` de adentro cuando el elemento pineado ES
+básicamente un botón/pill (st.pills, segmented_control, un st.button o
+st.popover sueltos) — esos widgets guardan la key en un wrapper de layout
+sin ningún borde/relleno/tipografía propios; lo visualmente real vive en
+el/los botones, que no tienen key. El criterio es de ÁREA (botones >=60%
+del ancho o alto del elemento), no "hay un botón adentro": una tarjeta
+grande con flechitas ▸ salpicadas por sus filas NO debe redirigir ahí.
+`width`/`height`/`flex`/`max-width`/`max-height` siempre van al elemento
+mismo, para que coincida con lo que trackean el overlay y las manijas.
+
+`neutralizarTransicion()` (arquitectura.md #48) corta `transition` con
+`!important` antes de tocar cualquier propiedad animable — un botón con
+`transition: all 0.15s` puede quedar con la propiedad SIN aplicar, con el
+inline `!important` confirmado presente y todo, porque el setInterval de
+150ms de `sync()` reinicia la transición en cada tick casi a la par de su
+propia duración y nunca llega a destino. No tira error: se ve como "mi
+cambio no hizo nada".
 """
 
 import json
@@ -100,7 +120,6 @@ def inject_diseno_visual():
                     key: key,
                     cssTextOriginal: null,
                     cambios: {},
-                    cambiosBotones: {},
                     transformState: { translateX: 0, translateY: 0, rotateDeg: 0 },
                     bordeAncho: 0,
                     bordeColor: '#6c5ce7',
@@ -263,26 +282,72 @@ def inject_diseno_visual():
             }
         }
 
-        // Pills/segmented_control (st.pills, st.segmented_control): las
-        // opciones individuales NO tienen su propia st-key-* -- solo el
-        // grupo entero la tiene ([data-testid="stButtonGroup"] es el
-        // contenedor). Pinear "Apilado"/"Agrupado" pinea el grupo completo,
-        // asi que un control sobre `elemento` (el contenedor) nunca toca el
-        // borde/relleno VISIBLE de cada boton. Esto expone esos botones
-        // como destinos de estilo aparte, trackeados en cambiosBotones.
-        function botonesInternos(elemento) {
-            var nodos = elemento.querySelectorAll('[data-testid="stButtonGroup"] button');
-            return Array.prototype.slice.call(nodos);
+        // Widgets tipo boton (st.pills/segmented_control, o un st.button/
+        // st.popover suelto): el key vive en un WRAPPER de layout, y lo
+        // visualmente relevante (borde, relleno, tipografia, color) esta en
+        // el/los <button> de adentro, que no tienen key propia. Pinear
+        // "Apilado" pinea el grupo entero; pinear un popover pinea su
+        // wrapper invisible. Sin esto, "Radio de borde"/"Padding"/etc.
+        // tocan una caja sin efecto visual (o agregan espacio vacio
+        // alrededor de un boton que se ve igual de chico).
+        //
+        // El criterio para redirigir es de AREA, no de "hay un boton
+        // adentro": una tarjeta grande (chartcard_cascada) tiene botones
+        // de expandir ▸ salpicados por todas las filas — redirigir ahi
+        // sería una sorpresa (tocar "color de fondo" de la tarjeta
+        // terminaría pintando flechitas). Solo redirige cuando el/los
+        // botones ocupan la MAYOR PARTE del propio elemento en ancho o
+        // alto (>=60%), es decir, cuando el elemento pineado ES basicamente
+        // el boton, no un contenedor mas grande que de casualidad tiene
+        // botones en algun lado.
+        function destinosDeEstilo(elemento) {
+            var enGrupo = elemento.querySelectorAll('[data-testid="stButtonGroup"] button');
+            var candidatos = enGrupo.length ? Array.prototype.slice.call(enGrupo)
+                                             : Array.prototype.slice.call(elemento.querySelectorAll('button'));
+            if (!candidatos.length) return [elemento];
+            var rEl = elemento.getBoundingClientRect();
+            if (rEl.width <= 0 || rEl.height <= 0) return [elemento];
+            // Ancho: SUMA (varios pills lado a lado ocupan la fila entre
+            // todos). Alto: MAXIMO (comparten la misma fila, no se apilan).
+            var anchoBotones = 0, altoMaxBotones = 0;
+            candidatos.forEach(function(b) {
+                var rb = b.getBoundingClientRect();
+                anchoBotones += rb.width;
+                altoMaxBotones = Math.max(altoMaxBotones, rb.height);
+            });
+            var ratioAncho = anchoBotones / rEl.width;
+            var ratioAlto = altoMaxBotones / rEl.height;
+            if (Math.max(ratioAncho, ratioAlto) < 0.6) return [elemento];
+            return candidatos;
         }
 
-        function establecerCambioBotones(elemento, registro, prop, valor) {
-            var botones = botonesInternos(elemento);
+        // Props de GEOMETRIA: siempre sobre `elemento` (asi coincide con el
+        // overlay/las manijas, que trackean su bounding box). Todo lo
+        // demas en `cambios` es "estilo" y va a destinosDeEstilo().
+        var PROPS_GEOMETRIA = { width: 1, height: 1, flex: 1, 'max-width': 1, 'max-height': 1 };
+
+        // Hallazgo real (no hipotetico): un boton con `transition: all
+        // 0.15s` puede terminar con la propiedad SIN aplicar aunque el
+        // inline style tenga !important y el valor correcto -- el
+        // setInterval de sync() (150ms) REINICIA la transicion en cada
+        // tick, casi a la par de su propia duracion, asi que nunca
+        // termina de llegar al valor nuevo (se ve "trabado" en el
+        // original, sin ningun error). Cortar la transicion es
+        // obligatorio antes de tocar cualquier propiedad animable.
+        function neutralizarTransicion(el) {
+            el.style.setProperty('transition', 'none', 'important');
+        }
+
+        function establecerCambioEstilo(elemento, registro, prop, valor) {
+            var destinos = destinosDeEstilo(elemento);
+            registro.transicionNeutralizada = true;
+            destinos.forEach(neutralizarTransicion);
             if (valor === null) {
-                delete registro.cambiosBotones[prop];
-                botones.forEach(function(b) { b.style.removeProperty(prop); });
+                delete registro.cambios[prop];
+                destinos.forEach(function(d) { d.style.removeProperty(prop); });
             } else {
-                registro.cambiosBotones[prop] = valor;
-                botones.forEach(function(b) { b.style.setProperty(prop, valor, 'important'); });
+                registro.cambios[prop] = valor;
+                destinos.forEach(function(d) { d.style.setProperty(prop, valor, 'important'); });
             }
         }
 
@@ -308,22 +373,43 @@ def inject_diseno_visual():
             }
             // reaplicado defensivo completo — barato e idempotente, cubre el
             // caso de un nodo re-creado (no solo preservado) tras un rerun.
-            for (var prop in registro.cambios) {
-                elemento.style.setProperty(prop, registro.cambios[prop], 'important');
+            // Geometria siempre sobre `elemento`; el resto sobre
+            // destinosDeEstilo() (calculado una sola vez si hace falta).
+            var destinos = null;
+            if (registro.transicionNeutralizada) {
+                destinos = destinosDeEstilo(elemento);
+                neutralizarTransicion(elemento);
+                destinos.forEach(neutralizarTransicion);
             }
-            aplicarTransform(elemento, registro);
-            // cambiosBotones: independiente de "ver original" del contenedor
-            // (arriba ya se corto con el return si esta activo) — se
-            // reaplica siempre que haya algo trackeado, aunque los botones
-            // reales sean nodos nuevos tras un rerun.
-            var botonesReap = botonesInternos(elemento);
-            if (botonesReap.length) {
-                for (var propB in registro.cambiosBotones) {
-                    for (var bi = 0; bi < botonesReap.length; bi++) {
-                        botonesReap[bi].style.setProperty(propB, registro.cambiosBotones[propB], 'important');
+            for (var prop in registro.cambios) {
+                if (PROPS_GEOMETRIA[prop]) {
+                    elemento.style.setProperty(prop, registro.cambios[prop], 'important');
+                } else {
+                    if (!destinos) destinos = destinosDeEstilo(elemento);
+                    for (var di = 0; di < destinos.length; di++) {
+                        destinos[di].style.setProperty(prop, registro.cambios[prop], 'important');
                     }
                 }
             }
+            // Padding/tamaño de letra sobre un boton redirigido no crecen
+            // nada por si solos: los botones de Streamlit traen
+            // box-sizing:border-box con width/height EXPLICITOS, asi que
+            // el padding se come espacio de adentro en vez de agrandar la
+            // caja. Liberar a width/height:auto solo cuando de verdad se
+            // esta tocando padding o font-size (nunca "porque hay botones
+            // adentro" sin mas: eso correria en cada tick para cualquier
+            // pin y podria desalinear pills que Streamlit iguala a
+            // proposito con un width fijo).
+            if (registro.cambios['padding'] !== undefined || registro.cambios['font-size'] !== undefined) {
+                if (!destinos) destinos = destinosDeEstilo(elemento);
+                if (destinos.length && destinos[0] !== elemento) {
+                    for (var dj = 0; dj < destinos.length; dj++) {
+                        destinos[dj].style.setProperty('width', 'auto', 'important');
+                        destinos[dj].style.setProperty('height', 'auto', 'important');
+                    }
+                }
+            }
+            aplicarTransform(elemento, registro);
         }
 
         // ---- arrastre: resize (bordes/esquina) y mover (nudge) ----
@@ -332,6 +418,11 @@ def inject_diseno_visual():
             e.stopPropagation();
             var ctx = elementoActivo();
             if (!ctx) return;
+            // transition:all puede pelear con el arrastre igual que con los
+            // controles de estilo (ver neutralizarTransicion) — un resize u
+            // "nudge" también se ve trabado sin esto si el elemento anima.
+            ctx.registro.transicionNeutralizada = true;
+            neutralizarTransicion(ctx.el);
             if (modo !== 'move') {
                 // Tomar control manual del tamaño (arquitectura.md #47): un
                 // width/height con !important NO alcanza en un item flex —
@@ -503,6 +594,12 @@ def inject_diseno_visual():
             header.appendChild(btnSoltar);
             panel.appendChild(header);
 
+            // Para LEER valores iniciales/computados, usar el mismo destino
+            // al que van a ESCRIBIR los controles de estilo — si no, el
+            // slider arranca mostrando el radio/tamaño de un wrapper
+            // invisible en vez del boton real que se ve en pantalla.
+            var lectura = destinosDeEstilo(elemento)[0];
+
             var tamVal = spanValor('');
             panel.appendChild(filaSoloLectura('Tamaño', tamVal));
             var posVal = spanValor('');
@@ -513,28 +610,28 @@ def inject_diseno_visual():
             // radio de borde
             var radioVal = registro.cambios['border-radius']
                 ? numDe(registro.cambios['border-radius'], 0)
-                : numDe(win.getComputedStyle(elemento).borderTopLeftRadius, 0);
+                : numDe(win.getComputedStyle(lectura).borderTopLeftRadius, 0);
             var inpRadio = rango(0, 32, 1, radioVal);
             var radioLbl = spanValor(Math.round(radioVal) + 'px');
             inpRadio.addEventListener('input', function() {
                 var ctx = elementoActivo(); if (!ctx) return;
                 var v = parseInt(inpRadio.value, 10);
                 radioLbl.textContent = v + 'px';
-                establecerCambio(ctx.el, ctx.registro, 'border-radius', v === 0 ? null : v + 'px');
+                establecerCambioEstilo(ctx.el, ctx.registro, 'border-radius', v === 0 ? null : v + 'px');
             });
             panel.appendChild(filaControl('Radio de borde', inpRadio, radioLbl));
 
             // padding (uniforme)
             var padVal = registro.cambios['padding']
                 ? numDe(registro.cambios['padding'], 0)
-                : numDe(win.getComputedStyle(elemento).paddingTop, 0);
+                : numDe(win.getComputedStyle(lectura).paddingTop, 0);
             var inpPad = rango(0, 48, 1, padVal);
             var padLbl = spanValor(Math.round(padVal) + 'px');
             inpPad.addEventListener('input', function() {
                 var ctx = elementoActivo(); if (!ctx) return;
                 var v = parseInt(inpPad.value, 10);
                 padLbl.textContent = v + 'px';
-                establecerCambio(ctx.el, ctx.registro, 'padding', v === 0 ? null : v + 'px');
+                establecerCambioEstilo(ctx.el, ctx.registro, 'padding', v === 0 ? null : v + 'px');
             });
             panel.appendChild(filaControl('Padding', inpPad, padLbl));
 
@@ -546,7 +643,7 @@ def inject_diseno_visual():
             inpBordeColor.value = registro.bordeColor;
             inpBordeColor.style.cssText = 'width:100%;height:24px;border:0;border-radius:4px;padding:0;cursor:pointer;margin-top:8px;background:transparent';
             function aplicarBorde(ctx) {
-                establecerCambio(ctx.el, ctx.registro, 'border',
+                establecerCambioEstilo(ctx.el, ctx.registro, 'border',
                     ctx.registro.bordeAncho === 0 ? null : (ctx.registro.bordeAncho + 'px solid ' + ctx.registro.bordeColor));
             }
             inpBordeAncho.addEventListener('input', function() {
@@ -571,36 +668,6 @@ def inject_diseno_visual():
             bordeWrap.appendChild(inpBordeColor);
             panel.appendChild(filaControl('Borde completo', bordeWrap, bordeLbl));
 
-            // Pills/segmented_control: el borde VISIBLE de cada opcion vive
-            // en botones sin key propia, invisibles para el control de
-            // arriba (ese toca el contenedor). Solo se muestra si hay
-            // botones adentro -- en el caso comun (sin stButtonGroup) no
-            // agrega nada al panel.
-            var botonesDetectados = botonesInternos(elemento);
-            if (botonesDetectados.length) {
-                // Pasos de 1px: por debajo de 1px varios navegadores
-                // redondean el borde RENDERIZADO hacia arriba (0.5px se ve
-                // igual que 1px), asi que un paso mas fino séria falsa
-                // precision. "0" es un valor explicito (sin borde), no un
-                // remove-override — a diferencia de radio/padding/sombra del
-                // contenedor, acá no hay un "0 por defecto" util: el borde
-                // original YA es visible a proposito, y "adelgazar hasta
-                // nada" es un caso real, no un accidente.
-                var bbAncho = registro.cambiosBotones['border-width']
-                    ? numDe(registro.cambiosBotones['border-width'], 0)
-                    : numDe(win.getComputedStyle(botonesDetectados[0]).borderTopWidth, 0);
-                var inpBotonesBorde = rango(0, 4, 1, bbAncho);
-                var bbLbl = spanValor(Math.round(bbAncho) + 'px');
-                inpBotonesBorde.addEventListener('input', function() {
-                    var ctx = elementoActivo(); if (!ctx) return;
-                    var v = parseInt(inpBotonesBorde.value, 10);
-                    bbLbl.textContent = v + 'px';
-                    establecerCambioBotones(ctx.el, ctx.registro, 'border-width', v + 'px');
-                });
-                panel.appendChild(filaControl(
-                    'Borde de botones (' + botonesDetectados.length + ')', inpBotonesBorde, bbLbl));
-            }
-
             // sombra
             var inpSombra = rango(0, 4, 1, registro.sombraNivel);
             var sombraLbl = spanValor(registro.sombraNivel === 0 ? 'sin sombra' : ('nivel ' + registro.sombraNivel));
@@ -608,7 +675,7 @@ def inject_diseno_visual():
                 var ctx = elementoActivo(); if (!ctx) return;
                 ctx.registro.sombraNivel = parseInt(inpSombra.value, 10);
                 sombraLbl.textContent = ctx.registro.sombraNivel === 0 ? 'sin sombra' : ('nivel ' + ctx.registro.sombraNivel);
-                establecerCambio(ctx.el, ctx.registro, 'box-shadow',
+                establecerCambioEstilo(ctx.el, ctx.registro, 'box-shadow',
                     ctx.registro.sombraNivel === 0 ? null : SOMBRAS[ctx.registro.sombraNivel]);
             });
             panel.appendChild(filaControl('Sombra', inpSombra, sombraLbl));
@@ -618,14 +685,14 @@ def inject_diseno_visual():
 
             var fsVal = registro.cambios['font-size']
                 ? numDe(registro.cambios['font-size'], 14)
-                : numDe(win.getComputedStyle(elemento).fontSize, 14);
+                : numDe(win.getComputedStyle(lectura).fontSize, 14);
             var inpFs = rango(10, 32, 1, fsVal);
             var fsLbl = spanValor(Math.round(fsVal) + 'px');
             inpFs.addEventListener('input', function() {
                 var ctx = elementoActivo(); if (!ctx) return;
                 var v = parseInt(inpFs.value, 10);
                 fsLbl.textContent = v + 'px';
-                establecerCambio(ctx.el, ctx.registro, 'font-size', v + 'px');
+                establecerCambioEstilo(ctx.el, ctx.registro, 'font-size', v + 'px');
             });
             panel.appendChild(filaControl('Tamaño de letra', inpFs, fsLbl));
 
@@ -633,14 +700,14 @@ def inject_diseno_visual():
             var pesoWrap = doc.createElement('div');
             pesoWrap.style.cssText = 'display:flex;gap:4px;margin-top:6px';
             var pesoBotones = [];
-            var pesoActual = registro.cambios['font-weight'] || String(numDe(win.getComputedStyle(elemento).fontWeight, 400));
+            var pesoActual = registro.cambios['font-weight'] || String(numDe(win.getComputedStyle(lectura).fontWeight, 400));
             PESOS.forEach(function(par) {
                 var b = doc.createElement('button');
                 b.textContent = par[1];
                 b.style.cssText = 'flex:1;background:' + (par[0] === pesoActual ? '#3C3489' : '#1c1c24') + ';color:#fff;border:1px solid #34343f;border-radius:4px;padding:5px 2px;font:11px sans-serif;cursor:pointer';
                 b.addEventListener('click', function() {
                     var ctx = elementoActivo(); if (!ctx) return;
-                    establecerCambio(ctx.el, ctx.registro, 'font-weight', par[0]);
+                    establecerCambioEstilo(ctx.el, ctx.registro, 'font-weight', par[0]);
                     pesoBotones.forEach(function(x) { x.style.background = '#1c1c24'; });
                     b.style.background = '#3C3489';
                 });
@@ -653,14 +720,14 @@ def inject_diseno_visual():
             var alinWrap = doc.createElement('div');
             alinWrap.style.cssText = 'display:flex;gap:4px;margin-top:6px';
             var alinBotones = [];
-            var alinActual = registro.cambios['text-align'] || win.getComputedStyle(elemento).textAlign;
+            var alinActual = registro.cambios['text-align'] || win.getComputedStyle(lectura).textAlign;
             ALINEACIONES.forEach(function(par) {
                 var b = doc.createElement('button');
                 b.textContent = par[1];
                 b.style.cssText = 'flex:1;background:' + (par[0] === alinActual ? '#3C3489' : '#1c1c24') + ';color:#fff;border:1px solid #34343f;border-radius:4px;padding:5px 2px;font:11px sans-serif;cursor:pointer';
                 b.addEventListener('click', function() {
                     var ctx = elementoActivo(); if (!ctx) return;
-                    establecerCambio(ctx.el, ctx.registro, 'text-align', par[0]);
+                    establecerCambioEstilo(ctx.el, ctx.registro, 'text-align', par[0]);
                     alinBotones.forEach(function(x) { x.style.background = '#1c1c24'; });
                     b.style.background = '#3C3489';
                 });
@@ -680,7 +747,7 @@ def inject_diseno_visual():
             btnSubrayado.addEventListener('click', function() {
                 var ctx = elementoActivo(); if (!ctx) return;
                 subrayadoActivo = !subrayadoActivo;
-                establecerCambio(ctx.el, ctx.registro, 'text-decoration', subrayadoActivo ? 'underline' : 'none');
+                establecerCambioEstilo(ctx.el, ctx.registro, 'text-decoration', subrayadoActivo ? 'underline' : 'none');
                 pintarSubrayado();
             });
             panel.appendChild(filaControl('Subrayado', btnSubrayado, spanValor('')));
@@ -692,7 +759,7 @@ def inject_diseno_visual():
                 var ctx = elementoActivo(); if (!ctx) return;
                 var v = parseFloat(inpLs.value);
                 lsLbl.textContent = v + 'px';
-                establecerCambio(ctx.el, ctx.registro, 'letter-spacing', v === 0 ? null : v + 'px');
+                establecerCambioEstilo(ctx.el, ctx.registro, 'letter-spacing', v === 0 ? null : v + 'px');
             });
             panel.appendChild(filaControl('Espaciado entre letras', inpLs, lsLbl));
 
@@ -714,7 +781,7 @@ def inject_diseno_visual():
             var colorTextoLbl = spanValor(colorTextoActual || 'sin cambio');
             panel.appendChild(filaControl('Texto', construirSwatches(colorTextoActual, function(hex) {
                 var ctx = elementoActivo(); if (!ctx) return;
-                establecerCambio(ctx.el, ctx.registro, 'color', hex);
+                establecerCambioEstilo(ctx.el, ctx.registro, 'color', hex);
                 colorTextoLbl.textContent = hex;
             }), colorTextoLbl));
 
@@ -722,7 +789,7 @@ def inject_diseno_visual():
             var colorFondoLbl = spanValor(colorFondoActual || 'sin cambio');
             panel.appendChild(filaControl('Fondo', construirSwatches(colorFondoActual, function(hex) {
                 var ctx = elementoActivo(); if (!ctx) return;
-                establecerCambio(ctx.el, ctx.registro, 'background-color', hex);
+                establecerCambioEstilo(ctx.el, ctx.registro, 'background-color', hex);
                 colorFondoLbl.textContent = hex;
             }), colorFondoLbl));
 
