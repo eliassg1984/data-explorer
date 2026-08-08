@@ -1459,18 +1459,18 @@ def inject_element_inspector():
             if (!win.__inspectorUltimo) return; // no hay nada bajo el cursor para fijar
             e.preventDefault();
             win.__inspectorTogglePin();
-            if (tipEl) {
-                // Fijar SIEMPRE muestra el tooltip, este silenciado (Alt+T) o
-                // no — es una accion deliberada, no hover pasivo. El
-                // contenido ya esta al dia (se actualiza en mousemove
-                // independiente del silenciado); acá solo hace falta
-                // revelarlo y ubicarlo en el cursor actual.
-                tipEl.style.opacity = '1';
+            // Silenciado (Alt+T / boton del badge): fijar NO debe revelar el
+            // tooltip — el usuario lo apago justamente para que clic-derecho-
+            // para-seleccionar no le tape la pantalla. __inspectorUltimo ya
+            // esta actualizado (lo necesitan el pin y el modo diseño), asi
+            // que fijar sigue funcionando igual; solo cambia la visibilidad.
+            if (tipEl && !win.__inspectorTooltipSilenciado) {
                 var txp = e.clientX + 16, typ = e.clientY - 10;
                 var twp = tipEl.offsetWidth || 260, thp = tipEl.offsetHeight || 80;
                 if (txp + twp > win.innerWidth - 8) txp = e.clientX - twp - 16;
                 if (typ + thp > win.innerHeight - 8) typ = e.clientY - thp - 10;
                 if (typ < 6) typ = 6;
+                tipEl.style.opacity = '1';
                 tipEl.style.left = txp + 'px';
                 tipEl.style.top = typ + 'px';
             }
