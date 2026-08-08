@@ -392,11 +392,6 @@ es_ajuste = (reporte == "Ajuste de Inventario")
 REPORTES_INICIO_TABLA = ("Receta Base", "Receta Venta")
 _vista_default = "Tabla" if reporte in REPORTES_INICIO_TABLA else "Gráficos"
 
-# Agrupación de filas de la AgGrid. Quedó fija en "sin agrupar" cuando el
-# popover de filtros se reemplazó por los chips de la franja (2026-08): ya no
-# hay UI que la alimente. Se mantiene la variable porque renderizar_aggrid_
-# desktop la recibe como parámetro posicional.
-grupos_sel = []
 
 # ── TÍTULO + WIDGET DE FECHA EN LA FRANJA SUPERIOR (solo Ajuste de Inventario) ──
 perf.start_phase("Ajuste top row")                                          # ⚡ PERF
@@ -612,7 +607,7 @@ def _aviso_rapido_aggrid(df_data):
         )
 
 
-def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, font_px, cfg):
+def _render_requerimientos(df_data, col_fecha_ref, cols_mostrar, font_px, cfg):
     """Renderiza el reporte de Requerimientos con tabla dinámica."""
     df_piv = df_data.copy()
 
@@ -650,7 +645,6 @@ def _render_requerimientos(df_data, col_fecha_ref, grupos_sel, cols_mostrar, fon
         _aviso_rapido_aggrid(df_piv)
         renderizar_aggrid_desktop(
             df_piv,
-            grupos_sel,
             list(df_piv.columns),
             "Requerimientos",
             font_px,
@@ -811,12 +805,8 @@ def _render_tabla(df_data=None, df_totales=None, filtros_grid=None):
     else:
         _aviso_rapido_aggrid(_df[cols_mostrar])
         cols_finales = list(cols_mostrar)
-        if grupos_sel:
-            for c in grupos_sel:
-                if c not in cols_finales:
-                    cols_finales.append(c)
         renderizar_aggrid_desktop(
-            _df[cols_finales], grupos_sel, cols_mostrar, reporte, font_px,
+            _df[cols_finales], cols_mostrar, reporte, font_px,
             cols_visibles=cols_visibles,
             df_totales=(None if df_totales is None else df_totales[cols_finales]),
             filtros_grid=filtros_grid,
@@ -844,7 +834,7 @@ def _render_contenido():
         # en graficos/) — el rail lleva un solo item para el mismo chrome
         # (franja transparente, padding reservado) que el resto de reportes.
         _render_rail((("", (("Tabla", "Tabla"),)),), "requerimientos_rail_sel")
-        _render_requerimientos(df_f, col_fecha, grupos_sel, cols_mostrar, font_px, cfg)
+        _render_requerimientos(df_f, col_fecha, cols_mostrar, font_px, cfg)
 
     # ── AJUSTE DE INVENTARIO — layout con rail derecho (como Compras) ───────
     elif reporte == "Ajuste de Inventario":

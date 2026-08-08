@@ -29,7 +29,7 @@ from tablas._css import _css_base, _css_franjas_sidebar
 _ALTO_FILA_PANEL = 38
 
 
-def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_px=14,
+def renderizar_aggrid_desktop(df_grid, cols_mostrar, reporte, font_px=14,
                               cols_visibles=None, df_totales=None, filtros_grid=None):
     """Renderiza la tabla AgGrid en vista desktop con formato financiero y diseño premium.
 
@@ -51,21 +51,17 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         de lo filtrado, igual que antes del cambio. Si es None, se usa df_grid.
     """
 
-    # DISEÑO UNIFICADO: todos los reportes usan el estilo plano de Ajuste
-    # (cabeceras envueltas, sin fondos semáforo por valor). es_inventario
-    # sigue acotado: controla colores de grupo y panel pivote.
-    envolver_cabeceras = True
-    quitar_fondos = True
-    # DISEÑO UNIFICADO: todos los grids desktop reciben el tratamiento
-    # completo de Ajuste (grupos coloreados, paginación v2, panel lateral
-    # con Modo pivote, maximizar y altura dinámica).
-    es_inventario = True
+    # DISEÑO UNIFICADO (2026-08): TODOS los reportes comparten el mismo
+    # tratamiento de grid — tema material, cabeceras envueltas, sin fondos
+    # semáforo por valor, paginación v2, panel lateral con Modo pivote,
+    # maximizar y altura dinámica. Hasta el 2026-08-08 esto vivía en tres
+    # flags (envolver_cabeceras / quitar_fondos / es_inventario) puestos a
+    # True a mano, con sus ramas `else` ya inalcanzables; se colapsaron.
+    # Si alguna vez vuelve a haber más de un estilo de grid, el
+    # discriminante correcto es `reporte`, no un flag booleano suelto.
     es_salidas = (reporte == "Salidas")
     es_requerimientos = (reporte == "Requerimientos")
     es_ajuste = (reporte == "Ajuste de Inventario")
-    # OJO: es_inventario (arriba) es "true para todos" desde el DISEÑO
-    # UNIFICADO — no significa "es el reporte Inventario Valorizado". Ese es
-    # este flag de acá, para las 2 columnas de % + checkbox de este reporte.
     es_inventario_valorizado = (reporte == "Inventario Valorizado")
 
     col_producto   = buscar_columna(df_grid, "Nombre Producto", "producto", "descripcion")
@@ -81,14 +77,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         resto = [c for c in df_grid.columns if c not in prioridad]
         df_grid = df_grid[prioridad + resto]
 
-    max_valorizado = 1.0
-    if col_valorizado and col_valorizado in df_grid.columns:
-        try:
-            m = float(df_grid[col_valorizado].max())
-            if m > 0:
-                max_valorizado = m
-        except Exception:
-            pass
 
     # ── Inventario Valorizado: 2 columnas de % + checkbox de selección ────
     # "Participación %" = valor / suma TOTAL de la columna (estática, no
@@ -122,23 +110,16 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
             cols_visibles = list(cols_visibles) + [col_participacion, col_seleccion]
 
     gb = GridOptionsBuilder.from_dataframe(df_grid)
-    _opciones_col_def = dict(
+    gb.configure_default_column(
         resizable=True, filter=True, sortable=True,
         editable=False, enableRowGroup=True,
         enablePivot=True, enableValue=True,
         minWidth=100,
+        wrapHeaderText=True, autoHeaderHeight=True,
         tooltipValueGetter=JsCode("function(params){ return params.value; }"),
     )
-    if envolver_cabeceras:
-        _opciones_col_def["wrapHeaderText"] = True
-        _opciones_col_def["autoHeaderHeight"] = True
-    gb.configure_default_column(**_opciones_col_def)
 
-    (mono_style, stock_cell_style, stock_cell_style_plano,
-     valorizado_bar_style, valorizado_plano) = _estilos_celda(max_valorizado)
-
-    _stock_style = stock_cell_style_plano if quitar_fondos else stock_cell_style
-    _valor_style = valorizado_plano       if quitar_fondos else valorizado_bar_style
+    mono_style, _stock_style, _valor_style = _estilos_celda()
 
     for c in df_grid.columns:
         if not pd.api.types.is_numeric_dtype(df_grid[c]):
@@ -215,7 +196,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
                 """),
             )
 
-    if col_producto and col_producto in df_grid.columns and col_producto not in grupos_sel:
+    if col_producto and col_producto in df_grid.columns:
         gb.configure_column(col_producto, pinned="left", minWidth=300)
 
     if es_requerimientos:
@@ -262,8 +243,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         hay_match = any(_norm(c) in visibles_norm for c in df_grid.columns)
         if hay_match:
             for c in df_grid.columns:
-                if c in grupos_sel:
-                    continue
                 if _norm(c) not in visibles_norm:
                     gb.configure_column(c, hide=True)
 
@@ -287,7 +266,7 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     _df_tot = df_totales if df_totales is not None else df_grid
     fila_totales = _fila_totales(_df_tot, cols_valor, cols_precio, cols_stock, primera_col)
 
-    get_row_style = _estilo_fila(col_stock, df_grid, es_inventario, quitar_fondos)
+    get_row_style = _estilo_fila(col_stock, df_grid)
     _sidebar_cfg = _config_sidebar(mostrar_pivot=True, es_ajuste=True)
 
     _reporte_js = str(reporte).replace("\\", "\\\\").replace('"', '\\"')
@@ -433,64 +412,15 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     else:
         opciones_grid["grandTotalRow"] = "bottom"
 
-    agrupar_on = bool(grupos_sel)
-    if agrupar_on:
-        for c in grupos_sel:
-            if c in df_grid.columns:
-                gb.configure_column(c, rowGroup=True, hide=True)
+    # La agrupación de filas INICIAL (desde Python) se retiró el 2026-08-08:
+    # la alimentaba `grupos_sel`, que venía del popover "Agrupar por" y quedó
+    # fijo en [] cuando ese popover se reemplazó por los chips de la franja.
+    # El usuario SIGUE pudiendo agrupar en caliente arrastrando columnas al
+    # panel "Grupos de filas" del sidebar (enableRowGroup=True, arriba); eso
+    # nunca dependió de este bloque.
+    opciones_grid["pivotMode"] = False
 
-        if es_inventario:
-            opciones_grid["groupDisplayType"] = "groupRows"
-            opciones_grid["onColumnPivotModeChanged"] = JsCode("""
-                function(params) {
-                    try {
-                        var pivotOn = params.api.isPivotMode
-                            ? params.api.isPivotMode() : false;
-                        params.api.setGridOption(
-                            'groupDisplayType',
-                            pivotOn ? 'multipleColumns' : 'groupRows'
-                        );
-                    } catch (e) {}
-                }
-            """)
-
-            _col_val_js = ""
-            if col_valorizado and col_valorizado in df_grid.columns:
-                _col_val_js = str(col_valorizado).replace("\\", "\\\\").replace('"', '\\"')
-
-            opciones_grid["groupRowRendererParams"] = {
-                "innerRenderer": JsCode(f"""
-                    function(params) {{
-                        if (!params.node || !params.node.group) return params.value;
-                        var nombre = (params.value == null ? '' : params.value);
-                        var n = params.node.allChildrenCount;
-                        var extra = '';
-                        var colVal = "{_col_val_js}";
-                        if (colVal && params.node.aggData &&
-                            params.node.aggData[colVal] !== null &&
-                            params.node.aggData[colVal] !== undefined) {{
-                            var v = Number(params.node.aggData[colVal]);
-                            if (!isNaN(v)) {{
-                                extra = ' · S/ ' + v.toLocaleString('es-PE', {{
-                                    minimumFractionDigits: 2, maximumFractionDigits: 2 }});
-                            }}
-                        }}
-                        return '<span style="font-weight:600;color:{TEXTO_PRINCIPAL}">' + nombre +
-                               '</span> <span style="color:{ICON_MUTED};font-weight:400">(' +
-                               n + ')' + extra + '</span>';
-                    }}
-                """)
-            }
-        else:
-            opciones_grid["groupDisplayType"] = "multipleColumns"
-
-        opciones_grid["groupDefaultExpanded"] = 0
-        opciones_grid["pivotMode"] = es_requerimientos
-    else:
-        opciones_grid["pivotMode"] = False
-
-    if envolver_cabeceras:
-        opciones_grid["headerHeight"] = int(font_px * 2 + 14)
+    opciones_grid["headerHeight"] = int(font_px * 2 + 14)
 
     # DISEÑO UNIFICADO: el atributo data-active-panel (del que dependen
     # TODOS los estilos de pastillas/toggles del sidebar) se marca en
@@ -680,156 +610,153 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
         "border-bottom": f"2px solid {ACENTO} !important",
     })
 
-    if envolver_cabeceras:
-        custom_css[".ag-header-cell-text"].update({
-            "white-space": "normal !important",
-            "overflow": "visible !important",
-            "text-overflow": "clip !important",
-            "line-height": "1.25 !important",
-            "overflow-wrap": "break-word",
-            "word-break": "normal",
-            "display": "flex",
-            "align-items": "center",
-            "text-align": "center",
-        })
-        custom_css[".ag-header-cell-label"] = {
-            "white-space": "normal !important",
-            "overflow": "visible !important",
-            "align-items": "center",
-        }
+    custom_css[".ag-header-cell-text"].update({
+        "white-space": "normal !important",
+        "overflow": "visible !important",
+        "text-overflow": "clip !important",
+        "line-height": "1.25 !important",
+        "overflow-wrap": "break-word",
+        "word-break": "normal",
+        "display": "flex",
+        "align-items": "center",
+        "text-align": "center",
+    })
+    custom_css[".ag-header-cell-label"] = {
+        "white-space": "normal !important",
+        "overflow": "visible !important",
+        "align-items": "center",
+    }
 
-    tema_grid = "balham"
-    if es_inventario:
-        tema_grid = "material"
-        custom_css[".ag-row-even"] = {"background-color": f"{BLANCO} !important"}
-        custom_css[".ag-row-odd"] = {"background-color": f"{BLANCO} !important"}
+    tema_grid = "material"
+    custom_css[".ag-row-even"] = {"background-color": f"{BLANCO} !important"}
+    custom_css[".ag-row-odd"] = {"background-color": f"{BLANCO} !important"}
 
-        custom_css[".ag-root-wrapper"].update({
-            "background-color": "transparent !important",
-            "border": "none !important",
-            "border-radius": "0 !important",
-            "box-shadow": "none !important",
-            "overflow": "visible !important",
-        })
-        custom_css[".ag-root-wrapper-body"] = {
-            "background": "transparent !important",
-            "overflow": "visible !important",
-        }
-        custom_css[".ag-root"] = {
-            "background-color": f"{BLANCO} !important",
-            "border": f"1px solid {GRIS_BORDE} !important",
-            "border-radius": "12px !important",
-            "box-shadow": ("0 1px 2px rgba(16,16,20,0.05), "
-                           "0 4px 14px rgba(16,16,20,0.07) !important"),
-            "overflow": "hidden !important",
-        }
-        custom_css["html, body"] = {"background": "transparent !important"}
+    custom_css[".ag-root-wrapper"].update({
+        "background-color": "transparent !important",
+        "border": "none !important",
+        "border-radius": "0 !important",
+        "box-shadow": "none !important",
+        "overflow": "visible !important",
+    })
+    custom_css[".ag-root-wrapper-body"] = {
+        "background": "transparent !important",
+        "overflow": "visible !important",
+    }
+    custom_css[".ag-root"] = {
+        "background-color": f"{BLANCO} !important",
+        "border": f"1px solid {GRIS_BORDE} !important",
+        "border-radius": "12px !important",
+        "box-shadow": ("0 1px 2px rgba(16,16,20,0.05), "
+                       "0 4px 14px rgba(16,16,20,0.07) !important"),
+        "overflow": "hidden !important",
+    }
+    custom_css["html, body"] = {"background": "transparent !important"}
 
-        custom_css[".ag-header"].update({
-            "background-color": f"{LAVANDA_FONDO} !important",
-            "border-bottom": f"1px solid {ACENTO} !important",
-        })
-        custom_css[".ag-header-cell"].update({
-            "background-color": f"{LAVANDA_FONDO} !important",
-        })
-        custom_css[".ag-header-cell-text"].update({
-            "color": f"{ACENTO_TEXTO_OSCURO} !important",
-            "font-weight": "500",
-            "letter-spacing": "normal",
-            "text-transform": "none",
-        })
-        custom_css[".ag-header-icon"].update({
-            "color": f"{GRIS_TEXTO_SUAVE} !important",
-        })
-        custom_css[".ag-row-pinned"].update({
-            "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
-            "border-top": "none !important",
-            "border-bottom": f"2px solid {ACENTO} !important",
-            "color": f"{ACENTO_TEXTO_OSCURO} !important",
-        })
+    custom_css[".ag-header"].update({
+        "background-color": f"{LAVANDA_FONDO} !important",
+        "border-bottom": f"1px solid {ACENTO} !important",
+    })
+    custom_css[".ag-header-cell"].update({
+        "background-color": f"{LAVANDA_FONDO} !important",
+    })
+    custom_css[".ag-header-cell-text"].update({
+        "color": f"{ACENTO_TEXTO_OSCURO} !important",
+        "font-weight": "500",
+        "letter-spacing": "normal",
+        "text-transform": "none",
+    })
+    custom_css[".ag-header-icon"].update({
+        "color": f"{GRIS_TEXTO_SUAVE} !important",
+    })
+    custom_css[".ag-row-pinned"].update({
+        "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
+        "border-top": "none !important",
+        "border-bottom": f"2px solid {ACENTO} !important",
+        "color": f"{ACENTO_TEXTO_OSCURO} !important",
+    })
 
-        custom_css[".ag-body-vertical-scroll::-webkit-scrollbar"] = {"width": "11px"}
-        custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar"] = {"height": "11px"}
-        custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-track"] = {"background": "transparent"}
-        custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar-track"] = {"background": "transparent"}
-        custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-thumb"] = {
-            "background": "transparent", "border-radius": "8px",
-            "border": "3px solid transparent", "background-clip": "padding-box",
-        }
-        custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar-thumb"] = {
-            "background": "transparent", "border-radius": "8px",
-            "border": "3px solid transparent", "background-clip": "padding-box",
-        }
-        custom_css[".ag-body-vertical-scroll:hover::-webkit-scrollbar-thumb"] = {
-            "background": f"{SCROLL_THUMB}", "background-clip": "padding-box",
-        }
-        custom_css[".ag-body-horizontal-scroll:hover::-webkit-scrollbar-thumb"] = {
-            "background": f"{SCROLL_THUMB}", "background-clip": "padding-box",
-        }
-        custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-thumb:hover"] = {
-            "background": f"{LAVANDA_FOCO}", "background-clip": "padding-box",
-        }
-        custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar-thumb:hover"] = {
-            "background": f"{LAVANDA_FOCO}", "background-clip": "padding-box",
-        }
-        custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar-corner"] = {
-            "background": "transparent",
-        }
+    custom_css[".ag-body-vertical-scroll::-webkit-scrollbar"] = {"width": "11px"}
+    custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar"] = {"height": "11px"}
+    custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-track"] = {"background": "transparent"}
+    custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar-track"] = {"background": "transparent"}
+    custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-thumb"] = {
+        "background": "transparent", "border-radius": "8px",
+        "border": "3px solid transparent", "background-clip": "padding-box",
+    }
+    custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar-thumb"] = {
+        "background": "transparent", "border-radius": "8px",
+        "border": "3px solid transparent", "background-clip": "padding-box",
+    }
+    custom_css[".ag-body-vertical-scroll:hover::-webkit-scrollbar-thumb"] = {
+        "background": f"{SCROLL_THUMB}", "background-clip": "padding-box",
+    }
+    custom_css[".ag-body-horizontal-scroll:hover::-webkit-scrollbar-thumb"] = {
+        "background": f"{SCROLL_THUMB}", "background-clip": "padding-box",
+    }
+    custom_css[".ag-body-vertical-scroll::-webkit-scrollbar-thumb:hover"] = {
+        "background": f"{LAVANDA_FOCO}", "background-clip": "padding-box",
+    }
+    custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar-thumb:hover"] = {
+        "background": f"{LAVANDA_FOCO}", "background-clip": "padding-box",
+    }
+    custom_css[".ag-body-horizontal-scroll::-webkit-scrollbar-corner"] = {
+        "background": "transparent",
+    }
 
-        custom_css[".ag-side-bar"].update({
-            "background-color": f"{LAVANDA_FILA} !important",
-            "border": f"1px solid {GRIS_BORDE} !important",
-            "border-left": f"1px solid {GRIS_BORDE} !important",
-            "border-radius": "12px !important",
-            "box-shadow": ("0 1px 2px rgba(16,16,20,0.05), "
-                           "0 4px 14px rgba(16,16,20,0.07) !important"),
-            "margin": "0 0 0 14px !important",
-            "overflow": "hidden !important",
-        })
-        custom_css[".ag-side-bar .ag-side-buttons"].update({
-            "background-color": f"{LAVANDA_FILA_ALT} !important",
-            "border-bottom": f"1px solid {GRIS_BORDE} !important",
-        })
+    custom_css[".ag-side-bar"].update({
+        "background-color": f"{LAVANDA_FILA} !important",
+        "border": f"1px solid {GRIS_BORDE} !important",
+        "border-left": f"1px solid {GRIS_BORDE} !important",
+        "border-radius": "12px !important",
+        "box-shadow": ("0 1px 2px rgba(16,16,20,0.05), "
+                       "0 4px 14px rgba(16,16,20,0.07) !important"),
+        "margin": "0 0 0 14px !important",
+        "overflow": "hidden !important",
+    })
+    custom_css[".ag-side-bar .ag-side-buttons"].update({
+        "background-color": f"{LAVANDA_FILA_ALT} !important",
+        "border-bottom": f"1px solid {GRIS_BORDE} !important",
+    })
 
-        # Franjas lavanda del sidebar (superior + inferior), en las 3 pestañas.
-        # Selectores con :not(.ag-hidden) para no des-ocultar los paneles
-        # inactivos (bug de "paneles uno al costado del otro").
-        custom_css.update(_css_franjas_sidebar())
+    # Franjas lavanda del sidebar (superior + inferior), en las 3 pestañas.
+    # Selectores con :not(.ag-hidden) para no des-ocultar los paneles
+    # inactivos (bug de "paneles uno al costado del otro").
+    custom_css.update(_css_franjas_sidebar())
 
-        # Alto de fila de las listas virtuales (panel Columnas / Modo pivote).
-        #
-        # EL SELECTOR IMPORTA. AG Grid no lee esta variable del elemento que
-        # uno esperaría: cuelga un div `.ag-measurement-container` del div de
-        # TEMA (`ag-theme-params-N`, hermano/padre del .ag-root-wrapper) y lee
-        # ahí. Puesta en `.ag-side-bar` no la ve; en `.ag-root-wrapper`
-        # tampoco. El nombre lleva un sufijo numérico generado por instancia,
-        # así que se matchea por prefijo.
-        # Tampoco sirve ponerla en html/body: el div de tema DECLARA la
-        # variable (`:where(.ag-theme-params-N){--ag-list-item-height:…}`) y
-        # una declaración propia le gana a lo heredado, sea cual sea la
-        # especificidad del ancestro. Hay que pisarla en ese mismo elemento
-        # (`[class*=...]` tiene especificidad 0,1,0 y `:where()` tiene 0,0,0).
-        #
-        # Las pastillas son de alto FIJO (label con nowrap + ellipsis), así
-        # que un valor uniforme es correcto.
-        custom_css['[class*="ag-theme-params-"]'] = {
-            "--ag-list-item-height": f"{_ALTO_FILA_PANEL}px",
-        }
+    # Alto de fila de las listas virtuales (panel Columnas / Modo pivote).
+    #
+    # EL SELECTOR IMPORTA. AG Grid no lee esta variable del elemento que
+    # uno esperaría: cuelga un div `.ag-measurement-container` del div de
+    # TEMA (`ag-theme-params-N`, hermano/padre del .ag-root-wrapper) y lee
+    # ahí. Puesta en `.ag-side-bar` no la ve; en `.ag-root-wrapper`
+    # tampoco. El nombre lleva un sufijo numérico generado por instancia,
+    # así que se matchea por prefijo.
+    # Tampoco sirve ponerla en html/body: el div de tema DECLARA la
+    # variable (`:where(.ag-theme-params-N){--ag-list-item-height:…}`) y
+    # una declaración propia le gana a lo heredado, sea cual sea la
+    # especificidad del ancestro. Hay que pisarla en ese mismo elemento
+    # (`[class*=...]` tiene especificidad 0,1,0 y `:where()` tiene 0,0,0).
+    #
+    # Las pastillas son de alto FIJO (label con nowrap + ellipsis), así
+    # que un valor uniforme es correcto.
+    custom_css['[class*="ag-theme-params-"]'] = {
+        "--ag-list-item-height": f"{_ALTO_FILA_PANEL}px",
+    }
 
-        custom_css[
-            ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-item, "
-            ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-item"
-        ] = {
-            "height": f"{_ALTO_FILA_PANEL}px !important",
-            "overflow": "visible !important",
-        }
+    custom_css[
+        ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-item, "
+        ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-item"
+    ] = {
+        "height": f"{_ALTO_FILA_PANEL}px !important",
+        "overflow": "visible !important",
+    }
 
-        custom_css[
-            ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-container, "
-            ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-container"
-        ] = {
-            "overflow": "visible !important",
-        }
+    custom_css[
+        ".ag-side-bar[data-active-panel='columns'] .ag-virtual-list-container, "
+        ".ag-side-bar[data-active-panel='pivotePanel'] .ag-virtual-list-container"
+    ] = {
+        "overflow": "visible !important",
+    }
 
     if es_requerimientos:
         custom_css[".ag-side-button.ag-selected"] = {

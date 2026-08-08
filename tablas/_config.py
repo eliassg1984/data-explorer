@@ -23,53 +23,20 @@ def _titulo_es(texto):
         p if (i > 0 and p in _MINUS_TITULO) else p.capitalize()
         for i, p in enumerate(palabras)
     )
-def _estilos_celda(max_valorizado):
-    # ... (código sin modificar)
-    """Estilos JsCode de celda del grid (mono, stock, valorizado y sus
-    variantes planas). Solo dependen de max_valorizado. Extraído de
-    renderizar_aggrid_desktop en la Fase 3."""
+def _estilos_celda():
+    """Estilos JsCode de celda del grid: (mono, stock, valorizado).
+
+    Sin parámetros ni estado: son tres constantes JsCode. Hasta el
+    2026-08-08 devolvía 5 estilos y recibía `max_valorizado`, porque
+    existían las variantes "con fondo" (semáforo rojo/naranja según el
+    valor del stock, barra de gradiente proporcional en el valorizado).
+    El DISEÑO UNIFICADO las dejó sin usar — el llamador elegía siempre
+    las planas — así que salieron junto con el parámetro que solo ellas
+    necesitaban."""
     mono_style = JsCode("""
         function(params) {
             return { fontFamily: "'Courier New', Courier, monospace" };
         }
-    """)
-
-    stock_cell_style = JsCode(f"""
-        function(params) {{
-            if (params.value === null || params.value === undefined) return {{}};
-            if (params.node && params.node.rowPinned) {{
-                return {{ fontWeight: '700', color: '{ACENTO_TEXTO_OSCURO}' }};
-            }}
-            var v = Number(params.value);
-            var base = {{
-                fontFamily: "'Courier New', Courier, monospace",
-                fontWeight: '700',
-                textAlign: 'right',
-                padding: '2px 10px'
-            }};
-            if (v < 0) {{
-                return Object.assign({{}}, base, {{
-                    backgroundColor: '{ERROR_FONDO}',
-                    color: '{DANGER_TEXT}',
-                    borderRadius: '20px'
-                }});
-            }}
-            if (v === 0) {{
-                return Object.assign({{}}, base, {{
-                    backgroundColor: '{ADVERTENCIA_FONDO}',
-                    color: '{ADVERTENCIA_TEXTO}',
-                    borderRadius: '20px'
-                }});
-            }}
-            if (v < 10) {{
-                return Object.assign({{}}, base, {{
-                    backgroundColor: '{CELDA_ALERTA_FONDO}',
-                    color: '{CELDA_ALERTA_TEXTO}',
-                    borderRadius: '20px'
-                }});
-            }}
-            return Object.assign({{}}, base, {{ color: '{CELDA_POS_TEXTO}' }});
-        }}
     """)
 
     stock_cell_style_plano = JsCode(f"""
@@ -88,34 +55,6 @@ def _estilos_celda(max_valorizado):
         }}
     """)
 
-    valorizado_bar_style = JsCode(f"""
-        function(params) {{
-            var base = {{
-                fontFamily: "'Courier New', Courier, monospace",
-                color: '{ACENTO_TEXTO_OSCURO}',
-                fontWeight: '600',
-                textAlign: 'right',
-                paddingRight: '12px'
-            }};
-            if (params.value === null || params.value === undefined) {{
-                return base;
-            }}
-            if (params.node && (params.node.group || params.node.rowPinned)) {{
-                return Object.assign({{}}, base, {{ fontWeight: '800' }});
-            }}
-            var maxv = {max_valorizado};
-            var num = Number(params.value);
-            if (isNaN(num)) return base;
-            var pct = maxv > 0 ? Math.max(0, Math.min(100, (num / maxv) * 100)) : 0;
-            return Object.assign({{}}, base, {{
-                backgroundImage: 'linear-gradient(to right, {LAVANDA_BORDE} 0%, {LAVANDA_BORDE} ' + pct + '%, transparent ' + pct + '%, transparent 100%)',
-                backgroundRepeat: 'no-repeat',
-                backgroundSize: '100% 80%',
-                backgroundPosition: 'left center'
-            }});
-        }}
-    """)
-
     valorizado_plano = JsCode(f"""
         function(params) {{
             var base = {{
@@ -131,13 +70,16 @@ def _estilos_celda(max_valorizado):
             return base;
         }}
     """)
-    return (mono_style, stock_cell_style, stock_cell_style_plano,
-            valorizado_bar_style, valorizado_plano)
-def _estilo_fila(col_stock, df_grid, es_inventario, quitar_fondos):
-    """Devuelve el JsCode getRowStyle según el reporte: inventario (grupos
-    coloreados), stock con semáforo, o fila total simple. Extraído de
-    renderizar_aggrid_desktop en la Fase 3."""
-    if col_stock and col_stock in df_grid.columns and es_inventario:
+    return mono_style, stock_cell_style_plano, valorizado_plano
+def _estilo_fila(col_stock, df_grid):
+    """JsCode getRowStyle: fila de totales + niveles de grupo coloreados
+    si el grid tiene columna de stock; si no, solo la fila de totales.
+
+    La tercera rama (semáforo de fondo por valor de stock) se borró el
+    2026-08-08: era inalcanzable por partida doble — su guarda pedía
+    `not quitar_fondos`, que el llamador fijaba siempre a True, y aunque
+    no lo hiciera, la primera rama ya capturaba la misma condición."""
+    if col_stock and col_stock in df_grid.columns:
         get_row_style = JsCode(f"""
             function(params) {{
                 if (params.node.rowPinned) {{
@@ -151,24 +93,6 @@ def _estilo_fila(col_stock, df_grid, es_inventario, quitar_fondos):
                     return {{ backgroundColor:'{LAVANDA_FONDO}', fontWeight:'500' }};
                 }}
                 return {{ backgroundColor:'{BLANCO}' }};
-            }}
-        """)
-    elif col_stock and col_stock in df_grid.columns and not quitar_fondos:
-        _sf = str(col_stock).replace("\\", "\\\\").replace('"', '\\"')
-        get_row_style = JsCode(f"""
-            function(params) {{
-                if (params.node.rowPinned) {{
-                    return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}', color:'{ACENTO_TEXTO_OSCURO}',
-                              borderBottom:'2px solid {ACENTO}', fontSize:'13px' }};
-                }}
-                if (params.node.group || !params.data) return null;
-                var s = params.data["{_sf}"];
-                if (s === null || s === undefined || s === '') return null;
-                var v = Number(s);
-                if (isNaN(v)) return null;
-                if (v === 0) return {{ backgroundColor:'{CELDA_NEG_FONDO}' }};
-                if (v < 10)  return {{ backgroundColor:'{ADVERTENCIA_FONDO}' }};
-                return null;
             }}
         """)
     else:
