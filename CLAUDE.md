@@ -16,6 +16,28 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 - Cada cambio se pushea y se confirma explícitamente. Si algo NO se pusheó,
   decirlo — si no, se diagnostican "conflictos" que no existen.
 
+Antes de pushear, dos comandos (segundos, no minutos):
+
+```bash
+python -m ruff check . && python test_graficos.py
+```
+
+`ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
+estilo marcarían cientos de líneas de CSS embebido y el ruido haría que
+nadie mire la salida. Se instala con `pip install -r requirements-dev.txt`
+(NO está en `requirements.txt`: Streamlit Cloud lo instalaría en cada
+deploy para nada).
+
+**Cuidado con `ruff check --fix` sobre F401:** hay módulos que importan un
+símbolo solo para reexportarlo (`graficos/compras/_comun.py` con
+`_es_movil`). Van con `# noqa: F401` **y un comentario que diga quién los
+consume** — sin eso, el fix automático los borra y rompe a sus
+importadores. Ver `arquitectura.md` regla #53.
+
+`test_graficos.py` construye todas las figuras + verifica los contratos del
+dispatcher (que cada dashboard acepte `tabla_cb`, la aridad de la llamada, y
+que no haya vuelto a aparecer una lista de reportes hardcodeada).
+
 ## El CSS vive en `estilos/`, una sección por módulo
 
 `estilos/` es un paquete (antes era un `estilos.py` de 1.700 líneas). La API

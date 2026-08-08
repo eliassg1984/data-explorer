@@ -21,9 +21,9 @@ actualiza este documento en el mismo commit.
 | `app.py` | Orquestador: navegación, filtros, fragmentos, llama a los renderizadores. |
 | `estado_rango.py` | **Dueño único** del rango de fechas de la franja superior (`clave_rango`, `asegurar_rango`, `atajos_rango`, `aplicar_atajo`). Nadie escribe la clave del rango fuera de este módulo — ver regla #24. |
 | `data.py` | Carga de datos: DuckDB + httpfs leyendo parquets de R2 (secrets). Sistema de refresco bajo demanda vía R2. |
-| `tablas/` | **Paquete de tablas AgGrid** (refactor 2026-08-01; antes un `tablas.py` de 2.028 líneas). `__init__.py` re-exporta la API pública. `_css.py` (CSS de grid y paneles), `_config.py` (estilos de celda/fila, sidebar, totales), `desktop.py` (`renderizar_aggrid_desktop`), `movil.py` (`renderizar_aggrid_movil`), `compras.py` (`renderizar_aggrid_compras` + `renderizar_tabla_compras`, esta última legacy y sin uso), `ajuste_pivote.py` (`renderizar_aggrid_pivote_ajuste`, tabla "Por fecha" de Ajuste de Inventario — ver regla #25). |
-| `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), `ajuste.py` (ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10), `ventas.py`, `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras), `legacy.py` (Inventario v1, respaldo no re-exportado). **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py` — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
-| `estilos/` | **Paquete del CSS global** (refactor 2026-08-01; antes un `estilos.py` de 1.700 líneas). `__init__.py` mantiene la API pública (`TAM_FUENTE`, `get_css`, `inject_css`) y concatena las secciones. Una sección por módulo, con prefijo numérico que marca el orden: `_00_base`, `_10_vista`, `_20_compras_rail`, `_30_filtros`, `_40_ajuste_franja`, `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`, `_90_franja_inferior`, `_99_movil`. **El orden de `_SECCIONES` es parte del comportamiento**: hay `!important` en ambos lados de varios conflictos, así que gana la regla que va DESPUÉS — por eso `_99_movil` cierra. |
+| `tablas/` | **Paquete de tablas AgGrid** (refactor 2026-08-01; antes un `tablas.py` de 2.028 líneas). `__init__.py` re-exporta la API pública. `_css.py` (CSS de grid y paneles), `_config.py` (estilos de celda/fila, sidebar, totales), `desktop.py` (`renderizar_aggrid_desktop`), `movil.py` (`renderizar_aggrid_movil`), `compras.py` (`renderizar_aggrid_compras`), `ajuste_pivote.py` (`renderizar_aggrid_pivote_ajuste`, tabla "Por fecha" de Ajuste de Inventario — ver regla #25). `renderizar_tabla_compras` se borró el 2026-08-08 (llevaba desde 2026-08-01 sin llamadores). |
+| `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `tiene_dashboard(reporte)` (para que `app.py` no enumere reportes ni importe `_DASHBOARDS`; ver regla #50). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), `ajuste.py` (ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10), `ventas.py`, `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras). `legacy.py` (Inventario v1) se borró el 2026-08-08: 421 líneas sin un solo import. **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py` — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
+| `estilos/` | **Paquete del CSS global** (refactor 2026-08-01; antes un `estilos.py` de 1.700 líneas). `__init__.py` mantiene la API pública (`TAM_FUENTE`, `get_css`, `inject_css`) y concatena las secciones. Una sección por módulo, con prefijo numérico que marca el orden: `_00_base`, `_20_compras_rail`, `_30_filtros`, `_40_ajuste_franja`, `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`, `_90_franja_inferior`, `_99_movil`. (`_10_vista` existió hasta el 2026-08-08: estilaba el selector Gráficos/Tabla y quedó 100% huérfano al borrarse ese widget — ver regla #49.) **El orden de `_SECCIONES` es parte del comportamiento**: hay `!important` en ambos lados de varios conflictos, así que gana la regla que va DESPUÉS — por eso `_99_movil` cierra. |
 | `navegacion.py` | Rail lateral, topbar y CSS por sección (`_CSS_AJUSTE`). Botón de refresco aislado en su propio `@st.fragment`. |
 | `inyecciones/` | **Paquete de JS/HTML inyectado** (refactor 2026-08-01; antes un `inyecciones.py` de 1.813 líneas). `_fragmentos.py` (CSS/JS compartido), `grid.py` (salud, altura, maximizar, panel de columnas), `paginacion.py`, `inspector.py` (herramienta de desarrollo), `diseno.py` (modo de diseño visual, `?debug=1&diseno=1` — lee el pin de `inspector.py`, ver regla #46), `varios.py` (overlay de errores, fullscreen, footer, calendario). Ninguna función depende de otra (la excepción de solo-lectura de `diseno.py` está documentada en la regla #46): las únicas dependencias internas apuntan a las constantes de `_fragmentos.py`. |
 | `tema.py` | **Paleta de colores con nombre, definida UNA vez.** Todos los demás importan de aquí. |
@@ -1555,3 +1555,110 @@ salvo `icono`):
       `getComputedStyle(el).transitionProperty/-Duration` antes de seguir
       buscando por el lado de la cascada — el problema puede ser de tiempo
       (reaplicado vs. duración de transición), no de especificidad.
+
+49. **Borrar código Python deja CSS huérfano, y nada en el `.py` lo
+    señala.** Al eliminar `_selector_vista()` de `app.py` (widget muerto,
+    lo había reemplazado el rail) quedaron sin dueño **el módulo
+    `estilos/_10_vista.py` entero** (100 líneas), bloques en
+    `_40_ajuste_franja` y `_99_movil`, y la clase `.titulo-ajuste-reporte`.
+    El acoplamiento key→CSS que CLAUDE.md advierte para el caso "una regla
+    del contenedor captura widgets nuevos" funciona igual al revés: el CSS
+    sobrevive al widget que lo justificaba, invisible, porque un selector
+    que no matchea nada no da error ni warning.
+    **Regla:** al borrar un `st.container(key=...)`, un widget con key, o
+    una clase que emitía un `st.markdown`, hacer `grep` de ese nombre en
+    `estilos/` e `inyecciones/` en el mismo commit.
+    **Cómo confirmarlo sin adivinar** — levantar la app y contar nodos:
+    ```js
+    document.querySelectorAll('[class*="st-key-<key>"]').length   // 0 = huérfano
+    ```
+    Ojo con el falso positivo: en modo demo hay elementos que no se pintan
+    por falta de datos, no por estar muertos (`.ultima-actualizacion` da 0
+    en local porque sin secrets R2 no hay fecha, pero en producción sí se
+    emite). Antes de borrar, confirmar que NINGÚN `.py` lo emite.
+
+50. **Un `inject_*` cuyo elemento ya no existe NO es código muerto inerte
+    — cuesta.** `inject_alinear_cabecera_ajuste` buscaba
+    `.titulo-ajuste-reporte` y `.st-key-ajuste_tabs_top`; los dos habían
+    dejado de emitirse, así que su `alinear()` devolvía `false` siempre.
+    Pero el patrón "medir con reintentos" seguía corriendo: **40 iteraciones
+    cada 400 ms (16 s de polling) dentro de un `components.html`, en CADA
+    render de tabla desktop.** No fallaba, no logueaba, solo gastaba.
+    **Regla:** las inyecciones con reintentos (`inject_dynamic_grid_height`,
+    `inject_maximize_aggrid`, y cualquiera que copie el patrón) deben
+    revisarse cuando se toca el DOM que buscan. Si el selector ya no
+    existe, la inyección entera sale — no basta con que "no rompa nada".
+
+51. **`var(--x, #hex)` es un `#hex` suelto disfrazado.** El proyecto
+    prohíbe hexes fuera de `tema.py`/`:root`, pero el fallback de `var()`
+    se colaba: había **28 fallbacks duplicando la paleta**, y 4 ya habían
+    DERIVADO del valor real (`var(--accent, #7f77dd)` contra el `#6c5ce7`
+    de verdad — otro morado; `var(--cab-offset-contenido, 128px)` contra
+    58px). Ninguno se pintaba, porque `_00_base` va primero en
+    `_SECCIONES` y todo se inyecta en el MISMO `<style>`: el fallback de
+    `var()` solo entra si la variable NO está definida, no si va después.
+    Es decir, eran valores muertos que mienten sobre cuál es el color real.
+    Peor caso: `--surface-1` / `--surface-2` se usaban **sin haberse
+    definido nunca**, así que ahí el fallback sí era lo que se renderizaba
+    — un segundo vocabulario para `--bg-primary` / `--bg-card`.
+    **Regla:** dentro de la app, `var(--x)` a secas. El fallback se
+    justifica solo cuando la variable la setea Python inline por elemento
+    y puede faltar de verdad (`--cp-prov-count`, `--periodo-selec` en
+    `proveedor.py`, donde `""` es el "sin valor" intencional).
+    **Chequeo:** que toda `var(--x)` del código exista en el `:root` de
+    `_00_base` — si falta, la propiedad queda inválida y la regla se cae
+    en silencio (le pasaba a `background: var(--background-color)` en
+    `proveedor.py`, que es un nombre del tema de Streamlit, no nuestro).
+
+52. **Un flag booleano fijado a `True` a mano se vuelve invisible en un
+    mes.** Cuando un cambio de diseño unifica reportes, la tentación es
+    dejar el flag y ponerlo en `True`. Al momento de la limpieza del
+    2026-08-08 había: `envolver_cabeceras`, `quitar_fondos` y
+    `es_inventario` en `renderizar_aggrid_desktop`; `mostrar_pivot` y
+    `es_ajuste` como parámetros de `_config_sidebar` (los dos llamadores
+    pasaban True); y **dos `if True:`** — uno envolviendo 119 líneas de
+    `app.py`, otro el panel de pivote en `_config.py`. Cuesta caro por
+    tres motivos: (a) las ramas `else` se pudren sin que nadie las
+    ejecute — `_estilo_fila` tenía una rama inalcanzable *por partida
+    doble*; (b) arrastran dependencias muertas — `max_valorizado` se
+    calculaba solo para una barra de gradiente que ya no se usaba; (c)
+    `es_inventario` llegó a significar "true para todos", NO "es el
+    reporte Inventario Valorizado", y hubo que agregar un comentario para
+    aclarar la confusión que el propio flag creaba.
+    **Regla:** si un flag queda en `True`, colapsarlo en el mismo commit.
+    Git conserva la versión parametrizada. Si algún día vuelve a haber más
+    de un caso, el discriminante correcto suele ser `reporte`, no un
+    booleano suelto.
+
+53. **`ruff --fix` sobre F401 puede romper re-exports deliberados.** El
+    proyecto usa módulos que importan un símbolo SOLO para reexponerlo
+    (`graficos/compras/_comun.py` importa `_es_movil` de `graficos.base`
+    porque la función se mudó y `proveedor.py`/`compras/__init__.py` la
+    siguen importando de ahí). Para ruff eso es un import sin usar, y el
+    fix automático lo borra rompiendo a sus consumidores — sin error de
+    sintaxis, sin fallo de test: revienta al abrir ese drill.
+    **Regla:** todo re-export lleva `# noqa: F401` **con un comentario que
+    diga que es un re-export y quién lo consume.** Los `__init__.py` ya
+    están cubiertos por `per-file-ignores` en `ruff.toml`; los demás
+    módulos no.
+    **Antes de un `--fix` masivo,** verificar que cada nombre marcado no
+    aparezca en el resto de su archivo (un template `.format()`, un
+    docstring, o justamente un re-export). Es un script de 20 líneas y en
+    esta limpieza cazó el único caso que habría roto la app, entre 108.
+
+54. **Un callback inyectado necesita UNA firma, no una por llamador.**
+    `tabla_cb` (el callback con el que `app.py` le presta la tabla AgGrid
+    a los dashboards) tenía DOS aridades: Ajuste y Receta Venta lo
+    llamaban `tabla_cb()`, el resto `tabla_cb(d)`. El único sitio donde
+    constaba cuál tocaba era un docstring, así que un dashboard nuevo que
+    eligiera mal fallaba con `TypeError` **solo en producción y solo al
+    hacer clic en "Tabla"** — el peor momento posible. Hoy la firma es
+    `tabla_cb(d)` para todos.
+    Lo mismo valía para el dispatcher: tenía un `if reporte in ("Ajuste de
+    Inventario", "Ventas", ...)` que había que mantener sincronizado a
+    mano con `_DASHBOARDS`. Se eliminó haciendo que TODOS los dashboards
+    acepten `tabla_cb` (Compras lo ignora, y lo dice en su docstring).
+    **Regla:** contratos así se protegen con un test, no con un comentario.
+    `test_graficos.py::_pruebas_contratos` recorre `_DASHBOARDS` y verifica
+    firma, aridad de la llamada y que el dispatcher no haya vuelto a meter
+    una lista de reportes. Cuesta 40 líneas y se ejecuta en un segundo.
