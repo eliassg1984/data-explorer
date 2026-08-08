@@ -353,15 +353,6 @@ sugeridas, faltan_cols, todas_cols = get_columnas_sugeridas(
     tuple(df_f.columns), col_fecha, cat_cols, col_busc, cfg
 )
 
-if "agrupar" in cfg:
-    cols_agrupar, _ = resolver_columnas(df_f, cfg["agrupar"])
-else:
-    cols_agrupar = [c for c in [
-        buscar_columna(df_f, "area", "área"),
-        buscar_columna(df_f, "familia"),
-        buscar_columna(df_f, "subfamilia", "sub familia"),
-    ] if c]
-
 
 # ===========================================================================
 # CONTROLES DE FILTRO — st.popover
@@ -401,43 +392,11 @@ es_ajuste = (reporte == "Ajuste de Inventario")
 REPORTES_INICIO_TABLA = ("Receta Base", "Receta Venta")
 _vista_default = "Tabla" if reporte in REPORTES_INICIO_TABLA else "Gráficos"
 
-controles = []
-# (los filtros categóricos ahora son chips en la franja; la fecha, la pill)
-if col_busc:
-    controles.append(("busc", col_busc))
-if cols_agrupar:
-    controles.append(("grp", None))
-
+# Agrupación de filas de la AgGrid. Quedó fija en "sin agrupar" cuando el
+# popover de filtros se reemplazó por los chips de la franja (2026-08): ya no
+# hay UI que la alimente. Se mantiene la variable porque renderizar_aggrid_
+# desktop la recibe como parámetro posicional.
 grupos_sel = []
-
-
-@st.cache_data
-def get_opciones_filtro(_df, _col):
-    """Retorna las opciones únicas de una columna, ordenadas."""
-    return sorted(_df[_col].dropna().unique().tolist(), key=lambda x: str(x))
-
-
-def _key(prefijo, idx):
-    return f"{prefijo}_{reporte}_{idx}"
-
-def _contar_filtros_activos():
-    n = 0
-    for idx, (tipo, col) in enumerate(controles):
-        if tipo == "fecha":
-            val = st.session_state.get(_key("fch", idx))
-            if isinstance(val, (tuple, list)) and len(val) == 2:
-                if val[0] != fecha_min_full or val[1] != fecha_max_full:
-                    n += 1
-        elif tipo == "cat":
-            if st.session_state.get(_key("cat", idx)):
-                n += 1
-        elif tipo == "busc":
-            if st.session_state.get(_key("busc", idx)):
-                n += 1
-    return n
-
-n_activos = _contar_filtros_activos()
-label_btn = f"🔍 Filtros{'  ·  ' + str(n_activos) + ' activo' + ('s' if n_activos != 1 else '') if n_activos else ''}"
 
 # ── TÍTULO + WIDGET DE FECHA EN LA FRANJA SUPERIOR (solo Ajuste de Inventario) ──
 perf.start_phase("Ajuste top row")                                          # ⚡ PERF
@@ -863,27 +822,6 @@ def _render_tabla(df_data=None, df_totales=None, filtros_grid=None):
             df_totales=(None if df_totales is None else df_totales[cols_finales]),
             filtros_grid=filtros_grid,
         )
-
-
-# ===========================================================================
-# SELECTOR DE VISTA (Tabla / Gráficos) — tabs subrayados (underline)
-# ===========================================================================
-def _selector_vista():
-    """Muestra un radio horizontal estilizado como tabs subrayados y devuelve
-    la opción elegida ('Tabla' o 'Gráficos'). El CSS que lo convierte en tabs
-    vive en estilos.py (bloque '.st-key-vistatabs_...')."""
-    _opciones = {"Gráficos": ":material/monitoring: Gráficos",
-             "Tabla": ":material/table_rows: Tabla"}
-    with st.container(key=f"vistatabs_{reporte}"):
-        vista = st.pills(
-            "Vista",
-            options=list(_opciones.keys()),
-            format_func=lambda o: _opciones[o],
-            default="Gráficos",
-            label_visibility="collapsed",
-            key=f"vista_seg_{reporte}",
-        )
-    return vista or "Gráficos"
 
 
 # ===========================================================================

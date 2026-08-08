@@ -9,15 +9,12 @@ paquete. La API publica no cambio: from tablas import renderizar_aggrid_desktop.
                   fila de totales, titulos en espanol.
     desktop.py    renderizar_aggrid_desktop (la vista principal)
     movil.py      renderizar_aggrid_movil
-    compras.py    renderizar_aggrid_compras + renderizar_tabla_compras
+    compras.py    renderizar_aggrid_compras
     ajuste_pivote.py  renderizar_aggrid_pivote_ajuste (tabla "Por fecha" de
                   Ajuste de Inventario, ver graficos/ajuste.py)
-
-OJO: renderizar_tabla_compras esta marcada legacy en arquitectura.md y no la
-importa nadie. Se conserva a la espera de decision.
 """
 
 from tablas.desktop import (renderizar_aggrid_desktop)  # noqa: F401
 from tablas.movil import (renderizar_aggrid_movil)  # noqa: F401
-from tablas.compras import (renderizar_aggrid_compras, renderizar_tabla_compras)  # noqa: F401
+from tablas.compras import (renderizar_aggrid_compras)  # noqa: F401
 from tablas.ajuste_pivote import (renderizar_aggrid_pivote_ajuste)  # noqa: F401

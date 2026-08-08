@@ -18,7 +18,6 @@ Estructura:
         inventario.py  → dashboard Inventario Valorizado (v2)
         salidas.py     → dashboard Salidas (evolución + subalmacén + tipo)
         constructor.py → constructor estilo Power BI (usado por Compras)
-        legacy.py      → Inventario Valorizado v1 (respaldo, no en la ruta activa)
 
 Cómo agregar un dashboard nuevo (p.ej. "Mermas"):
     1. Crear graficos/mermas.py con `def renderizar_graficos_mermas(df, reporte, df_full=None): ...`
@@ -45,7 +44,6 @@ from graficos.inventario import renderizar_graficos_inventario        # noqa: F4
 from graficos.recetaventa import renderizar_graficos_recetaventa      # noqa: F401
 from graficos.salidas import renderizar_graficos_salidas              # noqa: F401
 from graficos.ventas import renderizar_graficos_ventas                # noqa: F401
-# legacy.renderizar_graficos NO se re-exporta: ya no se usa desde fuera.
 
 
 # render_vista_pills() (pestañas Gráficos/Tabla en la franja) se eliminó
