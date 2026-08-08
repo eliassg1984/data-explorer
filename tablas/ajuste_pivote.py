@@ -206,20 +206,14 @@ def renderizar_aggrid_pivote_ajuste(df_wide, periodos, col_familia,
 
     # Producto NO es rowGroup: si lo fuera, cada producto formaría su
     # propio grupo de un solo hijo (una fila más para expandir, sin
-    # información nueva). Familia/Subfamilia agrupan; Producto queda como
-    # la columna que autoGroupColumnDef muestra en la fila HOJA (ver más
-    # abajo) -- el árbol termina en el producto, no un nivel después.
+    # información nueva). Familia/Subfamilia agrupan; Producto queda
+    # oculto como columna propia -- lo muestra autoGroupColumnDef.field
+    # en la fila HOJA (ver más abajo), el árbol termina en el producto,
+    # no un nivel después.
     _grupos = [c for c in (col_familia, col_subfamilia) if c]
     for i, c in enumerate(_grupos):
         gb.configure_column(c, rowGroup=True, rowGroupIndex=i, hide=True)
-    # Producto va como columna PROPIA (no vía autoGroupColumnDef.field):
-    # con groupDisplayType="groupRows" las filas de GRUPO son de ancho
-    # completo (no pintan columnas individuales) y las filas HOJA no
-    # terminaron mostrando el auto-group column en absoluto -- verificado
-    # en vivo con _test_pivote_aislado.py (quedaba en blanco). Una columna
-    # normal pinneada a la izquierda sí se ve en toda fila hoja.
-    gb.configure_column(col_producto, hide=False, pinned="left",
-                        headerName="Producto", minWidth=180)
+    gb.configure_column(col_producto, hide=True)
 
     _tiene_aj = any(p["field_aj"] for p in periodos)
 
@@ -339,18 +333,26 @@ def renderizar_aggrid_pivote_ajuste(df_wide, periodos, col_familia,
             "headerName": "Familia / Subfamilia / Producto",
             # `field` decide qué se ve en filas HOJA (y filas pinneadas) --
             # las de GRUPO (Familia/Subfamilia) muestran su propia clave
-            # sin importar `field`, vía groupRowRendererParams de arriba.
-            # col_producto porque la hoja de este árbol es el producto.
+            # sin importar `field`. col_producto porque la hoja de este
+            # árbol es el producto.
             "field": col_producto,
             "pinned": "left", "minWidth": 220,
+            # SIN groupDisplayType="groupRows" (default = "singleColumn"):
+            # las filas de grupo dejan de ser de ancho completo y cada
+            # columna de periodo se renderiza también para ellas --
+            # subtotal por Familia/Subfamilia en cada corte/semana/mes, no
+            # solo el total de la fila. El innerRenderer va ACÁ (no en
+            # groupRowRendererParams, que es lo que aplicaría en modo
+            # "groupRows" -- ver arquitectura.md regla #25) porque ahora el
+            # grupo se pinta con el cell renderer normal de esta columna,
+            # no con un renderer de ancho completo aparte.
+            # suppressCount: agGroupCellRenderer (el wrapper nativo que da
+            # el ícono expandir/colapsar) agrega SU PROPIO "(n)" por
+            # defecto -- sin esto queda duplicado con el "(n)" que ya
+            # arma group_inner_renderer a mano ("ALIMENTOS (3) · S/ 215(3)").
+            "cellRendererParams": {"innerRenderer": group_inner_renderer,
+                                   "suppressCount": True},
         },
-        # groupDisplayType="groupRows" pinta la fila de grupo con un
-        # renderer de ancho completo aparte (agGroupRowRenderer) -- el
-        # innerRenderer va acá, NO en autoGroupColumnDef.cellRendererParams
-        # (eso solo aplicaría con groupDisplayType="singleColumn"). Mismo
-        # mecanismo que tablas/desktop.py::opciones_grid["groupRowRendererParams"].
-        groupRowRendererParams={"innerRenderer": group_inner_renderer},
-        groupDisplayType="groupRows",
         groupDefaultExpanded=0,
         localeText=LOCALE_ES,
         sideBar=_sidebar_cfg,

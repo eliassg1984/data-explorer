@@ -816,6 +816,36 @@ salvo `icono`):
     nota apretado con las columnas reales (muchas, la ventana no da para
     estirar). Medir contra un caso con volumen realista, no el más fácil.
 
+    **2026-08-07, otra vuelta — subtotal por periodo en filas de grupo
+    (pedido real: "puedo tener subtotales").** Con `groupDisplayType:
+    "groupRows"` las filas de Familia/Subfamilia eran de ANCHO COMPLETO
+    (`agGroupRowRenderer`) — solo mostraban nombre + cantidad + el total
+    de la fila entera, ninguna columna de periodo se pintaba para ellas
+    (quedaban en blanco). Sacar `groupDisplayType` (default =
+    "singleColumn") hace que AG Grid pinte cada columna de periodo
+    TAMBIÉN para las filas de grupo, con el `aggFunc` propio de esa
+    columna sumando los hijos — el mismo cellRenderer compacto que ya
+    usan las filas hoja, sin código nuevo del lado de los valores.
+    **Lo que sí hubo que mover:** `groupRowRendererParams.innerRenderer`
+    (que pinta "ALIMENTOS (n) · S/ total") solo aplica en modo
+    "groupRows"; en "singleColumn" el lugar correcto es
+    `autoGroupColumnDef.cellRendererParams.innerRenderer` — el espejo
+    exacto de la regla ya documentada arriba, para el modo contrario.
+    **Efecto colateral no obvio:** al pasar a "singleColumn", el ícono de
+    expandir/colapsar vuelve a ser el `agGroupCellRenderer` NATIVO (no el
+    renderer de ancho completo), y ESE tiene su PROPIO "(n)" por defecto
+    — sin `"suppressCount": true` junto al `innerRenderer`, el conteo
+    salía duplicado ("ALIMENTOS (3) · S/ 215**(3)**"). Verificado en vivo
+    con `_test_pivote_aislado.py` (apareció el duplicado, se sacó con
+    `suppressCount`, se confirmó limpio).
+    **De yapa:** este cambio de modo también permitió sacar la columna
+    "Producto" separada que existía como workaround (regla de más
+    arriba, "las filas hoja NO terminaban pintando el auto-group column
+    en 'groupRows'") — en "singleColumn" `autoGroupColumnDef.field`
+    SÍ funciona para filas hoja, así que Producto volvió a mostrarse
+    dentro del mismo árbol de una sola columna (el diseño original,
+    antes del workaround), un poco más simple.
+
 26. **`GridOptionsBuilder.configure_column()` PISA el `headerName` cada vez
     que se lo llama sin `header_name`.** No hace merge parcial: reconstruye
     el colDef con `{"headerName": field, "field": field}` y recién después
