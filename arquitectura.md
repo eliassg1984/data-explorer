@@ -25,7 +25,7 @@ actualiza este documento en el mismo commit.
 | `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), `ajuste.py` (ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10), `ventas.py`, `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras), `legacy.py` (Inventario v1, respaldo no re-exportado). **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py` — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
 | `estilos/` | **Paquete del CSS global** (refactor 2026-08-01; antes un `estilos.py` de 1.700 líneas). `__init__.py` mantiene la API pública (`TAM_FUENTE`, `get_css`, `inject_css`) y concatena las secciones. Una sección por módulo, con prefijo numérico que marca el orden: `_00_base`, `_10_vista`, `_20_compras_rail`, `_30_filtros`, `_40_ajuste_franja`, `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`, `_90_franja_inferior`, `_99_movil`. **El orden de `_SECCIONES` es parte del comportamiento**: hay `!important` en ambos lados de varios conflictos, así que gana la regla que va DESPUÉS — por eso `_99_movil` cierra. |
 | `navegacion.py` | Rail lateral, topbar y CSS por sección (`_CSS_AJUSTE`). Botón de refresco aislado en su propio `@st.fragment`. |
-| `inyecciones/` | **Paquete de JS/HTML inyectado** (refactor 2026-08-01; antes un `inyecciones.py` de 1.813 líneas). `_fragmentos.py` (CSS/JS compartido), `grid.py` (salud, altura, maximizar, panel de columnas), `paginacion.py`, `inspector.py` (herramienta de desarrollo), `varios.py` (overlay de errores, fullscreen, footer, calendario). Ninguna función depende de otra: las únicas dependencias internas apuntan a las constantes de `_fragmentos.py`. |
+| `inyecciones/` | **Paquete de JS/HTML inyectado** (refactor 2026-08-01; antes un `inyecciones.py` de 1.813 líneas). `_fragmentos.py` (CSS/JS compartido), `grid.py` (salud, altura, maximizar, panel de columnas), `paginacion.py`, `inspector.py` (herramienta de desarrollo), `diseno.py` (modo de diseño visual, `?debug=1&diseno=1` — lee el pin de `inspector.py`, ver regla #46), `varios.py` (overlay de errores, fullscreen, footer, calendario). Ninguna función depende de otra (la excepción de solo-lectura de `diseno.py` está documentada en la regla #46): las únicas dependencias internas apuntan a las constantes de `_fragmentos.py`. |
 | `tema.py` | **Paleta de colores con nombre, definida UNA vez.** Todos los demás importan de aquí. |
 | `inspector.py` | Herramienta de verificación de datos crudos: busca, filtra por fecha, radiografía de columnas, detección de columnas duplicadas. |
 | `perf.py` | Diagnóstico de rendimiento por rerun (activado con `?debug=1`). Singleton `perf` con fases, fragments y BroadcastChannel hacia el navegador. |
@@ -1436,3 +1436,36 @@ salvo `icono`):
     recargar la página), es candidato al mismo bug — el síntoma es
     "funciona la primera vez, desaparece con la segunda interacción y no
     vuelve nunca".
+
+46. **`inject_diseno_visual` (`inyecciones/diseno.py`) lee estado de
+    `inspector.py` sin que `inspector.py` sepa que existe — y
+    `requestAnimationFrame` puede no dispararse NUNCA.** Dos hallazgos del
+    modo de diseño visual (`?debug=1&diseno=1`), fase A (esqueleto):
+    - **Acoplamiento de solo lectura entre dos `inject_*`.** `diseno.py`
+      lee `win.__inspectorPinned`/`win.__inspectorUltimo` (que
+      `inspector.py` expone en `window.parent` para sobrevivir el remount
+      del iframe) para saber qué elemento está fijado, sin que
+      `inspector.py` importe ni llame nada de `diseno.py`. Es la regla
+      general del §4 aplicada: dos `inject_*` comparten estado, así que la
+      interacción se documenta en ambos módulos (ver docstring de
+      `inyecciones/__init__.py` y de `diseno.py`). Si `inspector.py` alguna
+      vez renombra esas variables o cambia qué guarda `elemento`/`key` en
+      `__inspectorUltimo`, `diseno.py` se rompe en silencio — revisar acá
+      primero si el modo diseño deja de reaccionar al pin.
+    - **`requestAnimationFrame` no es confiable como ÚNICO mecanismo de
+      sync.** Verificado en vivo (Browser pane del editor, agente de
+      planning): con la pestaña sin composición activa de frames, una
+      sonda `requestAnimationFrame` instalada a mano dio **0 callbacks en
+      2 segundos**. Un primer diseño de `diseno.py` que solo reprogramaba
+      el tracking de la manija vía `requestAnimationFrame` dejaba el
+      overlay CONGELADO en la posición vieja tras un rerun real (la
+      tarjeta se movía/cambiaba de alto al expandir una fila, el overlay
+      se quedaba clavado donde estaba) — sin ningún error en consola,
+      porque no es una excepción, es un callback que simplemente nunca se
+      vuelve a agendar en ese contexto. Arreglo: el `setInterval` de
+      ~150ms es la fuente de verdad del tracking (llama a la misma
+      función `sync()` que hace el resize del overlay), no solo un
+      "¿sigue vivo el pin?". `requestAnimationFrame` se reserva para
+      cuando de verdad hace falta fluidez a 60fps (arrastre activo de una
+      manija en fase A.2) y SIEMPRE como mejora encima del intervalo, no
+      como reemplazo.

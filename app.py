@@ -17,7 +17,7 @@ from estado_rango import (
     clave_rango, asegurar_rango, debug_estado_rango,
     atajos_rango, aplicar_atajo,
 )
-from inyecciones import inject_error_overlay, inject_element_inspector, inject_footer_actualizacion, inject_calendario_es, inject_fullscreen_app
+from inyecciones import inject_error_overlay, inject_element_inspector, inject_diseno_visual, inject_footer_actualizacion, inject_calendario_es, inject_fullscreen_app
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_aggrid_compras
 from graficos import renderizar_graficos_reporte
 from graficos.base import _render_rail
@@ -58,6 +58,7 @@ st.set_page_config(
 inject_css()
 inject_error_overlay()
 inject_element_inspector()
+inject_diseno_visual()   # modo diseño (?debug=1&diseno=1), lee el pin de arriba
 inject_calendario_es()
 inject_fullscreen_app()   # botón ⛶ pantalla completa (móvil)
 
