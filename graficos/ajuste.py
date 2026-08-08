@@ -967,6 +967,25 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
        que venga despues. */
     [data-testid="stMarkdownContainer"]:has(> .ajcas-head) {{
         margin-bottom: 0 !important; }}
+    /* Cabecera oculta hasta pasar el cursor por la tabla (2026-08-08, a
+       pedido -- "opción 1" de las 6 propuestas: sobre TODA la tabla, no
+       fila por fila). Con max-height:0 + overflow:hidden en vez de
+       display:none: display:none no se puede animar y el fix de margen
+       de arriba sigue haciendo falta igual (el <div> raíz de .ajcas-head
+       no cambia). Al aparecer empuja las filas hacia abajo -- mismo
+       comportamiento que el mockup que se aprobó. padding-bottom
+       también se anima a 0: max-height con box-sizing:content-box (el
+       default) solo acota el content-box, no el padding -- sin esto
+       quedaban 7px de padding siempre visibles (medido: el <div> daba
+       7px de alto con max-height:0 en vez de 0). */
+    .ajcas-head {{
+        max-height: 0; opacity: 0; overflow: hidden;
+        padding-bottom: 0 !important;
+        transition: max-height .15s ease, opacity .12s ease,
+                    padding-bottom .15s ease; }}
+    div[class*="st-key-chartcard_cascada"]:hover .ajcas-head,
+    div[class*="st-key-chartcard_cascada"]:active .ajcas-head {{
+        max-height: 24px; opacity: 1; padding-bottom: 7px !important; }}
     </style>""", unsafe_allow_html=True)
 
     with _card("cascada"):
