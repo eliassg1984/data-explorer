@@ -22,7 +22,7 @@ actualiza este documento en el mismo commit.
 | `estado_rango.py` | **Dueño único** del rango de fechas de la franja superior (`clave_rango`, `asegurar_rango`, `atajos_rango`, `aplicar_atajo`). Nadie escribe la clave del rango fuera de este módulo — ver regla #24. |
 | `data.py` | Carga de datos: DuckDB + httpfs leyendo parquets de R2 (secrets). Sistema de refresco bajo demanda vía R2. |
 | `tablas/` | **Paquete de tablas AgGrid** (refactor 2026-08-01; antes un `tablas.py` de 2.028 líneas). `__init__.py` re-exporta la API pública. `_css.py` (CSS de grid y paneles), `_config.py` (estilos de celda/fila, sidebar, totales), `desktop.py` (`renderizar_aggrid_desktop`), `movil.py` (`renderizar_aggrid_movil`), `compras.py` (`renderizar_aggrid_compras`), `ajuste_pivote.py` (`renderizar_aggrid_pivote_ajuste`, tabla "Por fecha" de Ajuste de Inventario — ver regla #25). `renderizar_tabla_compras` se borró el 2026-08-08 (llevaba desde 2026-08-01 sin llamadores). |
-| `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `tiene_dashboard(reporte)` (para que `app.py` no enumere reportes ni importe `_DASHBOARDS`; ver regla #50). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), `ajuste.py` (ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10), `ventas.py`, `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras). `legacy.py` (Inventario v1) se borró el 2026-08-08: 421 líneas sin un solo import. **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py` — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. El drill de Proveedor se siguió partiendo el 2026-08-08 (era una función de 1.577 líneas): `_css_proveedor.py` (sus 527 líneas de CSS, que NO van a `estilos/` a propósito — ver su docstring) y `_etiquetas_proveedor.py` (texto de las barras: `fmt_k`, `abrev_nombre`, `etiqueta_serie`, `sufijo_granularidad`; puras y con asserts de valor en `test_graficos.py`). Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
+| `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `tiene_dashboard(reporte)` (para que `app.py` no enumere reportes ni importe `_DASHBOARDS`; ver regla #50). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), `ajuste.py` (ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10), `ventas.py`, `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras). `legacy.py` (Inventario v1) se borró el 2026-08-08: 421 líneas sin un solo import. **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py` — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. El drill de Proveedor se siguió partiendo el 2026-08-08 (era una función de 1.577 líneas): `_css_proveedor.py` (sus 527 líneas de CSS, que NO van a `estilos/` a propósito — ver su docstring), `_etiquetas_proveedor.py` (texto de las barras: `fmt_k`, `abrev_nombre`, `etiqueta_serie`, `sufijo_granularidad`; puras y con asserts de valor en `test_graficos.py`) y `_documentos_proveedor.py` (`tabla_documentos`, la AgGrid pivote del pie). Quedó en 791 líneas; el resto NO se siguió cortando a propósito — ver regla #55. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
 | `estilos/` | **Paquete del CSS global** (refactor 2026-08-01; antes un `estilos.py` de 1.700 líneas). `__init__.py` mantiene la API pública (`TAM_FUENTE`, `get_css`, `inject_css`) y concatena las secciones. Una sección por módulo, con prefijo numérico que marca el orden: `_00_base`, `_20_compras_rail`, `_30_filtros`, `_40_ajuste_franja`, `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`, `_90_franja_inferior`, `_99_movil`. (`_10_vista` existió hasta el 2026-08-08: estilaba el selector Gráficos/Tabla y quedó 100% huérfano al borrarse ese widget — ver regla #49.) **El orden de `_SECCIONES` es parte del comportamiento**: hay `!important` en ambos lados de varios conflictos, así que gana la regla que va DESPUÉS — por eso `_99_movil` cierra. |
 | `navegacion.py` | Rail lateral, topbar y CSS por sección (`_CSS_AJUSTE`). Botón de refresco aislado en su propio `@st.fragment`. |
 | `inyecciones/` | **Paquete de JS/HTML inyectado** (refactor 2026-08-01; antes un `inyecciones.py` de 1.813 líneas). `_fragmentos.py` (CSS/JS compartido), `grid.py` (salud, altura, maximizar, panel de columnas), `paginacion.py`, `inspector.py` (herramienta de desarrollo), `diseno.py` (modo de diseño visual, `?debug=1&diseno=1` — lee el pin de `inspector.py`, ver regla #46), `varios.py` (overlay de errores, fullscreen, footer, calendario). Ninguna función depende de otra (la excepción de solo-lectura de `diseno.py` está documentada en la regla #46): las únicas dependencias internas apuntan a las constantes de `_fragmentos.py`. |
@@ -1662,3 +1662,52 @@ salvo `icono`):
     `test_graficos.py::_pruebas_contratos` recorre `_DASHBOARDS` y verifica
     firma, aridad de la llamada y que el dispatcher no haya vuelto a meter
     una lista de reportes. Cuesta 40 líneas y se ejecuta en un segundo.
+
+55. **Al partir una función gigante, el orden lo decide el ACOPLAMIENTO,
+    no el tamaño.** `_compras_proveedor_drill` tenía 1.577 líneas y se
+    bajó a 791 en tres cortes (2026-08-08), todos verificables por
+    separado, ninguno tocando el núcleo:
+
+    | Corte | Qué salió | Por qué era seguro |
+    |---|---|---|
+    | `_css_proveedor.py` | 527 líneas de CSS estático | Texto puro. Se comparó **byte a byte** contra git. |
+    | `_etiquetas_proveedor.py` | `fmt_k`, `abrev_nombre`, `etiqueta_serie`, `sufijo_granularidad` | Puras o casi: 2 valores de closure pasaron a parámetros. |
+    | `_documentos_proveedor.py` | `tabla_documentos` (AgGrid pivote del pie) | Solo 6 valores del scope, y su estado (`cp_docs_*`) no lo lee nadie más. |
+
+    **Lo que queda NO se sigue cortando sin una decisión previa.** Las
+    piezas restantes (controles, cálculo de período, ventana de
+    paginación, procesar clic, gráfico principal, paneles A/B) comparten
+    ~50 locales y accesos a `session_state`. Extraer cualquiera obliga a
+    elegir cómo se pasa ese estado — muchos parámetros, un dataclass de
+    contexto, o que cada pieza lea `session_state` directo — y esa
+    elección cambia el resultado. Es una decisión de diseño, no un
+    movimiento mecánico: no la tome quien solo venía a "reducir líneas".
+
+    **Regla general:** en una función así, buscar primero (a) los bloques
+    de texto/CSS/JS estático, (b) las funciones anidadas puras, y (c) el
+    bloque de UI cuyo estado en `session_state` sea privado. Esos tres
+    salen sin decidir nada. El resto ya no es refactor de mover-código.
+
+    **Corolario — las funciones anidadas no se pueden probar.** El valor
+    real del corte (b) no fue quitar 100 líneas: fue que `etiqueta_serie`
+    y compañía pasaron a tener 19 asserts de valor. Mientras vivían
+    dentro del drill, no había forma de llamarlas desde un test. Si una
+    función anidada tiene lógica que valga la pena verificar, ya es razón
+    suficiente para sacarla.
+
+    **Prerrequisito que costó descubrir:** este drill NO se podía abrir
+    en local, porque los datos demo de `compras.parquet` no traían
+    `Proveedor` (mostraba "Faltan columnas"). Refactorizar 1.577 líneas
+    sin poder ejecutarlas es como se rompen las cosas, así que el primer
+    commit de la tanda fue completar `_datos_demo` (ver su bloque de
+    `compras.parquet`). **Antes de tocar un dashboard, comprobar que su
+    demo lo levante entero** — si no, ese es el primer commit.
+
+    **Al verificar el resultado, ojo con `getComputedStyle`:** el pestillo
+    de la tabla de documentos marcaba `rotate(180deg)` estando cerrado,
+    lo que parecía un bug recién introducido. No lo era — la propiedad
+    tiene `transition: transform .55s` y `getComputedStyle` sobre
+    pseudo-elementos animados devuelve valores a mitad de vuelo. La
+    verdad estaba en la CASCADA: leyendo las reglas del CSSOM, el
+    `<style>` inyectado decía `rotate(0deg)`, que es lo correcto. Mismo
+    espíritu que la regla #48.
