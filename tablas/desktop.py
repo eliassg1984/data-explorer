@@ -10,7 +10,7 @@ import json
 import pandas as pd
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 from utils import _norm, buscar_columna, LOCALE_ES
-from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid, inject_dynamic_grid_height, inject_fix_column_panel_ajuste, inject_alinear_cabecera_ajuste, inject_filtros_grid
+from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid, inject_dynamic_grid_height, inject_fix_column_panel_ajuste, inject_filtros_grid
 from perf import perf
 from tema import (
     ACENTO, ACENTO_FUERTE, ACENTO_TEXTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA_FONDO, ADVERTENCIA_TEXTO, BLANCO, CELDA_ALERTA_FONDO, CELDA_ALERTA_TEXTO, CELDA_NEG_FONDO, CELDA_POS_TEXTO, DANGER_TEXT, ERROR_FONDO, EXIT_HOVER, GRIS_BORDE, GRIS_FONDO, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE, ICON_MUTED, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FILA, LAVANDA_FILA_ALT, LAVANDA_FOCO, LAVANDA_FONDO, LAVANDA_MEDIO, LAVANDA_SELECCION, SCROLL_THUMB, TEXTO_PRINCIPAL,
@@ -900,7 +900,6 @@ def renderizar_aggrid_desktop(df_grid, grupos_sel, cols_mostrar, reporte, font_p
     inject_maximize_aggrid()
     inject_dynamic_grid_height(offset_px=260, min_px=320)
     inject_fix_column_panel_ajuste()
-    inject_alinear_cabecera_ajuste()
 
     if filtros_grid is not None:
         # El sello identifica al modelo: si no cambio respecto del rerun

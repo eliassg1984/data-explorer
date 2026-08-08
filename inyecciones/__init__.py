@@ -10,8 +10,8 @@ paquete. La API publica no cambio: from inyecciones import inject_*.
     inspector.py    inspector de elementos (herramienta de desarrollo)
     diseno.py       modo de diseno visual (herramienta de desarrollo, lee
                     el pin de inspector.py — ver Regla viva mas abajo)
-    varios.py       overlay de errores, fullscreen, cabecera de Ajuste,
-                    footer y calendario en espanol
+    varios.py       overlay de errores, fullscreen, footer y calendario
+                    en espanol
 
 Ninguna funcion depende de otra: las unicas dependencias internas son hacia
 las constantes de _fragmentos.py. La excepcion es diseno.py, que LEE (nunca
@@ -27,4 +27,4 @@ from inyecciones.grid import (inject_dynamic_grid_height, inject_filtros_grid, i
 from inyecciones.paginacion import (inject_pagination_v2)  # noqa: F401
 from inyecciones.inspector import (inject_element_inspector)  # noqa: F401
 from inyecciones.diseno import (inject_diseno_visual)  # noqa: F401
-from inyecciones.varios import (inject_alinear_cabecera_ajuste, inject_calendario_es, inject_error_overlay, inject_footer_actualizacion, inject_fullscreen_app)  # noqa: F401
+from inyecciones.varios import (inject_calendario_es, inject_error_overlay, inject_footer_actualizacion, inject_fullscreen_app)  # noqa: F401

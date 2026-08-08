@@ -132,26 +132,6 @@ CSS = """    /* ================================================================
         align-items: center !important;
     }
 
-    /* Pestañas Gráficos/Tabla DENTRO de la franja (col_titulo): anular el
-       margin-top de 6px que las bajaba cuando vivían en su banda propia. */
-    .st-key-fila_ajuste_top [class*="st-key-vistatabs_"] [data-testid="stButtonGroup"] {
-        margin: 0 !important;
-    }
-    .st-key-fila_ajuste_top [class*="st-key-vistatabs_"] {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    /* Pestañas Gráficos/Tabla — ya NO fijas en la franja: ahora fluyen justo
-       encima del canvas (se renderizan en app.py antes de _render_contenido).
-       Quedan pegadas al borde superior del primer contenedor del contenido. */
-    .st-key-ajuste_tabs_top {
-        position: relative !important;
-        z-index: 5 !important;
-        margin: 2px 0 6px 0 !important;
-        padding: 0 !important;
-    }
-
     /* ================================================================== */
     /* CHIPS DE FILTRO EN LA FRANJA BLANCA — Área / Familia / Ajuste /     */
     /* Ajuste valor.  Nivel 2, a la derecha del selector de vista.         */
@@ -244,23 +224,6 @@ CSS = """    /* ================================================================
             max-width: none !important;
             margin: 6px 0 0 0 !important;
         }
-    }
-
-    /* Título del reporte, fijo en el nivel 1 de la franja */
-    .titulo-ajuste-reporte {
-        position: fixed !important;
-        top: 6px !important;
-        left: calc(90px + 1rem) !important;
-        z-index: 22 !important;
-        margin: 0 !important;
-        color: var(--text-primary) !important;
-        font-family: 'Corbel', 'Segoe UI', system-ui, -apple-system, sans-serif !important;
-        text-transform: uppercase !important;
-        font-size: 27px !important;
-        font-weight: 700 !important;
-        line-height: 1.2 !important;
-        letter-spacing: 0.01em !important;
-        transform: none !important;
     }
 
     /* Chip pill del título del reporte */

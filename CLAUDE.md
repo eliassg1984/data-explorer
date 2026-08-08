@@ -22,9 +22,9 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 pública no cambió: `from estilos import TAM_FUENTE, inject_css`.
 
 Cada sección tiene su módulo, con prefijo numérico que marca el orden:
-`_00_base` → `_10_vista` → `_20_compras_rail` → `_30_filtros` →
-`_40_ajuste_franja` → `_50_fecha` → `_60_calendario` → `_70_chrome` →
-`_80_cards` → `_90_franja_inferior` → `_99_movil`.
+`_00_base` → `_20_compras_rail` → `_30_filtros` → `_40_ajuste_franja` →
+`_50_fecha` → `_60_calendario` → `_70_chrome` → `_80_cards` →
+`_90_franja_inferior` → `_99_movil`.
 
 **El orden de `_SECCIONES` en `__init__.py` es parte del comportamiento**, no
 estética: hay `!important` en ambos lados de varios conflictos, así que gana

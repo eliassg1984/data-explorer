@@ -1,38 +1,23 @@
 """
 Estilos globales de la app: CSS, tamaños de fuente e inyección del tema.
 
-ÍNDICE (buscar el header exacto con Ctrl+F)
--------------------------------------------
-    L  112  PALETA DE COLORES — variables :root del tema CallAI
-    L  170  HEADER NATIVO + ESPACIO SUPERIOR
-    L  197  IFRAMES INVISIBLES (por defecto)
-    L  211  PANEL DE RENDIMIENTO DEL NAVEGADOR (excepción iframe)
-    L  225  BOTÓN PARA EXPANDIR EL SIDEBAR
-    L  234  ESTILOS BASE — tipografía, fondos, layout raíz
-    L  274  INPUTS Y BOTONES
-    L  313  EXPANDER
-    L  328  CAPTION Y ALERTAS
-    L  354  SIDEBAR NAV
-    L  373  AGGRID — ancho completo
-    L  383  CONTROL DE TAMAÑO EN SIDEBAR
-    L  389  MÓVIL — LAYOUT GENERAL
-    L  469  SELECTOR DE VISTA (Tabla / Gráficos) — pestañas ghost
-    L  565  PESTAÑAS DE TIPO DE GRÁFICO (fila pegada al tope del gráfico)
-    L  606  BOTÓN FILTROS (popover)
-    L  624  FILA SUPERIOR DE AJUSTE DE INVENTARIO — franja blanca sticky
-    L  684  CHIPS DE FILTRO EN LA FRANJA BLANCA — Área / Familia / etc.
-    L  793  FECHA EN EL HEADER — trigger del popover (atajos + calendario)
-    L  866  CALENDARIO DESPLEGABLE (BaseWeb)
-    L  887  OCULTAR TOOLBARS NATIVAS DE STREAMLIT
-    L  907  POSICIÓN DEL TOAST (st.toast)
-    L  917  AVISO DE REFRESCO EN CURSO
-    L  930  CARDS DE GRÁFICOS — contenedor blanco (ajuste_graf_card_*)
-    L 1043  TARJETAS DEL DRILL DE PROVEEDOR (compras_prov_card_*)
-    L 1074  FRANJA INFERIOR FIJA — cierre visual del área de contenido
-    L 1129  MÓVIL — overrides @media (SIEMPRE al final; no mover)
+ÍNDICE — un módulo por sección, el prefijo numérico marca el orden
+------------------------------------------------------------------
+    _00_base            paleta :root, tipografía, layout raíz, inputs,
+                        botones, expander, alertas, header nativo
+    _20_compras_rail    rail vertical derecho (selector de gráfico) —
+                        compartido por TODOS los reportes pese al nombre
+    _30_filtros         botón/popover de filtros
+    _40_ajuste_franja   franja superior sticky + chips de filtro
+    _50_fecha           pill de fecha y su panel (atajos + calendario)
+    _60_calendario      calendario desplegable (BaseWeb)
+    _70_chrome          ocultar toolbars nativas, posición del toast
+    _80_cards           cards de gráficos + tarjetas del drill de Proveedor
+    _90_franja_inferior franja inferior fija
+    _99_movil           overrides @media (SIEMPRE al final; no mover)
 
-Al mover secciones, ACTUALIZAR estos números. Los @media al final NO se
-tocan de posición: van al fondo para que ninguna regla desktop las pise.
+Para ubicar una regla: `grep` el prefijo de la key en `estilos/`. No hay
+números de línea que mantener — el nombre del módulo es el índice.
 
 Convención de keys — CRÍTICO para evitar solapes
 ------------------------------------------------
@@ -47,10 +32,6 @@ Un elemento visual = UNA key que es dueña de su estilo.
   dos rutas de estilado para el mismo elemento (misma especificidad +
   ambos `!important` = gana el que aparezca ÚLTIMO en el archivo, y eso
   es un bug esperando a pasar).
-
-Excepciones conocidas (widgets estilados por su propia key, legado):
-- `[class*="st-key-vistatabs_"]` — pestañas Tabla/Gráficos (bloque L 426).
-  A consolidar la próxima vez que se toque ese bloque.
 
 Sobre los `!important` (hoy hay ~450)
 -------------------------------------
@@ -75,12 +56,14 @@ En la versión actual de Streamlit, st.pills renderiza este DOM:
         └── button[role="radio"]      (uno por opción)
                 └── atributo `data-selected` SOLO cuando está activo
 
-Por eso todos los selectores del "selector de vista" apuntan a
+Por eso todos los selectores que estilan un st.pills apuntan a
 stButtonGroup / button[role="radio"] / [data-selected].
 NO usar [data-testid="stPills"] ni `label` — no existen en este DOM.
 Si Streamlit cambia el DOM en una actualización, verificar con DevTools
-qué atributo marca el botón activo y actualizar SOLO el bloque
-"SELECTOR DE VISTA" (hay uno único, buscar ese título).
+qué atributo marca el botón activo. Ojo: st.pills y st.segmented_control
+rinden el MISMO DOM, así que cambiar uno por el otro no cambia nada
+visualmente — si esperabas que sí, el estilo viene de una regla del
+contenedor, no del widget.
 
 Estructura del paquete (refactor 2026-08-01)
 --------------------------------------------
@@ -112,7 +95,6 @@ TAM_FUENTE = {
 }
 
 from ._00_base import CSS as _CSS_BASE
-from ._10_vista import CSS as _CSS_VISTA
 from ._20_compras_rail import CSS as _CSS_COMPRAS_RAIL
 from ._30_filtros import CSS as _CSS_FILTROS
 from ._40_ajuste_franja import CSS as _CSS_AJUSTE_FRANJA
@@ -127,7 +109,6 @@ from ._99_movil import CSS as _CSS_MOVIL
 # ORDEN SIGNIFICATIVO - ver el docstring. No reordenar a la ligera.
 _SECCIONES = (
     _CSS_BASE,
-    _CSS_VISTA,
     _CSS_COMPRAS_RAIL,
     _CSS_FILTROS,
     _CSS_AJUSTE_FRANJA,

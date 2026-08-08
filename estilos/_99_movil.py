@@ -11,24 +11,6 @@ CSS = """    /* ================================================================
     /* lo pisen los estilos de escritorio definidos arriba.                 */
     /* =================================================================== */
     @media screen and (max-width: 768px) {
-        /* Encabezado de Ajuste: sin rail a la izquierda (nav es barra
-           inferior en móvil), los anclajes left pasan de 90px+margen a 12px. */
-        .titulo-ajuste-reporte {
-            transform: none !important;
-            font-size: 1.3rem !important;
-            left: 12px !important;
-            /* No pisarse con la pill de fecha fija de la derecha */
-            max-width: calc(100vw - 220px) !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-            white-space: nowrap !important;
-        }
-        .st-key-ajuste_tabs_top {
-            transform: none !important;
-            position: relative !important;
-            left: auto !important;
-            margin: 2px 0 6px 0 !important;
-        }
         /* COLAPSAR el hueco fantasma de la franja: en móvil TODO su
            contenido visible (título, pestañas, fecha) es position:fixed,
            así que su altura en el flujo es espacio muerto — y al apilarse
@@ -130,18 +112,6 @@ CSS = """    /* ================================================================
         /* Panel a ancho de pantalla en móvil (menos el margen). */
         [data-testid="stPopoverBody"]:has(.st-key-fecha_panel) {
             min-width: min(380px, 92vw) !important;
-        }
-
-        /* Selector de vista: mantiene Opción C, más compacto para tocar */
-        .st-key-ajuste_tabs_top [data-testid="stButtonGroup"],
-        [class*="st-key-vistatabs_"] [data-testid="stButtonGroup"] {
-            gap: 4px !important;
-        }
-        .st-key-ajuste_tabs_top [data-testid="stButtonGroup"] button[role="radio"],
-        [class*="st-key-vistatabs_"] [data-testid="stButtonGroup"] button[role="radio"] {
-            min-height: 40px !important;
-            padding: 9px 14px !important;
-            font-size: 13px !important;
         }
 
         /* Popovers: no crear scroll lateral */
