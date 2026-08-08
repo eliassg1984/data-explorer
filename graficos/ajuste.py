@@ -818,9 +818,31 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     /* ── Filas de la tabla: tarjetas con matiz por severidad, no líneas
        divisorias ─────────────────────────────────────────────────────── */
     div[class*="st-key-ajcas_fila_"] {{
+        position: relative;
         margin: 0 -6px 4px -6px; padding: 3px 6px;
         border-radius: 8px;
         transition: background .12s ease; }}
+    /* Cabecera flotante (2026-08-08, a pedido: "pegada a la barra", no
+       fija arriba de toda la tabla). Cada fila trae su propia copia del
+       header, escondida y pegada a su borde superior (position:relative
+       de la regla de arriba es el ancla) — aparece SOLO mientras el
+       cursor está sobre ESA fila y desaparece al salir, en vez de una
+       fila fija que queda lejos de las de más abajo. Fondo blanco propio
+       (no el tinte de severidad de la fila) para que el texto gris se
+       lea igual en una fila crítica que en una OK. :active además de
+       :hover, mismo motivo que .ajcas-tip: en táctil no hay hover. */
+    .ajcas-head-float {{
+        position: absolute; left: 0; right: 0; bottom: calc(100% + 4px);
+        background: {BLANCO}; border: 1px solid {GRIS_BORDE};
+        border-radius: 7px; padding: 6px 8px;
+        font-size: 9px; color: {GRIS_TEXTO_SUAVE};
+        text-transform: uppercase; letter-spacing: .08em; font-weight: 600;
+        opacity: 0; transform: translateY(4px); pointer-events: none;
+        transition: opacity .12s ease, transform .12s ease;
+        z-index: 3; }}
+    div[class*="st-key-ajcas_fila_"]:hover .ajcas-head-float,
+    div[class*="st-key-ajcas_fila_"]:active .ajcas-head-float {{
+        opacity: 1; transform: translateY(0); }}
     div[class*="st-key-ajcas_fila_"][class*="_critico"] {{
         background: {_tint_critico} !important; }}
     div[class*="st-key-ajcas_fila_"][class*="_alerta"] {{
@@ -935,38 +957,15 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
        row-gap: las filas de familia son hijas directas de este flex, así
        que lo que las separa es el gap del contenedor (16px por defecto
        en Streamlit) MÁS el margin-bottom de 4px de cada fila — 20px
-       medidos. Con 6px quedan a 10px. Es un solo número para las tres
-       separaciones de la card: título→cabecera 27→17, fila→fila 20→10,
+       medidos. Con 6px quedan a 10px. Es un solo número para las dos
+       separaciones de la card: título→1ª fila 27→17, fila→fila 20→10,
        y la card baja de 214 a 184px (entran más familias sin
        scrollear). Si hay que separar SOLO las filas sin tocar el
        resto, el knob es el margin-bottom de st-key-ajcas_fila_, no
-       este gap.
-
-       cabecera→1ª fila NO sigue esa cuenta — ver el fix de .ajcas-head
-       de abajo: con el gap en 16px (default) el numero daba 0 gap "por
-       suerte"; al bajar a 6px paso a ser overlap negativo real. */
+       este gap. */
     div[class*="st-key-chartcard_cascada"] {{
         padding-top: 0px !important;
         row-gap: 6px !important; }}
-    /* ── Cabecera de la tabla se comía la 1ª fila (regla nueva, ver
-       arquitectura.md) ──────────────────────────────────────────────
-       stMarkdownContainer trae de Streamlit un margin-bottom:-16px
-       nativo (compensa el margin de un <p> normal, que aca no existe
-       porque el HTML empieza con <div> y CommonMark lo trata como
-       bloque HTML crudo, sin envolverlo en <p>). Ese -16px le resta
-       16px a la altura que ve el flex padre (chartcard_cascada) para
-       ESTE item -> el border-bottom del header (visualmente 22px de
-       alto) queda pintado bien por debajo de donde el flex cree que
-       termina el item, montado sobre la fila siguiente.
-       Medido en vivo: stElementContainer quedaba en 6.4px de alto
-       aunque el contenido pintaba 22.4px. Fix: cancelar el -16px nativo
-       SOLO en el stMarkdownContainer que envuelve a .ajcas-head (la
-       clase sobrevive al sanitizador, ver comentario junto al
-       st.markdown de la cabecera). Sin esto, cualquier st.markdown con
-       <div> como tag raiz (no <span>/<p>) en esta card puede pisar lo
-       que venga despues. */
-    [data-testid="stMarkdownContainer"]:has(> .ajcas-head) {{
-        margin-bottom: 0 !important; }}
     </style>""", unsafe_allow_html=True)
 
     with _card("cascada"):
@@ -1059,15 +1058,13 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                 f"{_kpi_neto_html}{_kpi_pct_html}</div>",
                 unsafe_allow_html=True)
 
-        # Cabecera de la tabla
-        # class="ajcas-head": necesaria para el fix de margen de abajo (ver
-        # regla en el <style> de arriba / arquitectura.md) — sobrevive al
-        # sanitizador de markdown igual que .ajcas-tip (linea ~909).
-        st.markdown(
-            f"<div class='ajcas-head' style='display:flex;font-size:9px;"
-            f"color:{GRIS_TEXTO_SUAVE};"
-            f"text-transform:uppercase;letter-spacing:.08em;font-weight:600;"
-            f"padding:0 0 7px 0'>"
+        # Cabecera de la tabla: ya no es una fila fija (a pedido,
+        # 2026-08-08) — cada fila la trae escondida y la muestra pegada
+        # arriba suyo solo mientras el cursor está encima (ver
+        # class="ajcas-head-float" + CSS en el <style> de arriba). Un
+        # solo HTML, reusado en cada iteración del for de abajo.
+        _cabecera_html = (
+            f"<div class='ajcas-head-float' style='display:flex'>"
             f"<div style='width:4%'></div>"
             f"<div style='width:26%'>Familia</div>"
             f"<div style='width:13%'>Ajuste</div>"
@@ -1075,7 +1072,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             f"<div style='width:11%;text-align:right'>s/ val</div>"
             f"<div style='width:11%;text-align:right'>% total</div>"
             f"<div style='width:13%;text-align:right'>Estado</div>"
-            f"</div>", unsafe_allow_html=True)
+            f"</div>")
 
         def _render_drill(focus_cat):
             """Panel de drill: se llama inline, justo debajo de la fila
@@ -1245,6 +1242,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             with st.container(
                     key=f"ajcas_fila_{_slug(_f['cat'])}_{_sev}"
                         + ("_on" if _es_foco else "")):
+                st.markdown(_cabecera_html, unsafe_allow_html=True)
                 _c = st.columns([0.04, 0.26, 0.13, 0.22, 0.11, 0.11, 0.13])
                 with _c[0]:
                     if st.button(
