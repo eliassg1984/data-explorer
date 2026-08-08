@@ -415,126 +415,125 @@ _categoria_ajuste_rango = (
 _k_rango_franja = clave_rango(reporte, _usa_carga_rango, es_ajuste,
                               categoria_ajuste=_categoria_ajuste_rango)
 _franja_con_fecha = bool(col_fecha) and fecha_min_full is not None
-if True:
-    # INVARIANTE: sembrar el default Y recortar a bounds AQUÍ, justo antes de
-    # dibujar el widget en este mismo render. Nunca clampear después del
-    # widget (se vería un render tarde → desync overlay/calendario/datos).
-    # Para carga_por_rango es idempotente con el recorte de arriba; para el
-    # resto de reportes ésta es su única inicialización/recorte.
-    if _franja_con_fecha:
-        asegurar_rango(
-            _k_rango_franja,
-            default=(fecha_ini_default, fecha_fin_default),
-            bounds=(fecha_min_full, fecha_max_full),
-            reporte=reporte, usa_carga_rango=_usa_carga_rango,
-        )
+# INVARIANTE: sembrar el default Y recortar a bounds AQUÍ, justo antes de
+# dibujar el widget en este mismo render. Nunca clampear después del
+# widget (se vería un render tarde → desync overlay/calendario/datos).
+# Para carga_por_rango es idempotente con el recorte de arriba; para el
+# resto de reportes ésta es su única inicialización/recorte.
+if _franja_con_fecha:
+    asegurar_rango(
+        _k_rango_franja,
+        default=(fecha_ini_default, fecha_fin_default),
+        bounds=(fecha_min_full, fecha_max_full),
+        reporte=reporte, usa_carga_rango=_usa_carga_rango,
+    )
 
-    # Evitar NameError antes de la franja superior
-    _fecha_actualizacion = None
+# Evitar NameError antes de la franja superior
+_fecha_actualizacion = None
 
-    # Franja superior: título (izquierda) + fecha (derecha, extremo opuesto).
-    _fila_top = st.container(key="fila_ajuste_top")
-    with _fila_top:
-        col_titulo, col_fecha_top = st.columns(
-            [3, 1.15], vertical_alignment="center",
-        )
-        with col_titulo:
-            # Título oculto por pedido. Antes acá vivían las pestañas
-            # Gráficos/Tabla (render_vista_pills) — desde que los 8 reportes
-            # usan el RAIL derecho (la "Tabla" es un item más del rail, ver
-            # más abajo en _render_contenido), esta columna quedó vacía a
-            # propósito: nada que dibujar, el layout de 2 columnas se
-            # mantiene por cómo se posiciona la fecha (col_fecha_top, fixed).
-            pass
-        with col_fecha_top:
-            if _franja_con_fecha:
-                try:
-                    _fecha_actualizacion = fecha_ultima_actualizacion(
-                        cfg.get("archivo")
-                    )
-                except Exception:
-                    _fecha_actualizacion = None
+# Franja superior: título (izquierda) + fecha (derecha, extremo opuesto).
+_fila_top = st.container(key="fila_ajuste_top")
+with _fila_top:
+    col_titulo, col_fecha_top = st.columns(
+        [3, 1.15], vertical_alignment="center",
+    )
+    with col_titulo:
+        # Título oculto por pedido. Antes acá vivían las pestañas
+        # Gráficos/Tabla (render_vista_pills) — desde que los 8 reportes
+        # usan el RAIL derecho (la "Tabla" es un item más del rail, ver
+        # más abajo en _render_contenido), esta columna quedó vacía a
+        # propósito: nada que dibujar, el layout de 2 columnas se
+        # mantiene por cómo se posiciona la fecha (col_fecha_top, fixed).
+        pass
+    with col_fecha_top:
+        if _franja_con_fecha:
+            try:
+                _fecha_actualizacion = fecha_ultima_actualizacion(
+                    cfg.get("archivo")
+                )
+            except Exception:
+                _fecha_actualizacion = None
 
-                if isinstance(_fecha_actualizacion, datetime.datetime):
-                    if _fecha_actualizacion.tzinfo is not None:
-                        _fecha_actualizacion = _fecha_actualizacion.astimezone(ZONA_PERU)
-                # El estado ya quedó sembrado y recortado por asegurar_rango()
-                # arriba (una sola vez, antes del widget). Aquí solo se LEE.
-                # El texto del rango es el TRIGGER de un panel (Opción B):
-                # atajos rápidos a la izquierda + calendario manual a la
-                # derecha. El date_input, los atajos y el label leen/escriben
-                # la MISMA clave → no pueden desincronizarse.
-                _rango_actual = st.session_state.get(_k_rango_franja)
-                if (isinstance(_rango_actual, (tuple, list))
-                        and len(_rango_actual) == 2 and all(_rango_actual)):
-                    _label_fecha = _fmt_rango_es(_rango_actual[0], _rango_actual[1])
-                else:
-                    _label_fecha = "Seleccionar rango"
+            if isinstance(_fecha_actualizacion, datetime.datetime):
+                if _fecha_actualizacion.tzinfo is not None:
+                    _fecha_actualizacion = _fecha_actualizacion.astimezone(ZONA_PERU)
+            # El estado ya quedó sembrado y recortado por asegurar_rango()
+            # arriba (una sola vez, antes del widget). Aquí solo se LEE.
+            # El texto del rango es el TRIGGER de un panel (Opción B):
+            # atajos rápidos a la izquierda + calendario manual a la
+            # derecha. El date_input, los atajos y el label leen/escriben
+            # la MISMA clave → no pueden desincronizarse.
+            _rango_actual = st.session_state.get(_k_rango_franja)
+            if (isinstance(_rango_actual, (tuple, list))
+                    and len(_rango_actual) == 2 and all(_rango_actual)):
+                _label_fecha = _fmt_rango_es(_rango_actual[0], _rango_actual[1])
+            else:
+                _label_fecha = "Seleccionar rango"
 
-                # Atajos válidos para la data actual (los calcula el dueño único).
-                _atajos = atajos_rango(_hoy, (fecha_min_full, fecha_max_full))
+            # Atajos válidos para la data actual (los calcula el dueño único).
+            _atajos = atajos_rango(_hoy, (fecha_min_full, fecha_max_full))
 
-                with st.container(key="fecha_ajuste_pill"):
-                    with st.popover(_label_fecha, use_container_width=False,
-                                    icon=":material/calendar_month:"):
-                        # Contenedor keyed → permite scopear el ancho del panel
-                        # por CSS aunque el popover se renderice en un portal.
-                        with st.container(key="fecha_panel"):
-                            _c_atajos, _c_cal = st.columns([1, 1.5])
-                            with _c_atajos:
-                                st.caption("Atajos")
-                                for _ca, _et, _rg in _atajos:
-                                    st.button(
-                                        _et, use_container_width=True,
-                                        key=f"atajo_{reporte}_{_ca}".replace(" ", "_"),
-                                        on_click=aplicar_atajo,
-                                        args=(_k_rango_franja, _rg, reporte,
-                                              _usa_carga_rango),
-                                    )
-                            with _c_cal:
-                                st.caption("Rango manual")
-                                st.date_input(
-                                    "Rango a Evaluar",
-                                    min_value=fecha_min_full,
-                                    max_value=fecha_max_full,
-                                    format="DD/MM/YYYY",
-                                    key=_k_rango_franja,
-                                    label_visibility="collapsed",
+            with st.container(key="fecha_ajuste_pill"):
+                with st.popover(_label_fecha, use_container_width=False,
+                                icon=":material/calendar_month:"):
+                    # Contenedor keyed → permite scopear el ancho del panel
+                    # por CSS aunque el popover se renderice en un portal.
+                    with st.container(key="fecha_panel"):
+                        _c_atajos, _c_cal = st.columns([1, 1.5])
+                        with _c_atajos:
+                            st.caption("Atajos")
+                            for _ca, _et, _rg in _atajos:
+                                st.button(
+                                    _et, use_container_width=True,
+                                    key=f"atajo_{reporte}_{_ca}".replace(" ", "_"),
+                                    on_click=aplicar_atajo,
+                                    args=(_k_rango_franja, _rg, reporte,
+                                          _usa_carga_rango),
                                 )
+                        with _c_cal:
+                            st.caption("Rango manual")
+                            st.date_input(
+                                "Rango a Evaluar",
+                                min_value=fecha_min_full,
+                                max_value=fecha_max_full,
+                                format="DD/MM/YYYY",
+                                key=_k_rango_franja,
+                                label_visibility="collapsed",
+                            )
 
-        # Las pestañas Gráficos/Tabla se movieron FUERA de la franja, a una
-        # banda pegada al borde superior del canvas (ver más abajo, justo
-        # antes de _render_contenido). Así la franja queda de un solo nivel.
+    # Las pestañas Gráficos/Tabla se movieron FUERA de la franja, a una
+    # banda pegada al borde superior del canvas (ver más abajo, justo
+    # antes de _render_contenido). Así la franja queda de un solo nivel.
 
-    # ── Texto de actualización FUERA de la franja sticky ──
-    # Así su position:fixed vive en el contexto raíz y no es tapado
-    # por .stApp::after (fila_ajuste_top crea un stacking context propio
-    # por su sticky + z-index).
-    if isinstance(_fecha_actualizacion, datetime.datetime):
-        inject_footer_actualizacion(
-            "Última actualización: "
-            + _fecha_actualizacion.strftime("%d/%m/%Y · %H:%M")
-        )
+# ── Texto de actualización FUERA de la franja sticky ──
+# Así su position:fixed vive en el contexto raíz y no es tapado
+# por .stApp::after (fila_ajuste_top crea un stacking context propio
+# por su sticky + z-index).
+if isinstance(_fecha_actualizacion, datetime.datetime):
+    inject_footer_actualizacion(
+        "Última actualización: "
+        + _fecha_actualizacion.strftime("%d/%m/%Y · %H:%M")
+    )
 
-    # Aplicar el rango al DataFrame (usa el valor ya guardado en session_state).
-    # En carga_por_rango el widget puede dejar una tupla de 1 elemento mientras
-    # el usuario elige la 2ª fecha: en ese caso no se filtra (se muestra lo ya
-    # cargado) hasta que el rango quede completo.
-    if _franja_con_fecha:
-        _rango_apl = st.session_state.get(_k_rango_franja)
-        if isinstance(_rango_apl, (tuple, list)) and len(_rango_apl) == 2 and all(_rango_apl):
-            _ini_apl, _fin_apl = _rango_apl
-            # Comparar contra Timestamps, NO contra .dt.date: eso ultimo
-            # materializa un datetime.date de Python por fila (27 ms vs 3.7 ms
-            # con 10k) y es justo la linea que corre en cada cambio de rango.
-            # El limite superior va como "< fin + 1 dia" para que el rango siga
-            # siendo INCLUSIVO aunque la columna traiga hora (que es el caso de
-            # FECHA APERTURA INVENTARIO): con "<= fin" se perderia todo lo
-            # posterior a la medianoche del ultimo dia.
-            df_f = df_f[
-                (df_f[col_fecha] >= pd.Timestamp(_ini_apl)) &
-                (df_f[col_fecha] < pd.Timestamp(_fin_apl) + pd.Timedelta(days=1))
-            ]
+# Aplicar el rango al DataFrame (usa el valor ya guardado en session_state).
+# En carga_por_rango el widget puede dejar una tupla de 1 elemento mientras
+# el usuario elige la 2ª fecha: en ese caso no se filtra (se muestra lo ya
+# cargado) hasta que el rango quede completo.
+if _franja_con_fecha:
+    _rango_apl = st.session_state.get(_k_rango_franja)
+    if isinstance(_rango_apl, (tuple, list)) and len(_rango_apl) == 2 and all(_rango_apl):
+        _ini_apl, _fin_apl = _rango_apl
+        # Comparar contra Timestamps, NO contra .dt.date: eso ultimo
+        # materializa un datetime.date de Python por fila (27 ms vs 3.7 ms
+        # con 10k) y es justo la linea que corre en cada cambio de rango.
+        # El limite superior va como "< fin + 1 dia" para que el rango siga
+        # siendo INCLUSIVO aunque la columna traiga hora (que es el caso de
+        # FECHA APERTURA INVENTARIO): con "<= fin" se perderia todo lo
+        # posterior a la medianoche del ultimo dia.
+        df_f = df_f[
+            (df_f[col_fecha] >= pd.Timestamp(_ini_apl)) &
+            (df_f[col_fecha] < pd.Timestamp(_fin_apl) + pd.Timedelta(days=1))
+        ]
 perf.end_phase("Ajuste top row")                                            # ⚡ PERF
 
 # (El popover de filtros fue retirado: los filtros viven en la franja.)
