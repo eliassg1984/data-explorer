@@ -1171,7 +1171,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                     / _max_abs * 100, 3)
                                 _t = f"S/ {_r[col_ajuste_val]:,.0f}"
                                 if _has_cant:
-                                    _t += f" · {int(_r[col_cantidad]):,}"
+                                    _t += f" · {_r[col_cantidad]:,.1f}"
                                     _um = (str(_r[col_unidad]).strip()
                                            if _has_um else "")
                                     if _um and _um.lower() != "nan":
