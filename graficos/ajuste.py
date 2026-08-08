@@ -33,7 +33,8 @@ from graficos.base import (
 )
 # _periodo_serie vive en graficos/compras/_comun.py; se reusa desde acá vía
 # graficos.compras (que ya la re-exporta para test_graficos.py) en vez de
-# duplicar el cálculo de granularidad Día/Semana/Mes.
+# duplicar el cálculo de granularidad Semana/Mes (Corte tiene su propio
+# cálculo, ver _cortes_por_racha: no es calendario fijo, son rachas).
 from graficos.compras import _periodo_serie
 
 
@@ -272,19 +273,78 @@ def _fmt_corte(fecha):
     return f"{_ts.day:02d}-{_MESES_ABR_ES[_ts.month - 1]}"
 
 
+_CORTE_MAX_SALTO_DIAS = 4
+"""Una sesión de conteo real puede durar varios días NO estrictamente
+seguidos (fin de semana de por medio, un área que se retoma dos días
+después). Mientras el salto al día siguiente con movimiento sea ≤ a
+esto, sigue siendo el MISMO corte; más que esto, arranca uno nuevo.
+Número fijado a pedido explícito (no es un ajuste fino, es una regla de
+negocio) — si cambia, es UNA constante."""
+
+
+def _etiqueta_corte(inicio, fin):
+    """'1-4 ago' si el corte no cruza de mes; '30 jul - 2 ago' si cruza.
+    Un corte de un solo día no muestra rango: '15 ago'."""
+    _di, _mi = inicio.day, inicio.month
+    _df, _mf = fin.day, fin.month
+    if inicio == fin:
+        return f"{_di} {_MESES_ABR_ES[_mi - 1]}"
+    if _mi == _mf:
+        return f"{_di}-{_df} {_MESES_ABR_ES[_mi - 1]}"
+    return f"{_di} {_MESES_ABR_ES[_mi - 1]} - {_df} {_MESES_ABR_ES[_mf - 1]}"
+
+
+def _cortes_por_racha(fechas):
+    """Agrupa fechas en "cortes": rachas de días con movimiento donde el
+    salto de un día al siguiente es ≤ _CORTE_MAX_SALTO_DIAS (ver esa
+    constante). Reemplaza a "Día" -- una sesión de conteo real casi nunca
+    es un solo día suelto, y agrupar por calendario partía una sesión de
+    varios días en columnas sin relación entre sí.
+    Devuelve (clave, etiqueta) igual que las demás granularidades, para
+    que _armar_tabla_pivote_ajuste no necesite saber la diferencia -- a
+    diferencia de Semana/Mes (donde cada fecha resuelve su clave sola),
+    acá hace falta la lista COMPLETA de fechas únicas primero para saber
+    dónde están los saltos, así que se arma un mapa fecha→(clave,
+    etiqueta) y se aplica con `.map()`."""
+    dias = fechas.dt.normalize()
+    unicos = sorted(dias.dropna().unique())
+    if not unicos:
+        return dias.astype(str), dias.astype(str)
+
+    rachas = []
+    actual = [unicos[0]]
+    for d in unicos[1:]:
+        salto = (pd.Timestamp(d) - pd.Timestamp(actual[-1])).days
+        if salto > _CORTE_MAX_SALTO_DIAS:
+            rachas.append(actual)
+            actual = [d]
+        else:
+            actual.append(d)
+    rachas.append(actual)
+
+    mapa_clave, mapa_etq = {}, {}
+    for i, racha in enumerate(rachas):
+        _clave = f"corte_{i:03d}"
+        _etq = _etiqueta_corte(pd.Timestamp(racha[0]), pd.Timestamp(racha[-1]))
+        for d in racha:
+            mapa_clave[d] = _clave
+            mapa_etq[d] = _etq
+
+    return dias.map(mapa_clave), dias.map(mapa_etq)
+
+
 def _periodo_pivote_ajuste(fechas, gran):
     """Clave ordenable + etiqueta corta de periodo para la tabla dinámica
-    de Ajuste, en las 3 granularidades del selector (Día/Semana/Mes). La
-    clave reusa `_periodo_serie` (graficos/compras/_comun.py, re-exportada
-    vía graficos.compras — "reusar desde ahí, no duplicar" per
-    arquitectura.md); la etiqueta es propia porque acá el mes va abreviado
-    en español (_MESES_ABR_ES) y Día/Semana no necesitan el año en la
-    cabecera de columna."""
+    de Ajuste, en las 3 granularidades del selector (Corte/Semana/Mes).
+    Corte agrupa por rachas de días (`_cortes_por_racha`); Semana/Mes
+    reusan `_periodo_serie` (graficos/compras/_comun.py, re-exportada vía
+    graficos.compras — "reusar desde ahí, no duplicar" per
+    arquitectura.md) para la clave, con etiqueta propia porque acá el mes
+    va abreviado en español (_MESES_ABR_ES)."""
+    if gran == "Corte":
+        return _cortes_por_racha(fechas)
     clave = _periodo_serie(fechas, gran)
-    if gran == "Día":
-        etiqueta = (fechas.dt.day.astype(str).str.zfill(2) + "/"
-                    + fechas.dt.month.astype(str).str.zfill(2))
-    elif gran == "Semana":
+    if gran == "Semana":
         etiqueta = "S" + fechas.dt.isocalendar().week.astype(str).str.zfill(2)
     else:
         etiqueta = fechas.dt.month.map(lambda m: _MESES_ABR_ES[m - 1])
@@ -303,8 +363,8 @@ def _armar_tabla_pivote_ajuste(df, col_familia, col_subfamilia, col_producto,
 
     Con granularidad "Mes" arma las 12 columnas del año FIJAS (Ene..Dic)
     aunque los meses futuros no tengan filas todavía, para que la forma de
-    la tabla no cambie mes a mes. Con "Semana"/"Día" solo las columnas que
-    ya tienen datos — a diferencia de la versión anterior (tope de 6
+    la tabla no cambie mes a mes. Con "Semana"/"Corte" solo las columnas
+    que ya tienen datos — a diferencia de la versión anterior (tope de 6
     cortes por el ancho fijo en %), acá el scroll horizontal nativo de AG
     Grid banca bastantes más columnas sin achicarlas."""
     clave, etiqueta = _periodo_pivote_ajuste(df[col_fecha], gran)
@@ -354,8 +414,11 @@ def _tabla_pivote_fecha_ajuste(df, col_familia, col_ajuste_val, col_producto,
                                 area_sel=None, fam_sel=None):
     """Tabla dinámica de Ajuste — AgGrid real (no HTML a mano): Familia >
     Subfamilia > Producto como árbol nativo (expandir/colapsar de AG Grid),
-    columnas por periodo (Día/Semana/Mes) con Ajuste Valorizado + Ajuste
-    combinados en una celda compacta (tablas/ajuste_pivote.py).
+    columnas por periodo (Corte/Semana/Mes) con Ajuste Valorizado + Ajuste
+    combinados en una celda compacta (tablas/ajuste_pivote.py). "Corte"
+    reemplaza a un antiguo "Día" calendario: agrupa por rachas de días con
+    movimiento (`_cortes_por_racha`) porque una sesión real de conteo
+    puede durar varios días, no necesariamente uno solo.
 
     Ignora a propósito el rango de fecha de la franja superior: siempre
     parte del año EN CURSO completo, con el mismo patrón que la rama
@@ -403,7 +466,7 @@ def _tabla_pivote_fecha_ajuste(df, col_familia, col_ajuste_val, col_producto,
             f"Año {anio_actual} completo — no depende del rango de fecha "
             f"de arriba. Los periodos futuros aparecen vacíos."
         )
-        gran = st.pills("Agrupar columnas por", ["Día", "Semana", "Mes"],
+        gran = st.pills("Agrupar columnas por", ["Corte", "Semana", "Mes"],
                         default="Mes", key="ajuste_pivote_gran") or "Mes"
 
         if d.empty:

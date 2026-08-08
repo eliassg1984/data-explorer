@@ -755,6 +755,38 @@ salvo `icono`):
     empieza a agrupar columnas y quiere el mismo look, recién ahí vale la
     pena subirlo a `_css.py`.
 
+    **2026-08-07, misma tarde — "Día" reemplazado por "Corte": agrupar
+    por RACHA de días, no por calendario** (`graficos/ajuste.py::
+    _cortes_por_racha`). Motivo (pedido real de negocio): una sesión de
+    conteo de inventario puede durar varios días — 1/2/3, después un
+    salto, 15/16, después un salto grande, 1/2/3/4 del mes siguiente — y
+    "Día" calendario mostraba cada uno como columna suelta sin relación
+    entre sí, cuando en realidad son 3 sesiones ("cortes") de duración
+    distinta. `_cortes_por_racha` ordena las fechas únicas y corta un
+    corte nuevo cuando el salto al día siguiente con movimiento supera
+    `_CORTE_MAX_SALTO_DIAS = 4` (constante fijada a pedido explícito, no
+    a ojo — tolera huecos cortos tipo fin de semana dentro de UNA misma
+    sesión). Etiqueta: `"1-3 ago"` (rango dentro del mismo mes), `"15
+    ago"` (corte de un solo día, sin rango), `"30 jul - 2 ago"` (corte
+    que cruza de mes — se nombra el mes en los DOS extremos solo cuando
+    difieren, si no se repite innecesariamente).
+    A diferencia de Semana/Mes (cada fecha resuelve su clave sola, sin
+    mirar las demás), Corte necesita la lista COMPLETA de fechas únicas
+    ANTES de poder asignarle una clave a ninguna — no hay forma de saber
+    si el día 16 abre un corte nuevo sin haber visto ya el día 15. Por
+    eso `_cortes_por_racha` arma un mapa fecha→(clave, etiqueta) aparte y
+    lo aplica con `.map()`, en vez de la cuenta vectorizada de una sola
+    pasada que alcanza para Semana/Mes.
+    No se reemplazó el pill por agregar una 4ta opción a propósito: un
+    día suelto sin sesión sigue siendo su propio corte (una racha de 1),
+    así que "Corte" cubre el mismo caso que "Día" cubría antes y no hacía
+    falta la opción extra.
+    Verificado con pandas puro (sin Streamlit) contra el escenario exacto
+    de arriba más los bordes del umbral (salto de 4 días exactos sigue
+    siendo el mismo corte, salto de 5+ corta) y el cruce de mes — la
+    parte de render (AgGrid) no cambió nada: sigue recibiendo la misma
+    forma de `periodos`/`wide` sin importar cómo se calculó la clave.
+
 26. **`GridOptionsBuilder.configure_column()` PISA el `headerName` cada vez
     que se lo llama sin `header_name`.** No hace merge parcial: reconstruye
     el colDef con `{"headerName": field, "field": field}` y recién después
