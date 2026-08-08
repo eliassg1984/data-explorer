@@ -842,16 +842,16 @@ def _render_contenido():
         # el selector, y "Tabla" es un item más. La tabla la sabe armar app.py
         # (usa cols_mostrar/font_px/etc.), así que se inyecta como callback:
         # el rail decide CUÁNDO mostrarla, app.py CÓMO.
-        def _ajuste_tabla_cb():
+        def _ajuste_tabla_cb(d):
             # df_tabla = lo que Python filtró (alimenta la fila de totales);
-            # df_f = sin filtrar por chips, es lo que cruza al navegador.
+            # `d` = sin filtrar por chips, es lo que cruza al navegador.
             # El navegador aplica `modelo` con setFilterModel, que NO cambia la
             # identidad de las filas y por eso no reagrupa (arquitectura.md #34).
-            df_tabla, modelo = _filtros_chips_franja(df_f)
+            df_tabla, modelo = _filtros_chips_franja(d)
             if df_tabla.empty:
                 st.info("Ningún registro coincide con los filtros seleccionados.")
             else:
-                _render_tabla(df_f, df_totales=df_tabla, filtros_grid=modelo)
+                _render_tabla(d, df_totales=df_tabla, filtros_grid=modelo)
 
         renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df,
                                     tabla_cb=_ajuste_tabla_cb)
@@ -889,8 +889,8 @@ def _render_contenido():
     elif reporte == "Receta Venta":
         # Sin chips propios (a diferencia de Ventas/Inventario): igual que
         # Ajuste, el callback usa los filtros genéricos que ya arma app.py.
-        def _recetaventa_tabla_cb():
-            df_tabla, _ = _filtros_chips_franja(df_f)
+        def _recetaventa_tabla_cb(d):
+            df_tabla, _ = _filtros_chips_franja(d)
             if df_tabla.empty:
                 st.info("Ningún registro coincide con los filtros seleccionados.")
             else:

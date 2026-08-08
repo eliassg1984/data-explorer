@@ -262,7 +262,8 @@ def renderizar_graficos_recetaventa(df_f, nombre_reporte, df_full=None, tabla_cb
 
     if graf == "Tabla":
         if tabla_cb is not None:
-            tabla_cb()
+            # Sin chips propios (como Ajuste): pasa su df tal cual.
+            tabla_cb(df_f)
         else:
             st.info("La tabla no está disponible en este contexto.")
         return

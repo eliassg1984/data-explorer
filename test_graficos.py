@@ -151,6 +151,65 @@ def _pruebas_puras():
     return fallos
 
 
+def _pruebas_contratos():
+    """El contrato del DISPATCHER (graficos/__init__.py).
+
+    Existe porque el dispatcher llama a TODOS los dashboards con la misma
+    firma: `render(df, reporte, df_full=..., tabla_cb=...)`. Un dashboard
+    nuevo que se olvide de `tabla_cb` revienta con TypeError, pero solo en
+    producción y solo al abrir ese reporte — nada lo detecta antes.
+
+    Igual de importante: `tabla_cb` se INVOCA con exactamente 1 argumento
+    posicional (el df a tabular). Hasta el 2026-08-08 unos dashboards
+    llamaban `tabla_cb()` y otros `tabla_cb(d)`, y el único sitio donde
+    constaba era un docstring.
+    """
+    import inspect
+    from graficos import _DASHBOARDS
+
+    fallos = 0
+
+    def check(nombre, ok, detalle=""):
+        nonlocal fallos
+        if ok:
+            print(f"OK    contrato · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA contrato · {nombre}{': ' + detalle if detalle else ''}")
+
+    for reporte, fn in sorted(_DASHBOARDS.items()):
+        params = inspect.signature(fn).parameters
+        check(f"{reporte} acepta tabla_cb", "tabla_cb" in params,
+              f"firma actual: ({', '.join(params)})")
+        check(f"{reporte} acepta df_full", "df_full" in params,
+              f"firma actual: ({', '.join(params)})")
+
+    # El dispatcher realmente le pasa tabla_cb a todo el mundo (si alguien
+    # vuelve a meter un `if reporte in (...)`, este assert lo caza).
+    import graficos
+    src = inspect.getsource(graficos.renderizar_graficos_reporte)
+    check("dispatcher sin lista de reportes hardcodeada",
+          src.count("tabla_cb=tabla_cb") == 1 and "reporte in (" not in src)
+
+    # tabla_cb se invoca con 1 argumento en TODOS los dashboards.
+    import re
+    import pathlib
+    for reporte, fn in sorted(_DASHBOARDS.items()):
+        ruta = pathlib.Path(inspect.getsourcefile(fn))
+        llamadas = re.findall(r"\btabla_cb\((.*?)\)",
+                              ruta.read_text(encoding="utf-8"))
+        # Se ignoran las menciones en docstrings/comentarios: solo importan
+        # las que tengan forma de llamada real (sin "=" de kwarg).
+        reales = [a for a in llamadas if "=" not in a]
+        if not reales:
+            continue  # dashboard que no usa el callback (Compras)
+        check(f"{reporte} invoca tabla_cb con 1 arg",
+              all(a.strip() and "," not in a for a in reales),
+              f"llamadas: {reales}")
+
+    return fallos
+
+
 def main():
     df, df_min = _df_completo(), _df_minimo()
     fallos = 0
@@ -202,6 +261,9 @@ def main():
 
     # ── Funciones puras: asserts de valor (contrato de transformación) ──
     fallos += _pruebas_puras()
+
+    # ── Contratos entre app.py y los dashboards (firma del dispatcher) ──
+    fallos += _pruebas_contratos()
 
     print()
     if fallos:

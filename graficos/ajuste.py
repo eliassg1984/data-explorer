@@ -2494,7 +2494,10 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
 
     if graf == "Tabla":
         if tabla_cb is not None:
-            tabla_cb()
+            # Ajuste no tiene chips propios: pasa su df tal cual y app.py le
+            # aplica los genéricos de la franja. La FIRMA es la misma para
+            # todos los dashboards — ver graficos/__init__.py.
+            tabla_cb(df_f)
         else:
             st.info("La tabla no está disponible en este contexto.")
         return

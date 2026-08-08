@@ -77,25 +77,26 @@ def renderizar_graficos_reporte(df_f, reporte, cfg, df_full=None, tabla_cb=None)
     df_full: DataFrame sin el filtro de fecha aplicado (opcional).
         Solo Ajuste lo usa (pestaña Histórico); los demás lo ignoran.
     tabla_cb: callback que renderiza la tabla AgGrid del reporte. Lo usan
-        los dashboards con rail donde "Tabla" es un item más (hoy Ajuste,
-        Ventas, Inventario Valorizado, Receta Venta y Salidas; el patrón
-        estándar a futuro). Los demás lo ignoran. La FIRMA del callback la
-        decide cada dashboard (documentado en su docstring): Ajuste y
-        Receta Venta lo llaman sin args (no tienen chips propios — usan
-        los genéricos de app.py); Ventas, Inventario Valorizado y Salidas
-        le pasan `d` — el df ya filtrado por sus propios chips (dentro de
-        cada módulo) para que la Tabla no tenga un estado de filtros
-        distinto al de los gráficos.
+        los dashboards con rail donde "Tabla" es un item más.
+
+        FIRMA ÚNICA: `tabla_cb(d)`, donde `d` es el DataFrame que el
+        dashboard quiere que se tabule. Los que tienen chips propios
+        (Ventas, Inventario Valorizado, Salidas) pasan su df YA filtrado,
+        para que la Tabla no tenga un estado de filtros distinto al de sus
+        gráficos; los que no los tienen (Ajuste, Receta Venta) pasan su df
+        tal cual y app.py les aplica los chips genéricos de la franja.
+
+        Hasta el 2026-08-08 la firma la decidía cada dashboard —unos
+        llamaban `tabla_cb()` y otros `tabla_cb(d)`— y el único sitio
+        donde constaba era el docstring. Un dashboard nuevo que eligiera
+        mal fallaba con TypeError solo al hacer clic en "Tabla".
     """
     render = _DASHBOARDS.get(reporte)
     if render is not None:
-        # Solo los dashboards migrados al rail aceptan tabla_cb; el resto
-        # conserva su firma antigua (la vista Tabla la maneja app.py).
-        if reporte in ("Ajuste de Inventario", "Ventas",
-                      "Inventario Valorizado", "Receta Venta", "Salidas"):
-            render(df_f, reporte, df_full=df_full, tabla_cb=tabla_cb)
-        else:
-            render(df_f, reporte, df_full=df_full)
+        # Todos los dashboards aceptan tabla_cb (los que no lo usan lo
+        # ignoran), así que no hace falta una lista de reportes que
+        # mantener sincronizada con _DASHBOARDS.
+        render(df_f, reporte, df_full=df_full, tabla_cb=tabla_cb)
         return
 
     # Motor genérico config-driven (para reportes sin dashboard dedicado)

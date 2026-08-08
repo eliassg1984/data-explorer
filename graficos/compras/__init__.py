@@ -60,8 +60,13 @@ _COMPRAS_RAIL_CATEGORIAS = (
                    ("Tabla",                "Tabla"))),
 )
 
-def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None):
-    """Dashboard dedicado de Compras: 5 gráficos con pestañas + 5 mini-tops."""
+def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=None):
+    """Dashboard dedicado de Compras: 5 gráficos con pestañas + 5 mini-tops.
+
+    `tabla_cb` se acepta por uniformidad de firma con el resto de
+    dashboards (ver graficos/__init__.py) pero NO se usa: la vista Tabla
+    de Compras es un item más de su propio rail y la arma este módulo,
+    con los mismos chips Familia/Subfamilia que los gráficos."""
     col_fam    = _resolver(df_f, ["Familia", "Nombre Familia"])
     col_subfam = _resolver(df_f, ["Subfamilia", "Nombre Subfamilia"])
     col_prov   = _resolver(df_f, ["Nombre_proveedor", "Nombre proveedor", "Proveedor"])
