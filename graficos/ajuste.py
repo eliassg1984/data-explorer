@@ -794,48 +794,15 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         [data-testid="stIconMaterial"]
         {{ font-size: 13px !important; width: 13px !important;
           height: 13px !important; }}
-    /* Selector "Top N" del drill (una para Faltantes, otra para Sobrantes —
-       keys ajuste_cascada_topn_neg/_pos, por eso el match es por prefijo).
-       2026-08-06, a pedido ("que ya no sean cápsulas"): antes eran píldoras
-       de 24px con borde+fondo, mucho más gruesas que el título de al lado
-       (14px). Ahora es texto plano — sin fondo, sin borde — al mismo
-       tamaño/peso que FALTANTES/SOBRANTES, separado por "·" (::before en
-       vez de un separador real en el DOM, que Streamlit no deja insertar
-       entre botones). El activo se marca solo con color + negrita. */
-    div[class*="st-key-ajuste_cascada_topn_"] [data-testid="stButtonGroup"] {{
-        gap: 3px !important; justify-content: flex-end !important; }}
-    div[class*="st-key-ajuste_cascada_topn_"] [data-testid="stButtonGroup"] button[role="radio"] {{
-        min-width: 0 !important; padding: 0 3px !important;
-        min-height: 0 !important; height: auto !important;
-        line-height: 1 !important; border: none !important;
-        background: transparent !important; box-shadow: none !important; }}
-    div[class*="st-key-ajuste_cascada_topn_"] [data-testid="stButtonGroup"]
-        button[role="radio"]:not(:first-child)::before {{
-        content: '·'; margin-right: 6px; color: {GRIS_TEXTO_SUAVE};
-        font-size: 9px; }}
-    div[class*="st-key-ajuste_cascada_topn_"] [data-testid="stButtonGroup"] button[role="radio"] p {{
-        font-size: 9px !important; font-weight: 600 !important;
-        letter-spacing: .02em !important; line-height: 1 !important;
-        margin: 0 !important; color: {GRIS_TEXTO_SUAVE} !important;
-        transition: color .12s ease; }}
-    div[class*="st-key-ajuste_cascada_topn_"] [data-testid="stButtonGroup"]
-        button[role="radio"]:hover p {{ color: {ACENTO} !important; }}
-    div[class*="st-key-ajuste_cascada_topn_"] [data-testid="stButtonGroup"]
-        button[role="radio"][aria-checked="true"] {{
-        background: transparent !important; border: none !important; }}
-    div[class*="st-key-ajuste_cascada_topn_"] [data-testid="stButtonGroup"]
-        button[role="radio"][aria-checked="true"] p {{
-        color: {ACENTO_TEXTO_OSCURO} !important; font-weight: 800 !important; }}
-    /* Mismo bug de arquitectura.md regla 33 en el título ("Faltantes" /
-       "Sobrantes"): stMarkdownContainer trae margin-bottom:-16px nativo de
-       Streamlit y el <div> raíz no tiene <p> que lo absorba. Acá no pisa a
-       nadie (es el último elemento visible de su columna), pero sí rompe
-       vertical_alignment="center": Streamlit centra la CAJA, que mide 16px
-       menos de lo que el texto pinta, así que el título quedaba ~8px por
-       debajo del centro real de la fila (verificado con
-       getBoundingClientRect). Se cancela igual que .ajcas-head. */
-    [data-testid="stMarkdownContainer"]:has(> .ajcas-topn-label) {{
-        margin-bottom: 0 !important; }}
+    /* Título de Faltantes/Sobrantes en el drill: el selector "Top N" que
+       vivía al lado se sacó a pedido (2026-08-08) — el listado siempre
+       muestra los 30 primeros, sin toggle. Mismo bug de arquitectura.md
+       regla 33: stMarkdownContainer trae margin-bottom:-16px nativo de
+       Streamlit y el <div> raíz no tiene <p> que lo absorba; sin cancelarlo
+       el listado de abajo quedaría pegado (o superpuesto) al título. Se
+       cancela y se deja un aire chico en su lugar, igual que .ajcas-head. */
+    [data-testid="stMarkdownContainer"]:has(> .ajcas-drill-titulo) {{
+        margin-bottom: 6px !important; }}
     /* ── Filas de la tabla: tarjetas con matiz por severidad, no líneas
        divisorias ─────────────────────────────────────────────────────── */
     div[class*="st-key-ajcas_fila_"] {{
@@ -1207,53 +1174,35 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                     f"</div>")
                             return "".join(_filas_html)
 
-                        def _header_split(txt, color, key):
-                            """Título de la columna + su propio Top N, en la
-                            misma fila — Faltantes y Sobrantes ya no
-                            comparten un único selector.
-                            class='ajcas-topn-label' en el título: sin ella
-                            el título queda 8px MÁS ABAJO del centro real de
-                            la fila (vertical_alignment="center" centra la
-                            CAJA del stElementContainer, y esa caja mide 16px
-                            menos de lo que el texto pinta — mismo bug que
-                            arquitectura.md regla 33, el <div> raíz no tiene
-                            <p> que absorba el margin-bottom:-16px nativo de
-                            Streamlit). Se cancela ese margen apuntando a la
-                            clase, igual que .ajcas-head."""
-                            _hl, _hr = st.columns(
-                                [1, 1], vertical_alignment="center")
-                            with _hl:
-                                st.markdown(
-                                    f"<div class='ajcas-topn-label' "
-                                    f"style='font-size:9px;font-weight:600;"
-                                    f"color:{color};letter-spacing:.08em;"
-                                    f"text-transform:uppercase'>{txt}</div>",
-                                    unsafe_allow_html=True,
-                                )
-                            with _hr:
-                                # format_func sin "Top": al lado del título
-                                # ya dice Faltantes/Sobrantes, y sin cápsula
-                                # alrededor "Top 5 Top 10 Top 20" se leía
-                                # repetitivo — el número solo, separado por
-                                # "·" (CSS ::before), alcanza. El label real
-                                # ("Top") sigue viajando oculto para
-                                # accesibilidad vía label_visibility.
-                                return st.pills(
-                                    "Top", [5, 10, 20], default=10, key=key,
-                                    label_visibility="collapsed",
-                                    format_func=lambda n: str(n),
-                                ) or 10
+                        _TOPN_DRILL = 30
+
+                        def _titulo_lista(txt, color):
+                            """Título de la columna (Faltantes/Sobrantes).
+                            El selector "Top N" que vivía al lado se sacó a
+                            pedido — el listado siempre muestra los
+                            _TOPN_DRILL primeros, sin toggle.
+                            class='ajcas-drill-titulo': sin ella el <div>
+                            raíz (sin <p> que absorba el margin-bottom:-16px
+                            nativo de Streamlit) deja el listado de abajo
+                            pegado al título — mismo bug que arquitectura.md
+                            regla 33. Se cancela apuntando a la clase, igual
+                            que .ajcas-head."""
+                            st.markdown(
+                                f"<div class='ajcas-drill-titulo' "
+                                f"style='font-size:9px;font-weight:600;"
+                                f"color:{color};letter-spacing:.08em;"
+                                f"text-transform:uppercase'>{txt}</div>",
+                                unsafe_allow_html=True,
+                            )
 
                         _pa, _pb = st.columns(2)
                         with _pa:
-                            _topn_neg = _header_split(
-                                "Faltantes", AJUSTE_NEG_TEXTO,
-                                "ajuste_cascada_topn_neg")
+                            _titulo_lista("Faltantes", AJUSTE_NEG_TEXTO)
                             # ascending=True: el más negativo (mayor
                             # magnitud) primero en el DataFrame -> primero
                             # en el HTML -> arriba de la lista.
                             _neg = (_agg_dim[_agg_dim[col_ajuste_val] < 0]
-                                    .nsmallest(int(_topn_neg), col_ajuste_val)
+                                    .nsmallest(_TOPN_DRILL, col_ajuste_val)
                                     .sort_values(col_ajuste_val, ascending=True))
                             if _neg.empty:
                                 st.caption("Sin faltantes en esta familia.")
@@ -1261,11 +1210,9 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                 st.markdown(_filas_split_html(_neg, AJUSTE_NEG),
                                            unsafe_allow_html=True)
                         with _pb:
-                            _topn_pos = _header_split(
-                                "Sobrantes", AJUSTE_POS_TEXTO,
-                                "ajuste_cascada_topn_pos")
+                            _titulo_lista("Sobrantes", AJUSTE_POS_TEXTO)
                             _pos = (_agg_dim[_agg_dim[col_ajuste_val] > 0]
-                                    .nlargest(int(_topn_pos), col_ajuste_val)
+                                    .nlargest(_TOPN_DRILL, col_ajuste_val)
                                     .sort_values(col_ajuste_val, ascending=False))
                             if _pos.empty:
                                 st.caption("Sin sobrantes en esta familia.")
@@ -2078,20 +2025,13 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                                         f"{_slug(str(_area_sel))}")
 
             if col_producto and col_producto in _det.columns:
-                _topn = st.pills(
-                    "Top", [5, 10, 20], default=10,
-                    key="hm_drill_topn",
-                    label_visibility="collapsed",
-                    format_func=lambda n: f"Top {n}",
-                ) or 10
-
                 _sub_prod = (
                     _det.groupby(col_producto, as_index=False)[col_metrica]
                     .sum()
                 )
                 _sub_prod["_abs"] = _sub_prod[col_metrica].abs()
                 _sub_prod = _sub_prod.sort_values(
-                    "_abs", ascending=False).head(int(_topn))
+                    "_abs", ascending=False).head(30)
 
                 def _filas_drill_html(_df_d, _color_bar):
                     """Mini barras de progreso (riel + relleno) — mismo
