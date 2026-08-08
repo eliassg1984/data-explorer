@@ -815,6 +815,19 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         font-size: 11.5px !important; color: {TEXTO_PRINCIPAL} !important; }}
     div[class*="st-key-ajcas_buscar_"] [data-testid="stTextInputRootElement"] input::placeholder {{
         color: {GRIS_TEXTO_SUAVE} !important; opacity: 1 !important; }}
+    /* Scroll propio por columna (Faltantes / Sobrantes) en vez de dejar
+       crecer la tarjeta con hasta 30 filas -- a pedido, 2026-08-08.
+       Scrollbar lo más discreta posible: fina, sin pista visible, y
+       gris clarito que recién se nota más al pasar el cursor. */
+    .ajcas-lista-scroll {{
+        max-height: 300px; overflow-y: auto;
+        scrollbar-width: thin; scrollbar-color: {GRIS_BORDE} transparent; }}
+    .ajcas-lista-scroll::-webkit-scrollbar {{ width: 5px; }}
+    .ajcas-lista-scroll::-webkit-scrollbar-track {{ background: transparent; }}
+    .ajcas-lista-scroll::-webkit-scrollbar-thumb {{
+        background: {GRIS_BORDE}; border-radius: 999px; }}
+    .ajcas-lista-scroll:hover::-webkit-scrollbar-thumb {{
+        background: {GRIS_TEXTO_SUAVE}; }}
     /* ── Filas de la tabla: tarjetas con matiz por severidad, no líneas
        divisorias ─────────────────────────────────────────────────────── */
     div[class*="st-key-ajcas_fila_"] {{
@@ -1237,8 +1250,10 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                 st.caption("Sin coincidencias." if _q_neg else
                                           "Sin faltantes en esta familia.")
                             else:
-                                st.markdown(_filas_split_html(_neg, AJUSTE_NEG),
-                                           unsafe_allow_html=True)
+                                st.markdown(
+                                    f"<div class='ajcas-lista-scroll'>"
+                                    f"{_filas_split_html(_neg, AJUSTE_NEG)}</div>",
+                                    unsafe_allow_html=True)
                         with _pb:
                             _q_pos = _buscador_lista(
                                 "Buscar en sobrantes…",
@@ -1253,8 +1268,10 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                 st.caption("Sin coincidencias." if _q_pos else
                                           "Sin sobrantes en esta familia.")
                             else:
-                                st.markdown(_filas_split_html(_pos, AJUSTE_POS),
-                                           unsafe_allow_html=True)
+                                st.markdown(
+                                    f"<div class='ajcas-lista-scroll'>"
+                                    f"{_filas_split_html(_pos, AJUSTE_POS)}</div>",
+                                    unsafe_allow_html=True)
 
         # Una fila por familia. El drill de la familia clickeada se
         # inserta justo debajo de su fila (no al final de la tabla).
