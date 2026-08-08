@@ -19,7 +19,7 @@ from estado_rango import (
 )
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_diseno_visual, inject_footer_actualizacion, inject_calendario_es, inject_fullscreen_app
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_aggrid_compras
-from graficos import renderizar_graficos_reporte
+from graficos import renderizar_graficos_reporte, tiene_dashboard
 from graficos.base import _render_rail
 from graficos.ajuste import categoria_rango_ajuste
 from asistente import inject_asistente
@@ -816,122 +816,90 @@ def _render_tabla(df_data=None, df_totales=None, filtros_grid=None):
 # ===========================================================================
 # FRAGMENT GENÉRICO — aisla el contenido principal de cada reporte
 # ===========================================================================
+# ── Las TRES formas de alimentar la vista "Tabla" ───────────────────────────
+# El rail de cada dashboard decide CUÁNDO mostrar la Tabla; estos callbacks
+# deciden CON QUÉ DATOS. Firma única `(d)` — ver graficos/__init__.py.
+
+def _cb_directo(d):
+    """El dashboard ya filtró `d` con sus propios chips, así que la Tabla lo
+    dibuja tal cual. Es el caso por defecto (Ventas, Inventario Valorizado,
+    Salidas): así la Tabla no tiene un estado de filtros distinto al de los
+    gráficos del mismo reporte."""
+    if d.empty:
+        st.info("Ningún registro coincide con los filtros seleccionados.")
+    else:
+        _render_tabla(d)
+
+
+def _cb_chips_en_python(d):
+    """El dashboard NO tiene chips propios: los pone app.py (los genéricos de
+    la franja) y filtra en Python antes de mandar el df al grid."""
+    df_tabla, _ = _filtros_chips_franja(d)
+    if df_tabla.empty:
+        st.info("Ningún registro coincide con los filtros seleccionados.")
+    else:
+        _render_tabla(df_tabla)
+
+
+def _cb_chips_en_navegador(d):
+    """Como _cb_chips_en_python, pero el filtro lo aplica el NAVEGADOR.
+
+    `d` cruza sin filtrar y el modelo va por el puente de AG Grid; el df que
+    Python sí filtró se usa solo para la fila de totales. Es 5-6x más rápido
+    porque setFilterModel no cambia la identidad de las filas y el grid no
+    reagrupa (arquitectura.md #33/#34). Hoy solo Ajuste lo necesita — es el
+    único con volumen suficiente para que la diferencia se note."""
+    df_tabla, modelo = _filtros_chips_franja(d)
+    if df_tabla.empty:
+        st.info("Ningún registro coincide con los filtros seleccionados.")
+    else:
+        _render_tabla(d, df_totales=df_tabla, filtros_grid=modelo)
+
+
+# Reportes que NO usan _cb_directo. Un reporte nuevo con dashboard propio no
+# necesita tocar nada de aquí: cae en el default.
+# (Compras aparecería con _cb_directo pero da igual — su vista Tabla la arma
+#  su propio módulo y nunca invoca el callback.)
+_TABLA_CB = {
+    "Ajuste de Inventario": _cb_chips_en_navegador,
+    "Receta Venta":         _cb_chips_en_python,
+}
+
+
 @st.fragment
 def _render_contenido():
     perf.fragment_start("_render_contenido")                                # ⚡ PERF
 
-    # ── COMPRAS ─────────────────────────────────────────────────────────────
-    if reporte == "Compras":
-        # Compras no usa G/T en la franja: la Tabla es una opción más dentro
-        # del selector de tipo de gráfico (ver graficos/compras/). Los chips
-        # Familia/Subfamilia viven dentro de compras.py y se aplican por igual
-        # a los gráficos y a la Tabla.
-        renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
-
-    # ── REQUERIMIENTOS ───────────────────────────────────────────────────────
-    elif reporte == "Requerimientos":
-        # No tiene vista de gráficos (tabla pivote propia, sin equivalente
-        # en graficos/) — el rail lleva un solo item para el mismo chrome
-        # (franja transparente, padding reservado) que el resto de reportes.
+    # ── REQUERIMIENTOS — sin vista de gráficos ──────────────────────────────
+    # Único reporte con tabla pivote propia y sin equivalente en graficos/.
+    # El rail lleva un solo item para conservar el mismo chrome (franja
+    # transparente, padding reservado) que el resto.
+    if reporte == "Requerimientos":
         _render_rail((("", (("Tabla", "Tabla"),)),), "requerimientos_rail_sel")
         _render_requerimientos(df_f, col_fecha, cols_mostrar, font_px, cfg)
 
-    # ── AJUSTE DE INVENTARIO — layout con rail derecho (como Compras) ───────
-    elif reporte == "Ajuste de Inventario":
-        # Sin pills Gráficos/Tabla: el rail (dentro de graficos/ajuste.py) es
-        # el selector, y "Tabla" es un item más. La tabla la sabe armar app.py
-        # (usa cols_mostrar/font_px/etc.), así que se inyecta como callback:
-        # el rail decide CUÁNDO mostrarla, app.py CÓMO.
-        def _ajuste_tabla_cb(d):
-            # df_tabla = lo que Python filtró (alimenta la fila de totales);
-            # `d` = sin filtrar por chips, es lo que cruza al navegador.
-            # El navegador aplica `modelo` con setFilterModel, que NO cambia la
-            # identidad de las filas y por eso no reagrupa (arquitectura.md #34).
-            df_tabla, modelo = _filtros_chips_franja(d)
-            if df_tabla.empty:
-                st.info("Ningún registro coincide con los filtros seleccionados.")
-            else:
-                _render_tabla(d, df_totales=df_tabla, filtros_grid=modelo)
+    # ── REPORTES CON DASHBOARD PROPIO ───────────────────────────────────────
+    # El dashboard dibuja su rail (donde "Tabla" es un item más) y llama al
+    # callback cuando toca. Antes esto eran 6 ramas elif idénticas salvo el
+    # nombre del callback; el discriminante real es cuál de las 3 formas de
+    # arriba usa cada reporte, y eso vive en _TABLA_CB.
+    elif tiene_dashboard(reporte):
+        renderizar_graficos_reporte(
+            df_f, reporte, cfg, df_full=df,
+            tabla_cb=_TABLA_CB.get(reporte, _cb_directo),
+        )
 
-        renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df,
-                                    tabla_cb=_ajuste_tabla_cb)
-
-    # ── VENTAS — layout con rail derecho (como Ajuste) ──────────────────────
-    elif reporte == "Ventas":
-        # A diferencia de Ajuste, Ventas filtra su propio df ANTES de llegar
-        # acá (chips Grupo/Sub Grupo/Canal/Servicio, dentro de
-        # graficos/ventas.py) — el callback recibe `d` YA filtrado y solo
-        # tiene que dibujar la tabla con él, para no tener un segundo estado
-        # de filtros independiente del de los gráficos.
-        def _ventas_tabla_cb(d):
-            if d.empty:
-                st.info("Ningún registro coincide con los filtros seleccionados.")
-            else:
-                _render_tabla(d)
-
-        renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df,
-                                    tabla_cb=_ventas_tabla_cb)
-
-    # ── INVENTARIO VALORIZADO — layout con rail derecho (como Ventas) ───────
-    elif reporte == "Inventario Valorizado":
-        # Mismo patrón que Ventas: el callback recibe `d`, ya filtrado por
-        # los chips propios (Área/Familia, dentro de graficos/inventario.py).
-        def _inventario_tabla_cb(d):
-            if d.empty:
-                st.info("Ningún registro coincide con los filtros seleccionados.")
-            else:
-                _render_tabla(d)
-
-        renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df,
-                                    tabla_cb=_inventario_tabla_cb)
-
-    # ── RECETA VENTA — layout con rail derecho (como Ajuste) ────────────────
-    elif reporte == "Receta Venta":
-        # Sin chips propios (a diferencia de Ventas/Inventario): igual que
-        # Ajuste, el callback usa los filtros genéricos que ya arma app.py.
-        def _recetaventa_tabla_cb(d):
-            df_tabla, _ = _filtros_chips_franja(d)
-            if df_tabla.empty:
-                st.info("Ningún registro coincide con los filtros seleccionados.")
-            else:
-                _render_tabla(df_tabla)
-
-        renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df,
-                                    tabla_cb=_recetaventa_tabla_cb)
-
-    # ── SALIDAS — layout con rail derecho (como Ventas/Inventario) ──────────
-    elif reporte == "Salidas":
-        # Igual que Ventas/Inventario: el callback recibe `d`, ya filtrado
-        # por los chips propios (Sub Almacén/Familia, dentro de
-        # graficos/salidas.py) — así la Tabla no tiene un estado de filtros
-        # distinto al de los gráficos.
-        def _salidas_tabla_cb(d):
-            if d.empty:
-                st.info("Ningún registro coincide con los filtros seleccionados.")
-            else:
-                _render_tabla(d)
-
-        renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df,
-                                    tabla_cb=_salidas_tabla_cb)
-
-    # ── RESTO DE REPORTES (Receta Base, …) — sin dashboard propio ───────────
+    # ── SIN DASHBOARD (Receta Base, …) — explorador genérico ────────────────
     else:
-        # Mismo rail que el resto, con 2 items en vez del selector Gráficos/
-        # Tabla que vivía en la franja: "Gráficos" cae al explorador genérico
-        # (renderizar_graficos_reporte sin dashboard registrado en
-        # _DASHBOARDS), "Tabla" arma la AgGrid. El orden respeta
-        # REPORTES_INICIO_TABLA (Receta Base arrancaba en Tabla).
+        # Rail de 2 items: "Gráficos" cae al explorador genérico, "Tabla"
+        # arma la AgGrid. El orden respeta REPORTES_INICIO_TABLA.
         _opciones_rail = (("Tabla", "Tabla"), ("Gráficos", "Gráficos"))
         if _vista_default != "Tabla":
             _opciones_rail = (("Gráficos", "Gráficos"), ("Tabla", "Tabla"))
         graf = _render_rail((("", _opciones_rail),),
                             f"rail_sel_{reporte.replace(' ', '_')}")
         if graf == "Tabla":
-            df_tabla, _ = _filtros_chips_franja(df_f)
-            if df_tabla.empty:
-                st.info("Ningún registro coincide con los filtros seleccionados.")
-            else:
-                _render_tabla(df_tabla)
+            _cb_chips_en_python(df_f)
         else:
             renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
 

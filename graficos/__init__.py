@@ -68,6 +68,18 @@ _DASHBOARDS = {
 }
 
 
+def tiene_dashboard(reporte):
+    """True si `reporte` tiene un dashboard dedicado registrado arriba.
+
+    Existe para que app.py no tenga que enumerar reportes a mano ni importar
+    `_DASHBOARDS` (privado) para saberlo: los reportes con dashboard dibujan
+    su propio rail y reciben `tabla_cb`; los que no, caen al explorador
+    genérico con un rail de 2 items que arma app.py. Así, registrar un
+    dashboard nuevo sigue siendo UNA línea en _DASHBOARDS — sin tocar app.py.
+    """
+    return reporte in _DASHBOARDS
+
+
 def renderizar_graficos_reporte(df_f, reporte, cfg, df_full=None, tabla_cb=None):
     """Punto de entrada de la vista Gráficos.
 
