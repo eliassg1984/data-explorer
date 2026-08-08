@@ -188,15 +188,9 @@ def inject_maximize_aggrid():
             }
         }
 
-        /* Ancla el ⛶ como PRIMER ítem del riel. Devuelve true si lo logró (o si
-           ya estaba puesto). Devuelve false si la tabla no tiene riel. */
-        function anclarEnRiel(iframe) {
-            var fdoc = null;
-            try { fdoc = iframe.contentDocument; } catch(e) {}
-            if (!fdoc) return false;
-            var riel = fdoc.querySelector('.ag-side-buttons');
-            if (!riel) return false;
-            if (fdoc.getElementById(BTN_ID)) return true;
+        /* Crea el botón ⛶ y lo antepone al riel -- helper reusado por el
+           anclaje inicial y por el observer de abajo. */
+        function crearBotonRiel(fdoc, riel) {
             var b = fdoc.createElement('button');
             b.id = BTN_ID;
             b.type = 'button';
@@ -204,6 +198,39 @@ def inject_maximize_aggrid():
             b.title = 'Maximizar tabla';
             b.onclick = toggle;
             riel.insertBefore(b, riel.firstChild);
+        }
+
+        /* Ancla el ⛶ como PRIMER ítem del riel. Devuelve true si lo logró (o si
+           ya estaba puesto). Devuelve false si la tabla no tiene riel.
+           También instala (una sola vez POR documento, con un flag en el
+           propio fdoc -- no en una var del closure, que se perdería si este
+           script se re-ejecuta) un MutationObserver que lo vuelve a poner si
+           AG Grid reconstruye el riel. Hace falta de verdad: un grid que
+           cambia de columnas en caliente (Ajuste "Por fecha", cambiar de
+           Corte/Semana/Mes) hace que AG Grid rehaga su sidebar interno y
+           borre cualquier nodo insertado a mano que no sea suyo -- y este
+           components.html de contenido fijo no se vuelve a ejecutar en el
+           siguiente rerun de Streamlit (mismo HTML, el iframe no se
+           recarga), así que sin el observer el botón se pierde para
+           siempre en vez de reaparecer solo. Verificado en vivo con
+           _test_pivote_aislado.py: sin esto, el botón no volvía ni
+           esperando 20+ segundos. */
+        function anclarEnRiel(iframe) {
+            var fdoc = null;
+            try { fdoc = iframe.contentDocument; } catch(e) {}
+            if (!fdoc) return false;
+            var riel = fdoc.querySelector('.ag-side-buttons');
+            if (!riel) return false;
+            if (!fdoc.getElementById(BTN_ID)) crearBotonRiel(fdoc, riel);
+            if (!fdoc.__maximizeObsInstalado) {
+                fdoc.__maximizeObsInstalado = true;
+                new MutationObserver(function() {
+                    var rielAhora = fdoc.querySelector('.ag-side-buttons');
+                    if (rielAhora && !fdoc.getElementById(BTN_ID)) {
+                        crearBotonRiel(fdoc, rielAhora);
+                    }
+                }).observe(fdoc.body, {childList: true, subtree: true});
+            }
             return true;
         }
 

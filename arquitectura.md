@@ -1333,3 +1333,47 @@ salvo `icono`):
     la regla #12: que el evento de selección real llegue del navegador al
     clickear/arrastrar sobre el overlay — verificar a mano en Cloud tras
     el deploy antes de asumirlo funcionando.
+
+45. **`inject_maximize_aggrid` — el botón ⛶ desaparecía para siempre al
+    cambiar de columnas en caliente (`inyecciones/grid.py`), arreglado
+    con un `MutationObserver` en vez de un inserto único.** Encontrado en
+    la tabla "Por fecha" de Ajuste (2026-08-07): cambiar el pill
+    Corte/Semana/Mes reconfigura `columnDefs` del MISMO grid (sin recargar
+    la página) y AG Grid reconstruye su `.ag-side-buttons` interno como
+    parte de ese cambio — lo que borra cualquier nodo insertado a mano
+    que no sea suyo, incluido el botón ⛶ que `anclarEnRiel` había puesto
+    con un `insertBefore` de una sola vez.
+    **Por qué no se auto-reparaba solo:** `inject_maximize_aggrid()` es un
+    `components.html(...)` de contenido FIJO (no depende de `gran` ni de
+    nada que cambie entre reruns) — Streamlit no vuelve a cargar ese
+    iframe si el HTML es idéntico al del run anterior, así que el script
+    de anclaje nunca se re-ejecuta después del primer montaje. El
+    `check()` que sí corrió una vez ya agotó sus reintentos (o encontró
+    el riel y paró) mucho antes de que el usuario tocara el pill. Sin el
+    grid en sí recargándose, nada vuelve a intentar poner el botón.
+    Verificado en vivo (`_test_pivote_aislado.py`, técnica de la regla
+    #12): esperando 21+ segundos después de cambiar de pill, el botón
+    seguía sin aparecer — no era cuestión de esperar más, estaba
+    genuinamente roto.
+    **Fix:** `anclarEnRiel` instala (una sola vez, con un flag en el
+    propio `fdoc.__maximizeObsInstalado` — no en una variable del
+    closure, que se perdería si el script llegara a re-ejecutarse) un
+    `MutationObserver` sobre `fdoc.body` que reinserta el botón cada vez
+    que detecta que `.ag-side-buttons` existe pero el botón no. Es
+    autosuficiente: no importa CUÁNTAS veces AG Grid reconstruya su
+    sidebar de ahí en más, ni si el components.html de arranque nunca
+    vuelve a correr. Verificado con 3 cambios de pill seguidos
+    (Mes→Corte→Semana→Mes): el botón sobrevive los tres, reapareciendo
+    en ≤2s cada vez.
+    **Por qué el fix es seguro para el resto de la app:** `inject_maximize_aggrid()`
+    no cambió de firma (cero args, igual que antes) — los demás callers
+    (`tablas/desktop.py`, `tablas/compras.py`, `tablas/movil.py`) no
+    necesitan tocarse y se benefician del mismo self-heal automáticamente
+    si alguna vez sus columnas también cambiaran en caliente (hoy no lo
+    hacen, así que para ellos el observer simplemente queda inerte).
+    **Sospecha para la próxima vez:** cualquier otro `inject_*` que haga
+    un `insertBefore`/`appendChild` de una sola vez sin observer, en un
+    grid cuyas columnas puedan cambiar dentro de la misma sesión (sin
+    recargar la página), es candidato al mismo bug — el síntoma es
+    "funciona la primera vez, desaparece con la segunda interacción y no
+    vuelve nunca".
