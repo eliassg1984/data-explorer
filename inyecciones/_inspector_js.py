@@ -34,7 +34,34 @@ JS = """
         win.__inspectorMapaRefs    = __MAPA_REFS__;
         win.__inspectorMapaTexto     = __MAPA_TEXTO__;
         win.__inspectorMapaConstruido = __MAPA_CONSTRUIDO__;
+        win.__inspectorMapaPrefijos  = __MAPA_PREFIJOS__;
         win.__inspectorSS            = __MAPA_SS__;
+
+        // Fallback por PREFIJO para keys dinamicas. Muchas keys de esta app se
+        // arman con f-string (chartcard_{slug}, atajo_{reporte}_{ca}, ...), asi
+        // que su nombre EXACTO no existe en el codigo fuente y los mapas por
+        // key no la encuentran. Python indexa el prefijo estatico de esas
+        // keys (ver _mapas_desarrollador) y aca se resuelve al prefijo MAS
+        // LARGO que sea prefijo de la key: entre "compras_g_" y
+        // "compras_g_fam_time_" gana el segundo, que apunta a la linea real.
+        //
+        // El mapa suele tener pocas decenas de entradas, asi que el barrido
+        // lineal es mas barato que trocear la key y probar cada corte.
+        function registroPorPrefijo(key) {
+            if (!key) return null;
+            var m = win.__inspectorMapaPrefijos, mejor = null;
+            for (var p in m) {
+                if (key.indexOf(p) === 0 && (mejor === null || p.length > mejor.length)) {
+                    mejor = p;
+                }
+            }
+            return mejor === null ? null : m[mejor];
+        }
+        // Devuelve el campo del registro por prefijo, o el vacio que toque.
+        function porPrefijo(key, campo, vacio) {
+            var reg = registroPorPrefijo(key);
+            return (reg && reg[campo]) ? reg[campo] : vacio;
+        }
 
         function buscarConstruido(key) {
             if (!key) return '';
@@ -59,21 +86,25 @@ JS = """
             return '';
         }
 
+        // Los cuatro caen al fallback por prefijo cuando la key exacta no
+        // esta (key dinamica). Ojo: el registro por prefijo usa "snippet" en
+        // singular, mientras el mapa por key es "Snippets".
         function buscarCodigo(key) {
             if (!key) return '';
-            return win.__inspectorMapaCodigo[key] || '';
+            return win.__inspectorMapaCodigo[key] || porPrefijo(key, 'codigo', '');
         }
         function buscarSnippet(key) {
             if (!key) return '';
-            return win.__inspectorMapaSnippets[key] || '';
+            return win.__inspectorMapaSnippets[key] || porPrefijo(key, 'snippet', '');
         }
         function buscarFuncion(key) {
             if (!key) return '';
-            return win.__inspectorMapaFuncion[key] || '';
+            return win.__inspectorMapaFuncion[key] || porPrefijo(key, 'funcion', '');
         }
         function buscarRefs(key) {
             if (!key) return [];
-            return win.__inspectorMapaRefs[key] || [];
+            var r = win.__inspectorMapaRefs[key];
+            return (r && r.length) ? r : porPrefijo(key, 'refs', []);
         }
         function buscarSS(key) {
             if (!key) return '';

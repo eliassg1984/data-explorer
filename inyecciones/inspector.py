@@ -314,12 +314,11 @@ def inject_element_inspector():
     # era una cadena de nueve .replace() encadenados en UNA linea de 400
     # caracteres; asi se ve de un vistazo que mapa alimenta a cual.
     #
-    # OJO con "prefijos": ese .replace() es un NO-OP y se conserva a
-    # proposito para que el codigo no mienta. El blob NO contiene
-    # __MAPA_PREFIJOS__ -- el JS declara siete mapas (lineas 22-28) y busca
-    # SOLO por coincidencia exacta (`map[key] || ''`). O sea: la mitad Python
-    # del fallback por prefijo para keys dinamicas (f-string) esta construida
-    # y probada, pero la mitad JS nunca se escribio. Ver arquitectura.md #56.
+    # INVARIANTE: cada clave de aqui existe en el blob, y el blob no tiene
+    # placeholders de mas. Se comprueba abajo, porque un placeholder que
+    # nadie sustituye rompe el JSON.parse del JS entero, y uno que sobra es
+    # trabajo que se calcula para tirar — que es lo que le pasaba a
+    # __MAPA_PREFIJOS__ hasta el 2026-08-08 (ver arquitectura.md #56).
     _sustituciones = {
         "__MAPA_CODIGO__": mapa_codigo,
         "__MAPA_ESTILOS__": mapa_estilos,
@@ -328,10 +327,25 @@ def inject_element_inspector():
         "__MAPA_REFS__": mapa_refs,
         "__MAPA_TEXTO__": mapa_texto,
         "__MAPA_CONSTRUIDO__": mapa_construido,
-        "__MAPA_PREFIJOS__": mapa_prefijos,   # no-op, ver arriba
+        "__MAPA_PREFIJOS__": mapa_prefijos,
         "__MAPA_SS__": mapa_ss,
     }
     _html = JS
     for _ph, _valor in _sustituciones.items():
         _html = _html.replace(_ph, _valor)
     components.html(_html, height=0, scrolling=False)
+
+
+def _placeholders_descuadrados() -> tuple[set, set]:
+    """(sobran_en_el_blob, sobran_en_el_dict). Ambos deben venir vacios.
+
+    Lo usa test_graficos.py: es el chequeo que habria cazado en su momento
+    el __MAPA_PREFIJOS__ muerto, que estuvo sustituyendose contra un
+    placeholder inexistente sin que nada se quejara."""
+    del_blob = set(re.findall(r"__MAPA_[A-Z]+__", JS))
+    del_codigo = {
+        "__MAPA_CODIGO__", "__MAPA_ESTILOS__", "__MAPA_SNIPPETS__",
+        "__MAPA_FUNCION__", "__MAPA_REFS__", "__MAPA_TEXTO__",
+        "__MAPA_CONSTRUIDO__", "__MAPA_PREFIJOS__", "__MAPA_SS__",
+    }
+    return del_blob - del_codigo, del_codigo - del_blob

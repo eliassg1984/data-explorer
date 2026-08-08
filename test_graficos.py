@@ -239,6 +239,18 @@ def _pruebas_contratos():
     check("dispatcher sin lista de reportes hardcodeada",
           src.count("tabla_cb=tabla_cb") == 1 and "reporte in (" not in src)
 
+    # Placeholders del inspector: el blob de JS y el dict de sustituciones
+    # tienen que cuadrar EN AMBAS DIRECCIONES. Uno que nadie sustituya rompe
+    # el JSON.parse del JS entero; uno que sobre es trabajo que se calcula
+    # para tirar (le pasó a __MAPA_PREFIJOS__ hasta 2026-08-08, ver
+    # arquitectura.md #56). Nada avisaba: no es error de sintaxis ni de lint.
+    from inyecciones.inspector import _placeholders_descuadrados
+    _sobran_blob, _sobran_dict = _placeholders_descuadrados()
+    check("inspector: ningún placeholder sin sustituir", _sobran_blob == set(),
+          f"en el blob pero no en el dict: {_sobran_blob}")
+    check("inspector: ninguna sustitución sin placeholder", _sobran_dict == set(),
+          f"en el dict pero no en el blob: {_sobran_dict}")
+
     # tabla_cb se invoca con 1 argumento en TODOS los dashboards.
     import re
     import pathlib
