@@ -130,6 +130,54 @@ def _pruebas_puras():
     check("_periodo Mes", _c._periodo_serie(fe, "Mes"), ["2024-01", "2024-12"])
     check("_periodo Año", _c._periodo_serie(fe, "Año"), ["2024", "2024"])
 
+    # ── Etiquetas de barra del drill de Proveedor ───────────────────────
+    # Vivían anidadas dentro de _compras_proveedor_drill (1.577 líneas), así
+    # que no había forma de probarlas. Salieron a su módulo el 2026-08-08.
+    from graficos.compras import _etiquetas_proveedor as _ep
+
+    check("fmt_k unidades", _ep.fmt_k(940), "S/ 940")
+    check("fmt_k miles", _ep.fmt_k(4000), "S/ 4.0k")
+    check("fmt_k millones", _ep.fmt_k(1_200_000), "S/ 1.2M")
+    # El umbral es >=, no >: 1000 ya es "1.0k" y no "S/ 1000".
+    check("fmt_k borde 1000", _ep.fmt_k(1000), "S/ 1.0k")
+
+    check("sufijo gran conocida", _ep.sufijo_granularidad("Mes"), "del Mes")
+    check("sufijo gran desconocida",
+          _ep.sufijo_granularidad("Quincena"), "del período")
+
+    # abrev_nombre — escalones por ancho disponible
+    _prov = "Distribuidora Andina S.A.C."
+    check("abrev <2 → vacío", _ep.abrev_nombre(_prov, 1), "")
+    check("abrev 2 → iniciales", _ep.abrev_nombre(_prov, 2), "DA")
+    # 6-14 → primera palabra. "Distribuidora" son 13 chars: en 14 entra
+    # entera, en 10 se trunca con … (9 chars + elipsis).
+    check("abrev 14 → 1ª palabra entera",
+          _ep.abrev_nombre(_prov, 14), "Distribuidora")
+    check("abrev 10 → 1ª palabra truncada",
+          _ep.abrev_nombre(_prov, 10), "Distribui…")
+    check("abrev cabe entero", _ep.abrev_nombre("Agro", 10), "Agro")
+    # Las palabras de ruido (S.A.C., de, del…) no cuentan como iniciales.
+    check("abrev ignora razón social",
+          _ep.abrev_nombre("Alimentos del Sur S.A.C.", 3), "AS")
+
+    # etiqueta_serie — barra en 0 no lleva etiqueta; la 1ª no tiene variación
+    _et = _ep.etiqueta_serie([0, 100, 150], "del Mes")
+    check("etiqueta barra en 0", _et[0], "")
+    check("etiqueta 1ª sin variación", _et[1], "S/ 100")
+    check("etiqueta 2ª con ▲50%", "▲50%" in _et[2], True)
+    _baja = _ep.etiqueta_serie([200, 100], "del Mes")
+    check("etiqueta baja con ▼", "▼50%" in _baja[1], True)
+    # compacta=True descarta docs y % aunque se los pasen
+    _comp = _ep.etiqueta_serie([100], "del Mes", compacta=True,
+                               pct_periodo=[42], docs=[3])
+    check("etiqueta compacta sin pie", _comp[0], "S/ 100")
+    _full = _ep.etiqueta_serie([100], "del Mes", pct_periodo=[42], docs=[3])
+    check("etiqueta full con docs", "3 docs" in _full[0], True)
+    check("etiqueta full con % y sufijo", "42% del Mes" in _full[0], True)
+    # singular/plural de documentos
+    _uno = _ep.etiqueta_serie([100], "del Mes", docs=[1])
+    check("etiqueta 1 doc en singular", "1 doc<" in _uno[0], True)
+
     # _preparar_datos — agrupa+suma por categoría; fecha → columna _mes
     dcat = pd.DataFrame({"FAMILIA": ["A", "A", "B"], "VAL": [1.0, 2.0, 4.0]})
     out, xcol = b._preparar_datos(dcat, "FAMILIA", "VAL", None, "bar")

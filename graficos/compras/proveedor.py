@@ -17,6 +17,9 @@ from tema import ACENTO, GRIS_BORDE, SERIE_PRINCIPAL
 from graficos.base import PALETA_CALLAI, _card, _compras_layout, _compras_truncar
 from graficos.compras._comun import _es_movil, _first_point
 from graficos.compras._css_proveedor import CSS as CSS_PROVEEDOR
+from graficos.compras._etiquetas_proveedor import (
+    abrev_nombre, etiqueta_serie, sufijo_granularidad,
+)
 
 
 @st.fragment
@@ -217,18 +220,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
     # ── Gráfico principal: barras verticales por periodo ──────────────────
 
-    def _fmt_k(v):
-        """Monto compacto para etiquetas angostas: S/ 4.0k, S/ 1.2M."""
-        if v >= 1_000_000:
-            return f"S/ {v / 1_000_000:.1f}M"
-        if v >= 1_000:
-            return f"S/ {v / 1_000:.1f}k"
-        return f"S/ {v:.0f}"
-
-    # Sufijo para la línea '% del ...' según la granularidad activa. El
-    # usuario ve el nombre del segmento directamente, sin genérico 'período'.
-    _gran_suffix = {"Día": "del Día", "Semana": "de la Semana",
-                    "Mes": "del Mes", "Año": "del Año"}.get(gran, "del período")
+    _gran_suffix = sufijo_granularidad(gran)
 
     # Ancho útil del plot según el dispositivo (User-Agent): móvil ~345px,
     # descontando el espacio entre barras queda ~245 útil; desktop ~700. De ahí
@@ -249,78 +241,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     #    barras son anchas, así que casi nunca se activa por ancho.
     # En ambos casos docs y % siguen en el hover, que ya los trae.
     _lab_compacta = (prov_focus is not None) or (_ancho_barra_lbl < 78)
-
-    def _etiqueta_serie(vals, pct_periodo=None, docs=None):
-        """Texto por barra: total SIEMPRE encima + variación vs el período
-        ANTERIOR del mismo proveedor (▲ verde sube / ▼ rojo baja) + cantidad
-        de documentos + % de participación en el período. La 1ª barra no
-        tiene anterior → solo total + docs + %. Barras en 0 → sin etiqueta.
-
-        Con `_lab_compacta` (hay proveedor en foco) se omiten las dos líneas
-        grises del pie: el chart está a 180px y no hay alto para ellas.
-
-        pct_periodo: lista del mismo largo que vals con el % que la barra
-            representa del total del segmento (0-100). Si None, se omite.
-        docs: lista del mismo largo que vals con la cantidad de documentos
-            (facturas / comprobantes únicos) que respaldan cada barra. Si
-            None, se omite.
-        """
-        if _lab_compacta:
-            docs, pct_periodo = None, None
-        _txt = []
-        for j, v in enumerate(vals):
-            if v <= 0:
-                _txt.append("")
-                continue
-            linea = _fmt_k(v)
-            if j > 0 and vals[j - 1] > 0:
-                chg = (v - vals[j - 1]) / vals[j - 1] * 100
-                flecha = "▲" if chg >= 0 else "▼"
-                col = "#0F6E56" if chg >= 0 else "#A32D2D"
-                linea += (f"<br><span style='color:{col}'>"
-                          f"{flecha}{abs(chg):.0f}%</span>")
-            # Tercera linea (gris chico): docs + % del segmento.
-            _foot = []
-            if docs is not None:
-                _n = docs[j]
-                if _n is not None and not pd.isna(_n) and _n > 0:
-                    _n = int(_n)
-                    _foot.append(f"{_n} doc" if _n == 1 else f"{_n} docs")
-            if pct_periodo is not None:
-                _pp = pct_periodo[j]
-                if _pp is not None and not pd.isna(_pp):
-                    _foot.append(f"{_pp:.0f}% {_gran_suffix}")
-            if _foot:
-                linea += "".join(
-                    f"<br><span style='color:#6b6b78;font-size:11.5px'>{_p}</span>"
-                    for _p in _foot
-                )
-            _txt.append(linea)
-        return _txt
-
-    def _abrev_nombre(nombre, max_chars):
-        """Abrevia el nombre del proveedor segun ancho disponible.
-        - max<2: vacio (bar muy chica)
-        - 2:      2 primeras iniciales de palabras
-        - 3-5:    iniciales de todas las palabras significativas
-        - 6-14:   primera palabra
-        - >=15:   nombre completo (truncado con … si excede)
-        """
-        s = str(nombre).strip()
-        if max_chars < 2 or not s:
-            return ""
-        if len(s) <= max_chars:
-            return s
-        words = [w for w in s.split() if w and w.lower() not in
-                 ("de", "del", "la", "el", "los", "las", "y", "e", "s.a.c.",
-                  "sac", "s.a.", "sa", "e.i.r.l.", "eirl")]
-        if max_chars <= 5:
-            ini = "".join(w[0].upper() for w in words[:max_chars])
-            return ini[:max_chars] if len(ini) >= 2 else s[:max_chars]
-        if max_chars <= 14 and words:
-            first = words[0]
-            return first if len(first) <= max_chars else first[:max_chars - 1] + "…"
-        return s[:max_chars - 1] + "…"
 
     # Nota: la serie se calcula sobre TODOS los periodos y recien despues se
     # recorta a la ventana visible (_sl). Asi la variacion % de la primera
@@ -372,11 +292,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             _docs_lst = list(_docs_prov.values)
         else:
             _docs_lst = None
-        _tags = _etiqueta_serie(list(grp.values),
-                                pct_periodo=_pct_per,
-                                docs=_docs_lst)[_sl]
+        _tags = etiqueta_serie(list(grp.values), _gran_suffix,
+                               compacta=_lab_compacta,
+                               pct_periodo=_pct_per,
+                               docs=_docs_lst)[_sl]
         if _show_names:
-            _abbr = _abrev_nombre(prov, _max_chars)
+            _abbr = abrev_nombre(prov, _max_chars)
             if _abbr:
                 _prefix = (f"<b><span style='color:{_color};font-size:10px'>"
                            f"{_abbr}</span></b><br>")
@@ -417,7 +338,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                      .groupby("per", as_index=False)["valor"].sum()
                      .set_index("per")["valor"]
                      .reindex(periodos, fill_value=0))
-        _tags_o = _etiqueta_serie(list(grp_otros.values))[_sl]
+        _tags_o = etiqueta_serie(list(grp_otros.values), _gran_suffix,
+                                 compacta=_lab_compacta)[_sl]
         if _show_names and _max_chars >= 2:
             _prefix_o = ("<b><span style='color:#7a7a86;font-size:10px'>"
                          "Otros</span></b><br>")
