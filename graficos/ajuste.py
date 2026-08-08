@@ -794,15 +794,27 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         [data-testid="stIconMaterial"]
         {{ font-size: 13px !important; width: 13px !important;
           height: 13px !important; }}
-    /* Título de Faltantes/Sobrantes en el drill: el selector "Top N" que
-       vivía al lado se sacó a pedido (2026-08-08) — el listado siempre
-       muestra los 30 primeros, sin toggle. Mismo bug de arquitectura.md
-       regla 33: stMarkdownContainer trae margin-bottom:-16px nativo de
-       Streamlit y el <div> raíz no tiene <p> que lo absorba; sin cancelarlo
-       el listado de abajo quedaría pegado (o superpuesto) al título. Se
-       cancela y se deja un aire chico en su lugar, igual que .ajcas-head. */
-    [data-testid="stMarkdownContainer"]:has(> .ajcas-drill-titulo) {{
-        margin-bottom: 6px !important; }}
+    /* Buscador de Faltantes/Sobrantes en el drill (2026-08-08, a pedido):
+       reemplaza el título fijo -- filtra los productos de esa zona en vez
+       de solo etiquetarla. data-testid="stTextInputRootElement" es la caja
+       real (fondo gris + borde 8px de radio); el <input> de adentro ya
+       viene transparente y sin borde en esta versión de Streamlit, así que
+       hay que aplanar la caja, no el <input>, o el look sigue siendo el de
+       un campo de formulario normal en vez de un filete minimalista. */
+    div[class*="st-key-ajcas_buscar_"] [data-testid="stTextInputRootElement"] {{
+        height: auto !important; background: transparent !important;
+        border: none !important; border-radius: 0 !important;
+        border-bottom: 1px solid {GRIS_BORDE} !important;
+        transition: border-color .12s ease; }}
+    div[class*="st-key-ajcas_buscar_neg_"] [data-testid="stTextInputRootElement"]:focus-within {{
+        border-bottom-color: {AJUSTE_NEG_TEXTO} !important; }}
+    div[class*="st-key-ajcas_buscar_pos_"] [data-testid="stTextInputRootElement"]:focus-within {{
+        border-bottom-color: {AJUSTE_POS_TEXTO} !important; }}
+    div[class*="st-key-ajcas_buscar_"] [data-testid="stTextInputRootElement"] input {{
+        height: auto !important; padding: 2px 2px 4px 2px !important;
+        font-size: 11.5px !important; color: {TEXTO_PRINCIPAL} !important; }}
+    div[class*="st-key-ajcas_buscar_"] [data-testid="stTextInputRootElement"] input::placeholder {{
+        color: {GRIS_TEXTO_SUAVE} !important; opacity: 1 !important; }}
     /* ── Filas de la tabla: tarjetas con matiz por severidad, no líneas
        divisorias ─────────────────────────────────────────────────────── */
     div[class*="st-key-ajcas_fila_"] {{
@@ -1176,46 +1188,51 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
 
                         _TOPN_DRILL = 30
 
-                        def _titulo_lista(txt, color):
-                            """Título de la columna (Faltantes/Sobrantes).
-                            El selector "Top N" que vivía al lado se sacó a
-                            pedido — el listado siempre muestra los
-                            _TOPN_DRILL primeros, sin toggle.
-                            class='ajcas-drill-titulo': sin ella el <div>
-                            raíz (sin <p> que absorba el margin-bottom:-16px
-                            nativo de Streamlit) deja el listado de abajo
-                            pegado al título — mismo bug que arquitectura.md
-                            regla 33. Se cancela apuntando a la clase, igual
-                            que .ajcas-head."""
-                            st.markdown(
-                                f"<div class='ajcas-drill-titulo' "
-                                f"style='font-size:9px;font-weight:600;"
-                                f"color:{color};letter-spacing:.08em;"
-                                f"text-transform:uppercase'>{txt}</div>",
-                                unsafe_allow_html=True,
-                            )
+                        def _buscador_lista(placeholder, key):
+                            """Buscador minimalista que reemplaza el título
+                            fijo (Faltantes/Sobrantes) a pedido. Filtra
+                            _agg_dim ANTES del top _TOPN_DRILL, no la lista
+                            ya recortada -- si no, un producto fuera del top
+                            actual no aparecería nunca por más que calzara
+                            con la búsqueda."""
+                            return st.text_input(
+                                placeholder, key=key, placeholder=placeholder,
+                                label_visibility="collapsed",
+                            ).strip().lower()
 
                         _pa, _pb = st.columns(2)
                         with _pa:
-                            _titulo_lista("Faltantes", AJUSTE_NEG_TEXTO)
+                            _q_neg = _buscador_lista(
+                                "Buscar en faltantes…",
+                                f"ajcas_buscar_neg_{_slug(focus_cat)}")
+                            _neg_pool = _agg_dim[_agg_dim[col_ajuste_val] < 0]
+                            if _q_neg:
+                                _neg_pool = _neg_pool[_neg_pool[dim].astype(str)
+                                    .str.lower().str.contains(_q_neg, regex=False)]
                             # ascending=True: el más negativo (mayor
                             # magnitud) primero en el DataFrame -> primero
                             # en el HTML -> arriba de la lista.
-                            _neg = (_agg_dim[_agg_dim[col_ajuste_val] < 0]
-                                    .nsmallest(_TOPN_DRILL, col_ajuste_val)
+                            _neg = (_neg_pool.nsmallest(_TOPN_DRILL, col_ajuste_val)
                                     .sort_values(col_ajuste_val, ascending=True))
                             if _neg.empty:
-                                st.caption("Sin faltantes en esta familia.")
+                                st.caption("Sin coincidencias." if _q_neg else
+                                          "Sin faltantes en esta familia.")
                             else:
                                 st.markdown(_filas_split_html(_neg, AJUSTE_NEG),
                                            unsafe_allow_html=True)
                         with _pb:
-                            _titulo_lista("Sobrantes", AJUSTE_POS_TEXTO)
-                            _pos = (_agg_dim[_agg_dim[col_ajuste_val] > 0]
-                                    .nlargest(_TOPN_DRILL, col_ajuste_val)
+                            _q_pos = _buscador_lista(
+                                "Buscar en sobrantes…",
+                                f"ajcas_buscar_pos_{_slug(focus_cat)}")
+                            _pos_pool = _agg_dim[_agg_dim[col_ajuste_val] > 0]
+                            if _q_pos:
+                                _pos_pool = _pos_pool[_pos_pool[dim].astype(str)
+                                    .str.lower().str.contains(_q_pos, regex=False)]
+                            _pos = (_pos_pool.nlargest(_TOPN_DRILL, col_ajuste_val)
                                     .sort_values(col_ajuste_val, ascending=False))
                             if _pos.empty:
-                                st.caption("Sin sobrantes en esta familia.")
+                                st.caption("Sin coincidencias." if _q_pos else
+                                          "Sin sobrantes en esta familia.")
                             else:
                                 st.markdown(_filas_split_html(_pos, AJUSTE_POS),
                                            unsafe_allow_html=True)
