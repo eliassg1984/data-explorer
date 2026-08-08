@@ -1711,3 +1711,59 @@ salvo `icono`):
     verdad estaba en la CASCADA: leyendo las reglas del CSSOM, el
     `<style>` inyectado decía `rotate(0deg)`, que es lo correcto. Mismo
     espíritu que la regla #48.
+
+56. **Al sacar un blob de JS/CSS embebido a su módulo: NO lo pases a raw
+    string, y verifica el VALOR PARSEADO, no el texto fuente.** Sacar el
+    JS de `inject_element_inspector` (1.381 líneas dentro de un
+    `components.html`) rompió el inspector entero, y la verificación que
+    hice no lo detectó. Las dos trampas, que van juntas:
+
+    **(a) El raw string duplica los escapes.** El blob vivía en un string
+    NORMAL. Ahí, un `\(` escrito en el fuente sobrevive tal cual (no es
+    una secuencia de escape válida de Python), y el navegador recibe el
+    regex que espera. Al moverlo a `r"""..."""`, los backslashes que el
+    string normal colapsaba dejaron de colapsar y el JS quedó con
+    `/var\\(\\s*(--[...]+)/g` → `SyntaxError: Invalid regular
+    expression: Unterminated group`, con el inspector muerto de entrada.
+    **Usa el mismo tipo de literal que el original** (aquí, triple-quote
+    normal). El módulo lleva el aviso en su docstring.
+
+    **(b) Comparar el fuente de git contra la constante nueva NO prueba
+    nada.** Es exactamente el error que cometí: extraje el blob viejo con
+    `git show` + rebanado de líneas (texto FUENTE, con `\\(`) y lo comparé
+    contra el `JS` nuevo (valor PARSEADO). Coincidían, porque ambos tenían
+    los backslashes sin colapsar — comparaba manzanas con naranjas, y dio
+    verde sobre un módulo roto.
+    **La comparación correcta es parsed-vs-parsed:**
+    ```python
+    import ast, subprocess
+    src = subprocess.run(["git", "show", "HEAD:ruta/al/modulo.py"],
+                         capture_output=True, text=True,
+                         encoding="utf-8").stdout
+    # El blob es el string constante MAS LARGO. NO lo busques por
+    # "contiene __MI_PLACEHOLDER__": el propio literal del .replace()
+    # también lo contiene (y mide 15 chars — me pasó, y sobrescribí el
+    # módulo con esa basura).
+    cands = [n.value for n in ast.walk(ast.parse(src))
+             if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+    blob = max(cands, key=len)
+    assert MiModulo.CONSTANTE == blob
+    ```
+    Con esto, `73.417 chars` idénticos. Y como red final: cargar la app
+    con `?debug=1` y mirar la CONSOLA — el fallo era un `Uncaught
+    SyntaxError` que ni `py_compile`, ni `ruff`, ni `test_graficos.py`
+    pueden ver, porque el error ocurre en el navegador.
+    **Ojo con el log de consola después de reiniciar el server:** conserva
+    entradas del cargue anterior. Renavegar y volver a leer.
+
+    **De paso, un hallazgo del mismo trabajo:** la cadena de nueve
+    `.replace()` sustituía `__MAPA_PREFIJOS__`, un placeholder que **no
+    existe en el JS**. Es un no-op: el JS declara siete mapas y busca solo
+    por coincidencia exacta (`map[key] || ''`). O sea que la mitad Python
+    del fallback por prefijo para keys dinámicas (f-string) está
+    construida —incluidos los `_refs_de()` que cuesta calcular— y la mitad
+    JS nunca se escribió. Consecuencia real: para las keys armadas con
+    f-string (que este repo usa mucho), el tooltip no muestra `codigo` ni
+    `snippet` ni `funcion`. Se dejó el `.replace()` con un comentario que
+    lo dice, para que el código no mienta, a la espera de decidir entre
+    borrar la mitad muerta o terminar la otra mitad.
