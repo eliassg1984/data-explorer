@@ -16,15 +16,13 @@ from utils import _norm, buscar_columna, LOCALE_ES
 from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid, inject_dynamic_grid_height, inject_fix_column_panel_ajuste
 from perf import perf
 from tema import (
-    ACENTO, ACENTO_FUERTE, ACENTO_TEXTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA_FONDO, ADVERTENCIA_TEXTO, BLANCO, CELDA_ALERTA_FONDO, CELDA_ALERTA_TEXTO, CELDA_NEG_FONDO, CELDA_POS_TEXTO, DANGER_TEXT, ERROR_FONDO, EXIT_HOVER, GRIS_BORDE, GRIS_FONDO, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE, ICON_MUTED, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FILA, LAVANDA_FILA_ALT, LAVANDA_FOCO, LAVANDA_FONDO, LAVANDA_MEDIO, LAVANDA_SELECCION, SCROLL_THUMB, TEXTO_PRINCIPAL,
+    ACENTO, ACENTO_TEXTO_OSCURO, BLANCO, GRIS_BORDE, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FILA, LAVANDA_FILA_ALT, LAVANDA_FONDO,
 )
 from tablas._config import _config_sidebar, _titulo_es
 from tablas._css import _css_base, _css_franjas_sidebar
 
 
 def renderizar_aggrid_compras(df_grid: pd.DataFrame, font_px: int = 14):
-    from inyecciones import inject_fix_column_panel_ajuste
-
     gb = GridOptionsBuilder.from_dataframe(df_grid)
     gb.configure_default_column(
         resizable=True, filter=True, sortable=True, editable=False,
@@ -132,7 +130,7 @@ def renderizar_aggrid_compras(df_grid: pd.DataFrame, font_px: int = 14):
         "}"
     )
 
-    _sidebar_cfg = _config_sidebar(mostrar_pivot=True, es_ajuste=True)
+    _sidebar_cfg = _config_sidebar()
 
     gb.configure_grid_options(
         autoGroupColumnDef={"minWidth": 220},

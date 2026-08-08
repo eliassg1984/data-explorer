@@ -1,0 +1,33 @@
+# Configuración de ruff — linter del proyecto.
+#
+# Instalación (NO va en requirements.txt: Streamlit Cloud instala ese archivo
+# en cada deploy y un linter ahí es tiempo de build a cambio de nada en
+# runtime). Ver requirements-dev.txt:
+#
+#     pip install -r requirements-dev.txt
+#
+# Uso:
+#     python -m ruff check .          # reportar
+#     python -m ruff check --fix .    # arreglar lo autoarreglable
+#
+# POR QUÉ SOLO "F" (pyflakes) y no el set por defecto:
+# esta app es Streamlit + CSS embebido en strings largos. Las reglas de
+# estilo (E501 línea larga, E741, W29x) marcarían cientos de líneas de CSS
+# que están así a propósito, y el ruido haría que nadie mire la salida.
+# "F" es el subconjunto que detecta código MUERTO o ROTO — imports sin usar,
+# redefiniciones, nombres inexistentes, f-strings sin placeholder — que es
+# exactamente la deuda que se venía acumulando sin que nada la señalara
+# (108 imports muertos al momento de introducir esta config).
+#
+# Si algún día se quiere subir la exigencia, el siguiente escalón razonable
+# es "B" (bugbear), no "E": son bugs, no estilo.
+line-length = 100   # informativo; E501 no está activo
+
+[lint]
+select = ["F"]
+
+[lint.per-file-ignores]
+# Los __init__.py son fachadas del paquete: re-exportan a propósito para que
+# `from tablas import renderizar_aggrid_desktop` siga funcionando. Ya llevan
+# `# noqa: F401` línea a línea, esto lo hace explícito a nivel de política.
+"**/__init__.py" = ["F401"]

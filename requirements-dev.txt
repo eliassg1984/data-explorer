@@ -1,0 +1,10 @@
+# Herramientas de desarrollo. NO se instalan en Streamlit Cloud — ese lee
+# requirements.txt, y meter un linter ahí solo alarga el build de cada deploy.
+#
+#     pip install -r requirements-dev.txt
+#
+# Antes de pushear:
+#     python -m ruff check .      (config en ruff.toml)
+#     python test_graficos.py     (smoke de figuras + contratos del dispatcher)
+
+ruff>=0.16,<0.17

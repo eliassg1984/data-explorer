@@ -8,9 +8,9 @@ import re
 import unicodedata
 
 import pandas as pd
-from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
+from st_aggrid import JsCode
 from tema import (
-    ACENTO, ACENTO_FUERTE, ACENTO_TEXTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA_FONDO, ADVERTENCIA_TEXTO, BLANCO, CELDA_ALERTA_FONDO, CELDA_ALERTA_TEXTO, CELDA_NEG_FONDO, CELDA_POS_TEXTO, DANGER_TEXT, ERROR_FONDO, EXIT_HOVER, GRIS_BORDE, GRIS_FONDO, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE, ICON_MUTED, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FILA, LAVANDA_FILA_ALT, LAVANDA_FOCO, LAVANDA_FONDO, LAVANDA_MEDIO, LAVANDA_SELECCION, SCROLL_THUMB, TEXTO_PRINCIPAL,
+    ACENTO, ACENTO_TEXTO_OSCURO, BLANCO, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FONDO, TEXTO_PRINCIPAL,
 )
 
 
@@ -105,59 +105,66 @@ def _estilo_fila(col_stock, df_grid):
             }}
         """)
     return get_row_style
-def _config_sidebar(mostrar_pivot, es_ajuste):
-    """Arma la configuración del sidebar de AgGrid: paneles Columnas,
-    Filtros y (solo en Ajuste) Modo pivote. Devuelve el dict sideBar.
-    Extraído de renderizar_aggrid_desktop en la Fase 3."""
-    _columns_panel = {
-        "id": "columns",
-        "labelDefault": "Columnas",
-        "labelKey": "columns",
-        "iconKey": "columns",
-        "toolPanel": "agColumnsToolPanel",
-        "toolPanelParams": {
-            "suppressRowGroups": (not mostrar_pivot) or es_ajuste,
-            "suppressValues":    (not mostrar_pivot) or es_ajuste,
-            "suppressPivots":    (not mostrar_pivot) or es_ajuste,
-            "suppressPivotMode": (not mostrar_pivot) or es_ajuste,
-            "suppressColumnFilter": es_ajuste,
-            "suppressColumnSelectAll": es_ajuste,
-            "suppressColumnExpandAll": True,
-        },
-    }
-    _filters_panel = {
-        "id": "filters",
-        "labelDefault": "Filtros",
-        "labelKey": "filters",
-        "iconKey": "filter",
-        "toolPanel": "agFiltersToolPanel",
-    }
-    _tool_panels = [_columns_panel, _filters_panel]
+def _config_sidebar():
+    """Config del sidebar de AgGrid: 3 paneles a la derecha, ninguno abierto.
 
-    if True:
-        _tool_panels.append({
-            "id": "pivotePanel",
-            "labelDefault": "Modo pivote",
-            "labelKey": "pivotePanel",
-            "iconKey": "pivot",
-            "toolPanel": "agColumnsToolPanel",
-            "toolPanelParams": {
-                "suppressRowGroups": False,
-                "suppressValues": False,
-                "suppressPivots": False,
-                "suppressPivotMode": False,
-                "suppressColumnFilter": True,
-                "suppressColumnSelectAll": True,
-                "suppressColumnExpandAll": True,
+      · Columnas    solo mostrar/ocultar (arrastrar a grupos/valores/pivote
+                    se hace desde el panel "Modo pivote", no desde aquí)
+      · Filtros     el panel de filtros nativo
+      · Modo pivote grupos de filas, valores y etiquetas de columna
+
+    Sin parámetros: hasta el 2026-08-08 recibía `mostrar_pivot` y
+    `es_ajuste`, pero los DOS llamadores (desktop.py y compras.py) pasaban
+    siempre True, así que cada expresión booleana de abajo tenía un único
+    resultado posible y el panel de pivote colgaba de un `if True:`. Se
+    dejaron los valores resueltos, que es lo que realmente se rendería.
+    Si vuelve a hacer falta un sidebar distinto por reporte, parametrizar
+    de nuevo desde el llamador — pero con un condicional que sí varíe."""
+    return {
+        "toolPanels": [
+            {
+                "id": "columns",
+                "labelDefault": "Columnas",
+                "labelKey": "columns",
+                "iconKey": "columns",
+                "toolPanel": "agColumnsToolPanel",
+                "toolPanelParams": {
+                    "suppressRowGroups": True,
+                    "suppressValues": True,
+                    "suppressPivots": True,
+                    "suppressPivotMode": True,
+                    "suppressColumnFilter": True,
+                    "suppressColumnSelectAll": True,
+                    "suppressColumnExpandAll": True,
+                },
             },
-        })
-
-    _sidebar_cfg = {
-        "toolPanels": _tool_panels,
-        "defaultToolPanel": "" if es_ajuste else "columns",
+            {
+                "id": "filters",
+                "labelDefault": "Filtros",
+                "labelKey": "filters",
+                "iconKey": "filter",
+                "toolPanel": "agFiltersToolPanel",
+            },
+            {
+                "id": "pivotePanel",
+                "labelDefault": "Modo pivote",
+                "labelKey": "pivotePanel",
+                "iconKey": "pivot",
+                "toolPanel": "agColumnsToolPanel",
+                "toolPanelParams": {
+                    "suppressRowGroups": False,
+                    "suppressValues": False,
+                    "suppressPivots": False,
+                    "suppressPivotMode": False,
+                    "suppressColumnFilter": True,
+                    "suppressColumnSelectAll": True,
+                    "suppressColumnExpandAll": True,
+                },
+            },
+        ],
+        "defaultToolPanel": "",   # ninguno abierto al cargar
         "position": "right",
     }
-    return _sidebar_cfg
 # Columnas numéricas que NO se suman en la fila de totales: son códigos o
 # partes de fecha, sumarlas da un número sin sentido.
 #

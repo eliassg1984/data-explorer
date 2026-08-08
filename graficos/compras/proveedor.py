@@ -418,8 +418,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                      .reindex(periodos, fill_value=0))
         _tags_o = _etiqueta_serie(list(grp_otros.values))[_sl]
         if _show_names and _max_chars >= 2:
-            _prefix_o = (f"<b><span style='color:#7a7a86;font-size:10px'>"
-                         f"Otros</span></b><br>")
+            _prefix_o = ("<b><span style='color:#7a7a86;font-size:10px'>"
+                         "Otros</span></b><br>")
             _tags_o = [(_prefix_o + t) if t else "" for t in _tags_o]
         fig.add_bar(
             x=_per_vis,

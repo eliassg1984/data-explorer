@@ -18,7 +18,7 @@ from estado_rango import (
     atajos_rango, aplicar_atajo,
 )
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_diseno_visual, inject_footer_actualizacion, inject_calendario_es, inject_fullscreen_app
-from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil, renderizar_aggrid_compras
+from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil
 from graficos import renderizar_graficos_reporte, tiene_dashboard
 from graficos.base import _render_rail
 from graficos.ajuste import categoria_rango_ajuste

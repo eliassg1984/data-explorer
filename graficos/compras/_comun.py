@@ -9,13 +9,15 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from tema import ACENTO, TEXTO_PRINCIPAL
-from graficos.base import _compras_truncar, _es_movil, _slug
-
-# `_es_movil` vivía definida acá; se movió a graficos/base.py (2026-08-07,
-# ver su docstring) porque graficos/ajuste.py la necesitó también. El import
-# de arriba la reexporta bajo el mismo nombre, así que nada que hiciera
-# `from graficos.compras._comun import _es_movil` (proveedor.py, __init__.py)
-# se entera del movimiento.
+from graficos.base import _compras_truncar, _slug
+# REEXPORT, no import muerto: `_es_movil` vivía definida acá y se movió a
+# graficos/base.py (2026-08-07, ver su docstring) porque graficos/ajuste.py
+# la necesitó también. Este import la reexpone bajo el mismo nombre, así que
+# proveedor.py y compras/__init__.py siguen haciendo
+# `from graficos.compras._comun import _es_movil` sin enterarse. Este módulo
+# NO la usa, de ahí el noqa: sin él, `ruff --fix` la borraría y rompería a
+# sus dos consumidores.
+from graficos.base import _es_movil  # noqa: F401
 
 
 def _first_point(evt):

@@ -21,15 +21,13 @@ genérico) viene de graficos.base.
 """
 
 import plotly.graph_objects as go
-import plotly.express as px
 import streamlit as st
 
 from tema import (
     ACENTO, BLANCO, GRIS_BORDE, PALETA_SERIES, SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
 )
 from graficos.base import (
-    _card, _layout, _render_rail, _resolver, _wrap_cat,
-    renderizar_graficos_genericos,
+    _card, _layout, _render_rail, _resolver, renderizar_graficos_genericos,
 )
 
 # Rail vertical fijo al borde DERECHO (componente compartido _render_rail,

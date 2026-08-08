@@ -13,7 +13,7 @@ from utils import _norm, buscar_columna, LOCALE_ES
 from inyecciones import inject_grid_health_check, inject_pagination_v2, inject_maximize_aggrid, inject_dynamic_grid_height, inject_fix_column_panel_ajuste, inject_filtros_grid
 from perf import perf
 from tema import (
-    ACENTO, ACENTO_FUERTE, ACENTO_TEXTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA_FONDO, ADVERTENCIA_TEXTO, BLANCO, CELDA_ALERTA_FONDO, CELDA_ALERTA_TEXTO, CELDA_NEG_FONDO, CELDA_POS_TEXTO, DANGER_TEXT, ERROR_FONDO, EXIT_HOVER, GRIS_BORDE, GRIS_FONDO, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE, ICON_MUTED, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FILA, LAVANDA_FILA_ALT, LAVANDA_FOCO, LAVANDA_FONDO, LAVANDA_MEDIO, LAVANDA_SELECCION, SCROLL_THUMB, TEXTO_PRINCIPAL,
+    ACENTO, ACENTO_TEXTO_OSCURO, BLANCO, EXIT_HOVER, GRIS_BORDE, GRIS_FONDO, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_SUAVE, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FILA, LAVANDA_FILA_ALT, LAVANDA_FOCO, LAVANDA_FONDO, SCROLL_THUMB, TEXTO_PRINCIPAL,
 )
 from tablas._config import _config_sidebar, _estilo_fila, _estilos_celda, _fila_totales, _titulo_es
 from tablas._css import _css_base, _css_franjas_sidebar
@@ -267,7 +267,7 @@ def renderizar_aggrid_desktop(df_grid, cols_mostrar, reporte, font_px=14,
     fila_totales = _fila_totales(_df_tot, cols_valor, cols_precio, cols_stock, primera_col)
 
     get_row_style = _estilo_fila(col_stock, df_grid)
-    _sidebar_cfg = _config_sidebar(mostrar_pivot=True, es_ajuste=True)
+    _sidebar_cfg = _config_sidebar()
 
     _reporte_js = str(reporte).replace("\\", "\\\\").replace('"', '\\"')
 
