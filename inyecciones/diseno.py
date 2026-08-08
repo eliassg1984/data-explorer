@@ -38,6 +38,13 @@ Python reales en este módulo: la paleta se importa de `tema.py` y se
 serializa al script igual que `_mapas_desarrollador()` en inspector.py
 (`json.dumps` + placeholder), para no hardcodear hex sueltos (CLAUDE.md
 "nunca un #hex suelto").
+
+El panel se puede colapsar a una pill chica (botón "–" en su cabecera,
+click en la pill para expandir, o Alt+D) — pensado para el caso "el panel
+ocupa lugar aunque no haya nada que ajustar todavía". Colapsar/expandir es
+una preferencia de sesión (`win.__disenoState.panelColapsado`), no depende
+de la key pineada; el overlay y las manijas del elemento pineado siguen
+funcionando igual con el panel colapsado.
 """
 
 import json
@@ -80,7 +87,10 @@ def inject_diseno_visual():
         }
 
         if (!win.__disenoState) {
-            win.__disenoState = { porKey: {} };
+            win.__disenoState = { porKey: {}, panelColapsado: false };
+        }
+        if (win.__disenoState.panelColapsado === undefined) {
+            win.__disenoState.panelColapsado = false;
         }
 
         function registroPara(key) {
@@ -142,41 +152,94 @@ def inject_diseno_visual():
             doc.body.appendChild(overlay);
         }
 
+        var PANEL_CSS_EXPANDIDO = [
+            'position:fixed',
+            'top:0', 'right:0', 'bottom:0',
+            'width:230px',
+            'z-index:2147483600',
+            'background:#101014',
+            'color:#cfcfd6',
+            'font:12px/1.5 -apple-system,sans-serif',
+            'border-left:1px solid #6c5ce7',
+            'padding:12px',
+            'box-sizing:border-box',
+            'overflow-y:auto',
+            'display:none'
+        ].join(';');
+
         var panel = doc.getElementById('el-diseno-panel');
         if (!panel) {
             panel = doc.createElement('div');
             panel.id = 'el-diseno-panel';
-            panel.style.cssText = [
-                'position:fixed',
-                'top:0', 'right:0', 'bottom:0',
-                'width:230px',
-                'z-index:2147483600',
-                'background:#101014',
-                'color:#cfcfd6',
-                'font:12px/1.5 -apple-system,sans-serif',
-                'border-left:1px solid #6c5ce7',
-                'padding:12px',
-                'box-sizing:border-box',
-                'overflow-y:auto',
-                'display:none'
-            ].join(';');
+            panel.style.cssText = PANEL_CSS_EXPANDIDO;
             doc.body.appendChild(panel);
+        }
+
+        function botonColapsar() {
+            var b = doc.createElement('button');
+            b.textContent = '–';
+            b.title = 'Ocultar panel (Alt+D)';
+            b.style.cssText = 'background:#2A2A35;color:#fff;border:0;border-radius:4px;width:22px;height:22px;font:600 14px/1 sans-serif;cursor:pointer;flex:0 0 auto';
+            b.addEventListener('click', function(ev) {
+                ev.stopPropagation();
+                win.__disenoState.panelColapsado = true;
+                panel.dataset.builtForKey = '';
+                sync();
+            });
+            return b;
+        }
+
+        function pintarPill() {
+            var res = elementoPineado();
+            var etiqueta = (res && res.el) ? ('🎨 ' + res.key) : '🎨 Modo diseno';
+            panel.style.cssText = [
+                'position:fixed','bottom:16px','right:16px','z-index:2147483600',
+                'background:#101014','color:#cfcfd6','border:1px solid #6c5ce7',
+                'border-radius:20px','padding:7px 14px',
+                'font:600 12px/1.3 -apple-system,sans-serif',
+                'cursor:pointer','box-shadow:0 2px 8px rgba(0,0,0,.35)',
+                'display:block','white-space:nowrap'
+            ].join(';');
+            panel.textContent = etiqueta + '  ·  expandir (Alt+D)';
+            panel.__tamVal = null;
+            panel.__posVal = null;
+            panel.onclick = function() {
+                win.__disenoState.panelColapsado = false;
+                panel.dataset.builtForKey = '';
+                sync();
+            };
         }
 
         function panelEspera() {
             panel.dataset.builtForKey = '';
+            panel.style.cssText = PANEL_CSS_EXPANDIDO;
             panel.style.display = 'block';
-            panel.style.whiteSpace = 'pre-wrap';
-            panel.style.font = '12px/1.6 "Courier New",monospace';
-            panel.textContent = 'Modo diseno activo\\n\\nClic derecho en un elemento para empezar (mismo Fijar del inspector).';
+            panel.onclick = null;
+            panel.innerHTML = '';
+            var header = doc.createElement('div');
+            header.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:8px';
+            header.appendChild(botonColapsar());
+            panel.appendChild(header);
+            var texto = doc.createElement('div');
+            texto.style.cssText = 'font:12px/1.6 "Courier New",monospace;white-space:pre-wrap';
+            texto.textContent = 'Modo diseno activo\\n\\nClic derecho en un elemento para empezar (mismo Fijar del inspector).';
+            panel.appendChild(texto);
         }
 
         function panelPerdido(key) {
             panel.dataset.builtForKey = '';
+            panel.style.cssText = PANEL_CSS_EXPANDIDO;
             panel.style.display = 'block';
-            panel.style.whiteSpace = 'pre-wrap';
-            panel.style.font = '12px/1.6 "Courier New",monospace';
-            panel.textContent = 'Widget key: ' + key + '\\n\\n(el elemento pineado ya no existe en este render)';
+            panel.onclick = null;
+            panel.innerHTML = '';
+            var header = doc.createElement('div');
+            header.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:8px';
+            header.appendChild(botonColapsar());
+            panel.appendChild(header);
+            var texto = doc.createElement('div');
+            texto.style.cssText = 'font:12px/1.6 "Courier New",monospace;white-space:pre-wrap';
+            texto.textContent = 'Widget key: ' + key + '\\n\\n(el elemento pineado ya no existe en este render)';
+            panel.appendChild(texto);
         }
 
         function trackear(el) {
@@ -383,14 +446,15 @@ def inject_diseno_visual():
         }
 
         function construirControles(key, elemento, registro) {
+            panel.style.cssText = PANEL_CSS_EXPANDIDO;
+            panel.style.display = 'block';
+            panel.onclick = null;
             panel.innerHTML = '';
-            panel.style.whiteSpace = 'normal';
-            panel.style.font = '12px/1.5 -apple-system,sans-serif';
 
             var header = doc.createElement('div');
-            header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #2a2a35';
+            header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #2a2a35';
             var headerKey = doc.createElement('div');
-            headerKey.style.cssText = 'font-size:11px;color:#9385ec;word-break:break-all;font-family:"Courier New",monospace';
+            headerKey.style.cssText = 'font-size:11px;color:#9385ec;word-break:break-all;font-family:"Courier New",monospace;flex:1;min-width:0';
             headerKey.textContent = key;
             var btnSoltar = doc.createElement('button');
             btnSoltar.textContent = 'Soltar';
@@ -399,6 +463,7 @@ def inject_diseno_visual():
                 if (win.__inspectorTogglePin) win.__inspectorTogglePin(true);
             });
             header.appendChild(headerKey);
+            header.appendChild(botonColapsar());
             header.appendChild(btnSoltar);
             panel.appendChild(header);
 
@@ -631,24 +696,31 @@ def inject_diseno_visual():
                 return;
             }
             var res = elementoPineado();
-            if (!res) {
-                overlay.style.display = 'none';
+
+            // Panel: colapsado se ve igual (una pill chica) haya o no algo
+            // pineado. El overlay/manijas del elemento pineado (mas abajo)
+            // son independientes de esto — colapsar el panel no las apaga.
+            if (win.__disenoState.panelColapsado) {
+                pintarPill();
+            } else if (!res) {
                 panelEspera();
-                return;
-            }
-            if (!res.el) {
-                overlay.style.display = 'none';
+            } else if (!res.el) {
                 panelPerdido(res.key);
+            } else {
+                if (panel.dataset.builtForKey !== res.key) {
+                    construirControles(res.key, res.el, registroPara(res.key));
+                    panel.dataset.builtForKey = res.key;
+                }
+                panel.style.display = 'block';
+            }
+
+            if (!res || !res.el) {
+                overlay.style.display = 'none';
                 return;
             }
             var registro = registroPara(res.key);
             aplicarEstado(res.el, registro);
             trackear(res.el);
-            if (panel.dataset.builtForKey !== res.key) {
-                construirControles(res.key, res.el, registro);
-                panel.dataset.builtForKey = res.key;
-            }
-            panel.style.display = 'block';
             actualizarReadouts(res.el, registro);
         }
 
@@ -663,11 +735,20 @@ def inject_diseno_visual():
         if (win.__disenoPollInterval) { win.clearInterval(win.__disenoPollInterval); }
         if (win.__disenoScrollHandler) { win.removeEventListener('scroll', win.__disenoScrollHandler, true); }
         if (win.__disenoResizeHandler) { win.removeEventListener('resize', win.__disenoResizeHandler); }
+        if (win.__disenoKeydownHandler) { win.removeEventListener('keydown', win.__disenoKeydownHandler); }
 
         win.__disenoScrollHandler = sync;
         win.__disenoResizeHandler = sync;
+        win.__disenoKeydownHandler = function(e) {
+            if (e.altKey && (e.key === 'd' || e.key === 'D') && disenoActivo()) {
+                win.__disenoState.panelColapsado = !win.__disenoState.panelColapsado;
+                panel.dataset.builtForKey = '';
+                sync();
+            }
+        };
         win.addEventListener('scroll', win.__disenoScrollHandler, true);
         win.addEventListener('resize', win.__disenoResizeHandler);
+        win.addEventListener('keydown', win.__disenoKeydownHandler);
 
         win.__disenoPollInterval = win.setInterval(sync, 150);
         sync();
