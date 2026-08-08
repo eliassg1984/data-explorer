@@ -787,19 +787,34 @@ salvo `icono`):
     parte de render (AgGrid) no cambió nada: sigue recibiendo la misma
     forma de `periodos`/`wide` sin importar cómo se calculó la clave.
 
-    **2026-08-07, más tarde — las etiquetas de Corte quedaban cortadas**
-    (`tablas/ajuste_pivote.py::_col_periodo`). El `minWidth=92` fijo de
-    las columnas de periodo estaba pensado para "ene"/"S01" (3
-    caracteres); una etiqueta de Corte como "30 jul - 2 ago" (14
-    caracteres) no entraba junto con los iconos de orden/filtro/menú de
-    la cabecera y se veía como "1..." — el dato de la celda estaba
-    completo, solo la cabecera lo escondía. `_ancho_header_periodo(label)`
-    calcula el mínimo a partir del largo real de la etiqueta (una
-    estimación a ojo de px-por-carácter, no hace falta exacta) en vez de
-    un número fijo pensado para el caso más corto. Se agregó de paso
-    `headerTooltip` con el mismo texto, por las dudas de que una etiqueta
-    todavía más larga (un corte que cruza de año, si alguna vez pasa)
-    vuelva a necesitar más que el ancho calculado.
+    **2026-08-07, más tarde — las etiquetas de Corte quedaban cortadas,
+    dos vueltas hasta calibrar bien el ancho** (`tablas/ajuste_pivote.py::
+    _col_periodo`/`_ancho_header_periodo`). El `minWidth=92` fijo de las
+    columnas de periodo estaba pensado para "ene"/"S01" (3 caracteres);
+    una etiqueta de Corte como "30 jul - 2 ago" no entraba junto con los
+    iconos de orden/filtro/menú de la cabecera y se veía como "1..." — el
+    dato de la celda estaba completo, solo la cabecera lo escondía. Se
+    agregó de paso `headerTooltip` con el mismo texto.
+    **1ra vuelta (insuficiente):** `_ancho_header_periodo` calculaba el
+    mínimo a ojo (`base=58 + 7px × carácter`), probado solo con 5-6
+    columnas en una ventana ancha — no se veía cortado ahí porque
+    `sizeColumnsToFit()` tenía de sobra para estirar todo más allá del
+    mínimo. Con datos reales (20+ columnas de Corte, la ventana ya no
+    alcanza para estirar de más) el mínimo SÍ se usaba literal, y 9 de
+    10 cabeceras salían cortadas — reportado por captura, reproducido en
+    `_test_pivote_aislado.py` con muchas columnas antes de tocar nada.
+    **2da vuelta (medida, no estimada):** se leyó `scrollWidth` del label
+    contra el ancho real de columna en varias etiquetas — los tres
+    iconos de cabecera comen **72px fijos** (no 58), y el texto ronda
+    **6.3px/carácter** (no muy lejos de la primera estimación, el error
+    grande estaba en el chrome de iconos). `base=85`/`por_caracter=7.5`
+    deja margen sobre esa medición. Verificado de nuevo con 24 columnas
+    (8 meses × 3 cortes) y scroll hasta la última: 0 cabeceras cortadas.
+    **Lección:** un ancho "que no se corta" verificado con pocas columnas
+    en una ventana ancha no prueba nada — `sizeColumnsToFit()` disimula
+    un mínimo insuficiente estirando de más cuando sobra espacio. Solo se
+    nota apretado con las columnas reales (muchas, la ventana no da para
+    estirar). Medir contra un caso con volumen realista, no el más fácil.
 
 26. **`GridOptionsBuilder.configure_column()` PISA el `headerName` cada vez
     que se lo llama sin `header_name`.** No hace merge parcial: reconstruye

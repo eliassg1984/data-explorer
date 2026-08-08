@@ -146,15 +146,22 @@ def _cell_renderer_combinado(es_total=False):
     """)
 
 
-def _ancho_header_periodo(label, minimo=92, base=58, por_caracter=7):
+def _ancho_header_periodo(label, minimo=92, base=85, por_caracter=7.5):
     """Ancho mínimo a partir del largo de la etiqueta. "ene"/"S01" entran
-    en el mínimo de siempre (pensado para 3 caracteres + iconos de orden/
-    filtro/menú), pero Corte trae etiquetas bien más largas ("15-16 ene",
-    "30 jul - 2 ago") que ese mínimo fijo no alcanzaba a mostrar completas
-    — se veían cortadas ("1...") aunque el dato entero cupiera en la
-    celda de abajo. `base`/`por_caracter` son una estimación a ojo del
-    ancho de fuente de la cabecera (11px) más los tres iconos; no hace
-    falta que sea exacta, solo que crezca con el largo real del texto."""
+    en el mínimo de siempre, pero Corte trae etiquetas bien más largas
+    ("15-16 ene", "30 jul - 2 ago") que un mínimo fijo pensado para 3
+    caracteres no alcanzaba a mostrar completas -- se veían cortadas
+    ("1...") aunque el dato entero cupiera en la celda de abajo.
+
+    `base`/`por_caracter` NO son una estimación a ojo (la primera versión
+    lo era -- 58 + 7px/car -- y con muchas columnas de Corte reales seguía
+    cortando: 9/10 headers truncados, verificado con
+    _test_pivote_aislado.py). Estos números salen de medir en vivo
+    `scrollWidth` del label vs. el ancho real de columna en varias
+    etiquetas: los tres iconos de cabecera (orden/filtro/menú) comen
+    ~72px fijos sea cual sea el texto, no ~58px. base=85/por_caracter=7.5
+    deja margen sobre esa medición (72px de chrome + ~6.3px/car de texto
+    medidos) para no quedar otra vez al borde exacto."""
     return max(minimo, base + len(str(label)) * por_caracter)
 
 
