@@ -199,6 +199,98 @@ def _pruebas_puras():
     return fallos
 
 
+def _pruebas_estado_y_utils():
+    """estado_rango.py y utils.py: lógica pura, cero Streamlit real.
+
+    `estado_rango` es el DUEÑO ÚNICO del rango de fechas y su docstring
+    documenta los desyncs (overlay ≠ calendario ≠ datos) que motivaron que
+    exista. `utils` resuelve nombres de columna en TODO el repo: si
+    `buscar_columna` deja de normalizar acentos, media app deja de
+    encontrar sus columnas y no falla — simplemente muestra menos.
+
+    Ninguno tenía un solo assert hasta el 2026-08-08.
+    """
+    import datetime
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    estado/utils · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA estado/utils · {nombre}: got={got!r} exp={exp!r}")
+
+    # ── utils: normalización y búsqueda de columnas ─────────────────────
+    from utils import _norm, buscar_columna, buscar_columna_fecha, resolver_columnas
+
+    check("_norm quita acentos", _norm("Área"), "area")
+    check("_norm colapsa separadores", _norm("Sub_Familia - 1"), "subfamilia1")
+    check("_norm ya normalizado", _norm("stock"), "stock")
+
+    df = pd.DataFrame({
+        "Nombre Área": ["a"], "STOCK AL CIERRE": [1],
+        "Fecha registro": pd.to_datetime(["2024-01-01"]),
+    })
+    # El match es por nombre NORMALIZADO: ni acentos ni mayúsculas ni
+    # espacios tienen que coincidir con el parquet real.
+    check("buscar_columna ignora acento y caja",
+          buscar_columna(df, "nombre area"), "Nombre Área")
+    check("buscar_columna ignora caja",
+          buscar_columna(df, "Stock al Cierre"), "STOCK AL CIERRE")
+    check("buscar_columna primer candidato que exista",
+          buscar_columna(df, "no_existe", "Stock al Cierre"), "STOCK AL CIERRE")
+    check("buscar_columna sin match", buscar_columna(df, "inexistente"), None)
+    # Prefiere la columna datetime aunque haya otras con "fecha" en el nombre.
+    check("buscar_columna_fecha por dtype",
+          buscar_columna_fecha(df), "Fecha registro")
+
+    # resolver_columnas: resuelve, DEDUPLICA y reporta las que faltan.
+    enc, falt = resolver_columnas(df, ["Nombre Area", "nombre área", "ni_idea"])
+    check("resolver_columnas deduplica", enc, ["Nombre Área"])
+    check("resolver_columnas reporta faltantes", falt, ["ni_idea"])
+
+    # ── estado_rango: qué clave usa cada reporte ────────────────────────
+    from estado_rango import _fin_de_mes, atajos_rango, clave_rango
+
+    check("clave_rango carga_por_rango",
+          clave_rango("Ventas", True), "rango_carga_Ventas")
+    check("clave_rango por categoría",
+          clave_rango("Ajuste de Inventario", False, categoria="tiempo"),
+          "ajuste_rango_aplicado_tiempo")
+    check("clave_rango normal",
+          clave_rango("Compras", False), "rango_franja_Compras")
+    # carga_por_rango GANA sobre la categoría: el date-picker tiene que
+    # controlar lo que se descarga de R2, o se pide un rango y se muestra otro.
+    check("clave_rango: carga_por_rango tiene prioridad",
+          clave_rango("X", True, categoria="tiempo"), "rango_carga_X")
+
+    check("_fin_de_mes mes normal",
+          _fin_de_mes(datetime.date(2024, 4, 10)), datetime.date(2024, 4, 30))
+    check("_fin_de_mes febrero bisiesto",
+          _fin_de_mes(datetime.date(2024, 2, 5)), datetime.date(2024, 2, 29))
+    check("_fin_de_mes diciembre",
+          _fin_de_mes(datetime.date(2024, 12, 3)), datetime.date(2024, 12, 31))
+
+    # atajos_rango: descarta los que no intersectan la data y recorta el resto.
+    hoy = datetime.date(2024, 6, 15)
+    bounds = (datetime.date(2024, 3, 1), datetime.date(2024, 5, 31))
+    atajos = dict((c, r) for c, _, r in atajos_rango(hoy, bounds))
+    # "Este mes" es junio, la data acaba en mayo → no intersecta → fuera.
+    check("atajos descarta el que no intersecta", "mes" in atajos, False)
+    check("atajos: Todo = bounds exactos", atajos.get("todo"), bounds)
+    # "Este año" (1-ene..31-dic) SÍ intersecta, y se recorta a los bounds.
+    check("atajos recorta a bounds", atajos.get("anio"), bounds)
+    check("atajos sin bounds no ofrece nada", atajos_rango(hoy, None), [])
+    # Un año presente en la data se ofrece como chip propio.
+    check("atajos incluye el año de la data", "y2023" in dict(
+        (c, r) for c, _, r in atajos_rango(
+            hoy, (datetime.date(2023, 1, 1), datetime.date(2024, 5, 31)))), True)
+
+    return fallos
+
+
 def _pruebas_contratos():
     """El contrato del DISPATCHER (graficos/__init__.py).
 
@@ -321,6 +413,9 @@ def main():
 
     # ── Funciones puras: asserts de valor (contrato de transformación) ──
     fallos += _pruebas_puras()
+
+    # ── Estado del rango y resolución de columnas (lógica pura) ─────────
+    fallos += _pruebas_estado_y_utils()
 
     # ── Contratos entre app.py y los dashboards (firma del dispatcher) ──
     fallos += _pruebas_contratos()
