@@ -33,7 +33,7 @@ from graficos.ajuste._comun import _cortes_por_racha, _layout_aj
 
 def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                          col_producto=None, col_fecha=None, df_full=None,
-                         col_valorizado=None):
+                         col_valorizado=None, area_sel=None, fam_sel=None):
     """Mapa de calor familia × área — modo Ajuste (signado, divergente) o
     Valorizado Total (siempre positivo, secuencial), elegido con un
     `st.pills` al tope del gráfico.
@@ -96,10 +96,22 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     #    agrupado por mes calendario. Sin `df_full`/`col_fecha`, o con
     #    menos de 2 cortes en la ventana, no se ofrece el slider y `df`
     #    sigue siendo el de siempre (se comporta exactamente como antes).
+    #
+    #    `df_full` NO trae aplicados los chips Área/Familia de la franja
+    #    superior (esos filtran `d` -> `df` en __init__.py, no df_full) —
+    #    reaplicarlos ACÁ, mismo criterio exacto que ya usa
+    #    `_tabla_pivote_fecha_ajuste` para el mismo problema ("Por fecha de
+    #    corte" también parte de df_full). Sin este reaplicado, cambiar de
+    #    corte pisaba los chips en silencio: el usuario filtraba Área/
+    #    Familia y el mapa/flujo/tabla del corte volvían a mostrar TODO.
     if col_fecha and df_full is not None and col_fecha in df_full.columns:
         _dff = df_full.copy()
         _dff[col_fecha] = pd.to_datetime(_dff[col_fecha], errors="coerce")
         _dff = _dff.dropna(subset=[col_fecha])
+        if area_sel and col_area and col_area in _dff.columns:
+            _dff = _dff[_dff[col_area].astype(str).isin(area_sel)]
+        if fam_sel and col_familia and col_familia in _dff.columns:
+            _dff = _dff[_dff[col_familia].astype(str).isin(fam_sel)]
         if not _dff.empty:
             _fmax_corte = _dff[col_fecha].max()
             _dff = _dff[_dff[col_fecha] >= _fmax_corte - pd.Timedelta(days=180)]

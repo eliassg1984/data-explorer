@@ -1824,6 +1824,18 @@ salvo `icono`):
     exactamente como antes de este cambio (mismo criterio que el resto de
     los parámetros opcionales de esta función).
 
+    **`df_full` NO trae los chips Área/Familia aplicados — hay que
+    reaplicarlos a mano.** Los chips filtran `d` (-> `df`) en
+    `graficos/ajuste/__init__.py`, nunca `df_full`. El primer intento de
+    este selector armaba el corte directo desde `df_full` sin reaplicar
+    `area_sel`/`fam_sel`: los chips seguían viéndose activos en pantalla
+    pero el mapa/flujo/tabla del corte volvían a mostrar TODAS las áreas/
+    familias apenas había más de un corte disponible (bug reportado en
+    producción el mismo día). `_graf_heatmap_ajuste` ahora recibe
+    `area_sel`/`fam_sel` igual que `_tabla_pivote_fecha_ajuste` (mismo
+    problema, misma solución ya existente) y los reaplica sobre `df_full`
+    ANTES de agrupar por corte.
+
     **Flujo (Sankey) no tiene click-drill, a propósito.** Mismo riesgo
     que la regla #11/#44: `on_select` sobre una traza que no sea
     Bar/Scatter/el Heatmap-con-overlay ya resuelto no está verificado en

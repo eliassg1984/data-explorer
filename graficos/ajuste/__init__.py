@@ -218,7 +218,8 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
             _graf_heatmap_ajuste(d, col_familia, col_area, col_ajuste_val,
                                  col_producto=col_producto,
                                  col_fecha=col_fecha, df_full=df_full,
-                                 col_valorizado=col_valorizado)
+                                 col_valorizado=col_valorizado,
+                                 area_sel=area_sel, fam_sel=fam_sel)
         elif graf == "Distribución":
             _graf_distribucion_ajuste(d, col_familia, col_area,
                                       col_ajuste_val, col_producto,
