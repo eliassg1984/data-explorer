@@ -142,15 +142,23 @@ CSS = """    /* ================================================================
        uno sin el otro. El override propio de Compras en
        _20_compras_rail.py se sacó porque ahora es idéntico al default.
        Ver arquitectura.md regla #17.
-       2026-08-09: 34px -> 40px. Con la barra tintada (ver el bloque de
-       arriba) los 34px quedaban apretados: el tinte necesita aire arriba y
-       abajo de los chips de 28px para leerse como superficie y no como
-       subrayado. 40px deja 6px por lado — de ahí el top:6px de
-       fecha_ajuste_pill/chips_ajuste_tabla en _50_fecha.py (antes 3px).
-       Siguen acoplados: no cambiar uno sin el otro. */
+       2026-08-09: 34px -> 40px -> 46px. Con la barra tintada (ver el
+       bloque de arriba) los 34px quedaban apretados: el tinte necesita
+       aire arriba y abajo de los chips de 28px para leerse como superficie
+       y no como subrayado.
+       Los 40px duraron una pasada: daban 6px arriba pero solo 4px abajo,
+       y se veia "metido a la fuerza" contra la linea inferior. El error
+       fue calcular el top como (40 - 28) / 2 = 6 OLVIDANDO que el ::before
+       es border-box, asi que el border-bottom de 2px se come alto por
+       dentro: el aire de abajo es (alto - borde - 28 - top), no (alto -
+       28 - top). Con 46px y top:8px queda 8px por lado, simetrico.
+       LA FORMULA, para la proxima vez que se toque:
+           top = (alto - borde_inferior - alto_del_control) / 2
+       Los dos numeros siguen acoplados con el top:8px de
+       fecha_ajuste_pill/chips_ajuste_tabla en _50_fecha.py. */
     @media (min-width: 901px) {
         .st-key-fila_ajuste_top::before {
-            height: 40px !important;
+            height: 46px !important;
         }
     }
     .st-key-fila_ajuste_top > * {

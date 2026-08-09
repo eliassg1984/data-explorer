@@ -437,10 +437,17 @@ salvo `icono`):
       fondo `color-mix(in srgb, var(--accent-tint) 88%, transparent)`,
       `border-bottom: 2px var(--border-lavender)` y ningún borde en los
       otros 3 lados. No choca con el rail derecho: ese arranca en `top:60px`.
-    - Alto desktop `34px → 40px`, y `top:3px → 6px` en `fecha_ajuste_pill` y
-      `chips_ajuste_tabla` (el par acoplado de la vuelta anterior, movido
-      junto). Verificado en el preview: la primera tarjeta arranca en y=57,
-      quedan 17px de aire.
+    - Alto desktop `34px → 40px → 46px`, y `top:3px → 8px` en
+      `fecha_ajuste_pill` y `chips_ajuste_tabla` (el par acoplado de la
+      vuelta anterior, movido junto). Los 40px/`top:6px` duraron una pasada:
+      se veía "metido a la fuerza" contra la línea inferior porque el aire
+      quedaba 6px arriba y **4px abajo**. El error fue calcular el top como
+      `(alto − control) / 2` olvidando que el `::before` es `border-box`,
+      así que el `border-bottom:2px` descuenta alto por dentro.
+      **La fórmula es `top = (alto − borde_inferior − alto_del_control) / 2`**
+      — con 46px y control de 28px da los 8px simétricos que hay hoy
+      (verificado en el preview: 8 arriba, 8 abajo, la primera tarjeta
+      arranca en y=57).
     - **Los chips dejaron de estar centrados**: `left:391px` fijo =
       `175px` (left del pill) + `210px` (ancho del pill) + `6px`. Para que
       ese número sea estable el pill tomó **ancho fijo** (`width:210px`, ya

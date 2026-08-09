@@ -144,7 +144,12 @@ CSS = """    /* ================================================================
            50px — van acoplados, no cambiar uno sin el otro. Ver docstring
            del módulo y arquitectura.md regla #17. */
         .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill {
-            top: 6px !important;   /* (40px de barra - 28px de pill) / 2 */
+            /* (46px de barra - 2px de border-bottom - 28px de pill) / 2.
+               El borde va DENTRO del alto (el ::before es border-box), por
+               eso se resta: sin restarlo salen 4px abajo contra 6 arriba y
+               el control se ve apretado contra la línea inferior — fue
+               justo el bug de la pasada anterior. Ver _40_ajuste_franja.py. */
+            top: 8px !important;
             left: 175px !important;
             right: auto !important;
         }
@@ -226,7 +231,7 @@ CSS = """    /* ================================================================
            Streamlit distintos (app.py vs. el módulo de cada dashboard) y
            los dos son position:fixed. */
         .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
-            top: 6px !important;
+            top: 8px !important;   /* mismo cálculo que el pill, ver arriba */
             left: 391px !important;
             right: auto !important;
             transform: none !important;
