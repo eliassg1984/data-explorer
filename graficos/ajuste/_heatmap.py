@@ -69,41 +69,21 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         st.info("Se necesitan columnas de familia y área para el mapa de calor.")
         return
 
-    # ── Modo Ajuste Valorizado (signado) vs Valorizado Total (magnitud) —
-    #    mismo heatmap, cambia la columna que se pivotea y todo lo que
-    #    depende del signo más abajo (colorscale, franja TOTAL, leyenda
-    #    móvil, drill). Sin col_valorizado en el df, ni se ofrece el
-    #    selector: se comporta exactamente como antes. ─────────────────────
+    # ── Precalcular QUÉ controles van a mostrarse, antes de dibujar
+    #    ninguno — hace falta saberlo para decidir cuántas columnas pedir
+    #    (ver bloque de una sola fila más abajo). Ninguno de los dos
+    #    todavía renderiza nada. ─────────────────────────────────────────
     _hay_valorizado = bool(col_valorizado and col_valorizado in df.columns)
-    _modo_val = False
-    if _hay_valorizado:
-        _modo = st.pills(
-            "Modo mapa de calor", ["Ajuste Valorizado", "Valorizado Total"],
-            default="Ajuste Valorizado", key="hm_ajuste_modo",
-            label_visibility="collapsed",
-        ) or "Ajuste Valorizado"
-        _modo_val = (_modo == "Valorizado Total")
-    col_metrica = col_valorizado if _modo_val else col_ajuste_val
 
-    # ── Selector de corte — `df` llega acá acotado por la franja de fecha
-    #    superior a "más o menos un mes" (categoría "visual", ver
-    #    categoria_rango_ajuste): normalmente 1 o 2 cortes reales, no hay
-    #    margen para animar nada. La fuente para el slider es `df_full`
-    #    (mismo criterio que ya usa el sparkline de tendencia unas líneas
-    #    más abajo), acotada a ~180 días para no pivotear el historial
-    #    completo en cada rerun. Reusa `_cortes_por_racha` — la MISMA
-    #    función que ya usa "Por fecha de corte" — en vez de inventar un
-    #    agrupado por mes calendario. Sin `df_full`/`col_fecha`, o con
-    #    menos de 2 cortes en la ventana, no se ofrece el slider y `df`
-    #    sigue siendo el de siempre (se comporta exactamente como antes).
-    #
-    #    `df_full` NO trae aplicados los chips Área/Familia de la franja
-    #    superior (esos filtran `d` -> `df` en __init__.py, no df_full) —
-    #    reaplicarlos ACÁ, mismo criterio exacto que ya usa
-    #    `_tabla_pivote_fecha_ajuste` para el mismo problema ("Por fecha de
-    #    corte" también parte de df_full). Sin este reaplicado, cambiar de
-    #    corte pisaba los chips en silencio: el usuario filtraba Área/
-    #    Familia y el mapa/flujo/tabla del corte volvían a mostrar TODO.
+    # `df_full` NO trae aplicados los chips Área/Familia de la franja
+    # superior (esos filtran `d` -> `df` en __init__.py, no df_full) —
+    # reaplicarlos ACÁ, mismo criterio exacto que ya usa
+    # `_tabla_pivote_fecha_ajuste` para el mismo problema ("Por fecha de
+    # corte" también parte de df_full). Sin este reaplicado, cambiar de
+    # corte pisaba los chips en silencio: el usuario filtraba Área/
+    # Familia y el mapa/flujo/tabla del corte volvían a mostrar TODO.
+    _dff = None
+    _cortes = None
     if col_fecha and df_full is not None and col_fecha in df_full.columns:
         _dff = df_full.copy()
         _dff[col_fecha] = pd.to_datetime(_dff[col_fecha], errors="coerce")
@@ -118,30 +98,56 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         if not _dff.empty:
             _corte_clave, _corte_etq = _cortes_por_racha(_dff[col_fecha])
             _dff = _dff.assign(_corte_clave=_corte_clave, _corte_etq=_corte_etq)
-            _cortes = (_dff[["_corte_clave", "_corte_etq"]].drop_duplicates()
-                       .sort_values("_corte_clave").tail(8))
-            if len(_cortes) >= 2:
-                _opciones_corte = _cortes["_corte_etq"].tolist()
-                _etq_sel = st.select_slider(
-                    "Corte", options=_opciones_corte,
-                    value=_opciones_corte[-1],
-                    key="hm_ajuste_corte", label_visibility="collapsed",
-                )
-                _clave_sel = _cortes.loc[
-                    _cortes["_corte_etq"] == _etq_sel, "_corte_clave"
-                ].iloc[0]
-                df = _dff[_dff["_corte_clave"] == _clave_sel].drop(
-                    columns=["_corte_clave", "_corte_etq"])
+            _cortes_tmp = (_dff[["_corte_clave", "_corte_etq"]].drop_duplicates()
+                          .sort_values("_corte_clave").tail(8))
+            if len(_cortes_tmp) >= 2:
+                _cortes = _cortes_tmp
+    _hay_corte = _cortes is not None
 
-    # ── Selector de vista — Mapa (heatmap, todo lo de abajo) / Flujo
-    #    (Sankey) / Tabla (grilla HTML) sobre el MISMO pivot del corte
-    #    elegido arriba. Fila propia, separada del Modo: son dos ejes
-    #    independientes (qué métrica vs. cómo mostrarla). ─────────────────
-    _vista = st.pills(
-        "Vista mapa de calor", ["Mapa", "Flujo", "Tabla"],
-        default="Mapa", key="hm_ajuste_vista",
-        label_visibility="collapsed",
-    ) or "Mapa"
+    # ── Modo / Corte / Vista en UNA fila — antes cada uno vivía en su
+    #    propio st.pills/slider de ancho completo, apilados con el
+    #    espaciado default de Streamlit entre elementos: ocupaba como un
+    #    tercio de la tarjeta en vertical (reportado 2026-08-09). Mismo
+    #    truco que ya usan los chips Área/Familia de arriba (__init__.py):
+    #    st.columns en vez de un elemento por fila. Columnas condicionales
+    #    — sin col_valorizado no hay Modo, sin ≥2 cortes no hay slider —
+    #    consumidas en orden con un iterador para no escribir la
+    #    combinatoria de 2×2 a mano. ─────────────────────────────────────
+    _anchos = ([1.3] if _hay_valorizado else []) + \
+        ([1.5] if _hay_corte else []) + [1.0]
+    _cols_ctrl = iter(st.columns(_anchos))
+
+    _modo_val = False
+    if _hay_valorizado:
+        with next(_cols_ctrl):
+            _modo = st.pills(
+                "Modo mapa de calor", ["Ajuste Valorizado", "Valorizado Total"],
+                default="Ajuste Valorizado", key="hm_ajuste_modo",
+                label_visibility="collapsed",
+            ) or "Ajuste Valorizado"
+            _modo_val = (_modo == "Valorizado Total")
+    col_metrica = col_valorizado if _modo_val else col_ajuste_val
+
+    if _hay_corte:
+        with next(_cols_ctrl):
+            _opciones_corte = _cortes["_corte_etq"].tolist()
+            _etq_sel = st.select_slider(
+                "Corte", options=_opciones_corte,
+                value=_opciones_corte[-1],
+                key="hm_ajuste_corte", label_visibility="collapsed",
+            )
+            _clave_sel = _cortes.loc[
+                _cortes["_corte_etq"] == _etq_sel, "_corte_clave"
+            ].iloc[0]
+            df = _dff[_dff["_corte_clave"] == _clave_sel].drop(
+                columns=["_corte_clave", "_corte_etq"])
+
+    with next(_cols_ctrl):
+        _vista = st.pills(
+            "Vista mapa de calor", ["Mapa", "Flujo", "Tabla"],
+            default="Mapa", key="hm_ajuste_vista",
+            label_visibility="collapsed",
+        ) or "Mapa"
 
     pivot = df.pivot_table(
         index=col_familia, columns=col_area,
