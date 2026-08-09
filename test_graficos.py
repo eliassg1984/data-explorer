@@ -291,6 +291,87 @@ def _pruebas_estado_y_utils():
     return fallos
 
 
+def _pruebas_anomalias():
+    """graficos/ajuste/_anomalias.py — "¿es raro PARA ESTE producto?".
+
+    Lo que estas pruebas fijan no es aritmética, es el CRITERIO: el mismo
+    18% de ajuste tiene que ser una alarma en un producto que siempre se
+    mueve ±2% y ruido en uno que se mueve ±30%.
+
+    Probado en negativo cambiando mediana/MAD por media/desviación: saltan
+    los asserts de `pct_mediana` (1.0 → 0.4) y de `z` (11.5 → 10.8). OJO:
+    los veredictos NO cambian en estos casos concretos, así que son esos
+    dos asserts numéricos —y no los de veredicto— los que sostienen el
+    criterio. Si se tocan, hay que sustituirlos por otro caso que sí
+    distinga, no borrarlos.
+    """
+    from graficos.ajuste._anomalias import perfil_por_producto
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    anomalias · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA anomalias · {nombre}: got={got!r} exp={exp!r}")
+
+    def _caso(nombre, ajustes):
+        # stock fijo 100 -> el ajuste ES el porcentaje, para que los
+        # números del test se lean sin hacer cuentas.
+        return pd.DataFrame({
+            "PRODUCTO": [nombre] * len(ajustes),
+            "FECHA": pd.date_range("2026-01-01", periods=len(ajustes), freq="MS"),
+            "AJUSTE": ajustes,
+            "STOCK": [100.0] * len(ajustes),
+        })
+
+    df = pd.concat([
+        _caso("estable",  [2, -1, 2, -2, 1, 18]),   # ±2 y de pronto 18
+        _caso("revuelto", [25, -30, 28, -22, 31, 18]),  # el MISMO 18
+        _caso("cero",     [0, 0, 0, 0, 0, 5]),      # dispersión nula
+        _caso("nuevo",    [1, 2, 40]),              # sin historia
+    ], ignore_index=True)
+    out = perfil_por_producto(df, "PRODUCTO", "FECHA", "AJUSTE", "STOCK")
+    v = dict(zip(out["producto"], out["veredicto"]))
+
+    check("el mismo 18% es anómalo para el estable", v["estable"], "anomalo")
+    check("...y normal para el revuelto", v["revuelto"], "normal")
+    check("dispersión 0 → nuevo_patron, no z infinito", v["cero"], "nuevo_patron")
+    check("pocos cortes → no se inventa veredicto", v["nuevo"], "sin_historico")
+
+    # El corte actual NO entra en su propia mediana (si no, se auto-normaliza).
+    fila = out[out["producto"] == "estable"].iloc[0]
+    check("mediana excluye el corte juzgado", float(fila["pct_mediana"]), 1.0)
+    check("z se calcula sobre el histórico", round(float(fila["z"]), 1), 11.5)
+    check("lo más raro va primero", out["producto"].iloc[0], "estable")
+
+    # Varias filas del mismo producto y corte (varias áreas) se AGREGAN
+    # antes de sacar el %: sumar ajuste y stock no es promediar porcentajes.
+    dos_areas = pd.DataFrame({
+        "PRODUCTO": ["x"] * 2,
+        "FECHA": [pd.Timestamp("2026-01-01")] * 2,
+        "AJUSTE": [10.0, 10.0],
+        "STOCK": [100.0, 300.0],
+    })
+    o2 = perfil_por_producto(dos_areas, "PRODUCTO", "FECHA", "AJUSTE",
+                             "STOCK", min_cortes=1)
+    # 20/400 = 5%, no el promedio de 10% y 3.33%
+    check("agrega por corte antes del %",
+          round(float(o2["pct_actual"].iloc[0]), 2), 5.0)
+
+    # Sin columnas o sin datos utiles: devuelve vacio, no revienta.
+    check("columnas ausentes → df vacío",
+          len(perfil_por_producto(df, "NO_EXISTE", "FECHA", "AJUSTE", "STOCK")), 0)
+    sin_stock = _caso("s", [1, 2, 3, 4])
+    sin_stock["STOCK"] = 0.0
+    check("stock 0 se descarta (no inventa %)",
+          len(perfil_por_producto(sin_stock, "PRODUCTO", "FECHA", "AJUSTE", "STOCK")), 0)
+
+    return fallos
+
+
 def _pruebas_contratos():
     """El contrato del DISPATCHER (graficos/__init__.py).
 
@@ -416,6 +497,9 @@ def main():
 
     # ── Estado del rango y resolución de columnas (lógica pura) ─────────
     fallos += _pruebas_estado_y_utils()
+
+    # ── Deteccion de anomalias en Ajuste ────────────────────────────────
+    fallos += _pruebas_anomalias()
 
     # ── Contratos entre app.py y los dashboards (firma del dispatcher) ──
     fallos += _pruebas_contratos()
