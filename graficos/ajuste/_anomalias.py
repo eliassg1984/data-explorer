@@ -26,11 +26,24 @@ DECISIONES QUE IMPORTAN (y por que)
    salen marcados `sin_historico` y el llamador decide si los muestra.
    Es la diferencia entre "no lo se" y "es normal", que no son lo mismo.
 
-4. **MAD = 0 se trata aparte.** Un producto que SIEMPRE ajusta
+4. **MAD ~ 0 se trata aparte.** Un producto que SIEMPRE ajusta
    exactamente igual (tipico: siempre 0) tiene dispersion nula, y ahi
    cualquier desvio daria z infinito. Si el valor actual coincide con su
    mediana es `normal`; si no, es `nuevo_patron` — informativo, pero no
-   un z que no significa nada.
+   un z que no significa nada. La comparacion es con TOLERANCIA, no con
+   `== 0`: contra datos reales aparecieron MAD del orden de 1e-16 que
+   pasaban el `== 0` y daban z de 3e16.
+
+5. **"El conteo dio cero" NO es una anomalia estadistica: es su propia
+   categoria.** Medido sobre el parquet real (235.045 filas): el 24,6%
+   de las filas tiene un ajuste de exactamente el 100% del stock, y el
+   98% de esas son `STOCK DECLARADO = 0` — el producto no aparecio al
+   contar. Es un evento de negocio nitido y frecuente, no una
+   desviacion sutil, y metido en el z-score ahogaba todo lo demas (con
+   el diseño inicial, 386 productos salian "anomalos", 19% del total:
+   una lista larga mas, que es justo lo que este modulo quiere evitar).
+   Ahora sale como veredicto propio `conteo_cero` y no compite con el
+   resto.
 """
 
 import numpy as np
@@ -52,7 +65,8 @@ _MIN_CORTES = 4
 
 
 def perfil_por_producto(df, col_producto, col_fecha, col_ajuste,
-                        col_stock, min_cortes=_MIN_CORTES,
+                        col_stock, col_declarado=None,
+                        min_cortes=_MIN_CORTES,
                         z_anomalo=_Z_ANOMALO, z_vigilar=_Z_VIGILAR):
     """Un registro por producto, comparando su ULTIMO corte con su historia.
 
@@ -64,8 +78,13 @@ def perfil_por_producto(df, col_producto, col_fecha, col_ajuste,
         pct_mediana     mediana historica de ese % (sin el corte actual)
         dispersion      MAD del historico, en puntos porcentuales
         z               z robusto del corte actual (NaN si no aplica)
-        veredicto       anomalo | vigilar | normal | nuevo_patron |
-                        sin_historico
+        veredicto       conteo_cero | anomalo | nuevo_patron | vigilar |
+                        normal | sin_historico
+
+    `col_declarado` (opcional, el stock CONTADO): si se pasa y el ultimo
+    corte del producto vino con 0, el veredicto es `conteo_cero` y no se
+    calcula z. Ver el punto 5 del docstring del modulo — sin esto, ese
+    caso (un cuarto de las filas reales) ahoga a todo lo demas.
 
     El df de entrada NO se modifica. Las filas sin fecha, sin producto o
     con stock nulo/cero se descartan: sin stock no hay porcentaje que
@@ -78,11 +97,18 @@ def perfil_por_producto(df, col_producto, col_fecha, col_ajuste,
                                      "pct_mediana", "dispersion", "z",
                                      "veredicto"])
 
-    d = df[[col_producto, col_fecha, col_ajuste, col_stock]].copy()
-    d.columns = ["producto", "fecha", "ajuste", "stock"]
+    usa_decl = bool(col_declarado) and col_declarado in df.columns
+    cols = [col_producto, col_fecha, col_ajuste, col_stock]
+    nombres = ["producto", "fecha", "ajuste", "stock"]
+    if usa_decl:
+        cols.append(col_declarado)
+        nombres.append("declarado")
+
+    d = df[cols].copy()
+    d.columns = nombres
     d["fecha"] = pd.to_datetime(d["fecha"], errors="coerce")
-    d["ajuste"] = pd.to_numeric(d["ajuste"], errors="coerce")
-    d["stock"] = pd.to_numeric(d["stock"], errors="coerce")
+    for c in nombres[2:]:
+        d[c] = pd.to_numeric(d[c], errors="coerce")
     d = d.dropna(subset=["producto", "fecha", "ajuste", "stock"])
     d = d[d["stock"] != 0]
     if d.empty:
@@ -98,8 +124,10 @@ def perfil_por_producto(df, col_producto, col_fecha, col_ajuste,
     # Varias filas del mismo producto en el mismo corte (varias areas):
     # se agregan sumando ajuste y stock ANTES de sacar el %, que no es lo
     # mismo que promediar porcentajes.
-    g = (d.groupby(["producto", "fecha"], as_index=False)
-           .agg(ajuste=("ajuste", "sum"), stock=("stock", "sum")))
+    agg = {"ajuste": ("ajuste", "sum"), "stock": ("stock", "sum")}
+    if usa_decl:
+        agg["declarado"] = ("declarado", "sum")
+    g = d.groupby(["producto", "fecha"], as_index=False).agg(**agg)
     g = g[g["stock"] != 0]
     g["pct"] = g["ajuste"] / g["stock"] * 100
     g = g.sort_values(["producto", "fecha"])
@@ -113,6 +141,14 @@ def perfil_por_producto(df, col_producto, col_fecha, col_ajuste,
         # se juzga entra en la mediana y se auto-normaliza.
         historia = pcts[:-1]
 
+        # "El conteo dio cero" antes que nada: es un hecho, no una
+        # desviacion. Mezclarlo con el z-score lo ahogaba todo (punto 5
+        # del docstring del modulo).
+        if usa_decl and float(sub["declarado"].to_numpy()[-1]) == 0:
+            filas.append((producto, n, actual, np.nan, np.nan, np.nan,
+                          "conteo_cero"))
+            continue
+
         if n < min_cortes:
             filas.append((producto, n, actual, np.nan, np.nan, np.nan,
                           "sin_historico"))
@@ -121,7 +157,11 @@ def perfil_por_producto(df, col_producto, col_fecha, col_ajuste,
         mediana = float(np.median(historia))
         mad = float(np.median(np.abs(historia - mediana)))
 
-        if mad == 0:
+        # Tolerancia, NO `== 0`: con datos reales aparecen MAD de ~1e-16
+        # que pasan el `== 0` y producen z del orden de 1e16. La escala la
+        # marca la propia mediana (un producto que se mueve en cientos
+        # tiene otro "practicamente cero" que uno que se mueve en unidades).
+        if mad <= max(1e-9, abs(mediana) * 1e-9):
             veredicto = "normal" if np.isclose(actual, mediana) else "nuevo_patron"
             filas.append((producto, n, actual, mediana, 0.0, np.nan, veredicto))
             continue
@@ -140,8 +180,8 @@ def perfil_por_producto(df, col_producto, col_fecha, col_ajuste,
                                        "pct_mediana", "dispersion", "z",
                                        "veredicto"])
     # Primero lo mas raro; dentro de cada grupo, el desvio mayor.
-    orden = {"anomalo": 0, "nuevo_patron": 1, "vigilar": 2,
-             "normal": 3, "sin_historico": 4}
+    orden = {"conteo_cero": 0, "anomalo": 1, "nuevo_patron": 2,
+             "vigilar": 3, "normal": 4, "sin_historico": 5}
     out["_o"] = out["veredicto"].map(orden)
     out = (out.sort_values(["_o", "z"], key=lambda s: s.abs() if s.name == "z" else s,
                            ascending=[True, False])
