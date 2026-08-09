@@ -879,14 +879,22 @@ def _ventas_ranking_meseros(d, col_mesero, col_propina, col_pedido,
     fig = go.Figure(go.Bar(
         x=resumen["residual"], y=resumen["mesero"], orientation="h",
         marker=dict(color=colores), text=_txt, textposition="outside",
+        cliponaxis=False,
         customdata=np.column_stack([resumen["pct_real"], resumen["n"]]),
         hovertemplate="%{y}<br>Propina real: %{customdata[0]:.2f}%<br>"
                       "vs. esperada: %{x:+.2f}pp<br>n=%{customdata[1]:.0f}"
                       "<extra></extra>",
     ))
     _compras_layout(fig, alto=max(280, 46 * len(resumen) + 60))
+    # Rango del eje con relleno extra (no solo min/max de los datos): el
+    # texto "outside" de la barra MÁS ancha (más lejos del cero) necesita
+    # aire antes de chocar contra la columna de nombres -- sin este padding
+    # se pisaban (ver captura real: "Junior Mendoza" perdía el "-0.79pp").
+    _lo, _hi = float(resumen["residual"].min()), float(resumen["residual"].max())
+    _pad = max(_hi - _lo, 0.2) * 0.35
     fig.update_layout(
-        xaxis=dict(zeroline=True, zerolinecolor=GRIS_BORDE, ticksuffix="pp"),
+        xaxis=dict(zeroline=True, zerolinecolor=GRIS_BORDE, ticksuffix="pp",
+                   range=[_lo - _pad, _hi + _pad]),
         margin=dict(l=10, r=90, t=10, b=10), showlegend=False)
     with _card("meseros", "Propina real vs. esperada por mesero"):
         st.plotly_chart(fig, use_container_width=True, key="ventas_g_meseros")
