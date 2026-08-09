@@ -53,6 +53,23 @@ mas que el default de 50px, asi que se universalizo: los 8 reportes usan
 _20_compras_rail.py se elimino por quedar identico al default. Ver el
 comentario junto al @media(min-width:901px) del bloque CSS de mas abajo
 para el detalle (por que 34px va fijo y no se toco --cab-altura).
+
+2026-08-09, 5ta vuelta: la tarjeta colgante volvio a ser BARRA de borde a
+borde, ahora con cara propia. El cristal esmerilado (blanco al 62% sobre
+un canvas blanco) era casi invisible — reportado con captura. Tres
+cambios que van juntos:
+  - left:90px / right:0 (antes 170/163): la barra ya no se alinea con la
+    tarjeta del grafico, arranca donde termina el nav-rail izquierdo y
+    llega al borde de la ventana. Es un cambio de CRITERIO, no un ajuste
+    de pixeles: si vuelve a alinearse con la tarjeta hay que restaurar
+    los dos numeros medidos de la 3ra vuelta (siguen documentados arriba).
+  - fondo --accent-tint al 88% + border-bottom de 2px --border-lavender,
+    sin borde en los otros 3 lados y sin border-radius.
+  - 40px de alto en desktop (antes 34px), con top:6px en los elementos
+    fijos que viven dentro (_50_fecha.py).
+El CONTENIDO tambien se reagrupo en la misma vuelta: fecha y chips ya no
+estan en extremos opuestos (fecha a la izquierda + chips centrados), van
+pegados a la izquierda uno tras otro. Ver _50_fecha.py.
 """
 
 CSS = """    /* =================================================================== */
@@ -89,16 +106,28 @@ CSS = """    /* ================================================================
         position: fixed !important;
         top: 0 !important;
         bottom: auto !important;
-        left: 170px !important;    /* = borde izquierdo real de la tarjeta del gráfico */
-        right: 163px !important;   /* = borde derecho real de la tarjeta del gráfico */
+        /* 2026-08-09: de tarjeta colgante (left:170/right:163, alineada con
+           la tarjeta del gráfico) a BARRA de borde a borde. left:90px = el
+           ancho del nav-rail izquierdo, así que la barra arranca justo donde
+           termina el rail; right:0 llega al borde de la ventana. No choca
+           con el rail DERECHO (compras_tabs_row) porque ese arranca en
+           top:60px (_20_compras_rail.py:19) y la barra mide 40px. */
+        left: 90px !important;
+        right: 0 !important;
         height: var(--cab-altura) !important;
-        border-radius: 0 0 14px 14px !important;  /* cuelga del borde superior: solo esquinas de abajo */
-        background: rgba(255, 255, 255, 0.62) !important;
+        border-radius: 0 !important;   /* toca los dos bordes: sin esquinas */
+        /* Tinte lavanda translúcido en vez del blanco al 62%: el cristal
+           esmerilado sobre canvas blanco era invisible (reportado con
+           captura — "no la veo muy bien"). El color sale de --accent-tint
+           (paleta única, ver CLAUDE.md § Colores) y color-mix le pone el
+           alfa; el blur sigue haciendo falta porque la barra es fixed y el
+           contenido pasa POR DEBAJO al scrollear. */
+        background: color-mix(in srgb, var(--accent-tint) 88%, transparent) !important;
         backdrop-filter: blur(14px) saturate(1.6) !important;
         -webkit-backdrop-filter: blur(14px) saturate(1.6) !important;
-        border: 1px solid rgba(230, 230, 235, 0.7) !important;
-        border-top: none !important;
-        box-shadow: 0 6px 18px rgba(16, 16, 20, 0.10) !important;
+        border: none !important;
+        border-bottom: 2px solid var(--border-lavender) !important;
+        box-shadow: 0 4px 14px rgba(16, 16, 20, 0.06) !important;
         z-index: 0 !important;
     }
     /* 2026-08-07: 34px (en vez de var(--cab-altura)=50px) para los 8
@@ -112,10 +141,16 @@ CSS = """    /* ================================================================
        fecha_ajuste_pill/chips_ajuste_tabla en _50_fecha.py — no cambiar
        uno sin el otro. El override propio de Compras en
        _20_compras_rail.py se sacó porque ahora es idéntico al default.
-       Ver arquitectura.md regla #17. */
+       Ver arquitectura.md regla #17.
+       2026-08-09: 34px -> 40px. Con la barra tintada (ver el bloque de
+       arriba) los 34px quedaban apretados: el tinte necesita aire arriba y
+       abajo de los chips de 28px para leerse como superficie y no como
+       subrayado. 40px deja 6px por lado — de ahí el top:6px de
+       fecha_ajuste_pill/chips_ajuste_tabla en _50_fecha.py (antes 3px).
+       Siguen acoplados: no cambiar uno sin el otro. */
     @media (min-width: 901px) {
         .st-key-fila_ajuste_top::before {
-            height: 34px !important;
+            height: 40px !important;
         }
     }
     .st-key-fila_ajuste_top > * {

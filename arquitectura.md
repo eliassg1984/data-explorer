@@ -424,6 +424,43 @@ salvo `icono`):
     dos números (34px / top:3px) van acoplados** — si se vuelve a tocar
     uno, revisar el otro.
 
+    **2026-08-09, 5ta vuelta — de tarjeta invisible a BARRA con cara
+    propia.** Reportado con captura: "no la veo muy bien". Dos causas, las
+    dos reales: (a) blanco al 62% sobre un canvas blanco no se distingue —
+    el `backdrop-filter` solo se nota cuando algo pasa por debajo; (b) la
+    fecha estaba anclada a la izquierda y los chips CENTRADOS en el ancho
+    útil, así que entre ambos quedaba un hueco muerto que crece con el
+    monitor. Cambios, todos acoplados entre sí:
+    - `::before`: `left:90px` / `right:0` (deja de alinearse con la tarjeta
+      del gráfico — los `170/163` medidos en la 3ra vuelta siguen
+      documentados en el módulo por si se quiere volver), `border-radius:0`,
+      fondo `color-mix(in srgb, var(--accent-tint) 88%, transparent)`,
+      `border-bottom: 2px var(--border-lavender)` y ningún borde en los
+      otros 3 lados. No choca con el rail derecho: ese arranca en `top:60px`.
+    - Alto desktop `34px → 40px`, y `top:3px → 6px` en `fecha_ajuste_pill` y
+      `chips_ajuste_tabla` (el par acoplado de la vuelta anterior, movido
+      junto). Verificado en el preview: la primera tarjeta arranca en y=57,
+      quedan 17px de aire.
+    - **Los chips dejaron de estar centrados**: `left:391px` fijo =
+      `175px` (left del pill) + `210px` (ancho del pill) + `6px`. Para que
+      ese número sea estable el pill tomó **ancho fijo** (`width:210px`, ya
+      no `fit-content`) y `app.py::_fmt_rango_es` pasó a mes abreviado con
+      el año una sola vez cuando coincide ("1 ago – 5 ago 2026"). Medido:
+      el peor caso del formato nuevo ("30 sep 2025 – 31 dic 2026") ocupa
+      144px de los 159px útiles del pill, así que nunca hay ellipsis.
+      **Son tres piezas de un mismo cambio** — left de los chips, ancho del
+      pill y formato del label. Tocar una sola desalinea la barra.
+    No se puede resolver con `flex` en vez de coordenadas fijas: la fecha
+    vive en `fila_ajuste_top` (app.py) y los chips los renderiza el módulo
+    de cada dashboard (6 sitios distintos, todos con la key
+    `chips_ajuste_tabla`, ver regla #16), así que no hay un ancestro común
+    donde ponerlos en la misma fila. Agrupar de verdad exigiría pasar un
+    contenedor-slot creado en la franja a los 6 renderers.
+    Verificado en el preview local a 1360/920/375px en Ajuste, Ventas y
+    Compras: el caso más apretado es Compras a 920px (2 chips con
+    `min-width:230px`), que termina en x=814 contra el rail en x=821 — sin
+    scroll horizontal en ningún caso.
+
 18. **Los 8 reportes usan el rail derecho (`_render_rail`) desde 2026-08-04**
     — antes solo Compras y Ajuste. `render_vista_pills` (pestañas Gráficos/
     Tabla sueltas en la franja) se ELIMINÓ de `graficos/__init__.py`: ya no

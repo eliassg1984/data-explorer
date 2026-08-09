@@ -37,6 +37,15 @@ Antes de sumar un reporte nuevo a esta lista: contar cuántos
 `st.popover(...)` de chip tiene en su franja — si son más de 2, NO
 agregarlo (ver regla #21 en arquitectura.md).
 
+2026-08-09: los chips dejaron de ir CENTRADOS en el ancho util y pasaron a
+ir pegados a la derecha del pill de fecha (left fijo de 391px). Para que
+ese numero sea estable el pill tomo ANCHO FIJO (210px) y el label se
+abrevio en app.py::_fmt_rango_es. Son tres piezas de un mismo cambio — el
+left de los chips, el ancho del pill y el formato del label — y tocar una
+sola rompe la alineacion. Va junto con la barra tintada de
+_40_ajuste_franja.py (5ta vuelta) y el top:6px de los dos contenedores
+fijos (antes 3px, por la barra de 40px en vez de 34px).
+
 Extraido de estilos.py (lineas 1084-1280 del original).
 El orden respecto a estilos/__init__.py es parte del comportamiento del CSS.
 """
@@ -124,13 +133,24 @@ CSS = """    /* ================================================================
            50px — van acoplados, no cambiar uno sin el otro. Ver docstring
            del módulo y arquitectura.md regla #17. */
         .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill {
-            top: 3px !important;
+            top: 6px !important;   /* (40px de barra - 28px de pill) / 2 */
             left: 175px !important;
             right: auto !important;
         }
+        /* ANCHO FIJO, no fit-content. Los chips se anclan a la derecha del
+           pill con un left: en px (más abajo), y eso solo funciona si el
+           ancho del pill NO depende del texto. 210px = el peor caso del
+           label abreviado ("30 sep 2025 – 31 dic 2026"); el ellipsis está
+           por si algún día vuelve un formato más largo — ver
+           app.py::_fmt_rango_es, que documenta el acoplamiento del otro
+           lado. Con rangos cortos sobra fondo acento dentro del pill: es
+           a propósito, todos los reportes muestran el mismo control. */
         .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill
             [data-testid="stPopover"] button {
             min-height: 28px !important;   /* alto real de los chips vecinos (con su borde de 1px) */
+            width: 210px !important;
+            justify-content: flex-start !important;
+            overflow: hidden !important;
             box-sizing: border-box !important;
             padding: 0 14px !important;
             border: none !important;
@@ -158,12 +178,28 @@ CSS = """    /* ================================================================
             border: none !important;
             background: var(--accent-deep) !important;
         }
+        .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill
+            [data-testid="stPopover"] button p {
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+        /* Chips PEGADOS a la derecha del pill de fecha, no centrados en el
+           ancho útil. El centrado (hasta 2026-08-09) dejaba un hueco muerto
+           entre la fecha y los chips que crecía con el monitor — el motivo
+           por el que la franja "no se veía" tanto como el fondo blanco.
+           391px = 175px (left del pill) + 210px (su ancho fijo) + 6px de
+           aire. Los tres números están acoplados: si cambia el left o el
+           ancho del pill, este left cambia también. No hay forma de
+           resolverlo con flex: fecha y chips viven en contenedores
+           Streamlit distintos (app.py vs. el módulo de cada dashboard) y
+           los dos son position:fixed. */
         .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
-            top: 3px !important;
-            left: calc((154px + (100vw - 131px)) / 2) !important;
+            top: 6px !important;
+            left: 391px !important;
             right: auto !important;
-            transform: translateX(-50%) !important;
-            max-width: calc(100vw - 154px - 131px - 380px) !important;
+            transform: none !important;
+            max-width: calc(100vw - 391px - 131px) !important;
         }
         .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
             [data-testid="stPopover"] button {

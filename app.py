@@ -29,14 +29,29 @@ from perf import perf                                                       # �
 
 ZONA_PERU = ZoneInfo("America/Lima")  # UTC-5 fijo, sin horario de verano
 
-_MESES_ES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-             "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+_MESES_ES = ["ene", "feb", "mar", "abr", "may", "jun",
+             "jul", "ago", "sep", "oct", "nov", "dic"]
 
 
 def _fmt_rango_es(ini, fin):
+    """Label del pill de fecha de la franja. ABREVIADO a propósito.
+
+    Hasta 2026-08-09 devolvía el mes completo y el año en los dos extremos
+    ("1 Agosto 2026 - 5 Agosto 2026", hasta 37 caracteres). El pill ahora
+    tiene ANCHO FIJO (estilos/_50_fecha.py, bloque min-width:901px) porque
+    los chips se anclan justo a su derecha con un left: en px — y un left
+    fijo solo funciona si el ancho del vecino es predecible. Con mes
+    abreviado y el año una sola vez cuando coincide, el peor caso
+    ("30 sep 2025 – 31 dic 2026") entra en los 210px del pill; con el
+    formato viejo no entraba y el texto se cortaba con ellipsis.
+    Si se vuelve al formato largo hay que volver a centrar los chips o
+    ensanchar el pill — no es solo cosmético."""
     if ini == fin:
         return f"{ini.day} {_MESES_ES[ini.month - 1]} {ini.year}"
-    return (f"{ini.day} {_MESES_ES[ini.month - 1]} {ini.year} - "
+    if ini.year == fin.year:
+        return (f"{ini.day} {_MESES_ES[ini.month - 1]} – "
+                f"{fin.day} {_MESES_ES[fin.month - 1]} {fin.year}")
+    return (f"{ini.day} {_MESES_ES[ini.month - 1]} {ini.year} – "
             f"{fin.day} {_MESES_ES[fin.month - 1]} {fin.year}")
 
 
