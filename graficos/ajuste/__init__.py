@@ -10,7 +10,6 @@ ultimos 200 commits, 2,7x el siguiente) y sus dos funciones mayores
     _evolucion.py        categoria Tiempo: serie temporal + comparativa
     _pivote.py           tabla "Por fecha de corte"
     _cascada.py          vista Cascada (la mas grande)
-    _panel_analisis.py   panel derecho que acompaña a la cascada
     _heatmap.py          vista Mapa de calor
     _distribucion.py     vista Distribucion
 
@@ -61,7 +60,6 @@ from graficos.ajuste._evolucion import (  # noqa: F401
 )
 from graficos.ajuste._pivote import _tabla_pivote_fecha_ajuste  # noqa: F401
 from graficos.ajuste._cascada import _graf_waterfall_ajuste  # noqa: F401
-from graficos.ajuste._panel_analisis import _panel_analisis_ajuste  # noqa: F401
 from graficos.ajuste._heatmap import _graf_heatmap_ajuste  # noqa: F401
 from graficos.ajuste._distribucion import _graf_distribucion_ajuste  # noqa: F401
 
@@ -234,12 +232,3 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
                 col_fecha, col_area=col_area, area_sel=area_sel,
                 fam_sel=fam_sel,
             )
-
-    _card_der = st.container(
-        border=True, key=f"ajuste_graf_card_der_{_slug(ambito)}",
-    )
-    with _card_der:
-        _panel_analisis_ajuste(
-            d, col_familia, col_area, col_ajuste_val,
-            col_producto, col_valorizado, col_cantidad, ambito,
-        )

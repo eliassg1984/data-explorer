@@ -5,9 +5,6 @@ st.columns + HTML en st.markdown, con una columna de barras flotantes
 que encadenan la cascada (ver arquitectura.md reglas #8 y #10). Se hizo
 asi porque go.Waterfall no permite el nivel de control de etiquetas,
 badges y drill por fila que pedia esta vista.
-
-El panel de analisis que la acompaña a la derecha vive en
-_panel_analisis.py.
 """
 
 
@@ -39,10 +36,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                            col_unidad=None):
     """Cascada (Waterfall) por familia/área — SOLO el gráfico.
 
-    Los análisis complementarios (Faltantes, Sobrantes, Extremos, etc.) que
-    antes vivían aquí como 8 tabs se movieron a `_panel_analisis_ajuste`,
-    que renderiza el contenedor derecho de la vista Gráficos de Ajuste.
-
     `col_unidad` es la unidad de Kardex por producto (Kg, Und, Lt...) — se
     usa solo en el texto de las barras del drill; si no se resuelve, la
     barra muestra la cantidad sin sufijo (nunca el genérico "und").
@@ -52,42 +45,10 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         st.info("Se necesita columna de familia o área para el gráfico de cascada.")
         return
 
-    # ── Preparar lista de productos para el popover de exclusión ──────────
-    # (Se calcula aquí, antes del card, porque _lbl lo necesita para el badge)
-    excluidos = set()
-    if col_producto and col_producto in df.columns:
-        _prod_s = df[col_producto].astype(str)
-        _rank = (df.groupby(col_producto, as_index=False)[col_ajuste_val]
-                 .sum())
-        _rank["_abs"] = _rank[col_ajuste_val].abs()
-        _rank = _rank.sort_values("_abs", ascending=False)
-        _prods_ranked = _rank[col_producto].astype(str).tolist()
-        _todos_prods = sorted(_prod_s.dropna().unique().tolist())
-
-        _n_top = int(st.session_state.get("ajuste_cascada_excl_top") or 0)
-        _n_prev = len(set(_prods_ranked[:_n_top]) |
-                      set(st.session_state.get("ajuste_cascada_excl_manual")
-                          or []))
-        _lbl = ":material/filter_alt_off: Excluir productos"
-        if _n_prev:
-            _lbl += f" :violet-badge[{_n_prev}]"
-
-        # Aplicar exclusiones al df (leyendo el estado ya comprometido)
-        if _n_top > 0:
-            excluidos.update(_prods_ranked[:_n_top])
-        _manual_prev = st.session_state.get("ajuste_cascada_excl_manual") or []
-        excluidos.update(str(p) for p in _manual_prev)
-
-        if excluidos:
-            df = df[~df[col_producto].astype(str).isin(excluidos)]
-    else:
-        _todos_prods = []
-        _lbl = ":material/filter_alt_off: Excluir productos"
-
     agg = (df.groupby(grp_col, as_index=False)[col_ajuste_val]
            .sum().sort_values(col_ajuste_val))
     if agg.empty:
-        st.info("No queda nada para graficar después de las exclusiones.")
+        st.info("No hay datos para graficar en el rango seleccionado.")
         return
     total = float(agg[col_ajuste_val].sum())
 
@@ -301,42 +262,6 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         return (AJUSTE_NEG_TEXTO, AJUSTE_CRIT_FONDO)
 
     st.markdown(f"""<style>
-    /* Popover "Excluir productos": achica el boton que la regla global de
-       estilos/_30_filtros.py deja en 180px de ancho y 15px de fuente.
-       El wrapper [data-testid="stPopover"] mide 33px aunque el boton mide
-       26px: como el boton es inline-flex dentro de un div en block-flow,
-       arma una linea de texto propia (strut) con el line-height heredado
-       (1.6 por defecto) y le agrega ~7px "fantasma" arriba/abajo. Se
-       resetea a 0 aqui, en el ancestro, para que el wrapper abrace el
-       boton sin ese aire. white-space:nowrap evita que "Excluir
-       productos" parta en 2 lineas si la columna se angosta (eso si
-       crecia el boton bastante mas alla de los 33px).
-       align-items:center en el wrapper mismo para centrar el boton
-       horizontal dentro de la columna del medio — a pedido. Es
-       align-items y NO justify-content porque stVerticalBlock (la
-       clase que Streamlit le pone a este container) ya viene con
-       flex-direction:column: en ese eje, justify-content mueve
-       VERTICAL (verificado midiendo — con justify-content:center el
-       boton no se movia un pixel del borde izquierdo). */
-    .st-key-ajcas_excl_wrap {{
-        align-items: center; }}
-    .st-key-ajcas_excl_wrap [data-testid="stPopover"] {{
-        line-height: 0; }}
-    .st-key-ajcas_excl_wrap [data-testid="stPopover"] button {{
-        min-width: 0 !important; padding: 2px 10px !important;
-        font-size: 11px !important; font-weight: 400 !important;
-        min-height: 0 !important; height: 26px !important;
-        line-height: 1 !important;
-        border-width: 1px !important; color: {GRIS_TEXTO} !important; }}
-    .st-key-ajcas_excl_wrap [data-testid="stPopover"] button div,
-    .st-key-ajcas_excl_wrap [data-testid="stPopover"] button span
-        {{ line-height: 1 !important; }}
-    .st-key-ajcas_excl_wrap [data-testid="stPopover"] button p
-        {{ font-size: 11px !important; white-space: nowrap !important; }}
-    .st-key-ajcas_excl_wrap [data-testid="stPopover"] button
-        [data-testid="stIconMaterial"]
-        {{ font-size: 13px !important; width: 13px !important;
-          height: 13px !important; }}
     /* Buscador de Faltantes/Sobrantes en el drill (2026-08-08, a pedido):
        reemplaza el título fijo -- filtra los productos de esa zona en vez
        de solo etiquetarla. data-testid="stTextInputRootElement" es la caja
@@ -482,17 +407,14 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
        título — 15px del padding-top que Streamlit le da por defecto a
        st.container(border=True) más 2px del div del título. Se recorta
        el padding SUPERIOR (los laterales siguen en 15px) para que el
-       título suba sin desalinearse del popover "Excluir productos": los
-       dos viven en el mismo stHorizontalBlock, así que mover la card los
-       sube juntos. Acotado a chartcard_cascada — el resto de las cards
-       de gráficos conserva su padding.
+       título suba sin desalinearse de los KPIs: los dos viven en el
+       mismo stHorizontalBlock, así que mover la card los sube juntos.
+       Acotado a chartcard_cascada — el resto de las cards de gráficos
+       conserva su padding.
        El aire se recorta primero ACÁ y no en el padding de las
        columnas de título/KPIs: tocarlo ahí las desalineaba entre sí
-       (verificado midiendo rects). 2026-08-07, a pedido: título,
-       popover "Excluir productos" y KPIs pasan de columnas [6,1]
-       (título+KPIs compartían una sola, centrados) a 3 columnas
-       iguales — título a la izquierda, popover al medio, KPIs a la
-       derecha. Cada una resetea su padding-top a 0 por separado.
+       (verificado midiendo rects). Título y KPIs van en 2 columnas
+       iguales, cada una resetea su padding-top a 0 por separado.
 
        row-gap: las filas de familia son hijas directas de este flex, así
        que lo que las separa es el gap del contenedor (16px por defecto
@@ -552,14 +474,13 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
 
     with _card("cascada"):
         # ── Título + KPIs (antes vivían en la fila TOTAL de la tabla)
-        #    2026-08-07, a pedido: título / popover "Excluir productos" /
-        #    KPIs en 3 columnas iguales — título a la izquierda, popover
-        #    al medio, KPIs a la derecha (antes título+KPIs centrados
-        #    juntos en una sola columna — ver git log si hace falta
-        #    volver). Los KPIs van cada uno en su propia cápsula
-        #    tonalizada por signo, no como texto plano separado por "|"
-        #    — así se distinguen del título de un vistazo en lugar de
-        #    leerse como una sola frase.────────
+        #    Título a la izquierda, KPIs a la derecha en 2 columnas
+        #    iguales (hasta 2026-08-09 había una tercera columna al medio
+        #    con el popover "Excluir productos", quitado a pedido — ver
+        #    git log si hace falta volver). Los KPIs van cada uno en su
+        #    propia cápsula tonalizada por signo, no como texto plano
+        #    separado por "|" — así se distinguen del título de un
+        #    vistazo en lugar de leerse como una sola frase.────────
 
         # El título es además el disparador del tooltip que explica la
         # cascada acumulada (ver el bloque .ajcas-tip en el <style> de
@@ -603,36 +524,18 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                 f"<span style='font-size:11.5px;color:{_col_pct};opacity:.65'>"
                 f"s/ total</span>"))
 
-        _col_titulo, _col_excl, _col_kpis = st.columns(3)
+        _col_titulo, _col_kpis = st.columns(2)
         with _col_titulo:
             st.markdown(
                 f"<div style='display:flex;align-items:center;"
                 f"padding:0 0 14px 0'>{_titulo_html}</div>",
                 unsafe_allow_html=True)
-        with _col_excl:
-            if col_producto and col_producto in df.columns:
-                with st.container(key="ajcas_excl_wrap"), \
-                        st.popover(_lbl, use_container_width=False):
-                    _top_ex = st.select_slider(
-                        "Excluir el top N por |ajuste|",
-                        options=[0, 1, 3, 5, 8, 10],
-                        value=0, key="ajuste_cascada_excl_top",
-                        format_func=lambda n: "Ninguno" if n == 0 else f"Top {n}",
-                        help="Quita los N productos de mayor ajuste absoluto — "
-                             "sirve cuando un error de captura domina la cascada.",
-                    )
-                    _top_ex = int(_top_ex or 0)
-                    _manual = st.multiselect(
-                        "…o elegir productos puntuales", _todos_prods,
-                        key="ajuste_cascada_excl_manual",
-                        placeholder="Buscar producto…",
-                    )
         with _col_kpis:
             # margin-top negativo: el padding-top de esta fila ya esta en 0
-            # (igual que titulo y popover, ver comentario "Aire sobre el
-            # titulo" arriba), asi que para subir SOLO los KPIs un poco mas
-            # no queda otro knob que despegarlos con margen negativo — a
-            # pedido, se acepta el desalineo extra con titulo/popover.
+            # (igual que el título, ver comentario "Aire sobre el título"
+            # arriba), asi que para subir SOLO los KPIs un poco mas no
+            # queda otro knob que despegarlos con margen negativo — a
+            # pedido, se acepta el desalineo extra con el título.
             st.markdown(
                 f"<div style='display:flex;align-items:center;"
                 f"justify-content:flex-end;flex-wrap:wrap;gap:12px;"
