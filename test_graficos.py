@@ -361,6 +361,41 @@ def _pruebas_anomalias():
     check("agrega por corte antes del %",
           round(float(o2["pct_actual"].iloc[0]), 2), 5.0)
 
+    # ── "Agotado" es atributo, NO veredicto ────────────────────────────
+    # El caso que motivó el cambio de diseño: dos productos que hoy se
+    # quedan en 0 (declarado=0), pero uno se agota SIEMPRE y el otro
+    # nunca lo había hecho. Deben salir con veredictos OPUESTOS, no en
+    # el mismo saco. Medido sobre el parquet real: de 1.146 agotados,
+    # 463 son normales para sí mismos y 209 anómalos.
+    def _con_declarado(nombre, cierres, declarados):
+        return pd.DataFrame({
+            "PRODUCTO": [nombre] * len(cierres),
+            "FECHA": pd.date_range("2026-01-01", periods=len(cierres), freq="MS"),
+            "STOCK": cierres,
+            "DECL": declarados,
+            "AJUSTE": [d - c for c, d in zip(cierres, declarados)],
+        })
+
+    df_ag = pd.concat([
+        # se agota en TODOS los cortes -> que hoy se agote no es noticia
+        _con_declarado("siempre se agota", [10, 12, 8, 11, 9], [0, 0, 0, 0, 0]),
+        # nunca se agotó (conteo casi exacto) y hoy sí
+        _con_declarado("nunca se agotó",   [10, 12, 8, 11, 9], [10, 12, 8, 11, 0]),
+    ], ignore_index=True)
+    o3 = perfil_por_producto(df_ag, "PRODUCTO", "FECHA", "AJUSTE", "STOCK",
+                             col_declarado="DECL")
+    r3 = {p: (v, a) for p, v, a in
+          zip(o3["producto"], o3["veredicto"], o3["agotado"])}
+    check("los dos constan como agotados",
+          (r3["siempre se agota"][1], r3["nunca se agotó"][1]), (True, True))
+    check("el que se agota siempre → normal",
+          r3["siempre se agota"][0], "normal")
+    check("el que nunca se agotó → NO normal",
+          r3["nunca se agotó"][0] != "normal", True)
+    # Sin col_declarado, la columna existe igual y sale toda en False.
+    o4 = perfil_por_producto(df_ag, "PRODUCTO", "FECHA", "AJUSTE", "STOCK")
+    check("sin col_declarado, agotado=False", bool(o4["agotado"].any()), False)
+
     # Sin columnas o sin datos utiles: devuelve vacio, no revienta.
     check("columnas ausentes → df vacío",
           len(perfil_por_producto(df, "NO_EXISTE", "FECHA", "AJUSTE", "STOCK")), 0)

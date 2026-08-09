@@ -34,16 +34,24 @@ DECISIONES QUE IMPORTAN (y por que)
    `== 0`: contra datos reales aparecieron MAD del orden de 1e-16 que
    pasaban el `== 0` y daban z de 3e16.
 
-5. **"El conteo dio cero" NO es una anomalia estadistica: es su propia
-   categoria.** Medido sobre el parquet real (235.045 filas): el 24,6%
-   de las filas tiene un ajuste de exactamente el 100% del stock, y el
-   98% de esas son `STOCK DECLARADO = 0` — el producto no aparecio al
-   contar. Es un evento de negocio nitido y frecuente, no una
-   desviacion sutil, y metido en el z-score ahogaba todo lo demas (con
-   el diseño inicial, 386 productos salian "anomalos", 19% del total:
-   una lista larga mas, que es justo lo que este modulo quiere evitar).
-   Ahora sale como veredicto propio `conteo_cero` y no compite con el
-   resto.
+5. **Agotarse (`STOCK DECLARADO = 0`) es un ATRIBUTO, no un veredicto.**
+   `DECLARADO = 0` significa que el producto se quedo sin stock — el
+   conteo no encontro nada. Pasa mucho: el 24,6% de las filas del
+   parquet real tiene un ajuste de exactamente -100% del stock.
+
+   La tentacion es sacarlo como categoria propia. Se probo y era PEOR:
+   un veredicto `conteo_cero` no distingue los dos casos opuestos que
+   importan —
+
+     · el producto que se agota en CADA corte: su historia esta llena de
+       -100%, asi que un -100% nuevo es normal PARA EL. No es noticia.
+     · el producto que NUNCA se habia agotado y hoy si: eso es
+       exactamente lo que se busca.
+
+   El z robusto ya los separa solo (en el primero la mediana ronda -100
+   y la MAD es chica; en el segundo el salto es enorme). Sacar esos
+   productos del calculo tiraba justo la señal. Asi que `agotado` va
+   como columna booleana y el veredicto lo sigue decidiendo la historia.
 """
 
 import numpy as np
@@ -78,13 +86,12 @@ def perfil_por_producto(df, col_producto, col_fecha, col_ajuste,
         pct_mediana     mediana historica de ese % (sin el corte actual)
         dispersion      MAD del historico, en puntos porcentuales
         z               z robusto del corte actual (NaN si no aplica)
-        veredicto       conteo_cero | anomalo | nuevo_patron | vigilar |
-                        normal | sin_historico
-
-    `col_declarado` (opcional, el stock CONTADO): si se pasa y el ultimo
-    corte del producto vino con 0, el veredicto es `conteo_cero` y no se
-    calcula z. Ver el punto 5 del docstring del modulo — sin esto, ese
-    caso (un cuarto de las filas reales) ahoga a todo lo demas.
+        veredicto       anomalo | nuevo_patron | vigilar | normal |
+                        sin_historico
+        agotado         True si el ultimo corte del producto se conto en
+                        cero (se quedo sin stock). Es un ATRIBUTO, no un
+                        veredicto: ver el punto 5 del docstring del
+                        modulo. Sin `col_declarado` sale siempre False.
 
     El df de entrada NO se modifica. Las filas sin fecha, sin producto o
     con stock nulo/cero se descartan: sin stock no hay porcentaje que
@@ -95,7 +102,7 @@ def perfil_por_producto(df, col_producto, col_fecha, col_ajuste,
     if faltan:
         return pd.DataFrame(columns=["producto", "n_cortes", "pct_actual",
                                      "pct_mediana", "dispersion", "z",
-                                     "veredicto"])
+                                     "veredicto", "agotado"])
 
     usa_decl = bool(col_declarado) and col_declarado in df.columns
     cols = [col_producto, col_fecha, col_ajuste, col_stock]
@@ -114,7 +121,7 @@ def perfil_por_producto(df, col_producto, col_fecha, col_ajuste,
     if d.empty:
         return pd.DataFrame(columns=["producto", "n_cortes", "pct_actual",
                                      "pct_mediana", "dispersion", "z",
-                                     "veredicto"])
+                                     "veredicto", "agotado"])
 
     # Ajuste relativo al stock, en %. abs() NO: el signo distingue faltante
     # de sobrante, y un producto que siempre falta y de pronto sobra es
@@ -141,17 +148,14 @@ def perfil_por_producto(df, col_producto, col_fecha, col_ajuste,
         # se juzga entra en la mediana y se auto-normaliza.
         historia = pcts[:-1]
 
-        # "El conteo dio cero" antes que nada: es un hecho, no una
-        # desviacion. Mezclarlo con el z-score lo ahogaba todo (punto 5
-        # del docstring del modulo).
-        if usa_decl and float(sub["declarado"].to_numpy()[-1]) == 0:
-            filas.append((producto, n, actual, np.nan, np.nan, np.nan,
-                          "conteo_cero"))
-            continue
+        # Agotado: se anota y se sigue. NO corta el analisis — que un
+        # producto se quede sin stock solo es noticia si para EL es raro,
+        # y eso lo decide su historia (punto 5 del docstring del modulo).
+        agotado = bool(usa_decl and float(sub["declarado"].to_numpy()[-1]) == 0)
 
         if n < min_cortes:
             filas.append((producto, n, actual, np.nan, np.nan, np.nan,
-                          "sin_historico"))
+                          "sin_historico", agotado))
             continue
 
         mediana = float(np.median(historia))
@@ -163,7 +167,8 @@ def perfil_por_producto(df, col_producto, col_fecha, col_ajuste,
         # tiene otro "practicamente cero" que uno que se mueve en unidades).
         if mad <= max(1e-9, abs(mediana) * 1e-9):
             veredicto = "normal" if np.isclose(actual, mediana) else "nuevo_patron"
-            filas.append((producto, n, actual, mediana, 0.0, np.nan, veredicto))
+            filas.append((producto, n, actual, mediana, 0.0, np.nan,
+                          veredicto, agotado))
             continue
 
         z = _ESCALA_MAD * (actual - mediana) / mad
@@ -174,14 +179,15 @@ def perfil_por_producto(df, col_producto, col_fecha, col_ajuste,
             veredicto = "vigilar"
         else:
             veredicto = "normal"
-        filas.append((producto, n, actual, mediana, mad, z, veredicto))
+        filas.append((producto, n, actual, mediana, mad, z, veredicto,
+                      agotado))
 
     out = pd.DataFrame(filas, columns=["producto", "n_cortes", "pct_actual",
                                        "pct_mediana", "dispersion", "z",
-                                       "veredicto"])
+                                       "veredicto", "agotado"])
     # Primero lo mas raro; dentro de cada grupo, el desvio mayor.
-    orden = {"conteo_cero": 0, "anomalo": 1, "nuevo_patron": 2,
-             "vigilar": 3, "normal": 4, "sin_historico": 5}
+    orden = {"anomalo": 0, "nuevo_patron": 1, "vigilar": 2,
+             "normal": 3, "sin_historico": 4}
     out["_o"] = out["veredicto"].map(orden)
     out = (out.sort_values(["_o", "z"], key=lambda s: s.abs() if s.name == "z" else s,
                            ascending=[True, False])
