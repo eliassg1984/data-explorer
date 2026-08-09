@@ -7,33 +7,11 @@ El orden respecto a estilos/__init__.py es parte del comportamiento del CSS.
 CSS = """    /* =================================================================== */
     /* CARDS DE GRÁFICOS — contenedor blanco con bordes redondeados         */
     /* =================================================================== */
-    .chart-card {
-        background: #ffffff;
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 1.25rem 1.5rem 0.75rem;
-        margin-bottom: 1rem;
-        box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
-        position: relative;
-        padding-bottom: 2.5rem;  /* espacio para el pie */
-    }
-
-    .chart-card-title {
-        position: absolute;
-        left: 0; right: 0; bottom: 0;
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--accent);
-        background: var(--accent-tint);
-        border-top: 1px solid var(--accent);
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        padding: 8px 1.5rem;
-        margin: 0;
-        line-height: 1;
-        border-bottom-left-radius: inherit;
-        border-bottom-right-radius: inherit;
-    }
+    /* .chart-card / .chart-card-title vivian aqui hasta el 2026-08-08:
+       ningun Python emite esas clases. graficos/base.py::_card envuelve
+       en un st.container(border=True, key="chartcard_...") y solo emite
+       .chart-card-hdr (titulo arriba) o .chart-card-pie (al pie). Ver
+       arquitectura.md #49. */
 
     /* Título al PIE de _card() -- el default cuando no se pide
        titulo_arriba. La clase la emitía graficos/base.py::_card desde
@@ -71,12 +49,6 @@ CSS = """    /* ================================================================
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-    }
-
-    .streamlit-expanderContent .chart-card {
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0.25rem 0 0 !important;
     }
 
     /* ============================================================

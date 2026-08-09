@@ -225,19 +225,4 @@ CSS = """    /* ================================================================
             margin: 6px 0 0 0 !important;
         }
     }
-
-    /* Chip pill del título del reporte */
-    .chip-titulo-reporte {
-        display: inline-flex;
-        align-items: center;
-        background: var(--accent-tint);
-        color: var(--accent-deep);
-        border-radius: 999px;
-        padding: 8px 18px;
-        font-size: 15px;
-        font-weight: 500;
-        line-height: 1;
-        white-space: nowrap;
-        letter-spacing: 0.01em;
-    }
 """

@@ -229,12 +229,6 @@ CSS = """    /* ================================================================
             height: 34px !important;
             bottom: var(--nav-movil-alto) !important;
         }
-        .st-key-footer_actualizacion {
-            left: 0 !important;
-            padding: 0 12px !important;
-            bottom: var(--nav-movil-alto) !important;
-            height: 34px !important;
-        }
         [data-testid="stMainBlockContainer"],
         .stMainBlockContainer,
         .block-container {

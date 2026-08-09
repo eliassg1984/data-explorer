@@ -26,36 +26,12 @@ CSS = """    /* ================================================================
         padding-bottom: 66px !important;
     }
 
-    /* Texto "Última actualización" anclado a la franja inferior fija */
-    .st-key-footer_actualizacion {
-        position: fixed !important;
-        left: 90px !important;
-        right: 0 !important;
-        bottom: 0 !important;
-        height: 42px !important;
-        display: flex !important;
-        align-items: center !important;
-        /* A la IZQUIERDA de la franja: la esquina derecha la ocupa el botón
-           'Manage app' de Streamlit Cloud y tapaba el texto. */
-        justify-content: flex-start !important;
-        padding: 0 24px !important;
-        margin: 0 !important;
-        z-index: 999991 !important; /* por encima de .stApp::after */
-        pointer-events: none !important;
-        /* El bloque vertical de Streamlit es columna con gap: en fila y sin
-           separaciones el texto queda centrado DENTRO de la franja de 42px
-           (antes desbordaba por debajo del viewport). */
-        flex-direction: row !important;
-        gap: 0 !important;
-    }
-    .st-key-footer_actualizacion > div {
-        height: auto !important;
-        margin: 0 !important;
-    }
-    .st-key-footer_actualizacion .ultima-actualizacion {
-        margin: 0 !important;
-        font-size: 12px !important;
-        color: var(--text-muted) !important;
-        white-space: nowrap !important;
-    }
+    /* El texto "Última actualización" NO se estila aquí. Lo pinta
+       inyecciones/varios.py::inject_footer_actualizacion, que crea un div
+       con id="footer-actualizacion" y estilos INLINE, anclado directo al
+       body para escapar de los stacking contexts de Streamlit (lo explica
+       su docstring). Hasta el 2026-08-08 vivian aqui ~32 lineas para
+       `.st-key-footer_actualizacion` y `.ultima-actualizacion`: ni esa key
+       ni esa clase las emite nadie — la inyeccion solo asigna id, cssText
+       y textContent. Ver arquitectura.md #49. */
 """

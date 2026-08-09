@@ -207,14 +207,4 @@ CSS = """    /* ================================================================
         justify-content: flex-start !important;
         text-align: left !important;
     }
-
-    .ultima-actualizacion {
-        margin: 0 !important;
-        color: var(--text-muted) !important;
-        font-size: 11px !important;
-        font-weight: 500 !important;
-        line-height: 1.2 !important;
-        text-align: right !important;
-        white-space: nowrap !important;
-    }
 """
