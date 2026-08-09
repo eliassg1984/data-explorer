@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import boto3
 import json
+import zlib
 from datetime import datetime, timezone
 
 
@@ -279,9 +280,17 @@ def secrets_disponibles():
 
 
 def _datos_demo(archivo, filas=60):
-    """Genera un DataFrame sintético acorde al reporte pedido. La semilla
-    depende del nombre de archivo para que cada reporte sea estable."""
-    rng = np.random.default_rng(abs(hash(archivo)) % (2**32))
+    """Genera un DataFrame sintético acorde al reporte pedido.
+
+    La semilla deriva del NOMBRE del archivo, para que cada reporte dé
+    siempre los mismos números y comparar dos capturas signifique algo.
+
+    crc32 y no hash(): el hash de str en Python va salteado por proceso
+    (PYTHONHASHSEED), así que con `abs(hash(archivo))` el demo cambiaba en
+    CADA reinicio del server — justo lo contrario de lo que decía este
+    docstring. crc32 es determinista entre procesos y máquinas.
+    """
+    rng = np.random.default_rng(zlib.crc32(archivo.encode("utf-8")))
     n = filas
 
     if archivo == "inventariovalorizado.parquet":
@@ -308,8 +317,19 @@ def _datos_demo(archivo, filas=60):
         # que en produccion: es lo que obliga a las columnas derivadas
         # (Mes)/(Dia) de app.py para el Modo pivote.
         n = 240
-        fechas = pd.to_datetime("2024-02-29") + pd.to_timedelta(
-            rng.integers(0, 90, n) * 1440 + rng.integers(0, 1440, n), unit="m")
+        # Anclado al AÑO EN CURSO, no a una fecha fija: la vista "Por fecha
+        # de corte" filtra por `_dt.date.today().year` y NO depende del
+        # rango de la franja (ver graficos/ajuste/_pivote.py). Con fechas de
+        # 2024 esa vista salia siempre "Sin datos de <año>" y era la unica
+        # del rail que no se podia verificar en local. Se reparten sobre los
+        # ultimos 300 dias DEL AÑO ACTUAL, con hora al minuto.
+        _hoy_aj = pd.Timestamp.now().normalize()
+        _ini_aj = max(_hoy_aj - pd.Timedelta(days=300),
+                      pd.Timestamp(_hoy_aj.year, 1, 1))
+        _tramo = max(1, int((_hoy_aj - _ini_aj).days))
+        fechas = _ini_aj + pd.to_timedelta(
+            rng.integers(0, _tramo, n) * 1440 + rng.integers(0, 1440, n),
+            unit="m")
         cierre = rng.uniform(0, 400, n).round(2)
         # ~55% sin diferencia (el caso real dominante), el resto falta o sobra.
         delta = np.where(rng.random(n) < 0.55, 0.0,
