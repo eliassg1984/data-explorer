@@ -61,8 +61,15 @@ CSS = """    /* ================================================================
             margin: 0 !important;
             z-index: 23 !important;
         }
-        /* MISMO pill sólido acento que en escritorio (_50_fecha.py, bloque
-           min-width:901px). Antes móvil se quedaba con el look "pestaña"
+        /* Pill SÓLIDO acento. Fue el mismo que en escritorio hasta el
+           2026-08-09, cuando el de escritorio pasó a outline (blanco +
+           borde) porque era el único bloque relleno entre chips y
+           segmentados outline. Acá se dejó sólido A PROPÓSITO: en móvil
+           el pill está SOLO en la barra — no hay chips outline al lado
+           con los que desentonar — y el relleno da mejor lectura de
+           "esto se toca". Si algún día móvil suma chips a la barra,
+           revisar esta divergencia. Ver _50_fecha.py, bloque
+           min-width:901px. Antes móvil se quedaba con el look "pestaña"
            de la regla base — degradado violeta + barra inferior de 3px —
            porque aquel bloque nunca cruzó el breakpoint. Se replica acá en
            vez de bajar el min-width porque las medidas cambian: en

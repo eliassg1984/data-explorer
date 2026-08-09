@@ -46,6 +46,16 @@ sola rompe la alineacion. Va junto con la barra tintada de
 _40_ajuste_franja.py (5ta vuelta) y el top:6px de los dos contenedores
 fijos (antes 3px, por la barra de 40px en vez de 34px).
 
+2026-08-09, 2da pasada del mismo dia: el pill dejo de ser RELLENO acento y
+paso a OUTLINE (fondo blanco, borde de 1.5px, texto --accent-deep, icono
+acento, radio de 4px como los chips). Con la barra ya tintada, el relleno
+solido era el unico bloque lleno de la pantalla y chocaba con el resto de
+controles, que son todos outline. Movil NO se toco a proposito: alla el
+pill sigue siendo solido acento (ver _99_movil.py) porque esta solo en la
+barra, sin chips outline al lado con los que desentonar, y el relleno le
+da mejor area de toque visual. Es la primera vez que movil y escritorio
+divergen en el ASPECTO del pill, no solo en las medidas.
+
 Extraido de estilos.py (lineas 1084-1280 del original).
 El orden respecto a estilos/__init__.py es parte del comportamiento del CSS.
 """
@@ -110,10 +120,11 @@ CSS = """    /* ================================================================
             #DED9FA 0%, rgba(222,217,250,0) 75%) !important;
     }
     /* ================================================================== */
-    /* DESKTOP (todos los reportes): fecha a la IZQUIERDA como pill sólido */
-    /* color acento (reemplaza el "tab" de arriba) + chips centrados con   */
-    /* fondo blanco. Ver docstring del módulo — por qué es el default y    */
-    /* por qué Compras tiene su propio addendum más abajo.                 */
+    /* DESKTOP (todos los reportes): fecha a la IZQUIERDA como pill        */
+    /* OUTLINE (reemplaza el "tab" de arriba; era relleno acento hasta la  */
+    /* 2da pasada del 2026-08-09) + chips pegados a su derecha, también    */
+    /* outline. Ver docstring del módulo — por qué es el default y por qué */
+    /* Compras tiene su propio addendum más abajo.                         */
     /*                                                                     */
     /* Selectores con clase duplicada (.st-key-X.st-key-X) para subir la   */
     /* especificidad por encima de la regla "tab" de arriba SIN depender   */
@@ -143,8 +154,28 @@ CSS = """    /* ================================================================
            label abreviado ("30 sep 2025 – 31 dic 2026"); el ellipsis está
            por si algún día vuelve un formato más largo — ver
            app.py::_fmt_rango_es, que documenta el acoplamiento del otro
-           lado. Con rangos cortos sobra fondo acento dentro del pill: es
-           a propósito, todos los reportes muestran el mismo control. */
+           lado. Con rangos cortos sobra ancho dentro del pill: se nota
+           mucho menos desde que el fondo es blanco (ver abajo) que cuando
+           era acento sólido.
+           2026-08-09, 2da pasada — OUTLINE, no relleno sólido. El pill
+           venía relleno de var(--accent) desde que la franja era casi
+           invisible y era lo único que se veía. Con la barra tintada pasó
+           a ser el ÚNICO elemento relleno de la pantalla (reportado con
+           captura de Compras: "el diseño de la fecha desentona") — los
+           chips vecinos y los segmentados del dashboard son todos
+           outline, y encima quedaba morado sobre morado contra el fondo
+           lavanda de la barra. Ahora comparte el lenguaje de los chips
+           (fondo blanco, radio de 4px) y la jerarquía la dan tres cosas
+           que NO son el relleno: borde de 1.5px en vez de 1px, icono en
+           acento y texto en --accent-deep. El borde sale de mezclar la
+           paleta, no de un hex suelto (ver CLAUDE.md § Colores): entre
+           --border-lavender (el de los chips) y --accent, más cerca del
+           segundo. OJO con el 1.5px: medido en el preview, Chrome a
+           DPR=1 lo redondea a 1px (getComputedStyle devuelve "1px"), así
+           que en pantallas sin escalado el borde pesa lo MISMO que el de
+           los chips y la diferencia la carga el color — por eso la mezcla
+           va al 80% de acento y no al 50%. En pantallas con escalado
+           (125% de Windows, retina) sí se ve el medio píxel. */
         .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill
             [data-testid="stPopover"] button {
             min-height: 28px !important;   /* alto real de los chips vecinos (con su borde de 1px) */
@@ -152,31 +183,31 @@ CSS = """    /* ================================================================
             justify-content: flex-start !important;
             overflow: hidden !important;
             box-sizing: border-box !important;
-            padding: 0 14px !important;
-            border: none !important;
-            border-radius: 999px !important;
-            background: var(--accent) !important;
+            padding: 0 12px !important;
+            border: 1.5px solid color-mix(in srgb, var(--accent) 80%, var(--accent-light)) !important;
+            border-radius: 4px !important;   /* mismo radio que los chips */
+            background: #ffffff !important;
             box-shadow: none !important;
-            color: #ffffff !important;
+            color: var(--accent-deep) !important;
             font-weight: 600 !important;
             font-size: 13px !important;
             letter-spacing: normal !important;
         }
         .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill
             [data-testid="stPopover"] button [data-testid="stIconMaterial"] {
-            color: #ffffff !important;
+            color: var(--accent) !important;
             font-size: 15px !important;
         }
         .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill
             [data-testid="stPopover"] button:hover {
-            border: none !important;
-            background: var(--accent-hover) !important;
-            color: #ffffff !important;
+            border: 1.5px solid var(--accent) !important;
+            background: var(--accent-tint) !important;
+            color: var(--accent-deep) !important;
         }
         .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill
             [data-testid="stPopover"] button[aria-expanded="true"] {
-            border: none !important;
-            background: var(--accent-deep) !important;
+            border: 1.5px solid var(--accent-deep) !important;
+            background: var(--accent-light) !important;
         }
         .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill
             [data-testid="stPopover"] button p {
