@@ -3,6 +3,7 @@ Panel de Reportes v2.0 - Punto de entrada principal (OPTIMIZADO).
 """
 
 import datetime
+import logging
 from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
@@ -909,10 +910,18 @@ def _render_contenido():
 _render_contenido()
 
 # ── Asistente flotante IA (tab derecho; cabecera del rail si hay rail) ───────
+# El asistente es ACCESORIO: si revienta, el reporte tiene que seguir en pie.
+# Esa parte estaba bien. Lo que no: era `except Exception: pass`, así que un
+# fallo suyo quedaba invisible PARA SIEMPRE — sin log, sin aviso, sin forma
+# de enterarse de que llevaba semanas roto. Ahora la app sigue igual de viva,
+# pero el fallo deja rastro: al log del server (que en Streamlit Cloud sí se
+# lee) y, con ?debug=1, la traza en pantalla.
 try:
     inject_asistente(reporte_activo=reporte, df_contexto=df_f)
-except Exception:
-    # Si algo falla en el asistente, la app principal sigue funcionando.
-    pass
+except Exception as _e_asistente:
+    logging.getLogger("app").exception("inject_asistente falló")
+    if st.query_params.get("debug"):
+        with st.expander("⚠️ El asistente falló (solo visible con ?debug=1)"):
+            st.exception(_e_asistente)
 
 perf.end()                                                                  # ⚡ PERF
