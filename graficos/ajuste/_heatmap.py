@@ -33,7 +33,8 @@ from graficos.ajuste._comun import _cortes_por_racha, _layout_aj
 
 def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                          col_producto=None, col_fecha=None, df_full=None,
-                         col_valorizado=None, area_sel=None, fam_sel=None):
+                         col_valorizado=None, area_sel=None, fam_sel=None,
+                         col_cantidad=None, col_unidad=None):
     """Mapa de calor familia × área — modo Ajuste (signado, divergente) o
     Valorizado Total (siempre positivo, secuencial), elegido con un
     `st.pills` al tope del gráfico.
@@ -861,10 +862,19 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                                         f"{_slug(str(_area_sel))}")
 
             if col_producto and col_producto in _det.columns:
-                _sub_prod = (
-                    _det.groupby(col_producto, as_index=False)[col_metrica]
-                    .sum()
-                )
+                # cantidad/unidad al lado del monto — mismo criterio que ya
+                # usa el drill de la Cascada (_filas_split_html): sum() para
+                # cantidad, "first" para unidad (constante por producto, no
+                # hay nada que sumar). _has_cant/_has_um en False si no
+                # llegó la columna: el drill se comporta como antes.
+                _has_cant = bool(col_cantidad and col_cantidad in _det.columns)
+                _has_um = bool(col_unidad and col_unidad in _det.columns)
+                _agg_map_hm = {col_metrica: "sum"}
+                if _has_cant:
+                    _agg_map_hm[col_cantidad] = "sum"
+                if _has_um:
+                    _agg_map_hm[col_unidad] = "first"
+                _sub_prod = _det.groupby(col_producto, as_index=False).agg(_agg_map_hm)
                 _sub_prod["_abs"] = _sub_prod[col_metrica].abs()
                 _sub_prod = _sub_prod.sort_values(
                     "_abs", ascending=False).head(30)
@@ -888,6 +898,13 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                         _tcol = (ACENTO_TEXTO_OSCURO if _modo_val else
                                  (DANGER_TEXT if _r[col_metrica] < 0
                                   else CELDA_POS_TEXTO))
+                        _t = f"S/ {_r[col_metrica]:,.0f}"
+                        if _has_cant:
+                            _t += f" · {_r[col_cantidad]:,.1f}"
+                            _um = (str(_r[col_unidad]).strip()
+                                   if _has_um else "")
+                            if _um and _um.lower() != "nan":
+                                _t += f" {_um}"
                         _filas_html.append(
                             f"<div style='display:flex;align-items:center;"
                             f"gap:8px;padding:3px 0'>"
@@ -912,7 +929,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                             f"font-size:10px;font-weight:600;"
                             f"color:{_tcol};font-variant-numeric:"
                             f"tabular-nums;white-space:nowrap'>"
-                            f"S/ {_r[col_metrica]:,.0f}</div></div>")
+                            f"{_t}</div></div>")
                     return "".join(_filas_html)
 
                 if _modo_val:
