@@ -1902,3 +1902,44 @@ salvo `icono`):
     queda con hover rico (`customdata` + `hovertemplate`) y sin apostar a
     un click que nadie pudo confirmar que llega. Si hace falta de verdad,
     se verifica aparte antes de construirlo.
+
+59. **`help=` en un `st.popover` cambia cuántos niveles de `<div>` hay
+    entre `[data-testid="stPopover"]` y el `<button>` — rompe selectores
+    CSS con hijo directo (`> div > button`).** Descubierto al convertir
+    el trigger del asistente (`asistente.py`, `.st-key-ai_float_wrap`) de
+    tab de texto a botón-ícono: agregar `help="Asistente IA"` hace que
+    Streamlit renderice el botón DOS veces (una envuelta en
+    `span.stTooltipIcon > span.stTooltipHoverTarget`, otra suelta en un
+    `<div>` propio) — ninguna de las dos copias queda a la profundidad
+    `div > button` que sí tenía el botón SIN `help=`. Resultado visual:
+    el botón vuelve al estilo DEFAULT de Streamlit (pill blanca, 180px de
+    `min-width`, flecha `expand_more`) como si el CSS no existiera,
+    aunque el selector esté bien escrito — porque literalmente no
+    matchea nada. Verificado con `outerHTML` del `[data-testid=
+    "stPopover"]` en vivo (preview local): sin `help=`, un solo `<button
+    data-testid="stPopoverButton">`; con `help=`, dos.
+    **Regla:** para un popover que se estiliza a medida, o no usar
+    `help=`, o escribir el selector como DESCENDIENTE (` button`, sin
+    `>`) en vez de hijo directo — un descendiente sobrevive a que
+    Streamlit intercale niveles nuevos. Antes de asumir que un selector
+    "debería" matchear, confirmar la profundidad real con `outerHTML`
+    (mismo espíritu que la regla #30, mismo elemento que ya la pisó una
+    vez).
+
+    **Aparte, simplificación de diseño (a pedido, 2026-08-09):** el
+    trigger del asistente pasó de "tab de texto pegado al borde derecho,
+    o cabecera de 84px del rail si `:has(.st-key-compras_tabs_row)`
+    matcheaba" a un ÍCONO de 30px fijo en la esquina superior derecha de
+    la FRANJA SUPERIOR (`.st-key-fila_ajuste_top`), igual en los 8
+    reportes y en los 3 rangos de ancho — cero ramas por `:has()` ni por
+    `@media` de rail. `right:15px` en los 3 anchos (mismo eje que el
+    rail cuando lo hay; en los reportes sin rail simplemente flota con
+    el mismo margen — el ícono vive en la banda 0-46/50px, el rail
+    arranca en `top:66px`, nunca se tocan). `top` sí varía en UN punto de
+    corte (el mismo `@media (min-width:901px)` que ya usa el resto de la
+    franja): `(alto_franja - 30) / 2` → 8px cuando la franja mide 46px
+    (desktop), 10px cuando mide 50px (default, cubre tablet 769-900px y
+    móvil <=768px). Verificado con `getBoundingClientRect` en 375px,
+    850px y 1280px, en reportes con rail grande (Ajuste) y rail de un
+    solo ítem (Requerimientos, Receta Base) — mismas coordenadas
+    `right`/`top` en los tres.

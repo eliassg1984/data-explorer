@@ -2,9 +2,13 @@
 
 Diseño:
 - st.popover flotante (position:fixed sobre el container ai_float_wrap):
-  por defecto es un tab pegado al borde derecho, centrado vertical. Con el
-  rail de Compras/Ajuste presente y en desktop pasa a ser la CABECERA del
-  rail (misma columna y ancho, en la banda de 50px que hay encima).
+  botón-ÍCONO (sin texto, solo 💬) fijo en la esquina superior derecha de
+  la franja superior — misma banda que la fecha/chips, para TODOS los
+  reportes y anchos. Hasta el 2026-08-09 era un tab de texto pegado al
+  borde derecho (o la cabecera del rail de Compras/Ajuste si había rail) —
+  a pedido, se simplificó a un único ícono en la franja, sin la rama por
+  breakpoint/rail que tenía el diseño anterior. Ver arquitectura.md
+  regla #59.
 - @st.fragment: al enviar un mensaje, solo re-ejecuta el asistente
   — la tabla, gráficos y filtros del reporte NO se recargan.
 - Cliente Groq (GPT-OSS 120B) para sintetizar respuestas. La key vive en
@@ -266,103 +270,70 @@ def _inject_css():
     st.session_state["_ai_css_inyectado"] = True
     st.markdown(f"""
     <style>
-    /* Wrapper del asistente — tab fijo en el borde derecho, centrado vertical. */
+    /* Wrapper del asistente — ÍCONO fijo en la esquina superior derecha de
+       la FRANJA SUPERIOR (misma banda que fecha/chips, ver
+       _40_ajuste_franja.py y _50_fecha.py), para TODOS los reportes y
+       anchos — ya no depende de si hay rail (:has(.st-key-compras_tabs_row))
+       ni de breakpoints de rail. right:15px = mismo eje que el rail de
+       Compras/Ajuste cuando lo hay (_20_compras_rail.py); en los reportes
+       sin rail (R. Base, Requerimientos) el ícono flota igual, con el mismo
+       margen. Nunca choca con el rail: el rail arranca en top:66px
+       (.st-key-compras_tabs_row) y este ícono vive en la banda 0-46/50px de
+       arriba. top:8/10px centra el ícono de 30px en la franja — la fórmula
+       es (alto_franja - 30) / 2: 8px cuando la franja mide 46px (desktop,
+       @media 901px de abajo), 10px cuando mide 50px (default, que cubre
+       tablet 769-900px y móvil <=768px — ver _40_ajuste_franja.py::before).
+       Ver arquitectura.md regla #59. */
     .st-key-ai_float_wrap {{
         position: fixed !important;
-        top: 50% !important;
-        right: 0 !important;
-        transform: translateY(-50%) !important;
+        top: 10px !important;
+        right: 15px !important;
         z-index: 999990 !important;
         width: auto !important;
     }}
-    /* Trigger: tab pegado al borde derecho (esquinas redondeadas solo a la izq). */
-    .st-key-ai_float_wrap [data-testid="stPopover"] > div > button {{
-        border-radius: 12px 0 0 12px !important;
-        min-height: 48px !important;
-        padding: 0 14px 0 16px !important;
+    @media (min-width: 901px) {{
+        .st-key-ai_float_wrap {{
+            top: 8px !important;
+        }}
+    }}
+    /* Trigger: círculo de 30px, solo ícono (💬, sin texto "Asistente") —
+       mismo alto que los chips/pill vecinos de la franja (28-30px). El
+       min-width:0 es necesario: sin él gana la regla global
+       [data-testid="stPopover"] button {{ min-width: 180px !important }}
+       (pensada para los popovers de filtros) — este mismo elemento ya la
+       pisó una vez reposicionado como cabecera del rail, ver arquitectura.md
+       regla #30. Selector DESCENDIENTE (` button`, sin `> div >`): la
+       versión anterior con hijo directo se rompió al agregar `help=` al
+       popover (agrega un stTooltipIcon que anida el botón un nivel más
+       hondo) — un descendiente cualquiera es más resistente a estos
+       cambios de anidado, y acá adentro solo hay un botón posible. */
+    .st-key-ai_float_wrap [data-testid="stPopover"] button {{
+        min-width: 0 !important;
+        width: 30px !important;
+        height: 30px !important;
+        min-height: 30px !important;
+        padding: 0 !important;
+        border-radius: 50% !important;
         background: {ACENTO} !important;
         color: {BLANCO} !important;
         border: none !important;
-        box-shadow: -2px 2px 12px rgba(108,92,231,0.30) !important;
-        font-weight: 600 !important;
+        box-shadow: 0 2px 8px rgba(108,92,231,0.35) !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }}
-    .st-key-ai_float_wrap [data-testid="stPopover"] > div > button:hover {{
+    .st-key-ai_float_wrap [data-testid="stPopover"] button p {{
+        margin: 0 !important;
+        font-size: 15px !important;
+        line-height: 1 !important;
+    }}
+    .st-key-ai_float_wrap [data-testid="stPopover"] button:hover {{
         background: {ACENTO_FUERTE} !important;
-        transform: translateX(-3px);
+        transform: scale(1.08);
     }}
-    /* Ocultar la flecha expand_more — no aporta en un tab lateral. */
+    /* Ocultar la flecha expand_more — no aporta en un botón-ícono. */
     .st-key-ai_float_wrap [data-testid="stPopoverButton"] [aria-hidden="true"] {{
         display: none !important;
-    }}
-    /* Con el rail de Compras/Ajuste activo (solo desktop): el asistente deja
-       de ser tab lateral y pasa a ser la CABECERA del rail — misma columna
-       (right 15px, mismo ancho 84px), dentro de la banda superior libre
-       (--cab-altura = 50px) que queda ENCIMA del rail (que arranca en 60px).
-       En desktop la fecha se va a la izquierda (_50_fecha, @media 901px), así
-       que esa esquina está vacía. En <=900px el rail se vuelve tira
-       horizontal: ahí no tocamos nada y el asistente sigue siendo el tab
-       centrado del borde derecho. */
-    @media (min-width: 901px) {{
-        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row) .st-key-ai_float_wrap {{
-            top: 12px !important;
-            right: 15px !important;    /* mismo eje que el rail */
-            width: 84px !important;    /* mismo ancho que el rail */
-            transform: none !important;
-            /* El wrap es el flex column de Streamlit con align-items:start →
-               el hijo se mide por contenido (68px) y no llena los 84px. */
-            align-items: stretch !important;
-        }}
-        /* stLayoutWrapper (hijo directo del wrap) trae width:fit-content de
-           Streamlit — con eso align-items:stretch no hace nada (stretch solo
-           gana cuando el ancho es auto). Sin esta línea el trigger queda a
-           68px (el ancho del texto) en vez de los 84px del rail. */
-        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
-            .st-key-ai_float_wrap [data-testid="stLayoutWrapper"] {{
-            width: 100% !important;
-        }}
-        /* El trigger deja de ser "tab" violeta (llamaba de más siendo un
-           control que se usa poco, justo arriba de la navegación real del
-           rail): pastilla del ancho del rail, MISMO LENGUAJE VISUAL que un
-           ítem inactivo del rail (transparente, texto secundario, sin
-           sombra) — se lee como parte del rail, no como un CTA. */
-        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
-            .st-key-ai_float_wrap [data-testid="stPopover"] > div > button {{
-            width: 100% !important;
-            /* Sin esto el botón mide 180px: hay una regla global
-               [data-testid="stPopover"] button {{ min-width: 180px !important }}
-               (los popovers de filtros) que le gana al width:100%. */
-            min-width: 0 !important;
-            min-height: 34px !important;
-            padding: 0 4px !important;
-            border-radius: 10px !important;
-            justify-content: center !important;
-            background: transparent !important;
-            color: var(--text-secondary) !important;
-            border: none !important;
-            box-shadow: none !important;
-            font-weight: 500 !important;
-        }}
-        /* El label vive en un <p> con su propio font-size: hay que bajarlo acá
-           o "Asistente" no entra en los 84px del rail. Color heredado del
-           botón (texto secundario) — nada de negrita fuerte. */
-        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
-            .st-key-ai_float_wrap [data-testid="stPopover"] > div > button p {{
-            font-size: 10.5px !important;
-            font-weight: 500 !important;
-            line-height: 1.15 !important;
-            white-space: nowrap !important;
-            margin: 0 !important;
-            color: inherit !important;
-        }}
-        /* Hover: mismo tinte lavanda suave que usan los ítems del rail al
-           pasar el cursor — nunca el violeta sólido (eso quedó reservado
-           para el ítem activo de la navegación real). */
-        [data-testid="stAppViewContainer"]:has(.st-key-compras_tabs_row)
-            .st-key-ai_float_wrap [data-testid="stPopover"] > div > button:hover {{
-            background: var(--accent-tint) !important;
-            color: var(--accent-deep) !important;
-            transform: none !important;
-        }}
     }}
     /* Interior del popover: un poco más ancho para el chat. */
     div[data-testid="stPopoverBody"] {{
@@ -392,7 +363,15 @@ def _inject_css():
 @st.fragment
 def _asistente_fragment(reporte: str, contexto: str):
     with st.container(key="ai_float_wrap"):
-        with st.popover("💬 Asistente", use_container_width=False):
+        # Sin help=: agrega un stTooltipIcon/stTooltipHoverTarget que RENDERIZA
+        # EL BOTÓN DOS VECES a distinta profundidad (verificado en vivo con
+        # outerHTML) — con eso el selector de _inject_css() puede dejar de
+        # matchear la copia visible y el botón vuelve al estilo DEFAULT (pill
+        # blanca, 180px, chevron) en vez del círculo de 30px. El selector ya
+        # es un descendiente (no `> div >`) para no depender de esto, pero
+        # evitamos help= igual: no aporta nada aquí (el panel ya se explica
+        # solo) y es una rama menos que romper. Ver arquitectura.md regla #59.
+        with st.popover("💬", use_container_width=False):
             st.markdown(
                 f'<div class="ai-header">'
                 f'<div class="ai-title">Asistente IA · {reporte or "General"}</div>'
