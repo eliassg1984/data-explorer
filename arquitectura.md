@@ -1779,3 +1779,26 @@ salvo `icono`):
     `snippet` ni `funcion`. Se dejó el `.replace()` con un comentario que
     lo dice, para que el código no mienta, a la espera de decidir entre
     borrar la mitad muerta o terminar la otra mitad.
+
+57. **`configure_column(..., hide=True)` oculta la columna de la GRILLA,
+    no de los paneles laterales "Columnas" ni "Filtros".** Ambos paneles
+    (`agColumnsToolPanel`, `agFiltersToolPanel`) listan todo colId con
+    `field` que exista en `columnDefs`, sin importar `hide` -- por diseño
+    (así el usuario puede reactivar algo que Python escondió a propósito,
+    ver regla #28). El problema es cuando esa columna oculta no es para el
+    usuario en absoluto, sino una fuente interna que solo alimenta un
+    `valueGetter` (patrón de columna SINTÉTICA, ver
+    `tablas/ajuste_pivote.py`): `ajv_i`/`aj_i`/`tot_ajv`/`tot_aj` nunca
+    reciben `header_name`, así que ambos paneles les muestran el field
+    crudo como pastilla ("ajv_0", "aj_1"...) -- ruido sin sentido mezclado
+    con Familia/Subfamilia/Producto. Se detectó por el panel Columnas
+    (bug reportado, 2026-08-08) pero el panel Filtros tiene el mismo
+    problema y pasaba desapercibido porque arranca colapsado.
+    **Solución:** además de `hide=True`, pasar
+    `suppressColumnsToolPanel=True` y `suppressFiltersToolPanel=True` en
+    la misma llamada a `configure_column` para toda columna que sea
+    puramente interna (alimenta otra columna, no se muestra nunca). Si en
+    cambio la columna oculta SÍ debe quedar reactivable por el usuario
+    (como Familia/Subfamilia en el árbol nativo), no se le ponen estas
+    propiedades -- la distinción es esa, no "está oculta" sino "existe
+    para el usuario".

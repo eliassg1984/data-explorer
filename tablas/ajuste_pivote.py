@@ -219,14 +219,21 @@ def renderizar_aggrid_pivote_ajuste(df_wide, periodos, col_familia,
 
     # Las columnas fuente (ajv_i/aj_i/tot_ajv/tot_aj) quedan ocultas: solo
     # alimentan el valueGetter de su columna sintética, no se muestran
-    # directas ni participan del aggFunc nativo de AG Grid.
+    # directas ni participan del aggFunc nativo de AG Grid. `hide=True` las
+    # saca de la GRILLA pero no de los paneles laterales -- Columnas Y
+    # Filtros listan TODO colId con field, oculto o no, y como nunca
+    # reciben header_name muestran su nombre crudo ("ajv_0", "aj_1"...).
+    # Sin suppress*ToolPanel ambos paneles se llenan de pastillas sin
+    # sentido para el usuario (ver arquitectura.md regla #57).
+    _kw_oculta = {"hide": True, "suppressColumnsToolPanel": True,
+                  "suppressFiltersToolPanel": True}
     for p in periodos:
-        gb.configure_column(p["field_ajv"], hide=True)
+        gb.configure_column(p["field_ajv"], **_kw_oculta)
         if p["field_aj"]:
-            gb.configure_column(p["field_aj"], hide=True)
-    gb.configure_column("tot_ajv", hide=True)
+            gb.configure_column(p["field_aj"], **_kw_oculta)
+    gb.configure_column("tot_ajv", **_kw_oculta)
     if _tiene_aj:
-        gb.configure_column("tot_aj", hide=True)
+        gb.configure_column("tot_aj", **_kw_oculta)
 
     # Devuelve un elemento DOM (ver nota en _cell_renderer_combinado sobre
     # por qué hace falta el componente init/getGui en vez de una función
