@@ -1,9 +1,10 @@
 """graficos.ajuste._heatmap - vista Mapa de calor.
 
-Tiene DOS modos (ver arquitectura.md regla #42). En movil se renderiza a
-tamaño completo con scroll en vez de encogerse hasta ser ilegible: el
-texto lo dibuja Plotly en el servidor, asi que no hay media query que
-valga (ver graficos.base._es_movil).
+Tiene DOS modos (ver arquitectura.md regla #42) y TRES vistas — Mapa,
+Flujo (Sankey) y Tabla — sobre el mismo corte seleccionado (regla #58).
+En movil se renderiza a tamaño completo con scroll en vez de encogerse
+hasta ser ilegible: el texto lo dibuja Plotly en el servidor, asi que no
+hay media query que valga (ver graficos.base._es_movil).
 """
 
 
@@ -14,6 +15,7 @@ import streamlit as st
 from tema import (
     ACENTO, ACENTO_TEXTO_OSCURO, GRIS_BORDE, GRIS_FONDO,
     TEXTO_PRINCIPAL,
+    AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS, AJUSTE_POS_TEXTO,
     BLANCO, CELDA_POS_TEXTO,
     DANGER_TEXT, ERROR, ERROR_FONDO, ESCALA_CONTINUA, EXITO, EXITO_FONDO,
     GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE,
@@ -26,7 +28,7 @@ from graficos.base import (
 # graficos.compras (que ya la re-exporta para test_graficos.py) en vez de
 # duplicar el cálculo de granularidad Semana/Mes (Corte tiene su propio
 # cálculo, ver _cortes_por_racha: no es calendario fijo, son rachas).
-from graficos.ajuste._comun import _layout_aj
+from graficos.ajuste._comun import _cortes_por_racha, _layout_aj
 
 
 def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
@@ -53,6 +55,15 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         cortes de `df_full` (hovertemplate sigue siendo texto plano, no
         hace falta JS). El click-drill, más rico, agrega un mini gráfico
         de líneas real en vez de pelear con el tooltip nativo.
+
+    Selector de Vista (Mapa / Flujo / Tabla, regla #58 de arquitectura.md):
+    con `df_full` + `col_fecha` disponibles, un `st.select_slider` elige
+    el CORTE real (no calendario — reusa `_cortes_por_racha`, la misma
+    función que ya usa "Por fecha de corte") de los últimos ~8 con datos;
+    `df` pasa a ser el de ese corte para las tres vistas. Flujo (Sankey) y
+    Tabla (grilla HTML con barra-en-celda) son vistas alternativas del
+    MISMO pivot, sin click-drill propio — todo lo de arriba (top-3,
+    totales, hover, click-drill) sigue siendo exclusivo de Mapa.
     """
     if not col_familia or not col_area:
         st.info("Se necesitan columnas de familia y área para el mapa de calor.")
@@ -74,6 +85,52 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         _modo_val = (_modo == "Valorizado Total")
     col_metrica = col_valorizado if _modo_val else col_ajuste_val
 
+    # ── Selector de corte — `df` llega acá acotado por la franja de fecha
+    #    superior a "más o menos un mes" (categoría "visual", ver
+    #    categoria_rango_ajuste): normalmente 1 o 2 cortes reales, no hay
+    #    margen para animar nada. La fuente para el slider es `df_full`
+    #    (mismo criterio que ya usa el sparkline de tendencia unas líneas
+    #    más abajo), acotada a ~180 días para no pivotear el historial
+    #    completo en cada rerun. Reusa `_cortes_por_racha` — la MISMA
+    #    función que ya usa "Por fecha de corte" — en vez de inventar un
+    #    agrupado por mes calendario. Sin `df_full`/`col_fecha`, o con
+    #    menos de 2 cortes en la ventana, no se ofrece el slider y `df`
+    #    sigue siendo el de siempre (se comporta exactamente como antes).
+    if col_fecha and df_full is not None and col_fecha in df_full.columns:
+        _dff = df_full.copy()
+        _dff[col_fecha] = pd.to_datetime(_dff[col_fecha], errors="coerce")
+        _dff = _dff.dropna(subset=[col_fecha])
+        if not _dff.empty:
+            _fmax_corte = _dff[col_fecha].max()
+            _dff = _dff[_dff[col_fecha] >= _fmax_corte - pd.Timedelta(days=180)]
+        if not _dff.empty:
+            _corte_clave, _corte_etq = _cortes_por_racha(_dff[col_fecha])
+            _dff = _dff.assign(_corte_clave=_corte_clave, _corte_etq=_corte_etq)
+            _cortes = (_dff[["_corte_clave", "_corte_etq"]].drop_duplicates()
+                       .sort_values("_corte_clave").tail(8))
+            if len(_cortes) >= 2:
+                _opciones_corte = _cortes["_corte_etq"].tolist()
+                _etq_sel = st.select_slider(
+                    "Corte", options=_opciones_corte,
+                    value=_opciones_corte[-1],
+                    key="hm_ajuste_corte", label_visibility="collapsed",
+                )
+                _clave_sel = _cortes.loc[
+                    _cortes["_corte_etq"] == _etq_sel, "_corte_clave"
+                ].iloc[0]
+                df = _dff[_dff["_corte_clave"] == _clave_sel].drop(
+                    columns=["_corte_clave", "_corte_etq"])
+
+    # ── Selector de vista — Mapa (heatmap, todo lo de abajo) / Flujo
+    #    (Sankey) / Tabla (grilla HTML) sobre el MISMO pivot del corte
+    #    elegido arriba. Fila propia, separada del Modo: son dos ejes
+    #    independientes (qué métrica vs. cómo mostrarla). ─────────────────
+    _vista = st.pills(
+        "Vista mapa de calor", ["Mapa", "Flujo", "Tabla"],
+        default="Mapa", key="hm_ajuste_vista",
+        label_visibility="collapsed",
+    ) or "Mapa"
+
     pivot = df.pivot_table(
         index=col_familia, columns=col_area,
         values=col_metrica, aggfunc="sum", fill_value=0,
@@ -85,6 +142,126 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     _fams = pivot.index.tolist()
     _areas = pivot.columns.tolist()
     _n, _m = len(_fams), len(_areas)
+
+    _titulo_metrica = "Valorizado Total" if _modo_val else "Ajuste Valorizado"
+
+    # ── Vista Flujo (Sankey) — misma matriz Familia×Área que el mapa,
+    #    grosor de la cinta = magnitud, color = signo (pastel AJUSTE_NEG/
+    #    AJUSTE_POS, la misma pareja que ya usa la Cascada — no ERROR/
+    #    EXITO, muy saturados para un área grande). Nodos de familia
+    #    tonalizados como la franja TOTAL del heatmap; nodos de área en
+    #    gris neutro (mismo tipo -> mismo color en todo el dashboard).
+    #    SIN click-drill: `on_select` sobre trazas no-Bar/Scatter no está
+    #    verificado en este entorno (regla #11: ni siquiera go.Heatmap lo
+    #    tenía sin el overlay de Scatter invisible; regla #44 deja
+    #    constancia del mismo riesgo para go.Histogram) — Flujo se queda
+    #    con hover rico y sin apostar a un click que no se pudo probar. ──
+    if _vista == "Flujo":
+        _sk_src, _sk_tgt, _sk_val, _sk_color, _sk_hover = [], [], [], [], []
+        for _i, _fam in enumerate(_fams):
+            for _j, _area in enumerate(_areas):
+                _v = float(pivot.values[_i][_j])
+                if abs(_v) < 0.5:
+                    continue
+                _sk_src.append(_i)
+                _sk_tgt.append(_n + _j)
+                _sk_val.append(abs(_v))
+                _sk_color.append(AJUSTE_NEG if _v < 0 else AJUSTE_POS)
+                _sk_hover.append(f"{_fam} → {_area}<br>S/ {_v:,.0f}")
+
+        fig_sk = go.Figure(go.Sankey(
+            node=dict(
+                label=_fams + _areas, pad=14, thickness=14,
+                color=([LAVANDA_CABECERA_GRUPO] * _n + [GRIS_FONDO] * _m),
+                line=dict(color=GRIS_BORDE, width=0.5),
+            ),
+            link=dict(
+                source=_sk_src, target=_sk_tgt, value=_sk_val,
+                color=_sk_color, customdata=_sk_hover,
+                hovertemplate="%{customdata}<extra></extra>",
+            ),
+        ))
+        fig_sk.update_layout(**_layout_aj(
+            height=min(560, max(280, (_n + _m) * 22 + 110)),
+            margin=dict(l=10, r=10, t=20, b=10),
+        ))
+        with _card("heatmap", f"Flujo {_titulo_metrica}"):
+            st.plotly_chart(fig_sk, use_container_width=True,
+                            key="heatmap_ajuste_sankey")
+        return
+
+    # ── Vista Tabla — grilla HTML compacta (Familia × Área + columna
+    #    Total), barra-riel-relleno en cada celda: mismo patrón que ya usa
+    #    esta función para el ranking de productos del drill
+    #    (`_filas_drill_html` más abajo), no una AgGrid nueva — un
+    #    cellRenderer con barra-en-celda en AgGrid pide la interfaz de
+    #    Component completa (regla #25), mucho más código que reusar un
+    #    patrón ya probado en este mismo archivo. Filas ordenadas por
+    #    |total familia| descendente; sin orden interactivo por columna en
+    #    esta primera versión (pedirlo por clic necesita JS, que
+    #    `st.markdown` no ejecuta, o un control Streamlit aparte que
+    #    rerun-ea — se deja para más adelante si hace falta de verdad). ──
+    if _vista == "Tabla":
+        _row_tot_tb = pivot.sum(axis=1)
+        _row_tot_tb = _row_tot_tb.reindex(
+            _row_tot_tb.abs().sort_values(ascending=False).index)
+        _col_max_tb = {_area: float(pivot[_area].abs().max()) or 1.0
+                       for _area in _areas}
+        _tot_max_tb = float(_row_tot_tb.abs().max()) or 1.0
+
+        def _celda_tabla_html(_v, _max_abs):
+            if abs(_v) < 0.5:
+                return "<div style='height:20px'></div>"
+            _pct = max(abs(_v) / _max_abs * 100, 5)
+            _bg = AJUSTE_NEG if _v < 0 else AJUSTE_POS
+            _tcol = AJUSTE_NEG_TEXTO if _v < 0 else AJUSTE_POS_TEXTO
+            return (
+                f"<div style='position:relative;height:20px'>"
+                f"<div style='position:absolute;left:0;top:2px;bottom:2px;"
+                f"width:{_pct:.1f}%;background:{_bg};opacity:.35;"
+                f"border-radius:4px'></div>"
+                f"<div style='position:relative;font-size:11px;"
+                f"line-height:20px;padding-left:6px;color:{_tcol};"
+                f"font-weight:600;font-variant-numeric:tabular-nums;"
+                f"white-space:nowrap'>S/ {_v:,.0f}</div></div>"
+            )
+
+        _filas_tb_html = []
+        for _fam in _row_tot_tb.index:
+            _celdas_tb = "".join(
+                f"<td style='padding:2px 6px'>"
+                f"{_celda_tabla_html(float(pivot.loc[_fam, _area]), _col_max_tb[_area])}"
+                f"</td>"
+                for _area in _areas
+            )
+            _tot_tb = _celda_tabla_html(float(_row_tot_tb.loc[_fam]), _tot_max_tb)
+            _nom_fam = str(_fam)
+            _filas_tb_html.append(
+                f"<tr><td style='padding:2px 8px;font-size:11.5px;"
+                f"font-weight:500;color:{TEXTO_PRINCIPAL};white-space:nowrap'>"
+                f"{_nom_fam}</td>{_celdas_tb}"
+                f"<td style='padding:2px 6px;background:{LAVANDA_CABECERA_GRUPO};"
+                f"border-radius:6px'>{_tot_tb}</td></tr>"
+            )
+
+        _head_tb = "".join(
+            f"<th style='padding:0 6px 6px;font-size:10px;font-weight:600;"
+            f"color:{GRIS_TEXTO_SUAVE};text-align:left;white-space:nowrap'>"
+            f"{_area}</th>"
+            for _area in _areas
+        )
+        _tabla_html = (
+            f"<div style='overflow-x:auto'>"
+            f"<table style='border-collapse:collapse;width:100%'>"
+            f"<thead><tr><th></th>{_head_tb}"
+            f"<th style='padding:0 6px 6px;font-size:10px;font-weight:600;"
+            f"color:{ACENTO_TEXTO_OSCURO};text-align:left'>Total</th>"
+            f"</tr></thead><tbody>{''.join(_filas_tb_html)}</tbody></table>"
+            f"</div>"
+        )
+        with _card("heatmap", f"Tabla {_titulo_metrica}"):
+            st.markdown(_tabla_html, unsafe_allow_html=True)
+        return
 
     # ── Móvil: el heatmap NO se achica a como dé lugar (con 11 áreas + Total
     #    ilegible a cualquier tamaño de letra) — se renderiza a su ancho real

@@ -1802,3 +1802,33 @@ salvo `icono`):
     (como Familia/Subfamilia en el árbol nativo), no se le ponen estas
     propiedades -- la distinción es esa, no "está oculta" sino "existe
     para el usuario".
+
+58. **`_graf_heatmap_ajuste` (Mapa de calor de Ajuste) suma un selector de
+    Vista — Mapa / Flujo (Sankey) / Tabla — y un selector de Corte real,
+    además del Modo de la regla #42.** Agregado 2026-08-09 a pedido: las
+    tres vistas leen el MISMO pivot Familia×Área del corte elegido, no
+    son gráficos aparte — Mapa es el heatmap de siempre (top-3, totales,
+    hover, click-drill, móvil: sin cambios de comportamiento), Flujo un
+    `go.Sankey` nuevo, Tabla una grilla HTML con barra-en-celda (mismo
+    patrón que `_filas_drill_html`, unas líneas más abajo en el mismo
+    archivo — no una AgGrid nueva: un `cellRenderer` con barra-en-celda
+    en AgGrid pide la interfaz de Component completa, ver regla #25).
+
+    El corte NO sale de `df` (llega acotado a "más o menos un mes" por la
+    franja superior — categoría "visual" de `categoria_rango_ajuste`,
+    normalmente 1-2 cortes reales, no hay margen para animar) sino de
+    `df_full` acotado a ~180 días, agrupado con `_cortes_por_racha` — la
+    MISMA función que ya usa "Por fecha de corte" (`_pivote.py`) — NO
+    calendario mes a mes. Sin `df_full`/`col_fecha`, o con menos de 2
+    cortes en la ventana, no se ofrece el slider y la función se comporta
+    exactamente como antes de este cambio (mismo criterio que el resto de
+    los parámetros opcionales de esta función).
+
+    **Flujo (Sankey) no tiene click-drill, a propósito.** Mismo riesgo
+    que la regla #11/#44: `on_select` sobre una traza que no sea
+    Bar/Scatter/el Heatmap-con-overlay ya resuelto no está verificado en
+    este entorno, y no hay forma de probarlo en vivo (el panel Browser no
+    puede screenshotear ni clickear un Plotly, ver regla #44). Flujo se
+    queda con hover rico (`customdata` + `hovertemplate`) y sin apostar a
+    un click que nadie pudo confirmar que llega. Si hace falta de verdad,
+    se verifica aparte antes de construirlo.
