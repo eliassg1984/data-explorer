@@ -15,11 +15,17 @@ CSS = """    /* ================================================================
     .st-key-compras_tabs_row {
         position: fixed !important;
         /* Rail arranca a la altura de la tarjeta (por debajo de la topbar de
-           Streamlit + la fila de chips/fecha), no desde el borde superior. */
-        top: 60px !important;
+           Streamlit + la fila de chips/fecha), no desde el borde superior.
+           2026-08-09: 60px -> 66px. Va ACOPLADO con el margin-top negativo
+           de la primera tarjeta (más abajo en este mismo archivo): los dos
+           tienen que dar el mismo top o la tarjeta y el rail arrancan en
+           líneas distintas — pasó con la barra de 46px, la tarjeta quedaba
+           en y=57 contra el rail en y=60 y se notaba en la esquina
+           superior derecha. Si se cambia uno, medir el otro. */
+        top: 66px !important;
         right: 15px !important;            /* despega del scrollbar del navegador */
         bottom: 0 !important;
-        height: calc(100vh - 60px) !important;
+        height: calc(100vh - 66px) !important;   /* = 100vh - el top de arriba */
         z-index: 900 !important;
         width: 84px !important;
         overflow-x: hidden !important;
@@ -67,11 +73,18 @@ CSS = """    /* ================================================================
        jalón: va en flujo debajo, y un -68px extra la solaparía con la de
        arriba. Reglas separadas (mismo valor base -60px) para poder afinar
        cada tarjeta por su lado sin mover la otra. */
+    /* 2026-08-09: -60 -> -51 y -65 -> -56 (9px menos de jalón cada uno).
+       Con la barra superior en 46px la tarjeta quedaba a 11px de ella y,
+       peor, 3px MÁS ARRIBA que el rail derecho (tarjeta en y=57, rail en
+       y=60) — se veía en la esquina superior derecha. Ahora las dos
+       arrancan en y=66: ~20px de aire bajo la barra, que es lo que había
+       antes de subirla, y tarjeta y rail en la misma línea. Los tres
+       números (top del rail, estos dos margin) van juntos. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap {
-        margin-top: -60px !important;
+        margin-top: -51px !important;
     }
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_"] {
-        margin-top: -65px !important;
+        margin-top: -56px !important;
     }
     /* Excepción: Salidas mete una fila de KPIs (st.metric x3) EN FLUJO justo
        arriba de esta tarjeta — a diferencia de Ajuste/Compras/Ventas/

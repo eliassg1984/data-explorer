@@ -446,8 +446,22 @@ salvo `icono`):
       así que el `border-bottom:2px` descuenta alto por dentro.
       **La fórmula es `top = (alto − borde_inferior − alto_del_control) / 2`**
       — con 46px y control de 28px da los 8px simétricos que hay hoy
-      (verificado en el preview: 8 arriba, 8 abajo, la primera tarjeta
-      arranca en y=57).
+      (verificado en el preview: 8 arriba, 8 abajo).
+    - **Subir la barra obligó a bajar la tarjeta Y el rail derecho, juntos.**
+      Con la barra en 46px la primera tarjeta quedaba en y=57: 11px de aire
+      (contra los ~23px de la barra original de 34px) y, peor, **3px más
+      arriba que el rail derecho**, que arranca en un `top` propio — se veía
+      el escalón en la esquina superior derecha. Ahora los tres números de
+      `_20_compras_rail.py` van coordinados para dar el mismo y=66:
+      `compras_tabs_row { top: 66px; height: calc(100vh - 66px) }`,
+      `compras_prov_drill_wrap { margin-top: -51px }` y
+      `ajuste_graf_card_izq_* { margin-top: -56px }` (antes 60/-60/-65).
+      Verificado en Ajuste y Compras: tarjeta y rail en y=66, 20px de aire
+      bajo la barra. **Regla: si vuelve a cambiar el alto de la barra, no
+      alcanza con recalcular el `top` de los controles — hay que mover
+      también la tarjeta y el rail, o quedan en líneas distintas.** El
+      `margin-top:0` de Salidas es una excepción aparte (tiene una fila de
+      KPIs en flujo encima, ver regla #38) y no entra en este ajuste.
     - **Los chips dejaron de estar centrados**: `left:391px` fijo =
       `175px` (left del pill) + `210px` (ancho del pill) + `6px`. Para que
       ese número sea estable el pill tomó **ancho fijo** (`width:210px`, ya
