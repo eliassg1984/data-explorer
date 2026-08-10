@@ -265,9 +265,17 @@ def _render_fuentes(sources) -> None:
 
 # ─── CSS del wrapper flotante ──────────────────────────────────────────────
 def _inject_css():
-    if st.session_state.get("_ai_css_inyectado"):
-        return
-    st.session_state["_ai_css_inyectado"] = True
+    # SIN guard de "solo una vez": Streamlit reconstruye el árbol de
+    # elementos a partir de lo que el script emite EN CADA rerun — un
+    # st.markdown que no se vuelve a llamar no "queda" de la vez anterior,
+    # se BORRA. Con el guard `if _ai_css_inyectado: return` de acá, el
+    # <style> con .st-key-ai_float_wrap se inyectaba en el primer render y
+    # desaparecía en el siguiente rerun (cambiar de reporte, tocar un
+    # filtro, cualquier interacción): el botón volvía al popover DEFAULT de
+    # Streamlit (pill blanca 180px) en vez del ícono, siempre fuera de la
+    # franja superior. Mismo patrón que ya usa sin guard estilos/__init__.py
+    # ::inject_css() (llamado sin condición en cada rerun, app.py:74) — ver
+    # arquitectura.md regla #59.
     st.markdown(f"""
     <style>
     /* Wrapper del asistente — ÍCONO fijo en la esquina superior derecha de
