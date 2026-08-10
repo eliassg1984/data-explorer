@@ -460,7 +460,16 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     # mockup ocupa el mismo cellW, más angosta por el margen interno de
     # su rect, no por una fracción de columna más grande (reportado
     # 2026-08-09: se veía visiblemente más larga que el resto).
-    _anchos_grid = [1.7] + [1.0] * _m + [1.0]
+    #
+    # Familia en 1.3 (antes 1.7): esa columna es casi toda espacio en
+    # blanco (nombres cortos, alineados a la derecha) y con 1.7 empujaba
+    # el sector de celdas entero hacia la derecha de la tarjeta -- "el
+    # espacio para los nombres es muy largo, empuja las celdas"
+    # (reportado 2026-08-09, con captura de la tarjeta completa). Los
+    # nombres más largos (ENVASES Y EMBALAJES, BEBIDAS CON ALCOHOL) se
+    # recortan con el ellipsis que ya tenía la celda -- el `title=` del
+    # div sigue mostrando el nombre completo al pasar el mouse.
+    _anchos_grid = [1.3] + [1.0] * _m + [1.0]
     # El gap default entre bloques de Streamlit (16px, propiedad flex
     # `gap` del propio .stVerticalBlock de la card) se aplica ENTRE CADA
     # fila -- cabecera->fila1, fila->fila, ultima fila->TOTAL -- porque
