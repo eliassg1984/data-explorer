@@ -2509,3 +2509,58 @@ salvo `icono`):
     mismo truco que un progress-bar falso, sin necesitar Component de
     AG Grid (regla #25 solo aplica si el renderer tiene que devolver HTML
     real; un `background` vía `Styler` es CSS puro).
+
+75. **Inventario Valorizado v3 (2026-08-10) — de 4 vistas a 3, más un
+    buscador que reemplaza a la Tabla para "¿cuánto tengo y dónde?".**
+    El rail pasó de `Área y familia / Torta familias / Top por área
+    (valor) / Top por área (cantidad)` a `Por área / Por familia / Buscar
+    producto`. Motivo: el stacked bar de 20 áreas × 8 familias no se leía,
+    la torta se rompía apenas una familia concentraba >70% (pasaba de
+    verdad con datos reales: `COSTOS PRODUCCION` en ~80%), y Top
+    valor/Top cantidad eran la misma vista con un flag `es_valor` interno
+    duplicada en el rail — se unificaron en un toggle `st.pills`
+    (`Valor`/`Cantidad`, key `inv_metrica`) reusado por Por área y Por
+    familia (`_grafico_ranking`). El selector de área de la vieja "Top
+    por área" ordenaba alfabético y podía arrancar en un valor vacío
+    (literalmente `"---"` en datos reales) — el reemplazo (`Buscar
+    producto`) no tiene ese selector: lista todo ordenado por valorizado.
+
+    **KPIs nuevos** (`Valorizado total`/`Cantidad total`/`Productos
+    activos`/`Áreas con stock`, `st.metric` × 4) se calculan sobre `d`
+    (post-chips Área/Familia) ANTES de entrar a cualquier vista del rail
+    — antes no había ningún total visible sin abrir un gráfico.
+
+    **Buscar producto** resuelve dos preguntas con el mismo bloque
+    (`_render_buscar_producto`): un producto puntual (ficha con
+    cantidad+valorizado+precio promedio+unidad por área,
+    `_ficha_producto`) o un grupo — Subfamilia — completo (todos sus
+    productos, barra apilada Producto × Área,` _ficha_subfamilia`). Los
+    dos `st.selectbox` (`inv_buscar_producto`/`inv_buscar_subfamilia`)
+    son mutuamente excluyentes vía `on_change` que limpia el otro
+    ANTES del rerun — mismo patrón que `_rail_set` en `graficos/base.py`.
+    No reemplaza la Tabla (sigue siendo lo mejor para exportar o cruzar
+    columnas raras): es el atajo de "necesito ver esto AHORA, en una
+    reunión", sin abrir el panel de AgGrid ni armar un agrupamiento a
+    mano.
+
+    **Panel lateral contextual.** El panel de la derecha
+    (`Mayor cantidad`/`Precio más alto`, top-10 genérico) se mantiene
+    intacto en Por área/Por familia — ahí complementa el agregado con
+    "qué productos puntuales pesan más". En Buscar producto ese mismo
+    top-10 quedaba redundante (desconectado de lo que ya se ve a la
+    izquierda para el producto elegido), así que se reemplaza por
+    `_panel_relacionados`: otros productos de la misma Subfamilia (o
+    Familia si no hay Subfamilia) que el seleccionado — nada que mostrar
+    todavía si el usuario eligió un grupo completo (ya está todo a la
+    izquierda) o no eligió nada.
+
+    **Pendiente, NO implementado:** `Nombre Area` en datos reales mezcla
+    ubicaciones físicas (`COCINA`, `SALON`, `CAVA`...) con cuentas
+    contables (`GASTOS`, `PRUEBAS`, `BAJAS DE ALMACEN`...) — confirmado
+    en vivo: el producto "Planilla De Movilidad" (no es stock físico)
+    aparece bajo área `GASTOS`. Un filtro "Solo físicas" necesitaría una
+    lista de qué áreas son cuentas, y esa lista es una decisión de
+    negocio que no está tomada — no se hardcodeó una lista adivinada.
+    Columnas nuevas resueltas (`col_subfam`, `col_unidad`) ya estaban en
+    el demo de `_datos_demo` (`data.py`, rama `inventariovalorizado.parquet`)
+    desde antes de este cambio — no hizo falta tocar `data.py`.
