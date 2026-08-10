@@ -56,26 +56,34 @@ def _rango_con_holgura(*series, factor=0.28):
     return [lo - pad, hi + pad]
 
 
-def _grafico_ranking(d, col_grp, col_val, col_cant, es_valor, titulo, key):
+def _grafico_ranking(d, col_grp, col_val, titulo, key):
     """Barra horizontal ordenada de mayor a menor — Por área/Por familia.
-    `es_valor` decide si se suma col_val o col_cant."""
-    met = pd.to_numeric(d[col_val] if es_valor else d[col_cant], errors="coerce").fillna(0)
+    Siempre valorizado (sin toggle Valor/Cantidad — se sacó a pedido: acá
+    solo importa el valorizado). Cada barra lleva su % de participación
+    sobre el total NETO (mismo total que el KPI "Valorizado total" de la
+    card — no sobre la suma de absolutos, para que sumen 100% de verdad
+    con lo que el usuario ya está viendo arriba)."""
+    met = pd.to_numeric(d[col_val], errors="coerce").fillna(0)
     serie = met.groupby(d[col_grp].astype(str)).sum().sort_values()
     if serie.empty:
         st.info("Sin datos.")
         return
-    _fmt = "S/ {:,.0f}" if es_valor else "{:,.0f}"
+    total = float(serie.sum())
+    _texto = [
+        f"S/ {v:,.0f} · {(v / total * 100):.1f}%" if total else f"S/ {v:,.0f}"
+        for v in serie.values
+    ]
     fig = go.Figure(go.Bar(
         x=serie.values,
         y=[_compras_truncar(i, 30) for i in serie.index],
         orientation="h",
         marker=dict(color=ACENTO, opacity=0.85),
-        text=[_fmt.format(v) for v in serie.values],
+        text=_texto,
         textposition="outside", cliponaxis=False,
     ))
     _compras_layout(fig, alto=min(900, max(360, 34 * len(serie) + 60)))
     fig.update_layout(title=titulo)
-    fig.update_xaxes(visible=False, range=_rango_con_holgura(serie.values))
+    fig.update_xaxes(visible=False, range=_rango_con_holgura(serie.values, factor=0.5))
     st.plotly_chart(fig, use_container_width=True, key=key)
 
 
@@ -353,17 +361,8 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                 if not col_grp:
                     st.info(f"No se encontró la columna de {nombre_grp}.")
                 else:
-                    if col_cant is not None:
-                        metrica = st.pills(
-                            "Métrica", ["Valor", "Cantidad"], default="Valor",
-                            key="inv_metrica", label_visibility="collapsed",
-                        ) or "Valor"
-                    else:
-                        metrica = "Valor"
-                    es_valor = (metrica == "Valor")
                     _grafico_ranking(
-                        d, col_grp, col_val, col_cant, es_valor,
-                        f"{metrica} por {nombre_grp}",
+                        d, col_grp, col_val, f"Valorizado por {nombre_grp}",
                         key=f"inv_g_{'area' if graf == 'Por área' else 'familia'}",
                     )
 
