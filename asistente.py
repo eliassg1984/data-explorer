@@ -411,16 +411,29 @@ def _asistente_fragment(reporte: str, df, filtros: dict):
                 pendiente = st.session_state.get("ai_pending")
 
                 with st.container(key="ai_scroll"):
+                    # st.empty() y NO un container (ni keyed): el bloque de
+                    # bienvenida + chips tiene que DESAPARECER en cuanto hay
+                    # conversación, y Streamlit no limpia un slot cuyo render
+                    # siguiente produce menos elementos — quedaban chips
+                    # huérfanos colgando bajo la respuesta. Probado: con
+                    # `if` suelto sobrevivían 2 de 3; envolviéndolo en un
+                    # `st.container(key=...)` fue PEOR (los 3 + el saludo,
+                    # porque un container keyed retiene a sus hijos). Un
+                    # st.empty() se crea siempre y REEMPLAZA su contenido en
+                    # cada render, así que dejarlo sin llenar lo vacía de
+                    # verdad. Es la única de las tres formas que limpia.
+                    hueco_sug = st.empty()
                     if not historial and not pendiente:
-                        st.caption(
-                            "Pregúntame sobre los datos que tienes en "
-                            "pantalla — consulto la tabla de verdad, no "
-                            "adivino. También busco precios de mercado."
-                        )
-                        for i, sug in enumerate(_sugerencias(reporte)):
-                            st.button(sug, key=f"ai_sug_{i}",
-                                      use_container_width=True,
-                                      on_click=_encolar, args=(sug,))
+                        with hueco_sug.container():
+                            st.caption(
+                                "Pregúntame sobre los datos que tienes en "
+                                "pantalla — consulto la tabla de verdad, no "
+                                "adivino. También busco precios de mercado."
+                            )
+                            for i, sug in enumerate(_sugerencias(reporte)):
+                                st.button(sug, key=f"ai_sug_{i}",
+                                          use_container_width=True,
+                                          on_click=_encolar, args=(sug,))
 
                     for i, msg in enumerate(historial):
                         _pintar_mensaje(msg, i)
