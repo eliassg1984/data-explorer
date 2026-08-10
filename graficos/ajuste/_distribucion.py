@@ -27,8 +27,22 @@ from graficos.ajuste._comun import _fmt_corte, _layout_aj
 def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_producto,
                               col_codigo=None, col_cantidad=None, col_fecha=None,
                               col_unidad=None):
-    """Strip plot coloreado (faltante/sobrante) + histograma, ambos excluyendo
-    los ajustes en cero.
+    """Vista con toggle (Distribución / Histograma, `st.pills`) — cada una a
+    ANCHO COMPLETO. Antes vivían a medias en `st.columns(2)`; esa mitad de
+    ancho apretaba tanto el strip (categorías largas, se solapaban) como el
+    histograma (bins finos, difíciles de leer). Ambas ramas excluyen los
+    ajustes en cero.
+
+    **Distribución** = strip plot coloreado (faltante/sobrante) por
+    familia/área; si no hay columna de grupo, cae a un histograma de
+    ajustes (fallback raro, cubierto por test_graficos.py con un df
+    mínimo). Las dos variantes ponen el AJUSTE (S/) en el eje VERTICAL a
+    propósito — es la métrica, va como "altura"; el eje horizontal es la
+    categoría (grupo) o, en el fallback, la frecuencia del bin. Por eso el
+    fallback usa `px.histogram(..., y=col_ajuste_val)` (no `x=`) y
+    `add_hline` (no `add_vline`) para la línea de Cero — invertir sin
+    cambiar los dos junto con el `xaxis`/`yaxis` del layout deja el
+    histograma con el valor acostado.
 
     Con >50% de productos en S/ 0 (lo normal en un inventario), un boxplot
     colapsa q1=mediana=q3 en una línea invisible y solo deja ver puntos
@@ -40,21 +54,23 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
     Con `col_producto` resuelto, el hover se enriquece (vía `custom_data`)
     con código/área/cantidad/fecha, y clic + selección (caja o lazo, barra
     del gráfico) arma una tabla de detalle abajo — mismo patrón
-    `on_select="rerun"` que ya usa `_graf_comparativa_mensual`. La key del
-    chart es estática a propósito: la selección solo pinta la tabla de
-    abajo, no realimenta el propio gráfico, así que no aplica la trampa de
-    key dinámica de arquitectura.md (selección con toggle infinito).
+    `on_select="rerun"` que ya usa `_graf_comparativa_mensual`. Las keys de
+    ambos charts son estáticas a propósito: la selección solo pinta la
+    tabla de abajo, no realimenta el propio gráfico, así que no aplica la
+    trampa de key dinámica de arquitectura.md (selección con toggle
+    infinito) — y tampoco la del toggle de vista: alternar
+    Distribución/Histograma no reprocesa la selección del otro, porque el
+    que no está activo ni siquiera se construye en ese rerun.
 
-    El histograma (derecha) tiene el mismo click→tabla, pero SIN
-    custom_data sobre el propio `go.Histogram`: es una traza agregada
-    (barras = bins, no filas) y `on_select` sobre ella es territorio no
-    verificado — mismo riesgo que `go.Heatmap` (regla #11 de
-    arquitectura.md, selección que nunca llega, sin error). Se reutiliza
-    esa solución: overlay de `go.Scatter` invisible (opacity=0), un punto
-    por bin a media altura, con el rango `[lo, hi]` de ese bin en
-    `customdata`. El click/drag selecciona el punto invisible, no la
-    barra; el rango de su customdata filtra `df_nz` directo en pandas."""
-    col_izq, col_der = st.columns(2)
+    El histograma tiene el mismo click→tabla, pero SIN custom_data sobre el
+    propio `go.Histogram`: es una traza agregada (barras = bins, no filas)
+    y `on_select` sobre ella es territorio no verificado — mismo riesgo que
+    `go.Heatmap` (regla #11 de arquitectura.md, selección que nunca llega,
+    sin error). Se reutiliza esa solución: overlay de `go.Scatter`
+    invisible (opacity=0), un punto por bin a media altura, con el rango
+    `[lo, hi]` de ese bin en `customdata`. El click/drag selecciona el
+    punto invisible, no la barra; el rango de su customdata filtra `df_nz`
+    directo en pandas."""
     grp = col_familia or col_area
 
     n_total = len(df)
@@ -65,7 +81,13 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
         st.info("Ningún producto tuvo ajuste distinto de cero en este rango.")
         return
 
-    with col_izq:
+    _vista = st.pills(
+        "Vista distribución", ["Distribución", "Histograma"],
+        default="Distribución", key="ajuste_dist_vista",
+        label_visibility="collapsed",
+    ) or "Distribución"
+
+    if _vista == "Distribución":
         st.caption(f"{n_nz} de {n_total} productos con diferencia")
         _es_strip = bool(grp and grp in df_nz.columns)
         _hay_prod = _es_strip and bool(col_producto and col_producto in df_nz.columns)
@@ -131,16 +153,18 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             fig.update_xaxes(tickmode="array", tickvals=_xcats,
                              ticktext=_wrap_cat(_xcats))
         else:
+            # value en Y (vertical) a propósito, igual que el strip de arriba
+            # — ver docstring. `y=` en vez de `x=` es lo que voltea px.histogram.
             fig = px.histogram(
-                df_nz, x=col_ajuste_val, nbins=30,
+                df_nz, y=col_ajuste_val, nbins=30,
                 title="Distribución de ajustes valorizados",
                 color_discrete_sequence=[SERIE_PRINCIPAL],
             )
-            fig.add_vline(x=0, line_dash="dash", line_color="#ef4444",
+            fig.add_hline(y=0, line_dash="dash", line_color="#ef4444",
                           annotation_text="Cero")
             fig.update_layout(**_layout_aj(
-                xaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
-                yaxis=dict(gridcolor=GRIS_BORDE),
+                yaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
+                xaxis=dict(gridcolor=GRIS_BORDE),
             ))
 
         with _card("dist_grupo", "Distribución por grupo"):
@@ -171,7 +195,7 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                     lambda v: f"S/ {v:,.2f}")
                 st.dataframe(_det_fmt, hide_index=True, use_container_width=True)
 
-    with col_der:
+    else:  # "Histograma"
         media   = float(df_nz[col_ajuste_val].mean())
         mediana = float(df_nz[col_ajuste_val].median())
 

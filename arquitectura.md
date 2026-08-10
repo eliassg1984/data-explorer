@@ -2381,3 +2381,39 @@ salvo `icono`):
     `st.chat_input` (el del `on_click` de un botón sí quedaba limpio, lo que
     hace fácil declarar victoria antes de tiempo — hay que probar los DOS
     caminos de entrada).
+
+71. **`st.pills`/`st.segmented_control` fuera de una corrida real de
+    Streamlit siempre devuelve su `default`, ignorando lo que haya en
+    `session_state`.** Confirmado con un probe suelto: hacer
+    `st.session_state[key] = "B"` ANTES de `st.pills(..., key=key,
+    default="A")` no cambia nada — el widget igual devuelve `"A"`;
+    Streamlit avisa "Session state does not function when running a
+    script without `streamlit run`". Consecuencia para `test_graficos.py`
+    (que llama a los `_graf_*` fuera de una app real, ver cabecera del
+    script): cualquier vista detrás de un pill solo se smoke-testea en su
+    rama DEFAULT. Ya pasaba sin que nadie lo hubiera dejado escrito con
+    `_vista` de `_graf_heatmap_ajuste` ("Flujo"/"Tabla" nunca se
+    construyen en el test) y pasa ahora también con el toggle
+    Distribución/Histograma de `_graf_distribucion_ajuste` (regla #72). No
+    hay forma de forzar la rama no-default precargando `session_state`
+    como si fuera una app real. Si una vista detrás de un pill tiene
+    lógica no trivial que valga la pena cubrir, la salida es partirla en
+    una función propia que el test llame directo (sin pasar por el pill),
+    no pelearse con `session_state`.
+
+72. **Para poner el valor continuo de un `px.histogram` en el eje
+    VERTICAL, se pasa `y=col` en vez de `x=col` — no existe un parámetro
+    `orientation` aparte que lo haga.** Volteado esto, hay que voltear en
+    pareja o el resultado queda mal etiquetado: la línea de referencia pasa
+    de `add_vline(x=0, ...)` a `add_hline(y=0, ...)`, y el
+    `tickprefix`/`tickformat` de moneda se mueve del override `xaxis=` al
+    `yaxis=`. Caso real (`_graf_distribucion_ajuste`, 2026-08-10): la rama
+    sin columna de grupo (sin Familia/Área) arma un histograma simple con
+    el ajuste ahora en Y, para que combine con el strip de arriba (que ya
+    tenía el ajuste en Y) en vez de acostarse cuando antes vivía en X.
+    De paso, "Distribución" y "Histograma" dejaron de compartir
+    `st.columns(2)` a medias — a media columna el strip amontonaba
+    categorías largas y el histograma apretaba sus 30 bins. Ahora es un
+    `st.pills` ("Vista distribución") que alterna cuál de las dos se
+    dibuja, siempre a ancho completo (ver regla #71 para el límite que
+    esto le impone a `test_graficos.py`).
