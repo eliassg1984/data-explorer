@@ -2518,17 +2518,18 @@ salvo `icono`):
     la torta se rompía apenas una familia concentraba >70% (pasaba de
     verdad con datos reales: `COSTOS PRODUCCION` en ~80%), y Top
     valor/Top cantidad eran la misma vista con un flag `es_valor` interno
-    duplicada en el rail — se unificaron en un toggle `st.pills`
-    (`Valor`/`Cantidad`, key `inv_metrica`) reusado por Por área y Por
-    familia (`_grafico_ranking`). El selector de área de la vieja "Top
+    duplicada en el rail — se unificaron en `_grafico_ranking`, reusado por
+    Por área y Por familia. El selector de área de la vieja "Top
     por área" ordenaba alfabético y podía arrancar en un valor vacío
     (literalmente `"---"` en datos reales) — el reemplazo (`Buscar
     producto`) no tiene ese selector: lista todo ordenado por valorizado.
 
-    **KPIs nuevos** (`Valorizado total`/`Cantidad total`/`Productos
-    activos`/`Áreas con stock`, `st.metric` × 4) se calculan sobre `d`
-    (post-chips Área/Familia) ANTES de entrar a cualquier vista del rail
-    — antes no había ningún total visible sin abrir un gráfico.
+    **Ajuste posterior (2026-08-10, mismo día):** el toggle `Valor`/
+    `Cantidad` de Por área/Por familia se sacó — ahí solo importa el
+    valorizado, y cada barra muestra su % de participación sobre el total
+    NETO en su lugar. Los 4 KPIs se consolidaron en 1 solo
+    (`Valorizado total`), dentro de la card izquierda y no en una franja
+    aparte (se probó así y quedaba la card muy abajo).
 
     **Buscar producto** resuelve dos preguntas con el mismo bloque
     (`_render_buscar_producto`): un producto puntual (ficha con
@@ -2564,3 +2565,41 @@ salvo `icono`):
     Columnas nuevas resueltas (`col_subfam`, `col_unidad`) ya estaban en
     el demo de `_datos_demo` (`data.py`, rama `inventariovalorizado.parquet`)
     desde antes de este cambio — no hizo falta tocar `data.py`.
+
+76. **Click-drill en Por área/Por familia (2026-08-10) — mismo patrón que
+    `compras/familia.py`, con la trampa de key ya documentada en la regla
+    del `CLAUDE.md` raíz (persistencia de `on_select` entre reruns).**
+    `_grafico_ranking` ganó `clic=True`/`state_key`: clic en una barra la
+    resalta (`ACENTO_FUERTE` vs `ACENTO`), guarda la categoría en
+    `st.session_state[state_key]` (clic de nuevo la quita) y devuelve el
+    foco al caller. El caller usa ese foco para (a) filtrar el panel
+    derecho (`Mayor cantidad`/`Precio más alto`) a esa categoría — filtra
+    `d` y re-alinea `_cant` con `.loc[d_panel.index]`, no recalcula desde
+    cero — y (b) mostrar debajo `_grafico_detalle_foco`: el siguiente
+    nivel (Área → Familia, Familia → Subfamilia), sin clic propio (dos
+    niveles alcanza, y evita competir por la selección con el gráfico de
+    arriba).
+
+    **La key del gráfico principal incluye el foco DE ANTES del clic**
+    (`f"{key}_{foco or 'none'}"`), no una key estática. Motivo: la
+    selección de `st.plotly_chart(on_select=...)` persiste mientras la key
+    no cambie, así que con key estática cada rerun posterior re-lee el
+    mismo punto seleccionado y vuelve a togglear el foco → parpadeo
+    infinito. Al cambiar el foco, la key cambia, el widget es "nuevo" para
+    Streamlit y no arrastra la selección vieja — mismo truco que
+    `compras_g_fam_time_{focus_fam}_..."` en `compras/familia.py`, solo
+    que ahí el foco cambia el DATASET del propio gráfico (la key cambia
+    como efecto colateral) y acá el foco no cambia el dataset del ranking
+    principal (todas las áreas siguen ahí) — hay que meter el foco en la
+    key a propósito, no viene gratis.
+
+    Verificado en el preview local: el entorno de este proyecto no puede
+    tomar `screenshot` ni clics por coordenada (pane sin compositing), así
+    que el clic real se simuló disparando `gd.emit('plotly_selected',
+    {points: [...]})` sobre el nodo `.js-plotly-plot` en DevTools/JS — la
+    misma ruta que usa el componente de Streamlit para convertir un clic
+    real en `evt.selection.points`. `plotly_click` NO sirve para esto:
+    Streamlit registra su handler en `plotly_selected` cuando `on_select`
+    trae `selection_mode="points"`, y el punto necesita `data`/`fullData`
+    (la traza completa) o el handler revienta leyendo `legendgroup` de
+    `undefined`.
