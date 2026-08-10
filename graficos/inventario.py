@@ -8,8 +8,9 @@ horizontal ordenada para las dos, con un toggle Valor/Cantidad — la torta se
 rompía apenas una familia concentraba >70% del total) y **Buscar producto**
 (nueva: ficha de un producto puntual, o de un grupo — Subfamilia — completo,
 con cantidad + valorizado + precio promedio + unidad de medida por área).
-Se agrega una franja de KPIs (valorizado/cantidad/productos/áreas) que antes
-no existía. El panel lateral de la derecha (Mayor cantidad/Precio más alto)
+Se agrega un KPI "Valorizado total" — vive DENTRO de la card izquierda (no
+en una franja aparte arriba: se probó así y quedaba la card muy abajo).
+El panel lateral de la derecha (Mayor cantidad/Precio más alto)
 se mantiene igual en Por área/Por familia, pero en Buscar producto pasa a
 mostrar productos relacionados (misma subfamilia/familia) en vez de un top
 genérico — repetir el mismo top ahí era redundante con lo que ya se ve a la
@@ -330,13 +331,6 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
     _cant = (pd.to_numeric(d[col_cant], errors="coerce").fillna(0)
              if col_cant else None)
 
-    # ── KPIs — resumen ANTES de entrar a cualquier gráfico ───────────────
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Valorizado total", f"S/ {_val.sum():,.0f}")
-    k2.metric("Cantidad total", f"{_cant.sum():,.0f}" if _cant is not None else "—")
-    k3.metric("Productos activos", f"{d[col_prod].nunique():,}" if col_prod else "—")
-    k4.metric("Áreas con stock", f"{d[col_area].nunique():,}" if col_area else "—")
-
     graf = _render_rail(_INVENTARIO_RAIL_CATEGORIAS, "inv_graf_tipo",
                         btn_prefix="inv_rail_btn_")
 
@@ -351,6 +345,8 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
 
     with col_izq:
         with st.container(border=True, key="ajuste_graf_card_izq_inv"):
+            st.metric("Valorizado total", f"S/ {_val.sum():,.0f}")
+
             if graf in ("Por área", "Por familia") and (col_area or col_fam):
                 col_grp = col_area if graf == "Por área" else col_fam
                 nombre_grp = "área" if graf == "Por área" else "familia"
