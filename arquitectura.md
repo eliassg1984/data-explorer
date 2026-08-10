@@ -1943,3 +1943,83 @@ salvo `icono`):
     850px y 1280px, en reportes con rail grande (Ajuste) y rail de un
     solo ítem (Requerimientos, Receta Base) — mismas coordenadas
     `right`/`top` en los tres.
+
+    **Bug real más grave, mismo día — reportado por el usuario ("el
+    ícono desaparece al cambiar de reporte"):** `_inject_css()` tenía un
+    guard `if st.session_state.get("_ai_css_inyectado"): return` para
+    "inyectar el CSS una sola vez por sesión". Streamlit no funciona así:
+    el árbol de elementos se reconstruye a partir de lo que el script
+    EMITE en cada rerun — un `st.markdown` que no se vuelve a llamar no
+    "queda" de la vez anterior, se BORRA. Con el guard, el `<style>` con
+    `.st-key-ai_float_wrap` se inyectaba en el primer render de la sesión
+    y desaparecía en el SIGUIENTE rerun (cambiar de reporte, tocar
+    cualquier filtro — cualquier interacción de nivel superior): el botón
+    volvía al popover DEFAULT de Streamlit (pill blanca, 180px,
+    `border-radius:999px`) renderizado en flujo normal (al fondo de la
+    página, donde cae `inject_asistente()` en `app.py`) — exactamente la
+    captura que había mandado el usuario al pedir este cambio, que en su
+    momento se atribuyó (mal) a una versión vieja del deploy. Confirmado
+    en vivo simulando un rerun real (click a otro reporte por JS, MISMA
+    sesión/WebSocket, sin recargar la página):
+    `document.querySelectorAll('style')` pasa de tener 1 bloque con
+    "ai_float_wrap" a 0, y el botón mide 180px otra vez.
+    **Regla:** un `st.markdown(unsafe_allow_html=True)` que inyecta
+    `<style>`/`<script>` que la página necesita VER tiene que llamarse
+    SIN CONDICIÓN en cada rerun — mismo patrón que ya usa, sin guard,
+    `estilos/__init__.py::inject_css()` (`app.py:74`, docstring de
+    `get_css()`: "no vale la pena cachear a cambio de perder recarga").
+    Un guard de sesión sí sirve para *cachear el cálculo* de un string
+    caro (ó para inicializar un valor una sola vez); nunca para decidir
+    si el `st.markdown` que lo *emite* se llama o no — eso siempre.
+    Detectarlo requiere probar un RERUN EN LA MISMA SESIÓN (cambiar de
+    reporte, tocar un filtro), no solo un reload de página — un reload
+    resetea `session_state` y el bug queda invisible (así pasó la
+    primera verificación de este mismo cambio).
+
+60. **"Aparece/desaparece en `:hover` pero sin empujar nada de abajo" se
+    anima con `opacity`/`visibility`, nunca `max-height`/`padding`/
+    `height`.** `.ajcas-head` (cabecera de la tabla de Cascada,
+    `graficos/ajuste/_cascada.py`) tuvo dos versiones opuestas en 24
+    horas. v1 (2026-08-08, "opción 1" de 6 propuestas, a pedido): oculta
+    con `max-height:0` + `padding-bottom:0`, visible en hover animando
+    ambas a su valor real — funcionaba, pero `max-height`/`padding` SÍ
+    generan layout, así que aparecer/desaparecer corría la primera fila
+    de la tabla hacia abajo/arriba ("empuja las filas, mismo
+    comportamiento que el mockup aprobado" — el comentario original
+    documentaba el push como intencional). v2 (2026-08-09, a pedido
+    contrario): mismo reveal en hover, cero desplazamiento de lo que
+    sigue.
+    **Regla:** si el pedido es "revela sin empujar", el elemento ocupa
+    su tamaño real SIEMPRE (oculto o visible — nada de `max-height:0`/
+    `display:none`/clamps de padding) y el toggle de hover va solo por
+    `opacity`/`visibility` (`opacity:0;visibility:hidden` ↔
+    `opacity:1;visibility:visible`, `transition` en ambas) — ninguna de
+    las dos genera layout. Iba `visibility` además de `opacity` para que
+    el contenido oculto no quede seleccionable ni en el tab order; por
+    la regla de animación CSS para propiedades discretas, el fade-out
+    sigue viéndose suave (`visibility` se queda en "visible" hasta el
+    100% de la transición al ocultar, salta a "visible" en el 0% al
+    mostrar) — mismo patrón que ya tenía `.ajcas-tip-txt` en el mismo
+    archivo, copiado sin inventar uno nuevo. Si el pedido fuera al revés
+    (que SÍ empuje — acordeón, la v1 original), ahí corresponde animar
+    una propiedad de layout (`max-height`/`grid-template-rows`), a
+    sabiendas de que reserva 0px oculto.
+    **Verificación:** mismas dos trampas que regla #44 y #48 (agravadas
+    porque acá el panel Browser de esa sesión tampoco componía frames,
+    igual que regla #44 — `computer{action:"screenshot"}` con timeout,
+    solo funcionan clics/hover por `ref` de `read_page`, no por
+    coordenada). `getComputedStyle` sobre `.ajcas-head` mintió tanto en
+    reposo como hovereado (devolvía `opacity:1;visibility:visible` sin
+    hover real activo, `:hover` global vacío) por tener `transition` —
+    mismo síntoma que la regla #48. Verificación que sí sirvió: (1) leer
+    la regla real vía `document.styleSheets` → `cssRules` en vez de
+    `getComputedStyle`, confirmando que el `<style>` servido solo toca
+    `opacity`/`visibility`; (2) un hover REAL disparado con
+    `computer{action:"hover", ref:...}` (dispara `:hover` de verdad vía
+    CDP; un `dispatchEvent` de JS no activa el pseudo-selector) sobre un
+    `ref` de un texto dentro de la cabecera, confirmando por
+    `document.querySelectorAll(':hover')` que el ancestro
+    `st-key-chartcard_cascada` sí entraba en `:hover`; (3)
+    `getBoundingClientRect().top` de la primera fila medido en reposo,
+    hovereada y post-hover — idéntico en los tres momentos, prueba de
+    cero reflow.

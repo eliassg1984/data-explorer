@@ -453,23 +453,30 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         margin-bottom: 0 !important; }}
     /* Cabecera oculta hasta pasar el cursor por la tabla (2026-08-08, a
        pedido -- "opción 1" de las 6 propuestas: sobre TODA la tabla, no
-       fila por fila). Con max-height:0 + overflow:hidden en vez de
-       display:none: display:none no se puede animar y el fix de margen
-       de arriba sigue haciendo falta igual (el <div> raíz de .ajcas-head
-       no cambia). Al aparecer empuja las filas hacia abajo -- mismo
-       comportamiento que el mockup que se aprobó. padding-bottom
-       también se anima a 0: max-height con box-sizing:content-box (el
-       default) solo acota el content-box, no el padding -- sin esto
-       quedaban 7px de padding siempre visibles (medido: el <div> daba
-       7px de alto con max-height:0 en vez de 0). */
+       fila por fila).
+       Reveal por OPACITY+VISIBILITY, no por tamaño (cambiado 2026-08-09,
+       a pedido). La v1 animaba max-height 0->24px + padding-bottom
+       0->7px: aparecer/desaparecer corría la primera fila de la tabla
+       hacia abajo/arriba -- "empuja las filas, mismo comportamiento que
+       el mockup aprobado" era lo QUERIDO en ese momento, pero en uso se
+       sintió como que la tabla saltaba y se pidió lo contrario: reservar
+       el espacio siempre, sin desplazar nada de abajo. Ahora el <div>
+       ocupa su alto real (padding-bottom:7px inline, sin tocar desde
+       acá) todo el tiempo, oculto o visible -- cero reflow en las filas
+       de abajo. Mismo patrón que .ajcas-tip-txt más arriba: opacity Y
+       visibility (no opacity sola), para que el texto oculto no quede
+       seleccionable ni en el tab order. El fade-out sigue siendo suave
+       pese a animar `visibility` (propiedad discreta): por la regla de
+       CSS Transitions para `visibility`, al OCULTAR el valor se queda en
+       "visible" hasta el 100% de la transición (recién ahí salta a
+       hidden), y al MOSTRAR salta a "visible" en el 0% -- nunca se
+       "apaga" de golpe en la dirección que se anima con opacity. */
     .ajcas-head {{
-        max-height: 0; opacity: 0; overflow: hidden;
-        padding-bottom: 0 !important;
-        transition: max-height .15s ease, opacity .12s ease,
-                    padding-bottom .15s ease; }}
+        opacity: 0; visibility: hidden;
+        transition: opacity .14s ease, visibility .14s ease; }}
     div[class*="st-key-chartcard_cascada"]:hover .ajcas-head,
     div[class*="st-key-chartcard_cascada"]:active .ajcas-head {{
-        max-height: 24px; opacity: 1; padding-bottom: 7px !important; }}
+        opacity: 1; visibility: visible; }}
     </style>""", unsafe_allow_html=True)
 
     with _card("cascada"):
