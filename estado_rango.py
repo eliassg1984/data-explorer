@@ -217,27 +217,45 @@ def clave_modo(clave_c):
     return f"modo_{clave_c}"
 
 
-MODOS_FECHA = ("Rango", "Corte", "Comparar")
-"""Los tres modos del eje temporal, en orden de menos a más específico:
-  · Rango    — intervalo (ini, fin). El de siempre.
-  · Corte    — UNA sesión de inventario; el clic en la lista reemplaza.
-  · Comparar — VARIAS; el clic alterna (agrega/saca).
-Corte y Comparar comparten estado: son el mismo conjunto de días, con
+MODOS_FECHA = ("Rango", "Corte", "Varios")
+"""Los tres modos del eje temporal. Los tres nombran QUÉ unidad de tiempo
+se elige, no qué pasa después — de ahí que sean sustantivos:
+  · Rango  — un intervalo (ini, fin). El de siempre.
+  · Corte  — UNA sesión de inventario; el clic en la lista reemplaza.
+  · Varios — VARIAS sesiones; el clic alterna (agrega/saca).
+
+"Varios" se llamó "Comparar" hasta 2026-08-10 y era un nombre MENTIROSO:
+no compara nada, SUMA. Los días de las sesiones elegidas se unen en un
+solo conjunto y todo lo que se ve abajo (mapa, cascada, tabla) es el
+total de ese conjunto — no hay una vista lado a lado por ningún lado.
+Tampoco "Acumulado", que en inventario se lee como total corrido desde
+una fecha (YTD) cuando acá la selección es arbitraria: se puede elegir
+marzo y agosto salteando el medio.
+
+Corte y Varios comparten estado: son el mismo conjunto de días, con
 distinto gesto de selección. Por eso pasar de uno a otro no pierde nada."""
 
 
 def modo_fecha(clave_c):
     """Modo vigente (uno de `MODOS_FECHA`). Default Rango: un reporte que
-    nunca abrió el panel se comporta como siempre."""
-    return st.session_state.get(clave_modo(clave_c), "Rango")
+    nunca abrió el panel se comporta como siempre.
+
+    Valida contra `MODOS_FECHA` y no devuelve lo que haya guardado tal
+    cual: una sesión abierta desde ANTES de un renombre de modo trae un
+    valor que ya no existe, y `st.segmented_control` con un `default` que
+    no está entre sus opciones no falla — arranca sin nada seleccionado y
+    el panel queda mudo. Cayendo a "Rango" el peor caso es el
+    comportamiento de siempre."""
+    _m = st.session_state.get(clave_modo(clave_c), "Rango")
+    return _m if _m in MODOS_FECHA else "Rango"
 
 
 def modo_por_cortes(clave_c):
-    """True si el modo vigente filtra por cortes (Corte o Comparar).
+    """True si el modo vigente filtra por cortes (Corte o Varios).
     Existe para que nadie escriba la comparación a mano y se olvide de uno
     de los dos — que es como se cuelan los bugs de "funciona en Corte pero
-    no en Comparar"."""
-    return modo_fecha(clave_c) in ("Corte", "Comparar")
+    no en Varios"."""
+    return modo_fecha(clave_c) in ("Corte", "Varios")
 
 
 def corte_vigente(clave_c):

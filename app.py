@@ -548,16 +548,21 @@ with _fila_top:
                                     (st.session_state.get(_k_corte) or {})
                                     .get("claves", [])
                                 )
-                                # Comparar y Corte comparten TODO menos qué
+                                # Varios y Corte comparten TODO menos qué
                                 # hace el clic: alternar (agrega/saca) vs.
                                 # reemplazar. Un solo bloque para los dos —
                                 # duplicar la lista es garantía de que un
                                 # día una de las dos copias quede vieja.
-                                _multi = (_modo == "Comparar")
-                                _cap = ("Elegí las sesiones a comparar"
+                                _multi = (_modo == "Varios")
+                                # El VERBO va acá, no en el nombre del modo:
+                                # el segmentado nombra la unidad de tiempo
+                                # (Rango/Corte/Varios) y esta línea dice qué
+                                # les hace. Sin ella "Varios" no aclara que
+                                # los días se SUMAN en un solo período.
+                                _cap = ("Suma las sesiones que elijas"
                                         if _multi else "Sesión de inventario")
                                 if _multi and len(_sel_claves) > 1:
-                                    _cap += f" · {len(_sel_claves)} elegidas"
+                                    _cap += f" · {len(_sel_claves)} sumadas"
                                 st.caption(_cap)
                                 # Del más reciente al más viejo: el conteo que
                                 # se revisa es casi siempre el último.

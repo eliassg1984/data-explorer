@@ -96,19 +96,21 @@ Detalle en `arquitectura.md` § Reglas #1.
 - **Detección móvil server-side:** para texto que Plotly dibuja en servidor,
   User-Agent vía `st.context.headers`. El layout va por CSS `@media`.
 - **Un widget que deja de renderizarse pierde su estado.** Por eso el
-  `date_input` de la franja se dibuja en los dos modos (Rango y Cortes):
-  esconderlo borraría la clave del rango del reporte.
+  `date_input` de la franja se dibuja en los TRES modos: esconderlo
+  borraría la clave del rango del reporte.
 
-## El eje temporal tiene DOS modos, y un solo dueño
+## El eje temporal tiene TRES modos, y un solo dueño
 
 El calendario de la franja tiene tres modos: **Rango** (intervalo),
 **Corte** (el conjunto exacto de días de una sesión de inventario, que no
-tiene por qué ser contiguo) y **Comparar** (varios cortes a la vez).
+tiene por qué ser contiguo) y **Varios** (suma varias sesiones en un
+solo período).
 `cortes.py` calcula los cortes; `estado_rango.py` es el dueño de los tres
 estados (rango, corte, modo) y nadie los escribe fuera.
 
-Corte y Comparar comparten estado: solo cambia si el clic reemplaza o
-alterna. `_fusionar` une N cortes en un estado con la misma forma que uno,
+Corte y Varios comparten estado: solo cambia si el clic reemplaza o
+alterna. "Varios" nombra la unidad elegida; el verbo (suma) va en el
+caption de la lista, no en la pastilla. `_fusionar` une N cortes en un estado con la misma forma que uno,
 así el filtro `isin(dias)` no distingue el caso.
 
 `aplicar_corte` escribe el corte **y** el rango — el rango lo leen el

@@ -2127,9 +2127,23 @@ salvo `icono`):
       ruido.
 
     **TRES modos, no dos** (2026-08-09, 2ª pasada): `Rango · Corte ·
-    Comparar`. Corte y Comparar comparten estado — el mismo conjunto de
-    días, distinto gesto: en Corte el clic REEMPLAZA la selección (revisar
-    un conteo, el caso normal), en Comparar la ALTERNA. Por eso cambiar de
+    Varios`. Corte y Varios comparten estado — el mismo conjunto de días,
+    distinto gesto: en Corte el clic REEMPLAZA la selección (revisar un
+    conteo, el caso normal), en Varios la ALTERNA.
+
+    El tercer modo se llamó **"Comparar" y era un nombre mentiroso**
+    (corregido 2026-08-10, lo detectó el usuario): no compara nada, SUMA.
+    Los días de las sesiones elegidas se unen en un conjunto y todo lo de
+    abajo muestra el TOTAL de ese conjunto; no hay vista lado a lado por
+    ningún lado. "Acumulado" tampoco: en inventario se lee como total
+    corrido desde una fecha (YTD) y acá la selección es arbitraria — se
+    puede elegir marzo y agosto salteando el medio. Los tres modos son
+    SUSTANTIVOS que nombran la unidad de tiempo que se elige; el verbo va
+    en el caption de la lista ("Suma las sesiones que elijas"), no en la
+    pastilla. Al renombrar un modo, `modo_fecha()` valida contra
+    `MODOS_FECHA` y cae a "Rango" si el valor guardado ya no existe: un
+    `st.segmented_control` con un `default` fuera de sus opciones no
+    falla, arranca sin nada seleccionado y el panel queda mudo. Por eso cambiar de
     uno a otro no pierde nada y `modo_por_cortes()` existe: para que nadie
     escriba la comparación a mano y se olvide de una de las dos ramas.
     `_fusionar()` une N cortes en un estado con la MISMA forma que uno
