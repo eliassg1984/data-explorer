@@ -56,6 +56,38 @@ def _rail_set(state_key, opcion_id):
     st.session_state[state_key] = opcion_id
 
 
+def publicar_contexto_ia(reporte, df, filtros=None):
+    """Publica el df EFECTIVO (con los chips ya aplicados) para el asistente IA.
+
+    POR QUÉ existe: `app.py` llama a `inject_asistente(df_contexto=df_f)`, y
+    `df_f` está filtrado por FECHA pero NO por los chips Área/Familia/etc —
+    esos se aplican sobre una copia local dentro de cada dashboard (ver
+    `graficos/ajuste/__init__.py`, misma trampa que la regla #58 con
+    `df_full`). Resultado: el usuario filtraba a un área, preguntaba "¿cuál
+    es el total?" y el asistente respondía el total SIN filtrar,
+    contradiciendo lo que había en pantalla.
+
+    Cada dashboard llama a esto justo DESPUÉS de aplicar sus chips. Funciona
+    por el orden de `app.py`: `_render_contenido()` corre antes de
+    `inject_asistente()`, así que lo publicado acá ya está disponible.
+
+    Se guarda el nombre del reporte junto al df A PROPÓSITO: si el usuario
+    cambia de reporte y el dashboard nuevo no publica (porque no tiene
+    chips), el asistente detecta que el contexto es de OTRO reporte y cae al
+    `df_f` que le pasa app.py, en vez de responder con datos del reporte
+    anterior. Sin ese chequeo, un contexto viejo sobrevive en session_state
+    y miente en silencio.
+
+    `filtros` es un dict {etiqueta: valor(es)} solo para CONTARLE al modelo
+    qué está filtrado; el filtrado real ya viene hecho en `df`.
+    """
+    st.session_state["_ia_contexto"] = {
+        "reporte": reporte,
+        "df": df,
+        "filtros": {k: v for k, v in (filtros or {}).items() if v},
+    }
+
+
 def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
     """Rail vertical fijo al borde DERECHO — selector de tipo de gráfico.
 

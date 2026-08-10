@@ -18,7 +18,7 @@ from estado_rango import (
     clave_rango, asegurar_rango, debug_estado_rango,
     atajos_rango, aplicar_atajo,
     clave_corte, clave_modo, modo_fecha, corte_vigente, aplicar_corte,
-    volver_a_rango,
+    alternar_corte, volver_a_rango, MODOS_FECHA,
 )
 from cortes import cortes_disponibles, corte_contiguo
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_diseno_visual, inject_footer_actualizacion, inject_calendario_es, inject_fullscreen_app
@@ -509,8 +509,12 @@ with _fila_top:
                 # En modo Cortes el label dice el CORTE, no las fechas: son
                 # dos filtros distintos ("30 jul – 2 ago" sugiere 4 días;
                 # el corte puede ser 3) y el usuario tiene que poder ver de
-                # un vistazo cuál de los dos está activo.
-                _label_fecha = f"Corte {_corte_apl['etiqueta']}"
+                # un vistazo cuál de los dos está activo. Con varios cortes
+                # la etiqueta ya viene con su propio encabezado ("3 cortes
+                # · …"), así que el prefijo "Corte" sobra.
+                _label_fecha = _corte_apl["etiqueta"]
+                if _corte_apl["n_cortes"] == 1:
+                    _label_fecha = f"Corte {_label_fecha}"
             elif (isinstance(_rango_actual, (tuple, list))
                     and len(_rango_actual) == 2 and all(_rango_actual)):
                 _label_fecha = _fmt_rango_es(_rango_actual[0], _rango_actual[1])
@@ -532,29 +536,44 @@ with _fila_top:
                         _modo = "Rango"
                         if _cortes_franja:
                             _modo = st.segmented_control(
-                                "Modo de filtro de fecha", ["Rango", "Cortes"],
+                                "Modo de filtro de fecha", MODOS_FECHA,
                                 default=modo_fecha(_k_corte),
                                 key=clave_modo(_k_corte),
                                 label_visibility="collapsed",
                             ) or modo_fecha(_k_corte)
                         _c_izq, _c_cal = st.columns([1, 1.5])
                         with _c_izq:
-                            if _modo == "Cortes":
-                                st.caption("Sesión de inventario")
-                                _corte_guardado = st.session_state.get(_k_corte)
+                            if _modo != "Rango":
+                                _sel_claves = set(
+                                    (st.session_state.get(_k_corte) or {})
+                                    .get("claves", [])
+                                )
+                                # Comparar y Corte comparten TODO menos qué
+                                # hace el clic: alternar (agrega/saca) vs.
+                                # reemplazar. Un solo bloque para los dos —
+                                # duplicar la lista es garantía de que un
+                                # día una de las dos copias quede vieja.
+                                _multi = (_modo == "Comparar")
+                                _cap = ("Elegí las sesiones a comparar"
+                                        if _multi else "Sesión de inventario")
+                                if _multi and len(_sel_claves) > 1:
+                                    _cap += f" · {len(_sel_claves)} elegidas"
+                                st.caption(_cap)
                                 # Del más reciente al más viejo: el conteo que
                                 # se revisa es casi siempre el último.
                                 for _co in reversed(_cortes_franja):
-                                    _act = bool(_corte_guardado) and \
-                                        _corte_guardado["clave"] == _co["clave"]
+                                    _act = _co["clave"] in _sel_claves
                                     st.button(
-                                        f"{_co['etiqueta']}  ·  {_co['n_dias']}d",
+                                        _co["etiqueta_anio"],
                                         use_container_width=True,
                                         type="primary" if _act else "secondary",
                                         key=f"corte_{reporte}_{_co['clave']}".replace(" ", "_"),
-                                        on_click=aplicar_corte,
-                                        args=(_k_rango_franja, _k_corte, _co,
-                                              reporte, _usa_carga_rango),
+                                        on_click=alternar_corte if _multi else aplicar_corte,
+                                        args=((_k_rango_franja, _k_corte, _co,
+                                               _cortes_franja, reporte,
+                                               _usa_carga_rango) if _multi else
+                                              (_k_rango_franja, _k_corte, _co,
+                                               reporte, _usa_carga_rango)),
                                     )
                             else:
                                 st.caption("Atajos")
@@ -585,17 +604,20 @@ with _fila_top:
                                 label_visibility="collapsed",
                                 on_change=volver_a_rango, args=(_k_corte,),
                             )
-                            if _modo == "Cortes" and _corte_apl:
+                            if _modo != "Rango" and _corte_apl:
                                 if corte_contiguo(_corte_apl):
                                     st.caption("Corte contiguo: mismo resultado "
                                                "que el rango.")
                                 else:
                                     _ajenos = ((_corte_apl["fin"] - _corte_apl["ini"]).days
                                                + 1 - _corte_apl["n_dias"])
+                                    _que = ("de esta sesión"
+                                            if _corte_apl["n_cortes"] == 1
+                                            else "de las sesiones elegidas")
                                     st.caption(
                                         f"Filtra {_corte_apl['n_dias']} días de "
                                         f"conteo y deja fuera {_ajenos} del rango "
-                                        "que no son de esta sesión."
+                                        f"que no son {_que}."
                                     )
 
             # ── Stepper del corte activo ──────────────────────────────────
@@ -610,10 +632,14 @@ with _fila_top:
             # aritmética de tres números acoplados (ver estilos/_50_fecha.py).
             # Como el stepper solo existe con un corte activo, aparecer y
             # desaparecer no mueve nada de lo demás.
-            if _corte_apl and _cortes_franja:
+            # Solo con UN corte elegido: con varios no hay "el siguiente"
+            # (¿el siguiente de cuál?), y un ‹ › que reemplazara la
+            # selección entera por un corte suelto borraría en un clic lo
+            # que el usuario acaba de armar.
+            if _corte_apl and _corte_apl["n_cortes"] == 1 and _cortes_franja:
                 _claves = [_c["clave"] for _c in _cortes_franja]
                 try:
-                    _i_act = _claves.index(_corte_apl["clave"])
+                    _i_act = _claves.index(_corte_apl["claves"][0])
                 except ValueError:
                     # El corte guardado ya no existe en la lista (cambió el
                     # parquet o el reporte). Se deja pasar sin stepper: el
@@ -633,12 +659,13 @@ with _fila_top:
                                       reporte, _usa_carga_rango),
                             )
                         with _n_txt:
+                            # Solo la posición en la secuencia. El conteo de
+                            # días se sacó a pedido: el pill de al lado ya
+                            # dice QUÉ corte es, y acá lo único que no se
+                            # sabe de otra forma es dónde está parado uno.
                             st.markdown(
                                 f"<div class='corte-nav-etq'>{_i_act + 1}"
-                                f"<span>/{len(_cortes_franja)}</span>"
-                                f"&nbsp; {_corte_apl['n_dias']} "
-                                f"{'día' if _corte_apl['n_dias'] == 1 else 'días'}"
-                                "</div>",
+                                f"<span>/{len(_cortes_franja)}</span></div>",
                                 unsafe_allow_html=True,
                             )
                         with _n_sig:

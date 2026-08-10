@@ -2126,6 +2126,34 @@ salvo `icono`):
       — en Ventas o Compras las fechas son continuas y las rachas serían
       ruido.
 
+    **TRES modos, no dos** (2026-08-09, 2ª pasada): `Rango · Corte ·
+    Comparar`. Corte y Comparar comparten estado — el mismo conjunto de
+    días, distinto gesto: en Corte el clic REEMPLAZA la selección (revisar
+    un conteo, el caso normal), en Comparar la ALTERNA. Por eso cambiar de
+    uno a otro no pierde nada y `modo_por_cortes()` existe: para que nadie
+    escriba la comparación a mano y se olvide de una de las dos ramas.
+    `_fusionar()` une N cortes en un estado con la MISMA forma que uno
+    solo — `dias` es la unión — así el filtro `isin(dias)` no distingue si
+    viene de uno o de cinco y nada río abajo cambió. Verificado con data
+    real: 3 sesiones elegidas = rango de 52 días con 6 días de datos, 46
+    excluidos. Eso es lo que un `date_input` no puede expresar.
+
+    La primera versión usaba un `st.toggle` "Elegir varios" ADEMÁS del
+    segmentado Rango/Cortes: dos controles apilados para una sola
+    decisión. Fusionarlos en el segmentado sacó un widget de la pantalla y
+    de paso volvió el modo verificable — un `st.toggle` es un React-Aria
+    pressable y **no responde a eventos sintéticos** (`.click()` ni
+    `KeyboardEvent`), así que no se puede accionar desde la consola; los
+    `st.button` y los `stButtonGroup` (pills/segmented) sí. Si hace falta
+    poder manejar un control desde `javascript_tool`, que sea uno de esos.
+
+    Las etiquetas de la lista llevan AÑO y no el conteo de días
+    (`etiqueta_corte_anio`, a pedido). Es una función aparte de
+    `etiqueta_corte` porque esa la consumen las cabeceras de la tabla
+    pivote, cuyo ancho se calcula del largo del label
+    (`tablas/ajuste_pivote.py::_ancho_header_periodo`): sumarle 5
+    caracteres ahí vuelve a truncarlas, que es un bug ya arreglado una vez.
+
 63. **Dos controles del MISMO concepto no se pisan el estado, pero igual
     es un bug (2026-08-09).** El mapa de calor tenía su `select_slider` de
     corte y la franja ganó el suyo. Cada uno con su clave: nada se

@@ -57,6 +57,30 @@ def etiqueta_corte(inicio, fin):
     return f"{_di} {MESES_ABR_ES[_mi - 1]} - {_df} {MESES_ABR_ES[_mf - 1]}"
 
 
+def etiqueta_corte_anio(inicio, fin):
+    """Como `etiqueta_corte` pero con el AÑO: '1-5 ago 2026'.
+
+    Es una función APARTE y no un parámetro de `etiqueta_corte` porque las
+    dos tienen consumidores con requisitos opuestos:
+      · `etiqueta_corte` → cabeceras de la tabla pivote, donde el ancho de
+        columna se calcula a partir del largo del label
+        (tablas/ajuste_pivote.py::_ancho_header_periodo). Sumarle 5
+        caracteres ahí vuelve a truncar los headers, que es un bug que ya
+        se arregló una vez.
+      · `etiqueta_corte_anio` → la lista del calendario y el label del
+        pill, donde el año es lo que pidió el usuario para no confundir
+        el mismo mes de dos años distintos.
+
+    Si el corte cruza de año (raro pero posible: un conteo de fin de
+    diciembre), el año va en LOS DOS extremos — '30 dic 2025 - 2 ene 2026'
+    —, que es justo el caso donde omitirlo engaña.
+    """
+    if inicio.year != fin.year:
+        return (f"{inicio.day} {MESES_ABR_ES[inicio.month - 1]} {inicio.year}"
+                f" - {fin.day} {MESES_ABR_ES[fin.month - 1]} {fin.year}")
+    return f"{etiqueta_corte(inicio, fin)} {fin.year}"
+
+
 def _rachas(dias):
     """Parte una lista ORDENADA de `datetime.date` en rachas por el salto
     máximo. Núcleo compartido por `cortes_por_racha` (que necesita el mapa
@@ -141,6 +165,7 @@ def _cortes_desde_dias(dias):
         salida.append({
             "clave": f"corte_{i:03d}",
             "etiqueta": etiqueta_corte(racha[0], racha[-1]),
+            "etiqueta_anio": etiqueta_corte_anio(racha[0], racha[-1]),
             "dias": tuple(racha),
             "ini": racha[0],
             "fin": racha[-1],

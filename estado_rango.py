@@ -217,51 +217,124 @@ def clave_modo(clave_c):
     return f"modo_{clave_c}"
 
 
+MODOS_FECHA = ("Rango", "Corte", "Comparar")
+"""Los tres modos del eje temporal, en orden de menos a más específico:
+  · Rango    — intervalo (ini, fin). El de siempre.
+  · Corte    — UNA sesión de inventario; el clic en la lista reemplaza.
+  · Comparar — VARIAS; el clic alterna (agrega/saca).
+Corte y Comparar comparten estado: son el mismo conjunto de días, con
+distinto gesto de selección. Por eso pasar de uno a otro no pierde nada."""
+
+
 def modo_fecha(clave_c):
-    """Modo vigente ("Rango" | "Cortes"). Default Rango: un reporte que
+    """Modo vigente (uno de `MODOS_FECHA`). Default Rango: un reporte que
     nunca abrió el panel se comporta como siempre."""
     return st.session_state.get(clave_modo(clave_c), "Rango")
 
 
-def corte_vigente(clave_c):
-    """El corte que hay que APLICAR, o None.
+def modo_por_cortes(clave_c):
+    """True si el modo vigente filtra por cortes (Corte o Comparar).
+    Existe para que nadie escriba la comparación a mano y se olvide de uno
+    de los dos — que es como se cuelan los bugs de "funciona en Corte pero
+    no en Comparar"."""
+    return modo_fecha(clave_c) in ("Corte", "Comparar")
 
-    Devuelve None si el modo es Rango aunque haya un corte guardado: el
-    corte se conserva (volver a Cortes lo restaura) pero no filtra. Es la
-    única función que debe consultarse para decidir el filtro — leer la
-    clave del corte a mano se saltea justamente esta condición.
+
+def corte_vigente(clave_c):
+    """La SELECCIÓN de cortes que hay que APLICAR, o None.
+
+    Devuelve None si el modo es Rango aunque haya una selección guardada:
+    se conserva (volver a Corte/Comparar la restaura) pero no filtra. Es
+    la única función que debe consultarse para decidir el filtro — leer la
+    clave a mano se saltea justamente esta condición.
     """
-    if modo_fecha(clave_c) != "Cortes":
+    if not modo_por_cortes(clave_c):
         return None
     return st.session_state.get(clave_c)
 
 
+def _fusionar(cortes_sel):
+    """Une N cortes en UN estado con la misma FORMA que tenía uno solo.
+
+    Esta es la pieza que hace que la selección múltiple no cueste nada río
+    abajo: `dias` es la UNIÓN de los días de todos los cortes elegidos, y
+    el filtro (`df[fecha].isin(dias)`) no distingue si vienen de uno o de
+    cinco. `ini`/`fin` son los extremos del conjunto, que es lo que
+    necesita el rango espejo — y por eso el rango de una selección de 2
+    cortes abarca también el hueco entre ellos, mientras que los datos NO:
+    exactamente la diferencia que justifica el modo.
+    """
+    _dias = sorted({d for c in cortes_sel for d in c["dias"]})
+    _claves = [c["clave"] for c in cortes_sel]
+    if len(cortes_sel) == 1:
+        _etiqueta = cortes_sel[0]["etiqueta_anio"]
+    else:
+        _etiqueta = (f"{len(cortes_sel)} cortes · "
+                     f"{cortes_sel[0]['etiqueta']} … "
+                     f"{cortes_sel[-1]['etiqueta_anio']}")
+    return {
+        "claves": _claves,
+        "etiqueta": _etiqueta,
+        "dias": _dias,
+        "ini": _dias[0],
+        "fin": _dias[-1],
+        "n_dias": len(_dias),
+        "n_cortes": len(_claves),
+    }
+
+
 def aplicar_corte(clave_r, clave_c, corte, reporte=None, usa_carga_rango=False):
-    """Callback `on_click` que fija un corte. Escribe los TRES estados.
+    """Callback `on_click` que fija UN corte, reemplazando la selección.
+    Lo usan el clic normal de la lista y el stepper ‹ ›.
 
     Corre antes del rerun, así que el `date_input` ve el rango nuevo al
     instanciarse (misma mecánica que `aplicar_atajo`, y por el mismo
     motivo: escribir la clave de un widget ya instanciado es un error de
     Streamlit).
-
-    `corte` es un dict de `cortes.cortes_disponibles`. Se guarda una copia
-    plana con los días como lista — `session_state` sobrevive al rerun,
-    pero una tupla dentro de un dict cacheado por `lru_cache` es la misma
-    referencia que usa el módulo de cálculo, y no conviene compartirla.
     """
-    # Misma FORMA que un corte recién calculado (incluido `n_dias`): así
-    # `cortes.corte_contiguo` y cualquier helper futuro funcionan igual
-    # sobre el corte guardado que sobre el de la lista, sin ramas.
-    st.session_state[clave_c] = {
-        "clave": corte["clave"],
-        "etiqueta": corte["etiqueta"],
-        "dias": list(corte["dias"]),
-        "ini": corte["ini"],
-        "fin": corte["fin"],
-        "n_dias": corte["n_dias"],
-    }
-    st.session_state[clave_modo(clave_c)] = "Cortes"
-    aplicar_atajo(clave_r, (corte["ini"], corte["fin"]),
+    _fijar_seleccion(clave_r, clave_c, [corte], reporte, usa_carga_rango)
+
+
+def alternar_corte(clave_r, clave_c, corte, todos, reporte=None,
+                   usa_carga_rango=False):
+    """Callback `on_click` del modo Comparar: agrega o saca `corte` de la
+    selección.
+
+    `todos` es la lista COMPLETA de cortes disponibles y hace falta para
+    reconstruir la selección en orden cronológico — el estado guarda solo
+    las claves, no los cortes enteros, así que sin la lista no se puede
+    recomponer `dias`.
+
+    Nunca deja la selección vacía: sacar el último elemento se ignora. Una
+    selección vacía filtraría CERO filas y la pantalla quedaría en blanco
+    sin explicación; para ver todo está el modo Rango.
+    """
+    _sel = set(st.session_state.get(clave_c, {}).get("claves", []))
+    if corte["clave"] in _sel:
+        if len(_sel) == 1:
+            return
+        _sel.discard(corte["clave"])
+    else:
+        _sel.add(corte["clave"])
+    _fijar_seleccion(clave_r, clave_c,
+                     [c for c in todos if c["clave"] in _sel],
+                     reporte, usa_carga_rango)
+
+
+def _fijar_seleccion(clave_r, clave_c, cortes_sel, reporte, usa_carga_rango):
+    """Escribe los TRES estados de una vez. Punto único: si el corte se
+    escribiera sin el rango, el `date_input`, el label y el loader de R2
+    seguirían mostrando el rango viejo (ver el invariante del módulo)."""
+    if not cortes_sel:
+        return
+    _estado = _fusionar(cortes_sel)
+    st.session_state[clave_c] = _estado
+    # Si ya estamos en Comparar hay que QUEDARSE ahí: forzar "Corte" en
+    # cada alternar_corte sacaría al usuario del modo en el que está
+    # armando la selección, a mitad de armarla.
+    if not modo_por_cortes(clave_c):
+        st.session_state[clave_modo(clave_c)] = "Corte"
+    aplicar_atajo(clave_r, (_estado["ini"], _estado["fin"]),
                   reporte=reporte, usa_carga_rango=usa_carga_rango)
 
 

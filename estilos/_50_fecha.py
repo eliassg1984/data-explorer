@@ -288,11 +288,12 @@ CSS = """    /* ================================================================
         justify-content: flex-start !important;
         text-align: left !important;
     }
-    /* Segmentado Rango/Cortes: vive ARRIBA de las columnas, así que la
-       regla de acá no lo alcanza — se estiliza aparte y compacto para que
-       no coma la altura del panel. */
+    /* Segmentado Rango/Corte/Comparar: vive ARRIBA de las columnas, así
+       que la regla de los atajos no lo alcanza — se estiliza aparte y
+       compacto (3 opciones tienen que entrar en los 380px del panel sin
+       partirse en dos filas). */
     .st-key-fecha_panel [data-testid="stButtonGroup"] button {
-        padding: 3px 14px !important;
+        padding: 3px 10px !important;
         font-size: 12.5px !important;
     }
 
