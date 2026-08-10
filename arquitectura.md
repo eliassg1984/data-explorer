@@ -2417,3 +2417,35 @@ salvo `icono`):
     `st.pills` ("Vista distribución") que alterna cuál de las dos se
     dibuja, siempre a ancho completo (ver regla #71 para el límite que
     esto le impone a `test_graficos.py`).
+
+73. **La barra de Plotly (modebar) por default trae 10 botones, casi
+    invisible (`displayModeBar="hover"`), Y el modo de arrastre por
+    default es "pan" — no "zoom" ni "select".** `on_select`/
+    `selection_mode` de `st.plotly_chart` NO tocan ninguna de las dos
+    cosas: confirmado con un probe (`gd.layout.dragmode`) sobre
+    `_graf_distribucion_ajuste` con `on_select="rerun",
+    selection_mode=["points","box","lasso"]` puesto — el dragmode seguía
+    en `"pan"`. Consecuencia real (reportada por el usuario, captura con
+    flechas sobre la barra): con "pan" de default, arrastrar sobre el
+    gráfico CORRE la vista en vez de seleccionar, y con la barra oculta
+    hasta que el mouse pasa por encima, no hay pista de que existe un
+    botón para cambiar de modo — fácil terminar viendo una sola familia y
+    creer que el resto no tiene datos (el caso que motivó esta regla).
+    **Arreglo, en `_distribucion.py`:** `fig.update_layout(dragmode=
+    "select")` explícito cuando la selección está activa (deja el drag
+    listo para usar SIN tocar la barra) + `config` con
+    `modeBarButtonsToRemove` recortado a lo que el gráfico realmente
+    ofrece (fuera `zoom2d`/`pan2d`/`zoomIn2d`/`zoomOut2d`/`autoScale2d`;
+    queda `select2d`/`lasso2d` si el chart soporta lazo, `resetScale2d`,
+    `toImage`) + `displayModeBar=True` (visible siempre, no solo al pasar
+    el mouse). Cuando la selección está apagada (sin `col_producto`), la
+    barra entera se oculta — un botón de selección que no hace nada es
+    peor que no tener botón. Esto EXTIENDE el precedente de
+    `graficos/compras/proveedor.py` (`_cfg_chart`, ~línea 490): ese caso
+    es más simple (`selection_mode="points"`, un click alcanza, así que
+    esconde la barra ENTERA en desktop); acá el chart depende de
+    arrastrar (`"box"`/`"lasso"`), así que esconder la barra habría
+    tapado la única forma de cambiar de modo si `dragmode="select"` no se
+    fijara a mano — las dos piezas (dragmode explícito + barra recortada)
+    van juntas, ninguna sola alcanza.
+

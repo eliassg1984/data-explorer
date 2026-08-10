@@ -62,6 +62,17 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
     Distribución/Histograma no reprocesa la selección del otro, porque el
     que no está activo ni siquiera se construye en ese rerun.
 
+    Cuando la selección está activa (`_hay_prod`/`_hay_prod_hist`), dos
+    cosas que Plotly NO trae por default y hacían que nadie usara esto:
+    `dragmode="select"` explícito — sin él el modo activo es "pan" y
+    arrastrar corre la vista en vez de seleccionar (así se llega fácil a
+    "solo veo una familia", ver arquitectura.md) — y `config` con la barra
+    recortada a 4-5 botones relevantes en vez de los 10 de default, con
+    `displayModeBar=True` (no el "hover" default: visible siempre, no solo
+    para quien ya sabía que estaba ahí). Sin `col_producto` la selección
+    está apagada (`on_select="ignore"`) y la barra se oculta entera — no
+    hay nada que seleccionar, mostrarla sería un botón muerto.
+
     El histograma tiene el mismo click→tabla, pero SIN custom_data sobre el
     propio `go.Histogram`: es una traza agregada (barras = bins, no filas)
     y `on_select` sobre ella es territorio no verificado — mismo riesgo que
@@ -88,9 +99,12 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
     ) or "Distribución"
 
     if _vista == "Distribución":
-        st.caption(f"{n_nz} de {n_total} productos con diferencia")
         _es_strip = bool(grp and grp in df_nz.columns)
         _hay_prod = _es_strip and bool(col_producto and col_producto in df_nz.columns)
+        _cap_dist = f"{n_nz} de {n_total} productos con diferencia"
+        if _hay_prod:
+            _cap_dist += " · arrastrá para seleccionar y ver el detalle abajo"
+        st.caption(_cap_dist)
 
         if _es_strip:
             d = df_nz.copy()
@@ -137,6 +151,11 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                 yaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
             ))
             if _hay_prod:
+                # Sin esto el dragmode por default de Plotly es "pan": arrastrar
+                # sobre el gráfico corre la vista en vez de seleccionar. "select"
+                # lo deja listo para usar sin tocar ningún botón de la barra —
+                # clic selecciona un punto, arrastre selecciona una caja.
+                fig.update_layout(dragmode="select")
                 _linea_ajuste = "Ajuste: <b>S/ %{y:,.2f}</b>"
                 if col_cantidad and col_cantidad in d.columns:
                     _linea_ajuste += " (%{customdata[3]:+.1f}%{customdata[4]})"
@@ -167,11 +186,29 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                 xaxis=dict(gridcolor=GRIS_BORDE),
             ))
 
+        # Barra de Plotly recortada a lo que este gráfico realmente usa — con
+        # los 10 botones de default (zoom/pan/lasso/autoscale/reset/...) nadie
+        # sabe cuál toca, y el modo activo por default ("pan") hace que
+        # arrastrar corra la vista en vez de seleccionar (fácil terminar
+        # viendo una sola familia y creer que el resto no tiene datos).
+        # displayModeBar=True en vez de "hover" (el default): que se vea
+        # siempre, sin que el usuario tenga que saber que ahí hay algo para
+        # pasar el mouse por encima.
+        _cfg_strip = {"displaylogo": False}
+        if _hay_prod:
+            _cfg_strip["displayModeBar"] = True
+            _cfg_strip["modeBarButtonsToRemove"] = [
+                "zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "autoScale2d",
+            ]
+        else:
+            _cfg_strip["displayModeBar"] = False
+
         with _card("dist_grupo", "Distribución por grupo"):
             _evento_dist = st.plotly_chart(
                 fig, use_container_width=True, key="ajuste_dist_strip",
                 on_select="rerun" if _hay_prod else "ignore",
                 selection_mode=["points", "box", "lasso"],
+                config=_cfg_strip,
             )
 
         if _hay_prod:
@@ -212,12 +249,14 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
         d_hist = df_nz[df_nz[col_ajuste_val].between(p_lo, p_hi)]
         n_fuera = n_nz - len(d_hist)
 
+        _hay_prod_hist = bool(col_producto and col_producto in df_nz.columns)
         _cap = f"{n_total - n_nz} productos en cero, excluidos del cálculo"
         if n_fuera:
             _cap += f" · {n_fuera} outliers fuera de este rango"
+        if _hay_prod_hist:
+            _cap += " · arrastrá para seleccionar y ver el detalle abajo"
         st.caption(_cap)
 
-        _hay_prod_hist = bool(col_producto and col_producto in df_nz.columns)
         _n_bins = 30
         _paso = (p_hi - p_lo) / _n_bins
         _bordes = [p_lo + i * _paso for i in range(_n_bins + 1)]
@@ -253,6 +292,26 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             hovermode="closest",
             showlegend=False,
         ))
+        if _hay_prod_hist:
+            # Mismo motivo que en el strip de arriba: sin esto el drag por
+            # default es "pan" y arrastrar sobre los bins no selecciona nada.
+            fig2.update_layout(dragmode="select")
+
+        # Mismo recorte de barra que el strip — acá directo sin lasso: la
+        # selección corre sobre el overlay de Scatter invisible (ver
+        # docstring), no sobre las barras, y selection_mode de abajo no
+        # incluye "lasso" para este chart (el rango [lo, hi] por customdata
+        # solo tiene sentido como caja, un lazo no define un intervalo).
+        _cfg_hist = {"displaylogo": False}
+        if _hay_prod_hist:
+            _cfg_hist["displayModeBar"] = True
+            _cfg_hist["modeBarButtonsToRemove"] = [
+                "zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "autoScale2d",
+                "lasso2d",
+            ]
+        else:
+            _cfg_hist["displayModeBar"] = False
+
         with _card("dist_hist", "Histograma"):
             st.markdown(
                 f"<div style='display:flex;gap:16px;font-size:11px;"
@@ -267,6 +326,7 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                 fig2, use_container_width=True, key="ajuste_dist_hist",
                 on_select="rerun" if _hay_prod_hist else "ignore",
                 selection_mode=["points", "box"],
+                config=_cfg_hist,
             )
 
         if _hay_prod_hist:
