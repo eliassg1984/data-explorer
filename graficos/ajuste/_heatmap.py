@@ -442,13 +442,21 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         return DANGER_TEXT if v < 0 else CELDA_POS_TEXTO
 
     def _celda_html(_bg_rgb, _fg, _texto, _borde):
+        # Mismo padding/min-height/box-sizing que el botón real de la
+        # celda de dato (más abajo) -- son divs, no <button>, así que sin
+        # esto el min-height:40px nativo del botón los deja más ALTOS que
+        # el total/gran total y el grid se ve escalonado (reportado
+        # 2026-08-09). display:flex + align-items centra el texto como lo
+        # hacía el padding vertical de sobra en la versión anterior.
         _r, _g, _b = _bg_rgb
         return (
             f"<div style='background:rgb({_r},{_g},{_b});border:{_borde};"
-            f"border-radius:8px;padding:7px 4px;text-align:center;"
+            f"border-radius:8px;padding:4px 2px;text-align:center;"
             f"font-size:11px;font-weight:600;color:{_fg};"
             f"font-variant-numeric:tabular-nums;white-space:nowrap;"
-            f"overflow:hidden;text-overflow:ellipsis'>{_texto}</div>"
+            f"overflow:hidden;text-overflow:ellipsis;min-height:40px;"
+            f"box-sizing:border-box;display:flex;align-items:center;"
+            f"justify-content:center'>{_texto}</div>"
         )
 
     # ── Click-drill: qué celda tiene el foco. Reemplaza el `on_select` de
@@ -535,7 +543,12 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                     )
                     _tip = f"{_fam} × {_area}: S/ {_v:,.0f}"
                     _tip += _spark_map.get((_fam, _area), "")
-                    if st.button(f"S/ {_v:,.0f}", key=_key, help=_tip,
+                    # En cero no hay nada que leer -- el color ya dice
+                    # "neutro" y el número sobra (reportado 2026-08-09). La
+                    # celda sigue coloreada y clickeable (regla de arriba),
+                    # solo se le vacía la etiqueta visible.
+                    _label = " " if _v == 0 else f"S/ {_v:,.0f}"
+                    if st.button(_label, key=_key, help=_tip,
                                 use_container_width=True):
                         st.session_state[_focus_key] = (
                             None if _es_foco else (_fam, _area))
