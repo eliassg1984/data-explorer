@@ -2,13 +2,22 @@
 
 Tiene DOS modos (ver arquitectura.md regla #42) y TRES vistas — Mapa,
 Flujo (Sankey) y Tabla — sobre el mismo corte seleccionado (regla #58).
-En movil se renderiza a tamaño completo con scroll en vez de encogerse
-hasta ser ilegible: el texto lo dibuja Plotly en el servidor, asi que no
-hay media query que valga (ver graficos.base._es_movil).
+
+Mapa NO es un trace de Plotly (regla #66): es una grilla de `st.button`,
+una celda de dato real cada uno, coloreada con `plotly.colors.
+sample_colorscale` + CSS por key. `go.Heatmap` rasteriza a PNG (sin rect
+por celda en el DOM — verificado inspeccionando el SVG en vivo) así que
+no había forma de redondear cada celda por separado, solo el contorno
+general; un `st.button` real ya viene redondeado por la regla global de
+`estilos/_00_base.py`, gratis. El click-drill usa el mismo patrón
+botón + `session_state` + `st.rerun()` que ya usa el chevron de cada
+fila en la Cascada, en vez de `on_select` (regla #11: no confiable para
+trazas que no sean Bar/Scatter).
 """
 
 
 import pandas as pd
+import plotly.colors as pc
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -22,7 +31,7 @@ from tema import (
     LAVANDA_CABECERA_GRUPO, LAVANDA_SELECCION,
 )
 from graficos.base import (
-    _card, _es_movil, _slug, _wrap_cat,
+    _card, _slug,
 )
 # _periodo_serie vive en graficos/compras/_comun.py; se reusa desde acá vía
 # graficos.compras (que ya la re-exporta para test_graficos.py) en vez de
@@ -312,30 +321,9 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
             st.markdown(_tabla_html, unsafe_allow_html=True)
         return
 
-    # ── Móvil: el heatmap NO se achica a como dé lugar (con 11 áreas + Total
-    #    ilegible a cualquier tamaño de letra) — se renderiza a su ancho real
-    #    y se scrollea, con la columna de familia fijada aparte en HTML (ver
-    #    más abajo). Plotly dibuja en el servidor y no puede adaptarse al
-    #    viewport real, así que la decisión se toma acá con el mismo
-    #    _es_movil() que ya usa Compras para sus etiquetas de barra. ───────
-    _movil = _es_movil()
-
-    # ── Tamaño de fuente: en desktop se adapta al ancho (pocas áreas ->
-    #    números grandes; las 11 reales -> se achica para no pisar la celda
-    #    vecina). En móvil no hace falta adaptar nada -- cada columna ya
-    #    tiene un ancho fijo generoso (ver _ancho_col_movil más abajo), así
-    #    que el tamaño es plano. Mismo espíritu que la altura adaptada a _n
-    #    más abajo. ───────────────────────────────────────────────────────
-    if _movil:
-        _cell_font, _tot_font, _grand_font = 11, 12, 12.5
-    else:
-        _cell_font = 12 if _m <= 6 else (11 if _m <= 9 else 9.5)
-        _tot_font = _cell_font + 1
-        _grand_font = _cell_font + 1.5
-
     # ── Top 3 por signo (mismo criterio que _badge_for en la Cascada: manda
-    #    el valor absoluto) — decide qué celdas se resaltan y cuáles atenúa
-    #    el trace de "apagado" de más abajo. ───────────────────────────────
+    #    el valor absoluto) — decide qué celdas quedan a color pleno y
+    #    cuáles se atenúan. ───────────────────────────────────────────────
     _celdas = [(i, j, float(pivot.values[i][j]))
                for i in range(_n) for j in range(_m)
                if abs(pivot.values[i][j]) >= 0.5]
@@ -355,7 +343,9 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     #    columna de fecha ya está en el df (la usan Evolución y la tabla
     #    dinámica); esto es un groupby más, no una fuente de datos nueva.
     #    Acotado a 120 días hacia atrás para no pivotear el historial
-    #    completo en cada rerun. ───────────────────────────────────────────
+    #    completo en cada rerun. Antes alimentaba un hovertemplate de
+    #    Plotly (HTML, `<br>`); ahora va al `help=` de un `st.button`
+    #    (texto plano) — mismo cálculo, separador " · " en vez de `<br>`. ──
     _BLOQUES = "▁▂▃▄▅▆▇█"
     _N_CORTES = 7
     _spark_map = {}
@@ -388,42 +378,19 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                 )
                 _flecha = "▲" if _vals[-1] >= _vals[-2] else "▼"
                 _spark_map[_key] = (
-                    f"<br>Tendencia ({len(_vals)} cortes): {_spark} {_flecha}"
+                    f" · Tendencia ({len(_vals)} cortes): {_spark} {_flecha}"
                 )
 
-    # Título al pie del mapa. Uno solo para las dos vistas (escritorio usa
-    # _card, móvil emite la clase a mano) para que no se despeguen.
-    _TITULO_HM = "Mapa Valorizado Total" if _modo_val else "Mapa Ajuste Valorizado"
+    _TITULO_HM = f"Mapa {_titulo_metrica}"
 
-    # Separación entre celdas, en px. Es lo único que las despega entre sí, y
-    # como se ve del color de plot_bgcolor (BLANCO), son LOS CANALES BLANCOS
-    # que le dan aire a la grilla — la perilla para que respire más o menos.
-    # Lo comparten el trace base y el de apagado: tienen que ser el mismo
-    # número o el atenuado no calza con la celda que atenúa.
-    _GAP = 6
-
-    # ── z con borde "TOTAL" en None: mismo trace, la categoría extra al
-    #    final de cada eje hace que Plotly le reserve un carril del mismo
-    #    ancho que cualquier otra categoría — no hace falta un subplot
-    #    aparte para alinear fila/columna de totales con la grilla. ───────
-    _x_labels = _areas + ["TOTAL"]
-    _y_labels = _fams + ["TOTAL"]
-    _z_full = [row + [None] for row in pivot.values.tolist()]
-    _z_full.append([None] * (_m + 1))
-
-    # En móvil la colorbar se saca del gráfico (compite por un ancho que ya
-    # es escaso) y se reemplaza por una leyenda HTML de 3 puntos, fija arriba
-    # del área que se scrollea -- no tiene sentido que la referencia de color
-    # se scrollee junto con los datos.
     # ── Colorscale: divergente centrada en cero para Ajuste (el signo
     #    importa: faltante/sobrante) vs secuencial anclada en cero para
-    #    Valorizado Total (magnitud, nunca negativo) — ESCALA_CONTINUA es
-    #    la misma escala que ya usan los mapas de calor de Compras
-    #    (graficos/constructor.py) para "valor -> intensidad". ────────────
+    #    Valorizado Total (magnitud, nunca negativo) — misma definición
+    #    que antes, solo que ahora la consume `sample_colorscale` en vez
+    #    de un trace `go.Heatmap` (ver docstring del módulo, regla #66). ──
     if _modo_val:
         _colorscale_hm = ESCALA_CONTINUA
-        _zmin_hm, _zmax_hm, _zmid_hm = 0.0, _vmax, None
-        _colorbar_titulo = "Valorizado S/"
+        _zmin_hm, _zmax_hm = 0.0, _vmax
     else:
         _colorscale_hm = [
             [0.00, ERROR],
@@ -432,411 +399,203 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
             [0.65, EXITO_FONDO],
             [1.00, EXITO],
         ]
-        _zmin_hm, _zmax_hm, _zmid_hm = -_vmax, _vmax, 0
-        _colorbar_titulo = "Ajuste S/"
+        _zmin_hm, _zmax_hm = -_vmax, _vmax
 
-    fig = go.Figure(go.Heatmap(
-        z=_z_full, x=_x_labels, y=_y_labels,
-        xgap=_GAP, ygap=_GAP,
-        colorscale=_colorscale_hm,
-        zmin=_zmin_hm, zmax=_zmax_hm, zmid=_zmid_hm,
-        showscale=not _movil,
-        colorbar=dict(
-            title=dict(text=_colorbar_titulo, font=dict(size=10,
-                                                        color=GRIS_TEXTO)),
-            tickformat=",.0f", tickfont=dict(size=9, color=GRIS_TEXTO_SUAVE),
-            thickness=8, len=0.75, outlinewidth=0,
-            ticks="outside", ticklen=3, tickcolor=GRIS_BORDE,
-        ),
-        hoverinfo="skip",
-    ))
+    def _rgb_de(rgb_str):
+        # sample_colorscale devuelve siempre "rgb(r, g, b)" (colortype
+        # default) -- partir por los separadores es más liviano que traer
+        # `re` solo para esto.
+        _inner = rgb_str[rgb_str.index("(") + 1:rgb_str.index(")")]
+        return tuple(int(_n) for _n in _inner.split(","))
 
-    # ── Trace de "apagado": Heatmap semitransparente encima de las celdas
-    #    con dato que NO están en el top 3 — mismas categorías/gaps que el
-    #    trace base (comparten eje -> Plotly las alinea por el nombre de la
-    #    categoría, no hace falta calcular píxeles). Top 3 y celdas vacías
-    #    quedan en None, sin tocar. Color lavanda (no gris plano) porque es
-    #    el tono de "apagado" de la marca, el mismo que LAVANDA_FONDO/
-    #    SELECCION, y no un gris genérico de planilla. Va semitransparente
-    #    sobre el BLANCO del fondo, así que la celda atenuada sigue dejando
-    #    ver de qué signo era. ───────────────────────────────────────────
-    _z_dim = [[None] * _m for _ in range(_n)]
-    for _i, _j, _v in _celdas:
-        if (_i, _j) not in _top_set:
-            _z_dim[_i][_j] = 1
-    fig.add_trace(go.Heatmap(
-        # MISMO _GAP que el trace base: si no coinciden, el rectangulo de
-        # apagado no calza con la celda que atenua y se derrama sobre los
-        # canales blancos.
-        z=_z_dim, x=_areas, y=_fams, xgap=_GAP, ygap=_GAP,
-        zmin=0, zmax=1,
-        colorscale=[[0, "rgba(240,237,254,.8)"], [1, "rgba(240,237,254,.8)"]],
-        showscale=False, hoverinfo="skip",
-    ))
+    def _hex_a_rgb(_hex):
+        _h = _hex.lstrip("#")
+        return tuple(int(_h[i:i + 2], 16) for i in (0, 2, 4))
 
-    _pts_x, _pts_y, _pts_cd = [], [], []
-    for _i, _fam in enumerate(_fams):
-        for _j, _area in enumerate(_areas):
-            _val = float(pivot.values[_i][_j])
-            _pts_x.append(_area)
-            _pts_y.append(_fam)
-            _pts_cd.append([_val, _spark_map.get((_fam, _area), "")])
+    def _color_celda(v, atenuar):
+        _t = (v - _zmin_hm) / ((_zmax_hm - _zmin_hm) or 1.0)
+        _t = max(0.0, min(1.0, _t))
+        _rgb = _rgb_de(pc.sample_colorscale(_colorscale_hm, [_t])[0])
+        if not atenuar:
+            return _rgb
+        # Atenuado = mezcla hacia LAVANDA_SELECCION -- mismo tono que usaba
+        # el trace semitransparente de "apagado" de la versión Plotly,
+        # ahora resuelto de una vez en el color final de fondo (sin
+        # necesidad de una segunda capa). alpha=0.5 -> a mitad de camino.
+        _dr, _dg, _db = _hex_a_rgb(LAVANDA_SELECCION)
+        return tuple(round(c * 0.5 + d * 0.5) for c, d in zip(_rgb, (_dr, _dg, _db)))
 
-    _hover_lbl = "Valorizado" if _modo_val else "Ajuste"
-    fig.add_trace(go.Scatter(
-        x=_pts_x, y=_pts_y, mode="markers",
-        marker=dict(size=28, opacity=0, color=ACENTO),
-        customdata=_pts_cd,
-        hovertemplate=(
-            "<b>%{y}</b><br>"
-            "Área: <b>%{x}</b><br>"
-            + _hover_lbl + ": <b>S/ %{customdata[0]:,.2f}</b>"
-            "%{customdata[1]}"
-            "<extra></extra>"
-        ),
-        showlegend=False,
-    ))
-
-    # ── Anotaciones de celdas con dato: top 3 a full color (blanco si el
-    #    fondo queda oscuro), el resto en gris — el trace de apagado ya
-    #    bajó el fondo, el texto tiene que acompañar o queda un número
-    #    nítido sobre un fondo apagado (contradice el gesto). ─────────────
-    _anns_hm = []
-    for _i, _fam in enumerate(_fams):
-        for _j, _area in enumerate(_areas):
-            _v = float(pivot.values[_i][_j])
-            if abs(_v) < 0.5:
-                continue
-            if (_i, _j) in _top_set:
-                _int = abs(_v) / _vmax
-                _fg = BLANCO if _int > 0.55 else GRIS_TEXTO_MEDIO
-            else:
-                _fg = GRIS_TEXTO_SUAVE
-            _anns_hm.append(dict(
-                x=_area, y=_fam, xref="x", yref="y",
-                text=f"S/ {_v:,.0f}", showarrow=False,
-                font=dict(size=_cell_font, color=_fg,
-                          family="ui-monospace, monospace"),
-            ))
-
-    # ── Fila/columna TOTAL: negrita (el mini-lenguaje de anotaciones de
-    #    Plotly soporta <b>) + una línea divisoria fina que las separa de
-    #    los datos reales, sin decorar celda por celda. En modo Valorizado
-    #    el total es casi siempre positivo — el semáforo rojo/verde ahí
-    #    leería como "bueno/malo" cuando es solo una magnitud, así que ese
-    #    modo usa el índigo de las cabeceras de grupo en su lugar. ────────
     def _color_total_hm(v):
         if _modo_val:
             return ACENTO_TEXTO_OSCURO
         return DANGER_TEXT if v < 0 else CELDA_POS_TEXTO
 
-    for _i, _fam in enumerate(_fams):
-        _v = float(_row_tot.iloc[_i])
-        _anns_hm.append(dict(
-            x="TOTAL", y=_fam, xref="x", yref="y",
-            text=f"<b>S/ {_v:,.0f}</b>", showarrow=False,
-            font=dict(size=_tot_font, color=_color_total_hm(_v), family="ui-monospace, monospace"),
-        ))
-    for _j, _area in enumerate(_areas):
-        _v = float(_col_tot.iloc[_j])
-        _anns_hm.append(dict(
-            x=_area, y="TOTAL", xref="x", yref="y",
-            text=f"<b>S/ {_v:,.0f}</b>", showarrow=False,
-            font=dict(size=_tot_font, color=_color_total_hm(_v), family="ui-monospace, monospace"),
-        ))
-    _anns_hm.append(dict(
-        x="TOTAL", y="TOTAL", xref="x", yref="y",
-        text=f"<b>S/ {_grand_tot:,.0f}</b>", showarrow=False,
-        font=dict(size=_grand_font, color=_color_total_hm(_grand_tot), family="ui-monospace, monospace"),
-    ))
-
-    # ── Filas/columnas fijas en px para móvil (_ROWPX/_TOPM/_BOTM/_COLPX) --
-    # nombradas acá porque la columna de familia "aparte" (HTML, sticky) que
-    # se arma más abajo tiene que calzar EXACTO con la altura de fila que ve
-    # Plotly: mismo _ROWPX en los dos lados, sin el clamp min/max que usa el
-    # alto de escritorio (con ese clamp una grilla chica dejaría de medir
-    # _ROWPX por fila y la columna HTML se desalinearía). ────────────────────
-    _ROWPX, _TOPM, _BOTM, _COLPX = 40, 50, 18, 64
-    if _movil:
-        # -16: medido en vivo con getBoundingClientRect(). El área de
-        # trazado real (el rect de fondo del heatmap) sale 16px más alta
-        # que "height - margin.t - margin.b" -- Plotly no respeta el
-        # margen pedido al pixel (con t=50/b=18 el rect de fondo arrancaba
-        # en y=42 y medía 16px más de lo esperado), y esos 16px "de más" se
-        # reparten estirando las categorías existentes en vez de sumar una
-        # fila -- por eso la fila TOTAL quedaba cada vez más lejos de su
-        # label en HTML a medida que crecía el número de familias. Restar
-        # acá compensa exactamente eso: con la resta, el rect de fondo mide
-        # (_n+1)*_ROWPX de punta a punta, fila por fila, sin dato de por
-        # medio. Si algún día cambia _layout_aj o la versión de Plotly,
-        # volver a medir (no asumir que sigue siendo 16).
-        _alto = (_n + 1) * _ROWPX + _TOPM + _BOTM - 16
-        _ancho = (_m + 1) * _COLPX + 12
-    else:
-        _alto = min(560, max(240, (_n + 1) * 38 + 110))
-        _ancho = None  # use_container_width=True gobierna el ancho
-
-    fig.update_layout(**_layout_aj(
-        title_text="",
-        xaxis=dict(tickangle=0, side="top", gridcolor=GRIS_BORDE,
-                   showgrid=False, ticks="",
-                   tickfont=dict(size=11 if not _movil else 10.5, color=GRIS_TEXTO)),
-        yaxis=dict(autorange="reversed", gridcolor=GRIS_BORDE,
-                   showgrid=False, ticks="", showticklabels=not _movil,
-                   tickfont=dict(size=11, color=GRIS_TEXTO_MEDIO)),
-        width=_ancho,
-        height=_alto,
-        margin=dict(l=(10 if not _movil else 6), r=(10 if not _movil else 6),
-                    t=_TOPM, b=_BOTM),
-        annotations=_anns_hm,
-        hovermode="closest",
-    ))
-    # plot_bgcolor BLANCO: es lo que se asoma por los xgap/ygap, o sea el
-    # color de los canales entre celdas y del hueco donde no hay dato.
-    #
-    # Estuvo en LAVANDA_FONDO por marca, pero con las celdas ya tenidas de
-    # lavanda (el 0.50 de la colorscale) y el trace de apagado tambien
-    # lavanda, el conjunto quedaba lavanda sobre lavanda sobre lavanda: sin
-    # un tono neutro que corte, la grilla se apelmazaba y se leia manchada.
-    # El blanco NO es "menos marca": es lo que deja respirar al lavanda para
-    # que se lea como color, y de paso hace resaltar la franja de totales.
-    fig.update_layout(plot_bgcolor=BLANCO)
-    # ── Franja de TOTALES ────────────────────────────────────────────────
-    # Antes la fila/columna TOTAL solo se distinguía por una línea gris de
-    # 1.5px: se leía como una celda más de la grilla. Ahora llevan fondo
-    # propio en LAVANDA_CABECERA_GRUPO — el MISMO tono que la fila de
-    # totales de la tabla AgGrid (tablas/desktop.py) — para que las dos
-    # vistas del reporte hablen el mismo idioma visual, y un borde de
-    # ACENTO como el de allá.
-    #
-    # El "espacio" sale del inset de 0.06 de categoría: la franja arranca
-    # en _m-0.44 en vez de _m-0.5, así que entre el último dato y los
-    # totales se asoma el plot_bgcolor como canaleta. Se hace con inset y
-    # NO agregando una categoría vacía al eje, porque las anotaciones y el
-    # trace de apagado indexan por posición de categoría — una categoría
-    # fantasma correría todos esos índices.
-    #
-    # layer="below" las deja por debajo de los traces; las celdas TOTAL
-    # tienen z=None, así que no hay nada del heatmap que las tape.
-    _INSET = 0.44
-    for _ejes, _pos in (
-        (dict(xref="x", yref="paper"),
-         dict(x0=_m - _INSET, x1=_m + 0.5, y0=0, y1=1)),
-        (dict(xref="paper", yref="y"),
-         dict(x0=0, x1=1, y0=_n - _INSET, y1=_n + 0.5)),
-    ):
-        fig.add_shape(type="rect", **_ejes, **_pos,
-                      fillcolor=LAVANDA_CABECERA_GRUPO,
-                      line=dict(width=0), layer="below")
-    # Borde de acento en el canto de la franja (no en _m-0.5: va pegado a
-    # la franja para que la canaleta quede del lado de los datos).
-    fig.add_shape(type="line", xref="x", yref="paper",
-                  x0=_m - _INSET, x1=_m - _INSET, y0=0, y1=1,
-                  line=dict(color=ACENTO, width=2))
-    fig.add_shape(type="line", xref="paper", yref="y",
-                  x0=0, x1=1, y0=_n - _INSET, y1=_n - _INSET,
-                  line=dict(color=ACENTO, width=2))
-    # Anillo de foco en las celdas del top 3 — el trace de apagado bajó el
-    # resto, esto hace que las que quedan arriba salten a la vista. En modo
-    # Valorizado todas son positivas (no hay "top_neg"): el anillo va en el
-    # acento de marca en vez del semáforo rojo/verde de Ajuste.
-    for _i, _j, _v in _top_pos + _top_neg:
-        _color_anillo = ACENTO if _modo_val else (EXITO if _v > 0 else ERROR)
-        fig.add_shape(
-            type="rect", xref="x", yref="y",
-            x0=_j - 0.47, x1=_j + 0.47, y0=_i - 0.47, y1=_i + 0.47,
-            line=dict(color=_color_anillo, width=2),
-            fillcolor="rgba(0,0,0,0)", layer="above",
-        )
-    _xcats = [str(c) for c in _x_labels]
-    fig.update_xaxes(tickmode="array", tickvals=_xcats,
-                     ticktext=_wrap_cat(_xcats))
-    if _movil:
-        # automargin=True (forzado por graficos.base._layout para TODOS los
-        # gráficos) recalcula el margen superior según el contenido real de
-        # las etiquetas del eje X -- exactamente lo que NO puede pasar acá:
-        # la columna de familia en HTML de más abajo asume un _TOPM/_ROWPX
-        # fijos para calzar fila a fila con el heatmap. Con automargin
-        # prendido, medido en vivo, el área de trazado terminaba 16px más
-        # alta de lo esperado y la columna HTML se desalineaba de la fila
-        # TOTAL para abajo. Se apaga SOLO en móvil (desktop no depende de
-        # una alineación externa, así que conserva el comportamiento ya
-        # probado) -- va DESPUÉS de _layout_aj porque esa función lo fuerza
-        # a True incondicionalmente.
-        fig.update_xaxes(automargin=False)
-
-    # ── Bordes redondeados en TODO el mapa de calor (pedido 2026-08-07) ──
-    # go.Heatmap no tiene un cornerradius como go.Bar, así que se redondea
-    # por CSS en dos puntos del SVG que arma Plotly -- ambos son clases
-    # FIJAS (el id numérico que las acompaña cambia en cada render, por eso
-    # no se usa):
-    #   · clipPath.plotclip -- el rect que recorta la imagen de datos
-    #     (celdas + puntos de hover) al área de trazado. Redondearlo
-    #     redondea las celdas mismas, no solo lo que se ve detrás.
-    #   · .bglayer rect.bg -- el rect de plot_bgcolor que se asoma por los
-    #     xgap/ygap entre celdas. Va con radio +8px (mismo margen que deja
-    #     Plotly entre bg y plotclip, medido en vivo) para que los dos
-    #     bordes queden concéntricos en vez de que el de afuera asome una
-    #     esquina cuadrada detrás del redondeado de adentro.
-    # Acotado a .st-key-heatmap_ajuste: "plotclip"/"bg" son clases
-    # genéricas de Plotly y sin el prefijo redondearía TODOS los gráficos
-    # de la app (misma regla que el resto del CSS del proyecto: acotar al
-    # widget, nunca colgar del contenedor global).
-    st.markdown("""<style>
-    .st-key-heatmap_ajuste clipPath.plotclip rect {
-        rx: 14px; ry: 14px;
-    }
-    .st-key-heatmap_ajuste .bglayer rect.bg {
-        rx: 22px; ry: 22px;
-    }
-    </style>""", unsafe_allow_html=True)
-
-    if _movil:
-        # ── Columna de familia "aparte", en HTML, fija a la izquierda del
-        #    contenedor que se scrollea horizontalmente. Plotly no tiene
-        #    equivalente a position:sticky DENTRO de un mismo SVG -- no hay
-        #    forma de dejar una franja fija mientras el resto del gráfico
-        #    se desliza -- así que la columna de nombres se saca del
-        #    heatmap (yaxis.showticklabels=False más arriba) y se arma acá
-        #    al lado, calzada fila a fila con el mismo _ROWPX/_TOPM que usa
-        #    el layout del gráfico. Si alguno de los dos cambia, el otro
-        #    tiene que cambiar junto (por eso comparten las constantes en
-        #    vez de números sueltos a cada lado). ─────────────────────────
-        _ANCHO_LABELS = 84
-        # -8px: medido en vivo con getBoundingClientRect() -- el bloque de
-        # markdown de la columna de labels arranca 8px más abajo que el rect
-        # de fondo del heatmap aunque los dos sean flex items hermanos con
-        # align-items:flex-start (differencia de padding/margin nativo entre
-        # stMarkdownContainer y el elemento de Plotly). Sin este ajuste, la
-        # primera fila de nombres queda corrida respecto a la primera fila
-        # de datos y el desfase se arrastra fila a fila.
-        _rows_html = f"<div style='height:{_TOPM - 8}px'></div>"
-        for _fam in _fams:
-            _rows_html += (
-                f"<div style='height:{_ROWPX}px;display:flex;"
-                f"align-items:center;justify-content:flex-end;"
-                f"padding-right:7px;font-size:10.5px;font-weight:500;"
-                f"color:{GRIS_TEXTO_MEDIO};white-space:nowrap;"
-                f"overflow:hidden;text-overflow:ellipsis'>{_fam}</div>"
-            )
-        # La etiqueta TOTAL lleva el MISMO fondo y borde que la franja de
-        # totales del heatmap (ver la seccion "Franja de TOTALES"): en movil
-        # esta columna es HTML aparte del grafico, asi que sin esto la franja
-        # se cortaria justo donde empieza el nombre de la fila.
-        _rows_html += (
-            f"<div style='height:{_ROWPX}px;display:flex;"
-            f"align-items:center;justify-content:flex-end;"
-            f"padding-right:7px;font-size:11px;font-weight:700;"
-            f"background:{LAVANDA_CABECERA_GRUPO};"
-            f"border-top:2px solid {ACENTO};"
-            f"color:{ACENTO_TEXTO_OSCURO}'>TOTAL</div>"
+    def _celda_html(_bg_rgb, _fg, _texto, _borde):
+        _r, _g, _b = _bg_rgb
+        return (
+            f"<div style='background:rgb({_r},{_g},{_b});border:{_borde};"
+            f"border-radius:8px;padding:7px 4px;text-align:center;"
+            f"font-size:11px;font-weight:600;color:{_fg};"
+            f"font-variant-numeric:tabular-nums;white-space:nowrap;"
+            f"overflow:hidden;text-overflow:ellipsis'>{_texto}</div>"
         )
 
-        # El sticky va en el ANCESTRO stElementContainer del markdown (vía
-        # :has(), no en la propia key) -- mismo motivo que el resto de
-        # stickies de este archivo (arquitectura.md regla #25): puesto
-        # directo en el div con key no engancha con el scroll.
-        st.markdown(f"""<style>
-        .st-key-hm_movil_scroll {{
-            display: flex !important;
-            flex-direction: row !important;
-            align-items: flex-start !important;
-            overflow-x: auto !important;
-            -webkit-overflow-scrolling: touch;
-            padding-bottom: 4px;
-        }}
-        div[data-testid="stElementContainer"]:has(.hm-movil-labels) {{
-            position: sticky !important;
-            left: 0 !important;
-            z-index: 3 !important;
-            flex: 0 0 auto !important;
-            width: {_ANCHO_LABELS}px !important;
-            background: {BLANCO} !important;
-            box-shadow: 3px 0 6px -3px rgba(24,24,29,.12);
-        }}
-        .st-key-hm_movil_scroll .st-key-heatmap_ajuste {{
-            flex: 0 0 auto !important;
-            width: auto !important;
-        }}
-        </style>""", unsafe_allow_html=True)
+    # ── Click-drill: qué celda tiene el foco. Reemplaza el `on_select` de
+    #    Plotly (regla #11: `go.Heatmap` no es seleccionable) por el mismo
+    #    patrón botón + session_state + rerun que ya usa el chevron de cada
+    #    fila en la Cascada — más simple y, a diferencia de `on_select`,
+    #    100% confiable (es un st.button real, no una traza). ─────────────
+    _focus_key = "hm_ajuste_focus"
+    _focus = st.session_state.get(_focus_key)
+    if _focus is not None and (
+            _focus[0] not in _fams or _focus[1] not in _areas):
+        _focus = None
+        st.session_state[_focus_key] = None
 
-        # Leyenda de signo (Faltante/Sobrante) solo tiene sentido en modo
-        # Ajuste — en Valorizado Total todas las celdas son positivas.
-        _leyenda_signo = "" if _modo_val else (
-            f"<div style='display:flex;gap:12px;font-size:9.5px;"
-            f"color:{GRIS_TEXTO};margin-bottom:8px'>"
-            f"<span><span style='display:inline-block;width:8px;"
-            f"height:8px;border-radius:2px;background:{ERROR};"
-            f"margin-right:4px;vertical-align:-1px'></span>Faltante</span>"
-            f"<span><span style='display:inline-block;width:8px;"
-            f"height:8px;border-radius:2px;background:{EXITO};"
-            f"margin-right:4px;vertical-align:-1px'></span>Sobrante</span>"
-            f"</div>"
-        )
-        with _card("heatmap"):
+    _anchos_grid = [1.7] + [1.0] * _m + [1.1]
+    _css_celdas = []
+
+    with _card("heatmap", _TITULO_HM):
+        # Cabecera: nombres de área, sin botón (no son clickeables).
+        _cols_h = st.columns(_anchos_grid)
+        with _cols_h[0]:
+            st.markdown("&nbsp;", unsafe_allow_html=True)
+        for _j, _area in enumerate(_areas):
+            with _cols_h[_j + 1]:
+                st.markdown(
+                    f"<div style='font-size:9.5px;font-weight:500;"
+                    f"color:{GRIS_TEXTO};text-align:center;"
+                    f"line-height:1.2;padding-bottom:4px'>{_area}</div>",
+                    unsafe_allow_html=True,
+                )
+        with _cols_h[-1]:
             st.markdown(
-                f"<div style='display:flex;align-items:center;gap:5px;"
-                f"font-size:10.5px;font-weight:600;"
-                f"color:{ACENTO_TEXTO_OSCURO};margin-bottom:6px'>"
-                f"Deslizá para ver las {_m} áreas &rarr;</div>"
-                + _leyenda_signo,
+                f"<div style='font-size:9.5px;font-weight:700;"
+                f"color:{ACENTO_TEXTO_OSCURO};text-align:center;"
+                f"padding-bottom:4px'>TOTAL</div>",
                 unsafe_allow_html=True,
             )
-            with st.container(key="hm_movil_scroll"):
-                st.markdown(f"<div class='hm-movil-labels'>{_rows_html}</div>",
-                           unsafe_allow_html=True)
-                _hm_evt = st.plotly_chart(
-                    fig, use_container_width=False,
-                    key="heatmap_ajuste",
-                    on_select="rerun", selection_mode="points",
-                    config={
-                        "displayModeBar": True, "displaylogo": False,
-                        "modeBarButtonsToRemove": [
-                            "zoom2d", "pan2d", "select2d", "lasso2d",
-                            "zoomIn2d", "zoomOut2d", "autoScale2d",
-                            "resetScale2d", "toImage",
-                        ],
-                    },
+
+        # Una fila por familia — nombre + un st.button real por celda con
+        # dato (fondo por CSS scoped a su key, ver más abajo) + total.
+        for _i, _fam in enumerate(_fams):
+            _cols_r = st.columns(_anchos_grid)
+            with _cols_r[0]:
+                st.markdown(
+                    f"<div style='font-size:11px;font-weight:500;"
+                    f"color:{TEXTO_PRINCIPAL};white-space:nowrap;"
+                    f"overflow:hidden;text-overflow:ellipsis;"
+                    f"padding-top:9px' title='{_fam}'>{_fam}</div>",
+                    unsafe_allow_html=True,
                 )
-            # Mismo título al pie que en escritorio. Móvil no usa _card, así
-            # que se emite la MISMA clase a mano para que se vean igual.
-            st.markdown(f'<p class="chart-card-pie">{_TITULO_HM}</p>',
-                        unsafe_allow_html=True)
-    else:
-        # El título va al PIE (default de _card): antes acá había un
-        # st.caption explicando el resalte y la fila TOTAL. Se saca por
-        # pedido -- el gráfico se explica solo y el texto largo competía
-        # con la grilla.
-        with _card("heatmap", _TITULO_HM):
-            _hm_evt = st.plotly_chart(
-                fig, use_container_width=True,
-                key="heatmap_ajuste",
-                on_select="rerun", selection_mode="points",
+            for _j, _area in enumerate(_areas):
+                _v = float(pivot.values[_i][_j])
+                _has = abs(_v) >= 0.5
+                with _cols_r[_j + 1]:
+                    if not _has:
+                        st.markdown("<div style='height:34px'></div>",
+                                   unsafe_allow_html=True)
+                        continue
+                    _key = f"hm_cell_{_i}_{_j}"
+                    _es_top = (_i, _j) in _top_set
+                    _bg_rgb = _color_celda(_v, atenuar=not _es_top)
+                    _luma = (0.299 * _bg_rgb[0] + 0.587 * _bg_rgb[1]
+                             + 0.114 * _bg_rgb[2])
+                    _fg = (BLANCO if (_es_top and _luma < 150)
+                          else (GRIS_TEXTO_MEDIO if _es_top else GRIS_TEXTO_SUAVE))
+                    _es_foco = (_focus == (_fam, _area))
+                    if _es_foco:
+                        _borde = f"2px solid {ACENTO}"
+                    elif _es_top:
+                        _color_anillo = (ACENTO if _modo_val
+                                        else (EXITO if _v > 0 else ERROR))
+                        _borde = f"2px solid {_color_anillo}"
+                    else:
+                        _borde = "1px solid transparent"
+                    _r, _g, _b = _bg_rgb
+                    _css_celdas.append(
+                        f'.st-key-{_key} button {{ background:'
+                        f'rgb({_r},{_g},{_b}) !important; color:{_fg} '
+                        f'!important; border:{_borde} !important; '
+                        f'font-size:11px !important; font-weight:600 '
+                        f'!important; padding:4px 2px !important; '
+                        f'font-variant-numeric:tabular-nums !important; }}'
+                    )
+                    _tip = f"{_fam} × {_area}: S/ {_v:,.0f}"
+                    _tip += _spark_map.get((_fam, _area), "")
+                    if st.button(f"S/ {_v:,.0f}", key=_key, help=_tip,
+                                use_container_width=True):
+                        st.session_state[_focus_key] = (
+                            None if _es_foco else (_fam, _area))
+                        st.rerun()
+            with _cols_r[-1]:
+                _vt = float(_row_tot.iloc[_i])
+                st.markdown(
+                    _celda_html(_hex_a_rgb(LAVANDA_CABECERA_GRUPO), _color_total_hm(_vt),
+                               f"S/ {_vt:,.0f}", "none"),
+                    unsafe_allow_html=True,
+                )
+
+        # Fila TOTAL — mismo tono lavanda que la columna, celdas no
+        # clickeables (clic en el resumen nunca abrió detalle de producto).
+        _cols_tot = st.columns(_anchos_grid)
+        with _cols_tot[0]:
+            st.markdown(
+                f"<div style='font-size:11px;font-weight:700;"
+                f"color:{ACENTO_TEXTO_OSCURO};padding-top:9px'>TOTAL</div>",
+                unsafe_allow_html=True,
+            )
+        for _j, _area in enumerate(_areas):
+            with _cols_tot[_j + 1]:
+                _vt = float(_col_tot.iloc[_j])
+                st.markdown(
+                    _celda_html(_hex_a_rgb(LAVANDA_CABECERA_GRUPO), _color_total_hm(_vt),
+                               f"S/ {_vt:,.0f}", "none"),
+                    unsafe_allow_html=True,
+                )
+        with _cols_tot[-1]:
+            st.markdown(
+                _celda_html(_hex_a_rgb(ACENTO), "#ffffff",
+                           f"S/ {_grand_tot:,.0f}", "none"),
+                unsafe_allow_html=True,
             )
 
-    _hm_punto = None
-    try:
-        _sel = getattr(_hm_evt, "selection", None) or (
-            _hm_evt.get("selection") if isinstance(_hm_evt, dict) else None)
-        _pts = (_sel or {}).get("points", [])
-        _hm_punto = _pts[0] if _pts else None
-    except Exception:
-        _hm_punto = None
+        # CSS de todas las celdas con dato en UN solo bloque (streamlit
+        # emite un <style> por st.markdown -- más liviano que uno por
+        # celda). border-radius no hace falta pedirlo: button[kind=
+        # "secondary"] ya lo trae en 8px por la regla global de
+        # estilos/_00_base.py — es justo lo que un st.button da gratis y
+        # go.Heatmap no podía dar (ver docstring del módulo). El color
+        # SÍ hace falta por celda: es continuo, no hay paleta fija de
+        # unas pocas clases como en la Cascada.
+        if _css_celdas:
+            st.markdown(f"<style>{''.join(_css_celdas)}</style>",
+                       unsafe_allow_html=True)
 
-    if _hm_punto is not None:
-        _fam_sel = _hm_punto.get("y")
-        _area_sel = _hm_punto.get("x")
-        if _fam_sel == "TOTAL" or _area_sel == "TOTAL":
-            # Clic en la fila/columna resumen: no es una combinación real
-            # de familia × área, no hay detalle de producto que mostrar.
-            _fam_sel = _area_sel = None
-        _val_sel = 0.0
-        try:
-            _val_sel = float(pivot.loc[_fam_sel, _area_sel])
-        except Exception:
-            _cd_evt = _hm_punto.get("customdata")
-            if isinstance(_cd_evt, (list, tuple)) and _cd_evt:
-                _val_sel = float(_cd_evt[0])
+        # Leyenda: gradiente CSS con los mismos 5 stops que ya usa
+        # _color_celda -- reemplaza la colorbar nativa que traía
+        # go.Heatmap (perdida al dejar de usar esa traza).
+        _leyenda_izq = "Faltante" if not _modo_val else "S/ 0"
+        _leyenda_der = "Sobrante" if not _modo_val else f"S/ {_vmax:,.0f}"
+        _stops_css = ",".join(
+            pc.sample_colorscale(_colorscale_hm, [k / 4])[0] for k in range(5)
+        )
+        st.markdown(
+            f"<div style='display:flex;align-items:center;gap:8px;"
+            f"margin-top:10px'>"
+            f"<span style='font-size:9.5px;color:{GRIS_TEXTO_SUAVE};"
+            f"white-space:nowrap'>{_leyenda_izq}</span>"
+            f"<div style='flex:1;max-width:220px;height:6px;"
+            f"border-radius:999px;background:linear-gradient(to right,"
+            f"{_stops_css})'></div>"
+            f"<span style='font-size:9.5px;color:{GRIS_TEXTO_SUAVE};"
+            f"white-space:nowrap'>{_leyenda_der}</span></div>",
+            unsafe_allow_html=True,
+        )
+
+    if _focus is not None:
+        _fam_sel, _area_sel = _focus
+        _val_sel = float(pivot.loc[_fam_sel, _area_sel])
 
         if _fam_sel and _area_sel:
             _det = df[

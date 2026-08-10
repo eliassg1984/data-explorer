@@ -2161,3 +2161,30 @@ salvo `icono`):
     huecos DENTRO de la sesión. Al agregar una vista que dependa de la
     FORMA temporal del dato (no solo de que haya fechas), revisar que el
     demo la reproduzca.
+
+66. **`go.Heatmap` no tiene bordes por celda porque no son celdas — es
+    una sola imagen (2026-08-09).** El pedido de "bordes redondeados
+    como el resto de la app" en el Mapa de calor de Ajuste no se puede
+    resolver con CSS: se verificó por DOM
+    (`document.querySelector('.heatmaplayer')`) que Plotly renderiza el
+    heatmap completo como UN `<image>` con un PNG en base64 — cero
+    `<rect>` por celda, nada que un selector CSS pueda alcanzar. La
+    vista "Mapa" (`_heatmap.py`) se reescribió sin `go.Heatmap`: una
+    grilla de `st.button` (una celda = un botón), color de fondo
+    calculado en Python con `plotly.colors.sample_colorscale` (misma
+    colorscale que antes) y aplicado vía `st.markdown` con CSS por key
+    (`hm_cell_<i>_<j>`), tooltip vía `help=` en vez del hovertemplate
+    (incluye el mismo sparkline de tendencia, ahora como texto plano).
+    El radio de borde sale gratis: `button[kind="secondary"]` ya tenía
+    `border-radius: 8px !important` global en `_00_base.py` — no hizo
+    falta CSS nuevo para eso. El click ya no pasa por `on_select` (regla
+    #11: ese era el motivo original del overlay `go.Scatter`, que esta
+    reescritura también elimina) sino por el patrón normal de botón de
+    Streamlit — `st.session_state["hm_ajuste_focus"]` + `st.rerun()`.
+    Todo el resto de la vista se preservó sin cambios de comportamiento
+    (top-3 + atenuado, fila/columna TOTAL, click-drill con tendencia
+    real y ranking Faltantes/Sobrantes con cantidad+unidad) porque esa
+    lógica vive después del pivot, no depende de cómo se dibuja la
+    celda. Si otra vista necesita bordes/radios por elemento sobre datos
+    tabulares, este es el patrón: HTML/botones en vez de una traza
+    Plotly que rasteriza.
