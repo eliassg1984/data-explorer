@@ -110,9 +110,14 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     # distintos a la vez y el usuario no tiene cómo saber cuál manda. Con
     # el corte global activo `df` ya viene filtrado por app.py: acá solo
     # hay que no volver a filtrarlo (y ahorrarse el copy() de df_full).
-    # El pill de la franja ya dice "Corte 30 jul - 2 ago", así que no hace
-    # falta un caption acá — esta fila de controles se compactó a propósito
-    # el 2026-08-09 y volver a meterle una línea la desarma.
+    # Este slider SOLO se dibuja cuando el corte global está apagado (ver
+    # arriba) — es decir, exactamente cuando el pill de la franja muestra
+    # un RANGO ("1 ago - 5 ago"), no un corte puntual. No hay ningún otro
+    # lugar en pantalla que diga cuál de los últimos 8 cortes quedó
+    # elegido: la burbuja nativa de st.select_slider flota ARRIBA de la
+    # barra y solo es visible mientras se arrastra. Por eso, debajo del
+    # slider, una etiqueta fija con el corte activo (reportado 2026-08-09
+    # comparando contra el mockup original).
     _corte_global = corte_vigente(clave_corte("Ajuste de Inventario",
                                               categoria="visual"))
     _dff = None
@@ -169,6 +174,12 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                 "Corte", options=_opciones_corte,
                 value=_opciones_corte[-1],
                 key="hm_ajuste_corte", label_visibility="collapsed",
+            )
+            st.markdown(
+                f"<div style='font-size:9.5px;color:{GRIS_TEXTO_SUAVE};"
+                f"text-align:center;margin-top:-8px'>Corte: "
+                f"<b style='color:{TEXTO_PRINCIPAL}'>{_etq_sel}</b></div>",
+                unsafe_allow_html=True,
             )
             _clave_sel = _cortes.loc[
                 _cortes["_corte_etq"] == _etq_sel, "_corte_clave"
@@ -485,7 +496,8 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                     f"<div style='font-size:11px;font-weight:500;"
                     f"color:{TEXTO_PRINCIPAL};white-space:nowrap;"
                     f"overflow:hidden;text-overflow:ellipsis;"
-                    f"padding-top:9px' title='{_fam}'>{_fam}</div>",
+                    f"text-align:right;padding-top:9px;padding-right:8px'"
+                    f" title='{_fam}'>{_fam}</div>",
                     unsafe_allow_html=True,
                 )
             for _j, _area in enumerate(_areas):
@@ -542,7 +554,8 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         with _cols_tot[0]:
             st.markdown(
                 f"<div style='font-size:11px;font-weight:700;"
-                f"color:{ACENTO_TEXTO_OSCURO};padding-top:9px'>TOTAL</div>",
+                f"color:{ACENTO_TEXTO_OSCURO};text-align:right;"
+                f"padding-top:9px;padding-right:8px'>TOTAL</div>",
                 unsafe_allow_html=True,
             )
         for _j, _area in enumerate(_areas):
