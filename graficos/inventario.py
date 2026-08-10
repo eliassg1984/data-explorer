@@ -24,10 +24,10 @@ import plotly.graph_objects as go
 import streamlit as st
 
 
-from tema import ACENTO, TEXTO_PRINCIPAL
+from tema import ACENTO, ACENTO_FUERTE, TEXTO_PRINCIPAL
 from graficos.base import (
     _compras_layout, _compras_truncar, _render_rail,
-    _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
+    _resolver, _slug, publicar_contexto_ia, renderizar_graficos_genericos,
 )
 
 # Rail vertical fijo al borde DERECHO (componente compartido _render_rail,
@@ -56,35 +56,85 @@ def _rango_con_holgura(*series, factor=0.28):
     return [lo - pad, hi + pad]
 
 
-def _grafico_ranking(d, col_grp, col_val, titulo, key):
+def _grafico_ranking(d, col_grp, col_val, titulo, key, clic=False, state_key=None):
     """Barra horizontal ordenada de mayor a menor — Por área/Por familia.
     Siempre valorizado (sin toggle Valor/Cantidad — se sacó a pedido: acá
     solo importa el valorizado). Cada barra lleva su % de participación
     sobre el total NETO (mismo total que el KPI "Valorizado total" de la
     card — no sobre la suma de absolutos, para que sumen 100% de verdad
-    con lo que el usuario ya está viendo arriba)."""
+    con lo que el usuario ya está viendo arriba).
+
+    `clic=True` agrega click-drill (mismo patrón que compras/familia.py):
+    clic en una barra la resalta y guarda la categoría en
+    `st.session_state[state_key]` — clic de nuevo la quita. Devuelve la
+    categoría en foco (o None) para que el caller filtre el panel derecho
+    y muestre el detalle del siguiente nivel debajo."""
     met = pd.to_numeric(d[col_val], errors="coerce").fillna(0)
     serie = met.groupby(d[col_grp].astype(str)).sum().sort_values()
     if serie.empty:
         st.info("Sin datos.")
-        return
+        return None
     total = float(serie.sum())
     _texto = [
         f"S/ {v:,.0f} · {(v / total * 100):.1f}%" if total else f"S/ {v:,.0f}"
         for v in serie.values
     ]
+    foco = st.session_state.get(state_key) if clic else None
+    if foco and foco not in serie.index:
+        foco = None
+        st.session_state[state_key] = None
+    color = ([ACENTO_FUERTE if i == foco else ACENTO for i in serie.index]
+              if clic else ACENTO)
     fig = go.Figure(go.Bar(
         x=serie.values,
         y=[_compras_truncar(i, 30) for i in serie.index],
         orientation="h",
-        marker=dict(color=ACENTO, opacity=0.85),
+        marker=dict(color=color, opacity=0.85),
         text=_texto,
         textposition="outside", cliponaxis=False,
     ))
     _compras_layout(fig, alto=min(900, max(360, 34 * len(serie) + 60)))
     fig.update_layout(title=titulo)
     fig.update_xaxes(visible=False, range=_rango_con_holgura(serie.values, factor=0.5))
-    st.plotly_chart(fig, use_container_width=True, key=key)
+    if not clic:
+        st.plotly_chart(fig, use_container_width=True, key=key)
+        return None
+
+    # La selección de on_select persiste entre reruns: con key estática,
+    # cada rerun re-procesa el mismo clic → toggle infinito (parpadeo).
+    # El foco (valor de ANTES de este clic) va en la key, así al cambiar
+    # de foco el widget es uno nuevo y no arrastra la selección vieja.
+    evt = st.plotly_chart(fig, use_container_width=True, key=f"{key}_{foco or 'none'}",
+                          on_select="rerun", selection_mode="points")
+    puntos = ((evt or {}).get("selection", {}) or {}).get("points", [])
+    p = puntos[0] if puntos else None
+    if p is not None:
+        idx = p.get("point_index")
+        if idx is None:
+            idx = p.get("point_number")
+        if idx is not None and 0 <= idx < len(serie):
+            cat = str(serie.index[idx])
+            st.session_state[state_key] = None if foco == cat else cat
+            st.rerun()
+    return st.session_state.get(state_key)
+
+
+def _grafico_detalle_foco(d, graf, col_grp, foco, col_fam, col_subfam, col_val):
+    """Debajo del ranking principal, cuando hay una barra en foco: siguiente
+    nivel de desglose del grupo elegido (Área → Familia, Familia →
+    Subfamilia) — la pregunta natural después de "cuánto vale GASTOS" es
+    "de qué se compone". Sin clic propio (no hay drill anidado, dos niveles
+    alcanza) — así no compite con el ranking de arriba por la selección."""
+    dd = d[d[col_grp].astype(str) == foco]
+    if graf == "Por área":
+        col_next, nombre_next = col_fam, "familia"
+    else:
+        col_next, nombre_next = col_subfam, "subfamilia"
+    if not col_next or dd.empty:
+        st.caption(f"Sin desglose adicional para {foco}.")
+        return
+    _grafico_ranking(dd, col_next, col_val, f"{foco} — por {nombre_next}",
+                     key=f"inv_g_detalle_{_slug(foco)}")
 
 
 def _ficha_producto(d, prod_sel, col_prod, col_area, col_val, col_cant,
@@ -351,6 +401,7 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
 
     col_izq, col_der = st.columns([1.7, 1])
 
+    col_grp, foco = None, None
     with col_izq:
         with st.container(border=True, key="ajuste_graf_card_izq_inv"):
             st.metric("Valorizado total", f"S/ {_val.sum():,.0f}")
@@ -361,10 +412,18 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                 if not col_grp:
                     st.info(f"No se encontró la columna de {nombre_grp}.")
                 else:
-                    _grafico_ranking(
+                    _state_key = f"inv_focus_{'area' if graf == 'Por área' else 'familia'}"
+                    foco = _grafico_ranking(
                         d, col_grp, col_val, f"Valorizado por {nombre_grp}",
                         key=f"inv_g_{'area' if graf == 'Por área' else 'familia'}",
+                        clic=True, state_key=_state_key,
                     )
+                    if foco:
+                        st.caption(f"📍 **{foco}** — clic en la barra de nuevo "
+                                   "para quitar el foco. El panel de la derecha "
+                                   "también quedó filtrado a esta selección.")
+                        _grafico_detalle_foco(d, graf, col_grp, foco,
+                                              col_fam, col_subfam, col_val)
 
             elif graf == "Buscar producto":
                 _render_buscar_producto(d, col_prod, col_area, col_subfam,
@@ -378,12 +437,16 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
             if graf == "Buscar producto":
                 _panel_relacionados(d, col_prod, col_fam, col_subfam, col_val)
             else:
+                d_panel = d[d[col_grp].astype(str) == foco] if foco else d
+                _cant_panel = _cant.loc[d_panel.index] if _cant is not None else None
+                if foco:
+                    st.caption(f"Top de **{foco}**.")
                 tabs = st.tabs(["Mayor cantidad", "Precio más alto"])
                 with tabs[0]:
-                    if col_prod and _cant is not None and col_area:
-                        g = (pd.DataFrame({"prod": d[col_prod].astype(str),
-                                           "area": d[col_area].astype(str),
-                                           "cant": _cant})
+                    if col_prod and _cant_panel is not None and col_area:
+                        g = (pd.DataFrame({"prod": d_panel[col_prod].astype(str),
+                                           "area": d_panel[col_area].astype(str),
+                                           "cant": _cant_panel})
                              .groupby(["prod", "area"], as_index=False)["cant"].sum()
                              .nlargest(10, "cant").sort_values("cant"))
                         if g.empty:
@@ -414,12 +477,12 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                         st.info("Faltan columnas de cantidad o área.")
                 with tabs[1]:
                     if col_prod and col_punit and col_area:
-                        _pu = pd.to_numeric(d[col_punit], errors="coerce")
-                        g = (pd.DataFrame({"prod": d[col_prod].astype(str),
-                                           "area": d[col_area].astype(str),
+                        _pu = pd.to_numeric(d_panel[col_punit], errors="coerce")
+                        g = (pd.DataFrame({"prod": d_panel[col_prod].astype(str),
+                                           "area": d_panel[col_area].astype(str),
                                            "pu": _pu,
-                                           "cant": (_cant if _cant is not None
-                                                    else pd.Series(0, index=d.index))})
+                                           "cant": (_cant_panel if _cant_panel is not None
+                                                    else pd.Series(0, index=d_panel.index))})
                              .dropna(subset=["pu"])
                              .groupby(["prod", "area"], as_index=False)
                              .agg(pu=("pu", "mean"), cant=("cant", "sum"))
