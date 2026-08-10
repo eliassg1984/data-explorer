@@ -435,11 +435,17 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         # el total/gran total y el grid se ve escalonado (reportado
         # 2026-08-09). display:flex + align-items centra el texto como lo
         # hacía el padding vertical de sobra en la versión anterior.
+        # font-size 10.5px -- igual que el botón de celda de dato, la
+        # cabecera de área y el "TOTAL" de la esquina (mismo esquema que
+        # el mockup: .hm-head/.hm-val/.hm-tot van los tres a 10.5px, solo
+        # .hm-row -- los NOMBRES, no los valores -- va más grande a 11px;
+        # reportado 2026-08-10, "todas las celdas deben tener el mismo
+        # tamaño de letra").
         _r, _g, _b = _bg_rgb
         return (
             f"<div style='background:rgb({_r},{_g},{_b});border:{_borde};"
             f"border-radius:8px;padding:4px 2px;text-align:center;"
-            f"font-size:11px;font-weight:600;color:{_fg};"
+            f"font-size:10.5px;font-weight:600;color:{_fg};"
             f"font-variant-numeric:tabular-nums;white-space:nowrap;"
             f"overflow:hidden;text-overflow:ellipsis;min-height:40px;"
             f"box-sizing:border-box;display:flex;align-items:center;"
@@ -502,14 +508,14 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
             for _j, _area in enumerate(_areas):
                 with _cols_h[_j + 1]:
                     st.markdown(
-                        f"<div style='font-size:9.5px;font-weight:500;"
+                        f"<div style='font-size:10.5px;font-weight:500;"
                         f"color:{GRIS_TEXTO};text-align:center;"
                         f"line-height:1.2;padding-bottom:4px'>{_area}</div>",
                         unsafe_allow_html=True,
                     )
             with _cols_h[-1]:
                 st.markdown(
-                    f"<div style='font-size:9.5px;font-weight:700;"
+                    f"<div style='font-size:10.5px;font-weight:700;"
                     f"color:{ACENTO_TEXTO_OSCURO};text-align:center;"
                     f"padding-bottom:4px'>TOTAL</div>",
                     unsafe_allow_html=True,
@@ -555,7 +561,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                             f'.st-key-{_key} button {{ background:'
                             f'rgb({_r},{_g},{_b}) !important; color:{_fg} '
                             f'!important; border:{_borde} !important; '
-                            f'font-size:11px !important; font-weight:600 '
+                            f'font-size:10.5px !important; font-weight:600 '
                             f'!important; padding:4px 2px !important; '
                             f'font-variant-numeric:tabular-nums !important; }}'
                         )
