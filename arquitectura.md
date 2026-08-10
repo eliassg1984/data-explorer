@@ -2188,3 +2188,39 @@ salvo `icono`):
     celda. Si otra vista necesita bordes/radios por elemento sobre datos
     tabulares, este es el patrón: HTML/botones en vez de una traza
     Plotly que rasteriza.
+
+67. **"Preservar el comportamiento anterior" no es lo mismo que "revisar
+    el mockup" — la regla #66 preservó algo que el mockup nunca tuvo
+    (2026-08-09).** El go.Heatmap de antes de la reescritura resaltaba
+    el top-3-por-signo a color pleno y atenuaba el resto (mezcla 50%
+    hacia lavanda) con un segundo trace semitransparente encima. Al
+    reescribir el Mapa sin `go.Heatmap` (regla #66) preservé ese
+    top-3/atenuado "sin cambios de comportamiento" — pero sin volver a
+    mirar el mockup (`ajuste_ideas_mapa_calor.html`) que motivó todo el
+    cambio de layout de esta vista. Ese mockup nunca tuvo la idea: su
+    `diverge(v, vmax, stops)` pinta CADA celda a color pleno, proporcional
+    a su propio valor, sin concepto de "top N" ni de atenuar el resto.
+    El usuario, comparando con el mockup, lo describió como "un marco"
+    (el anillo de borde de los top-3) en vez de intensidad de color — y
+    tenía razón: con la mayoría de las celdas atenuadas al mismo lavanda
+    parejo, el color dejaba de decir nada sobre la magnitud individual;
+    solo el anillo distinguía "importante" de "no importante".
+
+    Se sacó el top-3/atenuado entero: `_color_celda` perdió el parámetro
+    `atenuar` (siempre color pleno), y el contraste de texto (blanco vs.
+    oscuro) pasó a decidirse por luminancia real del color de fondo de
+    CADA celda, no por pertenecer al top-3 — antes una celda fuera del
+    top-3 jamás tenía texto blanco aunque su fondo fuera oscuro (no podía
+    pasar, estaban todas atenuadas hacia el lavanda claro); ahora
+    cualquier celda con fondo suficientemente oscuro lo tiene. De paso,
+    la columna TOTAL bajó de una fracción de ancho propia (1.1) a la
+    misma que una columna de dato (1.0) — en el mockup ocupa el mismo
+    `cellW`, más angosta por el margen interno del rect, no por una
+    fracción de columna mayor; con 1.1 se notaba visiblemente más larga.
+
+    Regla general para "esto no se parece al mockup": releer el mockup
+    de nuevo en ese punto puntual en vez de asumir que el comportamiento
+    heredado del código anterior seguía siendo la intención — heredar
+    sin revisar es cómo esta vista terminó con una regla que la regla
+    #66 documentó como "preservada" y que en realidad nunca debió
+    sobrevivir a esa reescritura.

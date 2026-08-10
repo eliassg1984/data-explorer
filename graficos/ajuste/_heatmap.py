@@ -55,23 +55,22 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     Valorizado Total (siempre positivo, secuencial), elegido con un
     `st.pills` al tope del gráfico.
 
-    Tres capas sobre el heatmap base — se combinan en el mismo trace / el
-    mismo click-drill, no son gráficos aparte:
-      · Totales al borde: fila/columna "TOTAL" agregadas al pivot como
-        categorías extra con z=None (no participan del colorscale/_vmax:
-        si entraran, un total podría superar a la celda individual más
-        extrema y le robaría saturación al resto del mapa).
-      · Top 3 resaltado: los 3 valores más fuertes de cada signo quedan a
-        color (en modo Valorizado, sin negativos, son directamente los 3
-        más altos); el resto de las celdas con dato se atenúa con un
-        segundo trace Heatmap semitransparente encima (mismas categorías/
-        xgap/ygap que el trace base -> calza celda a celda sin cuentas de
-        píxeles).
-      · Tendencia: el trace invisible de hover ya existía para el tooltip;
-        ahora suma un sparkline de caracteres Unicode con los últimos
-        cortes de `df_full` (hovertemplate sigue siendo texto plano, no
-        hace falta JS). El click-drill, más rico, agrega un mini gráfico
-        de líneas real en vez de pelear con el tooltip nativo.
+    Capas sobre la grilla de botones (regla #66 de arquitectura.md) — se
+    combinan en el mismo grid / el mismo click-drill, no son piezas aparte:
+      · Color por celda: cada celda a su color pleno, proporcional a SU
+        propio valor (`_color_celda`) — sin resaltado por ranking (regla
+        #67: el mockup original tampoco lo tiene, es proporcional puro,
+        sin concepto de "top N" ni de atenuar el resto).
+      · Totales al borde: fila/columna "TOTAL" — `pivot.sum(axis=...)`
+        aparte del pivot (no participan del colorscale/_vmax: si
+        entraran, un total podría superar a la celda individual más
+        extrema y le robaría saturación al resto del mapa), pintadas con
+        `_celda_html` en el mismo tono lavanda que usa el resto del
+        dashboard para "agregado".
+      · Tendencia: sparkline de caracteres Unicode con los últimos cortes
+        de `df_full`, en el `help=` de cada botón (texto plano, sin JS).
+        El click-drill, más rico, agrega un mini gráfico de líneas real
+        en vez de pelear con el tooltip nativo.
 
     Selector de Vista (Mapa / Flujo / Tabla, regla #58 de arquitectura.md):
     con `df_full` + `col_fecha` disponibles, un `st.select_slider` elige
@@ -82,8 +81,8 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     Cortes): ahí el corte lo eligió el usuario arriba y `df` llega
     filtrado — un eje, un dueño. Flujo (Sankey) y
     Tabla (grilla HTML con barra-en-celda) son vistas alternativas del
-    MISMO pivot, sin click-drill propio — todo lo de arriba (top-3,
-    totales, hover, click-drill) sigue siendo exclusivo de Mapa.
+    MISMO pivot, sin click-drill propio — todo lo de arriba (color por
+    celda, totales, hover, click-drill) sigue siendo exclusivo de Mapa.
     """
     if not col_familia or not col_area:
         st.info("Se necesitan columnas de familia y área para el mapa de calor.")
@@ -332,15 +331,6 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
             st.markdown(_tabla_html, unsafe_allow_html=True)
         return
 
-    # ── Top 3 por signo (mismo criterio que _badge_for en la Cascada: manda
-    #    el valor absoluto) — decide qué celdas quedan a color pleno y
-    #    cuáles se atenúan. ───────────────────────────────────────────────
-    _celdas = [(i, j, float(pivot.values[i][j]))
-               for i in range(_n) for j in range(_m)
-               if abs(pivot.values[i][j]) >= 0.5]
-    _top_pos = sorted((c for c in _celdas if c[2] > 0), key=lambda c: -c[2])[:3]
-    _top_neg = sorted((c for c in _celdas if c[2] < 0), key=lambda c: c[2])[:3]
-    _top_set = {(i, j) for i, j, _ in _top_pos + _top_neg}
 
     # ── Totales de fila/columna — mismo pivot, fuera de _vmax a propósito
     #    (ver docstring). ─────────────────────────────────────────────────
@@ -423,18 +413,13 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         _h = _hex.lstrip("#")
         return tuple(int(_h[i:i + 2], 16) for i in (0, 2, 4))
 
-    def _color_celda(v, atenuar):
+    def _color_celda(v):
+        # Sin top-3 ni atenuado (regla #67 de arquitectura.md): cada celda
+        # a color pleno, proporcional a SU propio valor -- igual que el
+        # mockup original (`diverge()` ahí, sin ningún concepto de "top N").
         _t = (v - _zmin_hm) / ((_zmax_hm - _zmin_hm) or 1.0)
         _t = max(0.0, min(1.0, _t))
-        _rgb = _rgb_de(pc.sample_colorscale(_colorscale_hm, [_t])[0])
-        if not atenuar:
-            return _rgb
-        # Atenuado = mezcla hacia LAVANDA_SELECCION -- mismo tono que usaba
-        # el trace semitransparente de "apagado" de la versión Plotly,
-        # ahora resuelto de una vez en el color final de fondo (sin
-        # necesidad de una segunda capa). alpha=0.5 -> a mitad de camino.
-        _dr, _dg, _db = _hex_a_rgb(LAVANDA_SELECCION)
-        return tuple(round(c * 0.5 + d * 0.5) for c, d in zip(_rgb, (_dr, _dg, _db)))
+        return _rgb_de(pc.sample_colorscale(_colorscale_hm, [_t])[0])
 
     def _color_total_hm(v):
         if _modo_val:
@@ -471,7 +456,11 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         _focus = None
         st.session_state[_focus_key] = None
 
-    _anchos_grid = [1.7] + [1.0] * _m + [1.1]
+    # TOTAL con el mismo ancho que cualquier columna de dato -- en el
+    # mockup ocupa el mismo cellW, más angosta por el margen interno de
+    # su rect, no por una fracción de columna más grande (reportado
+    # 2026-08-09: se veía visiblemente más larga que el resto).
+    _anchos_grid = [1.7] + [1.0] * _m + [1.0]
     _css_celdas = []
 
     with _card("heatmap", _TITULO_HM):
@@ -517,21 +506,19 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                     _v = 0.0  # evita el "S/ -0" de :.0f sobre p.ej. -0.3
                 with _cols_r[_j + 1]:
                     _key = f"hm_cell_{_i}_{_j}"
-                    _es_top = (_i, _j) in _top_set
-                    _bg_rgb = _color_celda(_v, atenuar=not _es_top)
+                    _bg_rgb = _color_celda(_v)
+                    # Contraste por luminancia, no por ranking -- con TODA
+                    # celda a color pleno (arriba), el texto oscuro ya no
+                    # alcanza sobre los tonos más saturados de las puntas
+                    # de la escala (mismo corte 0.55 que "light" en el
+                    # mockup, aplicado acá sobre luma real en vez de |v|
+                    # normalizado -- más preciso cerca de los extremos).
                     _luma = (0.299 * _bg_rgb[0] + 0.587 * _bg_rgb[1]
                              + 0.114 * _bg_rgb[2])
-                    _fg = (BLANCO if (_es_top and _luma < 150)
-                          else (GRIS_TEXTO_MEDIO if _es_top else GRIS_TEXTO_SUAVE))
+                    _fg = BLANCO if _luma < 150 else GRIS_TEXTO_MEDIO
                     _es_foco = (_focus == (_fam, _area))
-                    if _es_foco:
-                        _borde = f"2px solid {ACENTO}"
-                    elif _es_top:
-                        _color_anillo = (ACENTO if _modo_val
-                                        else (EXITO if _v > 0 else ERROR))
-                        _borde = f"2px solid {_color_anillo}"
-                    else:
-                        _borde = "1px solid transparent"
+                    _borde = (f"2px solid {ACENTO}" if _es_foco
+                             else "1px solid transparent")
                     _r, _g, _b = _bg_rgb
                     _css_celdas.append(
                         f'.st-key-{_key} button {{ background:'
