@@ -39,6 +39,22 @@ _INVENTARIO_RAIL_CATEGORIAS = (
 )
 
 
+def _rango_con_holgura(*series, factor=0.28):
+    """Rango de eje X con holgura para que el texto `outside` de la barra
+    más larga no se corte contra el borde del gráfico — con `cliponaxis=
+    False` Plotly no recorta en el eje, pero SÍ recorta contra el margen
+    fijo de `_compras_layout` (r=10px) si la barra ya ocupa casi el 100%
+    del ancho. Bug real: "Por área" con `GASTOS` en S/ 161,816 (barra al
+    tope) mostraba la etiqueta cortada en "S/ 16…". `factor` más alto para
+    etiquetas largas (p.ej. "S/ x · y unidad" en la ficha de un producto)."""
+    valores = [v for s in series for v in s]
+    if not valores:
+        return None
+    lo, hi = min(0, min(valores)), max(0, max(valores))
+    pad = max(abs(hi), abs(lo), 1) * factor
+    return [lo - pad, hi + pad]
+
+
 def _grafico_ranking(d, col_grp, col_val, col_cant, es_valor, titulo, key):
     """Barra horizontal ordenada de mayor a menor — Por área/Por familia.
     `es_valor` decide si se suma col_val o col_cant."""
@@ -58,7 +74,7 @@ def _grafico_ranking(d, col_grp, col_val, col_cant, es_valor, titulo, key):
     ))
     _compras_layout(fig, alto=min(900, max(360, 34 * len(serie) + 60)))
     fig.update_layout(title=titulo)
-    fig.update_xaxes(visible=False)
+    fig.update_xaxes(visible=False, range=_rango_con_holgura(serie.values))
     st.plotly_chart(fig, use_container_width=True, key=key)
 
 
@@ -103,7 +119,7 @@ def _ficha_producto(d, prod_sel, col_prod, col_area, col_val, col_cant,
     ))
     _compras_layout(fig, alto=min(900, max(320, 40 * len(g) + 80)))
     fig.update_layout(title=f"{prod_sel} — cantidad y valorizado por área")
-    fig.update_xaxes(visible=False)
+    fig.update_xaxes(visible=False, range=_rango_con_holgura(g["val"], factor=0.35))
     st.plotly_chart(fig, use_container_width=True, key="inv_g_producto")
 
 
@@ -233,7 +249,7 @@ def _panel_relacionados(d, col_prod, col_fam, col_subfam, col_val):
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=11),
             )
-            fig.update_xaxes(visible=False)
+            fig.update_xaxes(visible=False, range=_rango_con_holgura(serie.values))
             st.plotly_chart(fig, use_container_width=True, key="inv_relacionados")
     elif subfam_sel:
         st.caption("Todos los productos del grupo ya están a la izquierda, "
