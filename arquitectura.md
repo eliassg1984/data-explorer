@@ -2356,3 +2356,28 @@ salvo `icono`):
     La capa de datos se testea sin API key ni navegador
     (`test_asistente_datos.py`, 39 casos) — ese es el motivo de haberla
     separado de `asistente.py`.
+
+70. **Un bloque condicional dentro de un `@st.fragment` deja elementos
+    HUÉRFANOS: Streamlit no limpia un slot cuyo render siguiente produce
+    MENOS elementos.** Caso real (2026-08-09, panel del asistente): el
+    bloque de bienvenida (saludo + 3 chips de sugerencia) se dibuja solo
+    `if not historial and not pendiente`. Al llegar la primera respuesta la
+    condición pasa a False, pero los chips seguían pintados colgando DEBAJO
+    de la respuesta. Tres formas probadas, con el resultado MEDIDO en el
+    preview (contando `div[class*="st-key-ai_sug_"] button` en el DOM):
+    - `if` suelto → sobrevivían **2 de 3** chips.
+    - `st.container(key="…")` envolviendo el `if` → **PEOR**: los 3 chips
+      *más* el saludo. Un container keyed tiene identidad estable y por eso
+      RETIENE a sus hijos; la intuición de "un slot con key se limpia solo"
+      es exactamente al revés.
+    - `st.empty()` creado SIEMPRE + `with hueco.container():` solo cuando la
+      condición se cumple → **0 huérfanos**. `st.empty()` reemplaza su
+      contenido en cada render, así que dejarlo sin llenar lo vacía de
+      verdad.
+    **Regla:** para un bloque que tiene que DESAPARECER (no solo cambiar),
+    `st.empty()`. Ni `if` suelto ni container keyed.
+    Un `st.rerun(scope="fragment")` después de mutar el estado ayuda pero
+    NO alcanza: el bug se reprodujo con el rerun puesto, por el camino del
+    `st.chat_input` (el del `on_click` de un botón sí quedaba limpio, lo que
+    hace fácil declarar victoria antes de tiempo — hay que probar los DOS
+    caminos de entrada).
