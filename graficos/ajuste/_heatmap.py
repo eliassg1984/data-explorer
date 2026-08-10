@@ -31,7 +31,7 @@ from tema import (
     LAVANDA_CABECERA_GRUPO, LAVANDA_SELECCION,
 )
 from graficos.base import (
-    _card, _slug,
+    _card,
 )
 # _periodo_serie vive en graficos/compras/_comun.py; se reusa desde acá vía
 # graficos.compras (que ya la re-exporta para test_graficos.py) en vez de
@@ -69,8 +69,10 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         dashboard para "agregado".
       · Tendencia: sparkline de caracteres Unicode con los últimos cortes
         de `df_full`, en el `help=` de cada botón (texto plano, sin JS).
-        El click-drill, más rico, agrega un mini gráfico de líneas real
-        en vez de pelear con el tooltip nativo.
+        Vivía también como mini gráfico de líneas real dentro del
+        click-drill; se sacó de ahí a pedido (2026-08-09, "eliminemos
+        ese gráfico que está debajo del mapa") — el drill pasa del
+        encabezado directo al ranking de Faltantes/Sobrantes.
 
     Selector de Vista (Mapa / Flujo / Tabla, regla #58 de arquitectura.md):
     con `df_full` + `col_fecha` disponibles, un `st.select_slider` elige
@@ -480,7 +482,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     # nomas -- la leyenda y el drill de abajo, que SI son bloques
     # distintos entre si, se quedan con el espaciado normal.
     _css_celdas = [
-        '.st-key-hm_grid_filas[class*="stVerticalBlock"] { gap: 3px !important; }'
+        '.st-key-hm_grid_filas[class*="stVerticalBlock"] { gap: 7px !important; }'
     ]
 
     with _card("heatmap", _TITULO_HM):
@@ -646,42 +648,6 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                 f"{len(_det)} registros",
                 unsafe_allow_html=True,
             )
-
-            # ── Tendencia real (línea Plotly, no el sparkline de texto del
-            #    hover) — reusa el _piv_t ya calculado arriba, sin volver a
-            #    consultar df_full. Se omite si hay menos de 2 cortes o si
-            #    la combinación no aparece en el historial (p. ej. recién
-            #    empezó a tener ajustes esta semana). ───────────────────
-            if _piv_t is not None:
-                try:
-                    _serie = _piv_t.loc[(_fam_sel, _area_sel)].sort_index()
-                except KeyError:
-                    _serie = None
-                if _serie is not None and len(_serie) >= 2:
-                    _serie = _serie.iloc[-24:]
-                    _fig_t = go.Figure(go.Scatter(
-                        x=_serie.index, y=_serie.values,
-                        mode="lines+markers",
-                        line=dict(color=ACENTO, width=2),
-                        marker=dict(size=5),
-                        fill="tozeroy", fillcolor="rgba(108,92,231,0.08)",
-                        hovertemplate="%{x|%d/%m}<br>S/ %{y:,.0f}<extra></extra>",
-                    ))
-                    _fig_t.add_hline(y=0, line_dash="dot",
-                                     line_color=GRIS_BORDE, line_width=1)
-                    _fig_t.update_layout(
-                        height=90, margin=dict(l=4, r=4, t=4, b=18),
-                        paper_bgcolor="rgba(0,0,0,0)",
-                        plot_bgcolor="rgba(0,0,0,0)",
-                        showlegend=False,
-                        xaxis=dict(showgrid=False,
-                                  tickfont=dict(size=8.5, color=GRIS_TEXTO_SUAVE)),
-                        yaxis=dict(visible=False),
-                    )
-                    st.plotly_chart(_fig_t, use_container_width=True,
-                                    config={"displayModeBar": False},
-                                    key=f"hm_trend_{_slug(str(_fam_sel))}_"
-                                        f"{_slug(str(_area_sel))}")
 
             if col_producto and col_producto in _det.columns:
                 # cantidad/unidad al lado del monto — mismo criterio que ya
