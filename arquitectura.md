@@ -27,6 +27,8 @@ actualiza este documento en el mismo commit.
 | `estilos/` | **Paquete del CSS global** (refactor 2026-08-01; antes un `estilos.py` de 1.700 líneas). `__init__.py` mantiene la API pública (`TAM_FUENTE`, `get_css`, `inject_css`) y concatena las secciones. Una sección por módulo, con prefijo numérico que marca el orden: `_00_base`, `_20_compras_rail`, `_30_filtros`, `_40_ajuste_franja`, `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`, `_90_franja_inferior`, `_99_movil`. (`_10_vista` existió hasta el 2026-08-08: estilaba el selector Gráficos/Tabla y quedó 100% huérfano al borrarse ese widget — ver regla #49.) **El orden de `_SECCIONES` es parte del comportamiento**: hay `!important` en ambos lados de varios conflictos, así que gana la regla que va DESPUÉS — por eso `_99_movil` cierra. |
 | `navegacion.py` | Rail lateral, topbar y CSS por sección (`_CSS_AJUSTE`). Botón de refresco aislado en su propio `@st.fragment`. |
 | `inyecciones/` | **Paquete de JS/HTML inyectado** (refactor 2026-08-01; antes un `inyecciones.py` de 1.813 líneas). `_fragmentos.py` (CSS/JS compartido), `grid.py` (salud, altura, maximizar, panel de columnas), `paginacion.py`, `inspector.py` (herramienta de desarrollo), `diseno.py` (modo de diseño visual, `?debug=1&diseno=1` — lee el pin de `inspector.py`, ver regla #46), `varios.py` (overlay de errores, fullscreen, footer, calendario). Los dos blobs de JS grandes viven aparte desde el 2026-08-08: `_inspector_js.py` (1.381 líneas) y `_diseno_js.py` (794). Sus funciones quedaron en 34 y 5 líneas. **Si tocas esos módulos, lee antes la regla #56** — extraerlos rompió el inspector de una forma que ni `ruff` ni los tests pueden ver. Ninguna función depende de otra (la excepción de solo-lectura de `diseno.py` está documentada en la regla #46): las únicas dependencias internas apuntan a las constantes de `_fragmentos.py`. |
+| `asistente.py` | **Asistente IA del reporte activo** (Groq, `gpt-oss-120b`): system prompt, bucle de tool calling y la UI del popover (ícono en la franja + panel de chat). Su CSS vive en `estilos/_85_asistente.py`, NO acá — ver regla #59. Accesorio por diseño: `app.py` lo envuelve en try/except para que un fallo suyo no tumbe el reporte. |
+| `asistente_datos.py` | **Capa de datos del asistente, sin LLM ni UI**: esquema para el prompt (`esquema_para_prompt`, incluye los VALORES de las categóricas), ejecución de SQL de solo lectura sobre el df en memoria con DuckDB (`ejecutar_sql`, con blocklist + guarda de columnas con espacios sin comillas) y las definiciones de herramientas. Es Python puro: se testea entero sin API key ni navegador (`test_asistente_datos.py`). Ver regla #69. |
 | `tema.py` | **Paleta de colores con nombre, definida UNA vez.** Todos los demás importan de aquí. |
 | `inspector.py` | Herramienta de verificación de datos crudos: busca, filtra por fecha, radiografía de columnas, detección de columnas duplicadas. |
 | `perf.py` | Diagnóstico de rendimiento por rerun (activado con `?debug=1`). Singleton `perf` con fases, fragments y BroadcastChannel hacia el navegador. |
@@ -2296,3 +2298,61 @@ salvo `icono`):
     medir el ancho real del glifo con un `Range` sobre su nodo de
     texto — dos textos idénticos ("S/ 403" aparecía como celda de dato
     y como total) que miden 44px y 36px no dejan lugar a interpretación.
+
+69. **El asistente IA consulta los datos con tool calling — y las trampas
+    son de SEMÁNTICA, no de sintaxis.** Reescrito 2026-08-09: antes recibía
+    un resumen de 7 líneas del df (totales + top 5 de UNA categórica, sin
+    los nombres de las columnas) y con eso no podía responder "qué producto
+    tuvo más merma". Hoy `asistente_datos.py` le da dos herramientas
+    (`consultar_datos(sql)` sobre DuckDB en memoria, `buscar_web(query)` vía
+    Tavily) y `asistente.py` corre el bucle de rondas.
+
+    Se midieron 4 modelos de Groq contra datos reales antes de construir:
+    `gpt-oss-120b`, `llama-3.3-70b-versatile`, `gpt-oss-20b` y
+    `qwen/qwen3.6-27b`. Los 4 soportan tool calling, los 4 citaron bien las
+    columnas con espacios y ninguno falló un SQL. **El modelo NO era el
+    cuello de botella** — se quedó `gpt-oss-120b`. Lo que sí fallaba, y que
+    el system prompt ahora ataja con reglas numeradas:
+    - **Agregación:** 3 de 4 respondieron "los 5 PRODUCTOS con más merma"
+      con `ORDER BY ... LIMIT 5` sobre filas CRUDAS — o sea los 5
+      movimientos, no los 5 productos. Con la regla explícita de
+      `GROUP BY` + `SUM`, `gpt-oss-120b` ahora escribe la consulta correcta.
+    - **Aritmética en prosa:** `llama-3.3-70b` listó 5 cifras que suman
+      −28.907 y afirmó que el total era −30.070. Regla: los totales los
+      calcula el SQL. Verificado que el modelo obedece — para una pregunta
+      mixta emitió `SELECT SUM("AJUSTE") * 79` en vez de multiplicar a mano.
+    - **Signo:** una corrida escribió `S/ 4,864.29` para una merma (que es
+      negativa) "porque ya había dicho que era merma". En un reporte
+      financiero eso invierte el sentido del número. Regla explícita de
+      conservar el signo del SQL.
+    - **Año del entrenamiento:** buscaba `precio lomo fino Lima 2024` en
+      pleno 2026 y presentaba precios viejos como actuales. El prompt ahora
+      inyecta la fecha de hoy (`_hoy_peru()`); el modelo NO la sabe.
+
+    **El peor fallo posible, y es SILENCIOSO:** una columna con espacios sin
+    comillas dobles no siempre da error. `SELECT AJUSTE VALORIZADO FROM
+    datos` lo lee DuckDB como `SELECT AJUSTE AS VALORIZADO` → devuelve la
+    columna de UNIDADES (−10) etiquetada con el nombre de la de SOLES
+    (−1000). Sin excepción, sin warning, cifra equivocada por dos órdenes de
+    magnitud. Dentro de `SUM(...)` sí revienta, así que el peligro es el
+    SELECT/GROUP BY/ORDER BY desnudo — justo donde el modelo lo escribiría.
+    `asistente_datos.columnas_sin_comillas()` lo detecta y RECHAZA la
+    consulta con instrucciones para que el modelo reintente citando.
+
+    Otras dos cosas que costaron una vuelta:
+    - **`_MAX_RONDAS` = 8, no 5.** Una pregunta mixta ("mi merma de lomo,
+      ¿cuánto es a precio de mercado hoy?") gasta 3 consultas ubicando el
+      producto y su unidad de medida, 1 búsqueda web y 1 cálculo: con 5 se
+      quedaba sin rondas justo antes de responder.
+    - **Los chips NO llegaban al asistente.** `app.py` pasa `df_f`, que está
+      filtrado por FECHA pero no por Área/Familia (esos se aplican sobre una
+      copia local dentro de cada dashboard — misma trampa que la #58). El
+      asistente respondía totales que contradecían la pantalla. Se resolvió
+      con `graficos.base.publicar_contexto_ia(reporte, df, filtros)`, que
+      cada dashboard llama tras aplicar sus chips; el asistente valida que
+      el reporte publicado sea el activo antes de usarlo, porque si no un
+      contexto viejo sobrevive en `session_state` y miente en silencio.
+
+    La capa de datos se testea sin API key ni navegador
+    (`test_asistente_datos.py`, 39 casos) — ese es el motivo de haberla
+    separado de `asistente.py`.

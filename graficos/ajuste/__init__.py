@@ -43,7 +43,7 @@ from tema import (
 )
 from graficos.base import (
     _card, _es_movil, _layout, _render_rail, _resolver, _slug, _wrap_cat,
-    renderizar_graficos_genericos,
+    publicar_contexto_ia, renderizar_graficos_genericos,
 )
 # _periodo_serie vive en graficos/compras/_comun.py; se reusa desde acá vía
 # graficos.compras (que ya la re-exporta para test_graficos.py) en vez de
@@ -191,6 +191,10 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
         d = d[d[col_area].astype(str).isin(area_sel)]
     if fam_sel and col_familia and col_familia in d.columns:
         d = d[d[col_familia].astype(str).isin(fam_sel)]
+
+    # El asistente IA tiene que ver ESTO (post-chips), no el df_f de app.py.
+    publicar_contexto_ia("Ajuste de Inventario", d,
+                         {"Área": area_sel, "Familia": fam_sel})
 
     if d is None or d.empty:
         st.info("No hay datos para los filtros seleccionados.")

@@ -15,7 +15,7 @@ import streamlit as st
 from tema import ACENTO
 from graficos.base import (
     PALETA_CALLAI, _compras_layout, _compras_truncar, _render_rail,
-    _resolver, renderizar_graficos_genericos,
+    _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
 )
 from graficos.compras import _periodo_serie
 
@@ -97,6 +97,11 @@ def renderizar_graficos_salidas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         d = d[d[col_sub].astype(str).isin(sub_sel)]
     if fam_sel and col_fam:
         d = d[d[col_fam].astype(str).isin(fam_sel)]
+
+    # El asistente IA tiene que ver ESTO (post-chips), no el df_f de app.py.
+    publicar_contexto_ia("Salidas", d,
+                         {"Sub Almacén": sub_sel, "Familia": fam_sel})
+
     if d is None or d.empty:
         st.info("No hay datos para los filtros seleccionados.")
         return

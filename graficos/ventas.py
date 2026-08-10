@@ -13,7 +13,7 @@ from data import cargar as _cargar_reporte
 from tema import ACENTO, ERROR, EXITO, GRIS_BORDE
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, _render_rail,
-    _resolver, renderizar_graficos_genericos,
+    _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
 )
 
 _MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
@@ -996,6 +996,13 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         d = d[d[col_canal].astype(str).isin(canal_sel)]
     if serv_sel and col_serv:
         d = d[d[col_serv].astype(str).isin(serv_sel)]
+
+    # El asistente IA tiene que ver ESTO (post-chips), no el df_f de app.py.
+    publicar_contexto_ia("Ventas", d, {
+        "Grupo": fam_sel, "Sub Grupo": sub_sel,
+        "Canal": canal_sel, "Servicio": serv_sel,
+    })
+
     if d is None or d.empty:
         st.info("No hay datos para los filtros seleccionados.")
         return

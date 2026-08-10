@@ -191,6 +191,46 @@ def _validar_sql(sql: str) -> str | None:
     return None
 
 
+def _sin_literales(sql: str) -> str:
+    """El SQL con los tramos entre comillas (dobles y simples) removidos.
+
+    Sirve para buscar identificadores SIN citar: lo que queda son solo los
+    tokens desnudos. Se quitan también los literales de texto ('...') para no
+    marcar un WHERE "PRODUCTO" = 'AJUSTE VALORIZADO' como si la columna
+    estuviera sin comillas.
+    """
+    sin_dobles = re.sub(r'"[^"]*"', " ", sql)
+    return re.sub(r"'[^']*'", " ", sin_dobles)
+
+
+def columnas_sin_comillas(sql: str, columnas) -> list[str]:
+    """Columnas CON ESPACIOS que el SQL usa sin comillas dobles.
+
+    Esto NO es cosmética, es el fallo más peligroso de todos: en la lista de
+    un SELECT, `SELECT AJUSTE VALORIZADO FROM datos` no da error — DuckDB lo
+    lee como `SELECT AJUSTE AS VALORIZADO` y devuelve la columna de UNIDADES
+    (-10) etiquetada con el nombre de la de SOLES (-1000). Verificado en vivo.
+    El modelo narraría "S/ -10" con total naturalidad y ni el usuario ni yo
+    podríamos detectarlo: no hay excepción, no hay warning, solo una cifra
+    equivocada por dos órdenes de magnitud.
+
+    Dentro de una función agregada (`SUM(AJUSTE VALORIZADO)`) sí revienta con
+    ParserException, así que el peligro es solo el SELECT/GROUP BY/ORDER BY
+    desnudo — que es exactamente donde el modelo lo escribiría.
+    """
+    desnudo = _sin_literales(sql)
+    culpables = []
+    # NO `columnas or []`: si es un pandas Index, el `or` lo evalúa como bool
+    # y lanza "The truth value of a Index is ambiguous".
+    for col in ([] if columnas is None else list(columnas)):
+        nombre = str(col)
+        if " " not in nombre:
+            continue   # sin espacios no hace falta citarla
+        if re.search(rf"\b{re.escape(nombre)}\b", desnudo, re.IGNORECASE):
+            culpables.append(nombre)
+    return culpables
+
+
 def _con_limite(sql: str, limite: int = MAX_FILAS_RESULTADO) -> str:
     """Añade LIMIT si la consulta no trae uno — el modelo lo olvida seguido."""
     limpio = sql.strip().rstrip(";").strip()
@@ -212,6 +252,20 @@ def ejecutar_sql(df: pd.DataFrame, sql: str) -> dict:
 
     if df is None or df.empty:
         return {"ok": False, "error": "No hay filas visibles con los filtros actuales."}
+
+    # Guarda contra el fallo SILENCIOSO de las columnas con espacios sin
+    # comillas (ver columnas_sin_comillas). Se rechaza con instrucciones para
+    # que el modelo corrija y reintente — es preferible una ronda extra a una
+    # cifra equivocada que nadie puede detectar.
+    culpables = columnas_sin_comillas(sql, df.columns)
+    if culpables:
+        lista = ", ".join(f'"{c}"' for c in culpables)
+        return {"ok": False, "error": (
+            f"Consulta rechazada: usa estas columnas SIN comillas dobles: "
+            f"{lista}. Sin comillas, DuckDB lee 'SELECT AJUSTE VALORIZADO' "
+            f"como 'SELECT AJUSTE AS VALORIZADO' y devuelve la columna "
+            f"equivocada sin dar error. Reescribe la consulta citando cada "
+            f"nombre de columna: {lista}.")}
 
     try:
         import duckdb

@@ -19,7 +19,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -37,6 +37,28 @@ importadores. Ver `arquitectura.md` regla #53.
 `test_graficos.py` construye todas las figuras + verifica los contratos del
 dispatcher (que cada dashboard acepte `tabla_cb`, la aridad de la llamada, y
 que no haya vuelto a aparecer una lista de reportes hardcodeada).
+
+`test_asistente_datos.py` cubre la capa de datos del asistente IA: validación
+del SQL que escribe el modelo (blocklist, una sola sentencia, `LIMIT`
+automático) y la guarda de **columnas con espacios sin comillas** — que no es
+cosmética: `SELECT AJUSTE VALORIZADO` no da error, DuckDB lo lee como
+`SELECT AJUSTE AS VALORIZADO` y devuelve la columna equivocada en silencio.
+Corre sin API key ni navegador. Ver `arquitectura.md` regla #69.
+
+## El asistente IA no adivina: consulta
+
+`asistente.py` (prompt + bucle de tool calling + UI del popover) y
+`asistente_datos.py` (esquema, SQL con DuckDB sobre el df en memoria,
+herramientas). Dos cosas que ya costaron bugs:
+
+- **El df que ve el modelo es el POST-CHIPS**, publicado por cada dashboard
+  con `graficos.base.publicar_contexto_ia()` tras aplicar sus filtros. El
+  `df_f` que pasa `app.py` está filtrado por fecha pero NO por Área/Familia:
+  usarlo hacía que el asistente respondiera totales que contradecían la
+  pantalla. Si agregas un dashboard con chips, llama a esa función.
+- **Su CSS vive en `estilos/_85_asistente.py`**, no inline en el módulo. Un
+  `st.markdown` de estilos con guard "inyectar una sola vez" DESAPARECE en el
+  rerun siguiente (regla #59).
 
 ## El CSS vive en `estilos/`, una sección por módulo
 

@@ -27,7 +27,7 @@ from tema import ACENTO, GRIS_BORDE
 from utils import _norm
 from graficos.base import (
     PALETA_CALLAI, _compras_layout, _compras_truncar, _render_rail,
-    _resolver, renderizar_graficos_genericos
+    _resolver, publicar_contexto_ia, renderizar_graficos_genericos
 )
 from graficos.constructor import _constructor_grafico
 from graficos.compras._comun import (  # noqa: F401  (re-export)
@@ -136,6 +136,11 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         d = d[d[col_fam].astype(str).isin(fam_sel)]
     if sub_sel and col_subfam:
         d = d[d[col_subfam].astype(str).isin(sub_sel)]
+
+    # El asistente IA tiene que ver ESTO (post-chips), no el df_f de app.py.
+    publicar_contexto_ia("Compras", d,
+                         {"Familia": fam_sel, "Subfamilia": sub_sel})
+
     if d is None or d.empty:
         st.info("No hay datos para los filtros seleccionados.")
         return

@@ -12,7 +12,7 @@ import streamlit as st
 from tema import ACENTO, TEXTO_PRINCIPAL
 from graficos.base import (
     PALETA_CALLAI, _compras_layout, _compras_truncar, _render_rail,
-    _resolver, renderizar_graficos_genericos,
+    _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
 )
 
 # Rail vertical fijo al borde DERECHO (componente compartido _render_rail,
@@ -85,6 +85,11 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
         d = d[d[col_area].astype(str).isin(area_sel)]
     if fam_sel and col_fam:
         d = d[d[col_fam].astype(str).isin(fam_sel)]
+
+    # El asistente IA tiene que ver ESTO (post-chips), no el df_f de app.py.
+    publicar_contexto_ia("Inventario Valorizado", d,
+                         {"Área": area_sel, "Familia": fam_sel})
+
     if d is None or d.empty:
         st.info("No hay datos para los filtros seleccionados.")
         return
