@@ -503,12 +503,32 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     # números de TOTAL contra números de celda). El problema de fondo es
     # de `_00_base.py`, pero corregirlo ahí es un cambio de alcance para
     # toda la app; acá se lo fuerza scoped a esta tarjeta nomás.
+    # Con muchas áreas (o ventana angosta) las columnas de dato no tenían
+    # piso: st.columns() las deja encoger hasta que el texto del botón
+    # ya no entra en una línea, envuelve a 2, y la fila entera se pone
+    # más alta que el gap ajustado de arriba -- la fila siguiente le
+    # queda pisada encima (reportado 2026-08-10 con captura, "TOTAL" de
+    # la cabecera solapado con la fila de ALIMENTOS). El mockup resuelve
+    # esto con scroll horizontal (`.scroll-x`) en vez de encoger sin
+    # límite; acá se replica: cada columna de dato tiene un piso de 70px
+    # (`flex-shrink:0`, no puede achicarse más), la fila no envuelve
+    # (`flex-wrap:nowrap`), y `hm_grid_filas` sí puede desbordar en X
+    # con scroll -- las filas se salen del ancho de la tarjeta en vez de
+    # aplastarse, y aparece una barra de scroll para verlas todas.
     _css_celdas = [
-        '.st-key-hm_grid_filas[class*="stVerticalBlock"] { gap: 7px !important; }',
+        '.st-key-hm_grid_filas[class*="stVerticalBlock"] { gap: 7px '
+        '!important; overflow-x: auto !important; }',
+        '.st-key-hm_grid_filas [data-testid="stHorizontalBlock"] { '
+        'flex-wrap: nowrap !important; }',
         '.st-key-hm_grid_filas [data-testid="stHorizontalBlock"] '
         '> [data-testid="stColumn"]:first-child { flex: 0 0 130px '
         '!important; max-width: 130px !important; min-width: 130px '
         '!important; }',
+        '.st-key-hm_grid_filas [data-testid="stHorizontalBlock"] '
+        '> [data-testid="stColumn"]:not(:first-child) { flex: 1 0 70px '
+        '!important; min-width: 70px !important; }',
+        '.st-key-hm_grid_filas button { white-space: nowrap !important; '
+        'overflow: hidden !important; text-overflow: ellipsis !important; }',
         '.st-key-chartcard_heatmap * { font-family: "DM Sans", "Inter", '
         '-apple-system, BlinkMacSystemFont, sans-serif !important; }',
     ]
