@@ -487,8 +487,11 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                 unsafe_allow_html=True,
             )
 
-        # Una fila por familia — nombre + un st.button real por celda con
-        # dato (fondo por CSS scoped a su key, ver más abajo) + total.
+        # Una fila por familia — nombre + un st.button real por CADA celda
+        # (incluidas las de valor 0: antes quedaban en blanco, pero el
+        # go.Heatmap original también las coloreaba — el fondo por CSS
+        # scoped a su key, ver más abajo — no hay motivo para esconderlas)
+        # + total.
         for _i, _fam in enumerate(_fams):
             _cols_r = st.columns(_anchos_grid)
             with _cols_r[0]:
@@ -502,12 +505,9 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                 )
             for _j, _area in enumerate(_areas):
                 _v = float(pivot.values[_i][_j])
-                _has = abs(_v) >= 0.5
+                if abs(_v) < 0.5:
+                    _v = 0.0  # evita el "S/ -0" de :.0f sobre p.ej. -0.3
                 with _cols_r[_j + 1]:
-                    if not _has:
-                        st.markdown("<div style='height:34px'></div>",
-                                   unsafe_allow_html=True)
-                        continue
                     _key = f"hm_cell_{_i}_{_j}"
                     _es_top = (_i, _j) in _top_set
                     _bg_rgb = _color_celda(_v, atenuar=not _es_top)
