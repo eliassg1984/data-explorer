@@ -95,6 +95,20 @@ Detalle en `arquitectura.md` § Reglas #1.
   `value=`, sin key dinámica). El clamp de bounds va justo antes del widget.
 - **Detección móvil server-side:** para texto que Plotly dibuja en servidor,
   User-Agent vía `st.context.headers`. El layout va por CSS `@media`.
+- **Un widget que deja de renderizarse pierde su estado.** Por eso el
+  `date_input` de la franja se dibuja en los dos modos (Rango y Cortes):
+  esconderlo borraría la clave del rango del reporte.
+
+## El eje temporal tiene DOS modos, y un solo dueño
+
+El calendario de la franja filtra por **rango** (intervalo) o por **corte**
+(el conjunto exacto de días de una sesión de inventario, que no tiene por
+qué ser contiguo). `cortes.py` calcula los cortes; `estado_rango.py` es el
+dueño de los tres estados (rango, corte, modo) y nadie los escribe fuera.
+
+`aplicar_corte` escribe el corte **y** el rango — el rango lo leen el
+`date_input`, el label del pill y el loader de R2, que no saben qué es un
+corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
 
 ## Plotly — específicos de este proyecto
 

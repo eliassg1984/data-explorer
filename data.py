@@ -52,6 +52,12 @@ REPORTES = {
             "Stock Declarado", "Ajuste", "Ajuste Valorizado",
         ],
         "derivar_periodo_pivote": True,
+        # El calendario de la franja ofrece la pestaña "Cortes" (filtrar por
+        # la sesión de conteo exacta en vez de por intervalo, ver cortes.py).
+        # Solo acá: en Ventas o Compras un "corte" no significa nada — las
+        # fechas son continuas y las rachas serían ruido. Sin este flag el
+        # panel de fecha queda idéntico a como estaba.
+        "cortes": True,
         "graficos": [
             {"tipo": "line",
              "x": ["FECHA APERTURA INVENTARIO", "MES"],
@@ -321,15 +327,40 @@ def _datos_demo(archivo, filas=60):
         # de corte" filtra por `_dt.date.today().year` y NO depende del
         # rango de la franja (ver graficos/ajuste/_pivote.py). Con fechas de
         # 2024 esa vista salia siempre "Sin datos de <año>" y era la unica
-        # del rail que no se podia verificar en local. Se reparten sobre los
-        # ultimos 300 dias DEL AÑO ACTUAL, con hora al minuto.
+        # del rail que no se podia verificar en local.
+        #
+        # AGRUPADAS EN SESIONES, no repartidas al azar (2026-08-09). Hasta
+        # esa fecha las 240 filas caian uniformes sobre 300 dias: eso da
+        # ~150 dias con movimiento separados por 1 dia, y como un corte
+        # admite saltos de hasta 4 dias (cortes.py), TODO el año colapsaba
+        # en UN corte. Resultado: ni el slider del mapa de calor ni el modo
+        # Cortes de la franja se podian probar en local — el bug que este
+        # bloque ya habia arreglado una vez, con otra cara.
+        # Ahora el demo imita la forma real del dato: sesiones de conteo de
+        # 1 a 4 dias, separadas por semanas, MAS dias sueltos de ajuste
+        # diario entre medio (que es lo que hace que un corte NO sea
+        # contiguo y justifica el filtro por conjunto).
         _hoy_aj = pd.Timestamp.now().normalize()
         _ini_aj = max(_hoy_aj - pd.Timedelta(days=300),
                       pd.Timestamp(_hoy_aj.year, 1, 1))
-        _tramo = max(1, int((_hoy_aj - _ini_aj).days))
-        fechas = _ini_aj + pd.to_timedelta(
-            rng.integers(0, _tramo, n) * 1440 + rng.integers(0, 1440, n),
-            unit="m")
+        _dias_aj = []
+        _cursor = _ini_aj
+        while _cursor < _hoy_aj - pd.Timedelta(days=6):
+            _largo = int(rng.integers(1, 5))          # sesion de 1 a 4 dias
+            for _k in range(_largo):
+                # Salto interno de 1 o 2 dias: el de 2 deja un hueco DENTRO
+                # de la sesion (el "fin de semana de por medio" real).
+                _cursor = _cursor + pd.Timedelta(days=int(rng.integers(1, 3)))
+                if _cursor >= _hoy_aj:
+                    break
+                _dias_aj.append(_cursor)
+            # Hasta la proxima sesion: 12 a 28 dias (> 4 => corte nuevo).
+            _cursor = _cursor + pd.Timedelta(days=int(rng.integers(12, 29)))
+        if not _dias_aj:                               # guarda: año recien
+            _dias_aj = [_ini_aj]                       # empezado
+        _dias_aj = np.array(_dias_aj, dtype="datetime64[ns]")
+        fechas = pd.to_datetime(rng.choice(_dias_aj, n)) + pd.to_timedelta(
+            rng.integers(0, 1440, n), unit="m")
         cierre = rng.uniform(0, 400, n).round(2)
         # ~55% sin diferencia (el caso real dominante), el resto falta o sobra.
         delta = np.where(rng.random(n) < 0.55, 0.0,

@@ -19,7 +19,8 @@ actualiza este documento en el mismo commit.
 | Fichero | Trabajo (uno solo) |
 |---|---|
 | `app.py` | Orquestador: navegación, filtros, fragmentos, llama a los renderizadores. |
-| `estado_rango.py` | **Dueño único** del rango de fechas de la franja superior (`clave_rango`, `asegurar_rango`, `atajos_rango`, `aplicar_atajo`). Nadie escribe la clave del rango fuera de este módulo — ver regla #24. |
+| `estado_rango.py` | **Dueño único** del eje temporal de la franja superior: rango (`clave_rango`, `asegurar_rango`, `atajos_rango`, `aplicar_atajo`) **y corte** (`clave_corte`, `clave_modo`, `modo_fecha`, `corte_vigente`, `aplicar_corte`, `volver_a_rango`). Nadie escribe esas claves fuera de este módulo — ver reglas #24 y #62. |
+| `cortes.py` | Agrupa fechas en **cortes**: las rachas de días de una misma sesión de inventario (salto ≤ `CORTE_MAX_SALTO_DIAS`). Un corte es un CONJUNTO de días, no un intervalo — ver regla #62. Sin dependencias de streamlit ni de `graficos/`, porque lo consumen los dos lados: la franja de `app.py` y `graficos/ajuste/_comun.py` (que lo reexporta con los nombres privados de siempre). |
 | `data.py` | Carga de datos: DuckDB + httpfs leyendo parquets de R2 (secrets). Sistema de refresco bajo demanda vía R2. |
 | `tablas/` | **Paquete de tablas AgGrid** (refactor 2026-08-01; antes un `tablas.py` de 2.028 líneas). `__init__.py` re-exporta la API pública. `_css.py` (CSS de grid y paneles), `_config.py` (estilos de celda/fila, sidebar, totales), `desktop.py` (`renderizar_aggrid_desktop`), `movil.py` (`renderizar_aggrid_movil`), `compras.py` (`renderizar_aggrid_compras`), `ajuste_pivote.py` (`renderizar_aggrid_pivote_ajuste`, tabla "Por fecha" de Ajuste de Inventario — ver regla #25). `renderizar_tabla_compras` se borró el 2026-08-08 (llevaba desde 2026-08-01 sin llamadores). |
 | `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `tiene_dashboard(reporte)` (para que `app.py` no enumere reportes ni importe `_DASHBOARDS`; ver regla #50). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), **`ajuste/` es un paquete** (refactor 2026-08-08; antes un `ajuste.py` de 2.607 líneas — el fichero con MÁS churn del repo, 80 de los últimos 200 commits): una vista por módulo — `_comun.py` (layout del rail, fechas de corte, periodos), `_evolucion.py`, `_pivote.py`, `_cascada.py`, `_panel_analisis.py`, `_heatmap.py`, `_distribucion.py` — y `__init__.py` con la config del rail, `categoria_rango_ajuste` y el entry point. Ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10, `ventas.py`, `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras). `legacy.py` (Inventario v1) se borró el 2026-08-08: 421 líneas sin un solo import. **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py` — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. El drill de Proveedor se siguió partiendo el 2026-08-08 (era una función de 1.577 líneas): `_css_proveedor.py` (sus 527 líneas de CSS, que NO van a `estilos/` a propósito — ver su docstring), `_etiquetas_proveedor.py` (texto de las barras: `fmt_k`, `abrev_nombre`, `etiqueta_serie`, `sufijo_granularidad`; puras y con asserts de valor en `test_graficos.py`) y `_documentos_proveedor.py` (`tabla_documentos`, la AgGrid pivote del pie). Quedó en 791 líneas; el resto NO se siguió cortando a propósito — ver regla #55. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
@@ -2088,3 +2089,75 @@ salvo `icono`):
     se resolvió solo en la siguiente — no perseguido más a fondo, parece
     un desfasaje de un run en el primer rerun de la sesión. Si se topa
     de nuevo, empezar por ahí.
+
+62. **El corte es un CONJUNTO de días, no un intervalo — por eso tiene su
+    propio modo en el calendario y no es un atajo más (2026-08-09).**
+    Una sesión de inventario se abre y se cierra en días sueltos: "1-5 ago"
+    puede ser {1, 5}, y el 2, 3 y 4 traer ajustes diarios que NO son de ese
+    conteo. Verificado con data real: de 12 cortes, la mayoría tiene huecos.
+
+    ```
+    rango  →  df[fecha].between(ini, fin)   INTERVALO — arrastra los ajenos
+    corte  →  df[fecha].isin(dias)          CONJUNTO  — exacto
+    ```
+
+    Un `st.date_input` solo sabe expresar lo primero. De ahí el diseño:
+    · `cortes.py` (raíz, sin streamlit ni graficos) calcula las rachas.
+      Subió desde `graficos/ajuste/_comun.py`, que ahora lo reexporta con
+      los nombres privados de siempre — el cálculo lo necesitan los dos
+      lados (la franja de `app.py`, genérica a los 8 reportes, y el mapa
+      de calor) y duplicarlo es la forma más fácil de que discrepen sobre
+      dónde empieza un corte.
+    · `estado_rango.py` es el dueño de los TRES estados (rango, corte,
+      modo). `clave_modo` se DERIVA de `clave_corte`, que a su vez espeja
+      la partición por categoría de `clave_rango`: una sola partición para
+      los tres, así no hay forma de que el modo apunte al corte de otra
+      categoría.
+    · **`aplicar_corte` escribe el corte Y el rango.** El rango no es
+      redundante: lo leen el `date_input`, el label del pill y el loader
+      de R2, y ninguno sabe qué es un corte. El corte estrecha; no
+      reemplaza el estado.
+    · El `date_input` se dibuja en LOS DOS modos. Streamlit descarta el
+      estado de un widget que deja de renderizarse: esconderlo en modo
+      Cortes borraría la clave del rango del reporte.
+    · Tocar el calendario a mano vuelve a modo Rango (`on_change`), y
+      cambiar de modo NO borra el corte: lo desactiva. Volver lo restaura.
+    · Flag `"cortes": True` en `REPORTES`. Sin él el panel queda idéntico
+      — en Ventas o Compras las fechas son continuas y las rachas serían
+      ruido.
+
+63. **Dos controles del MISMO concepto no se pisan el estado, pero igual
+    es un bug (2026-08-09).** El mapa de calor tenía su `select_slider` de
+    corte y la franja ganó el suyo. Cada uno con su clave: nada se
+    sobrescribía. Pero mostraban cortes DISTINTOS a la vez y no había
+    forma de saber cuál mandaba. Regla: **un eje, un dueño.** Con el corte
+    global activo, `_graf_heatmap_ajuste` no dibuja su slider y saltea el
+    `df_full.copy()` entero. Sin caption que lo explique: el pill de la
+    franja ya dice "Corte 1-5 ago" y esa fila de controles se compactó a
+    propósito (ver regla #58) — devolverle una línea la desarma.
+
+64. **El stepper del corte NO va dentro de `fecha_ajuste_pill`
+    (2026-08-09).** Ese pill tiene ancho FIJO de 210px y los chips se
+    anclan a `left: 391px` = 175 (left del pill) + 210 + 6. Son tres
+    números acoplados; meter dos botones adentro los rompe. El stepper
+    vive en `st-key-fecha_corte_nav`, anclado a `right: 138px` — el hueco
+    que el propio pill dejó libre al mudarse a la izquierda en el bloque
+    de desktop. Solo se renderiza con un corte activo, así que aparecer y
+    desaparecer no mueve nada. Visible recién desde 1400px: entre 901 y
+    1400 los chips (que crecen según el reporte) le llegarían encima, y
+    abajo de eso la navegación vive en el panel, que siempre tiene la
+    lista completa. Verificado a 1600px: pill 175→385, chips 391→627,
+    stepper 1286→1462, asistente en 1555. Cero solapes.
+
+65. **Datos demo que no tienen la FORMA del dato real no verifican nada
+    (2026-08-09).** El demo de `ajusteinventario.parquet` repartía 240
+    filas uniformes sobre 300 días: eso da ~150 días con movimiento
+    separados por 1 día y, como un corte admite saltos de hasta 4
+    (`cortes.CORTE_MAX_SALTO_DIAS`), TODO el año colapsaba en UN corte.
+    Ni el slider del mapa de calor ni el modo Cortes se podían probar en
+    local — el mismo bloque ya había tenido el mismo problema con las
+    fechas de 2024 y la vista "Por fecha de corte". Ahora genera sesiones
+    de 1 a 4 días separadas por 12-28 días, con saltos internos que dejan
+    huecos DENTRO de la sesión. Al agregar una vista que dependa de la
+    FORMA temporal del dato (no solo de que haya fechas), revisar que el
+    demo la reproduzca.

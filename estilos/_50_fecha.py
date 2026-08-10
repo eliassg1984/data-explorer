@@ -269,7 +269,16 @@ CSS = """    /* ================================================================
     [data-testid="stPopoverBody"]:has(.st-key-fecha_panel) {
         min-width: 380px !important;
     }
-    /* Botones de atajo: compactos, alineados a la izquierda. */
+    /* Botones de atajo: compactos, alineados a la izquierda.
+       OJO — esta regla cuelga del CONTENEDOR, así que también captura los
+       botones de la lista de CORTES (misma primera columna, ver
+       app.py::modo Cortes). Es intencional: los dos son listas de un clic
+       y tienen que verse igual. El corte activo se distingue por el
+       type="primary" de Streamlit (relleno acento), que esta regla no
+       toca. Si algún día hay que diferenciarlos, acotar por key
+       (st-key-atajo_ / st-key-corte_), no agregar otra regla al
+       contenedor. Ver CLAUDE.md § "grep estilos/ antes de agregar un
+       widget". */
     .st-key-fecha_panel [data-testid="stColumn"]:first-child button {
         min-width: 0 !important;
         padding: 6px 10px !important;
@@ -278,5 +287,82 @@ CSS = """    /* ================================================================
         border-radius: 8px !important;
         justify-content: flex-start !important;
         text-align: left !important;
+    }
+    /* Segmentado Rango/Cortes: vive ARRIBA de las columnas, así que la
+       regla de acá no lo alcanza — se estiliza aparte y compacto para que
+       no coma la altura del panel. */
+    .st-key-fecha_panel [data-testid="stButtonGroup"] button {
+        padding: 3px 14px !important;
+        font-size: 12.5px !important;
+    }
+
+    /* =================================================================== */
+    /* STEPPER DEL CORTE ACTIVO — ‹ 3/8 · 4 días ›                          */
+    /* =================================================================== */
+    /* Ocupa el hueco de `right: 138px`, que quedó libre cuando el pill de
+       fecha se mudó a `left: 175px` en el bloque de desktop de arriba. NO
+       va dentro de .st-key-fecha_ajuste_pill: ese pill tiene ancho FIJO de
+       210px y los chips se anclan a `left: 391px` (= 175 + 210 + 6). Meter
+       botones ahí adentro rompe esos tres números acoplados.
+       Solo se renderiza con un corte activo (app.py), así que aparecer y
+       desaparecer no mueve nada más de la franja.
+       Oculto por defecto y visible recién a partir de 1400px: entre 901 y
+       1400 los chips (que arrancan en 391px y crecen con el reporte) le
+       llegarían encima. Abajo de ese ancho la navegación entre cortes vive
+       en el panel, que siempre tiene la lista completa. */
+    .st-key-fecha_corte_nav {
+        display: none !important;
+    }
+    @media (min-width: 1400px) {
+        .st-key-fecha_corte_nav {
+            display: block !important;
+            position: fixed !important;
+            top: 8px !important;
+            right: 138px !important;
+            left: auto !important;
+            width: 176px !important;
+            z-index: 23 !important;
+            margin: 0 !important;
+        }
+        .st-key-fecha_corte_nav [data-testid="stHorizontalBlock"] {
+            gap: 2px !important;
+        }
+        .st-key-fecha_corte_nav button {
+            min-width: 0 !important;
+            width: 100% !important;
+            min-height: 28px !important;   /* mismo alto que el pill y los chips */
+            padding: 0 !important;
+            border: 1.5px solid color-mix(in srgb, var(--accent) 80%, var(--accent-light)) !important;
+            border-radius: 4px !important;
+            background: #ffffff !important;
+            color: var(--accent-deep) !important;
+            font-size: 15px !important;
+            font-weight: 600 !important;
+            line-height: 1 !important;
+        }
+        .st-key-fecha_corte_nav button:hover:not(:disabled) {
+            background: var(--accent-tint) !important;
+            border-color: var(--accent) !important;
+        }
+        .st-key-fecha_corte_nav button:disabled {
+            border-color: var(--border) !important;
+            color: var(--text-muted) !important;
+        }
+        /* Etiqueta central: no es un widget, es markdown — se centra a
+           mano contra el alto de 28px de los botones vecinos. */
+        .corte-nav-etq {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 28px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent-deep);
+            white-space: nowrap;
+        }
+        .corte-nav-etq span {
+            font-weight: 400;
+            color: var(--text-secondary);
+        }
     }
 """

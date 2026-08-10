@@ -17,7 +17,10 @@ from estilos import TAM_FUENTE, inject_css
 from estado_rango import (
     clave_rango, asegurar_rango, debug_estado_rango,
     atajos_rango, aplicar_atajo,
+    clave_corte, clave_modo, modo_fecha, corte_vigente, aplicar_corte,
+    volver_a_rango,
 )
+from cortes import cortes_disponibles, corte_contiguo
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_diseno_visual, inject_footer_actualizacion, inject_calendario_es, inject_fullscreen_app
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil
 from graficos import renderizar_graficos_reporte, tiene_dashboard
@@ -447,6 +450,25 @@ if _franja_con_fecha:
         reporte=reporte, usa_carga_rango=_usa_carga_rango,
     )
 
+# ── Modo CORTES de la franja (solo reportes con "cortes" en REPORTES) ──
+# Las claves del corte y del modo salen del mismo dueño único que el rango
+# y con la MISMA partición por categoría (ver estado_rango.clave_corte).
+#
+# Los cortes se calculan sobre `df_f` ANTES de aplicarle el rango (el
+# filtro está más abajo): si se calcularan después, elegir un corte
+# reduciría la lista a ese único corte y no habría cómo volver a los otros
+# — el clásico filtro que se come su propio selector.
+_k_corte = clave_corte(reporte, categoria=_categoria_ajuste_rango)
+_cortes_franja = []
+if _franja_con_fecha and cfg.get("cortes"):
+    _cortes_franja = cortes_disponibles(df_f[col_fecha], maximo=12)
+    if len(_cortes_franja) < 2:
+        # Un solo corte = no hay nada que segmentar; la pestaña sobra.
+        _cortes_franja = []
+# corte_vigente() devuelve None si el modo es Rango, aunque haya un corte
+# guardado. Es lo que decide el filtro de más abajo Y el label del pill.
+_corte_apl = corte_vigente(_k_corte) if _cortes_franja else None
+
 # Evitar NameError antes de la franja superior
 _fecha_actualizacion = None
 
@@ -483,7 +505,13 @@ with _fila_top:
             # derecha. El date_input, los atajos y el label leen/escriben
             # la MISMA clave → no pueden desincronizarse.
             _rango_actual = st.session_state.get(_k_rango_franja)
-            if (isinstance(_rango_actual, (tuple, list))
+            if _corte_apl:
+                # En modo Cortes el label dice el CORTE, no las fechas: son
+                # dos filtros distintos ("30 jul – 2 ago" sugiere 4 días;
+                # el corte puede ser 3) y el usuario tiene que poder ver de
+                # un vistazo cuál de los dos está activo.
+                _label_fecha = f"Corte {_corte_apl['etiqueta']}"
+            elif (isinstance(_rango_actual, (tuple, list))
                     and len(_rango_actual) == 2 and all(_rango_actual)):
                 _label_fecha = _fmt_rango_es(_rango_actual[0], _rango_actual[1])
             else:
@@ -498,19 +526,56 @@ with _fila_top:
                     # Contenedor keyed → permite scopear el ancho del panel
                     # por CSS aunque el popover se renderice en un portal.
                     with st.container(key="fecha_panel"):
-                        _c_atajos, _c_cal = st.columns([1, 1.5])
-                        with _c_atajos:
-                            st.caption("Atajos")
-                            for _ca, _et, _rg in _atajos:
-                                st.button(
-                                    _et, use_container_width=True,
-                                    key=f"atajo_{reporte}_{_ca}".replace(" ", "_"),
-                                    on_click=aplicar_atajo,
-                                    args=(_k_rango_franja, _rg, reporte,
-                                          _usa_carga_rango),
-                                )
+                        # Selector de modo: solo si el reporte tiene cortes.
+                        # Sin él, `modo_fecha()` devuelve "Rango" y todo el
+                        # panel queda exactamente como estaba.
+                        _modo = "Rango"
+                        if _cortes_franja:
+                            _modo = st.segmented_control(
+                                "Modo de filtro de fecha", ["Rango", "Cortes"],
+                                default=modo_fecha(_k_corte),
+                                key=clave_modo(_k_corte),
+                                label_visibility="collapsed",
+                            ) or modo_fecha(_k_corte)
+                        _c_izq, _c_cal = st.columns([1, 1.5])
+                        with _c_izq:
+                            if _modo == "Cortes":
+                                st.caption("Sesión de inventario")
+                                _corte_guardado = st.session_state.get(_k_corte)
+                                # Del más reciente al más viejo: el conteo que
+                                # se revisa es casi siempre el último.
+                                for _co in reversed(_cortes_franja):
+                                    _act = bool(_corte_guardado) and \
+                                        _corte_guardado["clave"] == _co["clave"]
+                                    st.button(
+                                        f"{_co['etiqueta']}  ·  {_co['n_dias']}d",
+                                        use_container_width=True,
+                                        type="primary" if _act else "secondary",
+                                        key=f"corte_{reporte}_{_co['clave']}".replace(" ", "_"),
+                                        on_click=aplicar_corte,
+                                        args=(_k_rango_franja, _k_corte, _co,
+                                              reporte, _usa_carga_rango),
+                                    )
+                            else:
+                                st.caption("Atajos")
+                                for _ca, _et, _rg in _atajos:
+                                    st.button(
+                                        _et, use_container_width=True,
+                                        key=f"atajo_{reporte}_{_ca}".replace(" ", "_"),
+                                        on_click=aplicar_atajo,
+                                        args=(_k_rango_franja, _rg, reporte,
+                                              _usa_carga_rango),
+                                    )
                         with _c_cal:
                             st.caption("Rango manual")
+                            # El date_input se dibuja SIEMPRE, en los dos
+                            # modos. Streamlit descarta el estado de un
+                            # widget que deja de renderizarse: esconderlo en
+                            # modo Cortes borraría el rango del reporte, que
+                            # es la clave que leen el label, el loader de R2
+                            # y `asegurar_rango`. En modo Cortes muestra el
+                            # rango que fijó el corte — y tocarlo a mano
+                            # vuelve a modo Rango (on_change).
                             st.date_input(
                                 "Rango a Evaluar",
                                 min_value=fecha_min_full,
@@ -518,6 +583,74 @@ with _fila_top:
                                 format="DD/MM/YYYY",
                                 key=_k_rango_franja,
                                 label_visibility="collapsed",
+                                on_change=volver_a_rango, args=(_k_corte,),
+                            )
+                            if _modo == "Cortes" and _corte_apl:
+                                if corte_contiguo(_corte_apl):
+                                    st.caption("Corte contiguo: mismo resultado "
+                                               "que el rango.")
+                                else:
+                                    _ajenos = ((_corte_apl["fin"] - _corte_apl["ini"]).days
+                                               + 1 - _corte_apl["n_dias"])
+                                    st.caption(
+                                        f"Filtra {_corte_apl['n_dias']} días de "
+                                        f"conteo y deja fuera {_ajenos} del rango "
+                                        "que no son de esta sesión."
+                                    )
+
+            # ── Stepper del corte activo ──────────────────────────────────
+            # Recorrer conteo por conteo sin abrir el panel: es EL gesto de
+            # "revisar los últimos inventarios".
+            #
+            # Vive en un contenedor propio anclado a `right: 138px` (el
+            # hueco que dejó libre el pill al mudarse a `left: 175px` en
+            # desktop) y NO dentro de `fecha_ajuste_pill`: ese pill tiene
+            # ancho FIJO de 210px y los chips se anclan a `left: 391px` =
+            # 175 + 210 + 6. Meter dos botones ahí adentro rompe esa
+            # aritmética de tres números acoplados (ver estilos/_50_fecha.py).
+            # Como el stepper solo existe con un corte activo, aparecer y
+            # desaparecer no mueve nada de lo demás.
+            if _corte_apl and _cortes_franja:
+                _claves = [_c["clave"] for _c in _cortes_franja]
+                try:
+                    _i_act = _claves.index(_corte_apl["clave"])
+                except ValueError:
+                    # El corte guardado ya no existe en la lista (cambió el
+                    # parquet o el reporte). Se deja pasar sin stepper: el
+                    # filtro sigue siendo válido y el panel permite reelegir.
+                    _i_act = None
+                if _i_act is not None:
+                    with st.container(key="fecha_corte_nav"):
+                        _n_ant, _n_txt, _n_sig = st.columns([1, 3.4, 1],
+                                                            vertical_alignment="center")
+                        with _n_ant:
+                            st.button(
+                                "‹", key="corte_nav_ant", disabled=_i_act == 0,
+                                help="Corte anterior",
+                                on_click=aplicar_corte,
+                                args=(_k_rango_franja, _k_corte,
+                                      _cortes_franja[max(0, _i_act - 1)],
+                                      reporte, _usa_carga_rango),
+                            )
+                        with _n_txt:
+                            st.markdown(
+                                f"<div class='corte-nav-etq'>{_i_act + 1}"
+                                f"<span>/{len(_cortes_franja)}</span>"
+                                f"&nbsp; {_corte_apl['n_dias']} "
+                                f"{'día' if _corte_apl['n_dias'] == 1 else 'días'}"
+                                "</div>",
+                                unsafe_allow_html=True,
+                            )
+                        with _n_sig:
+                            st.button(
+                                "›", key="corte_nav_sig",
+                                disabled=_i_act == len(_cortes_franja) - 1,
+                                help="Corte siguiente",
+                                on_click=aplicar_corte,
+                                args=(_k_rango_franja, _k_corte,
+                                      _cortes_franja[min(len(_cortes_franja) - 1,
+                                                         _i_act + 1)],
+                                      reporte, _usa_carga_rango),
                             )
 
     # Las pestañas Gráficos/Tabla se movieron FUERA de la franja, a una
@@ -538,7 +671,18 @@ if isinstance(_fecha_actualizacion, datetime.datetime):
 # En carga_por_rango el widget puede dejar una tupla de 1 elemento mientras
 # el usuario elige la 2ª fecha: en ese caso no se filtra (se muestra lo ya
 # cargado) hasta que el rango quede completo.
-if _franja_con_fecha:
+if _franja_con_fecha and _corte_apl:
+    # MODO CORTES — filtro por CONJUNTO, no por intervalo. Es toda la razón
+    # de ser del modo: los días de una sesión de inventario no tienen por
+    # qué ser contiguos, y el `between` de abajo arrastraría los ajustes
+    # diarios de los días intermedios (ver cortes.py).
+    # `.dt.normalize()` a los dos lados porque la columna trae hora (FECHA
+    # APERTURA INVENTARIO): sin normalizar, isin() contra medianoche no
+    # matchea ni una fila.
+    df_f = df_f[df_f[col_fecha].dt.normalize().isin(
+        [pd.Timestamp(_d) for _d in _corte_apl["dias"]]
+    )]
+elif _franja_con_fecha:
     _rango_apl = st.session_state.get(_k_rango_franja)
     if isinstance(_rango_apl, (tuple, list)) and len(_rango_apl) == 2 and all(_rango_apl):
         _ini_apl, _fin_apl = _rango_apl

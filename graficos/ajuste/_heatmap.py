@@ -29,6 +29,13 @@ from graficos.base import (
 # duplicar el cálculo de granularidad Semana/Mes (Corte tiene su propio
 # cálculo, ver _cortes_por_racha: no es calendario fijo, son rachas).
 from graficos.ajuste._comun import _cortes_por_racha, _layout_aj
+# El mapa de calor tiene selector de corte PROPIO: consulta el estado de la
+# franja para cederle el eje cuando el calendario ya fijó uno (ver abajo).
+# "visual" es la categoría de rango a la que pertenece el mapa de calor en
+# el rail (graficos.ajuste.categoria_rango_ajuste) — está fija acá porque
+# este módulo ES una vista visual; no hay caso en que se renderice bajo la
+# categoría "tiempo".
+from estado_rango import clave_corte, corte_vigente
 
 
 def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
@@ -61,7 +68,10 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     con `df_full` + `col_fecha` disponibles, un `st.select_slider` elige
     el CORTE real (no calendario — reusa `_cortes_por_racha`, la misma
     función que ya usa "Por fecha de corte") de los últimos ~8 con datos;
-    `df` pasa a ser el de ese corte para las tres vistas. Flujo (Sankey) y
+    `df` pasa a ser el de ese corte para las tres vistas. Ese slider
+    DESAPARECE si el calendario de la franja ya fijó un corte (modo
+    Cortes): ahí el corte lo eligió el usuario arriba y `df` llega
+    filtrado — un eje, un dueño. Flujo (Sankey) y
     Tabla (grilla HTML con barra-en-celda) son vistas alternativas del
     MISMO pivot, sin click-drill propio — todo lo de arriba (top-3,
     totales, hover, click-drill) sigue siendo exclusivo de Mapa.
@@ -83,9 +93,23 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     # corte" también parte de df_full). Sin este reaplicado, cambiar de
     # corte pisaba los chips en silencio: el usuario filtraba Área/
     # Familia y el mapa/flujo/tabla del corte volvían a mostrar TODO.
+    #
+    # UN EJE, UN DUEÑO: si el calendario de la franja ya fijó un corte
+    # (modo Cortes, ver estado_rango.py), este slider no se dibuja y todo
+    # el bloque de abajo se saltea. Dos controles del MISMO concepto no se
+    # pisan el estado —cada uno tiene su clave— pero muestran cortes
+    # distintos a la vez y el usuario no tiene cómo saber cuál manda. Con
+    # el corte global activo `df` ya viene filtrado por app.py: acá solo
+    # hay que no volver a filtrarlo (y ahorrarse el copy() de df_full).
+    # El pill de la franja ya dice "Corte 30 jul - 2 ago", así que no hace
+    # falta un caption acá — esta fila de controles se compactó a propósito
+    # el 2026-08-09 y volver a meterle una línea la desarma.
+    _corte_global = corte_vigente(clave_corte("Ajuste de Inventario",
+                                              categoria="visual"))
     _dff = None
     _cortes = None
-    if col_fecha and df_full is not None and col_fecha in df_full.columns:
+    if _corte_global is None and col_fecha and df_full is not None \
+            and col_fecha in df_full.columns:
         _dff = df_full.copy()
         _dff[col_fecha] = pd.to_datetime(_dff[col_fecha], errors="coerce")
         _dff = _dff.dropna(subset=[col_fecha])
