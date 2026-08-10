@@ -2224,3 +2224,33 @@ salvo `icono`):
     sin revisar es cómo esta vista terminó con una regla que la regla
     #66 documentó como "preservada" y que en realidad nunca debió
     sobrevivir a esa reescritura.
+
+68. **El texto de un `st.button` no está en el `<button>`: está en un
+    `<p>` con su propio `font-size` (2026-08-10).** Streamlit envuelve
+    el label en `button > div[stMarkdownContainer] > p`, y ese `<p>`
+    trae `font-size:14px; font-weight:400` propios. `font-size` NO
+    cascadea a través de un elemento que define el suyo, así que
+    cualquier `.st-key-x button { font-size: ... }` se ve pisado y no
+    hace absolutamente nada sobre el número que el usuario lee. En el
+    mapa de calor esto convivió con celdas TOTAL hechas de `<div>`
+    (sin `<p>` de por medio, donde el estilo inline SÍ aplica): mismo
+    `font-size` declarado en el código, tamaño real distinto en
+    pantalla (14px/400 contra 10.5px/600). Se "arregló" una vez
+    bajando el valor en la regla del `<button>` — cambio que no movió
+    un píxel, porque apuntaba al nodo equivocado.
+
+    El selector correcto es `... button p` (o `button
+    [data-testid="stMarkdownContainer"] p`), que es el que YA usaban
+    `_20_compras_rail.py` y `_40_ajuste_franja.py` — o sea: el repo ya
+    lo sabía, se reinventó mal. `color` sí funciona desde el `<button>`
+    (el `<p>` no lo declara, lo hereda), que es justo por qué el color
+    de celda venía bien y confundía el diagnóstico.
+
+    **Corolario de método, que es la parte que más costó:** al medir
+    con `getComputedStyle` hay que apuntar al nodo que DIBUJA el texto,
+    no al contenedor. Medir el `<button>` daba "10.5px" y confirmaba
+    una corrección que en realidad no existía. La verificación que sí
+    cierra: buscar el elemento HOJA (`el.children.length === 0`) y
+    medir el ancho real del glifo con un `Range` sobre su nodo de
+    texto — dos textos idénticos ("S/ 403" aparecía como celda de dato
+    y como total) que miden 44px y 36px no dejan lugar a interpretación.

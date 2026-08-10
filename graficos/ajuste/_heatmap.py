@@ -529,6 +529,19 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         '!important; min-width: 70px !important; }',
         '.st-key-hm_grid_filas button { white-space: nowrap !important; '
         'overflow: hidden !important; text-overflow: ellipsis !important; }',
+        # El texto del botón NO vive en el <button>: Streamlit lo envuelve
+        # en un <p> con su propio font-size:14px/weight:400, y font-size no
+        # cascadea a través de un elemento que define el suyo -- todo lo
+        # que se le ponga al <button> lo pisa ese <p>. Por eso las celdas
+        # de dato salían en 14px/400 mientras las celdas TOTAL (divs de
+        # _celda_html, sin <p> de por medio) salían en los 10.5px/600
+        # pedidos: mismo "font-size" declarado, distinto tamaño real
+        # (reportado 2026-08-10; ver regla #68 de arquitectura.md). El
+        # selector `button p` es el que ya usa el resto del repo para
+        # esto (_20_compras_rail.py, _40_ajuste_franja.py).
+        '.st-key-hm_grid_filas button p { font-size: 10.5px !important; '
+        'font-weight: 600 !important; line-height: 1.6 !important; '
+        'margin: 0 !important; }',
         '.st-key-chartcard_heatmap * { font-family: "DM Sans", "Inter", '
         '-apple-system, BlinkMacSystemFont, sans-serif !important; }',
     ]
