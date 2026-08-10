@@ -491,12 +491,26 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     # (`:first-child`, alcanza cabecera/filas/TOTAL con un solo
     # selector) -- las demás columnas, todas con el mismo peso 1.0 entre
     # sí, se reparten lo que sobra en partes iguales, como el mockup.
+    # `estilos/_00_base.py` pone la fuente del proyecto (DM Sans/Inter) en
+    # `html, body, [class*="css"]` pero SIN !important -- el CSS interno
+    # de Streamlit para contenido de markdown le gana esa pulseada y cae
+    # a su Source Sans por default. A un st.button no le pasa (Streamlit
+    # no le pone su propia font-family), por eso los NÚMEROS de celda
+    # (botones reales) salían bien y todo lo demás en este grid (creado
+    # con st.markdown, incluidas las celdas TOTAL) salía en la fuente
+    # equivocada -- mismo tamaño en px pero letra distinta, con menor
+    # x-height, se lee más chica (reportado 2026-08-10, comparando
+    # números de TOTAL contra números de celda). El problema de fondo es
+    # de `_00_base.py`, pero corregirlo ahí es un cambio de alcance para
+    # toda la app; acá se lo fuerza scoped a esta tarjeta nomás.
     _css_celdas = [
         '.st-key-hm_grid_filas[class*="stVerticalBlock"] { gap: 7px !important; }',
         '.st-key-hm_grid_filas [data-testid="stHorizontalBlock"] '
         '> [data-testid="stColumn"]:first-child { flex: 0 0 130px '
         '!important; max-width: 130px !important; min-width: 130px '
         '!important; }',
+        '.st-key-chartcard_heatmap * { font-family: "DM Sans", "Inter", '
+        '-apple-system, BlinkMacSystemFont, sans-serif !important; }',
     ]
 
     with _card("heatmap", _TITULO_HM):
