@@ -196,6 +196,32 @@ def _pruebas_puras():
     lay2 = b._layout(yaxis=dict(showticklabels=True))
     check("_layout respeta override Y", lay2["yaxis"]["showticklabels"], True)
 
+    # ── Volatilidad de insumos (drill de Compras) ───────────────────────
+    from graficos.compras import volatilidad as _vol
+
+    check("_vol_ohlc normal", _vol._vol_ohlc_semana([10, 15, 8, 12]),
+          {"o": 10.0, "c": 12.0, "h": 15.0, "l": 8.0})
+    check("_vol_ohlc filtra 0 y NaN",
+          _vol._vol_ohlc_semana([0, 10, float("nan"), 12]),
+          {"o": 10.0, "c": 12.0, "h": 12.0, "l": 10.0})
+    check("_vol_ohlc vacía → None", _vol._vol_ohlc_semana([]), None)
+    check("_vol_ohlc todo inválido → None", _vol._vol_ohlc_semana([0, float("nan")]), None)
+
+    check("_vol_score dos saltos", _vol._vol_score([100, 110, 99]), 20.0)
+    check("_vol_score ignora huecos iniciales",
+          _vol._vol_score([None, 100, 110]), 10.0)
+    check("_vol_score una sola semana", _vol._vol_score([100]), 0.0)
+    check("_vol_score vacía", _vol._vol_score([]), 0.0)
+
+    _fe5 = pd.Series(pd.to_datetime(
+        ["2026-06-15", "2026-06-22", "2026-06-29", "2026-07-06", "2026-07-13"]))
+    _sem5 = _vol._vol_semanas_ventana(_fe5, minimo=4)
+    check("_vol_semanas cuenta semanas distintas", len(_sem5), 5)
+    check("_vol_semanas arranca en lunes", _sem5[0], pd.Timestamp("2026-06-15"))
+    _fe2 = pd.Series(pd.to_datetime(["2026-06-15", "2026-06-16"]))  # misma semana
+    check("_vol_semanas insuficientes → None",
+          _vol._vol_semanas_ventana(_fe2, minimo=4), None)
+
     return fallos
 
 

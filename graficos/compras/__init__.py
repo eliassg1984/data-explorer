@@ -37,6 +37,7 @@ from graficos.compras.proveedor import _compras_proveedor_drill
 from graficos.compras.familia import _compras_familia_drill
 from graficos.compras.cantidad import _compras_cantidad_producto
 from graficos.compras.evolucion import _compras_evolucion_proveedores
+from graficos.compras.volatilidad import _compras_volatilidad_drill
 
 
 
@@ -51,7 +52,8 @@ _COMPRAS_RAIL_CATEGORIAS = (
                    ("Evolución proveedor",  "Evolución prov."))),
     ("Precios",   (("Precio top 10",        "Top 10"),
                    ("Precio por compra",    "Por compra"),
-                   ("Precio vs año pasado", "Vs año pasado"))),
+                   ("Precio vs año pasado", "Vs año pasado"),
+                   ("Volatilidad",          "Volatilidad"))),
     ("Cantidad",  (("Cantidad vs año pasado", "Vs año pasado"),
                    ("Cantidad por producto",  "Por producto"))),
     ("Más",       (("Semanal",              "Semanal"),
@@ -87,6 +89,10 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                                   "Numero Documento", "Numero_documento",
                                   "Nro Documento", "Nro_Documento", "Num Doc",
                                   "N Documento", "Documento", "Comprobante"])
+    # Solo la usa el drill Volatilidad (mezclar monedas en una misma serie de
+    # precio sería incorrecto). Ninguna otra vista de Compras la resuelve, y
+    # el demo local no la trae — por eso el drill la trata como opcional.
+    col_moneda = _resolver(df_f, ["Tipo_moneda", "Tipo Moneda", "Moneda"])
     if not col_fecha:
         for _c in df_f.columns:
             if pd.api.types.is_datetime64_any_dtype(df_f[_c]) or "fecha" in _norm(str(_c)):
@@ -162,7 +168,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
 
     opciones = ["Familia", "Proveedor", "Evolución proveedor",
                 "Precio top 10", "Precio por compra",
-                "Precio vs año pasado", "Cantidad vs año pasado",
+                "Precio vs año pasado", "Volatilidad", "Cantidad vs año pasado",
                 "Cantidad por producto",
                 "Semanal", "Vs año anterior", "Personalizado", "Tabla"]
 
@@ -218,6 +224,14 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         with st.container(border=True, key="ajuste_graf_card_izq_compras"):
             _compras_evolucion_proveedores(d, col_prov, col_prod, col_cant,
                                            col_valor, col_punit, col_fecha)
+        return
+
+    # Volatilidad: ranking de insumos por variación de precio semanal +
+    # candlestick del insumo elegido + compras de la semana clickeada.
+    if graf == "Volatilidad":
+        with st.container(border=True, key="ajuste_graf_card_izq_compras"):
+            _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
+                                       col_valor, col_cant, col_um, col_moneda)
         return
 
     col_izq, col_der = st.columns([1.7, 1])

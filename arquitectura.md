@@ -23,7 +23,7 @@ actualiza este documento en el mismo commit.
 | `cortes.py` | Agrupa fechas en **cortes**: las rachas de días de una misma sesión de inventario (salto ≤ `CORTE_MAX_SALTO_DIAS`). Un corte es un CONJUNTO de días, no un intervalo — ver regla #62. Sin dependencias de streamlit ni de `graficos/`, porque lo consumen los dos lados: la franja de `app.py` y `graficos/ajuste/_comun.py` (que lo reexporta con los nombres privados de siempre). |
 | `data.py` | Carga de datos: DuckDB + httpfs leyendo parquets de R2 (secrets). Sistema de refresco bajo demanda vía R2. |
 | `tablas/` | **Paquete de tablas AgGrid** (refactor 2026-08-01; antes un `tablas.py` de 2.028 líneas). `__init__.py` re-exporta la API pública. `_css.py` (CSS de grid y paneles), `_config.py` (estilos de celda/fila, sidebar, totales), `desktop.py` (`renderizar_aggrid_desktop`), `movil.py` (`renderizar_aggrid_movil`), `compras.py` (`renderizar_aggrid_compras`), `ajuste_pivote.py` (`renderizar_aggrid_pivote_ajuste`, tabla "Por fecha" de Ajuste de Inventario — ver regla #25). `renderizar_tabla_compras` se borró el 2026-08-08 (llevaba desde 2026-08-01 sin llamadores). |
-| `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `tiene_dashboard(reporte)` (para que `app.py` no enumere reportes ni importe `_DASHBOARDS`; ver regla #50). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), **`ajuste/` es un paquete** (refactor 2026-08-08; antes un `ajuste.py` de 2.607 líneas — el fichero con MÁS churn del repo, 80 de los últimos 200 commits): una vista por módulo — `_comun.py` (layout del rail, fechas de corte, periodos), `_evolucion.py`, `_pivote.py`, `_cascada.py`, `_panel_analisis.py`, `_heatmap.py`, `_distribucion.py` — y `__init__.py` con la config del rail, `categoria_rango_ajuste` y el entry point. Ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10, `ventas.py`, `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras). `legacy.py` (Inventario v1) se borró el 2026-08-08: 421 líneas sin un solo import. **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py` — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. El drill de Proveedor se siguió partiendo el 2026-08-08 (era una función de 1.577 líneas): `_css_proveedor.py` (sus 527 líneas de CSS, que NO van a `estilos/` a propósito — ver su docstring), `_etiquetas_proveedor.py` (texto de las barras: `fmt_k`, `abrev_nombre`, `etiqueta_serie`, `sufijo_granularidad`; puras y con asserts de valor en `test_graficos.py`) y `_documentos_proveedor.py` (`tabla_documentos`, la AgGrid pivote del pie). Quedó en 791 líneas; el resto NO se siguió cortando a propósito — ver regla #55. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
+| `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `tiene_dashboard(reporte)` (para que `app.py` no enumere reportes ni importe `_DASHBOARDS`; ver regla #50). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), **`ajuste/` es un paquete** (refactor 2026-08-08; antes un `ajuste.py` de 2.607 líneas — el fichero con MÁS churn del repo, 80 de los últimos 200 commits): una vista por módulo — `_comun.py` (layout del rail, fechas de corte, periodos), `_evolucion.py`, `_pivote.py`, `_cascada.py`, `_panel_analisis.py`, `_heatmap.py`, `_distribucion.py` — y `__init__.py` con la config del rail, `categoria_rango_ajuste` y el entry point. Ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10, `ventas.py`, `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras). `legacy.py` (Inventario v1) se borró el 2026-08-08: 421 líneas sin un solo import. **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py`, `volatilidad.py` (ranking de insumos por volatilidad de precio → candlestick semanal → compras de la semana clickeada; ver regla #74) — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. El drill de Proveedor se siguió partiendo el 2026-08-08 (era una función de 1.577 líneas): `_css_proveedor.py` (sus 527 líneas de CSS, que NO van a `estilos/` a propósito — ver su docstring), `_etiquetas_proveedor.py` (texto de las barras: `fmt_k`, `abrev_nombre`, `etiqueta_serie`, `sufijo_granularidad`; puras y con asserts de valor en `test_graficos.py`) y `_documentos_proveedor.py` (`tabla_documentos`, la AgGrid pivote del pie). Quedó en 791 líneas; el resto NO se siguió cortando a propósito — ver regla #55. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
 | `estilos/` | **Paquete del CSS global** (refactor 2026-08-01; antes un `estilos.py` de 1.700 líneas). `__init__.py` mantiene la API pública (`TAM_FUENTE`, `get_css`, `inject_css`) y concatena las secciones. Una sección por módulo, con prefijo numérico que marca el orden: `_00_base`, `_20_compras_rail`, `_30_filtros`, `_40_ajuste_franja`, `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`, `_90_franja_inferior`, `_99_movil`. (`_10_vista` existió hasta el 2026-08-08: estilaba el selector Gráficos/Tabla y quedó 100% huérfano al borrarse ese widget — ver regla #49.) **El orden de `_SECCIONES` es parte del comportamiento**: hay `!important` en ambos lados de varios conflictos, así que gana la regla que va DESPUÉS — por eso `_99_movil` cierra. |
 | `navegacion.py` | Rail lateral, topbar y CSS por sección (`_CSS_AJUSTE`). Botón de refresco aislado en su propio `@st.fragment`. |
 | `inyecciones/` | **Paquete de JS/HTML inyectado** (refactor 2026-08-01; antes un `inyecciones.py` de 1.813 líneas). `_fragmentos.py` (CSS/JS compartido), `grid.py` (salud, altura, maximizar, panel de columnas), `paginacion.py`, `inspector.py` (herramienta de desarrollo), `diseno.py` (modo de diseño visual, `?debug=1&diseno=1` — lee el pin de `inspector.py`, ver regla #46), `varios.py` (overlay de errores, fullscreen, footer, calendario). Los dos blobs de JS grandes viven aparte desde el 2026-08-08: `_inspector_js.py` (1.381 líneas) y `_diseno_js.py` (794). Sus funciones quedaron en 34 y 5 líneas. **Si tocas esos módulos, lee antes la regla #56** — extraerlos rompió el inspector de una forma que ni `ruff` ni los tests pueden ver. Ninguna función depende de otra (la excepción de solo-lectura de `diseno.py` está documentada en la regla #46): las únicas dependencias internas apuntan a las constantes de `_fragmentos.py`. |
@@ -2449,3 +2449,63 @@ salvo `icono`):
     fijara a mano — las dos piezas (dragmode explícito + barra recortada)
     van juntas, ninguna sola alcanza.
 
+74. **`go.Candlestick` (drill Volatilidad de insumos,
+    `graficos/compras/volatilidad.py`) — sin precedente de selección
+    confiable en este proyecto, igual que `go.Heatmap` (#11) y
+    `go.Histogram` (#44): se asume que el clic no llega desde la traza de
+    velas y se agrega una `go.Scatter` invisible (`marker.opacity=0`, un
+    punto por semana en `(h+l)/2`) como trace 1, con `hoverinfo="skip"`.
+    El handler solo procesa el clic si `curve_number == 1` — un clic
+    reportado desde la traza 0 (las velas) se ignora. Mismo patrón de
+    dedup que `proveedor.py` (key estable por insumo seleccionado +
+    `session_state["compras_vol_last_click"]` comparando el
+    `point_index` contra el último procesado, para no reabrir/cerrar la
+    semana en cada rerun). **No se pudo verificar el clic en sí con el
+    navegador del entorno de desarrollo — ver regla #12: esta clase de
+    selección de Plotly no se puede simular ahí.** Falta un smoke test
+    manual real después de deployar.
+
+    **Bug real ya encontrado y corregido en la misma sesión:** la ventana
+    de semanas al principio usaba TODO el rango de fecha que el usuario
+    tuviera elegido en la franja (para "respetar" el filtro global). Con
+    "Todo" (3.5 años, 189 semanas) el ranking salió dominado por
+    `Servicio De Movilidad Y Flete` con 56.602 puntos de "volatilidad" —
+    un artefacto: 189 velas no caben en un gráfico legible, y encima
+    mezclan huecos de años con movimiento real. **La ventana del
+    candlestick SIEMPRE se recorta a las últimas `MAX_SEMANAS=8` semanas
+    con datos** (`_vol_semanas_ventana`), sin importar cuánto rango tenga
+    seleccionado la franja — el filtro de fecha global es un TECHO, no la
+    ventana en sí. Con el recorte puesto, el mismo insumo bajó a 573
+    puntos: sigue siendo el más volátil de sus últimas 8 semanas (un
+    hallazgo real, no ruido), pero ya no un número que solo se explica
+    por el largo del rango.
+
+    El filtro de materialidad (`MIN_GASTO=400` soles gastados en la
+    ventana) y de cobertura (`MIN_COBERTURA=0.75`, al menos 75% de las
+    semanas con compra) existen por la misma razón que el recorte de
+    ventana: sin ellos, insumos comprados en cantidades mínimas (hierbas,
+    condimentos) dominan el ranking con "volatilidad" que es ruido de
+    redondeo de `VALOR_COMPRA / CANTIDAD_COMPRA`, no un movimiento de
+    precio real. Ninguno de los dos filtros excluye por NOMBRE o
+    categoría (nada de listas de "esto no es un insumo de mercado") — son
+    puramente estadísticos, a propósito: más robusto y menos frágil que
+    adivinar qué productos "no cuentan".
+
+    `TIPO_MONEDA` no lo resuelve ningún otro drill de Compras — se
+    agregó su propio `_resolver` en `__init__.py` (candidatos
+    `["Tipo_moneda", "Tipo Moneda", "Moneda"]`) y el drill lo trata como
+    **opcional**: si no resuelve (el demo local no trae esa columna) o no
+    está en `d`, no se filtra por moneda en vez de romper. Mezclar
+    monedas en una sola serie de precio sería incorrecto, pero preferible
+    a que el drill no abra en local.
+
+    Semáforo de la tabla ranking: NO es AgGrid con `cellStyle`/`JsCode`
+    (el patrón de `ventas.py` para su ranking de FoodCost) sino
+    `st.dataframe` + pandas `Styler` (`.map`/`.apply`), como el otro
+    patrón ya usado en `ventas.py` para la tabla de SubGrupo — más simple
+    y sin componente JS de por medio. La "barra" de la columna
+    Volatilidad no es un cellRenderer: es un `linear-gradient` CSS de dos
+    colores en el `background` de la celda, con el corte en `pct%` — el
+    mismo truco que un progress-bar falso, sin necesitar Component de
+    AG Grid (regla #25 solo aplica si el renderer tiene que devolver HTML
+    real; un `background` vía `Styler` es CSS puro).
