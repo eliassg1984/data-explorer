@@ -461,127 +461,138 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     # su rect, no por una fracción de columna más grande (reportado
     # 2026-08-09: se veía visiblemente más larga que el resto).
     _anchos_grid = [1.7] + [1.0] * _m + [1.0]
-    _css_celdas = []
+    # El gap default entre bloques de Streamlit (16px, propiedad flex
+    # `gap` del propio .stVerticalBlock de la card) se aplica ENTRE CADA
+    # fila -- cabecera->fila1, fila->fila, ultima fila->TOTAL -- porque
+    # cada una es un st.columns() (=bloque) distinto. En el mockup el
+    # grid es un solo <svg>, sin ese gap: cabecera a 6px de la primera
+    # fila (reportado 2026-08-09, "los nombres de las areas estan muy
+    # separadas del cuadro"). Se angosta aca, scoped a esta grilla
+    # nomas -- la leyenda y el drill de abajo, que SI son bloques
+    # distintos entre si, se quedan con el espaciado normal.
+    _css_celdas = [
+        '.st-key-hm_grid_filas[class*="stVerticalBlock"] { gap: 3px !important; }'
+    ]
 
     with _card("heatmap", _TITULO_HM):
-        # Cabecera: nombres de área, sin botón (no son clickeables).
-        _cols_h = st.columns(_anchos_grid)
-        with _cols_h[0]:
-            st.markdown("&nbsp;", unsafe_allow_html=True)
-        for _j, _area in enumerate(_areas):
-            with _cols_h[_j + 1]:
+        with st.container(key="hm_grid_filas"):
+            # Cabecera: nombres de área, sin botón (no son clickeables).
+            _cols_h = st.columns(_anchos_grid)
+            with _cols_h[0]:
+                st.markdown("&nbsp;", unsafe_allow_html=True)
+            for _j, _area in enumerate(_areas):
+                with _cols_h[_j + 1]:
+                    st.markdown(
+                        f"<div style='font-size:9.5px;font-weight:500;"
+                        f"color:{GRIS_TEXTO};text-align:center;"
+                        f"line-height:1.2;padding-bottom:4px'>{_area}</div>",
+                        unsafe_allow_html=True,
+                    )
+            with _cols_h[-1]:
                 st.markdown(
-                    f"<div style='font-size:9.5px;font-weight:500;"
-                    f"color:{GRIS_TEXTO};text-align:center;"
-                    f"line-height:1.2;padding-bottom:4px'>{_area}</div>",
+                    f"<div style='font-size:9.5px;font-weight:700;"
+                    f"color:{ACENTO_TEXTO_OSCURO};text-align:center;"
+                    f"padding-bottom:4px'>TOTAL</div>",
                     unsafe_allow_html=True,
                 )
-        with _cols_h[-1]:
-            st.markdown(
-                f"<div style='font-size:9.5px;font-weight:700;"
-                f"color:{ACENTO_TEXTO_OSCURO};text-align:center;"
-                f"padding-bottom:4px'>TOTAL</div>",
-                unsafe_allow_html=True,
-            )
 
-        # Una fila por familia — nombre + un st.button real por CADA celda
-        # (incluidas las de valor 0: antes quedaban en blanco, pero el
-        # go.Heatmap original también las coloreaba — el fondo por CSS
-        # scoped a su key, ver más abajo — no hay motivo para esconderlas)
-        # + total.
-        for _i, _fam in enumerate(_fams):
-            _cols_r = st.columns(_anchos_grid)
-            with _cols_r[0]:
+            # Una fila por familia — nombre + un st.button real por CADA celda
+            # (incluidas las de valor 0: antes quedaban en blanco, pero el
+            # go.Heatmap original también las coloreaba — el fondo por CSS
+            # scoped a su key, ver más abajo — no hay motivo para esconderlas)
+            # + total.
+            for _i, _fam in enumerate(_fams):
+                _cols_r = st.columns(_anchos_grid)
+                with _cols_r[0]:
+                    st.markdown(
+                        f"<div style='font-size:11px;font-weight:500;"
+                        f"color:{TEXTO_PRINCIPAL};white-space:nowrap;"
+                        f"overflow:hidden;text-overflow:ellipsis;"
+                        f"text-align:right;padding-top:9px;padding-right:8px'"
+                        f" title='{_fam}'>{_fam}</div>",
+                        unsafe_allow_html=True,
+                    )
+                for _j, _area in enumerate(_areas):
+                    _v = float(pivot.values[_i][_j])
+                    if abs(_v) < 0.5:
+                        _v = 0.0  # evita el "S/ -0" de :.0f sobre p.ej. -0.3
+                    with _cols_r[_j + 1]:
+                        _key = f"hm_cell_{_i}_{_j}"
+                        _bg_rgb = _color_celda(_v)
+                        # Contraste por luminancia, no por ranking -- con TODA
+                        # celda a color pleno (arriba), el texto oscuro ya no
+                        # alcanza sobre los tonos más saturados de las puntas
+                        # de la escala (mismo corte 0.55 que "light" en el
+                        # mockup, aplicado acá sobre luma real en vez de |v|
+                        # normalizado -- más preciso cerca de los extremos).
+                        _luma = (0.299 * _bg_rgb[0] + 0.587 * _bg_rgb[1]
+                                 + 0.114 * _bg_rgb[2])
+                        _fg = BLANCO if _luma < 150 else GRIS_TEXTO_MEDIO
+                        _es_foco = (_focus == (_fam, _area))
+                        _borde = (f"2px solid {ACENTO}" if _es_foco
+                                 else "1px solid transparent")
+                        _r, _g, _b = _bg_rgb
+                        _css_celdas.append(
+                            f'.st-key-{_key} button {{ background:'
+                            f'rgb({_r},{_g},{_b}) !important; color:{_fg} '
+                            f'!important; border:{_borde} !important; '
+                            f'font-size:11px !important; font-weight:600 '
+                            f'!important; padding:4px 2px !important; '
+                            f'font-variant-numeric:tabular-nums !important; }}'
+                        )
+                        _tip = f"{_fam} × {_area}: S/ {_v:,.0f}"
+                        _tip += _spark_map.get((_fam, _area), "")
+                        # En cero no hay nada que leer -- el color ya dice
+                        # "neutro" y el número sobra (reportado 2026-08-09). La
+                        # celda sigue coloreada y clickeable (regla de arriba),
+                        # solo se le vacía la etiqueta visible.
+                        _label = " " if _v == 0 else f"S/ {_v:,.0f}"
+                        if st.button(_label, key=_key, help=_tip,
+                                    use_container_width=True):
+                            st.session_state[_focus_key] = (
+                                None if _es_foco else (_fam, _area))
+                            st.rerun()
+                with _cols_r[-1]:
+                    _vt = float(_row_tot.iloc[_i])
+                    st.markdown(
+                        _celda_html(_hex_a_rgb(LAVANDA_CABECERA_GRUPO), _color_total_hm(_vt),
+                                   f"S/ {_vt:,.0f}", "none"),
+                        unsafe_allow_html=True,
+                    )
+
+            # Fila TOTAL — mismo tono lavanda que la columna, celdas no
+            # clickeables (clic en el resumen nunca abrió detalle de producto).
+            _cols_tot = st.columns(_anchos_grid)
+            with _cols_tot[0]:
                 st.markdown(
-                    f"<div style='font-size:11px;font-weight:500;"
-                    f"color:{TEXTO_PRINCIPAL};white-space:nowrap;"
-                    f"overflow:hidden;text-overflow:ellipsis;"
-                    f"text-align:right;padding-top:9px;padding-right:8px'"
-                    f" title='{_fam}'>{_fam}</div>",
+                    f"<div style='font-size:11px;font-weight:700;"
+                    f"color:{ACENTO_TEXTO_OSCURO};text-align:right;"
+                    f"padding-top:9px;padding-right:8px'>TOTAL</div>",
                     unsafe_allow_html=True,
                 )
             for _j, _area in enumerate(_areas):
-                _v = float(pivot.values[_i][_j])
-                if abs(_v) < 0.5:
-                    _v = 0.0  # evita el "S/ -0" de :.0f sobre p.ej. -0.3
-                with _cols_r[_j + 1]:
-                    _key = f"hm_cell_{_i}_{_j}"
-                    _bg_rgb = _color_celda(_v)
-                    # Contraste por luminancia, no por ranking -- con TODA
-                    # celda a color pleno (arriba), el texto oscuro ya no
-                    # alcanza sobre los tonos más saturados de las puntas
-                    # de la escala (mismo corte 0.55 que "light" en el
-                    # mockup, aplicado acá sobre luma real en vez de |v|
-                    # normalizado -- más preciso cerca de los extremos).
-                    _luma = (0.299 * _bg_rgb[0] + 0.587 * _bg_rgb[1]
-                             + 0.114 * _bg_rgb[2])
-                    _fg = BLANCO if _luma < 150 else GRIS_TEXTO_MEDIO
-                    _es_foco = (_focus == (_fam, _area))
-                    _borde = (f"2px solid {ACENTO}" if _es_foco
-                             else "1px solid transparent")
-                    _r, _g, _b = _bg_rgb
-                    _css_celdas.append(
-                        f'.st-key-{_key} button {{ background:'
-                        f'rgb({_r},{_g},{_b}) !important; color:{_fg} '
-                        f'!important; border:{_borde} !important; '
-                        f'font-size:11px !important; font-weight:600 '
-                        f'!important; padding:4px 2px !important; '
-                        f'font-variant-numeric:tabular-nums !important; }}'
+                with _cols_tot[_j + 1]:
+                    _vt = float(_col_tot.iloc[_j])
+                    st.markdown(
+                        _celda_html(_hex_a_rgb(LAVANDA_CABECERA_GRUPO), _color_total_hm(_vt),
+                                   f"S/ {_vt:,.0f}", "none"),
+                        unsafe_allow_html=True,
                     )
-                    _tip = f"{_fam} × {_area}: S/ {_v:,.0f}"
-                    _tip += _spark_map.get((_fam, _area), "")
-                    # En cero no hay nada que leer -- el color ya dice
-                    # "neutro" y el número sobra (reportado 2026-08-09). La
-                    # celda sigue coloreada y clickeable (regla de arriba),
-                    # solo se le vacía la etiqueta visible.
-                    _label = " " if _v == 0 else f"S/ {_v:,.0f}"
-                    if st.button(_label, key=_key, help=_tip,
-                                use_container_width=True):
-                        st.session_state[_focus_key] = (
-                            None if _es_foco else (_fam, _area))
-                        st.rerun()
-            with _cols_r[-1]:
-                _vt = float(_row_tot.iloc[_i])
+            with _cols_tot[-1]:
                 st.markdown(
-                    _celda_html(_hex_a_rgb(LAVANDA_CABECERA_GRUPO), _color_total_hm(_vt),
-                               f"S/ {_vt:,.0f}", "none"),
+                    _celda_html(_hex_a_rgb(ACENTO), "#ffffff",
+                               f"S/ {_grand_tot:,.0f}", "none"),
                     unsafe_allow_html=True,
                 )
 
-        # Fila TOTAL — mismo tono lavanda que la columna, celdas no
-        # clickeables (clic en el resumen nunca abrió detalle de producto).
-        _cols_tot = st.columns(_anchos_grid)
-        with _cols_tot[0]:
-            st.markdown(
-                f"<div style='font-size:11px;font-weight:700;"
-                f"color:{ACENTO_TEXTO_OSCURO};text-align:right;"
-                f"padding-top:9px;padding-right:8px'>TOTAL</div>",
-                unsafe_allow_html=True,
-            )
-        for _j, _area in enumerate(_areas):
-            with _cols_tot[_j + 1]:
-                _vt = float(_col_tot.iloc[_j])
-                st.markdown(
-                    _celda_html(_hex_a_rgb(LAVANDA_CABECERA_GRUPO), _color_total_hm(_vt),
-                               f"S/ {_vt:,.0f}", "none"),
-                    unsafe_allow_html=True,
-                )
-        with _cols_tot[-1]:
-            st.markdown(
-                _celda_html(_hex_a_rgb(ACENTO), "#ffffff",
-                           f"S/ {_grand_tot:,.0f}", "none"),
-                unsafe_allow_html=True,
-            )
-
-        # CSS de todas las celdas con dato en UN solo bloque (streamlit
-        # emite un <style> por st.markdown -- más liviano que uno por
-        # celda). border-radius no hace falta pedirlo: button[kind=
-        # "secondary"] ya lo trae en 8px por la regla global de
-        # estilos/_00_base.py — es justo lo que un st.button da gratis y
-        # go.Heatmap no podía dar (ver docstring del módulo). El color
-        # SÍ hace falta por celda: es continuo, no hay paleta fija de
-        # unas pocas clases como en la Cascada.
-        if _css_celdas:
+            # CSS de todas las celdas con dato en UN solo bloque (streamlit
+            # emite un <style> por st.markdown -- más liviano que uno por
+            # celda). border-radius no hace falta pedirlo: button[kind=
+            # "secondary"] ya lo trae en 8px por la regla global de
+            # estilos/_00_base.py — es justo lo que un st.button da gratis y
+            # go.Heatmap no podía dar (ver docstring del módulo). El color
+            # SÍ hace falta por celda: es continuo, no hay paleta fija de
+            # unas pocas clases como en la Cascada.
             st.markdown(f"<style>{''.join(_css_celdas)}</style>",
                        unsafe_allow_html=True)
 
