@@ -2023,3 +2023,68 @@ salvo `icono`):
     `getBoundingClientRect().top` de la primera fila medido en reposo,
     hovereada y post-hover — idéntico en los tres momentos, prueba de
     cero reflow.
+
+61. **Panorama de compras (`recetaventa.py`, 2026-08-09): 5ª vista del rail
+    de Receta Venta, la primera que cruza DOS parquets.** Sankey
+    Producto comprado → Plato, agregado (no un plato a la vez como las
+    otras 4 vistas). Mismo precedente de carga cruzada que
+    `graficos/ventas.py::_compra_por_dia` (`data.cargar("compras.parquet")`
+    directo, sin pasar por `df_f`).
+
+    **El join es por código, no por nombre — y las columnas que PARECEN
+    la clave no lo son.** `compras.COD_PRODUCTO` ↔ `recetaventa.COD INS`
+    (y `recetabase.COD INS RB`) es la clave real, validada con datos
+    reales: 31,7% de los códigos de compra matchean, y semánticamente
+    tiene sentido (Ají Amarillo → Lomo Saltado, Tomahawk → Tomahawk).
+    `LLAVE_PRODUCTO`/`ENLACE`/`RB ART ENLAZADO`/`RB INS ENLAZADO` tienen
+    nombre de clave de cruce pero están casi vacías (`ENLACE`: 2 valores
+    no nulos en 2.711 filas) — señuelo, no usar. Detalle completo en la
+    memoria de proyecto `esquema-real-compras-recetaventa`.
+
+    **`recetaventa.parquet` mezcla platos activos y de baja — filtrar
+    ANTES de agrupar, no después.** 54,8% de las filas son
+    `ITEM VENTA ACTIVO = 'INACTIV'` (842 platos en el catálogo, solo 418
+    activos). Se detectó a ojo: un primer mockup sin este filtro mostraba
+    nombres de platos que el usuario reconoció como dados de baja al
+    instante ("esos platos no están activos"). `ITEM VENTA ACTIVO='ACTIV'`
+    ya implica `RV ACTIV='RV ACT'` (mismo conteo exacto, 1226 filas);
+    sumar `INS ACTIVO='ACTIV'` afina un poco más (1226→1200). Con el
+    filtro puesto la cobertura compras↔receta baja de 33,7% (mal, sin
+    filtro) a 20,9% (la real) — el número más alto era artefacto del
+    bug, no una mejora.
+
+    **Sin click-drill sobre los nodos del Sankey — mismo motivo que la
+    nota de Flujo/Ajuste más arriba (regla #11/#44), nunca resuelto para
+    `go.Sankey` en este entorno.** Interacción vía `st.selectbox` en su
+    lugar: uno lista las recetas de un insumo elegido (tabla), otro
+    setea `session_state["rv_plato_sel"]` + `session_state["rv_graf_tipo"]
+    = "Sankey por plato"` y hace `st.rerun()` para reusar la vista de
+    UN plato que ya existía, en vez de duplicar esa lógica. Verificado
+    en vivo: funciona, pero el resultado tarda 1-2 reruns en reflejarse
+    en `get_page_text`/`read_page` — no dar por "no funcionó" sin volver
+    a leer la página después de esperar.
+
+    **Bug de reconciliación descubierto al agregar esta vista (no
+    exclusivo de ella): un widget de una vista anterior queda huérfano
+    (visible, `data-stale="false"`, funcional) si el código que lo crea
+    queda envuelto en un `if` que esta vez no se cumple.** Pasaba con el
+    selectbox "Plato" (compartido por Sankey/Composición, key
+    `rv_plato_sel`) al entrar a Ranking/Ingredientes/Panorama — y con los
+    `st.selectbox` propios de Panorama, al salir hacia Ranking. Los dos
+    tenían el MISMO patrón: `if condición: with columna_o_container: ...`.
+    **Fix de dos partes, hace falta las dos:**
+    1. Invertir el orden — `with columna: if condición: widget(...)` —
+       para que Streamlit "visite" esa posición TODOS los runs (vacía o
+       no) en vez de saltearla enteramente cuando la condición es falsa.
+    2. Envolver el contenido de cada rama del dispatcher en
+       `st.container(key=f"rv_graf_body_{graf...}")` — key que VARÍA por
+       vista, no fija — mismo espíritu que el contador de remount de la
+       regla #9, aplicado al nombre de la vista en vez de a un contador
+       de aperturas.
+    Con las dos partes, las transiciones entre vistas quedan limpias
+    (verificado Panorama→Ranking→Panorama). Quedó un residuo menor: el
+    selectbox "Plato" se vio huérfano en la PRIMERA transición después
+    de cargar la página (Sankey, la vista default, → cualquier otra) y
+    se resolvió solo en la siguiente — no perseguido más a fondo, parece
+    un desfasaje de un run en el primer rerun de la sesión. Si se topa
+    de nuevo, empezar por ahí.
