@@ -224,9 +224,15 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                 hovertemplate="%{customdata}<extra></extra>",
             ),
         ))
+        # margin l/r generoso: Plotly ubica las etiquetas de nodo AFUERA del
+        # diagrama solo si el margen les deja lugar -- con poco margen (10px,
+        # el valor anterior) no entran y las escribe encima de las cintas de
+        # color, ilegibles sobre fondo saturado (reportado con captura,
+        # 2026-08-09). 140px alcanza para el nombre mas largo de familia o
+        # area a la fuente default de Sankey (~12px).
         fig_sk.update_layout(**_layout_aj(
             height=min(560, max(280, (_n + _m) * 22 + 110)),
-            margin=dict(l=10, r=10, t=20, b=10),
+            margin=dict(l=140, r=140, t=20, b=10),
         ))
         with _card("heatmap", f"Flujo {_titulo_metrica}"):
             st.plotly_chart(fig_sk, use_container_width=True,
