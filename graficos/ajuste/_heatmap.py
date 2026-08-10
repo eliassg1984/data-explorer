@@ -462,15 +462,6 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     # mockup ocupa el mismo cellW, más angosta por el margen interno de
     # su rect, no por una fracción de columna más grande (reportado
     # 2026-08-09: se veía visiblemente más larga que el resto).
-    #
-    # Familia en 1.3 (antes 1.7): esa columna es casi toda espacio en
-    # blanco (nombres cortos, alineados a la derecha) y con 1.7 empujaba
-    # el sector de celdas entero hacia la derecha de la tarjeta -- "el
-    # espacio para los nombres es muy largo, empuja las celdas"
-    # (reportado 2026-08-09, con captura de la tarjeta completa). Los
-    # nombres más largos (ENVASES Y EMBALAJES, BEBIDAS CON ALCOHOL) se
-    # recortan con el ellipsis que ya tenía la celda -- el `title=` del
-    # div sigue mostrando el nombre completo al pasar el mouse.
     _anchos_grid = [1.3] + [1.0] * _m + [1.0]
     # El gap default entre bloques de Streamlit (16px, propiedad flex
     # `gap` del propio .stVerticalBlock de la card) se aplica ENTRE CADA
@@ -481,8 +472,25 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     # separadas del cuadro"). Se angosta aca, scoped a esta grilla
     # nomas -- la leyenda y el drill de abajo, que SI son bloques
     # distintos entre si, se quedan con el espaciado normal.
+    #
+    # Columna de familia a ancho FIJO en px, no a fracción -- bajar la
+    # fracción de 1.7 a 1.3 (commit anterior) seguía siendo un % del
+    # ancho disponible, y en una ventana ancha (reportado 2026-08-09 con
+    # el inspector: viewport 1912px) ese % igual da una columna enorme
+    # para un texto corto ("ALIMENTOS"), empujando las celdas. El
+    # mockup nunca tuvo este problema porque `labelW=132` ahí es un
+    # valor fijo en px, no una fracción del contenedor. st.columns() no
+    # tiene una opción nativa de "ancho fijo", así que se fuerza por
+    # CSS: flex-basis fijo en la PRIMERA columna de cada fila del grid
+    # (`:first-child`, alcanza cabecera/filas/TOTAL con un solo
+    # selector) -- las demás columnas, todas con el mismo peso 1.0 entre
+    # sí, se reparten lo que sobra en partes iguales, como el mockup.
     _css_celdas = [
-        '.st-key-hm_grid_filas[class*="stVerticalBlock"] { gap: 7px !important; }'
+        '.st-key-hm_grid_filas[class*="stVerticalBlock"] { gap: 7px !important; }',
+        '.st-key-hm_grid_filas [data-testid="stHorizontalBlock"] '
+        '> [data-testid="stColumn"]:first-child { flex: 0 0 130px '
+        '!important; max-width: 130px !important; min-width: 130px '
+        '!important; }',
     ]
 
     with _card("heatmap", _TITULO_HM):
