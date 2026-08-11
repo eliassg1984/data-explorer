@@ -49,11 +49,26 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
     es_valor = True
     fe = pd.to_datetime(d[col_fecha], errors="coerce")
 
+    if gran == "Semana":
+        # Fecha real del lunes de esa semana, no el número ISO ("2026-S31"
+        # no se lee sin calendario a mano). per_sort ordena cronológicamente
+        # (fecha ISO); per es la etiqueta que ve el usuario en el eje.
+        _wstart = (fe - pd.to_timedelta(fe.dt.weekday, unit="D")).dt.normalize()
+        per_sort = _wstart.dt.strftime("%Y-%m-%d")
+        per_disp = _wstart.dt.strftime("%d %b %Y")
+        for _en, _es in {"Jan": "Ene", "Apr": "Abr",
+                         "Aug": "Ago", "Dec": "Dic"}.items():
+            per_disp = per_disp.str.replace(_en, _es)
+    else:
+        per_disp = _periodo_serie(fe, gran)
+        per_sort = per_disp
+
     valor_s = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
     cant_s = (pd.to_numeric(d[col_cant], errors="coerce").fillna(0)
               if col_cant else pd.Series(0.0, index=d.index))
     base = pd.DataFrame({
-        "per": _periodo_serie(fe, gran).values,
+        "per": per_disp.values,
+        "per_sort": per_sort.values,
         "fam": d[col_fam].astype(str).values,
         "sub": (d[col_subfam].astype(str).values if col_subfam else "—"),
         "prod": (d[col_prod].astype(str).values if col_prod else "—"),
@@ -133,7 +148,12 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
     tb = tb.copy()
     tb["serie"] = tb[serie_col].where(tb[serie_col].isin(top_ser), "Otros")
     g = tb.groupby(["per", "serie"], as_index=False)["m"].sum()
-    periodos = sorted(g["per"].unique())
+    # Orden cronológico por per_sort, no alfabético sobre la etiqueta que ve
+    # el usuario (necesario desde que "per" dejó de ser un string ordenable
+    # como "2026-S31" para pasar a una fecha legible "04 Ago 2026").
+    periodos = (tb[["per_sort", "per"]].drop_duplicates()
+                .sort_values("per_sort")["per"].tolist())
+    periodos = list(dict.fromkeys(periodos))
     orden = top_ser + (["Otros"] if (tb["serie"] == "Otros").any() else [])
 
     _pref = "S/ " if es_valor else ""
