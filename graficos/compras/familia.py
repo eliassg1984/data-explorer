@@ -30,7 +30,9 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
         return
 
     # ── Controles ───────────────────────────────────────────────────────
-    c1, c2, c3, c4 = st.columns(4)
+    # Medida fija en Valor S/: se quitó el toggle Valor/Cantidad (la
+    # cantidad sigue viva igual en los paneles, junto al valor).
+    c1, c2, c3 = st.columns(3)
     with c1:
         gran = st.pills("Agrupar por", ["Semana", "Mes", "Año"],
                         default="Mes", key="compras_fam_gran",
@@ -40,16 +42,11 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
                          default="Apilado", key="compras_fam_vista",
                          label_visibility="collapsed") or "Apilado"
     with c3:
-        _meas = ["Valor S/"] + (["Cantidad"] if col_cant else [])
-        meas = st.pills("Medir", _meas, default="Valor S/",
-                        key="compras_fam_meas",
-                        label_visibility="collapsed") or "Valor S/"
-    with c4:
         topn = st.pills("Top", [5, 10, 20], default=10,
                         key="compras_fam_topn",
                         label_visibility="collapsed") or 10
 
-    es_valor = (meas == "Valor S/")
+    es_valor = True
     fe = pd.to_datetime(d[col_fecha], errors="coerce")
 
     valor_s = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
