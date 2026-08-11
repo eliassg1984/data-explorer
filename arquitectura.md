@@ -2768,3 +2768,43 @@ salvo `icono`):
     las dos columnas. Pedido explícito del usuario (layout lateral +
     "top" abajo); si hace falta compactar el Top también, es un ajuste
     aparte, no implícito en este cambio.
+
+82. **`_panel_top` pasa de 2 pestañas de mini-gráficos a UNA tabla AgGrid
+    ordenable, con barra de "Participación %" + checkbox y "Selección %"
+    en vivo (2026-08-10, mismo día) — pedido explícito del usuario.** No
+    es un componente nuevo: reusa el patrón EXACTO que ya vive en
+    `tablas/desktop.py` (líneas ~81-594, sección "Inventario Valorizado: 2
+    columnas de % + checkbox de selección") para la vista Tabla de este
+    mismo reporte — la barra-gradiente vía `cellStyle` (JsCode, no Styler
+    de pandas — ese es el patrón de `compras/volatilidad.py`, sin
+    checkbox, ver regla del CLAUDE.md), `configure_selection("multiple",
+    use_checkbox=True, header_checkbox=True)`, y el `valueGetter` de
+    "Selección %" que recalcula contra `getSelectedNodes()` en el
+    navegador — CERO round-trip a Streamlit por click de checkbox.
+    Diferencia con el original: "Participación %" es contra el total del
+    FOCO actual (el `d_panel` ya filtrado), no el total general del
+    reporte — coherente con el % que ya muestran las barras de
+    `_grafico_ranking`. Top 20 por Valorizado (antes: dos tops de 10,
+    cantidad y precio, por separado) — con columnas ordenables por header,
+    "top por cantidad" y "top por precio" son la misma tabla vista con
+    otro clic, así que las 2 pestañas quedaron redundantes y se sacaron.
+
+    **Bug real encontrado al verificar (no al leer el código): la última
+    columna ("Selección %") nunca renderizaba ninguna celda de dato** —
+    el header aparecía, el contenedor central medía el ancho correcto
+    para 6 columnas, pero cada fila solo tenía 5 `[role="gridcell"]`; un
+    hueco vacío del ancho de una columna quedaba al final. Sobrevivió a
+    sacar el `valueGetter` (no era eso), a sacar
+    `fit_columns_on_grid_load` (no era eso), a apretar los `minWidth` (no
+    era eso) — la causa era virtualización de COLUMNAS: AG Grid calcula
+    qué columnas están "en el viewport visible" y probablemente lo hace
+    ANTES de que el iframe de `st_aggrid` (un `st.components.v1.html`)
+    se asiente en su ancho final dentro de Streamlit, dejando a la última
+    columna fuera de ese rango para siempre — ni un `dispatchEvent(new
+    Event('resize'))` manual sobre el iframe lo recalculaba. Fix:
+    `grid_options["suppressColumnVirtualisation"] = True` — con una
+    grilla chica (7 columnas, ~20 filas) no cuesta nada de performance
+    desactivar la virtualización horizontal. **Si un AgGrid embebido en
+    un panel angosto (no la Tabla principal a pantalla completa) muestra
+    menos columnas de las configuradas sin ningún error en consola,
+    sospechar de esto primero.**

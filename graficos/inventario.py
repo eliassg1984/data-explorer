@@ -24,7 +24,9 @@ import plotly.graph_objects as go
 import streamlit as st
 
 
-from tema import ACENTO, ACENTO_FUERTE, AJUSTE_NEG, AJUSTE_NEG_TEXTO, TEXTO_PRINCIPAL
+from tema import (
+    ACENTO, ACENTO_FUERTE, AJUSTE_NEG, AJUSTE_NEG_TEXTO, LAVANDA_BORDE, TEXTO_PRINCIPAL,
+)
 from graficos.base import (
     _compras_layout, _compras_truncar, _render_rail,
     _resolver, _slug, publicar_contexto_ia, renderizar_graficos_genericos,
@@ -389,90 +391,165 @@ def _panel_relacionados(d, col_prod, col_fam, col_subfam, col_val):
         st.caption("Elegí un producto o un grupo para ver contexto relacionado acá.")
 
 
-def _panel_top(d, foco, col_grp, col_prod, col_area, col_punit, _cant):
-    """Top-10 Mayor cantidad/Precio más alto de Por área/Por familia. Sin
-    foco (col_der de siempre) es el top global; con foco activo se filtra
-    a esa categoría — lo usa la franja de ABAJO en ese caso, porque col_der
-    pasa a mostrar el detalle del drill (lateral, no apilado) y el Top
-    pierde su lugar de siempre."""
+def _panel_top(d, foco, col_grp, col_prod, col_area, col_val, col_punit, _cant):
+    """Top de productos de Por área/Por familia — tabla ordenable, no un
+    gráfico. Reemplaza las 2 pestañas de mini-barras (Mayor cantidad/Precio
+    más alto): con columnas ordenables por header, "top por cantidad" y
+    "top por precio" son el mismo componente visto con otro orden — dos
+    gráficos separados eran redundantes.
+
+    Barra de "Participación %" + checkbox con "Selección %" recalculada en
+    vivo (sin rerun de Streamlit): MISMO patrón ya usado en la Tabla
+    principal de este reporte (`tablas/desktop.py`, sección "Inventario
+    Valorizado: 2 columnas de % + checkbox de selección") — no un
+    componente nuevo, la barra-gradiente vive en `cellStyle` de AgGrid, no
+    en un Styler de pandas (ver `arquitectura.md` sobre por qué acá sí
+    hace falta JsCode y en `compras/volatilidad.py` no)."""
+    from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
+    from tablas._css import _css_grid
+
     d_panel = d[d[col_grp].astype(str) == foco] if foco else d
-    _cant_panel = _cant.loc[d_panel.index] if _cant is not None else None
     if foco:
         st.caption(f"Top de **{foco}**.")
-    tabs = st.tabs(["Mayor cantidad", "Precio más alto"])
-    with tabs[0]:
-        if col_prod and _cant_panel is not None and col_area:
-            g = (pd.DataFrame({"prod": d_panel[col_prod].astype(str),
-                               "area": d_panel[col_area].astype(str),
-                               "cant": _cant_panel})
-                 .groupby(["prod", "area"], as_index=False)["cant"].sum()
-                 .nlargest(10, "cant").sort_values("cant"))
-            if g.empty:
-                st.info("Sin datos.")
-            else:
-                fig = go.Figure(go.Bar(
-                    x=g["cant"],
-                    y=[_compras_truncar(p_, 24) for p_ in g["prod"]],
-                    orientation="h",
-                    marker=dict(color=ACENTO, opacity=0.85),
-                    text=[_compras_truncar(a_, 14) for a_ in g["area"]],
-                    textposition="outside", cliponaxis=False,
-                    customdata=g["area"],
-                    hovertemplate=("%{y}<br>Área: %{customdata}"
-                                   "<br>Cantidad: %{x:,.1f}<extra></extra>"),
-                ))
-                fig.update_layout(
-                    height=400, margin=dict(l=4, r=60, t=10, b=10),
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    font=dict(family="DM Sans, sans-serif",
-                              color=TEXTO_PRINCIPAL, size=11),
-                )
-                fig.update_xaxes(visible=False)
-                st.plotly_chart(fig, use_container_width=True,
-                                key="inv_mini_cant")
-        else:
-            st.info("Faltan columnas de cantidad o área.")
-    with tabs[1]:
-        if col_prod and col_punit and col_area:
-            _pu = pd.to_numeric(d_panel[col_punit], errors="coerce")
-            g = (pd.DataFrame({"prod": d_panel[col_prod].astype(str),
-                               "area": d_panel[col_area].astype(str),
-                               "pu": _pu,
-                               "cant": (_cant_panel if _cant_panel is not None
-                                        else pd.Series(0, index=d_panel.index))})
-                 .dropna(subset=["pu"])
-                 .groupby(["prod", "area"], as_index=False)
-                 .agg(pu=("pu", "mean"), cant=("cant", "sum"))
-                 .nlargest(10, "pu").sort_values("pu"))
-            if g.empty:
-                st.info("Sin datos.")
-            else:
-                fig = go.Figure(go.Bar(
-                    x=g["pu"],
-                    y=[_compras_truncar(p_, 24) for p_ in g["prod"]],
-                    orientation="h",
-                    marker=dict(color=ACENTO, opacity=0.85),
-                    text=[f"S/ {v:,.1f}" for v in g["pu"]],
-                    textposition="outside", cliponaxis=False,
-                    customdata=np.stack([g["area"], g["cant"]], axis=-1),
-                    hovertemplate=("%{y}<br>Área: %{customdata[0]}"
-                                   "<br>Precio: S/ %{x:,.2f}"
-                                   "<br>Cantidad: %{customdata[1]:,.1f}"
-                                   "<extra></extra>"),
-                ))
-                fig.update_layout(
-                    height=400, margin=dict(l=4, r=60, t=10, b=10),
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    font=dict(family="DM Sans, sans-serif",
-                              color=TEXTO_PRINCIPAL, size=11),
-                )
-                fig.update_xaxes(visible=False)
-                st.plotly_chart(fig, use_container_width=True,
-                                key="inv_mini_precio")
-        else:
-            st.info("Faltan columnas de precio o área.")
+    if not (col_prod and col_area and _cant is not None and col_val):
+        st.info("Faltan columnas para esta tabla.")
+        return
+
+    _cant_panel = _cant.loc[d_panel.index]
+    _val_panel = pd.to_numeric(d_panel[col_val], errors="coerce").fillna(0)
+    _pu_panel = (pd.to_numeric(d_panel[col_punit], errors="coerce")
+                if col_punit else pd.Series(np.nan, index=d_panel.index))
+    base = pd.DataFrame({
+        "Producto": d_panel[col_prod].astype(str),
+        "Área": d_panel[col_area].astype(str),
+        "Cantidad": _cant_panel.values,
+        "Precio unitario": _pu_panel.values,
+        "Valorizado": _val_panel.values,
+    })
+    g = (base.groupby(["Producto", "Área"], as_index=False)
+         .agg(Cantidad=("Cantidad", "sum"), Valorizado=("Valorizado", "sum"),
+              **{"Precio unitario": ("Precio unitario", "mean")}))
+    if g.empty:
+        st.info("Sin datos.")
+        return
+
+    # Participación % contra el total del FOCO (no solo el top mostrado) —
+    # mismo criterio que el % de las barras de _grafico_ranking: sobre el
+    # total neto que el usuario ya ve arriba, no sobre una suma parcial.
+    _total_foco = float(_val_panel.sum())
+    g["Participación %"] = ((g["Valorizado"] / _total_foco * 100)
+                            if _total_foco else 0.0)
+    g["Selección %"] = g["Participación %"]  # semilla; el valueGetter de abajo la recalcula en vivo
+    g = g.nlargest(20, "Valorizado")
+
+    gb = GridOptionsBuilder.from_dataframe(
+        g[["Producto", "Área", "Cantidad", "Precio unitario", "Valorizado",
+           "Participación %", "Selección %"]])
+    gb.configure_default_column(resizable=True, sortable=True, filter=False)
+    # minWidths ajustados para que las 7 entren sin scroll horizontal en la
+    # franja de abajo (~911-1117px medido en vivo): con los anchos "cómodos"
+    # originales (170+110+100+120+120+140+140=900px de columnas centrales)
+    # quedaban ~19px cortos contra el ancho disponible real — Selección %,
+    # al ser la última, quedaba virtualizada fuera de vista (ni scrolleable
+    # a simple vista: parecía que la columna no existía).
+    gb.configure_column("Producto", pinned="left", minWidth=150)
+    gb.configure_column("Área", minWidth=90)
+
+    _num_fmt = JsCode("""
+        function(params) {
+            if (params.value === null || params.value === undefined || isNaN(params.value)) return '–';
+            return Number(params.value).toLocaleString('es-PE', {maximumFractionDigits: 1});
+        }
+    """)
+    _money_fmt = JsCode("""
+        function(params) {
+            if (params.value === null || params.value === undefined || isNaN(params.value)) return '–';
+            return 'S/ ' + Number(params.value).toLocaleString('es-PE', {maximumFractionDigits: 0});
+        }
+    """)
+    gb.configure_column("Cantidad", type=["numericColumn"], minWidth=90,
+                        valueFormatter=_num_fmt)
+    gb.configure_column("Precio unitario", type=["numericColumn"], minWidth=100,
+                        valueFormatter=_money_fmt)
+    gb.configure_column("Valorizado", type=["numericColumn"], minWidth=110,
+                        valueFormatter=_money_fmt, sort="desc")
+
+    # Misma barra-gradiente que tablas/desktop.py::_pct_bar_style — el "–"
+    # con value null cubre "Selección %" mientras no haya nada marcado
+    # (Participación % siempre tiene valor).
+    _pct_bar_style = JsCode(f"""
+        function(params) {{
+            var base = {{ textAlign: 'right', fontWeight: '500', paddingRight: '12px' }};
+            if (params.value === null || params.value === undefined) return base;
+            var pct = Math.max(0, Math.min(100, Number(params.value)));
+            return Object.assign({{}}, base, {{
+                backgroundImage: 'linear-gradient(to right, {LAVANDA_BORDE} 0%, {LAVANDA_BORDE} ' + pct + '%, transparent ' + pct + '%, transparent 100%)',
+                backgroundRepeat: 'no-repeat',
+                backgroundSize: '100% 80%',
+                backgroundPosition: 'left center',
+            }});
+        }}
+    """)
+    _pct_fmt = JsCode("""
+        function(params) {
+            if (params.value === null || params.value === undefined) return '–';
+            return Number(params.value).toLocaleString('es-PE',
+                { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+        }
+    """)
+    gb.configure_column("Participación %", minWidth=115, type=["numericColumn"],
+                        cellStyle=_pct_bar_style, valueFormatter=_pct_fmt)
+    gb.configure_column(
+        "Selección %", minWidth=115, type=["numericColumn"],
+        cellStyle=_pct_bar_style, valueFormatter=_pct_fmt,
+        # Recalcula en vivo contra la suma de getSelectedNodes() — sin
+        # selección, null (el formatter de arriba pinta "–").
+        valueGetter=JsCode("""
+            function(params) {
+                if (!params.data) return null;
+                var val = Number(params.data["Valorizado"]);
+                if (isNaN(val)) return null;
+                var nodes = (params.api && params.api.getSelectedNodes)
+                    ? params.api.getSelectedNodes() : [];
+                if (!nodes || nodes.length === 0) return null;
+                var suma = 0;
+                nodes.forEach(function(n) {
+                    if (n.data) {
+                        var v = Number(n.data["Valorizado"]);
+                        if (!isNaN(v)) suma += v;
+                    }
+                });
+                if (suma <= 0) return null;
+                return (val / suma) * 100;
+            }
+        """),
+    )
+    gb.configure_selection("multiple", use_checkbox=True, header_checkbox=True)
+    grid_options = gb.build()
+    # Sin esto, la última columna ("Selección %") quedaba virtualizada
+    # fuera de rango y NUNCA renderizaba celda — bug real, verificado en
+    # vivo: el header aparecía pero la fila tenía un hueco vacío del ancho
+    # de una columna. La grilla es chica (7 columnas, ~20 filas), así que
+    # desactivar la virtualización horizontal no cuesta nada de
+    # performance. Causa raíz probable: AG Grid calcula el rango visible
+    # ANTES de que el iframe de Streamlit se asiente en su ancho final.
+    grid_options["suppressColumnVirtualisation"] = True
+    # AG Grid no sabe que un valueGetter "cambió" (no depende de ningún
+    # field propio) — sin este refreshCells forzado tras cada click de
+    # checkbox, "Selección %" se queda pintada con el valor anterior.
+    grid_options["onSelectionChanged"] = JsCode("""
+        function(params) {
+            try {
+                params.api.refreshCells({ columns: ['Selección %'], force: true });
+            } catch(e) {}
+        }
+    """)
+
+    AgGrid(
+        g, gridOptions=grid_options, height=380, theme="material",
+        custom_css=_css_grid(12),
+        allow_unsafe_jscode=True, key=f"inv_top_grid_{foco or 'global'}",
+    )
 
 
 def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=None):
@@ -596,8 +673,10 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                 _grafico_detalle_foco(d, graf, col_grp, foco,
                                       col_fam, col_subfam, col_val)
             else:
-                _panel_top(d, None, col_grp, col_prod, col_area, col_punit, _cant)
+                _panel_top(d, None, col_grp, col_prod, col_area, col_val,
+                          col_punit, _cant)
 
     if foco and graf in ("Por área", "Por familia"):
         with st.container(border=True, key="ajuste_graf_card_abajo_inv"):
-            _panel_top(d, foco, col_grp, col_prod, col_area, col_punit, _cant)
+            _panel_top(d, foco, col_grp, col_prod, col_area, col_val,
+                      col_punit, _cant)
