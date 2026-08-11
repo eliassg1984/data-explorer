@@ -16,6 +16,7 @@ from graficos.base import (
     _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
 )
 from graficos.ventas_resumen import _ventas_resumen
+from graficos.ventas_comparativo import _ventas_comparativo
 
 _MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
              "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
@@ -26,6 +27,7 @@ _MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
 _VENTAS_RAIL_CATEGORIAS = (
     ("Resumen",  (("Resumen ejecutivo", "Resumen"),)),
     ("Tiempo",   (("Venta por día",              "Por día"),
+                  ("Comparativo vs Año Pasado",   "Año Pasado"),
                   ("Venta vs Compra",            "Vs Compra"),
                   ("Familia/Subfamilia semanal",  "Semanal"),
                   ("Histórica subfamilia",        "Histórica"))),
@@ -989,15 +991,21 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         with _cols[3]:
             serv_sel = _filtro_popover(col_serv, "ventas_graf_filtro_serv", "Servicio")
 
-    d = df_f
-    if fam_sel and col_fam:
-        d = d[d[col_fam].astype(str).isin(fam_sel)]
-    if sub_sel and col_sub:
-        d = d[d[col_sub].astype(str).isin(sub_sel)]
-    if canal_sel and col_canal:
-        d = d[d[col_canal].astype(str).isin(canal_sel)]
-    if serv_sel and col_serv:
-        d = d[d[col_serv].astype(str).isin(serv_sel)]
+    def _aplicar_chips(df):
+        """Aplica los chips de la franja a CUALQUIER df de ventas, no solo al
+        del rango cargado. Existe como función (y no inline) porque el
+        comparativo "Año Pasado" trae su propio df desde R2 y tiene que
+        quedar filtrado IGUAL que la vista actual — si no, se comparan
+        barras filtradas contra barras sin filtrar. Defensiva con las
+        columnas: el df del año pasado sale del mismo parquet, pero si
+        alguna faltara, ese filtro se saltea en vez de reventar."""
+        for _col, _sel in ((col_fam, fam_sel), (col_sub, sub_sel),
+                           (col_canal, canal_sel), (col_serv, serv_sel)):
+            if _sel and _col and _col in df.columns:
+                df = df[df[_col].astype(str).isin(_sel)]
+        return df
+
+    d = _aplicar_chips(df_f)
 
     # El asistente IA tiene que ver ESTO (post-chips), no el df_f de app.py.
     publicar_contexto_ia("Ventas", d, {
@@ -1073,6 +1081,13 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                 st.info("Sin fechas válidas en el rango.")
             else:
                 _ventas_grafico_dia(g, col_costo, col_pax)
+
+        # ── 1a) Comparativo día a día vs Año Pasado ──────────────────────
+        # Trae su propio df del año pasado (data.cargar_rango) y le pasa
+        # _aplicar_chips para que quede filtrado igual que `d`.
+        elif graf == "Comparativo vs Año Pasado":
+            _ventas_comparativo(d, col_venta, col_fecha,
+                                filtrar_cb=_aplicar_chips)
 
         # ── 1b) Venta vs Compra por día (líneas arriba, Pax en barras abajo) ─
         # Vista aparte de "Venta por día": mismo espíritu que un gráfico

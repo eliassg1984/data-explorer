@@ -222,6 +222,44 @@ def _pruebas_puras():
     check("_vol_semanas insuficientes → None",
           _vol._vol_semanas_ventana(_fe2, minimo=4), None)
 
+    # ── Comparativo vs Año Pasado (Ventas) ──────────────────────────────
+    import datetime as _dt
+    from graficos import ventas_comparativo as _vc
+
+    # Pascua: fechas conocidas (control externo, no auto-referencial)
+    check("_pascua 2026", _vc._pascua(2026), _dt.date(2026, 4, 5))
+    check("_pascua 2025", _vc._pascua(2025), _dt.date(2025, 4, 20))
+    check("_pascua 2024", _vc._pascua(2024), _dt.date(2024, 3, 31))
+
+    _fer26 = _vc._feriados_peru(2026)
+    check("feriado fijo (28 jul)", _dt.date(2026, 7, 28) in _fer26, True)
+    check("feriado movible (Viernes Santo 2026)",
+          _dt.date(2026, 4, 3) in _fer26, True)
+    check("día común NO es feriado", _dt.date(2026, 7, 27) in _fer26, False)
+
+    # Alineación por fecha calendario: mismo día/mes, año anterior
+    check("equivalente calendario",
+          _vc._fecha_equivalente(_dt.date(2026, 8, 5), "calendario"),
+          _dt.date(2025, 8, 5))
+    check("equivalente calendario 29-feb → 28",
+          _vc._fecha_equivalente(_dt.date(2024, 2, 29), "calendario"),
+          _dt.date(2023, 2, 28))
+
+    # Alineación por semana ISO: el DÍA DE SEMANA es lo que se conserva
+    _orig = _dt.date(2026, 8, 5)                      # miércoles
+    _eq = _vc._fecha_equivalente(_orig, "semana")
+    check("equivalente semana conserva día de semana",
+          _eq.weekday(), _orig.weekday())
+    check("equivalente semana conserva semana ISO",
+          _eq.isocalendar()[1], _orig.isocalendar()[1])
+    check("equivalente semana cae en el año anterior", _eq.year, 2025)
+    # Semana 53 (2026 la tiene; 2025 no) → cae a la 52 sin reventar
+    _s53 = _dt.date.fromisocalendar(2026, 53, 3)
+    check("equivalente semana 53 → 52 sin error",
+          _vc._fecha_equivalente(_s53, "semana").isocalendar()[1], 52)
+
+    check("_etiqueta_dia", _vc._etiqueta_dia(_dt.date(2026, 8, 5)), "Mié 05/08")
+
     return fallos
 
 

@@ -23,7 +23,7 @@ actualiza este documento en el mismo commit.
 | `cortes.py` | Agrupa fechas en **cortes**: las rachas de días de una misma sesión de inventario (salto ≤ `CORTE_MAX_SALTO_DIAS`). Un corte es un CONJUNTO de días, no un intervalo — ver regla #62. Sin dependencias de streamlit ni de `graficos/`, porque lo consumen los dos lados: la franja de `app.py` y `graficos/ajuste/_comun.py` (que lo reexporta con los nombres privados de siempre). |
 | `data.py` | Carga de datos: DuckDB + httpfs leyendo parquets de R2 (secrets). Sistema de refresco bajo demanda vía R2. |
 | `tablas/` | **Paquete de tablas AgGrid** (refactor 2026-08-01; antes un `tablas.py` de 2.028 líneas). `__init__.py` re-exporta la API pública. `_css.py` (CSS de grid y paneles), `_config.py` (estilos de celda/fila, sidebar, totales), `desktop.py` (`renderizar_aggrid_desktop`), `movil.py` (`renderizar_aggrid_movil`), `compras.py` (`renderizar_aggrid_compras`), `ajuste_pivote.py` (`renderizar_aggrid_pivote_ajuste`, tabla "Por fecha" de Ajuste de Inventario — ver regla #25). `renderizar_tabla_compras` se borró el 2026-08-08 (llevaba desde 2026-08-01 sin llamadores). |
-| `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `tiene_dashboard(reporte)` (para que `app.py` no enumere reportes ni importe `_DASHBOARDS`; ver regla #50). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), **`ajuste/` es un paquete** (refactor 2026-08-08; antes un `ajuste.py` de 2.607 líneas — el fichero con MÁS churn del repo, 80 de los últimos 200 commits): una vista por módulo — `_comun.py` (layout del rail, fechas de corte, periodos), `_evolucion.py`, `_pivote.py`, `_cascada.py`, `_panel_analisis.py`, `_heatmap.py`, `_distribucion.py` — y `__init__.py` con la config del rail, `categoria_rango_ajuste` y el entry point. Ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10, `ventas.py` (`ventas_resumen.py` aporta su vista "Resumen ejecutivo" — KPIs + venta diaria coloreada por tendencia + ticket promedio + top platos; nació con un candlestick, ver por qué se dio de baja en la regla #85), `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras). `legacy.py` (Inventario v1) se borró el 2026-08-08: 421 líneas sin un solo import. **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py`, `volatilidad.py` (ranking de insumos por volatilidad de precio → candlestick semanal → compras de la semana clickeada; ver regla #74) — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. El drill de Proveedor se siguió partiendo el 2026-08-08 (era una función de 1.577 líneas): `_css_proveedor.py` (sus 527 líneas de CSS, que NO van a `estilos/` a propósito — ver su docstring), `_etiquetas_proveedor.py` (texto de las barras: `fmt_k`, `abrev_nombre`, `etiqueta_serie`, `sufijo_granularidad`; puras y con asserts de valor en `test_graficos.py`) y `_documentos_proveedor.py` (`tabla_documentos`, la AgGrid pivote del pie). Quedó en 791 líneas; el resto NO se siguió cortando a propósito — ver regla #55. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
+| `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `tiene_dashboard(reporte)` (para que `app.py` no enumere reportes ni importe `_DASHBOARDS`; ver regla #50). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), **`ajuste/` es un paquete** (refactor 2026-08-08; antes un `ajuste.py` de 2.607 líneas — el fichero con MÁS churn del repo, 80 de los últimos 200 commits): una vista por módulo — `_comun.py` (layout del rail, fechas de corte, periodos), `_evolucion.py`, `_pivote.py`, `_cascada.py`, `_panel_analisis.py`, `_heatmap.py`, `_distribucion.py` — y `__init__.py` con la config del rail, `categoria_rango_ajuste` y el entry point. Ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10, `ventas.py` (`ventas_resumen.py` aporta su vista "Resumen ejecutivo" — KPIs + venta diaria coloreada por tendencia + ticket promedio + top platos; nació con un candlestick, ver por qué se dio de baja en la regla #85) y `ventas_comparativo.py` (vista "Año Pasado": barras agrupadas día a día con toggle de alineación fecha-calendario / día-de-semana, feriados y findes marcados — ver regla #86), `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras). `legacy.py` (Inventario v1) se borró el 2026-08-08: 421 líneas sin un solo import. **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py`, `volatilidad.py` (ranking de insumos por volatilidad de precio → candlestick semanal → compras de la semana clickeada; ver regla #74) — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. El drill de Proveedor se siguió partiendo el 2026-08-08 (era una función de 1.577 líneas): `_css_proveedor.py` (sus 527 líneas de CSS, que NO van a `estilos/` a propósito — ver su docstring), `_etiquetas_proveedor.py` (texto de las barras: `fmt_k`, `abrev_nombre`, `etiqueta_serie`, `sufijo_granularidad`; puras y con asserts de valor en `test_graficos.py`) y `_documentos_proveedor.py` (`tabla_documentos`, la AgGrid pivote del pie). Quedó en 791 líneas; el resto NO se siguió cortando a propósito — ver regla #55. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
 | `estilos/` | **Paquete del CSS global** (refactor 2026-08-01; antes un `estilos.py` de 1.700 líneas). `__init__.py` mantiene la API pública (`TAM_FUENTE`, `get_css`, `inject_css`) y concatena las secciones. Una sección por módulo, con prefijo numérico que marca el orden: `_00_base`, `_20_compras_rail`, `_30_filtros`, `_40_ajuste_franja`, `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`, `_90_franja_inferior`, `_99_movil`. (`_10_vista` existió hasta el 2026-08-08: estilaba el selector Gráficos/Tabla y quedó 100% huérfano al borrarse ese widget — ver regla #49.) **El orden de `_SECCIONES` es parte del comportamiento**: hay `!important` en ambos lados de varios conflictos, así que gana la regla que va DESPUÉS — por eso `_99_movil` cierra. |
 | `navegacion.py` | Rail lateral, topbar y CSS por sección (`_CSS_AJUSTE`). Botón de refresco aislado en su propio `@st.fragment`. |
 | `inyecciones/` | **Paquete de JS/HTML inyectado** (refactor 2026-08-01; antes un `inyecciones.py` de 1.813 líneas). `_fragmentos.py` (CSS/JS compartido), `grid.py` (salud, altura, maximizar, panel de columnas), `paginacion.py`, `inspector.py` (herramienta de desarrollo), `diseno.py` (modo de diseño visual, `?debug=1&diseno=1` — lee el pin de `inspector.py`, ver regla #46), `varios.py` (overlay de errores, fullscreen, footer, calendario). Los dos blobs de JS grandes viven aparte desde el 2026-08-08: `_inspector_js.py` (1.381 líneas) y `_diseno_js.py` (794). Sus funciones quedaron en 34 y 5 líneas. **Si tocas esos módulos, lee antes la regla #56** — extraerlos rompió el inspector de una forma que ni `ruff` ni los tests pueden ver. Ninguna función depende de otra (la excepción de solo-lectura de `diseno.py` está documentada en la regla #46): las únicas dependencias internas apuntan a las constantes de `_fragmentos.py`. |
@@ -2952,3 +2952,76 @@ salvo `icono`):
     comparación que sí importa (día vs. día anterior, período vs. período)
     dice lo mismo con menos aparato y sin insinuar una relación que no
     existe.
+
+86. **Comparativo diario vs Año Pasado (`graficos/ventas_comparativo.py`,
+    2026-08-11) — "la misma fecha del año pasado" es AMBIGUO, y la
+    ambigüedad es del negocio, no del código: por eso es un toggle
+    visible.** 05/08/2026 es miércoles; 05/08/2025 fue martes. En un
+    restaurante el día de semana es la variable que más pesa (viernes y
+    sábado contra lunes), así que comparar por fecha calendario mezcla la
+    señal que se busca con el ruido de estar comparando días distintos.
+    Los dos modos conviven detrás de un `st.pills`:
+    - **"Mismo día de semana"** (default): misma semana ISO + mismo día de
+      semana del año ISO anterior (`date.fromisocalendar`). La fecha se
+      corre ±3 días, el día de semana coincide siempre.
+    - **"Misma fecha"**: mismo día/mes del año anterior. Se conserva porque
+      es lo que hace cualquier comparativo de calendario (y lo que el
+      usuario ve en su Power BI), pero el caption avisa explícitamente que
+      el día de semana no coincide.
+    Las etiquetas del eje X llevan el día de semana SIEMPRE (`Mié 05/08`,
+    `_etiqueta_dia`) — en modo "misma fecha" es justo lo que deja ver el
+    desfase de un vistazo, en vez de esconderlo.
+
+    **Dos edge cases reales, con test de valor cada uno** (`test_graficos.py`):
+    29-feb no existe en un año no bisiesto (cae al 28) y la semana ISO 53 no
+    existe en la mayoría de los años ISO (cae a la 52 —
+    `date.fromisocalendar(2025, 53, x)` lanza `ValueError`, no devuelve algo
+    razonable). Sin la guarda, el gráfico revienta en unas pocas fechas al
+    año: el peor tipo de bug, el que no aparece cuando lo probás.
+
+    **El df del año pasado NO sale de `d`.** Ventas usa `carga_por_rango`
+    (ver `REPORTES` en `data.py`), así que `d` trae SOLO el rango de la
+    franja — el año pasado no está en memoria salvo que el usuario ensanche
+    el rango a mano (que es la limitación que tienen hoy "Matriz agrupada" y
+    "Ranking & FoodCost", ambas avisan "amplía el rango" cuando falta el año
+    anterior). Acá se trae con `data.cargar_rango()` acotado al tramo
+    equivalente (~2 semanas, no el parquet entero), así que el comparativo
+    funciona sin pedirle nada al usuario.
+    **Y se le aplican LOS MISMOS chips**, vía un `filtrar_cb` que
+    `ventas.py` construye donde viven las selecciones (`_aplicar_chips`, que
+    de paso reemplazó el filtrado inline — un solo sitio, dos consumidores).
+    Sin eso, filtrar por Grupo daría barras actuales filtradas contra barras
+    del año pasado SIN filtrar: dos números que no se pueden comparar, en un
+    gráfico cuyo único trabajo es compararlos. Misma clase de bug que la
+    regla #58 y que el que motivó `publicar_contexto_ia`.
+
+    **Feriados hardcodeados** (`_FERIADOS_FIJOS_PE` + Jueves/Viernes Santo
+    vía `_pascua`, algoritmo gregoriano anónimo). Es el calendario NACIONAL
+    de Perú: no sabe de cierres del local, aniversarios ni feriados
+    regionales. Si eso hace falta, tiene que pasar a ser un dato mantenido
+    por el negocio, no una constante en el código — está anotado en el
+    módulo. Los tests de `_pascua` clavan fechas conocidas (2024-03-31,
+    2025-04-20, 2026-04-05) contra un almanaque real, no contra la propia
+    salida de la función.
+
+    **Un día se marca feriado si lo es este año O si lo era el día contra el
+    que se compara — y la etiqueta DISTINGUE cuál** ("feriado" vs "feriado
+    AP"). Encontrado verificando en el navegador, no razonando: con datos
+    reales aparecían dos bandas ámbar y solo una era feriado de 2026. La
+    otra era `Mié 05/08/2026`, que en modo día-de-semana se compara contra
+    el 06/08/2025 (Batalla de Junín) — información útil (explica una barra
+    lavanda anormal) pero que sin distinguir se lee como "hoy es feriado",
+    que es falso. Las dos explican barras DISTINTAS: la morada o la lavanda.
+
+    **Es un item propio del rail, no una pieza más del Resumen ejecutivo**
+    (categoría "Tiempo", entre "Por día" y "Vs Compra"). El Resumen recién
+    se había ajustado para entrar sin scroll (reglas #84/#85); meterle un
+    gráfico de barras agrupadas con toggles habría deshecho eso.
+
+    **Verificado en el navegador con datos reales de R2**, los dos modos: en
+    "misma fecha" el 01/08/2026 se compara contra 01/08/2025; en "mismo día
+    de semana", contra 02/08/2025 (sábado con sábado). **NO se pudo
+    ejercitar** la supresión del %Var sobre las barras con más de
+    `MAX_ETIQUETAS=14` días: el rango cargado en el entorno tenía 9 días con
+    ventas, y la ventana es un TECHO (`.tail(ventana)`), así que pedir 30
+    días sigue mostrando 9 — correcto, pero deja esa rama sin probar.
