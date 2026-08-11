@@ -2626,3 +2626,36 @@ salvo `icono`):
     con foco) y en viewport móvil (375px, sin solape). No es un cambio de
     Inventario: al vivir en `_20_compras_rail.py` (CSS compartido por
     prefijo de key), arregla las dos a la vez.
+
+78. **"Buscar producto" (grupo/Subfamilia) mostraba ítems sin stock y en
+    orden equivocado (2026-08-10).** `_ficha_subfamilia` armaba `g` con
+    TODOS los productos de la subfamilia, sin filtrar los que no tienen
+    nada — en un catálogo real son la mayoría (ej. CARNES: 188 productos
+    catalogados, 39 con algo de stock/valorizado). Consecuencias: (a) el
+    gráfico se llenaba de barras invisibles (val=0) que solo ensuciaban,
+    y (b) como estaban empatadas en 0, `sort_values` las dejaba en el
+    orden alfabético del `groupby` en vez de por importe — parecía "sin
+    ordenar". Fix: filtrar a `(val != 0) | (cant != 0)` ANTES de calcular
+    `orden` — no solo `val != 0`, para no esconder un producto con stock
+    real pero precio 0 (dato real observado: "(P) Bife Angosto Arg 500gr"
+    con cant>0 y val=0 exacto). Mismo filtro en `_ficha_producto` (ahí son
+    ÁREAS sin ese producto, no productos). `k4.metric("Productos", ...)`
+    NO se tocó — sigue contando el catálogo completo (188), a propósito:
+    es "cuántos productos existen en este grupo", no "cuántos tienen
+    barra"; el número más chico del gráfico de al lado es coherente con
+    eso, no un bug nuevo.
+
+    **Bug de orden aparte, no relacionado al filtro:** `_ficha_subfamilia`
+    usa `px.bar(..., category_orders={"prod": orden})`, a diferencia de
+    `_grafico_ranking` que arma un `go.Bar` con `y=lista literal`. Con
+    `go.Bar`, el primer elemento del array `y` pinta ABAJO (comentario
+    original, confirmado en vivo con la regla #76: la barra más grande
+    quedaba arriba con `sort_values(ascending=True)`). Con
+    `category_orders` de `px.bar` es AL REVÉS: el primer elemento del
+    orden pinta ARRIBA — confirmado midiendo posición en pantalla
+    (`getBoundingClientRect().top` de los ticks del eje Y), no leyendo el
+    código: con `ascending=True` el producto más chico terminaba arriba y
+    el más grande abajo. Con `ascending=False` (mayor primero) queda
+    correcto. **No asumir que `category_orders` y un `y=` literal de
+    `go.Bar` comparten convención de "primer elemento = dónde" — verificar
+    en vivo cada vez que se toque uno de los dos.**

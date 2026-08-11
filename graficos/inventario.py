@@ -162,10 +162,12 @@ def _ficha_producto(d, prod_sel, col_prod, col_area, col_val, col_cant,
 
     g = (pd.DataFrame({"area": dd[col_area].astype(str), "val": _v,
                        "cant": _c if _c is not None else 0})
-         .groupby("area", as_index=False).agg(val=("val", "sum"), cant=("cant", "sum"))
-         .sort_values("val"))
+         .groupby("area", as_index=False).agg(val=("val", "sum"), cant=("cant", "sum")))
+    # Áreas sin nada de este producto (val=0 y cant=0: "inactivas" para él)
+    # no suman una barra — solo ruido, la mayoría de las áreas ni lo tienen.
+    g = g[(g["val"] != 0) | (g["cant"] != 0)].sort_values("val")
     if g.empty:
-        st.info("Sin datos para este producto.")
+        st.info("Sin stock ni valorizado activo para este producto en ninguna área.")
         return
     _texto = [f"S/ {v:,.0f}  ·  {c:,.0f} {unidad}" for v, c in zip(g["val"], g["cant"])]
     fig = go.Figure(go.Bar(
@@ -213,8 +215,24 @@ def _ficha_subfamilia(d, subfam_sel, col_subfam, col_prod, col_area,
     g = (pd.DataFrame({"prod": dd[col_prod].astype(str), "area": dd[col_area].astype(str),
                        "val": _v, "cant": _c if _c is not None else 0})
          .groupby(["prod", "area"], as_index=False).agg(val=("val", "sum"), cant=("cant", "sum")))
-    orden = (g.groupby("prod")["val"].sum()
-             .sort_values(ascending=True).index.tolist())  # ascendente: la barra horizontal pinta de abajo hacia arriba
+    # Productos sin stock ni valorizado ("inactivos" para esta subfamilia)
+    # no entran: son la mayoría en un catálogo real y ensucian el desglose
+    # sin aportar nada — además, empatados en 0, arruinaban el orden por
+    # valor (quedaban en el orden alfabético del groupby, no por importe).
+    tot_prod = g.groupby("prod").agg(val=("val", "sum"), cant=("cant", "sum"))
+    tot_prod = tot_prod[(tot_prod["val"] != 0) | (tot_prod["cant"] != 0)]
+    if tot_prod.empty:
+        st.info("Ningún producto de este grupo tiene stock o valorizado activo.")
+        return
+    # Mayor a menor LEYENDO DE ARRIBA HACIA ABAJO. A diferencia de un
+    # go.Bar con y=lista literal (donde el primer elemento pinta ABAJO,
+    # ver _grafico_ranking), category_orders de px.bar pone el primer
+    # elemento ARRIBA — confirmado en vivo (medido por posición en
+    # pantalla, no por lectura del código): con ascending=True el
+    # producto más CHICO terminaba arriba y el más grande abajo, al
+    # revés de lo pedido.
+    orden = tot_prod["val"].sort_values(ascending=False).index.tolist()
+    g = g[g["prod"].isin(orden)]
     fig = px.bar(g, x="val", y="prod", color="area", orientation="h",
                  category_orders={"prod": orden}, custom_data=["cant"])
     _compras_layout(fig, alto=min(900, max(360, 40 * len(orden) + 80)))
