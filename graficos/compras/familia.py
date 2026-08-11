@@ -106,7 +106,30 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
         tb, serie_col, titulo_ser = base[base["fam"] == focus_fam], "fam", "familia"
 
     tot_ser = tb.groupby(serie_col)["m"].sum().sort_values(ascending=False)
-    top_ser = tot_ser.head(6).index.tolist()
+    _ser_all = tot_ser.index.tolist()
+    _top6_default = tot_ser.head(6).index.tolist()
+
+    # Qué series se dibujan: popover ARRIBA del gráfico (checkboxes), no la
+    # leyenda de Plotly abajo — con 7+ familias esa leyenda se envolvía en
+    # dos líneas y tapaba las etiquetas del eje X. El popover es un overlay:
+    # se expande sin desplazar nada de lo que está debajo (a diferencia de
+    # un expander, que sí empuja el layout).
+    for _s in _ser_all:
+        _k = f"compras_fam_ser_cb::{titulo_ser}::{_s}"
+        if _k not in st.session_state:
+            st.session_state[_k] = (_s in _top6_default)
+    top_ser = [s for s in _ser_all
+               if st.session_state.get(f"compras_fam_ser_cb::{titulo_ser}::{s}")] \
+              or _top6_default
+    _cpop, _ = st.columns([1.4, 4.6])
+    with _cpop:
+        _lbl_pop = f"{titulo_ser.capitalize()}s :violet-badge[{len(top_ser)}]"
+        with st.popover(_lbl_pop, use_container_width=True):
+            st.caption(f"Elegí qué {titulo_ser}s mostrar en el gráfico.")
+            for _s in _ser_all:
+                st.checkbox(_compras_truncar(_s, 30),
+                           key=f"compras_fam_ser_cb::{titulo_ser}::{_s}")
+
     tb = tb.copy()
     tb["serie"] = tb[serie_col].where(tb[serie_col].isin(top_ser), "Otros")
     g = tb.groupby(["per", "serie"], as_index=False)["m"].sum()
@@ -132,7 +155,7 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
               + ("" if focus_fam is None else f" — {_compras_truncar(focus_fam, 32)}"),
         barmode="stack" if vista == "Apilado" else "group",
         yaxis=dict(tickprefix=_pref, tickformat=",.0f"),
-        legend=dict(orientation="h", y=-0.22, x=0, font=dict(size=10)))
+        showlegend=False)
     fig.update_xaxes(type="category", tickangle=0)
     # Muchos periodos → rangeslider para deslizar horizontal + ventana inicial
     # (últimos ~12). El usuario arrastra el slider para ver periodos anteriores.
