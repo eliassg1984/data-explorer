@@ -86,6 +86,16 @@ CSS = """    /* ================================================================
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_"] {
         margin-top: -56px !important;
     }
+    /* La tarjeta der (panel lateral, p.ej. Mayor cantidad/Precio más alto de
+       Inventario o los mini-tops de Compras) es hermana de la izq en la
+       misma fila — mismo jalón, si no arranca 56px más abajo que su
+       hermana y las dos tarjetas quedan escalonadas (se notó en Inventario
+       Por área/Por familia: la izq creció con el detalle del click-drill y
+       el desnivel saltó a la vista). Reseteada a 0 en el media query de
+       abajo, igual que la izq. */
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_der_"] {
+        margin-top: -56px !important;
+    }
     /* Excepción: Salidas mete una fila de KPIs (st.metric x3) EN FLUJO justo
        arriba de esta tarjeta — a diferencia de Ajuste/Compras/Ventas/
        Inventario, donde encima solo hay chips y el -80px recupera un hueco
@@ -308,7 +318,8 @@ CSS = """    /* ================================================================
         /* Sin el rail fijo arriba, la vieja compensación negativa de las
            tarjetas dejaría un solape: se neutraliza. */
         [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap,
-        [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_"] {
+        [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_"],
+        [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_der_"] {
             margin-top: 0 !important;
         }
         /* La franja superior ya no debe esquivar el rail (que ya no está a

@@ -2603,3 +2603,26 @@ salvo `icono`):
     trae `selection_mode="points"`, y el punto necesita `data`/`fullData`
     (la traza completa) o el handler revienta leyendo `legendgroup` de
     `undefined`.
+
+77. **Tarjeta der desalineada con la izq (2026-08-10) — bug preexistente en
+    `estilos/_20_compras_rail.py`, expuesto por la regla #76, no causado
+    por ella.** `[class*="st-key-ajuste_graf_card_izq_"]` lleva
+    `margin-top: -56px` para que la tarjeta arranque a la misma altura que
+    el rail fijo (`.st-key-compras_tabs_row`, `top: 66px`) — ver comentario
+    original de esa regla. La tarjeta der (`ajuste_graf_card_der_*`, usada
+    por Compras — vistas Semanal/Vs año anterior — e Inventario) nunca
+    tuvo el mismo jalón: en flujo normal las dos arrancan a la misma altura
+    porque son hermanas de la misma fila, pero sin el jalón la der queda
+    56px más abajo que la izq. No se notaba porque la diferencia es chica
+    y ambas tarjetas suelen tener contenido de altura parecida — con el
+    click-drill de la regla #76, la izq de Inventario creció mucho (barra +
+    caption + gráfico de detalle) y el escalón saltó a la vista.
+
+    Fix: mismo `margin-top: -56px` para `[class*="st-key-ajuste_graf_card_
+    der_"]`, y su reset a `0` en el `@media (max-width: 900px)` de más
+    abajo — sin el reset, en móvil (donde las columnas se apilan en
+    columna) la der se monta encima de la izq. Verificado en vivo en las
+    dos vistas reales que usan der (Compras/Semanal e Inventario/Por área
+    con foco) y en viewport móvil (375px, sin solape). No es un cambio de
+    Inventario: al vivir en `_20_compras_rail.py` (CSS compartido por
+    prefijo de key), arregla las dos a la vez.
