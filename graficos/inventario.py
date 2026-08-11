@@ -115,6 +115,9 @@ def _grafico_ranking(d, col_grp, col_val, titulo, key, clic=False, state_key=Non
     _compras_layout(fig, alto=alto)
     fig.update_layout(title=titulo)
     fig.update_xaxes(visible=False, range=_rango_con_holgura(serie.values, factor=0.5))
+    fig.update_yaxes(showgrid=False)  # sin esto la cuadrícula de _compras_layout
+    # cruza cada barra horizontal a la altura de su fila — tiene sentido en un
+    # eje de VALORES, no acá donde el eje Y son nombres de categoría.
     if not clic:
         st.plotly_chart(fig, use_container_width=True, key=key)
         return None
@@ -200,6 +203,7 @@ def _ficha_producto(d, prod_sel, col_prod, col_area, col_val, col_cant,
     _compras_layout(fig, alto=min(900, max(320, 40 * len(g) + 80)))
     fig.update_layout(title=f"{prod_sel} — cantidad y valorizado por área")
     fig.update_xaxes(visible=False, range=_rango_con_holgura(g["val"], factor=0.35))
+    fig.update_yaxes(showgrid=False)  # eje Y = nombres de área, no valores
     st.plotly_chart(fig, use_container_width=True, key="inv_g_producto")
 
 
@@ -263,6 +267,7 @@ def _ficha_subfamilia(d, subfam_sel, col_subfam, col_prod, col_area,
     fig.update_traces(
         hovertemplate=("%{fullData.name}<br>%{y}<br>Valorizado: S/ %{x:,.2f}"
                        "<br>Cantidad: %{customdata[0]:,.1f}<extra></extra>"))
+    fig.update_yaxes(showgrid=False)  # eje Y = nombres de producto, no valores
     st.plotly_chart(fig, use_container_width=True, key="inv_g_subfamilia")
 
 
@@ -456,8 +461,7 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                         clic=True, state_key=_state_key,
                     )
                     if foco:
-                        st.caption(f"📍 **{foco}** · clic de nuevo para quitar "
-                                   "el foco · panel derecho filtrado")
+                        st.caption(f"📍 **{foco}** · panel derecho filtrado")
                         _grafico_detalle_foco(d, graf, col_grp, foco,
                                               col_fam, col_subfam, col_val)
 
