@@ -47,13 +47,18 @@ def _rango_con_holgura(*series, factor=0.28):
     fijo de `_compras_layout` (r=10px) si la barra ya ocupa casi el 100%
     del ancho. Bug real: "Por área" con `GASTOS` en S/ 161,816 (barra al
     tope) mostraba la etiqueta cortada en "S/ 16…". `factor` más alto para
-    etiquetas largas (p.ej. "S/ x · y unidad" en la ficha de un producto)."""
+    etiquetas largas (p.ej. "S/ x · y unidad" en la ficha de un producto).
+
+    Holgura SOLO del lado que se usa: con todo >= 0 (regla #80 — barras
+    convertidas a magnitud, negativo se lee por color no por dirección)
+    `lo` da 0 y no hace falta reservarle aire — eso dejaba una franja en
+    blanco entre las etiquetas del eje Y y el arranque de las barras."""
     valores = [v for s in series for v in s]
     if not valores:
         return None
     lo, hi = min(0, min(valores)), max(0, max(valores))
     pad = max(abs(hi), abs(lo), 1) * factor
-    return [lo - pad, hi + pad]
+    return [lo - pad if lo < 0 else 0, hi + pad]
 
 
 def _grafico_ranking(d, col_grp, col_val, titulo, key, clic=False, state_key=None,
