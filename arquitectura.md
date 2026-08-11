@@ -2687,4 +2687,34 @@ salvo `icono`):
     absolutamente cualquier cantidad de filas sin sacrificar legibilidad;
     esto reduce el caso común y acota el peor caso, no lo elimina.
     También se acortó el caption de foco a una sola línea (mismo motivo,
-    ahorra ~20px).
+    ahorra ~20px). El caption se terminó sacando del todo el mismo día
+    (regla #80): el color de la barra en foco + el título del gráfico de
+    detalle ya dicen qué está seleccionado.
+
+80. **Barra negativa dibujada a la izquierda descentraba el ranking
+    (2026-08-10, mismo día).** En `_grafico_ranking`/`_ficha_producto`
+    (barras horizontales de una sola serie), un valor negativo (área con
+    ajuste/devolución neto negativo, ej. `BARRA: -S/ 1,750`) se pintaba
+    hacia la izquierda de x=0 — mientras el resto de las barras arranca en
+    x=0 y crece a la derecha. Con una sola barra "flotando" del otro lado,
+    el eje quedaba descentrado (el rango tenía que cubrir negativo Y
+    positivo) y la barra negativa no se comparaba visualmente contra las
+    demás.
+
+    Fix: TODAS las barras dibujan hacia la derecha (`x=np.abs(valores)`,
+    largo = magnitud); el signo se lee por COLOR, no por dirección —
+    `AJUSTE_NEG` (`#d97a72`, mismo tono que ya usa el heatmap de Ajuste
+    para "negativo", `graficos/ajuste/_heatmap.py`) en vez de `ACENTO`, y
+    `AJUSTE_NEG_TEXTO` en vez de `ACENTO_FUERTE` cuando esa barra negativa
+    está en foco (click-drill de la regla #76). Texto de la barra y hover
+    siguen mostrando el valor real CON signo (`_texto` ya usaba
+    `serie.values` sin tocar; el hover necesitó `customdata` explícito
+    porque el `x` del trazo ahora es el valor absoluto, no el real —
+    `%{x}` en un hovertemplate hubiera mostrado el número sin signo).
+    `_rango_con_holgura` también pasa a recibir el array de absolutos, así
+    el eje arranca en 0 de verdad en vez de dejar hueco para el lado
+    negativo que ya no existe.
+
+    No tocado: `_ficha_subfamilia` (barra APILADA por área, color = área,
+    no por signo — mismo patrón no aplica sin rediseñar qué representa el
+    color ahí, y no era el caso reportado).

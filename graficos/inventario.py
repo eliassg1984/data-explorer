@@ -24,7 +24,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 
-from tema import ACENTO, ACENTO_FUERTE, TEXTO_PRINCIPAL
+from tema import ACENTO, ACENTO_FUERTE, AJUSTE_NEG, AJUSTE_NEG_TEXTO, TEXTO_PRINCIPAL
 from graficos.base import (
     _compras_layout, _compras_truncar, _render_rail,
     _resolver, _slug, publicar_contexto_ia, renderizar_graficos_genericos,
@@ -91,15 +91,27 @@ def _grafico_ranking(d, col_grp, col_val, titulo, key, clic=False, state_key=Non
     if foco and foco not in serie.index:
         foco = None
         st.session_state[state_key] = None
-    color = ([ACENTO_FUERTE if i == foco else ACENTO for i in serie.index]
-              if clic else ACENTO)
+    # Un valor negativo (ajuste/devolución) dibujado hacia la izquierda
+    # descentra el gráfico: el resto de las barras arranca en x=0 y esa
+    # queda flotando sola contra el margen. Mismo lado que todas (barra
+    # hacia la derecha, largo = magnitud) pero en un color de la familia
+    # AJUSTE_NEG — el mismo que usa el heatmap de Ajuste para "negativo" —
+    # así el signo se lee por color, no por dirección. El texto/hover
+    # siguen con el valor real con signo.
+    color = [
+        (AJUSTE_NEG_TEXTO if (clic and i == foco) else AJUSTE_NEG) if v < 0
+        else (ACENTO_FUERTE if (clic and i == foco) else ACENTO)
+        for i, v in zip(serie.index, serie.values)
+    ]
     fig = go.Figure(go.Bar(
-        x=serie.values,
+        x=np.abs(serie.values),
         y=[_compras_truncar(i, 30) for i in serie.index],
         orientation="h",
         marker=dict(color=color, opacity=0.85),
         text=_texto,
         textposition="outside", cliponaxis=False,
+        customdata=serie.values,
+        hovertemplate="%{y}<br>S/ %{customdata:,.2f}<extra></extra>",
     ))
     # Con foco activo el ranking se achica (menos px por barra, tope más
     # bajo) para dejarle sitio al detalle de abajo dentro de la misma
@@ -114,7 +126,7 @@ def _grafico_ranking(d, col_grp, col_val, titulo, key, clic=False, state_key=Non
         alto = min(900, max(360, 34 * len(serie) + 60))
     _compras_layout(fig, alto=alto)
     fig.update_layout(title=titulo)
-    fig.update_xaxes(visible=False, range=_rango_con_holgura(serie.values, factor=0.5))
+    fig.update_xaxes(visible=False, range=_rango_con_holgura(np.abs(serie.values), factor=0.5))
     fig.update_yaxes(showgrid=False)  # sin esto la cuadrícula de _compras_layout
     # cruza cada barra horizontal a la altura de su fila — tiene sentido en un
     # eje de VALORES, no acá donde el eje Y son nombres de categoría.
@@ -192,17 +204,21 @@ def _ficha_producto(d, prod_sel, col_prod, col_area, col_val, col_cant,
         st.info("Sin stock ni valorizado activo para este producto en ninguna área.")
         return
     _texto = [f"S/ {v:,.0f}  ·  {c:,.0f} {unidad}" for v, c in zip(g["val"], g["cant"])]
+    # Mismo criterio que _grafico_ranking: negativo va hacia la derecha
+    # como el resto (largo = magnitud), diferenciado por color en vez de
+    # descentrar el gráfico dibujando hacia la izquierda.
+    color = [AJUSTE_NEG if v < 0 else ACENTO for v in g["val"]]
     fig = go.Figure(go.Bar(
-        x=g["val"], y=[_compras_truncar(a, 30) for a in g["area"]],
-        orientation="h", marker=dict(color=ACENTO, opacity=0.85),
+        x=g["val"].abs(), y=[_compras_truncar(a, 30) for a in g["area"]],
+        orientation="h", marker=dict(color=color, opacity=0.85),
         text=_texto, textposition="outside", cliponaxis=False,
-        customdata=g["cant"],
-        hovertemplate=("%{y}<br>Valorizado: S/ %{x:,.2f}<br>Cantidad: "
-                       "%{customdata:,.1f} " + unidad + "<extra></extra>"),
+        customdata=np.stack([g["val"], g["cant"]], axis=-1),
+        hovertemplate=("%{y}<br>Valorizado: S/ %{customdata[0]:,.2f}<br>Cantidad: "
+                       "%{customdata[1]:,.1f} " + unidad + "<extra></extra>"),
     ))
     _compras_layout(fig, alto=min(900, max(320, 40 * len(g) + 80)))
     fig.update_layout(title=f"{prod_sel} — cantidad y valorizado por área")
-    fig.update_xaxes(visible=False, range=_rango_con_holgura(g["val"], factor=0.35))
+    fig.update_xaxes(visible=False, range=_rango_con_holgura(g["val"].abs(), factor=0.35))
     fig.update_yaxes(showgrid=False)  # eje Y = nombres de área, no valores
     st.plotly_chart(fig, use_container_width=True, key="inv_g_producto")
 
