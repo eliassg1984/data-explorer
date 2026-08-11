@@ -147,4 +147,29 @@ CSS = """    /* ================================================================
     .st-key-ajuste_graf_card_izq_inv [data-testid="stMetric"] {
         gap: 2px !important;
     }
+
+    /* =================================================================== */
+    /* KPIs del "Resumen ejecutivo" de Ventas — 5 cajas chicas en fila       */
+    /*                                                                       */
+    /* Wildcard por prefijo de key (graficos/ventas_resumen.py): cada KPI   */
+    /* es su propio st.container(border=True, key="ventas_resumen_kpi_..."). */
+    /* Sin este bloque quedaban al tamaño default de Streamlit — grandes y   */
+    /* compitiendo por atención con el candlestick de abajo, que es el       */
+    /* protagonista real de la vista. Sin ícono (se sacó del label en       */
+    /* Python): con la caja ya chica, el emoji quedaba desproporcionado.    */
+    /* =================================================================== */
+    div[class*="st-key-ventas_resumen_kpi_"] {
+        border-radius: 14px !important;
+        padding: 10px 12px !important;
+    }
+    div[class*="st-key-ventas_resumen_kpi_"] [data-testid="stMetricValue"] {
+        font-size: 19px !important;
+        line-height: 1.2 !important;
+    }
+    div[class*="st-key-ventas_resumen_kpi_"] [data-testid="stMetricLabel"] {
+        font-size: 10px !important;
+    }
+    div[class*="st-key-ventas_resumen_kpi_"] [data-testid="stMetric"] {
+        gap: 2px !important;
+    }
 """
