@@ -317,6 +317,10 @@ def _pruebas_puras():
 
     check("_etiqueta_clave mes", _vc._etiqueta_clave((2026, 8), "Mes"), "Ago 26")
 
+    check("_fmt_soles_compacto miles", _vc._fmt_soles_compacto(636448), "S/ 636k")
+    check("_fmt_soles_compacto bajo mil", _vc._fmt_soles_compacto(480), "S/ 480")
+    check("_fmt_soles_compacto exacto mil", _vc._fmt_soles_compacto(1000), "S/ 1k")
+
     # ── Recorte del período EN CURSO (comparación justa) ────────────────
     # Ancla 09/08/2026: agosto va del 1 al 9, así que el agosto del año
     # pasado tiene que recortarse a sus primeros 9 días — si no, 9 días

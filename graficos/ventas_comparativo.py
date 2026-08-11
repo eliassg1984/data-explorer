@@ -213,6 +213,15 @@ def _etiqueta_clave(clave, grano):
     return f"{_MESES_ES[p - 1]} {y % 100:02d}"
 
 
+def _fmt_soles_compacto(v):
+    """'S/ 636k' arriba de 1000, 'S/ 480' abajo — para la etiqueta ENCIMA de
+    la barra (el valor exacto ya está en el hover). Sin esto, "S/ 636,448"
+    en 9px sobre una barra angosta se corta o se pisa con la vecina."""
+    if v >= 1000:
+        return f"S/ {v / 1000:,.0f}k"
+    return f"S/ {v:,.0f}"
+
+
 def _texto_periodo(clave, grano, fin_real=None):
     """Período en texto largo, para el hover (ahí sí importa el año).
     `fin_real` acorta el texto cuando el período está recortado por estar
@@ -350,26 +359,39 @@ def _ventas_comparativo(d, col_venta, col_fecha, filtrar_cb=None):
     hay_ap = any(y_ap)
 
     etiquetas = [_etiqueta_clave(k, grano) for k in claves]
+    # Con más de MAX_ETIQUETAS barras, valor + %Var + "en curso" apilados se
+    # pisan entre sí (y contra los de la categoría vecina) — mismo umbral
+    # que ya usaba el %Var, ahora también gobierna las etiquetas de valor.
+    mostrar_etq = len(claves) <= MAX_ETIQUETAS
+    _txt_ap = [_fmt_soles_compacto(v) for v in y_ap] if mostrar_etq else None
+    _txt_act = [_fmt_soles_compacto(v) for v in y_act] if mostrar_etq else None
 
     fig = go.Figure()
     fig.add_bar(
         x=etiquetas, y=y_ap, name="Año pasado",
         marker=dict(color=LAVANDA_BORDE),
+        text=_txt_ap, textposition="outside", cliponaxis=False,
+        textfont=dict(size=9, color=GRIS_TEXTO),
         customdata=[_texto_periodo(k, grano, fin) for (k, _i, fin) in rangos_ap],
         hovertemplate="Año pasado · %{customdata}<br>S/ %{y:,.0f}<extra></extra>",
     )
     fig.add_bar(
         x=etiquetas, y=y_act, name="Actual",
         marker=dict(color=ACENTO),
+        text=_txt_act, textposition="outside", cliponaxis=False,
+        textfont=dict(size=9, color=ACENTO),
         customdata=[_texto_periodo(k, grano, fin) for (k, _i, fin) in rangos_act],
         hovertemplate="Actual · %{customdata}<br>S/ %{y:,.0f}<extra></extra>",
     )
     # El período en curso se marca: aunque el año pasado ya viene recortado
     # al mismo tramo (comparación justa), el usuario tiene que saber que esa
-    # barra no es un mes/semana entero — si no, la lee como cerrada.
+    # barra no es un mes/semana entero — si no, la lee como cerrada. Offset
+    # en unidades de dato (no yshift en píxeles) para apilar en el mismo
+    # sistema que el %Var de abajo, arriba de las etiquetas de valor.
+    _tope = max(max(y_act, default=0), max(y_ap, default=0)) or 1
     for i in parciales:
         fig.add_annotation(
-            x=i, y=max(y_act[i], y_ap[i]), yanchor="bottom", yshift=14,
+            x=i, y=max(y_act[i], y_ap[i]) + _tope * (0.24 if mostrar_etq else 0.04),
             showarrow=False, text="en curso",
             font=dict(size=8, color=GRIS_TEXTO))
 
@@ -422,20 +444,19 @@ def _ventas_comparativo(d, col_venta, col_fecha, filtrar_cb=None):
                 text=f"{'+' if _dif > 0 else '−'}{abs(_dif)} fer.",
                 font=dict(size=8, color=ADVERTENCIA_TEXTO))
 
-    if hay_ap and len(claves) <= MAX_ETIQUETAS:
-        _tope = max(max(y_act, default=0), max(y_ap, default=0)) or 1
+    if hay_ap and mostrar_etq:
         for i, (a, b) in enumerate(zip(y_act, y_ap)):
             if not b:
                 continue
             var = (a - b) / b * 100
             fig.add_annotation(
-                x=i, y=max(a, b) + _tope * 0.04, showarrow=False,
+                x=i, y=max(a, b) + _tope * 0.14, showarrow=False,
                 text=f"{var:+.0f}%",
                 font=dict(size=9, color=(EXITO if var >= 0 else ERROR)))
 
     fig.update_layout(
         barmode="group", bargap=0.28, bargroupgap=0.08,
-        height=340, margin=dict(l=10, r=10, t=30, b=10),
+        height=340, margin=dict(l=10, r=10, t=(70 if mostrar_etq else 30), b=10),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="DM Sans, sans-serif", color=GRIS_TEXTO, size=12),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
