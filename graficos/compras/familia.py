@@ -29,10 +29,48 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
         st.info("Faltan columnas (Familia, Fecha, Valor) para este gráfico.")
         return
 
-    # ── Controles ───────────────────────────────────────────────────────
+    # ── Estado de drill (por clic en las barras) ─────────────────────────
+    fams_all = sorted(d[col_fam].dropna().astype(str).unique().tolist())
+    focus_fam = st.session_state.get("compras_fam_focus")
+    focus_sub = st.session_state.get("compras_fam_subfocus")
+    if focus_fam not in fams_all:
+        focus_fam, focus_sub = None, None
+
+    # Desglose: se lee de session_state ANTES de dibujar su pill (que vive
+    # más abajo, en la fila de navegación) para poder resolver qué serie
+    # corresponde — familia o subfamilia — y armar el selector de series
+    # ya en la fila de controles de arriba, junto a la granularidad. Mismo
+    # patrón "leer del estado, dibujar el widget después" que usa el rail
+    # flotante del drill de Proveedor.
+    _es_subfam = bool(
+        focus_fam is not None and col_subfam
+        and st.session_state.get("compras_fam_desglose", "Total familia")
+        == "Por subfamilia")
+    serie_col = "sub" if _es_subfam else "fam"
+    titulo_ser = "subfamilia" if _es_subfam else "familia"
+
+    _dsub = d if focus_fam is None else d[d[col_fam].astype(str) == focus_fam]
+    _dsub = _dsub[pd.to_datetime(_dsub[col_fecha], errors="coerce").notna()]
+    _col_serie_raw = col_subfam if _es_subfam else col_fam
+    _valor_ser = pd.to_numeric(_dsub[col_valor], errors="coerce").fillna(0)
+    tot_ser = (_valor_ser.groupby(_dsub[_col_serie_raw].astype(str)).sum()
+               .sort_values(ascending=False))
+    _ser_all = tot_ser.index.tolist()
+    _top6_default = tot_ser.head(6).index.tolist()
+    for _s in _ser_all:
+        _k = f"compras_fam_ser_cb::{titulo_ser}::{_s}"
+        if _k not in st.session_state:
+            st.session_state[_k] = (_s in _top6_default)
+    top_ser = [s for s in _ser_all
+               if st.session_state.get(f"compras_fam_ser_cb::{titulo_ser}::{s}")] \
+              or _top6_default
+
+    # ── Controles: una sola fila (granularidad, vista, top, series) ──────
     # Medida fija en Valor S/: se quitó el toggle Valor/Cantidad (la
-    # cantidad sigue viva igual en los paneles, junto al valor).
-    c1, c2, c3 = st.columns(3)
+    # cantidad sigue viva igual en los paneles, junto al valor). El
+    # selector de series comparte fila con la granularidad — antes vivía
+    # solo, en un botón grande una fila más abajo.
+    c1, c2, c3, c4 = st.columns([1.3, 1.2, 0.9, 1.3])
     with c1:
         gran = st.pills("Agrupar por", ["Semana", "Mes", "Año"],
                         default="Mes", key="compras_fam_gran",
@@ -45,6 +83,29 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
         topn = st.pills("Top", [5, 10, 20], default=10,
                         key="compras_fam_topn",
                         label_visibility="collapsed") or 10
+    with c4:
+        # estilos/_30_filtros.py pone [data-testid="stPopover"] button GRANDE
+        # sin scope (pensado para el popover de filtros de la franja): acá se
+        # sobreescribe con más especificidad para que este quede al tamaño
+        # de los pills vecinos, no del popover de filtros.
+        with st.container(key="compras_fam_ser_pop"):
+            st.markdown(
+                """<style>
+                .st-key-compras_fam_ser_pop [data-testid="stPopover"] button {
+                    min-width: 0 !important;
+                    padding: 4px 12px !important;
+                    font-size: 13px !important;
+                    font-weight: 500 !important;
+                    border-radius: 999px !important;
+                }
+                </style>""",
+                unsafe_allow_html=True,
+            )
+            with st.popover(f"{titulo_ser.capitalize()}s ({len(top_ser)})"):
+                st.caption(f"Elegí qué {titulo_ser}s mostrar en el gráfico.")
+                for _s in _ser_all:
+                    st.checkbox(_compras_truncar(_s, 30),
+                               key=f"compras_fam_ser_cb::{titulo_ser}::{_s}")
 
     es_valor = True
     fe = pd.to_datetime(d[col_fecha], errors="coerce")
@@ -93,14 +154,7 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
     def _fmt(v):
         return f"S/ {v:,.0f}" if es_valor else f"{v:,.0f}"
 
-    # ── Estado de drill (por clic en las barras) + navegación ───────────
-    fams_all = sorted(base["fam"].dropna().unique().tolist())
-    focus_fam = st.session_state.get("compras_fam_focus")
-    focus_sub = st.session_state.get("compras_fam_subfocus")
-    if focus_fam not in fams_all:
-        focus_fam, focus_sub = None, None
-
-    desglose = "Total familia"
+    # ── Navegación (breadcrumb + desglose) ────────────────────────────────
     nav = st.columns([1.1, 1.5, 1.4])
     with nav[0]:
         if st.button("↩ Todas", key="cf_bc_all", use_container_width=True,
@@ -116,45 +170,16 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
             st.rerun()
     with nav[2]:
         # Al elegir una familia NO se desglosa solo: el usuario decide si
-        # expandir a subfamilias en el gráfico del tiempo.
+        # expandir a subfamilias en el gráfico del tiempo. El valor ya se
+        # leyó de session_state arriba (para armar serie_col/titulo_ser
+        # antes de esta fila); acá solo se dibuja el widget.
         if focus_fam is not None and col_subfam:
-            desglose = st.pills("Desglose", ["Total familia", "Por subfamilia"],
-                                default="Total familia", key="compras_fam_desglose",
-                                label_visibility="collapsed") or "Total familia"
+            st.pills("Desglose", ["Total familia", "Por subfamilia"],
+                     default="Total familia", key="compras_fam_desglose",
+                     label_visibility="collapsed")
+
     # ── Barras en el tiempo (serie = familia o subfamilia) ──────────────
-    if focus_fam is None:
-        tb, serie_col, titulo_ser = base, "fam", "familia"
-    elif desglose == "Por subfamilia":
-        tb, serie_col, titulo_ser = base[base["fam"] == focus_fam], "sub", "subfamilia"
-    else:
-        tb, serie_col, titulo_ser = base[base["fam"] == focus_fam], "fam", "familia"
-
-    tot_ser = tb.groupby(serie_col)["m"].sum().sort_values(ascending=False)
-    _ser_all = tot_ser.index.tolist()
-    _top6_default = tot_ser.head(6).index.tolist()
-
-    # Qué series se dibujan: popover ARRIBA del gráfico (checkboxes), no la
-    # leyenda de Plotly abajo — con 7+ familias esa leyenda se envolvía en
-    # dos líneas y tapaba las etiquetas del eje X. El popover es un overlay:
-    # se expande sin desplazar nada de lo que está debajo (a diferencia de
-    # un expander, que sí empuja el layout).
-    for _s in _ser_all:
-        _k = f"compras_fam_ser_cb::{titulo_ser}::{_s}"
-        if _k not in st.session_state:
-            st.session_state[_k] = (_s in _top6_default)
-    top_ser = [s for s in _ser_all
-               if st.session_state.get(f"compras_fam_ser_cb::{titulo_ser}::{s}")] \
-              or _top6_default
-    _cpop, _ = st.columns([1.4, 4.6])
-    with _cpop:
-        _lbl_pop = f"{titulo_ser.capitalize()}s :violet-badge[{len(top_ser)}]"
-        with st.popover(_lbl_pop, use_container_width=True):
-            st.caption(f"Elegí qué {titulo_ser}s mostrar en el gráfico.")
-            for _s in _ser_all:
-                st.checkbox(_compras_truncar(_s, 30),
-                           key=f"compras_fam_ser_cb::{titulo_ser}::{_s}")
-
-    tb = tb.copy()
+    tb = (base if focus_fam is None else base[base["fam"] == focus_fam]).copy()
     tb["serie"] = tb[serie_col].where(tb[serie_col].isin(top_ser), "Otros")
     g = tb.groupby(["per", "serie"], as_index=False)["m"].sum()
     # Orden cronológico por per_sort, no alfabético sobre la etiqueta que ve
