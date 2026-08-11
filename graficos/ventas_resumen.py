@@ -124,11 +124,9 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
     mejor_dia, mejor_valor = g.loc[idx_mejor, "dia"], g.loc[idx_mejor, "total"]
     alzas = int((g["total"].diff() >= 0).sum())  # NaN del primer día no cuenta
 
-    st.caption(
-        f"Resumen ejecutivo · {dias[0]:%d/%m/%Y} – {dias[-1]:%d/%m/%Y} "
-        f"({len(dias)} días con ventas)"
-        + ("" if len(dias_disponibles) <= MAX_DIAS else
-           f" — recortado a los últimos {MAX_DIAS} días del rango cargado."))
+    _nota_recorte = ("" if len(dias_disponibles) <= MAX_DIAS else
+                     f" Recortado a los últimos {MAX_DIAS} días con ventas "
+                     "del rango cargado.")
 
     # Contenedores minimalistas: st.container(border=True) nativo, sin CSS
     # nuevo para el borde en sí — a diferencia de los `_card()` (key
@@ -202,7 +200,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
             "Apertura/cierre = primera/última línea de venta registrada ese "
             "día · máx/mín = ticket de línea más caro/barato del día. No es "
             "una comparación contra el día anterior — para eso está "
-            "«Venta por día».")
+            "«Venta por día»." + _nota_recorte)
 
     # ── Ticket promedio diario ───────────────────────────────────────────
     if vol_label:

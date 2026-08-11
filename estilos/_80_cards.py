@@ -158,9 +158,14 @@ CSS = """    /* ================================================================
     /* protagonista real de la vista. Sin ícono (se sacó del label en       */
     /* Python): con la caja ya chica, el emoji quedaba desproporcionado.    */
     /* =================================================================== */
+    /* width: fit-content — sin esto, el container de Streamlit ocupa el
+       100% de su columna (~1/5 del ancho de la card) aunque el texto sea
+       corto, y la caja sale como una barra larga con aire de sobra. */
     div[class*="st-key-ventas_resumen_kpi_"] {
-        border-radius: 12px !important;
-        padding: 8px 12px !important;
+        border-radius: 10px !important;
+        padding: 6px 10px !important;
+        width: fit-content !important;
+        max-width: 100% !important;
     }
     /* Label + valor en la MISMA línea. stMetric NO tiene label/valor como
        hijos directos: envuelve todo en UN div intermedio (sin data-testid
@@ -176,11 +181,11 @@ CSS = """    /* ================================================================
         gap: 6px !important;
     }
     div[class*="st-key-ventas_resumen_kpi_"] [data-testid="stMetricValue"] {
-        font-size: 15px !important;
+        font-size: 13px !important;
         line-height: 1.15 !important;
     }
     div[class*="st-key-ventas_resumen_kpi_"] [data-testid="stMetricLabel"] {
-        font-size: 9px !important;
+        font-size: 8px !important;
         white-space: nowrap !important;
     }
 """
