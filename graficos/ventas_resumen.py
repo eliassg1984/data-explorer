@@ -1,16 +1,14 @@
 """
 graficos.ventas_resumen — vista "Resumen ejecutivo" del dashboard de Ventas:
-KPIs del rango + candlestick diario (apertura/cierre/máx/mín de las líneas
-de venta de cada día) + volumen de Pax, ticket promedio diario y top platos.
+KPIs del rango + venta total por día (barras coloreadas por tendencia
+día-a-día) + volumen de Pax, ticket promedio diario y top platos.
 
-Inspirado en un mockup tipo "panel bursátil" para restaurantes. La vela NO es
-decorativa: apertura/cierre son la primera/última línea de venta REGISTRADA
-ese día y máx/mín el ticket de línea más caro/barato — mismo criterio que
-`graficos/compras/volatilidad.py::_vol_ohlc_semana` (candlestick semanal de
-precio unitario), aplicado a día/línea de venta en vez de semana/precio. NO
-es una comparación día-contra-día (para eso está "Venta por día", que
-grafica el TOTAL); esta vela expone la DISPERSIÓN de montos por línea
-dentro de cada jornada, algo que ningún otro gráfico de Ventas muestra hoy.
+Nació como un candlestick (mockup tipo "panel bursátil" para restaurantes)
+con apertura/cierre = primera/última línea de venta del día — se reemplazó
+por barras el 2026-08-11 porque esa apertura/cierre comparaba dos ventas
+básicamente al azar (sin relación real entre sí, a diferencia de un precio
+de acción) y el color resultante no tenía señal. Ver arquitectura.md
+regla #85 para el detalle de por qué se dio de baja.
 
 El detalle profundo por producto (FoodCost, sparklines, %Var vs Año Pasado)
 sigue viviendo en "Ranking & FoodCost" — este panel es la foto rápida de un
@@ -26,32 +24,19 @@ from plotly.subplots import make_subplots
 from tema import ACENTO, ERROR, EXITO, GRIS_BORDE
 from graficos.base import _card, _compras_layout, _compras_truncar
 
-MIN_DIAS = 5     # con menos, un candlestick diario no dice nada
-MAX_DIAS = 30    # tope de velas legibles. Mismo espíritu que MAX_SEMANAS de
+MIN_DIAS = 5     # con menos, la tendencia día-a-día no dice nada
+MAX_DIAS = 30    # tope de barras legibles. Mismo espíritu que MAX_SEMANAS de
                  # compras/volatilidad.py (arquitectura.md regla #74): el
                  # filtro de fecha de la franja es un TECHO, no la ventana en
                  # sí — con un rango de "todo el año" cargado, esta vista
-                 # sigue mostrando solo los últimos 30 días CON datos. 30
-                 # replica el alcance del mockup original (un mes calendario).
-
-
-def _resumen_ohlc_dia(montos_ordenados):
-    """OHLC de una lista de montos de línea de venta de UN día, YA ordenada
-    por hora. None si está vacía. Mismo criterio que
-    graficos/compras/volatilidad.py::_vol_ohlc_semana, a nivel línea de
-    venta/día en vez de precio unitario/semana."""
-    montos = [m for m in montos_ordenados if pd.notna(m) and m > 0]
-    if not montos:
-        return None
-    return {"o": float(montos[0]), "c": float(montos[-1]),
-            "h": float(max(montos)), "l": float(min(montos))}
+                 # sigue mostrando solo los últimos 30 días CON datos.
 
 
 @st.fragment
 def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_cant):
-    """"Resumen ejecutivo": KPIs + candlestick diario + volumen + ticket
-    promedio + top platos, todas las piezas sobre la MISMA ventana de días
-    (últimos `MAX_DIAS` con datos) para que cuenten la misma historia.
+    """"Resumen ejecutivo": KPIs + venta diaria + volumen + ticket promedio +
+    top platos, todas las piezas sobre la MISMA ventana de días (últimos
+    `MAX_DIAS` con datos) para que cuenten la misma historia.
     """
     if not (col_venta and col_fecha):
         st.info("Faltan columnas (Venta, Fecha) para el resumen ejecutivo.")
@@ -83,16 +68,13 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
     dias = dias_disponibles[-MAX_DIAS:]
     tabla = tabla_full[tabla_full["dia"].isin(dias)].sort_values("fecha")
 
-    # ── OHLC + total por día (líneas de venta ordenadas por hora) ────────
-    filas = []
-    for f, gd in tabla.groupby("dia"):
-        ohlc = _resumen_ohlc_dia(gd["venta"].tolist())
-        if ohlc:
-            filas.append({"dia": f, **ohlc, "total": gd["venta"].sum()})
-    if not filas:
+    # ── Total de venta por día ────────────────────────────────────────────
+    g = (tabla.groupby("dia", as_index=False)["venta"].sum()
+         .rename(columns={"venta": "total"})
+         .sort_values("dia").reset_index(drop=True))
+    if g.empty:
         st.info("Sin datos en el rango cargado.")
         return
-    g = pd.DataFrame(filas).sort_values("dia").reset_index(drop=True)
 
     # ── Volumen: Pax/día (dedup por pedido, mismo criterio que
     # ventas.py::_ventas_grafico_dia) o, sin Pax, pedidos distintos/día ────
@@ -134,11 +116,11 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
     # transparenta los cards internos, así que conservan su borde propio
     # dentro de la card grande. Tamaño/radius sí llevan CSS propio, acotado
     # al prefijo de key "ventas_resumen_kpi_" (estilos/_80_cards.py).
-    # Labels cortos y sin delta: en una columna de ~1/5 del ancho de la
-    # card, "Ventas totales" + "S/ 113,229" no entra en una sola línea aunque
-    # el CSS ponga stMetric en flex-row (arriba de ~150px de ancho, envuelve
-    # igual). El contexto extra (fecha del mejor día, qué significa "en
-    # alza") pasa a `help=` — un tooltip no consume ancho de línea.
+    # Labels cortos y sin delta: en una columna angosta, un label largo
+    # ("Ventas totales") + un valor de varios dígitos no entra en una sola
+    # línea aunque el CSS ponga stMetric en flex-row. El contexto extra
+    # (fecha del mejor día, qué significa "en alza") pasa a `help=` — un
+    # tooltip no consume ancho de línea.
     k1, k2, k3, k4, k5 = st.columns(5)
     with k1.container(border=True, key="ventas_resumen_kpi_venta"):
         st.metric("Ventas", f"S/ {total_venta:,.0f}")
@@ -154,25 +136,30 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
         st.metric("Días en alza", f"{alzas}/{len(g) - 1}",
                   help="Días con más venta que el día anterior")
 
-    # ── Candlestick diario + volumen ─────────────────────────────────────
-    with _card("ventas_resumen_candle", "Rango de venta por día (candlestick)",
+    # ── Venta total por día (barras) + volumen ───────────────────────────
+    # Coloreadas por tendencia día-a-día (mismo criterio que el KPI "Días en
+    # alza": total de hoy vs. total de ayer) — no por apertura/cierre de
+    # transacciones sueltas (eso era el candlestick que reemplaza esta
+    # vista, ver arquitectura.md regla #85). El primer día no tiene día
+    # anterior con el que compararse: color neutro (ACENTO), ni sube ni baja.
+    g["pct_vs_ayer"] = g["total"].pct_change() * 100
+    colores = [ACENTO if pd.isna(p) else (EXITO if p >= 0 else ERROR)
+               for p in g["pct_vs_ayer"]]
+    hover_dia = [
+        f"{f:%d/%m/%Y} · S/ {t:,.0f}<br>"
+        + ("Primer día del rango" if pd.isna(p) else f"{p:+.1f}% vs. día anterior")
+        for f, t, p in zip(g["dia"], g["total"], g["pct_vs_ayer"])
+    ]
+
+    with _card("ventas_resumen_dia", "Tendencia diaria de venta",
                titulo_arriba=True):
         filas_sub = 2 if vol_label else 1
         alturas = [0.72, 0.28] if vol_label else [1.0]
         fig = make_subplots(rows=filas_sub, cols=1, shared_xaxes=True,
                             row_heights=alturas, vertical_spacing=0.06)
-        fig.add_trace(go.Candlestick(
-            x=g["dia"], open=g["o"], high=g["h"], low=g["l"], close=g["c"],
-            increasing=dict(line=dict(color=EXITO), fillcolor=EXITO),
-            decreasing=dict(line=dict(color=ERROR), fillcolor=ERROR),
-            hovertext=[
-                f"{f:%d/%m/%Y} · Total del día S/ {t:,.0f}<br>"
-                f"Apertura S/ {o:,.2f} · Máx S/ {h:,.2f} · "
-                f"Mín S/ {l:,.2f} · Cierre S/ {c:,.2f}"
-                for f, t, o, h, l, c in
-                zip(g["dia"], g["total"], g["o"], g["h"], g["l"], g["c"])
-            ],
-            hoverinfo="text", name="",
+        fig.add_trace(go.Bar(
+            x=g["dia"], y=g["total"], marker=dict(color=colores),
+            hovertext=hover_dia, hoverinfo="text", name="",
         ), row=1, col=1)
         if vol_label:
             fig.add_trace(go.Bar(
@@ -185,7 +172,6 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
         _compras_layout(fig, alto=300 if vol_label else 240)
         fig.update_layout(
             showlegend=False,
-            xaxis=dict(rangeslider=dict(visible=False)),
             yaxis=dict(tickprefix="S/ ", gridcolor=GRIS_BORDE),
         )
         fig.update_xaxes(
@@ -195,12 +181,11 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
         )
         if vol_label:
             fig.update_yaxes(title=vol_label, tickformat=",.0f", row=2, col=1)
-        st.plotly_chart(fig, use_container_width=True, key="ventas_g_resumen_candle")
+        st.plotly_chart(fig, use_container_width=True, key="ventas_g_resumen_dia")
         st.caption(
-            "Apertura/cierre = primera/última línea de venta registrada ese "
-            "día · máx/mín = ticket de línea más caro/barato del día. No es "
-            "una comparación contra el día anterior — para eso está "
-            "«Venta por día»." + _nota_recorte)
+            "Verde = vendió más que el día anterior · rojo = vendió menos "
+            "(el primer día del rango no tiene con qué compararse)."
+            + _nota_recorte)
 
     # ── Ticket promedio diario ───────────────────────────────────────────
     if vol_label:

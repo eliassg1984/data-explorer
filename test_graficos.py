@@ -222,18 +222,6 @@ def _pruebas_puras():
     check("_vol_semanas insuficientes → None",
           _vol._vol_semanas_ventana(_fe2, minimo=4), None)
 
-    # ── Resumen ejecutivo de Ventas (candlestick diario) ─────────────────
-    from graficos import ventas_resumen as _vr
-
-    check("_resumen_ohlc normal", _vr._resumen_ohlc_dia([10, 15, 8, 12]),
-          {"o": 10.0, "c": 12.0, "h": 15.0, "l": 8.0})
-    check("_resumen_ohlc filtra 0 y NaN",
-          _vr._resumen_ohlc_dia([0, 10, float("nan"), 12]),
-          {"o": 10.0, "c": 12.0, "h": 12.0, "l": 10.0})
-    check("_resumen_ohlc vacía → None", _vr._resumen_ohlc_dia([]), None)
-    check("_resumen_ohlc todo inválido → None",
-          _vr._resumen_ohlc_dia([0, float("nan")]), None)
-
     return fallos
 
 
