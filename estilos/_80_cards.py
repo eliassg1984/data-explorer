@@ -159,17 +159,20 @@ CSS = """    /* ================================================================
     /* Python): con la caja ya chica, el emoji quedaba desproporcionado.    */
     /* =================================================================== */
     div[class*="st-key-ventas_resumen_kpi_"] {
-        border-radius: 14px !important;
-        padding: 10px 12px !important;
+        border-radius: 12px !important;
+        padding: 6px 10px !important;
     }
     div[class*="st-key-ventas_resumen_kpi_"] [data-testid="stMetricValue"] {
-        font-size: 19px !important;
-        line-height: 1.2 !important;
+        font-size: 15px !important;
+        line-height: 1.15 !important;
     }
     div[class*="st-key-ventas_resumen_kpi_"] [data-testid="stMetricLabel"] {
+        font-size: 8px !important;
+    }
+    div[class*="st-key-ventas_resumen_kpi_"] [data-testid="stMetricDelta"] {
         font-size: 10px !important;
     }
     div[class*="st-key-ventas_resumen_kpi_"] [data-testid="stMetric"] {
-        gap: 2px !important;
+        gap: 1px !important;
     }
 """

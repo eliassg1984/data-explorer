@@ -180,7 +180,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
                                + ": %{y:,.0f}<extra></extra>"),
             ), row=2, col=1)
 
-        _compras_layout(fig, alto=520 if vol_label else 400)
+        _compras_layout(fig, alto=300 if vol_label else 240)
         fig.update_layout(
             showlegend=False,
             xaxis=dict(rangeslider=dict(visible=False)),
