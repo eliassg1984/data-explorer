@@ -130,16 +130,25 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
         + ("" if len(dias_disponibles) <= MAX_DIAS else
            f" — recortado a los últimos {MAX_DIAS} días del rango cargado."))
 
+    # Contenedores minimalistas: st.container(border=True) nativo, sin CSS
+    # nuevo — a diferencia de los `_card()` (key "chartcard_*"), estos NO
+    # matchean la regla de estilos/_80_cards.py que transparenta los cards
+    # internos, así que conservan su borde propio dentro de la card grande.
     k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric("💰 Ventas totales", f"S/ {total_venta:,.0f}")
-    k2.metric(f"👥 {vol_label}" if vol_label else "👥 Clientes",
-              f"{total_pax:,.0f}" if vol_label else "—")
-    k3.metric("🎟️ Ticket promedio",
-              f"S/ {ticket_prom:,.2f}" if ticket_prom else "—")
-    k4.metric("🏆 Mejor día", f"S/ {mejor_valor:,.0f}",
-              delta=f"{mejor_dia:%d/%m}", delta_color="off")
-    k5.metric("📈 Días en alza", f"{alzas}/{len(g) - 1}",
-              delta="vs. día anterior", delta_color="off")
+    with k1.container(border=True):
+        st.metric("💰 Ventas totales", f"S/ {total_venta:,.0f}")
+    with k2.container(border=True):
+        st.metric(f"👥 {vol_label}" if vol_label else "👥 Clientes",
+                  f"{total_pax:,.0f}" if vol_label else "—")
+    with k3.container(border=True):
+        st.metric("🎟️ Ticket promedio",
+                  f"S/ {ticket_prom:,.2f}" if ticket_prom else "—")
+    with k4.container(border=True):
+        st.metric("🏆 Mejor día", f"S/ {mejor_valor:,.0f}",
+                  delta=f"{mejor_dia:%d/%m}", delta_color="off")
+    with k5.container(border=True):
+        st.metric("📈 Días en alza", f"{alzas}/{len(g) - 1}",
+                  delta="vs. día anterior", delta_color="off")
 
     # ── Candlestick diario + volumen ─────────────────────────────────────
     with _card("ventas_resumen_candle", "Rango de venta por día (candlestick)",
