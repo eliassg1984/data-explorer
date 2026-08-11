@@ -46,9 +46,10 @@ import streamlit as st
 from data import REPORTES, cargar_rango
 from tema import (
     ACENTO, ADVERTENCIA_TEXTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO,
-    LAVANDA_BORDE,
+    LAVANDA_BORDE, PALETA_SERIES,
 )
 from graficos.base import _card
+from graficos.compras._comun import _first_point
 
 GRANOS = ("Día", "Semana", "Mes")
 VENTANAS = {"Día": (7, 14, 30), "Semana": (4, 8, 13), "Mes": (3, 6, 12)}
@@ -264,45 +265,132 @@ def _rangos_comparables(claves, claves_ap, grano, ancla):
 
 # ── Vista ────────────────────────────────────────────────────────────────────
 
-def _serie_por_rangos(archivo, col_parquet, col_fecha, col_venta,
-                      rangos, filtrar_cb):
-    """{clave: venta} sumando cada `(clave, ini, fin)` de `rangos`, con UNA
-    sola carga de R2 que cubre todos. Devuelve {} si no hay datos.
+def _cargar_tramo(archivo, col_parquet, ini, fin, filtrar_cb):
+    """df de ventas de [ini, fin] con los chips ya aplicados, o None.
+
+    El acotado por fecha se re-aplica en pandas aunque `cargar_rango` ya
+    filtre en DuckDB: en modo demo (sin secrets R2) el loader devuelve el df
+    entero sin filtrar —la columna de fecha del demo no se llama igual— y
+    sin esta guarda se sumarían filas de fuera de la ventana."""
+    df = cargar_rango(archivo, col_parquet, ini, fin)
+    if df is None or df.empty:
+        return None
+    if filtrar_cb is not None:
+        df = filtrar_cb(df)
+    return df if (df is not None and not df.empty) else None
+
+
+def _series_por_rangos(archivo, col_parquet, col_fecha, col_venta, col_pax,
+                       col_pedido, rangos, filtrar_cb):
+    """({clave: venta}, {clave: pax}) para cada `(clave, ini, fin)` de
+    `rangos`, con UNA sola carga de R2 que los cubre a todos.
 
     Se suma por RANGO y no por clave de período justamente para que el
     recorte del período en curso (ver `_rangos_comparables`) funcione: la
     clave del año pasado sigue siendo "agosto", pero sólo se suman sus
     primeros 9 días.
 
-    El acotado por fecha se re-aplica en pandas aunque `cargar_rango` ya
-    filtre en DuckDB: en modo demo (sin secrets R2) el loader devuelve el df
-    entero sin filtrar —la columna de fecha del demo no se llama igual— y
-    sin esta guarda se sumarían filas de fuera de la ventana."""
+    Pax NO se suma línea a línea: `Cant Pax` se repite en cada línea del
+    pedido, así que sumarla cuenta la misma mesa una vez por plato. Se toma
+    un valor por pedido (`max`) y recién ahí se suma — mismo criterio que
+    `ventas_resumen.py`. Sin columna de pedido no hay forma de deduplicar,
+    así que pax queda vacío en vez de devolver un número inflado."""
     ini_g = min(r[1] for r in rangos)
     fin_g = max(r[2] for r in rangos)
-    df = cargar_rango(archivo, col_parquet, ini_g, fin_g)
-    if df is None or df.empty:
-        return {}
-    if filtrar_cb is not None:
-        df = filtrar_cb(df)
-    if df is None or df.empty \
-            or col_fecha not in df.columns or col_venta not in df.columns:
-        return {}
-    _fe = pd.to_datetime(df[col_fecha], errors="coerce").dt.normalize()
-    _vt = pd.to_numeric(df[col_venta], errors="coerce")
-    base = pd.DataFrame({"f": _fe, "venta": _vt}).dropna(subset=["f", "venta"])
+    df = _cargar_tramo(archivo, col_parquet, ini_g, fin_g, filtrar_cb)
+    if df is None or col_fecha not in df.columns or col_venta not in df.columns:
+        return {}, {}
+    cols = {
+        "f": pd.to_datetime(df[col_fecha], errors="coerce").dt.normalize(),
+        "venta": pd.to_numeric(df[col_venta], errors="coerce"),
+    }
+    hay_pax = bool(col_pax and col_pedido
+                   and col_pax in df.columns and col_pedido in df.columns)
+    if hay_pax:
+        cols["pax"] = pd.to_numeric(df[col_pax], errors="coerce")
+        cols["ped"] = df[col_pedido].astype(str)
+    base = pd.DataFrame(cols).dropna(subset=["f", "venta"])
     if base.empty:
-        return {}
+        return {}, {}
     fechas = base["f"].dt.date
-    out = {}
+    ventas, paxes = {}, {}
     for clave, ini, fin in rangos:
-        out[clave] = float(base.loc[(fechas >= ini) & (fechas <= fin), "venta"].sum())
-    return out
+        m = (fechas >= ini) & (fechas <= fin)
+        ventas[clave] = float(base.loc[m, "venta"].sum())
+        if hay_pax:
+            _t = base.loc[m, ["ped", "pax"]].dropna(subset=["pax"])
+            paxes[clave] = (float(_t.groupby("ped")["pax"].max().sum())
+                            if not _t.empty else 0.0)
+    return ventas, paxes
+
+
+def _pct(actual, previo):
+    """%Δ de `actual` contra `previo`, o None si no hay base con la que
+    comparar. Devolver None y no 0 es deliberado: un período sin dato del
+    año pasado deja un HUECO en la línea, no un punto en cero que se leería
+    como "no cambió"."""
+    if not previo:
+        return None
+    return (actual - previo) / previo * 100
+
+
+def _ranking_platos(archivo, col_parquet, col_fecha, col_venta, col_prod,
+                    col_cant, rango_act, rango_ap, filtrar_cb, top=15):
+    """Ranking de productos de UN período, Actual vs Año Pasado.
+
+    Carga sólo los dos tramos del período clickeado (no la ventana entera),
+    así que el drill cuesta dos consultas acotadas. Ordena por venta actual
+    y se queda con el top; los productos que existen en un año y no en el
+    otro se conservan con 0 del lado que falta — que un plato haya
+    desaparecido de la carta es justamente lo que se quiere ver.
+
+    Devuelve un DataFrame ya listo para mostrar, o None si no hay datos.
+    """
+    def _agg(rango):
+        _ini, _fin = rango
+        df = _cargar_tramo(archivo, col_parquet, _ini, _fin, filtrar_cb)
+        if df is None or col_fecha not in df.columns \
+                or col_venta not in df.columns or col_prod not in df.columns:
+            return None
+        _fe = pd.to_datetime(df[col_fecha], errors="coerce").dt.normalize()
+        cols = {"f": _fe, "prod": df[col_prod].astype(str),
+                "venta": pd.to_numeric(df[col_venta], errors="coerce")}
+        if col_cant and col_cant in df.columns:
+            cols["cant"] = pd.to_numeric(df[col_cant], errors="coerce").fillna(0)
+        b = pd.DataFrame(cols).dropna(subset=["f", "venta"])
+        b = b[(b["f"].dt.date >= _ini) & (b["f"].dt.date <= _fin)]
+        if b.empty:
+            return None
+        agg = {"venta": ("venta", "sum")}
+        if "cant" in b.columns:
+            agg["cant"] = ("cant", "sum")
+        return b.groupby("prod", as_index=False).agg(**agg)
+
+    a, p = _agg(rango_act), _agg(rango_ap)
+    if a is None and p is None:
+        return None
+    if a is None:
+        a = pd.DataFrame({"prod": [], "venta": []})
+    if p is None:
+        p = pd.DataFrame({"prod": [], "venta": []})
+
+    t = a.merge(p[["prod", "venta"]].rename(columns={"venta": "venta_ap"}),
+                on="prod", how="outer")
+    t["venta"] = t["venta"].fillna(0.0)
+    t["venta_ap"] = t["venta_ap"].fillna(0.0)
+    if "cant" in t.columns:
+        t["cant"] = t["cant"].fillna(0)
+    t["var"] = [_pct(x, y) for x, y in zip(t["venta"], t["venta_ap"])]
+    t = t.sort_values("venta", ascending=False).head(top).reset_index(drop=True)
+    return t
 
 
 @st.fragment
-def _ventas_comparativo(d, col_venta, col_fecha, filtrar_cb=None):
-    """Barras agrupadas Año Pasado vs Actual por día, semana o mes."""
+def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
+                        col_prod=None, col_cant=None, filtrar_cb=None):
+    """Comparativo Año Pasado vs Actual por día, semana o mes — en montos o
+    descompuesto en pax × ticket, con drill al ranking de platos del período
+    que se clickee."""
     if not (col_venta and col_fecha):
         st.info("Faltan columnas (Venta, Fecha) para el comparativo.")
         return
@@ -346,10 +434,12 @@ def _ventas_comparativo(d, col_venta, col_fecha, filtrar_cb=None):
     cfg = REPORTES.get("Ventas", {})
     _arch = cfg.get("archivo", "ventas.parquet")
     _colp = cfg.get("carga_por_rango", "FEC REG DOCUMENTO")
-    serie_act = _serie_por_rangos(_arch, _colp, col_fecha, col_venta,
-                                  rangos_act, filtrar_cb)
-    serie_ap = _serie_por_rangos(_arch, _colp, col_fecha, col_venta,
-                                 rangos_ap, filtrar_cb)
+    serie_act, pax_act_d = _series_por_rangos(
+        _arch, _colp, col_fecha, col_venta, col_pax, col_pedido,
+        rangos_act, filtrar_cb)
+    serie_ap, pax_ap_d = _series_por_rangos(
+        _arch, _colp, col_fecha, col_venta, col_pax, col_pedido,
+        rangos_ap, filtrar_cb)
 
     y_act = [float(serie_act.get(k, 0.0)) for k in claves]
     y_ap = [float(serie_ap.get(k, 0.0)) for k in claves_ap]
@@ -357,6 +447,19 @@ def _ventas_comparativo(d, col_venta, col_fecha, filtrar_cb=None):
         st.info("Sin datos de venta en la ventana elegida.")
         return
     hay_ap = any(y_ap)
+
+    # Descomposición: Venta = Pax × Ticket, así que %Δventa, %Δpax y %Δticket
+    # viven en el MISMO eje de % y contestan "¿vino menos gente o gastaron
+    # menos?" — la pregunta que sigue a cualquier caída. Sólo se ofrece si
+    # hay pax deduplicable por pedido (ver _series_por_rangos).
+    p_act = [float(pax_act_d.get(k, 0.0)) for k in claves]
+    p_ap = [float(pax_ap_d.get(k, 0.0)) for k in claves_ap]
+    hay_pax = bool(pax_act_d) and any(p_ap) and any(p_act)
+    vista = "Montos"
+    if hay_pax and hay_ap:
+        vista = st.pills(
+            "Vista", ["Montos", "Descomposición"], default="Montos",
+            key="ventas_comp_vista", label_visibility="collapsed") or "Montos"
 
     etiquetas = [_etiqueta_clave(k, grano) for k in claves]
     # Con más de MAX_ETIQUETAS barras, valor + %Var + "en curso" apilados se
@@ -366,32 +469,83 @@ def _ventas_comparativo(d, col_venta, col_fecha, filtrar_cb=None):
     _txt_ap = [_fmt_soles_compacto(v) for v in y_ap] if mostrar_etq else None
     _txt_act = [_fmt_soles_compacto(v) for v in y_act] if mostrar_etq else None
 
+    es_desc = vista == "Descomposición"
+    d_venta = [_pct(a, b) for a, b in zip(y_act, y_ap)]
+    d_pax = [_pct(a, b) for a, b in zip(p_act, p_ap)]
+    # Ticket = venta/pax. Si falta cualquiera de los dos lados, el ticket de
+    # ese período no existe (None) y la línea corta ahí en vez de inventar.
+    t_act = [(v / p if p else None) for v, p in zip(y_act, p_act)]
+    t_ap = [(v / p if p else None) for v, p in zip(y_ap, p_ap)]
+    d_ticket = [(_pct(a, b) if (a is not None and b) else None)
+                for a, b in zip(t_act, t_ap)]
+
     fig = go.Figure()
-    fig.add_bar(
-        x=etiquetas, y=y_ap, name="Año pasado",
-        marker=dict(color=LAVANDA_BORDE),
-        text=_txt_ap, textposition="outside", cliponaxis=False,
-        textfont=dict(size=9, color=GRIS_TEXTO),
-        customdata=[_texto_periodo(k, grano, fin) for (k, _i, fin) in rangos_ap],
-        hovertemplate="Año pasado · %{customdata}<br>S/ %{y:,.0f}<extra></extra>",
-    )
-    fig.add_bar(
-        x=etiquetas, y=y_act, name="Actual",
-        marker=dict(color=ACENTO),
-        text=_txt_act, textposition="outside", cliponaxis=False,
-        textfont=dict(size=9, color=ACENTO),
-        customdata=[_texto_periodo(k, grano, fin) for (k, _i, fin) in rangos_act],
-        hovertemplate="Actual · %{customdata}<br>S/ %{y:,.0f}<extra></extra>",
-    )
+    if es_desc:
+        _col_barra = [(EXITO if (v is not None and v >= 0) else ERROR)
+                      for v in d_venta]
+        fig.add_bar(
+            x=etiquetas, y=d_venta, name="%Δ venta",
+            marker=dict(color=_col_barra), opacity=0.82,
+            text=([None if v is None else f"{v:+.0f}%" for v in d_venta]
+                  if mostrar_etq else None),
+            textposition="outside", cliponaxis=False, textfont=dict(size=9),
+            customdata=[_texto_periodo(k, grano, fin) for (k, _i, fin) in rangos_act],
+            hovertemplate="%{customdata}<br>Venta: %{y:+.1f}%<extra></extra>",
+        )
+        fig.add_trace(go.Scatter(
+            x=etiquetas, y=d_pax, name="%Δ pax", mode="lines+markers",
+            line=dict(color=PALETA_SERIES[1], width=2),
+            marker=dict(size=7, line=dict(color="white", width=1.5)),
+            customdata=[[a, b] for a, b in zip(p_act, p_ap)],
+            hovertemplate=("Pax: %{y:+.1f}% "
+                           "(%{customdata[0]:,.0f} vs %{customdata[1]:,.0f})"
+                           "<extra></extra>"),
+        ))
+        fig.add_trace(go.Scatter(
+            x=etiquetas, y=d_ticket, name="%Δ ticket", mode="lines+markers",
+            line=dict(color=PALETA_SERIES[2], width=2, dash="dash"),
+            marker=dict(size=7, symbol="square",
+                        line=dict(color="white", width=1.5)),
+            customdata=[[(0 if a is None else a), (0 if b is None else b)]
+                        for a, b in zip(t_act, t_ap)],
+            hovertemplate=("Ticket: %{y:+.1f}% "
+                           "(S/ %{customdata[0]:,.0f} vs S/ %{customdata[1]:,.0f})"
+                           "<extra></extra>"),
+        ))
+        fig.add_hline(y=0, line=dict(color=GRIS_TEXTO, width=1))
+    else:
+        fig.add_bar(
+            x=etiquetas, y=y_ap, name="Año pasado",
+            marker=dict(color=LAVANDA_BORDE),
+            text=_txt_ap, textposition="outside", cliponaxis=False,
+            textfont=dict(size=9, color=GRIS_TEXTO),
+            customdata=[_texto_periodo(k, grano, fin) for (k, _i, fin) in rangos_ap],
+            hovertemplate="Año pasado · %{customdata}<br>S/ %{y:,.0f}<extra></extra>",
+        )
+        fig.add_bar(
+            x=etiquetas, y=y_act, name="Actual",
+            marker=dict(color=ACENTO),
+            text=_txt_act, textposition="outside", cliponaxis=False,
+            textfont=dict(size=9, color=ACENTO),
+            customdata=[_texto_periodo(k, grano, fin) for (k, _i, fin) in rangos_act],
+            hovertemplate="Actual · %{customdata}<br>S/ %{y:,.0f}<extra></extra>",
+        )
     # El período en curso se marca: aunque el año pasado ya viene recortado
     # al mismo tramo (comparación justa), el usuario tiene que saber que esa
     # barra no es un mes/semana entero — si no, la lee como cerrada. Offset
     # en unidades de dato (no yshift en píxeles) para apilar en el mismo
     # sistema que el %Var de abajo, arriba de las etiquetas de valor.
-    _tope = max(max(y_act, default=0), max(y_ap, default=0)) or 1
+    if es_desc:
+        _vals = [v for v in (d_venta + d_pax + d_ticket) if v is not None]
+        _tope = (max(abs(v) for v in _vals) if _vals else 1) or 1
+    else:
+        _tope = max(max(y_act, default=0), max(y_ap, default=0)) or 1
     for i in parciales:
+        _base = (max([v for v in (d_venta[i], d_pax[i], d_ticket[i])
+                      if v is not None] or [0]) if es_desc
+                 else max(y_act[i], y_ap[i]))
         fig.add_annotation(
-            x=i, y=max(y_act[i], y_ap[i]) + _tope * (0.24 if mostrar_etq else 0.04),
+            x=i, y=_base + _tope * (0.24 if mostrar_etq else 0.04),
             showarrow=False, text="en curso",
             font=dict(size=8, color=GRIS_TEXTO))
 
@@ -444,7 +598,9 @@ def _ventas_comparativo(d, col_venta, col_fecha, filtrar_cb=None):
                 text=f"{'+' if _dif > 0 else '−'}{abs(_dif)} fer.",
                 font=dict(size=8, color=ADVERTENCIA_TEXTO))
 
-    if hay_ap and mostrar_etq:
+    # El %Var sólo se anota aparte en Montos: en Descomposición la barra YA
+    # es el %Δ de venta y lleva su propia etiqueta (`text=` de la traza).
+    if hay_ap and mostrar_etq and not es_desc:
         for i, (a, b) in enumerate(zip(y_act, y_ap)):
             if not b:
                 continue
@@ -464,18 +620,43 @@ def _ventas_comparativo(d, col_venta, col_fecha, filtrar_cb=None):
     )
     fig.update_xaxes(type="category", tickangle=-45, tickfont=dict(size=10),
                      showgrid=False)
-    fig.update_yaxes(tickprefix="S/ ", tickformat=",.0f", gridcolor=GRIS_BORDE,
-                     zeroline=False)
+    if es_desc:
+        fig.update_yaxes(ticksuffix="%", tickformat=",.0f",
+                         gridcolor=GRIS_BORDE, zeroline=False)
+    else:
+        fig.update_yaxes(tickprefix="S/ ", tickformat=",.0f",
+                         gridcolor=GRIS_BORDE, zeroline=False)
 
     _sufijo = {"Día": "día a día", "Semana": "semana a semana",
                "Mes": "mes a mes"}[grano]
-    titulo = f"Comparativo {_sufijo} vs. año pasado"
-    if grano == "Día":
-        titulo += (" — alineado por día de semana" if modo == "semana"
-                   else " — alineado por fecha calendario")
+    if es_desc:
+        titulo = f"¿Por qué cambió la venta? — {_sufijo} vs. año pasado"
+    else:
+        titulo = f"Comparativo {_sufijo} vs. año pasado"
+        if grano == "Día":
+            titulo += (" — alineado por día de semana" if modo == "semana"
+                       else " — alineado por fecha calendario")
+
+    foco = st.session_state.get("ventas_comp_foco")
+    if foco is not None and not (0 <= foco < len(claves)):
+        foco = None
 
     with _card("ventas_comparativo", titulo, titulo_arriba=True):
-        st.plotly_chart(fig, use_container_width=True, key="ventas_g_comparativo")
+        # La selección de plotly_chart PERSISTE entre reruns: con una key
+        # estática el mismo clic se re-procesa en cada rerun y el drill
+        # parpadea abriéndose y cerrándose. El foco va en la key (CLAUDE.md).
+        evt = st.plotly_chart(
+            fig, use_container_width=True,
+            key=f"ventas_g_comparativo_{vista}_{grano}_{foco if foco is not None else 'none'}",
+            on_select="rerun", selection_mode="points",
+            config={"displaylogo": False, "displayModeBar": False})
+        _mp = _first_point(evt)
+        if _mp is not None:
+            _pi = _mp.get("point_index", _mp.get("point_number"))
+            if _pi is not None and st.session_state.get("ventas_comp_click") != _pi:
+                st.session_state["ventas_comp_click"] = _pi
+                st.session_state["ventas_comp_foco"] = None if foco == _pi else _pi
+                st.rerun(scope="fragment")
         if not hay_ap:
             st.caption(
                 "No hay ventas registradas en el tramo equivalente del año "
@@ -512,6 +693,61 @@ def _ventas_comparativo(d, col_venta, col_fecha, filtrar_cb=None):
             _lbl += (" El período marcado «en curso» todavía no terminó: se "
                      "compara contra el MISMO tramo del año pasado (no contra "
                      "el período entero), así que el %Var es justo.")
+        if es_desc:
+            _expl = ("Venta = pax × ticket, así que los tres %Δ comparten un "
+                     "mismo eje. Si la venta cae y el ticket queda plano, "
+                     "faltó gente; si cae el ticket y el pax no, vinieron "
+                     "igual pero gastaron menos. " + _expl)
         _plural = {"Día": "días", "Semana": "semanas", "Mes": "meses"}[grano]
         st.caption(f"Ventana: {ventana} {_plural} hasta {ancla:%d/%m/%Y}. "
-                   + _expl + _cal_txt + _lbl)
+                   + _expl + _cal_txt + _lbl
+                   + (" Tocá una barra para ver los platos de ese período."
+                      if col_prod else ""))
+
+    # ── Drill: ranking de platos del período clickeado ───────────────────
+    if foco is not None and col_prod:
+        k = claves[foco]
+        _r_act = (rangos_act[foco][1], rangos_act[foco][2])
+        _r_ap = (rangos_ap[foco][1], rangos_ap[foco][2])
+        with _card("ventas_comp_platos",
+                   f"Platos · {_texto_periodo(k, grano, rangos_act[foco][2])} "
+                   f"vs. {_texto_periodo(claves_ap[foco], grano, rangos_ap[foco][2])}",
+                   titulo_arriba=True):
+            _c1, _c2 = st.columns([6, 1])
+            with _c2:
+                if st.button("Cerrar", key="ventas_comp_cerrar",
+                             use_container_width=True):
+                    st.session_state["ventas_comp_foco"] = None
+                    st.session_state["ventas_comp_click"] = None
+                    st.rerun(scope="fragment")
+            rk = _ranking_platos(_arch, _colp, col_fecha, col_venta, col_prod,
+                                 col_cant, _r_act, _r_ap, filtrar_cb)
+            if rk is None or rk.empty:
+                st.info("Sin ventas de productos en ese período.")
+            else:
+                _cols = {"prod": "Producto", "venta_ap": "Año pasado",
+                         "venta": "Actual", "var": "%Var"}
+                _orden = ["prod", "venta_ap", "venta", "var"]
+                if "cant" in rk.columns:
+                    _cols["cant"] = "Cantidad"
+                    _orden.insert(3, "cant")
+                tv = rk[_orden].rename(columns=_cols)
+
+                def _sty_var(v):
+                    if pd.isna(v):
+                        return f"color:{GRIS_TEXTO}"
+                    return f"color:{EXITO}" if v >= 0 else f"color:{ERROR}"
+
+                _fmt = {"Año pasado": "S/ {:,.0f}", "Actual": "S/ {:,.0f}",
+                        "%Var": lambda v: "—" if pd.isna(v) else f"{v:+.0f}%"}
+                if "Cantidad" in tv.columns:
+                    _fmt["Cantidad"] = "{:,.0f}"
+                sty = (tv.style.format(_fmt)
+                       .map(_sty_var, subset=["%Var"])
+                       .set_properties(subset=["Año pasado"], color=GRIS_TEXTO))
+                st.dataframe(sty, use_container_width=True, hide_index=True,
+                             height=min(430, 60 + 34 * len(tv)))
+                st.caption(
+                    "Top 15 por venta actual. Un producto con «—» en %Var no "
+                    "se vendió en el período equivalente del año pasado "
+                    "(entró a la carta después, o no estaba disponible).")

@@ -317,6 +317,13 @@ def _pruebas_puras():
 
     check("_etiqueta_clave mes", _vc._etiqueta_clave((2026, 8), "Mes"), "Ago 26")
 
+    # _pct: sin base con la que comparar devuelve None (hueco en la linea),
+    # NO 0 — un 0 se leeria como "no cambio", que es una afirmacion falsa.
+    check("_pct normal", _vc._pct(80, 100), -20.0)
+    check("_pct base cero → None", _vc._pct(80, 0), None)
+    check("_pct base None → None", _vc._pct(80, None), None)
+    check("_pct actual cero es un dato real", _vc._pct(0, 100), -100.0)
+
     check("_fmt_soles_compacto miles", _vc._fmt_soles_compacto(636448), "S/ 636k")
     check("_fmt_soles_compacto bajo mil", _vc._fmt_soles_compacto(480), "S/ 480")
     check("_fmt_soles_compacto exacto mil", _vc._fmt_soles_compacto(1000), "S/ 1k")
