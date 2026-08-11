@@ -23,7 +23,7 @@ actualiza este documento en el mismo commit.
 | `cortes.py` | Agrupa fechas en **cortes**: las rachas de días de una misma sesión de inventario (salto ≤ `CORTE_MAX_SALTO_DIAS`). Un corte es un CONJUNTO de días, no un intervalo — ver regla #62. Sin dependencias de streamlit ni de `graficos/`, porque lo consumen los dos lados: la franja de `app.py` y `graficos/ajuste/_comun.py` (que lo reexporta con los nombres privados de siempre). |
 | `data.py` | Carga de datos: DuckDB + httpfs leyendo parquets de R2 (secrets). Sistema de refresco bajo demanda vía R2. |
 | `tablas/` | **Paquete de tablas AgGrid** (refactor 2026-08-01; antes un `tablas.py` de 2.028 líneas). `__init__.py` re-exporta la API pública. `_css.py` (CSS de grid y paneles), `_config.py` (estilos de celda/fila, sidebar, totales), `desktop.py` (`renderizar_aggrid_desktop`), `movil.py` (`renderizar_aggrid_movil`), `compras.py` (`renderizar_aggrid_compras`), `ajuste_pivote.py` (`renderizar_aggrid_pivote_ajuste`, tabla "Por fecha" de Ajuste de Inventario — ver regla #25). `renderizar_tabla_compras` se borró el 2026-08-08 (llevaba desde 2026-08-01 sin llamadores). |
-| `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `tiene_dashboard(reporte)` (para que `app.py` no enumere reportes ni importe `_DASHBOARDS`; ver regla #50). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), **`ajuste/` es un paquete** (refactor 2026-08-08; antes un `ajuste.py` de 2.607 líneas — el fichero con MÁS churn del repo, 80 de los últimos 200 commits): una vista por módulo — `_comun.py` (layout del rail, fechas de corte, periodos), `_evolucion.py`, `_pivote.py`, `_cascada.py`, `_panel_analisis.py`, `_heatmap.py`, `_distribucion.py` — y `__init__.py` con la config del rail, `categoria_rango_ajuste` y el entry point. Ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10, `ventas.py` (`ventas_resumen.py` aporta su vista "Resumen ejecutivo" — KPIs + venta diaria coloreada por tendencia + ticket promedio + top platos; nació con un candlestick, ver por qué se dio de baja en la regla #85) y `ventas_comparativo.py` (vista "Año Pasado": barras agrupadas día a día con toggle de alineación fecha-calendario / día-de-semana, feriados y findes marcados — ver regla #86), `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras). `legacy.py` (Inventario v1) se borró el 2026-08-08: 421 líneas sin un solo import. **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py`, `volatilidad.py` (ranking de insumos por volatilidad de precio → candlestick semanal → compras de la semana clickeada; ver regla #74) — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. El drill de Proveedor se siguió partiendo el 2026-08-08 (era una función de 1.577 líneas): `_css_proveedor.py` (sus 527 líneas de CSS, que NO van a `estilos/` a propósito — ver su docstring), `_etiquetas_proveedor.py` (texto de las barras: `fmt_k`, `abrev_nombre`, `etiqueta_serie`, `sufijo_granularidad`; puras y con asserts de valor en `test_graficos.py`) y `_documentos_proveedor.py` (`tabla_documentos`, la AgGrid pivote del pie). Quedó en 791 líneas; el resto NO se siguió cortando a propósito — ver regla #55. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
+| `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `tiene_dashboard(reporte)` (para que `app.py` no enumere reportes ni importe `_DASHBOARDS`; ver regla #50). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), **`ajuste/` es un paquete** (refactor 2026-08-08; antes un `ajuste.py` de 2.607 líneas — el fichero con MÁS churn del repo, 80 de los últimos 200 commits): una vista por módulo — `_comun.py` (layout del rail, fechas de corte, periodos), `_evolucion.py`, `_pivote.py`, `_cascada.py`, `_panel_analisis.py`, `_heatmap.py`, `_distribucion.py` — y `__init__.py` con la config del rail, `categoria_rango_ajuste` y el entry point. Ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10, `ventas.py` (`ventas_resumen.py` aporta su vista "Resumen ejecutivo" — KPIs + venta diaria coloreada por tendencia + ticket promedio + top platos; nació con un candlestick, ver por qué se dio de baja en la regla #85) y `ventas_comparativo.py` (vista "Año Pasado": barras agrupadas Actual vs Año Pasado en día/semana/mes, con toggle de alineación fecha-calendario / día-de-semana en día, feriados y findes marcados, y recorte del período en curso — ver reglas #86 y #87), `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras). `legacy.py` (Inventario v1) se borró el 2026-08-08: 421 líneas sin un solo import. **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py`, `volatilidad.py` (ranking de insumos por volatilidad de precio → candlestick semanal → compras de la semana clickeada; ver regla #74) — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. El drill de Proveedor se siguió partiendo el 2026-08-08 (era una función de 1.577 líneas): `_css_proveedor.py` (sus 527 líneas de CSS, que NO van a `estilos/` a propósito — ver su docstring), `_etiquetas_proveedor.py` (texto de las barras: `fmt_k`, `abrev_nombre`, `etiqueta_serie`, `sufijo_granularidad`; puras y con asserts de valor en `test_graficos.py`) y `_documentos_proveedor.py` (`tabla_documentos`, la AgGrid pivote del pie). Quedó en 791 líneas; el resto NO se siguió cortando a propósito — ver regla #55. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
 | `estilos/` | **Paquete del CSS global** (refactor 2026-08-01; antes un `estilos.py` de 1.700 líneas). `__init__.py` mantiene la API pública (`TAM_FUENTE`, `get_css`, `inject_css`) y concatena las secciones. Una sección por módulo, con prefijo numérico que marca el orden: `_00_base`, `_20_compras_rail`, `_30_filtros`, `_40_ajuste_franja`, `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`, `_90_franja_inferior`, `_99_movil`. (`_10_vista` existió hasta el 2026-08-08: estilaba el selector Gráficos/Tabla y quedó 100% huérfano al borrarse ese widget — ver regla #49.) **El orden de `_SECCIONES` es parte del comportamiento**: hay `!important` en ambos lados de varios conflictos, así que gana la regla que va DESPUÉS — por eso `_99_movil` cierra. |
 | `navegacion.py` | Rail lateral, topbar y CSS por sección (`_CSS_AJUSTE`). Botón de refresco aislado en su propio `@st.fragment`. |
 | `inyecciones/` | **Paquete de JS/HTML inyectado** (refactor 2026-08-01; antes un `inyecciones.py` de 1.813 líneas). `_fragmentos.py` (CSS/JS compartido), `grid.py` (salud, altura, maximizar, panel de columnas), `paginacion.py`, `inspector.py` (herramienta de desarrollo), `diseno.py` (modo de diseño visual, `?debug=1&diseno=1` — lee el pin de `inspector.py`, ver regla #46), `varios.py` (overlay de errores, fullscreen, footer, calendario). Los dos blobs de JS grandes viven aparte desde el 2026-08-08: `_inspector_js.py` (1.381 líneas) y `_diseno_js.py` (794). Sus funciones quedaron en 34 y 5 líneas. **Si tocas esos módulos, lee antes la regla #56** — extraerlos rompió el inspector de una forma que ni `ruff` ni los tests pueden ver. Ninguna función depende de otra (la excepción de solo-lectura de `diseno.py` está documentada en la regla #46): las únicas dependencias internas apuntan a las constantes de `_fragmentos.py`. |
@@ -3020,8 +3020,63 @@ salvo `icono`):
 
     **Verificado en el navegador con datos reales de R2**, los dos modos: en
     "misma fecha" el 01/08/2026 se compara contra 01/08/2025; en "mismo día
-    de semana", contra 02/08/2025 (sábado con sábado). **NO se pudo
-    ejercitar** la supresión del %Var sobre las barras con más de
-    `MAX_ETIQUETAS=14` días: el rango cargado en el entorno tenía 9 días con
-    ventas, y la ventana es un TECHO (`.tail(ventana)`), así que pedir 30
-    días sigue mostrando 9 — correcto, pero deja esa rama sin probar.
+    de semana", contra 02/08/2025 (sábado con sábado).
+
+    **Granularidad día / semana / mes (agregado el mismo día).** El toggle de
+    alineación aparece SÓLO en día: en semana y mes la pregunta se disuelve
+    sola —una semana ISO completa trae un lunes, un viernes y un sábado, y un
+    mes también, así que el ruido de día-de-semana se cancela al sumar— y no
+    queda una segunda lectura razonable de "semana 32 contra semana 32". Las
+    bandas de finde y la punteada de inicio de semana también son exclusivas
+    de día (no hay día que sombrear en una barra que ya es un mes).
+    Los feriados, en cambio, **no dejan de importar al agregar**: si un
+    período tiene un feriado que su equivalente no tenía, el %Var mide con la
+    vara torcida. Por eso en semana/mes se marca el DESBALANCE (`+1 fer.` /
+    `−1 fer.`) en vez de descartarlos. No es teórico: verificando en el
+    navegador apareció `−1 fer.` en S26 y `+1 fer.` en S27 porque San Pedro y
+    San Pablo (29/06) cae en la semana 26 de 2025 y en la 27 de 2026. El caso
+    grande es Semana Santa, que se muda de marzo a abril según el año —
+    `test_graficos.py` lo clava con `_feriados_entre` (2024 en marzo, 2026 en
+    abril).
+
+    **Los DOS lados se cargan de R2, no de `d`.** Al agregar mensual quedó a
+    la vista que usar `d` no alcanzaba: viene acotado al rango de la franja
+    (1 del mes a hoy por defecto), así que pedir 12 meses habría mostrado un
+    mes y medio. Ahora ambas series salen de `data.cargar_rango()` con el
+    ancla en la última fecha con datos de `d` — la vista sigue mirando donde
+    mira el usuario, pero la ventana la manda el selector. Efecto lateral
+    bueno y visible: en día ya no se recorta a lo que haya en la franja (con
+    9 días cargados y ventana 14, antes mostraba 9; ahora muestra los 14).
+    La ventana se pide con `key=f"ventas_comp_ventana_{grano}"` — las
+    opciones cambian con el grano y un `st.pills` que conserva un valor fuera
+    de su lista nueva se queda sin selección (regla #9).
+
+87. **Todo comparativo período-contra-período tiene que recortar el período
+    EN CURSO — si no, el último dato miente y encima miente en grande.**
+    Encontrado verificando `ventas_comparativo.py` en granularidad mes: con
+    datos hasta el 09/08, "Ago 26" mostraba **−83%** contra agosto del año
+    pasado. No era una caída de ventas: eran 9 días contra 31. El resto de
+    los meses de la misma pantalla iban entre −15% y −44%, así que el −83%
+    saltaba como el peor mes del año cuando en realidad era el artefacto más
+    grande del gráfico.
+    **Arreglo (`_rangos_comparables`):** cuando el período actual se pasa del
+    ancla, se recorta al ancla Y se recorta el del año pasado a la MISMA
+    cantidad de días — el "mes a la fecha vs. mismo tramo del año pasado" de
+    cualquier BI serio. Con eso agosto pasó de −83% a **−40%**, en línea con
+    los meses vecinos. La barra se marca "en curso" igual: la comparación ya
+    es justa, pero el usuario tiene que saber que ese mes no está cerrado o
+    lo lee como definitivo.
+    **Consecuencia de diseño:** la agregación NO puede ser un
+    `groupby(clave_de_período)`. La clave del año pasado sigue siendo
+    "agosto" pero sólo hay que sumarle 9 días, así que se suma por RANGO
+    explícito (`_serie_por_rangos` recibe `(clave, ini, fin)`) — un groupby
+    por clave no tiene dónde expresar el recorte. Si alguien "simplifica"
+    eso a un groupby, el −83% vuelve.
+    El test fija la propiedad que importa —**ambos lados cubren la misma
+    cantidad de días**— y no sólo las fechas concretas; es lo que hace justa
+    la comparación, las fechas son el medio.
+    Aplica igual a semana (una semana en curso son 3 días contra 7) y, en
+    principio, a cualquier vista futura que compare períodos: Matriz agrupada
+    y Ranking & FoodCost comparan por mes contra Año Pasado y **tienen este
+    mismo sesgo sin corregir** en su mes en curso — no se tocaron acá, pero
+    queda anotado.

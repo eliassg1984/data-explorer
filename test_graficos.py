@@ -258,7 +258,91 @@ def _pruebas_puras():
     check("equivalente semana 53 → 52 sin error",
           _vc._fecha_equivalente(_s53, "semana").isocalendar()[1], 52)
 
-    check("_etiqueta_dia", _vc._etiqueta_dia(_dt.date(2026, 8, 5)), "Mié 05/08")
+    check("_etiqueta_clave día",
+          _vc._etiqueta_clave(_dt.date(2026, 8, 5), "Día"), "Mié 05/08")
+
+    # ── Granularidad semana / mes ───────────────────────────────────────
+    # Claves hacia atrás: terminan SIEMPRE en el período del ancla
+    _cl_d = _vc._claves_hacia_atras(_dt.date(2026, 8, 5), "Día", 3)
+    check("claves día cuenta", len(_cl_d), 3)
+    check("claves día terminan en el ancla", _cl_d[-1], _dt.date(2026, 8, 5))
+    check("claves día en orden", _cl_d[0], _dt.date(2026, 8, 3))
+
+    _cl_s = _vc._claves_hacia_atras(_dt.date(2026, 8, 5), "Semana", 3)
+    check("claves semana cuenta", len(_cl_s), 3)
+    check("claves semana terminan en la del ancla",
+          _cl_s[-1], (2026, _dt.date(2026, 8, 5).isocalendar()[1]))
+
+    # Cruce de año: 3 meses hacia atrás desde enero cae en el año anterior
+    _cl_m = _vc._claves_hacia_atras(_dt.date(2026, 1, 15), "Mes", 3)
+    check("claves mes cruzan el año", _cl_m, [(2025, 11), (2025, 12), (2026, 1)])
+
+    # Clave AP: mismo número de período, un año antes
+    check("clave AP mes", _vc._clave_ap((2026, 3), "Mes", "semana"), (2025, 3))
+    check("clave AP semana", _vc._clave_ap((2026, 20), "Semana", "semana"),
+          (2025, 20))
+    # 2025 no tiene semana 53 → cae a la 52 en vez de reventar
+    check("clave AP semana 53 → 52",
+          _vc._clave_ap((2026, 53), "Semana", "semana"), (2025, 52))
+
+    # Rango de clave: el mes cierra en su último día real (28/30/31)
+    check("rango mes feb-2025 (no bisiesto)",
+          _vc._rango_de_clave((2025, 2), "Mes"),
+          (_dt.date(2025, 2, 1), _dt.date(2025, 2, 28)))
+    check("rango mes feb-2024 (bisiesto)",
+          _vc._rango_de_clave((2024, 2), "Mes"),
+          (_dt.date(2024, 2, 1), _dt.date(2024, 2, 29)))
+    _ini_s, _fin_s = _vc._rango_de_clave((2026, 32), "Semana")
+    check("rango semana arranca lunes", _ini_s.weekday(), 0)
+    check("rango semana cierra domingo", _fin_s.weekday(), 6)
+
+    # _clave_de_fecha invierte a _rango_de_clave (una fecha cae en su período)
+    check("clave de fecha (mes)",
+          _vc._clave_de_fecha(_dt.date(2026, 8, 5), "Mes"), (2026, 8))
+    check("clave de fecha (semana)",
+          _vc._clave_de_fecha(_dt.date(2026, 8, 5), "Semana"),
+          (2026, _dt.date(2026, 8, 5).isocalendar()[1]))
+
+    # Feriados en un rango: julio trae 28 y 29 (Fiestas Patrias)
+    check("feriados en julio 2026",
+          _vc._feriados_entre(_dt.date(2026, 7, 1), _dt.date(2026, 7, 31)), 2)
+    check("feriados en un tramo sin ninguno",
+          _vc._feriados_entre(_dt.date(2026, 7, 1), _dt.date(2026, 7, 27)), 0)
+    # Semana Santa se muda de mes: 2024 cayó en marzo, 2026 en abril. Es el
+    # caso que justifica el marcador de desbalance a nivel mes.
+    check("Semana Santa 2024 en marzo",
+          _vc._feriados_entre(_dt.date(2024, 3, 1), _dt.date(2024, 3, 31)), 2)
+    check("Semana Santa 2026 en abril",
+          _vc._feriados_entre(_dt.date(2026, 4, 1), _dt.date(2026, 4, 30)), 2)
+
+    check("_etiqueta_clave mes", _vc._etiqueta_clave((2026, 8), "Mes"), "Ago 26")
+
+    # ── Recorte del período EN CURSO (comparación justa) ────────────────
+    # Ancla 09/08/2026: agosto va del 1 al 9, así que el agosto del año
+    # pasado tiene que recortarse a sus primeros 9 días — si no, 9 días
+    # contra 31 dan un −83% que es puro calendario, no una caída de ventas.
+    _ancla = _dt.date(2026, 8, 9)
+    _cl = _vc._claves_hacia_atras(_ancla, "Mes", 2)          # [(2026,7),(2026,8)]
+    _cl_ap = [_vc._clave_ap(k, "Mes", "semana") for k in _cl]
+    _ra, _rp, _parc = _vc._rangos_comparables(_cl, _cl_ap, "Mes", _ancla)
+    check("recorte: sólo el último período es parcial", _parc, {1})
+    check("recorte: el mes cerrado NO se toca",
+          (_ra[0][1], _ra[0][2]), (_dt.date(2026, 7, 1), _dt.date(2026, 7, 31)))
+    check("recorte: el mes en curso corta en el ancla",
+          (_ra[1][1], _ra[1][2]), (_dt.date(2026, 8, 1), _ancla))
+    check("recorte: el AP del mes en curso corta al mismo tramo",
+          (_rp[1][1], _rp[1][2]), (_dt.date(2025, 8, 1), _dt.date(2025, 8, 9)))
+    check("recorte: el AP del mes cerrado queda entero",
+          (_rp[0][1], _rp[0][2]), (_dt.date(2025, 7, 1), _dt.date(2025, 7, 31)))
+    # Los dos lados suman la MISMA cantidad de días (eso es lo que hace justa
+    # la comparación — es la propiedad que importa, no las fechas en sí)
+    check("recorte: ambos lados cubren los mismos días",
+          (_ra[1][2] - _ra[1][1]), (_rp[1][2] - _rp[1][1]))
+
+    # Con el ancla en el último día del mes, nada es parcial
+    _ra2, _rp2, _parc2 = _vc._rangos_comparables(
+        [(2026, 7)], [(2025, 7)], "Mes", _dt.date(2026, 7, 31))
+    check("recorte: mes completo no marca parcial", _parc2, set())
 
     return fallos
 
