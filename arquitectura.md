@@ -2726,3 +2726,45 @@ salvo `icono`):
     No tocado: `_ficha_subfamilia` (barra APILADA por área, color = área,
     no por signo — mismo patrón no aplica sin rediseñar qué representa el
     color ahí, y no era el caso reportado).
+
+81. **Drill lateral en vez de apilado (2026-08-10, mismo día) — el detalle
+    del click-drill (regla #76) pasa de col_izq a col_der, y el Top que
+    vivía en col_der baja a una franja nueva debajo de las dos columnas.**
+    Antes: con foco, `_grafico_detalle_foco` se apilaba DEBAJO del ranking
+    en col_izq (regla #79 lo hizo compacto para que entrara sin scroll) y
+    col_der seguía mostrando el Top de siempre, sin relación con el foco
+    excepto un filtro. Ahora: col_der muestra el DETALLE (lateral, al lado
+    del ranking) cuando hay foco, y el Top (`_panel_top`, extraído del
+    bloque que antes vivía inline en `renderizar_graficos_inventario`) se
+    dibuja en una tercera card (`ajuste_graf_card_abajo_inv`) debajo de
+    las dos columnas — SOLO aparece con foco activo en Por área/Por
+    familia; sin foco, layout de siempre (ranking en izq, Top en der).
+
+    **Efecto en holgura del eje X:** el detalle ahora renderiza en col_der
+    (~307-343px, contra los ~588px de la card izq) — el `factor=0.5` de
+    `_rango_con_holgura` que alcanzaba en la card ancha dejaba la etiqueta
+    de la barra más larga cortada contra el borde en la angosta (mismo
+    síntoma que la regla #44, causa distinta: antes era la barra ocupando
+    el 100% del ancho, ahora es la COLUMNA la que es angosta). `factor`
+    pasa a `3.2` cuando `compacto=True` (el detalle siempre es
+    `compacto`), verificado en vivo midiendo `getBoundingClientRect()` del
+    texto vs. el borde del plot — la relación no es lineal (fracción de
+    ancho para texto = factor/(1+factor), se acerca a 1 asintóticamente),
+    así que se ajustó por prueba y medición en vivo, no por álgebra:
+    0.5→47px de corte, 0.9→31px, 2.0→6px, 3.2→sin corte, probado con la
+    barra dominante (GASTOS: una barra al 99.7%) y con valores más
+    parejos (BARRA: seis barras entre 11% y 102%) para no asumir que
+    arreglar un caso alcanza para el otro.
+
+    `ajuste_graf_card_abajo_inv` hereda el estilo de card blanca por el
+    selector wildcard `[class*="st-key-ajuste_graf_card_"]` de
+    `estilos/_80_cards.py` sin CSS nuevo — y al NO matchear `_izq_` ni
+    `_der_`, no hereda el `margin-top: -56px` de la regla #77 (correcto:
+    esta card vive en flujo normal, no pegada al rail).
+
+    **Trade-off de altura, a propósito:** el bloque total con foco activo
+    creció (~774px → ~1074px en el caso GASTOS) porque el Top —antes en
+    paralelo con el ranking, sin sumar altura— ahora se apila DEBAJO de
+    las dos columnas. Pedido explícito del usuario (layout lateral +
+    "top" abajo); si hace falta compactar el Top también, es un ajuste
+    aparte, no implícito en este cambio.
