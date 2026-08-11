@@ -56,7 +56,8 @@ def _rango_con_holgura(*series, factor=0.28):
     return [lo - pad, hi + pad]
 
 
-def _grafico_ranking(d, col_grp, col_val, titulo, key, clic=False, state_key=None):
+def _grafico_ranking(d, col_grp, col_val, titulo, key, clic=False, state_key=None,
+                     compacto=False):
     """Barra horizontal ordenada de mayor a menor — Por área/Por familia.
     Siempre valorizado (sin toggle Valor/Cantidad — se sacó a pedido: acá
     solo importa el valorizado). Cada barra lleva su % de participación
@@ -68,7 +69,14 @@ def _grafico_ranking(d, col_grp, col_val, titulo, key, clic=False, state_key=Non
     clic en una barra la resalta y guarda la categoría en
     `st.session_state[state_key]` — clic de nuevo la quita. Devuelve la
     categoría en foco (o None) para que el caller filtre el panel derecho
-    y muestre el detalle del siguiente nivel debajo."""
+    y muestre el detalle del siguiente nivel debajo.
+
+    `compacto=True` fuerza el formato bajito (menos px/barra) — lo usa el
+    caller para el detalle de `_grafico_detalle_foco`. Con foco activo,
+    ESTE gráfico (el ranking de arriba) también se achica solo, sin que el
+    caller tenga que pedirlo: no tiene sentido mantenerlo a tamaño completo
+    cuando ya cumplió su función (elegir la categoría) y lo que importa
+    ahora es el detalle de abajo."""
     met = pd.to_numeric(d[col_val], errors="coerce").fillna(0)
     serie = met.groupby(d[col_grp].astype(str)).sum().sort_values()
     if serie.empty:
@@ -93,7 +101,18 @@ def _grafico_ranking(d, col_grp, col_val, titulo, key, clic=False, state_key=Non
         text=_texto,
         textposition="outside", cliponaxis=False,
     ))
-    _compras_layout(fig, alto=min(900, max(360, 34 * len(serie) + 60)))
+    # Con foco activo el ranking se achica (menos px por barra, tope más
+    # bajo) para dejarle sitio al detalle de abajo dentro de la misma
+    # pantalla — sin esto, ranking completo + detalle sumaban más que el
+    # viewport y el usuario tenía que hacer scroll para ver lo que acababa
+    # de pedir con el clic.
+    if clic and foco:
+        alto = min(240, max(140, 20 * len(serie) + 40))  # ya cumplió su función, se achica al mínimo
+    elif compacto:
+        alto = min(420, max(200, 28 * len(serie) + 40))  # detalle: el que importa ahora, algo más de aire
+    else:
+        alto = min(900, max(360, 34 * len(serie) + 60))
+    _compras_layout(fig, alto=alto)
     fig.update_layout(title=titulo)
     fig.update_xaxes(visible=False, range=_rango_con_holgura(serie.values, factor=0.5))
     if not clic:
@@ -134,7 +153,7 @@ def _grafico_detalle_foco(d, graf, col_grp, foco, col_fam, col_subfam, col_val):
         st.caption(f"Sin desglose adicional para {foco}.")
         return
     _grafico_ranking(dd, col_next, col_val, f"{foco} — por {nombre_next}",
-                     key=f"inv_g_detalle_{_slug(foco)}")
+                     key=f"inv_g_detalle_{_slug(foco)}", compacto=True)
 
 
 def _ficha_producto(d, prod_sel, col_prod, col_area, col_val, col_cant,
@@ -437,9 +456,8 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                         clic=True, state_key=_state_key,
                     )
                     if foco:
-                        st.caption(f"📍 **{foco}** — clic en la barra de nuevo "
-                                   "para quitar el foco. El panel de la derecha "
-                                   "también quedó filtrado a esta selección.")
+                        st.caption(f"📍 **{foco}** · clic de nuevo para quitar "
+                                   "el foco · panel derecho filtrado")
                         _grafico_detalle_foco(d, graf, col_grp, foco,
                                               col_fam, col_subfam, col_val)
 

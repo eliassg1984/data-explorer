@@ -2659,3 +2659,32 @@ salvo `icono`):
     correcto. **No asumir que `category_orders` y un `y=` literal de
     `go.Bar` comparten convención de "primer elemento = dónde" — verificar
     en vivo cada vez que se toque uno de los dos.**
+
+79. **Click-drill (regla #76) obligaba a hacer scroll para ver el detalle
+    (2026-08-10, mismo día).** Con foco activo, `_grafico_ranking` seguía
+    dibujando el ranking de arriba a tamaño completo (hasta 900px con
+    muchas categorías — GASTOS, la más grande del dataset real, tiene 21
+    áreas) y el detalle de abajo SUMABA otros ~360-900px: en una pantalla
+    de 800px el bloque completo llegaba a ~988px, casi 200px de scroll
+    para ver lo que el usuario acababa de pedir con el clic.
+
+    Fix: `_grafico_ranking` gana `compacto` (parámetro explícito, para el
+    detalle) y además se achica SOLO cuando `clic and foco` (el ranking ya
+    cumplió su función — elegir la categoría — así que no necesita tamaño
+    completo). Tres tamaños en la misma función según el caso:
+    - Sin foco / vista normal: `min(900, max(360, 34·n+60))` (el de
+      siempre).
+    - Ranking CON foco activo: `min(240, max(140, 20·n+40))` — chico a
+      propósito, ya cumplió su función.
+    - Detalle (`compacto=True`, vía `_grafico_detalle_foco`): `min(420,
+      max(200, 28·n+40))` — el que importa ahora, algo más de aire que el
+      ranking pero con tope para no volver a desbordar.
+
+    Con esto, GASTOS (el caso más grande del dataset real: 21 áreas en el
+    ranking + 8 familias en el detalle) pasó de ~988px a ~830px de bloque
+    total — para la mayoría de las categorías (menos filas) entra
+    completo sin scroll. No hay forma de garantizar CERO scroll para
+    absolutamente cualquier cantidad de filas sin sacrificar legibilidad;
+    esto reduce el caso común y acota el peor caso, no lo elimina.
+    También se acortó el caption de foco a una sola línea (mismo motivo,
+    ahorra ~20px).
