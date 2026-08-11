@@ -15,6 +15,7 @@ from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, _render_rail,
     _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
 )
+from graficos.ventas_resumen import _ventas_resumen
 
 _MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
              "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
@@ -23,6 +24,7 @@ _MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
 # ver graficos/base.py) — reemplaza el st.pills que vivia ANTES en medio
 # del dashboard. Mismo patron que Compras/Ajuste.
 _VENTAS_RAIL_CATEGORIAS = (
+    ("Resumen",  (("Resumen ejecutivo", "Resumen"),)),
     ("Tiempo",   (("Venta por día",              "Por día"),
                   ("Venta vs Compra",            "Vs Compra"),
                   ("Familia/Subfamilia semanal",  "Semanal"),
@@ -1021,12 +1023,22 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
 
     with st.container(border=True, key="ajuste_graf_card_izq_ventas"):
 
+        # ── 0) Resumen ejecutivo: KPIs + candlestick diario + ticket + top
+        # platos (graficos/ventas_resumen.py). Vive DENTRO de esta misma
+        # card compartida (no arriba, entre chips y card) a propósito: así
+        # no hace falta repetir la excepción de margin-top de la regla #38
+        # de arquitectura.md — esa regla solo aplica a contenido en flujo
+        # POR FUERA de `ajuste_graf_card_izq_ventas`.
+        if graf == "Resumen ejecutivo":
+            _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido,
+                            col_prod, col_cant)
+
         # ── 1) Venta bruta por día (Venta / Costo / Pax / Pax·Venta) ─────
         # Venta y Costo comparten el eje IZQUIERDO (soles). Pax va a un eje
         # derecho (conteo) y el ratio Pax/Venta a un tercer eje derecho
         # (escala minúscula), para que las 4 escalas no se pisen. El selector
         # de métricas (pills multi) permite prender/apagar cada serie.
-        if graf == "Venta por día" and col_fecha:
+        elif graf == "Venta por día" and col_fecha:
             _fe = pd.to_datetime(d[col_fecha], errors="coerce").dt.normalize()
 
             # Venta y Costo: suma por línea (cada línea es un valor distinto).
