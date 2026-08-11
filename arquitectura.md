@@ -3138,3 +3138,42 @@ salvo `icono`):
     `col_venta` ya viene en mayúsculas y calza con el df crudo de R2. Un
     script de prueba que escriba los nombres a mano en Title Case falla con
     un `None` silencioso que parece un bug de la app y no lo es.
+
+    **La tabla del drill sumó Grupo / Sub Grupo y la cantidad del año
+    pasado** (pedido del usuario al verla con datos reales). Dos decisiones
+    que NO son obvias:
+    - **Grupo/Sub Grupo se resuelven POR PRODUCTO (la moda), no se agregan a
+      la clave del `groupby`.** Agrupar por los tres campos parece más
+      correcto, pero si un plato cambió de grupo entre los dos años saldría
+      partido en dos filas —una con sólo Actual y otra con sólo AP, ambas
+      con `—`— que es exactamente lo contrario de lo que el drill busca. La
+      jerarquía sale del período actual y, para los platos que ya no
+      existen hoy, del año pasado. Se usa la moda y no `first` para que una
+      fila mal cargada no decida el grupo del producto.
+    - **Orden de columnas:** jerarquía → plata + `%Var` → cantidades. Las
+      cantidades van al final a propósito: con dos pares AP/Actual
+      intercalados (venta AP, cant AP, venta act, cant act) la tabla se
+      vuelve ilegible. Y sirven — con datos reales apareció un plato con
+      `+0%` de venta pero 73 → 71 unidades: vendió dos platos menos por más
+      plata cada uno, o sea subió el precio. Eso no se ve mirando sólo la
+      columna de soles.
+
+89. **`Styler.format(...)` NO aplica el formateador a los `None` de una
+    columna `object`: los pinta como el literal `"None"`.** Bug real y
+    visible en producción (tabla del drill de `ventas_comparativo.py`): la
+    columna `%Var` se armaba con una list comprehension que devolvía
+    `float` o `None`, pandas la tipaba como `object`, y el
+    `lambda v: "—" if pd.isna(v) else ...` **nunca corría** para los `None`
+    — la celda mostraba `None` en la pantalla del usuario. Los valores
+    numéricos SÍ se formateaban, así que la columna se veía medio bien y el
+    bug pasaba por "dato faltante" en vez de por error de formato.
+    **Dos arreglos, y conviene poner los dos:** (a) que la columna sea
+    `float` con `NaN` en vez de `object` con `None`
+    (`pd.to_numeric(..., errors="coerce")`), y (b) pasar `na_rep="—"` a
+    `.format()`, que es el mecanismo explícito de pandas para el faltante y
+    no depende de que el formateador lo maneje.
+    **Cómo se verifica sin navegador** (es un bug de RENDER, así que mirar
+    el DataFrame no alcanza — el df estaba bien): renderizar el Styler a
+    HTML en un probe y buscar el literal, `assert ">None<" not in
+    sty.to_html()`. Es la misma clase de verificación que la regla #25:
+    contra el resultado real, no contra la intención.

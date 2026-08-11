@@ -1088,7 +1088,8 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         elif graf == "Comparativo vs Año Pasado":
             _ventas_comparativo(d, col_venta, col_fecha, col_pax=col_pax,
                                 col_pedido=col_pedido, col_prod=col_prod,
-                                col_cant=col_cant, filtrar_cb=_aplicar_chips)
+                                col_cant=col_cant, col_fam=col_fam,
+                                col_sub=col_sub, filtrar_cb=_aplicar_chips)
 
         # ── 1b) Venta vs Compra por día (líneas arriba, Pax en barras abajo) ─
         # Vista aparte de "Venta por día": mismo espíritu que un gráfico

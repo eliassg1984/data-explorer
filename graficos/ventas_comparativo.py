@@ -335,7 +335,8 @@ def _pct(actual, previo):
 
 
 def _ranking_platos(archivo, col_parquet, col_fecha, col_venta, col_prod,
-                    col_cant, rango_act, rango_ap, filtrar_cb, top=15):
+                    col_cant, rango_act, rango_ap, filtrar_cb, top=15,
+                    col_fam=None, col_sub=None):
     """Ranking de productos de UN período, Actual vs Año Pasado.
 
     Carga sólo los dos tramos del período clickeado (no la ventana entera),
@@ -344,29 +345,50 @@ def _ranking_platos(archivo, col_parquet, col_fecha, col_venta, col_prod,
     otro se conservan con 0 del lado que falta — que un plato haya
     desaparecido de la carta es justamente lo que se quiere ver.
 
+    Grupo/Sub Grupo se resuelven por PRODUCTO (el valor más frecuente), no
+    se agregan a la clave del groupby: si un plato cambió de grupo entre los
+    dos años, agrupar por los tres campos lo partiría en dos filas que no se
+    comparan entre sí — justo lo contrario de lo que se busca acá. Se toma
+    del período actual y, si el plato ya no existe hoy, del año pasado.
+
     Devuelve un DataFrame ya listo para mostrar, o None si no hay datos.
     """
+    _jer = bool(col_fam) or bool(col_sub)
+
     def _agg(rango):
         _ini, _fin = rango
         df = _cargar_tramo(archivo, col_parquet, _ini, _fin, filtrar_cb)
         if df is None or col_fecha not in df.columns \
                 or col_venta not in df.columns or col_prod not in df.columns:
-            return None
+            return None, None
         _fe = pd.to_datetime(df[col_fecha], errors="coerce").dt.normalize()
         cols = {"f": _fe, "prod": df[col_prod].astype(str),
                 "venta": pd.to_numeric(df[col_venta], errors="coerce")}
         if col_cant and col_cant in df.columns:
             cols["cant"] = pd.to_numeric(df[col_cant], errors="coerce").fillna(0)
+        if col_fam and col_fam in df.columns:
+            cols["fam"] = df[col_fam].astype(str)
+        if col_sub and col_sub in df.columns:
+            cols["sub"] = df[col_sub].astype(str)
         b = pd.DataFrame(cols).dropna(subset=["f", "venta"])
         b = b[(b["f"].dt.date >= _ini) & (b["f"].dt.date <= _fin)]
         if b.empty:
-            return None
+            return None, None
         agg = {"venta": ("venta", "sum")}
         if "cant" in b.columns:
             agg["cant"] = ("cant", "sum")
-        return b.groupby("prod", as_index=False).agg(**agg)
+        res = b.groupby("prod", as_index=False).agg(**agg)
+        # Jerarquía por producto: la moda (valor más frecuente), no el
+        # primero — una fila suelta mal cargada no debería decidir el grupo.
+        jer = None
+        _cj = [c for c in ("fam", "sub") if c in b.columns]
+        if _cj:
+            jer = (b.groupby("prod")[_cj]
+                   .agg(lambda s: s.mode().iat[0] if not s.mode().empty else "")
+                   .reset_index())
+        return res, jer
 
-    a, p = _agg(rango_act), _agg(rango_ap)
+    (a, jer_a), (p, jer_p) = _agg(rango_act), _agg(rango_ap)
     if a is None and p is None:
         return None
     if a is None:
@@ -374,20 +396,39 @@ def _ranking_platos(archivo, col_parquet, col_fecha, col_venta, col_prod,
     if p is None:
         p = pd.DataFrame({"prod": [], "venta": []})
 
-    t = a.merge(p[["prod", "venta"]].rename(columns={"venta": "venta_ap"}),
+    _pcols = ["prod", "venta"] + (["cant"] if "cant" in p.columns else [])
+    t = a.merge(p[_pcols].rename(columns={"venta": "venta_ap",
+                                          "cant": "cant_ap"}),
                 on="prod", how="outer")
-    t["venta"] = t["venta"].fillna(0.0)
-    t["venta_ap"] = t["venta_ap"].fillna(0.0)
-    if "cant" in t.columns:
-        t["cant"] = t["cant"].fillna(0)
-    t["var"] = [_pct(x, y) for x, y in zip(t["venta"], t["venta_ap"])]
+    for _c in ("venta", "venta_ap", "cant", "cant_ap"):
+        if _c in t.columns:
+            t[_c] = t[_c].fillna(0)
+    # float con NaN, no una lista con None: en una columna `object` el Styler
+    # no aplica el formateador a los None y los pinta como el literal "None".
+    t["var"] = pd.to_numeric(
+        pd.Series([_pct(x, y) for x, y in zip(t["venta"], t["venta_ap"])],
+                  index=t.index, dtype="object"), errors="coerce")
+
+    if _jer:
+        jer = jer_a if jer_a is not None else jer_p
+        if jer_a is not None and jer_p is not None:
+            # Los que ya no existen hoy conservan la jerarquía del año pasado.
+            _falta = jer_p[~jer_p["prod"].isin(jer_a["prod"])]
+            jer = pd.concat([jer_a, _falta], ignore_index=True)
+        if jer is not None:
+            t = t.merge(jer, on="prod", how="left")
+            for _c in ("fam", "sub"):
+                if _c in t.columns:
+                    t[_c] = t[_c].fillna("—")
+
     t = t.sort_values("venta", ascending=False).head(top).reset_index(drop=True)
     return t
 
 
 @st.fragment
 def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
-                        col_prod=None, col_cant=None, filtrar_cb=None):
+                        col_prod=None, col_cant=None, col_fam=None,
+                        col_sub=None, filtrar_cb=None):
     """Comparativo Año Pasado vs Actual por día, semana o mes — en montos o
     descompuesto en pax × ticket, con drill al ranking de platos del período
     que se clickee."""
@@ -721,16 +762,22 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                     st.session_state["ventas_comp_click"] = None
                     st.rerun(scope="fragment")
             rk = _ranking_platos(_arch, _colp, col_fecha, col_venta, col_prod,
-                                 col_cant, _r_act, _r_ap, filtrar_cb)
+                                 col_cant, _r_act, _r_ap, filtrar_cb,
+                                 col_fam=col_fam, col_sub=col_sub)
             if rk is None or rk.empty:
                 st.info("Sin ventas de productos en ese período.")
             else:
-                _cols = {"prod": "Producto", "venta_ap": "Año pasado",
-                         "venta": "Actual", "var": "%Var"}
-                _orden = ["prod", "venta_ap", "venta", "var"]
-                if "cant" in rk.columns:
-                    _cols["cant"] = "Cantidad"
-                    _orden.insert(3, "cant")
+                # Jerarquía primero (Grupo → Sub Grupo → Producto, como la
+                # Matriz agrupada), después la plata con su %Var, y las
+                # cantidades al final: son la lectura de apoyo, no la
+                # principal — y así los dos pares AP/Actual no se intercalan.
+                _cols = {"fam": "Grupo", "sub": "Sub Grupo", "prod": "Producto",
+                         "venta_ap": "Venta AP", "venta": "Venta actual",
+                         "var": "%Var", "cant_ap": "Cant AP",
+                         "cant": "Cant actual"}
+                _orden = [c for c in ("fam", "sub", "prod", "venta_ap",
+                                      "venta", "var", "cant_ap", "cant")
+                          if c in rk.columns]
                 tv = rk[_orden].rename(columns=_cols)
 
                 def _sty_var(v):
@@ -738,13 +785,16 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                         return f"color:{GRIS_TEXTO}"
                     return f"color:{EXITO}" if v >= 0 else f"color:{ERROR}"
 
-                _fmt = {"Año pasado": "S/ {:,.0f}", "Actual": "S/ {:,.0f}",
-                        "%Var": lambda v: "—" if pd.isna(v) else f"{v:+.0f}%"}
-                if "Cantidad" in tv.columns:
-                    _fmt["Cantidad"] = "{:,.0f}"
-                sty = (tv.style.format(_fmt)
+                _fmt = {"Venta AP": "S/ {:,.0f}", "Venta actual": "S/ {:,.0f}",
+                        "%Var": "{:+.0f}%", "Cant AP": "{:,.0f}",
+                        "Cant actual": "{:,.0f}"}
+                _fmt = {k: v for k, v in _fmt.items() if k in tv.columns}
+                _gris = [c for c in ("Venta AP", "Cant AP") if c in tv.columns]
+                # na_rep gobierna los NaN (productos sin equivalente el año
+                # pasado): sin él, el Styler pinta el literal "None".
+                sty = (tv.style.format(_fmt, na_rep="—")
                        .map(_sty_var, subset=["%Var"])
-                       .set_properties(subset=["Año pasado"], color=GRIS_TEXTO))
+                       .set_properties(subset=_gris, color=GRIS_TEXTO))
                 st.dataframe(sty, use_container_width=True, hide_index=True,
                              height=min(430, 60 + 34 * len(tv)))
                 st.caption(
