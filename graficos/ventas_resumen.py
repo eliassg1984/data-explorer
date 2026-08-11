@@ -169,6 +169,24 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
                                + ": %{y:,.0f}<extra></extra>"),
             ), row=2, col=1)
 
+        # División sutil entre semanas (un lunes = arranca semana nueva):
+        # línea punteada gris clara, yref="paper" para que cruce las DOS
+        # filas del subplot (barra + volumen) aunque solo haya una xaxis
+        # con nombre propio ("x", fila 1) — paper va de 0 a 1 en TODA la
+        # figura, no por fila. Se salta el lunes que coincide con el primer
+        # día mostrado (una línea pegada al borde izquierdo no divide nada).
+        _lunes = pd.date_range(g["dia"].min(), g["dia"].max(), freq="W-MON")
+        for _l in _lunes:
+            if _l <= g["dia"].min():
+                continue
+            fig.add_shape(
+                type="line", xref="x", yref="paper",
+                x0=_l - pd.Timedelta(hours=12), x1=_l - pd.Timedelta(hours=12),
+                y0=0, y1=1,
+                line=dict(color=GRIS_BORDE, width=1, dash="dot"),
+                opacity=0.8, layer="below",
+            )
+
         _compras_layout(fig, alto=300 if vol_label else 240)
         fig.update_layout(
             showlegend=False,
