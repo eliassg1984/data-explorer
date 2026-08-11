@@ -136,21 +136,25 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
     # transparenta los cards internos, así que conservan su borde propio
     # dentro de la card grande. Tamaño/radius sí llevan CSS propio, acotado
     # al prefijo de key "ventas_resumen_kpi_" (estilos/_80_cards.py).
+    # Labels cortos y sin delta: en una columna de ~1/5 del ancho de la
+    # card, "Ventas totales" + "S/ 113,229" no entra en una sola línea aunque
+    # el CSS ponga stMetric en flex-row (arriba de ~150px de ancho, envuelve
+    # igual). El contexto extra (fecha del mejor día, qué significa "en
+    # alza") pasa a `help=` — un tooltip no consume ancho de línea.
     k1, k2, k3, k4, k5 = st.columns(5)
     with k1.container(border=True, key="ventas_resumen_kpi_venta"):
-        st.metric("Ventas totales", f"S/ {total_venta:,.0f}")
+        st.metric("Ventas", f"S/ {total_venta:,.0f}")
     with k2.container(border=True, key="ventas_resumen_kpi_vol"):
         st.metric(vol_label or "Clientes",
                   f"{total_pax:,.0f}" if vol_label else "—")
     with k3.container(border=True, key="ventas_resumen_kpi_ticket"):
-        st.metric("Ticket promedio",
-                  f"S/ {ticket_prom:,.2f}" if ticket_prom else "—")
+        st.metric("Ticket", f"S/ {ticket_prom:,.2f}" if ticket_prom else "—")
     with k4.container(border=True, key="ventas_resumen_kpi_mejor"):
-        st.metric("Mejor día", f"S/ {mejor_valor:,.0f}",
-                  delta=f"{mejor_dia:%d/%m}", delta_color="off")
+        st.metric("Mejor", f"S/ {mejor_valor:,.0f}",
+                  help=f"{mejor_dia:%d/%m/%Y}")
     with k5.container(border=True, key="ventas_resumen_kpi_alza"):
         st.metric("Días en alza", f"{alzas}/{len(g) - 1}",
-                  delta="vs. día anterior", delta_color="off")
+                  help="Días con más venta que el día anterior")
 
     # ── Candlestick diario + volumen ─────────────────────────────────────
     with _card("ventas_resumen_candle", "Rango de venta por día (candlestick)",

@@ -160,19 +160,27 @@ CSS = """    /* ================================================================
     /* =================================================================== */
     div[class*="st-key-ventas_resumen_kpi_"] {
         border-radius: 12px !important;
-        padding: 6px 10px !important;
+        padding: 8px 12px !important;
+    }
+    /* Label + valor en la MISMA línea. stMetric NO tiene label/valor como
+       hijos directos: envuelve todo en UN div intermedio (sin data-testid
+       propio, clase emotion-cache no estable) que es el que hay que poner
+       en flex-row — ponerlo en stMetric no hace nada porque stMetric solo
+       tiene ESE div como único hijo. `> div` apunta a ese wrapper por
+       estructura, no por clase generada. */
+    div[class*="st-key-ventas_resumen_kpi_"] [data-testid="stMetric"] > div {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: baseline !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
     }
     div[class*="st-key-ventas_resumen_kpi_"] [data-testid="stMetricValue"] {
         font-size: 15px !important;
         line-height: 1.15 !important;
     }
     div[class*="st-key-ventas_resumen_kpi_"] [data-testid="stMetricLabel"] {
-        font-size: 8px !important;
-    }
-    div[class*="st-key-ventas_resumen_kpi_"] [data-testid="stMetricDelta"] {
-        font-size: 10px !important;
-    }
-    div[class*="st-key-ventas_resumen_kpi_"] [data-testid="stMetric"] {
-        gap: 1px !important;
+        font-size: 9px !important;
+        white-space: nowrap !important;
     }
 """
