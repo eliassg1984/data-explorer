@@ -441,9 +441,13 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         # .hm-row -- los NOMBRES, no los valores -- va más grande a 11px;
         # reportado 2026-08-10, "todas las celdas deben tener el mismo
         # tamaño de letra").
+        # La clase `hm-celda` existe para que _99_movil.py pueda subirle el
+        # min-height a 44px en móvil (donde el botón de celda lo toma solo,
+        # por área de toque) sin depender del anidado exacto del DOM de
+        # Streamlit.
         _r, _g, _b = _bg_rgb
         return (
-            f"<div style='background:rgb({_r},{_g},{_b});border:{_borde};"
+            f"<div class='hm-celda' style='background:rgb({_r},{_g},{_b});border:{_borde};"
             f"border-radius:8px;padding:4px 2px;text-align:center;"
             f"font-size:10.5px;font-weight:600;color:{_fg};"
             f"font-variant-numeric:tabular-nums;white-space:nowrap;"
