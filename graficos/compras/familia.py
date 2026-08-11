@@ -50,12 +50,21 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
     fe = pd.to_datetime(d[col_fecha], errors="coerce")
 
     if gran == "Semana":
-        # Fecha real del lunes de esa semana, no el número ISO ("2026-S31"
-        # no se lee sin calendario a mano). per_sort ordena cronológicamente
-        # (fecha ISO); per es la etiqueta que ve el usuario en el eje.
+        # Rango real lunes-domingo de esa semana, no el número ISO
+        # ("2026-S31" no se lee sin calendario a mano): "del 27 Jul - 02 Ago
+        # 2026". per_sort ordena cronológicamente (fecha ISO del lunes);
+        # per es la etiqueta que ve el usuario en el eje.
         _wstart = (fe - pd.to_timedelta(fe.dt.weekday, unit="D")).dt.normalize()
+        _wend = _wstart + pd.Timedelta(days=6)
         per_sort = _wstart.dt.strftime("%Y-%m-%d")
-        per_disp = _wstart.dt.strftime("%d %b %Y")
+        _mismo_anio = _wstart.dt.year == _wend.dt.year
+        _ini = _wstart.dt.strftime("%d %b")
+        _ini_con_anio = _wstart.dt.strftime("%d %b %Y")
+        _fin = _wend.dt.strftime("%d %b %Y")
+        per_disp = pd.Series(
+            np.where(_mismo_anio, "del " + _ini + " - " + _fin,
+                     "del " + _ini_con_anio + " - " + _fin),
+            index=fe.index)
         for _en, _es in {"Jan": "Ene", "Apr": "Abr",
                          "Aug": "Ago", "Dec": "Dic"}.items():
             per_disp = per_disp.str.replace(_en, _es)
