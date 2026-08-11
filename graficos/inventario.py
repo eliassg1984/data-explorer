@@ -461,7 +461,6 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                         clic=True, state_key=_state_key,
                     )
                     if foco:
-                        st.caption(f"📍 **{foco}** · panel derecho filtrado")
                         _grafico_detalle_foco(d, graf, col_grp, foco,
                                               col_fam, col_subfam, col_val)
 

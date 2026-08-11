@@ -126,4 +126,25 @@ CSS = """    /* ================================================================
         border-color: transparent !important;
         box-shadow: none !important;
     }
+
+    /* =================================================================== */
+    /* KPI "Valorizado total" DE INVENTARIO — minimalista                    */
+    /*                                                                       */
+    /* Único st.metric de esa tarjeta (.st-key-ajuste_graf_card_izq_inv,     */
+    /* clase EXACTA, no el prefijo wildcard de arriba: no tocar el metric    */
+    /* de Salidas ni ningún otro). Con el ranking ya achicado en foco        */
+    /* (graficos/inventario.py — click-drill), el número gigante por         */
+    /* default de Streamlit competía por atención con el gráfico que el      */
+    /* usuario acaba de pedir con el clic.                                   */
+    /* =================================================================== */
+    .st-key-ajuste_graf_card_izq_inv [data-testid="stMetricValue"] {
+        font-size: 22px !important;
+        line-height: 1.25 !important;
+    }
+    .st-key-ajuste_graf_card_izq_inv [data-testid="stMetricLabel"] {
+        font-size: 11px !important;
+    }
+    .st-key-ajuste_graf_card_izq_inv [data-testid="stMetric"] {
+        gap: 2px !important;
+    }
 """
