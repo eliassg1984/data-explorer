@@ -2808,3 +2808,33 @@ salvo `icono`):
     un panel angosto (no la Tabla principal a pantalla completa) muestra
     menos columnas de las configuradas sin ningún error en consola,
     sospechar de esto primero.**
+
+83. **`_ficha_subfamilia` deja de desglosar por área (2026-08-10, mismo
+    día) — pasa de barra apilada Producto × Área a UN bar por producto
+    (sumado entre áreas), con precio + unidad + % de participación en la
+    propia barra, y solo 2 KPIs.** Pedido explícito del usuario tras ver
+    la ficha de un grupo (Subfamilia "AVES"): sacar "Cantidad total" y
+    "Precio promedio" del KPI row (mezclaban unidades entre productos —
+    kg, und, Lt — el número agregado no representaba nada real ni
+    accionable) y tratar el negativo igual que el resto del dashboard
+    (regla #80: a la derecha, `AJUSTE_NEG` en vez de `ACENTO`, magnitud
+    en `x`, valor real con signo en `customdata`/hover).
+
+    La razón por la que esta ficha había quedado AFUERA de la regla #80
+    quince minutos antes ("no tocado: barra apilada por área, color = área,
+    no por signo") dejó de aplicar: al sacar el desglose por área, el
+    color queda libre para representar signo — ya no hace falta elegir
+    entre "colorear por área" y "colorear por signo", esta ficha solo
+    necesitaba lo segundo. Cambia de motor: `px.bar(color="area",
+    barmode="stack")` → `go.Figure(go.Bar(...))` como el resto de los
+    gráficos de este archivo (y la regla #78 sobre `category_orders` de
+    `px.bar` pintando el primer elemento ARRIBA, al revés de `y=` literal
+    de `go.Bar`, deja de aplicar acá — vuelve a `ascending=True`, mismo
+    criterio que `_grafico_ranking`). `import plotly.express as px` se
+    sacó del archivo: sin este uso era el último.
+
+    Precio unitario se calcula por PRODUCTO (`valorizado_total /
+    cantidad_total` agregados sobre todas sus áreas), no por fila —
+    coherente con que la barra ya representa al producto entero. Si
+    `cantidad_total` da 0 (valorizado sin stock, ej. un ajuste), el texto
+    muestra "—" en la parte del precio en vez de dividir por cero.

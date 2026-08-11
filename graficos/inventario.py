@@ -19,7 +19,6 @@ izquierda para el producto elegido.
 
 import numpy as np
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -241,64 +240,78 @@ def _ficha_producto(d, prod_sel, col_prod, col_area, col_val, col_cant,
 
 def _ficha_subfamilia(d, subfam_sel, col_subfam, col_prod, col_area,
                        col_val, col_cant, col_unidad):
-    """Todos los productos de una subfamilia, valorizado desglosado por
-    área (barra apilada Producto × Área) — la pregunta "necesito ver
-    Carnes ahora" sin pasar por la Tabla."""
+    """Todos los productos de una subfamilia — un bar por producto (sumado
+    entre áreas; ya no desglosado por área — el color lo necesita el signo,
+    ver abajo). Cada barra muestra precio + unidad + % de participación.
+    Solo 2 KPIs (Valorizado total, Productos): Cantidad total/Precio
+    promedio se sacaron a pedido — mezclaban unidades entre productos
+    (kg, und, Lt) y el número agregado no representaba nada accionable.
+
+    Negativo va a la derecha, diferenciado por color — mismo criterio que
+    `_grafico_ranking`/`_ficha_producto` (regla #80). Antes esta ficha era
+    la única sin ese tratamiento porque el color codificaba ÁREA (barra
+    apilada); al pasar a un bar por producto, el color queda libre para
+    codificar signo como en el resto del dashboard."""
     dd = d[d[col_subfam].astype(str) == subfam_sel]
     _v = pd.to_numeric(dd[col_val], errors="coerce").fillna(0)
     _c = pd.to_numeric(dd[col_cant], errors="coerce").fillna(0) if col_cant else None
 
-    unidades = (dd[col_unidad].dropna().astype(str).unique().tolist()
-                if col_unidad else [])
-    unidad_unica = unidades[0] if len(unidades) == 1 else None
     total_val = float(_v.sum())
-    total_cant = float(_c.sum()) if (_c is not None and unidad_unica) else None
     n_prod = dd[col_prod].nunique() if col_prod else 0
 
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Cantidad total",
-              f"{total_cant:,.0f} {unidad_unica}" if total_cant is not None
-              else ("— (unidades mixtas)" if col_unidad else "—"))
-    k2.metric("Valorizado total", f"S/ {total_val:,.0f}")
-    k3.metric("Precio promedio",
-              f"S/ {(total_val / total_cant):,.2f}/{unidad_unica}" if total_cant else "—")
-    k4.metric("Productos", f"{n_prod:,}")
+    k1, k2 = st.columns(2)
+    k1.metric("Valorizado total", f"S/ {total_val:,.0f}")
+    k2.metric("Productos", f"{n_prod:,}")
 
     if not col_prod or dd.empty:
         st.info("Sin datos para este grupo.")
         return
-    g = (pd.DataFrame({"prod": dd[col_prod].astype(str), "area": dd[col_area].astype(str),
-                       "val": _v, "cant": _c if _c is not None else 0})
-         .groupby(["prod", "area"], as_index=False).agg(val=("val", "sum"), cant=("cant", "sum")))
+    base = pd.DataFrame({
+        "prod": dd[col_prod].astype(str),
+        "val": _v,
+        "cant": _c if _c is not None else 0,
+        "unidad": dd[col_unidad].astype(str) if col_unidad else "",
+    })
+    g = base.groupby("prod").agg(
+        val=("val", "sum"), cant=("cant", "sum"),
+        unidad=("unidad", lambda s: next(iter(s.dropna()), "")),
+    )
     # Productos sin stock ni valorizado ("inactivos" para esta subfamilia)
-    # no entran: son la mayoría en un catálogo real y ensucian el desglose
-    # sin aportar nada — además, empatados en 0, arruinaban el orden por
-    # valor (quedaban en el orden alfabético del groupby, no por importe).
-    tot_prod = g.groupby("prod").agg(val=("val", "sum"), cant=("cant", "sum"))
-    tot_prod = tot_prod[(tot_prod["val"] != 0) | (tot_prod["cant"] != 0)]
-    if tot_prod.empty:
+    # no entran — regla #78.
+    g = g[(g["val"] != 0) | (g["cant"] != 0)]
+    if g.empty:
         st.info("Ningún producto de este grupo tiene stock o valorizado activo.")
         return
-    # Mayor a menor LEYENDO DE ARRIBA HACIA ABAJO. A diferencia de un
-    # go.Bar con y=lista literal (donde el primer elemento pinta ABAJO,
-    # ver _grafico_ranking), category_orders de px.bar pone el primer
-    # elemento ARRIBA — confirmado en vivo (medido por posición en
-    # pantalla, no por lectura del código): con ascending=True el
-    # producto más CHICO terminaba arriba y el más grande abajo, al
-    # revés de lo pedido.
-    orden = tot_prod["val"].sort_values(ascending=False).index.tolist()
-    g = g[g["prod"].isin(orden)]
-    fig = px.bar(g, x="val", y="prod", color="area", orientation="h",
-                 category_orders={"prod": orden}, custom_data=["cant"])
-    _compras_layout(fig, alto=min(900, max(360, 40 * len(orden) + 80)))
-    fig.update_layout(
-        title=f"{subfam_sel} — valorizado por producto, desglosado por área",
-        barmode="stack", xaxis_title=None, yaxis_title=None,
-        legend=dict(orientation="h", y=-0.2, x=0, font=dict(size=10)),
-    )
-    fig.update_traces(
-        hovertemplate=("%{fullData.name}<br>%{y}<br>Valorizado: S/ %{x:,.2f}"
-                       "<br>Cantidad: %{customdata[0]:,.1f}<extra></extra>"))
+
+    _precio = np.where(g["cant"] != 0, g["val"] / g["cant"], np.nan)
+    _pct = (g["val"] / total_val * 100) if total_val else pd.Series(0.0, index=g.index)
+    _texto = []
+    for _precio_v, _pct_v, _unidad_v in zip(_precio, _pct, g["unidad"]):
+        if pd.notna(_precio_v):
+            _precio_txt = (f"S/ {_precio_v:,.2f}/{_unidad_v}" if _unidad_v
+                           else f"S/ {_precio_v:,.2f}")
+        else:
+            _precio_txt = "—"
+        _texto.append(f"{_precio_txt} · {_pct_v:.1f}%")
+    g["_texto"] = _texto
+
+    # Ascendente: en un go.Bar (a diferencia del px.bar que usaba esta
+    # ficha antes) el primer elemento del array `y` pinta ABAJO — mayor a
+    # menor leyendo de arriba hacia abajo pide el más grande AL FINAL de
+    # la lista. Mismo criterio que _grafico_ranking/_ficha_producto.
+    g = g.sort_values("val", ascending=True)
+    color = [AJUSTE_NEG if v < 0 else ACENTO for v in g["val"]]
+
+    fig = go.Figure(go.Bar(
+        x=np.abs(g["val"]), y=[_compras_truncar(p, 30) for p in g.index],
+        orientation="h", marker=dict(color=color, opacity=0.85),
+        text=g["_texto"], textposition="outside", cliponaxis=False,
+        customdata=g["val"],
+        hovertemplate="%{y}<br>S/ %{customdata:,.2f}<extra></extra>",
+    ))
+    _compras_layout(fig, alto=min(900, max(360, 34 * len(g) + 60)))
+    fig.update_layout(title=f"{subfam_sel} — valorizado por producto")
+    fig.update_xaxes(visible=False, range=_rango_con_holgura(np.abs(g["val"]), factor=0.5))
     fig.update_yaxes(showgrid=False)  # eje Y = nombres de producto, no valores
     st.plotly_chart(fig, use_container_width=True, key="inv_g_subfamilia")
 
