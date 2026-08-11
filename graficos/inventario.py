@@ -122,11 +122,13 @@ def _grafico_ranking(d, col_grp, col_val, titulo, key, clic=False, state_key=Non
     # bajo) para dejarle sitio al detalle de abajo dentro de la misma
     # pantalla — sin esto, ranking completo + detalle sumaban más que el
     # viewport y el usuario tenía que hacer scroll para ver lo que acababa
-    # de pedir con el clic.
-    if clic and foco:
-        alto = min(240, max(140, 20 * len(serie) + 40))  # ya cumplió su función, se achica al mínimo
-    elif compacto:
-        alto = min(420, max(200, 28 * len(serie) + 40))  # detalle: el que importa ahora, algo más de aire
+    # de pedir con el clic. MISMA fórmula para el ranking enfocado y para
+    # el detalle (antes el ranking tenía un tope más bajo que el detalle:
+    # con pocas categorías pegaba contra el piso de 140px y el título
+    # quedaba encimado con la primera barra — se notaba MÁS chico que el
+    # detalle en vez de solo "ya cumplió su función").
+    if compacto or (clic and foco):
+        alto = min(280, max(190, 22 * len(serie) + 50))
     else:
         alto = min(900, max(360, 34 * len(serie) + 60))
     _compras_layout(fig, alto=alto)

@@ -2671,17 +2671,14 @@ salvo `icono`):
     Fix: `_grafico_ranking` gana `compacto` (parámetro explícito, para el
     detalle) y además se achica SOLO cuando `clic and foco` (el ranking ya
     cumplió su función — elegir la categoría — así que no necesita tamaño
-    completo). Tres tamaños en la misma función según el caso:
+    completo).
     - Sin foco / vista normal: `min(900, max(360, 34·n+60))` (el de
       siempre).
-    - Ranking CON foco activo: `min(240, max(140, 20·n+40))` — chico a
-      propósito, ya cumplió su función.
-    - Detalle (`compacto=True`, vía `_grafico_detalle_foco`): `min(420,
-      max(200, 28·n+40))` — el que importa ahora, algo más de aire que el
-      ranking pero con tope para no volver a desbordar.
+    - Ranking CON foco activo, o detalle (`compacto=True`): `min(280,
+      max(190, 22·n+50))`.
 
     Con esto, GASTOS (el caso más grande del dataset real: 21 áreas en el
-    ranking + 8 familias en el detalle) pasó de ~988px a ~830px de bloque
+    ranking + 8 familias en el detalle) pasó de ~988px a ~774px de bloque
     total — para la mayoría de las categorías (menos filas) entra
     completo sin scroll. No hay forma de garantizar CERO scroll para
     absolutamente cualquier cantidad de filas sin sacrificar legibilidad;
@@ -2690,6 +2687,17 @@ salvo `icono`):
     ahorra ~20px). El caption se terminó sacando del todo el mismo día
     (regla #80): el color de la barra en foco + el título del gráfico de
     detalle ya dicen qué está seleccionado.
+
+    **Ajuste posterior, mismo día:** la primera versión usaba DOS fórmulas
+    distintas — ranking `min(240, max(140, 20·n+40))` vs. detalle
+    `min(420, max(200, 28·n+40))` — pensando en darle más protagonismo al
+    detalle. Con pocas categorías en el ranking (Por familia: 8, o un
+    Área/Familia filtrado a un puñado) pegaba contra el piso de 140px:
+    el título quedaba encimado con la primera barra y el ranking se veía
+    roto/mucho más chico que el detalle, no solo "ya cumplió su función".
+    Unificadas a UNA sola fórmula para ambos casos — se ven como un par
+    consistente, cada uno escalado por su propia cantidad de categorías,
+    en vez de una jerarquía artificial de tamaños.
 
 80. **Barra negativa dibujada a la izquierda descentraba el ranking
     (2026-08-10, mismo día).** En `_grafico_ranking`/`_ficha_producto`
