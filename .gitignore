@@ -2,8 +2,9 @@ __pycache__/
 *.pyc
 .streamlit/secrets.toml
 
-# Caché en disco de @st.cache_data(persist="disk") — parquets de R2 ya
-# materializados. Se regenera solo y puede pesar cientos de MB.
+# Caché de @st.cache_data(persist="disk"). Streamlit la escribe en el HOME
+# (~/.streamlit/cache), no acá — esta línea es sólo una red por si alguna
+# versión la deja en el proyecto: son parquets de R2 materializados y pesan.
 .streamlit/cache/
 
 # Salida de herramientas/ver_figura.py: PNGs para mirar un gráfico sin

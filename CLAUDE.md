@@ -188,6 +188,14 @@ editor y usar `herramientas/auditar_layout.js`:
 Antes de discutir por qué "algo se ve grande", medir. `auditar()` responde
 en 10 segundos y evita ida-y-vuelta de deploys + capturas.
 
+**Para saber si un gráfico se pisa o se corta: pegá
+`herramientas/auditar_graficos.js` en la consola y llamá `auditarGraficos()`.**
+Mide las cajas de TODOS los textos de cada figura Plotly. Ojo con dos cosas
+que ya dieron resultados falsos: recorre los **tres** `svg.main-svg` (las
+anotaciones viven en el segundo, no en el primero), y hay que **recargar
+después de cambiar el tamaño de la ventana** o reporta recortes que no
+existen. Ver `arquitectura.md` regla #96.
+
 **Para VER un gráfico sin levantar la app: `herramientas/ver_figura.py`.**
 Vuelca a PNG lo que dibuja un dashboard, sin navegador:
 

@@ -7,6 +7,7 @@ cada dashboard (ajuste.py, compras.py, ...) importa lo que necesita de aquí.
 """
 
 import re
+import unicodedata
 from contextlib import contextmanager
 
 import pandas as pd
@@ -23,6 +24,20 @@ from tema import (
 def _slug(texto):
     """Convierte un texto a un identificador válido para keys/CSS."""
     return re.sub(r"\W+", "_", str(texto)).strip("_").lower()
+
+
+def _slug_url(texto):
+    """Como `_slug` pero SIN acentos — es lo que viaja en `?vista=`, para que
+    la URL se pueda tipear a mano ("comparativo_vs_ano_pasado" y no
+    "comparativo_vs_año_pasado", que en la barra sale percent-encodeado).
+
+    NO se toca `_slug`: ese alimenta las keys de los widgets y por lo tanto
+    los selectores de `estilos/` — cambiarlo movería CSS de sitio.
+    Para LEER el parámetro no se usa esto sino `_norm`, que además ignora
+    separadores: así entra igual "Año Pasado" que "ano-pasado"."""
+    ascii_ = (unicodedata.normalize("NFKD", str(texto))
+              .encode("ascii", "ignore").decode())
+    return re.sub(r"\W+", "_", ascii_).strip("_").lower()
 
 
 def _es_movil():
@@ -111,9 +126,20 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
     _todos = [oid for _, items in categorias for oid, _ in items]
     if not _todos:
         return None
+    # ── Deep-link: el item del rail viaja en ?vista= ─────────────────────
+    # Sin esto, la URL sólo decía el reporte y llegar a una pantalla
+    # concreta eran 3-5 clics encadenados, cada uno con su rerun. Además
+    # no se podía compartir "mirá ESTA pantalla": había que describirla.
+    # Va acá, en el rail COMPARTIDO, así vale para los 6 dashboards de una.
+    _por_norm = {_norm(o): o for o in _todos}
     sel = st.session_state.get(state_key)
     if sel not in _todos:
-        sel = _todos[0]
+        # Todavía no hay selección válida: primera carga, o venimos de otro
+        # reporte cuyo rail tenía otros ids. Ahí manda la URL, si trae uno
+        # que exista en ESTE rail; si no, el primer item de siempre.
+        # El match va por `_norm` (ignora acentos Y separadores), así entra
+        # igual "comparativo_vs_ano_pasado" que "Comparativo vs Año Pasado".
+        sel = _por_norm.get(_norm(st.query_params.get("vista", ""))) or _todos[0]
         st.session_state[state_key] = sel
     with st.container(key="compras_tabs_row"):
         with st.container(key="graf_tipo_chips"):
@@ -134,7 +160,12 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
                 if i < len(categorias) - 1:
                     st.markdown('<div class="rail-sep"></div>',
                                 unsafe_allow_html=True)
-    return st.session_state.get(state_key, _todos[0])
+    _final = st.session_state.get(state_key, _todos[0])
+    # Espejo hacia la URL. Escribir query_params NO dispara rerun, pero se
+    # compara antes igual: reescribir en cada rerun es ruido inútil.
+    if st.query_params.get("vista") != _slug_url(_final):
+        st.query_params["vista"] = _slug_url(_final)
+    return _final
 
 
 @contextmanager

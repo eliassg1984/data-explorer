@@ -3416,3 +3416,48 @@ salvo `icono`):
       kaleido no lo hace. **Efecto lateral honesto:** los márgenes del PNG
       NO son fieles al píxel. Sirve para composición, colores, solapamientos
       y legibilidad; para juzgar recortes, el navegador manda.
+
+96. **El item del rail viaja en `?vista=`, y el detector de solapamientos
+    tenía que mirar los TRES `svg` (2026-08-12).** Dos herramientas del
+    mismo día, las dos nacidas de la misma friccion: llegar a una pantalla
+    concreta y saber si se ve bien.
+
+    **Deep-link (`graficos/base.py::_render_rail`).** La URL sólo decía el
+    reporte; llegar a una vista eran 3-5 clics encadenados, cada uno con su
+    rerun, y no había forma de compartir "mirá ESTA pantalla". Ahora el rail
+    —que es COMPARTIDO, así que vale para los 6 dashboards con una sola
+    edición— lee `?vista=` cuando todavía no hay selección válida y espeja
+    la selección a la URL después de dibujar los botones.
+    - Se **escribe** con `_slug_url()` (ASCII, sin acentos:
+      `comparativo_vs_ano_pasado`) para que se pueda tipear a mano. NO se
+      reusó `_slug`, que alimenta keys de widgets y por lo tanto selectores
+      de `estilos/`: cambiarlo movería CSS de sitio.
+    - Se **lee** con `_norm` (ignora acentos Y separadores), así entra igual
+      `comparativo_vs_ano_pasado` que `Comparativo vs Año Pasado`.
+    - Cambiar de reporte con un `?vista=` ajeno NO rompe: `_render_rail` ya
+      valida contra `_todos` y cae al primer item, y el espejo reescribe la
+      URL. Verificado saltando de Ventas (`venta_por_dia`) a Ajuste → queda
+      `vista=cascada`.
+    - Escribir `st.query_params` no dispara rerun, pero se compara antes:
+      reescribir en cada rerun es ruido.
+
+    **`herramientas/auditar_graficos.js`.** El chequeo de "¿algún texto se
+    pisa o se corta?" se escribió a mano cinco veces en una sesión. Al
+    convertirlo en herramienta aparecieron dos defectos que las versiones
+    ad-hoc tenían y que invalidaban parte de lo verificado:
+    - **Plotly usa VARIOS `svg.main-svg`** (datos/ejes + un "infolayer" con
+      anotaciones, legend y títulos). Mirar sólo el primero deja ciegas a
+      las anotaciones — justo `feriado`, `en curso` y el `%Var`. Se detectó
+      plantando dos textos en el mismo punto y viendo que el chequeo NO los
+      reportaba. En la vista de Ventas eran 48 textos vistos contra 67
+      reales: 19 invisibles para el detector, y encima los solapamientos
+      entre capas son los más fáciles de producir.
+    - **Sólo miraba recorte arriba/abajo**, no por los lados. El eje Y
+      cortado por izquierda no lo habría visto nunca.
+
+    **Trampa al usarlo:** después de cambiar el tamaño de la ventana hay que
+    RECARGAR. Plotly no re-maquetea solo, el `<svg>` conserva el ancho viejo
+    y el chequeo reporta textos "cortados" que están perfectos — pasó con 25
+    falsos positivos que desaparecieron con un F5.
+    Con todo corregido, el comparativo de Ventas da 0 pisadas y 0 recortes
+    sobre los 67 textos, a 1912px y a 1280px.
