@@ -10,7 +10,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from data import cargar as _cargar_reporte
-from tema import ACENTO, ERROR, EXITO, GRIS_BORDE
+from tema import ACENTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO_MEDIO
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, _render_rail,
     _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
@@ -58,6 +58,12 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
         "Métricas", _opts, selection_mode="multi", default=_def,
         key="ventas_dia_metricas", label_visibility="collapsed",
     ) or ["Venta"]
+    # Separador de base bajo los toggles: los distingue del gráfico como un
+    # bloque de controles propio, en vez de flotar sueltos arriba del chart.
+    st.markdown(
+        f'<hr style="border:none;border-top:2px solid {GRIS_TEXTO_MEDIO};'
+        'margin:2px 0 14px;">',
+        unsafe_allow_html=True)
 
     _need_y2 = "Pax" in sel and "pax" in g.columns
     _need_y3 = "Pax/Venta" in sel and "ratio" in g.columns
