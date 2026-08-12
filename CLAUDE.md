@@ -188,6 +188,23 @@ editor y usar `herramientas/auditar_layout.js`:
 Antes de discutir por qué "algo se ve grande", medir. `auditar()` responde
 en 10 segundos y evita ida-y-vuelta de deploys + capturas.
 
+**Para VER un gráfico sin levantar la app: `herramientas/ver_figura.py`.**
+Vuelca a PNG lo que dibuja un dashboard, sin navegador:
+
+```bash
+python herramientas/ver_figura.py Ventas -s "ventas_graf_tipo=Comparativo vs Año Pasado" -s ventas_comp_vista=Descomposición
+```
+
+`-s key=valor` fuerza cualquier widget o el item del rail por su key (las
+muestra el inspector). Existe porque medir el DOM prueba que un gráfico
+**funciona**, nunca que **se ve**: así se escapó un legend legible-en-el-DOM
+e invisible en pantalla (regla #91). Necesita `kaleido` de
+`requirements-dev.txt` y, una vez por máquina,
+`python -c "import kaleido; kaleido.get_chrome_sync()"`.
+Ojo: los **márgenes** del PNG no son fieles (el export fuerza `automargin`
+porque kaleido no expande solo como el navegador) — para juzgar recortes,
+el navegador manda.
+
 También existe el inspector propio: **`?debug=1` en la URL o `Alt+I`**
 activa `inject_element_inspector` (tooltip con selectores y estilos al
 pasar el cursor). El inspector NO agrega elementos visibles en la página

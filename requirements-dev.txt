@@ -8,3 +8,8 @@
 #     python test_graficos.py     (smoke de figuras + contratos del dispatcher)
 
 ruff>=0.16,<0.17
+
+# Exportar figuras Plotly a PNG sin navegador (herramientas/ver_figura.py).
+# La primera vez hay que bajarle su Chrome, una sola vez por máquina:
+#     python -c "import kaleido; kaleido.get_chrome_sync()"
+kaleido>=1.0,<2

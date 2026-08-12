@@ -510,10 +510,19 @@ def _datos_demo(archivo, filas=60):
 # CARGA DE DATOS
 # ===========================================================================
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, persist="disk")
 def _cargar_cacheable(archivo):
     """Lectura pura del parquet. Si falla, LANZA — así @st.cache_data NO cachea
-    el fracaso. Ver `cargar()` para el porqué de este split."""
+    el fracaso. Ver `cargar()` para el porqué de este split.
+
+    `persist="disk"` (2026-08-12): sin él, la caché vive SOLO en memoria del
+    proceso, así que cada reinicio del server vuelve a bajar el parquet de R2
+    — ventas.parquet son ~40s en frío. Peor en desarrollo: si tocás algo
+    mientras baja, Streamlit cancela el run (StopException) y la descarga
+    arranca de CERO; se puede quedar en un bucle donde nunca termina y parece
+    que R2 está caído cuando no lo está.
+    El `ttl` se sigue respetando con persist (verificado en 1.59), y sólo se
+    persiste el ÉXITO: el split cacheada/wrapper de abajo no cambia."""
     # ── Modo demo: sin credenciales R2 → datos sintéticos en memoria ──
     if not secrets_disponibles():
         return _datos_demo(archivo)
@@ -555,10 +564,14 @@ def limpiar_cache(archivo):
     _cargar_cacheable.clear(archivo)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, persist="disk")
 def _cargar_rango_cacheable(archivo, col_fecha, ini, fin):
     """Lectura filtrada por rango. Si falla, LANZA — @st.cache_data no cachea el
-    fracaso. Ver `cargar()` para el porqué del split cacheada/wrapper."""
+    fracaso. Ver `cargar()` para el porqué del split cacheada/wrapper.
+
+    `persist="disk"` por lo mismo que `_cargar_cacheable`: la clave incluye el
+    rango, así que cada ventana que ya se miró una vez queda en disco y
+    sobrevive al reinicio del server."""
     # ── Modo demo: sin credenciales R2 → datos sintéticos filtrados ──
     if not secrets_disponibles():
         df = _datos_demo(archivo)
@@ -604,7 +617,7 @@ def cargar_rango(archivo, col_fecha, ini, fin):
         return None
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, persist="disk")
 def _rango_fechas_cacheable(archivo, col_fecha):
     """MIN/MAX de la fecha. Si falla, LANZA (no se cachea). El None de 'no hay
     fechas' SÍ es cacheable — es un resultado válido, no un error."""

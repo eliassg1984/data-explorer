@@ -1,3 +1,11 @@
 __pycache__/
 *.pyc
 .streamlit/secrets.toml
+
+# Caché en disco de @st.cache_data(persist="disk") — parquets de R2 ya
+# materializados. Se regenera solo y puede pesar cientos de MB.
+.streamlit/cache/
+
+# Salida de herramientas/ver_figura.py: PNGs para mirar un gráfico sin
+# levantar la app. Artefactos de inspección, no fuente.
+herramientas/_figuras/

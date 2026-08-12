@@ -3362,3 +3362,57 @@ salvo `icono`):
     **Filas juntas:** el aire no estaba en la fila (24px) sino en el **gap
     de 16px** entre bloques, más que la fila misma. `st.container(gap=None)`
     lo saca; con la caja de 12px la fila baja a 15px. De 40px por fila a 15.
+
+94. **`persist="disk"` en la caché de datos, y por qué una descarga lenta se
+    volvía "R2 caído" (2026-08-12).** `_cargar_cacheable` /
+    `_cargar_rango_cacheable` / `_rango_fechas_cacheable` cacheaban SOLO en
+    memoria del proceso. Dos consecuencias que costaron una sesión entera:
+    - Cada reinicio del server volvía a bajar el parquet. `ventas.parquet`
+      son ~220k filas y ~40s en frío.
+    - Peor: si alguien toca algo mientras baja, Streamlit **cancela el run**
+      (`StopException`) y la descarga arranca de CERO. Con un navegador
+      automatizado clickeando cada pocos segundos, nunca terminaba: la app
+      mostraba "No se pudieron cargar los datos o el archivo está vacío" una
+      y otra vez. Parecía R2 caído; R2 estaba perfecto (el mismo
+      `data.cargar('ventas.parquet')` fuera de Streamlit devolvía las
+      220.481 filas, sólo que tardando 40s).
+    `persist="disk"` (el `ttl` se sigue respetando, verificado en 1.59) hace
+    que sobreviva al reinicio. **No cambia el split cacheada/wrapper** de la
+    regla del None cacheado: sólo se persiste el éxito, porque la función
+    interna sigue LANZANDO ante un fallo.
+    Corolario para diagnosticar: si "no cargan los datos", antes de sospechar
+    de R2 probar `python -c "import data; print(len(data.cargar('x.parquet')))"`.
+    Si eso trae filas, el problema es cancelación de runs, no la nube.
+    (Lo agrava que `perf.py::phase` reviente al desenrollarse una
+    `StopException` y REEMPLACE la excepción real por un `TypeError` — queda
+    un "Uncaught app execution" que apunta al lugar equivocado.)
+
+95. **`herramientas/ver_figura.py`: ver un gráfico sin navegador, y por qué
+    hacía falta (2026-08-12).** Medir el DOM prueba que un gráfico
+    **funciona**; nunca que **se ve**. Toda la saga del legend de la regla
+    #91 —tres rondas— pasó por eso: el elemento existía, respondía al clic y
+    era ilegible. Un PNG lo habría mostrado en 10 segundos.
+
+    El script **no levanta Streamlit**: parchea en caliente las funciones de
+    UI del módulo `st` ya importado (widgets → devuelven su default,
+    contenedores → un context manager vacío, `plotly_chart` → guarda la
+    figura). Se parchea el módulo REAL en vez de reemplazarlo en
+    `sys.modules` a propósito: así `st.secrets` y `@st.cache_data` siguen
+    siendo los de verdad y los datos salen de R2 como en producción.
+
+    **Tres cosas que no son obvias y costaron intentos:**
+    - `st.session_state` no funciona fuera de `streamlit run`, y de ahí sale
+      el item activo del rail (`_render_rail` lo lee). Hay que reemplazarlo
+      por un dict; se siembra con los `-s` para poder elegir la vista.
+    - `@st.fragment` se aplica al IMPORTAR, así que los stubs tienen que
+      instalarse **antes** de `import graficos`. El resto de las llamadas se
+      resuelven contra el módulo en cada invocación y dan igual.
+    - **El tamaño va en el LAYOUT, no como kwarg de `write_image`.** Por
+      kwarg, kaleido no ajusta márgenes y RECORTA las etiquetas — el PNG
+      mostraba un eje Y sin números que en el navegador está completo
+      (comprobado contra el DOM). Aun con el layout hace falta forzar
+      `automargin` en ambos ejes, porque los dashboards usan márgenes
+      apretados (`l=10, b=10`) confiando en que Plotly los expanda solo, y
+      kaleido no lo hace. **Efecto lateral honesto:** los márgenes del PNG
+      NO son fieles al píxel. Sirve para composición, colores, solapamientos
+      y legibilidad; para juzgar recortes, el navegador manda.
