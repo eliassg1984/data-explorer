@@ -197,8 +197,11 @@ CSS = """    /* ================================================================
     /* son atributos reales de Streamlit (no clases con hash), así que el   */
     /* selector no se rompe con la próxima versión que cambie los hashes.   */
     /* =================================================================== */
-    div[class*="st-key-ventas_dia_metricas"] [data-testid="stButtonGroup"] {
-        gap: 20px !important;
+    /* El gap real no va en stButtonGroup: ese es display:block (verificado
+       en el navegador, no a ojo). El flex de verdad es su hijo directo, un
+       <div> sin testid propio — de ahí el "> div". */
+    div[class*="st-key-ventas_dia_metricas"] [data-testid="stButtonGroup"] > div {
+        gap: 28px !important;
     }
     div[class*="st-key-ventas_dia_metricas"] [data-testid="stButtonGroup"]
         button[data-variant="pills"] {
