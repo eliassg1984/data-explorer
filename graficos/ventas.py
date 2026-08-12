@@ -62,7 +62,7 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
     # bloque de controles propio, en vez de flotar sueltos arriba del chart.
     st.markdown(
         f'<hr style="border:none;border-top:1px solid {GRIS_TEXTO};'
-        'margin:-16px 0 14px;">',
+        'margin:-20px 0 14px;">',
         unsafe_allow_html=True)
 
     _need_y2 = "Pax" in sel and "pax" in g.columns
