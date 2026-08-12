@@ -653,10 +653,20 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
 
     fig.update_layout(
         barmode="group", bargap=0.28, bargroupgap=0.08,
-        height=340, margin=dict(l=10, r=10, t=(70 if mostrar_etq else 30), b=10),
+        height=340, margin=dict(l=10, r=10, t=(95 if mostrar_etq else 60), b=10),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="DM Sans, sans-serif", color=GRIS_TEXTO, size=12),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+        # El legend es un CONTROL (se clickea para ocultar/mostrar la serie),
+        # así que tiene que leerse como tal: en y=1.02 y gris chico quedaba
+        # en la MISMA franja que las anotaciones "feriado"/"feriado AP"
+        # (y=1.0, yref="paper") y se perdía entre ellas. Sube por encima de
+        # esa línea y lleva fondo + borde propio, como una pastilla.
+        legend=dict(
+            orientation="h", yanchor="bottom", y=1.12, x=0,
+            font=dict(size=13, color=GRIS_TEXTO),
+            bgcolor="rgba(255,255,255,0.92)",
+            bordercolor=GRIS_BORDE, borderwidth=1,
+        ),
         showlegend=True,  # nativo: da el clic-para-ocultar/mostrar serie
                           # gratis. El panel "Detalle" (abajo) complementa
                           # con el valor absoluto, que el legend no muestra.
