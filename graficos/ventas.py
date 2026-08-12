@@ -10,7 +10,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from data import cargar as _cargar_reporte
-from tema import ACENTO, ERROR, EXITO, GRIS_BORDE
+from tema import ACENTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO_SUAVE
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, _render_rail,
     _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
@@ -66,7 +66,7 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
     # ese padding con margen negativo + ensanchar el width lo mismo, si no
     # la línea queda corta por los dos lados en vez de tocar el borde.
     st.markdown(
-        f'<hr style="border:none;border-top:1px solid {GRIS_BORDE};'
+        f'<hr style="border:none;border-top:1px solid {GRIS_TEXTO_SUAVE};'
         'margin:-23px -18px 14px;width:calc(100% + 36px);">',
         unsafe_allow_html=True)
 
