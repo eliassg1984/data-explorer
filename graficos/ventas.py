@@ -10,7 +10,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from data import cargar as _cargar_reporte
-from tema import ACENTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO_MEDIO
+from tema import ACENTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, _render_rail,
     _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
@@ -61,8 +61,8 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
     # Separador de base bajo los toggles: los distingue del gráfico como un
     # bloque de controles propio, en vez de flotar sueltos arriba del chart.
     st.markdown(
-        f'<hr style="border:none;border-top:1px solid {GRIS_TEXTO_MEDIO};'
-        'margin:-12px 0 14px;">',
+        f'<hr style="border:none;border-top:1px solid {GRIS_TEXTO};'
+        'margin:-16px 0 14px;">',
         unsafe_allow_html=True)
 
     _need_y2 = "Pax" in sel and "pax" in g.columns
