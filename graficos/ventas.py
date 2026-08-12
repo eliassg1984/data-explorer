@@ -10,7 +10,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from data import cargar as _cargar_reporte
-from tema import ACENTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO_SUAVE
+from tema import ACENTO, ERROR, EXITO, GRIS_BORDE
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, _render_rail,
     _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
@@ -75,8 +75,13 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
     # estilos/_80_cards.py sobre `st-key-ventas_dia_metricas`): el <hr> va
     # en flujo justo detrás de las pills, así que sin esto subiría con
     # ellas. Van acoplados — si cambia uno, recalcular el otro.
+    # Color: el MISMO gris de la cuadrícula del gráfico (GRIS_BORDE, el
+    # `gridcolor` de graficos/base.py), no uno propio — así el separador
+    # se lee como una línea más del gráfico y no como un elemento ajeno.
+    # Como ese gris es más claro que el del texto suave, va a 2px para no
+    # desaparecer: el grosor compensa el contraste que pierde el color.
     st.markdown(
-        f'<hr style="border:none;border-top:1px solid {GRIS_TEXTO_SUAVE};'
+        f'<hr style="border:none;border-top:2px solid {GRIS_BORDE};'
         'margin:-15px -18px 14px;width:calc(100% + 36px);">',
         unsafe_allow_html=True)
 

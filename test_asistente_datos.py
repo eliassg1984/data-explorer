@@ -21,6 +21,13 @@ from asistente_datos import (
     resumen_para_prompt,
 )
 
+# Igual que test_graficos.py: la consola de Windows (cp1252) no puede imprimir
+# los ─/✅ de este script y revienta con UnicodeEncodeError en el PRIMER print,
+# antes de correr una sola prueba — el gate de CLAUDE.md fallaba sin decir por
+# qué. Forzar UTF-8 lo hace correr igual en Windows y en Linux.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 _fallos = []
 
 
