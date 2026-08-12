@@ -693,7 +693,12 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         # propio: no hace falta reinventar el toggle.
         if es_desc:
             _etq_ultimo = _etiqueta_clave(claves[-1], grano)
-            with st.expander(f"Detalle · {_etq_ultimo}", expanded=False):
+            # type="compact": el default de st.expander estira a todo el
+            # ancho del card aunque el label sea corto (la barra vacía que
+            # se ve en la franja "Detalle · Ago 26") — "compact" lo rinde
+            # como un toggle inline, sin la caja ni el ancho completo.
+            with st.expander(f"Detalle · {_etq_ultimo}", expanded=False,
+                             type="compact"):
                 _filas = [
                     ("Venta", f"S/ {y_act[-1]:,.0f}", d_venta[-1],
                      EXITO if (d_venta[-1] is not None and d_venta[-1] >= 0)
