@@ -197,6 +197,13 @@ CSS = """    /* ================================================================
     /* son atributos reales de Streamlit (no clases con hash), así que el   */
     /* selector no se rompe con la próxima versión que cambie los hashes.   */
     /* =================================================================== */
+    /* Sube SÓLO el toggle, no la tarjeta. El ancla es la key del PROPIO
+       widget: `st.pills(key="ventas_dia_metricas")` emite esa clase en su
+       element container, así que no hace falta (ni conviene) envolverlo en
+       un st.container extra — ver arquitectura.md regla #90. */
+    div[class*="st-key-ventas_dia_metricas"] {
+        margin-top: -4px !important;
+    }
     /* El gap real no va en stButtonGroup: ese es display:block (verificado
        en el navegador, no a ojo). El flex de verdad es su hijo directo, un
        <div> sin testid propio — de ahí el "> div". */

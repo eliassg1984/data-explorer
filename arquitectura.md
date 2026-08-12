@@ -1276,15 +1276,12 @@ salvo `icono`):
     de la tarjeta debe caer DESPUÉS del `bottom` de lo que esté arriba, con
     margen positivo.
 
-    **Mismo patrón, motivo distinto (2026-08-12):** Ventas pidió subir un
-    poco más el toggle Venta/Costo/Pax/Pax·Venta (preferencia visual, no un
-    solape) — mismo mecanismo, `.st-key-ajuste_graf_card_izq_ventas` con
-    `margin-top: -60px` (el wildcard sigue en -56px) puesto después del
-    wildcard. El dato exacto salió del inspector propio del proyecto
-    (`?debug=1`, tecla **C**) pegado directo en el chat — confirmó de
-    entrada que el -56px era una regla COMPARTIDA (`_20_compras_rail.py`)
-    antes de tocar nada, evitando la trampa de "subir el toggle" editando
-    el wildcard y corriendo los otros 4 reportes por accidente.
+    **Intento fallido que NO hay que repetir (2026-08-12):** para "subir un
+    poco el toggle de Por día" se tocó `margin-top` de
+    `.st-key-ajuste_graf_card_izq_ventas` (de -56px a -60px). Funcionó
+    ópticamente, pero esa tarjeta envuelve las **10 vistas del rail de
+    Ventas**, así que movió Resumen, Año Pasado, Matriz, Tabla y el resto —
+    no el toggle. Revertido. La solución correcta está en la regla #90.
 
 39. **Inspector (`?debug=1`): clic derecho solo FIJABA el tooltip, nunca
     copiaba — y encima el copiado automático puede fallar silencioso.**
@@ -3187,3 +3184,47 @@ salvo `icono`):
     HTML en un probe y buscar el literal, `assert ">None<" not in
     sty.to_html()`. Es la misma clase de verificación que la regla #25:
     contra el resultado real, no contra la intención.
+
+90. **Para mover UN widget, el ancla es la key del PROPIO widget — no hace
+    falta (ni conviene) envolverlo en un `st.container(key=...)`.**
+    Todo `st.pills/button/selectbox/...(key="X")` emite `st-key-X` en su
+    element container. Eso YA es un ancla de estilo local y acotada:
+    `div[class*="st-key-X"] { margin-top: -4px; }` mueve ese widget y nada
+    más. Suena obvio escrito; no lo fue en el momento.
+
+    **Los dos errores encadenados que motivan esta regla (2026-08-12),
+    porque el segundo es el instructivo:**
+    - **Error 1 — mover el ancestro.** Pedido: "subí un poco el toggle de
+      Por día". Se tocó el `margin-top` de `ajuste_graf_card_izq_ventas`
+      (la tarjeta), porque era el margen que el inspector mostraba a mano.
+      Subió el toggle, sí — y con él las 10 vistas del rail de Ventas. El
+      usuario lo detectó preguntando "¿subiste sólo lo que te mencioné o
+      subiste más contenedores?".
+    - **Error 2 — el diagnóstico equivocado del error 1.** Se concluyó que
+      "no existía una palanca local" y que había que **crear** un
+      `st.container(key="ventas_dia_toggle")` alrededor del `st.pills`.
+      Falso por partida doble: (a) la palanca ya existía
+      (`st-key-ventas_dia_metricas`), y (b) el container extra reintrodujo
+      la **regla #70** — un contenedor con key tiene identidad estable y
+      RETIENE hijos huérfanos. Medido: el wrapper quedó de **250px** de
+      alto con 5 hijos (las pills de 32px + **4 `stColumn` sobrevivientes**
+      de la fila de KPIs del Resumen ejecutivo, `flex-basis: calc(20% -
+      16px)` = las columnas de un `st.columns(5)`), y el `<hr>` separador
+      se fue de `top:115` a `top:329`.
+
+    **Regla de decisión, en orden:**
+    1. ¿El widget tiene `key`? → estilar `div[class*="st-key-<key>"]`.
+       Fin. (Este caso.)
+    2. ¿Es un grupo de widgets que se estilan juntos y **siempre** se
+       renderizan juntos? → ahí sí un `st.container(key=...)`, sabiendo que
+       hereda el riesgo de la regla #70 si el grupo es condicional.
+    3. Tocar el margen de un ancestro **sólo** si el ancestro ES lo que hay
+       que mover. Antes de hacerlo: mirar la línea "Cadena de contenedores
+       st-key" del inspector y preguntarse *qué más vive adentro*.
+
+    **Verificación que distingue un caso del otro** (la que faltó la
+    primera vez): medir el ancestro compartido ANTES y DESPUÉS. Si
+    `getComputedStyle(tarjeta).marginTop` cambió, movió más que el widget.
+    Acá el cierre correcto dio: tarjeta en `-56px` y `top:66` (idénticos a
+    antes), ancla del toggle en `-4px`, altura del ancla **32px** (no 250)
+    y un solo hijo — o sea, sin huérfanos.

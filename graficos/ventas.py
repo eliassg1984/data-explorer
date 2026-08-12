@@ -54,6 +54,12 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
     if col_pax:
         _opts += ["Pax", "Pax/Venta"]
     _def = [m for m in ("Venta", "Costo") if m in _opts]
+    # NO envolver esto en un st.container(key=...) para poder estilarlo:
+    # `st.pills(key=...)` YA emite `st-key-ventas_dia_metricas` en su propio
+    # element container, que es el ancla de estilo local. Un container extra
+    # además reintroduce el bug de la regla #70 (un contenedor con key tiene
+    # identidad estable y RETIENE hijos huérfanos de la vista anterior —
+    # acá se quedaba con las columnas de KPI del Resumen ejecutivo).
     sel = st.pills(
         "Métricas", _opts, selection_mode="multi", default=_def,
         key="ventas_dia_metricas", label_visibility="collapsed",
