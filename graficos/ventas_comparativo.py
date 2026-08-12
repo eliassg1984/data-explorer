@@ -653,7 +653,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
 
     fig.update_layout(
         barmode="group", bargap=0.28, bargroupgap=0.08,
-        height=340, margin=dict(l=10, r=10, t=(70 if mostrar_etq else 30), b=10),
+        height=280, margin=dict(l=10, r=10, t=(70 if mostrar_etq else 30), b=10),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="DM Sans, sans-serif", color=GRIS_TEXTO, size=12),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
@@ -775,10 +775,12 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                      "faltó gente; si cae el ticket y el pax no, vinieron "
                      "igual pero gastaron menos. " + _expl)
         _plural = {"Día": "días", "Semana": "semanas", "Mes": "meses"}[grano]
-        st.caption(f"Ventana: {ventana} {_plural} hasta {ancla:%d/%m/%Y}. "
-                   + _expl + _cal_txt + _lbl
-                   + (" Tocá una barra para ver los platos de ese período."
-                      if col_prod else ""))
+        st.caption(
+            f"Ventana: {ventana} {_plural} hasta {ancla:%d/%m/%Y}."
+            + (" Tocá una barra para ver los platos de ese período."
+               if col_prod else ""))
+        with st.expander("ℹ️ Cómo se compara", expanded=False):
+            st.caption(_expl + _cal_txt + _lbl)
 
     # ── Drill: ranking de platos del período clickeado ───────────────────
     if foco is not None and col_prod:
