@@ -212,6 +212,7 @@ CSS = """    /* ================================================================
         padding: 4px 1px !important;
         color: var(--text-secondary) !important;
         font-weight: 400 !important;
+        font-size: 17px !important;
     }
     div[class*="st-key-ventas_dia_metricas"] [data-testid="stButtonGroup"]
         button[data-variant="pills"][aria-pressed="true"] {
