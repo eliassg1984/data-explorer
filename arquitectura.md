@@ -3228,3 +3228,26 @@ salvo `icono`):
     Acá el cierre correcto dio: tarjeta en `-56px` y `top:66` (idénticos a
     antes), ancla del toggle en `-4px`, altura del ancla **32px** (no 250)
     y un solo hijo — o sea, sin huérfanos.
+
+    **El inspector aprendió la lección (mismo día).** Los tres errores de
+    arriba fueron todos "elegí el selector equivocado", y el inspector
+    tenía los datos para evitarlo pero no los presentaba como decisión: la
+    cadena `st-key` salía como texto plano, sin distinguir el ancla propia
+    del ancestro ni decir qué había adentro de cada uno. Se agregaron a
+    `inyecciones/_inspector_js.py` (`anclaPropia`, `pesoAncestros`,
+    `selectoresCompartidos`):
+    - `ANCLA PROPIA (estila SOLO este widget): div[class*="st-key-<key>"]`,
+      **primera línea** del bloque y antes de la cadena, a propósito.
+    - `Contenedores que lo ENVUELVEN: st-key-X (N widgets adentro)` — sólo
+      ancestros; contar los hijos del propio contenedor del widget da 0 y
+      se lee como "está vacío" (se probó, se corrigió).
+    - `AVISO` con las reglas **wildcard por familia** que estilan al
+      ancestro. **Trampa al implementarlo:** el primer intento filtraba por
+      "captura ≥ 2 elementos en el DOM" — pero la app renderiza UN reporte
+      por vez, así que un wildcard que cubre los 5 devuelve 1 y el filtro
+      mataba justo el caso a detectar. La señal correcta es el SELECTOR
+      (está escrito por prefijo, no por la key), no cuántos matchean ahora.
+    Va diferido a la tecla **C** porque recorre `document.styleSheets`,
+    misma convención que `conflictos`/`matcheantes` (no en cada mousemove).
+    Verificado sobre el mismo toggle del bug: marca
+    `ajuste_graf_card_izq_*` y `ajuste_graf_card_*` como familias.

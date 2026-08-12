@@ -202,9 +202,22 @@ matchean el prefijo de la key), `padre` y `hermanos` (contenedores
 pseudo, que `el.matches()` no puede alcanzar), el **reporte activo real**
 leído del marker `st-key-app_reporte_<slug>` del DOM (no del query
 `?reporte=`, que suele faltar), y las **franjas fijas** superior/inferior
-(pseudo + `pointer-events:none`) vía fallback por coordenadas. Al copiar
-con **C** se agregan además las **variables CSS** que usa el elemento con
-su **valor numérico actual** resuelto (`--cab-altura = 50px`). Tecla **C**
+(pseudo + `pointer-events:none`) vía fallback por coordenadas.
+
+**Para decidir DÓNDE estilar** (agregado 2026-08-12, ver `arquitectura.md`
+regla #90) el tooltip abre con tres líneas hechas para eso:
+`ANCLA PROPIA` (el selector que estila SOLO ese widget — todo
+`st.X(key="K")` emite `st-key-K`, así que casi nunca hace falta crear un
+container), `Contenedores que lo ENVUELVEN` (con cuántos widgets tiene
+cada uno adentro) y, al copiar, un `AVISO` si alguna regla que estila al
+ancestro es un **wildcard por familia** (`[class*="st-key-pre_"]`) —
+editarla toca a todos sus miembros. Nacieron de un bug real: para "subir
+un poco este toggle" se tocó el margen del ancestro y se movió el reporte
+entero.
+
+Al copiar con **C** se agregan además las **variables CSS** que usa el
+elemento con su **valor numérico actual** resuelto
+(`--cab-altura = 50px`). Tecla **C**
 copia todo eso al portapapeles como un bloque listo para pegar a la IA;
 **clic derecho** sobre el elemento hace lo mismo en un solo gesto (fija el
 tooltip y copia — el botón "Fijar" standalone solo fija). Si el copiado

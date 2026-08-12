@@ -251,6 +251,93 @@ JS = """
             }
             return out;
         }
+        // ── Anclas de estilo: cual es la del PROPIO widget y cuanto pesa
+        // cada ancestro. Nacio de un bug real (arquitectura.md regla #90):
+        // para "subir un poco este toggle" se toco el margin del ancestro
+        // que el inspector mostraba a mano, y ese ancestro envolvia las 10
+        // vistas del rail — movio el reporte entero. La cadena st-key ya
+        // estaba en el tooltip, pero como texto plano: no distinguia el
+        // ancla propia de los ancestros ni decia que habia dentro de cada
+        // uno. Estas dos funciones responden justo eso.
+        function anclaPropia(el) {
+            // El st-key MAS CERCANO que envuelve SOLO a este widget. Todo
+            // st.X(key="K") emite st-key-K en su element container, asi que
+            // casi siempre existe — y es el selector correcto para estilar
+            // el widget sin tocar a nadie mas.
+            var cur = el;
+            while (cur && cur !== doc.body) {
+                var k = keyDeElemento(cur);
+                if (k) {
+                    var td = cur.getAttribute && cur.getAttribute('data-testid');
+                    // stElementContainer = envoltorio de UN widget suelto.
+                    // stVerticalBlock = un st.container, puede traer varios.
+                    return { key: k, soloWidget: (td === 'stElementContainer') };
+                }
+                cur = cur.parentElement;
+            }
+            return null;
+        }
+        function pesoAncestros(el) {
+            // Por cada contenedor keyed de la cadena: cuantos widgets vivos
+            // tiene adentro. Un ancestro con decenas de hijos es una senal
+            // de "no me toques el margen para mover una sola cosa".
+            var out = [];
+            var cur = el, primero = true;
+            while (cur && cur !== doc.body && out.length < 6) {
+                var k = keyDeElemento(cur);
+                if (k) {
+                    var n = 0;
+                    try { n = cur.querySelectorAll('[data-testid="stElementContainer"]').length; } catch(_) {}
+                    out.push({ key: k, widgets: n, propio: primero });
+                    primero = false;
+                }
+                cur = cur.parentElement;
+            }
+            return out;
+        }
+        function selectoresCompartidos(el) {
+            // Reglas de estilos/ que matchean `el` con un selector WILDCARD
+            // por prefijo ([class*="st-key-pre_"]) en vez de su key exacta.
+            // Editar esa regla toca TODOS los contenedores con ese prefijo
+            // — en este proyecto, tipicamente los 5 reportes que comparten
+            // ajuste_graf_card_izq_*. Mismo recorrido de styleSheets que
+            // reglasQueMatchean (no hay indice global de reglas).
+            if (!el || !el.matches) return [];
+            var out = [], vistos = {};
+            var sheets = doc.styleSheets;
+            for (var s = 0; s < sheets.length; s++) {
+                var rules = null;
+                try { rules = sheets[s].cssRules; } catch(e) { continue; }
+                if (!rules) continue;
+                for (var r = 0; r < rules.length && out.length < 4; r++) {
+                    var rule = rules[r];
+                    if (!rule.selectorText || !rule.style) continue;
+                    if (rule.selectorText.indexOf('[class*="st-key-') === -1) continue;
+                    var sels = rule.selectorText.split(',');
+                    for (var si = 0; si < sels.length; si++) {
+                        var st = sels[si].trim();
+                        var m = /\\[class\\*="st-key-([A-Za-z0-9_]+)"\\]/.exec(st);
+                        if (!m) continue;
+                        var ok = false;
+                        try { ok = el.matches(st); } catch(_) { continue; }
+                        if (!ok || vistos[st]) continue;
+                        // NO se filtra por "cuantos matchean ahora": la app
+                        // renderiza UN reporte por vez, asi que un wildcard
+                        // que cubre los 5 reportes igual devuelve 1 en el DOM
+                        // vivo. La senal es el selector en si — esta escrito
+                        // para una FAMILIA (prefijo), no para esta key.
+                        var cuantos = 0;
+                        try { cuantos = doc.querySelectorAll('[class*="st-key-' + m[1] + '"]').length; } catch(_) {}
+                        vistos[st] = 1;
+                        out.push({ sel: (st.length > 120 ? st.slice(0, 117) + '...' : st),
+                                   archivo: archivoDeSelector(rule.selectorText) || '',
+                                   prefijo: m[1], captura: cuantos });
+                        if (out.length >= 4) break;
+                    }
+                }
+            }
+            return out;
+        }
         function clasesElemento(el) {
             if (!el || !el.classList) return [];
             var arr = [];
@@ -569,6 +656,41 @@ JS = """
                 lines.push('Viewport: ' + pagina.viewport);
             }
             if (extras2) {
+                // ANCLA PROPIA primero y con nombre explicito: es el selector
+                // con el que se estila ESTE widget sin tocar a nadie mas.
+                // Va antes de la cadena a proposito — leer la cadena y elegir
+                // un ancestro fue justo el error de la regla #90.
+                if (extras2.ancla) {
+                    lines.push('ANCLA PROPIA (estila SOLO este widget): div[class*="st-key-'
+                               + extras2.ancla.key + '"]'
+                               + (extras2.ancla.soloWidget ? '' : '  <- ojo: es un container, puede traer hermanos'));
+                }
+                if (extras2.pesos && extras2.pesos.length) {
+                    // Solo los ANCESTROS: el ancla propia ya se reporto arriba,
+                    // y contar "widgets adentro" de la propia caja del widget
+                    // da 0, que se lee como si estuviera vacia.
+                    var _pz = [];
+                    for (var pi = 0; pi < extras2.pesos.length; pi++) {
+                        var _p = extras2.pesos[pi];
+                        if (_p.propio) continue;
+                        _pz.push('st-key-' + _p.key + ' (' + _p.widgets + ' widget'
+                                 + (_p.widgets === 1 ? '' : 's') + ' adentro)');
+                    }
+                    if (_pz.length) {
+                        lines.push('Contenedores que lo ENVUELVEN: ' + _pz.join(' > '));
+                        lines.push('  ^ tocar el margen/padding de uno de estos mueve todo su contenido, no solo este widget');
+                    }
+                }
+                if (extras2.compartidos && extras2.compartidos.length) {
+                    lines.push('AVISO - el contenedor que lo envuelve lo estilan reglas WILDCARD (por familia, no por su key):');
+                    for (var ci = 0; ci < extras2.compartidos.length; ci++) {
+                        var _c = extras2.compartidos[ci];
+                        lines.push('  ' + _c.sel + (_c.archivo ? '  [' + _c.archivo + ']' : ''));
+                        lines.push('    -> familia "st-key-' + _c.prefijo
+                                   + '*"; editar esa regla afecta a TODOS sus miembros'
+                                   + ' (ahora se renderiza ' + _c.captura + ')');
+                    }
+                }
                 if (extras2.keysCad && extras2.keysCad.length)
                     lines.push('Cadena de contenedores st-key (elemento -> raiz): ' + extras2.keysCad.join(' > '));
                 if (extras2.testids && extras2.testids.length)
@@ -1144,6 +1266,15 @@ JS = """
             if (u.extras2) for (var _k in u.extras2) extras2Copia[_k] = u.extras2[_k];
             extras2Copia.matcheantesPadreKey = matcheantesPadreKey;
             extras2Copia.padreKeyNombre = (u.ctx && u.ctx.padre) || '';
+            // Wildcards compartidos: recorre TODAS las hojas de estilo, asi
+            // que va diferido a la C igual que conflictos/matcheantes (no en
+            // cada mousemove). Se calcula sobre el ancestro keyed, que es el
+            // que suele traer el margen que uno tiene ganas de tocar.
+            try {
+                var _mio2 = contenedorConKey(elBase);
+                var _up2  = _mio2 ? contenedorConKey(_mio2.el.parentElement) : null;
+                extras2Copia.compartidos = selectoresCompartidos(_up2 ? _up2.el : elBase);
+            } catch(_){}
             // Variables CSS: junto el cssText AUTORADO de las reglas que
             // matchean (preserva los var() sin resolver) y las resuelvo
             // contra el elemento. Aca (al copiar) ya tengo matcheantes.
@@ -1285,6 +1416,11 @@ JS = """
                 var testids = cadenaTestids(el);
                 var clases  = clasesElemento(el);
                 var keysCad = cadenaKeys(el);
+                // Baratas (recorridos de DOM, no de hojas de estilo): van en
+                // el hover. `compartidos` no — ese recorre styleSheets y se
+                // computa al pulsar C. Ver regla #90.
+                var ancla   = anclaPropia(el);
+                var pesos   = pesoAncestros(el);
                 var ctxFunc = buscarFuncion(ctxKey);
                 var ctxRefs = buscarRefs(ctxKey);
                 var ctxSS   = buscarSS(ctxKey);
@@ -1319,6 +1455,7 @@ JS = """
                                  construido: ctxConstruido };
                 var extras2Hover = { testids: testids, clases: clases, keysCad: keysCad,
                                      layoutPadre: lp, boxPadre: bp, boxPadreKey: bpk,
+                                     ancla: ancla, pesos: pesos,
                                      pseudoBefore: pBefore, pseudoAfter: pAfter };
                 var etiquetaFinal = bloqueParaIA(etiqueta, ctxKey, ctxHover, medidas,
                                                  pagina, null, null, extras2Hover)
@@ -1332,6 +1469,7 @@ JS = """
                     medidas: medidas, pagina: pagina,
                     extras2: { testids: testids, clases: clases, keysCad: keysCad,
                                layoutPadre: lp, boxPadre: bp, boxPadreKey: bpk,
+                               ancla: ancla, pesos: pesos,
                                pseudoBefore: pBefore, pseudoAfter: pAfter },
                     elemento: (ctxCont ? ctxCont.el : el),
                     elementoOriginal: el
