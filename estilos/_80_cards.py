@@ -202,7 +202,7 @@ CSS = """    /* ================================================================
        element container, así que no hace falta (ni conviene) envolverlo en
        un st.container extra — ver arquitectura.md regla #90. */
     div[class*="st-key-ventas_dia_metricas"] {
-        margin-top: -4px !important;
+        margin-top: -12px !important;
     }
     /* El gap real no va en stButtonGroup: ese es display:block (verificado
        en el navegador, no a ojo). El flex de verdad es su hijo directo, un
