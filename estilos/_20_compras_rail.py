@@ -109,6 +109,15 @@ CSS = """    /* ================================================================
         margin-top: 0 !important;
     }
 
+    /* Excepción: Ventas sube un poco más que el default compartido (pedido
+       explícito, verificado con el inspector — ver arquitectura.md). Mismo
+       patrón que la excepción de Salidas de arriba: misma especificidad
+       (clase exacta, no el wildcard) + !important en ambos lados, gana por
+       ir DESPUÉS en el archivo. */
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_izq_ventas {
+        margin-top: -60px !important;
+    }
+
 /* Compras hereda el cristal esmerilado del DEFAULT
        (estilos/_40_ajuste_franja.py) sin duplicar nada — scopeado con
        :has(.st-key-app_reporte_compras), un marker inyectado desde app.py

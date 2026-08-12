@@ -1276,6 +1276,16 @@ salvo `icono`):
     de la tarjeta debe caer DESPUÉS del `bottom` de lo que esté arriba, con
     margen positivo.
 
+    **Mismo patrón, motivo distinto (2026-08-12):** Ventas pidió subir un
+    poco más el toggle Venta/Costo/Pax/Pax·Venta (preferencia visual, no un
+    solape) — mismo mecanismo, `.st-key-ajuste_graf_card_izq_ventas` con
+    `margin-top: -60px` (el wildcard sigue en -56px) puesto después del
+    wildcard. El dato exacto salió del inspector propio del proyecto
+    (`?debug=1`, tecla **C**) pegado directo en el chat — confirmó de
+    entrada que el -56px era una regla COMPARTIDA (`_20_compras_rail.py`)
+    antes de tocar nada, evitando la trampa de "subir el toggle" editando
+    el wildcard y corriendo los otros 4 reportes por accidente.
+
 39. **Inspector (`?debug=1`): clic derecho solo FIJABA el tooltip, nunca
     copiaba — y encima el copiado automático puede fallar silencioso.**
     Bug real (2026-08-07): un usuario reportó "clic derecho para copiar no
