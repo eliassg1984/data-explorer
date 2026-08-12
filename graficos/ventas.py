@@ -71,9 +71,13 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
     # (estilos/_80_cards.py, ajuste_graf_card_*), así que hay que compensar
     # ese padding con margen negativo + ensanchar el width lo mismo, si no
     # la línea queda corta por los dos lados en vez de tocar el borde.
+    # El margen SUPERIOR compensa la subida del toggle (-12px en
+    # estilos/_80_cards.py sobre `st-key-ventas_dia_metricas`): el <hr> va
+    # en flujo justo detrás de las pills, así que sin esto subiría con
+    # ellas. Van acoplados — si cambia uno, recalcular el otro.
     st.markdown(
         f'<hr style="border:none;border-top:1px solid {GRIS_TEXTO_SUAVE};'
-        'margin:-23px -18px 14px;width:calc(100% + 36px);">',
+        'margin:-15px -18px 14px;width:calc(100% + 36px);">',
         unsafe_allow_html=True)
 
     _need_y2 = "Pax" in sel and "pax" in g.columns
