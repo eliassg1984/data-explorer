@@ -33,6 +33,12 @@ CSS = """    <style>
         --danger-bg: #fee2e2;
         --danger-border: #fca5a5;
         --danger-text: #991b1b;
+        /* Espejo CSS de PALETA_SERIES[1] y [2] de tema.py — las usan las
+           líneas %Δ pax / %Δ ticket del comparativo de Ventas, y el
+           cuadradito-checkbox de su panel "Detalle" tiene que coincidir.
+           Si cambia PALETA_SERIES, cambiar acá también (regla #1). */
+        --serie-pax: #22b8d4;
+        --serie-ticket: #e85ba8;
         --border-lavender: #d4cdf7; /* borde lavanda de pastillas/inputs */
         --icon-muted: #85858f;
         --focus-lavender: #b9aff2;  /* borde de foco/selección */

@@ -190,6 +190,53 @@ CSS = """    /* ================================================================
     }
 
     /* =================================================================== */
+    /* Panel "Detalle" del comparativo de Ventas (graficos/ventas_comparativo)*/
+    /*                                                                       */
+    /* El cuadradito de color ES el checkbox que prende/apaga la serie: no   */
+    /* hay swatch de HTML aparte (antes eran dos cosas — un <span> pintado   */
+    /* y un checkbox al lado — y el usuario pidió una sola).                 */
+    /*                                                                       */
+    /* La caja visual de st.checkbox es el ÚNICO <div> hijo del <label> que  */
+    /* NO tiene data-testid (el otro es stWidgetLabel). Se ancla por         */
+    /* estructura y no por su clase emotion, que lleva hash y cambia de      */
+    /* versión a versión.                                                    */
+    /*                                                                       */
+    /* El color entra por --sw-color, que fija el container de cada fila.    */
+    /* Venta tiene DOS variantes porque su color sigue el signo del %Δ       */
+    /* (igual que la barra del gráfico): _pos verde, _neg rojo.              */
+    /* =================================================================== */
+    div[class*="st-key-ventas_comp_sw_venta_pos"] { --sw-color: var(--success); }
+    div[class*="st-key-ventas_comp_sw_venta_neg"] { --sw-color: var(--danger); }
+    div[class*="st-key-ventas_comp_sw_pax"]       { --sw-color: var(--serie-pax); }
+    div[class*="st-key-ventas_comp_sw_ticket"]    { --sw-color: var(--serie-ticket); }
+
+    div[class*="st-key-ventas_comp_sw_"] [data-testid="stCheckbox"]
+        label > div:not([data-testid]) {
+        width: 12px !important;
+        height: 12px !important;
+        min-width: 12px !important;
+        border-radius: 3px !important;
+        border: 1.5px solid var(--sw-color) !important;
+        background-color: transparent !important;
+        box-shadow: none !important;
+    }
+    /* Marcado = cuadradito RELLENO del color de la serie (apagado = sólo el
+       contorno). Es la misma lectura que un legend: color sólido = se ve. */
+    div[class*="st-key-ventas_comp_sw_"] [data-testid="stCheckbox"]
+        label:has(input:checked) > div:not([data-testid]) {
+        background-color: var(--sw-color) !important;
+    }
+    /* El alto mínimo de 24px del checkbox es lo que estiraba cada fila:
+       con el cuadradito de 12px sobra la mitad. */
+    div[class*="st-key-ventas_comp_sw_"] [data-testid="stCheckbox"] {
+        min-height: 0 !important;
+    }
+    div[class*="st-key-ventas_comp_sw_"] [data-testid="stCheckbox"] label {
+        min-height: 0 !important;
+        align-items: center !important;
+    }
+
+    /* =================================================================== */
     /* Toggle "Venta/Costo/Pax/Pax·Venta" de Ventas › Por día — de cápsula   */
     /* a tab de texto con subrayado, pedido explícito (referencia: pestañas */
     /* de un extracto financiero, texto plano + línea de color abajo del    */

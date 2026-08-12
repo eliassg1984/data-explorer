@@ -523,14 +523,16 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     # Qué series se dibujan en Descomposición. Los checkboxes viven en el
     # panel "Detalle" (abajo, DESPUÉS del gráfico) pero la figura se arma
     # ACÁ, así que el valor se lee de session_state — que es donde el widget
-    # dejó lo elegido en el rerun anterior. En el primer render la clave
-    # todavía no existe: `setdefault` la crea en True (todas visibles).
-    # Va antes de instanciar el widget a propósito: después, Streamlit no
-    # deja escribir la clave de un widget ya creado.
+    # dejó lo elegido en el rerun anterior.
+    #
+    # El default NO se siembra con `setdefault`: se probó y el checkbox lo
+    # IGNORA (se dibujaba destildado mientras la figura mostraba las tres
+    # series — widget y gráfico diciendo cosas distintas). El default va
+    # donde Streamlit lo respeta, en `value=True` del propio widget, y acá
+    # se lee con `.get(..., True)` para el primer render, cuando la clave
+    # todavía no existe. Un solo dueño del valor: el widget.
     _SERIES_DESC = ("venta", "pax", "ticket")
-    for _s in _SERIES_DESC:
-        st.session_state.setdefault(f"ventas_comp_ver_{_s}", True)
-    _ver = {s: bool(st.session_state[f"ventas_comp_ver_{s}"])
+    _ver = {s: bool(st.session_state.get(f"ventas_comp_ver_{s}", True))
             for s in _SERIES_DESC}
     # El legend nativo sólo queda en Montos. En Descomposición el control
     # son los checkboxes del panel "Detalle", que además muestran el valor
@@ -758,50 +760,58 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             # como un toggle inline, sin la caja ni el ancho completo.
             with st.expander(f"Detalle · {_etq_ultimo}", expanded=False,
                              type="compact"):
+                # La variante de color de Venta sigue el SIGNO, igual que su
+                # barra en el gráfico; pax y ticket tienen color fijo. El
+                # color en sí lo pone el CSS (estilos/_80_cards.py) leyendo
+                # esta variante del key del container — no va inline acá,
+                # porque el cuadradito ahora es el checkbox y su caja la
+                # dibuja Streamlit, no nosotros.
+                _v_venta = ("venta_pos"
+                            if (d_venta[-1] is not None and d_venta[-1] >= 0)
+                            else "venta_neg")
                 _filas = [
-                    ("venta", "Venta", f"S/ {y_act[-1]:,.0f}", d_venta[-1],
-                     EXITO if (d_venta[-1] is not None and d_venta[-1] >= 0)
-                     else ERROR),
-                    ("pax", "Pax", f"{p_act[-1]:,.0f}", d_pax[-1],
-                     PALETA_SERIES[1]),
-                    ("ticket", "Ticket promedio",
+                    ("venta", _v_venta, "Venta", f"S/ {y_act[-1]:,.0f}",
+                     d_venta[-1]),
+                    ("pax", "pax", "Pax", f"{p_act[-1]:,.0f}", d_pax[-1]),
+                    ("ticket", "ticket", "Ticket promedio",
                      (f"S/ {t_act[-1]:,.2f}" if t_act[-1] is not None else "—"),
-                     d_ticket[-1], PALETA_SERIES[2]),
+                     d_ticket[-1]),
                 ]
-                # Una fila = [checkbox | color+nombre | valor | %Δ]. El
-                # `width` en píxeles es lo que la mantiene angosta: por
-                # defecto las columnas reparten TODO el ancho del card y la
-                # fila se estiraba hasta el borde (~1500px). El checkbox es
-                # el que prende/apaga la serie: su key es la misma que se
-                # lee arriba para construir la figura.
-                for _k, _label, _val, _pv, _sw in _filas:
-                    _pt = "—" if _pv is None else f"{_pv:+.0f}%"
-                    _pc = GRIS_TEXTO if _pv is None else (EXITO if _pv >= 0 else ERROR)
-                    _c = st.columns([0.8, 3, 2, 1.4], width=400,
-                                    vertical_alignment="center")
-                    with _c[0]:
-                        st.checkbox(_label, key=f"ventas_comp_ver_{_k}",
-                                    label_visibility="collapsed")
-                    with _c[1]:
-                        st.markdown(
-                            '<div style="display:flex;align-items:center;'
-                            'gap:8px;">'
-                            f'<span style="width:11px;height:11px;'
-                            f'border-radius:2px;background:{_sw};'
-                            f'flex-shrink:0;"></span>'
-                            f'<span style="font-size:14px;color:#3f3f46;">'
-                            f'{_label}</span></div>',
-                            unsafe_allow_html=True)
-                    with _c[2]:
-                        st.markdown(
-                            f'<div style="font-size:14px;text-align:right;'
-                            f'color:{GRIS_TEXTO};">{_val}</div>',
-                            unsafe_allow_html=True)
-                    with _c[3]:
-                        st.markdown(
-                            f'<div style="font-size:14px;font-weight:600;'
-                            f'text-align:right;color:{_pc};">{_pt}</div>',
-                            unsafe_allow_html=True)
+                # Una fila = [cuadradito-checkbox | nombre | valor | %Δ].
+                # `gap=None` en el container es lo que las junta: el gap por
+                # defecto entre bloques metía 16px entre fila y fila, más que
+                # el alto de la fila misma. `width` las mantiene angostas —
+                # sin él las columnas reparten TODO el ancho del card.
+                with st.container(gap=None, width=400):
+                    for _k, _variante, _label, _val, _pv in _filas:
+                        _pt = "—" if _pv is None else f"{_pv:+.0f}%"
+                        _pc = (GRIS_TEXTO if _pv is None
+                               else (EXITO if _pv >= 0 else ERROR))
+                        _c = st.columns([0.6, 3, 2, 1.4],
+                                        vertical_alignment="center")
+                        with _c[0]:
+                            # El container sólo existe para colgarle el color
+                            # al CSS: la key del checkbox tiene que quedar
+                            # ESTABLE (si el signo entrara en su key, cambiar
+                            # de signo le borraría el estado al widget).
+                            with st.container(key=f"ventas_comp_sw_{_variante}"):
+                                st.checkbox(_label, value=True,
+                                            key=f"ventas_comp_ver_{_k}",
+                                            label_visibility="collapsed")
+                        with _c[1]:
+                            st.markdown(
+                                f'<div style="font-size:14px;color:#3f3f46;">'
+                                f'{_label}</div>', unsafe_allow_html=True)
+                        with _c[2]:
+                            st.markdown(
+                                f'<div style="font-size:14px;text-align:right;'
+                                f'color:{GRIS_TEXTO};">{_val}</div>',
+                                unsafe_allow_html=True)
+                        with _c[3]:
+                            st.markdown(
+                                f'<div style="font-size:14px;font-weight:600;'
+                                f'text-align:right;color:{_pc};">{_pt}</div>',
+                                unsafe_allow_html=True)
         _mp = _first_point(evt)
         if _mp is not None:
             _pi = _mp.get("point_index", _mp.get("point_number"))

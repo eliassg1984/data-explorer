@@ -3277,10 +3277,21 @@ salvo `icono`):
 
     **El patrón para que un widget de ABAJO controle una figura de
     ARRIBA:** la figura se arma antes que el panel, así que el valor se lee
-    de `st.session_state` (donde el widget lo dejó en el rerun anterior),
-    con `setdefault` para el primer render. Va **antes** de instanciar el
-    widget: después, Streamlit no deja escribir la clave de un widget ya
-    creado. Ojo con el corolario de "un widget que deja de renderizarse
+    de `st.session_state` (donde el widget lo dejó en el rerun anterior)
+    con `.get(clave, default)`, y el default se declara en el **`value=`
+    del propio widget**.
+
+    **`st.session_state.setdefault()` NO sirve para sembrar el default de
+    un `st.checkbox`** — se intentó primero y falló en silencio: el
+    checkbox se dibujaba DESTILDADO mientras la figura mostraba las tres
+    series (medido: `plot.data` con `visible: true` en las tres y los tres
+    `input.checked === false`). El widget ignora el valor pre-sembrado y
+    usa su propio default. Widget y gráfico terminan diciendo cosas
+    distintas, que es justo el bug que la regla de "un solo dueño del
+    valor" busca evitar. Un solo dueño: el widget (`value=True`), y el
+    resto lee con `.get(..., True)`.
+
+    Ojo con el corolario de "un widget que deja de renderizarse
     pierde su estado" (§ regla del `date_input` de la franja): al
     pasar a Montos los checkboxes dejan de renderizarse y su estado se
     purga, así que volver a Descomposición reinicia todo en visible —
@@ -3309,3 +3320,45 @@ salvo `icono`):
       paso es 1 y no cambia nada.
     Verificado midiendo cajas de texto en el DOM a 1912px en día 14, día 30
     y mes: 0 pares pisados y 0 textos cortados.
+
+93. **El cuadradito de color ES el checkbox — cómo estilar la caja de
+    `st.checkbox` sin depender de clases con hash (2026-08-12).** El panel
+    "Detalle" tenía DOS cosas por fila: un `<span>` pintado a mano (el
+    swatch) y un checkbox al lado. El usuario pidió una sola. La caja
+    visual de `st.checkbox` es el **único `<div>` hijo del `<label>` que NO
+    tiene `data-testid`** (el otro es `stWidgetLabel`) — se ancla por
+    ESTRUCTURA, no por su clase `st-emotion-cache-*`, que lleva hash y
+    cambia entre versiones:
+
+    ```css
+    [data-testid="stCheckbox"] label > div:not([data-testid])
+    ```
+
+    El color entra por una variable (`--sw-color`) que fija el container de
+    cada fila; marcado = relleno, sin marcar = sólo contorno, vía
+    `label:has(input:checked)`. Venta tiene DOS variantes de key
+    (`_pos`/`_neg`) porque su color sigue el signo, como su barra: el CSS
+    es estático, así que la única forma de un color dinámico es que Python
+    elija entre variantes ya escritas. **La key del checkbox NO puede
+    llevar el signo** — si cambia, el widget pierde su estado (regla #9);
+    el signo va en un container aparte que sólo existe para eso.
+
+    **Al medirlo, `getComputedStyle` mintió** (mismo caso que ya está
+    anotado para `letter-spacing`): la caja tiene
+    `transition: background-color .1s`, y leer el fondo justo después de un
+    cambio devuelve el valor VIEJO — un checkbox destildado seguía
+    reportando el color relleno, y hasta un `background-color: magenta
+    !important` inline leía cian. Se mide anulando la transición y forzando
+    reflow antes de leer:
+
+    ```js
+    el.style.setProperty('transition','none','important');
+    void el.offsetWidth;
+    getComputedStyle(el).backgroundColor;   // ahora sí, el valor real
+    ```
+
+    Con eso: marcado → color sólido, sin marcar → `rgba(0,0,0,0)`.
+
+    **Filas juntas:** el aire no estaba en la fila (24px) sino en el **gap
+    de 16px** entre bloques, más que la fila misma. `st.container(gap=None)`
+    lo saca; con la caja de 12px la fila baja a 15px. De 40px por fila a 15.
