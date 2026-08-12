@@ -708,10 +708,16 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                      (f"S/ {t_act[-1]:,.2f}" if t_act[-1] is not None else "—"),
                      d_ticket[-1], PALETA_SERIES[2]),
                 ]
+                # Filas en UN solo st.markdown, envueltas en max-width: cada
+                # `st.markdown` separado es su propio contenedor de ancho
+                # completo, así que el `flex:1` del label empujaba el valor
+                # hasta el borde de la tarjeta (~1500px) en vez de quedar
+                # junto a él, como el legend de referencia (panel angosto).
+                _filas_html = []
                 for _label, _val, _pv, _sw in _filas:
                     _pt = "—" if _pv is None else f"{_pv:+.0f}%"
                     _pc = GRIS_TEXTO if _pv is None else (EXITO if _pv >= 0 else ERROR)
-                    st.markdown(
+                    _filas_html.append(
                         '<div style="display:flex;align-items:center;gap:8px;'
                         'padding:5px 2px;">'
                         f'<span style="width:10px;height:10px;border-radius:2px;'
@@ -721,8 +727,11 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                         f'<span style="font-size:12px;color:{GRIS_TEXTO};">'
                         f'{_val}</span>'
                         f'<span style="font-size:12px;font-weight:600;width:52px;'
-                        f'text-align:right;color:{_pc};">{_pt}</span></div>',
-                        unsafe_allow_html=True)
+                        f'text-align:right;color:{_pc};">{_pt}</span></div>')
+                st.markdown(
+                    '<div style="max-width:280px;">'
+                    + "".join(_filas_html) + '</div>',
+                    unsafe_allow_html=True)
         # La selección de plotly_chart PERSISTE entre reruns: con una key
         # estática el mismo clic se re-procesa en cada rerun y el drill
         # parpadea abriéndose y cerrándose. El foco va en la key (CLAUDE.md).
