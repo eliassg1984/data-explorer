@@ -657,8 +657,9 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="DM Sans, sans-serif", color=GRIS_TEXTO, size=12),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-        showlegend=not es_desc,  # en Descomposición el legend nativo se
-                                 # reemplaza por el panel "Detalle" colapsable
+        showlegend=True,  # nativo: da el clic-para-ocultar/mostrar serie
+                          # gratis. El panel "Detalle" (abajo) complementa
+                          # con el valor absoluto, que el legend no muestra.
         hovermode="x unified",
     )
     fig.update_xaxes(type="category", tickangle=-45, tickfont=dict(size=10),
@@ -685,12 +686,19 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         foco = None
 
     with _card("ventas_comparativo", titulo, titulo_arriba=True):
-        # Panel "Detalle": reemplaza el legend nativo de Plotly en
-        # Descomposición (arriba, showlegend=False) por uno propio que SÍ
-        # puede mostrar el valor absoluto de cada serie, no sólo su nombre y
-        # color — es lo que Plotly no ofrece. st.expander ya trae cerrado
-        # por defecto y recuerda el estado entre reruns sin session_state
-        # propio: no hace falta reinventar el toggle.
+        # La selección de plotly_chart PERSISTE entre reruns: con una key
+        # estática el mismo clic se re-procesa en cada rerun y el drill
+        # parpadea abriéndose y cerrándose. El foco va en la key (CLAUDE.md).
+        evt = st.plotly_chart(
+            fig, use_container_width=True,
+            key=f"ventas_g_comparativo_{vista}_{grano}_{foco if foco is not None else 'none'}",
+            on_select="rerun", selection_mode="points",
+            config={"displaylogo": False, "displayModeBar": False})
+        # Panel "Detalle": el legend nativo (showlegend=True arriba) ya da
+        # el clic-para-ocultar/mostrar serie; esto complementa con el valor
+        # ABSOLUTO de la última barra, que el legend no muestra. Va DESPUÉS
+        # del gráfico a propósito: si fuera antes, abrirlo/cerrarlo movería
+        # el gráfico en vez de sólo lo que viene debajo.
         if es_desc:
             _etq_ultimo = _etiqueta_clave(claves[-1], grano)
             # type="compact": el default de st.expander estira a todo el
@@ -732,14 +740,6 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                     '<div style="max-width:280px;">'
                     + "".join(_filas_html) + '</div>',
                     unsafe_allow_html=True)
-        # La selección de plotly_chart PERSISTE entre reruns: con una key
-        # estática el mismo clic se re-procesa en cada rerun y el drill
-        # parpadea abriéndose y cerrándose. El foco va en la key (CLAUDE.md).
-        evt = st.plotly_chart(
-            fig, use_container_width=True,
-            key=f"ventas_g_comparativo_{vista}_{grano}_{foco if foco is not None else 'none'}",
-            on_select="rerun", selection_mode="points",
-            config={"displaylogo": False, "displayModeBar": False})
         _mp = _first_point(evt)
         if _mp is not None:
             _pi = _mp.get("point_index", _mp.get("point_number"))
