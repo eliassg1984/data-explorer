@@ -188,4 +188,36 @@ CSS = """    /* ================================================================
         font-size: 8px !important;
         white-space: nowrap !important;
     }
+
+    /* =================================================================== */
+    /* Toggle "Venta/Costo/Pax/Pax·Venta" de Ventas › Por día — de cápsula   */
+    /* a tab de texto con subrayado, pedido explícito (referencia: pestañas */
+    /* de un extracto financiero, texto plano + línea de color abajo del    */
+    /* activo, sin fondo relleno). `data-variant="pills"` + `aria-pressed`  */
+    /* son atributos reales de Streamlit (no clases con hash), así que el   */
+    /* selector no se rompe con la próxima versión que cambie los hashes.   */
+    /* =================================================================== */
+    div[class*="st-key-ventas_dia_metricas"] [data-testid="stButtonGroup"] {
+        gap: 20px !important;
+    }
+    div[class*="st-key-ventas_dia_metricas"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"] {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        border-bottom: 2px solid transparent !important;
+        padding: 4px 1px !important;
+        color: var(--text-secondary) !important;
+        font-weight: 400 !important;
+    }
+    div[class*="st-key-ventas_dia_metricas"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"][aria-pressed="true"] {
+        border-bottom-color: var(--accent) !important;
+        color: var(--accent-deep) !important;
+        font-weight: 600 !important;
+    }
+    div[class*="st-key-ventas_dia_metricas"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"]:hover {
+        color: var(--accent) !important;
+    }
 """
