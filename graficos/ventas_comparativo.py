@@ -520,6 +520,23 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     d_ticket = [(_pct(a, b) if (a is not None and b) else None)
                 for a, b in zip(t_act, t_ap)]
 
+    # Qué series se dibujan en Descomposición. Los checkboxes viven en el
+    # panel "Detalle" (abajo, DESPUÉS del gráfico) pero la figura se arma
+    # ACÁ, así que el valor se lee de session_state — que es donde el widget
+    # dejó lo elegido en el rerun anterior. En el primer render la clave
+    # todavía no existe: `setdefault` la crea en True (todas visibles).
+    # Va antes de instanciar el widget a propósito: después, Streamlit no
+    # deja escribir la clave de un widget ya creado.
+    _SERIES_DESC = ("venta", "pax", "ticket")
+    for _s in _SERIES_DESC:
+        st.session_state.setdefault(f"ventas_comp_ver_{_s}", True)
+    _ver = {s: bool(st.session_state[f"ventas_comp_ver_{s}"])
+            for s in _SERIES_DESC}
+    # El legend nativo sólo queda en Montos. En Descomposición el control
+    # son los checkboxes del panel "Detalle", que además muestran el valor
+    # absoluto — tener los dos era decir lo mismo dos veces.
+    _legend_on = not es_desc
+
     fig = go.Figure()
     if es_desc:
         _col_barra = [(EXITO if (v is not None and v >= 0) else ERROR)
@@ -529,7 +546,8 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             marker=dict(color=_col_barra), opacity=0.82,
             text=([None if v is None else f"{v:+.0f}%" for v in d_venta]
                   if mostrar_etq else None),
-            textposition="outside", cliponaxis=False, textfont=dict(size=9),
+            textposition="outside", cliponaxis=False, textfont=dict(size=11),
+            visible=_ver["venta"],
             customdata=[_texto_periodo(k, grano, fin) for (k, _i, fin) in rangos_act],
             hovertemplate="%{customdata}<br>Venta: %{y:+.1f}%<extra></extra>",
         )
@@ -537,6 +555,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             x=etiquetas, y=d_pax, name="%Δ pax", mode="lines+markers",
             line=dict(color=PALETA_SERIES[1], width=2),
             marker=dict(size=7, line=dict(color="white", width=1.5)),
+            visible=_ver["pax"],
             customdata=[[a, b] for a, b in zip(p_act, p_ap)],
             hovertemplate=("Pax: %{y:+.1f}% "
                            "(%{customdata[0]:,.0f} vs %{customdata[1]:,.0f})"
@@ -547,6 +566,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             line=dict(color=PALETA_SERIES[2], width=2, dash="dash"),
             marker=dict(size=7, symbol="square",
                         line=dict(color="white", width=1.5)),
+            visible=_ver["ticket"],
             customdata=[[(0 if a is None else a), (0 if b is None else b)]
                         for a, b in zip(t_act, t_ap)],
             hovertemplate=("Ticket: %{y:+.1f}% "
@@ -559,7 +579,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             x=etiquetas, y=y_ap, name="Año pasado",
             marker=dict(color=LAVANDA_BORDE),
             text=_txt_ap, textposition="outside", cliponaxis=False,
-            textfont=dict(size=9, color=GRIS_TEXTO),
+            textfont=dict(size=11, color=GRIS_TEXTO),
             customdata=[_texto_periodo(k, grano, fin) for (k, _i, fin) in rangos_ap],
             hovertemplate="Año pasado · %{customdata}<br>S/ %{y:,.0f}<extra></extra>",
         )
@@ -567,7 +587,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             x=etiquetas, y=y_act, name="Actual",
             marker=dict(color=ACENTO),
             text=_txt_act, textposition="outside", cliponaxis=False,
-            textfont=dict(size=9, color=ACENTO),
+            textfont=dict(size=11, color=ACENTO),
             customdata=[_texto_periodo(k, grano, fin) for (k, _i, fin) in rangos_act],
             hovertemplate="Actual · %{customdata}<br>S/ %{y:,.0f}<extra></extra>",
         )
@@ -576,19 +596,23 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     # barra no es un mes/semana entero — si no, la lee como cerrada. Offset
     # en unidades de dato (no yshift en píxeles) para apilar en el mismo
     # sistema que el %Var de abajo, arriba de las etiquetas de valor.
+    # Sólo las series VISIBLES entran en la escala: si se destildó una en el
+    # panel "Detalle", dejar su máximo acá reservaría aire para una curva que
+    # ya no se dibuja y las que quedan se verían aplastadas.
+    _vis_desc = [d for d, _on in ((d_venta, _ver["venta"]), (d_pax, _ver["pax"]),
+                                  (d_ticket, _ver["ticket"])) if _on]
     if es_desc:
-        _vals = [v for v in (d_venta + d_pax + d_ticket) if v is not None]
+        _vals = [v for d in _vis_desc for v in d if v is not None]
         _tope = (max(abs(v) for v in _vals) if _vals else 1) or 1
     else:
         _tope = max(max(y_act, default=0), max(y_ap, default=0)) or 1
     for i in parciales:
-        _base = (max([v for v in (d_venta[i], d_pax[i], d_ticket[i])
-                      if v is not None] or [0]) if es_desc
-                 else max(y_act[i], y_ap[i]))
+        _base = (max([d[i] for d in _vis_desc if d[i] is not None] or [0])
+                 if es_desc else max(y_act[i], y_ap[i]))
         fig.add_annotation(
             x=i, y=_base + _tope * (0.24 if mostrar_etq else 0.04),
             showarrow=False, text="en curso",
-            font=dict(size=8, color=GRIS_TEXTO))
+            font=dict(size=10, color=GRIS_TEXTO))
 
     if grano == "Día":
         # Calendario del día: banda por fin de semana / feriado + punteada
@@ -616,7 +640,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 fig.add_annotation(
                     x=i, y=1.0, yref="paper", yanchor="bottom", showarrow=False,
                     text=("feriado" if fer_act else "feriado AP"),
-                    font=dict(size=8, color=ADVERTENCIA_TEXTO))
+                    font=dict(size=10, color=ADVERTENCIA_TEXTO))
         for i, f in enumerate(claves):
             if f.weekday() == 0 and i > 0:
                 fig.add_shape(
@@ -637,7 +661,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             fig.add_annotation(
                 x=i, y=1.0, yref="paper", yanchor="bottom", showarrow=False,
                 text=f"{'+' if _dif > 0 else '−'}{abs(_dif)} fer.",
-                font=dict(size=8, color=ADVERTENCIA_TEXTO))
+                font=dict(size=10, color=ADVERTENCIA_TEXTO))
 
     # El %Var sólo se anota aparte en Montos: en Descomposición la barra YA
     # es el %Δ de venta y lleva su propia etiqueta (`text=` de la traza).
@@ -649,31 +673,45 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             fig.add_annotation(
                 x=i, y=max(a, b) + _tope * 0.14, showarrow=False,
                 text=f"{var:+.0f}%",
-                font=dict(size=9, color=(EXITO if var >= 0 else ERROR)))
+                font=dict(size=11, color=(EXITO if var >= 0 else ERROR)))
 
     fig.update_layout(
         barmode="group", bargap=0.28, bargroupgap=0.08,
-        height=340, margin=dict(l=10, r=10, t=(95 if mostrar_etq else 60), b=10),
+        height=340,
+        # El margen de arriba sólo reserva lugar para el legend cuando el
+        # legend existe (Montos). En Descomposición ese espacio sería aire.
+        margin=dict(l=10, r=10,
+                    t=((95 if mostrar_etq else 60) if _legend_on
+                       else (70 if mostrar_etq else 30)),
+                    b=10),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="DM Sans, sans-serif", color=GRIS_TEXTO, size=12),
-        # El legend es un CONTROL (se clickea para ocultar/mostrar la serie),
-        # así que tiene que leerse como tal: en y=1.02 y gris chico quedaba
-        # en la MISMA franja que las anotaciones "feriado"/"feriado AP"
-        # (y=1.0, yref="paper") y se perdía entre ellas. Sube por encima de
-        # esa línea y lleva fondo + borde propio, como una pastilla.
+        # En Montos el legend es un CONTROL (se clickea para ocultar la
+        # serie), así que se lee como tal: por encima de la franja de las
+        # anotaciones "feriado" (y=1.0, yref="paper"), con fondo y borde.
         legend=dict(
             orientation="h", yanchor="bottom", y=1.12, x=0,
             font=dict(size=13, color=GRIS_TEXTO),
             bgcolor="rgba(255,255,255,0.92)",
             bordercolor=GRIS_BORDE, borderwidth=1,
         ),
-        showlegend=True,  # nativo: da el clic-para-ocultar/mostrar serie
-                          # gratis. El panel "Detalle" (abajo) complementa
-                          # con el valor absoluto, que el legend no muestra.
+        showlegend=_legend_on,
         hovermode="x unified",
     )
-    fig.update_xaxes(type="category", tickangle=-45, tickfont=dict(size=10),
-                     showgrid=False)
+    # Fechas HORIZONTALES (no en diagonal). Dos cosas hacen que entren:
+    #  · en día y semana, el prefijo ("Mié", "S32") baja a su propia línea:
+    #    de lado, "Mié 29/07" mide ~56px y a 14 barras se pisa con la vecina;
+    #    partido mide la mitad. El texto del eje se arma aparte de `etiquetas`
+    #    (que siguen siendo la categoría real) para no meter <br> en el hover.
+    #  · con muchas barras se muestra una cada `_paso` — a lo sumo
+    #    ~MAX_ETIQUETAS etiquetas en el eje.
+    _paso = max(1, -(-len(claves) // MAX_ETIQUETAS))
+    _tickvals = [e for i, e in enumerate(etiquetas) if i % _paso == 0]
+    _ticktext = [(e.replace(" ", "<br>", 1) if grano in ("Día", "Semana") else e)
+                 for e in _tickvals]
+    fig.update_xaxes(type="category", tickangle=0, tickfont=dict(size=12),
+                     showgrid=False, tickmode="array",
+                     tickvals=_tickvals, ticktext=_ticktext)
     if es_desc:
         fig.update_yaxes(ticksuffix="%", tickformat=",.0f",
                          gridcolor=GRIS_BORDE, zeroline=False)
@@ -704,11 +742,14 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             key=f"ventas_g_comparativo_{vista}_{grano}_{foco if foco is not None else 'none'}",
             on_select="rerun", selection_mode="points",
             config={"displaylogo": False, "displayModeBar": False})
-        # Panel "Detalle": el legend nativo (showlegend=True arriba) ya da
-        # el clic-para-ocultar/mostrar serie; esto complementa con el valor
-        # ABSOLUTO de la última barra, que el legend no muestra. Va DESPUÉS
-        # del gráfico a propósito: si fuera antes, abrirlo/cerrarlo movería
-        # el gráfico en vez de sólo lo que viene debajo.
+        if es_desc and not any(_ver.values()):
+            st.caption("Ninguna medida seleccionada: marcá al menos una en "
+                       "«Detalle» para ver el gráfico.")
+        # Panel "Detalle": es el legend de esta vista. Cada fila prende o
+        # apaga su serie (checkbox) y además muestra el valor ABSOLUTO del
+        # último período, que el legend de Plotly no puede mostrar. Va
+        # DESPUÉS del gráfico a propósito: si fuera antes, abrirlo o
+        # cerrarlo movería el gráfico en vez de sólo lo que viene debajo.
         if es_desc:
             _etq_ultimo = _etiqueta_clave(claves[-1], grano)
             # type="compact": el default de st.expander estira a todo el
@@ -718,38 +759,49 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             with st.expander(f"Detalle · {_etq_ultimo}", expanded=False,
                              type="compact"):
                 _filas = [
-                    ("Venta", f"S/ {y_act[-1]:,.0f}", d_venta[-1],
+                    ("venta", "Venta", f"S/ {y_act[-1]:,.0f}", d_venta[-1],
                      EXITO if (d_venta[-1] is not None and d_venta[-1] >= 0)
                      else ERROR),
-                    ("Pax", f"{p_act[-1]:,.0f}", d_pax[-1], PALETA_SERIES[1]),
-                    ("Ticket promedio",
+                    ("pax", "Pax", f"{p_act[-1]:,.0f}", d_pax[-1],
+                     PALETA_SERIES[1]),
+                    ("ticket", "Ticket promedio",
                      (f"S/ {t_act[-1]:,.2f}" if t_act[-1] is not None else "—"),
                      d_ticket[-1], PALETA_SERIES[2]),
                 ]
-                # Filas en UN solo st.markdown, envueltas en max-width: cada
-                # `st.markdown` separado es su propio contenedor de ancho
-                # completo, así que el `flex:1` del label empujaba el valor
-                # hasta el borde de la tarjeta (~1500px) en vez de quedar
-                # junto a él, como el legend de referencia (panel angosto).
-                _filas_html = []
-                for _label, _val, _pv, _sw in _filas:
+                # Una fila = [checkbox | color+nombre | valor | %Δ]. El
+                # `width` en píxeles es lo que la mantiene angosta: por
+                # defecto las columnas reparten TODO el ancho del card y la
+                # fila se estiraba hasta el borde (~1500px). El checkbox es
+                # el que prende/apaga la serie: su key es la misma que se
+                # lee arriba para construir la figura.
+                for _k, _label, _val, _pv, _sw in _filas:
                     _pt = "—" if _pv is None else f"{_pv:+.0f}%"
                     _pc = GRIS_TEXTO if _pv is None else (EXITO if _pv >= 0 else ERROR)
-                    _filas_html.append(
-                        '<div style="display:flex;align-items:center;gap:8px;'
-                        'padding:5px 2px;">'
-                        f'<span style="width:10px;height:10px;border-radius:2px;'
-                        f'background:{_sw};flex-shrink:0;"></span>'
-                        f'<span style="font-size:12px;color:#3f3f46;flex:1;">'
-                        f'{_label}</span>'
-                        f'<span style="font-size:12px;color:{GRIS_TEXTO};">'
-                        f'{_val}</span>'
-                        f'<span style="font-size:12px;font-weight:600;width:52px;'
-                        f'text-align:right;color:{_pc};">{_pt}</span></div>')
-                st.markdown(
-                    '<div style="max-width:280px;">'
-                    + "".join(_filas_html) + '</div>',
-                    unsafe_allow_html=True)
+                    _c = st.columns([0.8, 3, 2, 1.4], width=400,
+                                    vertical_alignment="center")
+                    with _c[0]:
+                        st.checkbox(_label, key=f"ventas_comp_ver_{_k}",
+                                    label_visibility="collapsed")
+                    with _c[1]:
+                        st.markdown(
+                            '<div style="display:flex;align-items:center;'
+                            'gap:8px;">'
+                            f'<span style="width:11px;height:11px;'
+                            f'border-radius:2px;background:{_sw};'
+                            f'flex-shrink:0;"></span>'
+                            f'<span style="font-size:14px;color:#3f3f46;">'
+                            f'{_label}</span></div>',
+                            unsafe_allow_html=True)
+                    with _c[2]:
+                        st.markdown(
+                            f'<div style="font-size:14px;text-align:right;'
+                            f'color:{GRIS_TEXTO};">{_val}</div>',
+                            unsafe_allow_html=True)
+                    with _c[3]:
+                        st.markdown(
+                            f'<div style="font-size:14px;font-weight:600;'
+                            f'text-align:right;color:{_pc};">{_pt}</div>',
+                            unsafe_allow_html=True)
         _mp = _first_point(evt)
         if _mp is not None:
             _pi = _mp.get("point_index", _mp.get("point_number"))

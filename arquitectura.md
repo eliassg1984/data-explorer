@@ -3251,3 +3251,61 @@ salvo `icono`):
     misma convención que `conflictos`/`matcheantes` (no en cada mousemove).
     Verificado sobre el mismo toggle del bug: marca
     `ajuste_graf_card_izq_*` y `ajuste_graf_card_*` como familias.
+
+91. **Un legend de Plotly que "no se ve" casi nunca está apagado: está
+    compitiendo con otra cosa en la misma franja
+    (`graficos/ventas_comparativo.py`, 2026-08-12).** El usuario reportó
+    "no veo la funcionalidad para ocultar/mostrar". Eran DOS causas
+    distintas encadenadas, y confundirlas costó tres idas y vueltas:
+    - **Primero sí estaba apagado**: `showlegend=not es_desc` dejaba la
+      vista Descomposición sin legend, con el comentario "el panel Detalle
+      lo reemplaza". Pero ese panel era **texto estático** — nunca tuvo el
+      clic-para-ocultar. O sea que la capacidad no existía, no es que
+      estuviera escondida. Moraleja: si un comentario dice "X reemplaza a
+      Y", verificar que X hace lo que Y hacía, no sólo que ocupa su lugar.
+    - **Después ya se dibujaba pero era ilegible**: en `y=1.02`, 12px y
+      gris, quedaba en la MISMA línea horizontal que las anotaciones
+      `feriado`/`feriado AP` (`y=1.0, yref="paper"`) y se leía como una
+      anotación más del gráfico. Se subió a `y=1.12` con fondo + borde.
+
+    **Cómo terminó (pedido del usuario): en Descomposición NO hay legend.**
+    El control son los checkboxes del panel "Detalle", que además muestran
+    el valor absoluto — tener legend Y panel era decir lo mismo dos veces.
+    El legend nativo queda sólo en Montos, y el margen superior es
+    condicional (`_legend_on`): reservar 95px para un legend que no existe
+    es aire muerto.
+
+    **El patrón para que un widget de ABAJO controle una figura de
+    ARRIBA:** la figura se arma antes que el panel, así que el valor se lee
+    de `st.session_state` (donde el widget lo dejó en el rerun anterior),
+    con `setdefault` para el primer render. Va **antes** de instanciar el
+    widget: después, Streamlit no deja escribir la clave de un widget ya
+    creado. Ojo con el corolario de "un widget que deja de renderizarse
+    pierde su estado" (§ regla del `date_input` de la franja): al
+    pasar a Montos los checkboxes dejan de renderizarse y su estado se
+    purga, así que volver a Descomposición reinicia todo en visible —
+    aceptable acá, pero es el comportamiento, no un bug.
+
+    **Al ocultar una serie hay que sacarla también de la ESCALA.** `_tope`
+    (que posiciona "en curso" y el %Var) se calcula sólo sobre las series
+    visibles: dejar el máximo de una curva oculta reserva aire para algo
+    que no se dibuja y aplasta lo que queda.
+
+92. **Fechas horizontales en un eje categórico: el arreglo no es
+    `tickangle=0`, es partir la etiqueta (mismo módulo, 2026-08-12).**
+    Pedido: "el texto de la fecha no debe estar en diagonal sino
+    horizontal". Poner `tickangle=0` solo **se pisa**: medido en el
+    navegador, "Mié 29/07" mide ~56px y a 14 barras hubo 5 pares
+    solapados. Dos cosas lo resuelven:
+    - En día y semana el prefijo baja a su propia línea (`Mié<br>29/07`,
+      `S32<br>05/08`): mismo texto, la mitad de ancho. Se arma con
+      `tickmode="array"` + `ticktext` y **no** tocando `etiquetas`, que
+      siguen siendo la categoría real — meter `<br>` en la categoría lo
+      filtraría al header del hover (`hovermode="x unified"`) y a
+      `_etiqueta_clave`, que también nombra el panel "Detalle" y está
+      clavada en `test_graficos.py`.
+    - Con muchas barras se muestra una cada `_paso = ceil(n/MAX_ETIQUETAS)`.
+      A 30 días quedan 10 etiquetas, cero solapamientos; a 14 o menos el
+      paso es 1 y no cambia nada.
+    Verificado midiendo cajas de texto en el DOM a 1912px en día 14, día 30
+    y mes: 0 pares pisados y 0 textos cortados.
