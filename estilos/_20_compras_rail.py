@@ -21,8 +21,12 @@ CSS = """    /* ================================================================
            tienen que dar el mismo top o la tarjeta y el rail arrancan en
            líneas distintas — pasó con la barra de 46px, la tarjeta quedaba
            en y=57 contra el rail en y=60 y se notaba en la esquina
-           superior derecha. Si se cambia uno, medir el otro. */
-        top: 66px !important;
+           superior derecha. Si se cambia uno, medir el otro.
+           2026-08-13: 66px -> 74px, a pedido (seguía viéndose pegado a la
+           franja superior). Los 3 números acoplados (este top, el
+           max-height de abajo, y los margin-top negativos de las tarjetas
+           más abajo en este archivo) se corrieron los mismos 8px juntos. */
+        top: 74px !important;
         right: 15px !important;            /* despega del scrollbar del navegador */
         /* 2026-08-13: de "bottom:0 + height:calc(100vh-66px)" (fuerza el
            rail a ocupar TODO el alto disponible, aunque tenga 3 items) a
@@ -34,7 +38,7 @@ CSS = """    /* ================================================================
            tantas vistas que no entran (activa el overflow-y:auto de abajo
            en vez de desbordar). */
         height: auto !important;
-        max-height: calc(100vh - 66px) !important;
+        max-height: calc(100vh - 74px) !important;
         z-index: 900 !important;
         width: 84px !important;
         overflow-x: hidden !important;
@@ -88,12 +92,15 @@ CSS = """    /* ================================================================
        y=60) — se veía en la esquina superior derecha. Ahora las dos
        arrancan en y=66: ~20px de aire bajo la barra, que es lo que había
        antes de subirla, y tarjeta y rail en la misma línea. Los tres
-       números (top del rail, estos dos margin) van juntos. */
+       números (top del rail, estos dos margin) van juntos.
+       2026-08-13: -51 -> -43 y -56 -> -48 (8px menos de jalón cada uno),
+       en sync con el top:66->74 del rail de arriba — las dos siguen
+       arrancando en la misma línea, ahora 8px más abajo. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap {
-        margin-top: -51px !important;
+        margin-top: -43px !important;
     }
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_"] {
-        margin-top: -56px !important;
+        margin-top: -48px !important;
     }
     /* La tarjeta der (panel lateral, p.ej. Mayor cantidad/Precio más alto de
        Inventario o los mini-tops de Compras) es hermana de la izq en la
@@ -103,7 +110,7 @@ CSS = """    /* ================================================================
        el desnivel saltó a la vista). Reseteada a 0 en el media query de
        abajo, igual que la izq. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_der_"] {
-        margin-top: -56px !important;
+        margin-top: -48px !important;
     }
     /* Excepción: Salidas mete una fila de KPIs (st.metric x3) EN FLUJO justo
        arriba de esta tarjeta — a diferencia de Ajuste/Compras/Ventas/
