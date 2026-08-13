@@ -41,104 +41,16 @@ from datetime import datetime, timezone
 # dict, igual que columnas_movil.
 
 REPORTES = {
-    "Ajuste de Inventario": {
-        "label_corto": "Ajuste",
-        "archivo": "ajusteinventario.parquet",
-        "icono": "sliders",
-        "filtros_cat": [],  # Sin filtros de Área/Familia/Subfamilia en el popover
-        "agrupar": [],      # Sin opción de "Agrupar por" en el popover
-        "columnas_iniciales": [
-            "Producto", "Precio Promedio", "Stock al Cierre",
-            "Stock Declarado", "Ajuste", "Ajuste Valorizado",
-        ],
-        "derivar_periodo_pivote": True,
-        # El calendario de la franja ofrece la pestaña "Cortes" (filtrar por
-        # la sesión de conteo exacta en vez de por intervalo, ver cortes.py).
-        # Solo acá: en Ventas o Compras un "corte" no significa nada — las
-        # fechas son continuas y las rachas serían ruido. Sin este flag el
-        # panel de fecha queda idéntico a como estaba.
-        "cortes": True,
-        "graficos": [
-            {"tipo": "line",
-             "x": ["FECHA APERTURA INVENTARIO", "MES"],
-             "y": ["VALORIZADO TOTAL"],
-             "color": ["FAMILIA"],
-             "titulo": "Evolución del valorizado total por familia"},
-            {"tipo": "line",
-             "x": ["FECHA APERTURA INVENTARIO", "MES"],
-             "y": ["AJUSTE VALORIZADO"],
-             "color": ["FAMILIA"],
-             "titulo": "Evolución del ajuste valorizado por familia"},
-            {"tipo": "bar",
-             "x": ["FAMILIA"],
-             "y": ["AJUSTE VALORIZADO"],
-             "color": ["AREA"],
-             "titulo": "Ajuste valorizado por familia y área",
-             "tickangle": -45},
-        ],
-    },
+    # Orden del dict == orden del rail de navegación (navegacion.py::
+    # inject_navegacion itera `reportes.items()` tal cual). Reordenar acá
+    # reordena los iconos de arriba a abajo.
     "Compras": {
         "label_corto": "Compras",
         "archivo": "compras.parquet",
         "icono": "cart",
     },
-    "Inventario Valorizado": {
-        "label_corto": "Inventario",
-        "archivo": "inventariovalorizado.parquet",
-        "icono": "boxes",
-        "columnas": [
-            "Nombre Familia", "Nombre Subfamilia", "Nombre Producto",
-            "Unidad Kardex", "Codigo Producto", "Nombre Area", "Codigo Area", "Stock al Dia", "Precio Promedio", "Valorizado total"
-        ],
-        "filtros_cat": ["Nombre Area", "Nombre Familia"],
-        "buscador": "Nombre Producto",
-        "fecha": None,
-        "agrupar": ["Nombre Area", "Nombre Familia", "Nombre Subfamilia"],
-        "columnas_iniciales": [
-            "Nombre Producto", "Stock al Dia", "Nombre Area", "Valorizado total",
-        ],
-        "columnas_movil": [
-            "Nombre Producto", "Stock al dia", "Precio Promedio",
-            "Valorizado total", "Nombre Area",
-        ],
-        "columnas_fijas_movil": 2,
-    },
-    # Receta Base y Receta Venta comparten UN ítem de nav ("Recetas", ver
-    # `grupo_nav` en navegacion.py::inject_navegacion) — dos entradas reales
-    # de REPORTES por dentro (cada una con su propio parquet/cfg, sin tocar
-    # el resto de app.py) pero un solo ícono para el usuario. El chip
-    # Base/Venta que separa las dos vive DENTRO de cada dashboard
-    # (`_chip_fuente` en graficos/recetas_comun.py) y navega entre estas dos
-    # claves — nunca las mezcla en un único df, porque no comparten esquema
-    # ni se cruzan entre sí (0% overlap COD RB / COD INS). Ver
-    # arquitectura.md § Unificación Recetas.
-    "Receta Base": {
-        "fecha": None,  # catálogo (foto completa): sin filtro de fecha
-        "label_corto": "R. Base",
-        "grupo_nav": "Recetas",
-        "archivo": "recetabase.parquet",
-        "icono": "receta",
-    },
-    "Receta Venta": {
-        "fecha": None,  # catálogo (foto completa): sin filtro de fecha
-        "label_corto": "R. Venta",
-        "grupo_nav": "Recetas",
-        "archivo": "recetaventa.parquet",
-        "icono": "receta",
-    },
-    "Ventas": {
-        "label_corto": "Ventas",
-        "archivo": "ventas.parquet",
-        "icono": "cash-coin",
-        # Carga filtrada por rango de fechas DENTRO de DuckDB (no baja todo
-        # el parquet). Al primer acceso: 01-del-mes-actual → hoy. El rango
-        # aplicado vive en st.session_state[f"rango_carga_{reporte}"] y el
-        # date_input del popover lo controla (ver app.py).
-        "carga_por_rango": "FEC REG DOCUMENTO",
-    },
     # Requerimientos y Salidas comparten UN ítem de nav ("Movimientos", ver
-    # `grupo_nav` en navegacion.py::inject_navegacion) — mismo mecanismo que
-    # Recetas (grupo `"Recetas"` arriba), pero acá el par SÍ describe un
+    # `grupo_nav` en navegacion.py::inject_navegacion) — el par describe un
     # flujo real: Requerimiento es la salida de stock de Almacén Central
     # HACIA un área de producción; Salidas es la BAJA que esa misma área
     # registra después (consumo/merma/evento — ver `Tipo Descargo`). No hay
@@ -191,6 +103,96 @@ REPORTES = {
             "Nombre Producto", "Cantidad", "Valor Item", "Sub Almacen",
         ],
         "columnas_fijas_movil": 2,
+    },
+    # Receta Base y Receta Venta comparten UN ítem de nav ("Recetas", ver
+    # `grupo_nav` en navegacion.py::inject_navegacion) — dos entradas reales
+    # de REPORTES por dentro (cada una con su propio parquet/cfg, sin tocar
+    # el resto de app.py) pero un solo ícono para el usuario. El chip
+    # Base/Venta que separa las dos vive DENTRO de cada dashboard
+    # (`_chip_fuente` en graficos/recetas_comun.py) y navega entre estas dos
+    # claves — nunca las mezcla en un único df, porque no comparten esquema
+    # ni se cruzan entre sí (0% overlap COD RB / COD INS). Ver
+    # arquitectura.md § Unificación Recetas.
+    "Receta Base": {
+        "fecha": None,  # catálogo (foto completa): sin filtro de fecha
+        "label_corto": "R. Base",
+        "grupo_nav": "Recetas",
+        "archivo": "recetabase.parquet",
+        "icono": "receta",
+    },
+    "Receta Venta": {
+        "fecha": None,  # catálogo (foto completa): sin filtro de fecha
+        "label_corto": "R. Venta",
+        "grupo_nav": "Recetas",
+        "archivo": "recetaventa.parquet",
+        "icono": "receta",
+    },
+    "Ajuste de Inventario": {
+        "label_corto": "Ajuste",
+        "archivo": "ajusteinventario.parquet",
+        "icono": "sliders",
+        "filtros_cat": [],  # Sin filtros de Área/Familia/Subfamilia en el popover
+        "agrupar": [],      # Sin opción de "Agrupar por" en el popover
+        "columnas_iniciales": [
+            "Producto", "Precio Promedio", "Stock al Cierre",
+            "Stock Declarado", "Ajuste", "Ajuste Valorizado",
+        ],
+        "derivar_periodo_pivote": True,
+        # El calendario de la franja ofrece la pestaña "Cortes" (filtrar por
+        # la sesión de conteo exacta en vez de por intervalo, ver cortes.py).
+        # Solo acá: en Ventas o Compras un "corte" no significa nada — las
+        # fechas son continuas y las rachas serían ruido. Sin este flag el
+        # panel de fecha queda idéntico a como estaba.
+        "cortes": True,
+        "graficos": [
+            {"tipo": "line",
+             "x": ["FECHA APERTURA INVENTARIO", "MES"],
+             "y": ["VALORIZADO TOTAL"],
+             "color": ["FAMILIA"],
+             "titulo": "Evolución del valorizado total por familia"},
+            {"tipo": "line",
+             "x": ["FECHA APERTURA INVENTARIO", "MES"],
+             "y": ["AJUSTE VALORIZADO"],
+             "color": ["FAMILIA"],
+             "titulo": "Evolución del ajuste valorizado por familia"},
+            {"tipo": "bar",
+             "x": ["FAMILIA"],
+             "y": ["AJUSTE VALORIZADO"],
+             "color": ["AREA"],
+             "titulo": "Ajuste valorizado por familia y área",
+             "tickangle": -45},
+        ],
+    },
+    "Inventario Valorizado": {
+        "label_corto": "Inventario",
+        "archivo": "inventariovalorizado.parquet",
+        "icono": "boxes",
+        "columnas": [
+            "Nombre Familia", "Nombre Subfamilia", "Nombre Producto",
+            "Unidad Kardex", "Codigo Producto", "Nombre Area", "Codigo Area", "Stock al Dia", "Precio Promedio", "Valorizado total"
+        ],
+        "filtros_cat": ["Nombre Area", "Nombre Familia"],
+        "buscador": "Nombre Producto",
+        "fecha": None,
+        "agrupar": ["Nombre Area", "Nombre Familia", "Nombre Subfamilia"],
+        "columnas_iniciales": [
+            "Nombre Producto", "Stock al Dia", "Nombre Area", "Valorizado total",
+        ],
+        "columnas_movil": [
+            "Nombre Producto", "Stock al dia", "Precio Promedio",
+            "Valorizado total", "Nombre Area",
+        ],
+        "columnas_fijas_movil": 2,
+    },
+    "Ventas": {
+        "label_corto": "Ventas",
+        "archivo": "ventas.parquet",
+        "icono": "cash-coin",
+        # Carga filtrada por rango de fechas DENTRO de DuckDB (no baja todo
+        # el parquet). Al primer acceso: 01-del-mes-actual → hoy. El rango
+        # aplicado vive en st.session_state[f"rango_carga_{reporte}"] y el
+        # date_input del popover lo controla (ver app.py).
+        "carga_por_rango": "FEC REG DOCUMENTO",
     },
     "Inspector": {
         "label_corto": "Inspector",
