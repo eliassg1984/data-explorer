@@ -409,9 +409,13 @@ fecha_fin_default = _hoy                  # hoy
 
 es_ajuste = (reporte == "Ajuste de Inventario")
 
-# Vista por defecto al abrir un reporte: "Gráficos" para todos, salvo los
-# reportes de consulta (recetas), que arrancan en "Tabla".
-REPORTES_INICIO_TABLA = ("Receta Base", "Receta Venta")
+# Vista por defecto al abrir un reporte SIN dashboard propio: "Gráficos"
+# cae al explorador genérico, "Tabla" arma la AgGrid directo (ver el rail
+# de 2 items más abajo, en la rama "SIN DASHBOARD"). Vacío desde que Receta
+# Base sumó su propio dashboard (2026-08-13): con eso, TODOS los reportes
+# no-herramienta tienen dashboard y esta rama queda sin reportes activos —
+# se deja el mecanismo listo para el próximo reporte que no tenga uno.
+REPORTES_INICIO_TABLA = ()
 _vista_default = "Tabla" if reporte in REPORTES_INICIO_TABLA else "Gráficos"
 
 
@@ -1053,6 +1057,7 @@ def _cb_chips_en_navegador(d):
 #  su propio módulo y nunca invoca el callback.)
 _TABLA_CB = {
     "Ajuste de Inventario": _cb_chips_en_navegador,
+    "Receta Base":          _cb_chips_en_python,
     "Receta Venta":         _cb_chips_en_python,
 }
 
@@ -1080,7 +1085,9 @@ def _render_contenido():
             tabla_cb=_TABLA_CB.get(reporte, _cb_directo),
         )
 
-    # ── SIN DASHBOARD (Receta Base, …) — explorador genérico ────────────────
+    # ── SIN DASHBOARD — explorador genérico ─────────────────────────────────
+    # Nadie cae acá hoy (Receta Base sumó dashboard propio 2026-08-13): rama
+    # lista para el próximo reporte que no tenga uno, ver REPORTES_INICIO_TABLA.
     else:
         # Rail de 2 items: "Gráficos" cae al explorador genérico, "Tabla"
         # arma la AgGrid. El orden respeta REPORTES_INICIO_TABLA.

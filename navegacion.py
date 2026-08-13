@@ -33,6 +33,7 @@ _MATERIAL = {
     "boxes": "inventory_2",
     "clipboard-data": "assignment",
     "receipt": "receipt_long",
+    "receta": "restaurant_menu",
     "cash-coin": "payments",
     "box-arrow-up": "output",
     "card-checklist": "checklist",
@@ -416,8 +417,41 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
         if not (nombre == "Inspector" and not mostrar_inspector)
     }
 
+    # Si el reporte activo pertenece a un grupo (p.ej. Receta Base/Venta bajo
+    # "Recetas"), recordar CUÁL de sus miembros fue el último visitado: es a
+    # dónde navega el botón agrupado la próxima vez que se lo pulse desde
+    # otro reporte. Sin esto, el botón siempre volvería al primer miembro del
+    # dict, perdiendo en qué sub-reporte estaba el usuario.
+    _grupo_activo = visibles.get(reporte_activo, {}).get("grupo_nav")
+    if _grupo_activo:
+        st.session_state[f"_ultimo_{_grupo_activo}"] = reporte_activo
+
+    _grupos_dibujados = set()
     with st.container(key="nav_rail"):
         for nombre, info in visibles.items():
+            grupo = info.get("grupo_nav")
+            if grupo:
+                # Un solo botón por grupo — las demás entradas del grupo se
+                # saltan (ya comparten ícono/etiqueta, no tiene sentido un
+                # botón por cada una). Navega al último miembro visitado, o
+                # al primero del dict la primera vez.
+                if grupo in _grupos_dibujados:
+                    continue
+                _grupos_dibujados.add(grupo)
+                miembros = [n for n, i in visibles.items() if i.get("grupo_nav") == grupo]
+                destino = st.session_state.get(f"_ultimo_{grupo}", miembros[0])
+                if destino not in miembros:
+                    destino = miembros[0]
+                mat = _MATERIAL.get(info.get("icono") or "question-circle", ICONO_DEFECTO)
+                st.button(
+                    f":material/{mat}: {grupo}",
+                    key=f"navbtn_{_slug(grupo)}",
+                    help=grupo,
+                    type="primary" if reporte_activo in miembros else "secondary",
+                    on_click=_on_nav_click,
+                    args=(destino,),
+                )
+                continue
             mat = _MATERIAL.get(info.get("icono") or "question-circle", ICONO_DEFECTO)
             # Etiqueta corta visible bajo el icono (el CSS del rail la apila
             # en columna). Respaldo: primera palabra del nombre, recortada.

@@ -103,17 +103,28 @@ REPORTES = {
         ],
         "columnas_fijas_movil": 2,
     },
+    # Receta Base y Receta Venta comparten UN ítem de nav ("Recetas", ver
+    # `grupo_nav` en navegacion.py::inject_navegacion) — dos entradas reales
+    # de REPORTES por dentro (cada una con su propio parquet/cfg, sin tocar
+    # el resto de app.py) pero un solo ícono para el usuario. El chip
+    # Base/Venta que separa las dos vive DENTRO de cada dashboard
+    # (`_chip_fuente` en graficos/recetas_comun.py) y navega entre estas dos
+    # claves — nunca las mezcla en un único df, porque no comparten esquema
+    # ni se cruzan entre sí (0% overlap COD RB / COD INS). Ver
+    # arquitectura.md § Unificación Recetas.
     "Receta Base": {
         "fecha": None,  # catálogo (foto completa): sin filtro de fecha
         "label_corto": "R. Base",
+        "grupo_nav": "Recetas",
         "archivo": "recetabase.parquet",
-        "icono": "clipboard-data",
+        "icono": "receta",
     },
     "Receta Venta": {
         "fecha": None,  # catálogo (foto completa): sin filtro de fecha
         "label_corto": "R. Venta",
+        "grupo_nav": "Recetas",
         "archivo": "recetaventa.parquet",
-        "icono": "receipt",
+        "icono": "receta",
     },
     "Ventas": {
         "label_corto": "Ventas",
@@ -490,7 +501,67 @@ def _datos_demo(archivo, filas=60):
             _punit * rng.uniform(0.8, 1.2, len(df))).round(2)
         return df
 
-    # Reportes genéricos (Requerimientos, Receta Base/Venta, etc.)
+    if archivo == "recetaventa.parquet":
+        # Nombres EXACTOS del parquet real (confirmado contra R2 2026-08-13,
+        # ver graficos/recetas_comun.py). Hasta acá este archivo caía al
+        # bloque genérico de más abajo, sin "Nomb Plato"/"Item Rv": el
+        # dashboard mostraba "columnas no reconocidas" y no se podía
+        # verificar en local — ver memoria de proyecto
+        # `esquema-real-compras-recetaventa`. El grano es el real: una fila
+        # por ítem/insumo dentro de un plato.
+        _n_platos = 45
+        _platos = [f"Plato demo {i:03d}" for i in range(_n_platos)]
+        _insumos_pool = [f"Insumo demo {i:03d}" for i in range(35)]
+        filas = []
+        for _i, _plato in enumerate(_platos):
+            _n_ins = int(rng.integers(3, 9))
+            _ins_plato = rng.choice(_insumos_pool, _n_ins, replace=False)
+            for _ins in _ins_plato:
+                _cant = round(float(rng.uniform(0.05, 3.0)), 3)
+                _costo_unit = round(float(rng.uniform(0.5, 25.0)), 4)
+                filas.append({
+                    "COD PLATO": f"PL{_i:04d}",
+                    "NOMB PLATO": _plato,
+                    # Formato REAL confirmado: "ACTIV"/"INACTIV" (distinto
+                    # al de recetabase, ver _activo() en recetas_comun.py).
+                    "ITEM VENTA ACTIVO": "ACTIV" if rng.random() < 0.75 else "INACTIV",
+                    "COD INS": f"IN{_insumos_pool.index(_ins):04d}",
+                    "ITEM RV": _ins,
+                    "INS ACTIVO": "ACTIV" if rng.random() < 0.95 else "INACTIV",
+                    "CANTIDAD": _cant,
+                    "TOTAL": round(_cant * _costo_unit, 2),
+                })
+        return pd.DataFrame(filas)
+
+    if archivo == "recetabase.parquet":
+        # Nombres EXACTOS del parquet real (confirmado contra R2 2026-08-13).
+        # Formato de "activo" PROPIO y DISTINTO al de recetaventa aunque la
+        # columna INS ACTIVO se llame igual en los dos parquets — el demo lo
+        # reproduce a propósito: si no, el bug de formato (arreglado en
+        # _activo(), recetas_comun.py) nunca se habría visto en local.
+        _n_rb = 60
+        _recetas = [f"Receta base demo {i:03d}" for i in range(_n_rb)]
+        _insumos_pool_rb = [f"Insumo demo {i:03d}" for i in range(35)]
+        filas = []
+        for _i, _rb in enumerate(_recetas):
+            _n_ins = int(rng.integers(3, 9))
+            _ins_rb = rng.choice(_insumos_pool_rb, _n_ins, replace=False)
+            for _ins in _ins_rb:
+                _cant = round(float(rng.uniform(0.05, 3.0)), 3)
+                _costo_unit = round(float(rng.uniform(0.5, 25.0)), 4)
+                filas.append({
+                    "COD RB": f"RB{_i:04d}",
+                    "RB NOMBRE": _rb,
+                    "RB ACT": "RB.ACTIV" if rng.random() < 0.7 else "RB.INACT",
+                    "COD INS RB": f"IN{_insumos_pool_rb.index(_ins):04d}",
+                    "INSUMO": _ins,
+                    "INS ACTIVO": "INS.ACT" if rng.random() < 0.95 else "INS.INAC",
+                    "CANT": _cant,
+                    "CST SUBT INS": round(_cant * _costo_unit, 2),
+                })
+        return pd.DataFrame(filas)
+
+    # Reportes genéricos (Requerimientos, etc.)
     cant = rng.integers(1, 200, n)
     precio = rng.uniform(1, 80, n).round(2)
     df = pd.DataFrame({

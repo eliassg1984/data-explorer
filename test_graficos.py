@@ -63,6 +63,17 @@ def _df_minimo():
     })
 
 
+def _df_recetas():
+    """12 filas emulando un BOM (contenedor -> ítems), forma común a
+    Receta Base y Receta Venta — suficiente para ejercitar los 5
+    constructores compartidos de graficos/recetas_comun.py."""
+    return pd.DataFrame({
+        "CONTENEDOR": ["A", "A", "A", "B", "B", "C", "C", "C", "C", "D", "D", "D"],
+        "ITEM":       ["x1", "x2", "x3", "x1", "x4", "x2", "x3", "x4", "x5", "x1", "x2", "x3"],
+        "VALOR":      [10.0, 5.0, 2.5, 8.0, 3.0, 4.0, 6.0, 1.0, 2.0, 9.0, 3.5, 1.5],
+    })
+
+
 def _pruebas_puras():
     """Asserts de VALOR sobre las funciones puras (transforman datos, sin
     Streamlit). Son las que un refactor de mover-código puede romper en
@@ -85,6 +96,20 @@ def _pruebas_puras():
     # ahí. `graficos.X` sigue funcionando para lo que se re-exporta.
     b = graficos.base
     from graficos import ventas as _v, compras as _c
+    from graficos import recetas_comun as _rc
+
+    # _activo — normaliza los TRES formatos reales de flag activo/inactivo
+    # (recetaventa: "ACTIV"/"INACTIV"/""; recetabase.RB ACT: "RB.ACTIV"/
+    # "RB.INACT"; recetabase.INS ACTIVO: "INS.ACT"/"INS.INAC" — misma
+    # columna que en recetaventa, formato distinto). Confirmado contra R2
+    # real 2026-08-13, ver docstring de _activo() en recetas_comun.py.
+    _serie_activo = pd.Series([
+        "ACTIV", "INACTIV", "", "RB.ACTIV", "RB.INACT",
+        "INS.ACT", "INS.INAC", None,
+    ])
+    check("_activo reconoce los 3 formatos reales",
+          _rc._activo(_serie_activo).tolist(),
+          [True, False, False, True, False, True, False, False])
 
     # _slug — id seguro para keys/CSS
     check("_slug símbolos", b._slug("Cascada · Precio"), "cascada_precio")
@@ -660,6 +685,38 @@ def main():
             (df, "FAMILIA", "AREA", "AJUSTE VALORIZADO", "NOMBRE PRODUCTO")),
         ("distribucion (rama else: histograma)", _aj._graf_distribucion_ajuste,
             (df_min, None, None, "AJUSTE VALORIZADO", None)),
+    ]
+
+    # ── Constructores compartidos de Receta Base / Receta Venta ─────────
+    # graficos/recetas_comun.py: una sola copia de cada gráfico para los
+    # dos dashboards (ver arquitectura.md § Unificación Recetas). Kwargs
+    # solo-nombrados → se envuelven en lambdas de 0 args para reusar el
+    # mismo bucle `fn(*args)` de arriba.
+    from graficos import recetas_comun as _rc
+    df_rec = _df_recetas()
+    links_panorama = pd.DataFrame({
+        "producto_n":   ["Prod 1", "Prod 1", "Otros insumos", "Prod 2"],
+        "contenedor_n": ["A", "B", "A", "Otros"],
+        "valor":        [100.0, 40.0, 15.0, 60.0],
+    })
+    pruebas += [
+        ("recetas_comun · sankey contenedor", lambda: _rc._sankey_contenedor(
+            df_rec, "CONTENEDOR", "ITEM", "VALOR", "A", True,
+            card_key="test_sankey"), ()),
+        ("recetas_comun · composicion contenedor", lambda: _rc._composicion_contenedor(
+            df_rec, "CONTENEDOR", "ITEM", "VALOR", "C", True,
+            card_key="test_dona"), ()),
+        ("recetas_comun · ranking contenedores", lambda: _rc._ranking_contenedores(
+            df_rec, "CONTENEDOR", "VALOR", True,
+            key_topn="test_topn", card_key="test_ranking",
+            titulo_card="Ranking de prueba"), ()),
+        ("recetas_comun · items clave", lambda: _rc._items_clave(
+            df_rec, "CONTENEDOR", "ITEM", "VALOR", True,
+            card_key="test_items", titulo_card="Ítems de prueba",
+            etiqueta_item="Ítem", etiqueta_contenedor_plural="contenedores",
+            expander_titulo="Tabla de prueba"), ()),
+        ("recetas_comun · fig panorama sankey", lambda: _rc._fig_panorama_sankey(
+            links_panorama, True), ()),
     ]
 
     for nombre, fn, args in pruebas:
