@@ -24,8 +24,17 @@ CSS = """    /* ================================================================
            superior derecha. Si se cambia uno, medir el otro. */
         top: 66px !important;
         right: 15px !important;            /* despega del scrollbar del navegador */
-        bottom: 0 !important;
-        height: calc(100vh - 66px) !important;   /* = 100vh - el top de arriba */
+        /* 2026-08-13: de "bottom:0 + height:calc(100vh-66px)" (fuerza el
+           rail a ocupar TODO el alto disponible, aunque tenga 3 items) a
+           altura de CONTENIDO — mismo pedido y mismo fix que ya se le hizo
+           al rail izquierdo (navegacion.py::nav_rail, ver arquitectura.md
+           regla #99 y los commits de esta misma fecha): "el rail debe
+           reducirse, no ser tan largo". Sin `bottom`, height:auto mide el
+           contenido; max-height sigue de red de seguridad si algún día hay
+           tantas vistas que no entran (activa el overflow-y:auto de abajo
+           en vez de desbordar). */
+        height: auto !important;
+        max-height: calc(100vh - 66px) !important;
         z-index: 900 !important;
         width: 84px !important;
         overflow-x: hidden !important;
