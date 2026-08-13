@@ -112,7 +112,13 @@ CSS = """    /* ================================================================
            termina el rail; right:0 llega al borde de la ventana. No choca
            con el rail DERECHO (compras_tabs_row) porque ese arranca en
            top:60px (_20_compras_rail.py:19) y la barra mide 40px. */
-        left: 90px !important;
+        /* 2026-08-12, 6ta vuelta: 90px -> 0. El fondo se extiende hasta el
+           borde real de la ventana (queda tapado por el rail en su propio
+           ancho, que pinta encima con z-index mayor) para que no quede un
+           filo sin pintar a la izquierda del rail en ningún escenario de
+           pintado. El control de fecha NO se movió — sigue anclado por su
+           propio position:fixed en _50_fecha.py, ajeno a este left. */
+        left: 0 !important;
         right: 0 !important;
         height: var(--cab-altura) !important;
         border-radius: 0 !important;   /* toca los dos bordes: sin esquinas */
