@@ -3638,3 +3638,35 @@ salvo `icono`):
     esperable: la mayoría de lo requerido se consume/vende, no se da de
     baja), y Tabla de Requerimientos con el AgGrid pivote intacto (sin
     excepciones en los logs del server).
+
+99. **El rail (`navegacion.py`) reserva su columna con `margin-left` en
+    `.stApp`, no con `left`/`padding` — esa columna queda FUERA de la caja
+    de `.stApp` (2026-08-13).** `stAppViewContainer` pinta el lienzo gris
+    (`--bg-primary`, `estilos/_00_base.py`), pero es un DESCENDIENTE de
+    `.stApp`: si `.stApp` tiene `margin-left:{RAIL_ANCHO}px`, toda su caja
+    —y todo lo que pinta adentro, incluido `stAppViewContainer`— arranca en
+    x=90. La franja de 0 a 90px es margen de verdad, no padding: ningún
+    hijo de `.stApp` pinta ahí. Confirmado con `elementFromPoint` en esa
+    columna → devolvía `<html>` directo, con `background-color` por
+    defecto del navegador (blanco), no el gris del lienzo.
+
+    No se notaba porque el rail (`.st-key-nav_rail`, `position:fixed`)
+    históricamente cubría esa columna de punta a punta (blanco de rail
+    sobre blanco de navegador = invisible). Se hizo visible recién al
+    separar el rail de los bordes: primero `height:auto` en vez de
+    `100vh` (regla ya documentada arriba, deja un tramo corto debajo del
+    último ítem) y luego `top:{RAIL_TOP}px` en vez de `top:0` (bajarlo del
+    borde superior por pedido explícito) — cada uno abrió un hueco nuevo
+    en esa columna, y ambos huecos salían blancos en vez de grises
+    (reportado con screenshot de producción, visible solo con el tema real
+    contra R2: el demo local con `.stApp` bien montado no lo delataba a
+    simple vista, hacía falta medir `elementFromPoint`, no mirar).
+
+    **Fix:** pintar `html, body` con `background: var(--bg-primary)
+    !important` en `_00_base.py`, junto a la regla de `stAppViewContainer`
+    — así el fondo por defecto del navegador coincide con el lienzo en
+    vez de blanco. Regla general: cualquier reserva de espacio con
+    `margin` (no `padding`) en un contenedor que pinta su propio fondo dueño
+    del layout deja ese margen sin pintar por los hijos — si algo flota
+    fijo encima y no lo cubre entero, hay que pintar el ancestro real
+    (`html`/`body` acá) o pasar la reserva a `padding`.
