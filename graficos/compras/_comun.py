@@ -18,6 +18,7 @@ from graficos.base import _compras_truncar, _slug
 # NO la usa, de ahí el noqa: sin él, `ruff --fix` la borraría y rompería a
 # sus dos consumidores.
 from graficos.base import _es_movil  # noqa: F401
+from graficos import alturas
 
 
 def _first_point(evt):
@@ -33,7 +34,7 @@ def _first_point(evt):
         return None
 
 
-def _compras_mini_barras(serie, titulo, fmt="S/ {:,.0f}", alto=400):
+def _compras_mini_barras(serie, titulo, fmt="S/ {:,.0f}", alto=alturas.APOYO):
     """Mini gráfico de barras horizontales top-N (mayor arriba)."""
     if serie is None or serie.empty:
         st.info("Sin datos para este top.")

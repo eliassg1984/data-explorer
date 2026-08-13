@@ -10,6 +10,7 @@ import streamlit as st
 
 from tema import ACENTO, ESCALA_CONTINUA
 from graficos.base import PALETA_CALLAI, _compras_layout
+from graficos import alturas
 
 def _constructor_grafico(d, key_prefix="compras"):
     """Panel donde el usuario arma su propio gráfico: elige tipo, dimensión,
@@ -102,7 +103,7 @@ def _constructor_grafico(d, key_prefix="compras"):
                          color_discrete_sequence=PALETA_CALLAI,
                          opacity=0.7)
         fig.update_traces(marker=dict(size=8))
-        _compras_layout(fig, alto=520)
+        _compras_layout(fig, alto=alturas.PROTAGONISTA)
         fig.update_layout(title=titulo or f"{medida} vs {dim}")
         st.plotly_chart(fig, use_container_width=True,
                         key=f"{key_prefix}_cb_fig")
@@ -183,7 +184,7 @@ def _constructor_grafico(d, key_prefix="compras"):
         st.info("No se pudo construir el gráfico con esa combinación.")
         return
 
-    _compras_layout(fig, alto=520)
+    _compras_layout(fig, alto=alturas.PROTAGONISTA)
     fig.update_layout(title=titulo)
     if tipo not in ("Torta", "Treemap", "Mapa de calor"):
         fig.update_layout(xaxis_title=None, yaxis_title=None)

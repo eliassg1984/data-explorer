@@ -110,6 +110,25 @@ Dos caras de la misma paleta, hay que mantener ambas:
 
 Detalle en `arquitectura.md` § Reglas #1.
 
+## Alturas: nunca un alto suelto
+
+Gemela de la regla de los colores, y con la misma forma de dos caras:
+- `graficos/alturas.py` (Python) → el alto de las FIGURAS, con roles
+  (`PROTAGONISTA`/`APOYO`/`MINI`, `por_filas()`, `apilado()`).
+- `--alto-util` en `estilos/_00_base.py` (CSS) → el MARCO de la tarjeta.
+
+**Ningún `alto=430` ni `height=560` en `graficos/`**: `test_graficos.py`
+falla si reaparece uno, o si el cromo de CSS y el de Python se
+desincronizan.
+
+Una tarjeta = una pantalla: se clampea con `max-height: var(--alto-util)` y
+lo que no entra scrollea DENTRO (`estilos/_80_cards.py`). Dos trampas que
+ya están medidas y documentadas en `arquitectura.md` reglas #101 y #102:
+**`height` en CSS no aplica** a un bloque de Streamlit (son flex items con
+`flex: 1 1 0%`; hay que usar `max-height`), y **Plotly no llena su
+contenedor** — `height="stretch"` estira el wrapper pero el SVG se queda
+en 450px, así que el alto sale de `fig.layout.height`, o sea de Python.
+
 ## Streamlit — trampas que ya costaron bugs
 
 - **`st.markdown` no ejecuta `<script>`.** Animaciones y DOM se hacen con CSS

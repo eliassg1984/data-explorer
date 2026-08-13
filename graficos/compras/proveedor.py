@@ -21,6 +21,7 @@ from graficos.compras._documentos_proveedor import tabla_documentos
 from graficos.compras._etiquetas_proveedor import (
     abrev_nombre, etiqueta_serie, sufijo_granularidad,
 )
+from graficos import alturas
 
 
 @st.fragment
@@ -651,7 +652,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             # 30px por fila -> 22px: menos aire vertical entre
                             # barras, sin tocar el grosor. La lista se compacta
                             # (con Top 20 el chart baja de ~640 a ~480px).
-                            _compras_layout(figa, alto=max(180, 22 * len(agg) + 40))
+                            _compras_layout(figa, alto=alturas.por_filas(
+                                len(agg), px_fila=22, minimo=180, extra=40))
                             # _compras_layout enciende la grilla del eje Y, que
                             # es lo correcto en barras VERTICALES (lineas de
                             # referencia detras de las barras). Aqui las barras

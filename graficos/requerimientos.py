@@ -24,6 +24,7 @@ from graficos.base import (
 )
 from graficos.compras import _periodo_serie
 from graficos.movimientos_comun import _chip_movimientos, _comparativo_pedido_baja
+from graficos import alturas
 
 _REQ_RAIL_CATEGORIAS = (
     ("Vista", (("Evolución",         "Evolución"),
@@ -160,7 +161,7 @@ def renderizar_graficos_requerimientos(df_f, nombre_reporte, df_full=None, tabla
                 g = (pd.DataFrame({"per": per, "m": _met})
                      .dropna(subset=["per"]).groupby("per", as_index=False)["m"].sum())
                 fig = px.bar(g, x="per", y="m")
-            _compras_layout(fig, alto=520)
+            _compras_layout(fig, alto=alturas.PROTAGONISTA)
             fig.update_layout(
                 title=f"Evolución de {metrica.lower()} por estado ({gran.lower()})"
                       if col_estado else f"Evolución de {metrica.lower()} ({gran.lower()})",
@@ -185,7 +186,7 @@ def renderizar_graficos_requerimientos(df_f, nombre_reporte, df_full=None, tabla
                     text=[_fmt.format(v) for v in serie.values],
                     textposition="outside", cliponaxis=False,
                 ))
-                _compras_layout(fig, alto=480)
+                _compras_layout(fig, alto=alturas.PROTAGONISTA)
                 fig.update_layout(title=f"{metrica} por sub almacén")
                 fig.update_xaxes(visible=False)
                 st.plotly_chart(fig, use_container_width=True, key="req_g_subalmacen")
@@ -202,7 +203,7 @@ def renderizar_graficos_requerimientos(df_f, nombre_reporte, df_full=None, tabla
                     hovertemplate=("%{label}<br>" + _fmt_pref
                                    + "%{value:" + _fmt_num + "} (%{percent})<extra></extra>"),
                 ))
-                _compras_layout(fig, alto=480)
+                _compras_layout(fig, alto=alturas.PROTAGONISTA)
                 fig.update_layout(
                     title=f"Participación de {metrica.lower()} por estado",
                     showlegend=False)
@@ -216,7 +217,7 @@ def renderizar_graficos_requerimientos(df_f, nombre_reporte, df_full=None, tabla
                      .sort_values(ascending=False).index.tolist())
             fig = px.bar(g, x="sub", y="m", color="estado",
                          category_orders={"sub": orden})
-            _compras_layout(fig, alto=520)
+            _compras_layout(fig, alto=alturas.PROTAGONISTA)
             fig.update_layout(
                 title=f"{metrica} por sub almacén, desglosado por estado",
                 barmode="stack", xaxis_title=None, yaxis_title=None,
@@ -239,7 +240,7 @@ def renderizar_graficos_requerimientos(df_f, nombre_reporte, df_full=None, tabla
                     text=[_fmt.format(v) for v in serie.values],
                     textposition="outside", cliponaxis=False,
                 ))
-                _compras_layout(fig, alto=480)
+                _compras_layout(fig, alto=alturas.PROTAGONISTA)
                 fig.update_layout(title=f"Top 10 productos por {metrica.lower()}")
                 fig.update_xaxes(visible=False)
                 st.plotly_chart(fig, use_container_width=True, key="req_g_top_productos")

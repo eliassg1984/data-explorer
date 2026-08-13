@@ -30,6 +30,7 @@ from graficos.base import (
     _compras_layout, _compras_truncar, _render_rail,
     _resolver, _slug, publicar_contexto_ia, renderizar_graficos_genericos,
 )
+from graficos import alturas
 
 # Rail vertical fijo al borde DERECHO (componente compartido _render_rail,
 # ver graficos/base.py).
@@ -231,7 +232,8 @@ def _ficha_producto(d, prod_sel, col_prod, col_area, col_val, col_cant,
         hovertemplate=("%{y}<br>Valorizado: S/ %{customdata[0]:,.2f}<br>Cantidad: "
                        "%{customdata[1]:,.1f} " + unidad + "<extra></extra>"),
     ))
-    _compras_layout(fig, alto=min(900, max(320, 40 * len(g) + 80)))
+    _compras_layout(fig, alto=alturas.por_filas(
+        len(g), px_fila=40, minimo=320, extra=80, enmarcada=True))
     fig.update_layout(title=f"{prod_sel} — cantidad y valorizado por área")
     fig.update_xaxes(visible=False, range=_rango_con_holgura(g["val"].abs(), factor=0.35))
     fig.update_yaxes(showgrid=False)  # eje Y = nombres de área, no valores
@@ -309,7 +311,8 @@ def _ficha_subfamilia(d, subfam_sel, col_subfam, col_prod, col_area,
         customdata=g["val"],
         hovertemplate="%{y}<br>S/ %{customdata:,.2f}<extra></extra>",
     ))
-    _compras_layout(fig, alto=min(900, max(360, 34 * len(g) + 60)))
+    _compras_layout(fig, alto=alturas.por_filas(
+        len(g), px_fila=34, minimo=360, extra=60, enmarcada=True))
     fig.update_layout(title=f"{subfam_sel} — valorizado por producto")
     fig.update_xaxes(visible=False, range=_rango_con_holgura(np.abs(g["val"]), factor=0.5))
     fig.update_yaxes(showgrid=False)  # eje Y = nombres de producto, no valores
@@ -391,7 +394,7 @@ def _panel_relacionados(d, col_prod, col_fam, col_subfam, col_val):
                 textposition="outside", cliponaxis=False,
             ))
             fig.update_layout(
-                height=400, margin=dict(l=4, r=60, t=10, b=10),
+                height=alturas.APOYO, margin=dict(l=4, r=60, t=10, b=10),
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=11),
             )
@@ -559,7 +562,7 @@ def _panel_top(d, foco, col_grp, col_prod, col_area, col_val, col_punit, _cant):
     """)
 
     AgGrid(
-        g, gridOptions=grid_options, height=380, theme="material",
+        g, gridOptions=grid_options, height=alturas.APOYO, theme="material",
         custom_css=_css_grid(12),
         allow_unsafe_jscode=True, key=f"inv_top_grid_{foco or 'global'}",
     )

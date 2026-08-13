@@ -21,6 +21,7 @@ import streamlit as st
 from st_aggrid import AgGrid, JsCode
 
 from inyecciones import inject_maximize_aggrid
+from graficos import alturas
 
 
 def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
@@ -199,7 +200,7 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
                     gridOptions=_grid_pv,
                     allow_unsafe_jscode=True,
                     theme="streamlit",
-                    height=460,
+                    height=alturas.PROTAGONISTA,
                     enable_enterprise_modules=True,
                     fit_columns_on_grid_load=True,
                     key=f"cp_prov_pivot_docs_{gran}_{_docs_inst}",

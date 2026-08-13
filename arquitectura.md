@@ -3852,3 +3852,72 @@ salvo `icono`):
      cifras correctas, reproducción y fix del crash de código duplicado
      con el mismo caso real que lo disparó, y limpieza posterior de los 2
      objetos de prueba en R2.
+
+101. **El presupuesto vertical: una tarjeta = una pantalla, y `graficos/alturas.py`
+     es su único dueño (2026-08-13).** El pedido era simple —"que la tarjeta
+     del gráfico se vea completa en desktop"— y la app estaba lejos: el alto
+     de cada figura era un literal escrito a mano (**41 números en 15
+     ficheros**, más 19 fórmulas por nº de filas de las cuales **7 no tenían
+     tope superior** y crecían sin límite con los datos reales). Nada leía el
+     tamaño de la pantalla. Medido en el navegador antes de tocar nada: **9 de
+     24 vistas** obligaban a scrollear en 1536x864 y **19 de 24** en un laptop
+     de 1366x768; el Resumen ejecutivo de Ventas medía 1364px y se veía al
+     37%.
+
+     **El cromo fijo son 156px** (58 de `--cab-offset-contenido` + 16 de
+     margen + 66 de `--franja-inf-reserva` + 16 de margen inferior), así que
+     el presupuesto es `viewport − 156`. Verificado dos veces contra el DOM:
+     con viewport 864 el presupuesto da 708 y la vista "Matriz" (742px)
+     desbordaba **exactamente** 34px; con viewport 657 da 501 y "Por día"
+     (584px) desbordaba **exactamente** 83px.
+
+     **Dos dueños, uno por mundo, como los colores de la regla #1:**
+     - **`graficos/alturas.py`** (Python) — el alto de las FIGURAS. Roles
+       semánticos `PROTAGONISTA` (430) / `APOYO` (380) / `MINI` (240), más
+       `por_filas()` y `apilado()`. Regla: **nunca un alto suelto**, gemela de
+       «nunca un `#hex` suelto».
+     - **`--alto-util`** en `estilos/_00_base.py` (CSS) — el MARCO de la
+       tarjeta, derivado de las variables de las franjas para que el
+       presupuesto las siga si alguna cambia de alto.
+
+     Los dos cuentan la misma geometría y nada los une salvo
+     `test_graficos.py::_pruebas_presupuesto_vertical`, que falla si se
+     desincronizan **o si reaparece un literal** en `graficos/`.
+
+     **La estrategia es ENCUADRAR, no comprimir.** La tarjeta se clampea a
+     `--alto-util` y lo que no entra scrollea DENTRO de ella
+     (`estilos/_80_cards.py`). Comprimir todo a una pantalla se evaluó y se
+     descartó: el Resumen ejecutivo son 5 KPIs y 3 gráficos, y meterlos en
+     501px da tres gráficos de ~150px — se cambiaba "hay que scrollear" por
+     "no se lee nada". Con el encuadre el scroll de página quedó en **0 en
+     todas las vistas** de los 4 dashboards medidos.
+
+     **Trampa al migrar:** `ventas_resumen.py` tenía una variable local
+     llamada `alturas` (proporciones de `row_heights`) que tapaba al módulo
+     dentro de la función; `alturas.MINI` habría reventado con `AttributeError`
+     sobre una lista. Lo cazó `ruff` (F401: el import quedaba "sin usar"), no
+     una prueba — es la razón de pasar `ruff` antes de dar por buena una
+     migración masiva.
+
+102. **Un `height` en CSS sobre un bloque de Streamlit NO HACE NADA, y
+     `height="stretch"` no llega al SVG de Plotly (2026-08-13).** Dos
+     hallazgos de un banco de pruebas levantado a propósito, ambos
+     contraintuitivos y ambos capaces de quemar una tarde:
+
+     - **Los bloques son flex items con `flex: 1 1 0%`.** En un contenedor
+       flex de columna el tamaño principal lo fija `flex-basis`, no `height`,
+       así que una regla `.st-key-x { height: calc(...) !important }` se
+       ignora en silencio (medido: seguía en 406px en vez de los 501 pedidos;
+       con `flex: 0 0 auto` pasó a 501). **`max-height` sí clampea** al flex
+       item — y además es lo correcto aquí, porque con `height` las tarjetas
+       cortas se estirarían a pantalla completa (Volatilidad mide 88px).
+
+     - **Plotly no llena su contenedor en este stack** (Streamlit 1.59 +
+       Plotly 6.9). `st.plotly_chart(fig, height="stretch")` estira el wrapper
+       de Streamlit (medido: 738px) pero el SVG se queda en 450. Con
+       `autosize:true`, la cadena de contenedores forzada a `height:100%` y un
+       `Plotly.Plots.resize()` explícito: **sigue en 450**. Sólo
+       `fig.layout.height` manda (`Plotly.relayout(gd, {height:700})` → 700
+       exactos). Por eso el alto de las figuras se decide en Python y no con
+       `dvh`, y por eso `fig.layout.height` hay que QUITARLO si algún día se
+       quiere que `stretch` funcione: cuando está puesto, gana siempre.

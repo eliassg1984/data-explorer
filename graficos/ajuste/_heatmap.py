@@ -45,6 +45,7 @@ from graficos.ajuste._comun import _cortes_por_racha, _layout_aj
 # este módulo ES una vista visual; no hay caso en que se renderice bajo la
 # categoría "tiempo".
 from estado_rango import clave_corte, corte_vigente
+from graficos import alturas
 
 
 def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
@@ -252,7 +253,8 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         # 2026-08-09). 140px alcanza para el nombre mas largo de familia o
         # area a la fuente default de Sankey (~12px).
         fig_sk.update_layout(**_layout_aj(
-            height=min(560, max(280, (_n + _m) * 22 + 110)),
+            height=alturas.por_filas(_n + _m, px_fila=22,
+                                     minimo=280, extra=110),
             margin=dict(l=140, r=140, t=20, b=10),
         ))
         with _card("heatmap", f"Flujo {_titulo_metrica}"):

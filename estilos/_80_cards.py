@@ -97,6 +97,53 @@ CSS = """    /* ================================================================
     }
 
     /* =================================================================== */
+    /* ENCUADRE: UNA TARJETA = UNA PANTALLA (desktop)                        */
+    /*                                                                       */
+    /* Nació el 2026-08-13. Medido: 19 de 24 vistas obligaban a scrollear en */
+    /* un laptop de 1366x768 porque el alto de cada tarjeta era la suma de   */
+    /* píxeles fijos de sus gráficos, sin relación con la pantalla.          */
+    /*                                                                       */
+    /* max-height y NO height, por dos razones distintas:                    */
+    /*   1. Con `height` las tarjetas CORTAS se estirarían a pantalla        */
+    /*      completa dejando un vacío enorme (Volatilidad mide 88px).        */
+    /*   2. `height` directamente NO APLICA: los bloques de Streamlit son    */
+    /*      flex items con `flex: 1 1 0%`, y en un contenedor flex de        */
+    /*      columna el tamaño principal lo fija flex-basis, no height        */
+    /*      (verificado en el navegador: con height puesto seguía midiendo   */
+    /*      406px en vez de 501). `max-height` sí clampea al flex item.      */
+    /*      Ver arquitectura.md regla #101.                                  */
+    /*                                                                       */
+    /* Lo que no entra scrollea DENTRO de la tarjeta, así que el marco       */
+    /* siempre se ve completo. El alto sale de --alto-util (_00_base.py),    */
+    /* que deriva de la franja superior e inferior: si alguna cambia de      */
+    /* alto, esto la sigue solo.                                             */
+    /*                                                                       */
+    /* Solo desktop: en móvil el cromo es otro (nav inferior propia) y el    */
+    /* patrón correcto es el scroll de página. Mismo breakpoint que          */
+    /* _99_movil.py.                                                         */
+    /* =================================================================== */
+    @media screen and (min-width: 769px) {
+        div[class*="st-key-ajuste_graf_card_"],
+        div[class*="st-key-compras_prov_card_"] {
+            max-height: var(--alto-util);
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        /* Barra fina y discreta, igual criterio que el panel del asistente
+           (_85_asistente.py): la tarjeta ya es un marco, la barra no tiene
+           que competir con el contenido. */
+        div[class*="st-key-ajuste_graf_card_"]::-webkit-scrollbar,
+        div[class*="st-key-compras_prov_card_"]::-webkit-scrollbar {
+            width: 6px;
+        }
+        div[class*="st-key-ajuste_graf_card_"]::-webkit-scrollbar-thumb,
+        div[class*="st-key-compras_prov_card_"]::-webkit-scrollbar-thumb {
+            background: var(--scroll-thumb);
+            border-radius: 3px;
+        }
+    }
+
+    /* =================================================================== */
     /* TARJETAS DEL DRILL DE PROVEEDOR (Compras)                             */
     /*                                                                       */
     /* Convención independiente de `ajuste_graf_card_*`: el drill de         */

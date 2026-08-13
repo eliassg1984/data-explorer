@@ -65,6 +65,29 @@ CSS = """    <style>
         --cab-offset-contenido: 58px;
 
         /* ==================================================================
+           PRESUPUESTO VERTICAL — cuánto mide "una pantalla" de contenido
+           Única fuente de verdad del cromo fijo que hay por ENCIMA y por
+           DEBAJO de las tarjetas. Nació el 2026-08-13, cuando se midió que
+           19 de 24 vistas no entraban en un laptop de 1366x768.
+
+           --alto-util es lo que queda para la tarjeta. Se usa para ENMARCAR
+           (tarjeta de una pantalla exacta con scroll interno); el alto de
+           las FIGURAS no sale de aquí sino de graficos/alturas.py, porque
+           Plotly no llena su contenedor y sólo obedece a fig.layout.height
+           — está medido y explicado en el docstring de ese módulo.
+
+           Los dos ficheros tienen que decir lo mismo: los sumandos de aquí
+           son los mismos que CROMO en graficos/alturas.py, y test_graficos
+           falla si se desincronizan. NUNCA escribir estos px sueltos.
+           ================================================================== */
+        --franja-inf-alto: 42px;      /* la franja blanca fija de abajo */
+        --franja-inf-reserva: 66px;   /* lo que reserva el block-container */
+        --margen-tarjeta: 16px;       /* margen de bloque de Streamlit, arriba y abajo */
+        --alto-util: calc(100dvh - var(--cab-offset-contenido)
+                                 - var(--franja-inf-reserva)
+                                 - var(--margen-tarjeta) * 2);
+
+        /* ==================================================================
            BARRA INFERIOR DE NAVEGACIÓN EN MÓVIL (bottom nav)
            Debe coincidir con NAV_MOVIL_ALTO en navegacion.py (60px).
            ================================================================== */

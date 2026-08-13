@@ -12,6 +12,7 @@ import streamlit as st
 from tema import ACENTO, GRIS_BORDE, SERIE_PRINCIPAL
 from graficos.base import PALETA_CALLAI, _card, _compras_layout, _compras_truncar
 from graficos.compras._comun import (_first_point, _periodo_serie)
+from graficos import alturas
 
 
 @st.fragment
@@ -202,7 +203,7 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
                     marker_color=color,
                     hovertemplate="%{fullData.name}<br>%{x}<br>"
                                   + _tpl + "<extra></extra>")
-    _compras_layout(fig, alto=380)
+    _compras_layout(fig, alto=alturas.APOYO)
     _mn = "Valor" if es_valor else "Cantidad"
     fig.update_layout(
         title=f"{_mn} de compra por {gran.lower()} y {titulo_ser}"
@@ -273,7 +274,8 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
                     text=[_fmt(v) for v in comp.values],
                     textposition="outside", cliponaxis=False,
                     hovertemplate="%{y}<br>" + _tpl.replace("y", "x") + "<extra></extra>"))
-                _compras_layout(figc, alto=max(240, 32 * len(comp) + 80))
+                _compras_layout(figc, alto=alturas.por_filas(
+                    len(comp), px_fila=32, minimo=240, extra=80))
                 figc.update_layout(xaxis=dict(tickprefix=_pref, tickformat=",.0f"),
                                    margin=dict(l=10, r=70, t=10, b=10))
                 _ckey = f"compras_g_fam_comp_{focus_fam}_{focus_sub}_{_rst}"
@@ -325,7 +327,8 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
                     customdata=np.stack([agg["valor"].values, agg["cant"].values], axis=-1),
                     hovertemplate="%{y}<br>S/ %{customdata[0]:,.0f} · "
                                   "%{customdata[1]:,.0f} u<extra></extra>"))
-                _compras_layout(figt, alto=max(240, 32 * len(agg) + 80))
+                _compras_layout(figt, alto=alturas.por_filas(
+                    len(agg), px_fila=32, minimo=240, extra=80))
                 figt.update_layout(xaxis=dict(tickprefix=_pref, tickformat=",.0f"),
                                    margin=dict(l=10, r=120, t=10, b=10))
                 st.plotly_chart(figt, use_container_width=True, key="compras_g_fam_top")

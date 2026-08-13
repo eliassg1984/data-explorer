@@ -17,6 +17,7 @@ from graficos.base import (
 )
 from graficos.ventas_resumen import _ventas_resumen
 from graficos.ventas_comparativo import _ventas_comparativo
+from graficos import alturas
 
 _MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
              "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
@@ -119,7 +120,7 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
             yaxis="y3",
             hovertemplate="%{x|%d/%m/%Y}<br>Pax/Venta: %{y:.4f}<extra></extra>"))
 
-    _compras_layout(fig, alto=500)
+    _compras_layout(fig, alto=alturas.PROTAGONISTA)
     _xright = 0.88 if _need_y3 else 1.0
     fig.update_layout(
         title="Venta bruta por día",
@@ -231,7 +232,7 @@ def _ventas_venta_compra_dia(g, hay_costo, hay_compra, hay_pax):
             hovertemplate="%{x|%d/%m/%Y}<br>Pax: %{y:,.0f}<extra></extra>",
         ), row=2, col=1)
 
-    _compras_layout(fig, alto=560 if hay_pax else 460)
+    _compras_layout(fig, alto=alturas.PROTAGONISTA if hay_pax else 460)
     fig.update_layout(
         title="Venta vs Compra por día (% de variación desde el inicio del rango)",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
@@ -572,7 +573,7 @@ def _ventas_matriz_agrupada(d, col_venta, col_costo, col_fam, col_sub,
         gridOptions=opciones_grid,
         allow_unsafe_jscode=True,
         theme="streamlit",
-        height=560,
+        height=alturas.PROTAGONISTA,
         # rowGroup (árbol Grupo→Sub Grupo→Producto) es función Enterprise:
         # sin esto AgGrid ignora la agrupación y muestra filas planas.
         enable_enterprise_modules=True,
@@ -663,7 +664,8 @@ def _ventas_ranking_foodcost(d, col_venta, col_costo, col_cant,
                     marker=dict(color=ACENTO), text=_txt,
                     textposition="outside",
                     hovertemplate="%{y}<br>S/ %{x:,.0f}<extra></extra>"))
-                _compras_layout(fig, alto=max(280, 46 * len(gv) + 60))
+                _compras_layout(fig, alto=alturas.por_filas(
+                    len(gv), px_fila=46, minimo=280, extra=60))
                 fig.update_layout(
                     xaxis=dict(tickprefix="S/ ", tickformat=",.0f"),
                     margin=dict(l=10, r=90, t=10, b=10), showlegend=False)
@@ -708,7 +710,8 @@ def _ventas_ranking_foodcost(d, col_venta, col_costo, col_cant,
                    .map(_fc_heat_css, subset=["%FC Venta"])
                    .set_properties(subset=["Año Pasado"], color="#9aa0a6"))
             st.dataframe(sty, use_container_width=True, hide_index=True,
-                         height=min(430, 60 + 34 * len(tv)))
+                         height=alturas.por_filas(len(tv), px_fila=34,
+                                                  extra=60, minimo=0))
 
     # ══ 3) Ranking por Producto con sparklines (AgGrid) ═══════════════
     ac_prod = cur_df.groupby("prod", as_index=False).agg(
@@ -811,7 +814,8 @@ def _ventas_ranking_foodcost(d, col_venta, col_costo, col_cant,
             gridOptions=grid_options,
             allow_unsafe_jscode=True,
             theme="streamlit",
-            height=min(560, 90 + 30 * len(df_rank)),
+            height=alturas.por_filas(len(df_rank), px_fila=30,
+                                     extra=90, minimo=0),
             enable_enterprise_modules=False,
             key="ventas_ranking_grid",
             reload_data=False,
@@ -915,7 +919,8 @@ def _ventas_ranking_meseros(d, col_mesero, col_propina, col_pedido,
                       "vs. esperada: %{x:+.2f}pp<br>n=%{customdata[1]:.0f}"
                       "<extra></extra>",
     ))
-    _compras_layout(fig, alto=max(280, 46 * len(resumen) + 60))
+    _compras_layout(fig, alto=alturas.por_filas(
+        len(resumen), px_fila=46, minimo=280, extra=60))
     # Rango del eje con relleno extra (no solo min/max de los datos): el
     # texto "outside" de la barra MÁS ancha (más lejos del cero) necesita
     # aire antes de chocar contra la columna de nombres -- sin este padding
@@ -1202,7 +1207,7 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                                     else PALETA_CALLAI[i % len(PALETA_CALLAI)])),
                         hovertemplate="%{fullData.name}<br>%{x}<br>S/ %{y:,.2f}<extra></extra>",
                     )
-                _compras_layout(fig, alto=540)
+                _compras_layout(fig, alto=alturas.PROTAGONISTA)
                 fig.update_layout(
                     title=f"Venta semanal por {_desg.lower()} (top 8 + Otros)",
                     barmode="stack",
@@ -1234,7 +1239,7 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                               color_discrete_sequence=PALETA_CALLAI)
                 fig.for_each_trace(
                     lambda t: t.update(name=_compras_truncar(t.name, 22)))
-                _compras_layout(fig, alto=520)
+                _compras_layout(fig, alto=alturas.PROTAGONISTA)
                 fig.update_layout(
                     title="Venta histórica por subfamilia (top 10)",
                     xaxis_title=None, yaxis_title=None, hovermode="x unified",

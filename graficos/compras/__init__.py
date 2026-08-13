@@ -38,6 +38,7 @@ from graficos.compras.familia import _compras_familia_drill
 from graficos.compras.cantidad import _compras_cantidad_producto
 from graficos.compras.evolucion import _compras_evolucion_proveedores
 from graficos.compras.volatilidad import _compras_volatilidad_drill
+from graficos import alturas
 
 
 
@@ -247,7 +248,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                 piv = dd.groupby(["mes", "prod"])["precio"].mean().reset_index()
                 fig = px.line(piv, x="mes", y="precio", color="prod", markers=True)
                 fig.for_each_trace(lambda t: t.update(name=_compras_truncar(t.name, 22)))
-                _compras_layout(fig, alto=560)
+                _compras_layout(fig, alto=alturas.PROTAGONISTA)
                 fig.update_layout(
                     title="Precio unitario promedio — top 10 productos más comprados",
                     xaxis_title=None, yaxis_title=None,
@@ -272,7 +273,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                 dd = dd.sort_values("fecha")
                 fig = px.line(dd, x="fecha", y="precio", color="prod", markers=True)
                 fig.for_each_trace(lambda t: t.update(name=_compras_truncar(t.name, 22)))
-                _compras_layout(fig, alto=560)
+                _compras_layout(fig, alto=alturas.PROTAGONISTA)
                 fig.update_layout(
                     title="Precio real por compra — top 10 productos más comprados",
                     xaxis_title=None, yaxis_title=None,
@@ -329,7 +330,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                             _sub = f" · variación promedio {_var:+.1f}% vs año pasado"
                     else:
                         st.caption("Este producto no tiene precio del año pasado registrado.")
-                    _compras_layout(fig, alto=500)
+                    _compras_layout(fig, alto=alturas.PROTAGONISTA)
                     fig.update_layout(
                         title=_compras_truncar(prod_sel, 48) + _sub,
                         xaxis_title=None, yaxis_title=None,
@@ -368,7 +369,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                                     marker=dict(color=GRIS_BORDE))
                     fig.add_bar(x=g.index, y=g["Este año"], name="Este año",
                                 marker=dict(color=ACENTO))
-                    _compras_layout(fig, alto=500)
+                    _compras_layout(fig, alto=alturas.PROTAGONISTA)
                     _tt = ("Cantidad comprada por mes: este año vs año pasado"
                            if prod_sel == "(Todos)" else
                            _compras_truncar(prod_sel, 40)
@@ -420,7 +421,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                                        "<br>Cantidad: %{customdata:,.1f}"
                                        "<extra></extra>"),
                     )
-                _compras_layout(fig, alto=540)
+                _compras_layout(fig, alto=alturas.PROTAGONISTA)
                 fig.update_layout(
                     title="Compra por semana — valor por producto (top 8 + Otros)",
                     barmode="stack",

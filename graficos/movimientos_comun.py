@@ -40,6 +40,7 @@ from data import cargar as _cargar_reporte
 from tema import ACENTO, AJUSTE_NEG, AJUSTE_POS, GRIS_TEXTO_SUAVE
 from graficos.base import _compras_layout, _compras_truncar, _resolver
 from graficos.compras import _periodo_serie
+from graficos import alturas
 
 
 # ─── Chip de fuente (mismo mecanismo que recetas_comun._chip_fuente) ───────
@@ -213,7 +214,7 @@ def _comparativo_pedido_baja(*, key_prefix):
             go.Bar(name="Dado de baja", x=todos_per, y=g_sal.values,
                   marker_color=GRIS_TEXTO_SUAVE),
         ])
-        _compras_layout(fig, alto=440)
+        _compras_layout(fig, alto=alturas.PROTAGONISTA)
         fig.update_layout(
             title=f"Requerido vs dado de baja ({gran.lower()})",
             barmode="group", xaxis_title=None, yaxis_title=None,
@@ -243,7 +244,8 @@ def _comparativo_pedido_baja(*, key_prefix):
                 text=[f"{pref}{v:,.0f}" for v in top["dif"]],
                 textposition="outside", cliponaxis=False,
             ))
-            _compras_layout(fig2, alto=min(560, max(320, len(top) * 30 + 120)))
+            _compras_layout(fig2, alto=alturas.por_filas(
+                len(top), px_fila=30, minimo=320, extra=120))
             fig2.update_layout(
                 title="Mayor diferencia entre lo requerido y lo dado de baja",
                 xaxis_title=None, yaxis_title=None, showlegend=False,

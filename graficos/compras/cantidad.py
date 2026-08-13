@@ -9,6 +9,7 @@ import streamlit as st
 
 from tema import ACENTO
 from graficos.base import PALETA_CALLAI, _compras_layout, _compras_truncar
+from graficos import alturas
 
 
 @st.fragment
@@ -118,7 +119,7 @@ def _compras_cantidad_producto(d, col_prod, col_cant, col_valor, col_punit, col_
                     textposition="outside", cliponaxis=False,
                     hovertemplate="%{x}<br>" + _tpl + "<extra></extra>")
 
-    _compras_layout(fig, alto=440)
+    _compras_layout(fig, alto=alturas.PROTAGONISTA)
     fig.update_layout(
         title=f"{meas} de compra por {gran.lower()}"
               + ("" if multi else f" — {_compras_truncar(foco, 40)}"),

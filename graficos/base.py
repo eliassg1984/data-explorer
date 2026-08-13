@@ -19,6 +19,7 @@ from tema import (
     BLANCO, ESCALA_CONTINUA, GRIS_BORDE, SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
     PALETA_SERIES,
 )
+from graficos import alturas
 
 
 def _slug(texto):
@@ -195,9 +196,11 @@ _LAYOUT_BASE = dict(
     font_color=TEXTO_PRINCIPAL,
     font_family="DM Sans, Inter, -apple-system, sans-serif",
     margin=dict(l=20, r=20, t=50, b=20),
-    # Altura base compacta: permite ver el gráfico completo junto con sus
-    # controles, incluso en laptops de pantalla baja.
-    height=380,
+    # El alto NO se escribe suelto: sale de graficos/alturas.py, que es su
+    # único dueño (ver su docstring: en este stack Plotly sólo obedece a
+    # fig.layout.height, así que el número tiene que salir de Python).
+    # APOYO vale 380, exactamente lo que este default decía antes.
+    height=alturas.APOYO,
     barcornerradius=6,          # ← NUEVO: esquinas redondeadas en TODAS las barras
     xaxis=dict(gridcolor=GRIS_BORDE),
     yaxis=dict(gridcolor=GRIS_BORDE, tickformat=",.0f"),
@@ -425,7 +428,7 @@ def renderizar_graficos_genericos(df_data, nombre_reporte):
 
     fig, err = crear_grafico(df_plot, conf)
     if fig:
-        fig.update_layout(height=450)
+        fig.update_layout(height=alturas.PROTAGONISTA)
         with _card(f"explorador_{nombre_reporte}"):
             st.plotly_chart(fig, use_container_width=True)
     else:
@@ -449,7 +452,14 @@ def _compras_truncar(s, n=26):
     return s if len(s) <= n else s[: n - 1] + "…"
 
 
-def _compras_layout(fig, alto=430):
+def _compras_layout(fig, alto=alturas.PROTAGONISTA):
+    """Layout común de los dashboards. `alto` espera un ROL de
+    graficos/alturas.py (PROTAGONISTA / APOYO / MINI) o el resultado de
+    `alturas.por_filas(...)` — no un literal: ver la regla «nunca un alto
+    suelto» en el docstring de ese módulo.
+
+    El nombre `_compras_*` es histórico (nació en Compras); hoy lo usan
+    también ventas, inventario, salidas, requerimientos y constructor."""
     fig.update_layout(
         height=alto,
         margin=dict(l=10, r=10, t=30, b=10),

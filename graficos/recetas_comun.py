@@ -32,6 +32,7 @@ from tema import (
     SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
 )
 from graficos.base import _card, _layout, _resolver
+from graficos import alturas
 
 # Familias de compras.parquet que SÍ son insumo/ingrediente — las únicas que
 # tiene sentido cruzar contra receta (compra de gasto operativo real como
@@ -213,7 +214,7 @@ def _composicion_contenedor(d, col_contenedor, col_item, col_valor, contenedor,
                       "<br>%{percent}<extra></extra>",
     ))
     fig.update_layout(
-        height=420, showlegend=False,
+        height=alturas.APOYO, showlegend=False,
         margin=dict(l=10, r=10, t=20, b=10),
         paper_bgcolor="rgba(0,0,0,0)",
         font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=12),
@@ -247,7 +248,8 @@ def _ranking_contenedores(d, col_contenedor, col_valor, es_soles, *,
         hovertemplate=f"%{{y}}<br>{pref}%{{x:{num}}}<extra></extra>",
     ))
     fig.update_layout(**_layout(
-        height=min(640, max(360, len(g_top) * 30 + 120)),
+        height=alturas.por_filas(len(g_top), px_fila=30,
+                                 minimo=360, extra=120),
         xaxis=dict(tickprefix=pref, tickformat=",.0f", gridcolor=GRIS_BORDE),
         yaxis=dict(showticklabels=True, gridcolor=GRIS_BORDE),
         showlegend=False,
@@ -284,7 +286,8 @@ def _items_clave(d, col_contenedor, col_item, col_valor, es_soles, *,
                        f"<br>en %{{customdata}} {etiqueta_contenedor_plural}<extra></extra>"),
     ))
     fig.update_layout(**_layout(
-        height=min(640, max(360, len(g_top) * 30 + 120)),
+        height=alturas.por_filas(len(g_top), px_fila=30,
+                                 minimo=360, extra=120),
         xaxis=dict(tickprefix=pref, tickformat=",.0f", gridcolor=GRIS_BORDE),
         yaxis=dict(showticklabels=True, gridcolor=GRIS_BORDE),
         showlegend=False,
@@ -508,7 +511,8 @@ def _drill_insumo(resultado, es_soles, *, key_select, col_contenedor_out, etique
     pref, _ = _fmt_valor(es_soles)
     sub["Valor"] = sub["Valor"].map(lambda v: f"{pref}{v:,.2f}")
     st.caption(f"**{sel}** aparece en {len(sub)} {etiqueta_plural}")
-    st.dataframe(sub, hide_index=True, use_container_width=True, height=220)
+    st.dataframe(sub, hide_index=True, use_container_width=True,
+                 height=alturas.MINI)
 
 
 def _drill_contenedor_jump(resultado, *, key_select, key_button, state_key_rail,

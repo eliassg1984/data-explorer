@@ -13,7 +13,11 @@ CSS = """    /* ================================================================
         left: 90px !important; /* coincide con el ancho del rail */
         right: 0 !important;
         bottom: 0 !important;
-        height: 42px !important;
+        /* El px vivía suelto aquí; desde 2026-08-13 es una variable porque
+           el presupuesto vertical de las tarjetas se calcula a partir de
+           ella (--alto-util en _00_base.py). Cambiarla aquí movía el marco
+           de las tarjetas sin que nada lo insinuara. */
+        height: var(--franja-inf-alto) !important;
         background: #ffffff !important;
         border-top: 1px solid var(--border) !important;
         box-shadow: 0 -2px 4px rgba(16, 16, 20, 0.04) !important;
@@ -23,7 +27,7 @@ CSS = """    /* ================================================================
     [data-testid="stMainBlockContainer"],
     .stMainBlockContainer,
     .block-container {
-        padding-bottom: 66px !important;
+        padding-bottom: var(--franja-inf-reserva) !important;
     }
 
     /* El texto "Última actualización" NO se estila aquí. Lo pinta

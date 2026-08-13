@@ -24,6 +24,7 @@ import streamlit as st
 from tema import ACENTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO, LAVANDA_FONDO
 from graficos.base import _card, _compras_layout, _compras_truncar, _slug
 from graficos.compras._comun import _first_point
+from graficos import alturas
 
 MIN_SEMANAS = 4          # con menos, un candlestick no dice nada
 MAX_SEMANAS = 8          # tope de velas visibles — más se vuelve ilegible y
@@ -223,7 +224,8 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             sty = sty.map(_sty_delta, subset=[c])
         sty = sty.apply(_sty_vol_bar, subset=["Volatilidad"])
         st.dataframe(sty, use_container_width=True, hide_index=True,
-                     height=min(430, 60 + 34 * len(tv)))
+                     height=alturas.por_filas(len(tv), px_fila=34,
+                                              extra=60, minimo=0))
         st.caption(f"Familia Alimentos · {n_sem} semanas · insumos con ≥ S/ 400 "
                    "de gasto y compras en al menos 75% de las semanas del rango.")
 
@@ -296,7 +298,7 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             mode="markers", marker=dict(size=38, opacity=0),
             hoverinfo="skip", showlegend=False,
         ))
-        _compras_layout(fig, alto=380)
+        _compras_layout(fig, alto=alturas.APOYO)
         fig.update_layout(
             xaxis=dict(gridcolor=GRIS_BORDE, showgrid=False, rangeslider=dict(visible=False)),
             yaxis=dict(gridcolor=GRIS_BORDE, tickprefix="S/ "),
@@ -362,5 +364,6 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                      .map(_sty_precio, subset=[f"Precio/{unidad}"])
                      .hide(axis="index"))
             st.dataframe(sty_p, use_container_width=True, hide_index=True,
-                        height=min(280, 60 + 34 * len(tp)))
+                        height=alturas.por_filas(len(tp), px_fila=34, extra=60,
+                                                 minimo=0, rol=alturas.MINI))
         st.caption("Tocá una vela para ver las compras de esa semana.")

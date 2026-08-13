@@ -24,6 +24,7 @@ from graficos.base import (
 # duplicar el cálculo de granularidad Semana/Mes (Corte tiene su propio
 # cálculo, ver _cortes_por_racha: no es calendario fijo, son rachas).
 from graficos.ajuste._comun import _layout_aj
+from graficos import alturas
 
 
 def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valorizado):
@@ -95,7 +96,7 @@ def _graf_evolucion_ajuste(df, col_fecha, col_familia, col_ajuste_val, col_valor
         yaxis=dict(gridcolor=GRIS_BORDE, tickprefix="S/ ", tickformat=",.2f"),
         hovermode="x unified",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        height=380,
+        height=alturas.APOYO,
     ))
 
     with _card("evolucion", "Evolución temporal"):
@@ -170,7 +171,7 @@ def _graf_comparativa_mensual(df, col_fecha, col_ajuste_val):
     fig.update_layout(**_layout_aj(
         xaxis=dict(dtick="M1", tickformat="%b %Y", gridcolor=GRIS_BORDE),
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f", gridcolor=GRIS_BORDE),
-        showlegend=False, height=360,
+        showlegend=False, height=alturas.APOYO,
     ))
     fig.add_hline(y=0, line_dash="dot", line_color=GRIS_BORDE, line_width=1)
 

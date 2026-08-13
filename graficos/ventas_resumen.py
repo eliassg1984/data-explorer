@@ -23,6 +23,7 @@ from plotly.subplots import make_subplots
 
 from tema import ACENTO, ERROR, EXITO, GRIS_BORDE
 from graficos.base import _card, _compras_layout, _compras_truncar
+from graficos import alturas
 
 MIN_DIAS = 5     # con menos, la tendencia día-a-día no dice nada
 MAX_DIAS = 30    # tope de barras legibles. Mismo espíritu que MAX_SEMANAS de
@@ -154,9 +155,13 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
     with _card("ventas_resumen_dia", "Tendencia diaria de venta",
                titulo_arriba=True):
         filas_sub = 2 if vol_label else 1
-        alturas = [0.72, 0.28] if vol_label else [1.0]
+        # `row_h` y no `alturas`: este nombre tapaba al módulo
+        # graficos.alturas dentro de la función y `alturas.MINI` reventaba
+        # con AttributeError sobre una lista (lo cazó ruff en la migración
+        # del 2026-08-13). Son proporciones de fila, no píxeles.
+        row_h = [0.72, 0.28] if vol_label else [1.0]
         fig = make_subplots(rows=filas_sub, cols=1, shared_xaxes=True,
-                            row_heights=alturas, vertical_spacing=0.06)
+                            row_heights=row_h, vertical_spacing=0.06)
         fig.add_trace(go.Bar(
             x=g["dia"], y=g["total"], marker=dict(color=colores),
             hovertext=hover_dia, hoverinfo="text", name="",
@@ -187,7 +192,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
                 opacity=0.8, layer="below",
             )
 
-        _compras_layout(fig, alto=300 if vol_label else 240)
+        _compras_layout(fig, alto=alturas.apilado(alturas.MINI, filas_sub))
         fig.update_layout(
             showlegend=False,
             yaxis=dict(tickprefix="S/ ", gridcolor=GRIS_BORDE),
@@ -218,7 +223,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
                     line=dict(color=ACENTO, width=2.2),
                     hovertemplate="%{x|%d/%m/%Y}<br>Ticket: S/ %{y:.2f}<extra></extra>",
                 ))
-                _compras_layout(fig_t, alto=260)
+                _compras_layout(fig_t, alto=alturas.MINI)
                 fig_t.update_layout(showlegend=False,
                                     yaxis=dict(tickprefix="S/ ", gridcolor=GRIS_BORDE))
                 fig_t.update_xaxes(type="date", tickformat="%d/%m", tickangle=-45,
@@ -253,7 +258,9 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
                                                  else "%{x:,.0f} unidades")
                                   + "<extra></extra>"),
                 ))
-                _compras_layout(fig_p, alto=max(240, 40 * len(top) + 60))
+                _compras_layout(fig_p, alto=alturas.por_filas(
+                    len(top), px_fila=40, minimo=240, extra=60,
+                    rol=alturas.APOYO))
                 fig_p.update_layout(
                     showlegend=False, margin=dict(l=10, r=90, t=10, b=10),
                     xaxis=dict(tickprefix="S/ " if metrica == "Ingreso" else ""),

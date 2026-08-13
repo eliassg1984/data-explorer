@@ -50,6 +50,7 @@ from tema import (
 )
 from graficos.base import _card, _es_movil
 from graficos.compras._comun import _first_point
+from graficos import alturas
 
 GRANOS = ("Día", "Semana", "Mes")
 VENTANAS = {"Día": (7, 14, 30), "Semana": (4, 8, 13), "Mes": (3, 6, 12)}
@@ -935,7 +936,8 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                        .map(_sty_var, subset=["%Var"])
                        .set_properties(subset=_gris, color=GRIS_TEXTO))
                 st.dataframe(sty, use_container_width=True, hide_index=True,
-                             height=min(430, 60 + 34 * len(tv)))
+                             height=alturas.por_filas(len(tv), px_fila=34,
+                                                      extra=60, minimo=0))
                 st.caption(
                     "Top 15 por venta actual. Un producto con «—» en %Var no "
                     "se vendió en el período equivalente del año pasado "

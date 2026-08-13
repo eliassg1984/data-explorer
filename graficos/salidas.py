@@ -22,6 +22,7 @@ from graficos.base import (
 )
 from graficos.compras import _periodo_serie
 from graficos.movimientos_comun import _chip_movimientos, _comparativo_pedido_baja
+from graficos import alturas
 
 # Rail vertical fijo al borde DERECHO (componente compartido _render_rail,
 # ver graficos/base.py). "Cruce" (Subalmacén × Tipo descargo) responde a la
@@ -167,7 +168,7 @@ def renderizar_graficos_salidas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                 g = (pd.DataFrame({"per": per, "m": _met})
                      .dropna(subset=["per"]).groupby("per", as_index=False)["m"].sum())
                 fig = px.bar(g, x="per", y="m")
-            _compras_layout(fig, alto=520)
+            _compras_layout(fig, alto=alturas.PROTAGONISTA)
             fig.update_layout(
                 title=f"Evolución de {metrica.lower()} por tipo de descargo ({gran.lower()})"
                       if col_tipo else f"Evolución de {metrica.lower()} ({gran.lower()})",
@@ -192,7 +193,7 @@ def renderizar_graficos_salidas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                     text=[_fmt.format(v) for v in serie.values],
                     textposition="outside", cliponaxis=False,
                 ))
-                _compras_layout(fig, alto=480)
+                _compras_layout(fig, alto=alturas.PROTAGONISTA)
                 fig.update_layout(title=f"{metrica} por subalmacén")
                 fig.update_xaxes(visible=False)
                 st.plotly_chart(fig, use_container_width=True, key="sal_g_subalmacen")
@@ -209,7 +210,7 @@ def renderizar_graficos_salidas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                     hovertemplate=("%{label}<br>" + _fmt_pref
                                    + "%{value:" + _fmt_num + "} (%{percent})<extra></extra>"),
                 ))
-                _compras_layout(fig, alto=480)
+                _compras_layout(fig, alto=alturas.PROTAGONISTA)
                 fig.update_layout(
                     title=f"Participación de {metrica.lower()} por tipo de descargo",
                     showlegend=False)
@@ -223,7 +224,7 @@ def renderizar_graficos_salidas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                      .sort_values(ascending=False).index.tolist())
             fig = px.bar(g, x="sub", y="m", color="tipo",
                          category_orders={"sub": orden})
-            _compras_layout(fig, alto=520)
+            _compras_layout(fig, alto=alturas.PROTAGONISTA)
             fig.update_layout(
                 title=f"{metrica} por subalmacén, desglosado por tipo de descargo",
                 barmode="stack", xaxis_title=None, yaxis_title=None,
@@ -246,7 +247,7 @@ def renderizar_graficos_salidas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                     text=[_fmt.format(v) for v in serie.values],
                     textposition="outside", cliponaxis=False,
                 ))
-                _compras_layout(fig, alto=480)
+                _compras_layout(fig, alto=alturas.PROTAGONISTA)
                 fig.update_layout(title=f"Top 10 productos por {metrica.lower()}")
                 fig.update_xaxes(visible=False)
                 st.plotly_chart(fig, use_container_width=True, key="sal_g_top_productos")

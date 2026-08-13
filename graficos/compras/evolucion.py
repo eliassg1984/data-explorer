@@ -11,6 +11,7 @@ import streamlit as st
 
 from tema import ACENTO
 from graficos.base import PALETA_CALLAI, _compras_layout, _compras_truncar
+from graficos import alturas
 
 
 @st.fragment
@@ -130,7 +131,7 @@ def _compras_evolucion_proveedores(d, col_prov, col_prod, col_cant,
         )
 
     _pref_y = "S/ " if es_valor else ""
-    _compras_layout(fig_main, alto=420)
+    _compras_layout(fig_main, alto=alturas.APOYO)
     fig_main.update_layout(
         barmode="group",
         xaxis=dict(
@@ -253,7 +254,7 @@ def _compras_evolucion_proveedores(d, col_prov, col_prod, col_cant,
                     fillcolor="rgba(108,92,231,0.10)",
                     hovertemplate="%{x}: S/ %{y:,.0f}<extra></extra>",
                 ))
-                _compras_layout(fig_sp, alto=180)
+                _compras_layout(fig_sp, alto=alturas.MINI)
                 fig_sp.update_layout(
                     margin=dict(l=10, r=10, t=10, b=10),
                     xaxis=dict(type="category", tickangle=-30,
@@ -295,7 +296,8 @@ def _compras_evolucion_proveedores(d, col_prov, col_prod, col_cant,
                 df_prod_tbl,
                 hide_index=True,
                 use_container_width=True,
-                height=min(320, 60 + 35 * len(df_prod_tbl)),
+                height=alturas.por_filas(len(df_prod_tbl), px_fila=35,
+                                         extra=60, minimo=0, rol=alturas.MINI),
             )
 
             # Selector de producto para drill-down
@@ -356,7 +358,8 @@ def _compras_evolucion_proveedores(d, col_prov, col_prod, col_cant,
                     cliponaxis=False,
                     hovertemplate="%{y}: S/ %{x:,.0f}<extra></extra>",
                 )
-            _compras_layout(fig_otros, alto=max(180, 38 * len(_filas_otros) + 60))
+            _compras_layout(fig_otros, alto=alturas.por_filas(
+                len(_filas_otros), px_fila=38, minimo=180, extra=60))
             fig_otros.update_layout(
                 showlegend=False,
                 barmode="overlay",

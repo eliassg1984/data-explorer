@@ -662,6 +662,89 @@ def _pruebas_contratos():
     return fallos
 
 
+def _pruebas_presupuesto_vertical():
+    """El contrato del PRESUPUESTO VERTICAL (graficos/alturas.py).
+
+    Existe porque el bug que arregló ese módulo es invisible desde el código:
+    un `alto=560` se lee perfectamente razonable, y solo midiendo en el
+    navegador se descubre que la tarjeta no entra en la pantalla. Medido el
+    2026-08-13, antes de la migración: 19 de 24 vistas obligaban a scrollear
+    en un laptop de 1366x768.
+
+    Tres cosas que se pueden romper en silencio y que aquí fallan ruidosas:
+
+      1. Que alguien vuelva a escribir un alto literal en `graficos/`. Es la
+         regla «nunca un alto suelto», gemela de «nunca un #hex suelto».
+      2. Que el cromo de `estilos/` y el de `alturas.py` se desincronicen:
+         son la misma geometría contada dos veces (CSS para el marco de la
+         tarjeta, Python para el alto de las figuras) y nada las une salvo
+         esta prueba.
+      3. Que un rol crezca hasta no entrar en el presupuesto.
+    """
+    import pathlib
+    import re
+
+    from graficos import alturas
+
+    fallos = 0
+
+    def check(nombre, ok, detalle=""):
+        nonlocal fallos
+        if ok:
+            print(f"OK    presupuesto · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA presupuesto · {nombre}{': ' + detalle if detalle else ''}")
+
+    # ── 1) Ningún alto literal suelto en graficos/ ──────────────────────
+    # `_css_proveedor.py` queda fuera: es un blob de CSS, no altos de
+    # figuras (ahí `height` es una propiedad, no un kwarg de Python).
+    raiz = pathlib.Path(__file__).parent / "graficos"
+    culpables = []
+    for py in sorted(raiz.rglob("*.py")):
+        if py.name in ("alturas.py", "_css_proveedor.py"):
+            continue
+        for i, linea in enumerate(py.read_text(encoding="utf-8").split("\n"), 1):
+            if re.search(r"\b(alto|height)=\d", linea):
+                culpables.append(f"{py.relative_to(raiz.parent)}:{i}")
+    check("ningún alto literal en graficos/ (usar alturas.py)",
+          not culpables, ", ".join(culpables[:6]))
+
+    # ── 2) El cromo de CSS y el de Python cuentan lo mismo ──────────────
+    css = (pathlib.Path(__file__).parent / "estilos" / "_00_base.py").read_text(
+        encoding="utf-8")
+
+    def _var(nombre):
+        m = re.search(rf"--{nombre}:\s*(\d+)px", css)
+        return int(m.group(1)) if m else None
+
+    cab = _var("cab-offset-contenido")
+    franja = _var("franja-inf-reserva")
+    margen = _var("margen-tarjeta")
+    check("las variables de cromo existen en estilos/_00_base.py",
+          None not in (cab, franja, margen),
+          f"cab={cab} franja={franja} margen={margen}")
+    if None not in (cab, franja, margen):
+        suma_css = cab + franja + margen * 2
+        check("el cromo de CSS coincide con alturas.CROMO",
+              suma_css == alturas.CROMO,
+              f"CSS suma {suma_css}px y alturas.CROMO vale {alturas.CROMO}px")
+
+    # ── 3) Los roles entran en el presupuesto ───────────────────────────
+    check("PROTAGONISTA + padding entra en el presupuesto",
+          alturas.cabe(alturas.PROTAGONISTA + 32),
+          f"{alturas.PROTAGONISTA} + 32 > {alturas.PRESUPUESTO}")
+    check("los roles están ordenados (MINI ≤ APOYO ≤ PROTAGONISTA)",
+          alturas.MINI <= alturas.APOYO <= alturas.PROTAGONISTA)
+    check("por_filas respeta el techo de su rol",
+          alturas.por_filas(500) == alturas.PROTAGONISTA
+          and alturas.por_filas(500, rol=alturas.MINI) == alturas.MINI)
+    check("por_filas enmarcada no supera el techo de scroll interno",
+          alturas.por_filas(9999, enmarcada=True) == alturas._TOPE_ENMARCADA)
+
+    return fallos
+
+
 def main():
     df, df_min = _df_completo(), _df_minimo()
     fallos = 0
@@ -754,6 +837,9 @@ def main():
 
     # ── Contratos entre app.py y los dashboards (firma del dispatcher) ──
     fallos += _pruebas_contratos()
+
+    # ── Presupuesto vertical: que las tarjetas sigan entrando en pantalla ─
+    fallos += _pruebas_presupuesto_vertical()
 
     print()
     if fallos:
