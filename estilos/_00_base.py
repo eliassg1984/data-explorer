@@ -140,6 +140,18 @@ CSS = """    <style>
         background: var(--bg-primary);
     }
 
+    /* html/body de fondo: navegacion.py corre el rail con margin-left en
+       .stApp, así que la columna reservada (0 a RAIL_ANCHO) queda FUERA de
+       la caja de .stApp — ahí no llega el background de stAppViewContainer
+       de arriba, cae al fondo por defecto del navegador. Con el rail ahora
+       separado del borde superior/inferior (RAIL_TOP en navegacion.py,
+       altura auto) esa columna se ve en los huecos por encima y por debajo
+       de la tarjeta del rail, y sin esto se veía blanca en vez del lienzo
+       gris. Ver arquitectura.md — nav_rail. */
+    html, body {
+        background: var(--bg-primary) !important;
+    }
+
     h1 {
         margin-bottom: 0.2rem !important;
         padding-top: 0 !important;
