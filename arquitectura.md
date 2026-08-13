@@ -4103,3 +4103,54 @@ salvo `icono`):
      el siguiente F5. En móvil el bloque no aplica (va dentro del
      `@media (min-width: 769px)`) y Plotly usa su default de 450px, que con
      scroll de página es correcto.
+
+107. **La franja de controles con VARIOS grupos: separadores colgados del
+     grupo, anchos por caso, y la regla #70 mordiendo otra vez
+     (2026-08-13).** Ventas › Año Pasado tenía cuatro grupos de toggles
+     sueltos ARRIBA de la tarjeta (`st.columns` + un `st.pills` de "Vista"
+     en su propia fila). Se metieron dentro de la misma franja de dos líneas
+     que Por día (#104). Tres cosas que costaron medición:
+
+     - **Separadores colgados del GRUPO, no de la posición.** Los tres
+       grupos de la izquierda ("cómo corto el tiempo") van separados por
+       hairlines verticales; cada uno dibuja el suyo a su IZQUIERDA con un
+       `::before` colgado de su key. Con una regla por posición, al
+       desaparecer "alinear por" (sólo existe en granularidad Día) quedaría
+       una línea suelta anunciando un grupo que no está. "Vista" es el otro
+       eje y NO lleva separador: se separa con espacio.
+
+     - **Los anchos de columna dependen de la granularidad.** Con los anchos
+       de Día, en Semana/Mes las etiquetas de "Ventana" pasan de "7 días" a
+       "12 semanas", no entran y ENVUELVEN: la franja pasaba de 52px a
+       143px. El ancho que sobra al no haber alineación es justo el que
+       necesita Ventana, así que la lista de ratios se elige por caso.
+
+     - **El `st.container(key=...)` de la tarjeta retenía el layout viejo.**
+       Al pasar de Día a Semana, Python quedaba correcto (el título decía
+       "semana a semana" y Ventana traía opciones de semanas) pero el DOM
+       conservaba las CINCO columnas de Día y el pills de "alinear por"
+       seguía ahí, huérfano, envolviendo a dos filas — franja de 156px. Es
+       la regla #70 otra vez, ahora disparada por meter contenido
+       CONDICIONAL dentro de un contenedor con key. Se arregla metiendo la
+       granularidad en la key de la tarjeta
+       (`_card(f"ventas_comparativo_{grano}")`): al variar, remonta limpia.
+       Reproducido con Semana y con Mes; medido antes y después.
+
+     **Y una que NO se pudo hacer con CSS:** alinear "Vista" a la derecha con
+     `justify-content: flex-end` no funciona. El div flex interno del
+     `stButtonGroup` se queda en su ancho de contenido (165px) aunque se le
+     fuerce `width: 100% !important` en los TRES niveles de la cadena
+     (element container, stButtonGroup y el div). Lo empuja una **columna
+     espaciadora vacía**, que además degrada sola cuando la tarjeta se
+     angosta.
+
+     **Orden de rendering:** la franja se dibuja antes de que existan sus
+     propios valores, así que hay tres huecos reservados —
+     `_ph_hdr` (el título depende de grano/modo/vista), `_ph_vista` ("Vista"
+     depende de `hay_pax`, que depende de los datos, que dependen de los
+     controles de la misma franja) y `_slot_graf`. Los placeholders son lo
+     que rompe la circularidad sin re-indentar las ~400 líneas de cálculo
+     que hay en el medio.
+
+     Medido a 1366x657, tarjeta de 997px — franja de **52px** en los tres
+     granos, sin envolver, y "Vista" a menos de 1px del borde derecho.

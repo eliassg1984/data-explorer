@@ -46,7 +46,7 @@ import streamlit as st
 from data import REPORTES, cargar_rango
 from tema import (
     ACENTO, ADVERTENCIA_TEXTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO,
-    LAVANDA_BORDE, PALETA_SERIES,
+    LAVANDA_BORDE, PALETA_SERIES, TEXTO_PRINCIPAL,
 )
 from graficos.base import _card, _es_movil
 from graficos.compras._comun import _first_point
@@ -443,30 +443,98 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         return
     ancla = _fe.max().date()
 
-    c1, c2, c3 = st.columns([1.5, 1.5, 2.2])
-    with c1:
-        grano = st.pills("Granularidad", list(GRANOS), default="Día",
-                         key="ventas_comp_grano",
-                         label_visibility="collapsed") or "Día"
-    with c2:
-        # Key por granularidad: las opciones cambian con el grano y un
-        # st.pills que conserva un valor fuera de su lista nuevo se queda
-        # sin selección (regla #9 — instance id en la key).
-        ventana = st.pills(
-            "Ventana", list(VENTANAS[grano]), default=VENTANA_DEF[grano],
-            key=f"ventas_comp_ventana_{grano}",
-            format_func=lambda v: f"{v} {'días' if grano == 'Día' else ('semanas' if grano == 'Semana' else 'meses')}",
-            label_visibility="collapsed",
-        ) or VENTANA_DEF[grano]
-    modo = "semana"
-    if grano == "Día":
-        with c3:
-            modo_lbl = st.pills(
-                "Alinear por", ["Mismo día de semana", "Misma fecha"],
-                default="Mismo día de semana", key="ventas_comp_modo",
+    # ── Franja de controles: título → línea → controles → línea → gráfico ──
+    # Misma forma que Ventas › Por día (arquitectura.md #104), con una
+    # diferencia que cambia el diseño: acá son CUATRO grupos independientes,
+    # no cuatro tabs de la misma cosa. Se agrupan por eje — a la izquierda
+    # "cómo corto el tiempo" (granularidad → ventana → alineación), a la
+    # derecha "qué muestro" (Montos/Descomposición) — y los tres de la
+    # izquierda se separan con hairlines verticales. El separador lo dibuja
+    # cada grupo a su IZQUIERDA (estilos/_80_cards.py), NO una regla por
+    # posición: así "alinear por" se lleva el suyo cuando desaparece en
+    # granularidad Semana/Mes. Con una regla por posición quedaría una línea
+    # suelta anunciando un grupo vacío.
+    #
+    # La tarjeta se abre ACÁ, y no en el `with` de más abajo, porque la franja
+    # tiene que quedar DENTRO. Para no re-indentar las ~400 líneas de cálculo
+    # que hay en el medio, se reservan tres huecos que se rellenan cuando ya
+    # hay con qué:
+    #   · `_ph_hdr`    el título depende de grano/modo/vista — el último aún
+    #                  no existe en este punto.
+    #   · `_ph_vista`  "Vista" depende de `hay_pax`, que depende de los datos,
+    #                  que dependen de los controles de esta MISMA franja.
+    #   · `_slot_graf` el gráfico, que se arma al final.
+    # Se lee de session_state y no de `grano` porque `grano` sale del pills que
+    # va DENTRO de estas columnas — hay que decidir antes de crearlas. En el
+    # rerun el estado del widget ya está actualizado, así que coincide; en el
+    # primer run no hay estado y el default ("Día") es el mismo del pills.
+    _grano_layout = st.session_state.get("ventas_comp_grano") or "Día"
+    # La granularidad va en la KEY de la tarjeta, y no es cosmético: es la
+    # regla #70. Un `st.container(key=...)` tiene identidad estable y RETIENE
+    # los hijos huérfanos de la vista anterior. Con una key fija, al pasar de
+    # Día a Semana el título y las opciones de Ventana se actualizaban bien
+    # (Python estaba correcto) pero en el DOM quedaban las CINCO columnas del
+    # layout de Día y el pills de "alinear por" seguía ahí, huérfano y
+    # envolviendo a dos filas — franja de 156px en vez de 52. Medido y
+    # reproducido con Semana y con Mes. Al variar la key, la tarjeta remonta
+    # limpia en cada cambio de granularidad.
+    with _card(f"ventas_comparativo_{_grano_layout}"):
+        _ph_hdr = st.empty()
+        # Anchos de columna SEGÚN LA GRANULARIDAD, no fijos. En Semana/Mes no
+        # existe "alinear por", y con los anchos de Día las etiquetas de
+        # "Ventana" pasan de "7 días" a "12 semanas" y NO ENTRAN: envuelven a
+        # tres filas y la franja crece 50px (medido: la línea inferior se iba
+        # de y=93.8 a y=143.8). El ancho que sobra al no haber alineación es
+        # justo el que necesita Ventana.
+        #
+        # La penúltima columna es un ESPACIADOR vacío: empuja "Vista" contra
+        # el borde derecho, que es donde va el otro eje. No se hace con
+        # `justify-content: flex-end` porque no funciona — el div flex interno
+        # del stButtonGroup se queda en su ancho de contenido (165px medidos)
+        # aunque se le fuerce `width:100% !important` en los tres niveles de
+        # la cadena. El espaciador además degrada solo: si la tarjeta se
+        # angosta, encoge proporcional como cualquier columna.
+        if _grano_layout == "Día":
+            c1, c2, c3, _esp, c4 = st.columns([1.3, 1.6, 2.1, 0.7, 1.3])
+        else:
+            c1, c2, _esp, c4 = st.columns([1.3, 2.6, 1.8, 1.3])
+            c3 = None
+        with c1:
+            grano = st.pills("Granularidad", list(GRANOS), default="Día",
+                             key="ventas_comp_grano",
+                             label_visibility="collapsed") or "Día"
+        with c2:
+            # Key por granularidad: las opciones cambian con el grano y un
+            # st.pills que conserva un valor fuera de su lista nuevo se queda
+            # sin selección (regla #9 — instance id en la key).
+            ventana = st.pills(
+                "Ventana", list(VENTANAS[grano]), default=VENTANA_DEF[grano],
+                key=f"ventas_comp_ventana_{grano}",
+                format_func=lambda v: f"{v} {'días' if grano == 'Día' else ('semanas' if grano == 'Semana' else 'meses')}",
                 label_visibility="collapsed",
-            ) or "Mismo día de semana"
-        modo = "semana" if modo_lbl.startswith("Mismo día") else "calendario"
+            ) or VENTANA_DEF[grano]
+        modo = "semana"
+        # `c3 is not None` protege el caso raro en que el ancho se decidió con
+        # un grano y el widget devolvió otro: sin la guarda sería un
+        # AttributeError sobre None en vez de una franja un poco más angosta.
+        if grano == "Día" and c3 is not None:
+            with c3:
+                modo_lbl = st.pills(
+                    "Alinear por", ["Mismo día de semana", "Misma fecha"],
+                    default="Mismo día de semana", key="ventas_comp_modo",
+                    label_visibility="collapsed",
+                ) or "Mismo día de semana"
+            modo = "semana" if modo_lbl.startswith("Mismo día") else "calendario"
+        with c4:
+            _ph_vista = st.empty()
+        # Línea INFERIOR de la franja. Los -18px + width:calc(100% + 36px)
+        # compensan el padding horizontal de la tarjeta para que toque el
+        # borde real, igual que en Por día (arquitectura.md #104).
+        st.markdown(
+            f'<hr style="border:none;border-top:2px solid {GRIS_BORDE};'
+            'margin:-6px -18px 12px;width:calc(100% + 36px);">',
+            unsafe_allow_html=True)
+        _slot_graf = st.container()
 
     claves = _claves_hacia_atras(ancla, grano, ventana)
     claves_ap = [_clave_ap(k, grano, modo) for k in claves]
@@ -499,7 +567,11 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     hay_pax = bool(pax_act_d) and any(p_ap) and any(p_act)
     vista = "Montos"
     if hay_pax and hay_ap:
-        vista = st.pills(
+        # Se dibuja en el hueco que la franja de arriba dejó reservado. No se
+        # puede declarar allá directamente: depende de `hay_pax`, que sale de
+        # los datos, que salen de grano/ventana — sus vecinos de la MISMA
+        # franja. El placeholder es lo que rompe esa circularidad.
+        vista = _ph_vista.pills(
             "Vista", ["Montos", "Descomposición"], default="Montos",
             key="ventas_comp_vista", label_visibility="collapsed") or "Montos"
 
@@ -740,7 +812,17 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     if foco is not None and not (0 <= foco < len(claves)):
         foco = None
 
-    with _card("ventas_comparativo", titulo, titulo_arriba=True):
+    # Ahora sí se puede escribir el título: grano, modo y vista están los tres
+    # resueltos. Va al hueco de la cabecera, ARRIBA de la franja, y su
+    # border-bottom es la línea SUPERIOR que la cierra por arriba.
+    _ph_hdr.markdown(
+        '<div style="margin:-6px -18px 0;padding:0 18px 9px;'
+        'width:calc(100% + 36px);font-size:16px;font-weight:600;'
+        f'line-height:1.3;color:{TEXTO_PRINCIPAL};'
+        f'border-bottom:2px solid {GRIS_BORDE};">{titulo}</div>',
+        unsafe_allow_html=True)
+
+    with _slot_graf:
         # La selección de plotly_chart PERSISTE entre reruns: con una key
         # estática el mismo clic se re-procesa en cada rerun y el drill
         # parpadea abriéndose y cerrándose. El foco va en la key (CLAUDE.md).

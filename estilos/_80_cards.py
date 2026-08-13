@@ -333,6 +333,92 @@ CSS = """    /* ================================================================
     }
 
     /* =================================================================== */
+    /* FRANJA DE CONTROLES DE VENTAS › AÑO PASADO                            */
+    /*                                                                       */
+    /* Cuatro grupos independientes (no tabs de la misma cosa) en una fila.  */
+    /* Mismo look de tab que Por día, y separadores verticales entre los     */
+    /* tres de la izquierda. Ver arquitectura.md regla #107.                 */
+    /* =================================================================== */
+    div[class*="st-key-ventas_comp_grano"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"],
+    div[class*="st-key-ventas_comp_ventana_"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"],
+    div[class*="st-key-ventas_comp_modo"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"],
+    div[class*="st-key-ventas_comp_vista"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"] {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        border-bottom: 2px solid transparent !important;
+        padding: 3px 1px !important;
+        color: var(--text-secondary) !important;
+        font-weight: 400 !important;
+        /* 15px y no los 17px de Por día: son CUATRO grupos en una fila y a
+           17px envuelven a dos líneas en un laptop de 1366. Medido. */
+        font-size: 15px !important;
+    }
+    div[class*="st-key-ventas_comp_grano"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"][aria-pressed="true"],
+    div[class*="st-key-ventas_comp_ventana_"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"][aria-pressed="true"],
+    div[class*="st-key-ventas_comp_modo"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"][aria-pressed="true"],
+    div[class*="st-key-ventas_comp_vista"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"][aria-pressed="true"] {
+        border-bottom-color: var(--accent) !important;
+        color: var(--accent-deep) !important;
+        font-weight: 600 !important;
+    }
+    /* El gap real no va en stButtonGroup (es display:block): va en su hijo
+       directo, un <div> sin testid propio — mismo hallazgo que en Por día. */
+    div[class*="st-key-ventas_comp_grano"] [data-testid="stButtonGroup"] > div,
+    div[class*="st-key-ventas_comp_ventana_"] [data-testid="stButtonGroup"] > div,
+    div[class*="st-key-ventas_comp_modo"] [data-testid="stButtonGroup"] > div,
+    div[class*="st-key-ventas_comp_vista"] [data-testid="stButtonGroup"] > div {
+        gap: 18px !important;
+    }
+    /* SEPARADORES. Cada grupo dibuja el suyo a su IZQUIERDA, nunca una regla
+       por posición: "alinear por" sólo existe en granularidad Día, así que
+       con una regla posicional quedaría una hairline suelta anunciando un
+       grupo que no está. Colgado de la key, el separador se va con su grupo.
+       El primero (grano) no lleva, y "vista" tampoco: es el otro eje y se
+       separa con espacio, no con línea — una línea diría "otro grupo de lo
+       mismo", y no lo es. */
+    /* Aire entre la línea SUPERIOR y los controles. Sin esto los tabs
+       arrancan pegados a la línea (medido: 0px) — el bloque de columnas cae
+       exactamente donde termina el border-bottom de la cabecera. Va acoplado
+       al margin-top del <hr> en ventas_comparativo.py: 6 arriba / 10 abajo. */
+    div[class*="st-key-ventas_comp_grano"],
+    div[class*="st-key-ventas_comp_ventana_"],
+    div[class*="st-key-ventas_comp_modo"],
+    div[class*="st-key-ventas_comp_vista"] {
+        margin-top: 6px !important;
+    }
+    /* "Vista" va a la DERECHA de la franja (es el otro eje). NO se intenta
+       con `justify-content: flex-end`: probado en el navegador, el div flex
+       interno del stButtonGroup se queda en su ancho de contenido (165px)
+       aunque se le fuerce `width: 100% !important` en los tres niveles de la
+       cadena — element container, stButtonGroup y el propio div. Lo empuja
+       una columna espaciadora vacía en ventas_comparativo.py. */
+    div[class*="st-key-ventas_comp_ventana_"],
+    div[class*="st-key-ventas_comp_modo"] {
+        position: relative;
+        padding-left: 17px !important;
+    }
+    div[class*="st-key-ventas_comp_ventana_"]::before,
+    div[class*="st-key-ventas_comp_modo"]::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 1px;
+        height: 18px;
+        background: var(--border);
+    }
+
+    /* =================================================================== */
     /* ALTO ELÁSTICO — el CSS es el dueño del alto de esta figura            */
     /*                                                                       */
     /* Va con `alturas.ELASTICO` en graficos/ventas.py: la figura sale SIN    */
