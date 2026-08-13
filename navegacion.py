@@ -97,15 +97,24 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
    TEMA CALLAI: sidebar blanco con borde sutil (antes rail oscuro). */
 .st-key-nav_rail {{
     position:fixed !important; top:0 !important; left:0 !important;
-    width:{RAIL_ANCHO}px !important; height:100vh !important;
+    width:{RAIL_ANCHO}px !important;
+    /* 2026-08-12, 2da corrección: la tarjeta se achica a su CONTENIDO (los
+       6 íconos + Refrescar) en vez de forzar 100vh — el pedido explícito
+       fue "el rail debe reducirse, no ser tan largo" (el 100vh original
+       dejaba un tramo blanco vacío hasta el borde inferior de la
+       ventana). max-height de red de seguridad: si algún día hay tantos
+       reportes que no entran, vuelve a activarse el scroll interno
+       (overflow-y:auto de la regla de abajo) en vez de desbordar. */
+    height:auto !important; max-height:100vh !important;
     background:#ffffff !important; z-index:999999 !important;
     border-right:none !important;
-    /* Mockup "asi debe quedar" 2026-08-12: solo el filo DERECHO (el único
-       que corta contra el contenido — izquierda/arriba/abajo quedan a ras
-       de la ventana) se redondea, con una sombra sutil para separarlo del
-       canvas en vez de la línea recta plana de antes. */
-    border-radius:0 18px 18px 0 !important;
-    box-shadow:2px 0 10px rgba(16, 16, 20, 0.05) !important;
+    /* Con el alto ahora recortado a su contenido, el borde INFERIOR deja
+       de estar a ras de la ventana igual que el derecho — se redondean
+       los tres filos que "cortan" contra el canvas (derecho, y los dos
+       de abajo). El de arriba-izquierda queda recto: ahí sí siguen
+       encontrándose dos bordes a ras (top:0 + left:0). */
+    border-radius:0 18px 18px 18px !important;
+    box-shadow:2px 2px 10px rgba(16, 16, 20, 0.05) !important;
     padding:0 !important;
     display:flex !important;
     flex-direction:column !important;
