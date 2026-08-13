@@ -143,7 +143,12 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
             yaxis="y3",
             hovertemplate="%{x|%d/%m/%Y}<br>Pax/Venta: %{y:.4f}<extra></extra>"))
 
-    _compras_layout(fig, alto=alturas.PROTAGONISTA)
+    # con_franja(), NO PROTAGONISTA: esta figura no manda sola en su tarjeta,
+    # comparte con la franja de controles de arriba (título + tabs + las dos
+    # líneas). Con PROTAGONISTA la tarjeta medía 558px contra un --alto-util
+    # de 501 en el laptop objetivo y el eje X quedaba cortado por el scroll
+    # interno de la tarjeta. Ver arquitectura.md regla #105.
+    _compras_layout(fig, alto=alturas.con_franja())
     _xright = 0.88 if _need_y3 else 1.0
     fig.update_layout(
         # Sin `title=`: el título de este gráfico lo dibuja la cabecera de la

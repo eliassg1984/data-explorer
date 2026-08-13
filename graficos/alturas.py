@@ -104,6 +104,42 @@ MARCO = PRESUPUESTO
 
 
 # ===========================================================================
+# LO QUE LA FIGURA NO ES: LA FRANJA DE CONTROLES
+# ===========================================================================
+# Una tarjeta no siempre es "sólo la figura". Cuando arriba lleva su propia
+# franja de controles (título + tabs + las dos líneas que la cierran), esos
+# píxeles salen del MISMO presupuesto y hasta hoy nadie los contaba: el
+# assert de abajo verificaba `PROTAGONISTA + padding <= PRESUPUESTO` y daba
+# verde mientras la tarjeta real desbordaba.
+#
+# Medido en el navegador el 2026-08-13 sobre Ventas › Por día, viewport
+# 1366x657 (el laptop objetivo): la tarjeta medía 558px contra un
+# `--alto-util` de 501 y el eje X quedaba 25.7px POR DEBAJO del borde —
+# cortado por el scroll interno, o sea invisible sin scrollear dentro de la
+# tarjeta. Es el modo de fallo más caro de todos: el gráfico se ve bien, sólo
+# que sin eje.
+#
+# Desglose de los 96px (graficos/ventas.py::_ventas_grafico_dia):
+#   título 21 + su padding 9 + línea 2 + aire 6 + tabs 32 + aire 8.5
+#   + línea 2 + margen al gráfico 14  ≈ 95.8  →  96
+FRANJA_CONTROLES = 96
+
+
+def con_franja(rol=PROTAGONISTA, franja=FRANJA_CONTROLES):
+    """Alto de una figura que comparte su tarjeta con una franja de controles.
+
+    `rol` es el techo que pediría si mandara sola; lo que devuelve es lo que
+    de verdad le queda una vez descontada la franja. Se usa igual que un rol:
+
+        _compras_layout(fig, alto=alturas.con_franja())
+
+    Con los números de hoy: 469 de contenido - 96 de franja = 373px. Es menos
+    que APOYO (380) y eso está bien — la figura no manda sola en la tarjeta,
+    comparte con los controles."""
+    return min(rol, CONTENIDO - franja)
+
+
+# ===========================================================================
 # ALTOS QUE DEPENDEN DE LOS DATOS
 # ===========================================================================
 
@@ -172,4 +208,9 @@ assert PROTAGONISTA + _PADDING_TARJETA <= PRESUPUESTO, (
 )
 assert APOYO <= PROTAGONISTA and MINI <= APOYO, (
     "Los roles deben quedar ordenados: MINI ≤ APOYO ≤ PROTAGONISTA."
+)
+assert con_franja() + FRANJA_CONTROLES + _PADDING_TARJETA <= PRESUPUESTO, (
+    f"Una tarjeta con franja de controles no entra: figura "
+    f"({con_franja()}px) + franja ({FRANJA_CONTROLES}px) + padding "
+    f"({_PADDING_TARJETA}px) supera el presupuesto ({PRESUPUESTO}px)."
 )

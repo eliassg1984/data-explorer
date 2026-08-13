@@ -3991,3 +3991,41 @@ salvo `icono`):
      barra se come ~10px y las dos líneas miden 10px menos de ancho que la
      tarjeta. No es un bug de las líneas — desaparece cuando la tarjeta
      entra completa.
+
+105. **El presupuesto vertical contaba la figura pero NO la franja de
+     controles (2026-08-13).** `alturas.py` afirmaba `PROTAGONISTA + padding
+     = 462 <= 501` y el assert daba verde mientras la tarjeta real medía
+     558px. Faltaba un sumando: los controles que van ARRIBA de la figura
+     dentro de la misma tarjeta.
+
+     Consecuencia medida en el laptop objetivo (1366x657, `--alto-util` =
+     501): la tarjeta desbordaba 57px por dentro y **el eje X quedaba 25.7px
+     por debajo del borde** — invisible sin scrollear dentro de la tarjeta.
+     El peor modo de fallo posible: el gráfico se ve perfecto, sólo que sin
+     eje, así que nadie sospecha del alto.
+
+     Se arregla pidiendo `alturas.con_franja()` en vez de
+     `alturas.PROTAGONISTA` cuando la tarjeta tiene franja: 469 de contenido
+     - 96 de franja = 373px de figura, y 373 + 96 + 32 = 501 exacto.
+
+     **Lo que este arreglo NO resuelve** (escrito acá para que nadie lo lea
+     como cerrado):
+
+     - `FRANJA_CONTROLES = 96` es un número MEDIDO A MANO. Nada lo deriva y
+       ningún test lo compara contra el DOM real: si alguien toca el
+       `font-size` del título o el padding de los tabs, queda obsoleto en
+       silencio. El assert sólo verifica la aritmética interna.
+     - Sólo se aplicó a Ventas › Por día. Los ~15 módulos que dibujan
+       `st.pills` encima de su figura siguen pidiendo `PROTAGONISTA` como si
+       la figura fuera sola. Sin auditar.
+     - **La raíz sigue ahí:** el MARCO es CSS (`--alto-util`, `100dvh`, se
+       adapta a cualquier pantalla) pero el alto de la FIGURA es una
+       constante de Python calibrada para UNA pantalla (657px de viewport
+       útil). En 1920x1080 la figura se queda en 373 y desperdicia ~300px;
+       en cualquier pantalla menor al objetivo vuelve a desbordar. La causa
+       es la regla #102 (Plotly no llena su contenedor en este stack, así
+       que el alto sale de Python) y Python nunca se entera del viewport.
+       El arreglo de verdad es meter `window.innerHeight` en session_state
+       una vez por sesión (vía `components.html`, que sí ejecuta JS — a
+       diferencia de `st.markdown`, regla de CLAUDE.md) y derivar
+       `PRESUPUESTO` de ahí en vez del 657 hardcodeado.
