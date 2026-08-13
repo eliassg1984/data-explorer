@@ -10,7 +10,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from data import cargar as _cargar_reporte
-from tema import ACENTO, ERROR, EXITO, GRIS_BORDE
+from tema import ACENTO, ERROR, EXITO, GRIS_BORDE, TEXTO_PRINCIPAL
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, _render_rail,
     _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
@@ -55,6 +55,29 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
     if col_pax:
         _opts += ["Pax", "Pax/Venta"]
     _def = [m for m in ("Venta", "Costo") if m in _opts]
+    # ── Cabecera de la franja: título + línea SUPERIOR ────────────────────
+    # Junto con el <hr> de más abajo ENCIERRAN los toggles en una banda
+    # propia, en vez de dejarlos flotando sobre una sola línea. Es el
+    # patrón de la franja de controles de un gráfico bursátil: header,
+    # línea, tabs, línea, gráfico.
+    #
+    # El título vivía DENTRO de la figura (`title=` en update_layout) y
+    # CHOCABA con la leyenda: `_compras_layout` deja 30px de margen
+    # superior (t=30) y pone la leyenda horizontal en y=1.02 / x=0, o sea
+    # exactamente donde Plotly dibuja el título. Se leían encimados. Al
+    # sacar el título acá, la leyenda se queda sola con esa banda.
+    #
+    # Los `-18px` + `width:calc(100% + 36px)` son los MISMOS de la línea de
+    # abajo y por la misma razón: compensan el padding horizontal de la
+    # tarjeta (16px 18px, estilos/_80_cards.py::ajuste_graf_card_*) para
+    # que la línea toque el borde REAL. Si cambia ese padding, cambian los
+    # tres números (acá, en el <hr> y en el margen del toggle).
+    st.markdown(
+        '<div style="margin:-6px -18px 0;padding:0 18px 9px;'
+        'width:calc(100% + 36px);font-size:16px;font-weight:600;'
+        f'line-height:1.3;color:{TEXTO_PRINCIPAL};'
+        f'border-bottom:2px solid {GRIS_BORDE};">Venta bruta por día</div>',
+        unsafe_allow_html=True)
     # NO envolver esto en un st.container(key=...) para poder estilarlo:
     # `st.pills(key=...)` YA emite `st-key-ventas_dia_metricas` en su propio
     # element container, que es el ancla de estilo local. Un container extra
@@ -72,7 +95,7 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
     # (estilos/_80_cards.py, ajuste_graf_card_*), así que hay que compensar
     # ese padding con margen negativo + ensanchar el width lo mismo, si no
     # la línea queda corta por los dos lados en vez de tocar el borde.
-    # El margen SUPERIOR compensa la subida del toggle (-12px en
+    # El margen SUPERIOR compensa la subida del toggle (-8px en
     # estilos/_80_cards.py sobre `st-key-ventas_dia_metricas`): el <hr> va
     # en flujo justo detrás de las pills, así que sin esto subiría con
     # ellas. Van acoplados — si cambia uno, recalcular el otro.
@@ -123,7 +146,8 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
     _compras_layout(fig, alto=alturas.PROTAGONISTA)
     _xright = 0.88 if _need_y3 else 1.0
     fig.update_layout(
-        title="Venta bruta por día",
+        # Sin `title=`: el título de este gráfico lo dibuja la cabecera de la
+        # franja (ver arriba). Dentro de la figura chocaba con la leyenda.
         barmode="group",
         xaxis=dict(
             domain=[0.0, _xright], type="date",

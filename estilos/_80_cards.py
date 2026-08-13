@@ -294,9 +294,15 @@ CSS = """    /* ================================================================
     /* Sube SÓLO el toggle, no la tarjeta. El ancla es la key del PROPIO
        widget: `st.pills(key="ventas_dia_metricas")` emite esa clase en su
        element container, así que no hace falta (ni conviene) envolverlo en
-       un st.container extra — ver arquitectura.md regla #90. */
+       un st.container extra — ver arquitectura.md regla #90.
+
+       Este margen come el gap del bloque vertical de Streamlit entre la
+       CABECERA de la franja (título + línea superior, en graficos/ventas.py)
+       y los tabs. Es el aire que queda entre la línea de arriba y el texto
+       de los tabs: si se toca, medir en el navegador — el <hr> de abajo y
+       el padding de la cabecera están calculados contra este número. */
     div[class*="st-key-ventas_dia_metricas"] {
-        margin-top: -12px !important;
+        margin-top: 6px !important;
     }
     /* El gap real no va en stButtonGroup: ese es display:block (verificado
        en el navegador, no a ojo). El flex de verdad es su hijo directo, un

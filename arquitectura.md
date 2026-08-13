@@ -3921,3 +3921,73 @@ salvo `icono`):
        exactos). Por eso el alto de las figuras se decide en Python y no con
        `dvh`, y por eso `fig.layout.height` hay que QUITARLO si algún día se
        quiere que `stretch` funcione: cuando está puesto, gana siempre.
+
+103. **El `title=` de una figura y la leyenda horizontal de `_compras_layout`
+     se pelean el MISMO espacio, y se dibujan encimados (2026-08-13).**
+     `_compras_layout` (graficos/base.py) fija dos cosas que no se pueden
+     cumplir a la vez:
+
+     ```python
+     margin=dict(l=10, r=10, t=30, b=10),
+     legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+     ```
+
+     Plotly dibuja el título DENTRO del margen superior, pegado a la
+     izquierda; la leyenda horizontal en `y=1.02 / x=0` cae en esa misma
+     banda de 30px y arranca en el mismo borde. Con las dos cosas puestas,
+     el título y las etiquetas de las series se superponen — se leyó en
+     producción como `Venta bruta por día` tachado por `■ Venta ■ Costo`.
+
+     No da error, no lo caza `test_graficos.py` (la figura se construye
+     perfecta) y en el DOM los dos textos existen y son legibles por
+     separado: es exactamente el caso de la regla #91 — el SVG "funciona"
+     pero no "se ve". Sólo aparece midiendo las cajas
+     (`herramientas/auditar_graficos.js`) o mirando el gráfico.
+
+     **Regla:** en un gráfico con leyenda visible, el título NO va dentro de
+     la figura. Va como cabecera de la tarjeta, arriba de la franja de
+     controles. Ver `graficos/ventas.py::_ventas_grafico_dia`, que además
+     usa esa cabecera como el techo de la franja (regla #104).
+
+     Quedan sin auditar los otros `title=` de nivel figura
+     (`graficos/compras/__init__.py`, `ajuste/_evolucion.py`,
+     `ajuste/_distribucion.py`, `movimientos_comun.py`, `ventas.py:261` y
+     `:1268`): chocan sólo si además muestran leyenda con más de una serie.
+
+104. **La franja de controles necesita CONTENIDO arriba para poder tener
+     línea superior (2026-08-13).** Los toggles de Ventas › Por día vivían
+     sobre una sola línea (el `<hr>` de abajo). Al pedir la franja cerrada
+     por dos líneas — como la de un gráfico bursátil — la de arriba no tenía
+     dónde ir: el toggle está a 4px del borde de la tarjeta
+     (`margin-top` negativo + `padding: 16px 18px`), así que una línea ahí
+     se lee como un doble borde de la propia tarjeta, no como el techo de
+     una banda.
+
+     La solución fue meterle el título del gráfico (que además había que
+     sacar de la figura por la regla #103): **título → línea → tabs → línea
+     → gráfico**. Medido en el navegador a 1280x720, tarjeta de 957px:
+
+     | pieza          | y (desde el tope de la tarjeta) |
+     |----------------|---------------------------------|
+     | título         | 10                              |
+     | línea superior | 41.8                            |
+     | tabs           | 47.8 – 79.8                     |
+     | línea inferior | 88.3                            |
+     | gráfico        | 111.8                           |
+
+     Aire de 6px arriba de los tabs y 8.5px abajo — no son simétricos a
+     propósito: el botón trae 4px de padding propio, así que el TEXTO queda
+     a 10px de la línea de arriba y el SUBRAYADO del activo a 8.5px de la de
+     abajo, que es lo que se ve.
+
+     **Tres números acoplados** (si se toca uno, medir los otros dos): el
+     `margin: -6px -18px 0` de la cabecera, el `margin-top: 6px` del toggle
+     en `estilos/_80_cards.py` y el `margin: -15px -18px 14px` del `<hr>`.
+     Los `-18px` + `width: calc(100% + 36px)` de cabecera y `<hr>` compensan
+     el padding horizontal de la tarjeta para que las líneas toquen el borde
+     REAL; sin eso quedan cortas por los dos lados.
+
+     **Trampa al medir:** si la tarjeta desborda y scrollea por dentro, la
+     barra se come ~10px y las dos líneas miden 10px menos de ancho que la
+     tarjeta. No es un bug de las líneas — desaparece cuando la tarjeta
+     entra completa.
