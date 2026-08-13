@@ -358,14 +358,24 @@ CSS = """    /* ================================================================
            17px envuelven a dos líneas en un laptop de 1366. Medido. */
         font-size: 15px !important;
     }
+    /* [data-selected="true"], NO [aria-pressed="true"]: los cuatro pills de
+       esta franja son single-select (sin `selection_mode=` en el .py, que
+       por defecto es "single"). Streamlit marca single-select con
+       `role="radio"` + `aria-checked` + `data-selected`; `aria-pressed` es
+       el marcado de MULTI-select (así rinde "Métricas" en Por día, de donde
+       se copió esta regla). Con el selector viejo el CSS nunca matcheaba:
+       verificado con outerHTML en el navegador — el botón activo ("Día",
+       default) no tenía `aria-pressed` en ningún valor, así que el estado
+       "activo" (negrita + color + subrayado) jamás se pintó, desde el
+       primer commit de esta franja. */
     div[class*="st-key-ventas_comp_grano"] [data-testid="stButtonGroup"]
-        button[data-variant="pills"][aria-pressed="true"],
+        button[data-variant="pills"][data-selected="true"],
     div[class*="st-key-ventas_comp_ventana_"] [data-testid="stButtonGroup"]
-        button[data-variant="pills"][aria-pressed="true"],
+        button[data-variant="pills"][data-selected="true"],
     div[class*="st-key-ventas_comp_modo"] [data-testid="stButtonGroup"]
-        button[data-variant="pills"][aria-pressed="true"],
+        button[data-variant="pills"][data-selected="true"],
     div[class*="st-key-ventas_comp_vista"] [data-testid="stButtonGroup"]
-        button[data-variant="pills"][aria-pressed="true"] {
+        button[data-variant="pills"][data-selected="true"] {
         border-bottom-color: var(--accent) !important;
         color: var(--accent-deep) !important;
         font-weight: 600 !important;

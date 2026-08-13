@@ -4175,3 +4175,26 @@ salvo `icono`):
      731 y 581px de tarjeta — por debajo de ~880px empiezan a envolver los
      OTROS tres grupos (grano/ventana/alineación), que es una degradación
      aparte y esperable en ventanas angostas, no el bug reportado.
+
+     **Segunda corrección el mismo día — más grave, dead CSS desde el primer
+     commit:** el estado "activo" (negrita + color + subrayado) de los
+     cuatro grupos JAMÁS se pintó. La regla usaba
+     `button[data-variant="pills"][aria-pressed="true"]`, copiada del
+     patrón de "Por día" — pero ese widget es `selection_mode="multi"` y
+     Streamlit lo marca con `role="checkbox"` + `aria-pressed`. Los cuatro
+     de esta franja son single-select (sin `selection_mode=`, el default),
+     y ahí Streamlit usa `role="radio"` + `aria-checked` + `data-selected`
+     — verificado con `outerHTML` en el navegador: el botón activo por
+     defecto ("Día") no tenía `aria-pressed` en NINGÚN valor. El selector
+     nunca matcheaba, así que los cuatro grupos se veían siempre "apagados"
+     — visualmente correctos en el mockup, muertos en el código real.
+
+     **Lección:** copiar un selector de `[atributo="valor"]` entre dos
+     widgets del mismo tipo (`st.pills`) sin verificar el `selection_mode`
+     de cada uno es exactamente el tipo de bug que no truena — no hay
+     error, no hay warning, el CSS "existe" y hasta pasa lint. Sólo se ve
+     mirando el `outerHTML` real o clickeando en el navegador. Corregido a
+     `[data-selected="true"]`; verificado con clic real en los cuatro
+     grupos (incluida la combinación "Semana" + "8 semanas" del caso
+     degradado): `font-weight` pasa de 400 a 600, el color a
+     `rgb(73,56,184)` y el `border-bottom` a `rgb(108,92,231)`.
