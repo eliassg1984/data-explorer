@@ -71,14 +71,12 @@ _LOGO_URI = _logo_data_uri()
 # ── CSS: convierte el contenedor de botones en una barra fija vertical ──────
 # RAIL_ANCHO: ancho de la barra lateral, 40% más grande que el original (64px).
 RAIL_ANCHO = 90  # 64 * 1.4 ≈ 90
-RAIL_TOP = 50    # aire entre el borde superior de la ventana y el rail.
-                 # = --cab-altura (estilos/_00_base.py): dejar que la franja
-                 # superior "cristal esmerilado" (_40_ajuste_franja.py) se
-                 # vea completa en la esquina donde antes tapaba el rail
-                 # (rail z-index 999999 > franja z-index 0). 50px cubre los
-                 # dos altos reales de la franja: 50px por defecto y 46px en
-                 # el override de escritorio (min-width:901px) — con 50 el
-                 # rail nunca la corta a la mitad en ningún ancho.
+RAIL_TOP = 64    # aire entre el borde superior de la ventana y el rail.
+                 # 50px (= --cab-altura) ya dejaba ver la franja "cristal
+                 # esmerilado" completa (_40_ajuste_franja.py, alto real
+                 # 46-50px) pero el rail quedaba pegado a su borde inferior.
+                 # 64px = esos 50px + ~14px de aire propio, para que el rail
+                 # flote separado de la franja en vez de tocarla.
 LOGO_ALTO = 0    # sin logo visible: el riel de iconos empieza desde arriba
 
 # ALTURA DE LA BARRA INFERIOR EN MÓVIL (bottom nav). Si cambias este valor,
