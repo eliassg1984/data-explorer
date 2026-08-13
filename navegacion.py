@@ -100,6 +100,12 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     width:{RAIL_ANCHO}px !important; height:100vh !important;
     background:#ffffff !important; z-index:999999 !important;
     border-right:none !important;
+    /* Mockup "asi debe quedar" 2026-08-12: solo el filo DERECHO (el único
+       que corta contra el contenido — izquierda/arriba/abajo quedan a ras
+       de la ventana) se redondea, con una sombra sutil para separarlo del
+       canvas en vez de la línea recta plana de antes. */
+    border-radius:0 18px 18px 0 !important;
+    box-shadow:2px 0 10px rgba(16, 16, 20, 0.05) !important;
     padding:0 !important;
     display:flex !important;
     flex-direction:column !important;
@@ -179,45 +185,13 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     font-size:22px !important; line-height:1 !important;
 }}
 
-/* Botón de refresco: sale del flujo del rail (antes quedaba al fondo via
-   margin-top:auto, dejando un hueco vacío entre el último ícono y el
-   propio botón) y se ancla a la franja inferior fija (.stApp::after, ver
-   estilos/_90_franja_inferior.py), a la derecha del texto "Última
-   actualización" (ese texto vive inyectado directo en <body>, ver
-   inject_footer_actualizacion en inyecciones/varios.py — son elementos
-   independientes que solo comparten la franja visualmente). El
-   contenedor de referencia de un position:fixed es el VIEWPORT (nav_rail
-   no define transform/filter/perspective), así que right/bottom anclan
-   a la esquina de la pantalla, no del rail. Selectores prefijados con
-   `.st-key-nav_rail` a propósito: sin eso, especificidad empataría con
-   las reglas genéricas de arriba y el orden de aparición decidiría al
-   revés. Reseteado para MÓVIL más abajo (ahí vuelve a ser un ícono más
-   de la barra inferior). 2026-08-12. */
-.st-key-nav_rail .st-key-navbtn_refresh {{
-    position:fixed !important;
-    top:auto !important; left:auto !important;
-    right:16px !important; bottom:5px !important;
-    margin:0 !important;
-    width:auto !important;
-}}
-.st-key-nav_rail .st-key-navbtn_refresh button {{
-    width:auto !important; height:32px !important; min-height:32px !important;
-    padding:0 14px !important;
-    border-radius:16px !important;
-    background:#ffffff !important;
-    box-shadow:inset 0 0 0 1px {GRIS_BORDE} !important;
-}}
-.st-key-nav_rail .st-key-navbtn_refresh button:hover {{
-    background:{LAVANDA_FONDO} !important; color:{ACENTO} !important;
-}}
-.st-key-nav_rail .st-key-navbtn_refresh button p {{
-    flex-direction:row !important;
-    gap:6px !important;
-    font-size:11px !important;
-}}
-.st-key-nav_rail .st-key-navbtn_refresh button [data-testid="stIconMaterial"] {{
-    font-size:16px !important;
-}}
+/* Botón de refresco, al fondo del rail. 2026-08-12: se probó sacarlo del
+   rail entero (position:fixed junto al texto "Última actualización" de
+   la franja inferior) pero el pedido real era otro — mockup "asi debe
+   quedar": Refrescar vuelve DENTRO del rail, pegado a su borde inferior;
+   el espacio vacío arriba de él (entre el último ícono y acá) es
+   aceptado tal cual, no hay que rellenarlo ni repartirlo. */
+.st-key-navbtn_refresh {{ margin-top:auto !important; }}
 
 /* ═══════════════════════════════════════════════════════════════════════
    MÓVIL — el rail lateral se convierte en BARRA INFERIOR (bottom nav).
@@ -237,6 +211,9 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
         width:100vw !important; height:{NAV_MOVIL_ALTO}px !important;
         border-right:none !important;
         border-top:1px solid {GRIS_BORDE} !important;
+        /* Barra horizontal a ras de los 3 bordes restantes (izq/der/abajo):
+           el redondeo del filo derecho de escritorio no aplica acá. */
+        border-radius:0 !important;
         box-shadow:0 -2px 8px rgba(16,16,20,0.08) !important;
         overflow-x:auto !important; overflow-y:hidden !important;
         -webkit-overflow-scrolling:touch !important;
@@ -284,28 +261,11 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
         font-size:23px !important;
     }}
 
-    /* 6) Refresh: en móvil vuelve a ser un ícono más de la barra inferior
-       (el position:fixed de escritorio lo sacaría de la fila y lo
-       pegaría flotando sobre el propio nav). Ancho/alto/tipografía del
-       botón ya los pisa la regla genérica del punto 5 (misma
-       especificidad que la de escritorio, pero definida DESPUÉS acá
-       dentro del media query, así que gana) — acá solo hace falta anular
-       lo que es EXCLUSIVO del override de escritorio: la posición fija y
-       el aspecto de píldora blanca. */
-    .st-key-nav_rail .st-key-navbtn_refresh {{
-        position:static !important;
-        right:auto !important; bottom:auto !important;
+    /* 6) Refresh: con anchos fijos de 25vw ya no hay espacio libre que
+       repartir, el margin-left:auto de columna no aplica en la fila. */
+    .st-key-navbtn_refresh {{
         margin-top:0 !important;
         margin-left:0 !important;
-    }}
-    .st-key-nav_rail .st-key-navbtn_refresh button {{
-        background:transparent !important;
-        box-shadow:none !important;
-        border-radius:10px !important;
-        padding:0 !important;
-    }}
-    .st-key-nav_rail .st-key-navbtn_refresh button p {{
-        flex-direction:column !important;
     }}
 
     /* 7) El contenido ocupa todo el ancho; la reserva de espacio inferior
