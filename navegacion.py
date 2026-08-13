@@ -71,6 +71,7 @@ _LOGO_URI = _logo_data_uri()
 # ── CSS: convierte el contenedor de botones en una barra fija vertical ──────
 # RAIL_ANCHO: ancho de la barra lateral, 40% más grande que el original (64px).
 RAIL_ANCHO = 90  # 64 * 1.4 ≈ 90
+RAIL_TOP = 14    # aire entre el borde superior de la ventana y el rail
 LOGO_ALTO = 0    # sin logo visible: el riel de iconos empieza desde arriba
 
 # ALTURA DE LA BARRA INFERIOR EN MÓVIL (bottom nav). Si cambias este valor,
@@ -96,7 +97,7 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
 /* Contenedor del rail -> barra vertical fija a la izquierda.
    TEMA CALLAI: sidebar blanco con borde sutil (antes rail oscuro). */
 .st-key-nav_rail {{
-    position:fixed !important; top:0 !important; left:0 !important;
+    position:fixed !important; top:{RAIL_TOP}px !important; left:0 !important;
     width:{RAIL_ANCHO}px !important;
     /* 2026-08-12, 2da corrección: la tarjeta se achica a su CONTENIDO (los
        6 íconos + Refrescar) en vez de forzar 100vh — el pedido explícito
@@ -104,16 +105,18 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
        dejaba un tramo blanco vacío hasta el borde inferior de la
        ventana). max-height de red de seguridad: si algún día hay tantos
        reportes que no entran, vuelve a activarse el scroll interno
-       (overflow-y:auto de la regla de abajo) en vez de desbordar. */
-    height:auto !important; max-height:100vh !important;
+       (overflow-y:auto de la regla de abajo) en vez de desbordar.
+       2026-08-13: bajado de top:0 a top:{RAIL_TOP}px — pegado al borde
+       superior se veía "muy arriba"; el max-height resta ese mismo
+       offset para no desbordar el viewport por abajo. */
+    height:auto !important; max-height:calc(100vh - {RAIL_TOP}px) !important;
     background:#ffffff !important; z-index:999999 !important;
     border-right:none !important;
-    /* Con el alto ahora recortado a su contenido, el borde INFERIOR deja
-       de estar a ras de la ventana igual que el derecho — se redondean
-       los tres filos que "cortan" contra el canvas (derecho, y los dos
-       de abajo). El de arriba-izquierda queda recto: ahí sí siguen
-       encontrándose dos bordes a ras (top:0 + left:0). */
-    border-radius:0 18px 18px 18px !important;
+    /* Con el alto ahora recortado a su contenido Y el top separado del
+       borde, los CUATRO filos flotan sobre el canvas → redondeo parejo
+       (antes el de arriba-izquierda quedaba recto porque top:0 + left:0
+       lo pegaban al borde de la ventana; ya no). */
+    border-radius:18px !important;
     box-shadow:2px 2px 10px rgba(16, 16, 20, 0.05) !important;
     padding:0 !important;
     display:flex !important;
