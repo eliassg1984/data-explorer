@@ -17,6 +17,12 @@ Estructura:
         ventas.py      → dashboard Ventas (ranking FoodCost, matriz agrupada)
         inventario.py  → dashboard Inventario Valorizado (v2)
         salidas.py     → dashboard Salidas (evolución + subalmacén + tipo)
+        requerimientos.py → dashboard Requerimientos (evolución + sub
+                          almacén + estado). Comparte nav con Salidas
+                          ("Movimientos") — ver movimientos_comun.py.
+        movimientos_comun.py → chip Requerimiento/Salidas + vista
+                          "Comparativo" (Pedido vs Baja), compartidos entre
+                          requerimientos.py y salidas.py.
         constructor.py → constructor estilo Power BI (usado por Compras)
 
 Cómo agregar un dashboard nuevo (p.ej. "Mermas"):
@@ -43,6 +49,7 @@ from graficos.compras import renderizar_graficos_compras              # noqa: F4
 from graficos.inventario import renderizar_graficos_inventario        # noqa: F401
 from graficos.recetabase import renderizar_graficos_recetabase        # noqa: F401
 from graficos.recetaventa import renderizar_graficos_recetaventa      # noqa: F401
+from graficos.requerimientos import renderizar_graficos_requerimientos  # noqa: F401
 from graficos.salidas import renderizar_graficos_salidas              # noqa: F401
 from graficos.ventas import renderizar_graficos_ventas                # noqa: F401
 
@@ -65,6 +72,7 @@ _DASHBOARDS = {
     "Inventario Valorizado": renderizar_graficos_inventario,
     "Receta Base":           renderizar_graficos_recetabase,
     "Receta Venta":          renderizar_graficos_recetaventa,
+    "Requerimientos":        renderizar_graficos_requerimientos,
     "Salidas":               renderizar_graficos_salidas,
     "Ventas":                renderizar_graficos_ventas,
 }

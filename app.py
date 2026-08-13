@@ -1051,6 +1051,19 @@ def _cb_chips_en_navegador(d):
         _render_tabla(d, df_totales=df_tabla, filtros_grid=modelo)
 
 
+def _cb_requerimientos_tabla(d):
+    """Callback de Tabla para Requerimientos. Hasta 2026-08-13 Requerimientos
+    era una rama de despacho aparte en `_render_contenido` (sin dashboard de
+    gráficos); ahora tiene uno (`graficos.requerimientos`, con chips propios
+    Sub Almacén/Familia) y "Tabla" es un item más de su rail, como Salidas —
+    pero la tabla en sí sigue siendo la pivote propia de siempre
+    (`_render_requerimientos`: deriva Mes/Año para el Modo pivote de AG Grid,
+    todas las columnas visibles, `grandTotalRow` en vez de fila anclada —
+    ver `tablas/desktop.py::es_requerimientos`). Preservar ese comportamiento
+    exacto es la razón de este wrapper en vez de caer en `_cb_directo`."""
+    _render_requerimientos(d, col_fecha, cols_mostrar, font_px, cfg)
+
+
 # Reportes que NO usan _cb_directo. Un reporte nuevo con dashboard propio no
 # necesita tocar nada de aquí: cae en el default.
 # (Compras aparecería con _cb_directo pero da igual — su vista Tabla la arma
@@ -1059,6 +1072,7 @@ _TABLA_CB = {
     "Ajuste de Inventario": _cb_chips_en_navegador,
     "Receta Base":          _cb_chips_en_python,
     "Receta Venta":         _cb_chips_en_python,
+    "Requerimientos":       _cb_requerimientos_tabla,
 }
 
 
@@ -1066,20 +1080,15 @@ _TABLA_CB = {
 def _render_contenido():
     perf.fragment_start("_render_contenido")                                # ⚡ PERF
 
-    # ── REQUERIMIENTOS — sin vista de gráficos ──────────────────────────────
-    # Único reporte con tabla pivote propia y sin equivalente en graficos/.
-    # El rail lleva un solo item para conservar el mismo chrome (franja
-    # transparente, padding reservado) que el resto.
-    if reporte == "Requerimientos":
-        _render_rail((("", (("Tabla", "Tabla"),)),), "requerimientos_rail_sel")
-        _render_requerimientos(df_f, col_fecha, cols_mostrar, font_px, cfg)
-
     # ── REPORTES CON DASHBOARD PROPIO ───────────────────────────────────────
     # El dashboard dibuja su rail (donde "Tabla" es un item más) y llama al
     # callback cuando toca. Antes esto eran 6 ramas elif idénticas salvo el
     # nombre del callback; el discriminante real es cuál de las 3 formas de
-    # arriba usa cada reporte, y eso vive en _TABLA_CB.
-    elif tiene_dashboard(reporte):
+    # arriba usa cada reporte, y eso vive en _TABLA_CB. Requerimientos vivió
+    # acá como rama aparte (sin dashboard) hasta 2026-08-13 — ver
+    # `_cb_requerimientos_tabla` arriba y arquitectura.md § Unificación
+    # Movimientos.
+    if tiene_dashboard(reporte):
         renderizar_graficos_reporte(
             df_f, reporte, cfg, df_full=df,
             tabla_cb=_TABLA_CB.get(reporte, _cb_directo),

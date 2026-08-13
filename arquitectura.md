@@ -23,7 +23,7 @@ actualiza este documento en el mismo commit.
 | `cortes.py` | Agrupa fechas en **cortes**: las rachas de días de una misma sesión de inventario (salto ≤ `CORTE_MAX_SALTO_DIAS`). Un corte es un CONJUNTO de días, no un intervalo — ver regla #62. Sin dependencias de streamlit ni de `graficos/`, porque lo consumen los dos lados: la franja de `app.py` y `graficos/ajuste/_comun.py` (que lo reexporta con los nombres privados de siempre). |
 | `data.py` | Carga de datos: DuckDB + httpfs leyendo parquets de R2 (secrets). Sistema de refresco bajo demanda vía R2. |
 | `tablas/` | **Paquete de tablas AgGrid** (refactor 2026-08-01; antes un `tablas.py` de 2.028 líneas). `__init__.py` re-exporta la API pública. `_css.py` (CSS de grid y paneles), `_config.py` (estilos de celda/fila, sidebar, totales), `desktop.py` (`renderizar_aggrid_desktop`), `movil.py` (`renderizar_aggrid_movil`), `compras.py` (`renderizar_aggrid_compras`), `ajuste_pivote.py` (`renderizar_aggrid_pivote_ajuste`, tabla "Por fecha" de Ajuste de Inventario — ver regla #25). `renderizar_tabla_compras` se borró el 2026-08-08 (llevaba desde 2026-08-01 sin llamadores). |
-| `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `tiene_dashboard(reporte)` (para que `app.py` no enumere reportes ni importe `_DASHBOARDS`; ver regla #50). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), **`ajuste/` es un paquete** (refactor 2026-08-08; antes un `ajuste.py` de 2.607 líneas — el fichero con MÁS churn del repo, 80 de los últimos 200 commits): una vista por módulo — `_comun.py` (layout del rail, fechas de corte, periodos), `_evolucion.py`, `_pivote.py`, `_cascada.py`, `_panel_analisis.py`, `_heatmap.py`, `_distribucion.py` — y `__init__.py` con la config del rail, `categoria_rango_ajuste` y el entry point. Ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10, `ventas.py` (`ventas_resumen.py` aporta su vista "Resumen ejecutivo" — KPIs + venta diaria coloreada por tendencia + ticket promedio + top platos; nació con un candlestick, ver por qué se dio de baja en la regla #85) y `ventas_comparativo.py` (vista "Año Pasado": barras agrupadas Actual vs Año Pasado en día/semana/mes, con toggle de alineación fecha-calendario / día-de-semana en día, feriados y findes marcados, recorte del período en curso, modo "Descomposición" (%Δ venta/pax/ticket en un solo eje) y drill por clic al ranking de platos del período — ver reglas #86, #87 y #88), `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras). **`recetas_comun.py`** (2026-08-13) tiene la ÚNICA copia de los 5 gráficos que comparten Receta Base y Receta Venta (Sankey/Composición/Ranking/Ítems clave/Panorama de compras) más `_activo()` y `_chip_fuente()` — ver regla #97. `recetabase.py` y `recetaventa.py` son capas finas sobre ese módulo: resuelven columnas reales + llaman a lo compartido. `legacy.py` (Inventario v1) se borró el 2026-08-08: 421 líneas sin un solo import. **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py`, `volatilidad.py` (ranking de insumos por volatilidad de precio → candlestick semanal → compras de la semana clickeada; ver regla #74) — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. El drill de Proveedor se siguió partiendo el 2026-08-08 (era una función de 1.577 líneas): `_css_proveedor.py` (sus 527 líneas de CSS, que NO van a `estilos/` a propósito — ver su docstring), `_etiquetas_proveedor.py` (texto de las barras: `fmt_k`, `abrev_nombre`, `etiqueta_serie`, `sufijo_granularidad`; puras y con asserts de valor en `test_graficos.py`) y `_documentos_proveedor.py` (`tabla_documentos`, la AgGrid pivote del pie). Quedó en 791 líneas; el resto NO se siguió cortando a propósito — ver regla #55. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
+| `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `tiene_dashboard(reporte)` (para que `app.py` no enumere reportes ni importe `_DASHBOARDS`; ver regla #50). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), **`ajuste/` es un paquete** (refactor 2026-08-08; antes un `ajuste.py` de 2.607 líneas — el fichero con MÁS churn del repo, 80 de los últimos 200 commits): una vista por módulo — `_comun.py` (layout del rail, fechas de corte, periodos), `_evolucion.py`, `_pivote.py`, `_cascada.py`, `_panel_analisis.py`, `_heatmap.py`, `_distribucion.py` — y `__init__.py` con la config del rail, `categoria_rango_ajuste` y el entry point. Ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10, `ventas.py` (`ventas_resumen.py` aporta su vista "Resumen ejecutivo" — KPIs + venta diaria coloreada por tendencia + ticket promedio + top platos; nació con un candlestick, ver por qué se dio de baja en la regla #85) y `ventas_comparativo.py` (vista "Año Pasado": barras agrupadas Actual vs Año Pasado en día/semana/mes, con toggle de alineación fecha-calendario / día-de-semana en día, feriados y findes marcados, recorte del período en curso, modo "Descomposición" (%Δ venta/pax/ticket en un solo eje) y drill por clic al ranking de platos del período — ver reglas #86, #87 y #88), `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras). **`recetas_comun.py`** (2026-08-13) tiene la ÚNICA copia de los 5 gráficos que comparten Receta Base y Receta Venta (Sankey/Composición/Ranking/Ítems clave/Panorama de compras) más `_activo()` y `_chip_fuente()` — ver regla #97. `recetabase.py` y `recetaventa.py` son capas finas sobre ese módulo: resuelven columnas reales + llaman a lo compartido. `requerimientos.py` (2026-08-13, dashboard nuevo: evolución + sub almacén + estado, mismo layout que `salidas.py`) y **`movimientos_comun.py`** (chip Requerimiento/Salidas + vista "Comparativo" que cruza los dos parquets — ver regla #98) comparten nav ("Movimientos") con `salidas.py`. `legacy.py` (Inventario v1) se borró el 2026-08-08: 421 líneas sin un solo import. **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `familia.py`, `cantidad.py`, `evolucion.py`, `volatilidad.py` (ranking de insumos por volatilidad de precio → candlestick semanal → compras de la semana clickeada; ver regla #74) — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. El drill de Proveedor se siguió partiendo el 2026-08-08 (era una función de 1.577 líneas): `_css_proveedor.py` (sus 527 líneas de CSS, que NO van a `estilos/` a propósito — ver su docstring), `_etiquetas_proveedor.py` (texto de las barras: `fmt_k`, `abrev_nombre`, `etiqueta_serie`, `sufijo_granularidad`; puras y con asserts de valor en `test_graficos.py`) y `_documentos_proveedor.py` (`tabla_documentos`, la AgGrid pivote del pie). Quedó en 791 líneas; el resto NO se siguió cortando a propósito — ver regla #55. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
 | `estilos/` | **Paquete del CSS global** (refactor 2026-08-01; antes un `estilos.py` de 1.700 líneas). `__init__.py` mantiene la API pública (`TAM_FUENTE`, `get_css`, `inject_css`) y concatena las secciones. Una sección por módulo, con prefijo numérico que marca el orden: `_00_base`, `_20_compras_rail`, `_30_filtros`, `_40_ajuste_franja`, `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`, `_90_franja_inferior`, `_99_movil`. (`_10_vista` existió hasta el 2026-08-08: estilaba el selector Gráficos/Tabla y quedó 100% huérfano al borrarse ese widget — ver regla #49.) **El orden de `_SECCIONES` es parte del comportamiento**: hay `!important` en ambos lados de varios conflictos, así que gana la regla que va DESPUÉS — por eso `_99_movil` cierra. |
 | `navegacion.py` | Rail lateral, topbar y CSS por sección (`_CSS_AJUSTE`). Botón de refresco aislado en su propio `@st.fragment`. |
 | `inyecciones/` | **Paquete de JS/HTML inyectado** (refactor 2026-08-01; antes un `inyecciones.py` de 1.813 líneas). `_fragmentos.py` (CSS/JS compartido), `grid.py` (salud, altura, maximizar, panel de columnas), `paginacion.py`, `inspector.py` (herramienta de desarrollo), `diseno.py` (modo de diseño visual, `?debug=1&diseno=1` — lee el pin de `inspector.py`, ver regla #46), `varios.py` (overlay de errores, fullscreen, footer, calendario). Los dos blobs de JS grandes viven aparte desde el 2026-08-08: `_inspector_js.py` (1.381 líneas) y `_diseno_js.py` (794). Sus funciones quedaron en 34 y 5 líneas. **Si tocas esos módulos, lee antes la regla #56** — extraerlos rompió el inspector de una forma que ni `ruff` ni los tests pueden ver. Ninguna función depende de otra (la excepción de solo-lectura de `diseno.py` está documentada en la regla #46): las únicas dependencias internas apuntan a las constantes de `_fragmentos.py`. |
@@ -122,7 +122,7 @@ salvo `icono`):
 | `columnas_iniciales` | list | Columnas que arrancan VISIBLES en la AgGrid de escritorio; el resto se activa desde el panel lateral "Columnas". Ausente = se muestran todas las sugeridas. Se resuelven con `buscar_columna`, así que no hace falta clavar el nombre exacto del parquet. |
 | `carga_por_rango` | str | Columna de fecha por la que DuckDB filtra ANTES de materializar el DataFrame (para parquets grandes: nunca se bajan las 100k+ filas). Hoy solo Ventas. |
 | `derivar_periodo_pivote` | bool | Crea las columnas `"<fecha> (Mes)"` y `"<fecha> (Día)"` como **string** para el Modo pivote de AG Grid, que pivotea por el valor EXACTO de la columna: con la fecha cruda (que trae hora al minuto) saldría una columna por minuto. Solo lo necesitan los reportes cuya fecha lleva hora. |
-| `grupo_nav` | str | Entradas de `REPORTES` que comparten este valor se dibujan como **UN solo botón** en el rail (`navegacion.py::inject_navegacion`), navegando al último miembro visitado (session_state `_ultimo_<grupo>`). Hoy solo Receta Base/Venta, grupo `"Recetas"` — ver regla #97. Sigue habiendo DOS entradas reales en `REPORTES` (cada una con su `archivo`/cfg propios); el grupo es puramente de presentación. |
+| `grupo_nav` | str | Entradas de `REPORTES` que comparten este valor se dibujan como **UN solo botón** en el rail (`navegacion.py::inject_navegacion`), navegando al último miembro visitado (session_state `_ultimo_<grupo>`). Dos grupos hoy: Receta Base/Venta (`"Recetas"`, ver regla #97) y Requerimientos/Salidas (`"Movimientos"`, ver regla #98). Sigue habiendo DOS entradas reales en `REPORTES` por grupo (cada una con su `archivo`/cfg propios); el grupo es puramente de presentación. El ícono del botón agrupado sale del PRIMER miembro del grupo en el orden del dict — por eso conviene que los dos miembros compartan el mismo `icono` (evita que la elección dependa del orden). |
 
 > `columnas_iniciales` y `derivar_periodo_pivote` vivían como
 > `if reporte == "..."` dentro de `app.py` hasta el 2026-08-08. Son
@@ -3548,3 +3548,93 @@ salvo `icono`):
     último sub-reporte visitado, el chip cambia de Receta Venta a Receta
     Base con re-render completo (rail con vocabulario propio: "Insumos"
     en vez de "Ingredientes", "RECETA BASE" en vez de "PLATO").
+
+98. **Unificación Requerimientos + Salidas bajo un solo ítem de nav
+    "Movimientos" (2026-08-13), y por qué NO es una repetición mecánica de
+    la regla #97.** El pedido fue el mismo patrón que Recetas, pero acá los
+    dos parquets NO son el mismo tipo de dato con 0% overlap — son las DOS
+    MITADES de un flujo real: Requerimiento es lo que Almacén Central le
+    entrega a un área de producción (Cocina/Barra/Pastelería/...); Salidas
+    es la baja que esa misma área registra después (consumo/merma/evento —
+    `Tipo Descargo`). Confirmado con DuckDB directo contra R2 real (no
+    demo, que hasta este cambio caía al bloque genérico de `_datos_demo`):
+    **726 de los 968 productos de Salidas (75%) también aparecen en
+    Requerimientos** — hay overlap real, a diferencia de Receta Base/Venta.
+    Eso habilitó una vista adicional que Recetas nunca tuvo: un
+    comparativo que cruza los dos parquets.
+
+    **Requerimientos no tenía dashboard de gráficos — era una rama de
+    despacho aparte en `app.py::_render_contenido`** (`if reporte ==
+    "Requerimientos"`, con una tabla pivote propia, `_render_requerimientos`,
+    y su propio flag `es_requerimientos` en `tablas/desktop.py`: deriva
+    Mes/Año para el Modo pivote de AG Grid, `grandTotalRow` en vez de fila
+    anclada, tema oscuro del side-panel). Para que quedara a la par de
+    Salidas (que sí tenía dashboard) se le creó `graficos/requerimientos.py`
+    — mismo layout que `salidas.py` (chips Sub Almacén/Familia en la
+    franja + rail derecho), pero **NO se tocó ni una línea de la lógica de
+    pivote**: se preservó detrás de un callback nuevo,
+    `app.py::_cb_requerimientos_tabla`, registrado en `_TABLA_CB["Requerimientos"]`
+    en vez de caer en el `_cb_directo` por defecto. `tablas/desktop.py`
+    decide su comportamiento especial mirando el string `reporte ==
+    "Requerimientos"`, no CÓMO se llegó ahí — por eso mover la Tabla detrás
+    de un item de rail (en vez de una rama de despacho aparte) no le rompió
+    nada.
+
+    **Columnas reales de `requerimientos.parquet`, confirmadas con DuckDB
+    directo (antes indocumentadas — el reporte usaba la config genérica
+    de `data.py::REPORTES`, sin `filtros_cat`/`buscador` propios):**
+    `Fecha Registro`, `Codigo Producto`, `Nombre Producto`, `Sub Almacen`
+    (el área que pide), `Nombre Familia`, `Nombre Subfamilia`, `Cantidad`,
+    `Precio Unit`, `Valor Item`, `Nombre Estado Requerimiento`
+    (Procesado/Anulado/Generado — 98.8%/0.9%/0.4%). Incidentalmente esto
+    también dejó al descubierto que la config de Salidas (`"Sub Almacen"`
+    en `filtros_cat`, confirmada "2026-08-04") está **desactualizada**: el
+    `salidas.parquet` real de hoy no trae esa columna (solo `LOCAL`,
+    constante `"SAPIENS"`) — el chip/agrupar de Sub Almacén en Salidas no
+    hace nada, en silencio (diseño defensivo de `_resolver`). No se tocó
+    en este cambio (alcance distinto); queda como tarea aparte.
+
+    **`graficos/movimientos_comun.py`** (mismo rol que `recetas_comun.py`
+    para Recetas) aporta dos cosas:
+    - `_chip_movimientos(reporte_activo)`: idéntico mecanismo a
+      `_chip_fuente` — clic en el lado no activo NAVEGA
+      (`session_state["_nav_reporte"]` + `st.rerun()`), no filtra.
+    - `_comparativo_pedido_baja(key_prefix)`: vista "Pedido vs Baja",
+      agregada como un ítem MÁS del rail en AMBOS dashboards (no un
+      reporte nuevo en `REPORTES` — precedente: `ventas_comparativo.py`
+      también vive como vista del rail de Ventas, no como entrada propia).
+      Carga los DOS parquets con `data.cargar()` (mismo precedente de
+      carga cruzada que `recetas_comun._cargar_flujo_compras` con
+      `compras.parquet`) y trae SUS PROPIOS controles (fecha/familia/
+      granularidad/métrica) en vez de heredar los del dashboard anfitrión
+      — los dos lados tienen que quedar filtrados exactamente igual.
+      **Dos límites reales del dato, no del código:** no hay llave
+      documento-a-documento (`COD REQUERIMIENTO`/`COD SALIDA` numeran en
+      secuencias independientes) → el cruce es agregado por
+      producto/familia/período, nunca transacción a transacción; y
+      `salidas.parquet` no trae el área destino → no se puede desglosar
+      por Sub Almacén, solo por producto/familia.
+
+    **Bug real encontrado verificando contra R2 (no el demo) — el mismo
+    tipo de trampa que ya documenta `_activo()` en la regla #97, con una
+    cara nueva:** `Serie.astype(str)` sobre una columna con nulos, cuando
+    el dtype que devuelve DuckDB→pandas es el "str" Arrow-backed (no el
+    `object` clásico), **no convierte el valor faltante a texto** — deja
+    un `float('nan')` suelto adentro de una Series "de texto". No revienta
+    en un `.groupby()` (que por defecto descarta claves NaN, en silencio),
+    pero sí en `sorted(set(...) | set(...))` para armar la lista de
+    familias del comparativo: `TypeError: '<' not supported between
+    instances of 'float' and 'str'`. Reproducido y confirmado con
+    `NOMBRE FAMILIA` de `requerimientos.parquet` (2.903/143.202 filas en
+    blanco). Fix: `.fillna(...)` SIEMPRE antes de `.astype(str)`, nunca
+    después — en `_cargar_lado()` de `movimientos_comun.py`.
+
+    **Verificación:** `ruff`/`test_graficos.py`/`test_asistente_datos.py`
+    verdes, más `streamlit run` contra R2 real (hay secrets locales): nav
+    agrupado en un ícono "Movimientos", KPIs reales en ambos lados del
+    chip, comparativo con cifras reales idénticas entrando desde
+    Requerimientos o desde Salidas (S/ 8.108.897 requerido vs S/ 581.645
+    de baja, 7.2% — la baja es una fracción chica de lo requerido, lo
+    esperable: la mayoría de lo requerido se consume/vende, no se da de
+    baja), y Tabla de Requerimientos con el AgGrid pivote intacto (sin
+    excepciones en los logs del server).

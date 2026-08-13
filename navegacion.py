@@ -37,6 +37,7 @@ _MATERIAL = {
     "cash-coin": "payments",
     "box-arrow-up": "output",
     "card-checklist": "checklist",
+    "arrow-left-right": "swap_horiz",
     "search": "search",
     "question-circle": "help",
 }

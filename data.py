@@ -136,10 +136,26 @@ REPORTES = {
         # date_input del popover lo controla (ver app.py).
         "carga_por_rango": "FEC REG DOCUMENTO",
     },
+    # Requerimientos y Salidas comparten UN ítem de nav ("Movimientos", ver
+    # `grupo_nav` en navegacion.py::inject_navegacion) — mismo mecanismo que
+    # Recetas (grupo `"Recetas"` arriba), pero acá el par SÍ describe un
+    # flujo real: Requerimiento es la salida de stock de Almacén Central
+    # HACIA un área de producción; Salidas es la BAJA que esa misma área
+    # registra después (consumo/merma/evento — ver `Tipo Descargo`). No hay
+    # llave que una un Requerimiento con la Salida que lo "cierra" (numeran
+    # documentos en secuencias independientes), así que el cruce entre
+    # ambos (`graficos/movimientos_comun.py::_comparativo_pedido_baja`) es
+    # agregado por producto/familia/período, nunca documento a documento.
+    # Confirmado con DuckDB directo contra R2 real (no demo) 2026-08-13:
+    # 726 de los 968 productos de Salidas (75%) también aparecen en
+    # Requerimientos — hay overlap real, a diferencia de Receta Base/Venta
+    # (0% overlap, por eso esas dos nunca se cruzan). Detalle en
+    # arquitectura.md § Unificación Movimientos.
     "Salidas": {
         "label_corto": "Salidas",
+        "grupo_nav": "Movimientos",
         "archivo": "salidas.parquet",
-        "icono": "box-arrow-up",
+        "icono": "arrow-left-right",
         # Columnas confirmadas contra el parquet real (2026-08-04): destino
         # de la salida es "Sub Almacen" (no "Nombre Area" — no hay tal
         # columna en este reporte), cantidad/valorizado son "Cant Salida" /
@@ -156,8 +172,25 @@ REPORTES = {
     },
     "Requerimientos": {
         "label_corto": "Requerim.",
+        "grupo_nav": "Movimientos",
         "archivo": "requerimientos.parquet",
-        "icono": "card-checklist",
+        "icono": "arrow-left-right",
+        # Columnas confirmadas contra el parquet real (2026-08-13, DuckDB
+        # directo): destino del requerimiento es "Sub Almacen" (el área de
+        # producción que lo pide — Cocina/Barra/Pastelería/...), cantidad/
+        # valorizado son "Cantidad" / "Valor Item", el estado es "Nombre
+        # Estado Requerimiento" (Procesado/Anulado/Generado), y la jerarquía
+        # de producto es Nombre Familia > Nombre Subfamilia > Nombre
+        # Producto — mismos nombres de columna "amigables" que Salidas
+        # (ambos vienen del mismo ERP, SAPIENS), aunque el código de
+        # producto real es CODIGO PRODUCTO acá vs COD PRODUCTO en Salidas.
+        "fecha": "Fecha Registro",
+        "filtros_cat": ["Sub Almacen", "Nombre Familia"],
+        "buscador": "Nombre Producto",
+        "columnas_movil": [
+            "Nombre Producto", "Cantidad", "Valor Item", "Sub Almacen",
+        ],
+        "columnas_fijas_movil": 2,
     },
     "Inspector": {
         "label_corto": "Inspector",
@@ -410,6 +443,29 @@ def _datos_demo(archivo, filas=60):
             "Cant Salida": cant,
         })
         df["Valor Neto"] = (cant * precio).round(2)
+        return df
+
+    if archivo == "requerimientos.parquet":
+        # Mismos códigos de producto que el demo de salidas.parquet
+        # (P00000-P00059, arriba): así el comparativo Pedido vs Baja
+        # (graficos/movimientos_comun.py) tiene con qué cruzar en local.
+        # Requerimiento es la salida de Almacén Central HACIA un área — no
+        # confundir con salidas.parquet, que es la baja que esa área
+        # registra después (ver comentario en REPORTES, data.py).
+        cant = rng.integers(1, 40, n)
+        precio = rng.uniform(1, 80, n).round(2)
+        df = pd.DataFrame({
+            "Fecha Registro": pd.date_range("2025-01-01", periods=n, freq="D"),
+            "Codigo Producto": [f"P{i:05d}" for i in range(n)],
+            "Nombre Producto": [f"Producto demo {i:03d}" for i in range(n)],
+            "Sub Almacen": rng.choice(["Cocina", "Bar", "Pastelería", "Producción"], n),
+            "Nombre Familia": rng.choice(["Carnes", "Bebidas", "Verduras", "Abarrotes"], n),
+            "Nombre Subfamilia": rng.choice(["Tipo A", "Tipo B", "Tipo C"], n),
+            "Nombre Estado Requerimiento": rng.choice(
+                ["Procesado", "Anulado", "Generado"], n, p=[0.9, 0.06, 0.04]),
+            "Cantidad": cant,
+        })
+        df["Valor Item"] = (cant * precio).round(2)
         return df
 
     if archivo == "ventas.parquet":
