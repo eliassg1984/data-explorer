@@ -1,7 +1,7 @@
 """
 formulario_receta.py — herramienta "Nueva Receta": arma y costea una receta
-de venta a partir del inventario valorizado, y la deja guardada como
-propuesta en R2 para que otra persona la revise.
+de venta o un combo, y los deja guardados como propuesta en R2 para que
+otra persona los revise.
 
 Punto de entrada público: render_formulario_receta().
 
@@ -11,33 +11,37 @@ graficos/recetas_comun.py) navega entre las tres. A diferencia de esas dos,
 esta NO es un reporte de parquet con fecha/filtros: entra por `tool: True`
 (igual que Inspector, ver app.py), no por el pipeline de carga de app.py.
 
-v1 (este commit) — deliberadamente acotado:
-  - Solo "Receta de Venta": insumos de inventariovalorizado.parquet,
-    costeo en vivo (S/ y % del total), precio de venta -> % de costo y
-    margen, Guardar como propuesta JSON en R2 (_recetas_propuestas/).
-  - Guardar es una PROPUESTA, no una escritura a recetaventa.parquet: esa
-    la controla el pipeline diario (Extraer a parquet.py / SQL Server), no
-    la webapp — mismo principio que ya sigue solicitar_refresco() en
-    data.py, que tampoco toca los parquets fuente directamente.
+Dos modos, un segmented_control propio (interno, no confundir con el chip
+Base/Venta/Nueva de arriba, que elige ENTRE reportes):
+  - "Receta de venta": insumos de inventariovalorizado.parquet.
+  - "Combo": productos de venta = platos de recetaventa.parquet, agrupados
+    por Nomb Plato, costo = suma de Total de sus ítems ACTIVOS. Nunca es el
+    precio de venta al público — mismo criterio que el resto de la
+    herramienta, `precio` es siempre COSTO.
 
-Afuera de este commit a propósito (ver mockups de la conversación de
-diseño para el alcance completo, quedan para commits siguientes):
-  - Pestaña Combo (arma un combo con productos de venta, no con insumos).
+Ambos modos comparten la misma lógica de línea/tabla/costeo/guardado
+(parametrizada por `modo`, mismo espíritu que graficos/recetas_comun.py
+con Base/Venta) — evita mantener dos copias del mismo widget.
+
+Guardar es una PROPUESTA en R2 (_recetas_propuestas/), nunca una escritura
+a recetaventa.parquet — mismo principio que solicitar_refresco() en
+data.py, que tampoco toca los parquets fuente directamente.
+
+Afuera de este commit a propósito (quedan para commits siguientes):
   - Crear/editar una Receta Base desde acá.
-  - Envío por correo (necesita SMTP_USER/SMTP_APP_PASSWORD en secrets,
-    que todavía no existen).
+  - Envío por correo (necesita SMTP_USER/SMTP_APP_PASSWORD en secrets).
   - Exportar a Excel/PDF.
-  - Un visor de las propuestas ya guardadas en R2 (hoy quedan ahí, pero
-    no hay una pantalla en la app que las liste).
-  - Grupo/SubGrupo de clasificación (no hay una fuente real definida
-    todavía para esa taxonomía — no se inventa una acá).
+  - Un visor de las propuestas ya guardadas en R2.
+  - Grupo/SubGrupo (sin fuente real definida para esa taxonomía todavía).
 
 OJO — `Activo` en inventariovalorizado.parquet: a diferencia de
-recetabase/recetaventa (con sus 3 formatos confirmados contra R2 real, ver
-`_activo()` en recetas_comun.py), NO se verificó si este parquet trae una
-columna de activo/inactivo ni en qué formato. `_resolver` con candidatos
-razonables + degradación silenciosa (sin insignia) si no aparece — nunca
-se asume una columna que no se confirmó.
+recetabase/recetaventa (con sus 4 formatos confirmados contra R2 real, ver
+`_activo()` en recetas_comun.py y arquitectura.md regla #97), NO se
+verificó si este parquet trae una columna de activo/inactivo ni en qué
+formato. `_resolver` con candidatos razonables + degradación silenciosa
+(sin insignia) si no aparece — nunca se asume una columna que no se
+confirmó (probado contra R2 real: ningún candidato matcheó, la insignia
+simplemente no sale, arquitectura.md regla #100).
 """
 
 import json
@@ -50,24 +54,32 @@ import streamlit as st
 from data import cargar as _cargar_reporte
 from data import get_s3_cliente, secrets_disponibles
 from graficos.base import _resolver
-from graficos.recetas_comun import _chip_fuente
+from graficos.recetas_comun import _activo, _chip_fuente
 
 _ARCHIVO_INVENTARIO = "inventariovalorizado.parquet"
+_ARCHIVO_RECETAVENTA = "recetaventa.parquet"
 _IGV = 1.18
 _UMBRAL_COSTO_OK = 30
 _UMBRAL_COSTO_WARN = 35
+
+_MODOS = ("venta", "combo")
 
 
 def _fmt(v):
     return f"S/ {v:,.2f}"
 
 
-def _key_lineas():
-    return "form_receta_lineas"
+def _key(modo, sufijo):
+    return f"form_receta_{modo}_{sufijo}"
+
+
+def _key_lineas(modo):
+    return _key(modo, "lineas")
 
 
 def _init_estado():
-    st.session_state.setdefault(_key_lineas(), [])
+    for modo in _MODOS:
+        st.session_state.setdefault(_key_lineas(modo), [])
     st.session_state.setdefault("form_receta_contador_nuevo", 0)
 
 
@@ -75,43 +87,88 @@ def _total_lineas(lineas):
     return sum(l["cantidad"] * l["precio"] for l in lineas)
 
 
+# ─── Catálogos (normalizados a las mismas 5 columnas: cod/nombre/unidad/
+# precio/activo, para que _buscador_catalogo y _tabla_lineas no necesiten
+# saber de qué parquet vino cada uno) ────────────────────────────────────
 @st.cache_data(ttl=300, show_spinner=False)
 def _catalogo_insumos_cacheado():
-    """Separado de la resolución de columnas para no recalcular _resolver
-    en cada rerun — el df en sí ya lo cachea data.cargar(), esto cachea
-    además el resultado de la búsqueda de columnas."""
+    """Artículos de almacén desde inventariovalorizado.parquet."""
     df = _cargar_reporte(_ARCHIVO_INVENTARIO)
     if df is None or df.empty:
-        return None, {}
+        return None
 
     col_cod = _resolver(df, ["Codigo Producto", "Código Producto", "COD_PRODUCTO"])
     col_nombre = _resolver(df, ["Nombre Producto", "NOMBRE_PRODUCTO"])
     col_unidad = _resolver(df, ["Unidad Kardex", "UNIDAD_KARDEX", "Unidad"])
     col_precio = _resolver(df, ["Precio Promedio", "PRECIO PROMEDIO", "Precio"])
     col_activo = _resolver(df, ["Activo", "ACTIVO", "Estado"])
-
     if not (col_cod and col_nombre and col_precio):
-        return None, {}
-
-    cols = {"cod": col_cod, "nombre": col_nombre, "precio": col_precio}
-    if col_unidad:
-        cols["unidad"] = col_unidad
-    if col_activo:
-        cols["activo"] = col_activo
-    return df, cols
-
-
-def _es_activo(fila, cols):
-    """None si el parquet no trae columna de activo (no se sabe -> no se
-    muestra insignia). True/False si sí la trae."""
-    if "activo" not in cols:
         return None
-    val = str(fila[cols["activo"]]).strip().upper()
-    return val not in ("INACTIVO", "INACTIVA", "INACTIVE", "NO", "0", "FALSE", "N")
+
+    out = pd.DataFrame({
+        "cod": df[col_cod].astype(str),
+        "nombre": df[col_nombre].astype(str),
+        "unidad": df[col_unidad].astype(str) if col_unidad else "unidad",
+        "precio": pd.to_numeric(df[col_precio], errors="coerce").fillna(0.0),
+    })
+    out["activo"] = _activo(df[col_activo]) if col_activo else None
+    return out
 
 
-def _agregar_linea(cod, nombre, unidad, precio, activo, tipo):
-    lineas = st.session_state[_key_lineas()]
+@st.cache_data(ttl=300, show_spinner=False)
+def _catalogo_productos_venta_cacheado():
+    """Productos de venta que puede usar un combo: cada PLATO de
+    recetaventa.parquet, con costo por unidad = suma de Total de sus ítems
+    ACTIVOS (mismo criterio que ya usa recetas_comun._activo()). Todo lo
+    que entra a este catálogo ya está filtrado a activo -> no hace falta
+    columna `activo` propia (a diferencia de inventariovalorizado)."""
+    df = _cargar_reporte(_ARCHIVO_RECETAVENTA)
+    if df is None or df.empty:
+        return None
+
+    col_plato = _resolver(df, ["Nomb Plato", "Nombre Plato", "PLATO", "Plato"])
+    col_total = _resolver(df, ["Total", "TOTAL", "Importe", "Costo Total"])
+    col_cod_plato = _resolver(df, ["COD PLATO", "Cod Plato"])
+    col_activo_plato = _resolver(df, ["ITEM VENTA ACTIVO", "Item Venta Activo"])
+    col_activo_ins = _resolver(df, ["INS ACTIVO", "Ins Activo"])
+    if not (col_plato and col_total):
+        return None
+
+    d = df.copy()
+    if col_activo_plato:
+        d = d[_activo(d[col_activo_plato])]
+    if col_activo_ins:
+        d = d[_activo(d[col_activo_ins])]
+    if d.empty:
+        return None
+
+    d["_total"] = pd.to_numeric(d[col_total], errors="coerce").fillna(0.0)
+    if col_cod_plato:
+        g = d.groupby(col_plato, as_index=False).agg(
+            precio=("_total", "sum"), cod=(col_cod_plato, "first"),
+        )
+    else:
+        g = d.groupby(col_plato, as_index=False).agg(precio=("_total", "sum"))
+        g["cod"] = g[col_plato]
+    g = g.rename(columns={col_plato: "nombre"})
+    g = g[g["precio"] > 0]
+    if g.empty:
+        return None
+    g["unidad"] = "porción"
+    g["activo"] = None
+    return g[["cod", "nombre", "unidad", "precio", "activo"]]
+
+
+def _es_activo_valor(fila):
+    """activo puede ser True/False/None (bool de numpy o Python) — se
+    normaliza a `is False` explícito para no confundir None (no se sabe)
+    con False (confirmado inactivo)."""
+    v = fila.get("activo")
+    return bool(v) if v is not None and not pd.isna(v) else None
+
+
+def _agregar_linea(modo, cod, nombre, unidad, precio, activo, tipo):
+    lineas = st.session_state[_key_lineas(modo)]
     if any(l["cod"] == cod for l in lineas):
         return
     lineas.append({
@@ -120,66 +177,56 @@ def _agregar_linea(cod, nombre, unidad, precio, activo, tipo):
     })
 
 
-def _buscador_insumos(df_cat, cols):
-    """Buscador con botón "Agregar" por resultado — más simple y liviano en
-    Streamlit que un dropdown custom (eso tenía sentido en JS para el
-    mockup; acá el widget nativo ya resuelve filtro + scroll)."""
-    texto = st.text_input(
-        "Buscar artículo del almacén", placeholder="nombre o código…",
-        key="form_receta_buscador",
-    ).strip()
-
+def _buscador_catalogo(modo, df_cat, *, etiqueta, placeholder, etiqueta_nuevo, unidad_nueva="unidad"):
+    """Buscador con botón "Agregar" por resultado — más simple en Streamlit
+    que un dropdown custom (eso tenía sentido en JS para el mockup; acá el
+    widget nativo ya resuelve filtro + scroll)."""
+    texto = st.text_input(etiqueta, placeholder=placeholder, key=_key(modo, "buscador")).strip()
     if not texto:
         return
 
     mask = (
-        df_cat[cols["nombre"]].astype(str).str.contains(texto, case=False, na=False, regex=False)
-        | df_cat[cols["cod"]].astype(str).str.contains(texto, case=False, na=False, regex=False)
+        df_cat["nombre"].str.contains(texto, case=False, na=False, regex=False)
+        | df_cat["cod"].str.contains(texto, case=False, na=False, regex=False)
     )
     resultados = df_cat[mask].head(8)
-    lineas_actuales = {l["cod"] for l in st.session_state[_key_lineas()]}
+    lineas_actuales = {l["cod"] for l in st.session_state[_key_lineas(modo)]}
 
     if resultados.empty:
         st.caption(f"Sin resultados para «{texto}».")
     else:
         for _, fila in resultados.iterrows():
-            cod = str(fila[cols["cod"]])
-            nombre = str(fila[cols["nombre"]])
-            unidad = str(fila[cols["unidad"]]) if "unidad" in cols else "unidad"
-            precio = float(fila[cols["precio"]]) if pd.notna(fila[cols["precio"]]) else 0.0
-            activo = _es_activo(fila, cols)
+            cod, nombre, unidad, precio = fila["cod"], fila["nombre"], fila["unidad"], float(fila["precio"])
+            activo = _es_activo_valor(fila)
 
             c1, c2 = st.columns([5, 1])
-            etiqueta = f"{nombre} · {cod} · {unidad} · {_fmt(precio)}"
+            etiqueta_fila = f"{nombre} · {cod} · {unidad} · {_fmt(precio)}"
             if activo is False:
-                etiqueta += " · 🔸 Inactivo"
-            c1.write(etiqueta)
+                etiqueta_fila += " · 🔸 Inactivo"
+            c1.write(etiqueta_fila)
             ya_agregado = cod in lineas_actuales
             if c2.button(
                 "Agregada" if ya_agregado else "Agregar",
-                key=f"form_receta_add_{cod}",
-                disabled=ya_agregado,
-                use_container_width=True,
+                key=_key(modo, f"add_{cod}"), disabled=ya_agregado, use_container_width=True,
             ):
-                _agregar_linea(cod, nombre, unidad, precio, activo, "almacen")
+                _agregar_linea(modo, cod, nombre, unidad, precio, activo, "almacen")
                 st.rerun()
 
-    if st.button(f"➕ Agregar «{texto}» como artículo nuevo", key="form_receta_add_nuevo"):
+    if st.button(f"➕ Agregar «{texto}» como {etiqueta_nuevo}", key=_key(modo, "add_nuevo")):
         st.session_state["form_receta_contador_nuevo"] += 1
         n = st.session_state["form_receta_contador_nuevo"]
-        _agregar_linea(f"NUEVO-{n}", texto, "unidad", 0.0, None, "nuevo")
+        _agregar_linea(modo, f"NUEVO-{n}", texto, unidad_nueva, 0.0, None, "nuevo")
         st.rerun()
 
 
-def _tabla_lineas():
+def _tabla_lineas(modo):
     """Devuelve las líneas YA sincronizadas con lo que el usuario haya
     editado en el data_editor durante ESTE mismo rerun (no hace falta un
-    st.rerun() extra acá: el propio data_editor ya disparó el rerun que
-    llegó hasta este punto; el llamador de esta función usa el valor
-    devuelto, no una copia vieja)."""
-    lineas = st.session_state[_key_lineas()]
+    st.rerun() extra: el propio data_editor ya disparó el rerun que llegó
+    hasta acá; el llamador usa el valor devuelto, no una copia vieja)."""
+    lineas = st.session_state[_key_lineas(modo)]
     if not lineas:
-        st.info("Todavía no agregaste ingredientes. Buscá un artículo arriba para empezar.")
+        st.info("Todavía no agregaste ítems. Buscá uno arriba para empezar.")
         return lineas
 
     total = _total_lineas(lineas)
@@ -205,9 +252,10 @@ def _tabla_lineas():
         })
     df_show = pd.DataFrame(filas)
 
+    editor_key = _key(modo, "editor")
     editado = st.data_editor(
         df_show,
-        key="form_receta_editor",
+        key=editor_key,
         hide_index=True,
         use_container_width=True,
         disabled=["Código", "Producto", "Subtotal (S/)", "% del total"],
@@ -226,41 +274,69 @@ def _tabla_lineas():
 
     c1, c2 = st.columns([1, 4])
     with c1:
-        if st.button("Quitar marcadas", key="form_receta_quitar"):
+        if st.button("Quitar marcadas", key=_key(modo, "quitar")):
             a_quitar = set(editado.index[editado["Quitar"]])
             if a_quitar:
-                st.session_state[_key_lineas()] = [
-                    l for i, l in enumerate(lineas) if i not in a_quitar
-                ]
-                st.session_state.pop("form_receta_editor", None)
+                st.session_state[_key_lineas(modo)] = [l for i, l in enumerate(lineas) if i not in a_quitar]
+                st.session_state.pop(editor_key, None)
                 st.rerun()
     with c2:
-        if st.button("Vaciar receta", key="form_receta_vaciar"):
-            st.session_state[_key_lineas()] = []
-            st.session_state.pop("form_receta_editor", None)
+        if st.button("Vaciar", key=_key(modo, "vaciar")):
+            st.session_state[_key_lineas(modo)] = []
+            st.session_state.pop(editor_key, None)
             st.rerun()
 
     return lineas
 
 
-def _guardar_propuesta(nombre, guardado_por, lineas, porciones, precio_venta):
+def _mostrar_pricing(costo_base, precio_venta, *, msg_sin_base="Agregá ítems para poder calcular esto."):
+    """costo_base: costo por porción (Receta de Venta) o costo del combo
+    entero (Combo, no hay porciones que dividir ahí) — al llamador le toca
+    decidir cuál de los dos pasar y qué mensaje mostrar mientras no hay
+    costo_base (los dos modos tienen motivos distintos para no tenerlo
+    todavía: a Receta de Venta le faltan las porciones, a Combo le faltan
+    ítems agregados)."""
+    if costo_base is None:
+        st.caption(msg_sin_base)
+        return
+    if not precio_venta:
+        st.caption("Ingresá un precio de venta para calcular el precio neto y el % de costo.")
+        return
+
+    precio_neto = precio_venta / _IGV
+    pct = costo_base / precio_neto * 100 if precio_neto else 0.0
+    margen = precio_neto - costo_base
+
+    p1, p2, p3 = st.columns(3)
+    p1.metric("Precio neto (sin IGV 18%)", _fmt(precio_neto))
+    p2.metric("% de costo", f"{pct:.1f}%")
+    p3.metric("Margen", _fmt(margen))
+    if pct <= _UMBRAL_COSTO_OK:
+        st.caption("🟢 % de costo muy bueno (referencia orientativa, no una regla del negocio).")
+    elif pct <= _UMBRAL_COSTO_WARN:
+        st.caption("🟠 % de costo aceptable (referencia orientativa).")
+    else:
+        st.caption("🔴 % de costo alto para la mayoría de restaurantes (referencia orientativa).")
+
+
+def _guardar_propuesta(tipo, nombre, guardado_por, lineas, extra=None):
     """Escribe la propuesta como JSON en R2 (_recetas_propuestas/), mismo
     mecanismo que solicitar_refresco() en data.py (get_s3_cliente() +
     put_object). NUNCA escribe en recetaventa.parquet directamente — eso lo
     genera el pipeline diario a partir de la fuente real."""
     payload = {
-        "tipo": "Receta de Venta",
+        "tipo": tipo,
         "nombre": nombre,
         "guardado_por": guardado_por,
         "guardado_en": datetime.now(timezone.utc).isoformat(),
-        "porciones": porciones,
-        "precio_venta": precio_venta,
         "total": round(_total_lineas(lineas), 2),
         "lineas": [
             {k: l[k] for k in ("cod", "nombre", "unidad", "precio", "cantidad", "tipo")}
             for l in lineas
         ],
     }
+    if extra:
+        payload.update(extra)
 
     if not secrets_disponibles():
         st.info("🧪 Modo demo: no hay R2 configurado. Esto es lo que se habría guardado:")
@@ -282,18 +358,15 @@ def _guardar_propuesta(nombre, guardado_por, lineas, porciones, precio_venta):
         return False
 
 
-# ─── Punto de entrada público ───────────────────────────────────────────────
-def render_formulario_receta():
-    _init_estado()
-    _chip_fuente("Nueva Receta")
+def _limpiar_modo(modo):
+    st.session_state[_key_lineas(modo)] = []
+    st.session_state.pop(_key(modo, "editor"), None)
 
-    st.subheader("Nueva Receta")
-    st.caption(
-        "Armá una receta con artículos del almacén, mirá el costo en vivo, "
-        "y guardala como propuesta para que otra persona la revise."
-    )
 
-    df_cat, cols = _catalogo_insumos_cacheado()
+# ─── Receta de venta ─────────────────────────────────────────────────────
+def _render_receta_venta():
+    modo = "venta"
+    df_cat = _catalogo_insumos_cacheado()
     if df_cat is None:
         st.error(
             f"No se pudo leer {_ARCHIVO_INVENTARIO} o le faltan columnas clave "
@@ -303,12 +376,15 @@ def render_formulario_receta():
 
     c1, c2 = st.columns([3, 1])
     with c1:
-        nombre_receta = st.text_input("Nombre de la receta", key="form_receta_nombre")
+        nombre = st.text_input("Nombre de la receta", key=_key(modo, "nombre"))
     with c2:
-        porciones = st.number_input("Porciones", min_value=0, step=1, value=0, key="form_receta_porciones")
+        porciones = st.number_input("Porciones", min_value=0, step=1, value=0, key=_key(modo, "porciones"))
 
-    _buscador_insumos(df_cat, cols)
-    lineas = _tabla_lineas()
+    _buscador_catalogo(
+        modo, df_cat, etiqueta="Buscar artículo del almacén",
+        placeholder="nombre o código…", etiqueta_nuevo="artículo nuevo",
+    )
+    lineas = _tabla_lineas(modo)
 
     total = _total_lineas(lineas)
     costo_porcion = (total / porciones) if porciones > 0 else None
@@ -319,39 +395,94 @@ def render_formulario_receta():
 
     st.divider()
     precio_venta = st.number_input(
-        "Precio de venta (por porción, con IGV)", min_value=0.0, step=0.10,
-        key="form_receta_precio_venta",
+        "Precio de venta (por porción, con IGV)", min_value=0.0, step=0.10, key=_key(modo, "precio_venta"),
     )
-    if costo_porcion is not None and precio_venta > 0:
-        precio_neto = precio_venta / _IGV
-        pct_costo = costo_porcion / precio_neto * 100 if precio_neto else 0.0
-        margen = precio_neto - costo_porcion
-        p1, p2, p3 = st.columns(3)
-        p1.metric("Precio neto (sin IGV 18%)", _fmt(precio_neto))
-        p2.metric("% de costo", f"{pct_costo:.1f}%")
-        p3.metric("Margen por porción", _fmt(margen))
-        if pct_costo <= _UMBRAL_COSTO_OK:
-            st.caption("🟢 % de costo muy bueno (referencia orientativa, no una regla del negocio).")
-        elif pct_costo <= _UMBRAL_COSTO_WARN:
-            st.caption("🟠 % de costo aceptable (referencia orientativa).")
-        else:
-            st.caption("🔴 % de costo alto para la mayoría de restaurantes (referencia orientativa).")
-    else:
-        st.caption("Ingresá porciones (arriba) y un precio de venta para ver el % de costo.")
+    _mostrar_pricing(
+        costo_porcion, precio_venta,
+        msg_sin_base="Ingresá las porciones (arriba) para poder calcular esto.",
+    )
 
     st.divider()
-    guardado_por = st.text_input("Guardado por (tu nombre)", key="form_receta_guardado_por")
-    if st.button("💾 Guardar como propuesta", type="primary", key="form_receta_guardar"):
-        if not nombre_receta.strip():
+    guardado_por = st.text_input("Guardado por (tu nombre)", key=_key(modo, "guardado_por"))
+    if st.button("💾 Guardar como propuesta", type="primary", key=_key(modo, "guardar")):
+        if not nombre.strip():
             st.warning("Ponele un nombre a la receta.")
         elif not guardado_por.strip():
             st.warning("Decime quién la guarda (campo 'Guardado por').")
         elif not lineas:
             st.warning("Agregá al menos un ingrediente.")
-        else:
-            if _guardar_propuesta(
-                nombre_receta.strip(), guardado_por.strip(), lineas, porciones, precio_venta
-            ):
-                st.success(f"«{nombre_receta}» se guardó como propuesta.")
-                st.session_state[_key_lineas()] = []
-                st.session_state.pop("form_receta_editor", None)
+        elif _guardar_propuesta(
+            "Receta de Venta", nombre.strip(), guardado_por.strip(), lineas,
+            extra={"porciones": porciones, "precio_venta": precio_venta},
+        ):
+            st.success(f"«{nombre}» se guardó como propuesta.")
+            _limpiar_modo(modo)
+
+
+# ─── Combo ───────────────────────────────────────────────────────────────
+def _render_combo():
+    modo = "combo"
+    df_prod = _catalogo_productos_venta_cacheado()
+    if df_prod is None:
+        st.error(
+            f"No se pudo armar el catálogo de productos de venta desde "
+            f"{_ARCHIVO_RECETAVENTA} (¿faltan columnas, o no hay platos activos?)."
+        )
+        return
+
+    nombre = st.text_input("Nombre del combo", key=_key(modo, "nombre"))
+
+    _buscador_catalogo(
+        modo, df_prod, etiqueta="Buscar producto de venta",
+        placeholder="nombre del plato…", etiqueta_nuevo="producto nuevo",
+        unidad_nueva="porción",
+    )
+    st.caption("Un combo se arma con productos de venta ya costeados (platos) — no con insumos sueltos.")
+    lineas = _tabla_lineas(modo)
+
+    total = _total_lineas(lineas)
+    st.metric("Costo total del combo", _fmt(total))
+
+    st.divider()
+    precio_venta = st.number_input(
+        "Precio de venta del combo (con IGV)", min_value=0.0, step=0.10, key=_key(modo, "precio_venta"),
+    )
+    _mostrar_pricing(total if lineas else None, precio_venta)
+
+    st.divider()
+    guardado_por = st.text_input("Guardado por (tu nombre)", key=_key(modo, "guardado_por"))
+    if st.button("💾 Guardar como propuesta", type="primary", key=_key(modo, "guardar")):
+        if not nombre.strip():
+            st.warning("Ponele un nombre al combo.")
+        elif not guardado_por.strip():
+            st.warning("Decime quién lo guarda (campo 'Guardado por').")
+        elif not lineas:
+            st.warning("Agregá al menos un producto.")
+        elif _guardar_propuesta(
+            "Combo", nombre.strip(), guardado_por.strip(), lineas,
+            extra={"precio_venta": precio_venta},
+        ):
+            st.success(f"«{nombre}» se guardó como propuesta.")
+            _limpiar_modo(modo)
+
+
+# ─── Punto de entrada público ───────────────────────────────────────────────
+def render_formulario_receta():
+    _init_estado()
+    _chip_fuente("Nueva Receta")
+
+    st.subheader("Nueva Receta")
+    st.caption(
+        "Armá una receta de venta o un combo, mirá el costo en vivo, "
+        "y guardalo como propuesta para que otra persona lo revise."
+    )
+
+    modo_label = st.segmented_control(
+        "Tipo", ["Receta de venta", "Combo"],
+        default="Receta de venta", key="form_receta_modo", label_visibility="collapsed",
+    )
+
+    if modo_label == "Combo":
+        _render_combo()
+    else:
+        _render_receta_venta()

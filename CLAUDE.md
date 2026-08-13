@@ -11,8 +11,12 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 ## Flujo de trabajo
 
 - Push directo a `main`. No hay staging: se valida en Streamlit Cloud.
-- El preview local **no toma cambios de `estilos/`** al navegar — hay que
-  reiniciar el server para verificar estilos.
+- El preview local **no siempre toma cambios al navegar/rerunear** si el
+  server ya estaba corriendo de antes — confirmado con `estilos/`, y
+  también con un módulo de herramienta normal (`formulario_receta.py`,
+  2026-08-13: un texto corregido en el código seguía saliendo viejo en el
+  navegador). Ante cualquier duda de "¿esto ya se ve actualizado?",
+  reiniciar el server en vez de asumir.
 - Cada cambio se pushea y se confirma explícitamente. Si algo NO se pusheó,
   decirlo — si no, se diagnostican "conflictos" que no existen.
 

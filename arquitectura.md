@@ -3743,6 +3743,29 @@ salvo `icono`):
      exportar a Excel/PDF, un visor de las propuestas ya guardadas en R2, y
      Grupo/SubGrupo (sin fuente real definida para esa taxonomía).
 
+     **Actualización (mismo día): se sumó Combo como segundo modo.** Un
+     `st.segmented_control` propio DENTRO de "Nueva Receta" (no confundir
+     con el chip Base/Venta/Nueva de arriba, que elige entre reportes)
+     alterna "Receta de venta" / "Combo". Combo arma su línea con
+     PRODUCTOS DE VENTA, no insumos: catálogo derivado en vivo de
+     `recetaventa.parquet`, agrupado por `Nomb Plato` con `_activo()` ya
+     aplicado (igual criterio que `_panorama_compras_venta`), costo =
+     suma de `Total` de sus ítems. Toda la lógica de línea/tabla/costeo/
+     guardado (`_agregar_linea`, `_tabla_lineas`, `_mostrar_pricing`,
+     `_guardar_propuesta`) se parametrizó por `modo` en vez de duplicarse
+     — mismo espíritu que `graficos/recetas_comun.py` con Base/Venta
+     (regla #97): ambos catálogos se normalizan a las mismas 5 columnas
+     (`cod`/`nombre`/`unidad`/`precio`/`activo`) para que el buscador y la
+     tabla no necesiten saber de qué parquet vino cada uno.
+
+     **Trampa nueva, para la lista de CLAUDE.md:** el preview local
+     tampoco recoge en caliente los cambios de un módulo `.py` normal si
+     el server ya estaba corriendo de una sesión anterior — mismo síntoma
+     que ya está documentado para `estilos/`, pero acá se manifestó en
+     `formulario_receta.py`: un mensaje corregido en el código seguía
+     saliendo viejo en el navegador hasta reiniciar el server. Reiniciar
+     (no solo recargar la pestaña) es el fix, igual que para estilos.
+
      **Verificación:** `ruff check` + `test_graficos.py` +
      `test_asistente_datos.py` en verde. `streamlit run` contra R2 real
      (no demo): nav agrupado sin ícono nuevo, chip con el 3er segmento
