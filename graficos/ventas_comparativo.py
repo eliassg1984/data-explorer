@@ -48,7 +48,7 @@ from tema import (
     ACENTO, ADVERTENCIA_TEXTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO,
     LAVANDA_BORDE, PALETA_SERIES,
 )
-from graficos.base import _card
+from graficos.base import _card, _es_movil
 from graficos.compras._comun import _first_point
 
 GRANOS = ("Día", "Semana", "Mes")
@@ -679,7 +679,11 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
 
     fig.update_layout(
         barmode="group", bargap=0.28, bargroupgap=0.08,
-        height=340,
+        # Móvil: 340px fijo desperdicia scroll en un viewport angosto (medido
+        # ~877px de card en 375x812, casi 1.1x el viewport — CLAUDE.md pide
+        # medir antes de tocar píxeles). El ancho ya cae solo con
+        # use_container_width; el alto no, hay que bajarlo a mano.
+        height=(260 if _es_movil() else 340),
         # El margen de arriba sólo reserva lugar para el legend cuando el
         # legend existe (Montos). En Descomposición ese espacio sería aire.
         margin=dict(l=10, r=10,
@@ -861,10 +865,24 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                      "faltó gente; si cae el ticket y el pax no, vinieron "
                      "igual pero gastaron menos. " + _expl)
         _plural = {"Día": "días", "Semana": "semanas", "Mes": "meses"}[grano]
-        st.caption(f"Ventana: {ventana} {_plural} hasta {ancla:%d/%m/%Y}. "
-                   + _expl + _cal_txt + _lbl
-                   + (" Tocá una barra para ver los platos de ese período."
-                      if col_prod else ""))
+        _texto_caption = (
+            f"Ventana: {ventana} {_plural} hasta {ancla:%d/%m/%Y}. "
+            + _expl + _cal_txt + _lbl
+            + (" Tocá una barra para ver los platos de ese período."
+               if col_prod else ""))
+        # Móvil: este texto junta ventana + método + feriados + notas en un
+        # solo párrafo — a 335px de ancho de card mide ~224px de alto, más de
+        # un cuarto de la card entera (medido en 375x812, ver CLAUDE.md). En
+        # desktop se queda visible tal cual (ahí entra en 1-2 líneas); en
+        # móvil se pliega detrás del mismo patrón "compact" que ya usa
+        # "Detalle" un poco más arriba, así sigue a un toque en vez de
+        # forzar scroll para llegar al gráfico de abajo.
+        if _es_movil():
+            with st.expander("Cómo leer este comparativo", expanded=False,
+                             type="compact"):
+                st.caption(_texto_caption)
+        else:
+            st.caption(_texto_caption)
 
     # ── Drill: ranking de platos del período clickeado ───────────────────
     if foco is not None and col_prod:
