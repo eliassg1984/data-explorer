@@ -143,12 +143,13 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
             yaxis="y3",
             hovertemplate="%{x|%d/%m/%Y}<br>Pax/Venta: %{y:.4f}<extra></extra>"))
 
-    # con_franja(), NO PROTAGONISTA: esta figura no manda sola en su tarjeta,
-    # comparte con la franja de controles de arriba (título + tabs + las dos
-    # líneas). Con PROTAGONISTA la tarjeta medía 558px contra un --alto-util
-    # de 501 en el laptop objetivo y el eje X quedaba cortado por el scroll
-    # interno de la tarjeta. Ver arquitectura.md regla #105.
-    _compras_layout(fig, alto=alturas.con_franja())
+    # ELASTICO: el alto lo pone el CSS de la tarjeta, no Python. Esta figura
+    # comparte tarjeta con la franja de controles y se come lo que sobra, sea
+    # cual sea la pantalla. Con un alto fijo (con_franja() = 373) quedaba bien
+    # en el laptop objetivo y desperdiciaba 343px en un monitor de 1920x1080:
+    # el MARCO es CSS y se adapta, el alto de la figura era una constante
+    # calibrada para una sola pantalla. Ver arquitectura.md reglas #105 y #106.
+    _compras_layout(fig, alto=alturas.ELASTICO)
     _xright = 0.88 if _need_y3 else 1.0
     fig.update_layout(
         # Sin `title=`: el título de este gráfico lo dibuja la cabecera de la
@@ -168,7 +169,13 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
         margin=dict(l=10, r=(70 if _need_y3 else 10), t=30, b=10),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
     )
-    st.plotly_chart(fig, use_container_width=True, key="ventas_g_dia")
+    # height="stretch" acompaña a alturas.ELASTICO: estira el wrapper de
+    # Streamlit para que la cadena de contenedores tenga alto, que es de
+    # donde Plotly lee el suyo al montar. Solo no alcanza (regla #102): hace
+    # falta además el CSS de estilos/_80_cards.py que le da alto a la tarjeta
+    # y `flex: 1 1 auto` a este elemento.
+    st.plotly_chart(fig, use_container_width=True, height="stretch",
+                    key="ventas_g_dia")
 
 
 def _ventas_cargar_compra_diaria(dia_min, dia_max):

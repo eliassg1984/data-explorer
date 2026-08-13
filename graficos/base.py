@@ -459,7 +459,17 @@ def _compras_layout(fig, alto=alturas.PROTAGONISTA):
     suelto» en el docstring de ese módulo.
 
     El nombre `_compras_*` es histórico (nació en Compras); hoy lo usan
-    también ventas, inventario, salidas, requerimientos y constructor."""
+    también ventas, inventario, salidas, requerimientos y constructor.
+
+    Con `alto=alturas.ELASTICO` la figura sale SIN `height`: el alto lo pone
+    el CSS del contenedor y Plotly lo lee al montar. Requiere que el llamador
+    pase `height="stretch"` a `st.plotly_chart` y que el CSS le dé alto a la
+    cadena de contenedores — ver arquitectura.md regla #106."""
+    if alto is alturas.ELASTICO:
+        # height=None a propósito: mientras `fig.layout.height` esté puesto,
+        # gana siempre y el contenedor no pinta nada (regla #102).
+        alto = None
+        fig.update_layout(autosize=True)
     fig.update_layout(
         height=alto,
         margin=dict(l=10, r=10, t=30, b=10),

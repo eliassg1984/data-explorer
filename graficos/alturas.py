@@ -125,6 +125,39 @@ MARCO = PRESUPUESTO
 FRANJA_CONTROLES = 96
 
 
+class _Elastico:
+    """Sentinela para `alto=`: el alto NO lo decide Python, lo decide el CSS.
+
+    No es un número y no debe entrar en ninguna cuenta: si aparece en una
+    suma, es que alguien lo trató como un rol. Su `repr` lo dice para que el
+    traceback sea legible."""
+
+    def __repr__(self):
+        return "alturas.ELASTICO"
+
+
+ELASTICO = _Elastico()
+"""Pedido de alto ELÁSTICO: la figura sale sin `fig.layout.height` y toma el
+alto de su contenedor CSS al montar.
+
+Medido el 2026-08-13 en un banco aparte (Streamlit 1.59 + Plotly 6.9), y
+corrige la regla #102, que daba esto por imposible:
+
+  · SIN `fig.layout.height`, el SVG SÍ toma el alto del contenedor CSS al
+    MONTAR. Verificado en tres viewports: 1920x1000 → 602px, 1600x950 →
+    544px, 1366x657 → 251px, siguiendo al hueco disponible en cada uno.
+  · Lo lee UNA sola vez. Ningún camino lo recalcula después: ni el evento
+    `resize`, ni `config={'responsive': True}`, ni `Plotly.Plots.resize()`,
+    ni `Plotly.relayout(gd, {height: N})` (que la regla #102 daba por
+    funcional y HOY es un no-op), ni un rerun de Streamlit.
+
+Consecuencia práctica: el alto sale bien al ABRIR la app en cualquier
+pantalla, y queda viejo si se redimensiona la ventana en el medio. Para eso
+hace falta REMONTAR el componente (cambiar su `key`), que es el paso 2 —
+mientras no esté, ELASTICO es correcto al cargar y desactualizado al
+arrastrar entre pantallas."""
+
+
 def con_franja(rol=PROTAGONISTA, franja=FRANJA_CONTROLES):
     """Alto de una figura que comparte su tarjeta con una franja de controles.
 

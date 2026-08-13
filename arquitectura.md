@@ -4029,3 +4029,77 @@ salvo `icono`):
        una vez por sesión (vía `components.html`, que sí ejecuta JS — a
        diferencia de `st.markdown`, regla de CLAUDE.md) y derivar
        `PRESUPUESTO` de ahí en vez del 657 hardcodeado.
+
+106. **El alto de una figura SÍ puede salir del CSS — la regla #102 estaba
+     mal (2026-08-13).** Un banco de pruebas nuevo, esta vez quitando
+     `fig.layout.height` en vez de dejarlo puesto, dio lo contrario de lo
+     que decía #102:
+
+     | viewport | hueco del contenedor | SVG |
+     |----------|----------------------|-----|
+     | 1920x1000 | 602 | **602** |
+     | 1600x950  | 552 | **544** |
+     | 1366x657  | 259 | **251** |
+
+     Sin `fig.layout.height`, Plotly lee el alto de su contenedor CSS. El
+     desfase constante de 8px es el modebar. Lo que #102 midió — "el SVG se
+     queda en 450" — era el default de Plotly cuando la cadena de
+     contenedores no tiene alto, no una incapacidad de Plotly.
+
+     **Lo que sí sigue siendo cierto, y es la limitación real:** lo lee UNA
+     vez, al MONTAR. Nada lo recalcula después. Medido, los cuatro caminos:
+
+     | intento sobre el gráfico ya montado | resultado |
+     |---|---|
+     | evento `resize` de la ventana | sin cambio |
+     | `config={'responsive': True}` | sin cambio |
+     | `Plotly.Plots.resize(gd)` | sin cambio |
+     | `Plotly.relayout(gd, {height: N})` | **sin cambio** |
+     | rerun de Streamlit (clic en un widget) | sin cambio |
+
+     Ojo con la penúltima: #102 afirma que `Plotly.relayout(gd,
+     {height:700})` da 700 exactos. Con Streamlit 1.59 + Plotly 6.9, y con
+     el `hueco` bien calculado y `window.Plotly` presente, es un **no-op**
+     (`_fullLayout.height` no se mueve). Eso mata la salida elegante — un
+     `ResizeObserver` que le avise a Plotly — y deja sólo dos caminos para
+     reaccionar a un resize: **remontar el componente** (cambiar su `key`
+     desde Python, conserva `session_state`) o **recargar la página**
+     (descartado: borra los filtros, que viven en `session_state` y no en la
+     URL).
+
+     **Cómo se pide:** `alturas.ELASTICO` como `alto=` + `height="stretch"`
+     en `st.plotly_chart` + el CSS de `estilos/_80_cards.py`. Los tres son
+     necesarios; con dos no alcanza.
+
+     **Tres trampas del CSS, las tres medidas:**
+
+     - `flex: 0 0 auto` en la tarjeta es OBLIGATORIO antes de darle `height`
+       (regla #101), si no se ignora en silencio.
+     - `min-height: 0` en el elemento del gráfico: sin él, el `min-height:
+       auto` de un flex item le impide ENCOGER por debajo de su contenido y
+       la tarjeta desborda en pantallas chicas.
+     - **NUNCA `> div { height: 100% }`** sobre el bloque de la tarjeta: le
+       pega a TODOS los hijos y el flex les reparte el alto en partes
+       iguales — medido en el banco, título, tabs y gráfico quedaban en
+       214.7px cada uno. Hay que acotar a la key del gráfico.
+
+     **Ancla `:has()`, no la key de la tarjeta:**
+     `ajuste_graf_card_izq_ventas` la comparten TODAS las vistas de Ventas,
+     así que darle alto fijo estiraría también el Resumen ejecutivo (1364px,
+     largo a propósito). El selector cuelga de la key del PROPIO gráfico:
+     `div[class*="st-key-ajuste_graf_card_"]:has([class*="st-key-ventas_g_dia"])`.
+     Verificado: en Resumen la regla no matchea (`flex` sigue en `1 1 0%`).
+
+     **Resultado en Ventas › Por día:**
+
+     | | 1366x657 | 1920x1000 |
+     |---|---|---|
+     | antes (373 fijos) | figura 373, eje OK | figura 373, **343px desperdiciados** |
+     | ahora (ELASTICO) | figura 373, eje OK | figura **716**, **0 desperdiciados** |
+
+     **Pendiente:** sólo se migró esta tarjeta, y falta el paso 2 (remontar
+     por `key` al cambiar el viewport). Hasta que exista, arrastrar la
+     ventana entre dos pantallas deja el gráfico del tamaño anterior hasta
+     el siguiente F5. En móvil el bloque no aplica (va dentro del
+     `@media (min-width: 769px)`) y Plotly usa su default de 450px, que con
+     scroll de página es correcto.

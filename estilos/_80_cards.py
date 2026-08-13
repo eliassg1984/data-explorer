@@ -331,4 +331,62 @@ CSS = """    /* ================================================================
         button[data-variant="pills"]:hover {
         color: var(--accent) !important;
     }
+
+    /* =================================================================== */
+    /* ALTO ELÁSTICO — el CSS es el dueño del alto de esta figura            */
+    /*                                                                       */
+    /* Va con `alturas.ELASTICO` en graficos/ventas.py: la figura sale SIN    */
+    /* `fig.layout.height` y Plotly toma el alto de este contenedor al        */
+    /* MONTAR. Antes el alto era una constante de Python (373px) calibrada    */
+    /* para el laptop de 1366x768: correcta ahí y desperdiciando 343px en un  */
+    /* monitor de 1920x1080. Ver arquitectura.md regla #106.                  */
+    /*                                                                       */
+    /* El ancla es `:has()` sobre la key del PROPIO gráfico, no la key de la  */
+    /* tarjeta: `ajuste_graf_card_izq_ventas` la comparten TODAS las vistas   */
+    /* de Ventas, y darle alto fijo estiraría también el Resumen ejecutivo    */
+    /* (1364px, largo a propósito). Así sólo se estira la tarjeta que de      */
+    /* verdad contiene este gráfico.                                         */
+    /* =================================================================== */
+    /* TODO el bloque elástico va dentro del mismo @media que el encuadre de
+       arriba. En móvil el cromo es otro y el patrón correcto es el scroll de
+       página: fijarle el alto a la tarjeta ahí rompería justamente eso.
+       Consecuencia conocida en móvil: sin alto de CSS ni de Python, Plotly
+       cae a su default de 450px, que con scroll de página es aceptable. */
+    @media screen and (min-width: 769px) {
+    div[class*="st-key-ajuste_graf_card_"]:has([class*="st-key-ventas_g_dia"]) {
+        /* flex: 0 0 auto es OBLIGATORIO: los bloques de Streamlit son flex
+           items con `flex: 1 1 0%` y ahí `height` se ignora en silencio
+           (regla #101). Sin esto, la regla de abajo no hace nada. */
+        flex: 0 0 auto !important;
+        height: var(--alto-util) !important;
+    }
+    /* La cadena hasta el gráfico: si un solo nivel queda en `auto`, el
+       `height: 100%` de abajo se resuelve contra un padre sin alto y Plotly
+       cae a su default de 450px. Los dos niveles son reales, medidos en el
+       navegador: la tarjeta envuelve un stLayoutWrapper y ese un
+       stVerticalBlock. */
+    div[class*="st-key-ajuste_graf_card_"]:has([class*="st-key-ventas_g_dia"])
+        > [data-testid="stLayoutWrapper"],
+    div[class*="st-key-ajuste_graf_card_"]:has([class*="st-key-ventas_g_dia"])
+        > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] {
+        height: 100% !important;
+    }
+    /* El gráfico se come lo que sobra después de la franja de controles.
+       Streamlit le pone `flex: 0 0 <alto>px` derivado del alto de Plotly;
+       hay que reemplazarlo. `min-height: 0` es imprescindible: sin él, el
+       min-height:auto de un flex item impide que se ENCOJA por debajo de su
+       contenido y la tarjeta desborda en pantallas chicas.
+       OJO: acotado a la key del gráfico, NUNCA a los hijos del contenedor.
+       Con `> div` el flex reparte el alto entre los TRES hijos por igual
+       (título, tabs y gráfico) — medido en el banco: 214.7px cada uno. */
+    div[class*="st-key-ventas_g_dia"] {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+    }
+    div[class*="st-key-ventas_g_dia"] [data-testid="stFullScreenFrame"],
+    div[class*="st-key-ventas_g_dia"] [data-testid="stPlotlyChart"],
+    div[class*="st-key-ventas_g_dia"] .js-plotly-plot {
+        height: 100% !important;
+    }
+    }
 """
