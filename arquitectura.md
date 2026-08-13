@@ -3776,3 +3776,79 @@ salvo `icono`):
      propósito, para no escribir un registro de prueba en el R2 de
      producción — su código reusa `get_s3_cliente()`/`put_object()` sin
      modificar, ya probado en producción por `solicitar_refresco()`.
+
+     **Actualización (mismo día): visor "Guardadas" + primera escritura
+     real en R2 + un crash real que solo aparece con datos de
+     producción.** El picker de modo pasó a 3 opciones (`Receta de venta` /
+     `Combo` / `Guardadas`). `_listar_propuestas_guardadas()` (cacheada,
+     TTL 60s) hace `list_objects_v2` sobre `_recetas_propuestas/` y lee
+     cada JSON con `get_object` — un objeto individual corrupto/parcial se
+     salta con `try/except` en vez de tirar abajo la lista completa (puede
+     pasar si alguien mira la carpeta mientras otra persona está
+     guardando). `_render_guardadas()` es de solo lectura: un
+     `st.expander` por propuesta con guardado_por/fecha/porciones/precio y
+     la tabla de líneas — cargar-para-editar queda para después.
+
+     **Esta vez sí se probó Guardar de verdad contra R2 de producción**
+     (la entrada de arriba decía explícitamente que no, para no ensuciar
+     datos reales) — con nombres `TEST ... (borrar)` para poder
+     identificar y borrar los objetos de prueba después (script de un solo
+     uso con el mismo `get_s3_cliente()`, filtrando por
+     `nombre.startswith("TEST")`, corrido al terminar — 0 objetos quedaron
+     bajo `_recetas_propuestas/`). Confirmó el circuito completo: guardar
+     → aparece en Guardadas incluso con el server reiniciado de cero (o
+     sea que es R2 de verdad, no session_state) → cifras (costo, % de
+     costo, margen) coinciden con lo calculado en el formulario.
+
+     **Bug real encontrado así, que ningún test automático iba a agarrar:**
+     `inventariovalorizado.parquet` trae **más de una fila para el mismo
+     código de producto** (confirmado en vivo: "Sal De Mesa" 0000460
+     aparece dos veces). `_buscador_catalogo` arma un botón "Agregar" por
+     fila con `key=_key(modo, f"add_{cod}")` — dos filas con el mismo
+     `cod` dentro del mismo resultado de búsqueda ⇒
+     `StreamlitDuplicateElementKey`, la app revienta. La búsqueda amplia
+     ("sal", 8 resultados con muchos códigos distintos) nunca lo mostró
+     porque el cupo de 8 se llenaba con otros productos antes de que
+     entraran las dos filas duplicadas — hizo falta una búsqueda
+     ESPECÍFICA ("sal de mesa") para que ambas cayeran en el mismo
+     resultado y colisionaran. **Fix:** `.drop_duplicates(subset="cod",
+     keep="first")` en `_catalogo_insumos_cacheado()` (y, preventivo, lo
+     mismo en `_catalogo_productos_venta_cacheado()`, por si un
+     `COD PLATO` se reusara entre dos platos con nombre distinto — el
+     `groupby` de ahí ya deduplica por nombre, pero no por código).
+     **Lección:** un dataset de producción puede tener filas duplicadas
+     por código aunque nada en el pipeline lo espere; cualquier catálogo
+     que alimente un `key=` de Streamlit armado con un campo
+     "identificador" necesita su propio `drop_duplicates` explícito — no
+     asumir que el campo es único solo porque se llama código.
+
+     **`_limpiar_modo(modo)` deja `guardado_por` sin tocar, a propósito**
+     — nombre/porciones/precio son de ESA receta, pero quien guarda
+     probablemente guarde varias seguidas y no quiere reescribir su
+     nombre cada vez. Ojo con la trampa al VERIFICAR esto en el
+     navegador: cambiar de pestaña (Receta de venta → Combo → Receta de
+     venta) **también** vacía los widgets de texto/número aunque no se
+     haya guardado nada — no es `_limpiar_modo`, es Streamlit limpiando el
+     session_state de un widget que no se instanció en el run anterior.
+     La lista `lineas` (session_state plano, no pasa por `key=` de ningún
+     widget) no sufre este efecto y sobrevive el cambio de pestaña sin
+     problema. Nota aparte: como `_limpiar_modo` no llama `st.rerun()`, el
+     run que procesa el clic en "Guardar" ya dibujó los widgets arriba con
+     los valores viejos antes de llegar al `if st.button(...)` — el
+     mensaje de éxito aparece, pero el formulario recién se ve vacío en la
+     SIGUIENTE interacción (buscar el próximo insumo, por ejemplo). No es
+     un bug — agregar `st.rerun()` ahí se consideró y se descartó SIN
+     probarlo (no llegó a escribirse): `st.rerun()` justo después de
+     `st.success()` es un patrón conocido de Streamlit para tragarse el
+     mensaje de éxito (la rerun reemplaza la salida antes de que se
+     alcance a ver); el reemplazo correcto sería `st.toast()`, que sí está
+     documentado para sobrevivir un rerun — queda pendiente para si el lag
+     visual molesta en el uso real.
+
+     **Verificación (esta ronda):** `ruff check` + `test_graficos.py` +
+     `test_asistente_datos.py` en verde otra vez. Server reiniciado en
+     puerto nuevo (no solo recargado) por la trampa de la entrada
+     anterior. Guardado real x2, visor Guardadas mostrando ambas con
+     cifras correctas, reproducción y fix del crash de código duplicado
+     con el mismo caso real que lo disparó, y limpieza posterior de los 2
+     objetos de prueba en R2.

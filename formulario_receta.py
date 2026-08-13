@@ -11,17 +11,22 @@ graficos/recetas_comun.py) navega entre las tres. A diferencia de esas dos,
 esta NO es un reporte de parquet con fecha/filtros: entra por `tool: True`
 (igual que Inspector, ver app.py), no por el pipeline de carga de app.py.
 
-Dos modos, un segmented_control propio (interno, no confundir con el chip
+Tres modos, un segmented_control propio (interno, no confundir con el chip
 Base/Venta/Nueva de arriba, que elige ENTRE reportes):
   - "Receta de venta": insumos de inventariovalorizado.parquet.
   - "Combo": productos de venta = platos de recetaventa.parquet, agrupados
     por Nomb Plato, costo = suma de Total de sus ítems ACTIVOS. Nunca es el
     precio de venta al público — mismo criterio que el resto de la
     herramienta, `precio` es siempre COSTO.
+  - "Guardadas": lee de vuelta lo que Guardar escribió en R2 — sin esto,
+    "guardar una propuesta para que otra persona la vea" quedaba a medias
+    (el archivo existía en R2, pero nadie en el equipo tenía dónde mirarlo
+    sin abrir el bucket a mano).
 
-Ambos modos comparten la misma lógica de línea/tabla/costeo/guardado
-(parametrizada por `modo`, mismo espíritu que graficos/recetas_comun.py
-con Base/Venta) — evita mantener dos copias del mismo widget.
+Los dos modos de construcción comparten la misma lógica de línea/tabla/
+costeo/guardado (parametrizada por `modo`, mismo espíritu que
+graficos/recetas_comun.py con Base/Venta) — evita mantener dos copias del
+mismo widget.
 
 Guardar es una PROPUESTA en R2 (_recetas_propuestas/), nunca una escritura
 a recetaventa.parquet — mismo principio que solicitar_refresco() en
@@ -31,7 +36,8 @@ Afuera de este commit a propósito (quedan para commits siguientes):
   - Crear/editar una Receta Base desde acá.
   - Envío por correo (necesita SMTP_USER/SMTP_APP_PASSWORD en secrets).
   - Exportar a Excel/PDF.
-  - Un visor de las propuestas ya guardadas en R2.
+  - "Cargar de vuelta en el editor" desde una propuesta guardada (el visor
+    de este commit es de solo lectura).
   - Grupo/SubGrupo (sin fuente real definida para esa taxonomía todavía).
 
 OJO — `Activo` en inventariovalorizado.parquet: a diferencia de
@@ -112,6 +118,12 @@ def _catalogo_insumos_cacheado():
         "precio": pd.to_numeric(df[col_precio], errors="coerce").fillna(0.0),
     })
     out["activo"] = _activo(df[col_activo]) if col_activo else None
+    # inventariovalorizado.parquet trae más de una fila para el mismo código
+    # (confirmado en vivo 2026-08-13: "Sal De Mesa" 0000460 repetido) — sin
+    # este drop_duplicates, _buscador_catalogo arma dos botones con la MISMA
+    # key (`add_<cod>`) y Streamlit revienta con StreamlitDuplicateElementKey
+    # en cuanto ambas filas caen dentro del mismo resultado de búsqueda.
+    out = out.drop_duplicates(subset="cod", keep="first").reset_index(drop=True)
     return out
 
 
@@ -156,6 +168,11 @@ def _catalogo_productos_venta_cacheado():
         return None
     g["unidad"] = "porción"
     g["activo"] = None
+    # El groupby de arriba ya deduplica por NOMBRE de plato; esto además
+    # protege el mismo `add_<cod>` key de _buscador_catalogo por si un
+    # COD PLATO se reutiliza entre dos platos con nombre distinto (mismo
+    # crash que _catalogo_insumos_cacheado, ver comentario ahí).
+    g = g.drop_duplicates(subset="cod", keep="first").reset_index(drop=True)
     return g[["cod", "nombre", "unidad", "precio", "activo"]]
 
 
@@ -359,8 +376,15 @@ def _guardar_propuesta(tipo, nombre, guardado_por, lineas, extra=None):
 
 
 def _limpiar_modo(modo):
+    """Tras guardar con éxito: vacía la receta/combo actual para la próxima.
+    Deja 'guardado_por' tal cual (la persona probablemente guarde varias
+    seguidas) pero limpia nombre/porciones/precio — son de ESTA receta, y
+    dejarlos puestos invita a re-guardar por error con el título viejo."""
     st.session_state[_key_lineas(modo)] = []
     st.session_state.pop(_key(modo, "editor"), None)
+    st.session_state.pop(_key(modo, "nombre"), None)
+    st.session_state.pop(_key(modo, "porciones"), None)
+    st.session_state.pop(_key(modo, "precio_venta"), None)
 
 
 # ─── Receta de venta ─────────────────────────────────────────────────────
@@ -466,6 +490,87 @@ def _render_combo():
             _limpiar_modo(modo)
 
 
+# ─── Guardadas (visor de solo lectura) ──────────────────────────────────
+_PREFIJO_PROPUESTAS = "_recetas_propuestas/"
+
+
+@st.cache_data(ttl=60, show_spinner="Cargando propuestas guardadas…")
+def _listar_propuestas_guardadas():
+    """Lee todos los JSON de _recetas_propuestas/ en R2. Un JSON individual
+    corrupto/parcial se salta (no tira abajo la lista entera) — puede pasar
+    si alguien mira la carpeta mientras otra persona está guardando."""
+    if not secrets_disponibles():
+        return []
+    try:
+        s3 = get_s3_cliente()
+        bucket = st.secrets["R2_BUCKET"]
+        resp = s3.list_objects_v2(Bucket=bucket, Prefix=_PREFIJO_PROPUESTAS)
+    except Exception as e:
+        st.error(f"No se pudo listar las propuestas guardadas: {e}")
+        return []
+
+    propuestas = []
+    for obj in resp.get("Contents", []):
+        clave = obj["Key"]
+        if not clave.endswith(".json"):
+            continue
+        try:
+            body = s3.get_object(Bucket=bucket, Key=clave)["Body"].read()
+            data = json.loads(body)
+            data["_clave"] = clave
+            propuestas.append(data)
+        except Exception:
+            continue
+    propuestas.sort(key=lambda p: p.get("guardado_en", ""), reverse=True)
+    return propuestas
+
+
+def _render_guardadas():
+    if not secrets_disponibles():
+        st.info("🧪 Modo demo: no hay R2 configurado, no hay nada para listar acá.")
+        return
+
+    if st.button("🔄 Actualizar lista", key="form_receta_guardadas_refresh"):
+        _listar_propuestas_guardadas.clear()
+        st.rerun()
+
+    propuestas = _listar_propuestas_guardadas()
+    if not propuestas:
+        st.info("Todavía no hay ninguna propuesta guardada.")
+        return
+
+    st.caption(f"{len(propuestas)} propuesta(s) guardada(s) — más nueva primero.")
+    for p in propuestas:
+        total = p.get("total", 0)
+        titulo = f"{p.get('tipo', '?')} · {p.get('nombre', '(sin nombre)')} · {_fmt(total)}"
+        with st.expander(titulo):
+            fecha = p.get("guardado_en", "")
+            st.caption(f"Guardado por **{p.get('guardado_por', '?')}** · {fecha}")
+
+            extra_bits = []
+            if p.get("porciones"):
+                extra_bits.append(f"{p['porciones']} porciones")
+            if p.get("precio_venta"):
+                extra_bits.append(f"precio de venta {_fmt(p['precio_venta'])}")
+            if extra_bits:
+                st.caption(" · ".join(extra_bits))
+
+            lineas = p.get("lineas") or []
+            if not lineas:
+                st.caption("(sin líneas)")
+                continue
+            df = pd.DataFrame(lineas)
+            df["Subtotal (S/)"] = (df["cantidad"] * df["precio"]).round(2)
+            df = df.rename(columns={
+                "cod": "Código", "nombre": "Producto", "unidad": "Unidad",
+                "cantidad": "Cantidad", "precio": "Precio unit. (S/)",
+            })
+            st.dataframe(
+                df[["Código", "Producto", "Unidad", "Cantidad", "Precio unit. (S/)", "Subtotal (S/)"]],
+                hide_index=True, use_container_width=True,
+            )
+
+
 # ─── Punto de entrada público ───────────────────────────────────────────────
 def render_formulario_receta():
     _init_estado()
@@ -478,11 +583,13 @@ def render_formulario_receta():
     )
 
     modo_label = st.segmented_control(
-        "Tipo", ["Receta de venta", "Combo"],
+        "Tipo", ["Receta de venta", "Combo", "Guardadas"],
         default="Receta de venta", key="form_receta_modo", label_visibility="collapsed",
     )
 
     if modo_label == "Combo":
         _render_combo()
+    elif modo_label == "Guardadas":
+        _render_guardadas()
     else:
         _render_receta_venta()
