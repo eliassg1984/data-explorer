@@ -3670,3 +3670,86 @@ salvo `icono`):
     del layout deja ese margen sin pintar por los hijos — si algo flota
     fijo encima y no lo cubre entero, hay que pintar el ancestro real
     (`html`/`body` acá) o pasar la reserva a `padding`.
+
+100. **"Nueva Receta": tercer miembro de `grupo_nav: "Recetas"`, y por qué
+     es `tool: True` en vez de una tercera entrada con `archivo`
+     (2026-08-13).** El pedido: un formulario para armar y costear una
+     receta de venta a mano y dejarla como propuesta para que otra persona
+     la vea — sin agregar un ícono nuevo al rail. La regla #97 ya había
+     resuelto "varias entradas, un ícono" para Base/Venta; acá el reto
+     distinto era sumar una TERCERA entrada al mismo grupo que **no lee
+     ningún parquet propio** (no tiene `fecha`/`archivo` — arma su tabla en
+     memoria contra `inventariovalorizado.parquet`, que ya carga otro
+     reporte).
+
+     **Encaja en el grupo sin tocar `navegacion.py`.** El agrupado por
+     `grupo_nav` (regla #97) ya es genérico: dibuja un botón por valor de
+     `grupo_nav`, sin asumir cuántos miembros tiene ni si son reportes de
+     parquet. Sumar "Nueva Receta" a `REPORTES` con
+     `"grupo_nav": "Recetas"` alcanzó — cero cambios en
+     `navegacion.py::inject_navegacion`.
+
+     **Pero SÍ necesita `"tool": True`.** Un miembro de grupo normal
+     (Base/Venta) espera pasar por el pipeline de `app.py` (`cargar()`,
+     filtro de fecha, `fecha_ultima_actualizacion`, botón de refresco) — no
+     hay parquet propio para ese pipeline acá. Con `tool: True`, app.py lo
+     desvía ANTES de ese pipeline (mismo bloque que ya usaba Inspector,
+     visto en regla previa de `_TOOLS`). Efecto práctico: `formulario_receta.py`
+     se ocupa de cargar `inventariovalorizado.parquet` por su cuenta
+     (`data.cargar()` directo, mismo precedente que
+     `graficos/recetaventa.py`/`recetas_comun.py` cruzando contra
+     `compras.parquet`).
+
+     **`app.py` pasó de un import fijo a un dict `_TOOLS`.** Hasta este
+     commit, `if cfg.get("tool"):` importaba `render_inspector` a mano —
+     funcionaba con una sola herramienta porque **cualquier** reporte con
+     `tool: True` disparaba SIEMPRE el mismo render. Con una segunda
+     herramienta hacía falta elegir cuál — `_TOOLS = {"Inspector": ...,
+     "Nueva Receta": ...}; _TOOLS[reporte]()`, mismo espíritu que
+     `_DASHBOARDS` en `graficos/__init__.py` (dict, no cadena de if/elif).
+
+     **`_chip_fuente` (regla #97) suma un tercer segmento sin tocar su
+     mecanismo.** El chip ya navegaba escribiendo
+     `session_state["_nav_reporte"]` + `st.rerun()` — el mismo camino que
+     usa el rail. Agregar `"Nueva Receta": "+ Nueva"` al diccionario de
+     etiquetas alcanzó; clic en "+ Nueva" desde Base o Venta navega igual
+     que clic en cualquier ítem del rail, y `formulario_receta.py` llama al
+     mismo `_chip_fuente("Nueva Receta")` arriba de todo para poder volver.
+
+     **Guardar es una PROPUESTA en R2, nunca una escritura a
+     `recetaventa.parquet`.** Mismo principio que `solicitar_refresco()`:
+     la webapp no genera datos fuente, solo señales que un proceso humano o
+     externo revisa después. `formulario_receta.py::_guardar_propuesta()`
+     reusa `get_s3_cliente()` + `put_object()` tal cual, apuntando a
+     `_recetas_propuestas/<uuid>.json` en vez de `_solicitudes_refresco/`.
+     Sin secrets de R2 (modo demo), no escribe nada — muestra con
+     `st.json()` el payload que se habría guardado, mismo criterio que
+     `secrets_disponibles()` ya usa en el resto de `data.py`.
+
+     **Columna `Activo` de `inventariovalorizado.parquet`: NO se asumió.**
+     A diferencia de la regla #97 (los 4 formatos de activo de
+     recetabase/recetaventa, confirmados contra R2 real), este parquet no
+     se verificó — `_resolver()` con candidatos razonables
+     (`"Activo"`/`"ACTIVO"`/`"Estado"`) y degradación silenciosa (sin
+     insignia) si no aparece ninguno. Contra R2 real de producción, ningún
+     candidato matcheó — la insignia simplemente no se muestra, sin error.
+     Si en algún momento se confirma el nombre real, sumarlo a la lista de
+     candidatos es todo el cambio que hace falta.
+
+     **Alcance v1, a propósito — ver docstring de `formulario_receta.py`
+     para el detalle completo:** solo pestaña Receta de Venta. Quedan
+     afuera de este commit: Combo, crear Receta Base desde acá, envío por
+     correo (sin `SMTP_USER`/`SMTP_APP_PASSWORD` en secrets todavía),
+     exportar a Excel/PDF, un visor de las propuestas ya guardadas en R2, y
+     Grupo/SubGrupo (sin fuente real definida para esa taxonomía).
+
+     **Verificación:** `ruff check` + `test_graficos.py` +
+     `test_asistente_datos.py` en verde. `streamlit run` contra R2 real
+     (no demo): nav agrupado sin ícono nuevo, chip con el 3er segmento
+     "+ Nueva", búsqueda de insumos contra `inventariovalorizado.parquet`
+     real ("pollo" → 8 resultados reales, con código/unidad/precio),
+     alta de línea y costeo correctos (Pechuga De Pollo S/ 12.62 → costo
+     total S/ 12.62 con 1 unidad). El botón Guardar NO se probó en vivo a
+     propósito, para no escribir un registro de prueba en el R2 de
+     producción — su código reusa `get_s3_cliente()`/`put_object()` sin
+     modificar, ya probado en producción por `solicitar_refresco()`.
