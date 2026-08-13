@@ -91,22 +91,26 @@ def _activo(serie):
 
 # ─── Chip de fuente (Opción A del rail unificado) ──────────────────────────
 def _chip_fuente(reporte_activo):
-    """Segmented control Base/Venta arriba del rail — separa Receta Base de
-    Receta Venta dentro del mismo ítem de nav ("Recetas", ver
+    """Segmented control Base/Venta/Nueva arriba del rail — separa las tres
+    entradas del mismo ítem de nav ("Recetas", ver
     navegacion.py::grupo_nav). Clic en el lado NO activo NAVEGA (mismo
     mecanismo que el rail de navegación: session_state['_nav_reporte'] +
     rerun) en vez de filtrar — así reusa TODO el pipeline de carga de
     app.py (cfg, archivo, fecha_ultima_actualizacion, refresco...) sin
-    duplicar ni un `if` ahí. Los dos parquets no comparten esquema, así que
-    "cambiar de fuente" tiene que recargar todo el reporte, no solo
-    refiltrar el mismo df.
+    duplicar ni un `if` ahí. "Nueva Receta" es `tool: True` (no un parquet,
+    ver formulario_receta.py) — igual navega por el mismo mecanismo, app.py
+    la desvía antes de tocar el pipeline de carga.
 
     La key incluye `reporte_activo` a propósito: si el usuario entra por el
     RAIL de navegación (no por este chip) — p.ej. volviendo de otro reporte
     — una key fija dejaría "pegado" el valor de la sesión anterior. Mismo
     patrón que la key de `st.plotly_chart(on_select=...)` en
     graficos/ajuste (CLAUDE.md § trampas de Streamlit)."""
-    etiquetas = {"Receta Base": "Receta base", "Receta Venta": "Receta venta"}
+    etiquetas = {
+        "Receta Base": "Receta base",
+        "Receta Venta": "Receta venta",
+        "Nueva Receta": "+ Nueva",
+    }
     inverso = {v: k for k, v in etiquetas.items()}
     sel = st.segmented_control(
         "Fuente", list(etiquetas.values()),

@@ -104,15 +104,15 @@ REPORTES = {
         ],
         "columnas_fijas_movil": 2,
     },
-    # Receta Base y Receta Venta comparten UN ítem de nav ("Recetas", ver
-    # `grupo_nav` en navegacion.py::inject_navegacion) — dos entradas reales
-    # de REPORTES por dentro (cada una con su propio parquet/cfg, sin tocar
-    # el resto de app.py) pero un solo ícono para el usuario. El chip
-    # Base/Venta que separa las dos vive DENTRO de cada dashboard
-    # (`_chip_fuente` en graficos/recetas_comun.py) y navega entre estas dos
-    # claves — nunca las mezcla en un único df, porque no comparten esquema
-    # ni se cruzan entre sí (0% overlap COD RB / COD INS). Ver
-    # arquitectura.md § Unificación Recetas.
+    # Receta Base, Receta Venta y Nueva Receta comparten UN ítem de nav
+    # ("Recetas", ver `grupo_nav` en navegacion.py::inject_navegacion) — tres
+    # entradas reales de REPORTES por dentro (cada una con su propio
+    # parquet/cfg, sin tocar el resto de app.py) pero un solo ícono para el
+    # usuario. El chip Base/Venta/Nueva que separa las tres vive DENTRO de
+    # cada pantalla (`_chip_fuente` en graficos/recetas_comun.py) y navega
+    # entre estas claves — Base/Venta nunca se mezclan en un único df,
+    # porque no comparten esquema ni se cruzan entre sí (0% overlap
+    # COD RB / COD INS). Ver arquitectura.md § Unificación Recetas.
     "Receta Base": {
         "fecha": None,  # catálogo (foto completa): sin filtro de fecha
         "label_corto": "R. Base",
@@ -126,6 +126,16 @@ REPORTES = {
         "grupo_nav": "Recetas",
         "archivo": "recetaventa.parquet",
         "icono": "receta",
+    },
+    "Nueva Receta": {
+        "label_corto": "+ Nueva",
+        "grupo_nav": "Recetas",
+        "icono": "receta",
+        # No es un parquet: arma y costea una receta de venta a mano contra
+        # inventariovalorizado.parquet, y la guarda como PROPUESTA en R2
+        # (_recetas_propuestas/), sin tocar recetaventa.parquet directo. Ver
+        # formulario_receta.py.
+        "tool": True,
     },
     "Ajuste de Inventario": {
         "label_corto": "Ajuste",

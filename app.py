@@ -236,12 +236,18 @@ if 'tabla_tam' not in st.session_state:
 # ===========================================================================
 # HERRAMIENTAS: entradas de REPORTES que no son un parquet
 # ===========================================================================
-# `tool: True` en REPORTES. El `or reporte == "Inspector"` que acompañaba a
-# esta guarda era redundante — esa entrada ya lleva el flag — y ademas
-# ataba app.py al nombre de una herramienta concreta.
+# `tool: True` en REPORTES. Dict en vez de un único import fijo (como era
+# hasta que solo existía Inspector): mismo espíritu que _DASHBOARDS en
+# graficos/__init__.py — sumar una herramienta nueva es una línea acá, sin
+# cadena de if/elif ni atar este bloque al nombre de una en particular.
 if cfg.get("tool"):
     from inspector import render_inspector
-    render_inspector()
+    from formulario_receta import render_formulario_receta
+    _TOOLS = {
+        "Inspector": render_inspector,
+        "Nueva Receta": render_formulario_receta,
+    }
+    _TOOLS[reporte]()
     perf.end()                                                              # ⚡ PERF
     st.stop()
 
