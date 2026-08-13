@@ -495,9 +495,9 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         # la cadena. El espaciador además degrada solo: si la tarjeta se
         # angosta, encoge proporcional como cualquier columna.
         if _grano_layout == "Día":
-            c1, c2, c3, _esp, c4 = st.columns([1.3, 1.6, 2.1, 0.7, 1.3])
+            c1, c2, c3, _esp, c4 = st.columns([1.3, 1.6, 2.1, 0.5, 1.5])
         else:
-            c1, c2, _esp, c4 = st.columns([1.3, 2.6, 1.8, 1.3])
+            c1, c2, _esp, c4 = st.columns([1.3, 2.6, 1.6, 1.5])
             c3 = None
         with c1:
             grano = st.pills("Granularidad", list(GRANOS), default="Día",

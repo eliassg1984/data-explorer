@@ -378,6 +378,21 @@ CSS = """    /* ================================================================
     div[class*="st-key-ventas_comp_vista"] [data-testid="stButtonGroup"] > div {
         gap: 18px !important;
     }
+    /* "Vista" NUNCA apila verticalmente. Medido: el contenedor se
+       shrink-wrappea a su contenido (165px = "Montos" + gap + "Descomposición"
+       exactos, SIN margen) — si la columna que lo aloja mide un pixel menos
+       (ventana más angosta, u otro navegador con métricas de fuente
+       distintas), el ajuste al pixel se rompe y las dos opciones caen en
+       líneas separadas: la franja pasa de 52px a ~100px. Con `nowrap`, en
+       vez de apilar, sale de la columna hacia la derecha — controlado
+       porque "Vista" ya es el grupo más a la derecha de la franja. */
+    div[class*="st-key-ventas_comp_vista"] [data-testid="stButtonGroup"] > div {
+        flex-wrap: nowrap !important;
+    }
+    div[class*="st-key-ventas_comp_vista"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"] {
+        white-space: nowrap !important;
+    }
     /* SEPARADORES. Cada grupo dibuja el suyo a su IZQUIERDA, nunca una regla
        por posición: "alinear por" sólo existe en granularidad Día, así que
        con una regla posicional quedaría una hairline suelta anunciando un

@@ -4154,3 +4154,24 @@ salvo `icono`):
 
      Medido a 1366x657, tarjeta de 997px — franja de **52px** en los tres
      granos, sin envolver, y "Vista" a menos de 1px del borde derecho.
+
+     **Corrección el mismo día:** el ajuste de "Vista" no tenía margen. El
+     contenedor se shrink-wrappea a su contenido (`display: block` +
+     `flex-wrap: wrap` en su hijo, sin `width` propio), así que su ancho es
+     SIEMPRE el mínimo necesario para el texto — "Montos" + gap +
+     "Descomposición" medían 165px, y la columna que lo alojaba en el caso
+     de trabajo tenía justo 165px de sobra: **0px de margen.** Cualquier
+     ventana un poco más angosta que la usada al medir empuja la columna por
+     debajo de esos 165px, y ahí el shrink-wrap dejó de poder darle todo el
+     ancho que pedía: el texto cae a dos líneas. Reproducido bajando el
+     viewport a 1100px (tarjeta 731px): las dos opciones se apilaban.
+
+     Se arregla con `flex-wrap: nowrap` en el `stButtonGroup` interno de
+     "Vista" — nunca vuelve a apilar; en el peor caso, sale unos px a la
+     derecha de su columna en vez de crecer en alto, y sigue dentro del
+     borde de la tarjeta (verificado: a 731px de tarjeta, el último botón
+     termina en 715px). Además se le movieron 0.2 de ratio al espaciador
+     vecino, que no lo necesita. Verificado sin apilar en 1366, 950, 881,
+     731 y 581px de tarjeta — por debajo de ~880px empiezan a envolver los
+     OTROS tres grupos (grano/ventana/alineación), que es una degradación
+     aparte y esperable en ventanas angostas, no el bug reportado.
