@@ -332,6 +332,23 @@ CSS = """    /* ================================================================
         color: var(--accent) !important;
     }
 
+    /* Reserva de alto de la tarjeta de Año Pasado, para que NO colapse
+       mientras se cargan los datos. El gráfico se dibuja al final del script
+       (después de traer las dos series de R2), así que entre el render de la
+       franja y su llegada la tarjeta se quedaba con 90px de alto y volvía a
+       ~470: eso es la mitad del "sube y baja" que se ve en cada clic (la
+       otra mitad era la cabecera vacía, ver regla #108).
+       El número sale de las piezas reales: 32 de padding + 42 de cabecera +
+       52 de franja + 340 de figura = 466. Es min-height, no height: el
+       caption y el panel "Detalle" pueden hacerla más alta sin problema.
+       Sólo desktop — en móvil la figura mide 260 y el patrón es scroll de
+       página, mismo criterio que el resto del encuadre. */
+    @media screen and (min-width: 769px) {
+        div[class*="st-key-chartcard_ventas_comparativo"] {
+            min-height: 466px;
+        }
+    }
+
     /* =================================================================== */
     /* FRANJA DE CONTROLES DE VENTAS › AÑO PASADO                            */
     /*                                                                       */

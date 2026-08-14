@@ -4198,3 +4198,55 @@ salvo `icono`):
      grupos (incluida la combinación "Semana" + "8 semanas" del caso
      degradado): `font-weight` pasa de 400 a 600, el color a
      `rgb(73,56,184)` y el `border-bottom` a `rgb(108,92,231)`.
+
+108. **`st.empty()` BORRA su contenido al crearse: un placeholder que se
+     rellena tarde es un salto de layout en cada clic (2026-08-13).** La
+     franja de Año Pasado (#107) reservaba la cabecera con `_ph_hdr =
+     st.empty()` al abrir la tarjeta y la rellenaba al FINAL del script,
+     después de traer las dos series de R2. En cada clic sobre cualquier
+     toggle eso producía:
+
+     - la cabecera quedaba vacía durante toda la carga → el título
+       desaparecía y todo lo de abajo subía ~42px, para volver a bajar
+       cuando llegaba;
+     - la tarjeta colapsaba a ~90px (sólo la franja) y volvía a ~470 cuando
+       aparecía el gráfico.
+
+     Reportado por el usuario como "hace como un refresco y se mueve como si
+     subiese y bajase el gráfico".
+
+     **Ojo con el diagnóstico fácil:** NO era falta de `@st.fragment` —
+     `_ventas_comparativo` ya era fragment desde antes, así que el rerun ya
+     estaba acotado. Era el orden de relleno de los placeholders, que es
+     invisible leyendo el código: sólo se ve muestreando el DOM durante el
+     clic (`setInterval` cada 50ms sobre el alto de la tarjeta).
+
+     **Arreglo, dos partes:**
+
+     - La cabecera se pinta DOS veces: una provisional apenas se conocen los
+       controles, leyendo `vista` de `session_state` (su valor del rerun
+       anterior, que acierta casi siempre), y otra al final con el valor
+       real. Si coinciden, Streamlit no toca el DOM. De ahí que el título
+       viva en `_titulo_comparativo()` y el pintado en `_pintar_cabecera()`:
+       se llaman desde dos sitios.
+     - `min-height` en la tarjeta, para que no colapse mientras carga:
+       32 de padding + 42 de cabecera + 52 de franja + 340 de figura = 466.
+       `min-height` y no `height` — el caption y el panel "Detalle" pueden
+       hacerla más alta.
+
+     **Medido con muestreo cada 50-60ms durante el clic:**
+
+     | | antes | después |
+     |---|---|---|
+     | frames sin título | muchos | **0** |
+     | frames sin gráfico | muchos | **0** (cambio de ventana) |
+     | tarjeta ausente | — | **0** |
+     | salto de alto (cambio de ventana) | ~380px | **0** |
+
+     **Lo que NO quedó resuelto:** al cambiar de GRANULARIDAD sigue habiendo
+     un transitorio de ~600ms con un salto de 104px (573 → 677 → 573) y un
+     frame sin gráfico. Es inherente a que ese caso REMONTA la tarjeta a
+     propósito — la key lleva la granularidad para no arrastrar el layout
+     viejo (#107) — así que la franja y el caption se re-maquetan antes de
+     que vuelva la figura. Cambiar ventana o vista, que no remontan, ya no
+     saltan nada.

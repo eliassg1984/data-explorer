@@ -426,6 +426,32 @@ def _ranking_platos(archivo, col_parquet, col_fecha, col_venta, col_prod,
     return t
 
 
+def _titulo_comparativo(grano, modo, es_desc):
+    """Título de la cabecera. Función y no inline porque se pinta DOS veces:
+    una provisional apenas se conocen los controles (para que la cabecera no
+    aparezca vacía mientras se cargan los datos) y otra al final con el valor
+    real de `vista`. Ver arquitectura.md regla #108."""
+    _sufijo = {"Día": "día a día", "Semana": "semana a semana",
+               "Mes": "mes a mes"}[grano]
+    if es_desc:
+        return f"¿Por qué cambió la venta? — {_sufijo} vs. año pasado"
+    titulo = f"Comparativo {_sufijo} vs. año pasado"
+    if grano == "Día":
+        titulo += (" — alineado por día de semana" if modo == "semana"
+                   else " — alineado por fecha calendario")
+    return titulo
+
+
+def _pintar_cabecera(ph, titulo):
+    """Escribe la cabecera (título + línea SUPERIOR de la franja) en su hueco."""
+    ph.markdown(
+        '<div style="margin:-6px -18px 0;padding:0 18px 9px;'
+        'width:calc(100% + 36px);font-size:16px;font-weight:600;'
+        f'line-height:1.3;color:{TEXTO_PRINCIPAL};'
+        f'border-bottom:2px solid {GRIS_BORDE};">{titulo}</div>',
+        unsafe_allow_html=True)
+
+
 @st.fragment
 def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                         col_prod=None, col_cant=None, col_fam=None,
@@ -527,6 +553,17 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             modo = "semana" if modo_lbl.startswith("Mismo día") else "calendario"
         with c4:
             _ph_vista = st.empty()
+        # CABECERA PROVISIONAL, ya. No esperar al final: `st.empty()` BORRA su
+        # contenido al crearse, así que dejarlo vacío durante la carga de datos
+        # hacía que el título desapareciera y todo lo de abajo subiera ~42px,
+        # para volver a bajar cuando llegaba. Eso es el "sube y baja" en cada
+        # clic. `vista` todavía no existe acá, pero su valor del rerun anterior
+        # sí está en session_state y es el que va a salir el 99% de las veces;
+        # al final se reescribe con el real y, si coincide, Streamlit no toca
+        # el DOM. Ver arquitectura.md regla #108.
+        _pintar_cabecera(_ph_hdr, _titulo_comparativo(
+            grano, modo,
+            st.session_state.get("ventas_comp_vista") == "Descomposición"))
         # Línea INFERIOR de la franja. Los -18px + width:calc(100% + 36px)
         # compensan el padding horizontal de la tarjeta para que toque el
         # borde real, igual que en Por día (arquitectura.md #104).
@@ -798,29 +835,17 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         fig.update_yaxes(tickprefix="S/ ", tickformat=",.0f",
                          gridcolor=GRIS_BORDE, zeroline=False)
 
-    _sufijo = {"Día": "día a día", "Semana": "semana a semana",
-               "Mes": "mes a mes"}[grano]
-    if es_desc:
-        titulo = f"¿Por qué cambió la venta? — {_sufijo} vs. año pasado"
-    else:
-        titulo = f"Comparativo {_sufijo} vs. año pasado"
-        if grano == "Día":
-            titulo += (" — alineado por día de semana" if modo == "semana"
-                       else " — alineado por fecha calendario")
+    titulo = _titulo_comparativo(grano, modo, es_desc)
 
     foco = st.session_state.get("ventas_comp_foco")
     if foco is not None and not (0 <= foco < len(claves)):
         foco = None
 
-    # Ahora sí se puede escribir el título: grano, modo y vista están los tres
-    # resueltos. Va al hueco de la cabecera, ARRIBA de la franja, y su
-    # border-bottom es la línea SUPERIOR que la cierra por arriba.
-    _ph_hdr.markdown(
-        '<div style="margin:-6px -18px 0;padding:0 18px 9px;'
-        'width:calc(100% + 36px);font-size:16px;font-weight:600;'
-        f'line-height:1.3;color:{TEXTO_PRINCIPAL};'
-        f'border-bottom:2px solid {GRIS_BORDE};">{titulo}</div>',
-        unsafe_allow_html=True)
+    # Reescritura con el `vista` REAL. Casi siempre es idéntico al provisional
+    # que ya se pintó arriba, y ahí Streamlit no toca el DOM; sólo cambia algo
+    # cuando el valor de session_state no era válido para estos datos (por
+    # ejemplo "Descomposición" guardado y un rango sin pax).
+    _pintar_cabecera(_ph_hdr, titulo)
 
     with _slot_graf:
         # La selección de plotly_chart PERSISTE entre reruns: con una key
