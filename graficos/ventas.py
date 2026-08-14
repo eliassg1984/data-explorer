@@ -17,6 +17,7 @@ from graficos.base import (
 )
 from graficos.ventas_resumen import _ventas_resumen
 from graficos.ventas_comparativo import _ventas_comparativo
+from graficos.ventas_horario import _ventas_horario
 from graficos import alturas
 
 _MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
@@ -28,6 +29,7 @@ _MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
 _VENTAS_RAIL_CATEGORIAS = (
     ("Resumen",  (("Resumen ejecutivo", "Resumen"),)),
     ("Tiempo",   (("Venta por día",              "Por día"),
+                  ("Mapa por hora",               "Por hora"),
                   ("Comparativo vs Año Pasado",   "Año Pasado"),
                   ("Venta vs Compra",            "Vs Compra"),
                   ("Familia/Subfamilia semanal",  "Semanal"),
@@ -1148,6 +1150,17 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                 st.info("Sin fechas válidas en el rango.")
             else:
                 _ventas_grafico_dia(g, col_costo, col_pax)
+
+        # ── 1a-bis) Mapa de calor día × hora, hasta 4 períodos ───────────
+        # Trae sus propios tramos (uno por período comparado) con
+        # data.cargar_rango y les aplica _aplicar_chips, igual que el
+        # comparativo: el `d` de acá está acotado al rango de la franja y los
+        # períodos que se comparan pueden caer fuera de él.
+        elif graf == "Mapa por hora":
+            _ventas_horario(d, col_venta, col_fecha, col_pax=col_pax,
+                            col_pedido=col_pedido, col_prod=col_prod,
+                            col_cant=col_cant, col_fam=col_fam,
+                            col_sub=col_sub, filtrar_cb=_aplicar_chips)
 
         # ── 1a) Comparativo día a día vs Año Pasado ──────────────────────
         # Trae su propio df del año pasado (data.cargar_rango) y le pasa

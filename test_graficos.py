@@ -380,6 +380,181 @@ def _pruebas_puras():
         [(2026, 7)], [(2025, 7)], "Mes", _dt.date(2026, 7, 31))
     check("recorte: mes completo no marca parcial", _parc2, set())
 
+    # ── Mapa por hora (Ventas › Por hora) ───────────────────────────────
+    from graficos import ventas_horario as _vh
+
+    # Granularidad Año: la única que NO delega en ventas_comparativo
+    check("horario · claves año", _vh._claves_hacia_atras(_dt.date(2026, 8, 14),
+                                                          "Año", 3),
+          [2024, 2025, 2026])
+    check("horario · rango año", _vh._rango_de_clave(2025, "Año"),
+          (_dt.date(2025, 1, 1), _dt.date(2025, 12, 31)))
+    check("horario · etiqueta año", _vh._etiqueta_clave(2025, "Año"), "2025")
+    # ...y las otras tres siguen delegando (mismo resultado que allá)
+    check("horario · claves mes delegan",
+          _vh._claves_hacia_atras(_dt.date(2026, 1, 15), "Mes", 3),
+          _vc._claves_hacia_atras(_dt.date(2026, 1, 15), "Mes", 3))
+
+    # Columnas por período: en Mes dependen del mes REAL (febrero no lleva 31
+    # columnas vacías al final, que se leerían como una caída de ventas)
+    check("horario · columnas semana", _vh._columnas((2026, 32), "Semana")[0], 7)
+    check("horario · columnas día", _vh._columnas(_dt.date(2026, 8, 5), "Día")[0], 1)
+    check("horario · columnas año", _vh._columnas(2025, "Año")[0], 12)
+    check("horario · columnas feb bisiesto", _vh._columnas((2024, 2), "Mes")[0], 29)
+    check("horario · columnas feb normal", _vh._columnas((2025, 2), "Mes")[0], 28)
+
+    _f = pd.Series(pd.to_datetime(["2026-08-05 13:00", "2026-08-09 20:30"]))
+    check("horario · columna en semana (mié=2, dom=6)",
+          list(_vh._columna_de_fecha(_f, "Semana")), [2, 6])
+    check("horario · columna en mes (día-1)",
+          list(_vh._columna_de_fecha(_f, "Mes")), [4, 8])
+    check("horario · columna en año (mes-1)",
+          list(_vh._columna_de_fecha(_f, "Año")), [7, 7])
+    check("horario · columna en día es siempre 0",
+          list(_vh._columna_de_fecha(_f, "Día")), [0, 0])
+
+    # OPCIÓN A: un arrastre que cruza de panel deja UNA MARCA POR PANEL, con
+    # las coordenadas que le tocaron a cada lado. Es la decisión del usuario
+    # (2026-08-14) y el corazón del gesto: arrastrar sobre dos semanas deja
+    # la comparación armada de una pasada.
+    _orden = _vh._orden_horas([12, 13, 19, 20, 21])
+    _pts = [(0, 4, 19), (0, 5, 19), (0, 5, 20), (1, 4, 19), (1, 6, 21)]
+    _ms = _vh._marcas_de_seleccion(_pts, _orden)
+    check("horario · un arrastre a dos paneles → dos marcas", len(_ms), 2)
+    check("horario · marca del panel 0 envuelve sus puntos", _ms[0],
+          {"sel": 0, "c0": 4, "c1": 5, "h0": 19, "h1": 20})
+    check("horario · marca del panel 1 envuelve LOS SUYOS", _ms[1],
+          {"sel": 1, "c0": 4, "c1": 6, "h0": 19, "h1": 21})
+    check("horario · una sola celda es un rectángulo 1x1",
+          _vh._marcas_de_seleccion([(2, 3, 13)], _orden),
+          [{"sel": 2, "c0": 3, "c1": 3, "h0": 13, "h1": 13}])
+
+    # Acumulación: sin repetir, y al pasar del tope se van las MÁS VIEJAS —
+    # un arrastre sobre los cuatro paneles tiene que dejar esas cuatro.
+    _m1 = {"sel": 0, "c0": 0, "c1": 0, "h0": 12, "h1": 12}
+    _m2 = {"sel": 1, "c0": 0, "c1": 0, "h0": 12, "h1": 12}
+    check("horario · no duplica una marca ya puesta",
+          _vh._agregar_marcas([_m1], [_m1]), [_m1])
+    check("horario · acumula la nueva",
+          _vh._agregar_marcas([_m1], [_m2]), [_m1, _m2])
+    _viejas = [dict(_m1, sel=i) for i in range(4)]
+    _nueva = {"sel": 3, "c0": 5, "c1": 5, "h0": 20, "h1": 20}
+    check("horario · pasado el tope se va la más vieja",
+          _vh._agregar_marcas(_viejas, [_nueva]), _viejas[1:] + [_nueva])
+
+    # Celdas de una marca: el denominador de «venta por celda», la única
+    # lectura honesta cuando dos marcas no miden lo mismo.
+    _o4 = _vh._orden_horas([18, 19, 20, 21])
+    check("horario · celdas de un rectángulo 3x4",
+          _vh._celdas_de_marca({"sel": 0, "c0": 4, "c1": 6, "h0": 18, "h1": 21},
+                               _o4), 12)
+    check("horario · celdas de una celda suelta",
+          _vh._celdas_de_marca({"sel": 0, "c0": 4, "c1": 4, "h0": 19, "h1": 19},
+                               _o4), 1)
+
+    # ── El turno cruza la medianoche ────────────────────────────────────
+    # Con datos reales de R2 el eje traía [0, 13, …, 23]: las 00h son el
+    # final de la noche anterior, no el principio del día. Ordenadas por
+    # número quedaban arriba de todo y el eje numérico dejaba doce filas
+    # vacías en el medio.
+    _os = _vh._orden_horas({0, 13, 14, 19, 22, 23})
+    check("horario · el orden arranca después del hueco mayor",
+          _os, [13, 14, 19, 22, 23, 0])
+    check("horario · una sola hora no rompe el orden",
+          _vh._orden_horas({19}), [19])
+    # «de 23h a 0h» son DOS horas. Con `h0 <= hora <= h1` habrían sido las
+    # veinticuatro, y la marca se habría comido el día entero en silencio.
+    check("horario · tramo que cruza la medianoche",
+          _vh._horas_entre(_os, 23, 0), [23, 0])
+    check("horario · tramo normal dentro del turno",
+          _vh._horas_entre(_os, 13, 19), [13, 14, 19])
+    check("horario · los extremos de una marca salen por POSICIÓN",
+          _vh._marca_de_puntos(0, [1], [0, 23], _os),
+          {"sel": 0, "c0": 1, "c1": 1, "h0": 23, "h1": 0})
+    check("horario · celdas de una marca que cruza la medianoche",
+          _vh._celdas_de_marca({"sel": 0, "c0": 1, "c1": 2, "h0": 23, "h1": 0},
+                               _os), 4)
+
+    check("horario · etiqueta de marca (semana)",
+          _vh._etiqueta_marca({"sel": 0, "c0": 4, "c1": 6, "h0": 18, "h1": 21},
+                              [(2026, 32)], "Semana"),
+          f"{_vc._etiqueta_clave((2026, 32), 'Semana')} · Vie–Dom · 18–21h")
+    # En granularidad Día la columna ES el período: repetirlo daría
+    # "vie 08/08 · vie", que no informa nada.
+    check("horario · etiqueta de marca (día) no repite el período",
+          _vh._etiqueta_marca({"sel": 0, "c0": 0, "c1": 0, "h0": 19, "h1": 19},
+                              [_dt.date(2026, 8, 7)], "Día"),
+          f"{_vc._etiqueta_clave(_dt.date(2026, 8, 7), 'Día')} · 19h")
+
+    # La firma gobierna la `key` del chart: si no cambia con las marcas, la
+    # misma selección se re-procesa en cada rerun y el drill parpadea.
+    check("horario · la firma cambia al agregar una marca",
+          _vh._firma("Semana", [(2026, 32)], "venta", [])
+          != _vh._firma("Semana", [(2026, 32)], "venta", [_m1]), True)
+    check("horario · la firma cambia al cambiar la medida del mapa",
+          _vh._firma("Semana", [(2026, 32)], "venta", [])
+          != _vh._firma("Semana", [(2026, 32)], "pax", []), True)
+
+    # ── Agregación por celda: pax NO se suma línea a línea ───────────────
+    # `CANT PAX` se repite en CADA línea del pedido. Sumarla cuenta la misma
+    # mesa una vez por plato: acá P1 tiene 2 líneas de 4 pax y P2 una de 2, o
+    # sea 6 personas — no 10. Es un error que no rompe nada, sólo miente.
+    _dfh = pd.DataFrame({
+        "FEC REG DOCUMENTO": pd.to_datetime(
+            ["2026-08-07 19:10", "2026-08-07 19:40", "2026-08-07 19:50",
+             "2026-08-08 13:05"]),
+        "VENTA ITEM DDOCUMENTO": [100.0, 60.0, 40.0, 90.0],
+        "CANT PAX": [4, 4, 2, 3],
+        "LLAVE LOCAL PEDIDO": ["P1", "P1", "P2", "P3"],
+        "CANTIDAD ITEM DDOCUMENTO": [1, 2, 1, 1],
+        "DESCUENTO ITEM DDOCUMENTO": [0.0, 10.0, 5.0, 0.0],
+        "NOMBRE DESCUENTO": [None, "BCP", "  ", "Socios"],
+        "GRUPO": ["Alimentos"] * 4,
+        "SUB GRUPO": ["Fondos"] * 4,
+        "NOMB ITEM VENTA": ["Lomo", "Lomo", "Ceviche", "Lomo"],
+    })
+    _colsh = {"fecha": "FEC REG DOCUMENTO", "venta": "VENTA ITEM DDOCUMENTO",
+              "pax": "CANT PAX", "pedido": "LLAVE LOCAL PEDIDO",
+              "prod": "NOMB ITEM VENTA", "cant": "CANTIDAD ITEM DDOCUMENTO",
+              "fam": "GRUPO", "sub": "SUB GRUPO",
+              "desc": "DESCUENTO ITEM DDOCUMENTO",
+              "tipo_desc": "NOMBRE DESCUENTO"}
+    _tr = _vh._prep_tramo(_dfh, _colsh, "Semana",
+                          _dt.date(2026, 8, 3), _dt.date(2026, 8, 9))
+    _cel = _vh._celdas(_tr)
+    _c19 = _cel[(_cel["col"] == 4) & (_cel["hora"] == 19)].iloc[0]
+    check("horario · pax deduplicado por pedido (4+4+2 → 6)",
+          float(_c19["pax"]), 6.0)
+    check("horario · venta de la celda suma las líneas",
+          float(_c19["venta"]), 200.0)
+    check("horario · descuento de la celda suma las líneas",
+          float(_c19["desc"]), 15.0)
+    check("horario · ticket = venta/pax (la definición del proyecto)",
+          round(float(_c19["ticket"]), 4), round(200.0 / 6.0, 4))
+    # Sin `NOMBRE DESCUENTO` no hay descuento: nulos y espacios en blanco caen
+    # en «Sin descuento», que NO es relleno — es lo vendido a precio de lista.
+    check("horario · tipo de descuento nulo → Sin descuento",
+          sorted(_tr["tipo"].unique().tolist()),
+          sorted([_vh._SIN_DSCTO, "BCP", "Socios"]))
+
+    # El recorte por fecha se re-aplica en pandas (en modo demo el loader
+    # devuelve el df entero): un tramo de un solo día deja fuera al resto.
+    _tr1 = _vh._prep_tramo(_dfh, _colsh, "Semana",
+                           _dt.date(2026, 8, 8), _dt.date(2026, 8, 8))
+    check("horario · el tramo recorta por fecha en pandas", len(_tr1), 1)
+
+    # Totales de una marca (el rectángulo del viernes 19h)
+    _oh = _vh._orden_horas(_tr["hora"].unique())
+    _tot = _vh._agregar_marca(_tr, {"sel": 0, "c0": 4, "c1": 4,
+                                    "h0": 19, "h1": 19}, _oh)
+    check("horario · total de marca: venta", _tot["venta"], 200.0)
+    check("horario · total de marca: pax deduplicado", _tot["pax"], 6.0)
+    _det = _vh._detalle_marca(_tr, {"sel": 0, "c0": 4, "c1": 4,
+                                    "h0": 19, "h1": 19}, _oh)
+    check("horario · el detalle parte el plato por tipo de descuento",
+          sorted(_det[_det["prod"] == "Lomo"]["tipo"].tolist()),
+          sorted([_vh._SIN_DSCTO, "BCP"]))
+
     return fallos
 
 
@@ -800,6 +975,33 @@ def main():
             expander_titulo="Tabla de prueba"), ()),
         ("recetas_comun · fig panorama sankey", lambda: _rc._fig_panorama_sankey(
             links_panorama, True), ()),
+    ]
+
+    # ── Mapa por hora (Ventas › Por hora) ───────────────────────────────
+    # Dos paneles con distinta cantidad de columnas y una marca puesta: es la
+    # combinación que ejercita los offsets del eje X, el hueco entre paneles,
+    # el customdata de la capa de selección y las shapes de las marcas.
+    from graficos import ventas_horario as _vh_fig
+    _celdas_demo = pd.DataFrame({
+        "col":    [0, 1, 4, 6],
+        "hora":   [12, 19, 19, 21],
+        "venta":  [100.0, 400.0, 250.0, 80.0],
+        "cant":   [3.0, 9.0, 6.0, 2.0],
+        "desc":   [0.0, 40.0, 10.0, 0.0],
+        "pax":    [2.0, 8.0, 5.0, 1.0],
+        "ticket": [50.0, 50.0, 50.0, 80.0],
+    })
+    pruebas += [
+        ("ventas_horario · mapa (2 paneles + marca)",
+         lambda: _vh_fig._fig_mapa(
+             [_celdas_demo, _celdas_demo], [(2026, 32), (2026, 33)], "Semana",
+             "venta", [{"sel": 1, "c0": 4, "c1": 6, "h0": 19, "h1": 21}],
+             [12, 19, 21]), ()),
+        ("ventas_horario · mapa (granularidad Mes)",
+         lambda: _vh_fig._fig_mapa(
+             [_celdas_demo], [(2026, 2)], "Mes", "ticket", [], [12, 19, 21]), ()),
+        ("ventas_horario · mapa sin datos",
+         lambda: _vh_fig._fig_mapa([None], [2026], "Año", "venta", [], [12]), ()),
     ]
 
     for nombre, fn, args in pruebas:
