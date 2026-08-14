@@ -800,17 +800,6 @@ def _puntos_de_evento(evt):
 
 # ── UI: selector de períodos ────────────────────────────────────────────────
 
-def _leyenda_dias(grano):
-    """Explica las marcas del eje X. Sin esto, un número en ámbar es un
-    número raro: el color sólo informa si dice de qué habla."""
-    if grano == "Año":
-        return ""      # las columnas son meses: ni finde ni feriado aplican
-    return (" En el eje de días, los **fines de semana** van en negro y los "
-            "**feriados** en ámbar y negrita (calendario nacional de Perú, el "
-            "mismo de la vista Año Pasado) — un feriado se escribe siempre, "
-            "aunque el resto de las etiquetas se ralee.")
-
-
 def _toggle_selector():
     st.session_state[_K_SELECTOR] = not st.session_state.get(_K_SELECTOR, False)
 
@@ -1287,17 +1276,12 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 st.session_state[_K_MARCAS] = [
                     p for e, p in zip(etiquetas, marcas) if e in vivos]
                 st.rerun(scope="fragment")
-            st.caption(
-                "Arrastrá sobre el mapa para marcar un bloque — un arrastre "
-                "que cruza de un panel al siguiente deja una marca en cada "
-                "uno. Tocá una pastilla para quitarla. La marca 1 es la base "
-                "de los % del detalle." + _leyenda_dias(grano))
-        else:
-            st.caption(
-                "Arrastrá sobre el mapa para marcar un bloque de días y horas "
-                f"(hasta {MAX_MARCAS}) y compararlos abajo. Un arrastre que "
-                "cruza de un panel al siguiente deja una marca en cada uno."
-                + _leyenda_dias(grano))
+        # SIN caption de ayuda (quitado a pedido, 2026-08-14). Ocupaba tres
+        # líneas —~60px— explicando el arrastre y el código de colores del eje
+        # de días. Lo que decía sigue estando en el docstring de este módulo,
+        # y el gesto se descubre solo: arrastrar sobre un mapa es lo que uno
+        # intenta primero. Si algún día hace falta para usuarios nuevos, un
+        # ícono de ayuda al lado del título cuesta cero píxeles de alto.
 
     # ── Drill ───────────────────────────────────────────────────────────
     # Las dos tarjetas se abren SIEMPRE, aunque no haya marcas, y por dentro
