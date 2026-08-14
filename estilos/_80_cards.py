@@ -420,28 +420,39 @@ CSS = """    /* ================================================================
            tarjeta de esquinas suaves, no un chip. */
         background: rgba(113, 113, 122, 0.08) !important;
         background: color-mix(in srgb, var(--text-secondary) 8%, transparent) !important;
-        backdrop-filter: blur(14px) saturate(1.4) !important;
-        -webkit-backdrop-filter: blur(14px) saturate(1.4) !important;
-        /* Borde y sombra apenas insinuados (10na vuelta). Acá está la
-           clave de por qué las 3 bajadas de tinte anteriores "no se
-           notaron": VERIFICADO en el navegador (escondiendo el panel y
-           mirando qué queda debajo con `elementsFromPoint`), detrás de
-           esta tarjeta hay `rect.bg` con `fill: rgba(0,0,0,0)` — el
-           fondo del plot es TRANSPARENTE (lo fija ventas_comparativo.py
-           con plot_bgcolor/paper_bgcolor) — y debajo, tarjeta blanca.
-           El panel flota sobre el MARGEN superior de la figura, no
-           sobre el área de datos: no hay NADA detrás que pueda
-           transparentarse. Bajar el tinte no lo hace más transparente,
-           lo hace más BLANCO, que sobre blanco es un cambio casi
-           invisible; y el blur no aporta nada porque difuminar blanco
-           liso da blanco liso.
-           Lo que de verdad lo hacía leer como "sólido" era el cromo:
-           un borde de 1px sólido y una sombra media dibujan una tarjeta
-           APOYADA. Con el borde casi transparente y la sombra difusa se
-           lee como una lámina flotando, que es el efecto buscado.
-           Si algún día se quiere transparencia REAL visible, la única
-           forma es que el panel se solape con datos (bajarlo dentro del
-           área del plot) — a costa de tapar barras. */
+        /* SIN blur (11na vuelta) — y acá está la causa real de las
+           cuatro rondas de "no se ve más transparente".
+           El fondo ya era 92% transparente (tinte al 8%), pero
+           `backdrop-filter: blur(14px)` desenfoca lo que hay detrás con
+           un radio MAYOR que el tamaño del propio contenido: la
+           anotación "feriado" mide ~10px de alto, así que 14px de blur
+           la convierte en una mancha uniforme. El tinte nunca fue el
+           problema; el blur borraba el fondo por completo, y por eso
+           bajarlo de 16% a 12% a 8% no cambió nada visible.
+           Medido con el panel ABIERTO: dentro de su rectángulo caen el
+           texto "feriado" (x=76,y=49), el "50%" del eje (x=14,y=70) y 2
+           bandas de `shapelayer`. O sea que SÍ hay contenido detrás —
+           lo que invalida la nota de la vuelta anterior, que decía "no
+           hay nada que transparentar" mirando sólo el estado CERRADO
+           (ahí es cierto: la barra de 26px no llega al área de datos).
+           Queda `saturate` solo: da el matiz de vidrio sin tocar la
+           nitidez de lo que pasa por detrás. */
+        backdrop-filter: saturate(1.15) !important;
+        -webkit-backdrop-filter: saturate(1.15) !important;
+        /* Borde y sombra apenas insinuados (10na vuelta): un borde de
+           1px SÓLIDO y una sombra media dibujan una tarjeta APOYADA;
+           con el borde casi transparente y la sombra difusa se lee como
+           una lámina flotando, que es el efecto buscado.
+           OJO — la 10na vuelta además diagnosticó "detrás del panel no
+           hay nada que transparentar" y eso es FALSO en general: se
+           midió con el panel CERRADO, y ahí sí es cierto (la barra de
+           26px no baja hasta el área de datos, sólo pisa el margen
+           superior de la figura, que es transparente sobre tarjeta
+           blanca). Abierto mide 75px y sí alcanza contenido real —ver
+           la nota del `backdrop-filter` más arriba—, así que la
+           conclusión de aquella vuelta no se puede generalizar.
+           Lección: medir el estado que el usuario está mirando, no el
+           que quedó abierto en el navegador. */
         border: 1px solid rgba(113, 113, 122, 0.12) !important;
         border: 1px solid color-mix(in srgb, var(--text-secondary) 12%, transparent) !important;
         /* 6px, no 10: con una tarjeta CERRADA de ~26px de alto, 10px de
