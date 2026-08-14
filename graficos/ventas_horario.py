@@ -69,7 +69,7 @@ import streamlit as st
 
 from data import REPORTES, cargar_rango
 from tema import (
-    ACENTO, ERROR, ESCALA_CONTINUA, EXITO, GRIS_TEXTO,
+    ACENTO, ADVERTENCIA_TEXTO, ERROR, ESCALA_CONTINUA, EXITO, GRIS_TEXTO,
     PALETA_SERIES, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
@@ -81,8 +81,10 @@ from graficos.base import _card, _resolver, franja_cabecera, franja_linea_inferi
 from graficos.ventas_comparativo import (
     _DIAS_ES,
     _MESES_ES,
+    _clave_de_fecha as _clave_de_fecha_cmp,
     _claves_hacia_atras as _claves_cmp,
     _etiqueta_clave as _etiqueta_cmp,
+    _feriados_peru,
     _rango_de_clave as _rango_cmp,
 )
 
@@ -183,6 +185,72 @@ def _etiqueta_clave(clave, grano):
     if grano == "Año":
         return str(clave)
     return _etiqueta_cmp(clave, grano)
+
+
+def _clave_de_fecha(f, grano):
+    """Clave del período al que pertenece la fecha `f`. Es lo que convierte
+    "elegí el 14 de febrero" en el período que hay que dibujar, sea el día,
+    su semana, su mes o su año."""
+    if grano == "Año":
+        return f.year
+    return _clave_de_fecha_cmp(f, grano)
+
+
+def _etiqueta_hora(h):
+    """La hora como se dice, no como la guarda el reloj de la base: «7 pm» y
+    no «19h» (pedido del usuario, 2026-08-14). El mediodía y la medianoche
+    son los dos casos que se escriben mal solos: 12 pm y 12 am, nunca 0."""
+    h = int(h) % 24
+    return f"{h % 12 or 12} {'am' if h < 12 else 'pm'}"
+
+
+def _tramo_horas(h0, h1):
+    """«7 pm – 9 pm», o «7 pm» si es una sola."""
+    return (_etiqueta_hora(h0) if h0 == h1
+            else f"{_etiqueta_hora(h0)}–{_etiqueta_hora(h1)}")
+
+
+def _fecha_de_columna(clave, grano, i):
+    """Fecha del día que representa la columna `i`, o None si la columna no
+    es un día (granularidad Año: cada columna es un mes entero)."""
+    if grano == "Día":
+        return clave
+    if grano == "Semana":
+        return _rango_de_clave(clave, grano)[0] + _dt.timedelta(days=int(i))
+    if grano == "Mes":
+        y, m = clave
+        n = _cal.monthrange(y, m)[1]
+        return _dt.date(y, m, min(int(i) + 1, n))
+    return None
+
+
+def _marca_dia(fecha, feriados):
+    """Qué tiene de especial ese día: '' | 'finde' | 'feriado'.
+
+    El feriado gana al fin de semana cuando caen juntos: un domingo feriado
+    ya se leía como domingo, lo que no se ve es que además era feriado."""
+    if fecha is None:
+        return ""
+    if fecha in feriados:
+        return "feriado"
+    return "finde" if fecha.weekday() >= 5 else ""
+
+
+def _feriados_de(claves, grano):
+    """Feriados peruanos de los años que tocan las claves elegidas.
+
+    Reusa el calendario de `ventas_comparativo` — el mismo que ya pinta las
+    bandas de la vista "Año Pasado", para que un 28 de julio no sea feriado
+    en un gráfico y un día común en el de al lado. Ojo con lo que ese módulo
+    ya avisa: es el calendario NACIONAL, no sabe de cierres del local."""
+    anios = set()
+    for k in claves:
+        ini, fin = _rango_de_clave(k, grano)
+        anios.update({ini.year, fin.year})
+    out = set()
+    for a in anios:
+        out |= set(_feriados_peru(a))
+    return out
 
 
 def _columnas(clave, grano, hasta=None):
@@ -333,9 +401,8 @@ def _etiqueta_marca(pin, claves, grano):
     clave = claves[pin["sel"]] if pin["sel"] < len(claves) else None
     per = _etiqueta_clave(clave, grano) if clave is not None else "?"
     cols = _etiqueta_columnas(pin, clave, grano) if clave is not None else ""
-    horas = (f"{pin['h0']}h" if pin["h0"] == pin["h1"]
-             else f"{pin['h0']}–{pin['h1']}h")
-    return " · ".join(x for x in (per, cols, horas) if x)
+    return " · ".join(
+        x for x in (per, cols, _tramo_horas(pin["h0"], pin["h1"])) if x)
 
 
 def _celdas_de_marca(pin, orden):
@@ -510,6 +577,20 @@ def _rango_x(total_columnas, ancho=None, ancho_max=None):
     return [-0.5 - margen, total - 0.5 + margen]
 
 
+def _tick_marcado(texto, marca):
+    """La etiqueta del eje X con su marca de fin de semana o feriado.
+
+    Plotly acepta un subconjunto de HTML en `ticktext` (`<b>` y
+    `<span style="color:…">`), así que la marca es tipográfica y no ocupa
+    ni un pixel de más — importa, porque en granularidad Mes hay 31 de
+    estas etiquetas en una franja de 10px de alto."""
+    if marca == "feriado":
+        return f'<span style="color:{ADVERTENCIA_TEXTO}"><b>{texto}</b></span>'
+    if marca == "finde":
+        return f'<span style="color:{TEXTO_PRINCIPAL}">{texto}</span>'
+    return texto
+
+
 def _paso_etiquetas(total_columnas, largo_etiqueta, ancho=None):
     """Cada cuántas columnas se escribe una etiqueta en el eje X.
 
@@ -540,7 +621,7 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None):
     # servicio (ver _orden_horas) y puede saltar de las 23h a las 00h. En un
     # eje numérico ese salto se dibuja como doce filas vacías; en uno
     # categórico las filas son las que hay, en el orden que se les dio.
-    y_cat = [f"{h:02d}h" for h in horas]
+    y_cat = [_etiqueta_hora(h) for h in horas]
 
     # Geometría PRIMERO, etiquetas después. El paso de las etiquetas ("una de
     # cada cuántas columnas se escribe") depende del ancho que le toca a cada
@@ -555,14 +636,25 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None):
     paso = _paso_etiquetas(
         total, max((len(e) for _n, ets in geo for e in ets if e), default=1))
 
+    # Fin de semana y feriado se marcan en la ETIQUETA del día, no con una
+    # banda: el mapa ya usa el color para el dato, y una banda encima de las
+    # celdas competiría con lo único que importa mirar. El feriado además se
+    # escribe SIEMPRE aunque el paso lo saltease — es justo el día que uno
+    # busca cuando una columna se sale de la norma.
+    feriados = _feriados_de(claves, grano) if grano != "Año" else set()
+    marcas_dia = {}          # posición del eje X → 'finde' | 'feriado'
+
     offs, ticks_pos, ticks_txt, titulos = [], [], [], []
     pos = 0
     for s, (n, etiquetas) in enumerate(geo):
         offs.append(pos)
         for i, et in enumerate(etiquetas):
-            if et and i % paso == 0:
+            _m = _marca_dia(_fecha_de_columna(claves[s], grano, i), feriados)
+            if _m:
+                marcas_dia[pos + i] = _m
+            if et and (i % paso == 0 or _m == "feriado"):
                 ticks_pos.append(pos + i)
-                ticks_txt.append(et)
+                ticks_txt.append(_tick_marcado(et, _m))
         titulos.append((pos + (n - 1) / 2, _etiqueta_clave(claves[s], grano)))
         pos += n + 1            # +1 = la columna de hueco
     total = max(total, 1)
@@ -619,8 +711,11 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None):
         for s, col, _h, *_r in cd:
             _n, _et = _columnas(claves[s], grano, ancla)
             _c = _et[col] if col < len(_et) and _et[col] else ""
+            _m = _marca_dia(_fecha_de_columna(claves[s], grano, col), feriados)
             _nombres.append(" · ".join(
-                x for x in (_etiqueta_clave(claves[s], grano), _c) if x))
+                x for x in (_etiqueta_clave(claves[s], grano), _c,
+                            {"feriado": "feriado",
+                             "finde": "fin de semana"}.get(_m, "")) if x))
         fig.data[-1].customdata = [c + [n] for c, n in zip(cd, _nombres)]
 
     for x, txt in titulos:
@@ -702,6 +797,17 @@ def _puntos_de_evento(evt):
 
 # ── UI: selector de períodos ────────────────────────────────────────────────
 
+def _leyenda_dias(grano):
+    """Explica las marcas del eje X. Sin esto, un número en ámbar es un
+    número raro: el color sólo informa si dice de qué habla."""
+    if grano == "Año":
+        return ""      # las columnas son meses: ni finde ni feriado aplican
+    return (" En el eje de días, los **fines de semana** van en negro y los "
+            "**feriados** en ámbar y negrita (calendario nacional de Perú, el "
+            "mismo de la vista Año Pasado) — un feriado se escribe siempre, "
+            "aunque el resto de las etiquetas se ralee.")
+
+
 def _toggle_selector():
     st.session_state[_K_SELECTOR] = not st.session_state.get(_K_SELECTOR, False)
 
@@ -715,10 +821,20 @@ def _selector_periodos(ancla, grano, claves):
     rerun, y un popover que se cierra en cada clic obligaría a reabrirlo
     cuatro veces para elegir cuatro períodos.
 
+    Los períodos NO tienen que ser consecutivos ni recientes: la lista es el
+    atajo para lo de siempre y el `date_input` de abajo abre el calendario
+    entero (pedido del usuario 2026-08-14, "elegir días o meses de manera
+    aleatoria"). Lo que se elige por fecha se suma a la lista con su ✓, así se
+    quita igual que cualquier otro.
+
     Devuelve la lista de claves elegidas (cronológica)."""
-    disponibles = _claves_hacia_atras(ancla, grano, _N_LISTA[grano])
-    disponibles = list(reversed(disponibles))      # más reciente primero
-    elegidas = [k for k in claves if k in disponibles] or claves
+    elegidas = list(claves)
+    # Los elegidos van SIEMPRE en la lista aunque caigan fuera de la ventana
+    # reciente: si no, un mes de hace un año se quedaba seleccionado y sin
+    # botón con el cual sacarlo.
+    disponibles = sorted(
+        set(_claves_hacia_atras(ancla, grano, _N_LISTA[grano])) | set(elegidas),
+        key=lambda k: _rango_de_clave(k, grano)[0], reverse=True)
 
     st.button(f"Comparar · {len(elegidas)} de {MAX_MARCAS}",
               key="vh_btn_selector", on_click=_toggle_selector,
@@ -768,9 +884,38 @@ def _selector_periodos(ancla, grano, claves):
                         # mismo. Se limpian en vez de mentir.
                         st.session_state[_K_MARCAS] = []
                     st.rerun(scope="fragment")
-        if lleno:
-            st.caption(f"Ya hay {MAX_MARCAS} períodos: quitá uno para elegir "
-                       "otro.")
+        # ── Cualquier fecha, no sólo las recientes ──────────────────────
+        # La lista de arriba cubre el 90% ("las últimas semanas"), pero deja
+        # fuera "quiero ver el 14 de febrero". El date_input traduce la fecha
+        # al período de la granularidad activa: en Mes, cualquier día de
+        # febrero agrega febrero.
+        _f1, _f2 = st.columns([2, 1])
+        with _f1:
+            _fecha = st.date_input(
+                "Otra fecha", value=None, max_value=ancla, format="DD/MM/YYYY",
+                key=f"vh_otra_{grano}", label_visibility="collapsed")
+        with _f2:
+            _agregar = st.button("Agregar", key=f"vh_add_{grano}",
+                                 use_container_width=True, disabled=lleno)
+        if _agregar:
+            if _fecha is None:
+                st.warning("Elegí una fecha primero.")
+            else:
+                _k = _clave_de_fecha(_fecha, grano)
+                if _k in elegidas:
+                    st.info(f"{_etiqueta_clave(_k, grano)} ya está en la "
+                            "comparación.")
+                else:
+                    st.session_state[_K_CLAVES] = sorted(
+                        elegidas + [_k],
+                        key=lambda x: _rango_de_clave(x, grano)[0])
+                    st.session_state[_K_MARCAS] = []
+                    st.rerun(scope="fragment")
+        st.caption(
+            (f"Ya hay {MAX_MARCAS} períodos: quitá uno para elegir otro. "
+             if lleno else "")
+            + "Los períodos no tienen que ser consecutivos — para uno que no "
+            "esté en la lista, elegí cualquier fecha suya arriba.")
     return elegidas
 
 
@@ -1121,12 +1266,13 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 "Arrastrá sobre el mapa para marcar un bloque — un arrastre "
                 "que cruza de un panel al siguiente deja una marca en cada "
                 "uno. Tocá una pastilla para quitarla. La marca 1 es la base "
-                "de los % del detalle.")
+                "de los % del detalle." + _leyenda_dias(grano))
         else:
             st.caption(
                 "Arrastrá sobre el mapa para marcar un bloque de días y horas "
                 f"(hasta {MAX_MARCAS}) y compararlos abajo. Un arrastre que "
-                "cruza de un panel al siguiente deja una marca en cada uno.")
+                "cruza de un panel al siguiente deja una marca en cada uno."
+                + _leyenda_dias(grano))
 
     # ── Drill ───────────────────────────────────────────────────────────
     # Las dos tarjetas se abren SIEMPRE, aunque no haya marcas, y por dentro

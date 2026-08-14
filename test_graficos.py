@@ -448,6 +448,49 @@ def _pruebas_puras():
     check("horario · con muchas columnas el rango es el justo",
           _vh._rango_x(31), [-0.5, 30.5])
 
+    # ── Horas en am/pm, no en formato 24h ───────────────────────────────
+    # El mediodía y la medianoche son los dos que se escriben mal solos.
+    check("horario · hora am/pm",
+          [_vh._etiqueta_hora(h) for h in (0, 9, 12, 13, 19, 23)],
+          ["12 am", "9 am", "12 pm", "1 pm", "7 pm", "11 pm"])
+    check("horario · tramo de una sola hora", _vh._tramo_horas(19, 19), "7 pm")
+    check("horario · tramo de varias horas",
+          _vh._tramo_horas(18, 21), "6 pm–9 pm")
+
+    # ── Fin de semana y feriado (mismo calendario que "Año Pasado") ──────
+    _fer26 = set(_vc._feriados_peru(2026))
+    check("horario · 28 de julio marcado como feriado",
+          _vh._marca_dia(_dt.date(2026, 7, 28), _fer26), "feriado")
+    check("horario · un sábado común es finde",
+          _vh._marca_dia(_dt.date(2026, 8, 8), _fer26), "finde")
+    check("horario · un martes común no lleva marca",
+          _vh._marca_dia(_dt.date(2026, 8, 11), _fer26), "")
+    # Un feriado que cae en finde se marca como FERIADO: que era domingo ya
+    # se veía; lo que no se veía es que además era feriado.
+    _dom_fer = [d for d in _fer26 if d.weekday() >= 5]
+    if _dom_fer:
+        check("horario · el feriado gana al fin de semana",
+              _vh._marca_dia(_dom_fer[0], _fer26), "feriado")
+    check("horario · sin fecha (columna de un año) no hay marca",
+          _vh._marca_dia(None, _fer26), "")
+
+    # La columna → fecha, que es de donde sale la marca
+    check("horario · fecha de la columna en Mes",
+          _vh._fecha_de_columna((2026, 7), "Mes", 27), _dt.date(2026, 7, 28))
+    check("horario · fecha de la columna en Semana",
+          _vh._fecha_de_columna((2026, 32), "Semana", 0).weekday(), 0)
+    check("horario · en Año la columna no es un día",
+          _vh._fecha_de_columna(2026, "Año", 3), None)
+
+    # Elegir un período por una fecha CUALQUIERA (no sólo los recientes)
+    check("horario · una fecha suelta cae en su mes",
+          _vh._clave_de_fecha(_dt.date(2025, 2, 14), "Mes"), (2025, 2))
+    check("horario · una fecha suelta cae en su año",
+          _vh._clave_de_fecha(_dt.date(2025, 2, 14), "Año"), 2025)
+    check("horario · una fecha suelta cae en su día",
+          _vh._clave_de_fecha(_dt.date(2025, 2, 14), "Día"),
+          _dt.date(2025, 2, 14))
+
     # El arranque es SIEMPRE un período: el EN CURSO. Comparar es una decisión
     # explícita del usuario y tiene su botón.
     check("horario · arranca con un solo período", _vh._N_DEFECTO, 1)
@@ -530,13 +573,13 @@ def _pruebas_puras():
     check("horario · etiqueta de marca (semana)",
           _vh._etiqueta_marca({"sel": 0, "c0": 4, "c1": 6, "h0": 18, "h1": 21},
                               [(2026, 32)], "Semana"),
-          f"{_vc._etiqueta_clave((2026, 32), 'Semana')} · Vie–Dom · 18–21h")
+          f"{_vc._etiqueta_clave((2026, 32), 'Semana')} · Vie–Dom · 6 pm–9 pm")
     # En granularidad Día la columna ES el período: repetirlo daría
     # "vie 08/08 · vie", que no informa nada.
     check("horario · etiqueta de marca (día) no repite el período",
           _vh._etiqueta_marca({"sel": 0, "c0": 0, "c1": 0, "h0": 19, "h1": 19},
                               [_dt.date(2026, 8, 7)], "Día"),
-          f"{_vc._etiqueta_clave(_dt.date(2026, 8, 7), 'Día')} · 19h")
+          f"{_vc._etiqueta_clave(_dt.date(2026, 8, 7), 'Día')} · 7 pm")
 
     # La firma gobierna la `key` del chart: si no cambia con las marcas, la
     # misma selección se re-procesa en cada rerun y el drill parpadea.
