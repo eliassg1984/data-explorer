@@ -403,6 +403,21 @@ def _pruebas_puras():
     check("horario · columnas feb bisiesto", _vh._columnas((2024, 2), "Mes")[0], 29)
     check("horario · columnas feb normal", _vh._columnas((2025, 2), "Mes")[0], 28)
 
+    # El período EN CURSO se recorta al último día con datos: el 14 de agosto
+    # "agosto" son 14 columnas, no 31 con diecisiete vacías a la derecha (que
+    # se leerían como una caída). Los períodos CERRADOS no se tocan.
+    check("horario · el mes en curso se recorta al ancla",
+          _vh._columnas((2026, 8), "Mes", _dt.date(2026, 8, 14))[0], 14)
+    check("horario · el mes cerrado queda entero",
+          _vh._columnas((2026, 7), "Mes", _dt.date(2026, 8, 14))[0], 31)
+    check("horario · las etiquetas se recortan con las columnas",
+          _vh._columnas((2026, 8), "Mes", _dt.date(2026, 8, 14))[1][-1], "14")
+    # La semana en curso también: un viernes son 5 columnas, no 7.
+    check("horario · la semana en curso se recorta",
+          _vh._columnas((2026, 33), "Semana", _dt.date(2026, 8, 14))[0], 5)
+    check("horario · el año en curso se recorta al mes",
+          _vh._columnas(2026, "Año", _dt.date(2026, 8, 14))[0], 8)
+
     _f = pd.Series(pd.to_datetime(["2026-08-05 13:00", "2026-08-09 20:30"]))
     check("horario · columna en semana (mié=2, dom=6)",
           list(_vh._columna_de_fecha(_f, "Semana")), [2, 6])

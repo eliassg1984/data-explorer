@@ -126,6 +126,23 @@ _MED_ARBOL = ("venta", "cant", "desc")
 # árbol se queda con la primera medida y lo dice.
 _MAX_COLS_ARBOL = 8
 
+# Geometría del mapa. El alto de la figura sigue al NÚMERO DE HORAS con dato
+# (`alturas.por_filas`) en vez de estirarse siempre al techo de la tarjeta: un
+# turno corto repartía el mismo alto entre menos filas y salían bandas con más
+# aire que dato. 22px por hora es la fila compacta; el techo lo sigue poniendo
+# `alturas.con_franja()`, así que un turno largo no desborda la pantalla.
+_PX_HORA = 22
+_AIRE_MAPA = 66    # títulos de panel + etiquetas del eje X + márgenes
+_ALTO_MIN = 170    # con 3-4 horas la figura no se convierte en una cinta
+
+# Cuántos períodos trae el arranque, por granularidad. Mes va SOLO: la vista
+# por defecto es el mes en curso de corrido (pedido del usuario 2026-08-14 —
+# "que sea de 30 días o del mes en curso"), no cuatro trozos que hay que
+# volver a coser con la vista. Las otras granularidades sí abren comparando,
+# que es para lo que existen.
+_N_DEFECTO = {"Día": 4, "Semana": 4, "Mes": 1, "Año": 2}
+_GRANO_DEF = "Mes"
+
 _SIN_DSCTO = "Sin descuento"
 
 _K_CLAVES = "vh_claves"      # períodos elegidos (lista de claves)
@@ -156,19 +173,33 @@ def _etiqueta_clave(clave, grano):
     return _etiqueta_cmp(clave, grano)
 
 
-def _columnas(clave, grano):
+def _columnas(clave, grano, hasta=None):
     """(n_columnas, etiquetas) dentro de un período.
 
     En Mes el número depende del mes concreto (28/29/30/31): febrero no tiene
-    31 columnas vacías al final, que se leerían como "cayó la venta"."""
+    31 columnas vacías al final, que se leerían como "cayó la venta".
+
+    `hasta` recorta el período EN CURSO al último día con datos, por lo mismo:
+    el 14 de agosto, "agosto" son 14 columnas, no 31 con diecisiete vacías a
+    la derecha. Es la versión visual del recorte que `ventas_comparativo`
+    hace sobre los totales (`_rangos_comparables`): un período a medias se
+    muestra hasta donde llegó, no hasta donde llegará."""
     if grano == "Día":
         return 1, [""]
     if grano == "Semana":
-        return 7, list(_DIAS_ES)
-    if grano == "Mes":
+        n, etiquetas = 7, list(_DIAS_ES)
+    elif grano == "Mes":
         n = _cal.monthrange(clave[0], clave[1])[1]
-        return n, [str(i) for i in range(1, n + 1)]
-    return 12, list(_MESES_ES)
+        etiquetas = [str(i) for i in range(1, n + 1)]
+    else:
+        n, etiquetas = 12, list(_MESES_ES)
+    if hasta is not None:
+        ini, fin = _rango_de_clave(clave, grano)
+        if ini <= hasta < fin:
+            n = min(n, _columna_de_fecha(
+                pd.Series([pd.Timestamp(hasta)]), grano).iat[0] + 1)
+            etiquetas = etiquetas[:n]
+    return n, etiquetas
 
 
 def _columna_de_fecha(fechas, grano):
@@ -444,7 +475,7 @@ def _detalle_marca(tramo, pin, orden):
 
 # ── Figura ──────────────────────────────────────────────────────────────────
 
-def _fig_mapa(paneles, claves, grano, medida, marcas, horas):
+def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None):
     """Mapa de calor de los N paneles en una sola figura, con la capa de
     selección transparente encima y un rectángulo por marca.
 
@@ -462,7 +493,7 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas):
 
     offs, total, ticks_pos, ticks_txt, titulos = [], 0, [], [], []
     for s, clave in enumerate(claves):
-        n, etiquetas = _columnas(clave, grano)
+        n, etiquetas = _columnas(clave, grano, ancla)
         offs.append(total)
         # Con muchas columnas (Mes) las etiquetas se pisan: se muestra una de
         # cada k. En Día no hay etiqueta de columna — el título del panel ya
@@ -481,7 +512,7 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas):
     for s, celdas in enumerate(paneles):
         if celdas is None or celdas.empty:
             continue
-        n, _et = _columnas(claves[s], grano)
+        n, _et = _columnas(claves[s], grano, ancla)
         for fila in celdas.itertuples(index=False):
             if fila.hora not in h_idx or fila.col >= n:
                 continue
@@ -526,7 +557,7 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas):
         # entender de calendarios.
         _nombres = []
         for s, col, _h, *_r in cd:
-            _n, _et = _columnas(claves[s], grano)
+            _n, _et = _columnas(claves[s], grano, ancla)
             _c = _et[col] if col < len(_et) and _et[col] else ""
             _nombres.append(" · ".join(
                 x for x in (_etiqueta_clave(claves[s], grano), _c) if x))
@@ -562,7 +593,13 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas):
                            bgcolor=color, borderpad=1)
 
     fig.update_layout(
-        height=alturas.con_franja(),
+        # El alto SIGUE A LAS FILAS en vez de estirarse siempre al techo: con
+        # `con_franja()` fijo, un turno de 8 horas repartía 373px entre 8
+        # filas y salían bandas de 46px de alto por 28 de ancho — ladrillos
+        # verticales con más aire que dato. `por_filas` clampea igual al
+        # techo cuando hay muchas horas.
+        height=alturas.por_filas(n_horas, px_fila=_PX_HORA, extra=_AIRE_MAPA,
+                                 rol=alturas.con_franja(), minimo=_ALTO_MIN),
         margin=dict(l=10, r=10, t=34, b=10),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=12),
@@ -918,14 +955,14 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             "fam": col_fam, "sub": col_sub, "desc": col_desc,
             "tipo_desc": col_tipo}
 
-    _grano_prev = st.session_state.get("vh_grano") or "Semana"
+    _grano_prev = st.session_state.get("vh_grano") or _GRANO_DEF
     with _card(f"ventas_horario_{_grano_prev}"):
         _ph_hdr = st.empty()
         c1, c2, c3 = st.columns([1.5, 2.2, 1.3])
         with c1:
-            grano = st.pills("Granularidad", list(GRANOS), default="Semana",
-                             key="vh_grano",
-                             label_visibility="collapsed") or "Semana"
+            grano = st.pills("Granularidad", list(GRANOS),
+                             default=_GRANO_DEF, key="vh_grano",
+                             label_visibility="collapsed") or _GRANO_DEF
         with c2:
             # Medida del MAPA: control propio y no "la primera del drill"
             # (decisión del usuario, 2026-08-14). El color sólo puede
@@ -948,7 +985,8 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
 
         claves = st.session_state.get(_K_CLAVES)
         if not claves:
-            claves = _claves_hacia_atras(ancla, grano, MAX_MARCAS)
+            claves = _claves_hacia_atras(ancla, grano,
+                                         _N_DEFECTO.get(grano, MAX_MARCAS))
             st.session_state[_K_CLAVES] = claves
 
         with c3:
@@ -981,7 +1019,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
 
         marcas = [m for m in st.session_state.get(_K_MARCAS, [])
                   if m["sel"] < len(claves)]
-        fig = _fig_mapa(paneles, claves, grano, medida, marcas, horas)
+        fig = _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla)
         evt = st.plotly_chart(
             fig, use_container_width=True,
             key=f"vh_mapa_{_firma(grano, claves, medida, marcas)}",
