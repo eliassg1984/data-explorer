@@ -235,7 +235,12 @@ CSS = """    /* ================================================================
             left: 391px !important;
             right: auto !important;
             transform: none !important;
-            max-width: calc(100vw - 391px - 131px) !important;
+            /* El último sumando (255px) es el sitio de `atajos_franja`, que
+               desde el 2026-08-14 vive anclado a la derecha en la MISMA
+               línea. Sin reservarlo, en pantallas de 901-1200px los chips
+               crecían por debajo de los atajos y se solapaban — los dos son
+               position:fixed, así que ninguno empuja al otro. */
+            max-width: calc(100vw - 391px - 131px - 255px) !important;
         }
         .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
             [data-testid="stPopover"] button {
@@ -262,6 +267,135 @@ CSS = """    /* ================================================================
             [data-testid="stPopover"] button {
             min-width: 230px !important;
         }
+
+        /* ============================================================== */
+        /* FRANJA PLANA (2026-08-14) — barra de herramientas, no cápsulas  */
+        /*                                                                 */
+        /* Pedido con una referencia concreta (la barra de TradingView) y  */
+        /* con el argumento correcto: cinco cápsulas con borde propio son  */
+        /* cinco rectángulos compitiendo, y ninguna distingue un filtro    */
+        /* que ESTÁ filtrando de uno que no — el único indicio era el      */
+        /* badge del número.                                               */
+        /*                                                                 */
+        /* No se inventa lenguaje: es el mismo tab-subrayado que ya usan   */
+        /* las franjas de control DENTRO de las tarjetas (_80_cards.py,    */
+        /* Año Pasado y Compras › Familia). Ahora la franja de arriba y    */
+        /* las de adentro hablan igual.                                    */
+        /*                                                                 */
+        /* El ancho de 210px del pill NO se toca aunque ya no haya         */
+        /* cápsula: los chips siguen anclados a `left: 391px` = 175 + 210  */
+        /* + 6. Aplanar el aspecto es gratis; soltar el ancho movería esa  */
+        /* aritmética de tres números acoplados.                           */
+        /* ============================================================== */
+        .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill
+            [data-testid="stPopover"] button {
+            border: none !important;
+            border-radius: 0 !important;
+            /* La fecha SIEMPRE filtra: su subrayado es permanente. */
+            border-bottom: 2px solid var(--accent) !important;
+            background: transparent !important;
+            padding: 0 6px !important;
+            font-weight: 600 !important;
+            font-size: 13.5px !important;
+        }
+        .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill
+            [data-testid="stPopover"] button:hover,
+        .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill
+            [data-testid="stPopover"] button[aria-expanded="true"] {
+            border: none !important;
+            border-bottom: 2px solid var(--accent-deep) !important;
+            background: var(--accent-tint) !important;
+        }
+        /* Chips: planos y APAGADOS mientras no filtren. */
+        .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
+            [data-testid="stPopover"] button {
+            background: transparent !important;
+            border: none !important;
+            border-radius: 0 !important;
+            border-bottom: 2px solid transparent !important;
+            color: var(--text-secondary) !important;
+            font-weight: 400 !important;
+            padding-right: 8px !important;
+        }
+        /* ACTIVO: subrayado de acento. Sustituye al relleno sólido de
+           _40_ajuste_franja.py (que gana por orden de sección, así que hace
+           falta la clase duplicada para pasarle por encima). */
+        .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
+            [class*="st-key-chipwrap_"][class*="_on"]
+            [data-testid="stPopover"] button {
+            background: transparent !important;
+            border-bottom: 2px solid var(--accent) !important;
+            color: var(--accent-deep) !important;
+            font-weight: 600 !important;
+        }
+        .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
+            [data-testid="stPopover"] button:hover {
+            background: var(--accent-tint) !important;
+        }
+
+        /* ============================================================== */
+        /* ATAJOS DE RANGO EN LA FRANJA                                    */
+        /* Anclados a la DERECHA y no a la izquierda como todo lo demás:   */
+        /* los chips miden distinto en cada reporte (2 a 4), así que no    */
+        /* existe un `left:` en px que sirva para todos. Desde la derecha  */
+        /* el ancla es estable y además ocupan el hueco muerto que había.  */
+        /* ============================================================== */
+        .st-key-atajos_franja {
+            position: fixed !important;
+            top: 8px !important;
+            right: 131px !important;
+            left: auto !important;
+            width: fit-content !important;
+            z-index: 23 !important;
+            margin: 0 !important;
+        }
+        /* Hairline a la izquierda del grupo, como los separadores de las
+           franjas de control de las tarjetas. */
+        .st-key-atajos_franja::before {
+            content: "" !important;
+            position: absolute !important;
+            left: -12px !important;
+            top: 4px !important;
+            width: 1px !important;
+            height: 20px !important;
+            background: var(--border) !important;
+        }
+        .st-key-atajos_franja [data-testid="stHorizontalBlock"] {
+            gap: 2px !important;
+            flex-wrap: nowrap !important;
+        }
+        .st-key-atajos_franja button {
+            background: transparent !important;
+            border: none !important;
+            border-radius: 0 !important;
+            border-bottom: 2px solid transparent !important;
+            box-shadow: none !important;
+            color: var(--text-secondary) !important;
+            font-size: 13px !important;
+            font-weight: 400 !important;
+            padding: 0 7px !important;
+            min-height: 28px !important;
+            white-space: nowrap !important;
+        }
+        .st-key-atajos_franja button:hover {
+            background: var(--accent-tint) !important;
+            color: var(--accent-deep) !important;
+        }
+        /* El atajo VIGENTE es el que coincide con el rango de la fecha: se
+           marca igual que un filtro activo, con el mismo subrayado. */
+        .st-key-atajos_franja button[kind="primary"],
+        .st-key-atajos_franja [data-testid="stBaseButton-primary"] {
+            border-bottom: 2px solid var(--accent) !important;
+            color: var(--accent-deep) !important;
+            font-weight: 600 !important;
+        }
+    }
+
+    /* Debajo de 901px la franja se reordena (ver _99_movil.py) y once
+       controles no entran: los atajos se pliegan y siguen estando en el
+       popover del calendario, que nunca los perdió. */
+    @media (max-width: 900px) {
+        .st-key-atajos_franja { display: none !important; }
     }
 
     /* Panel del popover: se renderiza en un portal (fuera del contenedor),

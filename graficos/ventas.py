@@ -1031,9 +1031,15 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
             return []
         _n = len(st.session_state.get(key) or [])
         _lbl = f":material/filter_alt: {label} :violet-badge[{_n}]" if _n else f":material/filter_alt: {label}"
-        with st.popover(_lbl, use_container_width=True):
-            return st.pills(label, opts, selection_mode="multi",
-                            key=key, label_visibility="collapsed") or []
+        # El wrapper `chipwrap_<key>_on|off` es lo que el CSS necesita para
+        # marcar un filtro ACTIVO (estilos/_50_fecha.py). Ventas dibuja sus
+        # chips acá y no por `app.py::_chip_categorico`, así que sin esta
+        # línea sus cuatro filtros se veían iguales estuvieran filtrando o no
+        # — el único indicio era el badge con el número.
+        with st.container(key=f"chipwrap_{key}_{'on' if _n else 'off'}"):
+            with st.popover(_lbl, use_container_width=True):
+                return st.pills(label, opts, selection_mode="multi",
+                                key=key, label_visibility="collapsed") or []
 
     fam_sel, sub_sel, canal_sel, serv_sel = [], [], [], []
     with st.container(key="chips_ajuste_tabla"):
