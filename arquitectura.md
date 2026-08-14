@@ -4502,9 +4502,40 @@ salvo `icono`):
        Verificado en vivo antes/después con `getBoundingClientRect`:
        cerrado, arriba y abajo del texto quedaron en 3px/4.5px (bajó de
        ~6px/~9px); abierto, el hueco título→primera fila bajó de ~16px
-       a 1.5px. El 1.5px residual (mismo en los dos casos) no se
-       persiguió más — se probó `align-items:center` en el botón
-       pensando que era el ícono vs. el `<p>` desalineados y NO cambió
-       nada, así que sale de algún margen propio de
-       `stElementContainer` sin identificar; por debajo del pixel
-       perceptible a simple vista, no vale la pena seguir cazándolo.
+       a 1.5px.
+
+     - **6ta vuelta — el 1.5px residual SÍ importaba, y la explicación
+       que quedó escrita en la vuelta anterior era EQUIVOCADA.** Ahí
+       decía "sale de algún margen propio de `stElementContainer` sin
+       identificar, por debajo del pixel perceptible". Falso en las dos
+       mitades: era el **baseline gap** del botón (Streamlit lo rinde
+       `inline-flex`, y todo hijo inline deja debajo el hueco de
+       descendente de su línea), y sí se percibía — el usuario lo
+       reportó como "la letra parece no estar centrada". El fix es una
+       línea: `display: flex !important` en el botón (block-level, sin
+       línea que genere el hueco). Medido después: `topGap == bottomGap
+       == 2px` exacto, y el centro del `<p>` contra el centro del ícono
+       dio diferencia **0**. Lección doble: (a) ante un desbalance
+       vertical de 1-4px en un widget de Streamlit, sospechar del
+       baseline gap ANTES que de un margen; (b) no cerrar un residuo
+       como "imperceptible" sin que lo mire un humano — acá el humano
+       lo vio de una.
+
+       En la misma vuelta, el resto de "se ve regordete, como un
+       gusano... el pestillo es casi imperceptible":
+       · **Ancho FIJO (`width: 280px`, no `auto`)**: cerrado se encogía
+         al texto (138px) y abierto saltaba a 280px. En la referencia la
+         barra colapsada mide lo mismo que el panel abierto y sólo crece
+         hacia abajo. Esto es lo que más cambió la lectura: una cápsula
+         corta y gruesa pasó a barra larga y fina.
+       · **`line-height: 1.35`** (heredaba 1.6): en una tarjeta cerrada
+         de una sola línea, la caja de línea del texto ES casi todo el
+         alto, así que el interlineado adelgaza más que el padding.
+         Alto total 32.7px → 26.2px.
+       · **`border-radius: 6px`** (era 10px): 10px sobre 26px de alto
+         redondea casi a cápsula — de ahí "gusano".
+       · **Chevron 17px + `--text-primary`** (era 13px + `--accent`):
+         13px contra un texto de 12px no es jerarquía, y el violeta
+         sobre vidrio gris translúcido pierde contraste. En la
+         referencia el chevron se lee ANTES que el label, porque es la
+         señal de "esto se abre".

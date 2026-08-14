@@ -347,8 +347,13 @@ CSS = """    /* ================================================================
     div[class*="st-key-ventas_comp_chart_slot_"] .st-key-ventas_comp_detalle_float {
         position: absolute;
         top: 6px; left: 8px; z-index: 5;
-        width: auto !important;
-        max-width: 280px;
+        /* Ancho FIJO, no `auto` — cerrado medía 138px (se encogía al
+           texto) y abierto 280px: el ancho saltaba en cada clic. En la
+           referencia la barra colapsada es igual de ancha que el panel
+           abierto; sólo crece HACIA ABAJO. De paso arregla el "se ve
+           regordete, como un gusano": una cápsula corta y gruesa pasa a
+           ser una barra larga y fina, que es la proporción del ejemplo. */
+        width: 280px !important;
         overflow: hidden;
         /* Simétrico (2px arriba Y abajo) — reportado "se ve descuadrado"
            con el panel cerrado: era `2px 0 5px` (5 abajo, no 2), y sumado
@@ -358,10 +363,10 @@ CSS = """    /* ================================================================
            necesitan las filas cuando está ABIERTO ahora es
            padding-bottom del panel (`ventas_comp_detalle_panel` más
            abajo), no de acá, para no desequilibrar el estado cerrado
-           (el más visto: por defecto arranca cerrado). Medido: con esto
-           el total arriba y abajo del texto da 6px en los dos lados
-           (1px de borde + 2px de este padding + 3px del botón). */
-        padding: 2px 0;
+           (el más visto: por defecto arranca cerrado). 1px y no 2:
+           reportado "muy grueso" — cada px de acá se suma DOS veces al
+           alto de una tarjeta que cerrada es una sola línea. */
+        padding: 1px 0;
         /* El default de Streamlit para un stVerticalBlock es
            gap:16px — invisible con un solo hijo (cerrado), pero al
            abrirse (botón + panel de filas, dos hijos) metía un salto de
@@ -399,7 +404,11 @@ CSS = """    /* ================================================================
         backdrop-filter: blur(14px) saturate(1.4) !important;
         -webkit-backdrop-filter: blur(14px) saturate(1.4) !important;
         border: 1px solid var(--border) !important;
-        border-radius: 10px !important;
+        /* 6px, no 10: con una tarjeta CERRADA de ~26px de alto, 10px de
+           radio la redondea casi a cápsula ("como un gusano"). 6px la
+           deja como barra de esquinas suaves, igual que la referencia,
+           y sigue leyéndose bien abierta (que es más alta). */
+        border-radius: 6px !important;
         box-shadow: var(--shadow-md) !important;
     }
     .st-key-ventas_comp_detalle_float [data-testid="stElementToolbar"] {
@@ -416,13 +425,22 @@ CSS = """    /* ================================================================
         min-width: 0 !important;
         min-height: 0 !important;
         height: auto !important;
+        /* `flex` (block-level), NO el inline-flex que trae Streamlit.
+           ESTE era el "la letra parece no estar centrada": un hijo
+           inline-block deja el hueco de descendente (baseline gap) de
+           la línea DEBAJO suyo — medido, 3px arriba contra 4.5px abajo,
+           así que el texto se veía corrido hacia arriba dentro de la
+           barra. En block-level no hay línea que lo genere. Es el mismo
+           1.5px que en la vuelta anterior atribuí a un margen sin
+           identificar y dejé pasar: no era margen, era el baseline. */
+        display: flex !important;
         justify-content: flex-start !important;
-        /* El ícono Material y el <p> del label tienen métricas de línea
-           distintas — sin align-items:center el texto queda ~1.5px más
-           alto que el ícono dentro del propio botón (medido en
-           navegador), leve pero sumado al resto es parte del
-           "descuadrado" reportado. */
         align-items: center !important;
+        /* 1.35 en vez del 1.6 heredado: el alto de la barra cerrada es
+           casi todo la caja de línea del texto (12px × 1.6 = 19.2px),
+           así que bajar el interlineado es lo que MÁS adelgaza sin
+           tocar el tamaño de letra. */
+        line-height: 1.35 !important;
         gap: 4px !important;
         padding: 3px 10px !important;
         margin: 0 !important;
@@ -441,10 +459,21 @@ CSS = """    /* ================================================================
         font-weight: 600 !important;
         margin: 0 !important;
     }
+    /* Chevron: reportado "casi imperceptible". Eran DOS cosas juntas —
+       13px (más chico que el propio texto de 12px sólo por 1px, o sea
+       sin jerarquía visual) y pintado en --accent, un violeta que sobre
+       el vidrio gris translúcido pierde contraste. Ahora 17px y del
+       mismo negro del texto (--text-primary), que es como se ve en la
+       referencia: el chevron es la señal de "esto se abre", tiene que
+       leerse antes que el label, no después. `wght` sube el grosor del
+       trazo — Material Symbols es una fuente VARIABLE, así que el eje
+       existe; si Streamlit cambiara a la versión estática, esta línea
+       se ignora sola y quedan el tamaño y el color, que ya alcanzan. */
     .st-key-ventas_comp_detalle_float [data-testid="stButton"]
         [data-testid="stIconMaterial"] {
-        font-size: 13px !important;
-        color: var(--accent) !important;
+        font-size: 17px !important;
+        color: var(--text-primary) !important;
+        font-variation-settings: 'wght' 600 !important;
     }
     /* Filas: mismo ancho angosto que antes (`width=260` en Python, ver
        ventas_comparativo.py — heredaba 400 del expander viejo, que
