@@ -393,15 +393,21 @@ CSS = """    /* ================================================================
            cambiando de tinte (blanco → --accent-tint), pero acá el
            pedido explícito era GRIS, no lavanda — así que en vez de
            cambiar de color se usa uno con más cuerpo: --text-secondary
-           (#71717a, gris medio) a SÓLO 12%, no 92%. Con eso el efecto
+           (#71717a, gris medio) a SÓLO 8%, no 92%. Con eso el efecto
            esmerilado (blur) sí se nota, y el tono se lee gris de
            verdad, no blanco con un nombre de variable gris.
-           16% → 12% en la 8va vuelta ("un poco levemente más
-           transparente"). El blur NO se tocó: es lo que sostiene la
-           legibilidad del texto cuando el tinte se aclara, así que
-           bajar tinte y blur juntos sería bajar dos veces lo mismo. Si
-           hiciera falta ir más abajo de ~10%, ahí sí conviene SUBIR el
-           blur para compensar, no seguir restando tinte solo.
+           Bajó en dos pedidos seguidos del usuario: 16% → 12% (8va
+           vuelta) → 8% (9na). El blur se mantiene en 14px en las dos:
+           es lo que sostiene la legibilidad del texto cuando el tinte
+           se aclara, así que bajar tinte y blur juntos sería restar dos
+           veces lo mismo, y además se cambia UNA variable por vuelta
+           para saber cuál movió la aguja.
+           OJO si se sigue bajando: el límite ya no es estético sino
+           FUNCIONAL — este panel muestra cifras (S/ 7,143, −52%) sobre
+           barras de colores fuertes, y a partir de acá lo que se pierde
+           es la lectura de los números, no "el efecto". Si hace falta
+           más transparencia, el próximo movimiento es SUBIR el blur
+           (14px → 18px) para compensar, no seguir restando tinte solo.
            Fallback plano ANTES del color-mix(): si el navegador no
            soporta esa función la declaración es inválida y SE IGNORA
            ENTERA — sin nada previo válido el fondo cae al blanco opaco
@@ -412,8 +418,8 @@ CSS = """    /* ================================================================
            --text-secondary cambia, actualizar también este rgba().
            border-radius 10px, NO 999px (cápsula): la referencia es una
            tarjeta de esquinas suaves, no un chip. */
-        background: rgba(113, 113, 122, 0.12) !important;
-        background: color-mix(in srgb, var(--text-secondary) 12%, transparent) !important;
+        background: rgba(113, 113, 122, 0.08) !important;
+        background: color-mix(in srgb, var(--text-secondary) 8%, transparent) !important;
         backdrop-filter: blur(14px) saturate(1.4) !important;
         -webkit-backdrop-filter: blur(14px) saturate(1.4) !important;
         border: 1px solid var(--border) !important;
