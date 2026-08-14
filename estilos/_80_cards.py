@@ -350,25 +350,36 @@ CSS = """    /* ================================================================
         width: auto !important;
         max-width: 280px;
         overflow: hidden;
-        padding: 3px 0 7px;
-        /* Gris translúcido: --bg-primary es el "lienzo general" de la
-           paleta (_00_base.py) — el único gris neutro que ya existe, sin
-           inventar un #hex nuevo. Blur = mismo recurso que la franja
-           "cristal esmerilado" (_40_ajuste_franja.py). Fallback plano
-           ANTES del color-mix(): si el navegador no soporta esa función
-           la declaración es inválida y SE IGNORA ENTERA — sin nada
-           previo válido el fondo cae al blanco opaco default de
-           Streamlit (reportado como "no tiene transparencia",
-           2026-08-14). rgba(246,246,248,...) es el mismo --bg-primary
-           (#f6f6f8) escrito a mano: CSS no permite sacarle los canales
-           R/G/B a una var() sin relative color syntax (aún menos
-           soportada que color-mix()) — si --bg-primary cambia, actualizar
-           también este rgba(). border-radius 10px, NO 999px (cápsula):
-           la referencia es una tarjeta de esquinas suaves, no un chip. */
-        background: rgba(246, 246, 248, 0.92) !important;
-        background: color-mix(in srgb, var(--bg-primary) 92%, transparent) !important;
-        backdrop-filter: blur(10px) saturate(1.3) !important;
-        -webkit-backdrop-filter: blur(10px) saturate(1.3) !important;
+        padding: 2px 0 5px;
+        /* Gris translúcido — 2da vuelta (2026-08-14): la 1ra usaba
+           --bg-primary (#f6f6f8, "lienzo general") al 92%, y el usuario
+           reportó "no lo veo que tenga nada de transparencia" incluso
+           DESPUÉS del fallback rgba. Es el MISMO bug que ya está
+           documentado en _40_ajuste_franja.py: un tinte casi-blanco al
+           92% sobre una tarjeta que YA es casi blanca (--bg-card) es
+           indistinguible del blanco opaco — no hay suficiente contraste
+           para que el ojo note la transparencia, más allá de que la
+           declaración esté aplicándose bien. La franja resolvió esto
+           cambiando de tinte (blanco → --accent-tint), pero acá el
+           pedido explícito era GRIS, no lavanda — así que en vez de
+           cambiar de color se usa uno con más cuerpo: --text-secondary
+           (#71717a, gris medio) a SÓLO 16%, no 92%. Con eso el efecto
+           esmerilado (blur) sí se nota, y el tono se lee gris de
+           verdad, no blanco con un nombre de variable gris.
+           Fallback plano ANTES del color-mix(): si el navegador no
+           soporta esa función la declaración es inválida y SE IGNORA
+           ENTERA — sin nada previo válido el fondo cae al blanco opaco
+           default de Streamlit. rgba(113,113,122,...) es el mismo
+           --text-secondary (#71717a) escrito a mano: CSS no permite
+           sacarle los canales R/G/B a una var() sin relative color
+           syntax (aún menos soportada que color-mix()) — si
+           --text-secondary cambia, actualizar también este rgba().
+           border-radius 10px, NO 999px (cápsula): la referencia es una
+           tarjeta de esquinas suaves, no un chip. */
+        background: rgba(113, 113, 122, 0.16) !important;
+        background: color-mix(in srgb, var(--text-secondary) 16%, transparent) !important;
+        backdrop-filter: blur(14px) saturate(1.4) !important;
+        -webkit-backdrop-filter: blur(14px) saturate(1.4) !important;
         border: 1px solid var(--border) !important;
         border-radius: 10px !important;
         box-shadow: var(--shadow-md) !important;
@@ -389,7 +400,7 @@ CSS = """    /* ================================================================
         height: auto !important;
         justify-content: flex-start !important;
         gap: 4px !important;
-        padding: 5px 10px !important;
+        padding: 3px 10px !important;
         margin: 0 !important;
         background: transparent !important;
         border: none !important;
@@ -408,7 +419,7 @@ CSS = """    /* ================================================================
     }
     .st-key-ventas_comp_detalle_float [data-testid="stButton"]
         [data-testid="stIconMaterial"] {
-        font-size: 15px !important;
+        font-size: 13px !important;
         color: var(--accent) !important;
     }
     /* Filas: mismo ancho angosto que antes (`width=260` en Python, ver
@@ -417,7 +428,7 @@ CSS = """    /* ================================================================
        propio: ya lo pone el contenedor; sólo el padding horizontal para
        alinear con el botón-título de arriba. */
     .st-key-ventas_comp_detalle_float .st-key-ventas_comp_detalle_panel {
-        padding: 2px 10px 0 !important;
+        padding: 0 10px 0 !important;
     }
     /* Móvil: el plot es angosto y una tarjeta absoluta sobre la esquina
        tapa barras — mismo criterio que prov_pop_float/gran_float en

@@ -969,18 +969,18 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                                             label_visibility="collapsed")
                                 with _c[1]:
                                     st.markdown(
-                                        f'<div style="font-size:14px;'
+                                        f'<div style="font-size:13px;'
                                         f'color:#3f3f46;">{_label}</div>',
                                         unsafe_allow_html=True)
                                 with _c[2]:
                                     st.markdown(
-                                        f'<div style="font-size:14px;'
+                                        f'<div style="font-size:13px;'
                                         f'text-align:right;'
                                         f'color:{GRIS_TEXTO};">{_val}</div>',
                                         unsafe_allow_html=True)
                                 with _c[3]:
                                     st.markdown(
-                                        f'<div style="font-size:14px;'
+                                        f'<div style="font-size:13px;'
                                         f'font-weight:600;text-align:right;'
                                         f'color:{_pc};">{_pt}</div>',
                                         unsafe_allow_html=True)

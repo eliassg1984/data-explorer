@@ -4452,3 +4452,24 @@ salvo `icono`):
        `return`: los callbacks de Streamlit corren ANTES de que el
        script vuelva a ejecutarse de arriba, así que para cuando el
        botón se arma de nuevo `session_state` ya tiene el valor nuevo.
+
+     - **4ta vuelta: "no lo veo que tenga nada de transparencia" incluso
+       CON el fallback rgba de la 2da vuelta.** No era un problema de
+       soporte de `color-mix()`/`backdrop-filter` (verificado con
+       `CSS.supports()` en local: los dos soportados) — era el MISMO bug
+       que ya está documentado en `_40_ajuste_franja.py`: un tinte
+       CASI-BLANCO a opacidad ALTA sobre una tarjeta que YA es casi
+       blanca (`--bg-card`) es indistinguible del blanco opaco a simple
+       vista, más allá de que la declaración se aplique perfecto. Ahí
+       `--bg-primary` (#f6f6f8) al 92% es, en los hechos, blanco con
+       nombre de variable gris. La franja resolvió esto cambiando de
+       TINTE (blanco → `--accent-tint`, lavanda) — acá el pedido
+       explícito era gris, no lavanda, así que en vez de cambiar de
+       color se bajó la opacidad y se subió el "cuerpo" del gris:
+       `--text-secondary` (#71717a, gris medio) a **16%** (no 92%), con
+       blur más fuerte (14px, iguala a la franja) para que lo que se ve
+       DETRÁS quede suavizado en vez de ruidoso. Lección: para que un
+       "vidrio esmerilado" se LEA transparente, lo que importa no es
+       sólo el alfa — es el CONTRASTE entre el tinte y la superficie
+       sobre la que flota. Blanco-sobre-blanco no se nota ni al 92%;
+       gris-medio-sobre-blanco se nota incluso al 16%.
