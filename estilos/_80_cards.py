@@ -909,4 +909,110 @@ CSS = """    /* ================================================================
     div[class*="st-key-compras_fam_ser_pop"] {
         margin-top: 4px !important;
     }
+
+    /* =================================================================== */
+    /* FRANJA DE CONTROLES DE VENTAS › POR HORA                             */
+    /*                                                                       */
+    /* Igual que Familia y Año Pasado —tabs de texto con subrayado— con una  */
+    /* diferencia que pidió el usuario el 2026-08-14 mirando la barra de     */
+    /* TradingView: acá el TÍTULO comparte la fila con los controles en vez  */
+    /* de llevarse una propia. A su derecha sobraban ~600px vacíos, y las    */
+    /* otras vistas gastan ahí una fila entera más su hairline.              */
+    /*                                                                       */
+    /* [data-selected="true"] y NO [aria-pressed="true"]: los dos pills son  */
+    /* single-select, y Streamlit los marca con role="radio" +               */
+    /* data-selected (aria-pressed es el marcado del MULTI-select). Es la    */
+    /* trampa que dejó muerto el selector de Año Pasado desde su primer      */
+    /* commit — ver arquitectura.md #107.                                    */
+    /* =================================================================== */
+    .vh-titulo {
+        margin: 0 !important;
+        font-size: 16px !important;
+        font-weight: 600 !important;
+        line-height: 1.3 !important;
+        color: var(--text) !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    div[class*="st-key-vh_grano"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"],
+    div[class*="st-key-vh_medida_mapa"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"] {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        border-bottom: 2px solid transparent !important;
+        padding: 3px 1px !important;
+        color: var(--text-secondary) !important;
+        font-weight: 400 !important;
+        font-size: 14px !important;
+    }
+    div[class*="st-key-vh_grano"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"][data-selected="true"],
+    div[class*="st-key-vh_medida_mapa"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"][data-selected="true"] {
+        border-bottom-color: var(--accent) !important;
+        color: var(--accent-deep) !important;
+        font-weight: 600 !important;
+    }
+    /* El gap real va en el hijo directo de stButtonGroup (que es
+       display:block), no en él — mismo hallazgo que en Ventas › Por día. */
+    div[class*="st-key-vh_grano"] [data-testid="stButtonGroup"] > div,
+    div[class*="st-key-vh_medida_mapa"] [data-testid="stButtonGroup"] > div {
+        gap: 16px !important;
+        flex-wrap: nowrap !important;
+    }
+    /* Separador colgado de cada grupo a su IZQUIERDA, no por posición: el
+       título es el primero y no lleva. */
+    div[class*="st-key-vh_grano"],
+    div[class*="st-key-vh_medida_mapa"] {
+        position: relative;
+        padding-left: 16px !important;
+    }
+    div[class*="st-key-vh_grano"]::before,
+    div[class*="st-key-vh_medida_mapa"]::before,
+    div[class*="st-key-vh_btn_selector"]::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 1px;
+        height: 18px;
+        background: var(--border);
+    }
+    /* "Comparar" es un botón normal (abre una lista, no alterna un valor),
+       así que no lleva subrayado — pero sí tiene que dejar de ser una
+       cápsula, o desentona en una fila de tabs. Y sobre todo: medía 55px de
+       alto y era ÉL quien fijaba el alto de la fila entera; con 32 la franja
+       mide lo que miden los tabs. */
+    div[class*="st-key-vh_btn_selector"] {
+        position: relative;
+        padding-left: 16px !important;
+    }
+    div[class*="st-key-vh_btn_selector"] button {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        color: var(--text-secondary) !important;
+        font-size: 14px !important;
+        font-weight: 400 !important;
+        min-height: 32px !important;
+        padding: 3px 4px !important;
+    }
+    div[class*="st-key-vh_btn_selector"] button:hover {
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+    }
+    /* El título comparte fila con los tabs, así que tiene que compartir su
+       línea de base: el contenedor de markdown trae margen propio y lo
+       dejaba 8px más abajo que las pastillas (medido). */
+    div[data-testid="stMarkdownContainer"]:has(> .vh-titulo),
+    div[data-testid="stMarkdown"]:has(.vh-titulo) {
+        margin: 0 !important;
+        padding: 0 !important;
+        line-height: 1 !important;
+    }
 """

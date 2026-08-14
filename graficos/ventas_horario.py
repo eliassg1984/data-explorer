@@ -73,7 +73,7 @@ from tema import (
     PALETA_SERIES, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
-from graficos.base import _card, _resolver, franja_cabecera, franja_linea_inferior
+from graficos.base import _card, _resolver, franja_linea_inferior
 # Los helpers de calendario NO se duplican: son los mismos que usa la vista
 # "Año Pasado" y ya están cubiertos por test_graficos.py. Acá sólo se extienden
 # para la granularidad Año, que allá no existe (comparar 2025 contra 2024 es
@@ -113,6 +113,9 @@ _MEDIDAS = (
     ("desc",   "Descuento"),
 )
 _MED_LABEL = dict(_MEDIDAS)
+# Etiqueta corta para la franja del MAPA, donde los controles comparten fila
+# con el título. Sólo cambia lo que no entra; el drill usa el nombre entero.
+_MED_CORTO = {"ticket": "Ticket"}
 _MED_FMT = {
     "venta": "S/ {:,.0f}", "pax": "{:,.0f}", "cant": "{:,.0f}",
     "ticket": "S/ {:,.2f}", "desc": "S/ {:,.0f}",
@@ -1162,15 +1165,24 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
 
     _grano_prev = st.session_state.get("vh_grano") or _GRANO_DEF
     with _card(f"ventas_horario_{_grano_prev}"):
-        _ph_hdr = st.empty()
-        # Anchos MEDIDOS, no a ojo (2026-08-14): las cuatro pastillas de
-        # granularidad piden 230px, las cinco de medida 432 (Venta 60 + Pax 46
-        # + Cantidad 80 + Ticket promedio 124 + Descuento 90, más los huecos) y
-        # "Comparar" 154. Con [1.5, 2.2, 1.3] la columna del medio daba 376 y
-        # "Descuento" caía a una SEGUNDA FILA: 36px de alto de tarjeta
-        # regalados en todas las vistas, y una franja que se movía sola según
-        # qué medidas estuvieran disponibles.
-        c1, c2, c3 = st.columns([1.35, 2.6, 0.95])
+        # TÍTULO Y CONTROLES EN LA MISMA LÍNEA (2026-08-14, pedido del
+        # usuario con la barra de TradingView como referencia: ahí el símbolo
+        # y la temporalidad conviven en una sola fila).
+        #
+        # El patrón de las otras vistas es «título → línea → controles →
+        # línea» (reglas #104/#107): dos filas y dos hairlines. Acá el título
+        # es FIJO —no depende de ningún control, así que tampoco hace falta
+        # el placeholder de la regla #108— y a su derecha sobraban ~600px
+        # vacíos. Fusionarlas ahorra una fila entera y una línea.
+        #
+        # Anchos medidos como TABS (que son más angostos que las pastillas:
+        # sin borde ni relleno): título 185 · granularidad 184 · medida 298 ·
+        # comparar 154, sobre 873px útiles.
+        c0, c1, c2, c3 = st.columns([1.9, 1.9, 3.1, 1.6],
+                                    vertical_alignment="center")
+        with c0:
+            st.markdown('<p class="vh-titulo">Mapa por día y hora</p>',
+                        unsafe_allow_html=True)
         with c1:
             grano = st.pills("Granularidad", list(GRANOS),
                              default=_GRANO_DEF, key="vh_grano",
@@ -1181,12 +1193,17 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             # codificar una cosa, y cuál es cambia el mapa por completo: por
             # venta manda el volumen, por ticket aparecen las horas de mesas
             # caras, que son otras.
-            _op_mapa = [lab for mid, lab in _MEDIDAS
+            #
+            # Etiquetas CORTAS acá y sólo acá: "Ticket promedio" pide 124px y
+            # en una fila que ahora comparte con el título no entra. En el
+            # drill, donde hay sitio, sigue con su nombre entero.
+            _op_mapa = [_MED_CORTO.get(mid, lab) for mid, lab in _MEDIDAS
                         if mid != "desc" or col_desc]
             medida_lab = st.pills("Color", _op_mapa, default="Venta",
                                   key="vh_medida_mapa",
                                   label_visibility="collapsed") or "Venta"
-        medida = next(mid for mid, lab in _MEDIDAS if lab == medida_lab)
+        medida = next(mid for mid, lab in _MEDIDAS
+                      if _MED_CORTO.get(mid, lab) == medida_lab)
 
         # Si cambió la granularidad, las claves y las marcas viejas dejan de
         # significar lo mismo (una columna de "Semana" no es una de "Mes").
@@ -1203,7 +1220,8 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         with c3:
             claves = _selector_periodos(ancla, grano, claves)
 
-        franja_cabecera(_ph_hdr, "Mapa de venta por día y hora")
+        # Una sola línea al pie de la franja, no dos: el título ya no tiene
+        # la suya porque comparte fila con los controles.
         franja_linea_inferior()
 
         # ── Datos: un tramo por panel ───────────────────────────────────
