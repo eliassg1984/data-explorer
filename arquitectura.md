@@ -4250,3 +4250,57 @@ salvo `icono`):
      viejo (#107) — así que la franja y el caption se re-maquetan antes de
      que vuelva la figura. Cambiar ventana o vista, que no remontan, ya no
      saltan nada.
+
+109. **La franja de controles se propagó a Compras › Familia — y de paso se
+     extrajo el helper compartido que #104/#107/#108 dejaron pendiente
+     (2026-08-13).** Tres decisiones de esta migración que no son obvias
+     mirando sólo el resultado:
+
+     - **`franja_cabecera()` / `franja_linea_inferior()` en `graficos/base.py`
+       son la 3ª implementación del patrón, ahora compartida.** Las dos
+       anteriores (Por día, Año Pasado) ya habían drifteado entre sí sin que
+       nadie lo pidiera — el `<hr>` de una usaba `margin:-15px -18px 14px` y
+       el de la otra `-6px -18px 12px`. Escribir una copia más a mano
+       hubiera sido la tercera variante. Las dos primeras NO se retocaron
+       (funcionan, están probadas, tocar dos features ya en producción para
+       des-duplicar es un riesgo que no pagaba la pena en esta pasada) —
+       queda anotado acá como candidato a una consolidación futura.
+
+     - **Familia no necesitó el `min-height` de la regla #108, y la razón
+       importa.** En Año Pasado el salto de layout salía de DOS llamadas a
+       `data.cargar_rango()` (red, ~1-3s) entre pintar la cabecera
+       provisional y la final. En Familia no hay ninguna llamada a red
+       dentro del dashboard — `d` ya llega cargado del caller — así que la
+       reescritura de la cabecera con el `gran` real ocurre a milisegundos
+       de la provisional, antes de que se arme siquiera la figura. Verificado
+       muestreando el alto de la tarjeta durante un clic: 0 frames sin
+       título, 0 frames con tarjeta ausente. La lección para el próximo
+       dashboard: el fix de #108 (placeholder + `min-height`) sólo hace
+       falta si hay una espera real (red) entre el pintado provisional y el
+       final: si todo el cálculo es en memoria, alcanza con reescribir la
+       cabecera lo antes posible después de resolver el control del que
+       depende.
+
+     - **Los 3 pills de Familia (Agrupar por / Vista / Top) usaron
+       `[data-selected="true"]` desde el primer commit**, no
+       `[aria-pressed="true"]`. La lección de Año Pasado (single-select usa
+       `role="radio"` + `data-selected`, no `aria-pressed`, que es de
+       multi-select) se aplicó de entrada — verificado con clic real: el
+       activo por defecto ("Mes") ya salía en `font-weight:600` y color de
+       acento sin necesitar una segunda pasada de corrección.
+
+     El 4º control (popover de series) NO lleva el tratamiento de tab/
+     subrayado — es un control distinto (abre una lista, no alterna un
+     valor único) — sólo se alinea en la misma fila con un separador a su
+     izquierda, igual criterio que "Vista" en Año Pasado con el otro eje.
+
+     El `title=` de la figura se sacó (vivía en `fig.update_layout`, ahora
+     en la cabecera) aunque este gráfico no tenía el choque de la regla
+     #103 (`showlegend=False`, sin leyenda que pelee el espacio) — se movió
+     por CONSISTENCIA con el resto de los dashboards migrados, no porque
+     hubiera un bug puntual acá.
+
+     Verificado: la key de tarjeta (`ajuste_graf_card_izq_compras`) la
+     comparten 6 vistas de Compras — probado que "Personalizado" (misma
+     key) no hereda nada de esta franja, igual que se verificó con
+     "Resumen" en Ventas (#106).

@@ -10,7 +10,10 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from tema import ACENTO, GRIS_BORDE, SERIE_PRINCIPAL
-from graficos.base import PALETA_CALLAI, _card, _compras_layout, _compras_truncar
+from graficos.base import (
+    PALETA_CALLAI, _card, _compras_layout, _compras_truncar,
+    franja_cabecera, franja_linea_inferior,
+)
 from graficos.compras._comun import (_first_point, _periodo_serie)
 from graficos import alturas
 
@@ -66,7 +69,23 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
                if st.session_state.get(f"compras_fam_ser_cb::{titulo_ser}::{s}")] \
               or _top6_default
 
-    # ── Controles: una sola fila (granularidad, vista, top, series) ──────
+    # ── Franja de controles: título → línea → tabs → línea → gráfico ─────
+    # Mismo patrón que Ventas › Por día y Año Pasado (arquitectura.md #104,
+    # #107). El título necesita `gran`, que se elige DENTRO de esta misma
+    # franja (en c1, más abajo) — circularidad resuelta con la técnica de
+    # #108: cabecera PROVISIONAL con el `gran` de session_state (acierta
+    # casi siempre) antes de dibujar los pills, y reescritura con el valor
+    # real después de leerlos. Sin esto, la cabecera queda vacía durante la
+    # carga y todo lo de abajo salta ~40px en cada clic.
+    def _titulo_familia(_gran):
+        return (f"Valor de compra por {_gran.lower()} y {titulo_ser}"
+                + ("" if focus_fam is None
+                   else f" — {_compras_truncar(focus_fam, 32)}"))
+
+    _ph_hdr = st.empty()
+    franja_cabecera(_ph_hdr, _titulo_familia(
+        st.session_state.get("compras_fam_gran") or "Mes"))
+
     # Medida fija en Valor S/: se quitó el toggle Valor/Cantidad (la
     # cantidad sigue viva igual en los paneles, junto al valor). El
     # selector de series comparte fila con la granularidad — antes vivía
@@ -107,6 +126,13 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
                 for _s in _ser_all:
                     st.checkbox(_compras_truncar(_s, 30),
                                key=f"compras_fam_ser_cb::{titulo_ser}::{_s}")
+
+    # Reescritura con el `gran` REAL, ya resuelto por el widget. Casi siempre
+    # coincide con el provisional de arriba (mismo valor de session_state);
+    # cuando difiere (primer render, o cambió el foco de familia), Streamlit
+    # sólo toca el DOM si el texto cambió de verdad.
+    franja_cabecera(_ph_hdr, _titulo_familia(gran))
+    franja_linea_inferior()
 
     es_valor = True
     fe = pd.to_datetime(d[col_fecha], errors="coerce")
@@ -204,10 +230,12 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
                     hovertemplate="%{fullData.name}<br>%{x}<br>"
                                   + _tpl + "<extra></extra>")
     _compras_layout(fig, alto=alturas.APOYO)
-    _mn = "Valor" if es_valor else "Cantidad"
+    # Sin `title=`: el título de este gráfico ya lo dibuja la cabecera de la
+    # franja, arriba (regla #103 — un título dentro de la figura choca con la
+    # leyenda cuando la hay; acá no la hay, `showlegend=False`, pero el título
+    # vive en la franja por CONSISTENCIA con el resto de los dashboards, no
+    # porque este caso puntual chocara).
     fig.update_layout(
-        title=f"{_mn} de compra por {gran.lower()} y {titulo_ser}"
-              + ("" if focus_fam is None else f" — {_compras_truncar(focus_fam, 32)}"),
         barmode="stack" if vista == "Apilado" else "group",
         yaxis=dict(tickprefix=_pref, tickformat=",.0f"),
         showlegend=False)

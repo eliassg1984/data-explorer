@@ -190,6 +190,43 @@ def _card(key, titulo: str = "", titulo_arriba: bool = False):
             )
 
 
+def franja_cabecera(ph, titulo, color_texto=None):
+    """Cabecera de una FRANJA DE CONTROLES: título + línea SUPERIOR que la
+    cierra por arriba. Patrón `título → línea → tabs → línea → contenido`
+    (arquitectura.md reglas #104/#107), nacido en Ventas › Por día y Año
+    Pasado — este helper es la 3ª implementación, para no dejar una tercera
+    copia con valores a mano que drifteen entre sí (las dos primeras YA
+    tienen -15px/-18px/14px vs -6px/-18px/12px en el `<hr>` de abajo:
+    exactamente el drift que este helper existe para frenar).
+
+    `ph` es el `st.empty()` (o el propio `st`/contenedor) donde se pinta —
+    normalmente un placeholder para poder escribir el título DESPUÉS de leer
+    los controles que van debajo de él (ver `franja_linea_inferior` y el
+    patrón de `session_state` en ventas_comparativo.py, regla #108: si el
+    título depende de un widget que vive dentro de la misma franja, pintarlo
+    dos veces —provisional con `session_state`, final con el valor real— es
+    lo que evita el "salto" de layout en cada clic)."""
+    color = color_texto or TEXTO_PRINCIPAL
+    ph.markdown(
+        '<div style="margin:-6px -18px 0;padding:0 18px 9px;'
+        'width:calc(100% + 36px);font-size:16px;font-weight:600;'
+        f'line-height:1.3;color:{color};'
+        f'border-bottom:2px solid {GRIS_BORDE};">{titulo}</div>',
+        unsafe_allow_html=True)
+
+
+def franja_linea_inferior():
+    """Línea INFERIOR que cierra una franja de controles por abajo, tocando
+    el borde REAL de la tarjeta. Los -18px + `width:calc(100% + 36px)`
+    compensan el padding horizontal de la tarjeta (16px 18px,
+    `estilos/_80_cards.py`); sin eso la línea queda corta por los dos
+    lados. Hermana de `franja_cabecera` — ver su docstring."""
+    st.markdown(
+        f'<hr style="border:none;border-top:2px solid {GRIS_BORDE};'
+        'margin:-6px -18px 12px;width:calc(100% + 36px);">',
+        unsafe_allow_html=True)
+
+
 _LAYOUT_BASE = dict(
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor=BLANCO,
