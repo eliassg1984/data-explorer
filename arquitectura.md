@@ -4386,3 +4386,28 @@ salvo `icono`):
        trigger; sólo cambia dónde vive cerrado. Verificado con
        `resize_window` a 375px: la regla se activa sola, sin recargar
        (es CSS puro, no depende de `_es_movil()`/User-Agent).
+
+     - **Corrección del mismo día, con captura del usuario**: el
+       `st.container(..., width=400)` que agrupa las 3 filas se heredó
+       tal cual del `st.expander` viejo, donde 400px era razonable (la
+       tarjeta entera medía ~880px). Flotando, ese mismo ancho hacía un
+       popover de ~448px — **casi la mitad** de la tarjeta, exactamente
+       la palabra que usó el usuario, y medible: `bodyRect.w` pasó de
+       448px a 320px al bajar el `width` interno a 260 (con un
+       `max-width: 300px !important` en el propio `stPopoverBody` como
+       tope, no sólo en el contenido). De paso, `border-radius: 999px`
+       (cápsula completa, trigger Y panel) bajó a 8px/10px — la
+       referencia es una tarjeta de esquinas suaves, no un chip/pill.
+       **La transparencia sí funcionaba en local** (verificado,
+       `color-mix()` se aplicaba) pero el reporte del usuario ("no tiene
+       transparencia") se tomó en serio igual: si `color-mix()` no está
+       soportado, la declaración es INVÁLIDA Y SE IGNORA ENTERA — sin
+       una declaración de `background` previa y válida, cae al blanco
+       opaco default de Streamlit, que es exactamente "no tiene
+       transparencia". Se agregó un `rgba(246, 246, 248, 0.9x)` (mismo
+       número que `--bg-primary`, a mano porque CSS no permite sacarle
+       los canales R/G/B a una var() sin relative color syntax) COMO
+       PRIMERA declaración de `background`, con el `color-mix()` después
+       pisándola donde sí hay soporte — dos declaraciones de la misma
+       propiedad en la misma regla no es un error, es progressive
+       enhancement: el navegador se queda con la última que entienda.

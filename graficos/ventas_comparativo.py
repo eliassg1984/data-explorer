@@ -918,7 +918,14 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                         # entre fila y fila, más que el alto de la fila
                         # misma. `width` las mantiene angostas — sin él
                         # las columnas reparten TODO el ancho del popover.
-                        with st.container(gap=None, width=400):
+                        # 260 (antes 400, heredado de cuando este panel
+                        # vivía EN FLUJO bajo una tarjeta ancha): flotando
+                        # sobre el gráfico, 400 hacía un popover de ~448px
+                        # — casi la mitad de una tarjeta de ~880px,
+                        # reportado por el usuario con captura. La
+                        # referencia visual (panel "Comparar con" de un
+                        # gráfico de índices) es angosta.
+                        with st.container(gap=None, width=260):
                             for _k, _variante, _label, _val, _pv in _filas:
                                 _pt = ("—" if _pv is None
                                        else f"{_pv:+.0f}%")

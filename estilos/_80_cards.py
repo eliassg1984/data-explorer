@@ -357,14 +357,26 @@ CSS = """    /* ================================================================
        transparente". El blur es el mismo recurso que la franja superior
        "cristal esmerilado" (_40_ajuste_franja.py): sin él, un fondo
        semi-transparente sobre las barras del gráfico se lee sucio en vez
-       de vidrio esmerilado. */
+       de vidrio esmerilado.
+       Fallback ANTES del color-mix(): si el navegador no soporta esa
+       función, la declaración es inválida y se ignora ENTERA — sin una
+       declaración previa válida, el fondo cae al blanco opaco por
+       defecto de Streamlit (reportado como "no tiene transparencia" con
+       captura, 2026-08-14). rgba(246,246,248,...) es el mismo
+       --bg-primary (#f6f6f8) escrito a mano porque CSS no permite sacarle
+       los canales R/G/B a una var() sin relative color syntax (aún menos
+       soportada que color-mix()) — si --bg-primary cambia, actualizar
+       también este rgba(). border-radius 8px (antes 999px, cápsula
+       completa): la referencia es una tarjeta con esquinas suaves, no un
+       chip/pill. */
     .st-key-ventas_comp_detalle_float [data-testid="stPopover"] button {
         min-width: 0 !important;
         min-height: 0 !important;
-        padding: 4px 12px !important;
+        padding: 4px 10px !important;
         font-size: 11.5px !important;
         font-weight: 500 !important;
-        border-radius: 999px !important;
+        border-radius: 8px !important;
+        background: rgba(246, 246, 248, 0.88) !important;
         background: color-mix(in srgb, var(--bg-primary) 88%, transparent) !important;
         backdrop-filter: blur(8px) !important;
         -webkit-backdrop-filter: blur(8px) !important;
@@ -383,13 +395,19 @@ CSS = """    /* ================================================================
        ventas_comparativo.py dibuja adentro (`ventas_comp_detalle_panel`),
        mismo truco que `fecha_panel` / `ai_panel`. Mismo tono gris
        translúcido que el trigger, para que se lea como una sola pieza de
-       vidrio (chip + panel), no dos superficies distintas. */
+       vidrio (chip + panel), no dos superficies distintas. `max-width`:
+       el contenido interno pide `width=260` (ventas_comparativo.py) pero
+       sin un tope acá el popover puede terminar más ancho por el padding
+       propio de Streamlit — reportado "casi la mitad del largo de la
+       tarjeta" cuando el pedido interno era 400. */
     [data-testid="stPopoverBody"]:has(.st-key-ventas_comp_detalle_panel) {
+        max-width: 300px !important;
+        background: rgba(246, 246, 248, 0.92) !important;
         background: color-mix(in srgb, var(--bg-primary) 92%, transparent) !important;
         backdrop-filter: blur(10px) saturate(1.3) !important;
         -webkit-backdrop-filter: blur(10px) saturate(1.3) !important;
         border: 1px solid var(--border) !important;
-        border-radius: 12px !important;
+        border-radius: 10px !important;
         box-shadow: var(--shadow-md) !important;
     }
     /* Móvil: el plot es angosto y un chip absoluto sobre la esquina tapa
