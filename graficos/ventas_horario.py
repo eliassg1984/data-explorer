@@ -135,13 +135,25 @@ _PX_HORA = 22
 _AIRE_MAPA = 66    # títulos de panel + etiquetas del eje X + márgenes
 _ALTO_MIN = 170    # con 3-4 horas la figura no se convierte en una cinta
 
-# Cuántos períodos trae el arranque, por granularidad. Mes va SOLO: la vista
-# por defecto es el mes en curso de corrido (pedido del usuario 2026-08-14 —
-# "que sea de 30 días o del mes en curso"), no cuatro trozos que hay que
-# volver a coser con la vista. Las otras granularidades sí abren comparando,
-# que es para lo que existen.
-_N_DEFECTO = {"Día": 4, "Semana": 4, "Mes": 1, "Año": 2}
+# El arranque es SIEMPRE un solo período: el día, la semana, el mes o el año
+# EN CURSO, según la granularidad. Comparar es una decisión explícita del
+# usuario y tiene su botón (pedido del 2026-08-14). La versión anterior abría
+# con cuatro paneles y obligaba a leer cuatro trozos para responder "¿cómo va
+# esto?", que es la pregunta que uno trae al abrir.
+_N_DEFECTO = 1
 _GRANO_DEF = "Mes"
+
+# Cuánto ancho se supone disponible para el eje X al decidir cada cuántas
+# columnas se escribe una etiqueta. Es una ESTIMACIÓN (el ancho real lo sabe
+# el navegador, no Python): 740px medidos en el laptop objetivo, tarjeta de
+# 879px menos los márgenes de la figura. Errar por abajo sólo saltea alguna
+# etiqueta de más, que es el lado barato del error.
+_ANCHO_UTIL = 740
+
+# Ancho máximo de una celda. Contra los 22px de alto de fila deja un
+# rectángulo apenas apaisado; más que eso y un período de pocas columnas se
+# ve como una bandera. Ver `_rango_x`.
+_ANCHO_MAX_CELDA = 44
 
 _SIN_DSCTO = "Sin descuento"
 
@@ -475,6 +487,45 @@ def _detalle_marca(tramo, pin, orden):
 
 # ── Figura ──────────────────────────────────────────────────────────────────
 
+def _rango_x(total_columnas, ancho=None, ancho_max=None):
+    """Rango del eje X: `[x0, x1]` en coordenadas de columna.
+
+    Con muchas columnas es el rango justo. Con POCAS, el heatmap estiraría
+    cada celda hasta llenar la tarjeta: medido el 2026-08-14, la semana en
+    curso un martes son 2 columnas de 376px de ancho por 21 de alto — dos
+    banderas, no un mapa. Y un lunes sería UNA celda de 740px.
+
+    Así que la celda tiene un ancho máximo y lo que sobra se reparte a los
+    DOS lados: el contenido queda centrado, que se lee como una decisión, no
+    como un gráfico a medio dibujar. Es el efecto lateral de abrir siempre en
+    el período en curso — un período que recién empieza tiene pocas columnas
+    por definición."""
+    ancho = _ANCHO_UTIL if ancho is None else ancho
+    ancho_max = _ANCHO_MAX_CELDA if ancho_max is None else ancho_max
+    total = max(1, int(total_columnas))
+    minimo = max(1, ancho // ancho_max)
+    if total >= minimo:
+        return [-0.5, total - 0.5]
+    margen = (minimo - total) / 2
+    return [-0.5 - margen, total - 0.5 + margen]
+
+
+def _paso_etiquetas(total_columnas, largo_etiqueta, ancho=None):
+    """Cada cuántas columnas se escribe una etiqueta en el eje X.
+
+    Sale del ancho que le toca a cada columna (`ancho / total`) comparado con
+    lo que ocupa una etiqueta (~5px por carácter más aire): si entra, se
+    escriben todas. Devuelve 1 cuando hay sitio, y crece sólo lo justo.
+
+    Reemplaza a los umbrales por panel (`1 si n<=12, 2 si n<=16, si no 5`) que
+    tenían el defecto de mirar UN panel: un mes en curso de 13 días saltaba
+    un día de por medio con medio gráfico vacío al lado."""
+    ancho = _ANCHO_UTIL if ancho is None else ancho
+    px_etiqueta = 8 + 5 * max(1, int(largo_etiqueta))
+    total = max(1, int(total_columnas))
+    return max(1, -(-total * px_etiqueta // ancho))   # ceil de la división
+
+
 def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None):
     """Mapa de calor de los N paneles en una sola figura, con la capa de
     selección transparente encima y un rectángulo por marca.
@@ -491,21 +542,30 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None):
     # categórico las filas son las que hay, en el orden que se les dio.
     y_cat = [f"{h:02d}h" for h in horas]
 
-    offs, total, ticks_pos, ticks_txt, titulos = [], 0, [], [], []
-    for s, clave in enumerate(claves):
-        n, etiquetas = _columnas(clave, grano, ancla)
-        offs.append(total)
-        # Con muchas columnas (Mes) las etiquetas se pisan: se muestra una de
-        # cada k. En Día no hay etiqueta de columna — el título del panel ya
-        # dice qué día es.
-        paso = 1 if n <= 12 else (2 if n <= 16 else 5)
+    # Geometría PRIMERO, etiquetas después. El paso de las etiquetas ("una de
+    # cada cuántas columnas se escribe") depende del ancho que le toca a cada
+    # columna, y eso sale del total de columnas del gráfico ENTERO — no de las
+    # que tenga un panel. Calcularlo por panel, como estaba hasta el
+    # 2026-08-14, hacía que un solo mes de 13 días saltease un día de por
+    # medio pese a que sobraba sitio (13 > 12 disparaba el paso 2), mientras
+    # que cuatro meses de 31 (124 columnas de 6px) usaban el mismo paso 5 que
+    # un mes suelto.
+    geo = [_columnas(clave, grano, ancla) for clave in claves]
+    total = sum(n for n, _e in geo) + max(0, len(geo) - 1)
+    paso = _paso_etiquetas(
+        total, max((len(e) for _n, ets in geo for e in ets if e), default=1))
+
+    offs, ticks_pos, ticks_txt, titulos = [], [], [], []
+    pos = 0
+    for s, (n, etiquetas) in enumerate(geo):
+        offs.append(pos)
         for i, et in enumerate(etiquetas):
-            if et and (i % paso == 0 or n <= 7):
-                ticks_pos.append(total + i)
+            if et and i % paso == 0:
+                ticks_pos.append(pos + i)
                 ticks_txt.append(et)
-        titulos.append((total + (n - 1) / 2, _etiqueta_clave(clave, grano)))
-        total += n + 1          # +1 = la columna de hueco
-    total = max(total - 1, 1)   # el último panel no lleva hueco a la derecha
+        titulos.append((pos + (n - 1) / 2, _etiqueta_clave(claves[s], grano)))
+        pos += n + 1            # +1 = la columna de hueco
+    total = max(total, 1)
 
     z = np.full((n_horas, total), np.nan)
     xs, ys, cd = [], [], []
@@ -607,7 +667,7 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None):
         showlegend=False,
     )
     fig.update_xaxes(tickvals=ticks_pos, ticktext=ticks_txt, showgrid=False,
-                     zeroline=False, range=[-0.5, total - 0.5],
+                     zeroline=False, range=_rango_x(total),
                      tickfont=dict(size=10, color=GRIS_TEXTO))
     # Horas de arriba hacia abajo: el turno empieza arriba y termina abajo,
     # como se lee un horario. `reversed` sobre un eje de categorías pone la
@@ -985,8 +1045,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
 
         claves = st.session_state.get(_K_CLAVES)
         if not claves:
-            claves = _claves_hacia_atras(ancla, grano,
-                                         _N_DEFECTO.get(grano, MAX_MARCAS))
+            claves = _claves_hacia_atras(ancla, grano, _N_DEFECTO)
             st.session_state[_K_CLAVES] = claves
 
         with c3:
@@ -999,16 +1058,26 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         cfg = REPORTES.get("Ventas", {})
         _arch = cfg.get("archivo", "ventas.parquet")
         _colp = cfg.get("carga_por_rango", "FEC REG DOCUMENTO")
+        # El spinner NO es decoración: cada panel es una consulta a R2 y en
+        # frío el primer tramo tarda lo suyo. Sin él, la franja de controles
+        # ya está pintada y debajo no hay NADA — la pantalla se lee como
+        # colgada, que es exactamente como la reportó el usuario el
+        # 2026-08-14. Va DENTRO de la tarjeta y después de la franja para que
+        # el mensaje aparezca donde va a aparecer el mapa.
         tramos, paneles = [], []
-        for k in claves:
-            ini, fin = _rango_de_clave(k, grano)
-            fin = min(fin, ancla)
-            df = cargar_rango(_arch, _colp, ini, fin)
-            if df is not None and not df.empty and filtrar_cb is not None:
-                df = filtrar_cb(df)
-            t = _prep_tramo(df, cols, grano, ini, fin)
-            tramos.append(t)
-            paneles.append(_celdas(t))
+        _n = len(claves)
+        _msg = ("Cargando el período…" if _n == 1
+                else f"Cargando {_n} períodos…")
+        with st.spinner(_msg):
+            for k in claves:
+                ini, fin = _rango_de_clave(k, grano)
+                fin = min(fin, ancla)
+                df = cargar_rango(_arch, _colp, ini, fin)
+                if df is not None and not df.empty and filtrar_cb is not None:
+                    df = filtrar_cb(df)
+                t = _prep_tramo(df, cols, grano, ini, fin)
+                tramos.append(t)
+                paneles.append(_celdas(t))
 
         # Ordenadas por día de servicio, no por número: ver _orden_horas.
         horas = _orden_horas({int(h) for c in paneles if c is not None

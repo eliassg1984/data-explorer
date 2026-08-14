@@ -418,6 +418,43 @@ def _pruebas_puras():
     check("horario · el año en curso se recorta al mes",
           _vh._columnas(2026, "Año", _dt.date(2026, 8, 14))[0], 8)
 
+    # Etiquetas del eje X: el paso sale del ancho por columna del gráfico
+    # ENTERO, no de las columnas de UN panel. El bug que corrige: un mes en
+    # curso de 13 días saltaba un día de por medio (13 > 12 disparaba el paso
+    # 2) con medio gráfico vacío al lado.
+    check("horario · un mes solo muestra TODOS los días",
+          [_vh._paso_etiquetas(n, 2) for n in (11, 13, 20, 31)], [1, 1, 1, 1])
+    check("horario · comparando meses las etiquetas se ralean",
+          _vh._paso_etiquetas(126, 2) > 1, True)
+    check("horario · el paso crece con el largo de la etiqueta",
+          _vh._paso_etiquetas(51, 3) >= _vh._paso_etiquetas(51, 1), True)
+    check("horario · el paso nunca baja de 1",
+          _vh._paso_etiquetas(1, 9), 1)
+
+    # Con POCAS columnas la celda no se estira a lo ancho de la tarjeta: se
+    # topea y lo que sobra se reparte a los dos lados. Sin esto, la semana en
+    # curso un martes son 2 celdas de 376px (medido) — dos banderas, no un
+    # mapa. Es el efecto lateral de abrir siempre en el período en curso.
+    def _ancho_celda(n):
+        x0, x1 = _vh._rango_x(n)
+        return 740 / (x1 - x0)
+
+    check("horario · una sola columna no ocupa toda la tarjeta",
+          _ancho_celda(1) <= _vh._ANCHO_MAX_CELDA + 3, True)
+    check("horario · el sobrante se reparte a los DOS lados (centrado)",
+          [round(v, 2) for v in _vh._rango_x(2)],
+          [round(-0.5 - (740 // _vh._ANCHO_MAX_CELDA - 2) / 2, 2),
+           round(1.5 + (740 // _vh._ANCHO_MAX_CELDA - 2) / 2, 2)])
+    check("horario · con muchas columnas el rango es el justo",
+          _vh._rango_x(31), [-0.5, 30.5])
+
+    # El arranque es SIEMPRE un período: el EN CURSO. Comparar es una decisión
+    # explícita del usuario y tiene su botón.
+    check("horario · arranca con un solo período", _vh._N_DEFECTO, 1)
+    check("horario · y ese período es el EN CURSO",
+          _vh._claves_hacia_atras(_dt.date(2026, 8, 14), "Mes",
+                                  _vh._N_DEFECTO), [(2026, 8)])
+
     _f = pd.Series(pd.to_datetime(["2026-08-05 13:00", "2026-08-09 20:30"]))
     check("horario · columna en semana (mié=2, dom=6)",
           list(_vh._columna_de_fecha(_f, "Semana")), [2, 6])
