@@ -4473,3 +4473,38 @@ salvo `icono`):
        sólo el alfa — es el CONTRASTE entre el tinte y la superficie
        sobre la que flota. Blanco-sobre-blanco no se nota ni al 92%;
        gris-medio-sobre-blanco se nota incluso al 16%.
+
+     - **5ta vuelta: "esto se ve descuadrado" / "aún se ve espacio
+       vacío" — dos bugs de padding DISTINTOS, encontrados con el propio
+       inspector del proyecto (`?debug=1`, "Copiar para IA").** El dump
+       trae "Layout del padre" y "Box del padre" con los valores
+       computados reales, así que en vez de adivinar se pudo hacer la
+       cuenta exacta:
+       1. El contenedor flotante tenía `padding: 2px 0 5px` (2 arriba,
+          5 abajo — asimétrico A PROPÓSITO, pensado para el estado
+          ABIERTO). Sumado al padding parejo del botón (3px arriba y
+          abajo), el total daba 6px arriba pero 9px abajo — 3px de más
+          SÓLO abajo, y como el estado por defecto es CERRADO (una sola
+          línea), esa asimetría era lo único que se veía siempre.
+          Fix: `padding: 2px 0` (parejo) en el contenedor; el aire
+          extra que necesitan las filas al abrir se movió al
+          `padding-bottom` DEL PANEL, no del contenedor — así el estado
+          cerrado (el más visto) queda centrado y el abierto sigue
+          respirando.
+       2. `stVerticalBlock` (el contenedor flotante ES uno, sin
+          `border=True`) trae `gap: 16px` de fábrica — invisible con un
+          solo hijo (cerrado), pero con dos (botón + panel, abierto)
+          metía una franja vacía de 16px entre el título y la primera
+          fila — exactamente lo que la captura con flechas mostraba.
+          Fix: `gap: 0 !important` en el contenedor; el
+          `padding-top: 4px` del panel es ahora TODA la separación
+          título↔filas.
+       Verificado en vivo antes/después con `getBoundingClientRect`:
+       cerrado, arriba y abajo del texto quedaron en 3px/4.5px (bajó de
+       ~6px/~9px); abierto, el hueco título→primera fila bajó de ~16px
+       a 1.5px. El 1.5px residual (mismo en los dos casos) no se
+       persiguió más — se probó `align-items:center` en el botón
+       pensando que era el ícono vs. el `<p>` desalineados y NO cambió
+       nada, así que sale de algún margen propio de
+       `stElementContainer` sin identificar; por debajo del pixel
+       perceptible a simple vista, no vale la pena seguir cazándolo.

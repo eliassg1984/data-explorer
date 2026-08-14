@@ -350,7 +350,25 @@ CSS = """    /* ================================================================
         width: auto !important;
         max-width: 280px;
         overflow: hidden;
-        padding: 2px 0 5px;
+        /* Simétrico (2px arriba Y abajo) — reportado "se ve descuadrado"
+           con el panel cerrado: era `2px 0 5px` (5 abajo, no 2), y sumado
+           al padding propio del botón (3px 10px, parejo) el texto
+           quedaba con 6px arriba pero 9px abajo — 3px de más SÓLO abajo,
+           notorio en una tarjeta de una sola línea. El aire extra que
+           necesitan las filas cuando está ABIERTO ahora es
+           padding-bottom del panel (`ventas_comp_detalle_panel` más
+           abajo), no de acá, para no desequilibrar el estado cerrado
+           (el más visto: por defecto arranca cerrado). Medido: con esto
+           el total arriba y abajo del texto da 6px en los dos lados
+           (1px de borde + 2px de este padding + 3px del botón). */
+        padding: 2px 0;
+        /* El default de Streamlit para un stVerticalBlock es
+           gap:16px — invisible con un solo hijo (cerrado), pero al
+           abrirse (botón + panel de filas, dos hijos) metía un salto de
+           16px entre el título y la primera fila. 0: las filas quedan
+           pegadas al título, y el padding-top del panel de abajo pone
+           el aire que corresponde. */
+        gap: 0 !important;
         /* Gris translúcido — 2da vuelta (2026-08-14): la 1ra usaba
            --bg-primary (#f6f6f8, "lienzo general") al 92%, y el usuario
            reportó "no lo veo que tenga nada de transparencia" incluso
@@ -399,6 +417,12 @@ CSS = """    /* ================================================================
         min-height: 0 !important;
         height: auto !important;
         justify-content: flex-start !important;
+        /* El ícono Material y el <p> del label tienen métricas de línea
+           distintas — sin align-items:center el texto queda ~1.5px más
+           alto que el ícono dentro del propio botón (medido en
+           navegador), leve pero sumado al resto es parte del
+           "descuadrado" reportado. */
+        align-items: center !important;
         gap: 4px !important;
         padding: 3px 10px !important;
         margin: 0 !important;
@@ -426,9 +450,15 @@ CSS = """    /* ================================================================
        ventas_comparativo.py — heredaba 400 del expander viejo, que
        flotando salía casi la mitad de la tarjeta del gráfico). Sin fondo
        propio: ya lo pone el contenedor; sólo el padding horizontal para
-       alinear con el botón-título de arriba. */
+       alinear con el botón-título de arriba.
+       top:4px / bottom:6px: con `gap:0` en el contenedor (arriba, misma
+       hoja) el panel queda pegado AL BOTÓN sin nada de aire — el 4px de
+       acá es toda la separación título↔filas que queda. El 6px de abajo
+       replica el mismo total (~6px) que el estado cerrado tiene entre
+       el texto y el borde inferior de la tarjeta, para que abierta y
+       cerrada respiren igual, no que abrirla la deje más apretada. */
     .st-key-ventas_comp_detalle_float .st-key-ventas_comp_detalle_panel {
-        padding: 0 10px 0 !important;
+        padding: 4px 10px 6px !important;
     }
     /* Móvil: el plot es angosto y una tarjeta absoluta sobre la esquina
        tapa barras — mismo criterio que prov_pop_float/gran_float en
