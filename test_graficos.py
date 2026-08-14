@@ -432,19 +432,23 @@ def _pruebas_puras():
           _vh._paso_etiquetas(1, 9), 1)
 
     # Con POCAS columnas la celda no se estira a lo ancho de la tarjeta: se
-    # topea y lo que sobra se reparte a los dos lados. Sin esto, la semana en
-    # curso un martes son 2 celdas de 376px (medido) — dos banderas, no un
-    # mapa. Es el efecto lateral de abrir siempre en el período en curso.
+    # topea. Sin esto, la semana en curso un martes son 2 celdas de 376px
+    # (medido) — dos banderas, no un mapa. Es el efecto lateral de abrir
+    # siempre en el período en curso.
     def _ancho_celda(n):
         x0, x1 = _vh._rango_x(n)
         return 740 / (x1 - x0)
 
     check("horario · una sola columna no ocupa toda la tarjeta",
           _ancho_celda(1) <= _vh._ANCHO_MAX_CELDA + 3, True)
-    check("horario · el sobrante se reparte a los DOS lados (centrado)",
-          [round(v, 2) for v in _vh._rango_x(2)],
-          [round(-0.5 - (740 // _vh._ANCHO_MAX_CELDA - 2) / 2, 2),
-           round(1.5 + (740 // _vh._ANCHO_MAX_CELDA - 2) / 2, 2)])
+    # El sobrante va TODO a la derecha: repartirlo a los dos lados metía
+    # 132px (medidos) entre el eje de horas y la primera celda. Y a la
+    # derecha significa algo — es el resto del período que todavía no pasó.
+    check("horario · el mapa arranca SIEMPRE pegado al eje de horas",
+          [_vh._rango_x(n)[0] for n in (1, 2, 11, 31, 126)],
+          [-0.5, -0.5, -0.5, -0.5, -0.5])
+    check("horario · el sobrante queda a la derecha",
+          _vh._rango_x(2)[1], 740 // _vh._ANCHO_MAX_CELDA - 0.5)
     check("horario · con muchas columnas el rango es el justo",
           _vh._rango_x(31), [-0.5, 30.5])
 

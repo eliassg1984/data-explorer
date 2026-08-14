@@ -565,19 +565,18 @@ def _rango_x(total_columnas, ancho=None, ancho_max=None):
     curso un martes son 2 columnas de 376px de ancho por 21 de alto — dos
     banderas, no un mapa. Y un lunes sería UNA celda de 740px.
 
-    Así que la celda tiene un ancho máximo y lo que sobra se reparte a los
-    DOS lados: el contenido queda centrado, que se lee como una decisión, no
-    como un gráfico a medio dibujar. Es el efecto lateral de abrir siempre en
-    el período en curso — un período que recién empieza tiene pocas columnas
-    por definición."""
+    Así que la celda tiene un ancho máximo y el sobrante va TODO A LA
+    DERECHA. La primera versión lo repartía a los dos lados para que el
+    contenido quedara centrado, y eso metía un hueco enorme entre el eje de
+    horas y la primera celda — 132px medidos con 11 columnas, reportado al
+    toque. Además de feo era menos significativo: el hueco a la derecha ES
+    el resto del período (agosto tiene 11 días cargados y el mes sigue),
+    mientras que a la izquierda no quería decir nada."""
     ancho = _ANCHO_UTIL if ancho is None else ancho
     ancho_max = _ANCHO_MAX_CELDA if ancho_max is None else ancho_max
     total = max(1, int(total_columnas))
     minimo = max(1, ancho // ancho_max)
-    if total >= minimo:
-        return [-0.5, total - 0.5]
-    margen = (minimo - total) / 2
-    return [-0.5 - margen, total - 0.5 + margen]
+    return [-0.5, max(total, minimo) - 0.5]
 
 
 def _tick_marcado(texto, marca):
