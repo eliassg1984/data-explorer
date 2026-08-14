@@ -803,8 +803,26 @@ def _toggle_selector():
     st.session_state[_K_SELECTOR] = not st.session_state.get(_K_SELECTOR, False)
 
 
-def _selector_periodos(ancla, grano, claves):
-    """Lista de períodos para elegir los hasta 4 paneles.
+def _boton_selector(claves):
+    """Sólo el botón que abre/cierra el selector. Va en la franja, en su
+    columna angosta.
+
+    Está separado del PANEL a propósito: el panel es una grilla de cinco
+    columnas y dibujarlo dentro de esta columna —168px medidos— le daba 30px
+    a cada botón, así que "Ago 26" salía partido letra por letra, en
+    vertical. El panel se dibuja a lo ancho de la tarjeta con
+    `_panel_selector`."""
+    st.button(f"Comparar · {len(claves)} de {MAX_MARCAS}",
+              key="vh_btn_selector", on_click=_toggle_selector,
+              icon=(":material/keyboard_arrow_up:"
+                    if st.session_state.get(_K_SELECTOR) else
+                    ":material/keyboard_arrow_down:"))
+
+
+def _panel_selector(ancla, grano, claves):
+    """Lista de períodos para elegir los hasta 4 paneles. Se dibuja FUERA de
+    las columnas de la franja, a lo ancho de la tarjeta (ver
+    `_boton_selector`).
 
     NO usa `st.popover`: el patrón manual (botón + `session_state` + contenido
     en flujo) es el que ya eligió este proyecto para el panel "Detalle" del
@@ -820,20 +838,14 @@ def _selector_periodos(ancla, grano, claves):
 
     Devuelve la lista de claves elegidas (cronológica)."""
     elegidas = list(claves)
+    if not st.session_state.get(_K_SELECTOR):
+        return elegidas
     # Los elegidos van SIEMPRE en la lista aunque caigan fuera de la ventana
     # reciente: si no, un mes de hace un año se quedaba seleccionado y sin
     # botón con el cual sacarlo.
     disponibles = sorted(
         set(_claves_hacia_atras(ancla, grano, _N_LISTA[grano])) | set(elegidas),
         key=lambda k: _rango_de_clave(k, grano)[0], reverse=True)
-
-    st.button(f"Comparar · {len(elegidas)} de {MAX_MARCAS}",
-              key="vh_btn_selector", on_click=_toggle_selector,
-              icon=(":material/keyboard_arrow_up:"
-                    if st.session_state.get(_K_SELECTOR) else
-                    ":material/keyboard_arrow_down:"))
-    if not st.session_state.get(_K_SELECTOR):
-        return elegidas
 
     with st.container(key="vh_selector_panel"):
         _c1, _c2, _c3 = st.columns([1, 1, 4])
@@ -1206,7 +1218,11 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             st.session_state[_K_CLAVES] = claves
 
         with c3:
-            claves = _selector_periodos(ancla, grano, claves)
+            _boton_selector(claves)
+        # El PANEL va fuera de las columnas, a lo ancho de la tarjeta: dentro
+        # de `c3` (168px) sus cinco columnas daban 30px por botón y los
+        # períodos salían escritos en vertical, una letra por línea.
+        claves = _panel_selector(ancla, grano, claves)
 
         # Una sola línea al pie de la franja, no dos: el título ya no tiene
         # la suya porque comparte fila con los controles.
