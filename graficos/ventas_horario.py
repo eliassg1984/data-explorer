@@ -1163,7 +1163,14 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     _grano_prev = st.session_state.get("vh_grano") or _GRANO_DEF
     with _card(f"ventas_horario_{_grano_prev}"):
         _ph_hdr = st.empty()
-        c1, c2, c3 = st.columns([1.5, 2.2, 1.3])
+        # Anchos MEDIDOS, no a ojo (2026-08-14): las cuatro pastillas de
+        # granularidad piden 230px, las cinco de medida 432 (Venta 60 + Pax 46
+        # + Cantidad 80 + Ticket promedio 124 + Descuento 90, más los huecos) y
+        # "Comparar" 154. Con [1.5, 2.2, 1.3] la columna del medio daba 376 y
+        # "Descuento" caía a una SEGUNDA FILA: 36px de alto de tarjeta
+        # regalados en todas las vistas, y una franja que se movía sola según
+        # qué medidas estuvieran disponibles.
+        c1, c2, c3 = st.columns([1.35, 2.6, 0.95])
         with c1:
             grano = st.pills("Granularidad", list(GRANOS),
                              default=_GRANO_DEF, key="vh_grano",

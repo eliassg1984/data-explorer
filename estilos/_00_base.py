@@ -62,7 +62,15 @@ CSS = """    <style>
         --cab-altura: 50px;
         --cab-nivel1-top: 30px;
         --cab-nivel2-top: 52px;   /* legacy: ya no hay nivel 2 en la banda */
-        --cab-offset-contenido: 58px;
+        /* 58px hasta el 2026-08-14. Medido en el navegador: la franja ocupa
+           de y=8 a y=37 (29px reales de controles) y la tarjeta arrancaba en
+           y=74 — o sea 37px de AIRE MUERTO entre el último chip y el borde
+           de la tarjeta. Con 44 la franja no se mueve (su `margin-top` es
+           `-1 * esta variable`, así que se compensa sola) y la tarjeta sube
+           14px. Queda un respiro de ~21px entre chips y tarjeta.
+           Si se toca: `_CAB_OFFSET` en graficos/alturas.py cuenta lo mismo y
+           test_graficos.py falla si se desincronizan. */
+        --cab-offset-contenido: 44px;
 
         /* ==================================================================
            PRESUPUESTO VERTICAL — cuánto mide "una pantalla" de contenido
@@ -81,7 +89,10 @@ CSS = """    <style>
            falla si se desincronizan. NUNCA escribir estos px sueltos.
            ================================================================== */
         --franja-inf-alto: 42px;      /* la franja blanca fija de abajo */
-        --franja-inf-reserva: 66px;   /* lo que reserva el block-container */
+        /* 66px hasta el 2026-08-14, contra una franja que mide 42: 24px de
+           reserva que no cubría nada. Con 48 quedan 6px de aire entre el
+           borde de la tarjeta y la franja. */
+        --franja-inf-reserva: 48px;   /* lo que reserva el block-container */
         --margen-tarjeta: 16px;       /* margen de bloque de Streamlit, arriba y abajo */
         --alto-util: calc(100dvh - var(--cab-offset-contenido)
                                  - var(--franja-inf-reserva)
