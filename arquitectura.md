@@ -4411,3 +4411,44 @@ salvo `icono`):
        pisándola donde sí hay soporte — dos declaraciones de la misma
        propiedad en la misma regla no es un error, es progressive
        enhancement: el navegador se queda con la última que entienda.
+
+     - **3ra vuelta (mismo día, 2da captura del usuario): `st.popover` se
+       DESCARTÓ del todo.** Un popover, no importa cuánto CSS se le
+       ponga, es estructuralmente DOS piezas: un botón (`stPopover`) y
+       su contenido abierto, que Streamlit renderiza en un PORTAL
+       (`stPopoverBody`) aparte, con su propio offset y su propia sombra
+       — no hay forma de que se vean como una sola tarjeta sin costura,
+       porque NO son un solo elemento en el DOM. Reportado con captura,
+       comparando contra la referencia: "así se ve el tuyo, como un
+       toggle, del cual sale otro toggle, usando más espacio". La
+       referencia (la tarjeta "Comparar con") es a la inversa: título y
+       filas viven en el MISMO rectángulo.
+
+       La solución NO fue más CSS — fue dejar de usar `st.popover` y
+       volver a un patrón manual, igual que el pestillo `latch_docs` de
+       `graficos/compras/_css_proveedor.py` pero flotando: un
+       `st.button` hace de título+chevron (con CSS que le saca todo
+       rastro de "soy un botón" — sin borde, sin fondo, sin sombra
+       propia, hereda el vidrio del contenedor) y `st.session_state`
+       guarda si está abierto. Las filas se dibujan (o no) DENTRO del
+       MISMO `st.container(key="ventas_comp_detalle_float")` que ya
+       tenía `position:absolute` desde la vuelta anterior — ese
+       contenedor no cambia de posición ni sale del flujo en NINGÚN
+       estado, así que expandirlo (Python agrega las 3 filas adentro)
+       sigue sin mover nada alrededor, exactamente la garantía que daba
+       el portal del popover, pero sin la costura de dos piezas.
+       Verificado en vivo, ciclo completo abrir→cerrar: el rect de
+       `_slot_graf` midió IDÉNTICO (879×461.5625, y=201.8) antes de
+       abrir, con el panel abierto (280×100 el contenedor flotante) y
+       después de cerrar.
+
+       **Trampa nueva, específica de este patrón**: el ícono (chevron)
+       del botón se decide ANTES de saber si ESTE click lo tocó — un
+       `st.button(icon=...)` ya se dibujó con el ícono viejo para cuando
+       su propio `if st.button(...):` devuelve `True` en la misma
+       pasada. Con `if st.button(...): flip()` el chevron queda UN CLIC
+       ATRASADO (probado: abría el panel pero seguía mostrando la
+       flecha de "cerrado"). El fix es `on_click=flip` en vez de leer el
+       `return`: los callbacks de Streamlit corren ANTES de que el
+       script vuelva a ejecutarse de arriba, así que para cuando el
+       botón se arma de nuevo `session_state` ya tiene el valor nuevo.

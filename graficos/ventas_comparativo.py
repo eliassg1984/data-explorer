@@ -869,27 +869,47 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         # Panel "Detalle": es el legend de esta vista. Cada fila prende o
         # apaga su serie (switch) y además muestra el valor ABSOLUTO del
         # último período, que el legend de Plotly no puede mostrar.
-        # 2026-08-14: de expander EN FLUJO (empujaba el gráfico al abrirse)
-        # a popover FLOTANTE arriba-izquierda del plot — referencia del
-        # usuario: el panel "Comparar con" de un gráfico de índices. Un
-        # popover no empuja nada al abrir: `stPopoverBody` se renderiza en
-        # un PORTAL fuera de este contenedor (mismo patrón que
-        # `ai_float_wrap` en estilos/_85_asistente.py y `fecha_panel` en
-        # _50_fecha.py), así que la posición en el DOM de acá abajo ya NO
-        # importa para dónde se VE — eso lo decide el CSS de
-        # `.st-key-ventas_comp_detalle_float` sobre `_slot_graf` (posición
-        # relativa, ver estilos/_80_cards.py).
+        # 2026-08-14, 2da vuelta: el `st.popover` (1ra vuelta) resolvía
+        # "no empuja el gráfico" pero se veía como DOS piezas flotantes
+        # separadas — un botón-cápsula arriba y, con un hueco, un panel
+        # aparte abajo (reportado con captura: "como un toggle del cual
+        # sale otro toggle"). La referencia es UNA sola tarjeta: el
+        # título y las filas viven en el MISMO rectángulo, sin costura.
+        # Un popover no puede dar eso — su contenido SIEMPRE se renderiza
+        # en un portal aparte (`stPopoverBody`), con su propio offset y
+        # sombra. Se volvió al patrón manual: un `st.button` que hace de
+        # título+chevron (con CSS para que no se vea a sí mismo como
+        # botón) y `st.session_state` guardando si está abierto; las
+        # filas se dibujan o no DENTRO del mismo `st.container(key=
+        # "ventas_comp_detalle_float")` que ya es `position:absolute`
+        # sobre `_slot_graf` (estilos/_80_cards.py). Ese contenedor NO
+        # cambia de posición al abrirse/cerrarse —sigue fuera del flujo—
+        # así que el gráfico sigue sin moverse, sin necesitar un portal.
         if es_desc:
             _etq_ultimo = _etiqueta_clave(claves[-1], grano)
+
+            def _toggle_detalle():
+                # on_click, no el return de st.button: el return sólo se
+                # sabe DESPUÉS de que el botón ya se dibujó con el ícono
+                # viejo en esta misma pasada — el chevron quedaría un
+                # clic atrasado (probado: abría el panel pero seguía
+                # mostrando la flecha "cerrado"). on_click corre ANTES
+                # de que el script vuelva a correr desde arriba, así que
+                # para cuando se arma el botón de nuevo session_state ya
+                # tiene el valor nuevo.
+                st.session_state["ventas_comp_detalle_abierto"] = (
+                    not st.session_state.get(
+                        "ventas_comp_detalle_abierto", False))
+
             with st.container(key="ventas_comp_detalle_float"):
-                with st.popover(f"Detalle · {_etq_ultimo}",
-                                 icon=":material/tune:"):
-                    # El container CON key adentro del popover es lo que
-                    # el CSS usa para encontrar el portal correcto:
-                    # `[data-testid="stPopoverBody"]:has(.st-key-
-                    # ventas_comp_detalle_panel)` — sin esta ancla, el
-                    # portal vive fuera de `_slot_graf` y no hay forma de
-                    # scopearlo por ancestro.
+                _abierto = st.session_state.get(
+                    "ventas_comp_detalle_abierto", False)
+                _chevron = "keyboard_arrow_up" if _abierto else "keyboard_arrow_down"
+                st.button(f"Detalle · {_etq_ultimo}",
+                          key="ventas_comp_detalle_toggle",
+                          icon=f":material/{_chevron}:",
+                          on_click=_toggle_detalle)
+                if _abierto:
                     with st.container(key="ventas_comp_detalle_panel"):
                         # La variante de color de Venta sigue el SIGNO,
                         # igual que su barra en el gráfico; pax y ticket
@@ -917,14 +937,9 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                         # el gap por defecto entre bloques metía 16px
                         # entre fila y fila, más que el alto de la fila
                         # misma. `width` las mantiene angostas — sin él
-                        # las columnas reparten TODO el ancho del popover.
-                        # 260 (antes 400, heredado de cuando este panel
-                        # vivía EN FLUJO bajo una tarjeta ancha): flotando
-                        # sobre el gráfico, 400 hacía un popover de ~448px
-                        # — casi la mitad de una tarjeta de ~880px,
-                        # reportado por el usuario con captura. La
-                        # referencia visual (panel "Comparar con" de un
-                        # gráfico de índices) es angosta.
+                        # las columnas reparten TODO el ancho de la
+                        # tarjeta flotante (260, ver estilos/_80_cards.py
+                        # para por qué no es 400 como el expander viejo).
                         with st.container(gap=None, width=260):
                             for _k, _variante, _label, _val, _pv in _filas:
                                 _pt = ("—" if _pv is None

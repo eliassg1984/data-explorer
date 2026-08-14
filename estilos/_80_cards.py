@@ -323,85 +323,48 @@ CSS = """    /* ================================================================
     }
 
     /* =================================================================== */
-    /* Panel "Detalle" — trigger FLOTANTE sobre el gráfico (2026-08-14)      */
+    /* Panel "Detalle" — tarjeta FLOTANTE sobre el gráfico (2026-08-14)      */
     /*                                                                       */
-    /* Antes vivía en un st.expander EN FLUJO, debajo del gráfico: abrirlo   */
-    /* empujaba la explicación de "Ventana: ..." que sigue después. Pedido  */
-    /* del usuario con referencia visual: el panel "Comparar con" de un     */
-    /* gráfico de índices, que flota arriba-izquierda del plot y no mueve   */
-    /* nada al abrirse.                                                      */
+    /* 1ra vuelta (el mismo día): st.popover. Se descartó — un popover      */
+    /* SIEMPRE se ve como DOS piezas: un botón-cápsula y, con un hueco,     */
+    /* un panel aparte (`stPopoverBody` es un portal con su propio offset  */
+    /* y sombra). Reportado con captura: "como un toggle del cual sale     */
+    /* otro toggle". La referencia es UNA sola tarjeta sin costura          */
+    /* (título y filas en el mismo rectángulo).                             */
     /*                                                                       */
-    /* Un st.popover ya resuelve la mitad sólo: el contenido abierto        */
-    /* (`stPopoverBody`) se renderiza en un PORTAL fuera de este árbol —     */
-    /* mismo mecanismo que `ai_float_wrap` (_85_asistente.py) y             */
-    /* `fecha_panel` (_50_fecha.py) — así que NUNCA empuja layout, esté el   */
-    /* trigger flotando o no. La otra mitad (que el TRIGGER quede pegado    */
-    /* arriba-izquierda del plot en vez de debajo) es este bloque: ancla    */
-    /* `position: relative` en `_slot_graf` —el contenedor directo del      */
-    /* gráfico, con key `ventas_comp_chart_slot_<grano>`, NO toda la        */
-    /* tarjeta— para que el `top`/`left` no dependan de cuánto mida la      */
-    /* franja de controles (grano/ventana/alinear/vista) de arriba.         */
+    /* 2da vuelta (esta): patrón manual. TODO —el botón-título con el       */
+    /* chevron Y las filas— vive dentro del MISMO                           */
+    /* `st.container(key="ventas_comp_detalle_float")`, que es              */
+    /* `position:absolute` sobre `_slot_graf` (ancla `position:relative`,   */
+    /* key `ventas_comp_chart_slot_<grano>` para no depender de cuánto      */
+    /* mida la franja de controles de arriba) TANTO abierto como cerrado.   */
+    /* Al no cambiar de posición ni salir del flujo normal en ningún        */
+    /* estado, expandirlo (Python agrega las 3 filas adentro del MISMO      */
+    /* contenedor) no mueve nada a su alrededor — mismo resultado que el    */
+    /* portal del popover, pero sin la costura de dos piezas separadas.     */
     /* =================================================================== */
     div[class*="st-key-ventas_comp_chart_slot_"] { position: relative; }
     div[class*="st-key-ventas_comp_chart_slot_"] .st-key-ventas_comp_detalle_float {
         position: absolute;
         top: 6px; left: 8px; z-index: 5;
         width: auto !important;
-    }
-    .st-key-ventas_comp_detalle_float [data-testid="stElementToolbar"] {
-        display: none;
-    }
-    /* Gris translúcido: --bg-primary es el "lienzo general" de la paleta
-       (_00_base.py), el único tono gris neutro que ya existe — no se
-       inventa un #hex nuevo para el pedido de "cierto tono gris
-       transparente". El blur es el mismo recurso que la franja superior
-       "cristal esmerilado" (_40_ajuste_franja.py): sin él, un fondo
-       semi-transparente sobre las barras del gráfico se lee sucio en vez
-       de vidrio esmerilado.
-       Fallback ANTES del color-mix(): si el navegador no soporta esa
-       función, la declaración es inválida y se ignora ENTERA — sin una
-       declaración previa válida, el fondo cae al blanco opaco por
-       defecto de Streamlit (reportado como "no tiene transparencia" con
-       captura, 2026-08-14). rgba(246,246,248,...) es el mismo
-       --bg-primary (#f6f6f8) escrito a mano porque CSS no permite sacarle
-       los canales R/G/B a una var() sin relative color syntax (aún menos
-       soportada que color-mix()) — si --bg-primary cambia, actualizar
-       también este rgba(). border-radius 8px (antes 999px, cápsula
-       completa): la referencia es una tarjeta con esquinas suaves, no un
-       chip/pill. */
-    .st-key-ventas_comp_detalle_float [data-testid="stPopover"] button {
-        min-width: 0 !important;
-        min-height: 0 !important;
-        padding: 4px 10px !important;
-        font-size: 11.5px !important;
-        font-weight: 500 !important;
-        border-radius: 8px !important;
-        background: rgba(246, 246, 248, 0.88) !important;
-        background: color-mix(in srgb, var(--bg-primary) 88%, transparent) !important;
-        backdrop-filter: blur(8px) !important;
-        -webkit-backdrop-filter: blur(8px) !important;
-        border: 1px solid var(--border) !important;
-        color: var(--text-secondary) !important;
-        box-shadow: var(--shadow) !important;
-        transition: border-color 0.12s, color 0.12s !important;
-    }
-    .st-key-ventas_comp_detalle_float [data-testid="stPopover"] button:hover,
-    .st-key-ventas_comp_detalle_float [data-testid="stPopover"] button[aria-expanded="true"] {
-        border-color: var(--accent) !important;
-        color: var(--accent-deep) !important;
-    }
-    /* Panel abierto: portal fuera de `_slot_graf`, así que NO se puede
-       scopear por ancestro — se busca por el container-key propio que
-       ventas_comparativo.py dibuja adentro (`ventas_comp_detalle_panel`),
-       mismo truco que `fecha_panel` / `ai_panel`. Mismo tono gris
-       translúcido que el trigger, para que se lea como una sola pieza de
-       vidrio (chip + panel), no dos superficies distintas. `max-width`:
-       el contenido interno pide `width=260` (ventas_comparativo.py) pero
-       sin un tope acá el popover puede terminar más ancho por el padding
-       propio de Streamlit — reportado "casi la mitad del largo de la
-       tarjeta" cuando el pedido interno era 400. */
-    [data-testid="stPopoverBody"]:has(.st-key-ventas_comp_detalle_panel) {
-        max-width: 300px !important;
+        max-width: 280px;
+        overflow: hidden;
+        padding: 3px 0 7px;
+        /* Gris translúcido: --bg-primary es el "lienzo general" de la
+           paleta (_00_base.py) — el único gris neutro que ya existe, sin
+           inventar un #hex nuevo. Blur = mismo recurso que la franja
+           "cristal esmerilado" (_40_ajuste_franja.py). Fallback plano
+           ANTES del color-mix(): si el navegador no soporta esa función
+           la declaración es inválida y SE IGNORA ENTERA — sin nada
+           previo válido el fondo cae al blanco opaco default de
+           Streamlit (reportado como "no tiene transparencia",
+           2026-08-14). rgba(246,246,248,...) es el mismo --bg-primary
+           (#f6f6f8) escrito a mano: CSS no permite sacarle los canales
+           R/G/B a una var() sin relative color syntax (aún menos
+           soportada que color-mix()) — si --bg-primary cambia, actualizar
+           también este rgba(). border-radius 10px, NO 999px (cápsula):
+           la referencia es una tarjeta de esquinas suaves, no un chip. */
         background: rgba(246, 246, 248, 0.92) !important;
         background: color-mix(in srgb, var(--bg-primary) 92%, transparent) !important;
         backdrop-filter: blur(10px) saturate(1.3) !important;
@@ -410,15 +373,62 @@ CSS = """    /* ================================================================
         border-radius: 10px !important;
         box-shadow: var(--shadow-md) !important;
     }
-    /* Móvil: el plot es angosto y un chip absoluto sobre la esquina tapa
-       barras — mismo criterio que prov_pop_float/gran_float en
+    .st-key-ventas_comp_detalle_float [data-testid="stElementToolbar"] {
+        display: none;
+    }
+    /* El botón-título: se ve como TEXTO clickeable dentro de la tarjeta,
+       no como un botón aparte propio — sin fondo, sin borde, sin sombra
+       (hereda el vidrio del contenedor). El chevron es la única señal de
+       que se puede abrir/cerrar, igual que la referencia; lo manda
+       Python vía `icon=` (keyboard_arrow_down/_up según
+       `ventas_comp_detalle_abierto`), no CSS. */
+    .st-key-ventas_comp_detalle_float [data-testid="stButton"] button {
+        width: 100% !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        height: auto !important;
+        justify-content: flex-start !important;
+        gap: 4px !important;
+        padding: 5px 10px !important;
+        margin: 0 !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        color: var(--text-primary) !important;
+    }
+    .st-key-ventas_comp_detalle_float [data-testid="stButton"] button:hover {
+        background: color-mix(in srgb, var(--text-primary) 5%, transparent) !important;
+        color: var(--accent-deep) !important;
+    }
+    .st-key-ventas_comp_detalle_float [data-testid="stButton"] button p {
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        margin: 0 !important;
+    }
+    .st-key-ventas_comp_detalle_float [data-testid="stButton"]
+        [data-testid="stIconMaterial"] {
+        font-size: 15px !important;
+        color: var(--accent) !important;
+    }
+    /* Filas: mismo ancho angosto que antes (`width=260` en Python, ver
+       ventas_comparativo.py — heredaba 400 del expander viejo, que
+       flotando salía casi la mitad de la tarjeta del gráfico). Sin fondo
+       propio: ya lo pone el contenedor; sólo el padding horizontal para
+       alinear con el botón-título de arriba. */
+    .st-key-ventas_comp_detalle_float .st-key-ventas_comp_detalle_panel {
+        padding: 2px 10px 0 !important;
+    }
+    /* Móvil: el plot es angosto y una tarjeta absoluta sobre la esquina
+       tapa barras — mismo criterio que prov_pop_float/gran_float en
        graficos/compras/_css_proveedor.py (>640px flota, <=640px fluye).
-       El popover sigue sin empujar nada al abrirse; sólo cambia dónde
-       vive el trigger cuando está cerrado. */
+       Expandirla sigue sin empujar nada (sigue siendo el mismo
+       contenedor, sólo que ahora en flujo); nada más cambia. */
     @media (max-width: 640px) {
         div[class*="st-key-ventas_comp_chart_slot_"] .st-key-ventas_comp_detalle_float {
             position: static !important;
             width: 100% !important;
+            max-width: none !important;
             margin: 0 0 6px !important;
         }
     }
