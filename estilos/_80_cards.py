@@ -1006,6 +1006,41 @@ CSS = """    /* ================================================================
         background: var(--accent-tint) !important;
         color: var(--accent-deep) !important;
     }
+    /* FRANJA DELGADA. Medido dentro de la tarjeta: la fila de controles mide
+       32px y la franja entera ocupaba 80 — 16px de padding arriba, 14 de
+       hueco entre la fila y el hairline (el gap por defecto del bloque
+       vertical de Streamlit), 2 de línea y 16 abajo. O sea 48px de aire
+       alrededor de 32px de control.
+
+       El margen negativo del hairline es lo que se come el hueco: su valor
+       inline lo pone `franja_linea_inferior()` (-6px), y acá se pisa con
+       !important porque un estilo inline sin !important pierde contra uno
+       con él. Los -18px horizontales NO se tocan: son los que hacen que la
+       línea toque el borde real de la tarjeta. */
+    div[class*="st-key-chartcard_ventas_horario_"] {
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+    }
+    /* El hueco de verdad NO era el margen del hairline sino el `gap: 16px`
+       del bloque vertical de la tarjeta: Streamlit separa así CADA bloque
+       (fila de controles, hairline, gráfico, pastillas, caption), y con
+       cinco bloques son 64px sólo de aire. Medido: bajar el margen negativo
+       del hr de -6 a -14 movió la línea 3px, porque el gap seguía mandando.
+       Con 6px la franja pasa de 81 a ~57 y el resto de la tarjeta también
+       respira menos. */
+    /* OJO con el selector: el elemento que lleva la key ES el
+       stVerticalBlock (`st.container(key=...)` la pone sobre él), no un
+       ancestro suyo. La primera versión de esta regla apuntaba sólo a los
+       stVerticalBlock DESCENDIENTES y no movió nada — medido: el gap seguía
+       en 16px. Van los dos: el propio y los de adentro. */
+    div[class*="st-key-chartcard_ventas_horario_"],
+    div[class*="st-key-chartcard_ventas_horario_"] [data-testid="stVerticalBlock"] {
+        gap: 6px !important;
+    }
+    div[class*="st-key-chartcard_ventas_horario_"] hr {
+        margin: -2px -18px 4px !important;
+    }
+
     /* El título comparte fila con los tabs, así que tiene que compartir su
        línea de base: el contenedor de markdown trae margen propio y lo
        dejaba 8px más abajo que las pastillas (medido). */
