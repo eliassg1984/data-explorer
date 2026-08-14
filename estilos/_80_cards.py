@@ -284,6 +284,13 @@ CSS = """    /* ================================================================
         border: 1.5px solid var(--sw-color) !important;
         background-color: transparent !important;
         box-shadow: none !important;
+        /* Streamlit le pone `margin-top: 2.5px` al track (pensado para
+           alinearlo con un label de texto al lado, que acá va
+           `collapsed`). Sin anularlo el switch queda pegado al fondo de
+           su caja — 1.25px bajo el centro — y desalineado contra el
+           texto de su fila. El centrado real lo hace el
+           `align-items:center` del label. */
+        margin: 0 !important;
         padding: 0 1.5px !important;
         display: flex !important;
         align-items: center !important;
@@ -488,6 +495,42 @@ CSS = """    /* ================================================================
        cerrada respiren igual, no que abrirla la deje más apretada. */
     .st-key-ventas_comp_detalle_float .st-key-ventas_comp_detalle_panel {
         padding: 4px 10px 6px !important;
+    }
+    /* Switch y textos de una misma fila, en la MISMA línea óptica.
+       Reportado "las filas de detalle y el switch se ven no alineados
+       entre sí"; medido: el track quedaba 6.75px POR ENCIMA del centro
+       del texto, idéntico en las tres filas (sistemático, no una fila
+       rara). Dos causas SUMADAS, ninguna evidente sin medir la cadena
+       de padres entera — la primera hipótesis (que el texto heredaba
+       `line-height: 1.6` y su caja de 20.8px desbordaba la fila de
+       13.5px) era cierta PERO no era la causa: al bajarlo a 1 la caja
+       pasó a 13px y el delta siguió clavado en -6.75.
+
+       1. `stMarkdownContainer` trae `margin-bottom: -16px` de
+          Streamlit — un negativo del tamaño de su propia línea, con lo
+          que la COLUMNA ENTERA del texto colapsa a `height: 0`
+          (verificado: stColumn/stVerticalBlock/stElementContainer/
+          stMarkdown todos en 0). Una caja de alto 0 centrada por
+          `align-items:center` queda clavada en el centro de la fila, y
+          el texto se pinta DESDE ahí hacia abajo — de ahí que el texto
+          apareciera medio renglón más abajo que el switch. Ponerlo en 0
+          le devuelve su altura real y el centrado empieza a funcionar.
+       2. El track del switch tiene `margin-top: 2.5px` propio (queda
+          pegado al fondo de su caja de 13.5px, o sea 1.25px bajo el
+          centro). Con la caja del texto ya sana, ese 1.25px era el
+          residuo que quedaba.
+       `line-height: 1` se queda igual: no era la causa, pero sin él la
+       caja del texto mide 20.8px contra 13.5 de la fila y el panel
+       crece de gusto. */
+    .st-key-ventas_comp_detalle_panel [data-testid="stHorizontalBlock"] {
+        align-items: center !important;
+    }
+    .st-key-ventas_comp_detalle_panel [data-testid="stMarkdownContainer"],
+    .st-key-ventas_comp_detalle_panel [data-testid="stMarkdownContainer"] div {
+        line-height: 1 !important;
+    }
+    .st-key-ventas_comp_detalle_panel [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
     }
     /* Móvil: el plot es angosto y una tarjeta absoluta sobre la esquina
        tapa barras — mismo criterio que prov_pop_float/gran_float en

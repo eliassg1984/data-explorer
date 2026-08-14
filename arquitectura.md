@@ -4539,3 +4539,41 @@ salvo `icono`):
          sobre vidrio gris translúcido pierde contraste. En la
          referencia el chevron se lee ANTES que el label, porque es la
          señal de "esto se abre".
+
+     - **7ma vuelta: "las filas de detalle y el switch se ven no
+       alineados entre sí" — y la primera hipótesis, aun siendo CIERTA,
+       no era la causa.** Medido: el track quedaba 6.75px por encima del
+       centro del texto, idéntico en las 3 filas (sistemático). Primera
+       hipótesis: los textos heredaban `line-height: 1.6`, o sea una
+       caja de 20.8px contra una fila de 13.5px. Era verdad — pero al
+       bajarlo a `1` la caja pasó a 13px y **el delta siguió clavado en
+       -6.75**. Ahí es donde midiendo la CADENA DE PADRES entera
+       (`getBoundingClientRect` + `getComputedStyle` subiendo de nodo en
+       nodo hasta la fila) aparecieron las dos causas reales, ninguna
+       visible desde el elemento en sí:
+
+       1. **`stMarkdownContainer` trae `margin-bottom: -16px`** —
+          negativo, del tamaño de su propia línea. Con eso la COLUMNA
+          ENTERA del texto colapsa a `height: 0` (verificado:
+          `stColumn`, `stVerticalBlock`, `stElementContainer` y
+          `stMarkdown` los cuatro en 0). Y una caja de alto 0 que
+          `align-items:center` "centra" queda clavada en el centro de la
+          fila, con el texto pintándose DESDE ahí hacia abajo — medio
+          renglón más abajo que el switch.
+       2. **El track del switch trae `margin-top: 2.5px`** (de
+          Streamlit, para alinearlo con un label de texto al lado — que
+          acá va `collapsed`), lo que lo deja pegado al fondo de su caja
+          y 1.25px bajo el centro.
+
+       Las dos se anulan con un `margin: 0`/`margin-bottom: 0` scopeado
+       al panel. Resultado medido: **delta 0.00 exacto** en las 3 filas
+       contra las 3 celdas de texto (nombre, valor y %Δ).
+
+       Lección de método, que es la que vale para el próximo caso: ante
+       un desalineado que se repite IGUAL en todas las filas, medir la
+       cadena de padres completa antes de tocar nada. Las tres veces que
+       este panel dio un problema de alineación vertical (baseline gap
+       del botón en la 6ta, estas dos acá) la causa estaba en un ancestro
+       o en un default de Streamlit, NUNCA en el elemento que se ve
+       torcido — y las tres veces la primera hipótesis "razonable"
+       miraba al elemento equivocado.
