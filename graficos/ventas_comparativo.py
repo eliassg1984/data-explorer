@@ -571,7 +571,14 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             f'<hr style="border:none;border-top:2px solid {GRIS_BORDE};'
             'margin:-6px -18px 12px;width:calc(100% + 36px);">',
             unsafe_allow_html=True)
-        _slot_graf = st.container()
+        # Key propia (no sólo `st.container()` a secas): el CSS necesita
+        # un ancla `position: relative` scopeada AL PLOT, no a toda la
+        # tarjeta (que incluye la franja de controles de arriba) — así
+        # el panel "Detalle" flotante (`ventas_comp_detalle_float`) queda
+        # pegado al borde superior del gráfico sin importar cuánto mida
+        # esa franja. Prefijo por `_grano_layout` como el resto de esta
+        # función (regla #70): remonta limpio al cambiar de granularidad.
+        _slot_graf = st.container(key=f"ventas_comp_chart_slot_{_grano_layout}")
 
     claves = _claves_hacia_atras(ancla, grano, ventana)
     claves_ap = [_clave_ap(k, grano, modo) for k in claves]
@@ -860,75 +867,101 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             st.caption("Ninguna medida seleccionada: marcá al menos una en "
                        "«Detalle» para ver el gráfico.")
         # Panel "Detalle": es el legend de esta vista. Cada fila prende o
-        # apaga su serie (checkbox) y además muestra el valor ABSOLUTO del
-        # último período, que el legend de Plotly no puede mostrar. Va
-        # DESPUÉS del gráfico a propósito: si fuera antes, abrirlo o
-        # cerrarlo movería el gráfico en vez de sólo lo que viene debajo.
+        # apaga su serie (switch) y además muestra el valor ABSOLUTO del
+        # último período, que el legend de Plotly no puede mostrar.
+        # 2026-08-14: de expander EN FLUJO (empujaba el gráfico al abrirse)
+        # a popover FLOTANTE arriba-izquierda del plot — referencia del
+        # usuario: el panel "Comparar con" de un gráfico de índices. Un
+        # popover no empuja nada al abrir: `stPopoverBody` se renderiza en
+        # un PORTAL fuera de este contenedor (mismo patrón que
+        # `ai_float_wrap` en estilos/_85_asistente.py y `fecha_panel` en
+        # _50_fecha.py), así que la posición en el DOM de acá abajo ya NO
+        # importa para dónde se VE — eso lo decide el CSS de
+        # `.st-key-ventas_comp_detalle_float` sobre `_slot_graf` (posición
+        # relativa, ver estilos/_80_cards.py).
         if es_desc:
             _etq_ultimo = _etiqueta_clave(claves[-1], grano)
-            # type="compact": el default de st.expander estira a todo el
-            # ancho del card aunque el label sea corto (la barra vacía que
-            # se ve en la franja "Detalle · Ago 26") — "compact" lo rinde
-            # como un toggle inline, sin la caja ni el ancho completo.
-            with st.expander(f"Detalle · {_etq_ultimo}", expanded=False,
-                             type="compact"):
-                # La variante de color de Venta sigue el SIGNO, igual que su
-                # barra en el gráfico; pax y ticket tienen color fijo. El
-                # color en sí lo pone el CSS (estilos/_80_cards.py) leyendo
-                # esta variante del key del container — no va inline acá,
-                # porque el cuadradito ahora es el checkbox y su caja la
-                # dibuja Streamlit, no nosotros.
-                _v_venta = ("venta_pos"
-                            if (d_venta[-1] is not None and d_venta[-1] >= 0)
-                            else "venta_neg")
-                _filas = [
-                    ("venta", _v_venta, "Venta", f"S/ {y_act[-1]:,.0f}",
-                     d_venta[-1]),
-                    ("pax", "pax", "Pax", f"{p_act[-1]:,.0f}", d_pax[-1]),
-                    ("ticket", "ticket", "Ticket promedio",
-                     (f"S/ {t_act[-1]:,.2f}" if t_act[-1] is not None else "—"),
-                     d_ticket[-1]),
-                ]
-                # Una fila = [cuadradito-checkbox | nombre | valor | %Δ].
-                # `gap=None` en el container es lo que las junta: el gap por
-                # defecto entre bloques metía 16px entre fila y fila, más que
-                # el alto de la fila misma. `width` las mantiene angostas —
-                # sin él las columnas reparten TODO el ancho del card.
-                with st.container(gap=None, width=400):
-                    for _k, _variante, _label, _val, _pv in _filas:
-                        _pt = "—" if _pv is None else f"{_pv:+.0f}%"
-                        _pc = (GRIS_TEXTO if _pv is None
-                               else (EXITO if _pv >= 0 else ERROR))
-                        _c = st.columns([0.6, 3, 2, 1.4],
-                                        vertical_alignment="center")
-                        with _c[0]:
-                            # El container sólo existe para colgarle el color
-                            # al CSS: la key del switch tiene que quedar
-                            # ESTABLE (si el signo entrara en su key, cambiar
-                            # de signo le borraría el estado al widget).
-                            # st.toggle en vez de st.checkbox (2026-08-13,
-                            # referencia: panel "Comparar con" de un gráfico
-                            # de índices) — mismo bool, misma key, el único
-                            # cambio es el widget; ver estilos/_80_cards.py
-                            # para la trampa del testid compartido.
-                            with st.container(key=f"ventas_comp_sw_{_variante}"):
-                                st.toggle(_label, value=True,
-                                          key=f"ventas_comp_ver_{_k}",
-                                          label_visibility="collapsed")
-                        with _c[1]:
-                            st.markdown(
-                                f'<div style="font-size:14px;color:#3f3f46;">'
-                                f'{_label}</div>', unsafe_allow_html=True)
-                        with _c[2]:
-                            st.markdown(
-                                f'<div style="font-size:14px;text-align:right;'
-                                f'color:{GRIS_TEXTO};">{_val}</div>',
-                                unsafe_allow_html=True)
-                        with _c[3]:
-                            st.markdown(
-                                f'<div style="font-size:14px;font-weight:600;'
-                                f'text-align:right;color:{_pc};">{_pt}</div>',
-                                unsafe_allow_html=True)
+            with st.container(key="ventas_comp_detalle_float"):
+                with st.popover(f"Detalle · {_etq_ultimo}",
+                                 icon=":material/tune:"):
+                    # El container CON key adentro del popover es lo que
+                    # el CSS usa para encontrar el portal correcto:
+                    # `[data-testid="stPopoverBody"]:has(.st-key-
+                    # ventas_comp_detalle_panel)` — sin esta ancla, el
+                    # portal vive fuera de `_slot_graf` y no hay forma de
+                    # scopearlo por ancestro.
+                    with st.container(key="ventas_comp_detalle_panel"):
+                        # La variante de color de Venta sigue el SIGNO,
+                        # igual que su barra en el gráfico; pax y ticket
+                        # tienen color fijo. El color en sí lo pone el CSS
+                        # (estilos/_80_cards.py) leyendo esta variante del
+                        # key del container — no va inline acá, porque el
+                        # cuadradito ahora es el switch y su caja la
+                        # dibuja Streamlit, no nosotros.
+                        _v_venta = ("venta_pos"
+                                    if (d_venta[-1] is not None
+                                        and d_venta[-1] >= 0)
+                                    else "venta_neg")
+                        _filas = [
+                            ("venta", _v_venta, "Venta",
+                             f"S/ {y_act[-1]:,.0f}", d_venta[-1]),
+                            ("pax", "pax", "Pax", f"{p_act[-1]:,.0f}",
+                             d_pax[-1]),
+                            ("ticket", "ticket", "Ticket promedio",
+                             (f"S/ {t_act[-1]:,.2f}"
+                              if t_act[-1] is not None else "—"),
+                             d_ticket[-1]),
+                        ]
+                        # Una fila = [switch | nombre | valor | %Δ].
+                        # `gap=None` en el container es lo que las junta:
+                        # el gap por defecto entre bloques metía 16px
+                        # entre fila y fila, más que el alto de la fila
+                        # misma. `width` las mantiene angostas — sin él
+                        # las columnas reparten TODO el ancho del popover.
+                        with st.container(gap=None, width=400):
+                            for _k, _variante, _label, _val, _pv in _filas:
+                                _pt = ("—" if _pv is None
+                                       else f"{_pv:+.0f}%")
+                                _pc = (GRIS_TEXTO if _pv is None
+                                       else (EXITO if _pv >= 0 else ERROR))
+                                _c = st.columns([0.6, 3, 2, 1.4],
+                                                vertical_alignment="center")
+                                with _c[0]:
+                                    # El container sólo existe para
+                                    # colgarle el color al CSS: la key
+                                    # del switch tiene que quedar ESTABLE
+                                    # (si el signo entrara en su key,
+                                    # cambiar de signo le borraría el
+                                    # estado al widget). st.toggle en vez
+                                    # de st.checkbox (2026-08-13,
+                                    # referencia: panel "Comparar con" de
+                                    # un gráfico de índices) — mismo
+                                    # bool, misma key; ver
+                                    # estilos/_80_cards.py para la trampa
+                                    # del testid compartido.
+                                    with st.container(
+                                            key=f"ventas_comp_sw_{_variante}"):
+                                        st.toggle(
+                                            _label, value=True,
+                                            key=f"ventas_comp_ver_{_k}",
+                                            label_visibility="collapsed")
+                                with _c[1]:
+                                    st.markdown(
+                                        f'<div style="font-size:14px;'
+                                        f'color:#3f3f46;">{_label}</div>',
+                                        unsafe_allow_html=True)
+                                with _c[2]:
+                                    st.markdown(
+                                        f'<div style="font-size:14px;'
+                                        f'text-align:right;'
+                                        f'color:{GRIS_TEXTO};">{_val}</div>',
+                                        unsafe_allow_html=True)
+                                with _c[3]:
+                                    st.markdown(
+                                        f'<div style="font-size:14px;'
+                                        f'font-weight:600;text-align:right;'
+                                        f'color:{_pc};">{_pt}</div>',
+                                        unsafe_allow_html=True)
         _mp = _first_point(evt)
         if _mp is not None:
             _pi = _mp.get("point_index", _mp.get("point_number"))

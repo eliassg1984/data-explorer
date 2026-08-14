@@ -4330,3 +4330,59 @@ salvo `icono`):
      agregar una cuarta), así que un "×" sin "+" para volver a traerla de
      vuelta sería un callejón sin salida — se lo dejó fuera y se avisó al
      usuario en el chat en vez de agregarlo en silencio.
+
+111. **Un `st.popover` no empuja layout NUNCA, esté flotando o no — por
+     eso es la herramienta correcta para "que al expandirse no empuje el
+     gráfico" (2026-08-14, panel "Detalle" de `graficos/ventas_comparativo.py`,
+     de nuevo con referencia visual el panel "Comparar con" de un gráfico
+     de índices).** El panel venía en un `st.expander` EN FLUJO: abrirlo
+     empujaba hacia abajo el caption "Ventana: ...". Dos cambios
+     independientes que es fácil confundir en uno solo:
+
+     - **`st.expander` → `st.popover` arregla el empuje POR SÍ SOLO**,
+       incluso sin ninguna línea de CSS: el contenido abierto de un
+       popover (`[data-testid="stPopoverBody"]`) se renderiza en un
+       PORTAL fuera del árbol del trigger — no es un hijo en flujo que
+       empuje a sus hermanos. Mismo mecanismo ya usado por
+       `ai_float_wrap` (`estilos/_85_asistente.py`) y `fecha_panel`
+       (`estilos/_50_fecha.py`). Si el pedido hubiera sido SÓLO "que no
+       empuje", este único cambio de widget alcanzaba.
+
+     - **Que el TRIGGER quede flotando arriba-izquierda DEL PLOT (no
+       "en algún lugar arriba de la tarjeta") es un problema aparte, de
+       posicionamiento CSS** — el popover resuelve el contenido, no
+       dónde vive el botón que lo abre. Se le dio una key propia a
+       `_slot_graf` (antes `st.container()` a secas) para tener un
+       ancla `position: relative` scopeada AL GRÁFICO, no a toda la
+       tarjeta — así `top`/`left` no dependen de cuánto mida la franja
+       de controles (grano/ventana/alinear/vista) que vive arriba.
+       Verificado en vivo (demo local, `getBoundingClientRect`): abrir
+       el popover no mueve ni un píxel el rect del `.js-plotly-plot`
+       (mismos `x`/`y`/`h` antes y después de abrir).
+
+     - **El tono "gris transparente" pedido salió de `--bg-primary`**
+       (el "lienzo general" de la paleta, `_00_base.py`) con
+       `color-mix(..., transparent)` + `backdrop-filter: blur()` — el
+       mismo recurso que la franja "cristal esmerilado"
+       (`_40_ajuste_franja.py`), pero con el gris neutro de
+       `--bg-primary` en vez del tinte lavanda de `--accent-tint` (la
+       referencia visual era gris, no violeta). El trigger CERRADO y el
+       panel ABIERTO comparten el mismo tono para leerse como una sola
+       pieza de vidrio.
+
+     - **Trampa del scopeo**: como el panel es un portal, no se puede
+       apuntar por ancestro (`.st-key-X .stPopoverBody`) — hay que
+       envolver el CONTENIDO del popover en un `st.container(key=...)`
+       propio y en CSS usar `[data-testid="stPopoverBody"]:has(.st-key-
+       ese-container)`. Sin esa ancla, el selector `stPopoverBody` a
+       secas pintaría TODOS los popovers de la página del mismo gris
+       (rompería Proveedores, el asistente IA, los filtros de fecha).
+
+     - **Móvil**: mismo criterio que `prov_pop_float`/`gran_float` en
+       `graficos/compras/_css_proveedor.py` — por debajo de 640px el
+       trigger deja de flotar (`position: static`, ancho 100%) porque un
+       chip absoluto sobre la esquina de un plot angosto tapa barras. El
+       popover sigue sin empujar nada al abrirse pase lo que pase con el
+       trigger; sólo cambia dónde vive cerrado. Verificado con
+       `resize_window` a 375px: la regla se activa sola, sin recargar
+       (es CSS puro, no depende de `_es_movil()`/User-Agent).

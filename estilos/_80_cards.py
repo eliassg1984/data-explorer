@@ -323,6 +323,89 @@ CSS = """    /* ================================================================
     }
 
     /* =================================================================== */
+    /* Panel "Detalle" — trigger FLOTANTE sobre el gráfico (2026-08-14)      */
+    /*                                                                       */
+    /* Antes vivía en un st.expander EN FLUJO, debajo del gráfico: abrirlo   */
+    /* empujaba la explicación de "Ventana: ..." que sigue después. Pedido  */
+    /* del usuario con referencia visual: el panel "Comparar con" de un     */
+    /* gráfico de índices, que flota arriba-izquierda del plot y no mueve   */
+    /* nada al abrirse.                                                      */
+    /*                                                                       */
+    /* Un st.popover ya resuelve la mitad sólo: el contenido abierto        */
+    /* (`stPopoverBody`) se renderiza en un PORTAL fuera de este árbol —     */
+    /* mismo mecanismo que `ai_float_wrap` (_85_asistente.py) y             */
+    /* `fecha_panel` (_50_fecha.py) — así que NUNCA empuja layout, esté el   */
+    /* trigger flotando o no. La otra mitad (que el TRIGGER quede pegado    */
+    /* arriba-izquierda del plot en vez de debajo) es este bloque: ancla    */
+    /* `position: relative` en `_slot_graf` —el contenedor directo del      */
+    /* gráfico, con key `ventas_comp_chart_slot_<grano>`, NO toda la        */
+    /* tarjeta— para que el `top`/`left` no dependan de cuánto mida la      */
+    /* franja de controles (grano/ventana/alinear/vista) de arriba.         */
+    /* =================================================================== */
+    div[class*="st-key-ventas_comp_chart_slot_"] { position: relative; }
+    div[class*="st-key-ventas_comp_chart_slot_"] .st-key-ventas_comp_detalle_float {
+        position: absolute;
+        top: 6px; left: 8px; z-index: 5;
+        width: auto !important;
+    }
+    .st-key-ventas_comp_detalle_float [data-testid="stElementToolbar"] {
+        display: none;
+    }
+    /* Gris translúcido: --bg-primary es el "lienzo general" de la paleta
+       (_00_base.py), el único tono gris neutro que ya existe — no se
+       inventa un #hex nuevo para el pedido de "cierto tono gris
+       transparente". El blur es el mismo recurso que la franja superior
+       "cristal esmerilado" (_40_ajuste_franja.py): sin él, un fondo
+       semi-transparente sobre las barras del gráfico se lee sucio en vez
+       de vidrio esmerilado. */
+    .st-key-ventas_comp_detalle_float [data-testid="stPopover"] button {
+        min-width: 0 !important;
+        min-height: 0 !important;
+        padding: 4px 12px !important;
+        font-size: 11.5px !important;
+        font-weight: 500 !important;
+        border-radius: 999px !important;
+        background: color-mix(in srgb, var(--bg-primary) 88%, transparent) !important;
+        backdrop-filter: blur(8px) !important;
+        -webkit-backdrop-filter: blur(8px) !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text-secondary) !important;
+        box-shadow: var(--shadow) !important;
+        transition: border-color 0.12s, color 0.12s !important;
+    }
+    .st-key-ventas_comp_detalle_float [data-testid="stPopover"] button:hover,
+    .st-key-ventas_comp_detalle_float [data-testid="stPopover"] button[aria-expanded="true"] {
+        border-color: var(--accent) !important;
+        color: var(--accent-deep) !important;
+    }
+    /* Panel abierto: portal fuera de `_slot_graf`, así que NO se puede
+       scopear por ancestro — se busca por el container-key propio que
+       ventas_comparativo.py dibuja adentro (`ventas_comp_detalle_panel`),
+       mismo truco que `fecha_panel` / `ai_panel`. Mismo tono gris
+       translúcido que el trigger, para que se lea como una sola pieza de
+       vidrio (chip + panel), no dos superficies distintas. */
+    [data-testid="stPopoverBody"]:has(.st-key-ventas_comp_detalle_panel) {
+        background: color-mix(in srgb, var(--bg-primary) 92%, transparent) !important;
+        backdrop-filter: blur(10px) saturate(1.3) !important;
+        -webkit-backdrop-filter: blur(10px) saturate(1.3) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 12px !important;
+        box-shadow: var(--shadow-md) !important;
+    }
+    /* Móvil: el plot es angosto y un chip absoluto sobre la esquina tapa
+       barras — mismo criterio que prov_pop_float/gran_float en
+       graficos/compras/_css_proveedor.py (>640px flota, <=640px fluye).
+       El popover sigue sin empujar nada al abrirse; sólo cambia dónde
+       vive el trigger cuando está cerrado. */
+    @media (max-width: 640px) {
+        div[class*="st-key-ventas_comp_chart_slot_"] .st-key-ventas_comp_detalle_float {
+            position: static !important;
+            width: 100% !important;
+            margin: 0 0 6px !important;
+        }
+    }
+
+    /* =================================================================== */
     /* Toggle "Venta/Costo/Pax/Pax·Venta" de Ventas › Por día — de cápsula   */
     /* a tab de texto con subrayado, pedido explícito (referencia: pestañas */
     /* de un extracto financiero, texto plano + línea de color abajo del    */
