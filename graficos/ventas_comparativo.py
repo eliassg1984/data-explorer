@@ -903,13 +903,18 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                                         vertical_alignment="center")
                         with _c[0]:
                             # El container sólo existe para colgarle el color
-                            # al CSS: la key del checkbox tiene que quedar
+                            # al CSS: la key del switch tiene que quedar
                             # ESTABLE (si el signo entrara en su key, cambiar
                             # de signo le borraría el estado al widget).
+                            # st.toggle en vez de st.checkbox (2026-08-13,
+                            # referencia: panel "Comparar con" de un gráfico
+                            # de índices) — mismo bool, misma key, el único
+                            # cambio es el widget; ver estilos/_80_cards.py
+                            # para la trampa del testid compartido.
                             with st.container(key=f"ventas_comp_sw_{_variante}"):
-                                st.checkbox(_label, value=True,
-                                            key=f"ventas_comp_ver_{_k}",
-                                            label_visibility="collapsed")
+                                st.toggle(_label, value=True,
+                                          key=f"ventas_comp_ver_{_k}",
+                                          label_visibility="collapsed")
                         with _c[1]:
                             st.markdown(
                                 f'<div style="font-size:14px;color:#3f3f46;">'

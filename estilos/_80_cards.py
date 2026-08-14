@@ -239,14 +239,28 @@ CSS = """    /* ================================================================
     /* =================================================================== */
     /* Panel "Detalle" del comparativo de Ventas (graficos/ventas_comparativo)*/
     /*                                                                       */
-    /* El cuadradito de color ES el checkbox que prende/apaga la serie: no   */
-    /* hay swatch de HTML aparte (antes eran dos cosas — un <span> pintado   */
-    /* y un checkbox al lado — y el usuario pidió una sola).                 */
+    /* El propio switch ES el indicador de color de la serie: no hay swatch  */
+    /* de HTML aparte (antes eran dos cosas — un <span> pintado y un         */
+    /* checkbox al lado — y el usuario pidió una sola pieza).                */
+    /* 2026-08-13: pasó de checkbox cuadrado a `st.toggle` (referencia: el   */
+    /* panel "Comparar con" de un gráfico de índices, switch en vez de       */
+    /* tilde) — sigue siendo UN solo widget, no se sumó un botón "quitar"    */
+    /* aparte a propósito, por la misma razón de la línea de arriba.         */
     /*                                                                       */
-    /* La caja visual de st.checkbox es el ÚNICO <div> hijo del <label> que  */
-    /* NO tiene data-testid (el otro es stWidgetLabel). Se ancla por         */
-    /* estructura y no por su clase emotion, que lleva hash y cambia de      */
-    /* versión a versión.                                                    */
+    /* TRAMPA verificada en el DOM real (no en la documentación): `st.toggle`*/
+    /* emite el MISMO data-testid="stCheckbox" que `st.checkbox` — Streamlit */
+    /* no tiene un testid "stToggle" propio. Lo único que cambia es          */
+    /* <input role="switch"> y la estructura interna: track + thumb          */
+    /* anidados en vez de un cuadrado único con SVG de tilde. Por eso estos  */
+    /* selectores no necesitaron cambiar de testid, sólo de forma.           */
+    /*                                                                       */
+    /* La caja visual (el "track") es el ÚNICO <div> hijo del <label> que    */
+    /* NO tiene data-testid (el otro es stWidgetLabel); el "thumb" es su     */
+    /* único <div> hijo. Se ancla por estructura y no por la clase emotion,  */
+    /* que lleva hash y cambia de versión a versión. Streamlit posiciona su  */
+    /* thumb con un transform propio (esa clase con hash); lo anulamos y     */
+    /* reposicionamos con justify-content en el track, que no depende de     */
+    /* esa clase ni de calcular un translateX en píxeles.                    */
     /*                                                                       */
     /* El color entra por --sw-color, que fija el container de cada fila.    */
     /* Venta tiene DOS variantes porque su color sigue el signo del %Δ       */
@@ -257,24 +271,49 @@ CSS = """    /* ================================================================
     div[class*="st-key-ventas_comp_sw_pax"]       { --sw-color: var(--serie-pax); }
     div[class*="st-key-ventas_comp_sw_ticket"]    { --sw-color: var(--serie-ticket); }
 
+    /* Track: pill de 20×11. Apagado = sólo contorno (mismo look que el
+       checkbox de antes, con esquinas redondeadas); prendido = relleno
+       sólido del color de la serie. Misma lectura que un legend: color
+       sólido = se ve. */
     div[class*="st-key-ventas_comp_sw_"] [data-testid="stCheckbox"]
         label > div:not([data-testid]) {
-        width: 12px !important;
-        height: 12px !important;
-        min-width: 12px !important;
-        border-radius: 3px !important;
+        width: 20px !important;
+        height: 11px !important;
+        min-width: 20px !important;
+        border-radius: 9999px !important;
         border: 1.5px solid var(--sw-color) !important;
         background-color: transparent !important;
         box-shadow: none !important;
+        padding: 0 1.5px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        transition: background-color 0.15s ease !important;
     }
-    /* Marcado = cuadradito RELLENO del color de la serie (apagado = sólo el
-       contorno). Es la misma lectura que un legend: color sólido = se ve. */
     div[class*="st-key-ventas_comp_sw_"] [data-testid="stCheckbox"]
         label:has(input:checked) > div:not([data-testid]) {
         background-color: var(--sw-color) !important;
+        justify-content: flex-end !important;
+    }
+    /* Thumb: punto de 7px. Apagado = color de la serie (se lee el color aun
+       con la serie oculta); prendido = blanco sobre el track ya relleno —
+       mismo contraste que el pulgar de un switch nativo. --bg-secondary es
+       el blanco de la paleta (tema.py / _00_base.py), no un #hex suelto. */
+    div[class*="st-key-ventas_comp_sw_"] [data-testid="stCheckbox"]
+        label > div:not([data-testid]) > div {
+        width: 7px !important;
+        height: 7px !important;
+        border-radius: 9999px !important;
+        background-color: var(--sw-color) !important;
+        transform: none !important;
+        transition: none !important;
+    }
+    div[class*="st-key-ventas_comp_sw_"] [data-testid="stCheckbox"]
+        label:has(input:checked) > div:not([data-testid]) > div {
+        background-color: var(--bg-secondary) !important;
     }
     /* El alto mínimo de 24px del checkbox es lo que estiraba cada fila:
-       con el cuadradito de 12px sobra la mitad. */
+       con el switch de 11px sobra la mitad. */
     div[class*="st-key-ventas_comp_sw_"] [data-testid="stCheckbox"] {
         min-height: 0 !important;
     }
