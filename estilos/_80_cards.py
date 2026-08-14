@@ -422,13 +422,34 @@ CSS = """    /* ================================================================
         background: color-mix(in srgb, var(--text-secondary) 8%, transparent) !important;
         backdrop-filter: blur(14px) saturate(1.4) !important;
         -webkit-backdrop-filter: blur(14px) saturate(1.4) !important;
-        border: 1px solid var(--border) !important;
+        /* Borde y sombra apenas insinuados (10na vuelta). Acá está la
+           clave de por qué las 3 bajadas de tinte anteriores "no se
+           notaron": VERIFICADO en el navegador (escondiendo el panel y
+           mirando qué queda debajo con `elementsFromPoint`), detrás de
+           esta tarjeta hay `rect.bg` con `fill: rgba(0,0,0,0)` — el
+           fondo del plot es TRANSPARENTE (lo fija ventas_comparativo.py
+           con plot_bgcolor/paper_bgcolor) — y debajo, tarjeta blanca.
+           El panel flota sobre el MARGEN superior de la figura, no
+           sobre el área de datos: no hay NADA detrás que pueda
+           transparentarse. Bajar el tinte no lo hace más transparente,
+           lo hace más BLANCO, que sobre blanco es un cambio casi
+           invisible; y el blur no aporta nada porque difuminar blanco
+           liso da blanco liso.
+           Lo que de verdad lo hacía leer como "sólido" era el cromo:
+           un borde de 1px sólido y una sombra media dibujan una tarjeta
+           APOYADA. Con el borde casi transparente y la sombra difusa se
+           lee como una lámina flotando, que es el efecto buscado.
+           Si algún día se quiere transparencia REAL visible, la única
+           forma es que el panel se solape con datos (bajarlo dentro del
+           área del plot) — a costa de tapar barras. */
+        border: 1px solid rgba(113, 113, 122, 0.12) !important;
+        border: 1px solid color-mix(in srgb, var(--text-secondary) 12%, transparent) !important;
         /* 6px, no 10: con una tarjeta CERRADA de ~26px de alto, 10px de
            radio la redondea casi a cápsula ("como un gusano"). 6px la
            deja como barra de esquinas suaves, igual que la referencia,
            y sigue leyéndose bien abierta (que es más alta). */
         border-radius: 6px !important;
-        box-shadow: var(--shadow-md) !important;
+        box-shadow: 0 2px 10px rgba(16, 16, 20, 0.05) !important;
     }
     .st-key-ventas_comp_detalle_float [data-testid="stElementToolbar"] {
         display: none;
