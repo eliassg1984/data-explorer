@@ -4304,3 +4304,29 @@ salvo `icono`):
      comparten 6 vistas de Compras — probado que "Personalizado" (misma
      key) no hereda nada de esta franja, igual que se verificó con
      "Resumen" en Ventas (#106).
+
+110. **`st.toggle` comparte `data-testid="stCheckbox"` con `st.checkbox` —
+     no existe un testid "stToggle" propio (2026-08-13, panel "Detalle" de
+     `graficos/ventas_comparativo.py`).** Verificado en el DOM real, no en
+     la documentación de Streamlit: al cambiar el widget de la fila
+     Venta/Pax/Ticket promedio de checkbox a toggle (pedido del usuario,
+     con referencia visual el panel "Comparar con" de un gráfico de
+     índices), el único cambio en el HTML es `<input role="switch">` y la
+     estructura interna — track + thumb anidados (dos `<div>`) en vez de
+     un cuadrado único con SVG de tilde. El selector `label > div:not(
+     [data-testid])` (la caja visual) sigue apuntando al mismo lugar en
+     ambos casos, así que las reglas CSS de `estilos/_80_cards.py` no
+     necesitaron cambiar de testid, sólo de forma (pill 20×11 + thumb 7px
+     en vez de cuadrado 12×12) y de posición del thumb (`justify-content`
+     en el track en vez de pelear con el `transform` que Streamlit le pone
+     a su propia clase con hash).
+
+     Se mantuvo la regla ya documentada arriba (checkbox del panel
+     Detalle): el switch sigue siendo la ÚNICA pieza por fila — no se
+     agregó un botón "×" aparte para sacar una serie del todo, aunque la
+     referencia visual sí lo tenía. La referencia (tipo comparador de
+     índices) permite AGREGAR series sueltas y por eso tiene sentido poder
+     sacarlas una a una; acá las tres filas son fijas (no hay forma de
+     agregar una cuarta), así que un "×" sin "+" para volver a traerla de
+     vuelta sería un callejón sin salida — se lo dejó fuera y se avisó al
+     usuario en el chat en vez de agregarlo en silencio.
