@@ -1041,6 +1041,48 @@ CSS = """    /* ================================================================
         margin: -2px -18px 4px !important;
     }
 
+    /* =================================================================== */
+    /* REPARTO ADAPTATIVO — el panel del drill toma el alto que sobra        */
+    /*                                                                       */
+    /* El alto del panel lo calcula Python (`alturas.reparto`) contra la      */
+    /* pantalla OBJETIVO, 1366x768. En un monitor más alto eso deja la        */
+    /* tarjeta corta y un vacío grande debajo: reportado con captura el       */
+    /* 2026-08-14 — ventana de ~1000px de alto, tarjeta de 544 y el detalle   */
+    /* mostrando cuatro filas en 150px mientras sobraban 350 de ventana.      */
+    /*                                                                       */
+    /* Python no puede saber el alto de la ventana (no hay round-trip de JS)  */
+    /* pero el CSS sí. Así que: la tarjeta pasa a `height` fijo —la pantalla  */
+    /* entera— y el panel toma lo que sobre con `flex: 1 1 0`. El alto de     */
+    /* Python queda de PISO, que es lo que vale si esto no aplica.            */
+    /*                                                                       */
+    /* Sólo con el drill ABIERTO (`_on`), y por eso la key lleva el estado:   */
+    /* estirar siempre la tarjeta dejaría el vacío enorme que el proyecto     */
+    /* evitó a propósito al elegir `max-height` (ver ENCUADRE, arriba).       */
+    /* =================================================================== */
+    /* INTENTO FALLIDO, DOCUMENTADO PARA NO REPETIRLO (2026-08-14).
+       El alto del panel del drill lo calcula Python contra la pantalla
+       objetivo (1366x768), así que en un monitor más alto sobra sitio: con
+       ventana de 1000px la tarjeta llegaba a 876 y el panel se quedaba en
+       150. La idea era estirarlo por CSS, que sí sabe el alto real.
+
+       NO SE PUEDE con esta cadena de DOM, y se midió paso por paso:
+         · `height: var(--alto-util)` en la tarjeta no mueve nada — los
+           bloques de Streamlit son flex items con `flex: 1 1 0%` y el
+           tamaño lo fija flex-basis (regla #101). Con `min-height` sí:
+           la tarjeta pasó de 544 a 876.
+         · Aún así el panel seguía en 150, porque su wrapper trae
+           `flex: 0 0 150px` (la traducción del `height=` de Python) y el
+           wrapper EXTERNO `flex: 0 1 auto`.
+         · Al soltar los dos, el bloque intermedio pasó a medir 1.402px:
+           crece con el CONTENIDO en vez de repartir el alto del padre. La
+           cadena entera está dimensionada por contenido, así que no hay
+           dónde apoyar un `flex: 1 1 0`.
+
+       Queda como está: el alto sale de `alturas.reparto()` y en pantallas
+       grandes sobran ~50px al pie. Para resolverlo de verdad hace falta que
+       Python conozca el alto de la ventana — hoy sólo se lee el User-Agent
+       (`_es_movil`), no las dimensiones. */
+
     /* El título comparte fila con los tabs, así que tiene que compartir su
        línea de base: el contenedor de markdown trae margen propio y lo
        dejaba 8px más abajo que las pastillas (medido). */

@@ -1357,11 +1357,16 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     #
     # Sin marcas no hay panel ni alto fijo: un contenedor vacío de 200px sería
     # un agujero en la tarjeta.
-    if marcas:
-        _panel = st.container(height=alturas.reparto(_alto, extra=_AIRE_MARCAS),
-                              border=False)
-    else:
-        _panel = st.container()
+    # La `key` lleva el estado (`_on`/`_off`) porque el CSS lo necesita para
+    # dos cosas que no puede deducir del DOM: estirar la tarjeta a la pantalla
+    # SOLO cuando hay drill, y darle al panel el alto que sobra. El alto de
+    # Python es el piso —el que vale si el CSS no aplica, p. ej. bajo 769px—
+    # y el CSS lo estira hacia arriba en pantallas más altas que el laptop
+    # objetivo. Ver estilos/_80_cards.py.
+    _panel = st.container(
+        key=f"vh_panel_drill_{'on' if marcas else 'off'}",
+        height=(alturas.reparto(_alto, extra=_AIRE_MARCAS) if marcas else None),
+        border=False)
 
     with _panel:
         # Las dos tarjetas se abren SIEMPRE, aunque no haya marcas, y por
