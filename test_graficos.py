@@ -1048,6 +1048,34 @@ def _pruebas_presupuesto_vertical():
     check("por_filas enmarcada no supera el techo de scroll interno",
           alturas.por_filas(9999, enmarcada=True) == alturas._TOPE_ENMARCADA)
 
+    # ── 4) Los anchos de los rails tienen UN dueño ──────────────────────
+    # Gemela de la regla del cromo, y por el mismo motivo: hasta el
+    # 2026-08-15 el ancho de los rails vivía escrito a mano en seis sitios
+    # que se derivaban entre sí (el margen de la app, el `left` de la franja
+    # inferior, el `padding-right` del contenido, los `right` de la fecha,
+    # los chips y los atajos). Cambiar uno sin los otros dejaba la franja
+    # superior flotando sobre el vacío — es la regla #17.
+    #
+    # Ahora se declaran en _00_base.py y SOLO las redefine el pestillo
+    # (_25_rails_pestillo.py). Si aparecen en un tercer sitio, el plegado
+    # deja de funcionar en esa esquina y nadie se entera hasta verlo.
+    _duenos = {"_00_base.py", "_25_rails_pestillo.py"}
+    intrusos = []
+    for py in sorted(pathlib.Path(__file__).parent.rglob("*.py")):
+        if py.name in _duenos or py.name == pathlib.Path(__file__).name:
+            continue
+        for i, linea in enumerate(py.read_text(encoding="utf-8").split("\n"), 1):
+            if re.search(r"--rail-(izq|der)-w\s*:|--rail-der-res\s*:", linea):
+                intrusos.append(f"{py.name}:{i}")
+    check("los anchos de rail solo los declaran _00_base y el pestillo",
+          not intrusos, ", ".join(intrusos[:6]))
+
+    # El ancho reservado a la derecha se DERIVA del ancho del rail; si
+    # alguien lo vuelve a fijar en px, plegar el rail derecho no ensancha
+    # la tarjeta (el rail se encoge y el hueco se queda igual de grande).
+    check("--rail-der-res se deriva de --rail-der-w, no es un px suelto",
+          re.search(r"--rail-der-res:\s*calc\([^)]*--rail-der-w", css) is not None)
+
     return fallos
 
 

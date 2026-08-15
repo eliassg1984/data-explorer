@@ -107,6 +107,39 @@ CSS = """    <style>
            Debe coincidir con NAV_MOVIL_ALTO en navegacion.py (60px).
            ================================================================== */
         --nav-movil-alto: 60px;
+
+        /* ==================================================================
+           ANCHO DE LOS DOS RAILS — única fuente de verdad (2026-08-15)
+           Hasta hoy estos números vivían escritos a mano en seis sitios que
+           se derivaban entre sí: RAIL_ANCHO en navegacion.py (Python), el
+           `left` de la franja inferior, el `padding-right` del contenido, y
+           los anclajes `right` de la fecha, los chips y los atajos. Cambiar
+           uno sin los otros dejaba la franja superior flotando sobre el
+           vacío — es la regla #17, la parte más frágil de este CSS.
+
+           Ahora son variables y todo lo demás las deriva con calc(), que es
+           lo que hace posible plegarlos: plegar = REDEFINIR estos valores
+           (lo hace `_25_rails_pestillo.py` cuando encuentra el marcador que
+           deja Python al estar el pestillo echado). Nadie más los escribe.
+
+             --rail-izq-w    ancho VIGENTE del rail de navegación; es también
+                             el margen izquierdo de la app y el `left` de la
+                             franja inferior y del topbar.
+             --rail-izq-full ancho desplegado (constante, lo usa el hover)
+             --rail-der-w    ancho VIGENTE del rail de vistas
+             --rail-der-full ancho desplegado
+             --rail-min      ancho de la lengüeta cuando un rail está plegado
+             --rail-der-res  lo que el CONTENIDO le reserva al rail derecho.
+                             Derivado, no escrito: ancho + los 15px que lo
+                             despegan del borde + 54px de aire hasta la
+                             tarjeta (84 + 15 + 54 = 153, el valor histórico).
+           ================================================================== */
+        --rail-izq-full: 90px;
+        --rail-der-full: 84px;
+        --rail-min: 24px;
+        --rail-izq-w: var(--rail-izq-full);
+        --rail-der-w: var(--rail-der-full);
+        --rail-der-res: calc(var(--rail-der-w) + 15px + 54px);
     }
 
     /* ============ HEADER NATIVO + ESPACIO SUPERIOR ============ */

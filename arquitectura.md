@@ -4764,3 +4764,71 @@ salvo `icono`):
      saber la pantalla en Python. Ese es el único argumento para leer el
      viewport real algún día — hoy sólo se lee el User-Agent
      (`_es_movil`), no las dimensiones. Todo lo demás ya no lo necesita.
+
+118. **Los rails se pliegan cambiando UN ancho — y lo que cambia por
+     `:has()` se DECLARA en la regla del `:has()`.**
+     Los dos rails (navegación a la izquierda, vistas a la derecha) se
+     comen ~240px que la tarjeta principal no puede usar. Desde el
+     2026-08-15 tienen pestillo: `pestillos.py` guarda el estado, dibuja
+     el botón y deja un marcador invisible en el DOM; el CSS
+     (`estilos/_25_rails_pestillo.py`) lo detecta con
+     `:root:has(style.rail-izq-plegado)` y redefine `--rail-izq-w`.
+
+     Eso solo es posible porque antes se hizo el paso aburrido: los
+     anchos, que vivían escritos a mano en SEIS sitios que se derivaban
+     entre sí (el margen de la app, el `left` de la franja inferior, el
+     `padding-right` del contenido, los `right` de la fecha, los chips y
+     los atajos — o sea la regla #17, la parte más frágil de este CSS),
+     pasaron a ser variables en `_00_base.py` con todo lo demás derivado
+     por `calc()`. Plegar es literalmente una línea por rail. Hay guarda:
+     `test_graficos.py` falla si `--rail-*-w` o `--rail-der-res` aparecen
+     declaradas fuera de esos dos módulos, o si `--rail-der-res` deja de
+     derivarse del ancho.
+
+     DOS GESTOS, a propósito distintos (es el patrón de VS Code/Notion):
+
+       · cursor sobre la lengüeta → VISTAZO. El rail es `position:fixed`,
+         así que se despliega SUPERPUESTO: `:hover` puro, sin rerun, y la
+         tarjeta no se mueve ni un píxel (medido: x=104 y w=1083 antes y
+         durante el vistazo).
+       · clic en el pestillo → FIJA. Rerun, y la tarjeta se ensancha.
+         Medido a 1280px: 957 → 1083 (+126, +13%), el Plotly igual, sin
+         scroll de página.
+
+     Los ítems del rail se ESCONDEN con `display:none`, no se dejan de
+     renderizar: un widget que deja de dibujarse pierde su estado y al
+     desplegar el rail volvería a la primera vista.
+
+     LA TRAMPA, que costó una hora: `:root:has(…) .st-key-nav_rail`
+     aplicaba `min-height`, `overflow` y `border-radius` pero NO el
+     `width` que venía heredado por variable — el rail se quedaba en 90px
+     mientras el margen de la app, la franja inferior y hasta los botones
+     de dentro del propio rail (`calc(var(--rail-izq-w) - 16px)`, que
+     medía 8px) sí se movían. Heredar una variable sirve para lo que está
+     LEJOS; para el elemento que la propia regla toca, declararlo directo.
+     Corolario del móvil: si lo declaras directo, también hay que
+     deshacerlo directo en el `@media` (si no, el rail plegado en
+     escritorio llega al teléfono convertido en una lengüeta de 24px
+     encima de la barra inferior).
+
+119. **Nada de `transition` sobre algo que un rerun pueda pillar a media
+     animación.**
+     Gemela de la anterior y descubierta en el mismo rato. El ancho del
+     rail se quedaba clavado en el valor viejo PARA SIEMPRE — no
+     "tardaba", no llegaba nunca, y era inmune a cualquier cascada
+     posterior: ni un `width:24px !important` inline lo movía. Solo se
+     despertaba tocando la variable a mano en la consola. La transición
+     arranca, el rerun de Streamlit reconstruye el DOM a mitad y el valor
+     queda congelado en el primer fotograma. Después pasó exactamente lo
+     mismo con la sombra del vistazo, que también estaba transicionada.
+
+     Que el síntoma no se parezca a la causa es lo que la hace cara: se
+     descarta la cascada, la especificidad, la variable y el `:has()`
+     antes de mirar la única propiedad que tenía `transition`.
+
+     Regla: en esta app, animar propiedades que disparan layout (`width`,
+     `height`, `top`…) sobre elementos que sobreviven a un rerun es
+     apostar. Si hace falta animación, `transform` u `opacity`, que no
+     dependen del layout y no pueden quedarse a medias. Hoy los rails
+     abren y cierran de golpe — que además es lo que hacen los de VS Code
+     y Notion.

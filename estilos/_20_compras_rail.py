@@ -28,6 +28,12 @@ CSS = """    /* ================================================================
            más abajo en este archivo) se corrieron los mismos 8px juntos. */
         top: 74px !important;
         right: 15px !important;            /* despega del scrollbar del navegador */
+        /* El ancho es VARIABLE desde el 2026-08-15 (pestillo, ver
+           _25_rails_pestillo.py). Hasta esa fecha había DOS `width` en este
+           mismo bloque, 84px unas líneas más abajo, que ganaba por ir
+           después — la variable estaba puesta y no hacía nada. */
+        width: var(--rail-der-w) !important;
+        overflow-x: hidden !important;
         /* 2026-08-13: de "bottom:0 + height:calc(100vh-66px)" (fuerza el
            rail a ocupar TODO el alto disponible, aunque tenga 3 items) a
            altura de CONTENIDO — mismo pedido y mismo fix que ya se le hizo
@@ -40,8 +46,6 @@ CSS = """    /* ================================================================
         height: auto !important;
         max-height: calc(100vh - 74px) !important;
         z-index: 900 !important;
-        width: 84px !important;
-        overflow-x: hidden !important;
         overflow-y: auto !important;
         margin: 0 !important;
         padding: 8px 0 16px 0 !important;
@@ -57,7 +61,7 @@ CSS = """    /* ================================================================
        el :has() detecta el rail dentro del contenedor principal. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row),
     .block-container:has(.st-key-compras_tabs_row) {
-        padding-right: 153px !important;   /* rail 116 + 22px de aire + 15px offset del rail */
+        padding-right: var(--rail-der-res) !important;   /* rail + aire + offset (_00_base) */
     }
 
     /* Badge de categoría + separador entre secciones */

@@ -74,7 +74,7 @@ from tema import (
 )
 from graficos import alturas
 from graficos.base import (
-    _card, _resolver, franja_linea_inferior, publicar_alto_css,
+    _card, _resolver, franja_linea_inferior, publicar_var_px,
 )
 # Los helpers de calendario NO se duplican: son los mismos que usa la vista
 # "Año Pasado" y ya están cubiertos por test_graficos.py. Acá sólo se extienden
@@ -1393,13 +1393,13 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     # esto era `st.container(height=alturas.reparto(...))`, que restaba contra
     # una pantalla supuesta: correcto en el laptop objetivo, y 350px de más en
     # un monitor grande. Ver `alturas.py` § LA RESTA NO SE HACE ACÁ.
-    publicar_alto_css(
+    publicar_var_px(
         "vh-alto-arriba",
         alturas.FRANJA_UNA_LINEA + _alto + _AIRE_MARCAS + _CROMO_TARJETA)
     # El piso del panel también se publica en vez de vivir suelto en el CSS:
     # con marcas evita que en una pantalla apretada quede una tira ilegible;
     # SIN marcas tiene que ser 0, o el panel vacío se come 150px de tarjeta.
-    publicar_alto_css("vh-panel-min", _PANEL_MIN if marcas else 0)
+    publicar_var_px("vh-panel-min", _PANEL_MIN if marcas else 0)
     # Key ESTABLE, sin `_on`/`_off`. Alternarla dejaba el contenedor viejo
     # huérfano en el DOM (regla #70) y no hace falta: con el panel vacío el
     # `max-height` no molesta a nadie.

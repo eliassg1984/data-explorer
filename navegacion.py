@@ -13,6 +13,7 @@ import base64
 import os
 import datetime
 from zoneinfo import ZoneInfo
+import pestillos
 from data import solicitar_refresco, secrets_disponibles, fecha_ultima_actualizacion, limpiar_cache
 from tema import (
     ACENTO, LAVANDA_FONDO, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO,
@@ -88,11 +89,11 @@ NAV_MOVIL_ALTO = 60
 _CSS = f"""
 <style>
 section[data-testid="stSidebar"] {{ display:none !important; }}
-.stApp {{ margin-left:{RAIL_ANCHO}px !important; padding-top:48px !important; }}
+.stApp {{ margin-left:var(--rail-izq-w) !important; padding-top:48px !important; }}
 
 /* Título superior fijo */
 #nav-topbar {{
-    position:fixed; top:0; left:{RAIL_ANCHO}px; right:0; height:48px;
+    position:fixed; top:0; left:var(--rail-izq-w); right:0; height:48px;
     display:flex; align-items:center; padding:0 18px;
     font-family:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif;
     font-weight:600; font-size:14px; color:{TEXTO_PRINCIPAL};
@@ -103,7 +104,7 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
    TEMA CALLAI: sidebar blanco con borde sutil (antes rail oscuro). */
 .st-key-nav_rail {{
     position:fixed !important; top:{RAIL_TOP}px !important; left:0 !important;
-    width:{RAIL_ANCHO}px !important;
+    width:var(--rail-izq-w) !important;
     /* 2026-08-12, 2da corrección: la tarjeta se achica a su CONTENIDO (los
        6 íconos + Refrescar) en vez de forzar 100vh — el pedido explícito
        fue "el rail debe reducirse, no ser tan largo" (el 100vh original
@@ -170,7 +171,7 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
    Reposo: icono gris. Hover: tinte lavanda. Activo: píldora lavanda con
    icono índigo, como el ítem activo del sidebar de CallAI. */
 .st-key-nav_rail [class*="st-key-navbtn_"] button {{
-    width:{RAIL_ANCHO - 16}px !important; height:50px !important; min-height:50px !important;
+    width:calc(var(--rail-izq-w) - 16px) !important; height:50px !important; min-height:50px !important;
     margin:0 auto !important;
     padding:0 !important;
     border:none !important; border-radius:10px !important;
@@ -458,8 +459,17 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     if _grupo_activo:
         st.session_state[f"_ultimo_{_grupo_activo}"] = reporte_activo
 
+    # Marcador del pestillo: si el rail está plegado, deja en el DOM la
+    # bandera que lee estilos/_25_rails_pestillo.py. Va ANTES del rail para
+    # que el CSS ya esté cuando el navegador lo pinta.
+    pestillos.marcar(pestillos.IZQ)
+
     _grupos_dibujados = set()
     with st.container(key="nav_rail"):
+        # Pestillo arriba de todo: plegado, es lo único que queda visible
+        # (la lengüeta). Los botones de abajo NO dejan de dibujarse al
+        # plegar — los esconde el CSS, si no perderían su estado.
+        pestillos.pestillo(pestillos.IZQ, "nav_pestillo")
         for nombre, info in visibles.items():
             grupo = info.get("grupo_nav")
             if grupo:

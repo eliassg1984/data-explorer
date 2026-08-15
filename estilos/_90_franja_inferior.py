@@ -10,7 +10,7 @@ CSS = """    /* ================================================================
     .stApp::after {
         content: "" !important;
         position: fixed !important;
-        left: 90px !important; /* coincide con el ancho del rail */
+        left: var(--rail-izq-w) !important;   /* sigue al rail (_00_base) */
         right: 0 !important;
         bottom: 0 !important;
         /* El px vivía suelto aquí; desde 2026-08-13 es una variable porque

@@ -69,7 +69,7 @@ CSS = """    /* ================================================================
     position: fixed !important;
     top: 8px !important;
     left: auto !important;
-    right: 138px !important;        /* alineada con el borde derecho de la tarjeta */
+    right: calc(var(--rail-der-res) - 15px) !important;  /* borde de la tarjeta */
     width: fit-content !important;
     z-index: 23 !important;
     margin: 0 !important;
@@ -240,7 +240,8 @@ CSS = """    /* ================================================================
                línea. Sin reservarlo, en pantallas de 901-1200px los chips
                crecían por debajo de los atajos y se solapaban — los dos son
                position:fixed, así que ninguno empuja al otro. */
-            max-width: calc(100vw - 391px - 131px - 255px) !important;
+            max-width: calc(100vw - 391px - (var(--rail-der-res) - 22px)
+                            - 255px) !important;
         }
         .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
             [data-testid="stPopover"] button {
@@ -351,7 +352,7 @@ CSS = """    /* ================================================================
         .st-key-atajos_franja {
             position: fixed !important;
             top: 8px !important;
-            right: 131px !important;
+            right: calc(var(--rail-der-res) - 22px) !important;
             left: auto !important;
             width: fit-content !important;
             z-index: 23 !important;
@@ -463,7 +464,7 @@ CSS = """    /* ================================================================
             display: block !important;
             position: fixed !important;
             top: 8px !important;
-            right: 138px !important;
+            right: calc(var(--rail-der-res) - 15px) !important;
             left: auto !important;
             width: 176px !important;
             z-index: 23 !important;

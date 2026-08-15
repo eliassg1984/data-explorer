@@ -14,6 +14,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+import pestillos
 from utils import buscar_columna, _norm
 from tema import (
     BLANCO, ESCALA_CONTINUA, GRIS_BORDE, SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
@@ -142,7 +143,14 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
         # igual "comparativo_vs_ano_pasado" que "Comparativo vs Año Pasado".
         sel = _por_norm.get(_norm(st.query_params.get("vista", ""))) or _todos[0]
         st.session_state[state_key] = sel
+    # Marcador del pestillo (ver pestillos.py). Solo existe si ESTE reporte
+    # dibuja el rail: los que no lo usan tampoco reservan ancho para él.
+    pestillos.marcar(pestillos.DER)
     with st.container(key="compras_tabs_row"):
+        # FUERA de graf_tipo_chips a propósito: ese contenedor estila a
+        # TODOS sus botones como ítems de la lista de vistas (regla #6 —
+        # acotar al widget, no al contenedor). El pestillo no es una vista.
+        pestillos.pestillo(pestillos.DER, "rail_pestillo")
         with st.container(key="graf_tipo_chips"):
             for i, (cat_nombre, items) in enumerate(categorias):
                 if cat_nombre:
@@ -190,11 +198,12 @@ def _card(key, titulo: str = "", titulo_arriba: bool = False):
             )
 
 
-def publicar_alto_css(nombre, px):
-    """Publica un alto calculado en Python como VARIABLE CSS, para que las
-    restas las haga el navegador.
+def publicar_var_px(nombre, px):
+    """Publica un número de píxeles calculado en Python como VARIABLE CSS,
+    para que las restas y las derivaciones las haga el navegador.
 
-    Por qué existe (2026-08-15, ver `alturas.py` § LA RESTA NO SE HACE ACÁ):
+    Nació para los altos (ver `alturas.py` § LA RESTA NO SE HACE ACÁ) y hoy
+    lo usan también los anchos de los rails plegables:
     el alto de una figura sólo lo puede decidir Python —Plotly ignora su
     contenedor—, pero el alto DISPONIBLE sólo lo conoce el navegador
     (`100dvh`). Cuando Python hace las dos cosas, resta contra una pantalla
@@ -202,7 +211,7 @@ def publicar_alto_css(nombre, px):
     solo monitor. Publicando el número, el CSS puede escribir la resta
     verdadera:
 
-        publicar_alto_css("vh-alto-arriba", 351)
+        publicar_var_px("vh-alto-arriba", 351)
         /* en estilos/: */
         max-height: calc(var(--alto-util) - var(--vh-alto-arriba));
 
