@@ -298,7 +298,7 @@ CSS = """    /* ================================================================
                subrayado quedaba ~7px por debajo de la palabra. */
             min-height: 0 !important;
             height: auto !important;
-            padding: 1px 6px 3px !important;
+            padding: 1px 6px 1px !important;
             line-height: 1.2 !important;
             font-weight: 600 !important;
             font-size: 13.5px !important;
@@ -322,7 +322,7 @@ CSS = """    /* ================================================================
             font-weight: 400 !important;
             min-height: 0 !important;
             height: auto !important;
-            padding: 1px 8px 3px 0 !important;
+            padding: 1px 8px 1px 0 !important;
             line-height: 1.2 !important;
         }
         /* ACTIVO: subrayado de acento. Sustituye al relleno sólido de
@@ -381,7 +381,7 @@ CSS = """    /* ================================================================
             color: var(--text-secondary) !important;
             font-size: 13px !important;
             font-weight: 400 !important;
-            padding: 1px 7px 3px !important;
+            padding: 1px 7px 1px !important;
             line-height: 1.2 !important;
             min-height: 0 !important;
             height: auto !important;

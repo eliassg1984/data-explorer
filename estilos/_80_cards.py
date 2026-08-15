@@ -970,7 +970,7 @@ CSS = """    /* ================================================================
            bien hecha. */
         min-height: 0 !important;
         height: auto !important;
-        padding: 1px 1px 3px !important;
+        padding: 1px 1px 1px !important;
         /* line-height 1.2 y no el 1.6 que hereda: con 14px, el 1.6 deja la
            caja del TEXTO en 22px mientras las letras miden ~10, o sea ~6px
            de aire DENTRO del renglón que ningún padding puede quitar. Lo
@@ -1172,7 +1172,7 @@ CSS = """    /* ================================================================
             /* Misma cuenta que arriba: la caja al texto, no al touch target. */
             min-height: 0 !important;
             height: auto !important;
-            padding: 1px 1px 3px !important;
+            padding: 1px 1px 1px !important;
             line-height: 1.2 !important;
             color: var(--text-secondary) !important;
             font-weight: 400 !important;
