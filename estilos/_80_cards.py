@@ -971,6 +971,11 @@ CSS = """    /* ================================================================
         min-height: 0 !important;
         height: auto !important;
         padding: 1px 1px 3px !important;
+        /* line-height 1.2 y no el 1.6 que hereda: con 14px, el 1.6 deja la
+           caja del TEXTO en 22px mientras las letras miden ~10, o sea ~6px
+           de aire DENTRO del renglón que ningún padding puede quitar. Lo
+           cazó el inspector, en su sección de conflictos. */
+        line-height: 1.2 !important;
         color: var(--text-secondary) !important;
         font-weight: 400 !important;
         font-size: 14px !important;
@@ -1168,6 +1173,7 @@ CSS = """    /* ================================================================
             min-height: 0 !important;
             height: auto !important;
             padding: 1px 1px 3px !important;
+            line-height: 1.2 !important;
             color: var(--text-secondary) !important;
             font-weight: 400 !important;
             font-size: 13.5px !important;

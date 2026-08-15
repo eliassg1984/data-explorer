@@ -299,6 +299,7 @@ CSS = """    /* ================================================================
             min-height: 0 !important;
             height: auto !important;
             padding: 1px 6px 3px !important;
+            line-height: 1.2 !important;
             font-weight: 600 !important;
             font-size: 13.5px !important;
         }
@@ -322,6 +323,7 @@ CSS = """    /* ================================================================
             min-height: 0 !important;
             height: auto !important;
             padding: 1px 8px 3px 0 !important;
+            line-height: 1.2 !important;
         }
         /* ACTIVO: subrayado de acento. Sustituye al relleno sólido de
            _40_ajuste_franja.py (que gana por orden de sección, así que hace
@@ -380,6 +382,7 @@ CSS = """    /* ================================================================
             font-size: 13px !important;
             font-weight: 400 !important;
             padding: 1px 7px 3px !important;
+            line-height: 1.2 !important;
             min-height: 0 !important;
             height: auto !important;
             white-space: nowrap !important;
