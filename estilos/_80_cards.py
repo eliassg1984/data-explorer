@@ -78,7 +78,12 @@ CSS = """    /* ================================================================
         background: var(--bg-card) !important;
         border: none !important;                    /* look plano: sin borde de Streamlit */
         border-radius: 20px !important;
-        padding: 16px 18px;
+        /* Padding vertical 16 -> 8 el 2026-08-15. Medido: entre el final de la
+           franja (y=36) y el título de la tarjeta había 56px, y 16 de ellos
+           eran este padding. El horizontal NO se toca: la línea de la franja
+           interna lo compensa con -18px y moverlo la dejaría corta.
+           `_PADDING_TARJETA` en graficos/alturas.py cuenta lo mismo. */
+        padding: 8px 18px;
         box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);  /* sombra tenue reemplaza al borde */
     }
     /* Anula el borde que Streamlit pinta en el hijo directo del container
@@ -1018,7 +1023,7 @@ CSS = """    /* ================================================================
        con él. Los -18px horizontales NO se tocan: son los que hacen que la
        línea toque el borde real de la tarjeta. */
     div[class*="st-key-chartcard_ventas_horario_"] {
-        padding-top: 8px !important;
+        padding-top: 4px !important;
         padding-bottom: 8px !important;
     }
     /* El hueco de verdad NO era el margen del hairline sino el `gap: 16px`

@@ -63,23 +63,24 @@ VIEWPORT_OBJETIVO = 657
 # navegador — 37px entre el último chip de la franja y el borde de la tarjeta,
 # 24px de reserva inferior sobre una franja que mide 42. El presupuesto sube
 # de 501 a 533px sin que se mueva ni un control de sitio.
-_CAB_OFFSET = 44    # padding-top del block-container   (_00_base.py, --cab-offset-contenido)
-_MARGEN_SUP = 16    # margen del bloque hasta la tarjeta (Streamlit)
+_CAB_OFFSET = 40    # padding-top del block-container   (_00_base.py, --cab-offset-contenido)
+_MARGEN_SUP = 8     # margen del bloque hasta la tarjeta (Streamlit)
 _FRANJA_INF = 48    # padding-bottom que reserva la franja (_90_franja_inferior.py)
-_MARGEN_INF = 16    # margen bajo la tarjeta             (Streamlit)
+_MARGEN_INF = 8     # margen bajo la tarjeta             (Streamlit)
 
-CROMO = _CAB_OFFSET + _MARGEN_SUP + _FRANJA_INF + _MARGEN_INF   # 124
+CROMO = _CAB_OFFSET + _MARGEN_SUP + _FRANJA_INF + _MARGEN_INF   # 104
 
 # Alto máximo que puede medir una tarjeta sin obligar a scrollear la página.
 # Verificado dos veces contra el navegador: en viewport 864 el presupuesto da
 # 708 y la vista «Matriz» (742px) desbordaba exactamente 34px; en viewport
 # 657 da 501 y «Por día» (584px) desbordaba exactamente 83px.
-PRESUPUESTO = VIEWPORT_OBJETIVO - CROMO                          # 533
+PRESUPUESTO = VIEWPORT_OBJETIVO - CROMO                          # 553
 
-# Padding propio de la tarjeta (`padding: 16px 18px` en estilos/_80_cards.py).
-# Lo que queda es el sitio real para el contenido.
-_PADDING_TARJETA = 16 * 2
-CONTENIDO = PRESUPUESTO - _PADDING_TARJETA                       # 501
+# Padding propio de la tarjeta (`padding: 8px 18px` en estilos/_80_cards.py;
+# vertical bajado de 16 a 8 el 2026-08-15). Lo que queda es el sitio real
+# para el contenido.
+_PADDING_TARJETA = 8 * 2
+CONTENIDO = PRESUPUESTO - _PADDING_TARJETA                       # 537
 
 
 # ===========================================================================

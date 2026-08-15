@@ -70,7 +70,7 @@ CSS = """    <style>
            14px. Queda un respiro de ~21px entre chips y tarjeta.
            Si se toca: `_CAB_OFFSET` en graficos/alturas.py cuenta lo mismo y
            test_graficos.py falla si se desincronizan. */
-        --cab-offset-contenido: 44px;
+        --cab-offset-contenido: 40px;
 
         /* ==================================================================
            PRESUPUESTO VERTICAL — cuánto mide "una pantalla" de contenido
@@ -93,7 +93,11 @@ CSS = """    <style>
            reserva que no cubría nada. Con 48 quedan 6px de aire entre el
            borde de la tarjeta y la franja. */
         --franja-inf-reserva: 48px;   /* lo que reserva el block-container */
-        --margen-tarjeta: 16px;       /* margen de bloque de Streamlit, arriba y abajo */
+        /* 16px hasta el 2026-08-15. Medido: la franja termina en y=36 y la
+           tarjeta arrancaba en 60 — 24px de hueco para una barra que el
+           usuario quiere «casi rozando». Con 8 quedan 4px de aire y el alto
+           útil gana 16 (el margen cuenta arriba Y abajo). */
+        --margen-tarjeta: 8px;        /* margen de bloque de Streamlit, arriba y abajo */
         --alto-util: calc(100dvh - var(--cab-offset-contenido)
                                  - var(--franja-inf-reserva)
                                  - var(--margen-tarjeta) * 2);
