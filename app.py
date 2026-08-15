@@ -483,16 +483,6 @@ _corte_apl = corte_vigente(_k_corte) if _cortes_franja else None
 _fecha_actualizacion = None
 
 # Franja superior: título (izquierda) + fecha (derecha, extremo opuesto).
-# Etiqueta CORTA de cada atajo para la franja. En el popover hay sitio para
-# "Últimos 30 días"; en la barra, donde conviven con la fecha y los filtros,
-# no — y una barra de atajos que envuelve a dos líneas deja de ser una barra.
-# Los años (y2025, y2024…) ya vienen cortos y caen al `.get(..., etiqueta)`.
-_ATAJO_CORTO = {"todo": "Todo", "semana": "Semana", "mes": "Mes",
-                "d30": "30 días", "anio": "Año"}
-# Cuántos entran en la franja. El resto sigue viviendo en el popover, que no
-# pierde ninguno: esto es un atajo del atajo, no un reemplazo.
-_ATAJOS_EN_FRANJA = 5
-
 _fila_top = st.container(key="fila_ajuste_top")
 with _fila_top:
     col_titulo, col_fecha_top = st.columns(
@@ -705,50 +695,12 @@ with _fila_top:
                                       reporte, _usa_carga_rango),
                             )
 
-            # ── Atajos de rango EN LA FRANJA (2026-08-14) ────────────────
-            # Los mismos que ya calcula `atajos_rango` y que hasta hoy sólo
-            # vivían DENTRO del popover: para poner "este mes" había que
-            # abrir el calendario, saber que la lista estaba ahí y hacer dos
-            # clics. Acá son uno y se ven siempre. Es la barra `1D 5D 1M 3M
-            # 6M YTD` de cualquier gráfico bursátil (referencia que trajo el
-            # usuario), y de paso usa el hueco muerto que quedaba a la
-            # derecha de los chips.
-            #
-            # Contenedor PROPIO anclado a la derecha, no pegado a los chips:
-            # los chips miden distinto en cada reporte (2 a 4), así que un
-            # `left:` en px como el suyo no existe. Anclado a `right` no
-            # depende de cuántos chips haya.
-            _at_franja = _atajos[:_ATAJOS_EN_FRANJA]
-            if _at_franja:
-                with st.container(key="atajos_franja"):
-                    # Columnas PROPORCIONALES AL TEXTO, no iguales. Con
-                    # `st.columns(n)` las cinco miden lo mismo (47px medidos)
-                    # y "Semana" —que pide 48— quedaba cortado, mientras
-                    # "Mes" desperdiciaba la mitad de su caja. El +2 es el
-                    # padding lateral en unidades de carácter.
-                    _txt_at = [_ATAJO_CORTO.get(_c, _e) for _c, _e, _ in _at_franja]
-                    _cols_at = st.columns([len(_t) + 2 for _t in _txt_at])
-                    for (_ca, _et, _rg), _col_at in zip(_at_franja, _cols_at):
-                        # Activo = el rango vigente ES el del atajo. Con un
-                        # corte aplicado NINGUNO lo está: el corte es un
-                        # filtro más estrecho que el rango que espeja, y
-                        # marcar "Este mes" ahí sería mentir.
-                        _act = (
-                            not _corte_apl
-                            and isinstance(_rango_actual, (tuple, list))
-                            and len(_rango_actual) == 2
-                            and tuple(_rango_actual) == tuple(_rg)
-                        )
-                        with _col_at:
-                            st.button(
-                                _ATAJO_CORTO.get(_ca, _et),
-                                key=f"atajofranja_{reporte}_{_ca}".replace(" ", "_"),
-                                use_container_width=True,
-                                type="primary" if _act else "secondary",
-                                on_click=aplicar_atajo,
-                                args=(_k_rango_franja, _rg, reporte,
-                                      _usa_carga_rango),
-                            )
+            # Los atajos de rango (Todo/Semana/Mes/30 días/Año) vivieron acá
+            # entre el 2026-08-14 y el 2026-08-15, anclados a la derecha de
+            # la franja. Se quitaron a pedido: son los MISMOS que la lista
+            # "Atajos" del popover del calendario, y tenerlos en los dos
+            # sitios repetía el control y le comía 255px de ancho a los
+            # chips de filtro (ver el max-width en estilos/_50_fecha.py).
 
     # Las pestañas Gráficos/Tabla se movieron FUERA de la franja, a una
     # banda pegada al borde superior del canvas (ver más abajo, justo
