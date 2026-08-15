@@ -672,14 +672,26 @@ def _pruebas_puras():
                               [_dt.date(2026, 8, 7)], "Día"),
           f"{_vc._etiqueta_clave(_dt.date(2026, 8, 7), 'Día')} · 7 pm")
 
-    # La firma gobierna la `key` del chart: si no cambia con las marcas, la
-    # misma selección se re-procesa en cada rerun y el drill parpadea.
-    check("horario · la firma cambia al agregar una marca",
-          _vh._firma("Semana", [(2026, 32)], "venta", [])
-          != _vh._firma("Semana", [(2026, 32)], "venta", [_m1]), True)
+    # La firma gobierna la `key` del chart, o sea CUÁNDO Streamlit remonta el
+    # componente. Tiene que cambiar con lo que hace que sea otro mapa —ahí el
+    # remonte es correcto, porque la selección vieja apunta a coordenadas que
+    # ya no significan lo mismo—.
     check("horario · la firma cambia al cambiar la medida del mapa",
-          _vh._firma("Semana", [(2026, 32)], "venta", [])
-          != _vh._firma("Semana", [(2026, 32)], "pax", []), True)
+          _vh._firma("Semana", [(2026, 32)], "venta")
+          != _vh._firma("Semana", [(2026, 32)], "pax"), True)
+    check("horario · la firma cambia al cambiar la granularidad",
+          _vh._firma("Semana", [(2026, 32)], "venta")
+          != _vh._firma("Mes", [(2026, 32)], "venta"), True)
+    check("horario · la firma cambia al comparar otro período",
+          _vh._firma("Semana", [(2026, 32)], "venta")
+          != _vh._firma("Semana", [(2026, 32), (2026, 33)], "venta"), True)
+    # Y NO tiene que cambiar con las marcas: eso remontaba el chart en cada
+    # arrastre y era el parpadeo que se reportó el 2026-08-15. Que la misma
+    # selección no se re-procese en bucle lo resuelve la huella (`_K_SEL`),
+    # no la key. La firma ya ni siquiera recibe las marcas — esta guarda deja
+    # constancia de que sacarlas fue deliberado.
+    check("horario · la firma NO mira las marcas (si no, parpadea)",
+          "marcas" in _vh._firma.__code__.co_varnames, False)
 
     # ── Agregación por celda: pax NO se suma línea a línea ───────────────
     # `CANT PAX` se repite en CADA línea del pedido. Sumarla cuenta la misma

@@ -51,12 +51,28 @@ TRES TRAMPAS QUE YA ESTÁN RESUELTAS ACÁ (y que muerden si alguien las toca)
      derivaran del evento en vez de acumularse en `session_state`, un clic
      torpe limpiaría el panel entero.
 
-  3. La `key` del chart lleva la firma de las marcas. Con key estática la
-     misma selección se re-procesa en cada rerun (CLAUDE.md § Streamlit) y el
-     drill parpadea. Corolario que NO se puede evitar: re-arrastrar sobre una
-     marca existente no la quita —`on_select` sólo dispara cuando la
-     selección CAMBIA—, así que quitar marcas es cosa de las pastillas de
-     abajo del mapa, no del mapa.
+  3. La misma selección se re-procesa en CADA rerun mientras el widget siga
+     montado (CLAUDE.md § Streamlit): sin defensa, la marca se vuelve a
+     aplicar sola en bucle. La defensa es la HUELLA (`_K_SEL`): se guarda la
+     de la última selección atendida y se ignora si vuelve igual.
+
+     Hasta el 2026-08-15 la defensa era otra: meter la firma de las marcas
+     en la `key`, para que el widget se re-montara y llegara sin selección.
+     Funcionaba, pero re-montar es tirar el componente y construir otro, y
+     Plotly repinta de cero — eso era el PARPADEO al seleccionar (medido: el
+     nodo del `.js-plotly-plot` se reemplazaba por otro en cada arrastre).
+     Con la huella la key queda quieta, Streamlit actualiza en vez de
+     remontar y el mapa no pestañea.
+
+     Lo que hizo falta para poder soltar la key: que ningún arrastre se
+     quede sin puntos. Con la capa de selección cubriendo TODAS las celdas
+     (ver `_fig_mapa`), Plotly limpia solo su rectángulo punteado al soltar,
+     que era la otra cosa que arreglaba el remonte.
+
+     Corolario que NO se puede evitar: re-arrastrar sobre una marca
+     existente no la quita —`on_select` sólo dispara cuando la selección
+     CAMBIA—, así que quitar marcas es cosa del selector de períodos, no del
+     mapa.
 """
 
 import calendar as _cal
@@ -201,9 +217,9 @@ _SIN_DSCTO = "Sin descuento"
 _K_CLAVES = "vh_claves"      # períodos elegidos (lista de claves)
 _K_MARCAS = "vh_marcas"      # marcas (lista de dicts)
 _K_SELECTOR = "vh_selector"  # ¿está abierto el selector de períodos?
-# Contador que sólo existe para REMONTAR el chart después de cada arrastre.
-# Ver `_ventas_horario`, § "el punteado que se quedaba pegado".
-_K_GESTO = "vh_gesto"
+# Huella de la última selección ATENDIDA. Es lo que evita re-aplicarla en
+# cada rerun sin tener que remontar el chart. Ver la trampa 3 del docstring.
+_K_SEL = "vh_sel_huella"
 
 
 # ── Funciones puras (calendario) ────────────────────────────────────────────
@@ -455,13 +471,19 @@ def _celdas_de_marca(pin, orden):
         _horas_entre(orden, pin["h0"], pin["h1"]))
 
 
-def _firma(grano, claves, medida, marcas):
-    """Firma corta del estado que gobierna el mapa. Va en la `key` del chart:
-    mientras no cambie, Streamlit reusa el widget; cuando cambia, lo remonta y
-    la selección vieja se va con él (ver trampa 3 del docstring)."""
-    _m = "|".join(f"{p['sel']},{p['c0']},{p['c1']},{p['h0']},{p['h1']}"
-                  for p in marcas)
-    return f"{grano}_{len(claves)}_{claves[0] if claves else '-'}_{medida}_{_m}"
+def _firma(grano, claves, medida):
+    """Firma del estado que define QUÉ MAPA es éste. Va en la `key` del chart.
+
+    NO lleva las marcas, y ése es el punto: las marcas cambian con cada
+    arrastre, y una key que cambia obliga a Streamlit a remontar el
+    componente —Plotly repinta de cero y el mapa pestañea—. Lleva las cosas
+    que cambian el mapa de verdad: la granularidad, cuántos/cuáles períodos
+    y qué medida. Ahí el remonte SÍ es lo correcto: la selección vieja
+    apunta a coordenadas de otro mapa.
+
+    Para que la selección no se re-procese en bucle con la key quieta está
+    la huella (`_K_SEL`, trampa 3 del docstring)."""
+    return f"{grano}_{len(claves)}_{claves[0] if claves else '-'}_{medida}"
 
 
 # ── Datos ───────────────────────────────────────────────────────────────────
@@ -1418,6 +1440,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             st.session_state["vh_grano_aplicado"] = grano
             st.session_state[_K_CLAVES] = None
             st.session_state[_K_MARCAS] = []
+            st.session_state[_K_SEL] = None
 
         claves = st.session_state.get(_K_CLAVES)
         if not claves:
@@ -1473,6 +1496,33 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             st.info("Sin ventas con hora en los períodos elegidos.")
             return
 
+        # ── La selección se lee ANTES de dibujar, no después ─────────────
+        # Un arrastre costaba DOS pasadas del script: la que dispara
+        # `on_select="rerun"`, que dibujaba el mapa todavía sin la marca y
+        # recién al final la guardaba, y la de `st.rerun()` que hacía falta
+        # para volver a dibujarlo con la marca puesta. Dos pasadas son dos
+        # veces que Streamlit apaga y repinta la tarjeta — eso era el
+        # parpadeo que se reportó el 2026-08-15.
+        #
+        # Con la key quieta (ver `_firma`) la key se puede calcular ANTES del
+        # widget, y con ella se lee del `session_state` la selección que dejó
+        # el render anterior. Así la marca ya está decidida cuando se arma la
+        # figura y una sola pasada alcanza.
+        #
+        # La HUELLA sigue siendo imprescindible: mientras el widget siga
+        # montado, esa misma selección vuelve en CADA rerun (los del rail,
+        # los de los chips, los del propio drill), y sin ella la marca se
+        # re-aplicaría sola una y otra vez.
+        _clave_mapa = f"vh_mapa_{_firma(grano, claves, medida)}"
+        puntos = _puntos_de_evento(st.session_state.get(_clave_mapa))
+        _huella = repr(sorted(puntos))
+        if puntos and _huella != st.session_state.get(_K_SEL):
+            st.session_state[_K_SEL] = _huella
+            st.session_state[_K_MARCAS] = _agregar_marcas(
+                [m for m in st.session_state.get(_K_MARCAS, [])
+                 if m["sel"] < len(claves)],
+                _marcas_de_seleccion(puntos, horas))
+
         marcas = [m for m in st.session_state.get(_K_MARCAS, [])
                   if m["sel"] < len(claves)]
         # REPARTO. Con marcas puestas el mapa se comprime y el detalle ocupa
@@ -1484,43 +1534,10 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                            varios=len(claves) > 1)
         fig = _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla,
                         alto=_alto)
-        # El contador `_K_GESTO` va en la key ADEMÁS de la firma de las
-        # marcas. Ver abajo: es lo que borra el rectángulo punteado.
-        evt = st.plotly_chart(
-            fig, use_container_width=True,
-            key=(f"vh_mapa_{_firma(grano, claves, medida, marcas)}"
-                 f"_{st.session_state.get(_K_GESTO, 0)}"),
+        st.plotly_chart(
+            fig, use_container_width=True, key=_clave_mapa,
             on_select="rerun", selection_mode=("points", "box"),
             config={"displaylogo": False, "displayModeBar": False})
-
-        # ── El punteado que se quedaba pegado ───────────────────────────
-        # Plotly deja su rectángulo de selección dibujado después de soltar,
-        # y convive con el rectángulo de color que pintamos nosotros: dos
-        # cosas distintas en pantalla para lo mismo. Se limpia sólo cuando
-        # el widget se REMONTA, y el widget se remonta cuando cambia su key.
-        #
-        # Con la key atada nada más que a las marcas había un caso que no la
-        # movía: arrastrar sobre celdas VACÍAS. Sin puntos no había marca
-        # nueva, sin marca nueva no había rerun, y el punteado se quedaba
-        # ahí para siempre (reportado el 2026-08-15 con captura). Por eso
-        # el gesto se cuenta aparte: cualquier arrastre —dé marca o no—
-        # incrementa `_K_GESTO`, la key cambia y el chart vuelve limpio.
-        #
-        # No hay bucle: el widget nuevo nace SIN selección, así que el
-        # `evt` del rerun siguiente viene vacío y no vuelve a entrar. Es la
-        # misma defensa que la firma (trampa 3 del docstring del módulo),
-        # aplicada al caso que la firma no cubría.
-        _sel = getattr(evt, "selection", None)
-        if _sel is None and isinstance(evt, dict):
-            _sel = evt.get("selection")
-        _sel = _sel or {}
-        puntos = _puntos_de_evento(evt)
-        if puntos or _sel.get("box") or _sel.get("lasso"):
-            if puntos:
-                st.session_state[_K_MARCAS] = _agregar_marcas(
-                    marcas, _marcas_de_seleccion(puntos, horas))
-            st.session_state[_K_GESTO] = st.session_state.get(_K_GESTO, 0) + 1
-            st.rerun(scope="fragment")
 
         # ── Pastillas de marcas: deseleccionar una la quita ─────────────
         # Las pastillas de marcas YA NO viven acá: se mudaron a la primera
