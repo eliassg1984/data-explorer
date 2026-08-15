@@ -294,7 +294,11 @@ CSS = """    /* ================================================================
             /* La fecha SIEMPRE filtra: su subrayado es permanente. */
             border-bottom: 2px solid var(--accent) !important;
             background: transparent !important;
-            padding: 0 6px !important;
+            /* Caja al texto: con el `min-height: 28px` que traía, el
+               subrayado quedaba ~7px por debajo de la palabra. */
+            min-height: 0 !important;
+            height: auto !important;
+            padding: 1px 6px 3px !important;
             font-weight: 600 !important;
             font-size: 13.5px !important;
         }
@@ -315,7 +319,9 @@ CSS = """    /* ================================================================
             border-bottom: 2px solid transparent !important;
             color: var(--text-secondary) !important;
             font-weight: 400 !important;
-            padding-right: 8px !important;
+            min-height: 0 !important;
+            height: auto !important;
+            padding: 1px 8px 3px 0 !important;
         }
         /* ACTIVO: subrayado de acento. Sustituye al relleno sólido de
            _40_ajuste_franja.py (que gana por orden de sección, así que hace
@@ -373,8 +379,9 @@ CSS = """    /* ================================================================
             color: var(--text-secondary) !important;
             font-size: 13px !important;
             font-weight: 400 !important;
-            padding: 0 7px !important;
-            min-height: 28px !important;
+            padding: 1px 7px 3px !important;
+            min-height: 0 !important;
+            height: auto !important;
             white-space: nowrap !important;
         }
         .st-key-atajos_franja button:hover {

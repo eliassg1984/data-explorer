@@ -962,7 +962,15 @@ CSS = """    /* ================================================================
         border: none !important;
         border-radius: 0 !important;
         border-bottom: 2px solid transparent !important;
-        padding: 3px 1px !important;
+        /* La caja se ajusta al TEXTO: los pills de Streamlit traen
+           `min-height: 32px` y con texto de 14px eso deja ~9px de aire entre
+           la palabra y el subrayado, que se lee como una línea suelta. Con
+           `min-height: 0` + padding chico, la línea queda a 3px de la base
+           de la letra — que es donde la ponen TradingView y cualquier tab
+           bien hecha. */
+        min-height: 0 !important;
+        height: auto !important;
+        padding: 1px 1px 3px !important;
         color: var(--text-secondary) !important;
         font-weight: 400 !important;
         font-size: 14px !important;
@@ -1156,8 +1164,10 @@ CSS = """    /* ================================================================
             border: none !important;
             border-radius: 0 !important;
             border-bottom: 2px solid transparent !important;
-            padding: 2px 1px !important;
-            min-height: 24px !important;
+            /* Misma cuenta que arriba: la caja al texto, no al touch target. */
+            min-height: 0 !important;
+            height: auto !important;
+            padding: 1px 1px 3px !important;
             color: var(--text-secondary) !important;
             font-weight: 400 !important;
             font-size: 13.5px !important;
