@@ -490,22 +490,34 @@ def _pruebas_puras():
     # topea. Sin esto, la semana en curso un martes son 2 celdas de 376px
     # (medido) — dos banderas, no un mapa. Es el efecto lateral de abrir
     # siempre en el período en curso.
+    _tope = _vh._RATIO_MAX_CELDA * _vh._PX_HORA
+
     def _ancho_celda(n):
         x0, x1 = _vh._rango_x(n)
-        return 740 / (x1 - x0)
+        return _vh._ANCHO_UTIL / (x1 - x0)
 
-    check("horario · una sola columna no ocupa toda la tarjeta",
-          _ancho_celda(1) <= _vh._ANCHO_MAX_CELDA + 3, True)
+    # El tope es APROXIMADO: el número de slots es entero, así que
+    # `ancho // tope` deja la celda un poco por encima (770/11 = 70 contra
+    # un tope de 66). Lo que se fija acá es lo que de verdad importa —que no
+    # se estire a bandera—, con sitio para ese redondeo: nunca más de cuatro
+    # veces el alto de fila. Si alguien sube el ratio, esto salta.
+    check("horario · una sola columna no se estira a bandera",
+          _ancho_celda(1) <= 4 * _vh._PX_HORA, True)
     # El sobrante va TODO a la derecha: repartirlo a los dos lados metía
-    # 132px (medidos) entre el eje de horas y la primera celda. Y a la
-    # derecha significa algo — es el resto del período que todavía no pasó.
+    # 132px (medidos) entre el eje de horas y la primera celda.
     check("horario · el mapa arranca SIEMPRE pegado al eje de horas",
           [_vh._rango_x(n)[0] for n in (1, 2, 11, 31, 126)],
           [-0.5, -0.5, -0.5, -0.5, -0.5])
     check("horario · el sobrante queda a la derecha",
-          _vh._rango_x(2)[1], 740 // _vh._ANCHO_MAX_CELDA - 0.5)
+          _vh._rango_x(2)[1], _vh._ANCHO_UTIL // _tope - 0.5)
     check("horario · con muchas columnas el rango es el justo",
           _vh._rango_x(31), [-0.5, 30.5])
+    # El caso que motivó recalibrar (2026-08-15): un mes EN CURSO de 13 días
+    # dejaba tres columnas de hueco entre el último día y la barra de color.
+    # Con el tope atado al alto de fila y el ancho puesto al día, el rango es
+    # el justo desde los 13 días.
+    check("horario · un mes en curso de 13 días no deja hueco",
+          _vh._rango_x(13), [-0.5, 12.5])
 
     # ── Horas en am/pm, no en formato 24h ───────────────────────────────
     # El mediodía y la medianoche son los dos que se escriben mal solos.

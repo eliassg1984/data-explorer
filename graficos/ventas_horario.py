@@ -172,17 +172,29 @@ _PANEL_MIN = 150
 _N_DEFECTO = 1
 _GRANO_DEF = "Mes"
 
-# Cuánto ancho se supone disponible para el eje X al decidir cada cuántas
-# columnas se escribe una etiqueta. Es una ESTIMACIÓN (el ancho real lo sabe
-# el navegador, no Python): 740px medidos en el laptop objetivo, tarjeta de
-# 879px menos los márgenes de la figura. Errar por abajo sólo saltea alguna
-# etiqueta de más, que es el lado barato del error.
-_ANCHO_UTIL = 740
+# Cuánto ancho se supone disponible para el eje X. Es una ESTIMACIÓN, y es la
+# única que queda en este módulo: el ancho real lo sabe el navegador, no
+# Python (regla #117 — la resta contra una pantalla supuesta). No se puede
+# publicar como variable CSS porque quien la necesita es Plotly, que dibuja
+# en el servidor.
+#
+# Es el ÁREA DE DIBUJO, no la figura: a 1280px con los dos rails abiertos la
+# figura mide 889 y el área 769 (46px de eje de horas a la izquierda, 74 de
+# barra de color a la derecha). Confundir las dos infla el hueco de la
+# derecha, porque un `ancho` de más pide más columnas de reserva.
+# 2026-08-15: 740 → 770, en sync con la tarjeta, que creció de 879 a 947px
+# (y a 1083 con los rails plegados, así que 770 sigue siendo el extremo
+# estrecho y por lo tanto el conservador).
+_ANCHO_UTIL = 770
 
-# Ancho máximo de una celda. Contra los 22px de alto de fila deja un
-# rectángulo apenas apaisado; más que eso y un período de pocas columnas se
-# ve como una bandera. Ver `_rango_x`.
-_ANCHO_MAX_CELDA = 44
+# Ancho máximo de una celda, y de ahí sale el hueco de la derecha (`_rango_x`).
+# Ya no es un número suelto sino una PROPORCIÓN contra el alto de fila: una
+# celda puede ser hasta tres veces más ancha que alta, y pasado eso deja de
+# leerse como celda y se lee como bandera. Atado a `_PX_HORA` para que las
+# dos medidas de la celda se muevan juntas — con el 44 fijo de antes, subir
+# la altura de fila habría hecho las celdas más altas que anchas sin que
+# nadie lo pidiera.
+_RATIO_MAX_CELDA = 3
 
 _SIN_DSCTO = "Sin descuento"
 
@@ -597,7 +609,7 @@ def _rango_x(total_columnas, ancho=None, ancho_max=None):
     el resto del período (agosto tiene 11 días cargados y el mes sigue),
     mientras que a la izquierda no quería decir nada."""
     ancho = _ANCHO_UTIL if ancho is None else ancho
-    ancho_max = _ANCHO_MAX_CELDA if ancho_max is None else ancho_max
+    ancho_max = (_RATIO_MAX_CELDA * _PX_HORA) if ancho_max is None else ancho_max
     total = max(1, int(total_columnas))
     minimo = max(1, ancho // ancho_max)
     return [-0.5, max(total, minimo) - 0.5]
@@ -744,7 +756,16 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
     # hora sin ventas ese día) y sin nada detrás, seguir una hora a lo ancho
     # de cuatro paneles era saltar por huecos blancos. Una de cada dos filas
     # lleva un gris apenas perceptible, como el rayado de una planilla.
+    # Las bandas llegan hasta el ÚLTIMO DÍA CON COLUMNA, no hasta el final
+    # del rango. El rango puede ser más ancho (ver `_rango_x`: con pocas
+    # columnas se reserva sitio para que la celda no se estire), y una banda
+    # gris estirada sobre ese sobrante se lee como una fila de la tabla que
+    # está vacía en vez de como espacio libre — fue justo lo que se reportó
+    # el 2026-08-15 con un mes en curso de 13 días. Cruzar el hueco ENTRE
+    # paneles sí es a propósito: seguir una hora de punta a punta es para lo
+    # que se pidieron las bandas.
     _x0, _x1 = _rango_x(total)
+    _x1 = min(_x1, offs[-1] + geo[-1][0] - 0.5) if geo else _x1
     for i in range(0, n_horas, 2):
         fig.add_shape(type="rect", x0=_x0, x1=_x1, y0=i - 0.5, y1=i + 0.5,
                       line=dict(width=0), fillcolor=GRIS_LINEA,
