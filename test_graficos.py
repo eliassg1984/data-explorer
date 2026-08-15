@@ -467,6 +467,26 @@ def _pruebas_puras():
                    for s in _seg if _pt(s, 0, 1) == _pt(s, 1, 1)})
     check("horario · las horizontales no cruzan el hueco entre paneles",
           _hor, [(-0.5, 6.5), (7.5, 14.5)])
+
+    # ── Capa de selección ───────────────────────────────────────────────
+    # Un punto por CELDA, haya venta o no. Si vuelve a haberlos sólo donde
+    # hay datos: un arrastre sobre celdas vacías no devuelve nada, Streamlit
+    # no ve cambio, no hay rerun, y el rectángulo punteado de Plotly se
+    # queda dibujado para siempre (pasó, 2026-08-15). Además la marca se
+    # encogería en silencio hasta el último día con venta.
+    _sel_pts = [t for t in _fig_rej.data
+                if t.type == "scatter" and t.hoverinfo == "skip"]
+    check("horario · la capa de selección cubre TODAS las celdas",
+          len(_sel_pts[0].x) if _sel_pts else 0,
+          2 * 7 * 2)          # 2 paneles × 7 días × 2 horas
+    # ...y el hover sigue colgando de las celdas CON datos, que son las que
+    # tienen números que mostrar.
+    _hov = [t for t in _fig_rej.data
+            if t.type == "scatter" and t.hoverinfo != "skip"]
+    check("horario · el hover sólo va donde hay datos",
+          len(_hov[0].x) if _hov else 0, 4)
+    check("horario · la selección no roba el hover",
+          _sel_pts[0].hoverinfo if _sel_pts else None, "skip")
     # La semana en curso también: un viernes son 5 columnas, no 7.
     check("horario · la semana en curso se recorta",
           _vh._columnas((2026, 33), "Semana", _dt.date(2026, 8, 14))[0], 5)

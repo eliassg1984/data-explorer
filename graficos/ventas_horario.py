@@ -201,6 +201,9 @@ _SIN_DSCTO = "Sin descuento"
 _K_CLAVES = "vh_claves"      # períodos elegidos (lista de claves)
 _K_MARCAS = "vh_marcas"      # marcas (lista de dicts)
 _K_SELECTOR = "vh_selector"  # ¿está abierto el selector de períodos?
+# Contador que sólo existe para REMONTAR el chart después de cada arrastre.
+# Ver `_ventas_horario`, § "el punteado que se quedaba pegado".
+_K_GESTO = "vh_gesto"
 
 
 # ── Funciones puras (calendario) ────────────────────────────────────────────
@@ -818,11 +821,45 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
         fig.add_shape(type="path", path="".join(_rejilla), layer="above",
                       line=dict(color=GRIS_CUADRICULA, width=1))
 
+    # ── Capa de selección: TODAS las celdas, tengan venta o no ──────────
+    # Va aparte de la capa de hover de abajo, y la diferencia importa.
+    #
+    # Hasta el 2026-08-15 sólo había puntos donde HABÍA datos, y eso tenía
+    # dos consecuencias feas. La primera, visible: un arrastre sobre celdas
+    # vacías no devolvía ningún punto, Streamlit no veía cambio, no había
+    # rerun — y el rectángulo punteado de Plotly se quedaba dibujado para
+    # siempre (reportado con captura, y reproducido después arrastrando 6px
+    # en una esquina). La segunda, silenciosa: la marca se calcula como el
+    # envolvente de los puntos tomados, así que si arrastrabas un rectángulo
+    # con los bordes vacíos, la marca se encogía hasta el último día con
+    # venta sin decir nada.
+    #
+    # Con un punto por celda las dos se van juntas: cualquier arrastre
+    # dentro del mapa devuelve algo, y la marca es EXACTAMENTE lo que
+    # encerraste. Que se pueda marcar una zona sin ventas no es un efecto
+    # colateral: "el martes a las 4 pm no vendimos nada" es una respuesta.
+    #
+    # `hoverinfo="skip"` es lo que la mantiene invisible al pasar el cursor:
+    # el hover con los números lo sigue dando la capa de datos.
+    _sx, _sy, _scd = [], [], []
+    for s, (n, _e) in enumerate(geo):
+        for c in range(n):
+            for i, h in enumerate(horas):
+                _sx.append(offs[s] + c)
+                _sy.append(y_cat[i])
+                _scd.append([s, c, int(h)])
+    if _sx:
+        fig.add_trace(go.Scatter(
+            x=_sx, y=_sy, mode="markers",
+            marker=dict(size=13, color="rgba(0,0,0,0)", line=dict(width=0)),
+            customdata=_scd, showlegend=False, hoverinfo="skip",
+        ))
+
     if xs:
-        # Capa de selección: invisible, pero es la ÚNICA que Plotly deja
-        # seleccionar (un heatmap no emite eventos de selección). También es
-        # la que lleva el hover, que por eso puede ser rico: en el heatmap
-        # sólo habría `z`.
+        # Capa de HOVER: sólo las celdas con datos, y es la que lleva los
+        # números. Un heatmap no emite eventos, así que el tooltip rico
+        # (venta, pax, ticket, cantidad, descuento) tiene que colgar de un
+        # scatter; en el heatmap sólo habría `z`.
         fig.add_trace(go.Scatter(
             x=xs, y=ys, mode="markers",
             marker=dict(size=13, color="rgba(0,0,0,0)",
@@ -900,6 +937,17 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
         font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=12),
         dragmode="select",     # sin esto el arrastre hace zoom, no selección
         showlegend=False,
+        # El rectángulo MIENTRAS se arrastra. El default de Plotly es un
+        # punteado gris fino de herramienta de dibujo; acá el gesto es
+        # "estoy eligiendo un rango de celdas", que es el de Excel, así que
+        # se viste como tal: línea llena del color de acento y relleno
+        # translúcido del mismo tono. El relleno lo pone `activeselection`
+        # (`newselection` sólo sabe de la línea).
+        newselection=dict(line=dict(color=ACENTO, width=1.5, dash="solid")),
+        # Se ve un instante, entre que se suelta el botón y el rerun que
+        # remonta el chart (ver `_K_GESTO`). Vale la pena igual: es el
+        # acuse de recibo de que el rango quedó tomado.
+        activeselection=dict(fillcolor=ACENTO, opacity=0.12),
     )
     # `fixedrange`: apaga el zoom y el paneo de los ejes. Plotly dibuja
     # alrededor del área del gráfico unas bandas invisibles para eso
@@ -1436,18 +1484,43 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                            varios=len(claves) > 1)
         fig = _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla,
                         alto=_alto)
+        # El contador `_K_GESTO` va en la key ADEMÁS de la firma de las
+        # marcas. Ver abajo: es lo que borra el rectángulo punteado.
         evt = st.plotly_chart(
             fig, use_container_width=True,
-            key=f"vh_mapa_{_firma(grano, claves, medida, marcas)}",
+            key=(f"vh_mapa_{_firma(grano, claves, medida, marcas)}"
+                 f"_{st.session_state.get(_K_GESTO, 0)}"),
             on_select="rerun", selection_mode=("points", "box"),
             config={"displaylogo": False, "displayModeBar": False})
 
+        # ── El punteado que se quedaba pegado ───────────────────────────
+        # Plotly deja su rectángulo de selección dibujado después de soltar,
+        # y convive con el rectángulo de color que pintamos nosotros: dos
+        # cosas distintas en pantalla para lo mismo. Se limpia sólo cuando
+        # el widget se REMONTA, y el widget se remonta cuando cambia su key.
+        #
+        # Con la key atada nada más que a las marcas había un caso que no la
+        # movía: arrastrar sobre celdas VACÍAS. Sin puntos no había marca
+        # nueva, sin marca nueva no había rerun, y el punteado se quedaba
+        # ahí para siempre (reportado el 2026-08-15 con captura). Por eso
+        # el gesto se cuenta aparte: cualquier arrastre —dé marca o no—
+        # incrementa `_K_GESTO`, la key cambia y el chart vuelve limpio.
+        #
+        # No hay bucle: el widget nuevo nace SIN selección, así que el
+        # `evt` del rerun siguiente viene vacío y no vuelve a entrar. Es la
+        # misma defensa que la firma (trampa 3 del docstring del módulo),
+        # aplicada al caso que la firma no cubría.
+        _sel = getattr(evt, "selection", None)
+        if _sel is None and isinstance(evt, dict):
+            _sel = evt.get("selection")
+        _sel = _sel or {}
         puntos = _puntos_de_evento(evt)
-        if puntos:
-            nuevas = _agregar_marcas(marcas, _marcas_de_seleccion(puntos, horas))
-            if nuevas != marcas:
-                st.session_state[_K_MARCAS] = nuevas
-                st.rerun(scope="fragment")
+        if puntos or _sel.get("box") or _sel.get("lasso"):
+            if puntos:
+                st.session_state[_K_MARCAS] = _agregar_marcas(
+                    marcas, _marcas_de_seleccion(puntos, horas))
+            st.session_state[_K_GESTO] = st.session_state.get(_K_GESTO, 0) + 1
+            st.rerun(scope="fragment")
 
         # ── Pastillas de marcas: deseleccionar una la quita ─────────────
         # Las pastillas de marcas YA NO viven acá: se mudaron a la primera
