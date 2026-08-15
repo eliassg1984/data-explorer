@@ -153,7 +153,10 @@ _ALTO_MIN = 170    # con 3-4 horas la figura no se convierte en una cinta
 # celda sigue siendo un rectángulo legible y el mapa NO se va de la vista, que
 # es de lo que se trata — comparar el detalle contra el gráfico sin scrollear.
 _PX_HORA_DRILL = 15
-_AIRE_MARCAS = 44   # la fila de pastillas de marcas, entre el mapa y el panel
+# 2026-08-15: aquí vivía `_AIRE_MARCAS = 44`, la fila de pastillas de marcas
+# que iba entre el mapa y la tabla del drill. Esa fila ya no existe (la tabla
+# muestra todas las medidas de entrada), así que el término sale del
+# presupuesto de `vh-alto-arriba` y esos 44px se los queda el panel.
 # Padding y gaps de la tarjeta del mapa (8+8 de padding, tres gaps de 6, los
 # márgenes del hairline). Medido: publicar sin esto daba 351 contra un bloque
 # real de 390, y el panel se pasaba justo esos 39px.
@@ -1395,7 +1398,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     # un monitor grande. Ver `alturas.py` § LA RESTA NO SE HACE ACÁ.
     publicar_var_px(
         "vh-alto-arriba",
-        alturas.FRANJA_UNA_LINEA + _alto + _AIRE_MARCAS + _CROMO_TARJETA)
+        alturas.FRANJA_UNA_LINEA + _alto + _CROMO_TARJETA)
     # El piso del panel también se publica en vez de vivir suelto en el CSS:
     # con marcas evita que en una pantalla apretada quede una tira ilegible;
     # SIN marcas tiene que ser 0, o el panel vacío se come 150px de tarjeta.
@@ -1415,61 +1418,25 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         # granularidad anterior. Vacías no se ven —el CSS de
         # estilos/_80_cards.py les quita borde y sombra dentro de la card de
         # Ventas—, así que dibujarlas siempre no cuesta un pixel.
-        # El título NO va arriba: baja a la misma fila de los controles y se
-        # ancla a la derecha (pedido 2026-08-15). Así la fila que antes era
-        # sólo controles ahora se lee de una: qué marcas, qué medidas, y de
-        # qué panel se trata — y se ahorra la fila del encabezado.
+        # SIN fila de controles (pedido 2026-08-15). Tenía las pastillas de
+        # marcas, el selector de medidas, el toggle de % y el título — una
+        # franja de ~44px por encima de la tabla, que es el dato. Ahora la
+        # tabla arranca directamente y muestra TODAS las medidas que el
+        # parquet permite calcular: es la respuesta a "¿qué diferencia hay
+        # entre estas marcas?" sin tener que pedirla columna por columna.
+        # Lo que se perdió, y es aceptado: quitar UNA marca suelta. Se
+        # cambian desde «Comparar» o volviendo a marcar en el mapa (el tope
+        # de 4 es FIFO, así que la quinta desplaza a la más vieja).
         with _card("ventas_horario_medidas", "", titulo_arriba=True):
             if marcas:
-                _op = [lab for mid, lab in _MEDIDAS
-                       if (mid != "desc" or col_desc)
-                       and (mid not in ("pax", "ticket")
-                            or (col_pax and col_pedido))]
-                _def = [lab for lab in ("Venta", "Pax", "Ticket promedio")
-                        if lab in _op]
-                # Medidas y el toggle de % COMPARTEN FILA (2026-08-15): eran
-                # dos filas de ~40px, y el % es una preferencia que se elige
-                # una vez, no un control de uso diario. Ver
-                # estilos/_80_cards.py § MEDIDAS DEL DRILL.
-                # Pesos ANCHOS a la izquierda y una columna final elástica:
-                # así los tres grupos quedan arrinconados y el título flota
-                # solo al otro extremo. Medidos: marcas ~110px (4 números),
-                # medidas 344, toggle 118.
-                _c_mar, _c_med, _c_var, _c_tit = st.columns(
-                    [1.5, 4.4, 1.4, 2.7], vertical_alignment="center")
-                with _c_mar:
-                    # Sólo el NÚMERO: es lo que enlaza con el badge del
-                    # rectángulo en el mapa. El período completo está en la
-                    # primera columna de la tabla, justo debajo. Key por
-                    # firma (regla #9): las opciones cambian con las marcas y
-                    # un pills que conserva un valor fuera de su lista nueva
-                    # se queda sin selección.
-                    _etq = [str(i + 1) for i in range(len(marcas))]
-                    _vivos = st.pills(
-                        "Marcas", _etq, selection_mode="multi", default=_etq,
-                        key=f"vh_marcas_pills_{len(marcas)}",
-                        label_visibility="collapsed")
-                    if _vivos is not None and len(_vivos) != len(_etq):
-                        st.session_state[_K_MARCAS] = [
-                            p for e, p in zip(_etq, marcas) if e in _vivos]
-                        st.rerun(scope="fragment")
-                with _c_med:
-                    _sel = st.pills("Medidas", _op, selection_mode="multi",
-                                    default=_def, key="vh_medidas",
-                                    label_visibility="collapsed")
-                with _c_var:
-                    ver_var = st.toggle("% vs marca 1", value=True,
-                                        key="vh_ver_var")
-                with _c_tit:
-                    st.markdown(
-                        '<p class="vh-titulo-drill">Medidas de cada marca</p>',
-                        unsafe_allow_html=True)
-                if not _sel:
-                    st.caption("Elegí al menos una medida.")
-                    _sel = _def
-                medidas = {mid for mid, lab in _MEDIDAS if lab in _sel}
+                medidas = {mid for mid, _ in _MEDIDAS
+                           if (mid != "desc" or col_desc)
+                           and (mid not in ("pax", "ticket")
+                                or (col_pax and col_pedido))}
+                # El Δ contra la marca base va SIEMPRE: sin él la tabla es
+                # una lista de totales y la pregunta era la comparación.
                 mismo = _tabla_medidas(marcas, tramos, claves, grano, horas,
-                                       medidas, ver_var)
+                                       medidas, True)
                 if not mismo:
                     st.caption("⚠️ Las marcas no miden lo mismo: compará por "
                                "«Venta/celda», no por el total — un rectángulo "

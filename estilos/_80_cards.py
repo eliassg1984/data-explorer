@@ -1146,7 +1146,14 @@ CSS = """    /* ================================================================
        (`_es_movil`), no las dimensiones. */
 
     /* =================================================================== */
-    /* MEDIDAS DEL DRILL — tabs, no pastillas                               */
+    /* MEDIDAS DEL ÁRBOL — tabs, no pastillas                               */
+    /*                                                                       */
+    /* Nació para DOS selectores: el de la tabla de marcas y el del árbol.   */
+    /* El primero se eliminó el 2026-08-15 (la tabla muestra todas las       */
+    /* medidas de entrada), así que hoy el único consumidor es               */
+    /* `vh_medidas_arbol` — y por eso el selector se acotó a esa key en vez  */
+    /* de seguir con el comodín `[class*="st-key-vh_medidas"]`, que ya no    */
+    /* tiene un segundo miembro al que aplicarse (regla #6).                 */
     /*                                                                       */
     /* Pedido del usuario el 2026-08-15: "los toggles se ven bonitos pero    */
     /* ocupan mucho espacio en desktop, me parecen más para móvil". Tiene    */
@@ -1167,7 +1174,7 @@ CSS = """    /* ================================================================
     /* queda como está (mismo breakpoint que _99_movil.py).                  */
     /* =================================================================== */
     @media screen and (min-width: 769px) {
-        div[class*="st-key-vh_medidas"] [data-testid="stButtonGroup"]
+        div[class*="st-key-vh_medidas_arbol"] [data-testid="stButtonGroup"]
             button[data-variant="pills"] {
             background: transparent !important;
             border: none !important;
@@ -1182,54 +1189,15 @@ CSS = """    /* ================================================================
             font-weight: 400 !important;
             font-size: 13.5px !important;
         }
-        div[class*="st-key-vh_medidas"] [data-testid="stButtonGroup"]
+        div[class*="st-key-vh_medidas_arbol"] [data-testid="stButtonGroup"]
             button[data-variant="pills"][aria-pressed="true"] {
             border-bottom-color: var(--accent) !important;
             color: var(--accent-deep) !important;
             font-weight: 600 !important;
         }
-        div[class*="st-key-vh_medidas"] [data-testid="stButtonGroup"] > div {
+        div[class*="st-key-vh_medidas_arbol"] [data-testid="stButtonGroup"] > div {
             gap: 16px !important;
             flex-wrap: wrap !important;
-        }
-        /* El toggle de % comparte fila con las medidas: su label en
-           mayúsculas y a 40px de alto era una fila entera para una
-           preferencia que se elige una vez. */
-        div[class*="st-key-vh_ver_var"] label {
-            font-size: 12px !important;
-            text-transform: none !important;
-        }
-        div[class*="st-key-vh_ver_var"] {
-            margin-top: 2px !important;
-        }
-        /* Título del panel, ahora en la MISMA fila que los controles y
-           anclado a la derecha. Va en el mismo tamaño que el título de la
-           tarjeta del mapa para que las dos franjas se lean como hermanas,
-           pero en gris: acá el protagonista es el dato, no el rótulo. */
-        .vh-titulo-drill {
-            margin: 0 !important;
-            text-align: right !important;
-            font-size: 15px !important;
-            font-weight: 600 !important;
-            line-height: 1.3 !important;
-            color: var(--text-secondary) !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-        }
-        div[data-testid="stMarkdownContainer"]:has(> .vh-titulo-drill),
-        div[data-testid="stMarkdown"]:has(.vh-titulo-drill) {
-            margin: 0 !important;
-            padding: 0 !important;
-            line-height: 1 !important;
-        }
-        /* Las pastillas de MARCAS sí siguen siendo pastillas —son chips con
-           color y una ✕, no un selector— pero compactas. */
-        div[class*="st-key-vh_marcas_pills"] [data-testid="stButtonGroup"]
-            button[data-variant="pills"] {
-            min-height: 26px !important;
-            padding: 2px 10px !important;
-            font-size: 12.5px !important;
         }
     }
 
