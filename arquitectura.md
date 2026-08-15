@@ -4677,3 +4677,39 @@ salvo `icono`):
      adentro. El precio es cero: una `chartcard_` vacía dentro de la card
      de Ventas no se ve (el CSS de `estilos/_80_cards.py` le quita borde y
      sombra), y sólo ocupa los ~32px de su padding.
+
+116. **Un drill APILADO empuja el gráfico fuera de la pantalla; uno
+     REPARTIDO no.** Ventas › Por hora, 2026-08-14. El detalle (tabla de
+     medidas + árbol) vivía debajo del mapa en el flujo normal del
+     documento, así que abrir una marca mandaba el mapa hacia arriba y
+     fuera de la vista: **1.312px de scroll medidos** en el navegador,
+     justo cuando el usuario está comparando el detalle CONTRA el
+     gráfico. Pedido textual: "que no pierda enfoque en el gráfico
+     principal y que haga el mínimo scroll".
+
+     La solución es la de cualquier terminal bursátil: el gráfico y el
+     panel se REPARTEN el alto de la pantalla y cada uno scrollea por
+     dentro. Dos piezas:
+
+     · `alturas.reparto(alto_figura, franja, extra)` — lo que le queda al
+       panel del presupuesto de contenido. Es aritmética de una línea,
+       pero vive en `alturas.py` porque es el dueño del alto (regla
+       «nunca un alto suelto»).
+     · La figura se COMPRIME cuando el panel está abierto: 22px por hora
+       en reposo, 15 con el drill. `st.container(height=N)` scrollea por
+       dentro sin CSS extra.
+
+     Medido después, viewport 720: franja 61 + mapa 246 + pastillas 44 +
+     panel 150 = 501, el contenido exacto del presupuesto; la tarjeta
+     entera mide 544 contra un marco de 596, con **cero scroll de página
+     y cero scroll de tarjeta**. El panel guarda 899px de detalle
+     adentro.
+
+     Lo que NO se puede: agrandar la tarjeta para que entre todo. La
+     tarjeta ya mide exactamente una pantalla (`--alto-util`); hacerla
+     más alta es devolverle el scroll a la página, que es el problema
+     que se estaba resolviendo. Y tampoco se puede estirar el panel al
+     alto real de la ventana: su alto sale de Python (pantalla objetivo
+     1366x768) mientras el marco sale del CSS (`100dvh`), así que en
+     monitores grandes sobran ~50px al pie. Es la misma tensión que
+     documenta el docstring de `alturas.py`, no un olvido.

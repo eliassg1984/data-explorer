@@ -129,6 +129,35 @@ MARCO = PRESUPUESTO
 FRANJA_CONTROLES = 96
 
 
+# ===========================================================================
+# REPARTO: LA FIGURA Y SU PANEL, EN LA MISMA PANTALLA
+# ===========================================================================
+# Nació el 2026-08-14 con Ventas › Por hora. El drill vivía APILADO debajo
+# del mapa, así que abrirlo empujaba el mapa fuera de la pantalla: 1.312px de
+# scroll medidos en el navegador, y el usuario perdía de vista el gráfico
+# justo cuando estaba comparando contra él.
+#
+# El modelo es el de cualquier terminal bursátil: el gráfico y el panel de
+# abajo se REPARTEN el alto y cada uno scrollea por dentro. El gráfico se
+# encoge, no se va.
+
+FRANJA_UNA_LINEA = 61
+"""Alto de una franja de controles que fusiona el título con los controles en
+UNA fila (Ventas › Por hora). Medida en el navegador el 2026-08-14, contra
+los 96 de `FRANJA_CONTROLES`, que es la de dos filas y dos hairlines."""
+
+
+def reparto(alto_figura, franja=FRANJA_UNA_LINEA, extra=0, minimo=150):
+    """Alto del PANEL que comparte la tarjeta con una figura de `alto_figura`.
+
+    Es lo que sobra del presupuesto de contenido una vez descontados la
+    franja de controles, la figura y `extra` (lo que haya en medio: chips,
+    leyendas). El `minimo` evita que en una pantalla apretada el panel quede
+    en una tira de dos filas que no se puede ni leer — si no entra, que
+    scrollee la tarjeta, que para eso está enmarcada."""
+    return max(minimo, CONTENIDO - franja - int(alto_figura) - int(extra))
+
+
 class _Elastico:
     """Sentinela para `alto=`: el alto NO lo decide Python, lo decide el CSS.
 

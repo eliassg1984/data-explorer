@@ -140,6 +140,13 @@ _PX_HORA = 22
 _AIRE_MAPA = 66    # títulos de panel + etiquetas del eje X + márgenes
 _ALTO_MIN = 170    # con 3-4 horas la figura no se convierte en una cinta
 
+# Con el DRILL ABIERTO el mapa se encoge para que los dos entren en la misma
+# pantalla (ver `alturas.reparto`). 15px por hora contra los 22 de reposo: la
+# celda sigue siendo un rectángulo legible y el mapa NO se va de la vista, que
+# es de lo que se trata — comparar el detalle contra el gráfico sin scrollear.
+_PX_HORA_DRILL = 15
+_AIRE_MARCAS = 44   # la fila de pastillas de marcas, entre el mapa y el panel
+
 # El arranque es SIEMPRE un solo período: el día, la semana, el mes o el año
 # EN CURSO, según la granularidad. Comparar es una decisión explícita del
 # usuario y tiene su botón (pedido del 2026-08-14). La versión anterior abría
@@ -593,6 +600,19 @@ def _tick_marcado(texto, marca):
     return texto
 
 
+def _alto_mapa(n_horas, con_drill=False):
+    """Alto de la figura. Sigue al NÚMERO DE FILAS y no al techo de la
+    tarjeta: con un alto fijo, un turno de 8 horas repartía 373px entre 8
+    filas y salían bandas de 46px de alto por 28 de ancho — más aire que dato.
+
+    Con el drill abierto la fila se comprime (22px → 15) para que el mapa y
+    el detalle entren en la MISMA pantalla. Es la pieza que evita que abrir
+    un bloque empuje el gráfico fuera de la vista."""
+    return alturas.por_filas(
+        n_horas, px_fila=(_PX_HORA_DRILL if con_drill else _PX_HORA),
+        extra=_AIRE_MAPA, rol=alturas.con_franja(), minimo=_ALTO_MIN)
+
+
 def _paso_etiquetas(total_columnas, largo_etiqueta, ancho=None):
     """Cada cuántas columnas se escribe una etiqueta en el eje X.
 
@@ -609,7 +629,8 @@ def _paso_etiquetas(total_columnas, largo_etiqueta, ancho=None):
     return max(1, -(-total * px_etiqueta // ancho))   # ceil de la división
 
 
-def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None):
+def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
+              alto=None):
     """Mapa de calor de los N paneles en una sola figura, con la capa de
     selección transparente encima y un rectángulo por marca.
 
@@ -771,8 +792,7 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None):
         # filas y salían bandas de 46px de alto por 28 de ancho — ladrillos
         # verticales con más aire que dato. `por_filas` clampea igual al
         # techo cuando hay muchas horas.
-        height=alturas.por_filas(n_horas, px_fila=_PX_HORA, extra=_AIRE_MAPA,
-                                 rol=alturas.con_franja(), minimo=_ALTO_MIN),
+        height=alto or _alto_mapa(n_horas),
         margin=dict(l=10, r=10, t=34, b=10),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=12),
@@ -1286,7 +1306,14 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
 
         marcas = [m for m in st.session_state.get(_K_MARCAS, [])
                   if m["sel"] < len(claves)]
-        fig = _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla)
+        # REPARTO. Con marcas puestas el mapa se comprime y el detalle ocupa
+        # el resto de la pantalla con scroll propio, en vez de apilarse
+        # debajo y empujar el gráfico fuera de la vista (1.312px de scroll
+        # medidos antes de esto). El objetivo del usuario, textual: "que no
+        # pierda enfoque en el gráfico principal y que haga el mínimo scroll".
+        _alto = _alto_mapa(len(horas), con_drill=bool(marcas))
+        fig = _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla,
+                        alto=_alto)
         evt = st.plotly_chart(
             fig, use_container_width=True,
             key=f"vh_mapa_{_firma(grano, claves, medida, marcas)}",
@@ -1323,51 +1350,67 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         # ícono de ayuda al lado del título cuesta cero píxeles de alto.
 
     # ── Drill ───────────────────────────────────────────────────────────
-    # Las dos tarjetas se abren SIEMPRE, aunque no haya marcas, y por dentro
-    # deciden si tienen algo que decir. NO es cosmético: un
-    # `st.container(key=...)` que deja de renderizarse RETIENE sus hijos
-    # (arquitectura.md regla #70). Medido acá el 2026-08-14: al cambiar la
-    # granularidad las marcas se limpian, el `return` temprano se saltaba
-    # estas dos tarjetas... y seguían en pantalla con los números de la
-    # granularidad anterior. Vacías no se ven —el CSS de estilos/_80_cards.py
-    # les quita borde y sombra dentro de la card de Ventas—, así que
-    # dibujarlas siempre no cuesta un pixel.
-    with _card("ventas_horario_medidas",
-               "Medidas de cada marca" if marcas else "", titulo_arriba=True):
-        if marcas:
-            _op = [lab for mid, lab in _MEDIDAS
-                   if (mid != "desc" or col_desc)
-                   and (mid not in ("pax", "ticket")
-                        or (col_pax and col_pedido))]
-            _def = [lab for lab in ("Venta", "Pax", "Ticket promedio")
-                    if lab in _op]
-            _sel = st.pills("Medidas", _op, selection_mode="multi",
-                            default=_def, key="vh_medidas",
-                            label_visibility="collapsed")
-            if not _sel:
-                st.caption("Elegí al menos una medida.")
-                _sel = _def
-            medidas = {mid for mid, lab in _MEDIDAS if lab in _sel}
-            ver_var = st.toggle("% variación contra la marca 1", value=True,
-                                key="vh_ver_var")
-            mismo = _tabla_medidas(marcas, tramos, claves, grano, horas,
-                                   medidas, ver_var)
-            if not mismo:
-                st.caption("⚠️ Las marcas no miden lo mismo: compará por "
-                           "«Venta/celda», no por el total — un rectángulo de "
-                           "12 celdas gana siempre contra uno de 3.")
+    # Va DENTRO de un contenedor con alto fijo, que en Streamlit scrollea por
+    # dentro: es la mitad de abajo del reparto. Así el detalle puede ser tan
+    # largo como quiera (la tabla de medidas y el árbol suman ~720px) sin
+    # empujar ni un pixel al mapa, que se queda arriba, siempre visible.
+    #
+    # Sin marcas no hay panel ni alto fijo: un contenedor vacío de 200px sería
+    # un agujero en la tarjeta.
+    if marcas:
+        _panel = st.container(height=alturas.reparto(_alto, extra=_AIRE_MARCAS),
+                              border=False)
+    else:
+        _panel = st.container()
 
-    # ── Drill: árbol Grupo › Sub Grupo › Plato › Descuento ──────────────
-    with _card("ventas_horario_arbol",
-               ("Detalle por grupo, subgrupo y plato"
-                if (marcas and col_prod) else ""), titulo_arriba=True):
-        if marcas and col_prod:
-            _opa = [_MED_LABEL[m] for m in _MED_ARBOL
-                    if m != "desc" or col_desc]
-            _sela = st.pills("Detalle por", _opa, selection_mode="multi",
-                             default=[_MED_LABEL["venta"]],
-                             key="vh_medidas_arbol",
-                             label_visibility="collapsed")
-            medidas_arbol = {m for m in _MED_ARBOL
-                             if _MED_LABEL[m] in (_sela or [])} or {"venta"}
-            _tabla_arbol(marcas, tramos, claves, grano, horas, medidas_arbol)
+    with _panel:
+        # Las dos tarjetas se abren SIEMPRE, aunque no haya marcas, y por
+        # dentro deciden si tienen algo que decir. NO es cosmético: un
+        # `st.container(key=...)` que deja de renderizarse RETIENE sus hijos
+        # (arquitectura.md regla #70). Medido acá el 2026-08-14: al cambiar la
+        # granularidad las marcas se limpian, el `return` temprano se saltaba
+        # estas dos tarjetas... y seguían en pantalla con los números de la
+        # granularidad anterior. Vacías no se ven —el CSS de
+        # estilos/_80_cards.py les quita borde y sombra dentro de la card de
+        # Ventas—, así que dibujarlas siempre no cuesta un pixel.
+        with _card("ventas_horario_medidas",
+                   "Medidas de cada marca" if marcas else "",
+                   titulo_arriba=True):
+            if marcas:
+                _op = [lab for mid, lab in _MEDIDAS
+                       if (mid != "desc" or col_desc)
+                       and (mid not in ("pax", "ticket")
+                            or (col_pax and col_pedido))]
+                _def = [lab for lab in ("Venta", "Pax", "Ticket promedio")
+                        if lab in _op]
+                _sel = st.pills("Medidas", _op, selection_mode="multi",
+                                default=_def, key="vh_medidas",
+                                label_visibility="collapsed")
+                if not _sel:
+                    st.caption("Elegí al menos una medida.")
+                    _sel = _def
+                medidas = {mid for mid, lab in _MEDIDAS if lab in _sel}
+                ver_var = st.toggle("% variación contra la marca 1",
+                                    value=True, key="vh_ver_var")
+                mismo = _tabla_medidas(marcas, tramos, claves, grano, horas,
+                                       medidas, ver_var)
+                if not mismo:
+                    st.caption("⚠️ Las marcas no miden lo mismo: compará por "
+                               "«Venta/celda», no por el total — un rectángulo "
+                               "de 12 celdas gana siempre contra uno de 3.")
+
+        # ── Drill: árbol Grupo › Sub Grupo › Plato › Descuento ──────────
+        with _card("ventas_horario_arbol",
+                   ("Detalle por grupo, subgrupo y plato"
+                    if (marcas and col_prod) else ""), titulo_arriba=True):
+            if marcas and col_prod:
+                _opa = [_MED_LABEL[m] for m in _MED_ARBOL
+                        if m != "desc" or col_desc]
+                _sela = st.pills("Detalle por", _opa, selection_mode="multi",
+                                 default=[_MED_LABEL["venta"]],
+                                 key="vh_medidas_arbol",
+                                 label_visibility="collapsed")
+                medidas_arbol = {m for m in _MED_ARBOL
+                                 if _MED_LABEL[m] in (_sela or [])} or {"venta"}
+                _tabla_arbol(marcas, tramos, claves, grano, horas,
+                             medidas_arbol)
