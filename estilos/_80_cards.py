@@ -1050,7 +1050,7 @@ CSS = """    /* ================================================================
        con él. Los -18px horizontales NO se tocan: son los que hacen que la
        línea toque el borde real de la tarjeta. */
     div[class*="st-key-chartcard_ventas_horario_"] {
-        padding-top: 4px !important;
+        padding-top: 2px !important;
         padding-bottom: 8px !important;
     }
     /* El hueco de verdad NO era el margen del hairline sino el `gap: 16px`
@@ -1067,10 +1067,14 @@ CSS = """    /* ================================================================
        en 16px. Van los dos: el propio y los de adentro. */
     div[class*="st-key-chartcard_ventas_horario_"],
     div[class*="st-key-chartcard_ventas_horario_"] [data-testid="stVerticalBlock"] {
-        gap: 6px !important;
+        gap: 4px !important;
     }
     div[class*="st-key-chartcard_ventas_horario_"] hr {
-        margin: -2px -18px 4px !important;
+        /* -5 arriba (no más: con el gap de 4px del bloque, a -6 la línea
+           se monta sobre la fila de controles) y 2 abajo. Los -18px
+           horizontales NO se tocan: son los que la hacen llegar al borde
+           real de la tarjeta. */
+        margin: -5px -18px 2px !important;
     }
 
     /* =================================================================== */
