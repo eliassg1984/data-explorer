@@ -1051,7 +1051,7 @@ CSS = """    /* ================================================================
        línea toque el borde real de la tarjeta. */
     div[class*="st-key-chartcard_ventas_horario_"] {
         padding-top: 2px !important;
-        padding-bottom: 8px !important;
+        padding-bottom: 4px !important;
     }
     /* El hueco de verdad NO era el margen del hairline sino el `gap: 16px`
        del bloque vertical de la tarjeta: Streamlit separa así CADA bloque

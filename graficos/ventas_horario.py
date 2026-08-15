@@ -139,7 +139,13 @@ _MAX_COLS_ARBOL = 8
 # aire que dato. 22px por hora es la fila compacta; el techo lo sigue poniendo
 # `alturas.con_franja()`, así que un turno largo no desborda la pantalla.
 _PX_HORA = 22
-_AIRE_MAPA = 66    # títulos de panel + etiquetas del eje X + márgenes
+# Lo que la figura reserva ADEMÁS de las filas. Con varios paneles hay que
+# dejar sitio para sus rótulos (34px de margen superior); con uno solo ese
+# rótulo se fue al título de la tarjeta y el aire sobrante era espacio muerto
+# entre las celdas y los números de día. Medido: 26px entre la última celda y
+# la etiqueta, más 10 bajo ella.
+_AIRE_MAPA = 66        # con varios paneles
+_AIRE_MAPA_SOLO = 42   # con uno
 _ALTO_MIN = 170    # con 3-4 horas la figura no se convierte en una cinta
 
 # Con el DRILL ABIERTO el mapa se encoge para que los dos entren en la misma
@@ -608,7 +614,7 @@ def _tick_marcado(texto, marca):
     return texto
 
 
-def _alto_mapa(n_horas, con_drill=False):
+def _alto_mapa(n_horas, con_drill=False, varios=False):
     """Alto de la figura. Sigue al NÚMERO DE FILAS y no al techo de la
     tarjeta: con un alto fijo, un turno de 8 horas repartía 373px entre 8
     filas y salían bandas de 46px de alto por 28 de ancho — más aire que dato.
@@ -618,7 +624,8 @@ def _alto_mapa(n_horas, con_drill=False):
     un bloque empuje el gráfico fuera de la vista."""
     return alturas.por_filas(
         n_horas, px_fila=(_PX_HORA_DRILL if con_drill else _PX_HORA),
-        extra=_AIRE_MAPA, rol=alturas.con_franja(), minimo=_ALTO_MIN)
+        extra=(_AIRE_MAPA if varios else _AIRE_MAPA_SOLO),
+        rol=alturas.con_franja(), minimo=_ALTO_MIN)
 
 
 def _paso_etiquetas(total_columnas, largo_etiqueta, ancho=None):
@@ -805,10 +812,12 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
         # filas y salían bandas de 46px de alto por 28 de ancho — ladrillos
         # verticales con más aire que dato. `por_filas` clampea igual al
         # techo cuando hay muchas horas.
-        height=alto or _alto_mapa(n_horas),
+        height=alto or _alto_mapa(n_horas, varios=len(claves) > 1),
         # `t` reserva el sitio de los rótulos de panel; sin ellos el gráfico
         # sube esos 24px.
-        margin=dict(l=10, r=10, t=(34 if len(claves) > 1 else 10), b=10),
+        # b=2: las etiquetas de día ya no llevan marca de tick, así que no
+        # hay nada que separar del eje. Eran 10px de aire bajo los números.
+        margin=dict(l=10, r=10, t=(34 if len(claves) > 1 else 10), b=2),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=12),
         dragmode="select",     # sin esto el arrastre hace zoom, no selección
@@ -822,7 +831,7 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
     # mapa es arrastrar para marcar un bloque, y agarrar tres píxeles por
     # debajo del eje movía el rango sin querer. Con esto desaparecen las
     # bandas y queda sólo `nsewdrag`, que es la que selecciona.
-    fig.update_xaxes(fixedrange=True)
+    fig.update_xaxes(fixedrange=True, ticks="", ticklen=0)
     fig.update_yaxes(fixedrange=True)
     fig.update_xaxes(tickvals=ticks_pos, ticktext=ticks_txt, showgrid=False,
                      zeroline=False, range=_rango_x(total),
@@ -1339,7 +1348,8 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         # debajo y empujar el gráfico fuera de la vista (1.312px de scroll
         # medidos antes de esto). El objetivo del usuario, textual: "que no
         # pierda enfoque en el gráfico principal y que haga el mínimo scroll".
-        _alto = _alto_mapa(len(horas), con_drill=bool(marcas))
+        _alto = _alto_mapa(len(horas), con_drill=bool(marcas),
+                           varios=len(claves) > 1)
         fig = _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla,
                         alto=_alto)
         evt = st.plotly_chart(
