@@ -69,8 +69,8 @@ import streamlit as st
 
 from data import REPORTES, cargar_rango
 from tema import (
-    ACENTO, ADVERTENCIA_TEXTO, ERROR, ESCALA_CONTINUA, EXITO, GRIS_LINEA,
-    GRIS_TEXTO, PALETA_SERIES, TEXTO_PRINCIPAL,
+    ACENTO, ADVERTENCIA_TEXTO, ERROR, ESCALA_CONTINUA, EXITO, GRIS_CUADRICULA,
+    GRIS_LINEA, GRIS_TEXTO, PALETA_SERIES, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
 from graficos.base import (
@@ -760,6 +760,43 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
         colorbar=dict(thickness=10, outlinewidth=0, len=0.85,
                       tickfont=dict(size=10, color=GRIS_TEXTO)),
     ))
+    # CUADRÍCULA (2026-08-15, pedido: "una ligera cuadrícula para tener
+    # referencia de la fecha y hora"). Las líneas caen en los BORDES de la
+    # celda (i ± 0.5), nunca en su centro: ahí es donde el xgap/ygap del
+    # heatmap ya deja 1-2px de junta, así que la línea entra en el hueco en
+    # vez de partir un día por la mitad.
+    #
+    # POR QUÉ UN SHAPE Y NO LA GRILLA DEL EJE. Se probaron las dos:
+    #   · La grilla MAYOR va en los ticks, o sea en el centro de la celda.
+    #     Descartada de entrada.
+    #   · La grilla MENOR (`minor=dict(tickvals=…)`) sí acepta los bordes,
+    #     pero se dibuja en `minor-gridlayer`, que Plotly monta ANTES de
+    #     `overplot`, y `layer="above traces"` (que mueve la mayor) no la
+    #     alcanza. Verificado en el DOM: el <image> del heatmap quedaba
+    #     encima y la cuadrícula sólo asomaba por las celdas vacías —
+    #     justo al revés de lo que hace falta, porque lo que uno quiere
+    #     rastrear hasta su día es la celda CARGADA.
+    # Un shape con `layer="above"` sí queda encima de todo. Y va como UN
+    # solo `type="path"` con muchos subtrazos en vez de una línea por corte:
+    # cuatro meses comparados son ~180 segmentos, que como shapes sueltos
+    # serían 180 objetos en el JSON de la figura.
+    _rejilla = []
+    for s, (n, _e) in enumerate(geo):
+        _a, _b = offs[s] - 0.5, offs[s] + n - 0.5
+        # Verticales: un corte por día, más los dos bordes del panel. El
+        # hueco ENTRE paneles queda cerrado a ambos lados y sin líneas
+        # dentro — cruzarlo sugeriría que ahí hay días.
+        for i in range(n + 1):
+            _rejilla.append(f"M{offs[s] + i - 0.5},-0.5"
+                            f"L{offs[s] + i - 0.5},{n_horas - 0.5}")
+        # Horizontales: sólo a lo ancho del panel, no del rango entero (a la
+        # derecha sobra el resto del mes, que no tiene celdas que separar).
+        for j in range(n_horas + 1):
+            _rejilla.append(f"M{_a},{j - 0.5}L{_b},{j - 0.5}")
+    if _rejilla:
+        fig.add_shape(type="path", path="".join(_rejilla), layer="above",
+                      line=dict(color=GRIS_CUADRICULA, width=1))
+
     if xs:
         # Capa de selección: invisible, pero es la ÚNICA que Plotly deja
         # seleccionar (un heatmap no emite eventos de selección). También es

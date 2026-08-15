@@ -445,6 +445,28 @@ def _pruebas_puras():
                             [19, 21]).layout.xaxis.ticktext
     check("horario · el eje de Semana se queda con el día",
           any("Ago" in t for t in _tt_sem), False)
+
+    # ── Cuadrícula del mapa ─────────────────────────────────────────────
+    # Va como UN shape `path` con muchos subtrazos, encima del heatmap (la
+    # grilla menor del eje se dibuja debajo y la tapaba el <image>). Lo que
+    # se fija acá es la GEOMETRÍA: los cortes caen en los bordes de celda
+    # (± 0.5, nunca en el centro) y el hueco entre paneles queda cerrado a
+    # los lados pero SIN líneas dentro — cruzarlo diría que ahí hay días.
+    _fig_rej = _vh._fig_mapa([_cd_eje, _cd_eje], [(2026, 32), (2026, 33)],
+                             "Semana", "venta", [], [19, 21])
+    _rej = [s for s in _fig_rej.layout.shapes if s.type == "path"]
+    check("horario · la cuadrícula es un solo shape", len(_rej), 1)
+    check("horario · y va encima del heatmap", _rej[0].layer, "above")
+    _seg = [s for s in _rej[0].path.split("M") if s]
+    _pt = lambda s, i, j: float(s.split("L")[i].split(",")[j])  # noqa: E731
+    _vert = sorted({_pt(s, 0, 0) for s in _seg if _pt(s, 0, 0) == _pt(s, 1, 0)})
+    check("horario · cortes verticales en los bordes de cada día",
+          _vert, [-0.5, 0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5,
+                  7.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 14.5])
+    _hor = sorted({(_pt(s, 0, 0), _pt(s, 1, 0))
+                   for s in _seg if _pt(s, 0, 1) == _pt(s, 1, 1)})
+    check("horario · las horizontales no cruzan el hueco entre paneles",
+          _hor, [(-0.5, 6.5), (7.5, 14.5)])
     # La semana en curso también: un viernes son 5 columnas, no 7.
     check("horario · la semana en curso se recorta",
           _vh._columnas((2026, 33), "Semana", _dt.date(2026, 8, 14))[0], 5)

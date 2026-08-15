@@ -54,6 +54,13 @@ GRIS_BORDE = "#e6e6eb"
 GRIS_LINEA = "#f1f1f4"
 """Líneas divisorias finas (0.5px) entre filas."""
 
+GRIS_CUADRICULA = "rgba(24, 24, 29, 0.10)"
+"""Cuadrícula de referencia que se dibuja ENCIMA del dato (mapa por día y
+hora). Va en rgba y no en hex a propósito: al ser el tinte de la tinta
+(TEXTO_PRINCIPAL) al 10%, sobre el blanco de una celda vacía se ve como un
+gris finito y sobre el azul oscuro de una celda cargada desaparece sola. Un
+hex opaco tendría que elegir entre verse en un fondo o en el otro."""
+
 GRIS_TEXTO = "#71717a"
 """Texto secundario: etiquetas, títulos de campos."""
 
