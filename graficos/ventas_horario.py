@@ -1330,20 +1330,12 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 st.rerun(scope="fragment")
 
         # ── Pastillas de marcas: deseleccionar una la quita ─────────────
-        if marcas:
-            etiquetas = [f"{i + 1} · {_etiqueta_marca(p, claves, grano)}"
-                         for i, p in enumerate(marcas)]
-            # Key por firma (regla #9): las opciones cambian con las marcas y
-            # un pills que conserva un valor fuera de su lista nueva se queda
-            # sin selección.
-            vivos = st.pills(
-                "Marcas", etiquetas, selection_mode="multi", default=etiquetas,
-                key=f"vh_marcas_pills_{len(marcas)}_{hash(tuple(etiquetas))}",
-                label_visibility="collapsed")
-            if vivos is not None and len(vivos) != len(etiquetas):
-                st.session_state[_K_MARCAS] = [
-                    p for e, p in zip(etiquetas, marcas) if e in vivos]
-                st.rerun(scope="fragment")
+        # Las pastillas de marcas YA NO viven acá: se mudaron a la primera
+        # fila del drill (2026-08-15, a pedido). El motivo es que su etiqueta
+        # larga —"1 · Ago 26 · día 7 · 4 pm"— estaba DUPLICADA: ya es la
+        # primera columna de la tabla de medidas y la cabecera de cada grupo
+        # del árbol. Lo único que no se repetía era el ✕, así que abajo
+        # quedan como número + ✕, que ocupa una fracción y va donde se usa.
         # SIN caption de ayuda (quitado a pedido, 2026-08-14). Ocupaba tres
         # líneas —~60px— explicando el arrastre y el código de colores del eje
         # de días. Lo que decía sigue estando en el docstring de este módulo,
@@ -1401,8 +1393,24 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 # dos filas de ~40px, y el % es una preferencia que se elige
                 # una vez, no un control de uso diario. Ver
                 # estilos/_80_cards.py § MEDIDAS DEL DRILL.
-                _c_med, _c_var = st.columns([3, 1.1],
-                                            vertical_alignment="center")
+                _c_mar, _c_med, _c_var = st.columns(
+                    [1.05, 2.6, 1.1], vertical_alignment="center")
+                with _c_mar:
+                    # Sólo el NÚMERO: es lo que enlaza con el badge del
+                    # rectángulo en el mapa. El período completo está en la
+                    # primera columna de la tabla, justo debajo. Key por
+                    # firma (regla #9): las opciones cambian con las marcas y
+                    # un pills que conserva un valor fuera de su lista nueva
+                    # se queda sin selección.
+                    _etq = [str(i + 1) for i in range(len(marcas))]
+                    _vivos = st.pills(
+                        "Marcas", _etq, selection_mode="multi", default=_etq,
+                        key=f"vh_marcas_pills_{len(marcas)}",
+                        label_visibility="collapsed")
+                    if _vivos is not None and len(_vivos) != len(_etq):
+                        st.session_state[_K_MARCAS] = [
+                            p for e, p in zip(_etq, marcas) if e in _vivos]
+                        st.rerun(scope="fragment")
                 with _c_med:
                     _sel = st.pills("Medidas", _op, selection_mode="multi",
                                     default=_def, key="vh_medidas",
