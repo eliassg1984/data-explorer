@@ -1168,6 +1168,27 @@ CSS = """    /* ================================================================
         div[class*="st-key-vh_ver_var"] {
             margin-top: 2px !important;
         }
+        /* Título del panel, ahora en la MISMA fila que los controles y
+           anclado a la derecha. Va en el mismo tamaño que el título de la
+           tarjeta del mapa para que las dos franjas se lean como hermanas,
+           pero en gris: acá el protagonista es el dato, no el rótulo. */
+        .vh-titulo-drill {
+            margin: 0 !important;
+            text-align: right !important;
+            font-size: 15px !important;
+            font-weight: 600 !important;
+            line-height: 1.3 !important;
+            color: var(--text-secondary) !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+        }
+        div[data-testid="stMarkdownContainer"]:has(> .vh-titulo-drill),
+        div[data-testid="stMarkdown"]:has(.vh-titulo-drill) {
+            margin: 0 !important;
+            padding: 0 !important;
+            line-height: 1 !important;
+        }
         /* Las pastillas de MARCAS sí siguen siendo pastillas —son chips con
            color y una ✕, no un selector— pero compactas. */
         div[class*="st-key-vh_marcas_pills"] [data-testid="stButtonGroup"]

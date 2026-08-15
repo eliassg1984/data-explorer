@@ -1379,9 +1379,11 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         # granularidad anterior. Vacías no se ven —el CSS de
         # estilos/_80_cards.py les quita borde y sombra dentro de la card de
         # Ventas—, así que dibujarlas siempre no cuesta un pixel.
-        with _card("ventas_horario_medidas",
-                   "Medidas de cada marca" if marcas else "",
-                   titulo_arriba=True):
+        # El título NO va arriba: baja a la misma fila de los controles y se
+        # ancla a la derecha (pedido 2026-08-15). Así la fila que antes era
+        # sólo controles ahora se lee de una: qué marcas, qué medidas, y de
+        # qué panel se trata — y se ahorra la fila del encabezado.
+        with _card("ventas_horario_medidas", "", titulo_arriba=True):
             if marcas:
                 _op = [lab for mid, lab in _MEDIDAS
                        if (mid != "desc" or col_desc)
@@ -1393,8 +1395,12 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 # dos filas de ~40px, y el % es una preferencia que se elige
                 # una vez, no un control de uso diario. Ver
                 # estilos/_80_cards.py § MEDIDAS DEL DRILL.
-                _c_mar, _c_med, _c_var = st.columns(
-                    [1.05, 2.6, 1.1], vertical_alignment="center")
+                # Pesos ANCHOS a la izquierda y una columna final elástica:
+                # así los tres grupos quedan arrinconados y el título flota
+                # solo al otro extremo. Medidos: marcas ~110px (4 números),
+                # medidas 344, toggle 118.
+                _c_mar, _c_med, _c_var, _c_tit = st.columns(
+                    [1.5, 4.4, 1.4, 2.7], vertical_alignment="center")
                 with _c_mar:
                     # Sólo el NÚMERO: es lo que enlaza con el badge del
                     # rectángulo en el mapa. El período completo está en la
@@ -1418,6 +1424,10 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 with _c_var:
                     ver_var = st.toggle("% vs marca 1", value=True,
                                         key="vh_ver_var")
+                with _c_tit:
+                    st.markdown(
+                        '<p class="vh-titulo-drill">Medidas de cada marca</p>',
+                        unsafe_allow_html=True)
                 if not _sel:
                     st.caption("Elegí al menos una medida.")
                     _sel = _def
