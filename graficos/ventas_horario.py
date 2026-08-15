@@ -814,6 +814,16 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
         dragmode="select",     # sin esto el arrastre hace zoom, no selección
         showlegend=False,
     )
+    # `fixedrange`: apaga el zoom y el paneo de los ejes. Plotly dibuja
+    # alrededor del área del gráfico unas bandas invisibles para eso
+    # (`ewdrag` bajo el eje X, `nsdrag` junto al Y, más sus esquinas
+    # `wdrag`/`edrag`), y cada una cambia el cursor a flecha de
+    # redimensionar. Acá sobran y además estorban: el único gesto de este
+    # mapa es arrastrar para marcar un bloque, y agarrar tres píxeles por
+    # debajo del eje movía el rango sin querer. Con esto desaparecen las
+    # bandas y queda sólo `nsewdrag`, que es la que selecciona.
+    fig.update_xaxes(fixedrange=True)
+    fig.update_yaxes(fixedrange=True)
     fig.update_xaxes(tickvals=ticks_pos, ticktext=ticks_txt, showgrid=False,
                      zeroline=False, range=_rango_x(total),
                      tickfont=dict(size=10, color=GRIS_TEXTO))
