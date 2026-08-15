@@ -412,6 +412,39 @@ def _pruebas_puras():
           _vh._columnas((2026, 7), "Mes", _dt.date(2026, 8, 14))[0], 31)
     check("horario · las etiquetas se recortan con las columnas",
           _vh._columnas((2026, 8), "Mes", _dt.date(2026, 8, 14))[1][-1], "14")
+
+    # El eje X de granularidad Mes escribe "1 Ago", no "1" (2026-08-15): el
+    # mes vivía sólo en el título del panel. `_columnas` NO se toca —de sus
+    # etiquetas sale también el nombre de una marca, donde el mes ya viene
+    # por otro lado y quedaría "días 7 Ago–8 Ago"—, así que el sufijo se
+    # agrega en la figura y estas dos guardas van juntas: la de abajo mira
+    # el eje, ésta se asegura de que el crudo siga crudo.
+    check("horario · las etiquetas crudas de Mes son sólo el número",
+          _vh._columnas((2026, 8), "Mes")[1][:2], ["1", "2"])
+    check("horario · el nombre de la marca no lleva el mes dos veces",
+          _vh._etiqueta_columnas({"c0": 6, "c1": 7}, (2026, 8), "Mes"),
+          "días 7–8")
+    # Con el sufijo la etiqueta pasa de 2 caracteres a 6: si el paso siguiera
+    # midiendo la cruda, 31 días de "31 Ago" se pisarían unos a otros.
+    check("horario · el paso crece con la etiqueta más larga",
+          _vh._paso_etiquetas(31, 6) > _vh._paso_etiquetas(31, 2), True)
+    # Y la comprobación de punta a punta: lo que termina escrito en el eje.
+    _cd_eje = pd.DataFrame({"col": [0, 1], "hora": [19, 21],
+                            "venta": [100.0, 200.0], "cant": [3.0, 5.0],
+                            "desc": [0.0, 0.0], "pax": [2.0, 4.0],
+                            "ticket": [50.0, 50.0]})
+    _tt_mes = _vh._fig_mapa([_cd_eje], [(2026, 8)], "Mes", "venta", [],
+                            [19, 21]).layout.xaxis.ticktext
+    # Los ticks pueden venir envueltos en <span> (fin de semana / feriado),
+    # así que se comprueba por contenido y no por igualdad exacta.
+    check("horario · el eje de Mes escribe el mes en cada día",
+          all("Ago" in t for t in _tt_mes), True)
+    check("horario · y el primero es el día 1",
+          any("1 Ago" in t for t in _tt_mes), True)
+    _tt_sem = _vh._fig_mapa([_cd_eje], [(2026, 32)], "Semana", "venta", [],
+                            [19, 21]).layout.xaxis.ticktext
+    check("horario · el eje de Semana se queda con el día",
+          any("Ago" in t for t in _tt_sem), False)
     # La semana en curso también: un viernes son 5 columnas, no 7.
     check("horario · la semana en curso se recorta",
           _vh._columnas((2026, 33), "Semana", _dt.date(2026, 8, 14))[0], 5)
@@ -1162,6 +1195,7 @@ def main():
         ("ventas_horario · mapa sin datos",
          lambda: _vh_fig._fig_mapa([None], [2026], "Año", "venta", [], [12]), ()),
     ]
+
 
     for nombre, fn, args in pruebas:
         try:

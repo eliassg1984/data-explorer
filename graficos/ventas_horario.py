@@ -673,9 +673,26 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
     # que cuatro meses de 31 (124 columnas de 6px) usaban el mismo paso 5 que
     # un mes suelto.
     geo = [_columnas(clave, grano, ancla) for clave in claves]
+
+    # En granularidad Mes la etiqueta del eje lleva el MES pegado al día
+    # ("1 Ago", no "1"): el mes sólo estaba en el título del panel, arriba de
+    # todo, así que para saber de qué agosto hablaba una columna había que
+    # levantar la vista y volver (pedido 2026-08-15). Sólo en Mes: en Semana
+    # las columnas ya son "Lun/Mar/…" y en Año son los meses mismos.
+    # NO se toca `_columnas`: sus etiquetas también arman el nombre de una
+    # marca (`_etiqueta_columnas`), donde el mes ya viene por otro lado y
+    # esto daría "días 7 Ago–8 Ago".
+    def _rotulo(s, et):
+        if grano != "Mes" or not et:
+            return et
+        return f"{et} {_MESES_ES[claves[s][1] - 1]}"
+
+    rotulos = [[_rotulo(s, e) for e in ets] for s, (_n, ets) in enumerate(geo)]
     total = sum(n for n, _e in geo) + max(0, len(geo) - 1)
+    # El paso se mide sobre la etiqueta QUE SE VE, no sobre la cruda: "1 Ago"
+    # ocupa el triple que "1" y con el largo viejo se solapaban.
     paso = _paso_etiquetas(
-        total, max((len(e) for _n, ets in geo for e in ets if e), default=1))
+        total, max((len(e) for ets in rotulos for e in ets if e), default=1))
 
     # Fin de semana y feriado se marcan en la ETIQUETA del día, no con una
     # banda: el mapa ya usa el color para el dato, y una banda encima de las
@@ -689,7 +706,7 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
     pos = 0
     for s, (n, etiquetas) in enumerate(geo):
         offs.append(pos)
-        for i, et in enumerate(etiquetas):
+        for i, et in enumerate(rotulos[s]):
             _m = _marca_dia(_fecha_de_columna(claves[s], grano, i), feriados)
             if _m:
                 marcas_dia[pos + i] = _m
@@ -1008,7 +1025,14 @@ def _panel_selector(ancla, grano, claves):
 def _tabla_medidas(marcas, tramos, claves, grano, orden, medidas, ver_var):
     """Pivote marca × medida. Una fila por marca (así la tabla es ordenable y
     no crece a lo ancho con cada marca nueva) y una columna por medida activa,
-    con su Δ contra la marca base al lado si el toggle está puesto."""
+    con su Δ contra la marca base al lado si el toggle está puesto.
+
+    Cuando las marcas NO encierran el mismo número de celdas aparece la
+    columna «Venta/celda». Hasta el 2026-08-15 aparecía además un aviso
+    debajo de la tabla explicándolo; se quitó a pedido. La columna es el
+    aviso: sale sólo en ese caso y es la comparación honesta —un rectángulo
+    de 12 celdas le gana siempre por total a uno de 3.
+    """
     filas, celdas = [], []
     for i, pin in enumerate(marcas):
         tot = _agregar_marca(tramos[pin["sel"]], pin, orden)
@@ -1064,7 +1088,6 @@ def _tabla_medidas(marcas, tramos, claves, grano, orden, medidas, ver_var):
     st.dataframe(sty, use_container_width=True,
                  height=alturas.por_filas(len(tv), px_fila=35, extra=48,
                                           minimo=0, rol=alturas.MINI))
-    return mismo
 
 
 def _tabla_arbol(marcas, tramos, claves, grano, orden, medidas_arbol,
@@ -1435,12 +1458,8 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                                 or (col_pax and col_pedido))}
                 # El Δ contra la marca base va SIEMPRE: sin él la tabla es
                 # una lista de totales y la pregunta era la comparación.
-                mismo = _tabla_medidas(marcas, tramos, claves, grano, horas,
-                                       medidas, True)
-                if not mismo:
-                    st.caption("⚠️ Las marcas no miden lo mismo: compará por "
-                               "«Venta/celda», no por el total — un rectángulo "
-                               "de 12 celdas gana siempre contra uno de 3.")
+                _tabla_medidas(marcas, tramos, claves, grano, horas,
+                               medidas, True)
 
         # ── Drill: árbol Grupo › Sub Grupo › Plato › Descuento ──────────
         with _card("ventas_horario_arbol",
