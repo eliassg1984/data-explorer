@@ -765,10 +765,15 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
                              "finde": "fin de semana"}.get(_m, "")) if x))
         fig.data[-1].customdata = [c + [n] for c, n in zip(cd, _nombres)]
 
-    for x, txt in titulos:
-        fig.add_annotation(x=x, y=1.0, xref="x", yref="paper",
-                           yanchor="bottom", showarrow=False, text=txt,
-                           font=dict(size=12, color=TEXTO_PRINCIPAL))
+    # El rótulo del panel se dibuja SÓLO si hay más de uno: con varios es lo
+    # único que dice cuál banda es cuál, pero con uno solo repite el título de
+    # la tarjeta y se lleva 24px de alto del gráfico. Con un panel, ese
+    # nombre viaja al título (ver `_ventas_horario`).
+    if len(claves) > 1:
+        for x, txt in titulos:
+            fig.add_annotation(x=x, y=1.0, xref="x", yref="paper",
+                               yanchor="bottom", showarrow=False, text=txt,
+                               font=dict(size=12, color=TEXTO_PRINCIPAL))
 
     for i, pin in enumerate(marcas):
         if pin["sel"] >= len(claves):
@@ -801,7 +806,9 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
         # verticales con más aire que dato. `por_filas` clampea igual al
         # techo cuando hay muchas horas.
         height=alto or _alto_mapa(n_horas),
-        margin=dict(l=10, r=10, t=34, b=10),
+        # `t` reserva el sitio de los rótulos de panel; sin ellos el gráfico
+        # sube esos 24px.
+        margin=dict(l=10, r=10, t=(34 if len(claves) > 1 else 10), b=10),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=12),
         dragmode="select",     # sin esto el arrastre hace zoom, no selección
@@ -864,7 +871,7 @@ def _boton_selector(claves):
     a cada botón, así que "Ago 26" salía partido letra por letra, en
     vertical. El panel se dibuja a lo ancho de la tarjeta con
     `_panel_selector`."""
-    st.button(f"Comparar · {len(claves)} de {MAX_MARCAS}",
+    st.button(f"Comparar · {len(claves)}/{MAX_MARCAS}",
               key="vh_btn_selector", on_click=_toggle_selector,
               icon=(":material/keyboard_arrow_up:"
                     if st.session_state.get(_K_SELECTOR) else
@@ -1224,11 +1231,14 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         # Anchos medidos como TABS (que son más angostos que las pastillas:
         # sin borde ni relleno): título 185 · granularidad 184 · medida 298 ·
         # comparar 154, sobre 873px útiles.
-        c0, c1, c2, c3 = st.columns([1.9, 1.9, 3.1, 1.6],
+        c0, c1, c2, c3 = st.columns([2.4, 1.85, 3.0, 1.45],
                                     vertical_alignment="center")
         with c0:
-            st.markdown('<p class="vh-titulo">Mapa por día y hora</p>',
-                        unsafe_allow_html=True)
+            # Con UN período su nombre va acá, al lado del título; con varios
+            # cada panel lleva el suyo dentro de la figura. `_ph_titulo` se
+            # pinta DESPUÉS de conocer `claves` (regla #108: el título
+            # depende de un control que vive en esta misma franja).
+            _ph_titulo = st.empty()
         with c1:
             grano = st.pills("Granularidad", list(GRANOS),
                              default=_GRANO_DEF, key="vh_grano",
@@ -1269,6 +1279,12 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         # de `c3` (168px) sus cinco columnas daban 30px por botón y los
         # períodos salían escritos en vertical, una letra por línea.
         claves = _panel_selector(ancla, grano, claves)
+
+        _ph_titulo.markdown(
+            '<p class="vh-titulo">Mapa por día y hora'
+            + (f'<span> · {_etiqueta_clave(claves[0], grano)}</span>'
+               if len(claves) == 1 else '')
+            + '</p>', unsafe_allow_html=True)
 
         # Una sola línea al pie de la franja, no dos: el título ya no tiene
         # la suya porque comparte fila con los controles.

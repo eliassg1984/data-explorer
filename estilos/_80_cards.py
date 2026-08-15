@@ -940,6 +940,20 @@ CSS = """    /* ================================================================
         overflow: hidden !important;
         text-overflow: ellipsis !important;
     }
+    /* El período (·  Ago 26) cuando hay UN solo panel: mismo renglón, menos
+       peso. Es un dato, no un rótulo — y en 13px cabe en la misma columna. */
+    .vh-titulo span {
+        font-size: 13px !important;
+        font-weight: 400 !important;
+        color: var(--text-secondary) !important;
+    }
+    /* Gap de 8px (default 16) SÓLO en la franja de esta tarjeta: con el
+       período en el título, los cuatro grupos piden 859px sobre 825
+       disponibles. Los 24px de los tres huecos son la diferencia. */
+    div[class*="st-key-chartcard_ventas_horario_"]
+        [data-testid="stHorizontalBlock"] {
+        gap: 8px !important;
+    }
     div[class*="st-key-vh_grano"] [data-testid="stButtonGroup"]
         button[data-variant="pills"],
     div[class*="st-key-vh_medida_mapa"] [data-testid="stButtonGroup"]
