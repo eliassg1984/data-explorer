@@ -984,6 +984,38 @@ def _pruebas_presupuesto_vertical():
     check("ningún alto literal en graficos/ (usar alturas.py)",
           not culpables, ", ".join(culpables[:6]))
 
+    # ── 1b) Ningún CONTENEDOR dimensionado desde Python ─────────────────
+    # Gemelo del anterior, y nació de un bug real (2026-08-14): el panel del
+    # drill de Ventas › Por hora se dibujaba con
+    # `st.container(height=alturas.reparto(...))`, o sea restando contra
+    # `VIEWPORT_OBJETIVO` — una pantalla SUPUESTA. En el laptop de 1366x768
+    # daba bien; en un monitor de 1000px de alto el panel se quedaba en 150
+    # con 350 libres debajo. No lo cazó nada: no es un error, es una cuenta
+    # correcta contra el número equivocado.
+    #
+    # La regla: Python emite alturas de CONTENIDO (filas × px); las RESTAS
+    # las hace el CSS, que conoce la ventana real, con lo que Python le
+    # publica vía `graficos.base.publicar_alto_css()`.
+    #
+    # Escape hatch explícito para el caso legítimo (un contenedor cuyo alto
+    # NO sale de restarle nada a la pantalla): marcar la línea con
+    # `# alto-fijo-justificado: <por qué>`.
+    culpables_cont = []
+    for py in sorted(raiz.rglob("*.py")):
+        for i, linea in enumerate(py.read_text(encoding="utf-8").split("\n"), 1):
+            # Los COMENTARIOS quedan fuera: media docena de ellos explican
+            # justamente esta regla citando la llamada prohibida, y una guarda
+            # que se dispara con su propia documentación es una guarda que
+            # alguien termina desactivando.
+            if linea.lstrip().startswith("#"):
+                continue
+            if "st.container(" in linea and "height=" in linea \
+                    and "alto-fijo-justificado" not in linea:
+                culpables_cont.append(f"{py.relative_to(raiz.parent)}:{i}")
+    check("ningún contenedor dimensionado desde Python "
+          "(la resta la hace el CSS)",
+          not culpables_cont, ", ".join(culpables_cont[:6]))
+
     # ── 2) El cromo de CSS y el de Python cuentan lo mismo ──────────────
     css = (pathlib.Path(__file__).parent / "estilos" / "_00_base.py").read_text(
         encoding="utf-8")

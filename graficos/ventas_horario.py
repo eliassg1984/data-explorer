@@ -73,7 +73,9 @@ from tema import (
     GRIS_TEXTO, PALETA_SERIES, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
-from graficos.base import _card, _resolver, franja_linea_inferior
+from graficos.base import (
+    _card, _resolver, franja_linea_inferior, publicar_alto_css,
+)
 # Los helpers de calendario NO se duplican: son los mismos que usa la vista
 # "Año Pasado" y ya están cubiertos por test_graficos.py. Acá sólo se extienden
 # para la granularidad Año, que allá no existe (comparar 2025 contra 2024 es
@@ -146,6 +148,12 @@ _ALTO_MIN = 170    # con 3-4 horas la figura no se convierte en una cinta
 # es de lo que se trata — comparar el detalle contra el gráfico sin scrollear.
 _PX_HORA_DRILL = 15
 _AIRE_MARCAS = 44   # la fila de pastillas de marcas, entre el mapa y el panel
+# Padding y gaps de la tarjeta del mapa (8+8 de padding, tres gaps de 6, los
+# márgenes del hairline). Medido: publicar sin esto daba 351 contra un bloque
+# real de 390, y el panel se pasaba justo esos 39px.
+_CROMO_TARJETA = 39
+# Piso del panel del drill: menos que esto no se lee.
+_PANEL_MIN = 150
 
 # El arranque es SIEMPRE un solo período: el día, la semana, el mes o el año
 # EN CURSO, según la granularidad. Comparar es una decisión explícita del
@@ -1357,16 +1365,23 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     #
     # Sin marcas no hay panel ni alto fijo: un contenedor vacío de 200px sería
     # un agujero en la tarjeta.
-    # La `key` lleva el estado (`_on`/`_off`) porque el CSS lo necesita para
-    # dos cosas que no puede deducir del DOM: estirar la tarjeta a la pantalla
-    # SOLO cuando hay drill, y darle al panel el alto que sobra. El alto de
-    # Python es el piso —el que vale si el CSS no aplica, p. ej. bajo 769px—
-    # y el CSS lo estira hacia arriba en pantallas más altas que el laptop
-    # objetivo. Ver estilos/_80_cards.py.
-    _panel = st.container(
-        key=f"vh_panel_drill_{'on' if marcas else 'off'}",
-        height=(alturas.reparto(_alto, extra=_AIRE_MARCAS) if marcas else None),
-        border=False)
+    # El alto del panel NO se calcula acá. Python publica lo único que sabe
+    # —cuánto ocupa todo lo que va ARRIBA del panel dentro de la tarjeta— y el
+    # CSS hace la resta contra la ventana REAL (estilos/_80_cards.py). Antes
+    # esto era `st.container(height=alturas.reparto(...))`, que restaba contra
+    # una pantalla supuesta: correcto en el laptop objetivo, y 350px de más en
+    # un monitor grande. Ver `alturas.py` § LA RESTA NO SE HACE ACÁ.
+    publicar_alto_css(
+        "vh-alto-arriba",
+        alturas.FRANJA_UNA_LINEA + _alto + _AIRE_MARCAS + _CROMO_TARJETA)
+    # El piso del panel también se publica en vez de vivir suelto en el CSS:
+    # con marcas evita que en una pantalla apretada quede una tira ilegible;
+    # SIN marcas tiene que ser 0, o el panel vacío se come 150px de tarjeta.
+    publicar_alto_css("vh-panel-min", _PANEL_MIN if marcas else 0)
+    # Key ESTABLE, sin `_on`/`_off`. Alternarla dejaba el contenedor viejo
+    # huérfano en el DOM (regla #70) y no hace falta: con el panel vacío el
+    # `max-height` no molesta a nadie.
+    _panel = st.container(key="vh_panel_drill", border=False)
 
     with _panel:
         # Las dos tarjetas se abren SIEMPRE, aunque no haya marcas, y por

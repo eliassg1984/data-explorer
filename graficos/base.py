@@ -190,6 +190,33 @@ def _card(key, titulo: str = "", titulo_arriba: bool = False):
             )
 
 
+def publicar_alto_css(nombre, px):
+    """Publica un alto calculado en Python como VARIABLE CSS, para que las
+    restas las haga el navegador.
+
+    Por qué existe (2026-08-15, ver `alturas.py` § LA RESTA NO SE HACE ACÁ):
+    el alto de una figura sólo lo puede decidir Python —Plotly ignora su
+    contenedor—, pero el alto DISPONIBLE sólo lo conoce el navegador
+    (`100dvh`). Cuando Python hace las dos cosas, resta contra una pantalla
+    supuesta (`alturas.VIEWPORT_OBJETIVO`) y el resultado es correcto en un
+    solo monitor. Publicando el número, el CSS puede escribir la resta
+    verdadera:
+
+        publicar_alto_css("vh-alto-arriba", 351)
+        /* en estilos/: */
+        max-height: calc(var(--alto-util) - var(--vh-alto-arriba));
+
+    SIN guard de "inyectar una sola vez": un `st.markdown` de estilos
+    desaparece en el rerun siguiente (arquitectura.md regla #59), así que
+    esto tiene que correr en cada render — que además es lo correcto, porque
+    el número cambia con los datos.
+    """
+    st.markdown(
+        f"<style>:root{{--{nombre}: {int(px)}px;}}</style>",
+        unsafe_allow_html=True,
+    )
+
+
 def franja_cabecera(ph, titulo, color_texto=None):
     """Cabecera de una FRANJA DE CONTROLES: título + línea SUPERIOR que la
     cierra por arriba. Patrón `título → línea → tabs → línea → contenido`

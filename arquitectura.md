@@ -4713,3 +4713,54 @@ salvo `icono`):
      1366x768) mientras el marco sale del CSS (`100dvh`), así que en
      monitores grandes sobran ~50px al pie. Es la misma tensión que
      documenta el docstring de `alturas.py`, no un olvido.
+
+117. **Python emite alturas de CONTENIDO; las RESTAS las hace el CSS.**
+     La regla que faltaba, y que explica los tres bugs de layout del
+     2026-08-14/15. Formulada así porque el enunciado ingenuo —"Python y
+     CSS no se ven"— no es accionable; el problema real es más preciso:
+
+     > alguien restó contra una pantalla SUPUESTA.
+
+     `alturas.py` arranca con `VIEWPORT_OBJETIVO = 657` y de ahí salen
+     `PRESUPUESTO`, `CONTENIDO` y todo lo que tenga forma de "lo que
+     queda después de descontar X". Una resta contra un viewport
+     hipotético es correcta en exactamente un monitor. En el del usuario
+     sobraban 350px; el panel del drill se quedaba en 150 con la ventana
+     a 1000px de alto.
+
+     LA LÍNEA no es Python vs CSS, es CONTENIDO vs CONTINENTE:
+
+       · alto de una FIGURA → Python (filas × px). No hay alternativa:
+         Plotly ignora su contenedor y sólo obedece a `fig.layout.height`
+         (regla #102).
+       · alto de un CONTENEDOR → CSS, porque `100dvh` es lo único que
+         conoce la ventana de verdad.
+
+     Para que el CSS pueda restar, Python PUBLICA lo que sabe:
+
+         publicar_alto_css("vh-alto-arriba", 390)     # graficos/base.py
+         max-height: calc(var(--alto-util) - var(--vh-alto-arriba));
+
+     Medido con eso puesto: el panel pasa a 383px en una ventana de 1000
+     y a 150 en una de 660, recalculado por el navegador, sin que Python
+     sepa nada de la pantalla.
+
+     TRES GUARDAS, porque documentar no alcanza:
+
+       1. `test_graficos.py` falla si aparece un `st.container(height=…)`
+          en `graficos/` — o sea un CONTENEDOR dimensionado desde Python.
+          Es el gemelo del test que prohíbe `alto=430` sueltos. Escape
+          hatch explícito: `# alto-fijo-justificado: <por qué>`.
+       2. `auditar_layout.js` reporta HOLGURA además de desborde: "panel
+          de 150px con 350 libres". El caso que no rompe nada y por eso
+          no se ve.
+       3. Los comentarios quedan fuera del grep del test: media docena
+          citan la llamada prohibida para explicar la regla, y una guarda
+          que salta con su propia documentación es una guarda que alguien
+          termina desactivando.
+
+     LO QUE QUEDA SUPUESTO, y es honesto que quede: acotar una FIGURA a
+     la pantalla (`con_franja()`, el `rol=` de `por_filas`) sí necesita
+     saber la pantalla en Python. Ese es el único argumento para leer el
+     viewport real algún día — hoy sólo se lee el User-Agent
+     (`_es_movil`), no las dimensiones. Todo lo demás ya no lo necesita.

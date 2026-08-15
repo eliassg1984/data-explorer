@@ -117,6 +117,44 @@
       });
     });
 
+    // ─── HOLGURA: paneles que podrían crecer y no crecen ─────────────────
+    // El auditor avisaba de lo que SE PASA. El caso inverso —un panel con
+    // scroll propio de 150px dentro de una tarjeta donde sobran 350— no
+    // rompe nada, así que pasaba desapercibido: reportado con captura el
+    // 2026-08-14, y la causa era un alto calculado en Python contra una
+    // pantalla supuesta (ver alturas.py § LA RESTA NO SE HACE ACÁ).
+    //
+    // Se mira todo lo que scrollea por dentro y se compara con el hueco que
+    // le deja su tarjeta enmarcada (la que tiene max-height). Si sobra
+    // espacio Y además el contenido está recortado, el panel está chico por
+    // decisión de alguien, no por falta de sitio.
+    const holguras = [];
+    document.querySelectorAll('[class*="st-key-"]').forEach(el => {
+      const cs = getComputedStyle(el);
+      if (!/auto|scroll/.test(cs.overflowY)) return;
+      const alto = el.clientHeight;
+      const recorte = el.scrollHeight - alto;
+      if (alto < 40 || recorte < 20) return;      // no scrollea de verdad
+      // Tarjeta enmarcada más cercana (la que define "una pantalla").
+      let marco = el.parentElement, libre = null;
+      while (marco) {
+        const m = getComputedStyle(marco);
+        if (m.maxHeight && m.maxHeight !== 'none') {
+          libre = Math.round(parseFloat(m.maxHeight) - marco.scrollHeight);
+          break;
+        }
+        marco = marco.parentElement;
+      }
+      if (libre !== null && libre > 60) {
+        holguras.push({
+          key: (el.className.match(/st-key-[\w-]+/) || [''])[0],
+          alto, contenido: el.scrollHeight, recortadoPx: recorte,
+          podriaCrecerPx: libre,
+          marco: (marco.className.match(/st-key-[\w-]+/) || ['(sin key)'])[0],
+        });
+      }
+    });
+
     const rpt = {
       viewport: [vw, vh],
       anchoUtil: Math.round(mw),
@@ -126,6 +164,7 @@
       topAltos: contenedores.slice(0, cfg.top),
       alertas: contenedores.filter(c => c.alerta).slice(0, cfg.top),
       outliersDeFamilia: outliers,
+      holguras,
       flotantes,
     };
 
@@ -143,6 +182,10 @@
     if (rpt.outliersDeFamilia.length) {
       console.warn('Outliers dentro de la misma familia de key:');
       console.table(rpt.outliersDeFamilia);
+    }
+    if (rpt.holguras.length) {
+      console.warn('Paneles que podrían crecer (alto chico con sitio libre):');
+      console.table(rpt.holguras);
     }
     console.log('Top por altura:');
     console.table(rpt.topAltos);

@@ -147,15 +147,31 @@ UNA fila (Ventas › Por hora). Medida en el navegador el 2026-08-14, contra
 los 96 de `FRANJA_CONTROLES`, que es la de dos filas y dos hairlines."""
 
 
-def reparto(alto_figura, franja=FRANJA_UNA_LINEA, extra=0, minimo=150):
-    """Alto del PANEL que comparte la tarjeta con una figura de `alto_figura`.
-
-    Es lo que sobra del presupuesto de contenido una vez descontados la
-    franja de controles, la figura y `extra` (lo que haya en medio: chips,
-    leyendas). El `minimo` evita que en una pantalla apretada el panel quede
-    en una tira de dos filas que no se puede ni leer — si no entra, que
-    scrollee la tarjeta, que para eso está enmarcada."""
-    return max(minimo, CONTENIDO - franja - int(alto_figura) - int(extra))
+# ── LA RESTA NO SE HACE ACÁ ────────────────────────────────────────────────
+# Acá vivió `reparto(alto_figura, ...)` durante un día: devolvía el alto del
+# panel que comparte la tarjeta con una figura, restando contra CONTENIDO.
+# Se borró el 2026-08-15 porque era la trampa hecha API.
+#
+# El problema no fue el cálculo sino CONTRA QUÉ restaba: `CONTENIDO` sale de
+# `VIEWPORT_OBJETIVO`, una pantalla SUPUESTA. La resta daba bien en el laptop
+# de 1366x768 y mal en todas las demás — reportado con captura en una ventana
+# de 1000px: el panel se quedaba en 150 con 350 libres debajo.
+#
+# La regla que lo reemplaza, y que vale para cualquier vista nueva:
+#
+#     Python emite alturas de CONTENIDO (filas × px: `por_filas`, `apilado`).
+#     Las RESTAS las hace el CSS, que es el único que conoce la ventana real.
+#     Para que pueda, Python PUBLICA lo que sabe como variable CSS con
+#     `graficos.base.publicar_alto_css()`.
+#
+# El único caso donde Python no puede evitar suponer la pantalla es ACOTAR
+# una figura (`con_franja()`, el `rol=` de `por_filas`), porque Plotly ignora
+# su contenedor y sólo obedece a `fig.layout.height`. Ese es el residuo
+# honesto de esta suposición, y el único argumento para leer el viewport
+# real algún día. Todo lo demás no lo necesita.
+#
+# `test_graficos.py` verifica que nadie vuelva a dimensionar un CONTENEDOR
+# desde Python (`st.container(height=...)` en `graficos/`).
 
 
 class _Elastico:

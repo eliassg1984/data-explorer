@@ -1059,6 +1059,32 @@ CSS = """    /* ================================================================
     /* estirar siempre la tarjeta dejaría el vacío enorme que el proyecto     */
     /* evitó a propósito al elegir `max-height` (ver ENCUADRE, arriba).       */
     /* =================================================================== */
+    /* =================================================================== */
+    /* PANEL DEL DRILL — la resta la hace el NAVEGADOR                       */
+    /*                                                                       */
+    /* `--vh-alto-arriba` la publica Python en cada render                   */
+    /* (graficos/base.py::publicar_alto_css): es lo que ocupan la franja de   */
+    /* controles, el mapa y las pastillas de marcas — las tres cosas que      */
+    /* Python sí conoce, porque el alto del mapa lo decide él.                */
+    /*                                                                       */
+    /* Lo que Python NO puede saber es el alto de la ventana, y por eso la    */
+    /* resta vive acá: `--alto-util` es `100dvh` menos el cromo, o sea el     */
+    /* alto REAL de la tarjeta en la pantalla de cada usuario. Antes esta     */
+    /* cuenta la hacía Python contra `VIEWPORT_OBJETIVO` (1366x768) y el      */
+    /* panel salía de 150px con 350 libres debajo en un monitor grande.       */
+    /*                                                                       */
+    /* El fallback de la `calc` no es decorativo: si algún día alguien borra  */
+    /* la publicación del alto, el panel queda usable en vez de invisible.    */
+    /* =================================================================== */
+    @media screen and (min-width: 769px) {
+        div[class*="st-key-vh_panel_drill"] {
+            max-height: calc(var(--alto-util)
+                             - var(--vh-alto-arriba, 400px)) !important;
+            min-height: var(--vh-panel-min, 0px) !important;
+            overflow-y: auto !important;
+        }
+    }
+
     /* INTENTO FALLIDO, DOCUMENTADO PARA NO REPETIRLO (2026-08-14).
        El alto del panel del drill lo calcula Python contra la pantalla
        objetivo (1366x768), así que en un monitor más alto sobra sitio: con
