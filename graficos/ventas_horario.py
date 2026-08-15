@@ -69,8 +69,8 @@ import streamlit as st
 
 from data import REPORTES, cargar_rango
 from tema import (
-    ACENTO, ADVERTENCIA_TEXTO, ERROR, ESCALA_CONTINUA, EXITO, GRIS_TEXTO,
-    PALETA_SERIES, TEXTO_PRINCIPAL,
+    ACENTO, ADVERTENCIA_TEXTO, ERROR, ESCALA_CONTINUA, EXITO, GRIS_LINEA,
+    GRIS_TEXTO, PALETA_SERIES, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
 from graficos.base import _card, _resolver, franja_linea_inferior
@@ -681,10 +681,26 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None):
                        float(fila.ticket) if pd.notna(fila.ticket) else 0.0])
 
     fig = go.Figure()
+
+    # BANDAS POR HORA (2026-08-14, pedido del usuario). Van DEBAJO de las
+    # celdas, así que sólo se ven donde el heatmap no pinta — que es
+    # justamente donde hacen falta: el mapa tiene muchas celdas vacías (una
+    # hora sin ventas ese día) y sin nada detrás, seguir una hora a lo ancho
+    # de cuatro paneles era saltar por huecos blancos. Una de cada dos filas
+    # lleva un gris apenas perceptible, como el rayado de una planilla.
+    _x0, _x1 = _rango_x(total)
+    for i in range(0, n_horas, 2):
+        fig.add_shape(type="rect", x0=_x0, x1=_x1, y0=i - 0.5, y1=i + 0.5,
+                      line=dict(width=0), fillcolor=GRIS_LINEA,
+                      layer="below")
+
     fig.add_trace(go.Heatmap(
         z=z, x=list(range(total)), y=y_cat,
         colorscale=ESCALA_CONTINUA, hoverinfo="skip",
-        xgap=1, ygap=1,
+        # ygap 2 y no 1: el hueco entre filas ES el separador (el fondo se ve
+        # a través), así que un píxel más de aire vertical convierte cada
+        # hora en una franja legible sin dibujar una sola línea.
+        xgap=1, ygap=2,
         colorbar=dict(thickness=10, outlinewidth=0, len=0.85,
                       tickfont=dict(size=10, color=GRIS_TEXTO)),
     ))
@@ -771,7 +787,15 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None):
     # PRIMERA categoría arriba, que es justo el arranque del servicio.
     fig.update_yaxes(type="category", autorange="reversed",
                      showgrid=False, zeroline=False, showticklabels=True,
-                     automargin=True, tickfont=dict(size=10, color=GRIS_TEXTO))
+                     automargin=True, tickfont=dict(size=10, color=GRIS_TEXTO),
+                     # Spike horizontal: al pasar el cursor por una celda, la
+                     # FILA entera se marca de punta a punta. Es la tercera
+                     # pata del pedido "ver la hora como una franja" — las
+                     # bandas y el `ygap` ayudan a leer en reposo; el spike
+                     # contesta "¿qué pasó a las 8 pm en todos los paneles?"
+                     # sin tener que seguir el renglón con el dedo.
+                     showspikes=True, spikemode="across", spikesnap="data",
+                     spikethickness=1, spikedash="dot", spikecolor=ACENTO)
     return fig
 
 
