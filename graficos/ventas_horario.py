@@ -1038,7 +1038,8 @@ def _tabla_medidas(marcas, tramos, claves, grano, orden, medidas, ver_var):
     return mismo
 
 
-def _tabla_arbol(marcas, tramos, claves, grano, orden, medidas_arbol):
+def _tabla_arbol(marcas, tramos, claves, grano, orden, medidas_arbol,
+                 expandir=False, colapsar=False):
     """Árbol Grupo › Sub Grupo › Plato › Tipo de descuento, una columna por
     marca y medida.
 
@@ -1157,16 +1158,9 @@ def _tabla_arbol(marcas, tramos, claves, grano, orden, medidas_arbol):
         "cellRendererParams": {"suppressCount": False},
     }
 
-    _b1, _b2, _b3 = st.columns([1, 1, 5])
-    with _b1:
-        _exp = st.button("⤢ Expandir todo", key="vh_arbol_exp",
-                         use_container_width=True)
-    with _b2:
-        _col = st.button("⤡ Colapsar", key="vh_arbol_col",
-                         use_container_width=True)
-    if _exp:
+    if expandir:
         opciones["groupDefaultExpanded"] = -1
-    elif _col:
+    elif colapsar:
         opciones["groupDefaultExpanded"] = 0
 
     AgGrid(wide, gridOptions=opciones, allow_unsafe_jscode=True,
@@ -1403,15 +1397,23 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                             or (col_pax and col_pedido))]
                 _def = [lab for lab in ("Venta", "Pax", "Ticket promedio")
                         if lab in _op]
-                _sel = st.pills("Medidas", _op, selection_mode="multi",
-                                default=_def, key="vh_medidas",
-                                label_visibility="collapsed")
+                # Medidas y el toggle de % COMPARTEN FILA (2026-08-15): eran
+                # dos filas de ~40px, y el % es una preferencia que se elige
+                # una vez, no un control de uso diario. Ver
+                # estilos/_80_cards.py § MEDIDAS DEL DRILL.
+                _c_med, _c_var = st.columns([3, 1.1],
+                                            vertical_alignment="center")
+                with _c_med:
+                    _sel = st.pills("Medidas", _op, selection_mode="multi",
+                                    default=_def, key="vh_medidas",
+                                    label_visibility="collapsed")
+                with _c_var:
+                    ver_var = st.toggle("% vs marca 1", value=True,
+                                        key="vh_ver_var")
                 if not _sel:
                     st.caption("Elegí al menos una medida.")
                     _sel = _def
                 medidas = {mid for mid, lab in _MEDIDAS if lab in _sel}
-                ver_var = st.toggle("% variación contra la marca 1",
-                                    value=True, key="vh_ver_var")
                 mismo = _tabla_medidas(marcas, tramos, claves, grano, horas,
                                        medidas, ver_var)
                 if not mismo:
@@ -1426,11 +1428,23 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             if marcas and col_prod:
                 _opa = [_MED_LABEL[m] for m in _MED_ARBOL
                         if m != "desc" or col_desc]
-                _sela = st.pills("Detalle por", _opa, selection_mode="multi",
-                                 default=[_MED_LABEL["venta"]],
-                                 key="vh_medidas_arbol",
-                                 label_visibility="collapsed")
+                # Las medidas del árbol comparten fila con Expandir/Colapsar,
+                # que antes vivían en su propia línea dentro de `_tabla_arbol`.
+                _c_ma, _c_exp, _c_col = st.columns(
+                    [3, 1.1, 1], vertical_alignment="center")
+                with _c_ma:
+                    _sela = st.pills("Detalle por", _opa,
+                                     selection_mode="multi",
+                                     default=[_MED_LABEL["venta"]],
+                                     key="vh_medidas_arbol",
+                                     label_visibility="collapsed")
+                with _c_exp:
+                    _exp = st.button("⤢ Expandir", key="vh_arbol_exp",
+                                     use_container_width=True)
+                with _c_col:
+                    _col = st.button("⤡ Colapsar", key="vh_arbol_col",
+                                     use_container_width=True)
                 medidas_arbol = {m for m in _MED_ARBOL
                                  if _MED_LABEL[m] in (_sela or [])} or {"venta"}
                 _tabla_arbol(marcas, tramos, claves, grano, horas,
-                             medidas_arbol)
+                             medidas_arbol, expandir=_exp, colapsar=_col)

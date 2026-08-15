@@ -1114,6 +1114,70 @@ CSS = """    /* ================================================================
        Python conozca el alto de la ventana — hoy sólo se lee el User-Agent
        (`_es_movil`), no las dimensiones. */
 
+    /* =================================================================== */
+    /* MEDIDAS DEL DRILL — tabs, no pastillas                               */
+    /*                                                                       */
+    /* Pedido del usuario el 2026-08-15: "los toggles se ven bonitos pero    */
+    /* ocupan mucho espacio en desktop, me parecen más para móvil". Tiene    */
+    /* razón y el argumento no es estético: la pastilla es un TOUCH TARGET   */
+    /* (44px es la recomendación de Apple y Google para el dedo). Con mouse  */
+    /* el target útil baja a ~24px, así que en desktop se paga el doble de   */
+    /* alto por la misma decisión. Cuatro filas de pastillas eran ~140px de  */
+    /* cromo antes del primer dato.                                          */
+    /*                                                                       */
+    /* [aria-pressed="true"] y NO [data-selected]: estas dos son             */
+    /* MULTI-select (`selection_mode="multi"`), y ahí Streamlit marca el     */
+    /* estado con aria-pressed. El data-selected es el marcado de las        */
+    /* single-select (la granularidad y la medida del mapa, más arriba en    */
+    /* este mismo archivo). Confundirlos deja el selector mudo — le pasó a   */
+    /* Año Pasado durante meses, arquitectura.md #107.                       */
+    /*                                                                       */
+    /* Sólo desktop: en móvil la pastilla es LA respuesta correcta y se      */
+    /* queda como está (mismo breakpoint que _99_movil.py).                  */
+    /* =================================================================== */
+    @media screen and (min-width: 769px) {
+        div[class*="st-key-vh_medidas"] [data-testid="stButtonGroup"]
+            button[data-variant="pills"] {
+            background: transparent !important;
+            border: none !important;
+            border-radius: 0 !important;
+            border-bottom: 2px solid transparent !important;
+            padding: 2px 1px !important;
+            min-height: 24px !important;
+            color: var(--text-secondary) !important;
+            font-weight: 400 !important;
+            font-size: 13.5px !important;
+        }
+        div[class*="st-key-vh_medidas"] [data-testid="stButtonGroup"]
+            button[data-variant="pills"][aria-pressed="true"] {
+            border-bottom-color: var(--accent) !important;
+            color: var(--accent-deep) !important;
+            font-weight: 600 !important;
+        }
+        div[class*="st-key-vh_medidas"] [data-testid="stButtonGroup"] > div {
+            gap: 16px !important;
+            flex-wrap: wrap !important;
+        }
+        /* El toggle de % comparte fila con las medidas: su label en
+           mayúsculas y a 40px de alto era una fila entera para una
+           preferencia que se elige una vez. */
+        div[class*="st-key-vh_ver_var"] label {
+            font-size: 12px !important;
+            text-transform: none !important;
+        }
+        div[class*="st-key-vh_ver_var"] {
+            margin-top: 2px !important;
+        }
+        /* Las pastillas de MARCAS sí siguen siendo pastillas —son chips con
+           color y una ✕, no un selector— pero compactas. */
+        div[class*="st-key-vh_marcas_pills"] [data-testid="stButtonGroup"]
+            button[data-variant="pills"] {
+            min-height: 26px !important;
+            padding: 2px 10px !important;
+            font-size: 12.5px !important;
+        }
+    }
+
     /* El título comparte fila con los tabs, así que tiene que compartir su
        línea de base: el contenedor de markdown trae margen propio y lo
        dejaba 8px más abajo que las pastillas (medido). */
