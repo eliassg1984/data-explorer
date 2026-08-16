@@ -54,7 +54,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     if _otros_mask_temp.any():
         _todos_provs_temp = _todos_provs_temp + ["Otros"]
     _real_provs = [p for p in _todos_provs_temp if p != "Otros"]  # sin "Otros"
-    _default_prov_sel = _real_provs[:5]
+    # 2026-08-16, a pedido: por defecto se muestran TODOS los proveedores del
+    # rango de fechas, no los 5 mas grandes. `_todos_provs_temp` sale de `d`,
+    # que ya viene filtrado por fecha, asi que "todos" significa "todos los
+    # que compraron en el periodo elegido" y cambia solo con la fecha.
+    # El usuario sigue pudiendo recortar con Top 3/5/10 en el popover.
+    _default_prov_sel = _real_provs
     # Inicializar el estado de cada proveedor (checkbox) la primera vez que
     # aparece. La clave usa el nombre (estable aunque cambie el orden/filtro).
     for _p in _todos_provs_temp:
@@ -81,9 +86,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # Selección de proveedores: se LEE de session_state (cp_prov_cb::<nombre>).
     # El popover se DIBUJA flotando arriba-izquierda sobre el gráfico (más
     # abajo), por eso aquí solo se calcula la selección para armar el figure.
+    # El `or` cubre el caso "el usuario destildo todo": cae al default, que
+    # desde 2026-08-16 son TODOS (ver `_default_prov_sel` arriba) — los dos
+    # tienen que decir lo mismo o el reset del popover cambiaria el default.
     prov_multisel = [p for p in _todos_provs_temp
                      if st.session_state.get("cp_prov_cb::" + str(p))] \
-                    or _real_provs[:5]
+                    or _real_provs
 
     # ── Preparar base de datos ─────────────────────────────────────────────
     base = pd.DataFrame({
@@ -129,12 +137,18 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         base["per"] = base["_per_sort"]
     base = base[base["per"].notna() & (base["per"] != "<NA>")]
 
-    # Top N proveedores por valor total (para la paleta y el filtro)
+    # Proveedores a dibujar (gobiernan la paleta, el filtro y el cuadro de
+    # control de la izquierda).
     _tot_all  = base["valor"].sum() or 1.0
     top_provs = [p for p in prov_multisel if p in set(base["prov"].unique())]
     if not top_provs:
+        # 2026-08-16: sin seleccion propia se muestran TODOS los del rango de
+        # fechas (a pedido), no los 5 mas grandes. Ordenados por valor para
+        # que la paleta siga asignando los colores mas fuertes a los que mas
+        # pesan, igual que antes. Con "todos" ya no hay resto: la serie gris
+        # "Otros" desaparece sola, porque _otros_mask queda vacia.
         top_provs = (base.groupby("prov")["valor"].sum()
-                         .nlargest(5).index.tolist())
+                         .sort_values(ascending=False).index.tolist())
 
     # Asignar color por proveedor (los que no están en top → "Otros" en gris)
     base["prov_label"] = base["prov"].where(base["prov"].isin(top_provs), "Otros")
@@ -227,12 +241,17 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     _gran_suffix = sufijo_granularidad(gran)
 
     # Ancho útil del plot según el dispositivo (User-Agent): móvil ~345px,
-    # descontando el espacio entre barras queda ~245 útil; desktop ~700. De ahí
-    # sale el ancho estimado por barra, que gobierna DOS decisiones que Plotly
-    # dibuja en el servidor (y no puede adaptar al ancho real): cuánto abreviar
-    # el nombre y cuándo compactar la etiqueta. Así móvil abrevia/compacta y
-    # desktop conserva nombres y etiquetas completas.
-    _plot_util_px = 245 if _es_movil() else 700
+    # descontando el espacio entre barras queda ~245 útil. De ahí sale el ancho
+    # estimado por barra, que gobierna DOS decisiones que Plotly dibuja en el
+    # servidor (y no puede adaptar al ancho real): cuánto abreviar el nombre y
+    # cuándo compactar la etiqueta.
+    # 2026-08-16: desktop baja de 700 a 545. El cuadro de control de
+    # proveedores dejó de flotar SOBRE el plot y pasó a ser una columna a su
+    # izquierda (st.columns([1, 3.6]) más abajo), así que el gráfico ya no se
+    # queda con el ancho entero de la tarjeta: 700 * 3.6/4.6 ≈ 548. Si no se
+    # actualiza, el servidor cree que hay más aire del que hay y deja de
+    # abreviar los nombres justo cuando más falta hace.
+    _plot_util_px = 245 if _es_movil() else 545
     _ancho_barra_lbl = _plot_util_px / max(1, len(_per_vis) * _n_series)
 
     # Etiqueta compacta (recorta docs + % del período, deja valor + variación)
@@ -531,13 +550,19 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # controla con la ventana de periodos (server-side) + flechas de
         # navegación — nunca scroll horizontal externo ni zoom client-side.
         with st.container(key="cp_chart_wrap"):
-            # ── Panel-leyenda plegable, flotando sobre el plot ──────────────
+            # ── Cuadro de control (izq.) + gráfico (der.) ───────────────────
+            # 2026-08-16, a pedido: el panel de proveedores dejo de FLOTAR
+            # encima del plot y paso a ser una columna propia a su izquierda.
+            # Flotando no le quitaba ancho al grafico pero le tapaba las
+            # barras del extremo; como columna no tapa nada, a cambio de
+            # ceder ~180px. Sigue siendo plegable, que es la valvula para
+            # devolverle ese ancho al grafico cuando hace falta.
+            _c_leg, _c_chart = st.columns([1, 3.6], gap="small")
+            # ── Panel-leyenda plegable ──────────────────────────────────────
             # Reemplaza la leyenda nativa de Plotly (ver showlegend=False
             # arriba). Mismo patrón que "Detalle" de Ventas › Año Pasado:
             # un st.button que hace de título+chevron y el estado abierto en
-            # session_state; las filas se dibujan DENTRO del mismo
-            # container, que es position:absolute sobre el plot — así
-            # abrirlo/cerrarlo NO mueve el gráfico ni necesita un portal.
+            # session_state.
             #
             # Las filas son BOTONES, no toggles, a propósito: el estado de
             # "qué proveedores se ven" ya lo dueñan los checkboxes
@@ -571,45 +596,50 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     for _i, (_p, _c, _v, _pc) in enumerate(_filas_leyenda))
                 + "</style>",
                 unsafe_allow_html=True)
-            with st.container(key="cp_leyenda_float"):
-                _chev = ("keyboard_arrow_up" if _leyenda_abierta
-                         else "keyboard_arrow_down")
-                st.button(f"Proveedores · {len(_filas_leyenda)}",
-                          key="cp_leyenda_toggle",
-                          icon=f":material/{_chev}:",
-                          on_click=_toggle_leyenda)
-                if _leyenda_abierta:
-                    with st.container(key="cp_leyenda_panel", gap=None,
-                                      width=250):
-                        for _i, (_p, _c, _v, _pc) in enumerate(_filas_leyenda):
-                            _cols = st.columns([3, 2],
-                                               vertical_alignment="center")
-                            with _cols[0]:
-                                # "Otros" no es un proveedor real: agrupa a
-                                # todos los que quedaron fuera del top, así
-                                # que enfocarlo no significa nada (el foco
-                                # filtra los paneles de abajo por UN
-                                # proveedor). Se dibuja igual, deshabilitado.
+            with _c_leg:
+                with st.container(key="cp_leyenda_float"):
+                    _chev = ("keyboard_arrow_up" if _leyenda_abierta
+                             else "keyboard_arrow_down")
+                    st.button(f"Proveedores · {len(_filas_leyenda)}",
+                              key="cp_leyenda_toggle",
+                              icon=f":material/{_chev}:",
+                              on_click=_toggle_leyenda)
+                    if _leyenda_abierta:
+                        # Sin `width=250`: ahora el ancho lo manda la COLUMNA,
+                        # no el panel. Fijarlo acá lo desbordaría cuando la
+                        # ventana se angosta.
+                        with st.container(key="cp_leyenda_panel", gap=None):
+                            for _i, (_p, _c, _v, _pc) in enumerate(_filas_leyenda):
+                                # Nombre y monto en DOS lineas, no en dos
+                                # columnas: la columna mide ~180px y partirla
+                                # en 3/2 dejaba ~100px para el nombre, que
+                                # truncaba casi todos. Apilados, el nombre se
+                                # lleva el ancho completo.
                                 with st.container(key=f"cp_leg_row_{_i}"):
+                                    # "Otros" no es un proveedor real: agrupa a
+                                    # los que quedaron fuera de la seleccion,
+                                    # asi que enfocarlo no significa nada (el
+                                    # foco filtra los paneles de abajo por UN
+                                    # proveedor). Se dibuja igual, apagado.
                                     st.button(
-                                        _compras_truncar(_p, 18),
+                                        _compras_truncar(_p, 22),
                                         key=f"cp_leg_btn_{_i}",
                                         disabled=(_p == "Otros"),
                                         help=_p,
                                         on_click=_leyenda_foco, args=(_p,))
-                            with _cols[1]:
-                                st.markdown(
-                                    f'<div class="cp-leg-val">S/ {_v:,.0f}'
-                                    f'<span>{_pc:.0f}%</span></div>',
-                                    unsafe_allow_html=True)
-            st.plotly_chart(
-                fig,
-                use_container_width=True,
-                key=_chart_key,
-                on_select="rerun",
-                selection_mode="points",
-                config=_cfg_chart,
-            )
+                                    st.markdown(
+                                        f'<div class="cp-leg-val">S/ {_v:,.0f}'
+                                        f'<span>{_pc:.0f}%</span></div>',
+                                        unsafe_allow_html=True)
+            with _c_chart:
+                st.plotly_chart(
+                    fig,
+                    use_container_width=True,
+                    key=_chart_key,
+                    on_select="rerun",
+                    selection_mode="points",
+                    config=_cfg_chart,
+                )
         # Navegacion de la ventana de periodos. El indice y el tamano viven en
         # session_state, asi que clicar una barra NO los mueve. El popover
         # central muestra cuantas agrupaciones se ven y permite cambiarlo.

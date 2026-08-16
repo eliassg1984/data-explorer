@@ -148,53 +148,23 @@ CSS = """        <style>
                                 - (var(--rail-der-res) - 22px)) !important;
             }
         }
-        /* ── PANEL-LEYENDA PLEGABLE (reemplaza la leyenda de Plotly) ──────
-           Mismas medidas y materiales que "Detalle" de Ventas > Año Pasado
-           (estilos/_80_cards.py): vidrio gris al 8% con saturate, borde
-           casi transparente, radio 6px y ancho FIJO — sin el ancho fijo la
-           tarjeta se encoge al texto cuando esta cerrada y salta de ancho
-           en cada clic. Abrir/cerrar no mueve el grafico: al ser absolute
-           esta fuera del flujo.
-           2026-08-16, 2da vuelta ("esta muy abajo, lo deseo mas arriba,
-           cerca del borde"): se ancla a la TARJETA y no a `cp_chart_wrap`.
-           El wrap empieza ~65px mas abajo que la tarjeta (ahi termina la
-           banda de controles), asi que anclado a el el panel nunca podia
-           subir de esa linea por mas que su `top` fuera 0. Por eso el wrap
-           NO lleva position:relative: sin el, el bloque contenedor pasa a
-           ser `compras_prov_card_chart`, que ya es relative, y el panel
-           puede subir hasta el borde de la tarjeta.
-           Efecto lateral bueno: al no ser el wrap su bloque contenedor,
-           el `overflow:hidden` que ese wrap se pone durante la animacion
-           de alto tampoco lo recorta.
-           Va arriba-IZQUIERDA, el hueco que dejo `prov_pop_float` al
-           mudarse a la franja — pero ese popover VUELVE aca abajo de
-           1230px (ver su media query), y ahi si chocarian: por eso el
-           `top` de la banda alta va en un @media gemelo, mismo umbral.
-           Abajo de 1230 el panel se queda debajo de la banda (66px), que
-           es donde estaba antes de esta vuelta. */
+        /* ── CUADRO DE CONTROL DE PROVEEDORES (reemplaza la leyenda) ──────
+           2026-08-16, 3ra vuelta: dejo de FLOTAR sobre el plot y paso a ser
+           una COLUMNA propia a su izquierda (st.columns en proveedor.py).
+           Las dos vueltas anteriores lo movieron dentro del grafico —
+           primero abajo, despues pegado al borde— hasta que quedo claro que
+           el problema no era DONDE flotaba sino QUE flotaba: encima de las
+           barras siempre tapa alguna.
+           Se van con el flotado todos sus artificios: position/top/left,
+           z-index, el ancho fijo de 250px (ahora lo manda la columna), el
+           vidrio translucido con saturate y la sombra. Lo que era una
+           lamina apoyada sobre el grafico pasa a ser una region de la
+           tarjeta, y una region se separa con una LINEA, que ademas es el
+           lenguaje plano que ya usa el resto del reporte. */
         .st-key-cp_leyenda_float {
-            position: absolute;
-            top: 66px; left: 16px; z-index: 6;
-            width: 250px !important;
-            overflow: hidden;
-            padding: 1px 0 !important;
+            padding: 2px 10px 4px 0 !important;
             gap: 0 !important;
-            background: rgba(113, 113, 122, 0.08) !important;
-            background: color-mix(in srgb, var(--text-secondary) 8%, transparent) !important;
-            backdrop-filter: saturate(1.15) !important;
-            -webkit-backdrop-filter: saturate(1.15) !important;
-            border: 1px solid rgba(113, 113, 122, 0.12) !important;
-            border: 1px solid color-mix(in srgb, var(--text-secondary) 12%, transparent) !important;
-            border-radius: 6px !important;
-            box-shadow: 0 2px 10px rgba(16, 16, 20, 0.05) !important;
-        }
-        /* Gemelo del @media de prov_pop_float (mismo umbral, a proposito):
-           recien cuando ESE popover se va a la franja queda libre la banda
-           alta de la tarjeta, y el panel puede subir al borde. 12px lo deja
-           en la misma linea que las pills de granularidad (top:14px) sin
-           pegarse al filo. */
-        @media (min-width: 1230px) {
-            .st-key-cp_leyenda_float { top: 12px !important; }
+            border-right: 1px solid var(--border) !important;
         }
         .st-key-cp_leyenda_float [data-testid="stElementToolbar"] { display: none; }
         /* El boton-titulo se lee como TEXTO clickeable de la tarjeta, no
@@ -232,12 +202,20 @@ CSS = """        <style>
             color: var(--text-primary) !important;
         }
         .st-key-cp_leyenda_panel {
-            padding: 0 8px 5px !important;
+            padding: 0 0 5px 2px !important;
             gap: 0 !important;
+            /* Con "todos los proveedores" por defecto la lista puede ser
+               larga; se le pone techo y scroll propio para que el cuadro no
+               estire la tarjeta a un alto arbitrario. El techo se ata al
+               alto del grafico, no a un px suelto. */
+            max-height: 330px !important;
+            overflow-y: auto !important;
         }
-        .st-key-cp_leyenda_panel [data-testid="stHorizontalBlock"] {
-            gap: 4px !important;
-            align-items: center !important;
+        /* Cada fila apila nombre y monto (antes eran dos columnas). El
+           bloque de la fila no debe meter aire entre esas dos lineas. */
+        .st-key-cp_leyenda_panel [class*="st-key-cp_leg_row_"] {
+            gap: 0 !important;
+            margin-bottom: 4px !important;
         }
         /* Fila = boton con el swatch de color en un ::before. El color entra
            por --cp-leg-color, que Python publica por key (no puede ir inline:
@@ -282,13 +260,18 @@ CSS = """        <style>
             opacity: .75 !important;
             cursor: default !important;
         }
+        /* Monto + %: segunda linea de la fila, sangrada para alinearse con
+           el NOMBRE y no con el swatch (9px de swatch + 6px de gap = 15px,
+           +2px del padding del boton). A la izquierda, no a la derecha:
+           apilada bajo el nombre, alinearla a la derecha la dejaba flotando
+           lejos del texto al que pertenece. */
         .cp-leg-val {
             font-size: 11px;
             font-weight: 600;
             color: var(--text-primary);
-            text-align: right;
             white-space: nowrap;
-            line-height: 1.3;
+            line-height: 1.25;
+            padding-left: 17px;
         }
         .cp-leg-val span {
             font-weight: 400;
