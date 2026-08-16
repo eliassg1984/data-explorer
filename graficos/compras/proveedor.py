@@ -14,7 +14,9 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from tema import ACENTO, GRIS_BORDE, SERIE_PRINCIPAL
-from graficos.base import PALETA_CALLAI, _card, _compras_layout, _compras_truncar
+from graficos.base import (
+    PALETA_CALLAI, _card, _compras_layout, _compras_truncar, titulo_en_franja,
+)
 from graficos.compras._comun import _es_movil, _first_point
 from graficos.compras._css_proveedor import CSS as CSS_PROVEEDOR
 from graficos.compras._documentos_proveedor import tabla_documentos
@@ -404,6 +406,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # El contenedor "compras_prov_card_chart" es posición relativa; dentro,
     # las pills se posicionan en absoluto arriba-derecha, superpuestas al gráfico.
     st.markdown(CSS_PROVEEDOR, unsafe_allow_html=True)
+
+    # Nombre de la vista en la FRANJA superior, a la derecha del pill de
+    # fecha (a pedido). Mismo mecanismo que los otros titulos fantasma
+    # (arquitectura.md regla #120): vive fuera de la tarjeta y lo ancla el
+    # CSS con position:fixed. La diferencia con Compras > Familia es de que
+    # LADO del pill cae: alla a la izquierda, aca a la derecha — por eso
+    # los chips se corren y el pill NO (ver _css_proveedor.py).
+    titulo_en_franja(
+        st.container(key="compras_prov_titulo_franja").empty(), "Proveedor")
 
     # Key ESTABLE (solo depende de la granularidad): evita que Streamlit
     # remonte el componente Plotly en cada clic. El clic se procesa arriba,

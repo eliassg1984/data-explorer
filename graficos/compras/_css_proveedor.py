@@ -90,6 +90,56 @@ CSS = """        <style>
                 z-index: 23 !important;
             }
         }
+        /* Nombre de la vista ("Proveedor") en la franja, a la DERECHA del
+           pill de fecha — al reves que en Compras > Familia, donde el
+           titulo va a su izquierda y empuja al pill. Aca el pill se queda
+           en su sitio (175px) y lo que se corre son los CHIPS.
+           Cadena de numeros acoplada, medida en vivo:
+             391 = donde arrancan los chips normalmente (= 175 del pill +
+                   210 de su ancho + 6 de aire) -> ahi va ahora el titulo.
+             100 = ancho reservado para la palabra "Proveedor" a 14px/700.
+             503 = 391 + 100 + 12 de aire -> nuevo left de los chips.
+           Mover uno sin los otros dos descoloca la fila. El umbral de este
+           bloque (1340px) sube respecto al de prov_pop_float (1230) porque
+           los chips arrancan 112px mas a la derecha:
+             503 + 492 (chips) + 12 + 165 (prov_pop) + 163 = 1335 -> 1340.
+           Los DOS bloques tienen que entrar o salir juntos, si no el
+           titulo se superpondria con unos chips que no se corrieron: por
+           eso el `right` de prov_pop_float se repite aca, para que en la
+           banda 1230-1339 (titulo oculto, chips sin correr) prov_pop_float
+           siga con su propia cuenta, que ahi todavia da. */
+        .st-key-compras_prov_titulo_franja {
+            position: fixed !important;
+            top: 8px !important;
+            left: 391px !important;
+            right: auto !important;
+            bottom: auto !important;
+            width: 100px !important;
+            z-index: 23 !important;
+            margin: 0 !important;
+            display: none !important;   /* oculto por defecto; ver abajo */
+        }
+        @media (min-width: 1340px) {
+            .st-key-compras_prov_titulo_franja { display: block !important; }
+            .st-key-compras_prov_titulo_franja [data-testid="stMarkdownContainer"] p {
+                margin: 0 !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                white-space: nowrap !important;
+                font-size: 14px !important;
+                font-weight: 700 !important;
+                line-height: calc(var(--cab-altura) - 8px) !important;
+                color: var(--text-primary) !important;
+            }
+            /* Los chips ceden los 112px que ocupa el titulo. Clase duplicada
+               para ganarle a `.st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla`
+               de estilos/_50_fecha.py sin depender del orden de archivos. */
+            .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
+                left: 503px !important;
+                max-width: calc(100vw - 503px
+                                - (var(--rail-der-res) - 22px)) !important;
+            }
+        }
         /* Variante "outline en tinte" (violeta claro con borde y texto oscuros).
            Contraste bajo: fondo casi blanco con leve tinte, borde tenue. */
         .st-key-prov_pop_float [data-testid="stPopover"] button {
