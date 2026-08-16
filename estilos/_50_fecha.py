@@ -602,9 +602,25 @@ CSS = """    /* ================================================================
        criterio, no una marcha atrás: la fusión sacó la sombra y las
        esquinas (que dibujaban una TARJETA), esto devuelve solo el
        límite. */
+    /* 6ta vuelta — franja OPACA al scrollear, a pedido. La regla base
+       (estilos/_40_ajuste_franja.py) la pinta con --bg-card al 88% +
+       `backdrop-filter: blur(14px)`: el contenido pasa por debajo y se
+       adivina desenfocado detrás de los controles. Ese efecto "cristal
+       esmerilado" nació cuando la franja era una banda tintada sobre un
+       lienzo GRIS, donde el contraste lo sostenía el color. Con Compras ya
+       en blanco uniforme (ver la regla de --bg-card más abajo) lo único
+       que aporta es ruido bajo el texto de los controles.
+       Se opaca con el MISMO token, sin el 88%, y se apaga el
+       backdrop-filter: con un fondo opaco no tiene nada que desenfocar y
+       solo cuesta pintado en cada frame del scroll. Ojo con el
+       `-webkit-` — hay que apagar los dos, si no Safari/Chrome viejos
+       siguen componiendo la capa. */
     [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
         .st-key-fila_ajuste_top::before {
         border-bottom: 1px solid var(--border) !important;
+        background: var(--bg-card) !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
     }
     [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
         .st-key-ajuste_graf_card_izq_compras {
