@@ -570,4 +570,22 @@ CSS = """    /* ================================================================
             max-width: calc(100vw - 667px - (var(--rail-der-res) - 22px)) !important;
         }
     }
+
+    /* PROTOTIPO (2026-08-16) — "fusionar" la tarjeta con la franja: sin la
+       línea divisoria y con las esquinas superiores de la tarjeta cuadradas
+       (en vez de redondeadas), para que se lea como una sola superficie
+       continua en vez de barra + tarjeta. Acotado a Compras › Familia via
+       :has() — NO en el media query de arriba (el corte es independiente
+       de si el título llegó a caber, aplica a cualquier ancho). Si gusta,
+       generalizar sacando el :has() (afecta a los 8 reportes, son las
+       mismas reglas wildcard que ya documenta CLAUDE.md/arquitectura.md). */
+    [data-testid="stAppViewContainer"]:has(.st-key-compras_fam_titulo_franja)
+        .st-key-fila_ajuste_top::before {
+        border-bottom: none !important;
+    }
+    [data-testid="stAppViewContainer"]:has(.st-key-compras_fam_titulo_franja)
+        .st-key-ajuste_graf_card_izq_compras {
+        border-top-left-radius: 0 !important;
+        border-top-right-radius: 0 !important;
+    }
 """
