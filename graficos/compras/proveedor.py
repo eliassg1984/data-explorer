@@ -291,15 +291,32 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         _docs_prov = None
     _rk_docs = [int(_docs_prov.get(p, 0)) if _docs_prov is not None else 0
                 for p in _rk_nombres]
-    # El foco se resalta apagando a los demás, igual que en el chart viejo.
-    _rk_op = [1.0 if (prov_focus is None or p == prov_focus) else 0.30
-              for p in _rk_nombres]
+    # El foco se resalta ACLARANDO el color de los demás, no bajándoles la
+    # opacidad. No es cosmética: con `marker.opacity` como LISTA (una por
+    # punto) plotly revienta al aplicar el estilo de selección —
+    # `textPointStyle` lee `trace.textfont` de una traza que le llega
+    # undefined, y el TypeError mata el handler del clic, que es lo que
+    # hacía que el drill no abriera (reportado: "no aparece el drill" +
+    # error de JS). Con una sola serie y opacidad escalar no entra en ese
+    # camino. Ver arquitectura.md.
+    def _atenuar(_hex, _f=0.72):
+        """Mezcla el color con blanco. _f=0 deja el original, 1 lo borra."""
+        _h = _hex.lstrip("#")
+        if len(_h) != 6:
+            return _hex
+        _r, _g, _b = (int(_h[i:i + 2], 16) for i in (0, 2, 4))
+        _m = lambda _c: int(round(_c + (255 - _c) * _f))   # noqa: E731
+        return f"#{_m(_r):02X}{_m(_g):02X}{_m(_b):02X}"
+
+    if prov_focus is not None:
+        _rk_colores = [_c if _p == prov_focus else _atenuar(_c)
+                       for _p, _c in zip(_rk_nombres, _rk_colores)]
 
     fig = go.Figure(go.Bar(
         x=_rk_valores,
         y=[_compras_truncar(p, 24) for p in _rk_nombres],
         orientation="h",
-        marker=dict(color=_rk_colores, opacity=_rk_op),
+        marker=dict(color=_rk_colores),
         text=_rk_txt,
         textposition="outside",
         textfont=dict(size=12),
@@ -537,6 +554,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         key=f"cp_evo_{gran}_{_prov_evo}",
                         config={"displayModeBar": False},
                     )
+        # Navegacion de la ventana de periodos. El indice y el tamano viven en
         # session_state, asi que clicar una barra NO los mueve. El popover
         # central muestra cuantas agrupaciones se ven y permite cambiarlo.
         def _win_mover(_delta):
