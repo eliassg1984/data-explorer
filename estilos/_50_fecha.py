@@ -590,9 +590,21 @@ CSS = """    /* ================================================================
        borde propio por bloque) no se tocan: nada matchea ahí. Si gusta,
        generalizar a los 8 reportes es sacar este :has() (son las mismas
        reglas wildcard que ya documenta CLAUDE.md/arquitectura.md). */
+    /* 5ta vuelta — la línea inferior de la franja VUELVE, a pedido ("deseo
+       que exista una línea acá a manera de separación visual"): sin nada
+       que marcara el límite, la franja y el contenido se leían como una
+       sola masa. Pero NO vuelve como estaba (2px de --border-lavender):
+       eso era el lenguaje de tarjetas de antes. Vuelve como HAIRLINE de
+       1px en --border, que es el mismo recurso con el que ya se separan
+       el nav-rail, el rail derecho, la franja inferior y los bloques del
+       drill de Proveedor — y es como separa paneles la referencia
+       (Google Finance usa líneas, no sombras). Es la corrección del
+       criterio, no una marcha atrás: la fusión sacó la sombra y las
+       esquinas (que dibujaban una TARJETA), esto devuelve solo el
+       límite. */
     [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
         .st-key-fila_ajuste_top::before {
-        border-bottom: none !important;
+        border-bottom: 1px solid var(--border) !important;
     }
     [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
         .st-key-ajuste_graf_card_izq_compras {
