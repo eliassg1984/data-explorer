@@ -515,11 +515,27 @@ CSS = """        <style>
             width: auto !important;
         }
         .st-key-topn_float > div { width: auto !important; }
-        .st-key-topn_pills {
+        /* Clase DUPLICADA a proposito: `.st-key-chartcard_prov_prods
+           [data-testid="stVerticalBlock"] { gap:0 !important }` (mas arriba)
+           mata el gap de TODOS los bloques anidados —existe para juntar el
+           titulo con el grafico, en vertical— y de paso aplastaba tambien
+           esta fila, que es horizontal. Con una sola clase (0,1,0) perdia
+           contra esa regla (0,2,0); duplicada empata en especificidad y
+           gana por ir despues.
+           Medido: el `gap: 6px` que habia aca NUNCA se aplico (computaba
+           0px). No se notaba porque cada grupo era una capsula con borde
+           propio, que ya marcaba donde terminaba uno y empezaba el otro. Al
+           pasar a tabs de texto esa frontera la tiene que dar el aire, y
+           con 0 los dos grupos quedaban pegados ("Seleccion" terminaba en
+           el mismo pixel donde arrancaba "5"). 20px > los 14px de
+           separacion DENTRO de cada grupo, para que se lean como dos
+           clusters y no como una lista pareja de cinco opciones. */
+        .st-key-topn_pills.st-key-topn_pills {
             flex-direction: row !important;
             flex-wrap: nowrap !important;
             align-items: center !important;
-            gap: 6px !important;
+            gap: 20px !important;
+            column-gap: 20px !important;
             width: auto !important;
         }
         .st-key-topn_pills > div { width: auto !important; }
@@ -589,10 +605,14 @@ CSS = """        <style>
             line-height: 1 !important;
         }
 
-        /* ── Cápsula segmentada: unir las pills en un solo control ── */
-        .st-key-gran_float [data-testid="stButtonGroup"],
-        .st-key-topn_float [data-testid="stButtonGroup"],
-        .st-key-panelb_scope_float [data-testid="stButtonGroup"] {
+        /* ── Cápsula segmentada: unir las pills en un solo control ──
+           2026-08-16: la capsula quedo SOLO para `gran_float` (la barra de
+           granularidad del grafico, que convive con los chips de win_nav y
+           mantiene ese lenguaje). Los dos encabezados de PANEL —topn_float
+           (Rango/Seleccion + 5/10/20) y panelb_scope_float (En rango/Todo)—
+           salieron de aca a pedido ("que esto no sea toggle, sino que sea
+           texto") y pasan a tabs de texto subrayado, mas abajo. */
+        .st-key-gran_float [data-testid="stButtonGroup"] {
             gap: 0 !important;
             border: 1px solid rgba(49,51,63,0.2);
             border-radius: 999px;
@@ -605,17 +625,68 @@ CSS = """        <style>
                no se puede abrir sin R2. */
             background: var(--bg-card);
         }
-        .st-key-gran_float [data-testid="stButtonGroup"] button,
-        .st-key-topn_float [data-testid="stButtonGroup"] button,
-        .st-key-panelb_scope_float [data-testid="stButtonGroup"] button {
+        .st-key-gran_float [data-testid="stButtonGroup"] button {
             border: 0 !important;
             border-radius: 0 !important;
             margin: 0 !important;
         }
-        .st-key-gran_float [data-testid="stButtonGroup"] button:not(:first-child),
-        .st-key-topn_float [data-testid="stButtonGroup"] button:not(:first-child),
-        .st-key-panelb_scope_float [data-testid="stButtonGroup"] button:not(:first-child) {
+        .st-key-gran_float [data-testid="stButtonGroup"] button:not(:first-child) {
             border-left: 1px solid rgba(49,51,63,0.15) !important;
+        }
+
+        /* ── Encabezados de panel: TABS DE TEXTO, no pastillas ────────────
+           Mismo lenguaje que ya usan las franjas de control de Ventas (Por
+           dia, Ano Pasado) y Compras > Familia en estilos/_80_cards.py: el
+           activo se marca con un subrayado de acento, no con un relleno.
+           `[data-selected="true"]` y NO `[aria-pressed="true"]`: los cuatro
+           grupos de aca son single-select (st.pills sin selection_mode), y
+           Streamlit los marca con role="radio" + data-selected; aria-pressed
+           es el marcado de los MULTI-select. Ese error ya costo un selector
+           muerto durante varios commits en Ano Pasado (arquitectura.md
+           #107, 2do addendum). */
+        .st-key-topn_float [data-testid="stButtonGroup"],
+        .st-key-panelb_scope_float [data-testid="stButtonGroup"] {
+            border: none !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            overflow: visible !important;
+        }
+        /* El gap REAL va en el hijo directo del stButtonGroup (que es
+           display:block), no en el grupo — mismo hallazgo que en Ventas y
+           Familia. Sin capsula que los una, el aire es lo unico que separa
+           una opcion de la otra. */
+        .st-key-topn_float [data-testid="stButtonGroup"] > div,
+        .st-key-panelb_scope_float [data-testid="stButtonGroup"] > div {
+            gap: 14px !important;
+            flex-wrap: nowrap !important;
+        }
+        .st-key-topn_float [data-testid="stButtonGroup"] button[data-variant="pills"],
+        .st-key-panelb_scope_float [data-testid="stButtonGroup"] button[data-variant="pills"] {
+            background: transparent !important;
+            border: none !important;
+            border-radius: 0 !important;
+            border-bottom: 2px solid transparent !important;
+            margin: 0 !important;
+            padding: 2px 1px !important;
+            min-height: 0 !important;
+            height: auto !important;
+            color: var(--text-secondary) !important;
+            font-weight: 400 !important;
+            line-height: 1.3 !important;
+        }
+        .st-key-topn_float [data-testid="stButtonGroup"]
+            button[data-variant="pills"][data-selected="true"],
+        .st-key-panelb_scope_float [data-testid="stButtonGroup"]
+            button[data-variant="pills"][data-selected="true"] {
+            border-bottom-color: var(--accent) !important;
+            color: var(--accent-deep) !important;
+            font-weight: 600 !important;
+        }
+        .st-key-topn_float [data-testid="stButtonGroup"]
+            button[data-variant="pills"]:hover,
+        .st-key-panelb_scope_float [data-testid="stButtonGroup"]
+            button[data-variant="pills"]:hover {
+            color: var(--accent) !important;
         }
 
         /* ── Panel B: tarjetas por proveedor (reemplaza el st.dataframe) ──
