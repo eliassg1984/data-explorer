@@ -122,13 +122,13 @@ CSS = """    /* ================================================================
         right: 0 !important;
         height: var(--cab-altura) !important;
         border-radius: 0 !important;   /* toca los dos bordes: sin esquinas */
-        /* Tinte lavanda translúcido en vez del blanco al 62%: el cristal
-           esmerilado sobre canvas blanco era invisible (reportado con
-           captura — "no la veo muy bien"). El color sale de --accent-tint
-           (paleta única, ver CLAUDE.md § Colores) y color-mix le pone el
-           alfa; el blur sigue haciendo falta porque la barra es fixed y el
-           contenido pasa POR DEBAJO al scrollear. */
-        background: color-mix(in srgb, var(--accent-tint) 88%, transparent) !important;
+        /* 2026-08-15: de tinte lavanda a blanco --bg-card (mismo fondo que
+           las tarjetas de gráfico), a pedido — el lavanda se leía como una
+           franja de color aparte en vez de una superficie de la misma
+           familia que el resto de la UI. El blur sigue haciendo falta
+           porque la barra es fixed y el contenido pasa POR DEBAJO al
+           scrollear. */
+        background: color-mix(in srgb, var(--bg-card) 88%, transparent) !important;
         backdrop-filter: blur(14px) saturate(1.6) !important;
         -webkit-backdrop-filter: blur(14px) saturate(1.6) !important;
         border: none !important;
