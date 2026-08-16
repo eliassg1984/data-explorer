@@ -41,10 +41,54 @@ CSS = """        <style>
             padding-bottom: 1px !important;
             line-height: 1.3 !important;
         }
-        /* Popover de proveedores flotando arriba-IZQUIERDA (compacto) */
+        /* Popover de proveedores flotando arriba-IZQUIERDA (compacto).
+           Es el fallback para 641-900px; en desktop sube a la franja (ver
+           el bloque min-width:901px de aca abajo) y en <=640px pasa a
+           static (media query al final del archivo). */
         .st-key-prov_pop_float {
             position: absolute; top: 14px; left: 16px; z-index: 5;
             width: auto !important;
+        }
+        /* DESKTOP: el filtro de proveedores sube a la FRANJA superior, a la
+           derecha — misma fila que fecha / Familia / Subfamilia (a pedido).
+           Mismo truco que ya usan fecha_ajuste_pill, chips_ajuste_tabla y
+           los titulos fantasma (arquitectura.md regla #120): position:fixed
+           lo saca de la tarjeta y lo ancla a la franja, sin importar donde
+           viva en el DOM.
+           · top:8px es el mismo que usan el pill y los chips.
+           · El `right` lo alinea con el borde derecho de la tarjeta que
+             queda justo abajo: --rail-der-res es lo que el contenido le
+             reserva al rail derecho, +10px del margen exterior de
+             Streamlit (los mismos 163px que documenta
+             estilos/_40_ajuste_franja.py). Se deriva de la variable en vez
+             de un px suelto para que siga al rail cuando se pliega.
+           · z-index 23 = el de sus vecinos de la franja.
+           · left/bottom a auto: sin eso el left:16px de la regla de arriba
+             seguiria activo y lo estiraria de lado a lado.
+           El umbral es 1230px y NO los 901px del resto de la franja: abajo
+           de ~1223px este popover se monta sobre los chips Familia/
+           Subfamilia, que no pueden ceder ancho porque llevan
+           min-width:230px cada uno (el addendum de Compras/Inventario/
+           Salidas en estilos/_50_fecha.py). La cuenta del ancho minimo en
+           el que entran los cuatro:
+               391 (left de los chips) + 492 (su ancho: 230*2 + 32 de gaps)
+               + 12 de aire + 165 (este popover) + 163 (su margen derecho)
+               = 1223  ->  se redondea a 1230.
+           Abajo de eso cae al fallback de arriba (dentro de la tarjeta),
+           que es justo lo que ya hacen los titulos fantasma de Ventas
+           (1220px) y Compras > Familia (1310px): antes que apilar
+           controles ilegibles, se vuelve a la posicion previa.
+           Compras no tiene cortes, asi que `fecha_corte_nav` —el otro
+           inquilino de esta esquina— nunca se renderiza aca: sin colision. */
+        @media (min-width: 1230px) {
+            .st-key-prov_pop_float {
+                position: fixed !important;
+                top: 8px !important;
+                left: auto !important;
+                bottom: auto !important;
+                right: calc(var(--rail-der-res) + 10px) !important;
+                z-index: 23 !important;
+            }
         }
         /* Variante "outline en tinte" (violeta claro con borde y texto oscuros).
            Contraste bajo: fondo casi blanco con leve tinte, borde tenue. */
