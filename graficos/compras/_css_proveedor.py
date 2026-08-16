@@ -161,10 +161,19 @@ CSS = """        <style>
            lamina apoyada sobre el grafico pasa a ser una region de la
            tarjeta, y una region se separa con una LINEA, que ademas es el
            lenguaje plano que ya usa el resto del reporte. */
-        .st-key-cp_leyenda_float {
-            padding: 2px 10px 4px 0 !important;
-            gap: 0 !important;
-            border-right: 1px solid var(--border) !important;
+        /* Titulo del grafico de evolucion (columna derecha). Va como markdown
+           y no con `_card(titulo_arriba=)` porque comparte fila con el
+           ranking y tiene que quedar a su misma altura, sin la divisoria
+           que ese helper dibuja. */
+        .cp-evo-tit {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-primary);
+            padding-left: 8px;
+            margin: 0 0 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         /* Scroll horizontal del plot. Solo entra en juego cuando Python le
            forzo un ancho mayor al disponible (ver `_scroll_x` en

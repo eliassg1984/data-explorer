@@ -13,17 +13,14 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from tema import GRIS_BORDE
+from tema import ACENTO, GRIS_BORDE
 from graficos.base import (
-    PALETA_CALLAI, _card, _compras_layout, _compras_truncar, publicar_var_px,
-    titulo_en_franja,
+    PALETA_CALLAI, _card, _compras_layout, _compras_truncar, titulo_en_franja,
 )
 from graficos.compras._comun import _es_movil, _first_point
 from graficos.compras._css_proveedor import CSS as CSS_PROVEEDOR
 from graficos.compras._documentos_proveedor import tabla_documentos
-from graficos.compras._etiquetas_proveedor import (
-    abrev_nombre, etiqueta_serie, sufijo_granularidad,
-)
+from graficos.compras._etiquetas_proveedor import sufijo_granularidad
 from graficos import alturas
 
 
@@ -205,228 +202,137 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     _per_vis = periodos[_win_ini:_win_ini + _ventana]
     _sl = slice(_win_ini, _win_ini + _ventana)
 
+    # Total por proveedor sobre TODO el rango (el ranking no mira períodos).
+    _tot_por_prov = (base[base["prov"].isin(orden_provs)]
+                     .groupby("prov")["valor"].sum()
+                     .reindex(orden_provs, fill_value=0))
+    _rk_nombres = list(_tot_por_prov.index)
+    _rk_valores = [float(v) for v in _tot_por_prov.values]
+    _rk_colores = [PALETA_CALLAI[i % len(PALETA_CALLAI)]
+                   for i in range(len(_rk_nombres))]
+    if _hay_otros and _otros_seleccionado:
+        _rk_nombres.append("Otros")
+        _rk_valores.append(float(base[_otros_mask]["valor"].sum()))
+        _rk_colores.append(GRIS_BORDE)
+
+    # Plotly dibuja las barras horizontales de ABAJO hacia arriba, así que
+    # para que el mayor quede ARRIBA hay que pasarle la lista al revés.
+    # (Es la misma trampa que ya documenta el drill de Familia.)
+    _ord = sorted(range(len(_rk_valores)), key=lambda i: _rk_valores[i])
+    _rk_nombres = [_rk_nombres[i] for i in _ord]
+    _rk_valores = [_rk_valores[i] for i in _ord]
+    _rk_colores = [_rk_colores[i] for i in _ord]
+
     # ── Procesar clic ANTES de dibujar ────────────────────────────────────
     # Leemos la selección que Streamlit guardó en session_state[chart_key] en
     # la interacción previa. Así actualizamos el foco y construimos el figure
     # UNA sola vez con el foco correcto: sin doble rerun = sin parpadeo.
-    # Clic en la MISMA barra enfocada → la desenfoca; clic en otra barra del
-    # mismo proveedor → cambia el período sin perder el foco.
+    # Clic en la MISMA barra → la desenfoca; en otra → cambia el foco. El
+    # foco es lo que ABRE el drill inferior (paneles A/B), así que esto es lo
+    # que mantiene viva esa navegación.
+    #
+    # 2026-08-16: el mapeo pasó de `curve_number` a `point_index`. Con las
+    # barras verticales había UNA SERIE POR PROVEEDOR y el número de serie
+    # identificaba al proveedor; el ranking horizontal es una sola serie con
+    # un punto por proveedor, así que ahora identifica el ÍNDICE del punto.
+    # Por eso los datos del ranking se calculan ARRIBA de este bloque: el
+    # clic necesita el mismo orden con el que se dibujó.
     _chart_key = f"compras_g_prov_main_{gran}"
     _mp = _first_point(st.session_state.get(_chart_key))
     if _mp is not None:
-        _cn = _mp.get("curve_number")
-        # Período (barra) clicado: x de la selección, con fallback al índice.
-        _per_click = _mp.get("x")
-        if _per_click is None:
-            # El indice es relativo a las barras DIBUJADAS (ventana visible).
-            _pi = _mp.get("point_index", _mp.get("point_number"))
-            if _pi is not None and 0 <= _pi < len(_per_vis):
-                _per_click = _per_vis[_pi]
-        if _cn is not None and 0 <= _cn < len(orden_provs):
-            _clicked = orden_provs[_cn]
-            # Dedup por (proveedor, período) para no reprocesar el mismo clic.
-            _click_key = (_clicked, _per_click)
-            if st.session_state.get("compras_prov_last_click") != _click_key:
-                st.session_state["compras_prov_last_click"] = _click_key
-                _misma_barra = (_clicked == prov_focus and _per_click ==
-                                st.session_state.get("compras_prov_perfocus"))
-                prov_focus = None if _misma_barra else _clicked
-                prod_focus = None
-                st.session_state["compras_prov_focus"]     = prov_focus
-                st.session_state["compras_prov_prodfocus"] = None
-                st.session_state["compras_prov_perfocus"]  = (
-                    None if _misma_barra else _per_click)
+        _pi = _mp.get("point_index", _mp.get("point_number"))
+        if _pi is not None and 0 <= _pi < len(_rk_nombres):
+            _clicked = _rk_nombres[_pi]
+            # "Otros" no es un proveedor real: agrupa a los que quedaron
+            # fuera, así que no hay drill que abrir.
+            if _clicked != "Otros":
+                # Dedup para no reprocesar el mismo clic en cada rerun (la
+                # selección de plotly PERSISTE — CLAUDE.md).
+                if st.session_state.get("compras_prov_last_click") != _clicked:
+                    st.session_state["compras_prov_last_click"] = _clicked
+                    _misma_barra = (_clicked == prov_focus)
+                    prov_focus = None if _misma_barra else _clicked
+                    prod_focus = None
+                    st.session_state["compras_prov_focus"]     = prov_focus
+                    st.session_state["compras_prov_prodfocus"] = None
+                    # El período ya no sale de este gráfico (el ranking no
+                    # tiene eje de tiempo): lo fija el de evolución.
+                    st.session_state["compras_prov_perfocus"]  = None
 
-    # ── Gráfico principal: barras verticales por periodo ──────────────────
-
+    # ── Gráfico principal: RANKING horizontal de proveedores ─────────────
+    # 2026-08-16, a pedido y con mockup aprobado (nivel 2 de densidad): deja
+    # de ser barras verticales por período y pasa a un ranking horizontal —
+    # un proveedor por FILA, ordenado por valor. El eje de tiempo no se
+    # pierde: se muda al gráfico de evolución de al lado, que muestra el
+    # proveedor elegido.
+    #
+    # Resuelve de raíz lo que se venía parchando: con 20+ proveedores en
+    # vertical las barras se apretaban hasta ser ilegibles, y hubo que
+    # meterles ancho mínimo y scroll horizontal. En horizontal cada
+    # proveedor es una fila de alto fijo: la lista crece hacia abajo y no
+    # hay nada que comprimir. Por eso también se fue el cuadro de control
+    # de la izquierda: los nombres AHORA SON el eje, y tenerlos también en
+    # una columna aparte era mostrarlos dos veces.
     _gran_suffix = sufijo_granularidad(gran)
 
-    # Ancho útil del plot según el dispositivo (User-Agent): móvil ~345px,
-    # descontando el espacio entre barras queda ~245 útil. De ahí sale el ancho
-    # estimado por barra, que gobierna DOS decisiones que Plotly dibuja en el
-    # servidor (y no puede adaptar al ancho real): cuánto abreviar el nombre y
-    # cuándo compactar la etiqueta.
-    # 2026-08-16: desktop baja de 700 a 545. El cuadro de control de
-    # proveedores dejó de flotar SOBRE el plot y pasó a ser una columna a su
-    # izquierda (st.columns([1, 3.6]) más abajo), así que el gráfico ya no se
-    # queda con el ancho entero de la tarjeta: 700 * 3.6/4.6 ≈ 548. Si no se
-    # actualiza, el servidor cree que hay más aire del que hay y deja de
-    # abreviar los nombres justo cuando más falta hace.
-    _plot_util_px = 245 if _es_movil() else 545
-    _ancho_barra_lbl = _plot_util_px / max(1, len(_per_vis) * _n_series)
 
-    # Etiqueta compacta (recorta docs + % del período, deja valor + variación)
-    # en dos casos:
-    #  · Hay un proveedor en foco → el chart baja a 180px y la etiqueta de 4
-    #    líneas se come casi todo el aire de las barras.
-    #  · Las barras son ANGOSTAS → una etiqueta de 4 líneas no cabe sobre una
-    #    barra de ~50px y plotly la recorta, dejando solo el valor ("incompleta").
-    #    Bajo ~78px de ancho estimado se activa el modo compacto. En desktop las
-    #    barras son anchas, así que casi nunca se activa por ancho.
-    # En ambos casos docs y % siguen en el hover, que ya los trae.
-    _lab_compacta = (prov_focus is not None) or (_ancho_barra_lbl < 78)
-
-    # Nota: la serie se calcula sobre TODOS los periodos y recien despues se
-    # recorta a la ventana visible (_sl). Asi la variacion % de la primera
-    # barra visible sigue comparando contra su periodo anterior real, aunque
-    # ese periodo quede fuera de la ventana.
-    #
-    # Toggle "Nombres en barras": prepende el nombre abreviado del proveedor
-    # a la etiqueta de cada barra. El ancho de barra estimado depende de la
-    # ventana visible y de la cantidad de series → recalculado en cada render.
-    _show_names = st.session_state.get("cp_prov_show_names", True)
-    # Cuánto abreviar el nombre según el ancho estimado por barra (ya calculado
-    # arriba con el ancho de plot según dispositivo). Móvil (~245 útil) abrevia
-    # a la primera palabra cuando hay 3+ series; desktop (~700) conserva el
-    # nombre largo salvo que las barras sean muy angostas. La leyenda y el hover
-    # siempre traen el nombre completo.
-    _ancho_barra_est_px = _ancho_barra_lbl
-    _max_chars = max(0, int(_ancho_barra_est_px / 6.5))  # ~6.5px por char a 11px
-    # Totales por período (sobre TODA la base filtrada, no solo los provs
-    # seleccionados) para el % de participación en cada barra.
-    _tot_por_periodo = (base.groupby("per")["valor"].sum()
-                        .reindex(periodos, fill_value=0))
-    # Cantidad de documentos unicos por (prov, per). Solo si la columna docu
-    # existe y no esta vacia; si no, dejamos None y la etiqueta lo omite.
+    # Nivel 2 del mockup: monto y % del total del rango, nada más. El resto
+    # (documentos) va al hover — en una barra lo que se compara es el LARGO,
+    # y cada cifra extra al final se lo come.
+    # OJO con el %: acá es sobre el total del RANGO, no del período. Con el
+    # eje de tiempo, "12%" podía leerse como "12% de ese mes"; en un ranking
+    # es "12% de todo lo comprado en el rango".
+    _rk_pct = [v / _tot_all * 100 for v in _rk_valores]
+    _rk_txt = [f"S/ {v:,.0f}  ·  {p:.0f}%"
+               for v, p in zip(_rk_valores, _rk_pct)]
     if "docu" in base.columns and (base["docu"].astype(str) != "").any():
-        _docs_por = (base.groupby(["prov", "per"])["docu"]
-                     .nunique().rename("n_docs"))
+        _docs_prov = base.groupby("prov")["docu"].nunique()
     else:
-        _docs_por = None
-    fig = go.Figure()
-    # Filas del panel-leyenda (`cp_leyenda_float`, más abajo). Se juntan acá
-    # y no en un segundo groupby aparte para que el panel y las barras no
-    # puedan discrepar: mismo color, mismo total y mismo % que la serie que
-    # se está dibujando en esta misma vuelta del loop.
-    _filas_leyenda = []
-    for i, prov in enumerate(orden_provs):
-        grp = (base[base["prov"] == prov]
-               .groupby("per", as_index=False)["valor"].sum()
-               .set_index("per")["valor"]
-               .reindex(periodos, fill_value=0))
-        _tot_prov = base[base["prov"] == prov]["valor"].sum()
-        _pct = _tot_prov / _tot_all * 100
-        _color = PALETA_CALLAI[i % len(PALETA_CALLAI)]
-        _filas_leyenda.append((prov, _color, float(_tot_prov), float(_pct)))
-        # Resaltar el proveedor en foco con opacidad plena; los demás, semitransparentes
-        _opacity = 1.0 if (prov_focus is None or prov == prov_focus) else 0.30
+        _docs_prov = None
+    _rk_docs = [int(_docs_prov.get(p, 0)) if _docs_prov is not None else 0
+                for p in _rk_nombres]
+    # El foco se resalta apagando a los demás, igual que en el chart viejo.
+    _rk_op = [1.0 if (prov_focus is None or p == prov_focus) else 0.30
+              for p in _rk_nombres]
 
-        # % que esta barra representa del total del período (0-100). Si el
-        # total del periodo es 0, deja None (etiqueta_serie lo ignora).
-        _pct_per = [(g / t * 100) if t > 0 else None
-                    for g, t in zip(grp.values, _tot_por_periodo.values)]
-        # Docs por bar (alineado con periodos): si el (prov, per) no aparece
-        # en el groupby -> reindex con fill_value=0 -> etiqueta lo omite.
-        if _docs_por is not None and prov in _docs_por.index.get_level_values(0):
-            _docs_prov = (_docs_por.loc[prov]
-                          .reindex(periodos, fill_value=0).astype(int))
-            _docs_lst = list(_docs_prov.values)
-        else:
-            _docs_lst = None
-        _tags = etiqueta_serie(list(grp.values), _gran_suffix,
-                               compacta=_lab_compacta,
-                               pct_periodo=_pct_per,
-                               docs=_docs_lst)[_sl]
-        if _show_names:
-            _abbr = abrev_nombre(prov, _max_chars)
-            if _abbr:
-                _prefix = (f"<b><span style='color:{_color};font-size:10px'>"
-                           f"{_abbr}</span></b><br>")
-                _tags = [(_prefix + t) if t else "" for t in _tags]
+    fig = go.Figure(go.Bar(
+        x=_rk_valores,
+        y=[_compras_truncar(p, 24) for p in _rk_nombres],
+        orientation="h",
+        marker=dict(color=_rk_colores, opacity=_rk_op),
+        text=_rk_txt,
+        textposition="outside",
+        textfont=dict(size=12),
+        cliponaxis=False,
+        customdata=[[p, d] for p, d in zip(_rk_nombres, _rk_docs)],
+        hovertemplate=("<b>%{customdata[0]}</b><br>"
+                       "S/ %{x:,.0f}<br>"
+                       "%{customdata[1]} docs<extra></extra>"),
+    ))
 
-        # customdata por barra: [prov, pct_total_prov, docs_barra, pct_periodo_barra]
-        # para que el tooltip repita la misma info que el rótulo sobre la barra.
-        _docs_lst_vis = list(_docs_lst)[_sl] if _docs_lst else [None] * len(_per_vis)
-        _pct_per_vis = list(_pct_per)[_sl] if _pct_per else [None] * len(_per_vis)
-        _cd = [
-            [prov, _pct,
-             int(_d) if _d and not pd.isna(_d) else 0,
-             float(_p) if _p is not None and not pd.isna(_p) else 0.0]
-            for _d, _p in zip(_docs_lst_vis, _pct_per_vis)
-        ]
-        fig.add_bar(
-            x=_per_vis,
-            y=grp.values[_sl],
-            name=_compras_truncar(prov, 22),
-            marker=dict(color=_color, opacity=_opacity),
-            text=_tags,
-            textposition="outside",
-            textfont=dict(size=13),
-            cliponaxis=False,
-            customdata=_cd,
-            hovertemplate=(
-                "<b>%{customdata[0]}</b>  %{x}<br>"
-                "S/ %{y:,.0f} · %{customdata[1]:.1f}%<br>"
-                "%{customdata[2]} docs · %{customdata[3]:.0f}% "
-                + _gran_suffix +
-                "<extra></extra>"
-            ),
-        )
-
-    # "Otros" proveedores agrupados (gris) — solo si el usuario lo pidió
-    if _hay_otros and _otros_seleccionado:
-        grp_otros = (base[_otros_mask]
-                     .groupby("per", as_index=False)["valor"].sum()
-                     .set_index("per")["valor"]
-                     .reindex(periodos, fill_value=0))
-        _tot_otros = base[_otros_mask]["valor"].sum()
-        _filas_leyenda.append(("Otros", GRIS_BORDE, float(_tot_otros),
-                               float(_tot_otros / _tot_all * 100)))
-        _tags_o = etiqueta_serie(list(grp_otros.values), _gran_suffix,
-                                 compacta=_lab_compacta)[_sl]
-        if _show_names and _max_chars >= 2:
-            _prefix_o = ("<b><span style='color:#7a7a86;font-size:10px'>"
-                         "Otros</span></b><br>")
-            _tags_o = [(_prefix_o + t) if t else "" for t in _tags_o]
-        fig.add_bar(
-            x=_per_vis,
-            y=grp_otros.values[_sl],
-            name="Otros",
-            marker=dict(color=GRIS_BORDE, opacity=0.6),
-            text=_tags_o,
-            textposition="outside",
-            textfont=dict(size=13),
-            cliponaxis=False,
-            hovertemplate="Otros · %{x}<br>S/ %{y:,.0f}<extra></extra>",
-        )
-
-    # Alto del chart principal: se encoge cuando hay un proveedor en foco para
-    # dar aire al detalle de abajo. El figure se dibuja YA al alto final; la
-    # transicion la hace el wrapper (ver _anim_css mas abajo).
-    #
-    # El foco manda las dos cosas a la vez: abre el detalle A/B y encoge el
-    # chart. Cerrar con la X limpia el foco -> el detalle se va y el chart
-    # vuelve a 360 en el mismo rerun.
-    #
-    # 180 en foco: cabe porque la etiqueta se recorta a 2 lineas en ese estado
-    # (ver _lab_compacta). Con las 4 lineas del estado normal no entraria.
-    _alto_chart = 180 if prov_focus is not None else 360
+    # Alto POR FILA, no fijo: es lo que hace que 5 proveedores y 25 se lean
+    # igual (CLAUDE.md § alturas). Ya no se encoge con el foco: en vertical
+    # bajar a 180px daba aire al detalle de abajo, pero en un ranking eso
+    # recortaría proveedores de la lista.
+    _alto_chart = alturas.por_filas(len(_rk_nombres), px_fila=26,
+                                    minimo=180, extra=40)
     _compras_layout(fig, alto=_alto_chart)
     fig.update_layout(
-
-        barmode="group",
-        # Margen superior mínimo: el gráfico sube dentro de la tarjeta y elimina
-        # la franja vacía sobre las barras (los flotantes Proveedores/Periodo se
-        # superponen encima; van con fondo semitransparente y no molestan).
-        margin=dict(l=10, r=10, t=6, b=36),
-        xaxis=dict(type="category", tickangle=0),
-        # Eje Y sin etiquetas de valor (S/ 4,000, S/ 3,500…): cada barra ya
-        # lleva su monto encima, así que la escala numérica era redundante.
-        # Se conserva la grilla como referencia visual de altura, pero sin
-        # números. Ademas libera el margen izquierdo → las barras ganan ancho.
-        yaxis=dict(showticklabels=False),
-        # 2026-08-16: la leyenda NATIVA de Plotly (vertical, flotando dentro
-        # del área con fondo semitransparente) se reemplazó por el panel
-        # plegable `cp_leyenda_float` de más abajo — mismo patrón que
-        # Ventas › Año Pasado, donde "Detalle" ES el legend de la vista.
-        # Motivo: la de Plotly solo puede mostrar color + nombre, y acá el
-        # nombre viene truncado a 22 chars; el panel muestra además el
-        # total y el % de participación de cada proveedor, y sus filas
-        # enfocan/desenfocan igual que un clic en la barra.
+        # r=110 le reserva sitio al rótulo "S/ 4,6k · 19%" que va FUERA de
+        # la barra; sin eso `cliponaxis=False` lo dibuja pero se sale de la
+        # tarjeta.
+        margin=dict(l=10, r=110, t=6, b=10),
+        # En barras HORIZONTALES el eje Y son los NOMBRES, no valores:
+        # `_compras_layout` oculta los ticks del eje Y por convención del
+        # proyecto, así que acá hay que volver a encenderlos — con
+        # `automargin` o los nombres largos se recortan (CLAUDE.md § Plotly).
+        yaxis=dict(showticklabels=True, automargin=True,
+                   tickfont=dict(size=11)),
+        # El eje X sobra: cada barra lleva su monto y su % al final.
+        xaxis=dict(visible=False),
+        bargap=0.28,
         showlegend=False,
         hovermode="closest",
-        # uirevision estable: evita que Plotly reinicie estado de UI propio
-        # (p. ej. leyenda arrastrada) en cada rerun por clic.
         uirevision=_chart_key,
     )
 
@@ -530,29 +436,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         st.markdown(f"<style>{_anim_css}</style>", unsafe_allow_html=True)
         st.session_state["cp_chart_alto_prev"] = _alto_chart
 
-        # ── Ancho MÍNIMO del plot + scroll horizontal ──────────────────────
-        # 2026-08-16, a pedido ("que el gráfico tenga alguna barra para ver
-        # más allá"). Hasta acá el chart SIEMPRE se estiraba al contenedor y
-        # la densidad se controlaba solo con la ventana de períodos: con 5
-        # series alcanzaba, pero desde que el default son TODOS los
-        # proveedores del rango pueden ser 20+, y en un solo período quedan
-        # 20 barras repartiéndose el ancho — ilegibles y con los rótulos
-        # encimados (reportado con captura).
-        # Ahora se le exige un piso de píxeles por barra: si no entra, el
-        # figure toma ese ancho y el contenedor scrollea. Cuando SÍ entra
-        # (el caso normal), nada cambia — sigue siendo responsive.
-        # El ancho NO se le pone al figure: medido, `fig.update_layout(width=)`
-        # no sobrevive — Streamlit reescribe `layout.width` con el ancho del
-        # contenedor al montar el componente (llegaba 828 con 1676 puesto), y
-        # apagar `responsive` tampoco alcanza. Se hace al revés y a favor de
-        # la corriente: Python publica el número como VARIABLE CSS, el
-        # CONTENEDOR toma ese ancho mínimo y Plotly —que sí sigue a su
-        # contenedor— se estira solo. Es el patrón `publicar_var_px` que ya
-        # usa el proyecto para los altos (arquitectura.md regla #117).
-        _PX_BARRA_MIN = 24
-        _ancho_min_plot = len(_per_vis) * _n_series * _PX_BARRA_MIN + 140
-        _scroll_x = _ancho_min_plot > _plot_util_px
-        publicar_var_px("cp-plot-min", _ancho_min_plot if _scroll_x else 0)
+        # El scroll horizontal y el ancho mínimo por barra que vivían acá se
+        # fueron con las barras verticales: existían porque muchas series en
+        # pocos períodos se apretaban a lo ancho. El ranking horizontal no
+        # tiene ese problema — cada proveedor es una fila de alto fijo y lo
+        # que crece es el ALTO, que ya resuelve `alturas.por_filas`.
 
         # Config del chart. En DESKTOP el modebar va oculto (vista BI limpia).
         # En MÓVIL se activa el modebar pero SOLO para conservar el botón de
@@ -575,92 +463,17 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # flechas; cuando ni con eso alcanza —muchas series en pocos
         # periodos— toma su ancho mínimo y el contenedor scrollea.
         with st.container(key="cp_chart_wrap"):
-            # ── Cuadro de control (izq.) + gráfico (der.) ───────────────────
-            # 2026-08-16, a pedido: el panel de proveedores dejo de FLOTAR
-            # encima del plot y paso a ser una columna propia a su izquierda.
-            # Flotando no le quitaba ancho al grafico pero le tapaba las
-            # barras del extremo; como columna no tapa nada, a cambio de
-            # ceder ~180px. Sigue siendo plegable, que es la valvula para
-            # devolverle ese ancho al grafico cuando hace falta.
-            _c_leg, _c_chart = st.columns([1, 3.6], gap="small")
-            # ── Panel-leyenda plegable ──────────────────────────────────────
-            # Reemplaza la leyenda nativa de Plotly (ver showlegend=False
-            # arriba). Mismo patrón que "Detalle" de Ventas › Año Pasado:
-            # un st.button que hace de título+chevron y el estado abierto en
-            # session_state.
-            #
-            # Las filas son BOTONES, no toggles, a propósito: el estado de
-            # "qué proveedores se ven" ya lo dueñan los checkboxes
-            # `cp_prov_cb::<nombre>` del popover de la franja, y dos widgets
-            # con la MISMA key revientan en Streamlit (regla del proyecto:
-            # una sola key por valor). Un botón no guarda estado, así que
-            # acá cada fila hace lo que hace un clic en su barra: enfocar /
-            # desenfocar ese proveedor.
-            def _leyenda_foco(_p):
-                st.session_state["compras_prov_focus"] = (
-                    None if st.session_state.get("compras_prov_focus") == _p
-                    else _p)
-                st.session_state["compras_prov_prodfocus"] = None
-
-            def _toggle_leyenda():
-                # on_click y no el return de st.button: el return recién se
-                # conoce DESPUÉS de dibujar el botón, así que el chevron
-                # quedaría un clic atrasado (misma trampa documentada en
-                # ventas_comparativo.py).
-                st.session_state["cp_leyenda_abierta"] = not st.session_state.get(
-                    "cp_leyenda_abierta", True)
-
-            _leyenda_abierta = st.session_state.get("cp_leyenda_abierta", True)
-            # El color de cada fila se publica como variable CSS por key en
-            # vez de ir inline: el swatch lo pinta un ::before del botón, y
-            # a un pseudo-elemento no se le puede poner estilo inline.
-            st.markdown(
-                "<style>"
-                + "".join(
-                    f".st-key-cp_leg_row_{_i}{{--cp-leg-color:{_c};}}"
-                    for _i, (_p, _c, _v, _pc) in enumerate(_filas_leyenda))
-                + "</style>",
-                unsafe_allow_html=True)
-            with _c_leg:
-                with st.container(key="cp_leyenda_float"):
-                    _chev = ("keyboard_arrow_up" if _leyenda_abierta
-                             else "keyboard_arrow_down")
-                    st.button(f"Proveedores · {len(_filas_leyenda)}",
-                              key="cp_leyenda_toggle",
-                              icon=f":material/{_chev}:",
-                              on_click=_toggle_leyenda)
-                    if _leyenda_abierta:
-                        # Sin `width=250`: ahora el ancho lo manda la COLUMNA,
-                        # no el panel. Fijarlo acá lo desbordaría cuando la
-                        # ventana se angosta.
-                        with st.container(key="cp_leyenda_panel", gap=None):
-                            for _i, (_p, _c, _v, _pc) in enumerate(_filas_leyenda):
-                                # Nombre y monto en DOS lineas, no en dos
-                                # columnas: la columna mide ~180px y partirla
-                                # en 3/2 dejaba ~100px para el nombre, que
-                                # truncaba casi todos. Apilados, el nombre se
-                                # lleva el ancho completo.
-                                with st.container(key=f"cp_leg_row_{_i}"):
-                                    # "Otros" no es un proveedor real: agrupa a
-                                    # los que quedaron fuera de la seleccion,
-                                    # asi que enfocarlo no significa nada (el
-                                    # foco filtra los paneles de abajo por UN
-                                    # proveedor). Se dibuja igual, apagado.
-                                    st.button(
-                                        _compras_truncar(_p, 22),
-                                        key=f"cp_leg_btn_{_i}",
-                                        disabled=(_p == "Otros"),
-                                        help=_p,
-                                        on_click=_leyenda_foco, args=(_p,))
-                                    st.markdown(
-                                        f'<div class="cp-leg-val">S/ {_v:,.0f}'
-                                        f'<span>{_pc:.0f}%</span></div>',
-                                        unsafe_allow_html=True)
-            with _c_chart:
-                # El contenedor propio existe para colgarle el `overflow-x` y
-                # el ancho mínimo (ver _css_proveedor.py). El chart se estira
-                # SIEMPRE al contenedor: es ese contenedor el que crece
-                # cuando las barras no entran, no el figure.
+            # ── Ranking (izq.) + evolución del elegido (der.) ──────────────
+            # 2026-08-16: el cuadro de control de proveedores DESAPARECE.
+            # Listaba color + nombre + monto + %, y con el ranking horizontal
+            # los nombres pasaron a ser el eje: tenerlos también en una
+            # columna aparte era mostrar lo mismo dos veces, a media pantalla
+            # de distancia. Su información no se pierde — el monto y el % van
+            # ahora al final de cada barra.
+            # En su lugar, a la derecha, la EVOLUCIÓN del proveedor elegido:
+            # es donde se mudó el eje de tiempo que el ranking dejó de tener.
+            _c_rank, _c_evo = st.columns([1.5, 1], gap="small")
+            with _c_rank:
                 with st.container(key="cp_chart_scroll"):
                     st.plotly_chart(
                         fig,
@@ -670,7 +483,60 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         selection_mode="points",
                         config=_cfg_chart,
                     )
-        # Navegacion de la ventana de periodos. El indice y el tamano viven en
+            with _c_evo:
+                # Sin elección del usuario cae al primero del ranking (el de
+                # mayor valor) — mismo criterio que el Panel B de abajo. Como
+                # `_rk_nombres` viene ordenado ASCENDENTE (plotly dibuja de
+                # abajo hacia arriba), el mayor es el ÚLTIMO.
+                _prov_evo = prov_focus
+                if _prov_evo is None:
+                    _reales = [p for p in _rk_nombres if p != "Otros"]
+                    _prov_evo = _reales[-1] if _reales else None
+                if _prov_evo is None:
+                    st.caption("Sin proveedores en el rango.")
+                else:
+                    _serie_evo = (base[base["prov"] == _prov_evo]
+                                  .groupby("per")["valor"].sum()
+                                  .reindex(periodos, fill_value=0))
+                    # Se dibuja la ventana visible, la misma que gobiernan las
+                    # flechas de arriba: son los períodos que el usuario eligió
+                    # mirar, y el ranking ya no las usa.
+                    _evo_x = list(_serie_evo.index)[_sl]
+                    _evo_y = [float(v) for v in _serie_evo.values[_sl]]
+                    _color_evo = dict(zip(_rk_nombres, _rk_colores)).get(
+                        _prov_evo, ACENTO)
+                    fig_evo = go.Figure(go.Scatter(
+                        x=_evo_x, y=_evo_y,
+                        mode="lines+markers",
+                        line=dict(color=_color_evo, width=2.5),
+                        marker=dict(color=_color_evo, size=7),
+                        fill="tozeroy",
+                        fillcolor=_color_evo.replace(")", ", 0.10)").replace(
+                            "rgb(", "rgba(") if _color_evo.startswith("rgb")
+                            else None,
+                        hovertemplate="%{x}<br>S/ %{y:,.0f}<extra></extra>",
+                    ))
+                    _compras_layout(fig_evo, alto=_alto_chart)
+                    fig_evo.update_layout(
+                        margin=dict(l=10, r=10, t=6, b=10),
+                        xaxis=dict(type="category", tickangle=0,
+                                   tickfont=dict(size=10)),
+                        # Acá el eje Y SÍ son valores, así que se respeta la
+                        # convención del proyecto y va sin etiquetas: cada
+                        # punto trae su monto en el hover.
+                        yaxis=dict(showticklabels=False),
+                        showlegend=False,
+                        hovermode="x unified",
+                    )
+                    st.markdown(
+                        f'<div class="cp-evo-tit">Evolución · '
+                        f'{_compras_truncar(_prov_evo, 22)}</div>',
+                        unsafe_allow_html=True)
+                    st.plotly_chart(
+                        fig_evo, width="stretch",
+                        key=f"cp_evo_{gran}_{_prov_evo}",
+                        config={"displayModeBar": False},
+                    )
         # session_state, asi que clicar una barra NO los mueve. El popover
         # central muestra cuantas agrupaciones se ven y permite cambiarlo.
         def _win_mover(_delta):
