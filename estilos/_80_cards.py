@@ -858,6 +858,17 @@ CSS = """    /* ================================================================
     }
     }
 
+    /* `compras_fam_titulo_franja` (el título que se mudó a la franja
+       superior, ver estilos/_50_fecha.py) se dibuja como HERMANO, justo
+       antes de esta fila — y aunque es position:fixed y colapsa a 0px de
+       alto, su wrapper de Streamlit sigue contando como flex item del
+       bloque vertical que los contiene: el gap del flex se aplica IGUAL
+       entre "un item de 0px" y el siguiente. -16px lo cancela — mismo
+       hallazgo que en Ventas › Comparativo (arquitectura.md regla #120). */
+    .st-key-compras_fam_controles_row {
+        margin-top: -16px !important;
+    }
+
     /* =================================================================== */
     /* FRANJA DE CONTROLES DE COMPRAS › FAMILIA                              */
     /*                                                                       */

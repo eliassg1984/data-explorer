@@ -12,7 +12,7 @@ import streamlit as st
 from tema import ACENTO, GRIS_BORDE, SERIE_PRINCIPAL
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar,
-    franja_cabecera, franja_linea_inferior,
+    franja_linea_inferior, titulo_en_franja,
 )
 from graficos.compras._comun import (_first_point, _periodo_serie)
 from graficos import alturas
@@ -69,69 +69,86 @@ def _compras_familia_drill(d, col_fam, col_subfam, col_prod, col_valor,
                if st.session_state.get(f"compras_fam_ser_cb::{titulo_ser}::{s}")] \
               or _top6_default
 
-    # ── Franja de controles: título → línea → tabs → línea → gráfico ─────
-    # Mismo patrón que Ventas › Por día y Año Pasado (arquitectura.md #104,
-    # #107). El título necesita `gran`, que se elige DENTRO de esta misma
-    # franja (en c1, más abajo) — circularidad resuelta con la técnica de
-    # #108: cabecera PROVISIONAL con el `gran` de session_state (acierta
-    # casi siempre) antes de dibujar los pills, y reescritura con el valor
-    # real después de leerlos. Sin esto, la cabecera queda vacía durante la
-    # carga y todo lo de abajo salta ~40px en cada clic.
+    # ── Título en la FRANJA superior (fuera de la tarjeta) → controles →
+    # línea → gráfico ── Mismo patrón que Ventas › Comparativo
+    # (arquitectura.md regla #120): el título vive en un contenedor propio,
+    # `compras_fam_titulo_franja`, anclado por CSS a la franja superior; la
+    # fecha y los chips Familia/Subfamilia se corren a la derecha para
+    # hacerle sitio (estilos/_50_fecha.py, scope `:has()` sobre esta misma
+    # key — solo en la dimensión Familia de Compras, no en el resto de
+    # vistas del reporte).
+    #
+    # El título necesita `gran`, que se elige DENTRO de la fila de
+    # controles (en c1, más abajo) — circularidad resuelta con la técnica de
+    # la regla #108: cabecera PROVISIONAL con el `gran` de session_state
+    # (acierta casi siempre) antes de dibujar los pills, y reescritura con
+    # el valor real después de leerlos. Sin esto, la cabecera queda vacía
+    # durante la carga y todo lo de abajo salta ~40px en cada clic.
     def _titulo_familia(_gran):
         return (f"Valor de compra por {_gran.lower()} y {titulo_ser}"
                 + ("" if focus_fam is None
                    else f" — {_compras_truncar(focus_fam, 32)}"))
 
-    _ph_hdr = st.empty()
-    franja_cabecera(_ph_hdr, _titulo_familia(
+    _ph_hdr = st.container(key="compras_fam_titulo_franja").empty()
+    titulo_en_franja(_ph_hdr, _titulo_familia(
         st.session_state.get("compras_fam_gran") or "Mes"))
 
     # Medida fija en Valor S/: se quitó el toggle Valor/Cantidad (la
     # cantidad sigue viva igual en los paneles, junto al valor). El
     # selector de series comparte fila con la granularidad — antes vivía
     # solo, en un botón grande una fila más abajo.
-    c1, c2, c3, c4 = st.columns([1.3, 1.2, 0.9, 1.3])
-    with c1:
-        gran = st.pills("Agrupar por", ["Semana", "Mes", "Año"],
-                        default="Mes", key="compras_fam_gran",
-                        label_visibility="collapsed") or "Mes"
-    with c2:
-        vista = st.pills("Vista", ["Apilado", "Agrupado"],
-                         default="Apilado", key="compras_fam_vista",
-                         label_visibility="collapsed") or "Apilado"
-    with c3:
-        topn = st.pills("Top", [5, 10, 20], default=10,
-                        key="compras_fam_topn",
-                        label_visibility="collapsed") or 10
-    with c4:
-        # estilos/_30_filtros.py pone [data-testid="stPopover"] button GRANDE
-        # sin scope (pensado para el popover de filtros de la franja): acá se
-        # sobreescribe con más especificidad para que este quede al tamaño
-        # de los pills vecinos, no del popover de filtros.
-        with st.container(key="compras_fam_ser_pop"):
-            st.markdown(
-                """<style>
-                .st-key-compras_fam_ser_pop [data-testid="stPopover"] button {
-                    min-width: 0 !important;
-                    padding: 4px 12px !important;
-                    font-size: 13px !important;
-                    font-weight: 500 !important;
-                    border-radius: 999px !important;
-                }
-                </style>""",
-                unsafe_allow_html=True,
-            )
-            with st.popover(f"{titulo_ser.capitalize()}s ({len(top_ser)})"):
-                st.caption(f"Elegí qué {titulo_ser}s mostrar en el gráfico.")
-                for _s in _ser_all:
-                    st.checkbox(_compras_truncar(_s, 30),
-                               key=f"compras_fam_ser_cb::{titulo_ser}::{_s}")
+    #
+    # `compras_fam_controles_row` es solo un ancla de CSS (sin border): el
+    # título de arriba colapsa a 0px de alto (position:fixed) pero su
+    # wrapper de Streamlit sigue contando para el gap:16px del flex que lo
+    # contiene, así que esta fila aparecía 16px más abajo de lo que estaba
+    # antes de que el título tuviera un hermano invisible. Se cancela con
+    # margin-top:-16px en estilos/_80_cards.py — mismo hallazgo que en
+    # Ventas › Comparativo (arquitectura.md regla #120, addendum).
+    with st.container(key="compras_fam_controles_row"):
+        c1, c2, c3, c4 = st.columns([1.3, 1.2, 0.9, 1.3])
+        with c1:
+            gran = st.pills("Agrupar por", ["Semana", "Mes", "Año"],
+                            default="Mes", key="compras_fam_gran",
+                            label_visibility="collapsed") or "Mes"
+        with c2:
+            vista = st.pills("Vista", ["Apilado", "Agrupado"],
+                             default="Apilado", key="compras_fam_vista",
+                             label_visibility="collapsed") or "Apilado"
+        with c3:
+            topn = st.pills("Top", [5, 10, 20], default=10,
+                            key="compras_fam_topn",
+                            label_visibility="collapsed") or 10
+        with c4:
+            # estilos/_30_filtros.py pone [data-testid="stPopover"] button
+            # GRANDE sin scope (pensado para el popover de filtros de la
+            # franja): acá se sobreescribe con más especificidad para que
+            # este quede al tamaño de los pills vecinos, no del popover de
+            # filtros.
+            with st.container(key="compras_fam_ser_pop"):
+                st.markdown(
+                    """<style>
+                    .st-key-compras_fam_ser_pop [data-testid="stPopover"] button {
+                        min-width: 0 !important;
+                        padding: 4px 12px !important;
+                        font-size: 13px !important;
+                        font-weight: 500 !important;
+                        border-radius: 999px !important;
+                    }
+                    </style>""",
+                    unsafe_allow_html=True,
+                )
+                with st.popover(f"{titulo_ser.capitalize()}s ({len(top_ser)})"):
+                    st.caption(f"Elegí qué {titulo_ser}s mostrar en el gráfico.")
+                    for _s in _ser_all:
+                        st.checkbox(_compras_truncar(_s, 30),
+                                   key=f"compras_fam_ser_cb::{titulo_ser}::{_s}")
 
     # Reescritura con el `gran` REAL, ya resuelto por el widget. Casi siempre
     # coincide con el provisional de arriba (mismo valor de session_state);
     # cuando difiere (primer render, o cambió el foco de familia), Streamlit
     # sólo toca el DOM si el texto cambió de verdad.
-    franja_cabecera(_ph_hdr, _titulo_familia(gran))
+    titulo_en_franja(_ph_hdr, _titulo_familia(gran))
     franja_linea_inferior()
 
     es_valor = True

@@ -48,7 +48,7 @@ from tema import (
     ACENTO, ADVERTENCIA_TEXTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO,
     LAVANDA_BORDE, PALETA_SERIES,
 )
-from graficos.base import _card, _es_movil
+from graficos.base import _card, _es_movil, titulo_en_franja
 from graficos.compras._comun import _first_point
 from graficos import alturas
 
@@ -442,16 +442,6 @@ def _titulo_comparativo(grano, modo, es_desc):
     return titulo
 
 
-def _pintar_cabecera(ph, titulo):
-    """Escribe el título en el placeholder de `ventas_comp_titulo_franja`,
-    que vive FUERA de la tarjeta y se ancla a la franja superior por CSS
-    (position:fixed, ver estilos/_50_fecha.py) — mismo truco que ya usan
-    fecha_ajuste_pill y chips_ajuste_tabla para "aparecer" en la franja
-    aunque su lugar en el DOM sea otro. `title=` en el span es el tooltip
-    para cuando el ellipsis del CSS lo trunca."""
-    ph.markdown(f'<span title="{titulo}">{titulo}</span>',
-                unsafe_allow_html=True)
-
 
 @st.fragment
 def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
@@ -573,7 +563,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         # valor del rerun anterior sí está en session_state y es el que va a
         # salir el 99% de las veces; al final se reescribe con el real y, si
         # coincide, Streamlit no toca el DOM. Ver arquitectura.md regla #108.
-        _pintar_cabecera(_ph_hdr, _titulo_comparativo(
+        titulo_en_franja(_ph_hdr, _titulo_comparativo(
             grano, modo,
             st.session_state.get("ventas_comp_vista") == "Descomposición"))
         # Línea INFERIOR de la franja de controles. Los -18px + width:calc(100% + 36px)
@@ -864,7 +854,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     # que ya se pintó arriba, y ahí Streamlit no toca el DOM; sólo cambia algo
     # cuando el valor de session_state no era válido para estos datos (por
     # ejemplo "Descomposición" guardado y un rango sin pax).
-    _pintar_cabecera(_ph_hdr, titulo)
+    titulo_en_franja(_ph_hdr, titulo)
 
     with _slot_graf:
         # La selección de plotly_chart PERSISTE entre reruns: con una key

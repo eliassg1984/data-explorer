@@ -251,6 +251,19 @@ def franja_cabecera(ph, titulo, color_texto=None):
         unsafe_allow_html=True)
 
 
+def titulo_en_franja(ph, titulo):
+    """Pinta `titulo` en un placeholder que vive FUERA de la tarjeta y se
+    ancla a la franja superior por CSS (position:fixed, con key propia por
+    vista — ver estilos/_50_fecha.py, sección por dashboard). El `title=`
+    del span es el tooltip para cuando el ellipsis del CSS lo trunca.
+
+    Nace en Ventas › Comparativo (arquitectura.md regla #120) y se reusa en
+    Compras › Familia para que una 3ra copia a mano no vuelva a driftear —
+    mismo motivo por el que existe `franja_cabecera` más arriba."""
+    ph.markdown(f'<span title="{titulo}">{titulo}</span>',
+                unsafe_allow_html=True)
+
+
 def franja_linea_inferior():
     """Línea INFERIOR que cierra una franja de controles por abajo, tocando
     el borde REAL de la tarjeta. Los -18px + `width:calc(100% + 36px)`

@@ -4896,3 +4896,43 @@ salvo `icono`):
      un futuro placeholder-fantasma (position:fixed, escapa a la franja)
      se agrega como HERMANO de algo en vez de vivir DENTRO de ello, contar
      con este mismo 16px de sobra.
+
+121. **El patrón "título fantasma en la franja" se generalizó (helper
+     `titulo_en_franja` en graficos/base.py) y se portó a Compras › Familia
+     — con dos diferencias que no eran obvias de la 1ra vez (Ventas
+     Comparativo, regla #120).**
+
+     Compras › Familia no tiene una tarjeta INTERNA propia (`_card()`) para
+     la sección de arriba — a diferencia de Ventas, donde el título vivía
+     hermano de `chartcard_ventas_comparativo_*` DENTRO de un wrapper
+     exterior compartido, acá el título es hermano DIRECTO de la fila de
+     controles, ambos dentro del wrapper único `ajuste_graf_card_izq_
+     compras` (que además reusan TODAS las demás vistas de Compras, así
+     que no se le puede colgar un margin-top propio sin afectarlas). Se
+     resolvió envolviendo SOLO la fila de controles en un contenedor nuevo
+     y liviano (`compras_fam_controles_row`, sin `border`, solo ancla de
+     CSS) y aplicándole el mismo `margin-top:-16px` — el resto de la
+     función (breadcrumb, gráfico, paneles `fam_comp`/`fam_top`) no
+     necesitó tocarse: el gap nuevo es SOLO el primero (entre el título y
+     lo que antes era el primer hijo), los demás gaps preexistentes entre
+     hermanos siguientes no cambiaron.
+
+     Scope del corrimiento de fecha/chips: Ventas se scopeaba por el key de
+     la tarjeta interna (`chartcard_ventas_comparativo_*`, único de esa
+     vista). Compras › Familia no tiene ese ancla — TODAS las vistas de
+     Compras comparten el mismo key de wrapper. Se scopeó por la
+     PRESENCIA DEL PROPIO TÍTULO (`:has(.st-key-compras_fam_titulo_
+     franja)`) en cambio: más simple, y funciona igual porque el título
+     solo lo dibuja esa vista.
+
+     Presupuesto horizontal: Compras tiene solo 2 chips (Familia/
+     Subfamilia) contra los 4 de Ventas, pero cada uno lleva
+     `min-width:230px` FORZADO (el addendum de Compras/Inventario/Salidas
+     en estilos/_50_fecha.py — reportes con EXACTAMENTE 2 chips). El
+     contenido real (230+230+8=468px) termina siendo MÁS ancho que el de
+     Ventas (~410px sin forzar), así que el umbral por debajo del cual el
+     título se oculta tuvo que subir: 1220px (Ventas) no alcanzaba acá
+     (medido: los 2 chips se superponían), 1310px sí. Ni el ancho del
+     título (260px) ni los tres números acoplados (175/451/667) cambiaron
+     — son los MISMOS que en Ventas, coincidencia de haber usado el mismo
+     ancho de reserva, no algo que haya que mantener igual a propósito.
