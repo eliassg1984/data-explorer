@@ -166,6 +166,47 @@ CSS = """        <style>
             gap: 0 !important;
             border-right: 1px solid var(--border) !important;
         }
+        /* Scroll horizontal del plot. Solo entra en juego cuando Python le
+           forzo un ancho mayor al disponible (ver `_scroll_x` en
+           proveedor.py): con muchas series en pocos periodos las barras se
+           achicaban hasta ser ilegibles, y ahora se les exige un piso de
+           px por barra. Cuando el ancho entra, el figure sigue siendo
+           responsive y esta regla no hace nada. */
+        .st-key-cp_chart_scroll {
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+        }
+        /* El ancho minimo lo publica Python como variable (`cp-plot-min`,
+           ver proveedor.py). Vale 0 cuando todo entra, y ahi esta regla no
+           hace nada. Va en el hijo y no en el contenedor: el que scrollea
+           tiene que quedarse en el ancho de la columna, y el que se estira
+           es su contenido. */
+        .st-key-cp_chart_scroll [data-testid="stPlotlyChart"],
+        .st-key-cp_chart_scroll [data-testid="stFullScreenFrame"] {
+            min-width: var(--cp-plot-min, 0px) !important;
+        }
+        /* El que TERMINA scrolleando no es el contenedor de arriba sino el
+           `stElementContainer` que Streamlit mete adentro — medido: el de
+           afuera queda en 829/829 y el de adentro en 829/1676, con 847px de
+           recorrido. Por eso el overflow y la barra se declaran tambien en
+           el hijo; el de afuera se deja por si esa estructura interna
+           cambia en una version futura. */
+        .st-key-cp_chart_scroll > [data-testid="stElementContainer"] {
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+        }
+        .st-key-cp_chart_scroll::-webkit-scrollbar,
+        .st-key-cp_chart_scroll [data-testid="stElementContainer"]::-webkit-scrollbar {
+            height: 8px;
+        }
+        .st-key-cp_chart_scroll::-webkit-scrollbar-thumb,
+        .st-key-cp_chart_scroll [data-testid="stElementContainer"]::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+        .st-key-cp_chart_scroll [data-testid="stElementContainer"]::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
         .st-key-cp_leyenda_float [data-testid="stElementToolbar"] { display: none; }
         /* El boton-titulo se lee como TEXTO clickeable de la tarjeta, no
            como un boton propio: hereda el vidrio del contenedor. `display:
@@ -216,6 +257,19 @@ CSS = """        <style>
         .st-key-cp_leyenda_panel [class*="st-key-cp_leg_row_"] {
             gap: 0 !important;
             margin-bottom: 4px !important;
+        }
+        /* SIN esto las filas se PISAN entre si (reportado con captura: el
+           monto de una encima del nombre de la siguiente). Streamlit le mete
+           `margin-bottom: -16px` al stMarkdownContainer —un negativo del alto
+           de su propia linea— y con eso la caja del monto colapsa a height:0:
+           medido, el wrapper daba 0px mientras su texto ocupaba 13px, asi que
+           la fila solo contaba el boton (16px) y el monto se derramaba sobre
+           la fila de abajo. Es EXACTAMENTE el mismo bug que ya documenta
+           estilos/_80_cards.py para el panel "Detalle" de Ventas; alla costo
+           medir la cadena de padres entera para encontrarlo. */
+        .st-key-cp_leyenda_panel [class*="st-key-cp_leg_row_"]
+            [data-testid="stMarkdownContainer"] {
+            margin-bottom: 0 !important;
         }
         /* Fila = boton con el swatch de color en un ::before. El color entra
            por --cp-leg-color, que Python publica por key (no puede ir inline:

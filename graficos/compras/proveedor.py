@@ -15,7 +15,8 @@ import streamlit as st
 
 from tema import GRIS_BORDE
 from graficos.base import (
-    PALETA_CALLAI, _card, _compras_layout, _compras_truncar, titulo_en_franja,
+    PALETA_CALLAI, _card, _compras_layout, _compras_truncar, publicar_var_px,
+    titulo_en_franja,
 )
 from graficos.compras._comun import _es_movil, _first_point
 from graficos.compras._css_proveedor import CSS as CSS_PROVEEDOR
@@ -529,6 +530,30 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         st.markdown(f"<style>{_anim_css}</style>", unsafe_allow_html=True)
         st.session_state["cp_chart_alto_prev"] = _alto_chart
 
+        # ── Ancho MÍNIMO del plot + scroll horizontal ──────────────────────
+        # 2026-08-16, a pedido ("que el gráfico tenga alguna barra para ver
+        # más allá"). Hasta acá el chart SIEMPRE se estiraba al contenedor y
+        # la densidad se controlaba solo con la ventana de períodos: con 5
+        # series alcanzaba, pero desde que el default son TODOS los
+        # proveedores del rango pueden ser 20+, y en un solo período quedan
+        # 20 barras repartiéndose el ancho — ilegibles y con los rótulos
+        # encimados (reportado con captura).
+        # Ahora se le exige un piso de píxeles por barra: si no entra, el
+        # figure toma ese ancho y el contenedor scrollea. Cuando SÍ entra
+        # (el caso normal), nada cambia — sigue siendo responsive.
+        # El ancho NO se le pone al figure: medido, `fig.update_layout(width=)`
+        # no sobrevive — Streamlit reescribe `layout.width` con el ancho del
+        # contenedor al montar el componente (llegaba 828 con 1676 puesto), y
+        # apagar `responsive` tampoco alcanza. Se hace al revés y a favor de
+        # la corriente: Python publica el número como VARIABLE CSS, el
+        # CONTENEDOR toma ese ancho mínimo y Plotly —que sí sigue a su
+        # contenedor— se estira solo. Es el patrón `publicar_var_px` que ya
+        # usa el proyecto para los altos (arquitectura.md regla #117).
+        _PX_BARRA_MIN = 24
+        _ancho_min_plot = len(_per_vis) * _n_series * _PX_BARRA_MIN + 140
+        _scroll_x = _ancho_min_plot > _plot_util_px
+        publicar_var_px("cp-plot-min", _ancho_min_plot if _scroll_x else 0)
+
         # Config del chart. En DESKTOP el modebar va oculto (vista BI limpia).
         # En MÓVIL se activa el modebar pero SOLO para conservar el botón de
         # pantalla completa (⛶) que Streamlit inyecta en él: se quitan todos los
@@ -545,10 +570,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             ]
         else:
             _cfg_chart["displayModeBar"] = False
-
-        # Chart siempre responsive al contenedor (estándar BI). La densidad se
-        # controla con la ventana de periodos (server-side) + flechas de
-        # navegación — nunca scroll horizontal externo ni zoom client-side.
+        # El chart es responsive al contenedor (estándar BI) MIENTRAS entre.
+        # La densidad se controla con la ventana de periodos (server-side) +
+        # flechas; cuando ni con eso alcanza —muchas series en pocos
+        # periodos— toma su ancho mínimo y el contenedor scrollea.
         with st.container(key="cp_chart_wrap"):
             # ── Cuadro de control (izq.) + gráfico (der.) ───────────────────
             # 2026-08-16, a pedido: el panel de proveedores dejo de FLOTAR
@@ -632,14 +657,19 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                         f'<span>{_pc:.0f}%</span></div>',
                                         unsafe_allow_html=True)
             with _c_chart:
-                st.plotly_chart(
-                    fig,
-                    use_container_width=True,
-                    key=_chart_key,
-                    on_select="rerun",
-                    selection_mode="points",
-                    config=_cfg_chart,
-                )
+                # El contenedor propio existe para colgarle el `overflow-x` y
+                # el ancho mínimo (ver _css_proveedor.py). El chart se estira
+                # SIEMPRE al contenedor: es ese contenedor el que crece
+                # cuando las barras no entran, no el figure.
+                with st.container(key="cp_chart_scroll"):
+                    st.plotly_chart(
+                        fig,
+                        width="stretch",
+                        key=_chart_key,
+                        on_select="rerun",
+                        selection_mode="points",
+                        config=_cfg_chart,
+                    )
         # Navegacion de la ventana de periodos. El indice y el tamano viven en
         # session_state, asi que clicar una barra NO los mueve. El popover
         # central muestra cuantas agrupaciones se ven y permite cambiarlo.
