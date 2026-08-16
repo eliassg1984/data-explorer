@@ -13,7 +13,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from tema import ACENTO, GRIS_BORDE, SERIE_PRINCIPAL
+from tema import GRIS_BORDE
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, titulo_en_franja,
 )
@@ -718,61 +718,83 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         sub = base[base["prov"] == prov_focus]
                         if _scope == "periodo" and _perf is not None:
                             sub = sub[sub["per"] == _perf]
+                        # `nlargest` ya devuelve de mayor a menor, que es el
+                        # orden natural de una TABLA. El `.sort_values()`
+                        # ascendente que habia aca era para el grafico de
+                        # barras horizontales, que dibuja de abajo hacia
+                        # arriba: sin el, el mas grande quedaba ultimo.
                         agg = (sub.groupby("prod")
                                   .agg(valor=("valor", "sum"), cant=("cant", "sum"))
-                                  .nlargest(topn, "valor")
-                                  .sort_values("valor"))
+                                  .nlargest(topn, "valor"))
                         if agg.empty:
                             st.info("Sin productos para este proveedor.")
                         else:
+                            # 2026-08-16: era un grafico de barras horizontales
+                            # con el clic capturado por `on_select` de Plotly.
+                            # Pasa a TABLA (a pedido) conservando las dos cosas
+                            # que aportaba: el clic que enfoca un producto — y
+                            # que el Panel B de al lado sigue leyendo de
+                            # `compras_prov_prodfocus`, sin enterarse del
+                            # cambio — y la lectura de ranking, que ahora la da
+                            # la barra DENTRO de la celda (ProgressColumn) en
+                            # vez de una barra suelta. De yapa, ordenar por
+                            # cualquier columna, que el grafico no permitia.
                             prod_cats = list(agg.index)
-                            _um_map = {p: _um_de(sub[sub["prod"] == p]) for p in prod_cats}
-                            _txt = [
-                                f"S/ {v:,.0f}  ·  {c:,.0f}{_um_map[p]}"
-                                for p, v, c in zip(prod_cats, agg["valor"], agg["cant"])
-                            ]
-                            _cc = [SERIE_PRINCIPAL if p == prod_focus else ACENTO
-                                   for p in prod_cats]
-                            figa = go.Figure(go.Bar(
-                                x=agg["valor"].values,
-                                y=[_compras_truncar(i, 24) for i in prod_cats],
-                                orientation="h", marker_color=_cc,
-                                text=_txt, textposition="outside", cliponaxis=False,
-                                hovertemplate="%{y}<extra></extra>",
-                            ))
-                            # 30px por fila -> 22px: menos aire vertical entre
-                            # barras, sin tocar el grosor. La lista se compacta
-                            # (con Top 20 el chart baja de ~640 a ~480px).
-                            _compras_layout(figa, alto=alturas.por_filas(
-                                len(agg), px_fila=22, minimo=180, extra=40))
-                            # _compras_layout enciende la grilla del eje Y, que
-                            # es lo correcto en barras VERTICALES (lineas de
-                            # referencia detras de las barras). Aqui las barras
-                            # son horizontales: el eje Y es el categorico, asi
-                            # que esa grilla dibuja una raya por producto que
-                            # cruza el rotulo. Se apaga.
-                            figa.update_yaxes(showgrid=False)
-                            # Eje X oculto: cada barra ya lleva su valor como
-                            # texto (S/ ... · ... KG), asi que la escala de
-                            # ticks (S/ 0, S/ 20,000...) era redundante y solo
-                            # sumaba ruido al pie del panel.
-                            figa.update_xaxes(visible=False)
-                            # bargap = aire entre filas, como fraccion del alto
-                            # de fila (22px). 0.35 -> barra de ~14px, mismo
-                            # grosor que antes pero con menos aire arriba/abajo.
-                            figa.update_layout(margin=dict(l=10, r=140, t=2, b=10),
-                                               bargap=0.35)
-                            _aevt = st.plotly_chart(
-                                figa, use_container_width=True,
-                                key=f"compras_g_prov_prods_{prov_focus}_{prod_focus}_{_pan_inst}",
-                                on_select="rerun", selection_mode="points",
-                                config={"displayModeBar": False},
+                            # El % se calcula sobre el total del proveedor en el
+                            # ambito vigente (`sub`), NO sobre la suma del Top N:
+                            # asi "12%" sigue significando lo mismo tanto en Top
+                            # 5 como en Top 20, y los porcentajes no suman 100
+                            # cuando el Top deja productos afuera, que es la
+                            # lectura honesta.
+                            _tot_sub = float(sub["valor"].sum()) or 1.0
+                            _val = agg["valor"].to_numpy(dtype=float)
+                            tv = pd.DataFrame({
+                                "Producto": prod_cats,
+                                "Valor": _val,
+                                "%": _val / _tot_sub * 100,
+                                "Cant.": agg["cant"].to_numpy(dtype=float),
+                                # _um_de devuelve la unidad con un espacio
+                                # delante (viene de concatenarse a una etiqueta).
+                                "UM": [_um_de(sub[sub["prod"] == p]).strip()
+                                       for p in prod_cats],
+                            })
+                            # La key lleva `prod_focus` a proposito: la seleccion
+                            # de un st.dataframe PERSISTE entre reruns igual que
+                            # la de un plotly_chart (CLAUDE.md), asi que con key
+                            # estable el mismo clic se re-procesaria en cada
+                            # rerun. Al variar la key el widget remonta sin
+                            # seleccion. El `!=` de mas abajo es el segundo
+                            # cinturon, para el caso de reclic en la MISMA fila
+                            # (ahi la key no cambia).
+                            _aevt = st.dataframe(
+                                tv,
+                                hide_index=True,
+                                use_container_width=True,
+                                height=alturas.por_filas(len(tv), px_fila=35,
+                                                         extra=45, minimo=0),
+                                on_select="rerun",
+                                selection_mode="single-row",
+                                key=f"cp_prov_prods_tab_{prov_focus}_{prod_focus}_{_pan_inst}",
+                                column_config={
+                                    "Producto": st.column_config.TextColumn(
+                                        "Producto", width="medium"),
+                                    "Valor": st.column_config.ProgressColumn(
+                                        "Valor", format="S/ %.0f",
+                                        min_value=0,
+                                        max_value=float(_val.max())),
+                                    "%": st.column_config.NumberColumn(
+                                        "%", format="%.0f%%", width="small"),
+                                    "Cant.": st.column_config.NumberColumn(
+                                        "Cant.", format="%.0f", width="small"),
+                                    "UM": st.column_config.TextColumn(
+                                        "UM", width="small"),
+                                },
                             )
-                            _ap = _first_point(_aevt)
-                            if _ap is not None:
-                                _j = _ap.get("point_number", _ap.get("point_index"))
-                                if _j is not None and 0 <= _j < len(prod_cats):
-                                    st.session_state["compras_prov_prodfocus"] = prod_cats[_j]
+                            _rows = (_aevt or {}).get("selection", {}).get("rows", [])
+                            if _rows and 0 <= _rows[0] < len(prod_cats):
+                                _psel = prod_cats[_rows[0]]
+                                if _psel != prod_focus:
+                                    st.session_state["compras_prov_prodfocus"] = _psel
                                     st.rerun(scope="fragment")
 
 
