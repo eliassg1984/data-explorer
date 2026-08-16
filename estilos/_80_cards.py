@@ -867,6 +867,7 @@ CSS = """    /* ================================================================
        hallazgo que en Ventas › Comparativo (arquitectura.md regla #120). */
     .st-key-compras_fam_controles_row {
         margin-top: -16px !important;
+        margin-bottom: -10px !important;
     }
 
     /* =================================================================== */
