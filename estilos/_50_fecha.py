@@ -447,4 +447,73 @@ CSS = """    /* ================================================================
             color: var(--text-secondary);
         }
     }
+
+    /* =================================================================== */
+    /* TÍTULO DE VENTAS › COMPARATIVO EN LA FRANJA (2026-08-15)             */
+    /*                                                                      */
+    /* `ventas_comp_titulo_franja` (graficos/ventas_comparativo.py) vive    */
+    /* FUERA de la tarjeta pero se ancla acá con el mismo truco que la      */
+    /* fecha/los chips: position:fixed, ajeno a su lugar real en el DOM.    */
+    /* Solo esta vista dibuja ese contenedor, así que scopear por su        */
+    /* PRESENCIA — vía :has() sobre el prefijo de key que arma `_card()`    */
+    /* (graficos/base.py: `chartcard_` + key), o sea                       */
+    /* `chartcard_ventas_comparativo_<grano>` — alcanza para no tocar el    */
+    /* resto de reportes/vistas. left:175px = el mismo punto donde          */
+    /* arrancaba el pill de fecha antes de este cambio; el pill y los       */
+    /* chips se corren a la derecha lo que el título reserva (260px +       */
+    /* 16px de aire) SOLO en esta vista — los otros 7 reportes (y el        */
+    /* resto de Ventas) no lo ven.                                          */
+    /* Los tres números de abajo (título:260, pill:451, chips:667) son la   */
+    /* MISMA cadena acoplada de siempre (ver el bloque de arriba): mover    */
+    /* uno sin los otros dos rompe la alineación.                           */
+    /* 260px (no 380: el ancho del título más largo) es a propósito — Ventas */
+    /* ya tiene 4 chips (Grupo/Sub Grupo/Canal/Servicio, ~430px de contenido */
+    /* real) y reservarle al título su ancho completo los hacía chocar: a   */
+    /* 1024px de viewport la fila de chips medía menos que su propio        */
+    /* contenido (superposición medida en vivo). Con 260px los títulos      */
+    /* largos truncan con ellipsis (el `title=` del span da el tooltip      */
+    /* completo). Con TODO y eso, el corrimiento sigue sin caber cómodo     */
+    /* por debajo de ~1220px (medido: ~410px de contenido de chips contra   */
+    /* un max-width que a esa altura ya no alcanza) — por eso el bloque de  */
+    /* abajo arranca en 1220px, no en los 901px que usa el resto de la      */
+    /* franja: bajo ese umbral el título se oculta y la fecha/chips vuelven */
+    /* a su posición de siempre (sin :has(), la regla base de arriba). Sin  */
+    /* título en pantallas angostas es mejor que chips ilegibles — mismo    */
+    /* criterio que ya usa fecha_corte_nav (oculto hasta 1400px) más abajo. */
+    /* =================================================================== */
+    .st-key-ventas_comp_titulo_franja {
+        position: fixed !important;
+        top: 8px !important;
+        left: 175px !important;
+        width: 260px !important;
+        z-index: 22 !important;
+        margin: 0 !important;
+        display: none !important;   /* oculto por defecto; ver abajo */
+    }
+    @media (min-width: 1220px) {
+        [data-testid="stAppViewContainer"]:has([class*="st-key-chartcard_ventas_comparativo_"])
+            .st-key-ventas_comp_titulo_franja {
+            display: block !important;
+        }
+        [data-testid="stAppViewContainer"]:has([class*="st-key-chartcard_ventas_comparativo_"])
+            .st-key-ventas_comp_titulo_franja [data-testid="stMarkdownContainer"] p {
+            margin: 0 !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+            font-size: 14px !important;
+            font-weight: 700 !important;
+            line-height: calc(var(--cab-altura) - 8px) !important;
+            color: var(--text-primary) !important;
+        }
+        [data-testid="stAppViewContainer"]:has([class*="st-key-chartcard_ventas_comparativo_"])
+            .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill {
+            left: 451px !important;   /* 175 (título) + 260 (su ancho) + 16 de aire */
+        }
+        [data-testid="stAppViewContainer"]:has([class*="st-key-chartcard_ventas_comparativo_"])
+            .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
+            left: 667px !important;   /* 451 (pill) + 210 (su ancho) + 6, igual que la cuenta base */
+            max-width: calc(100vw - 667px - (var(--rail-der-res) - 22px)) !important;
+        }
+    }
 """

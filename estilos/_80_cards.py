@@ -648,16 +648,20 @@ CSS = """    /* ================================================================
        mientras se cargan los datos. El gráfico se dibuja al final del script
        (después de traer las dos series de R2), así que entre el render de la
        franja y su llegada la tarjeta se quedaba con 90px de alto y volvía a
-       ~470: eso es la mitad del "sube y baja" que se ve en cada clic (la
-       otra mitad era la cabecera vacía, ver regla #108).
-       El número sale de las piezas reales: 32 de padding + 42 de cabecera +
-       52 de franja + 340 de figura = 466. Es min-height, no height: el
-       caption y el panel "Detalle" pueden hacerla más alta sin problema.
+       subir después — mitad del "sube y baja" que se ve en cada clic (ver
+       regla #108).
+       El número sale de las piezas reales: 32 de padding + 52 de franja de
+       controles + 340 de figura = 424. Es min-height, no height: el caption
+       y el panel "Detalle" pueden hacerla más alta sin problema.
+       2026-08-15: el término "42 de cabecera" que este número traía se sacó
+       — el título se mudó a la franja superior (fuera de la tarjeta, ver
+       ventas_comp_titulo_franja en estilos/_50_fecha.py), así que la
+       tarjeta ya no reserva alto para él.
        Sólo desktop — en móvil la figura mide 260 y el patrón es scroll de
        página, mismo criterio que el resto del encuadre. */
     @media screen and (min-width: 769px) {
         div[class*="st-key-chartcard_ventas_comparativo"] {
-            min-height: 466px;
+            min-height: 424px;
         }
     }
 

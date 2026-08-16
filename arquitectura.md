@@ -4832,3 +4832,52 @@ salvo `icono`):
      dependen del layout y no pueden quedarse a medias. Hoy los rails
      abren y cierran de golpe — que además es lo que hacen los de VS Code
      y Notion.
+
+120. **Un dashboard puede "aparecer" en la franja superior sin que app.py
+     sepa nada de él — mismo truco que ya usaban los chips, ahora aplicado
+     a un título.**
+     Ventas › Comparativo (`graficos/ventas_comparativo.py`) pedía mover
+     su título de dentro de la tarjeta a la franja superior, y correr la
+     fecha/chips a la derecha para hacerle sitio — solo en esa vista, no
+     en los otros 7 reportes ni en el resto de Ventas.
+
+     `fecha_ajuste_pill` (app.py) y `chips_ajuste_tabla` (cada dashboard)
+     ya probaban que un contenedor puede vivir en CUALQUIER parte del DOM
+     y aun así "aparecer" en la franja: alcanza con `position:fixed` y un
+     `top`/`left` que apunte ahí. El título usa el mismo truco —
+     `ventas_comp_titulo_franja`, creado DENTRO del fragment de
+     `_ventas_comparativo` (ni siquiera necesita vivir fuera de un
+     `@st.fragment`) — así que no hizo falta tocar la firma del
+     dispatcher (`graficos/__init__.py::renderizar_graficos_reporte`) ni
+     `app.py`. `test_graficos.py` verifica esa firma; agregar un
+     parámetro nuevo ahí habría obligado a tocar los 8 dashboards para
+     que el test de arity siguiera pasando.
+
+     Para que el corrimiento de fecha/chips sea EXCLUSIVO de esa vista
+     (y no un shift global que le robe espacio a los otros 7 reportes),
+     el CSS se scopea por PRESENCIA, no por reporte: `:has()` sobre el
+     prefijo de key que arma `_card()` (`chartcard_ventas_comparativo_`),
+     no sobre `st-key-app_reporte_ventas` — ese marcador es del REPORTE
+     entero, y el título solo existe en una de sus vistas. Ver
+     estilos/_50_fecha.py, bloque "TÍTULO DE VENTAS › COMPARATIVO".
+
+     Medido en vivo (regla de oro del proyecto: nunca a ojo) el ancho que
+     hacía falta reservarle al título chocaba con los 4 chips de Ventas
+     (Grupo/Sub Grupo/Canal/Servicio, ~410px de contenido real): a
+     380px de reserva, los chips se comprimían/superponían ya a 1280px.
+     Con 260px (truncando los títulos largos con ellipsis + `title=`
+     como tooltip) el corrimiento entero deja de caber cómodo por debajo
+     de ~1220px. En vez de aceptar chips ilegibles ahí, el bloque entero
+     va detrás de `@media (min-width: 1220px)` — no los 901px que usa el
+     resto de la franja — y por debajo el título se oculta y la fecha/
+     chips vuelven a su posición de siempre (misma idea que
+     `fecha_corte_nav`, oculto hasta 1400px por el mismo motivo: sin
+     dato es mejor que dato ilegible).
+
+     Como el título dejó de vivir DENTRO de la tarjeta, el `min-height`
+     de reserva de esa tarjeta (estilos/_80_cards.py, evita el colapso
+     mientras cargan los dos rangos de R2) perdió el término "42 de
+     cabecera" que traía: 466px → 424px. Un número que cita piezas
+     reales (padding + franja + figura) hay que recalcularlo cuando una
+     de esas piezas se muda, o queda reservando alto para algo que ya no
+     está.
