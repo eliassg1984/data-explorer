@@ -384,10 +384,21 @@ CSS = """        <style>
            Ya no lleva fondo translucido ni blur: eso existia para leerse
            como "chip apoyado" SOBRE el grafico; en la banda superior se
            apoya en el fondo de la tarjeta y el translucido era invisible
-           (blanco 55% sobre blanco) pagando el costo de pintado del blur. */
+           (blanco 55% sobre blanco) pagando el costo de pintado del blur.
+           z-index 6 y NO 20 (era 20, reportado: "al hacer scroll se
+           superpone a la franja superior"): la franja `fila_ajuste_top` es
+           sticky con z-index 20, y la tarjeta que contiene a win_nav no
+           crea contexto de apilado propio (position:relative con z-index
+           auto), asi que el 20 de win_nav competia DE IGUAL A IGUAL con el
+           de la franja — y a igual z-index gana el que va despues en el
+           DOM, que es la tarjeta. Al scrollear, la nav de periodos pasaba
+           por encima de la franja en vez de por debajo. 6 lo deja sobre el
+           grafico y debajo de la franja, alineado con la convencion de sus
+           vecinos flotantes (gran_float y prov_pop_float usan 5,
+           cp_leyenda_float usa 6). */
         .st-key-win_nav {
             position: absolute; top: 11px; right: 255px; bottom: auto;
-            z-index: 20;
+            z-index: 6;
             width: auto !important;
             display: flex !important; flex-direction: row !important;
             align-items: center !important;
@@ -491,9 +502,15 @@ CSS = """        <style>
             z-index: 100; pointer-events: none;
             box-shadow: 0 2px 6px rgba(0,0,0,0.15);
         }
-        /* Toggles en la MISMA fila del título, centrados vertical. */
+        /* Toggles en la MISMA fila del título, centrados vertical.
+           z-index 6 y no 20 por el mismo motivo que win_nav (ver su regla):
+           su bloque contenedor no crea contexto de apilado, asi que un 20
+           empataba con la franja sticky y ganaba por orden de DOM,
+           montandosele encima al scrollear. Aca todavia no se habia
+           reportado —el Panel A queda mas abajo, hay que scrollear mas para
+           cruzarlo con la franja— pero es el mismo bug latente. */
         .st-key-topn_float {
-            position: absolute; top: 0; right: 12px; z-index: 20;
+            position: absolute; top: 0; right: 12px; z-index: 6;
             height: 24px; display: flex; align-items: center;
             width: auto !important;
         }
