@@ -599,4 +599,51 @@ CSS = """    /* ================================================================
         border-radius: 0 !important;
         box-shadow: none !important;
     }
+
+    /* 4ta vuelta — el ÚLTIMO borde visible no era una línea ni una sombra:
+       era un CAMBIO DE COLOR. La app tiene dos fondos (`--bg-primary`
+       #f6f6f8 "lienzo general" y `--bg-card` #ffffff), así que aun sin
+       sombra ni esquinas quedaba un rectángulo blanco recortado contra el
+       gris — medido en vivo, no a ojo. En Compras se unifican: toda la
+       página pasa al blanco de las tarjetas y el recorte desaparece.
+       Los paneles de abajo (fam_comp / fam_top) NO hicieron falta tocarlos:
+       ya eran transparentes y sin sombra desde antes (la regla
+       `[class*="st-key-ajuste_graf_card_"] [class*="st-key-chartcard_"]`
+       de estilos/_80_cards.py los aplana por ser hijos de la tarjeta).
+       Se scopea con `:root:has()` y no con `stAppViewContainer:has()` como
+       las reglas de arriba porque html/body están FUERA de ese contenedor
+       (y el nav-rail vive en su propio position:fixed): `:root` es el
+       único ancestro común garantizado. */
+    :root:has(.st-key-app_reporte_compras),
+    :root:has(.st-key-app_reporte_compras) body,
+    :root:has(.st-key-app_reporte_compras) [data-testid="stAppViewContainer"] {
+        background: var(--bg-card) !important;
+    }
+    /* El nav-rail izquierdo es una tarjeta blanca que hasta ahora se
+       distinguía SOLO por el contraste contra el lienzo gris: su borde es
+       `none` y su sombra un 5% (navegacion.py). Con la página en blanco
+       quedaría blanco sobre blanco, así que se le devuelve el límite con
+       un hairline de 1px — el mismo recurso que ya usan el rail DERECHO
+       (compras_tabs_row) y la franja inferior, y el que usa la referencia
+       (Google Finance separa sus paneles con líneas, no con sombras). */
+    :root:has(.st-key-app_reporte_compras) .st-key-nav_rail {
+        border: 1px solid var(--border) !important;
+    }
+    /* Los 4 bloques del drill de Proveedor (gráfico, panel A, panel B,
+       tabla) son la OTRA familia de tarjetas de Compras: no usan el
+       wrapper `ajuste_graf_card_izq_compras` sino `compras_prov_card_*`,
+       así que las reglas de arriba no los alcanzaban y quedaban con
+       sombra + 20px flotando sobre la página ya blanca — inconsistentes
+       dentro del mismo reporte. Se aplanan igual, pero CON hairline: a
+       diferencia de la tarjeta principal (que se funde con la franja a
+       propósito), estos cuatro sí necesitan separarse entre sí — es su
+       razón de existir (ver el docstring de graficos/compras/__init__.py:
+       "cada uno lleva su propio borde para separación visual limpia").
+       Hairline en vez de sombra es exactamente el recurso de la
+       referencia. */
+    :root:has(.st-key-app_reporte_compras) [class*="st-key-compras_prov_card_"] {
+        border: 1px solid var(--border) !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+    }
 """
