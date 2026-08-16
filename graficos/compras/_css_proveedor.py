@@ -145,19 +145,28 @@ CSS = """        <style>
            (estilos/_80_cards.py): vidrio gris al 8% con saturate, borde
            casi transparente, radio 6px y ancho FIJO — sin el ancho fijo la
            tarjeta se encoge al texto cuando esta cerrada y salta de ancho
-           en cada clic. El contenedor es absolute sobre `cp_chart_wrap`,
-           asi que abrir/cerrar no mueve el grafico.
-           Va arriba-IZQUIERDA. Abajo de 1230px `prov_pop_float` VUELVE a
-           esa zona (ver su media query), pero NO hace falta media query
-           para esto: el popover se ancla a la TARJETA (top:14px, banda de
-           controles) y este panel al `cp_chart_wrap`, que empieza mas
-           abajo. Medido a 1100px: popover termina en y=119 y el panel
-           arranca en y=130 — 11px de aire. Si alguna vez se achica esa
-           banda de controles, revisar aca. */
-        .st-key-cp_chart_wrap { position: relative; }
+           en cada clic. Abrir/cerrar no mueve el grafico: al ser absolute
+           esta fuera del flujo.
+           2026-08-16, 2da vuelta ("esta muy abajo, lo deseo mas arriba,
+           cerca del borde"): se ancla a la TARJETA y no a `cp_chart_wrap`.
+           El wrap empieza ~65px mas abajo que la tarjeta (ahi termina la
+           banda de controles), asi que anclado a el el panel nunca podia
+           subir de esa linea por mas que su `top` fuera 0. Por eso el wrap
+           NO lleva position:relative: sin el, el bloque contenedor pasa a
+           ser `compras_prov_card_chart`, que ya es relative, y el panel
+           puede subir hasta el borde de la tarjeta.
+           Efecto lateral bueno: al no ser el wrap su bloque contenedor,
+           el `overflow:hidden` que ese wrap se pone durante la animacion
+           de alto tampoco lo recorta.
+           Va arriba-IZQUIERDA, el hueco que dejo `prov_pop_float` al
+           mudarse a la franja — pero ese popover VUELVE aca abajo de
+           1230px (ver su media query), y ahi si chocarian: por eso el
+           `top` de la banda alta va en un @media gemelo, mismo umbral.
+           Abajo de 1230 el panel se queda debajo de la banda (66px), que
+           es donde estaba antes de esta vuelta. */
         .st-key-cp_leyenda_float {
             position: absolute;
-            top: 4px; left: 6px; z-index: 6;
+            top: 66px; left: 16px; z-index: 6;
             width: 250px !important;
             overflow: hidden;
             padding: 1px 0 !important;
@@ -170,6 +179,14 @@ CSS = """        <style>
             border: 1px solid color-mix(in srgb, var(--text-secondary) 12%, transparent) !important;
             border-radius: 6px !important;
             box-shadow: 0 2px 10px rgba(16, 16, 20, 0.05) !important;
+        }
+        /* Gemelo del @media de prov_pop_float (mismo umbral, a proposito):
+           recien cuando ESE popover se va a la franja queda libre la banda
+           alta de la tarjeta, y el panel puede subir al borde. 12px lo deja
+           en la misma linea que las pills de granularidad (top:14px) sin
+           pegarse al filo. */
+        @media (min-width: 1230px) {
+            .st-key-cp_leyenda_float { top: 12px !important; }
         }
         .st-key-cp_leyenda_float [data-testid="stElementToolbar"] { display: none; }
         /* El boton-titulo se lee como TEXTO clickeable de la tarjeta, no
