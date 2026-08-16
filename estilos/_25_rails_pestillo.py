@@ -199,6 +199,81 @@ CSS = """    /* ================================================================
         height: 22px !important;
     }
 
+    /* ── 4b. PESTILLO IZQUIERDO: PESTAÑA EN EL BORDE ────────────────────
+       2026-08-16, a pedido y con referencia concreta (el latch de MSN
+       Dinero): en vez de un chevron gris tenue DENTRO del rail, una
+       pestaña sólida de acento montada en su borde derecho, mitad afuera.
+       El cambio de fondo es lo de menos; lo que lo hace legible como
+       "esto se abre" es la POSICIÓN — colgado del filo, no alineado con
+       los íconos, que es lo que lo hacía leerse como un ítem más de la
+       lista.
+       Puede salirse del rail porque `.st-key-nav_rail` es position:fixed
+       con `overflow: visible` y el pestillo cuelga DIRECTO de él (medido:
+       su único ancestro intermedio es un stElementContainer, tambien
+       visible). Si algún día pasa a vivir dentro del bloque interno —el
+       que scrollea, `overflow: hidden auto`— quedaría recortado.
+       Solo el rail IZQUIERDO: el derecho (`rail_pestillo`) sigue con el
+       chevron discreto de arriba. Su geometría es espejada y no se
+       verificó, así que se deja como estaba en vez de suponer. */
+    /* El selector arranca en `.st-key-nav_rail` por ESPECIFICIDAD, no por
+       claridad: navegacion.py estila `.st-key-nav_rail
+       [data-testid="stElementContainer"]` (0,2,0) y su CSS se inyecta
+       DESPUÉS que el de estilos/, así que empataba y ganaba él — medido, el
+       contenedor se quedaba en 88px y el botón salía centrado adentro del
+       rail (45-69) en vez de montado en el filo. Con la key duplicada
+       encima son (0,4,0) y no hay empate posible.
+       `justify-content: flex-end` es el segundo cinturón: aunque alguien
+       vuelva a forzar el ancho del contenedor, el botón queda pegado a la
+       derecha igual. */
+    .st-key-nav_rail .st-key-nav_pestillo.st-key-nav_pestillo {
+        position: absolute !important;
+        top: 50% !important;
+        left: auto !important;
+        /* La mitad de sus 24px queda fuera del rail: la pestaña se ve
+           "montada" en el filo, como la referencia. */
+        right: -12px !important;
+        transform: translateY(-50%) !important;
+        width: 24px !important;
+        min-width: 24px !important;
+        justify-content: flex-end !important;
+        z-index: 5 !important;
+    }
+    .st-key-nav_rail .st-key-nav_pestillo.st-key-nav_pestillo button {
+        width: 24px !important;
+        height: 46px !important;
+        /* Redondeado solo del lado que MIRA al contenido; el que toca al
+           rail queda recto para que se lea pegado, no flotando. */
+        border-radius: 0 8px 8px 0 !important;
+        background: var(--accent) !important;
+        color: #ffffff !important;
+        /* Opaco desde el arranque: la referencia lo tiene siempre visible.
+           El 0.45 de la regla de arriba lo escondía hasta pasar el mouse,
+           que es justo lo que hay que evitar en un control de "descúbreme". */
+        opacity: 1 !important;
+        box-shadow: 0 1px 4px rgba(16, 16, 20, 0.14) !important;
+    }
+    .st-key-nav_rail:hover .st-key-nav_pestillo.st-key-nav_pestillo button,
+    .st-key-nav_rail .st-key-nav_pestillo.st-key-nav_pestillo button:hover {
+        background: var(--accent-deep) !important;
+        color: #ffffff !important;
+        opacity: 1 !important;
+    }
+    .st-key-nav_rail .st-key-nav_pestillo.st-key-nav_pestillo button [data-testid="stIconMaterial"],
+    .st-key-nav_rail .st-key-nav_pestillo.st-key-nav_pestillo button p > span {
+        font-size: 20px !important;
+    }
+    /* Plegado: la pestaña crece a lo alto (mismo criterio que tenía el
+       chevron, que pasaba a 116px) para que la tira angosta siga siendo
+       fácil de agarrar. */
+    :root:has(style.rail-izq-plegado) .st-key-nav_rail .st-key-nav_pestillo.st-key-nav_pestillo button {
+        height: 64px !important;
+        opacity: 1 !important;
+    }
+    :root:has(style.rail-izq-plegado) .st-key-nav_rail:hover
+        .st-key-nav_pestillo.st-key-nav_pestillo button {
+        height: 64px !important;
+    }
+
     /* ── 5. MÓVIL — no hay pestillo ─────────────────────────────────────
        Los dos rails ya se transforman en tiras horizontales (bottom nav el
        izquierdo, fila scrollable el derecho): no ocupan ancho, así que no
