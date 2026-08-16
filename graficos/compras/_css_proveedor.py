@@ -175,6 +175,13 @@ CSS = """        <style>
             overflow: hidden;
             text-overflow: ellipsis;
         }
+        /* "· todo el histórico": avisa que este gráfico NO está mirando el
+           mismo rango que el ranking de al lado. Va en el mismo renglón y
+           apagado — es una aclaración, no un dato. */
+        .cp-evo-tit span {
+            font-weight: 400;
+            color: var(--text-secondary);
+        }
         /* Scroll horizontal del plot. Solo entra en juego cuando Python le
            forzo un ancho mayor al disponible (ver `_scroll_x` en
            proveedor.py): con muchas series en pocos periodos las barras se

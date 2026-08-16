@@ -111,29 +111,37 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         return
 
     # ── Calcular periodo ──────────────────────────────────────────────────
-    fe_s = pd.to_datetime(base["fecha"], errors="coerce")
-    if gran == "Día":
-        base["_per_sort"] = fe_s.dt.strftime("%Y-%m-%d")
-        base["per"] = fe_s.dt.strftime("%d %b")
-        _mes_es = {'Jan':'Ene','Apr':'Abr','Aug':'Ago','Dec':'Dic'}
-        for _en, _es in _mes_es.items():
-            base["per"] = base["per"].str.replace(_en, _es)
-    elif gran == "Semana":
-        _wstart = (fe_s - pd.to_timedelta(fe_s.dt.weekday, unit="D")).dt.normalize()
-        _wend = _wstart + pd.Timedelta(days=6)
-        base["_per_sort"] = _wstart.dt.strftime("%Y-%m-%d")   # clave de orden
-        _mes_es = {'Jan':'Ene','Apr':'Abr','Aug':'Ago','Dec':'Dic'}
-        _per = _wstart.dt.strftime("%d%b") + "-" + _wend.dt.strftime("%d%b")
-        for _en, _es in _mes_es.items():
-            _per = _per.str.replace(_en, _es)
-        base["per"] = _per
-    elif gran == "Año":
-        base["_per_sort"] = fe_s.dt.year.astype("Int64").astype(str)
-        base["per"] = base["_per_sort"]
-    else:  # Mes
-        base["_per_sort"] = fe_s.dt.to_period("M").astype(str)
-        base["per"] = base["_per_sort"]
-    base = base[base["per"].notna() & (base["per"] != "<NA>")]
+    # Extraído a función (2026-08-16) para poder aplicárselo TAMBIÉN al
+    # histórico completo, que es lo que alimenta el gráfico de evolución:
+    # con el rango de la franja puede haber un solo período y una línea de
+    # un punto no dibuja ninguna evolución (reportado con captura: en
+    # granularidad Año se veía un punto suelto en medio de la nada).
+    def _agregar_periodo(_df):
+        _fe = pd.to_datetime(_df["fecha"], errors="coerce")
+        _mes_es = {'Jan': 'Ene', 'Apr': 'Abr', 'Aug': 'Ago', 'Dec': 'Dic'}
+        if gran == "Día":
+            _df["_per_sort"] = _fe.dt.strftime("%Y-%m-%d")
+            _p = _fe.dt.strftime("%d %b")
+            for _en, _es in _mes_es.items():
+                _p = _p.str.replace(_en, _es)
+            _df["per"] = _p
+        elif gran == "Semana":
+            _ws = (_fe - pd.to_timedelta(_fe.dt.weekday, unit="D")).dt.normalize()
+            _we = _ws + pd.Timedelta(days=6)
+            _df["_per_sort"] = _ws.dt.strftime("%Y-%m-%d")   # clave de orden
+            _p = _ws.dt.strftime("%d%b") + "-" + _we.dt.strftime("%d%b")
+            for _en, _es in _mes_es.items():
+                _p = _p.str.replace(_en, _es)
+            _df["per"] = _p
+        elif gran == "Año":
+            _df["_per_sort"] = _fe.dt.year.astype("Int64").astype(str)
+            _df["per"] = _df["_per_sort"]
+        else:  # Mes
+            _df["_per_sort"] = _fe.dt.to_period("M").astype(str)
+            _df["per"] = _df["_per_sort"]
+        return _df[_df["per"].notna() & (_df["per"] != "<NA>")]
+
+    base = _agregar_periodo(base)
 
     # Proveedores a dibujar (gobiernan la paleta, el filtro y el cuadro de
     # control de la izquierda).
@@ -512,14 +520,48 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 if _prov_evo is None:
                     st.caption("Sin proveedores en el rango.")
                 else:
-                    _serie_evo = (base[base["prov"] == _prov_evo]
+                    # De dónde salen los períodos: el rango de la franja
+                    # suele tener UNO solo (un mes, o un año en granularidad
+                    # Año), y una línea de un punto no dibuja ninguna
+                    # evolución — se veía un punto suelto en el aire
+                    # (reportado con captura). Así que si el rango no da al
+                    # menos 2 períodos, la evolución se calcula sobre el
+                    # HISTÓRICO COMPLETO (`d_full`), que es exactamente lo
+                    # que el Panel B ya ofrece con su toggle "Todo".
+                    # El ranking de al lado sigue mirando el rango: son dos
+                    # preguntas distintas —"quién pesa más ACÁ" y "cómo viene
+                    # este proveedor"— y el caption lo dice cuando difieren.
+                    _evo_hist = False
+                    _src_evo = base
+                    if len(periodos) < 2 and d_full is not None and col_fecha:
+                        _bf = pd.DataFrame({
+                            "prov":  d_full[col_prov].astype(str).values,
+                            "valor": pd.to_numeric(d_full[col_valor],
+                                                   errors="coerce").fillna(0).values,
+                            "fecha": pd.to_datetime(d_full[col_fecha],
+                                                    errors="coerce").values,
+                        })
+                        _bf = _agregar_periodo(
+                            _bf[_bf["prov"].notna() & (_bf["prov"] != "nan")])
+                        if not _bf.empty:
+                            _src_evo = _bf
+                            _evo_hist = True
+                    _per_evo = (_src_evo[["_per_sort", "per"]].drop_duplicates()
+                                .sort_values("_per_sort")["per"].tolist())
+                    _per_evo = list(dict.fromkeys(_per_evo))
+                    _serie_evo = (_src_evo[_src_evo["prov"] == _prov_evo]
                                   .groupby("per")["valor"].sum()
-                                  .reindex(periodos, fill_value=0))
-                    # Se dibuja la ventana visible, la misma que gobiernan las
-                    # flechas de arriba: son los períodos que el usuario eligió
-                    # mirar, y el ranking ya no las usa.
-                    _evo_x = list(_serie_evo.index)[_sl]
-                    _evo_y = [float(v) for v in _serie_evo.values[_sl]]
+                                  .reindex(_per_evo, fill_value=0))
+                    # Sobre el histórico se muestran los últimos períodos (no
+                    # la ventana de las flechas, que es del rango); sobre el
+                    # rango se respeta esa ventana.
+                    if _evo_hist:
+                        _serie_evo = _serie_evo.tail(12)
+                        _evo_x = list(_serie_evo.index)
+                        _evo_y = [float(v) for v in _serie_evo.values]
+                    else:
+                        _evo_x = list(_serie_evo.index)[_sl]
+                        _evo_y = [float(v) for v in _serie_evo.values[_sl]]
                     _color_evo = dict(zip(_rk_nombres, _rk_colores)).get(
                         _prov_evo, ACENTO)
                     fig_evo = go.Figure(go.Scatter(
@@ -547,7 +589,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     )
                     st.markdown(
                         f'<div class="cp-evo-tit">Evolución · '
-                        f'{_compras_truncar(_prov_evo, 22)}</div>',
+                        f'{_compras_truncar(_prov_evo, 22)}'
+                        + ('<span> · todo el histórico</span>'
+                           if _evo_hist else '')
+                        + '</div>',
                         unsafe_allow_html=True)
                     st.plotly_chart(
                         fig_evo, width="stretch",
