@@ -4881,3 +4881,18 @@ salvo `icono`):
      reales (padding + franja + figura) hay que recalcularlo cuando una
      de esas piezas se muda, o queda reservando alto para algo que ya no
      está.
+
+     TRAMPA aparte, encontrada al pedido de "esto desperdicia espacio,
+     subilo": un `position:fixed` colapsa a 0px de alto — pero SOLO el
+     elemento que lo tiene, no su wrapper. `ventas_comp_titulo_franja` se
+     dibuja como HERMANO de la tarjeta (mismo bloque vertical), y aunque
+     el título en sí no ocupa alto, el wrapper que Streamlit le pone
+     alrededor sigue siendo un flex item más del bloque que los contiene
+     — y el `gap:16px` de ese flex se aplica IGUAL entre "un item de 0px"
+     y el siguiente. La tarjeta apareció 16px más abajo de lo que estaba
+     antes de que el título tuviera un hermano invisible, aun con
+     `position:fixed` puesto correctamente. Medido (`getBoundingClientRect`
+     antes/después) y cancelado con `margin-top:-16px` en la tarjeta. Si
+     un futuro placeholder-fantasma (position:fixed, escapa a la franja)
+     se agrega como HERMANO de algo en vez de vivir DENTRO de ello, contar
+     con este mismo 16px de sobra.
