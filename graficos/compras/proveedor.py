@@ -679,6 +679,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     #    tarjeta vive en una funcion local para NO re-indentar su cuerpo; se
     #    llama abajo solo si hay proveedor en foco.
     def _paneles_card():
+        # Producto por DEFECTO del Panel B: el primero de la tabla del Panel
+        # A (el de mayor valor). Lo llena el Panel A mas abajo y lo lee el
+        # Panel B, que se dibuja despues en el mismo `st.columns`. Existe
+        # como variable local y NO se escribe en session_state a proposito:
+        # es un DEFAULT de presentacion, no una seleccion del usuario. Si se
+        # guardara como foco real, "no hay nada elegido" y "elegi justo el
+        # primero" pasarian a ser el mismo estado, y ya no se podria volver
+        # al vacio ni distinguir un clic deliberado.
+        _prod_top = None
         with st.container(border=True, key="compras_prov_card_paneles"):
             pa, pb = st.columns(2)
 
@@ -740,6 +749,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             # vez de una barra suelta. De yapa, ordenar por
                             # cualquier columna, que el grafico no permitia.
                             prod_cats = list(agg.index)
+                            # `nlargest` ya ordeno de mayor a menor, asi que
+                            # el primero es el producto de mas valor: ese es
+                            # el que el Panel B muestra si no hay ninguno
+                            # elegido a mano.
+                            _prod_top = prod_cats[0]
                             # El % se calcula sobre el total del proveedor en el
                             # ambito vigente (`sub`), NO sobre la suma del Top N:
                             # asi "12%" sigue significando lo mismo tanto en Top
@@ -800,8 +814,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
             # Panel B: proveedores del producto seleccionado
             with pb:
-                _tb = ("Proveedores del producto" if prod_focus is None
-                       else f"Proveedores de · {_compras_truncar(prod_focus, 26)}")
+                # Sin eleccion del usuario, cae al primero de la tabla de al
+                # lado (a pedido: antes el panel arrancaba vacio, con solo el
+                # titulo "Proveedores del producto" y nada debajo, y no habia
+                # forma de saber que ese hueco se llenaba clickeando).
+                # `_prod_top` es None si no hay proveedor en foco o su tabla
+                # salio vacia: ahi el panel sigue mostrando el estado vacio.
+                _prod_ver = prod_focus if prod_focus is not None else _prod_top
+                _tb = ("Proveedores del producto" if _prod_ver is None
+                       else f"Proveedores de · {_compras_truncar(_prod_ver, 26)}")
                 with _card("prov_prov_de_prod", _tb, titulo_arriba=True):
                     # Toggle de ámbito de fecha, alojado en la cabecera (dcha.):
                     # "En rango" respeta el filtro superior; "Todo" recalcula con
@@ -812,7 +833,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             default="En rango", key="compras_prov_prov_scope",
                             label_visibility="collapsed",
                         ) or "En rango"
-                    if prod_focus is None:
+                    if _prod_ver is None:
                         pass
                     else:
                         _todo_hist = (_scope == "Todo" and d_full is not None)
@@ -820,7 +841,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         if _todo_hist:
                             st.caption("📅 Todo el histórico — ignora el filtro "
                                        "de fecha de arriba.")
-                        sub2 = _srcB[_srcB["prod"] == prod_focus]
+                        sub2 = _srcB[_srcB["prod"] == _prod_ver]
                         # Color por proveedor: los del top toman su color de la
                         # paleta (el mismo que en el chart principal); los que
                         # no estan en top -> gris. Asi el swatch de la tarjeta
