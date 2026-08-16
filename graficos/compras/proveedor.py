@@ -274,13 +274,20 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     else:
         _docs_por = None
     fig = go.Figure()
+    # Filas del panel-leyenda (`cp_leyenda_float`, más abajo). Se juntan acá
+    # y no en un segundo groupby aparte para que el panel y las barras no
+    # puedan discrepar: mismo color, mismo total y mismo % que la serie que
+    # se está dibujando en esta misma vuelta del loop.
+    _filas_leyenda = []
     for i, prov in enumerate(orden_provs):
         grp = (base[base["prov"] == prov]
                .groupby("per", as_index=False)["valor"].sum()
                .set_index("per")["valor"]
                .reindex(periodos, fill_value=0))
-        _pct = base[base["prov"] == prov]["valor"].sum() / _tot_all * 100
+        _tot_prov = base[base["prov"] == prov]["valor"].sum()
+        _pct = _tot_prov / _tot_all * 100
         _color = PALETA_CALLAI[i % len(PALETA_CALLAI)]
+        _filas_leyenda.append((prov, _color, float(_tot_prov), float(_pct)))
         # Resaltar el proveedor en foco con opacidad plena; los demás, semitransparentes
         _opacity = 1.0 if (prov_focus is None or prov == prov_focus) else 0.30
 
@@ -342,6 +349,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                      .groupby("per", as_index=False)["valor"].sum()
                      .set_index("per")["valor"]
                      .reindex(periodos, fill_value=0))
+        _tot_otros = base[_otros_mask]["valor"].sum()
+        _filas_leyenda.append(("Otros", GRIS_BORDE, float(_tot_otros),
+                               float(_tot_otros / _tot_all * 100)))
         _tags_o = etiqueta_serie(list(grp_otros.values), _gran_suffix,
                                  compacta=_lab_compacta)[_sl]
         if _show_names and _max_chars >= 2:
@@ -385,13 +395,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # Se conserva la grilla como referencia visual de altura, pero sin
         # números. Ademas libera el margen izquierdo → las barras ganan ancho.
         yaxis=dict(showticklabels=False),
-        # Leyenda VERTICAL flotando DENTRO del área (x<=1 → Plotly no reserva
-        # margen → no encoge el gráfico). Fondo semitransparente para leerse
-        # sobre las barras. Arranca en y=0.82 para no pisar el toggle superior.
-        legend=dict(orientation="v", yanchor="top", y=0.82,
-                    xanchor="right", x=0.99, font=dict(size=10),
-                    bgcolor="rgba(255,255,255,0.78)",
-                    bordercolor="rgba(0,0,0,0.12)", borderwidth=1),
+        # 2026-08-16: la leyenda NATIVA de Plotly (vertical, flotando dentro
+        # del área con fondo semitransparente) se reemplazó por el panel
+        # plegable `cp_leyenda_float` de más abajo — mismo patrón que
+        # Ventas › Año Pasado, donde "Detalle" ES el legend de la vista.
+        # Motivo: la de Plotly solo puede mostrar color + nombre, y acá el
+        # nombre viene truncado a 22 chars; el panel muestra además el
+        # total y el % de participación de cada proveedor, y sus filas
+        # enfocan/desenfocan igual que un clic en la barra.
+        showlegend=False,
         hovermode="closest",
         # uirevision estable: evita que Plotly reinicie estado de UI propio
         # (p. ej. leyenda arrastrada) en cada rerun por clic.
@@ -520,14 +532,83 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # controla con la ventana de periodos (server-side) + flechas de
         # navegación — nunca scroll horizontal externo ni zoom client-side.
         with st.container(key="cp_chart_wrap"):
+            # ── Panel-leyenda plegable, flotando sobre el plot ──────────────
+            # Reemplaza la leyenda nativa de Plotly (ver showlegend=False
+            # arriba). Mismo patrón que "Detalle" de Ventas › Año Pasado:
+            # un st.button que hace de título+chevron y el estado abierto en
+            # session_state; las filas se dibujan DENTRO del mismo
+            # container, que es position:absolute sobre el plot — así
+            # abrirlo/cerrarlo NO mueve el gráfico ni necesita un portal.
+            #
+            # Las filas son BOTONES, no toggles, a propósito: el estado de
+            # "qué proveedores se ven" ya lo dueñan los checkboxes
+            # `cp_prov_cb::<nombre>` del popover de la franja, y dos widgets
+            # con la MISMA key revientan en Streamlit (regla del proyecto:
+            # una sola key por valor). Un botón no guarda estado, así que
+            # acá cada fila hace lo que hace un clic en su barra: enfocar /
+            # desenfocar ese proveedor.
+            def _leyenda_foco(_p):
+                st.session_state["compras_prov_focus"] = (
+                    None if st.session_state.get("compras_prov_focus") == _p
+                    else _p)
+                st.session_state["compras_prov_prodfocus"] = None
+
+            def _toggle_leyenda():
+                # on_click y no el return de st.button: el return recién se
+                # conoce DESPUÉS de dibujar el botón, así que el chevron
+                # quedaría un clic atrasado (misma trampa documentada en
+                # ventas_comparativo.py).
+                st.session_state["cp_leyenda_abierta"] = not st.session_state.get(
+                    "cp_leyenda_abierta", True)
+
+            _leyenda_abierta = st.session_state.get("cp_leyenda_abierta", True)
+            # El color de cada fila se publica como variable CSS por key en
+            # vez de ir inline: el swatch lo pinta un ::before del botón, y
+            # a un pseudo-elemento no se le puede poner estilo inline.
+            st.markdown(
+                "<style>"
+                + "".join(
+                    f".st-key-cp_leg_row_{_i}{{--cp-leg-color:{_c};}}"
+                    for _i, (_p, _c, _v, _pc) in enumerate(_filas_leyenda))
+                + "</style>",
+                unsafe_allow_html=True)
+            with st.container(key="cp_leyenda_float"):
+                _chev = ("keyboard_arrow_up" if _leyenda_abierta
+                         else "keyboard_arrow_down")
+                st.button(f"Proveedores · {len(_filas_leyenda)}",
+                          key="cp_leyenda_toggle",
+                          icon=f":material/{_chev}:",
+                          on_click=_toggle_leyenda)
+                if _leyenda_abierta:
+                    with st.container(key="cp_leyenda_panel", gap=None,
+                                      width=250):
+                        for _i, (_p, _c, _v, _pc) in enumerate(_filas_leyenda):
+                            _cols = st.columns([3, 2],
+                                               vertical_alignment="center")
+                            with _cols[0]:
+                                # "Otros" no es un proveedor real: agrupa a
+                                # todos los que quedaron fuera del top, así
+                                # que enfocarlo no significa nada (el foco
+                                # filtra los paneles de abajo por UN
+                                # proveedor). Se dibuja igual, deshabilitado.
+                                with st.container(key=f"cp_leg_row_{_i}"):
+                                    st.button(
+                                        _compras_truncar(_p, 18),
+                                        key=f"cp_leg_btn_{_i}",
+                                        disabled=(_p == "Otros"),
+                                        help=_p,
+                                        on_click=_leyenda_foco, args=(_p,))
+                            with _cols[1]:
+                                st.markdown(
+                                    f'<div class="cp-leg-val">S/ {_v:,.0f}'
+                                    f'<span>{_pc:.0f}%</span></div>',
+                                    unsafe_allow_html=True)
             st.plotly_chart(
                 fig,
                 use_container_width=True,
                 key=_chart_key,
                 on_select="rerun",
                 selection_mode="points",
-                # edits.legendPosition: permite ARRASTRAR la leyenda con el cursor.
-                # Ojo: la posición no persiste (al reejecutar vuelve a y=0.82).
                 config=_cfg_chart,
             )
         # Navegacion de la ventana de periodos. El indice y el tamano viven en

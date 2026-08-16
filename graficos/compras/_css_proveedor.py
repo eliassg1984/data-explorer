@@ -140,6 +140,137 @@ CSS = """        <style>
                                 - (var(--rail-der-res) - 22px)) !important;
             }
         }
+        /* ── PANEL-LEYENDA PLEGABLE (reemplaza la leyenda de Plotly) ──────
+           Mismas medidas y materiales que "Detalle" de Ventas > Año Pasado
+           (estilos/_80_cards.py): vidrio gris al 8% con saturate, borde
+           casi transparente, radio 6px y ancho FIJO — sin el ancho fijo la
+           tarjeta se encoge al texto cuando esta cerrada y salta de ancho
+           en cada clic. El contenedor es absolute sobre `cp_chart_wrap`,
+           asi que abrir/cerrar no mueve el grafico.
+           Va arriba-IZQUIERDA. Abajo de 1230px `prov_pop_float` VUELVE a
+           esa zona (ver su media query), pero NO hace falta media query
+           para esto: el popover se ancla a la TARJETA (top:14px, banda de
+           controles) y este panel al `cp_chart_wrap`, que empieza mas
+           abajo. Medido a 1100px: popover termina en y=119 y el panel
+           arranca en y=130 — 11px de aire. Si alguna vez se achica esa
+           banda de controles, revisar aca. */
+        .st-key-cp_chart_wrap { position: relative; }
+        .st-key-cp_leyenda_float {
+            position: absolute;
+            top: 4px; left: 6px; z-index: 6;
+            width: 250px !important;
+            overflow: hidden;
+            padding: 1px 0 !important;
+            gap: 0 !important;
+            background: rgba(113, 113, 122, 0.08) !important;
+            background: color-mix(in srgb, var(--text-secondary) 8%, transparent) !important;
+            backdrop-filter: saturate(1.15) !important;
+            -webkit-backdrop-filter: saturate(1.15) !important;
+            border: 1px solid rgba(113, 113, 122, 0.12) !important;
+            border: 1px solid color-mix(in srgb, var(--text-secondary) 12%, transparent) !important;
+            border-radius: 6px !important;
+            box-shadow: 0 2px 10px rgba(16, 16, 20, 0.05) !important;
+        }
+        .st-key-cp_leyenda_float [data-testid="stElementToolbar"] { display: none; }
+        /* El boton-titulo se lee como TEXTO clickeable de la tarjeta, no
+           como un boton propio: hereda el vidrio del contenedor. `display:
+           flex` (block-level) y no el inline-flex de Streamlit — el inline
+           deja el hueco de descendente debajo y el texto se ve corrido
+           hacia arriba (bug ya diagnosticado en el panel de Ventas). */
+        .st-key-cp_leyenda_toggle button {
+            width: 100% !important;
+            min-width: 0 !important; min-height: 0 !important;
+            height: auto !important;
+            display: flex !important;
+            justify-content: flex-start !important;
+            align-items: center !important;
+            line-height: 1.35 !important;
+            gap: 4px !important;
+            padding: 3px 10px !important;
+            margin: 0 !important;
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            color: var(--text-primary) !important;
+        }
+        .st-key-cp_leyenda_toggle button:hover {
+            background: color-mix(in srgb, var(--text-primary) 5%, transparent) !important;
+            color: var(--accent-deep) !important;
+        }
+        .st-key-cp_leyenda_toggle button p {
+            font-size: 12px !important; font-weight: 600 !important;
+            margin: 0 !important;
+        }
+        .st-key-cp_leyenda_toggle button [data-testid="stIconMaterial"] {
+            font-size: 17px !important;
+            color: var(--text-primary) !important;
+        }
+        .st-key-cp_leyenda_panel {
+            padding: 0 8px 5px !important;
+            gap: 0 !important;
+        }
+        .st-key-cp_leyenda_panel [data-testid="stHorizontalBlock"] {
+            gap: 4px !important;
+            align-items: center !important;
+        }
+        /* Fila = boton con el swatch de color en un ::before. El color entra
+           por --cp-leg-color, que Python publica por key (no puede ir inline:
+           un pseudo-elemento no acepta style=""). */
+        .st-key-cp_leyenda_panel [class*="st-key-cp_leg_row_"] button {
+            width: 100% !important;
+            min-width: 0 !important; min-height: 0 !important;
+            height: auto !important;
+            display: flex !important;
+            justify-content: flex-start !important;
+            align-items: center !important;
+            gap: 6px !important;
+            padding: 1px 2px !important;
+            margin: 0 !important;
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 3px !important;
+            color: var(--text-primary) !important;
+            line-height: 1.3 !important;
+        }
+        .st-key-cp_leyenda_panel [class*="st-key-cp_leg_row_"] button::before {
+            content: "";
+            flex: 0 0 auto;
+            width: 9px; height: 9px;
+            border-radius: 2px;
+            background: var(--cp-leg-color, var(--text-secondary));
+        }
+        .st-key-cp_leyenda_panel [class*="st-key-cp_leg_row_"] button p {
+            font-size: 11px !important; font-weight: 500 !important;
+            margin: 0 !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+        .st-key-cp_leyenda_panel [class*="st-key-cp_leg_row_"] button:hover:not(:disabled) {
+            background: color-mix(in srgb, var(--text-primary) 6%, transparent) !important;
+        }
+        /* "Otros" no es un proveedor real: su fila va apagada pero se sigue
+           viendo (el swatch gris explica las barras grises del grafico). */
+        .st-key-cp_leyenda_panel [class*="st-key-cp_leg_row_"] button:disabled {
+            opacity: .75 !important;
+            cursor: default !important;
+        }
+        .cp-leg-val {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-align: right;
+            white-space: nowrap;
+            line-height: 1.3;
+        }
+        .cp-leg-val span {
+            font-weight: 400;
+            color: var(--text-secondary);
+            margin-left: 5px;
+        }
+
         /* Variante "outline en tinte" (violeta claro con borde y texto oscuros).
            Contraste bajo: fondo casi blanco con leve tinte, borde tenue. */
         .st-key-prov_pop_float [data-testid="stPopover"] button {
