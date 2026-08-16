@@ -571,21 +571,30 @@ CSS = """    /* ================================================================
         }
     }
 
-    /* PROTOTIPO (2026-08-16), 2da vuelta — "fusionar" de verdad, referencia
+    /* PROTOTIPO (2026-08-16), 3ra vuelta — "fusionar" de verdad, referencia
        Google Finance: NADA de tarjeta (ni sombra ni esquinas, en ningún
        lado), toda la superficie de un color, de borde a borde. La 1ra
        vuelta solo sacaba la línea + esquinas SUPERIORES y dejaba la
        sombra + esquinas inferiores tal cual — el resultado se leía como
        "la franja se ensanchó" (sin nada que marque un límite, no como
-       "franja y tarjeta fundidas en una forma"). Acotado a Compras ›
-       Familia via :has(). Si gusta, generalizar sacando el :has() (afecta
-       a los 8 reportes, son las mismas reglas wildcard que ya documenta
-       CLAUDE.md/arquitectura.md). */
-    [data-testid="stAppViewContainer"]:has(.st-key-compras_fam_titulo_franja)
+       "franja y tarjeta fundidas en una forma"); la 2da sacó también
+       sombra y esquinas inferiores, pero acotado solo a Familia.
+       Esta vuelta amplía el alcance a TODO Compras (no solo Familia):
+       scope por `app_reporte_compras` (el marker de reporte que ya usan
+       otras reglas de esta app — ver estilos/_20_compras_rail.py) en vez
+       de por la presencia del título de Familia. La regla de la tarjeta
+       (`.st-key-ajuste_graf_card_izq_compras`) ya era exclusiva de
+       Compras por el nombre de su key —no necesita :has()— pero se deja
+       agrupada bajo el mismo scope por legibilidad. Vistas de Compras que
+       NO usan ese wrapper (Proveedor, con `compras_prov_drill_wrap` y
+       borde propio por bloque) no se tocan: nada matchea ahí. Si gusta,
+       generalizar a los 8 reportes es sacar este :has() (son las mismas
+       reglas wildcard que ya documenta CLAUDE.md/arquitectura.md). */
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
         .st-key-fila_ajuste_top::before {
         border-bottom: none !important;
     }
-    [data-testid="stAppViewContainer"]:has(.st-key-compras_fam_titulo_franja)
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
         .st-key-ajuste_graf_card_izq_compras {
         border-radius: 0 !important;
         box-shadow: none !important;
