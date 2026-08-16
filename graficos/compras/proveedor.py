@@ -836,11 +836,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     if _prod_ver is None:
                         pass
                     else:
+                        # `_todo_hist` solo elige la FUENTE. El caption que lo
+                        # anunciaba ("📅 Todo el histórico — ignora el filtro
+                        # de fecha de arriba") se quitó a pedido: el pill
+                        # "Todo" ya está marcado ahí mismo, en la cabecera del
+                        # panel, así que la leyenda repetía lo que el propio
+                        # control mostraba — y encima aparecía y desaparecía,
+                        # moviendo las tarjetas de abajo en cada cambio.
                         _todo_hist = (_scope == "Todo" and d_full is not None)
                         _srcB = _base_prov_de(d_full) if _todo_hist else base
-                        if _todo_hist:
-                            st.caption("📅 Todo el histórico — ignora el filtro "
-                                       "de fecha de arriba.")
                         sub2 = _srcB[_srcB["prod"] == _prod_ver]
                         # Color por proveedor: los del top toman su color de la
                         # paleta (el mismo que en el chart principal); los que
