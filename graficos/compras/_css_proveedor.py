@@ -114,21 +114,48 @@ CSS = """        <style>
         }
 
         /* Navegacion de ventana: flechas ‹ › + pills de tamano en la misma
-           fila, abajo-derecha, flotando (no suman alto a la tarjeta). El
-           key de un container SIN borde ES el stVerticalBlock, por eso la
-           direccion FILA se fija aqui directo. Los controles tienen sombra
-           leve para leerse como "chips apoyados" sobre el grafico, no como
-           pills sueltos. */
+           fila, flotando (no suman alto a la tarjeta). El key de un
+           container SIN borde ES el stVerticalBlock, por eso la direccion
+           FILA se fija aqui directo.
+           2026-08-16, a pedido: subio de abajo-derecha (bottom:4px) a la
+           MISMA fila que la granularidad Dia/Semana/Mes/Ano, a su
+           izquierda. Los tres numeros van acoplados y salen de medir en
+           vivo, no a ojo:
+             · gran_float esta en right:16px y mide 227px de ancho, asi que
+               su borde izquierdo cae a 243px del borde derecho de la
+               tarjeta; +12px de aire => right:255px para win_nav.
+             · gran_float esta en top:14px y mide 22px de alto (centro a
+               25px); win_nav mide 28px, asi que top = 25 - 14 = 11px lo
+               deja centrado contra el.
+           Si cambian las opciones de granularidad (hoy 4 fijas) cambia su
+           ancho y hay que recalcular el right de aca.
+           `bottom:auto` es obligatorio: sin el, top Y bottom activos a la
+           vez estiran el contenedor de arriba a abajo de la tarjeta.
+           Ya no lleva fondo translucido ni blur: eso existia para leerse
+           como "chip apoyado" SOBRE el grafico; en la banda superior se
+           apoya en el fondo de la tarjeta y el translucido era invisible
+           (blanco 55% sobre blanco) pagando el costo de pintado del blur. */
         .st-key-win_nav {
-            position: absolute; bottom: 4px; right: 10px; z-index: 20;
+            position: absolute; top: 11px; right: 255px; bottom: auto;
+            z-index: 20;
             width: auto !important;
             display: flex !important; flex-direction: row !important;
             align-items: center !important;
             gap: 2px !important;
             padding: 1px 2px !important;
-            background: rgba(255,255,255,0.55) !important;
-            backdrop-filter: blur(4px);
+            background: transparent !important;
             border-radius: 6px !important;
+        }
+        /* Banda 641-768px: el `right` de arriba deja de servir porque
+           STREAMLIT (no este CSS) ensancha sus pills abajo de 768px —
+           padding 12px -> 16px, medido en vivo: gran_float pasa de 227px a
+           259px y win_nav se le encimaba 20px. Mismo breakpoint que usa
+           estilos/_99_movil.py. El limite inferior es 641px porque de ahi
+           para abajo win_nav ya deja de flotar (position:static, mas
+           abajo en este archivo) y el right no aplica.
+           right = 16 (el de gran_float) + 259 (su ancho aca) + 12 de aire. */
+        @media (max-width: 768px) and (min-width: 641px) {
+            .st-key-win_nav { right: 287px !important; }
         }
         .st-key-win_nav [data-testid="stElementToolbar"] { display: none; }
         .st-key-win_nav [data-testid="stElementContainer"] { width: auto !important; }
