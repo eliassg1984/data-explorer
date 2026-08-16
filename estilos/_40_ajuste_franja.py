@@ -133,7 +133,6 @@ CSS = """    /* ================================================================
         -webkit-backdrop-filter: blur(14px) saturate(1.6) !important;
         border: none !important;
         border-bottom: 2px solid var(--border-lavender) !important;
-        box-shadow: 0 4px 14px rgba(16, 16, 20, 0.06) !important;
         z-index: 0 !important;
     }
     /* 2026-08-07: 34px (en vez de var(--cab-altura)=50px) para los 8
