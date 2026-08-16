@@ -672,10 +672,21 @@ CSS = """    /* ================================================================
        bloque vertical que los contiene: el `gap:16px` de ese flex se
        aplica IGUAL entre "un item de 0px" y el siguiente, así que la
        tarjeta quedaba 16px más abajo de lo que estaba antes de que el
-       título tuviera un hermano invisible. -16px lo cancela — medido en
-       vivo (getBoundingClientRect antes/después), no a ojo. */
+       título tuviera un hermano invisible.
+       2026-08-15, 2da pasada (inspector: "esto debe subir" + "así como
+       los controles arriba"): -16px solo cancelaba el gap del flex. El
+       padre real, `ajuste_graf_card_izq_ventas`, es OTRA tarjeta —
+       redondeada, con su propio padding-top:8px (estilos/_80_cards.py,
+       regla de familia `st-key-ajuste_graf_card_*` — el inspector avisa
+       que es wildcard, así que NO se toca esa: movería las tarjetas de
+       los otros 7 reportes). Esos 8px se suman al gap ya cancelado:
+       -16 - 8 = -24px, medido en vivo hasta que el borde de esta tarjeta
+       quedó pegado al de su padre (que a su vez ya está pegado a la
+       franja por el -48px de _20_compras_rail.py). Con eso suben juntos
+       la tarjeta Y los controles de adentro (Día/Semana/Mes, Ventana,
+       Vista) — son el mismo elemento, no hace falta una regla aparte. */
     div[class*="st-key-chartcard_ventas_comparativo"] {
-        margin-top: -16px !important;
+        margin-top: -24px !important;
     }
 
     /* =================================================================== */
@@ -930,6 +941,36 @@ CSS = """    /* ================================================================
        más alto que los pills de texto plano. */
     div[class*="st-key-compras_fam_ser_pop"] {
         margin-top: 4px !important;
+    }
+
+    /* Botón "Cerrar" del drill de Platos (Ventas › Año Pasado): ícono solo,
+       sin relleno — a pedido, el botón secundario ancho (127×40,
+       use_container_width) "es muy grande para desktop" y comparte fila
+       con el título "Platos · …" (ver graficos/ventas_comparativo.py).
+       `vertical_alignment="center"` de st.columns no alcanzó (medido:
+       align-items quedaba en "stretch", no en "center"), así que se fuerza
+       acá. Con eso puesto TODAVÍA quedaban 8px de diferencia entre los
+       centros de título y botón (medido con getBoundingClientRect: el
+       `help=` del botón agrega algo invisible a su columna que corre su
+       centro de alineación) — el margin-top de abajo es ese resto, medido
+       en vivo hasta que los dos centros coincidieron, no a ojo. */
+    [data-testid="stHorizontalBlock"]:has(.st-key-ventas_comp_cerrar) {
+        align-items: center !important;
+    }
+    .st-key-ventas_comp_cerrar button {
+        min-width: 0 !important;
+        width: auto !important;
+        height: auto !important;
+        min-height: 0 !important;
+        padding: 4px !important;
+        margin-top: 12px !important;
+        border: none !important;
+        background: transparent !important;
+        color: var(--text-secondary) !important;
+    }
+    .st-key-ventas_comp_cerrar button:hover {
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
     }
 
     /* =================================================================== */

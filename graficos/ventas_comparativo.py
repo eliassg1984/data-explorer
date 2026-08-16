@@ -1069,17 +1069,33 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         k = claves[foco]
         _r_act = (rangos_act[foco][1], rangos_act[foco][2])
         _r_ap = (rangos_ap[foco][1], rangos_ap[foco][2])
-        with _card("ventas_comp_platos",
-                   f"Platos · {_texto_periodo(k, grano, rangos_act[foco][2])} "
-                   f"vs. {_texto_periodo(claves_ap[foco], grano, rangos_ap[foco][2])}",
-                   titulo_arriba=True):
-            _c1, _c2 = st.columns([6, 1])
+        _titulo_platos = (
+            f"Platos · {_texto_periodo(k, grano, rangos_act[foco][2])} "
+            f"vs. {_texto_periodo(claves_ap[foco], grano, rangos_ap[foco][2])}")
+        # Título propio (no `_card(titulo_arriba=True)`): ese helper dibuja
+        # el título en su PROPIA fila, de borde a borde — acá va compartiendo
+        # fila con el botón de cerrar, así que el título entra manual (misma
+        # clase `.chart-card-hdr`, sin su margen/borde-inferior porque ese
+        # ahora lo pone el <hr> de abajo, a lo ancho de las DOS columnas) y
+        # "Cerrar" pasa de botón ancho (127×40, a pedido: "muy grande para
+        # desktop") a ícono solo, sin relleno — mismo lenguaje minimalista
+        # que el resto de controles de esta vista.
+        with _card("ventas_comp_platos"):
+            _c1, _c2 = st.columns([0.94, 0.06], vertical_alignment="center")
+            with _c1:
+                st.markdown(
+                    f'<p class="chart-card-hdr" style="margin:0;padding:0;'
+                    f'border-bottom:none;">{_titulo_platos}</p>',
+                    unsafe_allow_html=True)
             with _c2:
-                if st.button("Cerrar", key="ventas_comp_cerrar",
-                             use_container_width=True):
+                if st.button(":material/close:", key="ventas_comp_cerrar",
+                             help="Cerrar"):
                     st.session_state["ventas_comp_foco"] = None
                     st.session_state["ventas_comp_click"] = None
                     st.rerun(scope="fragment")
+            st.markdown(
+                f'<hr style="border:none;border-top:1px solid {GRIS_BORDE};'
+                'margin:0 0 0.55rem;">', unsafe_allow_html=True)
             rk = _ranking_platos(_arch, _colp, col_fecha, col_venta, col_prod,
                                  col_cant, _r_act, _r_ap, filtrar_cb,
                                  col_fam=col_fam, col_sub=col_sub)
