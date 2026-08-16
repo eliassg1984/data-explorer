@@ -419,12 +419,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # las pills se posicionan en absoluto arriba-derecha, superpuestas al gráfico.
     st.markdown(CSS_PROVEEDOR, unsafe_allow_html=True)
 
-    # Nombre de la vista en la FRANJA superior, a la derecha del pill de
-    # fecha (a pedido). Mismo mecanismo que los otros titulos fantasma
-    # (arquitectura.md regla #120): vive fuera de la tarjeta y lo ancla el
-    # CSS con position:fixed. La diferencia con Compras > Familia es de que
-    # LADO del pill cae: alla a la izquierda, aca a la derecha — por eso
-    # los chips se corren y el pill NO (ver _css_proveedor.py).
+    # Nombre de la vista PRIMERO en la FRANJA superior, pegado a la
+    # izquierda y antes del pill de fecha — igual que Compras > Familia.
+    # Mismo mecanismo que los otros titulos fantasma (arquitectura.md regla
+    # #120): vive fuera de la tarjeta y lo ancla el CSS con position:fixed,
+    # que es lo que corre al pill y a los chips (ver _css_proveedor.py).
     titulo_en_franja(
         st.container(key="compras_prov_titulo_franja").empty(), "Proveedor")
 
