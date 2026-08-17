@@ -4936,3 +4936,28 @@ salvo `icono`):
      título (260px) ni los tres números acoplados (175/451/667) cambiaron
      — son los MISMOS que en Ventas, coincidencia de haber usado el mismo
      ancho de reserva, no algo que haya que mantener igual a propósito.
+
+122. **El texto del hover de Plotly casi no se veía — no era un problema de
+     `estilos/`, sino de `layout.font` no llegando al tooltip.**
+
+     Reportado sobre el gráfico de Evolución de Compras › Proveedor (con
+     captura y flechas sobre los puntos): el hover se disparaba (la
+     spikeline vertical se veía) pero el texto era casi ilegible. Medido en
+     el DOM (`hoverlayer` > `text.legendtext`): `fill: rgb(128,132,149)`
+     sobre fondo blanco — 3.7:1 de contraste, no pasa AA (mínimo 4.5:1) —
+     pese a que `_compras_layout` ya fija `font.color=TEXTO_PRINCIPAL` para
+     TODO el resto del gráfico. `layout.font` no alcanza al hover: Plotly
+     le pone su propio gris por defecto, y ese default gana siempre que no
+     se pise explícito con `layout.hoverlabel`.
+
+     Se fijó en `_compras_layout` (graficos/base.py), no en cada dashboard:
+     al ser compartida por compras, ventas, inventario, salidas,
+     requerimientos y constructor, el mismo contraste bajo estaba latente
+     en los 18 ficheros de `graficos/` que usan `hovertemplate`, aunque
+     solo se reportó en uno. `hoverlabel=dict(bgcolor=BLANCO,
+     bordercolor=GRIS_BORDE, font=dict(color=TEXTO_PRINCIPAL, ...))`
+     verificado con el mismo truco de simulación de hover que ya documenta
+     este archivo (disparar `mousemove`/`mouseover` sobre `.nsewdrag`, leer
+     `hoverlayer` del DOM) en dos gráficos distintos del mismo drill
+     (ranking horizontal y evolución) para confirmar que un solo cambio
+     centralizado alcanzó a ambos.
