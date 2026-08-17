@@ -421,18 +421,6 @@ CSS = """        <style>
             min-width: 300px !important;
         }
 
-        /* Leyenda del gráfico Plotly: totalmente transparente en reposo. Solo
-           se hace opaca cuando el cursor pasa DIRECTO sobre la leyenda (no
-           al hover de toda la tarjeta). Sigue interactuable porque opacity:0
-           conserva pointer-events. */
-        .st-key-compras_prov_card_chart .js-plotly-plot .legend {
-            opacity: 0.1 !important;
-            transition: opacity .22s ease-in-out !important;
-        }
-        .st-key-compras_prov_card_chart .js-plotly-plot .legend:hover {
-            opacity: 1 !important;
-        }
-
         /* Navegacion de ventana: flechas ‹ › + pills de tamano en la misma
            fila, flotando (no suman alto a la tarjeta). El key de un
            container SIN borde ES el stVerticalBlock, por eso la direccion

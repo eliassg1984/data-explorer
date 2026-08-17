@@ -5142,3 +5142,41 @@ salvo `icono`):
         contra su `getBoundingClientRect()`. Con `?debug=1` activo, el
         inspector propio del proyecto también intercepta el clic (queda
         clicable el tooltip, no la fila) — hay que probar SIN `?debug=1`.
+
+127. **`hovermode="x unified"` de Plotly renderiza su caja de hover con la
+     clase SVG `.legend` — cualquier CSS que apunte a `.legend` pensando
+     "la leyenda del gráfico" también atrapa el hover unificado de
+     CUALQUIER otro gráfico que comparta el mismo contenedor scopeado.**
+
+     Reportado: "la etiqueta [del hover] casi no se ve, como si fuese
+     transparente" sobre el gráfico de Evolución de Compras › Proveedor.
+     La regla venía de ANTES del merge de la regla #126: cuando el
+     ranking todavía era un `go.Bar` con leyenda propia, `_css_proveedor.py`
+     tenía `.st-key-compras_prov_card_chart .js-plotly-plot .legend {
+     opacity: 0.1 !important; } ...:hover { opacity: 1 !important; }` —
+     la leyenda del ranking se hacía casi invisible en reposo y opaca solo
+     al pasar el cursor DIRECTO sobre ella. El ranking se unió a la tabla
+     (regla #126) y su leyenda desapareció con él, pero la regla CSS
+     quedó — y sigue matcheando, porque el selector es por CONTENEDOR
+     (`.st-key-compras_prov_card_chart`), no por gráfico: la evolución
+     vive en el mismo contenedor, y su hover unificado, al llevar también
+     `class="legend"` (verificado en el DOM: `hoverlayer > g.legend`),
+     heredaba el `opacity: 0.1` — quedaba al 10%, "casi transparente",
+     todo el tiempo salvo que el cursor cayera justo sobre la cajita del
+     hover (que sigue al dato, no al cursor, así que casi nunca coincide).
+
+     Verificado en vivo: simular hover (`mouseover`/`mousemove` sobre
+     `.nsewdrag`, técnica ya documentada en este archivo) y leer
+     `getComputedStyle` del grupo `.legend` DENTRO de `.hoverlayer` — no
+     de sus hijos, que reportan `opacity:1` cada uno aunque el padre esté
+     al 10% (la opacidad de un `<g>` en SVG se compone visualmente pero no
+     cambia el `computedStyle` propio de los descendientes). Antes del
+     fix: `0.1`. Después de borrar la regla (ya no tenía target propio):
+     `1`.
+
+     Lección: un CSS "para el gráfico X" que en realidad apunta a una
+     clase GENÉRICA de Plotly (`.legend`, `.hoverlayer`, `.modebar`...)
+     dentro de un contenedor que hospeda VARIOS gráficos, sigue vivo para
+     todos ellos aunque el gráfico que lo motivó desaparezca. Al borrar un
+     gráfico, grepear su contenedor por reglas CSS de alcance amplio antes
+     de darlo por limpio.
