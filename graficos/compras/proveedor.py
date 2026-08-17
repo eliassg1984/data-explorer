@@ -575,10 +575,33 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             else None,
                         hovertemplate="%{x}<br>S/ %{y:,.0f}<extra></extra>",
                     ))
+                    # Etiquetas del eje X: con 12 períodos en ~380px las
+                    # "2026-08" se pisan entre sí y quedan ilegibles
+                    # (reportado con captura). Dos cosas juntas: se acortan
+                    # a "ago 26" y se muestra UNA CADA N para que nunca
+                    # entren más de ~6. El punto sin etiqueta sigue estando
+                    # en el hover, que trae el período completo.
+                    _MES_AB = ("ene", "feb", "mar", "abr", "may", "jun",
+                               "jul", "ago", "sep", "oct", "nov", "dic")
+
+                    def _etq_evo(_p):
+                        _t = str(_p)
+                        if gran == "Mes" and len(_t) == 7 and _t[4] == "-":
+                            try:
+                                return f"{_MES_AB[int(_t[5:]) - 1]} {_t[2:4]}"
+                            except (ValueError, IndexError):
+                                return _t
+                        return _t
+
+                    _paso_evo = max(1, -(-len(_evo_x) // 6))
+                    _tickv = [x for i, x in enumerate(_evo_x)
+                              if i % _paso_evo == 0]
                     _compras_layout(fig_evo, alto=_alto_chart)
                     fig_evo.update_layout(
                         margin=dict(l=10, r=10, t=6, b=10),
                         xaxis=dict(type="category", tickangle=0,
+                                   tickmode="array", tickvals=_tickv,
+                                   ticktext=[_etq_evo(x) for x in _tickv],
                                    tickfont=dict(size=10)),
                         # Acá el eje Y SÍ son valores, así que se respeta la
                         # convención del proyecto y va sin etiquetas: cada
