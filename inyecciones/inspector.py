@@ -117,10 +117,17 @@ def _mapas_desarrollador() -> tuple[str, str, str, str, str, str, str, str]:
     mapa_prefijos: dict[str, dict] = {}
     prefijo_a_func: dict[str, tuple[str, str]] = {}
 
+    # graficos/ se recorre RECURSIVO (`**`), no plano: cada vez que un
+    # dashboard se parte en paquete (compras 2026-07, ajuste despues) sus
+    # keys quedaban fuera del indice y el tooltip salia sin "Declarado en",
+    # sin snippet y sin funcion — y las Referencias perdian esos call sites,
+    # que es peor: una referencia que falta parece "nadie depende de esto".
+    # Antes habia una linea por subpaquete y compras era la unica agregada.
+    # Los `_`-prefijados SI entran aca (a diferencia de la raiz): es
+    # justamente donde viven las keys de los paquetes (_heatmap.py, etc).
     fuentes_py = sorted(p for p in _RAIZ.glob("*.py") if not p.name.startswith("_"))
-    fuentes_py += sorted((_RAIZ / "graficos").glob("*.py"))
-    fuentes_py += sorted((_RAIZ / "graficos" / "compras").glob("*.py")) if (_RAIZ / "graficos" / "compras").exists() else []
-    fuentes_py += sorted((_RAIZ / "tablas").glob("*.py")) if (_RAIZ / "tablas").exists() else []
+    fuentes_py += sorted((_RAIZ / "graficos").glob("**/*.py"))
+    fuentes_py += sorted((_RAIZ / "tablas").glob("**/*.py")) if (_RAIZ / "tablas").exists() else []
 
     # cache: {archivo -> [lineas]} para no releer al buscar refs
     contenido_por_archivo: dict[str, list[str]] = {}
