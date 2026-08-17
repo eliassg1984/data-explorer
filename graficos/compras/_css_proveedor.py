@@ -182,6 +182,44 @@ CSS = """        <style>
             font-weight: 400;
             color: var(--text-secondary);
         }
+        /* Resumen del ultimo periodo, debajo de la linea. El encabezado dice
+           QUE periodo se esta resumiendo: sin eso las cifras no tienen
+           contra que leerse. */
+        .cp-evo-kpis-tit {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            padding-left: 8px;
+            margin: 6px 0 4px;
+        }
+        /* 2x2 y no una fila de 4: la columna mide ~380px y cuatro celdas en
+           linea dejaban ~90px para "S/ 20,711", que se cortaba. */
+        .cp-evo-kpis {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            padding-left: 8px;
+        }
+        .cp-evo-kpis > div {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            padding: 5px 8px;
+            border-radius: 6px;
+            background: color-mix(in srgb, var(--text-secondary) 6%, transparent);
+        }
+        .cp-evo-kpis span {
+            font-size: 10px;
+            color: var(--text-secondary);
+            line-height: 1.2;
+        }
+        .cp-evo-kpis b {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            line-height: 1.25;
+            white-space: nowrap;
+        }
         /* Scroll horizontal del plot. Solo entra en juego cuando Python le
            forzo un ancho mayor al disponible (ver `_scroll_x` en
            proveedor.py): con muchas series en pocos periodos las barras se

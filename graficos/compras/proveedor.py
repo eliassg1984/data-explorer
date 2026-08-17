@@ -534,10 +534,18 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     _evo_hist = False
                     _src_evo = base
                     if len(periodos) < 2 and d_full is not None and col_fecha:
+                        # `cant` y `docu` no los usa la línea, pero sí el
+                        # resumen de abajo: tiene que poder sumar sobre la
+                        # MISMA fuente que el gráfico que resume.
                         _bf = pd.DataFrame({
                             "prov":  d_full[col_prov].astype(str).values,
                             "valor": pd.to_numeric(d_full[col_valor],
                                                    errors="coerce").fillna(0).values,
+                            "cant":  (pd.to_numeric(d_full[col_cant],
+                                                    errors="coerce").fillna(0).values
+                                      if col_cant else 0.0),
+                            "docu":  (d_full[col_docu].astype(str).values
+                                      if col_docu else ""),
                             "fecha": pd.to_datetime(d_full[col_fecha],
                                                     errors="coerce").values,
                         })
@@ -622,6 +630,46 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         key=f"cp_evo_{gran}_{_prov_evo}",
                         config={"displayModeBar": False},
                     )
+                    # ── Resumen del proveedor ───────────────────────────
+                    # Resume el ÚLTIMO período de la granularidad vigente (a
+                    # pedido), no todo el tramo dibujado: es el último punto
+                    # de la línea de arriba, o sea "cómo le fue el último
+                    # mes / semana / año". El período se imprime en el
+                    # encabezado — sin eso, "S/ 2,104" no dice contra qué.
+                    #
+                    # Sale de `_src_evo`, la MISMA fuente que la línea (rango
+                    # o histórico según el caso). Un resumen pegado a un
+                    # gráfico tiene que sumar lo que ese gráfico muestra, o
+                    # los números contradicen a la curva que tienen encima.
+                    if _evo_x:
+                        _per_ult = _evo_x[-1]
+                        _ult = _src_evo[_src_evo["per"] == _per_ult]
+                        _f_evo = _ult[_ult["prov"] == _prov_evo]
+                        _r_val = float(_f_evo["valor"].sum())
+                        _r_cant = (float(_f_evo["cant"].sum())
+                                   if "cant" in _f_evo.columns else 0.0)
+                        _r_docs = (int(_f_evo["docu"].replace("", pd.NA)
+                                       .dropna().nunique())
+                                   if "docu" in _f_evo.columns else 0)
+                        # El % se mide contra lo comprado a TODOS los
+                        # proveedores en ese mismo período: "de lo que gasté
+                        # este mes, tanto fue con este proveedor".
+                        _tot_ult = float(_ult["valor"].sum()) or 1.0
+                        _r_pct = _r_val / _tot_ult * 100
+                        _celdas = [("Total compra", f"S/ {_r_val:,.0f}"),
+                                   ("% del total", f"{_r_pct:.1f}%"),
+                                   ("Cantidad", f"{_r_cant:,.0f}"),
+                                   ("Documentos", f"{_r_docs:,.0f}")]
+                        st.markdown(
+                            f'<div class="cp-evo-kpis-tit">'
+                            # "Semana" es femenino y las otras tres no: sin
+                            # esto salia "Último semana".
+                            f'{"Última" if gran == "Semana" else "Último"} '
+                            f'{gran.lower()} · {_etq_evo(_per_ult)}</div>'
+                            '<div class="cp-evo-kpis">'
+                            + "".join(f'<div><span>{_k}</span><b>{_v}</b></div>'
+                                      for _k, _v in _celdas)
+                            + '</div>', unsafe_allow_html=True)
         # Navegacion de la ventana de periodos. El indice y el tamano viven en
         # session_state, asi que clicar una barra NO los mueve. El popover
         # central muestra cuantas agrupaciones se ven y permite cambiarlo.
