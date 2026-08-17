@@ -103,8 +103,10 @@ CSS = """    /* ================================================================
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap {
         margin-top: -43px !important;
     }
-    /* 2026-08-17, a pedido: ensanchar la tarjeta para que el ranking +
-       tabla + evolución (3 columnas, ver proveedor.py) entren sin
+    /* 2026-08-17, a pedido: ensanchar la tarjeta para que las columnas de
+       proveedor.py (ranking-tabla + evolución; nació pensado para 3 —
+       ranking, tabla y evolución separadas — antes de que las dos
+       primeras se unieran en una sola tabla el mismo día) entren sin
        apretarse. Medido en vivo (preview local, getBoundingClientRect): el
        reservado a cada lado (170px izq / 163px der, ver el docstring de
        estilos/_40_ajuste_franja.py) es MÁS de lo que hace falta para no

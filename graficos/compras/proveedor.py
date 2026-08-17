@@ -1,14 +1,13 @@
 """graficos.compras.proveedor - drill de Proveedor.
 
-Barras verticales por periodo (una serie por proveedor). Clic en una barra
-fija el foco y filtra los paneles A/B y la tabla de documentos de abajo.
+Ranking de proveedores como tabla (nombre + barra de valor + documentos +
+%). Clic en una fila fija el foco y filtra los paneles A/B y la tabla de
+documentos de abajo.
 
 Es el drill mas grande del dashboard. Incluye un bloque largo de CSS
 inyectado con st.markdown para los controles flotantes sobre el grafico;
 vive aca (y no en estilos/) porque esta scopeado a las keys de este drill.
 """
-
-import html
 
 import numpy as np
 import pandas as pd
@@ -19,10 +18,8 @@ from tema import ACENTO, GRIS_BORDE
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, titulo_en_franja,
 )
-from graficos.compras._comun import _es_movil, _first_point
 from graficos.compras._css_proveedor import CSS as CSS_PROVEEDOR
 from graficos.compras._documentos_proveedor import tabla_documentos
-from graficos.compras._etiquetas_proveedor import sufijo_granularidad
 from graficos import alturas
 
 
@@ -30,12 +27,12 @@ from graficos import alturas
 def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                              col_punit, col_um, col_fecha, col_docu=None,
                              d_full=None):
-    """Dashboard de Proveedor — barras verticales agrupadas por periodo.
+    """Dashboard de Proveedor.
 
-    Gráfico principal: barras verticales por periodo (Semana/Mes/Año), un color
-    por proveedor (top N). Clic en una barra → selecciona ese proveedor como
-    foco y filtra los paneles A y B de abajo. Los nombres en el hover son
-    completos; en las leyendas se truncan.
+    Tabla-ranking (izq.): un proveedor por fila, ordenados por valor, con
+    `ProgressColumn` haciendo de barra. Clic en una fila → selecciona ese
+    proveedor como foco y filtra los paneles A y B de abajo; el botón
+    "✕ Quitar foco" lo limpia. Al lado, la evolución del proveedor elegido.
 
     Panel A: Top N productos comprados al proveedor en foco (valor + cantidad).
     Panel B: proveedores del producto seleccionado en Panel A.
@@ -224,157 +221,72 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         _rk_nombres.append("Otros")
         _rk_valores.append(float(base[_otros_mask]["valor"].sum()))
         _rk_colores.append(GRIS_BORDE)
-
-    # Plotly dibuja las barras horizontales de ABAJO hacia arriba, así que
-    # para que el mayor quede ARRIBA hay que pasarle la lista al revés.
-    # (Es la misma trampa que ya documenta el drill de Familia.)
-    _ord = sorted(range(len(_rk_valores)), key=lambda i: _rk_valores[i])
-    _rk_nombres = [_rk_nombres[i] for i in _ord]
-    _rk_valores = [_rk_valores[i] for i in _ord]
-    _rk_colores = [_rk_colores[i] for i in _ord]
+    # Orden: DESCENDENTE (mayor primero) — `orden_provs` ya viene así, y es
+    # el orden natural de una TABLA (a diferencia del ranking en Plotly que
+    # había antes, que necesitaba la lista al revés por cómo dibuja barras
+    # horizontales de abajo hacia arriba; con la tabla eso ya no aplica).
 
     # ── Procesar clic ANTES de dibujar ────────────────────────────────────
-    # Leemos la selección que Streamlit guardó en session_state[chart_key] en
-    # la interacción previa. Así actualizamos el foco y construimos el figure
+    # Leemos la selección que Streamlit guardó en session_state[key] en la
+    # interacción previa. Así actualizamos el foco y construimos la tabla
     # UNA sola vez con el foco correcto: sin doble rerun = sin parpadeo.
-    # Clic en la MISMA barra → la desenfoca; en otra → cambia el foco. El
+    # Clic en la MISMA fila → la desenfoca; en otra → cambia el foco. El
     # foco es lo que ABRE el drill inferior (paneles A/B), así que esto es lo
     # que mantiene viva esa navegación.
-    #
-    # 2026-08-16: el mapeo pasó de `curve_number` a `point_index`. Con las
-    # barras verticales había UNA SERIE POR PROVEEDOR y el número de serie
-    # identificaba al proveedor; el ranking horizontal es una sola serie con
-    # un punto por proveedor, así que ahora identifica el ÍNDICE del punto.
-    # Por eso los datos del ranking se calculan ARRIBA de este bloque: el
-    # clic necesita el mismo orden con el que se dibujó.
-    _chart_key = f"compras_g_prov_main_{gran}"
-    _mp = _first_point(st.session_state.get(_chart_key))
-    if _mp is not None:
-        _pi = _mp.get("point_index", _mp.get("point_number"))
-        if _pi is not None and 0 <= _pi < len(_rk_nombres):
-            _clicked = _rk_nombres[_pi]
+    _rank_tab_key = "compras_prov_rank_tab"
+    _rows_sel = ((st.session_state.get(_rank_tab_key) or {})
+                 .get("selection", {}).get("rows", []))
+    if _rows_sel:
+        _ri = _rows_sel[0]
+        if 0 <= _ri < len(_rk_nombres):
+            _clicked = _rk_nombres[_ri]
             # "Otros" no es un proveedor real: agrupa a los que quedaron
             # fuera, así que no hay drill que abrir.
             if _clicked != "Otros":
                 # Dedup para no reprocesar el mismo clic en cada rerun (la
-                # selección de plotly PERSISTE — CLAUDE.md).
+                # selección de un st.dataframe PERSISTE, igual que la de
+                # st.plotly_chart — CLAUDE.md).
                 if st.session_state.get("compras_prov_last_click") != _clicked:
                     st.session_state["compras_prov_last_click"] = _clicked
-                    _misma_barra = (_clicked == prov_focus)
-                    prov_focus = None if _misma_barra else _clicked
+                    _misma_fila = (_clicked == prov_focus)
+                    prov_focus = None if _misma_fila else _clicked
                     prod_focus = None
                     st.session_state["compras_prov_focus"]     = prov_focus
                     st.session_state["compras_prov_prodfocus"] = None
-                    # El período ya no sale de este gráfico (el ranking no
+                    # El período ya no sale de esta tabla (el ranking no
                     # tiene eje de tiempo): lo fija el de evolución.
                     st.session_state["compras_prov_perfocus"]  = None
 
-    # ── Gráfico principal: RANKING horizontal de proveedores ─────────────
-    # 2026-08-16, a pedido y con mockup aprobado (nivel 2 de densidad): deja
-    # de ser barras verticales por período y pasa a un ranking horizontal —
-    # un proveedor por FILA, ordenado por valor. El eje de tiempo no se
-    # pierde: se muda al gráfico de evolución de al lado, que muestra el
+    # ── Tabla-ranking: datos que consume ────────────────────────────────
+    # 2026-08-17, a pedido: el ranking se UNE con la tabla resumen — eran
+    # dos vistas de los mismos números (barra horizontal vs. fila de tabla)
+    # una al lado de la otra. Pasa a ser una sola tabla (`st.dataframe`,
+    # más abajo) con una `ProgressColumn` haciendo de barra — conserva la
+    # lectura de ranking sin duplicar la información. El eje de tiempo no
+    # se pierde: vive en el gráfico de evolución de al lado, que muestra el
     # proveedor elegido.
     #
-    # Resuelve de raíz lo que se venía parchando: con 20+ proveedores en
-    # vertical las barras se apretaban hasta ser ilegibles, y hubo que
-    # meterles ancho mínimo y scroll horizontal. En horizontal cada
-    # proveedor es una fila de alto fijo: la lista crece hacia abajo y no
-    # hay nada que comprimir. Por eso también se fue el cuadro de control
-    # de la izquierda: los nombres AHORA SON el eje, y tenerlos también en
-    # una columna aparte era mostrarlos dos veces.
-    _gran_suffix = sufijo_granularidad(gran)
-
-
-    # Nivel 2 del mockup: monto y % del total del rango, nada más. El resto
-    # (documentos) va al hover — en una barra lo que se compara es el LARGO,
-    # y cada cifra extra al final se lo come.
-    # OJO con el %: acá es sobre el total del RANGO, no del período. Con el
-    # eje de tiempo, "12%" podía leerse como "12% de ese mes"; en un ranking
-    # es "12% de todo lo comprado en el rango".
+    # Nivel 2 del mockup (heredado de la versión en barras): monto y % del
+    # total del rango. OJO con el %: es sobre el total del RANGO, no del
+    # período — con eje de tiempo "12%" podía leerse como "12% de ese mes";
+    # acá es "12% de todo lo comprado en el rango".
     _rk_pct = [v / _tot_all * 100 for v in _rk_valores]
-    _rk_txt = [f"S/ {v:,.0f}  ·  {p:.0f}%"
-               for v, p in zip(_rk_valores, _rk_pct)]
     if "docu" in base.columns and (base["docu"].astype(str) != "").any():
         _docs_prov = base.groupby("prov")["docu"].nunique()
     else:
         _docs_prov = None
     _rk_docs = [int(_docs_prov.get(p, 0)) if _docs_prov is not None else 0
                 for p in _rk_nombres]
-    # El foco se resalta ACLARANDO el color de los demás, no bajándoles la
-    # opacidad. No es cosmética: con `marker.opacity` como LISTA (una por
-    # punto) plotly revienta al aplicar el estilo de selección —
-    # `textPointStyle` lee `trace.textfont` de una traza que le llega
-    # undefined, y el TypeError mata el handler del clic, que es lo que
-    # hacía que el drill no abriera (reportado: "no aparece el drill" +
-    # error de JS). Con una sola serie y opacidad escalar no entra en ese
-    # camino. Ver arquitectura.md.
-    def _atenuar(_hex, _f=0.72):
-        """Mezcla el color con blanco. _f=0 deja el original, 1 lo borra."""
-        _h = _hex.lstrip("#")
-        if len(_h) != 6:
-            return _hex
-        _r, _g, _b = (int(_h[i:i + 2], 16) for i in (0, 2, 4))
-        _m = lambda _c: int(round(_c + (255 - _c) * _f))   # noqa: E731
-        return f"#{_m(_r):02X}{_m(_g):02X}{_m(_b):02X}"
 
-    if prov_focus is not None:
-        _rk_colores = [_c if _p == prov_focus else _atenuar(_c)
-                       for _p, _c in zip(_rk_nombres, _rk_colores)]
-
-    fig = go.Figure(go.Bar(
-        x=_rk_valores,
-        y=[_compras_truncar(p, 24) for p in _rk_nombres],
-        orientation="h",
-        marker=dict(color=_rk_colores),
-        text=_rk_txt,
-        textposition="outside",
-        textfont=dict(size=12),
-        cliponaxis=False,
-        customdata=[[p, d] for p, d in zip(_rk_nombres, _rk_docs)],
-        hovertemplate=("<b>%{customdata[0]}</b><br>"
-                       "S/ %{x:,.0f}<br>"
-                       "%{customdata[1]} docs<extra></extra>"),
-    ))
-
-    # Alto POR FILA, no fijo: es lo que hace que 5 proveedores y 25 se lean
-    # igual (CLAUDE.md § alturas). `enmarcada=True`: la FIGURA crece con
-    # TODAS las filas sin comprimirlas (antes tenía techo en 430 = rol
-    # PROTAGONISTA, así que 17+ proveedores ya venían apretados). Lo que el
-    # usuario VE es un frame fijo de 8 filas (`_ALTO_FRAME` abajo) con
-    # scroll interno para el resto — a pedido 2026-08-17.
-    _alto_fig_rank = alturas.por_filas(len(_rk_nombres), px_fila=26,
-                                       minimo=180, extra=40, enmarcada=True)
-    _compras_layout(fig, alto=_alto_fig_rank)
-    # Frame visible de ranking Y tabla resumen: 8 filas fijas, para que el
-    # bloque de 3 columnas no baile con la cantidad de proveedores.
-    # Evolución (más abajo) toma el mismo número para quedar a la misma
-    # altura. El CSS (_css_proveedor.py, `cp_chart_scroll` y
-    # `cp-rk-tabla-body`) repite este valor a mano en su `max-height` — si
-    # esto cambia, hay que actualizar los dos.
-    _ALTO_FRAME = alturas.por_filas(8, px_fila=26, minimo=180, extra=40)
-    fig.update_layout(
-        # r=110 le reserva sitio al rótulo "S/ 4,6k · 19%" que va FUERA de
-        # la barra; sin eso `cliponaxis=False` lo dibuja pero se sale de la
-        # tarjeta.
-        margin=dict(l=10, r=110, t=6, b=10),
-        # En barras HORIZONTALES el eje Y son los NOMBRES, no valores:
-        # `_compras_layout` oculta los ticks del eje Y por convención del
-        # proyecto, así que acá hay que volver a encenderlos — con
-        # `automargin` o los nombres largos se recortan (CLAUDE.md § Plotly).
-        yaxis=dict(showticklabels=True, automargin=True,
-                   tickfont=dict(size=11)),
-        # El eje X sobra: cada barra lleva su monto y su % al final.
-        xaxis=dict(visible=False),
-        bargap=0.28,
-        showlegend=False,
-        hovermode="closest",
-        uirevision=_chart_key,
-    )
-
-    # Sin rangeslider: la navegacion es server-side (ventana + flechas), asi
-    # sobrevive al clic en una barra. Eso ademas libera el alto que ocupaba el
-    # slider, que ahora queda para las barras.
+    # Frame visible de la tabla Y de evolución: 8 filas fijas, para que el
+    # bloque de 2 columnas no baile con la cantidad de proveedores — lo que
+    # no entra scrollea DENTRO (`st.dataframe` ya trae su propio scroll
+    # interno con `height=`, a diferencia del `st.plotly_chart` de antes,
+    # que necesitó el rodeo de la regla #125 de arquitectura.md).
+    # px_fila=35/extra=45 son los mismos que ya usa la tabla de Panel A
+    # (más abajo) para su `st.dataframe` — el alto de una FILA de tabla, no
+    # el de una barra de gráfico (26px, lo que usaba el ranking viejo).
+    _ALTO_FRAME = alturas.por_filas(8, px_fila=35, extra=45, minimo=0)
 
     # ── Selector de granularidad FLOTANTE sobre el gráfico ────────────────
     # El contenedor "compras_prov_card_chart" es posición relativa; dentro,
@@ -389,9 +301,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     titulo_en_franja(
         st.container(key="compras_prov_titulo_franja").empty(), "Proveedor")
 
-    # Key ESTABLE (solo depende de la granularidad): evita que Streamlit
-    # remonte el componente Plotly en cada clic. El clic se procesa arriba,
-    # antes de construir el figure (sin doble rerun = sin parpadeo).
+    # `_rank_tab_key` es ESTABLE (no depende del foco): el clic se procesa
+    # arriba, antes de construir la tabla, así el rerun que abre el drill ya
+    # sale con el foco correcto (sin doble rerun = sin parpadeo).
     with st.container(border=True, key="compras_prov_card_chart"):
         # Popover de proveedores — flota arriba-izquierda (misma banda que la
         # leyenda y el toggle). Los checkboxes escriben cp_prov_cb::<nombre>;
@@ -445,106 +357,90 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # frame fijo de 8 filas de arriba, el bloque ya no cambia de alto
         # entre reruns, así que no queda nada que animar.)
 
-        # Config del chart. En DESKTOP el modebar va oculto (vista BI limpia).
-        # En MÓVIL se activa el modebar pero SOLO para conservar el botón de
-        # pantalla completa (⛶) que Streamlit inyecta en él: se quitan todos los
-        # botones estándar de Plotly (zoom/pan/lasso/descarga…) y queda el ⛶.
-        # Tocándolo el gráfico llena la pantalla; girando el teléfono a
-        # horizontal las etiquetas caben holgadas y el hover trae el detalle.
-        # displaylogo off para no meter el logo de Plotly.
-        _cfg_chart = {"edits": {"legendPosition": True}, "displaylogo": False}
-        if _es_movil():
-            _cfg_chart["displayModeBar"] = True
-            _cfg_chart["modeBarButtonsToRemove"] = [
-                "zoom2d", "pan2d", "select2d", "lasso2d", "zoomIn2d",
-                "zoomOut2d", "autoScale2d", "resetScale2d", "toImage",
-            ]
-        else:
-            _cfg_chart["displayModeBar"] = False
-        # El chart es responsive al contenedor (estándar BI) MIENTRAS entre.
-        # La densidad se controla con la ventana de periodos (server-side) +
-        # flechas; cuando ni con eso alcanza —muchas series en pocos
-        # periodos— toma su ancho mínimo y el contenedor scrollea.
         with st.container(key="cp_chart_wrap"):
-            # ── Tabla resumen (izq.) + ranking (medio) + evolución (der.) ──
+            # ── Ranking (izq., tabla) + evolución (der.) ────────────────
             # 2026-08-16: el cuadro de control de proveedores DESAPARECE.
             # Listaba color + nombre + monto + %, y con el ranking horizontal
             # los nombres pasaron a ser el eje: tenerlos también en una
             # columna aparte era mostrar lo mismo dos veces, a media pantalla
-            # de distancia. Su información no se pierde — el monto y el % van
-            # ahora al final de cada barra.
-            # A su lado, la EVOLUCIÓN del proveedor elegido: es donde se mudó
-            # el eje de tiempo que el ranking dejó de tener.
-            # 2026-08-17, a pedido: la tabla resumen (antes apilada debajo
-            # del ranking) pasa a ser su PROPIA columna, PRIMERA de las tres
-            # (antes el ranking iba a la izquierda) — la tarjeta se ensanchó
-            # (ver compras_prov_drill_wrap en estilos/_20_compras_rail.py)
-            # para que entren sin apretarse. Ranking y tabla muestran 8
-            # filas fijas (`_ALTO_FRAME`) y scrollean el resto por dentro.
-            _c_tabla, _c_rank, _c_evo = st.columns([1, 1.2, 1], gap="small")
+            # de distancia.
+            # A su lado, la EVOLUCIÓN del proveedor elegido: es donde vive
+            # el eje de tiempo que el ranking no tiene.
+            # 2026-08-17, a pedido: el ranking (barras) y la tabla resumen
+            # —antes dos columnas separadas mostrando los mismos números—
+            # se UNEN acá en una sola tabla con `ProgressColumn` haciendo de
+            # barra. Muestra 8 filas fijas (`_ALTO_FRAME`) y scrollea el
+            # resto por dentro (scroll nativo de `st.dataframe`).
+            _c_tabla, _c_evo = st.columns([1.6, 1], gap="small")
             with _c_tabla:
-                # ── Tabla resumen ────────────────────────────────────────
-                # A pedido, con mockup aprobado (opción A, tabla plana): el
-                # ranking ya imprime monto + % al final de cada barra, esta
-                # tabla suma la columna que solo vivía en el hover
-                # (documentos) y deja las filas comparables de un vistazo,
-                # sin pasar el mouse una por una.
-                # Mismas filas que el gráfico, orden INVERTIDO: `_rk_*` viene
-                # ASCENDENTE porque así dibuja plotly las barras horizontales
-                # (de abajo hacia arriba); una tabla se lee de arriba hacia
-                # abajo, así que acá va DESCENDENTE (mayor primero). Los
-                # colores son los mismos `_rk_colores` que las barras — si
-                # hay un proveedor en foco, sus puntos también salen
-                # atenuados acá, y la fila enfocada se nota sola.
-                # Nombre a 20 (antes 34): la columna dejó de compartir ancho
-                # con el gráfico y pasó a ser angosta por su cuenta.
-                _rk_filas = "".join(
-                    '<div class="cp-rk-tabla-fila">'
-                    f'<span class="cp-rk-tabla-dot" style="background:{c}"></span>'
-                    f'<span class="cp-rk-tabla-nombre" title="{html.escape(n)}">'
-                    f'{html.escape(_compras_truncar(n, 20))}</span>'
-                    f'<span class="cp-rk-tabla-valor">S/ {v:,.0f}</span>'
-                    f'<span class="cp-rk-tabla-docs">{d}</span>'
-                    f'<span class="cp-rk-tabla-pct">{p:.0f}%</span>'
-                    '</div>'
-                    for n, v, d, p, c in zip(
-                        reversed(_rk_nombres), reversed(_rk_valores),
-                        reversed(_rk_docs), reversed(_rk_pct),
-                        reversed(_rk_colores))
+                # Título + botón de limpiar foco en la misma fila. Hace
+                # falta un botón explícito (y no solo "clic de nuevo en la
+                # misma fila") porque un `st.dataframe` con selección ya
+                # puesta en una fila NO vuelve a disparar `on_select` si el
+                # usuario reclickea esa MISMA fila — el valor del widget no
+                # cambia, así que Streamlit no manda un rerun. Con el
+                # ranking en barras (versión anterior) sí funcionaba porque
+                # el evento de Plotly SÍ se repetía; con la tabla no.
+                # Verificado en vivo: reclickear la fila enfocada no hace
+                # nada. Mismo patrón que "↩ Todas" en el breadcrumb de
+                # Compras › Familia (familia.py).
+                _c_tit, _c_clear = st.columns([3, 1])
+                with _c_tit:
+                    st.markdown('<div class="cp-rank-tit">Ranking de '
+                               'proveedores</div>', unsafe_allow_html=True)
+                with _c_clear:
+                    if st.button("✕ Quitar foco", key="cp_rank_clear_focus",
+                                 disabled=(prov_focus is None),
+                                 width="stretch"):
+                        st.session_state["compras_prov_focus"] = None
+                        st.session_state["compras_prov_prodfocus"] = None
+                        st.session_state["compras_prov_perfocus"] = None
+                        st.session_state["compras_prov_last_click"] = None
+                        st.rerun(scope="fragment")
+                # `ProgressColumn` en "Valor" reemplaza la barra horizontal
+                # que dibujaba Plotly: mismo dato (monto), misma lectura de
+                # longitud-proporcional-al-valor, ahora como celda de tabla.
+                # `key` estable (no depende de `prov_focus`): el clic se
+                # procesa ARRIBA, antes de construir esta tabla, leyendo
+                # `st.session_state[_rank_tab_key]` de la interacción
+                # anterior — así el rerun que abre el drill ya sale con el
+                # foco correcto, sin un segundo rerun para "alcanzarlo".
+                st.dataframe(
+                    pd.DataFrame({
+                        "Proveedor": _rk_nombres,
+                        "Valor": _rk_valores,
+                        "Documentos": _rk_docs,
+                        "%": _rk_pct,
+                    }),
+                    hide_index=True,
+                    width="stretch",
+                    height=_ALTO_FRAME,
+                    on_select="rerun",
+                    selection_mode="single-row",
+                    key=_rank_tab_key,
+                    column_config={
+                        "Proveedor": st.column_config.TextColumn(
+                            "Proveedor", width="medium"),
+                        "Valor": st.column_config.ProgressColumn(
+                            "Valor", format="S/ %.0f", min_value=0,
+                            max_value=float(max(_rk_valores))
+                            if _rk_valores else 1.0),
+                        "Documentos": st.column_config.NumberColumn(
+                            "Docs", format="%.0f", width="small"),
+                        "%": st.column_config.NumberColumn(
+                            "%", format="%.0f%%", width="small"),
+                    },
                 )
-                # Cabecera FUERA del scroll (siempre visible); solo las filas
-                # (`cp-rk-tabla-body`) scrollean pasadas las primeras 8, a
-                # pedido — CSS en _css_proveedor.py.
-                st.markdown(
-                    '<div class="cp-rk-tabla">'
-                    '<div class="cp-rk-tabla-cab">'
-                    '<span></span><span>Proveedor</span>'
-                    '<span>Valor</span><span>Docs</span>'
-                    '<span>%</span>'
-                    '</div>'
-                    '<div class="cp-rk-tabla-body">' + _rk_filas + '</div>'
-                    '</div>',
-                    unsafe_allow_html=True,
-                )
-            with _c_rank:
-                with st.container(key="cp_chart_scroll"):
-                    st.plotly_chart(
-                        fig,
-                        width="stretch",
-                        key=_chart_key,
-                        on_select="rerun",
-                        selection_mode="points",
-                        config=_cfg_chart,
-                    )
             with _c_evo:
                 # Sin elección del usuario cae al primero del ranking (el de
-                # mayor valor) — mismo criterio que el Panel B de abajo. Como
-                # `_rk_nombres` viene ordenado ASCENDENTE (plotly dibuja de
-                # abajo hacia arriba), el mayor es el ÚLTIMO.
+                # mayor valor) — mismo criterio que el Panel B de abajo.
+                # `_rk_nombres` viene ordenado DESCENDENTE (mayor primero,
+                # el orden natural de la tabla-ranking de al lado), así que
+                # el mayor es directamente el primero.
                 _prov_evo = prov_focus
                 if _prov_evo is None:
                     _reales = [p for p in _rk_nombres if p != "Otros"]
-                    _prov_evo = _reales[-1] if _reales else None
+                    _prov_evo = _reales[0] if _reales else None
                 if _prov_evo is None:
                     st.caption("Sin proveedores en el rango.")
                 else:
@@ -771,9 +667,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         return _b[_b["prov"].notna() & (_b["prov"] != "nan")]
 
     # -- Bloque 2: el detalle A/B lo manda el FOCO, no un pestillo. Clic en una
-    #    barra lo abre; la X (gutter izquierdo) limpia el foco y lo cierra. La
-    #    tarjeta vive en una funcion local para NO re-indentar su cuerpo; se
-    #    llama abajo solo si hay proveedor en foco.
+    #    fila del ranking lo abre; el botón "✕ Quitar foco" (junto al título
+    #    de la tabla-ranking) lo cierra. La tarjeta vive en una funcion local
+    #    para NO re-indentar su cuerpo; se llama abajo solo si hay proveedor
+    #    en foco.
     def _paneles_card():
         # Producto por DEFECTO del Panel B: el primero de la tabla del Panel
         # A (el de mayor valor). Lo llena el Panel A mas abajo y lo lee el
@@ -1024,9 +921,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             st.caption("Último precio = precio unitario de la compra "
                                        "más reciente. Verde = menor precio.")
 
-    # -- Visibilidad del detalle A/B = hay proveedor en foco. Sin pestillo y sin
-    #    boton de cerrar: la barra lo abre y esa misma barra lo cierra (el
-    #    toggle vive en el procesado de clic, arriba).
+    # -- Visibilidad del detalle A/B = hay proveedor en foco. Sin pestillo: lo
+    #    abre un clic en la fila del ranking, lo cierra el botón "✕ Quitar
+    #    foco" (junto al título de la tabla-ranking, más arriba).
     _pan_ab = prov_focus is not None
     # Instance id: se incrementa cada vez que el bloque pasa de cerrado a
     # abierto. Se anade al key de los componentes hijos (plotly / aggrid /

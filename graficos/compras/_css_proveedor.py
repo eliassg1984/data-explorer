@@ -220,134 +220,15 @@ CSS = """        <style>
             line-height: 1.25;
             white-space: nowrap;
         }
-        /* Tabla resumen (columna propia, ver proveedor.py) — opción A del
-           mockup: plana, sin barra. Mismo grid en la cabecera y en cada
-           fila para que las columnas calcen; el punto de color replica el
-           de la barra del ranking, así la fila se identifica sin leer el
-           nombre.
-           2026-08-17: columna angosta propia en vez de apilada debajo del
-           ranking (compartía su ancho de ~627px; sola arranca en ~360-400px)
-           — anchos fijos recortados (96/84/60 -> 62/36/34) y gap 10 -> 6
-           para dejarle sitio al nombre, que es lo único de ancho variable. */
-        .cp-rk-tabla-cab,
-        .cp-rk-tabla-fila {
-            display: grid;
-            grid-template-columns: 12px minmax(0, 1fr) 62px 36px 34px;
-            align-items: center;
-            gap: 6px;
-        }
-        .cp-rk-tabla-cab {
-            padding: 8px 4px 6px;
-            font-size: 10px;
-            font-weight: 600;
-            color: var(--text-muted);
-        }
-        .cp-rk-tabla-cab span:nth-child(n+3) {
-            text-align: right;
-        }
-        .cp-rk-tabla-fila {
-            padding: 7px 4px;
-            border-top: 1px solid var(--border);
-            font-size: 12px;
-        }
-        .cp-rk-tabla-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-        }
-        .cp-rk-tabla-nombre {
-            color: var(--text-primary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .cp-rk-tabla-valor {
+        /* Título sobre la tabla-ranking (columna izquierda). Mismo lenguaje
+           que `.cp-evo-tit` de al lado (markdown, no `_card(titulo_arriba=)`
+           — ese helper dibuja una divisoria que acá no hace falta). */
+        .cp-rank-tit {
+            font-size: 11px;
             font-weight: 600;
             color: var(--text-primary);
-            text-align: right;
-        }
-        .cp-rk-tabla-docs,
-        .cp-rk-tabla-pct {
-            color: var(--text-secondary);
-            text-align: right;
-        }
-        /* 2026-08-17, a pedido: 8 filas fijas visibles, scroll interno para
-           el resto. La cabecera (`cp-rk-tabla-cab`) queda AFUERA de este
-           wrapper a propósito — así no se va con el scroll. 274px, medido
-           en vivo contra `.cp-rk-tabla-fila` real (34.2px/fila incl.
-           borde: 547px de scrollHeight / 16 filas) — con el 248px que usa
-           el ranking de al lado (`_ALTO_FRAME`, mismo pedido) solo entraban
-           7 filas, no 8, porque la fila de la tabla es más alta que los
-           26px/barra del gráfico. Números distintos a propósito: cada uno
-           mide 8 de SU propia unidad, no el mismo px que su vecino. */
-        .cp-rk-tabla-body {
-            max-height: 274px;
-            overflow-y: auto;
-        }
-        .cp-rk-tabla-body::-webkit-scrollbar {
-            width: 8px;
-        }
-        .cp-rk-tabla-body::-webkit-scrollbar-thumb {
-            background: var(--border);
-            border-radius: 4px;
-        }
-        .cp-rk-tabla-body::-webkit-scrollbar-thumb:hover {
-            background: var(--text-muted);
-        }
-        /* Scroll horizontal del plot. Solo entra en juego cuando Python le
-           forzo un ancho mayor al disponible (ver `_scroll_x` en
-           proveedor.py): con muchas series en pocos periodos las barras se
-           achicaban hasta ser ilegibles, y ahora se les exige un piso de
-           px por barra. Cuando el ancho entra, el figure sigue siendo
-           responsive y esta regla no hace nada. */
-        /* 2026-08-17, a pedido: 8 filas fijas visibles, scroll interno para
-           el resto (la FIGURA sí dibuja todas las filas — `enmarcada=True`
-           en proveedor.py — para no comprimir las barras). 248px replica a
-           mano `_ALTO_FRAME` de proveedor.py (alturas.por_filas(8, ...));
-           si ese número cambia, cambiar este también. */
-        .st-key-cp_chart_scroll {
-            overflow-x: auto !important;
-            overflow-y: auto !important;
-            max-height: 248px !important;
-        }
-        /* El ancho minimo lo publica Python como variable (`cp-plot-min`,
-           ver proveedor.py). Vale 0 cuando todo entra, y ahi esta regla no
-           hace nada. Va en el hijo y no en el contenedor: el que scrollea
-           tiene que quedarse en el ancho de la columna, y el que se estira
-           es su contenido. */
-        .st-key-cp_chart_scroll [data-testid="stPlotlyChart"],
-        .st-key-cp_chart_scroll [data-testid="stFullScreenFrame"] {
-            min-width: var(--cp-plot-min, 0px) !important;
-        }
-        /* El que TERMINA scrolleando HORIZONTALMENTE no es el contenedor de
-           arriba sino el `stElementContainer` que Streamlit mete adentro —
-           medido: el de afuera queda en 829/829 y el de adentro en
-           829/1676, con 847px de recorrido. Por eso el overflow-x se
-           declara tambien en el hijo.
-           OJO, distinto para el alto: acá NO va `max-height` ni
-           `overflow-y` — medido en vivo 2026-08-17, si este nodo (el que
-           Streamlit usa para su propio ResizeObserver del plot) queda con
-           el alto acotado, Streamlit fuerza `fig.layout.height` a ESE alto
-           (lo pisa, aunque Python haya pedido 456 con `enmarcada=True`) en
-           vez de dejarlo crecer y que el de AFUERA (`cp_chart_scroll`, con
-           su propio max-height) sea quien recorte y scrollee. El resultado
-           era el opuesto al pedido: la figura se comprimía a 8 filas en
-           vez de dibujarlas todas con scroll. */
-        .st-key-cp_chart_scroll > [data-testid="stElementContainer"] {
-            overflow-x: auto !important;
-        }
-        .st-key-cp_chart_scroll::-webkit-scrollbar,
-        .st-key-cp_chart_scroll [data-testid="stElementContainer"]::-webkit-scrollbar {
-            height: 8px;
-            width: 8px;
-        }
-        .st-key-cp_chart_scroll::-webkit-scrollbar-thumb,
-        .st-key-cp_chart_scroll [data-testid="stElementContainer"]::-webkit-scrollbar-thumb {
-            background: var(--border);
-            border-radius: 4px;
-        }
-        .st-key-cp_chart_scroll [data-testid="stElementContainer"]::-webkit-scrollbar-thumb:hover {
-            background: var(--text-muted);
+            padding-left: 2px;
+            margin: 0 0 4px;
         }
         .st-key-cp_leyenda_float [data-testid="stElementToolbar"] { display: none; }
         /* El boton-titulo se lee como TEXTO clickeable de la tarjeta, no
@@ -524,23 +405,18 @@ CSS = """        <style>
            Sin `> div >`: el chart vive dentro de cp_chart_wrap (un nivel más
            abajo) y el selector directo dejaba de matchear. */
         .st-key-compras_prov_card_chart [data-testid="stElementToolbar"] { display: none; }
-        /* Wrapper del chart: solo existe para animar el alto (ver más abajo).
-           Aplanado para no meter aire extra dentro de la tarjeta. */
+        /* Aplanado para no meter aire extra dentro de la tarjeta. */
         .st-key-cp_chart_wrap {
             padding: 0 !important; margin: 0 !important; gap: 0 !important;
         }
-        /* 2026-08-17: min-width por columna para las 3 columnas (ranking /
-           tabla / evolución, ver proveedor.py). Sin esto, `flex-wrap: wrap`
-           (default de Streamlit en stHorizontalBlock) las deja apretarse
-           hasta ilegibles ANTES de apilarlas — medido en vivo: a 800-850px
-           de viewport quedaban en ~186-200px, y la tabla (grid con 168px
-           fijos de por sí) le dejaba ~20-30px al nombre del proveedor.
-           300px es el piso medido para que la tabla y el ranking se lean
-           bien; por debajo, mejor apiladas a ancho completo (más alto, pero
-           legibles) que las tres apretadas. Con esto el corte efectivo
-           entre "3 en fila" y "apiladas" queda ~1160px de viewport (donde
-           el contenido ensanchado — ver compras_prov_drill_wrap en
-           estilos/_20_compras_rail.py — llega a 3*300px + gaps). */
+        /* min-width por columna (ranking-tabla / evolución, ver
+           proveedor.py). Sin esto, `flex-wrap: wrap` (default de Streamlit
+           en stHorizontalBlock) las deja apretarse hasta ilegibles ANTES
+           de apilarlas — medido en vivo con el layout de 3 columnas que
+           hubo antes de unir ranking+tabla (2026-08-17): a 800-850px de
+           viewport quedaban en ~186-200px. 300px es el piso para que se
+           lean bien; por debajo, mejor apiladas a ancho completo (más
+           alto, pero legible) que apretadas. */
         .st-key-cp_chart_wrap [data-testid="stColumn"] {
             min-width: 300px !important;
         }

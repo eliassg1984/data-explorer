@@ -5074,3 +5074,71 @@ salvo `icono`):
      gráfico, así que "8 de lo suyo" no es el mismo px que "8 filas" del
      ranking — cada frame mide 8 en SU propia unidad, no un mismo número
      compartido.
+
+     Addendum 2026-08-17 (mismo día): el ranking en barras que esta regla
+     describe se UNIÓ con la tabla resumen (regla #126) y `st-key-cp_
+     chart_scroll`/`.cp-rk-tabla-body` ya no existen en el código. La
+     LECCIÓN sigue valiendo para cualquier `st.plotly_chart` futuro al que
+     se le quiera aplicar el mismo patrón "8 filas + scroll" — por eso
+     queda, aunque el selector puntual ya no se pueda grepear.
+
+126. **El ranking (barras Plotly) y la tabla resumen del drill de
+     Proveedor —dos vistas de los mismos números, una al lado de la
+     otra— se UNEN en una sola tabla (`st.dataframe` con `ProgressColumn`
+     haciendo de barra). Al pasar de `st.plotly_chart` a `st.dataframe`
+     para la interacción de foco, dos cosas se rompen si se copia el
+     patrón viejo tal cual.**
+
+     Pedido: "la información del ranking y de la tabla se parece, únelas,
+     conservando la barra y el clic". El resultado son 2 columnas en vez
+     de 3 (tabla-ranking unida | evolución), con la MISMA lógica de "leer
+     la selección ANTES de dibujar" que ya usaba el ranking en barras
+     (regla evitar doble rerun / parpadeo) — pero aplicada a
+     `st.session_state[key]["selection"]["rows"]` de un `st.dataframe` en
+     vez de `_first_point()` de un `st.plotly_chart`. Dos gotchas nuevos,
+     los dos verificados en vivo (no a ojo):
+
+     1. **Reclickear la MISMA fila ya seleccionada NO dispara un nuevo
+        rerun.** El ranking en barras SÍ tenía un toggle "clic en la misma
+        barra → desenfoca" (comparando `_clicked == prov_focus` a mano).
+        Con `st.dataframe`, el valor del widget no cambia entre el primer
+        y el segundo clic sobre la misma fila, así que Streamlit no manda
+        el evento — el `if _rows_sel:` nunca se re-ejecuta y el foco queda
+        pegado. Confirmado con clics sintéticos reales (`PointerEvent`
+        sobre el canvas, ver punto 3): clic en fila 2 enfoca; clic de
+        nuevo en fila 2, sin cambios. Fix: un botón explícito "✕ Quitar
+        foco" (mismo patrón que "↩ Todas" en el breadcrumb de Compras ›
+        Familia, familia.py) en vez de depender del reclic.
+
+     2. **El orden de `_rk_nombres` cambió de ASCENDENTE a DESCENDENTE** al
+        borrar el paso `_ord = sorted(...)` que existía SOLO porque Plotly
+        dibuja barras horizontales de abajo hacia arriba (así que había
+        que invertir la lista para que el mayor quedara arriba). Una
+        tabla no tiene esa restricción — orden natural (mayor primero,
+        que ya traía `orden_provs`). Pero el default de "sin foco, mostrar
+        el proveedor de mayor valor" en el gráfico de evolución leía
+        `_reales[-1]` (el ÚLTIMO de la lista ascendente = el mayor). Con
+        la lista ahora descendente, `_reales[-1]` pasó a ser el MENOR —
+        bug real, encontrado al probar (la evolución por defecto mostraba
+        al proveedor más chico, MIFARMA S.A.C. en vez de VIBEJ COLIBRI
+        SAC). Fix: `_reales[0]`. Cualquier código que asuma el orden de
+        `_rk_nombres` hay que revisarlo cuando ese orden cambie — no hay
+        garantía de tipo que lo avise.
+
+     3. **Verificar un `st.dataframe` con clics automatizados en este
+        entorno necesita DOS rodeos, no uno.** (a) El grid
+        (`stDataFrameGlideDataEditor`, glide-data-grid) NO pinta su
+        `<canvas>` hasta que el contenedor entra en viewport — medido:
+        recién montado, `.stDataFrameGlideDataEditor` es un
+        `<div></div>` vacío y no hay canvas de tamaño real en la página;
+        tras `scrollIntoView()` + esperar, aparecen 2 canvases con el
+        tamaño real (uno para el header, uno para las filas). Sin el
+        scroll, cualquier intento de clic (real o sintético) cae sobre
+        nada. (b) El grid no reacciona a un `MouseEvent` sintético con
+        `type:'pointerdown'` — necesita un `PointerEvent` DE VERDAD
+        (`pointerId`, `pointerType:'mouse'`, `isPrimary:true`
+        explícitos), disparado como `pointermove` → `pointerdown` →
+        `pointerup` sobre el `<canvas>` con `clientX/clientY` calculados
+        contra su `getBoundingClientRect()`. Con `?debug=1` activo, el
+        inspector propio del proyecto también intercepta el clic (queda
+        clicable el tooltip, no la fila) — hay que probar SIN `?debug=1`.
