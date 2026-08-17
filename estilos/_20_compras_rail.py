@@ -103,6 +103,39 @@ CSS = """    /* ================================================================
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap {
         margin-top: -43px !important;
     }
+    /* 2026-08-17, a pedido: ensanchar la tarjeta para que el ranking +
+       tabla + evolución (3 columnas, ver proveedor.py) entren sin
+       apretarse. Medido en vivo (preview local, getBoundingClientRect): el
+       reservado a cada lado (170px izq / 163px der, ver el docstring de
+       estilos/_40_ajuste_franja.py) es MÁS de lo que hace falta para no
+       pisar los rails — el rail izquierdo termina en x=90 (deja 80px de
+       sobra) y el derecho empieza a `--rail-der-res` del borde (deja 64px
+       de sobra). Estos números son PX FIJOS, no dependen del viewport (los
+       rails tampoco), así que valen igual en cualquier ancho de escritorio.
+       Se come la sobra dejando ~20px de aire a cada rail:
+         margin-left  -60px  (170 -> 110, a 20px del rail izq. en x=90)
+         width       +104px  (60 del izq. + 44 del der., hasta ~20px del
+                              rail der.)
+       Si algún día cambian los anchos de rail (--rail-izq-full /
+       --rail-der-full) hay que volver a medir estos dos números.
+       `max-width` es OBLIGATORIO acá: Streamlit le pone a este mismo nodo
+       `max-width:100%` en su propio CSS emotion (sin !important, pero como
+       nuestro `width` de abajo tampoco lo pisaba, el ancho quedaba
+       clampeado de vuelta a 1107px — medido en vivo, el `width` de acá NO
+       alcanzaba solo).
+       min-width:901px es OBLIGATORIO: bajo 768px `nav_rail` (navegacion.py)
+       deja de ser rail izquierdo y pasa a barra inferior — sin este guard,
+       el margin-left:-60px empuja la tarjeta 60px fuera del viewport en
+       móvil (no hay rail del que despegarla). 901 y no 769 para quedar del
+       mismo lado que el breakpoint de compras_tabs_row (arriba, max-width:
+       900px) y no abrir una franja 769-900px sin decidir. */
+    @media (min-width: 901px) {
+        [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap {
+            margin-left: -60px !important;
+            width: calc(100% + 104px) !important;
+            max-width: calc(100% + 104px) !important;
+        }
+    }
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_"] {
         margin-top: -48px !important;
     }

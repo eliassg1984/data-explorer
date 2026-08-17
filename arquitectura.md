@@ -4961,3 +4961,69 @@ salvo `icono`):
      `hoverlayer` del DOM) en dos gráficos distintos del mismo drill
      (ranking horizontal y evolución) para confirmar que un solo cambio
      centralizado alcanzó a ambos.
+
+123. **Para ensanchar un contenedor de Streamlit con `margin` negativo +
+     `width: calc(100% + Npx)`, hay que pisar TAMBIÉN `max-width` — si no,
+     el ancho nuevo se clampea en silencio.**
+
+     Pedido: ensanchar `compras_prov_drill_wrap` (el contenedor del drill
+     de Proveedor) para que entraran 3 columnas en vez de 2. La receta
+     obvia — `margin-left:-60px; width:calc(100% + 104px)` con
+     `!important` — no hacía NADA: medido en vivo
+     (`getBoundingClientRect`), el ancho volvía siempre a 1107px pese al
+     `!important`. La causa no era especificidad ni orden de cascada (los
+     sospechosos habituales): Streamlit le pone a TODO `stVerticalBlock`
+     su propio CSS emotion con `max-width: 100%` (sin `!important`, pero
+     `max-width` no compite CON `width` — son propiedades distintas que el
+     motor de layout aplica en secuencia, así que un `width` más grande
+     simplemente se vuelve a recortar después). La regla ganaba el pulso
+     de `width` y perdía la partida igual, porque nunca competía por
+     `max-width`.
+
+     Se encontró iterando `document.styleSheets` y filtrando las reglas
+     cuyo selector matcheaba el nodo (`el.matches(rule.selectorText)`) —
+     más rápido que adivinar por especificidad a ojo. Fix: repetir el
+     mismo `calc(100% + Npx)` también en `max-width`. Aplica a cualquier
+     intento futuro de ensanchar un `st.container()`/bloque vertical más
+     allá de su 100% con CSS puro.
+
+124. **`compras_prov_drill_wrap` (drill de Proveedor) pasó de 2 a 3
+     columnas (ranking / tabla resumen / evolución) — el ensanche de la
+     regla #123 solo alcanza en DESKTOP, y las columnas necesitan su
+     propio piso de ancho para no apretarse antes de apilarse.**
+
+     Dos guardas nuevas en este cambio, ambas con número medido, no a ojo:
+
+     - El ensanche (`margin-left:-60px` + `width:calc(100% + 104px)`,
+       estilos/_20_compras_rail.py) va detrás de `@media (min-width:
+       901px)`. Sin el guard rompe en móvil: `nav_rail` (navegacion.py)
+       deja de ser el rail izquierdo de 90px y pasa a barra INFERIOR
+       recién por debajo de **768px** — un breakpoint DISTINTO al que ya
+       usa `compras_tabs_row` (rail derecho, 900px, en este mismo
+       fichero). Entre 769 y 900px los dos rails siguen en su forma de
+       escritorio, así que 901 es el corte correcto para no dejar una
+       franja intermedia sin decidir. Por debajo de 901, sin rail del que
+       "recuperar" espacio, tirar la tarjeta 60px a la izquierda la saca
+       del viewport (verificado: sin el guard, a 850px de ancho la
+       tarjeta arrancaba en x=46 con el rail izquierdo terminando en
+       x=90 — 44px de la tarjeta tapados debajo del rail).
+
+     - Las 3 columnas (`st.columns([1.2, 1, 1])`, proveedor.py) usan
+       `flex-wrap:wrap`, default de Streamlit en `stHorizontalBlock` —
+       pero SOLO apilan cuando no entran a su ancho NATURAL, que puede
+       ser bastante angosto antes de eso. Medido en vivo: sin piso propio,
+       a 800-850px de viewport las 3 quedaban lado a lado en ~186-200px
+       cada una, y la tabla (grid con 168px fijos entre columnas
+       numéricas) le dejaba ~20-30px al nombre del proveedor — ilegible.
+       Fix: `min-width:300px` por columna
+       (`.st-key-cp_chart_wrap [data-testid="stColumn"]`,
+       graficos/compras/_css_proveedor.py) — por debajo de ese piso,
+       `flex-wrap` las apila a ancho completo en vez de apretarlas.
+
+     Con las dos guardas juntas, el resultado medido: 3 en fila recién de
+     ~1160px de viewport en adelante (donde el ensanche ya dio ancho de
+     sobra), apiladas por debajo — incluida la franja 641-900px que con
+     el layout viejo de 2 columnas ya venía algo justa y ahora queda
+     prolija. La tabla resumen (antes apilada DEBAJO del ranking, dentro
+     de la misma columna) truncaba nombres a 34 caracteres
+     (`_compras_truncar`); al pasar a columna propia y angosta bajó a 20.

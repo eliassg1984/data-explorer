@@ -490,16 +490,21 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # flechas; cuando ni con eso alcanza —muchas series en pocos
         # periodos— toma su ancho mínimo y el contenedor scrollea.
         with st.container(key="cp_chart_wrap"):
-            # ── Ranking (izq.) + evolución del elegido (der.) ──────────────
+            # ── Ranking (izq.) + tabla resumen (medio) + evolución (der.) ──
             # 2026-08-16: el cuadro de control de proveedores DESAPARECE.
             # Listaba color + nombre + monto + %, y con el ranking horizontal
             # los nombres pasaron a ser el eje: tenerlos también en una
             # columna aparte era mostrar lo mismo dos veces, a media pantalla
             # de distancia. Su información no se pierde — el monto y el % van
             # ahora al final de cada barra.
-            # En su lugar, a la derecha, la EVOLUCIÓN del proveedor elegido:
-            # es donde se mudó el eje de tiempo que el ranking dejó de tener.
-            _c_rank, _c_evo = st.columns([1.5, 1], gap="small")
+            # A su lado, la EVOLUCIÓN del proveedor elegido: es donde se mudó
+            # el eje de tiempo que el ranking dejó de tener.
+            # 2026-08-17, a pedido: la tabla resumen (antes apilada debajo
+            # del ranking) pasa a ser su PROPIA columna del medio — la
+            # tarjeta se ensanchó (ver compras_prov_drill_wrap en
+            # estilos/_20_compras_rail.py) para que entren las tres sin
+            # apretarse.
+            _c_rank, _c_tabla, _c_evo = st.columns([1.2, 1, 1], gap="small")
             with _c_rank:
                 with st.container(key="cp_chart_scroll"):
                     st.plotly_chart(
@@ -510,11 +515,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         selection_mode="points",
                         config=_cfg_chart,
                     )
-                # ── Tabla resumen debajo del ranking ────────────────────────
+            with _c_tabla:
+                # ── Tabla resumen ────────────────────────────────────────
                 # A pedido, con mockup aprobado (opción A, tabla plana): el
                 # ranking ya imprime monto + % al final de cada barra, esta
                 # tabla suma la columna que solo vivía en el hover
-                # (documentos) y deja las 9 filas comparables de un vistazo,
+                # (documentos) y deja las filas comparables de un vistazo,
                 # sin pasar el mouse una por una.
                 # Mismas filas que el gráfico, orden INVERTIDO: `_rk_*` viene
                 # ASCENDENTE porque así dibuja plotly las barras horizontales
@@ -523,11 +529,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 # colores son los mismos `_rk_colores` que las barras — si
                 # hay un proveedor en foco, sus puntos también salen
                 # atenuados acá, y la fila enfocada se nota sola.
+                # Nombre a 20 (antes 34): la columna dejó de compartir ancho
+                # con el gráfico y pasó a ser angosta por su cuenta.
                 _rk_filas = "".join(
                     '<div class="cp-rk-tabla-fila">'
                     f'<span class="cp-rk-tabla-dot" style="background:{c}"></span>'
                     f'<span class="cp-rk-tabla-nombre" title="{html.escape(n)}">'
-                    f'{html.escape(_compras_truncar(n, 34))}</span>'
+                    f'{html.escape(_compras_truncar(n, 20))}</span>'
                     f'<span class="cp-rk-tabla-valor">S/ {v:,.0f}</span>'
                     f'<span class="cp-rk-tabla-docs">{d}</span>'
                     f'<span class="cp-rk-tabla-pct">{p:.0f}%</span>'
@@ -541,8 +549,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     '<div class="cp-rk-tabla">'
                     '<div class="cp-rk-tabla-cab">'
                     '<span></span><span>Proveedor</span>'
-                    '<span>Valor total</span><span>Documentos</span>'
-                    '<span>% total</span>'
+                    '<span>Valor</span><span>Docs</span>'
+                    '<span>%</span>'
                     '</div>' + _rk_filas + '</div>',
                     unsafe_allow_html=True,
                 )

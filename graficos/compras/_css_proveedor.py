@@ -220,20 +220,21 @@ CSS = """        <style>
             line-height: 1.25;
             white-space: nowrap;
         }
-        /* Tabla resumen debajo del ranking (opción A del mockup: plana, sin
-           barra). Mismo grid en la cabecera y en cada fila para que las
-           columnas calcen; el punto de color replica el de la barra de
-           arriba, así la fila se identifica sin leer el nombre. */
-        .cp-rk-tabla {
-            margin-top: 10px;
-            border-top: 1px solid var(--border);
-        }
+        /* Tabla resumen (columna propia, ver proveedor.py) — opción A del
+           mockup: plana, sin barra. Mismo grid en la cabecera y en cada
+           fila para que las columnas calcen; el punto de color replica el
+           de la barra del ranking, así la fila se identifica sin leer el
+           nombre.
+           2026-08-17: columna angosta propia en vez de apilada debajo del
+           ranking (compartía su ancho de ~627px; sola arranca en ~360-400px)
+           — anchos fijos recortados (96/84/60 -> 62/36/34) y gap 10 -> 6
+           para dejarle sitio al nombre, que es lo único de ancho variable. */
         .cp-rk-tabla-cab,
         .cp-rk-tabla-fila {
             display: grid;
-            grid-template-columns: 14px minmax(0, 1fr) 96px 84px 60px;
+            grid-template-columns: 12px minmax(0, 1fr) 62px 36px 34px;
             align-items: center;
-            gap: 10px;
+            gap: 6px;
         }
         .cp-rk-tabla-cab {
             padding: 8px 4px 6px;
@@ -490,6 +491,21 @@ CSS = """        <style>
            Aplanado para no meter aire extra dentro de la tarjeta. */
         .st-key-cp_chart_wrap {
             padding: 0 !important; margin: 0 !important; gap: 0 !important;
+        }
+        /* 2026-08-17: min-width por columna para las 3 columnas (ranking /
+           tabla / evolución, ver proveedor.py). Sin esto, `flex-wrap: wrap`
+           (default de Streamlit en stHorizontalBlock) las deja apretarse
+           hasta ilegibles ANTES de apilarlas — medido en vivo: a 800-850px
+           de viewport quedaban en ~186-200px, y la tabla (grid con 168px
+           fijos de por sí) le dejaba ~20-30px al nombre del proveedor.
+           300px es el piso medido para que la tabla y el ranking se lean
+           bien; por debajo, mejor apiladas a ancho completo (más alto, pero
+           legibles) que las tres apretadas. Con esto el corte efectivo
+           entre "3 en fila" y "apiladas" queda ~1160px de viewport (donde
+           el contenido ensanchado — ver compras_prov_drill_wrap en
+           estilos/_20_compras_rail.py — llega a 3*300px + gaps). */
+        .st-key-cp_chart_wrap [data-testid="stColumn"] {
+            min-width: 300px !important;
         }
 
         /* Leyenda del gráfico Plotly: totalmente transparente en reposo. Solo
