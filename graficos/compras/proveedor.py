@@ -607,10 +607,18 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     _compras_layout(fig_evo, alto=_alto_chart)
                     fig_evo.update_layout(
                         margin=dict(l=10, r=10, t=6, b=10),
+                        # size=10 (reportado "casi no se ven"): es el mismo
+                        # oscuro que el resto de la app (rgb(49,51,63), sin
+                        # problema de contraste — medido), pero en una caja
+                        # de 32x13px era chico de mas. 13, no 10, para que
+                        # sean el UNICO texto legible de este grafico sin
+                        # pasar el mouse (el eje Y va sin numeros a
+                        # proposito, el valor de cada punto vive en el
+                        # hover).
                         xaxis=dict(type="category", tickangle=0,
                                    tickmode="array", tickvals=_tickv,
                                    ticktext=[_etq_evo(x) for x in _tickv],
-                                   tickfont=dict(size=10)),
+                                   tickfont=dict(size=13)),
                         # Acá el eje Y SÍ son valores, así que se respeta la
                         # convención del proyecto y va sin etiquetas: cada
                         # punto trae su monto en el hover.
