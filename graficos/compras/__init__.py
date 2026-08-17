@@ -8,7 +8,6 @@ un dashboard por archivo.
     proveedor.py    drill de Proveedor (el mas grande)
     familia.py      drill Familia -> Subfamilia -> productos
     cantidad.py     top de productos por cantidad
-    evolucion.py    evolucion de proveedores en el tiempo
 
 Punto de entrada publico: renderizar_graficos_compras (lo consume el 
 dispatcher de graficos/__init__.py). Vive aca abajo junto a la config del
@@ -36,7 +35,6 @@ from graficos.compras._comun import (  # noqa: F401  (re-export)
 from graficos.compras.proveedor import _compras_proveedor_drill
 from graficos.compras.familia import _compras_familia_drill
 from graficos.compras.cantidad import _compras_cantidad_producto
-from graficos.compras.evolucion import _compras_evolucion_proveedores
 from graficos.compras.volatilidad import _compras_volatilidad_drill
 from graficos import alturas
 
@@ -49,8 +47,7 @@ from graficos import alturas
 # se pinta en el botón del rail.
 _COMPRAS_RAIL_CATEGORIAS = (
     ("Dimensión", (("Familia",              "Familia"),
-                   ("Proveedor",            "Proveedor"),
-                   ("Evolución proveedor",  "Evolución prov."))),
+                   ("Proveedor",            "Proveedor"))),
     ("Precios",   (("Precio top 10",        "Top 10"),
                    ("Precio por compra",    "Por compra"),
                    ("Precio vs año pasado", "Vs año pasado"),
@@ -167,7 +164,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         _f = pd.to_datetime(d[col_fecha], errors="coerce")
         _mes = _f.dt.to_period("M").astype(str)
 
-    opciones = ["Familia", "Proveedor", "Evolución proveedor",
+    opciones = ["Familia", "Proveedor",
                 "Precio top 10", "Precio por compra",
                 "Precio vs año pasado", "Volatilidad", "Cantidad vs año pasado",
                 "Cantidad por producto",
@@ -218,13 +215,6 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                      col_punit, col_um, col_fecha, col_docu,
                                      d_full=d_full)
-        return
-
-    # Evolución proveedor: ancho completo (dashboard rediseñado con drill y detalle).
-    if graf == "Evolución proveedor":
-        with st.container(border=True, key="ajuste_graf_card_izq_compras"):
-            _compras_evolucion_proveedores(d, col_prov, col_prod, col_cant,
-                                           col_valor, col_punit, col_fecha)
         return
 
     # Volatilidad: ranking de insumos por variación de precio semanal +

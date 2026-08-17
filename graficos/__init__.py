@@ -12,7 +12,7 @@ Estructura:
                           resolución de columnas, helpers de layout)
         ajuste.py      → dashboard Ajuste de Inventario
         compras/       → dashboard Compras — PAQUETE, un drill por archivo
-                          (_comun, proveedor, familia, cantidad, evolucion).
+                          (_comun, proveedor, familia, cantidad).
                           Era un compras.py de 2.835 líneas hasta 2026-08-01.
         ventas.py      → dashboard Ventas (ranking FoodCost, matriz agrupada)
         inventario.py  → dashboard Inventario Valorizado (v2)
