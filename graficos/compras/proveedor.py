@@ -338,12 +338,21 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     ))
 
     # Alto POR FILA, no fijo: es lo que hace que 5 proveedores y 25 se lean
-    # igual (CLAUDE.md § alturas). Ya no se encoge con el foco: en vertical
-    # bajar a 180px daba aire al detalle de abajo, pero en un ranking eso
-    # recortaría proveedores de la lista.
-    _alto_chart = alturas.por_filas(len(_rk_nombres), px_fila=26,
-                                    minimo=180, extra=40)
-    _compras_layout(fig, alto=_alto_chart)
+    # igual (CLAUDE.md § alturas). `enmarcada=True`: la FIGURA crece con
+    # TODAS las filas sin comprimirlas (antes tenía techo en 430 = rol
+    # PROTAGONISTA, así que 17+ proveedores ya venían apretados). Lo que el
+    # usuario VE es un frame fijo de 8 filas (`_ALTO_FRAME` abajo) con
+    # scroll interno para el resto — a pedido 2026-08-17.
+    _alto_fig_rank = alturas.por_filas(len(_rk_nombres), px_fila=26,
+                                       minimo=180, extra=40, enmarcada=True)
+    _compras_layout(fig, alto=_alto_fig_rank)
+    # Frame visible de ranking Y tabla resumen: 8 filas fijas, para que el
+    # bloque de 3 columnas no baile con la cantidad de proveedores.
+    # Evolución (más abajo) toma el mismo número para quedar a la misma
+    # altura. El CSS (_css_proveedor.py, `cp_chart_scroll` y
+    # `cp-rk-tabla-body`) repite este valor a mano en su `max-height` — si
+    # esto cambia, hay que actualizar los dos.
+    _ALTO_FRAME = alturas.por_filas(8, px_fila=26, minimo=180, extra=40)
     fig.update_layout(
         # r=110 le reserva sitio al rótulo "S/ 4,6k · 19%" que va FUERA de
         # la barra; sin eso `cliponaxis=False` lo dibuja pero se sale de la
@@ -426,48 +435,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         with st.container(key="gran_float"):
             st.pills("Periodo", ["Día", "Semana", "Mes", "Año"], default="Mes",
                      key="compras_prov_gran", label_visibility="collapsed")
-        # -- Transicion del alto del chart (360 <-> 220) ---------------------
-        # Plotly reescribe el SVG con el alto nuevo de golpe: entre 360 y 220 no
-        # hay estado intermedio que el navegador pueda interpolar, y `transition`
-        # no sirve (el alto lo escribe plotly.js inline en px, y el wrapper esta
-        # en height:auto, que no es animable). Lo que SI se anima es el hueco:
-        # el figure se dibuja ya al alto final y el wrapper colapsa de un alto al
-        # otro con @keyframes (declara ambos extremos, no necesita valor previo).
-        # El ojo lee "el chart se encogio y el detalle subio".
-        #
-        # Dos condiciones para que funcione:
-        #  1) nombre de animacion UNICO por transicion. El key de plotly es
-        #     estable (ver arriba), asi que el nodo no se remonta; reaplicar el
-        #     mismo animation-name a un nodo vivo no reinicia nada.
-        #  2) emitir el CSS SOLO en el rerun donde el alto cambio. Si no, cada
-        #     clic en un producto del Panel A repetiria el encogido.
-        # Sin `forwards`: al terminar, el wrapper vuelve a su alto natural, que
-        # ya es el final. overflow:hidden solo hace falta al CRECER (el chart
-        # grande desbordaria); al encoger el wrapper solo sobra aire, y evitarlo
-        # deja los tooltips de plotly sin recortar.
-        # El st.markdown se emite SIEMPRE (con <style> vacio si no toca animar):
-        # un elemento condicional cambiaria la cuenta de hijos del bloque y el
-        # gap de 1rem haria saltar la tarjeta 16px al enfocar/desenfocar.
-        _alto_prev = st.session_state.get("cp_chart_alto_prev", _alto_chart)
-        _anim_css = ""
-        if _alto_prev != _alto_chart:
-            st.session_state["cp_chart_anim_n"] = (
-                st.session_state.get("cp_chart_anim_n", 0) + 1)
-            _an = st.session_state["cp_chart_anim_n"]
-            _ovf = ("overflow:hidden;" if _alto_chart > _alto_prev else "")
-            _anim_css = (
-                f"@keyframes cpChartH{_an}{{"
-                f"from{{height:{_alto_prev}px;}}to{{height:{_alto_chart}px;}}}}"
-                f".st-key-cp_chart_wrap{{{_ovf}"
-                f"animation:cpChartH{_an} .35s cubic-bezier(.2,.7,.2,1);}}")
-        st.markdown(f"<style>{_anim_css}</style>", unsafe_allow_html=True)
-        st.session_state["cp_chart_alto_prev"] = _alto_chart
 
         # El scroll horizontal y el ancho mínimo por barra que vivían acá se
         # fueron con las barras verticales: existían porque muchas series en
         # pocos períodos se apretaban a lo ancho. El ranking horizontal no
-        # tiene ese problema — cada proveedor es una fila de alto fijo y lo
-        # que crece es el ALTO, que ya resuelve `alturas.por_filas`.
+        # tiene ese problema.
+        # (Acá vivió una animación de @keyframes para el alto del chart al
+        # cambiar el filtro de proveedores — se sacó 2026-08-17: con el
+        # frame fijo de 8 filas de arriba, el bloque ya no cambia de alto
+        # entre reruns, así que no queda nada que animar.)
 
         # Config del chart. En DESKTOP el modebar va oculto (vista BI limpia).
         # En MÓVIL se activa el modebar pero SOLO para conservar el botón de
@@ -490,7 +466,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # flechas; cuando ni con eso alcanza —muchas series en pocos
         # periodos— toma su ancho mínimo y el contenedor scrollea.
         with st.container(key="cp_chart_wrap"):
-            # ── Ranking (izq.) + tabla resumen (medio) + evolución (der.) ──
+            # ── Tabla resumen (izq.) + ranking (medio) + evolución (der.) ──
             # 2026-08-16: el cuadro de control de proveedores DESAPARECE.
             # Listaba color + nombre + monto + %, y con el ranking horizontal
             # los nombres pasaron a ser el eje: tenerlos también en una
@@ -500,21 +476,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             # A su lado, la EVOLUCIÓN del proveedor elegido: es donde se mudó
             # el eje de tiempo que el ranking dejó de tener.
             # 2026-08-17, a pedido: la tabla resumen (antes apilada debajo
-            # del ranking) pasa a ser su PROPIA columna del medio — la
-            # tarjeta se ensanchó (ver compras_prov_drill_wrap en
-            # estilos/_20_compras_rail.py) para que entren las tres sin
-            # apretarse.
-            _c_rank, _c_tabla, _c_evo = st.columns([1.2, 1, 1], gap="small")
-            with _c_rank:
-                with st.container(key="cp_chart_scroll"):
-                    st.plotly_chart(
-                        fig,
-                        width="stretch",
-                        key=_chart_key,
-                        on_select="rerun",
-                        selection_mode="points",
-                        config=_cfg_chart,
-                    )
+            # del ranking) pasa a ser su PROPIA columna, PRIMERA de las tres
+            # (antes el ranking iba a la izquierda) — la tarjeta se ensanchó
+            # (ver compras_prov_drill_wrap en estilos/_20_compras_rail.py)
+            # para que entren sin apretarse. Ranking y tabla muestran 8
+            # filas fijas (`_ALTO_FRAME`) y scrollean el resto por dentro.
+            _c_tabla, _c_rank, _c_evo = st.columns([1, 1.2, 1], gap="small")
             with _c_tabla:
                 # ── Tabla resumen ────────────────────────────────────────
                 # A pedido, con mockup aprobado (opción A, tabla plana): el
@@ -545,15 +512,30 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         reversed(_rk_docs), reversed(_rk_pct),
                         reversed(_rk_colores))
                 )
+                # Cabecera FUERA del scroll (siempre visible); solo las filas
+                # (`cp-rk-tabla-body`) scrollean pasadas las primeras 8, a
+                # pedido — CSS en _css_proveedor.py.
                 st.markdown(
                     '<div class="cp-rk-tabla">'
                     '<div class="cp-rk-tabla-cab">'
                     '<span></span><span>Proveedor</span>'
                     '<span>Valor</span><span>Docs</span>'
                     '<span>%</span>'
-                    '</div>' + _rk_filas + '</div>',
+                    '</div>'
+                    '<div class="cp-rk-tabla-body">' + _rk_filas + '</div>'
+                    '</div>',
                     unsafe_allow_html=True,
                 )
+            with _c_rank:
+                with st.container(key="cp_chart_scroll"):
+                    st.plotly_chart(
+                        fig,
+                        width="stretch",
+                        key=_chart_key,
+                        on_select="rerun",
+                        selection_mode="points",
+                        config=_cfg_chart,
+                    )
             with _c_evo:
                 # Sin elección del usuario cae al primero del ranking (el de
                 # mayor valor) — mismo criterio que el Panel B de abajo. Como
@@ -650,7 +632,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     _paso_evo = max(1, -(-len(_evo_x) // 6))
                     _tickv = [x for i, x in enumerate(_evo_x)
                               if i % _paso_evo == 0]
-                    _compras_layout(fig_evo, alto=_alto_chart)
+                    _compras_layout(fig_evo, alto=_ALTO_FRAME)
                     fig_evo.update_layout(
                         margin=dict(l=10, r=10, t=6, b=10),
                         # size=10 (reportado "casi no se ven"): es el mismo

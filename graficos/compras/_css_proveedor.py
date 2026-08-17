@@ -271,15 +271,44 @@ CSS = """        <style>
             color: var(--text-secondary);
             text-align: right;
         }
+        /* 2026-08-17, a pedido: 8 filas fijas visibles, scroll interno para
+           el resto. La cabecera (`cp-rk-tabla-cab`) queda AFUERA de este
+           wrapper a propósito — así no se va con el scroll. 274px, medido
+           en vivo contra `.cp-rk-tabla-fila` real (34.2px/fila incl.
+           borde: 547px de scrollHeight / 16 filas) — con el 248px que usa
+           el ranking de al lado (`_ALTO_FRAME`, mismo pedido) solo entraban
+           7 filas, no 8, porque la fila de la tabla es más alta que los
+           26px/barra del gráfico. Números distintos a propósito: cada uno
+           mide 8 de SU propia unidad, no el mismo px que su vecino. */
+        .cp-rk-tabla-body {
+            max-height: 274px;
+            overflow-y: auto;
+        }
+        .cp-rk-tabla-body::-webkit-scrollbar {
+            width: 8px;
+        }
+        .cp-rk-tabla-body::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+        .cp-rk-tabla-body::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
         /* Scroll horizontal del plot. Solo entra en juego cuando Python le
            forzo un ancho mayor al disponible (ver `_scroll_x` en
            proveedor.py): con muchas series en pocos periodos las barras se
            achicaban hasta ser ilegibles, y ahora se les exige un piso de
            px por barra. Cuando el ancho entra, el figure sigue siendo
            responsive y esta regla no hace nada. */
+        /* 2026-08-17, a pedido: 8 filas fijas visibles, scroll interno para
+           el resto (la FIGURA sí dibuja todas las filas — `enmarcada=True`
+           en proveedor.py — para no comprimir las barras). 248px replica a
+           mano `_ALTO_FRAME` de proveedor.py (alturas.por_filas(8, ...));
+           si ese número cambia, cambiar este también. */
         .st-key-cp_chart_scroll {
             overflow-x: auto !important;
-            overflow-y: hidden !important;
+            overflow-y: auto !important;
+            max-height: 248px !important;
         }
         /* El ancho minimo lo publica Python como variable (`cp-plot-min`,
            ver proveedor.py). Vale 0 cuando todo entra, y ahi esta regla no
@@ -290,19 +319,27 @@ CSS = """        <style>
         .st-key-cp_chart_scroll [data-testid="stFullScreenFrame"] {
             min-width: var(--cp-plot-min, 0px) !important;
         }
-        /* El que TERMINA scrolleando no es el contenedor de arriba sino el
-           `stElementContainer` que Streamlit mete adentro — medido: el de
-           afuera queda en 829/829 y el de adentro en 829/1676, con 847px de
-           recorrido. Por eso el overflow y la barra se declaran tambien en
-           el hijo; el de afuera se deja por si esa estructura interna
-           cambia en una version futura. */
+        /* El que TERMINA scrolleando HORIZONTALMENTE no es el contenedor de
+           arriba sino el `stElementContainer` que Streamlit mete adentro —
+           medido: el de afuera queda en 829/829 y el de adentro en
+           829/1676, con 847px de recorrido. Por eso el overflow-x se
+           declara tambien en el hijo.
+           OJO, distinto para el alto: acá NO va `max-height` ni
+           `overflow-y` — medido en vivo 2026-08-17, si este nodo (el que
+           Streamlit usa para su propio ResizeObserver del plot) queda con
+           el alto acotado, Streamlit fuerza `fig.layout.height` a ESE alto
+           (lo pisa, aunque Python haya pedido 456 con `enmarcada=True`) en
+           vez de dejarlo crecer y que el de AFUERA (`cp_chart_scroll`, con
+           su propio max-height) sea quien recorte y scrollee. El resultado
+           era el opuesto al pedido: la figura se comprimía a 8 filas en
+           vez de dibujarlas todas con scroll. */
         .st-key-cp_chart_scroll > [data-testid="stElementContainer"] {
             overflow-x: auto !important;
-            overflow-y: hidden !important;
         }
         .st-key-cp_chart_scroll::-webkit-scrollbar,
         .st-key-cp_chart_scroll [data-testid="stElementContainer"]::-webkit-scrollbar {
             height: 8px;
+            width: 8px;
         }
         .st-key-cp_chart_scroll::-webkit-scrollbar-thumb,
         .st-key-cp_chart_scroll [data-testid="stElementContainer"]::-webkit-scrollbar-thumb {

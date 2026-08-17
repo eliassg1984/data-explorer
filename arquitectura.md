@@ -5027,3 +5027,50 @@ salvo `icono`):
      prolija. La tabla resumen (antes apilada DEBAJO del ranking, dentro
      de la misma columna) truncaba nombres a 34 caracteres
      (`_compras_truncar`); al pasar a columna propia y angosta bajó a 20.
+
+125. **El scroll interno de un `st.plotly_chart` (8 filas fijas + scroll,
+     drill de Proveedor) necesita DOS contenedores, no uno: si el nodo que
+     Streamlit usa para su propio ResizeObserver del plot queda con el
+     alto acotado, Plotly se ENCOGE a ese alto en vez de crecer y dejar
+     que el de AFUERA recorte con scroll.**
+
+     Pedido: que el ranking (y la tabla resumen, al lado) del drill de
+     Proveedor mostraran 8 filas fijas con scroll para el resto, en vez de
+     crecer sin techo con la cantidad de proveedores. La receta obvia —
+     `alto=alturas.por_filas(n, ..., enmarcada=True)` en Python (para que
+     la FIGURA dibuje las N filas sin comprimirlas, hasta el techo de 900
+     de `_TOPE_ENMARCADA`) + `max-height:248px; overflow-y:auto` en el
+     contenedor de `_css_proveedor.py` (`cp_chart_scroll`, que envuelve
+     `st.plotly_chart`) — no hizo lo pedido: medido en vivo
+     (`gd.layout.height`, `gd._fullLayout.height` del div de Plotly), la
+     figura llegaba al navegador con `height:248`, no los 456px que pedía
+     Python para 16 proveedores (26px × 16 + 40 de extra). El ranking
+     terminaba comprimiendo las 16 filas en el frame en vez de dibujarlas
+     todas y scrollear — el resultado opuesto al pedido, y silencioso: sin
+     leer el `layout` de Plotly en el DOM, se ve simplemente "el chart no
+     creció".
+
+     La causa: el `max-height`/`overflow-y` estaba puesto TANTO en
+     `.st-key-cp_chart_scroll` (el contenedor propio de este proyecto)
+     COMO en su hijo directo `[data-testid="stElementContainer"]` (el nodo
+     que Streamlit envuelve alrededor del componente Plotly) — ese hijo es
+     el que Streamlit mide para decidir el tamaño del plot. Con el hijo
+     acotado a 248, Streamlit redibujaba la figura a 248, pisando
+     `fig.layout.height` exactamente como si Python nunca hubiera pedido
+     456.
+
+     Fix: sacar `max-height`/`overflow-y` del hijo (`stElementContainer`,
+     que se deja SIN acotar) y dejarlo solo en el padre
+     (`cp_chart_scroll`). Sin el hijo acotado, Streamlit deja crecer la
+     figura a su alto real; el padre es quien la recorta a 248px visibles
+     con scroll — que es lo que se pidió. Mismo síntoma de fondo que la
+     regla #123 (algo vuelve solo a un tamaño más chico pese al ajuste
+     explícito), causa distinta: ahí era CSS puro (`max-width` compitiendo
+     con `width`); acá es el propio JS de Streamlit reaccionando al
+     tamaño de SU contenedor. La tabla resumen de al lado (HTML plano, sin
+     Plotly de por medio) no tuvo este problema — su `.cp-rk-tabla-body`
+     con `max-height` funcionó a la primera; solo hizo falta ajustar el
+     número (248 → 274px) porque su fila mide más que los 26px/barra del
+     gráfico, así que "8 de lo suyo" no es el mismo px que "8 filas" del
+     ranking — cada frame mide 8 en SU propia unidad, no un mismo número
+     compartido.
