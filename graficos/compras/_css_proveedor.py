@@ -220,6 +220,56 @@ CSS = """        <style>
             line-height: 1.25;
             white-space: nowrap;
         }
+        /* Tabla resumen debajo del ranking (opción A del mockup: plana, sin
+           barra). Mismo grid en la cabecera y en cada fila para que las
+           columnas calcen; el punto de color replica el de la barra de
+           arriba, así la fila se identifica sin leer el nombre. */
+        .cp-rk-tabla {
+            margin-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+        .cp-rk-tabla-cab,
+        .cp-rk-tabla-fila {
+            display: grid;
+            grid-template-columns: 14px minmax(0, 1fr) 96px 84px 60px;
+            align-items: center;
+            gap: 10px;
+        }
+        .cp-rk-tabla-cab {
+            padding: 8px 4px 6px;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+        .cp-rk-tabla-cab span:nth-child(n+3) {
+            text-align: right;
+        }
+        .cp-rk-tabla-fila {
+            padding: 7px 4px;
+            border-top: 1px solid var(--border);
+            font-size: 12px;
+        }
+        .cp-rk-tabla-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .cp-rk-tabla-nombre {
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .cp-rk-tabla-valor {
+            font-weight: 600;
+            color: var(--text-primary);
+            text-align: right;
+        }
+        .cp-rk-tabla-docs,
+        .cp-rk-tabla-pct {
+            color: var(--text-secondary);
+            text-align: right;
+        }
         /* Scroll horizontal del plot. Solo entra en juego cuando Python le
            forzo un ancho mayor al disponible (ver `_scroll_x` en
            proveedor.py): con muchas series en pocos periodos las barras se

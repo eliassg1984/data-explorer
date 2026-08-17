@@ -8,6 +8,8 @@ inyectado con st.markdown para los controles flotantes sobre el grafico;
 vive aca (y no en estilos/) porque esta scopeado a las keys de este drill.
 """
 
+import html
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -508,6 +510,42 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         selection_mode="points",
                         config=_cfg_chart,
                     )
+                # ── Tabla resumen debajo del ranking ────────────────────────
+                # A pedido, con mockup aprobado (opción A, tabla plana): el
+                # ranking ya imprime monto + % al final de cada barra, esta
+                # tabla suma la columna que solo vivía en el hover
+                # (documentos) y deja las 9 filas comparables de un vistazo,
+                # sin pasar el mouse una por una.
+                # Mismas filas que el gráfico, orden INVERTIDO: `_rk_*` viene
+                # ASCENDENTE porque así dibuja plotly las barras horizontales
+                # (de abajo hacia arriba); una tabla se lee de arriba hacia
+                # abajo, así que acá va DESCENDENTE (mayor primero). Los
+                # colores son los mismos `_rk_colores` que las barras — si
+                # hay un proveedor en foco, sus puntos también salen
+                # atenuados acá, y la fila enfocada se nota sola.
+                _rk_filas = "".join(
+                    '<div class="cp-rk-tabla-fila">'
+                    f'<span class="cp-rk-tabla-dot" style="background:{c}"></span>'
+                    f'<span class="cp-rk-tabla-nombre" title="{html.escape(n)}">'
+                    f'{html.escape(_compras_truncar(n, 34))}</span>'
+                    f'<span class="cp-rk-tabla-valor">S/ {v:,.0f}</span>'
+                    f'<span class="cp-rk-tabla-docs">{d}</span>'
+                    f'<span class="cp-rk-tabla-pct">{p:.0f}%</span>'
+                    '</div>'
+                    for n, v, d, p, c in zip(
+                        reversed(_rk_nombres), reversed(_rk_valores),
+                        reversed(_rk_docs), reversed(_rk_pct),
+                        reversed(_rk_colores))
+                )
+                st.markdown(
+                    '<div class="cp-rk-tabla">'
+                    '<div class="cp-rk-tabla-cab">'
+                    '<span></span><span>Proveedor</span>'
+                    '<span>Valor total</span><span>Documentos</span>'
+                    '<span>% total</span>'
+                    '</div>' + _rk_filas + '</div>',
+                    unsafe_allow_html=True,
+                )
             with _c_evo:
                 # Sin elección del usuario cae al primero del ranking (el de
                 # mayor valor) — mismo criterio que el Panel B de abajo. Como
