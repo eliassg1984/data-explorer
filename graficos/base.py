@@ -564,6 +564,14 @@ def _compras_layout(fig, alto=alturas.PROTAGONISTA):
         font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=12),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
         colorway=PALETA_CALLAI,
+        # `layout.font` no alcanza al tooltip: Plotly le pone SU PROPIO gris
+        # por defecto (~rgb(128,132,149), 3.7:1 sobre blanco — no pasa AA)
+        # sin importar el color del resto del gráfico. Reportado "no se ve
+        # la información de la etiqueta" sobre el hover de compras/proveedor;
+        # se fija acá porque lo pisa cualquier gráfico que use este layout.
+        hoverlabel=dict(bgcolor=BLANCO, bordercolor=GRIS_BORDE,
+                        font=dict(family="DM Sans, sans-serif",
+                                  color=TEXTO_PRINCIPAL, size=12)),
     )
     fig.update_xaxes(showgrid=False, zeroline=False)
     fig.update_yaxes(gridcolor=GRIS_BORDE, zeroline=False)
