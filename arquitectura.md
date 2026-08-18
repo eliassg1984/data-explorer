@@ -5355,3 +5355,13 @@ salvo `icono`):
      del grid entero, no falla en silencio — no fue el caso). **Falta un
      smoke test manual real después de deployar**: pasar el cursor sobre
      un % y confirmar que aparece el tooltip con el precio.
+
+     **Card de detalle, a pedido: candlestick y compras de la semana uno
+     al lado del otro (`st.columns([1, 1], gap="small")`), no apiladas.**
+     El candlestick baja de `alturas.APOYO` (380) a `alturas.MINI`
+     (240) — mismo criterio que el gráfico de evolución de Producto,
+     que también comparte fila con una tabla (regla #128). Verificado
+     por `getBoundingClientRect()`: las dos cajas quedan en la misma
+     fila (mismo rango de Y), 426px de ancho cada una, sin superponerse
+     — la tarjeta completa bajó de lo que hubiera sido candlestick(380)
+     + tabla apilada debajo a 377px de alto total.

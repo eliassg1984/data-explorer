@@ -289,46 +289,54 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             unsafe_allow_html=True,
         )
 
-        fig = go.Figure()
-        fig.add_trace(go.Candlestick(
-            x=semanas, open=[w["o"] for w in weeks], high=[w["h"] for w in weeks],
-            low=[w["l"] for w in weeks], close=[w["c"] for w in weeks],
-            increasing=dict(line=dict(color=ERROR), fillcolor=ERROR),
-            decreasing=dict(line=dict(color=EXITO), fillcolor=EXITO),
-            hovertext=[f"Semana del {s:%d/%m} · abre S/ {w['o']:.2f} · máx S/ {w['h']:.2f} "
-                      f"· mín S/ {w['l']:.2f} · cierra S/ {w['c']:.2f}"
-                      for s, w in zip(semanas, weeks)],
-            hoverinfo="text",
-            name="",
-        ))
-        # Overlay invisible para capturar el clic (go.Candlestick sin
-        # precedente de selección confiable en este proyecto — ver rules #11/#44).
-        fig.add_trace(go.Scatter(
-            x=semanas, y=[(w["h"] + w["l"]) / 2 for w in weeks],
-            mode="markers", marker=dict(size=38, opacity=0),
-            hoverinfo="skip", showlegend=False,
-        ))
-        _compras_layout(fig, alto=alturas.APOYO)
-        fig.update_layout(
-            xaxis=dict(gridcolor=GRIS_BORDE, showgrid=False, rangeslider=dict(visible=False)),
-            yaxis=dict(gridcolor=GRIS_BORDE, tickprefix="S/ "),
-            showlegend=False,
-        )
+        # Candlestick (izq.) + compras de la semana enfocada (der.), uno al
+        # lado del otro — antes apiladas, entre las dos pasaban de una
+        # pantalla. alto=MINI (no APOYO): mismo criterio que el gráfico de
+        # evolución de Producto, que también comparte fila con una tabla.
+        col_chart, col_detalle = st.columns([1, 1], gap="small")
 
-        _chart_key = f"compras_g_vol_candle_{_slug(str(prod_sel))}"
-        _cfg = {"displaylogo": False, "displayModeBar": False}
-        evt = st.plotly_chart(fig, use_container_width=True, key=_chart_key,
-                              on_select="rerun", selection_mode="points", config=_cfg)
+        with col_chart:
+            fig = go.Figure()
+            fig.add_trace(go.Candlestick(
+                x=semanas, open=[w["o"] for w in weeks], high=[w["h"] for w in weeks],
+                low=[w["l"] for w in weeks], close=[w["c"] for w in weeks],
+                increasing=dict(line=dict(color=ERROR), fillcolor=ERROR),
+                decreasing=dict(line=dict(color=EXITO), fillcolor=EXITO),
+                hovertext=[f"Semana del {s:%d/%m} · abre S/ {w['o']:.2f} · máx S/ {w['h']:.2f} "
+                          f"· mín S/ {w['l']:.2f} · cierra S/ {w['c']:.2f}"
+                          for s, w in zip(semanas, weeks)],
+                hoverinfo="text",
+                name="",
+            ))
+            # Overlay invisible para capturar el clic (go.Candlestick sin
+            # precedente de selección confiable en este proyecto — ver rules #11/#44).
+            fig.add_trace(go.Scatter(
+                x=semanas, y=[(w["h"] + w["l"]) / 2 for w in weeks],
+                mode="markers", marker=dict(size=38, opacity=0),
+                hoverinfo="skip", showlegend=False,
+            ))
+            _compras_layout(fig, alto=alturas.MINI)
+            fig.update_layout(
+                xaxis=dict(gridcolor=GRIS_BORDE, showgrid=False, rangeslider=dict(visible=False)),
+                yaxis=dict(gridcolor=GRIS_BORDE, tickprefix="S/ "),
+                showlegend=False,
+            )
 
-        # Procesar clic (dedup, patrón de proveedor.py): solo se atiende un
-        # punto que venga de la traza 1 (el overlay), no de la 0 (las velas).
-        _mp = _first_point(evt)
-        if _mp is not None and _mp.get("curve_number") == 1:
-            _pi = _mp.get("point_index", _mp.get("point_number"))
-            if _pi is not None and st.session_state.get("compras_vol_last_click") != _pi:
-                st.session_state["compras_vol_last_click"] = _pi
-                _misma = st.session_state.get("compras_vol_semfocus") == _pi
-                st.session_state["compras_vol_semfocus"] = None if _misma else _pi
+            _chart_key = f"compras_g_vol_candle_{_slug(str(prod_sel))}"
+            _cfg = {"displaylogo": False, "displayModeBar": False}
+            evt = st.plotly_chart(fig, use_container_width=True, key=_chart_key,
+                                  on_select="rerun", selection_mode="points", config=_cfg)
+
+            # Procesar clic (dedup, patrón de proveedor.py): solo se atiende
+            # un punto que venga de la traza 1 (el overlay), no de la 0
+            # (las velas).
+            _mp = _first_point(evt)
+            if _mp is not None and _mp.get("curve_number") == 1:
+                _pi = _mp.get("point_index", _mp.get("point_number"))
+                if _pi is not None and st.session_state.get("compras_vol_last_click") != _pi:
+                    st.session_state["compras_vol_last_click"] = _pi
+                    _misma = st.session_state.get("compras_vol_semfocus") == _pi
+                    st.session_state["compras_vol_semfocus"] = None if _misma else _pi
 
         sem_focus = st.session_state.get("compras_vol_semfocus")
         if sem_focus is None or not (0 <= sem_focus < len(weeks)):
@@ -338,42 +346,44 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         w = weeks[sem_focus]
         ini = semanas[sem_focus]
         fin = ini + pd.Timedelta(days=6)
-        delta_txt = ""
-        if sem_focus > 0 and weeks[sem_focus - 1]["c"]:
-            var = (w["c"] - weeks[sem_focus - 1]["c"]) / weeks[sem_focus - 1]["c"] * 100
-            color = ERROR if var > 0 else (EXITO if var < 0 else GRIS_TEXTO)
-            delta_txt = (f' <span style="color:{color}; font-weight:700;">'
-                        f'{"+" if var >= 0 else "−"}{abs(var):.1f}% vs semana anterior</span>')
-        st.markdown(
-            f'<div style="margin-top:.5rem; padding-top:.75rem; border-top:1px solid {GRIS_BORDE};">'
-            f'<span style="font-weight:600;">Semana del {ini:%d/%m} al {fin:%d/%m}</span>{delta_txt}'
-            f'</div>', unsafe_allow_html=True,
-        )
 
-        if not w["rows"]:
-            st.caption("Sin compras registradas esta semana — precio repetido del último cierre.")
-        else:
-            tp = pd.DataFrame(w["rows"])
-            maxp, minp = tp["precio"].max(), tp["precio"].min()
+        with col_detalle:
+            delta_txt = ""
+            if sem_focus > 0 and weeks[sem_focus - 1]["c"]:
+                var = (w["c"] - weeks[sem_focus - 1]["c"]) / weeks[sem_focus - 1]["c"] * 100
+                color = ERROR if var > 0 else (EXITO if var < 0 else GRIS_TEXTO)
+                delta_txt = (f' <span style="color:{color}; font-weight:700;">'
+                            f'{"+" if var >= 0 else "−"}{abs(var):.1f}% vs semana anterior</span>')
+            st.markdown(
+                f'<div style="margin-bottom:.5rem;">'
+                f'<span style="font-weight:600;">Semana del {ini:%d/%m} al {fin:%d/%m}</span>{delta_txt}'
+                f'</div>', unsafe_allow_html=True,
+            )
 
-            def _sty_precio(v):
-                if maxp == minp:
+            if not w["rows"]:
+                st.caption("Sin compras registradas esta semana — precio repetido del último cierre.")
+            else:
+                tp = pd.DataFrame(w["rows"])
+                maxp, minp = tp["precio"].max(), tp["precio"].min()
+
+                def _sty_precio(v):
+                    if maxp == minp:
+                        return ""
+                    if v == maxp:
+                        return f"color:{ERROR}; font-weight:700;"
+                    if v == minp:
+                        return f"color:{EXITO}; font-weight:700;"
                     return ""
-                if v == maxp:
-                    return f"color:{ERROR}; font-weight:700;"
-                if v == minp:
-                    return f"color:{EXITO}; font-weight:700;"
-                return ""
 
-            tp = tp.rename(columns={"fecha": "Fecha", "prov": "Proveedor",
-                                    "cant": "Cantidad", "precio": f"Precio/{unidad}"})
-            fmts = {"Fecha": lambda v: f"{v:%d/%m/%Y}",
-                   "Cantidad": lambda v: "—" if pd.isna(v) else f"{v:,.2f} {unidad}",
-                   f"Precio/{unidad}": lambda v: f"S/ {v:,.2f}"}
-            sty_p = (tp.style.format(fmts)
-                     .map(_sty_precio, subset=[f"Precio/{unidad}"])
-                     .hide(axis="index"))
-            st.dataframe(sty_p, use_container_width=True, hide_index=True,
-                        height=alturas.por_filas(len(tp), px_fila=34, extra=60,
-                                                 minimo=0, rol=alturas.MINI))
+                tp = tp.rename(columns={"fecha": "Fecha", "prov": "Proveedor",
+                                        "cant": "Cantidad", "precio": f"Precio/{unidad}"})
+                fmts = {"Fecha": lambda v: f"{v:%d/%m/%Y}",
+                       "Cantidad": lambda v: "—" if pd.isna(v) else f"{v:,.2f} {unidad}",
+                       f"Precio/{unidad}": lambda v: f"S/ {v:,.2f}"}
+                sty_p = (tp.style.format(fmts)
+                         .map(_sty_precio, subset=[f"Precio/{unidad}"])
+                         .hide(axis="index"))
+                st.dataframe(sty_p, use_container_width=True, hide_index=True,
+                            height=alturas.por_filas(len(tp), px_fila=34, extra=60,
+                                                     minimo=0, rol=alturas.MINI))
         st.caption("Tocá una vela para ver las compras de esa semana.")
