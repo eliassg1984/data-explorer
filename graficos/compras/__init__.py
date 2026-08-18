@@ -1,15 +1,20 @@
-"""graficos.compras - dashboard de Compras (3 drills).
+"""graficos.compras - dashboard de Compras (5 drills).
 
 Este modulo era un unico compras.py de 2.835 lineas; desde el refactor de
 2026-08-01 es un paquete con un drill por archivo, igual que graficos/ tiene
 un dashboard por archivo.
 
-    _comun.py       helpers compartidos (movil, seleccion, mini barras)
-    proveedor.py    drill de Proveedor (el mas grande)
-    producto.py     drill de Producto: ranking + precio/cantidad/valor
-                    (incluye el ranking por Familia — ver docstring propio)
+    _comun.py         helpers compartidos (movil, seleccion, mini barras)
+    proveedor.py      drill de Proveedor (el mas grande)
+    producto.py       drill de Producto: ranking + precio/cantidad/valor
+                      (incluye el ranking por Familia — ver docstring propio)
+    volatilidad.py    drill de Volatilidad: ranking (AgGrid, tooltip +
+                      clic en fila) + candlestick + compras de la semana
+    vs_ano_pasado.py  drill "Vs año pasado": Precio o Cantidad de un
+                      producto en comun, cada uno contra su serie del
+                      año pasado
 
-Punto de entrada publico: renderizar_graficos_compras (lo consume el 
+Punto de entrada publico: renderizar_graficos_compras (lo consume el
 dispatcher de graficos/__init__.py). Vive aca abajo junto a la config del
 rail derecho, que es lo que decide que drill se muestra.
 
@@ -34,6 +39,7 @@ from graficos.compras._comun import (  # noqa: F401  (re-export)
 from graficos.compras.proveedor import _compras_proveedor_drill
 from graficos.compras.producto import _compras_producto_drill
 from graficos.compras.volatilidad import _compras_volatilidad_drill
+from graficos.compras.vs_ano_pasado import _compras_vs_ano_pasado_drill
 from graficos import alturas
 
 
@@ -46,9 +52,8 @@ from graficos import alturas
 _COMPRAS_RAIL_CATEGORIAS = (
     ("Dimensión", (("Proveedor",            "Proveedor"),
                    ("Producto",             "Producto"))),
-    ("Precios",   (("Precio vs año pasado", "Vs año pasado"),
+    ("Precios",   (("Vs año pasado",        "Vs año pasado"),
                    ("Volatilidad",          "Volatilidad"))),
-    ("Cantidad",  (("Cantidad vs año pasado", "Vs año pasado"),)),
     ("Más",       (("Semanal",              "Semanal"),
                    ("Vs año anterior",      "Vs año ant."),
                    ("Personalizado",        "Personalizado"),
@@ -155,8 +160,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
 
     _valor = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
 
-    opciones = ["Proveedor", "Producto",
-                "Precio vs año pasado", "Volatilidad", "Cantidad vs año pasado",
+    opciones = ["Proveedor", "Producto", "Vs año pasado", "Volatilidad",
                 "Semanal", "Vs año anterior", "Personalizado", "Tabla"]
 
     # Rail vertical fijo al borde DERECHO (componente compartido _render_rail):
@@ -209,107 +213,20 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                                        col_valor, col_cant, col_um, col_moneda)
         return
 
+    # Vs año pasado: Precio o Cantidad (selector "Ver") de un producto en
+    # común — unifica los dos drills que antes vivían en categorías
+    # separadas del rail (Precios/Cantidad).
+    if graf == "Vs año pasado":
+        with st.container(key="compras_vap_drill_wrap"):
+            _compras_vs_ano_pasado_drill(d, col_prod, col_punit, col_cant,
+                                         col_fecha, col_valor)
+        return
+
     col_izq, col_der = st.columns([1.7, 1])
 
     with col_izq:
         with st.container(border=True, key="ajuste_graf_card_izq_compras"):
-            if graf == "Precio vs año pasado" and col_prod and col_punit and col_fecha:
-                # Un producto a la vez: precio real de cada compra (línea
-                # sólida) vs el precio unitario del año pasado (punteada).
-                _col_pu_aa = _resolver(d, ["Precio_unit_ano_anterior",
-                                           "Precio unit ano anterior",
-                                           "Precio_unit_ano_a nterior"])
-                _tops = _valor.groupby(d[col_prod].astype(str)).sum().nlargest(30).index.tolist()
-                _cp, _ = st.columns([1.4, 1.6])
-                with _cp:
-                    prod_sel = st.selectbox("Producto", _tops,
-                                            key="compras_pvsaa_prod")
-                dd = d[d[col_prod].astype(str) == prod_sel]
-                _fe = pd.to_datetime(dd[col_fecha], errors="coerce")
-                _pu = pd.to_numeric(dd[col_punit], errors="coerce")
-                base = pd.DataFrame({"fecha": _fe, "pu": _pu})
-                if _col_pu_aa:
-                    base["pu_aa"] = pd.to_numeric(dd[_col_pu_aa], errors="coerce")
-                base = base.dropna(subset=["fecha", "pu"]).sort_values("fecha")
-                if base.empty:
-                    st.info("Sin compras de ese producto en el rango.")
-                else:
-                    fig = go.Figure()
-                    fig.add_scatter(
-                        x=base["fecha"], y=base["pu"], mode="lines+markers",
-                        name="Precio por compra",
-                        line=dict(color=ACENTO, width=2.2),
-                        marker=dict(size=7),
-                        hovertemplate="%{x|%d/%m/%Y}: S/ %{y:,.2f}<extra>Compra</extra>",
-                    )
-                    _sub = ""
-                    if _col_pu_aa and base.get("pu_aa") is not None and base["pu_aa"].notna().any():
-                        fig.add_scatter(
-                            x=base["fecha"], y=base["pu_aa"], mode="lines",
-                            name="Precio año pasado",
-                            line=dict(color="#9aa0a6", width=2, dash="dot"),
-                            hovertemplate="%{x|%d/%m/%Y}: S/ %{y:,.2f}<extra>Año pasado</extra>",
-                        )
-                        _m_act = base["pu"].mean()
-                        _m_aa = base["pu_aa"].mean()
-                        if _m_aa and _m_aa > 0:
-                            _var = (_m_act - _m_aa) / _m_aa * 100
-                            _sub = f" · variación promedio {_var:+.1f}% vs año pasado"
-                    else:
-                        st.caption("Este producto no tiene precio del año pasado registrado.")
-                    _compras_layout(fig, alto=alturas.PROTAGONISTA)
-                    fig.update_layout(
-                        title=_compras_truncar(prod_sel, 48) + _sub,
-                        xaxis_title=None, yaxis_title=None,
-                        legend=dict(orientation="h", y=-0.18, x=0),
-                    )
-                    st.plotly_chart(fig, use_container_width=True,
-                                    key="compras_g_pvsaa")
-
-            elif graf == "Cantidad vs año pasado" and col_fecha and col_cant:
-                _col_cant_aa = _resolver(d, ["Cantidad_ano_anterior",
-                                             "Cantidad ano anterior"])
-                _tops = (["(Todos)"] +
-                         _valor.groupby(d[col_prod].astype(str)).sum()
-                         .nlargest(30).index.tolist()) if col_prod else ["(Todos)"]
-                _cp, _ = st.columns([1.4, 1.6])
-                with _cp:
-                    prod_sel = st.selectbox("Producto", _tops,
-                                            key="compras_cvsaa_prod")
-                dd = d if prod_sel == "(Todos)" else d[
-                    d[col_prod].astype(str) == prod_sel]
-                _fe = pd.to_datetime(dd[col_fecha], errors="coerce")
-                _mm = _fe.dt.to_period("M").astype(str)
-                _cn = pd.to_numeric(dd[col_cant], errors="coerce").fillna(0)
-                base = pd.DataFrame({"mes": _mm, "Este año": _cn})
-                if _col_cant_aa:
-                    base["Año pasado"] = pd.to_numeric(
-                        dd[_col_cant_aa], errors="coerce").fillna(0)
-                g = base.groupby("mes").sum().sort_index()
-                if g.empty:
-                    st.info("Sin datos en el rango.")
-                else:
-                    fig = go.Figure()
-                    if "Año pasado" in g.columns:
-                        fig.add_bar(x=g.index, y=g["Año pasado"],
-                                    name="Año pasado",
-                                    marker=dict(color=GRIS_BORDE))
-                    fig.add_bar(x=g.index, y=g["Este año"], name="Este año",
-                                marker=dict(color=ACENTO))
-                    _compras_layout(fig, alto=alturas.PROTAGONISTA)
-                    _tt = ("Cantidad comprada por mes: este año vs año pasado"
-                           if prod_sel == "(Todos)" else
-                           _compras_truncar(prod_sel, 40)
-                           + " — cantidad mensual vs año pasado")
-                    fig.update_layout(title=_tt, barmode="group",
-                                      legend=dict(orientation="h", y=-0.18, x=0))
-                    fig.update_xaxes(type="category")
-                    fig.update_traces(
-                        hovertemplate="%{fullData.name}<br>%{x}: %{y:,.1f}<extra></extra>")
-                    st.plotly_chart(fig, use_container_width=True,
-                                    key="compras_g_cvsaa")
-
-            elif graf == "Semanal" and col_prod and col_fecha:
+            if graf == "Semanal" and col_prod and col_fecha:
                 # Compra por SEMANA: barras apiladas (valor) por producto
                 # (top 8 + Otros); el hover muestra valor y cantidad.
                 _dias_ini = {"Lunes": 0, "Sábado": 5, "Domingo": 6}

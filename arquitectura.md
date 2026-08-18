@@ -5365,3 +5365,59 @@ salvo `icono`):
      fila (mismo rango de Y), 426px de ancho cada una, sin superponerse
      — la tarjeta completa bajó de lo que hubiera sido candlestick(380)
      + tabla apilada debajo a 377px de alto total.
+
+131. **Se unificaron "Precio vs año pasado" y "Cantidad vs año pasado"
+     (categorías separadas "Precios"/"Cantidad" del rail) en un solo
+     drill nuevo, `graficos/compras/vs_ano_pasado.py`**, con un selector
+     "Ver: Precio / Cantidad" y un producto en común — mismo espíritu que
+     la unificación de Producto (regla #128), a pedido explícito después
+     de mostrar el código de las dos vistas viejas.
+
+     **A propósito, Precio y Cantidad NO comparten granularidad.** Precio
+     sigue siendo la serie diaria de compras reales (un punto = una
+     compra); Cantidad sigue siendo suma mensual. Unificar SOLO la
+     pantalla (selector + producto + tarjeta) y no la lógica de cada
+     métrica fue una decisión deliberada para no ampliar el pedido: el
+     usuario pidió juntar dos pantallas, no rediseñar cómo se agrega cada
+     métrica.
+
+     **"(Todos los productos)" queda asimétrico a propósito:** solo
+     aparece en el selector cuando `modo == "Cantidad"` — sumar cantidad
+     de todos los productos es una magnitud real; promediar o sumar
+     PRECIO de productos distintos no lo es. La consecuencia práctica es
+     un caso que hay que blindar: si el usuario elige "(Todos)" en
+     Cantidad y pasa a Precio, `session_state["compras_vap_prod"]` ya no
+     está en la nueva lista de `options` del `st.selectbox` — Streamlit
+     **revienta** si el valor guardado no está en `options` al momento
+     de instanciar el widget. La guarda va ANTES del `st.selectbox`, no
+     con `index=` (que solo aplica en el primer render, no en reruns
+     donde `session_state` ya tiene un valor):
+     ```python
+     if st.session_state.get("compras_vap_prod") not in _opciones_prod:
+         st.session_state["compras_vap_prod"] = _opciones_prod[0]
+     prod_sel = st.selectbox("Producto", _opciones_prod, key="compras_vap_prod")
+     ```
+     Mismo problema de fondo que "el foco en la key" (reglas #120/#124/
+     #130), pero la solución acá es la contraria: ahí se evitaba con una
+     key dinámica; acá la key es fija (`compras_vap_prod`, se comparte
+     entre modos a propósito para que el producto sobreviva el cambio de
+     Ver) y en cambio se corrige el VALOR antes de que el widget lo lea.
+
+     **Al remover "Cantidad vs año pasado" de la categoría "Cantidad"
+     del rail, la categoría quedaba vacía** (era su único ítem) — se
+     borró la categoría entera en vez de dejarla con cabecera y sin
+     botones. El nuevo ítem único "Vs año pasado" pasó a la categoría
+     "Precios", que ya tenía sitio (le quedó "Volatilidad" al lado).
+
+     **No se pudo verificar por UI el caso "(Todos)" → cambiar a
+     Precio"** en el navegador de este entorno: el combobox de
+     `st.selectbox` (BaseWeb Select) no respondió ni a `type` + Enter ni
+     a `form_input` — el valor tipeado se queda en el input sin
+     confirmarse como selección real (mismo tipo de fricción de
+     automatización que host los clics en canvas, pero acá aplica a un
+     `<input>` normal, no a un canvas). Se verificó por lectura de
+     código en cambio: la guarda corre siempre, antes de construir el
+     widget, sin condición que la salte. **Falta un smoke test manual
+     real después de deployar**: en modo Cantidad elegir "(Todos)",
+     cambiar a Precio, confirmar que no revienta y cae a un producto
+     real.
