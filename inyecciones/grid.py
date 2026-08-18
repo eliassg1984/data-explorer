@@ -608,7 +608,11 @@ def inject_filtros_grid(modelo, sello):
                 d.id = AVISO_ID;
                 d.textContent = 'Los filtros no se aplicaron a la tabla. '
                               + 'Recarga la pagina (F5).';
-                d.style.cssText = 'position:fixed;z-index:2147483647;top:8px;'
+                /* El top se cuenta bajo la franja de navegación superior
+                   (--nav-top-alto, 0 en móvil): si no, el aviso queda
+                   escondido detrás de ella. */
+                d.style.cssText = 'position:fixed;z-index:2147483647;'
+                    + 'top:calc(var(--nav-top-alto) + 8px);'
                     + 'left:50%;transform:translateX(-50%);background:#b3261e;'
                     + 'color:#fff;padding:8px 16px;border-radius:8px;'
                     + 'font:500 13px system-ui,sans-serif;'

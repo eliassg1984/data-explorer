@@ -60,7 +60,10 @@ CSS = """    <style>
            Gráficos/Tabla salieron de la banda al canvas, así que la altura
            baja de 104px (2 niveles) a ~50px (1 nivel). Ajustable en preview. */
         --cab-altura: 50px;
-        --cab-nivel1-top: 30px;
+        /* 30px hasta el 2026-08-18. La franja ya no arranca en el borde de
+           la ventana: encima de ella vive la barra de navegación superior,
+           así que su anclaje se corre --nav-top-alto (30 + 40 = 70). */
+        --cab-nivel1-top: 70px;
         --cab-nivel2-top: 52px;   /* legacy: ya no hay nivel 2 en la banda */
         /* 58px hasta el 2026-08-14. Medido en el navegador: la franja ocupa
            de y=8 a y=37 (29px reales de controles) y la tarjeta arrancaba en
@@ -69,8 +72,15 @@ CSS = """    <style>
            `-1 * esta variable`, así que se compensa sola) y la tarjeta sube
            14px. Queda un respiro de ~21px entre chips y tarjeta.
            Si se toca: `_CAB_OFFSET` en graficos/alturas.py cuenta lo mismo y
-           test_graficos.py falla si se desincronizan. */
-        --cab-offset-contenido: 40px;
+           test_graficos.py falla si se desincronizan.
+           2026-08-18: 40 -> 80. El rail de navegación dejó de ser una columna
+           izquierda y pasó a ser la barra superior (--nav-top-alto): sus 40px
+           ya no salen del ANCHO sino del ALTO, y el contenido tiene que
+           arrancar debajo de la barra Y de la franja. Va LITERAL y no
+           calc(var(--nav-top-alto) + 40px) a propósito: test_graficos.py lee
+           esta variable con un regex de `\\d+px` para cotejar el cromo de CSS
+           contra el de graficos/alturas.py, y un calc() lo dejaría ciego. */
+        --cab-offset-contenido: 80px;
 
         /* ==================================================================
            PRESUPUESTO VERTICAL — cuánto mide "una pantalla" de contenido
@@ -103,41 +113,55 @@ CSS = """    <style>
                                  - var(--margen-tarjeta) * 2);
 
         /* ==================================================================
-           BARRA INFERIOR DE NAVEGACIÓN EN MÓVIL (bottom nav)
-           Debe coincidir con NAV_MOVIL_ALTO en navegacion.py (60px).
+           BARRA DE NAVEGACIÓN ENTRE REPORTES — arriba en escritorio, abajo
+           en móvil. Son la MISMA fila de botones (`nav_rail`), reacomodada.
+
+           --nav-top-alto es el alto de la barra superior en escritorio, y la
+           distancia que TODO lo que estaba anclado al borde de arriba se
+           corre hacia abajo: la franja de fecha/chips, sus controles fijos y
+           el rail derecho de vistas. Nadie escribe esos 40px sueltos: se
+           consume la variable con calc().
+
+           En móvil vale 0 (la barra se va abajo, ver _99_movil.py), y así
+           todos esos calc() vuelven solos a los valores de siempre.
            ================================================================== */
+        --nav-top-alto: 40px;
+
+        /* Barra inferior de navegación en móvil (bottom nav).
+           Debe coincidir con NAV_MOVIL_ALTO en navegacion.py (60px). */
         --nav-movil-alto: 60px;
 
         /* ==================================================================
-           ANCHO DE LOS DOS RAILS — única fuente de verdad (2026-08-15)
-           Hasta hoy estos números vivían escritos a mano en seis sitios que
-           se derivaban entre sí: RAIL_ANCHO en navegacion.py (Python), el
-           `left` de la franja inferior, el `padding-right` del contenido, y
-           los anclajes `right` de la fecha, los chips y los atajos. Cambiar
-           uno sin los otros dejaba la franja superior flotando sobre el
-           vacío — es la regla #17, la parte más frágil de este CSS.
+           ANCHO DEL RAIL DERECHO — única fuente de verdad (2026-08-15)
+           Hasta entonces estos números vivían escritos a mano en sitios que
+           se derivaban entre sí: el `left` de la franja inferior, el
+           `padding-right` del contenido, y los anclajes `right` de la fecha,
+           los chips y los atajos. Cambiar uno sin los otros dejaba la franja
+           superior flotando sobre el vacío — es la regla #17, la parte más
+           frágil de este CSS.
 
            Ahora son variables y todo lo demás las deriva con calc(), que es
-           lo que hace posible plegarlos: plegar = REDEFINIR estos valores
-           (lo hace `_25_rails_pestillo.py` cuando encuentra el marcador que
-           deja Python al estar el pestillo echado). Nadie más los escribe.
+           lo que hace posible plegarlo: plegar = REDEFINIR estos valores (lo
+           hace `_25_rails_pestillo.py` cuando encuentra el marcador que deja
+           Python al estar el pestillo echado). Nadie más los escribe.
 
-             --rail-izq-w    ancho VIGENTE del rail de navegación; es también
-                             el margen izquierdo de la app y el `left` de la
-                             franja inferior y del topbar.
-             --rail-izq-full ancho desplegado (constante, lo usa el hover)
+           2026-08-18: el rail IZQUIERDO (navegación) ya no existe —es la
+           barra superior, --nav-top-alto— así que --rail-izq-w y
+           --rail-izq-full se retiraron. Lo que reservaba en ancho (90px) lo
+           recuperó el contenido: los anclajes `left` de la franja se
+           recalcularon restando esos 90px (_40_ajuste_franja.py,
+           _50_fecha.py) y la franja inferior arranca en 0.
+
              --rail-der-w    ancho VIGENTE del rail de vistas
              --rail-der-full ancho desplegado
-             --rail-min      ancho de la lengüeta cuando un rail está plegado
+             --rail-min      ancho de la lengüeta cuando está plegado
              --rail-der-res  lo que el CONTENIDO le reserva al rail derecho.
                              Derivado, no escrito: ancho + los 15px que lo
                              despegan del borde + 54px de aire hasta la
                              tarjeta (84 + 15 + 54 = 153, el valor histórico).
            ================================================================== */
-        --rail-izq-full: 90px;
         --rail-der-full: 84px;
         --rail-min: 24px;
-        --rail-izq-w: var(--rail-izq-full);
         --rail-der-w: var(--rail-der-full);
         --rail-der-res: calc(var(--rail-der-w) + 15px + 54px);
     }
@@ -211,14 +235,12 @@ CSS = """    <style>
         background: var(--bg-primary);
     }
 
-    /* html/body de fondo: navegacion.py corre el rail con margin-left en
-       .stApp, así que la columna reservada (0 a RAIL_ANCHO) queda FUERA de
-       la caja de .stApp — ahí no llega el background de stAppViewContainer
-       de arriba, cae al fondo por defecto del navegador. Con el rail ahora
-       separado del borde superior/inferior (RAIL_TOP en navegacion.py,
-       altura auto) esa columna se ve en los huecos por encima y por debajo
-       de la tarjeta del rail, y sin esto se veía blanca en vez del lienzo
-       gris. Ver arquitectura.md — nav_rail. */
+    /* html/body de fondo: hasta el 2026-08-18 `.stApp` llevaba un
+       `margin-left` del ancho del rail, así que esa columna quedaba FUERA de
+       su caja y sin el background de stAppViewContainer. Ya no hay rail
+       lateral (es la barra superior), pero el fondo se mantiene: sigue
+       cubriendo cualquier borde que quede fuera de la caja de .stApp.
+       Ver arquitectura.md — nav_rail. */
     html, body {
         background: var(--bg-primary) !important;
     }

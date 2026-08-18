@@ -10,7 +10,10 @@ CSS = """    /* ================================================================
     .stApp::after {
         content: "" !important;
         position: fixed !important;
-        left: var(--rail-izq-w) !important;   /* sigue al rail (_00_base) */
+        /* 2026-08-18: seguía al rail izquierdo (var(--rail-izq-w)). Ese
+           rail es hoy la franja superior, así que la franja inferior
+           arranca en el borde de la ventana. */
+        left: 0 !important;
         right: 0 !important;
         bottom: 0 !important;
         /* El px vivía suelto aquí; desde 2026-08-13 es una variable porque

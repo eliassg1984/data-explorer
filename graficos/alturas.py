@@ -63,7 +63,11 @@ VIEWPORT_OBJETIVO = 657
 # navegador — 37px entre el último chip de la franja y el borde de la tarjeta,
 # 24px de reserva inferior sobre una franja que mide 42. El presupuesto sube
 # de 501 a 533px sin que se mueva ni un control de sitio.
-_CAB_OFFSET = 40    # padding-top del block-container   (_00_base.py, --cab-offset-contenido)
+# 2026-08-18: 40 -> 80. El rail de navegación dejó de comerse 90px de ANCHO a
+# la izquierda y pasó a comerse 40px de ALTO arriba (la franja superior,
+# --nav-top-alto). Las tarjetas ganaron ancho y perdieron ese alto: el
+# presupuesto vertical baja de 553 a 513px.
+_CAB_OFFSET = 80    # padding-top del block-container   (_00_base.py, --cab-offset-contenido)
 _MARGEN_SUP = 8     # margen del bloque hasta la tarjeta (Streamlit)
 _FRANJA_INF = 48    # padding-bottom que reserva la franja (_90_franja_inferior.py)
 _MARGEN_INF = 8     # margen bajo la tarjeta             (Streamlit)

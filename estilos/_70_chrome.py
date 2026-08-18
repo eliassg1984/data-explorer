@@ -25,21 +25,26 @@ CSS = """    /* ================================================================
     }
 
     /* =================================================================== */
-    /* POSICIÓN DEL TOAST (st.toast) — junto al rail (RAIL_ANCHO=90px+10)   */
+    /* POSICIÓN DEL TOAST (st.toast) — abajo a la izquierda                 */
+    /* 2026-08-18: 100px -> 16px. Los 100 eran el ancho del rail izquierdo  */
+    /* (90) + 10 de aire, para que el toast no le cayera encima. El rail    */
+    /* es hoy la franja superior, así que esa esquina quedó libre y el      */
+    /* toast se pega al borde como cualquier otro.                          */
     /* =================================================================== */
     div[data-testid="stToastContainer"] {
-        left: 100px !important;
+        left: 16px !important;
         right: auto !important;
         bottom: 16px !important;
         top: auto !important;
     }
 
     /* =================================================================== */
-    /* AVISO DE REFRESCO EN CURSO — flotante junto al botón del rail        */
+    /* AVISO DE REFRESCO EN CURSO — flotante abajo a la izquierda           */
+    /* Mismo `left` que el toast, por el mismo motivo (ver arriba).         */
     /* =================================================================== */
     .st-key-aviso_refresco {
         position: fixed !important;
-        left: 100px !important;
+        left: 16px !important;
         bottom: 16px !important;
         max-width: 320px !important;
         z-index: 999997 !important;

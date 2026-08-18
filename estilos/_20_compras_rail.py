@@ -25,8 +25,12 @@ CSS = """    /* ================================================================
            2026-08-13: 66px -> 74px, a pedido (seguía viéndose pegado a la
            franja superior). Los 3 números acoplados (este top, el
            max-height de abajo, y los margin-top negativos de las tarjetas
-           más abajo en este archivo) se corrieron los mismos 8px juntos. */
-        top: 74px !important;
+           más abajo en este archivo) se corrieron los mismos 8px juntos.
+           2026-08-18: los 74px pasan a contarse DESPUÉS de la barra de
+           navegación superior (--nav-top-alto), que también es fija y le
+           caería encima. En móvil la variable vale 0 y la cuenta vuelve a
+           los 74 de siempre. */
+        top: calc(var(--nav-top-alto) + 74px) !important;
         right: 15px !important;            /* despega del scrollbar del navegador */
         /* El ancho es VARIABLE desde el 2026-08-15 (pestillo, ver
            _25_rails_pestillo.py). Hasta esa fecha había DOS `width` en este
@@ -44,7 +48,7 @@ CSS = """    /* ================================================================
            tantas vistas que no entran (activa el overflow-y:auto de abajo
            en vez de desbordar). */
         height: auto !important;
-        max-height: calc(100vh - 74px) !important;
+        max-height: calc(100vh - var(--nav-top-alto) - 74px) !important;
         z-index: 900 !important;
         overflow-y: auto !important;
         margin: 0 !important;
@@ -107,35 +111,36 @@ CSS = """    /* ================================================================
        proveedor.py (ranking-tabla + evolución; nació pensado para 3 —
        ranking, tabla y evolución separadas — antes de que las dos
        primeras se unieran en una sola tabla el mismo día) entren sin
-       apretarse. Medido en vivo (preview local, getBoundingClientRect): el
-       reservado a cada lado (170px izq / 163px der, ver el docstring de
-       estilos/_40_ajuste_franja.py) es MÁS de lo que hace falta para no
-       pisar los rails — el rail izquierdo termina en x=90 (deja 80px de
-       sobra) y el derecho empieza a `--rail-der-res` del borde (deja 64px
-       de sobra). Estos números son PX FIJOS, no dependen del viewport (los
-       rails tampoco), así que valen igual en cualquier ancho de escritorio.
-       Se come la sobra dejando ~20px de aire a cada rail:
-         margin-left  -60px  (170 -> 110, a 20px del rail izq. en x=90)
-         width       +104px  (60 del izq. + 44 del der., hasta ~20px del
+       apretarse. Medido en vivo (preview local, getBoundingClientRect): lo
+       reservado a cada lado es MÁS de lo que hace falta para no pisar el
+       rail derecho, que empieza a `--rail-der-res` del borde (deja 64px de
+       sobra). Son PX FIJOS, no dependen del viewport, así que valen igual
+       en cualquier ancho de escritorio.
+       2026-08-18, al retirarse el rail izquierdo: el jalón izquierdo era
+       -60px y estaba medido contra ese rail (la tarjeta arrancaba en 170 e
+       iba a 110, a 20px del rail que terminaba en x=90). Sin rail, la
+       tarjeta arranca ~90px más a la izquierda y ese mismo -60 la dejaba en
+       x=20, descolgada de todo lo demás. Ahora el jalón es -16px, que la
+       alinea con el borde izquierdo de los chips de la franja (x=64,
+       _40_ajuste_franja.py) en vez de con un rail que ya no está.
+         margin-left  -16px  (80 -> 64, la línea de los chips)
+         width        +60px  (16 del izq. + 44 del der., hasta ~20px del
                               rail der.)
-       Si algún día cambian los anchos de rail (--rail-izq-full /
-       --rail-der-full) hay que volver a medir estos dos números.
        `max-width` es OBLIGATORIO acá: Streamlit le pone a este mismo nodo
        `max-width:100%` en su propio CSS emotion (sin !important, pero como
        nuestro `width` de abajo tampoco lo pisaba, el ancho quedaba
        clampeado de vuelta a 1107px — medido en vivo, el `width` de acá NO
        alcanzaba solo).
-       min-width:901px es OBLIGATORIO: bajo 768px `nav_rail` (navegacion.py)
-       deja de ser rail izquierdo y pasa a barra inferior — sin este guard,
-       el margin-left:-60px empuja la tarjeta 60px fuera del viewport en
-       móvil (no hay rail del que despegarla). 901 y no 769 para quedar del
-       mismo lado que el breakpoint de compras_tabs_row (arriba, max-width:
-       900px) y no abrir una franja 769-900px sin decidir. */
+       min-width:901px es OBLIGATORIO: en móvil el padding del contenedor es
+       otro y el jalón negativo empuja la tarjeta fuera del viewport. 901 y
+       no 769 para quedar del mismo lado que el breakpoint de
+       compras_tabs_row (arriba, max-width: 900px) y no abrir una franja
+       769-900px sin decidir. */
     @media (min-width: 901px) {
         [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap {
-            margin-left: -60px !important;
-            width: calc(100% + 104px) !important;
-            max-width: calc(100% + 104px) !important;
+            margin-left: -16px !important;
+            width: calc(100% + 60px) !important;
+            max-width: calc(100% + 60px) !important;
         }
     }
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_"] {

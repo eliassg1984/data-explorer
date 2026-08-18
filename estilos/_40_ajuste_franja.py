@@ -103,8 +103,13 @@ CSS = """    /* ================================================================
     }
     .st-key-fila_ajuste_top::before {
         content: "" !important;
+        /* 2026-08-18: top:0 -> var(--nav-top-alto). La franja ya no toca el
+           borde de la ventana: encima vive la barra de navegación superior
+           (navegacion.py). En móvil la variable vale 0 y la franja vuelve
+           sola al tope, que es donde tiene que estar (allá la navegación
+           está abajo). */
         position: fixed !important;
-        top: 0 !important;
+        top: var(--nav-top-alto) !important;
         bottom: auto !important;
         /* 2026-08-09: de tarjeta colgante (left:170/right:163, alineada con
            la tarjeta del gráfico) a BARRA de borde a borde. left:90px = el
@@ -185,16 +190,20 @@ CSS = """    /* ================================================================
     /* Ajuste valor.  Nivel 2, a la derecha del selector de vista.         */
     /* ================================================================== */
     /* Filtros Familia / Subfamilia en el NIVEL 1: pegados a la IZQUIERDA,
-       alineados con el borde izquierdo de la TARJETA (no del rail). El
-       block-container tiene padding-left ~60px encima del rail (90px),
-       de ahi los ~154px. La fecha se ancla al lado derecho (más abajo). */
+       alineados con el borde izquierdo de la TARJETA. Son los ~64px de
+       padding-left que el block-container se pone solo.
+       2026-08-18: 154 -> 64. Los 154 llevaban dentro los 90px que el rail
+       izquierdo reservaba en ancho; ese rail es hoy la franja superior y no
+       reserva nada, así que TODOS los `left` de la franja bajaron 90px
+       (aquí y en _50_fecha.py). El `top` se corre --nav-top-alto por la
+       misma razón, pero al revés: lo que perdió en ancho lo ganó en alto. */
     .st-key-chips_ajuste_tabla {
         position: fixed !important;
-        top: 8px !important;
-        left: 154px !important;
+        top: calc(var(--nav-top-alto) + 8px) !important;
+        left: 64px !important;
         right: auto !important;
         width: auto !important;
-        max-width: calc(100vw - 154px - 380px) !important;   /* deja aire para la fecha derecha */
+        max-width: calc(100vw - 64px - 380px) !important;   /* deja aire para la fecha derecha */
         z-index: 23 !important;
         margin: 0 !important;
         padding: 0 !important;

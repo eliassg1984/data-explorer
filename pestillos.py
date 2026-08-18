@@ -1,12 +1,17 @@
 """
-pestillos — el estado de los dos rails plegables, con un solo dueño.
+pestillos — el estado del rail plegable, con un solo dueño.
 
-La app tiene dos rails fijos: el de NAVEGACIÓN a la izquierda
-(`navegacion.py`, key `nav_rail`) y el de VISTAS a la derecha
-(`graficos/base.py::_render_rail`, key `compras_tabs_row`). Entre los dos
-se comen ~240px de ancho que la tarjeta principal no puede usar. Este
-módulo es el interruptor: guarda si cada uno está plegado, dibuja su
-pestillo y deja en el DOM el marcador que el CSS necesita para verlo.
+La app tiene un rail fijo: el de VISTAS a la derecha
+(`graficos/base.py::_render_rail`, key `compras_tabs_row`), que se come
+~150px de ancho que la tarjeta principal no puede usar. Este módulo es el
+interruptor: guarda si está plegado, dibuja su pestillo y deja en el DOM
+el marcador que el CSS necesita para verlo.
+
+Hasta el 2026-08-18 los rails eran DOS: el de navegación vivía a la
+izquierda y también se plegaba. Hoy es la franja horizontal superior
+(`navegacion.py`) — una barra que no compite por el ancho de la tarjeta no
+tiene nada que recuperar plegándose, así que perdió su pestillo y este
+módulo quedó con un solo lado.
 
 Mismo patrón que `estado_rango.py` con el eje temporal: el estado tiene UN
 dueño y nadie escribe sus claves de `session_state` por fuera.
@@ -36,9 +41,9 @@ Es el patrón de VS Code / Notion: mirar es gratis, mover cuesta un clic.
 
 EL MARCADOR
 -----------
-`marcar()` emite un `<style class="rail-izq-plegado">` VACÍO. No lleva
+`marcar()` emite un `<style class="rail-der-plegado">` VACÍO. No lleva
 reglas: es una bandera para que el CSS de `estilos/_25_rails_pestillo.py`
-la encuentre con `:has()` y redefina `--rail-izq-w`. Se eligió un `<style>`
+la encuentre con `:has()` y redefina `--rail-der-w`. Se eligió un `<style>`
 y no un `<div>` porque su contenedor lo esconde una regla que ya existía
 (`navegacion.py`, "colapsar los contenedores invisibles"), así que el
 marcador no aporta ni un píxel de alto al bloque donde caiga.
@@ -46,10 +51,9 @@ marcador no aporta ni un píxel de alto al bloque donde caiga.
 
 import streamlit as st
 
-IZQ = "izq"
 DER = "der"
 
-_CLAVE = {IZQ: "_rail_izq_plegado", DER: "_rail_der_plegado"}
+_CLAVE = {DER: "_rail_der_plegado"}
 
 
 def plegado(lado):
@@ -78,12 +82,9 @@ def pestillo(lado, key):
     al plegarse queda él como única cosa visible (la lengüeta).
 
     El chevron apunta a dónde va a ir el rail si lo pulsas, no a dónde
-    está: plegado el izquierdo, apunta a la derecha (= "sácame")."""
+    está: abierto el derecho, apunta a la derecha (= "guárdame")."""
     abierto = not plegado(lado)
-    if lado == IZQ:
-        icono = "chevron_left" if abierto else "chevron_right"
-    else:
-        icono = "chevron_right" if abierto else "chevron_left"
+    icono = "chevron_right" if abierto else "chevron_left"
     st.button(
         f":material/{icono}:",
         key=key,

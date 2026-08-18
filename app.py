@@ -639,11 +639,11 @@ with _fila_top:
             # Recorrer conteo por conteo sin abrir el panel: es EL gesto de
             # "revisar los últimos inventarios".
             #
-            # Vive en un contenedor propio anclado a `right: 138px` (el
-            # hueco que dejó libre el pill al mudarse a `left: 175px` en
-            # desktop) y NO dentro de `fecha_ajuste_pill`: ese pill tiene
-            # ancho FIJO de 210px y los chips se anclan a `left: 391px` =
-            # 175 + 210 + 6. Meter dos botones ahí adentro rompe esa
+            # Vive en un contenedor propio anclado a la derecha (el hueco
+            # que dejó libre el pill al mudarse a la izquierda en desktop) y
+            # NO dentro de `fecha_ajuste_pill`: ese pill tiene ancho FIJO de
+            # 210px y los chips se anclan a `left: 301px` =
+            # 85 + 210 + 6. Meter dos botones ahí adentro rompe esa
             # aritmética de tres números acoplados (ver estilos/_50_fecha.py).
             # Como el stepper solo existe con un corte activo, aparecer y
             # desaparecer no mueve nada de lo demás.

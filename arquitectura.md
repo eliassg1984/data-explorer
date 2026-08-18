@@ -25,7 +25,7 @@ actualiza este documento en el mismo commit.
 | `tablas/` | **Paquete de tablas AgGrid** (refactor 2026-08-01; antes un `tablas.py` de 2.028 líneas). `__init__.py` re-exporta la API pública. `_css.py` (CSS de grid y paneles), `_config.py` (estilos de celda/fila, sidebar, totales), `desktop.py` (`renderizar_aggrid_desktop`), `movil.py` (`renderizar_aggrid_movil`), `compras.py` (`renderizar_aggrid_compras`), `ajuste_pivote.py` (`renderizar_aggrid_pivote_ajuste`, tabla "Por fecha" de Ajuste de Inventario — ver regla #25). `renderizar_tabla_compras` se borró el 2026-08-08 (llevaba desde 2026-08-01 sin llamadores). |
 | `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `tiene_dashboard(reporte)` (para que `app.py` no enumere reportes ni importe `_DASHBOARDS`; ver regla #50). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), **`ajuste/` es un paquete** (refactor 2026-08-08; antes un `ajuste.py` de 2.607 líneas — el fichero con MÁS churn del repo, 80 de los últimos 200 commits): una vista por módulo — `_comun.py` (layout del rail, fechas de corte, periodos), `_evolucion.py`, `_pivote.py`, `_cascada.py`, `_panel_analisis.py`, `_heatmap.py`, `_distribucion.py` — y `__init__.py` con la config del rail, `categoria_rango_ajuste` y el entry point. Ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10, `ventas.py` (`ventas_resumen.py` aporta su vista "Resumen ejecutivo" — KPIs + venta diaria coloreada por tendencia + ticket promedio + top platos; nació con un candlestick, ver por qué se dio de baja en la regla #85) y `ventas_comparativo.py` (vista "Año Pasado": barras agrupadas Actual vs Año Pasado en día/semana/mes, con toggle de alineación fecha-calendario / día-de-semana en día, feriados y findes marcados, recorte del período en curso, modo "Descomposición" (%Δ venta/pax/ticket en un solo eje) y drill por clic al ranking de platos del período — ver reglas #86, #87 y #88), **`ventas_horario.py`** (2026-08-14, vista "Por hora": mapa de calor día × hora de hasta 4 períodos comparados en franjas, marcas rectangulares por arrastre —una por panel tocado—, drill con medidas a elección y árbol Grupo › Sub Grupo › Plato › **Tipo de descuento**; reusa los helpers de calendario de `ventas_comparativo` en vez de duplicarlos y sólo agrega la granularidad Año — ver reglas #112 a #115. Abre SIEMPRE en el período EN CURSO (uno solo: comparar es explícito y tiene su botón), recortado al último día con datos; los períodos a comparar NO tienen que ser consecutivos ni recientes — la lista es el atajo y el `date_input` abre el calendario entero. El eje de horas va en am/pm, y en el eje de días los fines de semana van en negro y los feriados en ámbar, con el MISMO calendario `_feriados_peru` que pinta las bandas de la vista Año Pasado), `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras). **`recetas_comun.py`** (2026-08-13) tiene la ÚNICA copia de los 5 gráficos que comparten Receta Base y Receta Venta (Sankey/Composición/Ranking/Ítems clave/Panorama de compras) más `_activo()` y `_chip_fuente()` — ver regla #97. `recetabase.py` y `recetaventa.py` son capas finas sobre ese módulo: resuelven columnas reales + llaman a lo compartido. `requerimientos.py` (2026-08-13, dashboard nuevo: evolución + sub almacén + estado, mismo layout que `salidas.py`) y **`movimientos_comun.py`** (chip Requerimiento/Salidas + vista "Comparativo" que cruza los dos parquets — ver regla #98) comparten nav ("Movimientos") con `salidas.py`. `legacy.py` (Inventario v1) se borró el 2026-08-08: 421 líneas sin un solo import. **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `producto.py` (2026-08-17, reemplaza a "Precio top 10" + "Precio por compra" + `cantidad.py`/"Cantidad por producto", que se borraron ese día: ranking de TODOS los productos —valor, cantidad, UM, precio real de inicio/fin de período y su variación— con el mismo patrón tabla-ranking + clic-para-enfocar que `proveedor.py`; el producto en foco muestra su evolución con un selector de texto plano Precio/Cantidad/Valor × Semana/Mes/Año que fusiona el promedio del período con el precio real de cada compra en un solo gráfico; debajo, un segundo ranking agrupa por Familia con mini ranking al clic — ver regla #128), `volatilidad.py` (`evolucion.py` —la vista "Evolución prov." del rail— se borró el 2026-08-16 a pedido: 377 líneas que quedaron sin un solo import al sacar la dimensión del rail; su pregunta la responde ahora el gráfico de evolución que vive DENTRO del drill de Proveedor) (ranking de insumos por volatilidad de precio → candlestick semanal → compras de la semana clickeada; ver regla #74) — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. `_COMPRAS_RAIL_CATEGORIAS` movió "Producto" a la categoría Dimensión (junto a Proveedor): al cubrir precio+cantidad+valor a la vez ya no es una vista de "Precios". El drill "Familia" (Familia→Subfamilia→productos) se eliminó el mismo día por redundante con el ranking por Familia que ya trae Producto — ver regla #129. El drill de Proveedor se siguió partiendo el 2026-08-08 (era una función de 1.577 líneas): `_css_proveedor.py` (sus 527 líneas de CSS, que NO van a `estilos/` a propósito — ver su docstring), `_etiquetas_proveedor.py` (texto de las barras: `fmt_k`, `abrev_nombre`, `etiqueta_serie`, `sufijo_granularidad`; puras y con asserts de valor en `test_graficos.py`) y `_documentos_proveedor.py` (`tabla_documentos`, la AgGrid pivote del pie). Quedó en 791 líneas; el resto NO se siguió cortando a propósito — ver regla #55. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
 | `estilos/` | **Paquete del CSS global** (refactor 2026-08-01; antes un `estilos.py` de 1.700 líneas). `__init__.py` mantiene la API pública (`TAM_FUENTE`, `get_css`, `inject_css`) y concatena las secciones. Una sección por módulo, con prefijo numérico que marca el orden: `_00_base`, `_20_compras_rail`, `_30_filtros`, `_40_ajuste_franja`, `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`, `_90_franja_inferior`, `_99_movil`. (`_10_vista` existió hasta el 2026-08-08: estilaba el selector Gráficos/Tabla y quedó 100% huérfano al borrarse ese widget — ver regla #49.) **El orden de `_SECCIONES` es parte del comportamiento**: hay `!important` en ambos lados de varios conflictos, así que gana la regla que va DESPUÉS — por eso `_99_movil` cierra. |
-| `navegacion.py` | Rail lateral, topbar y CSS por sección (`_CSS_AJUSTE`). Botón de refresco aislado en su propio `@st.fragment`. |
+| `navegacion.py` | **Franja horizontal superior de navegación** (solo texto, 40px, `--nav-top-alto`) + el CSS de la cabecera fija (`_CSS_AJUSTE`, se inyecta en TODOS los reportes). Botón de refresco aislado en su propio `@st.fragment`, al extremo derecho de la franja. En móvil la misma fila se va abajo (bottom nav). Fue rail lateral de 90px con íconos hasta el 2026-08-18 — ver regla #132. |
 | `inyecciones/` | **Paquete de JS/HTML inyectado** (refactor 2026-08-01; antes un `inyecciones.py` de 1.813 líneas). `_fragmentos.py` (CSS/JS compartido), `grid.py` (salud, altura, maximizar, panel de columnas), `paginacion.py`, `inspector.py` (herramienta de desarrollo), `diseno.py` (modo de diseño visual, `?debug=1&diseno=1` — lee el pin de `inspector.py`, ver regla #46), `varios.py` (overlay de errores, fullscreen, footer, calendario). Los dos blobs de JS grandes viven aparte desde el 2026-08-08: `_inspector_js.py` (1.381 líneas) y `_diseno_js.py` (794). Sus funciones quedaron en 34 y 5 líneas. **Si tocas esos módulos, lee antes la regla #56** — extraerlos rompió el inspector de una forma que ni `ruff` ni los tests pueden ver. Ninguna función depende de otra (la excepción de solo-lectura de `diseno.py` está documentada en la regla #46): las únicas dependencias internas apuntan a las constantes de `_fragmentos.py`. |
 | `asistente.py` | **Asistente IA del reporte activo** (Groq, `gpt-oss-120b`): system prompt, bucle de tool calling y la UI del popover (ícono en la franja + panel de chat). Su CSS vive en `estilos/_85_asistente.py`, NO acá — ver regla #59. Accesorio por diseño: `app.py` lo envuelve en try/except para que un fallo suyo no tumbe el reporte. |
 | `asistente_datos.py` | **Capa de datos del asistente, sin LLM ni UI**: esquema para el prompt (`esquema_para_prompt`, incluye los VALORES de las categóricas), ejecución de SQL de solo lectura sobre el df en memoria con DuckDB (`ejecutar_sql`, con blocklist + guarda de columnas con espacios sin comillas) y las definiciones de herramientas. Es Python puro: se testea entero sin API key ni navegador (`test_asistente_datos.py`). Ver regla #69. |
@@ -109,7 +109,7 @@ salvo `icono`):
 | Clave | Tipo | Efecto |
 |---|---|---|
 | `archivo` | str | Nombre del parquet en R2. Sin esta clave, el reporte es una herramienta (`tool`). |
-| `icono` | str | Nombre Bootstrap del icono; `navegacion.py` lo traduce a Material Symbols. |
+| `icono` | str | Nombre Bootstrap del icono. La navegación NO lo usa desde el 2026-08-18 (la franja superior es solo texto, regla #132); queda como parte de la identidad del reporte. |
 | `tool` | bool | Si `True`, `app.py` delega a `inspector.py` en vez de intentar cargar un parquet. |
 | `columnas` | list | Columnas a mostrar (en orden). Si no existe, se muestran todas. |
 | `filtros_cat` | list | Columnas categóricas que aparecen como multiselect en el popover de filtros. |
@@ -5436,3 +5436,77 @@ salvo `icono`):
      sin excepción. Al borrar el `elif graf == "Vs año anterior"` de
      `__init__.py`, `ACENTO` quedó sin uso ahí (su único consumidor era
      ese bloque) — lo sacó `ruff check`, no una relectura manual.
+
+132. **El rail de navegación dejó de ser una columna izquierda de 90px y
+     pasó a ser una franja horizontal de 40px arriba, solo texto
+     (2026-08-18).** Pedido con referencia concreta (la barra de MSN
+     Dinero) y con el argumento correcto: casi toda webapp de reportes
+     financieros ordena la jerarquía de arriba hacia abajo, no de
+     izquierda a derecha. Los ítems son etiquetas de texto (`label_corto`
+     o el nombre del grupo), sin ícono; el activo se marca con subrayado
+     de acento —el mismo tab-subrayado que ya usan las franjas dentro de
+     las tarjetas (`_80_cards.py`)—, no con píldora.
+
+     **El cambio no es de un archivo, es de un EJE.** Lo que el rail
+     reservaba en ANCHO (90px) pasó a reservarse en ALTO (40px), y todo
+     lo que estaba anclado a un borde se movió:
+
+     - **Los `left` bajaron 90px.** `chips_ajuste_tabla` 154→64,
+       `fecha_ajuste_pill` 175→85, chips desktop 391→301, y la cadena de
+       Ventas › Comparativo (451→361, 667→577). La misma cadena existe
+       DUPLICADA en `graficos/compras/_css_proveedor.py` (título
+       Proveedor 175→85, pill 287→197, chips 503→413): si se toca una,
+       tocar la otra. La franja inferior (`_90`) pasó a `left: 0` y el
+       toast/aviso (`_70`) de 100 a 16.
+     - **Los `top` se corren `var(--nav-top-alto)`.** La banda de
+       `_40_ajuste_franja` (`top: 0` → la variable), los cuatro
+       `top: 8px` de `_50_fecha`, el `prov_pop_float` y el rail derecho
+       de vistas (`top: 74px` → `calc(var(--nav-top-alto) + 74px)`, ídem
+       su `max-height`).
+     - **El presupuesto vertical baja 40px**: `--cab-offset-contenido`
+       40→80 y su gemelo `_CAB_OFFSET` en `graficos/alturas.py`
+       (`PRESUPUESTO` 553→513). La variable va LITERAL, no `calc()`:
+       `test_graficos.py` la lee con un regex de `\d+px`.
+     - **En móvil `--nav-top-alto` vale 0** (`_99_movil.py`) y los seis
+       `calc()` vuelven solos a los valores de siempre, porque allá la
+       barra se va abajo. Un solo override en vez de seis.
+
+     **Lo que se retiró:** `--rail-izq-w` / `--rail-izq-full`, el pestillo
+     izquierdo entero (`_25_rails_pestillo.py` quedó con un solo lado, y
+     `pestillos.py` con una sola constante) — una franja horizontal no le
+     quita ancho a la tarjeta, así que no hay nada que recuperar
+     plegándola — y el `#nav-topbar`, que llevaba tiempo muerto: salía
+     siempre vacío y con `display:none` desde el CSS de la cabecera.
+
+     **Tres trampas medidas en el navegador, ninguna visible en el
+     código:**
+
+     1. **El botón medía lo que su TEXTO, no la franja.** Con `help=`,
+        Streamlit envuelve el botón en `div > span.stTooltipIcon >
+        span.stTooltipHoverTarget` y NINGUNA capa hereda el alto: el
+        botón se quedaba en 14px dentro de una franja de 40, así que el
+        subrayado del activo y el tinte del hover salían como una tira
+        fina a media altura. En el rail vertical no se notaba porque
+        allá el alto lo ponía el propio botón (50px fijos). Hay que
+        estirar las tres capas. El de Refrescar necesita DOS más
+        (`stLayoutWrapper > stVerticalBlock`): vive en un `st.fragment`.
+     2. **La copia fantasma.** Dentro de un mismo `stButton` con `help=`
+        hay DOS hijos: el botón envuelto en el tooltip y una copia
+        suelta. No la esconde nada — medía 0x0 sólo porque su alto salía
+        del contenido. En cuanto la franja le dio alto y ancho
+        explícitos, **cada reporte apareció DOS VECES**, uno al lado del
+        otro. Se oculta con
+        `[data-testid="stButton"]:has(.stTooltipIcon) > div:not(:has(.stTooltipIcon))`.
+     3. **Los `{}` de un f-string.** El CSS de `navegacion.py` vive en un
+        `f"""…"""`, así que toda llave va DOBLE. Un bloque nuevo con
+        llaves simples da `NameError: name 'align' is not defined` al
+        importar — y **ni `ruff` ni los tests lo ven**: `ruff` acepta la
+        f-string y `test_graficos.py` no importa `navegacion`. Lo cazó el
+        log del server. Si se toca ese CSS, levantar la app.
+
+     **Verificado midiendo el DOM** (el preview no compone frames para
+     screenshot, así que se mide, no se mira) en Compras › Proveedor,
+     Ventas y Ajuste a 1366x768, y en 375x812: franja en y=0..40, banda
+     en 40..86, fecha/chips en y=48, rail derecho en y=114, cero scroll
+     horizontal, y el clic entre reportes cambiando el marcador
+     `st-key-app_reporte_*` con el ítem activo correcto.

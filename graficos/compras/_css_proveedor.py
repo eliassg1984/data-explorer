@@ -71,7 +71,7 @@ CSS = """        <style>
            min-width:230px cada uno (el addendum de Compras/Inventario/
            Salidas en estilos/_50_fecha.py). La cuenta del ancho minimo en
            el que entran los cuatro:
-               391 (left de los chips) + 492 (su ancho: 230*2 + 32 de gaps)
+               301 (left de los chips) + 492 (su ancho: 230*2 + 32 de gaps)
                + 12 de aire + 165 (este popover) + 163 (su margen derecho)
                = 1223  ->  se redondea a 1230.
            Abajo de eso cae al fallback de arriba (dentro de la tarjeta),
@@ -83,7 +83,7 @@ CSS = """        <style>
         @media (min-width: 1230px) {
             .st-key-prov_pop_float {
                 position: fixed !important;
-                top: 8px !important;
+                top: calc(var(--nav-top-alto) + 8px) !important;
                 left: auto !important;
                 bottom: auto !important;
                 right: calc(var(--rail-der-res) + 10px) !important;
@@ -95,15 +95,21 @@ CSS = """        <style>
            Familia (2da vuelta: nacio a la derecha del pill y se movio a
            pedido). El pill y los chips se corren para hacerle sitio.
            Cadena de numeros acoplada, medida en vivo:
-             175 = el left original del pill -> ahi va ahora el titulo.
+              85 = el left original del pill -> ahi va ahora el titulo.
              100 = ancho reservado para la palabra "Proveedor" a 14px/700.
-             287 = 175 + 100 + 12 de aire -> nuevo left del PILL.
-             503 = 287 + 210 (ancho fijo del pill) + 6 -> left de los chips.
+             197 = 85 + 100 + 12 de aire -> nuevo left del PILL.
+             413 = 197 + 210 (ancho fijo del pill) + 6 -> left de los chips.
+           2026-08-18: la cadena entera bajo 90px al retirarse el rail
+           izquierdo (hoy franja superior). Los umbrales de @media NO se
+           tocaron: son anchos de viewport, no coordenadas.
            Mover uno descoloca la fila entera. Ojo: el 503 de los chips es
            el MISMO que cuando el titulo estaba a la derecha del pill — el
            ancho total ocupado no cambia, solo el orden — asi que el umbral
            de abajo tampoco se movio:
-             503 + 492 (chips) + 12 + 165 (prov_pop) + 163 = 1335 -> 1340.
+             413 + 492 (chips) + 12 + 165 (prov_pop) + 163 = 1245, pero el
+             umbral se DEJA en 1340: bajarlo es una decision de diseno
+             aparte (mas ancho util no significa que el titulo se lea bien)
+             y este cambio no la toma.
            Los DOS bloques (este y el de prov_pop_float) tienen que entrar
            o salir juntos, si no el titulo se superpondria con unos chips
            que no se corrieron: por eso el `right` de prov_pop_float se
@@ -111,8 +117,8 @@ CSS = """        <style>
            y chips sin correr) siga con su propia cuenta, que ahi da. */
         .st-key-compras_prov_titulo_franja {
             position: fixed !important;
-            top: 8px !important;
-            left: 175px !important;
+            top: calc(var(--nav-top-alto) + 8px) !important;
+            left: 85px !important;
             right: auto !important;
             bottom: auto !important;
             width: 100px !important;
@@ -137,14 +143,14 @@ CSS = """        <style>
                estilos/_50_fecha.py, que ya usa la key duplicada (0,2,0),
                sin depender del orden en que se inyecten los archivos. */
             .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill {
-                left: 287px !important;
+                left: 197px !important;
             }
-            /* Los chips arrancan despues del pill corrido: 287 + 210 + 6.
-               Da el MISMO 503 que antes (el titulo solo cambio de lugar
+            /* Los chips arrancan despues del pill corrido: 197 + 210 + 6.
+               Da el MISMO 413 que antes (el titulo solo cambio de lugar
                dentro de la fila, no agrego ancho). */
             .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
-                left: 503px !important;
-                max-width: calc(100vw - 503px
+                left: 413px !important;
+                max-width: calc(100vw - 413px
                                 - (var(--rail-der-res) - 22px)) !important;
             }
         }

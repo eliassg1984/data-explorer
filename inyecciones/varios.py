@@ -157,7 +157,10 @@ def inject_footer_actualizacion(texto):
         if (!el) {
             el = doc.createElement('div');
             el.id = 'footer-actualizacion';
-            el.style.cssText = 'position:fixed;left:114px;bottom:13px;'
+            /* 114px hasta el 2026-08-18: eran los 90 del rail izquierdo +
+               24 de aire. Retirado el rail (hoy es la franja superior), el
+               texto se alinea con el borde de la ventana. */
+            el.style.cssText = 'position:fixed;left:24px;bottom:13px;'
                 + 'z-index:2147483647;font-size:12px;color:#71717a;'
                 + "font-family:'DM Sans',sans-serif;pointer-events:none;";
             doc.body.appendChild(el);

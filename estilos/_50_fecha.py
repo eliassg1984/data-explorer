@@ -38,7 +38,7 @@ Antes de sumar un reporte nuevo a esta lista: contar cuántos
 agregarlo (ver regla #21 en arquitectura.md).
 
 2026-08-09: los chips dejaron de ir CENTRADOS en el ancho util y pasaron a
-ir pegados a la derecha del pill de fecha (left fijo de 391px). Para que
+ir pegados a la derecha del pill de fecha (left fijo de 301px). Para que
 ese numero sea estable el pill tomo ANCHO FIJO (210px) y el label se
 abrevio en app.py::_fmt_rango_es. Son tres piezas de un mismo cambio — el
 left de los chips, el ancho del pill y el formato del label — y tocar una
@@ -65,9 +65,15 @@ CSS = """    /* ================================================================
     /* alineado con el borde derecho de la tarjeta (padding-right: 138px    */
     /* en Compras). Es el TRIGGER de un popover: atajos + calendario.       */
     /* =================================================================== */
+/* Los `top` de este módulo se cuentan desde el borde INFERIOR de la barra de
+   navegación superior (--nav-top-alto), no desde el de la ventana: la franja
+   de fecha/chips vive debajo de ella desde el 2026-08-18. En móvil la
+   variable vale 0 y estas cuentas vuelven solas a los valores de siempre.
+   Sus `left` bajaron 90px en la misma vuelta — es el ancho que el rail
+   izquierdo reservaba y que ya no existe. */
 .st-key-fecha_ajuste_pill {
     position: fixed !important;
-    top: 8px !important;
+    top: calc(var(--nav-top-alto) + 8px) !important;
     left: auto !important;
     right: calc(var(--rail-der-res) - 15px) !important;  /* borde de la tarjeta */
     width: fit-content !important;
@@ -149,8 +155,8 @@ CSS = """    /* ================================================================
                eso se resta: sin restarlo salen 4px abajo contra 6 arriba y
                el control se ve apretado contra la línea inferior — fue
                justo el bug de la pasada anterior. Ver _40_ajuste_franja.py. */
-            top: 8px !important;
-            left: 175px !important;
+            top: calc(var(--nav-top-alto) + 8px) !important;
+            left: 85px !important;   /* 175 - 90 del rail retirado */
             right: auto !important;
         }
         /* ANCHO FIJO, no fit-content. Los chips se anclan a la derecha del
@@ -224,15 +230,17 @@ CSS = """    /* ================================================================
            ancho útil. El centrado (hasta 2026-08-09) dejaba un hueco muerto
            entre la fecha y los chips que crecía con el monitor — el motivo
            por el que la franja "no se veía" tanto como el fondo blanco.
-           391px = 175px (left del pill) + 210px (su ancho fijo) + 6px de
+           301px = 85px (left del pill) + 210px (su ancho fijo) + 6px de
            aire. Los tres números están acoplados: si cambia el left o el
            ancho del pill, este left cambia también. No hay forma de
            resolverlo con flex: fecha y chips viven en contenedores
            Streamlit distintos (app.py vs. el módulo de cada dashboard) y
-           los dos son position:fixed. */
+           los dos son position:fixed.
+           2026-08-18: la cadena entera bajó 90px (391 -> 301) al retirarse
+           el rail izquierdo. */
         .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
-            top: 8px !important;   /* mismo cálculo que el pill, ver arriba */
-            left: 391px !important;
+            top: calc(var(--nav-top-alto) + 8px) !important;  /* como el pill */
+            left: 301px !important;
             right: auto !important;
             transform: none !important;
             /* Hasta el 2026-08-15 esta cuenta llevaba un sumando más, 255px,
@@ -242,7 +250,7 @@ CSS = """    /* ================================================================
                solapaban entre 901 y 1200px. Los atajos se fueron (están en
                el popover del calendario), así que los chips se quedan con
                ese ancho. */
-            max-width: calc(100vw - 391px
+            max-width: calc(100vw - 301px
                             - (var(--rail-der-res) - 22px)) !important;
         }
         .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
@@ -286,7 +294,7 @@ CSS = """    /* ================================================================
         /* las de adentro hablan igual.                                    */
         /*                                                                 */
         /* El ancho de 210px del pill NO se toca aunque ya no haya         */
-        /* cápsula: los chips siguen anclados a `left: 391px` = 175 + 210  */
+        /* cápsula: los chips siguen anclados a `left: 301px` = 85 + 210   */
         /* + 6. Aplanar el aspecto es gratis; soltar el ancho movería esa  */
         /* aritmética de tres números acoplados.                           */
         /* ============================================================== */
@@ -382,14 +390,14 @@ CSS = """    /* ================================================================
     /* STEPPER DEL CORTE ACTIVO — ‹ 3/8 · 4 días ›                          */
     /* =================================================================== */
     /* Ocupa el hueco de `right: 138px`, que quedó libre cuando el pill de
-       fecha se mudó a `left: 175px` en el bloque de desktop de arriba. NO
+       fecha se mudó a `left: 85px` en el bloque de desktop de arriba. NO
        va dentro de .st-key-fecha_ajuste_pill: ese pill tiene ancho FIJO de
-       210px y los chips se anclan a `left: 391px` (= 175 + 210 + 6). Meter
+       210px y los chips se anclan a `left: 301px` (= 85 + 210 + 6). Meter
        botones ahí adentro rompe esos tres números acoplados.
        Solo se renderiza con un corte activo (app.py), así que aparecer y
        desaparecer no mueve nada más de la franja.
        Oculto por defecto y visible recién a partir de 1400px: entre 901 y
-       1400 los chips (que arrancan en 391px y crecen con el reporte) le
+       1400 los chips (que arrancan en 301px y crecen con el reporte) le
        llegarían encima. Abajo de ese ancho la navegación entre cortes vive
        en el panel, que siempre tiene la lista completa. */
     .st-key-fecha_corte_nav {
@@ -399,7 +407,7 @@ CSS = """    /* ================================================================
         .st-key-fecha_corte_nav {
             display: block !important;
             position: fixed !important;
-            top: 8px !important;
+            top: calc(var(--nav-top-alto) + 8px) !important;
             right: calc(var(--rail-der-res) - 15px) !important;
             left: auto !important;
             width: 176px !important;
@@ -458,12 +466,12 @@ CSS = """    /* ================================================================
     /* PRESENCIA — vía :has() sobre el prefijo de key que arma `_card()`    */
     /* (graficos/base.py: `chartcard_` + key), o sea                       */
     /* `chartcard_ventas_comparativo_<grano>` — alcanza para no tocar el    */
-    /* resto de reportes/vistas. left:175px = el mismo punto donde          */
+    /* resto de reportes/vistas. left:85px = el mismo punto donde           */
     /* arrancaba el pill de fecha antes de este cambio; el pill y los       */
     /* chips se corren a la derecha lo que el título reserva (260px +       */
     /* 16px de aire) SOLO en esta vista — los otros 7 reportes (y el        */
     /* resto de Ventas) no lo ven.                                          */
-    /* Los tres números de abajo (título:260, pill:451, chips:667) son la   */
+    /* Los tres números de abajo (título:260, pill:361, chips:577) son la   */
     /* MISMA cadena acoplada de siempre (ver el bloque de arriba): mover    */
     /* uno sin los otros dos rompe la alineación.                           */
     /* 260px (no 380: el ancho del título más largo) es a propósito — Ventas */
@@ -483,8 +491,8 @@ CSS = """    /* ================================================================
     /* =================================================================== */
     .st-key-ventas_comp_titulo_franja {
         position: fixed !important;
-        top: 8px !important;
-        left: 175px !important;
+        top: calc(var(--nav-top-alto) + 8px) !important;
+        left: 85px !important;   /* 175 - 90 del rail retirado */
         width: 260px !important;
         z-index: 22 !important;
         margin: 0 !important;
@@ -508,12 +516,12 @@ CSS = """    /* ================================================================
         }
         [data-testid="stAppViewContainer"]:has([class*="st-key-chartcard_ventas_comparativo_"])
             .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill {
-            left: 451px !important;   /* 175 (título) + 260 (su ancho) + 16 de aire */
+            left: 361px !important;   /* 85 (título) + 260 (su ancho) + 16 de aire */
         }
         [data-testid="stAppViewContainer"]:has([class*="st-key-chartcard_ventas_comparativo_"])
             .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
-            left: 667px !important;   /* 451 (pill) + 210 (su ancho) + 6, igual que la cuenta base */
-            max-width: calc(100vw - 667px - (var(--rail-der-res) - 22px)) !important;
+            left: 577px !important;   /* 361 (pill) + 210 (su ancho) + 6, igual que la cuenta base */
+            max-width: calc(100vw - 577px - (var(--rail-der-res) - 22px)) !important;
         }
     }
 

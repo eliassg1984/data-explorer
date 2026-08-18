@@ -11,6 +11,18 @@ CSS = """    /* ================================================================
     /* lo pisen los estilos de escritorio definidos arriba.                 */
     /* =================================================================== */
     @media screen and (max-width: 768px) {
+        /* LA BARRA DE NAVEGACIÓN NO ESTÁ ARRIBA: en móvil `nav_rail` se va
+           al pie de la pantalla (bottom nav, navegacion.py). Poniendo la
+           variable en 0 vuelven solos a su sitio los seis `calc()` que en
+           escritorio corren cosas hacia abajo por la franja: la banda
+           blanca (_40_ajuste_franja), el pill de fecha, los chips, el
+           stepper de cortes y el título de Ventas (_50_fecha), y el rail
+           derecho de vistas (_20_compras_rail). Sin esto, cada uno tendría
+           que repetir su override acá. */
+        :root {
+            --nav-top-alto: 0px;
+        }
+
         /* COLAPSAR el hueco fantasma de la franja: en móvil TODO su
            contenido visible (título, pestañas, fecha) es position:fixed,
            así que su altura en el flujo es espacio muerto — y al apilarse
