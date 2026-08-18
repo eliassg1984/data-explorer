@@ -5510,3 +5510,36 @@ salvo `icono`):
      en 40..86, fecha/chips en y=48, rail derecho en y=114, cero scroll
      horizontal, y el clic entre reportes cambiando el marcador
      `st-key-app_reporte_*` con el ítem activo correcto.
+
+133. **Compras › Proveedor perdió el botón "✕ Quitar foco" del ranking
+     (2026-08-18, a pedido): ahora el foco se limpia DESTILDANDO el
+     checkbox de la fila.** El botón existía por una limitación real —
+     reclickear la fila YA seleccionada de un `st.dataframe` no vuelve a
+     disparar `on_select`, porque el valor del widget no cambia y
+     Streamlit no manda rerun (ver regla #128, donde `producto.py` copia
+     este mismo patrón y **conserva** sus botones: el cambio fue sólo en
+     Proveedor). Quitarlo sin más habría dejado el foco sin salida: el
+     drill A/B se abre con el foco y no se cerraría nunca.
+
+     Lo que lo reemplaza es el caso que faltaba procesar. El bloque de
+     "procesar clic ANTES de dibujar" de `graficos/compras/proveedor.py`
+     sólo miraba `if _rows_sel:` (selección con fila). Se le sumó el
+     `elif st.session_state.get("compras_prov_last_click") is not None:`
+     → limpia `compras_prov_focus` / `prodfocus` / `perfocus` /
+     `last_click`. Funciona porque destildar SÍ cambia el valor del
+     widget (`rows: [i]` → `[]`) y por lo tanto sí dispara `on_select` —
+     es exactamente el caso que el reclic de la misma fila no puede
+     producir.
+
+     Efecto lateral aceptado: si Streamlit resetea la selección de la
+     tabla (p. ej. al cambiar chips y remontarse con otros datos), el
+     foco se limpia con ella. Es coherente — si la fila ya no está
+     marcada en la tabla, el drill de abajo no debería seguir abierto
+     apuntándole.
+
+     De paso desaparece el `st.columns([3, 1])` que partía el título:
+     ambas mitades eran `[data-testid="stColumn"]` dentro de
+     `cp_chart_wrap`, y comían el `min-width: 300px !important` que
+     `_css_proveedor.py` pone ahí para que la tabla y la evolución no se
+     apreten. El título "Ranking de proveedores" ahora va a ancho
+     completo, con el mismo `.cp-rank-tit`.

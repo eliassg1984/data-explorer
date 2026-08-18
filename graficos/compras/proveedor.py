@@ -31,8 +31,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
     Tabla-ranking (izq.): un proveedor por fila, ordenados por valor, con
     `ProgressColumn` haciendo de barra. Clic en una fila → selecciona ese
-    proveedor como foco y filtra los paneles A y B de abajo; el botón
-    "✕ Quitar foco" lo limpia. Al lado, la evolución del proveedor elegido.
+    proveedor como foco y filtra los paneles A y B de abajo; destildar el
+    checkbox de esa fila lo limpia. Al lado, la evolución del proveedor
+    elegido.
 
     Panel A: Top N productos comprados al proveedor en foco (valor + cantidad).
     Panel B: proveedores del producto seleccionado en Panel A.
@@ -256,6 +257,18 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     # El período ya no sale de esta tabla (el ranking no
                     # tiene eje de tiempo): lo fija el de evolución.
                     st.session_state["compras_prov_perfocus"]  = None
+    elif st.session_state.get("compras_prov_last_click") is not None:
+        # Selección VACÍA habiendo habido un clic antes = el usuario
+        # DESTILDÓ el checkbox de la fila enfocada. Eso sí cambia el valor
+        # del widget (rows: [i] → []), así que sí llega acá. Es la única
+        # forma de quitar el foco desde que se sacó el botón "✕ Quitar
+        # foco" — reclickear la fila ya seleccionada no dispara nada.
+        st.session_state["compras_prov_last_click"] = None
+        prov_focus = None
+        prod_focus = None
+        st.session_state["compras_prov_focus"]     = None
+        st.session_state["compras_prov_prodfocus"] = None
+        st.session_state["compras_prov_perfocus"]  = None
 
     # ── Tabla-ranking: datos que consume ────────────────────────────────
     # 2026-08-17, a pedido: el ranking se UNE con la tabla resumen — eran
@@ -373,29 +386,16 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             # resto por dentro (scroll nativo de `st.dataframe`).
             _c_tabla, _c_evo = st.columns([1.6, 1], gap="small")
             with _c_tabla:
-                # Título + botón de limpiar foco en la misma fila. Hace
-                # falta un botón explícito (y no solo "clic de nuevo en la
-                # misma fila") porque un `st.dataframe` con selección ya
-                # puesta en una fila NO vuelve a disparar `on_select` si el
-                # usuario reclickea esa MISMA fila — el valor del widget no
-                # cambia, así que Streamlit no manda un rerun. Con el
-                # ranking en barras (versión anterior) sí funcionaba porque
-                # el evento de Plotly SÍ se repetía; con la tabla no.
-                # Verificado en vivo: reclickear la fila enfocada no hace
-                # nada — de ahí el botón explícito.
-                _c_tit, _c_clear = st.columns([3, 1])
-                with _c_tit:
-                    st.markdown('<div class="cp-rank-tit">Ranking de '
-                               'proveedores</div>', unsafe_allow_html=True)
-                with _c_clear:
-                    if st.button("✕ Quitar foco", key="cp_rank_clear_focus",
-                                 disabled=(prov_focus is None),
-                                 width="stretch"):
-                        st.session_state["compras_prov_focus"] = None
-                        st.session_state["compras_prov_prodfocus"] = None
-                        st.session_state["compras_prov_perfocus"] = None
-                        st.session_state["compras_prov_last_click"] = None
-                        st.rerun(scope="fragment")
+                # 2026-08-18, a pedido: el botón "✕ Quitar foco" que vivía
+                # acá (en su propia columna, al lado del título) SE FUE. Lo
+                # reemplaza destildar el checkbox de la fila enfocada, que
+                # sí vacía la selección del `st.dataframe` y por lo tanto sí
+                # dispara `on_select` — el caso que se procesa arriba, en el
+                # `elif not _rows_sel`. Lo que NO funciona, y por eso existía
+                # el botón, es reclickear la MISMA fila ya seleccionada: el
+                # valor del widget no cambia y Streamlit no manda rerun.
+                st.markdown('<div class="cp-rank-tit">Ranking de '
+                            'proveedores</div>', unsafe_allow_html=True)
                 # `ProgressColumn` en "Valor" reemplaza la barra horizontal
                 # que dibujaba Plotly: mismo dato (monto), misma lectura de
                 # longitud-proporcional-al-valor, ahora como celda de tabla.
@@ -666,8 +666,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         return _b[_b["prov"].notna() & (_b["prov"] != "nan")]
 
     # -- Bloque 2: el detalle A/B lo manda el FOCO, no un pestillo. Clic en una
-    #    fila del ranking lo abre; el botón "✕ Quitar foco" (junto al título
-    #    de la tabla-ranking) lo cierra. La tarjeta vive en una funcion local
+    #    fila del ranking lo abre; destildar el checkbox de esa fila lo
+    #    cierra. La tarjeta vive en una funcion local
     #    para NO re-indentar su cuerpo; se llama abajo solo si hay proveedor
     #    en foco.
     def _paneles_card():
