@@ -11,8 +11,9 @@ un dashboard por archivo.
     volatilidad.py    drill de Volatilidad: ranking (AgGrid, tooltip +
                       clic en fila) + candlestick + compras de la semana
     vs_ano_pasado.py  drill "Vs año pasado": Precio o Cantidad de un
-                      producto en comun, cada uno contra su serie del
-                      año pasado
+                      producto en comun, o Valor por Familia (sin
+                      selector), cada uno contra su serie del año
+                      pasado/anterior
 
 Punto de entrada publico: renderizar_graficos_compras (lo consume el
 dispatcher de graficos/__init__.py). Vive aca abajo junto a la config del
@@ -26,7 +27,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from tema import ACENTO, GRIS_BORDE
+from tema import GRIS_BORDE
 from utils import _norm
 from graficos.base import (
     PALETA_CALLAI, _compras_layout, _compras_truncar, _render_rail,
@@ -55,7 +56,6 @@ _COMPRAS_RAIL_CATEGORIAS = (
     ("Precios",   (("Vs año pasado",        "Vs año pasado"),
                    ("Volatilidad",          "Volatilidad"))),
     ("Más",       (("Semanal",              "Semanal"),
-                   ("Vs año anterior",      "Vs año ant."),
                    ("Personalizado",        "Personalizado"),
                    ("Tabla",                "Tabla"))),
 )
@@ -161,7 +161,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     _valor = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
 
     opciones = ["Proveedor", "Producto", "Vs año pasado", "Volatilidad",
-                "Semanal", "Vs año anterior", "Personalizado", "Tabla"]
+                "Semanal", "Personalizado", "Tabla"]
 
     # Rail vertical fijo al borde DERECHO (componente compartido _render_rail):
     # selector de tipo de gráfico agrupado por categoría. El activo se marca
@@ -213,13 +213,14 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                                        col_valor, col_cant, col_um, col_moneda)
         return
 
-    # Vs año pasado: Precio o Cantidad (selector "Ver") de un producto en
-    # común — unifica los dos drills que antes vivían en categorías
-    # separadas del rail (Precios/Cantidad).
+    # Vs año pasado: Precio, Cantidad o Valor (selector "Ver") — unifica los
+    # tres drills que antes vivían separados en el rail (Precios/Cantidad/
+    # Más). Valor es por Familia (col_fam/col_val_aa), sin selector de
+    # producto: era el drill aparte "Vs año anterior".
     if graf == "Vs año pasado":
         with st.container(key="compras_vap_drill_wrap"):
             _compras_vs_ano_pasado_drill(d, col_prod, col_punit, col_cant,
-                                         col_fecha, col_valor)
+                                         col_fecha, col_valor, col_fam, col_val_aa)
         return
 
     col_izq, col_der = st.columns([1.7, 1])
@@ -274,22 +275,6 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                 )
                 fig.update_xaxes(type="category")
                 st.plotly_chart(fig, use_container_width=True, key="compras_g_semanal")
-
-            elif graf == "Vs año anterior" and col_fam and col_val_aa:
-                _vaa = pd.to_numeric(d[col_val_aa], errors="coerce").fillna(0)
-                g = pd.DataFrame({
-                    "fam": d[col_fam].astype(str),
-                    "Este año": _valor, "Año anterior": _vaa,
-                }).groupby("fam").sum().sort_values("Este año", ascending=False)
-                fig = go.Figure()
-                fig.add_bar(x=g.index, y=g["Año anterior"], name="Año anterior",
-                            marker=dict(color=GRIS_BORDE))
-                fig.add_bar(x=g.index, y=g["Este año"], name="Este año",
-                            marker=dict(color=ACENTO))
-                _compras_layout(fig)
-                fig.update_layout(title="Compra por familia: este año vs año anterior",
-                                  barmode="group")
-                st.plotly_chart(fig, use_container_width=True, key="compras_g_vsaa")
 
             else:
                 st.info("No hay columnas suficientes para este gráfico.")

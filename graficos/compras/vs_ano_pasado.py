@@ -1,28 +1,29 @@
 """graficos.compras.vs_ano_pasado - drill "Vs año pasado" de Compras.
 
-Unifica los dos drills que existían antes en categorías separadas del rail
-("Precios › Vs año pasado" y "Cantidad › Vs año pasado") en una sola
-pantalla con un selector Precio/Cantidad — mismo espíritu que
-`graficos/compras/producto.py`, que ya unificó Precio/Cantidad/Valor de
-otro trío de drills viejos en uno solo.
+Unifica TRES drills que antes vivían separados en el rail (categorías
+"Precios"/"Cantidad"/"Más") en una sola pantalla con un selector Precio/
+Cantidad/Valor — mismo espíritu que `graficos/compras/producto.py`, que ya
+unificó Precio/Cantidad/Valor de otro trío de drills viejos en uno solo.
 
-Precio y Cantidad NO comparten granularidad ni lógica a propósito — son
-las mismas dos vistas de antes, solo reunidas bajo un selector y un
-producto en común:
+Los tres modos NO comparten nivel ni granularidad a propósito — son las
+mismas vistas de antes, solo reunidas bajo un selector:
 
-  · Precio: línea de precio REAL por compra (un producto, granularidad
+  · Precio: línea de precio REAL por compra de UN producto (granularidad
     diaria — cada punto es una compra real), contra el precio del año
     pasado ("Precio_unit_ano_anterior", punteado).
-  · Cantidad: barras de cantidad por MES (un producto, o "(Todos)" para
+  · Cantidad: barras de cantidad por MES de un producto (o "(Todos)" para
     sumar todo el rango filtrado), contra la cantidad del año pasado
     ("Cantidad_ano_anterior").
+  · Valor: gasto por FAMILIA (todas a la vez, sin selector de producto —
+    era el drill separado "Vs año anterior"), contra "Valor_ano_anterior".
 
 "(Todos)" solo tiene sentido en Cantidad (sumar cantidad de todos los
 productos es una magnitud real; promediar o sumar PRECIO de productos
 distintos no lo es) — por eso el selector de producto lo oculta en modo
-Precio. Si el usuario tenía "(Todos)" elegido y cambia a Precio, el
-selector cae al primero de la lista en vez de fallar (Streamlit revienta
-si el valor en session_state ya no está en `options`).
+Precio, y Valor no tiene selector de producto en absoluto (es por Familia).
+Si el usuario tenía "(Todos)" elegido y cambia a Precio, el selector cae al
+primero de la lista en vez de fallar (Streamlit revienta si el valor en
+session_state ya no está en `options`).
 """
 
 import pandas as pd
@@ -134,10 +135,38 @@ def _render_cantidad(d, col_prod, col_cant, col_fecha, prod_sel):
     st.plotly_chart(fig, use_container_width=True, key="compras_g_vap_cantidad")
 
 
+def _render_valor(d, col_fam, col_valor, col_val_aa):
+    """Gasto por Familia (todas a la vez) — era el drill separado "Vs año
+    anterior"; se mueve tal cual, sin selector de producto (no aplica)."""
+    if not (col_fam and col_val_aa):
+        st.info("Faltan columnas (Familia o Valor año anterior) para este gráfico.")
+        return
+    _valor = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
+    _vaa = pd.to_numeric(d[col_val_aa], errors="coerce").fillna(0)
+    g = pd.DataFrame({
+        "fam": d[col_fam].astype(str),
+        "Este año": _valor, "Año anterior": _vaa,
+    }).groupby("fam").sum().sort_values("Este año", ascending=False)
+    if g.empty:
+        st.info("Sin datos en el rango.")
+        return
+
+    fig = go.Figure()
+    fig.add_bar(x=g.index, y=g["Año anterior"], name="Año anterior",
+                marker=dict(color=GRIS_BORDE))
+    fig.add_bar(x=g.index, y=g["Este año"], name="Este año",
+                marker=dict(color=ACENTO))
+    _compras_layout(fig, alto=alturas.PROTAGONISTA)
+    fig.update_layout(title="Compra por familia: este año vs año anterior",
+                      barmode="group")
+    st.plotly_chart(fig, use_container_width=True, key="compras_g_vap_valor")
+
+
 @st.fragment
-def _compras_vs_ano_pasado_drill(d, col_prod, col_punit, col_cant, col_fecha, col_valor):
-    """Precio o Cantidad (selector "Ver") de un producto en común, cada uno
-    contra su serie del año pasado."""
+def _compras_vs_ano_pasado_drill(d, col_prod, col_punit, col_cant, col_fecha,
+                                 col_valor, col_fam=None, col_val_aa=None):
+    """Precio, Cantidad o Valor (selector "Ver"): los dos primeros son de un
+    producto en común; Valor es agregado por Familia, sin selector."""
     if not (col_prod and col_fecha and col_valor):
         st.info("Faltan columnas (Producto, Fecha o Valor) para este gráfico.")
         return
@@ -146,9 +175,14 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_punit, col_cant, col_fecha, co
 
     with _card("compras_vap", "Vs año pasado", titulo_arriba=True):
         with st.container(key="compras_vap_modo"):
-            modo = st.pills("Ver", ["Precio", "Cantidad"], default="Precio",
+            modo = st.pills("Ver", ["Precio", "Cantidad", "Valor"], default="Precio",
                             key="compras_vap_modo_pills",
                             label_visibility="collapsed") or "Precio"
+
+        if modo == "Valor":
+            # Por Familia, no por producto: sin selector (ver docstring).
+            _render_valor(d, col_fam, col_valor, col_val_aa)
+            return
 
         _valor = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
         _tops = _valor.groupby(d[col_prod].astype(str)).sum().nlargest(30).index.tolist()

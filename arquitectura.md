@@ -5421,3 +5421,18 @@ salvo `icono`):
      real después de deployar**: en modo Cantidad elegir "(Todos)",
      cambiar a Precio, confirmar que no revienta y cae a un producto
      real.
+
+     **Segunda vuelta, mismo commit tipo: se sumó un tercer modo "Valor"
+     que absorbe al drill separado "Vs año anterior"** (gasto por
+     Familia, sin selector de producto — nunca lo tuvo, porque es
+     agregado). El patrón se repite limpio: `if modo == "Valor": ...
+     return` ANTES de construir el selector de producto — ese selector
+     directamente no se arma en este modo, no se esconde con CSS. Se
+     verificó en el navegador real esta vez (a diferencia del caso
+     "(Todos)" de arriba, clickear pills SÍ respondió a eventos
+     sintéticos): Valor muestra "Compra por familia: este año vs año
+     anterior" con las Familias reales y sin selector; volver a Cantidad
+     restaura el producto que estaba elegido antes de entrar a Valor,
+     sin excepción. Al borrar el `elif graf == "Vs año anterior"` de
+     `__init__.py`, `ACENTO` quedó sin uso ahí (su único consumidor era
+     ese bloque) — lo sacó `ruff check`, no una relectura manual.
