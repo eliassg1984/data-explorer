@@ -21,10 +21,11 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from tema import ACENTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO, LAVANDA_FONDO
+from tema import ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO
 from graficos.base import _card, _compras_layout, _compras_truncar, _slug
 from graficos.compras._comun import _first_point
 from graficos import alturas
+from tablas.compras_volatilidad import renderizar_ranking_volatilidad
 
 MIN_SEMANAS = 4          # con menos, un candlestick no dice nada
 MAX_SEMANAS = 8          # tope de velas visibles — más se vuelve ilegible y
@@ -144,38 +145,6 @@ def _vol_detalle_producto(d, prod, col_prod, col_punit, col_fecha, col_prov,
     return weeks
 
 
-# ── CSS de las celdas (semáforo) ─────────────────────────────────────────────
-
-def _sty_delta(v):
-    if pd.isna(v):
-        return "color:#c9c9d1"
-    if abs(v) < 1:
-        return f"color:{GRIS_TEXTO}"
-    color, fondo = (ERROR, "#fee2e2") if v > 0 else (EXITO, "#f0fdf4")
-    return f"background-color:{fondo}; color:{color}; font-weight:600; border-radius:6px;"
-
-
-def _fmt_delta(v):
-    if pd.isna(v):
-        return "—"
-    return f"{'+' if v >= 0 else '−'}{abs(v):.1f}%"
-
-
-def _sty_vol_bar(serie):
-    """Barra de volatilidad falseada con un gradiente CSS: el color del
-    acento hasta `pct`%, lavanda claro después — mismo truco que el mockup,
-    sin necesitar un componente AgGrid aparte."""
-    maximo = serie.max() or 1
-    out = []
-    for v in serie:
-        pct = 0 if pd.isna(v) else round(v / maximo * 100)
-        out.append(
-            f"background:linear-gradient(90deg, {ACENTO} {pct}%, "
-            f"{LAVANDA_FONDO} {pct}%); font-weight:600;"
-        )
-    return out
-
-
 # ── Vista principal ──────────────────────────────────────────────────────────
 
 @st.fragment
@@ -221,8 +190,10 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
     ranking = sorted(candidatos.items(), key=lambda kv: -kv[1]["volatilidad"])
 
     n_sem = len(semanas)
+    labels_todas = [_vol_fmt_rango_semana(s) for s in semanas]
+    cols_sem = labels_todas[1:]
 
-    # ── Tabla ranking (semáforo, buscador, clic en fila para enfocar) ────
+    # ── Tabla ranking (semáforo, buscador, tooltip + clic en fila) ───────
     with _card("compras_vol_ranking", "Insumos ordenados por volatilidad", titulo_arriba=True):
         _c_q = st.columns([1, 2])[0]
         with _c_q:
@@ -232,24 +203,43 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         ranking_vista = [(p, info) for p, info in ranking
                          if not _q or _q in str(p).lower()]
 
-        # Clic en la fila (mismo patrón que Proveedor/Producto): se procesa
-        # ANTES de construir la tabla, leyendo la selección de la interacción
-        # anterior, así el rerun que cambia el foco sale correcto a la
-        # primera. La key incluye `_q`: sin eso, un índice de fila de ANTES
-        # de buscar quedaría apuntando a otro insumo después de filtrar
-        # (mismo motivo que "el foco en la key" de arquitectura.md #120/#124,
-        # aplicado acá a filas de tabla en vez de puntos de Plotly).
         prod_focus = st.session_state.get("compras_vol_focus")
         if prod_focus not in {p for p, _ in ranking}:
             prod_focus = None
-        _rank_tab_key = f"compras_vol_rank_tab_{_q}"
-        _rows_sel = ((st.session_state.get(_rank_tab_key) or {})
-                    .get("selection", {}).get("rows", []))
-        if _rows_sel:
-            _ri = _rows_sel[0]
-            if 0 <= _ri < len(ranking_vista):
-                prod_focus = ranking_vista[_ri][0]
+
+        if not ranking_vista:
+            st.info(f"Ningún insumo coincide con «{_q}».")
+        else:
+            filas = []
+            for prod, info in ranking_vista:
+                cierres = info["cierres"]
+                fila = {"Insumo": _compras_truncar(str(prod), 34),
+                        "__insumo_full": str(prod)}
+                for i, col in enumerate(cols_sem):
+                    prev, cur = cierres[i], cierres[i + 1]
+                    delta = (None if (prev is None or cur is None or not prev)
+                             else (cur - prev) / prev * 100)
+                    fila[col] = delta
+                    fila[f"__prev_{i}"] = prev
+                    fila[f"__cur_{i}"] = cur
+                fila["Volatilidad"] = info["volatilidad"]
+                filas.append(fila)
+            tv = pd.DataFrame(filas)
+
+            # AgGrid devuelve la fila clickeada por CONTENIDO
+            # (__insumo_full), no por índice — a diferencia del
+            # st.dataframe que tenía este ranking antes, filtrar con el
+            # buscador no puede desalinear un índice viejo contra la fila
+            # nueva (arquitectura.md regla #130).
+            _clicked = renderizar_ranking_volatilidad(
+                tv, cols_sem, labels_todas[:-1],
+                altura=alturas.por_filas(len(tv), px_fila=30, extra=40, minimo=0),
+                key="compras_vol_rank_grid",
+            )
+            if _clicked is not None:
+                prod_focus = _clicked
                 st.session_state["compras_vol_focus"] = prod_focus
+
         prod_sel = prod_focus if prod_focus is not None else ranking[0][0]
 
         if st.session_state.get("compras_vol_prod_prev") != prod_sel:
@@ -257,31 +247,10 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             st.session_state["compras_vol_semfocus"] = None
             st.session_state["compras_vol_last_click"] = None
 
-        if not ranking_vista:
-            st.info(f"Ningún insumo coincide con «{_q}».")
-        else:
-            cols_sem = [_vol_fmt_rango_semana(semanas[i + 1]) for i in range(n_sem - 1)]
-            filas = []
-            for prod, info in ranking_vista:
-                cierres = info["cierres"]
-                deltas = [None if (cierres[i] is None or cierres[i - 1] is None or not cierres[i - 1])
-                         else (cierres[i] - cierres[i - 1]) / cierres[i - 1] * 100
-                         for i in range(1, len(cierres))]
-                filas.append([_compras_truncar(str(prod), 34), *deltas, info["volatilidad"]])
-            tv = pd.DataFrame(filas, columns=["Insumo", *cols_sem, "Volatilidad"])
-
-            sty = tv.style.format({c: _fmt_delta for c in cols_sem} | {"Volatilidad": "{:.1f}"})
-            for c in cols_sem:
-                sty = sty.map(_sty_delta, subset=[c])
-            sty = sty.apply(_sty_vol_bar, subset=["Volatilidad"])
-            st.dataframe(sty, use_container_width=True, hide_index=True,
-                         height=alturas.por_filas(len(tv), px_fila=34,
-                                                  extra=60, minimo=0),
-                         on_select="rerun", selection_mode="single-row",
-                         key=_rank_tab_key)
         st.caption(f"Familia Alimentos · {n_sem} semanas · insumos con ≥ S/ 400 "
                    "de gasto y compras en al menos 75% de las semanas del rango "
-                   "· clic en una fila para ver su candlestick.")
+                   "· pasa el cursor sobre un % para ver el precio, clic en la "
+                   "fila para ver su candlestick.")
 
     unidad_raw = str(dd.loc[dd[col_prod] == prod_sel, col_um].mode().iat[0]) \
         if col_um and col_um in dd.columns and not dd.loc[dd[col_prod] == prod_sel, col_um].empty \
