@@ -7,7 +7,7 @@ un dashboard por archivo.
     _comun.py       helpers compartidos (movil, seleccion, mini barras)
     proveedor.py    drill de Proveedor (el mas grande)
     familia.py      drill Familia -> Subfamilia -> productos
-    cantidad.py     top de productos por cantidad
+    producto.py     drill de Producto: ranking + precio/cantidad/valor
 
 Punto de entrada publico: renderizar_graficos_compras (lo consume el 
 dispatcher de graficos/__init__.py). Vive aca abajo junto a la config del
@@ -18,7 +18,6 @@ importa desde graficos.compras.
 """
 
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -34,7 +33,7 @@ from graficos.compras._comun import (  # noqa: F401  (re-export)
 )
 from graficos.compras.proveedor import _compras_proveedor_drill
 from graficos.compras.familia import _compras_familia_drill
-from graficos.compras.cantidad import _compras_cantidad_producto
+from graficos.compras.producto import _compras_producto_drill
 from graficos.compras.volatilidad import _compras_volatilidad_drill
 from graficos import alturas
 
@@ -47,13 +46,11 @@ from graficos import alturas
 # se pinta en el botón del rail.
 _COMPRAS_RAIL_CATEGORIAS = (
     ("Dimensión", (("Familia",              "Familia"),
-                   ("Proveedor",            "Proveedor"))),
-    ("Precios",   (("Precio top 10",        "Top 10"),
-                   ("Precio por compra",    "Por compra"),
-                   ("Precio vs año pasado", "Vs año pasado"),
+                   ("Proveedor",            "Proveedor"),
+                   ("Producto",             "Producto"))),
+    ("Precios",   (("Precio vs año pasado", "Vs año pasado"),
                    ("Volatilidad",          "Volatilidad"))),
-    ("Cantidad",  (("Cantidad vs año pasado", "Vs año pasado"),
-                   ("Cantidad por producto",  "Por producto"))),
+    ("Cantidad",  (("Cantidad vs año pasado", "Vs año pasado"),)),
     ("Más",       (("Semanal",              "Semanal"),
                    ("Vs año anterior",      "Vs año ant."),
                    ("Personalizado",        "Personalizado"),
@@ -159,15 +156,9 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         d_full = d_full[d_full[col_subfam].astype(str).isin(sub_sel)]
 
     _valor = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
-    _mes = None
-    if col_fecha and col_fecha in d.columns:
-        _f = pd.to_datetime(d[col_fecha], errors="coerce")
-        _mes = _f.dt.to_period("M").astype(str)
 
-    opciones = ["Familia", "Proveedor",
-                "Precio top 10", "Precio por compra",
+    opciones = ["Familia", "Proveedor", "Producto",
                 "Precio vs año pasado", "Volatilidad", "Cantidad vs año pasado",
-                "Cantidad por producto",
                 "Semanal", "Vs año anterior", "Personalizado", "Tabla"]
 
     # Rail vertical fijo al borde DERECHO (componente compartido _render_rail):
@@ -192,11 +183,13 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             _constructor_grafico(d, "compras")
         return
 
-    # Cantidad por producto: ancho completo (KPIs + controles + barras).
-    if graf == "Cantidad por producto":
-        with st.container(border=True, key="ajuste_graf_card_izq_compras"):
-            _compras_cantidad_producto(d, col_prod, col_cant, col_valor,
-                                       col_punit, col_fecha)
+    # Producto: ancho completo (ranking de todos los productos + evolución
+    # del producto en foco + ranking por familia). Sin borde externo, igual
+    # que Proveedor: cada bloque interno lleva su propio borde.
+    if graf == "Producto":
+        with st.container(key="compras_prod_drill_wrap"):
+            _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant,
+                                    col_punit, col_um, col_fecha, col_prov)
         return
 
     # Familia: ancho completo (dashboard con drill Familia→Subfamilia→productos).
@@ -229,54 +222,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
 
     with col_izq:
         with st.container(border=True, key="ajuste_graf_card_izq_compras"):
-            if graf == "Precio top 10" and col_prod and col_punit and _mes is not None:
-                top = _valor.groupby(d[col_prod].astype(str)).sum().nlargest(10).index
-                _pu = pd.to_numeric(d[col_punit], errors="coerce")
-                dd = pd.DataFrame({"mes": _mes, "prod": d[col_prod].astype(str),
-                                   "precio": _pu})
-                dd = dd[dd["prod"].isin(top)].dropna(subset=["precio"])
-                piv = dd.groupby(["mes", "prod"])["precio"].mean().reset_index()
-                fig = px.line(piv, x="mes", y="precio", color="prod", markers=True)
-                fig.for_each_trace(lambda t: t.update(name=_compras_truncar(t.name, 22)))
-                _compras_layout(fig, alto=alturas.PROTAGONISTA)
-                fig.update_layout(
-                    title="Precio unitario promedio — top 10 productos más comprados",
-                    xaxis_title=None, yaxis_title=None,
-                    hovermode="x unified",
-                    legend=dict(orientation="h", y=-0.2, x=0,
-                                font=dict(size=10)),
-                )
-                fig.update_xaxes(type="category")
-                fig.update_traces(line=dict(width=2.2),
-                                  marker=dict(size=6))
-                st.plotly_chart(fig, use_container_width=True, key="compras_g_precio")
-
-            elif graf == "Precio por compra" and col_prod and col_punit and col_fecha:
-                # Precio REAL de cada compra en su fecha exacta (sin promediar):
-                # un punto por ingreso; varios ingresos el mismo día = varios puntos.
-                top = _valor.groupby(d[col_prod].astype(str)).sum().nlargest(10).index
-                _pu = pd.to_numeric(d[col_punit], errors="coerce")
-                _fe = pd.to_datetime(d[col_fecha], errors="coerce")
-                dd = pd.DataFrame({"fecha": _fe, "prod": d[col_prod].astype(str),
-                                   "precio": _pu})
-                dd = dd[dd["prod"].isin(top)].dropna(subset=["fecha", "precio"])
-                dd = dd.sort_values("fecha")
-                fig = px.line(dd, x="fecha", y="precio", color="prod", markers=True)
-                fig.for_each_trace(lambda t: t.update(name=_compras_truncar(t.name, 22)))
-                _compras_layout(fig, alto=alturas.PROTAGONISTA)
-                fig.update_layout(
-                    title="Precio real por compra — top 10 productos más comprados",
-                    xaxis_title=None, yaxis_title=None,
-                    legend=dict(orientation="h", y=-0.2, x=0,
-                                font=dict(size=10)),
-                )
-                fig.update_traces(
-                    line=dict(width=1.6), marker=dict(size=7),
-                    hovertemplate="%{fullData.name}<br>%{x|%d/%m/%Y}: S/ %{y:,.2f}<extra></extra>",
-                )
-                st.plotly_chart(fig, use_container_width=True, key="compras_g_precio_real")
-
-            elif graf == "Precio vs año pasado" and col_prod and col_punit and col_fecha:
+            if graf == "Precio vs año pasado" and col_prod and col_punit and col_fecha:
                 # Un producto a la vez: precio real de cada compra (línea
                 # sólida) vs el precio unitario del año pasado (punteada).
                 _col_pu_aa = _resolver(d, ["Precio_unit_ano_anterior",

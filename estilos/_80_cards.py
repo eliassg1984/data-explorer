@@ -1,4 +1,4 @@
-"""estilos._80_cards - Tarjetas de los dashboards: .chart-card, wrappers ajuste_graf_card_* y bloques compras_prov_card_* del drill de Proveedor.
+"""estilos._80_cards - Tarjetas de los dashboards: .chart-card, wrappers ajuste_graf_card_* y bloques compras_prov_card_*/compras_prod_card_* de los drills de Proveedor y Producto.
 
 Extraido de estilos.py (lineas 1345-1498 del original).
 El orden respecto a estilos/__init__.py es parte del comportamiento del CSS.
@@ -177,6 +177,29 @@ CSS = """    /* ================================================================
     [data-testid="stVerticalBlockBorderWrapper"] {
         border-color: transparent !important;
         box-shadow: none !important;
+    }
+
+    /* =================================================================== */
+    /* TARJETAS DEL DRILL DE PRODUCTO (Compras)                              */
+    /*                                                                       */
+    /* Misma convención que el bloque de Proveedor de arriba: 2 bloques      */
+    /* separados por el gris del app (ranking+evolución, ranking por         */
+    /* familia), cada uno con key con prefijo `compras_prod_card_`.          */
+    /*                                                                       */
+    /* No tocar sin revisar `_compras_producto_drill` en graficos/compras/producto.py */
+    /* =================================================================== */
+    div[class*="st-key-compras_prod_card_"] {
+        background: var(--bg-card) !important;
+        border: none !important;
+        border-radius: 20px !important;
+        padding: 16px 18px;
+        box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
+    }
+    div[class*="st-key-compras_prod_card_"] > div {
+        border: none !important;
+    }
+    div[class*="st-key-compras_prod_card_"] + div[class*="st-key-compras_prod_card_"] {
+        margin-top: 16px;
     }
 
     /* =================================================================== */
