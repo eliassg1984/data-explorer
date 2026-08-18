@@ -72,8 +72,9 @@ def _grafico_ranking(d, col_grp, col_val, titulo, key, clic=False, state_key=Non
     card — no sobre la suma de absolutos, para que sumen 100% de verdad
     con lo que el usuario ya está viendo arriba).
 
-    `clic=True` agrega click-drill (mismo patrón que compras/familia.py):
-    clic en una barra la resalta y guarda la categoría en
+    `clic=True` agrega click-drill (mismo patrón que el Panel de composición
+    del drill de Proveedor en compras/proveedor.py): clic en una barra la
+    resalta y guarda la categoría en
     `st.session_state[state_key]` — clic de nuevo la quita. Devuelve la
     categoría en foco (o None) para que el caller filtre el panel derecho
     y muestre el detalle del siguiente nivel debajo.

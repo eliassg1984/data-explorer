@@ -517,60 +517,6 @@ CSS = """    /* ================================================================
         }
     }
 
-    /* =================================================================== */
-    /* TÍTULO DE COMPRAS › FAMILIA EN LA FRANJA (2026-08-16)                */
-    /*                                                                      */
-    /* Mismo mecanismo que el título de Ventas › Comparativo de arriba —    */
-    /* ver ese bloque para el porqué de cada número. Acá se scopea por la   */
-    /* PRESENCIA del propio título (`compras_fam_titulo_franja`) en vez del */
-    /* key de una tarjeta interna: Compras › Familia no tiene una tarjeta   */
-    /* propia distinta del wrapper compartido `ajuste_graf_card_izq_        */
-    /* compras` (que usan TODAS las vistas de Compras), así que no hay un   */
-    /* key único de tarjeta para anclar el :has() — pero el título sí es    */
-    /* único de esta vista, y alcanza igual.                                */
-    /* Compras tiene solo 2 chips (Familia/Subfamilia) — MENOS que los 4 de */
-    /* Ventas — pero cada uno lleva min-width:230px forzado (ver el         */
-    /* addendum de arriba, "Compras/Inventario/Salidas"), así que el        */
-    /* contenido real (230+230+8=468px) es MÁS ancho que el de Ventas       */
-    /* (~410px sin forzar). Por eso el umbral de abajo es más alto: 1220px  */
-    /* no alcanzaba (medido: los 2 chips se superponían), 1310px sí.        */
-    /* =================================================================== */
-    .st-key-compras_fam_titulo_franja {
-        position: fixed !important;
-        top: 8px !important;
-        left: 175px !important;
-        width: 260px !important;
-        z-index: 22 !important;
-        margin: 0 !important;
-        display: none !important;
-    }
-    @media (min-width: 1310px) {
-        [data-testid="stAppViewContainer"]:has(.st-key-compras_fam_titulo_franja)
-            .st-key-compras_fam_titulo_franja {
-            display: block !important;
-        }
-        [data-testid="stAppViewContainer"]:has(.st-key-compras_fam_titulo_franja)
-            .st-key-compras_fam_titulo_franja [data-testid="stMarkdownContainer"] p {
-            margin: 0 !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-            white-space: nowrap !important;
-            font-size: 14px !important;
-            font-weight: 700 !important;
-            line-height: calc(var(--cab-altura) - 8px) !important;
-            color: var(--text-primary) !important;
-        }
-        [data-testid="stAppViewContainer"]:has(.st-key-compras_fam_titulo_franja)
-            .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill {
-            left: 451px !important;
-        }
-        [data-testid="stAppViewContainer"]:has(.st-key-compras_fam_titulo_franja)
-            .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
-            left: 667px !important;
-            max-width: calc(100vw - 667px - (var(--rail-der-res) - 22px)) !important;
-        }
-    }
-
     /* PROTOTIPO (2026-08-16), 3ra vuelta — "fusionar" de verdad, referencia
        Google Finance: NADA de tarjeta (ni sombra ni esquinas, en ningún
        lado), toda la superficie de un color, de borde a borde. La 1ra

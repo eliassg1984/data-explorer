@@ -72,7 +72,8 @@ CSS = """    /* ================================================================
        nada que anular).
 
        Al modificar: pensar primero si el cambio afecta a los cards
-       "clásicos" (Familia/Evolución) o a los del drill Proveedor.
+       "clásicos" (Volatilidad, Vs año pasado, ...) o a los del drill
+       Proveedor.
        ============================================================ */
     div[class*="st-key-ajuste_graf_card_"] {
         background: var(--bg-card) !important;
@@ -879,103 +880,6 @@ CSS = """    /* ================================================================
     div[class*="st-key-ventas_g_dia"] .js-plotly-plot {
         height: 100% !important;
     }
-    }
-
-    /* `compras_fam_titulo_franja` (el título que se mudó a la franja
-       superior, ver estilos/_50_fecha.py) se dibuja como HERMANO, justo
-       antes de esta fila — y aunque es position:fixed y colapsa a 0px de
-       alto, su wrapper de Streamlit sigue contando como flex item del
-       bloque vertical que los contiene: el gap del flex se aplica IGUAL
-       entre "un item de 0px" y el siguiente. -16px lo cancela — mismo
-       hallazgo que en Ventas › Comparativo (arquitectura.md regla #120). */
-    .st-key-compras_fam_controles_row {
-        margin-top: -16px !important;
-        margin-bottom: -10px !important;
-    }
-
-    /* =================================================================== */
-    /* FRANJA DE CONTROLES DE COMPRAS › FAMILIA                              */
-    /*                                                                       */
-    /* Mismo patrón que Ventas (Por día #104, Año Pasado #107): tabs de       */
-    /* texto con subrayado en el activo, no pastillas. Tres grupos afines    */
-    /* ("Agrupar por" · "Vista" · "Top") separados por hairlines — a          */
-    /* diferencia de Año Pasado, acá los CUATRO controles (incluido el        */
-    /* popover de series) responden a la misma pregunta ("cómo se ve ESTE    */
-    /* gráfico"), no dos ejes distintos: no hace falta separar con espacio   */
-    /* ni columna espaciadora, los cuatro van en fila con línea entre cada    */
-    /* uno.                                                                  */
-    /*                                                                       */
-    /* [data-selected="true"], NO [aria-pressed="true"]: los tres pills son   */
-    /* single-select (sin `selection_mode=`) — Streamlit los marca con        */
-    /* `role="radio"` + `data-selected`, no con `aria-pressed` (ese es el     */
-    /* marcado de MULTI-select). Se aprendió esta vez a la primera: en        */
-    /* Año Pasado el selector viejo estuvo muerto desde el primer commit      */
-    /* (arquitectura.md #107, segundo addendum).                             */
-    /* =================================================================== */
-    div[class*="st-key-compras_fam_gran"] [data-testid="stButtonGroup"]
-        button[data-variant="pills"],
-    div[class*="st-key-compras_fam_vista"] [data-testid="stButtonGroup"]
-        button[data-variant="pills"],
-    div[class*="st-key-compras_fam_topn"] [data-testid="stButtonGroup"]
-        button[data-variant="pills"] {
-        background: transparent !important;
-        border: none !important;
-        border-radius: 0 !important;
-        border-bottom: 2px solid transparent !important;
-        padding: 3px 1px !important;
-        color: var(--text-secondary) !important;
-        font-weight: 400 !important;
-        font-size: 15px !important;
-    }
-    div[class*="st-key-compras_fam_gran"] [data-testid="stButtonGroup"]
-        button[data-variant="pills"][data-selected="true"],
-    div[class*="st-key-compras_fam_vista"] [data-testid="stButtonGroup"]
-        button[data-variant="pills"][data-selected="true"],
-    div[class*="st-key-compras_fam_topn"] [data-testid="stButtonGroup"]
-        button[data-variant="pills"][data-selected="true"] {
-        border-bottom-color: var(--accent) !important;
-        color: var(--accent-deep) !important;
-        font-weight: 600 !important;
-    }
-    /* El gap real va en el hijo directo de stButtonGroup (que es
-       display:block), no en él — mismo hallazgo que en Ventas. `nowrap`
-       preventivo: aprendido de Año Pasado (regla #107, addendum) que un
-       ajuste sin margen apila con cualquier ventana un poco más angosta.
-       Acá el texto es corto ("Semana", "Agrupado", "20") y hay bastante
-       margen, pero la protección no cuesta nada. */
-    div[class*="st-key-compras_fam_gran"] [data-testid="stButtonGroup"] > div,
-    div[class*="st-key-compras_fam_vista"] [data-testid="stButtonGroup"] > div,
-    div[class*="st-key-compras_fam_topn"] [data-testid="stButtonGroup"] > div {
-        gap: 18px !important;
-        flex-wrap: nowrap !important;
-    }
-    /* Separadores: cada grupo dibuja el suyo a su IZQUIERDA (colgado de su
-       key, no de una posición) — "Agrupar por" es el primero y no lleva. */
-    div[class*="st-key-compras_fam_vista"],
-    div[class*="st-key-compras_fam_topn"],
-    div[class*="st-key-compras_fam_ser_pop"] {
-        position: relative;
-        padding-left: 17px !important;
-    }
-    div[class*="st-key-compras_fam_vista"]::before,
-    div[class*="st-key-compras_fam_topn"]::before,
-    div[class*="st-key-compras_fam_ser_pop"]::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 1px;
-        height: 18px;
-        background: var(--border);
-    }
-    /* El popover de series es un control DISTINTO (abre una lista, no
-       alterna un valor): no lleva el tratamiento de tab/subrayado, sólo se
-       alinea verticalmente con la fila de pills — su botón trae su propio
-       padding (definido inline en familia.py) y por defecto queda un poco
-       más alto que los pills de texto plano. */
-    div[class*="st-key-compras_fam_ser_pop"] {
-        margin-top: 4px !important;
     }
 
     /* Botón "Cerrar" del drill de Platos (Ventas › Año Pasado): ícono solo,

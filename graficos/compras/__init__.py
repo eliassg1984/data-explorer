@@ -1,4 +1,4 @@
-"""graficos.compras - dashboard de Compras (4 drills).
+"""graficos.compras - dashboard de Compras (3 drills).
 
 Este modulo era un unico compras.py de 2.835 lineas; desde el refactor de
 2026-08-01 es un paquete con un drill por archivo, igual que graficos/ tiene
@@ -6,8 +6,8 @@ un dashboard por archivo.
 
     _comun.py       helpers compartidos (movil, seleccion, mini barras)
     proveedor.py    drill de Proveedor (el mas grande)
-    familia.py      drill Familia -> Subfamilia -> productos
     producto.py     drill de Producto: ranking + precio/cantidad/valor
+                    (incluye el ranking por Familia — ver docstring propio)
 
 Punto de entrada publico: renderizar_graficos_compras (lo consume el 
 dispatcher de graficos/__init__.py). Vive aca abajo junto a la config del
@@ -32,7 +32,6 @@ from graficos.compras._comun import (  # noqa: F401  (re-export)
     _compras_mini_barras, _es_movil, _first_point, _periodo_serie,
 )
 from graficos.compras.proveedor import _compras_proveedor_drill
-from graficos.compras.familia import _compras_familia_drill
 from graficos.compras.producto import _compras_producto_drill
 from graficos.compras.volatilidad import _compras_volatilidad_drill
 from graficos import alturas
@@ -45,8 +44,7 @@ from graficos import alturas
 # es el string que consume el resto del dashboard; el label (derecha) es lo que
 # se pinta en el botón del rail.
 _COMPRAS_RAIL_CATEGORIAS = (
-    ("Dimensión", (("Familia",              "Familia"),
-                   ("Proveedor",            "Proveedor"),
+    ("Dimensión", (("Proveedor",            "Proveedor"),
                    ("Producto",             "Producto"))),
     ("Precios",   (("Precio vs año pasado", "Vs año pasado"),
                    ("Volatilidad",          "Volatilidad"))),
@@ -157,7 +155,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
 
     _valor = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
 
-    opciones = ["Familia", "Proveedor", "Producto",
+    opciones = ["Proveedor", "Producto",
                 "Precio vs año pasado", "Volatilidad", "Cantidad vs año pasado",
                 "Semanal", "Vs año anterior", "Personalizado", "Tabla"]
 
@@ -190,13 +188,6 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         with st.container(key="compras_prod_drill_wrap"):
             _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant,
                                     col_punit, col_um, col_fecha, col_prov)
-        return
-
-    # Familia: ancho completo (dashboard con drill Familia→Subfamilia→productos).
-    if graf == "Familia":
-        with st.container(border=True, key="ajuste_graf_card_izq_compras"):
-            _compras_familia_drill(d, col_fam, col_subfam, col_prod,
-                                   col_valor, col_cant, col_fecha)
         return
 
     # Proveedor: ancho completo (drill Proveedor→productos→proveedores del prod.).

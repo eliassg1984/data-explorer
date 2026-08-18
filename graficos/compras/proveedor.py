@@ -382,8 +382,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 # ranking en barras (versión anterior) sí funcionaba porque
                 # el evento de Plotly SÍ se repetía; con la tabla no.
                 # Verificado en vivo: reclickear la fila enfocada no hace
-                # nada. Mismo patrón que "↩ Todas" en el breadcrumb de
-                # Compras › Familia (familia.py).
+                # nada — de ahí el botón explícito.
                 _c_tit, _c_clear = st.columns([3, 1])
                 with _c_tit:
                     st.markdown('<div class="cp-rank-tit">Ranking de '
