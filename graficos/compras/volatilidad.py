@@ -77,6 +77,20 @@ def _vol_score(cierres):
     return round(total, 1)
 
 
+_MESES_CORTO = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago",
+                "Sep", "Oct", "Nov", "Dic"]
+
+
+def _vol_fmt_rango_semana(ini):
+    """Etiqueta de columna para la semana que empieza el lunes `ini`:
+    "15-21 Jun" si cae en un solo mes, "29 Jun - 5 Jul" si cruza de mes."""
+    fin = ini + pd.Timedelta(days=6)
+    m1, m2 = _MESES_CORTO[ini.month - 1], _MESES_CORTO[fin.month - 1]
+    if ini.month == fin.month:
+        return f"{ini.day}-{fin.day} {m1}"
+    return f"{ini.day} {m1} - {fin.day} {m2}"
+
+
 def _vol_candidatos(d, col_prod, col_punit, col_fecha, col_valor, semanas,
                     min_gasto=MIN_GASTO, min_cobertura=MIN_COBERTURA):
     """Cierres semanales (con relleno hacia adelante en huecos) por producto,
@@ -206,41 +220,68 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
 
     ranking = sorted(candidatos.items(), key=lambda kv: -kv[1]["volatilidad"])
 
-    # ── Tabla ranking (semáforo, solo lectura) ───────────────────────────
+    n_sem = len(semanas)
+
+    # ── Tabla ranking (semáforo, buscador, clic en fila para enfocar) ────
     with _card("compras_vol_ranking", "Insumos ordenados por volatilidad", titulo_arriba=True):
-        n_sem = len(semanas)
-        cols_sem = [f"S{i + 2}" for i in range(n_sem - 1)]
-        filas = []
-        for prod, info in ranking:
-            cierres = info["cierres"]
-            deltas = [None if (cierres[i] is None or cierres[i - 1] is None or not cierres[i - 1])
-                     else (cierres[i] - cierres[i - 1]) / cierres[i - 1] * 100
-                     for i in range(1, len(cierres))]
-            filas.append([_compras_truncar(str(prod), 34), *deltas, info["volatilidad"]])
-        tv = pd.DataFrame(filas, columns=["Insumo", *cols_sem, "Volatilidad"])
+        _c_q = st.columns([1, 2])[0]
+        with _c_q:
+            _q = st.text_input("Buscar insumo", key="compras_vol_q",
+                               placeholder="Buscar insumo…",
+                               label_visibility="collapsed").strip().lower()
+        ranking_vista = [(p, info) for p, info in ranking
+                         if not _q or _q in str(p).lower()]
 
-        sty = tv.style.format({c: _fmt_delta for c in cols_sem} | {"Volatilidad": "{:.1f}"})
-        for c in cols_sem:
-            sty = sty.map(_sty_delta, subset=[c])
-        sty = sty.apply(_sty_vol_bar, subset=["Volatilidad"])
-        st.dataframe(sty, use_container_width=True, hide_index=True,
-                     height=alturas.por_filas(len(tv), px_fila=34,
-                                              extra=60, minimo=0))
+        # Clic en la fila (mismo patrón que Proveedor/Producto): se procesa
+        # ANTES de construir la tabla, leyendo la selección de la interacción
+        # anterior, así el rerun que cambia el foco sale correcto a la
+        # primera. La key incluye `_q`: sin eso, un índice de fila de ANTES
+        # de buscar quedaría apuntando a otro insumo después de filtrar
+        # (mismo motivo que "el foco en la key" de arquitectura.md #120/#124,
+        # aplicado acá a filas de tabla en vez de puntos de Plotly).
+        prod_focus = st.session_state.get("compras_vol_focus")
+        if prod_focus not in {p for p, _ in ranking}:
+            prod_focus = None
+        _rank_tab_key = f"compras_vol_rank_tab_{_q}"
+        _rows_sel = ((st.session_state.get(_rank_tab_key) or {})
+                    .get("selection", {}).get("rows", []))
+        if _rows_sel:
+            _ri = _rows_sel[0]
+            if 0 <= _ri < len(ranking_vista):
+                prod_focus = ranking_vista[_ri][0]
+                st.session_state["compras_vol_focus"] = prod_focus
+        prod_sel = prod_focus if prod_focus is not None else ranking[0][0]
+
+        if st.session_state.get("compras_vol_prod_prev") != prod_sel:
+            st.session_state["compras_vol_prod_prev"] = prod_sel
+            st.session_state["compras_vol_semfocus"] = None
+            st.session_state["compras_vol_last_click"] = None
+
+        if not ranking_vista:
+            st.info(f"Ningún insumo coincide con «{_q}».")
+        else:
+            cols_sem = [_vol_fmt_rango_semana(semanas[i + 1]) for i in range(n_sem - 1)]
+            filas = []
+            for prod, info in ranking_vista:
+                cierres = info["cierres"]
+                deltas = [None if (cierres[i] is None or cierres[i - 1] is None or not cierres[i - 1])
+                         else (cierres[i] - cierres[i - 1]) / cierres[i - 1] * 100
+                         for i in range(1, len(cierres))]
+                filas.append([_compras_truncar(str(prod), 34), *deltas, info["volatilidad"]])
+            tv = pd.DataFrame(filas, columns=["Insumo", *cols_sem, "Volatilidad"])
+
+            sty = tv.style.format({c: _fmt_delta for c in cols_sem} | {"Volatilidad": "{:.1f}"})
+            for c in cols_sem:
+                sty = sty.map(_sty_delta, subset=[c])
+            sty = sty.apply(_sty_vol_bar, subset=["Volatilidad"])
+            st.dataframe(sty, use_container_width=True, hide_index=True,
+                         height=alturas.por_filas(len(tv), px_fila=34,
+                                                  extra=60, minimo=0),
+                         on_select="rerun", selection_mode="single-row",
+                         key=_rank_tab_key)
         st.caption(f"Familia Alimentos · {n_sem} semanas · insumos con ≥ S/ 400 "
-                   "de gasto y compras en al menos 75% de las semanas del rango.")
-
-    # ── Selector de insumo (mismo orden que el ranking) ──────────────────
-    nombres = [str(p) for p, _ in ranking]
-    labels = [f"{i + 1}. {_compras_truncar(str(p), 40)} — {info['volatilidad']:.1f} pts"
-             for i, (p, info) in enumerate(ranking)]
-    idx_sel = st.selectbox("Ver candlestick de:", range(len(nombres)),
-                           format_func=lambda i: labels[i], key="compras_vol_prod_idx")
-    prod_sel = nombres[idx_sel]
-
-    if st.session_state.get("compras_vol_prod_prev") != prod_sel:
-        st.session_state["compras_vol_prod_prev"] = prod_sel
-        st.session_state["compras_vol_semfocus"] = None
-        st.session_state["compras_vol_last_click"] = None
+                   "de gasto y compras en al menos 75% de las semanas del rango "
+                   "· clic en una fila para ver su candlestick.")
 
     unidad_raw = str(dd.loc[dd[col_prod] == prod_sel, col_um].mode().iat[0]) \
         if col_um and col_um in dd.columns and not dd.loc[dd[col_prod] == prod_sel, col_um].empty \

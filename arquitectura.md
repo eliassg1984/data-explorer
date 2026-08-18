@@ -5280,3 +5280,73 @@ salvo `icono`):
      un archivo por nombre es una referencia que puede quedar colgando;
      grepear el nombre del archivo borrado en todo el repo (no solo en
      `graficos/` y `estilos/`) antes de dar el borrado por completo.
+
+130. **Ranking de Volatilidad (`compras/volatilidad.py`): cabeceras con
+     fecha real, buscador de insumo y clic-en-fila reemplazando al
+     selectbox** — a pedido, tres cambios sobre la tabla que ya existía
+     (regla #74).
+
+     **Cabeceras.** `cols_sem` pasó de `f"S{i+2}"` a
+     `_vol_fmt_rango_semana(semanas[i+1])`, función pura nueva (testeada
+     en `test_graficos.py`) que da `"15-21 Jun"` si la semana cae en un
+     solo mes y `"29 Jun - 5 Jul"` si cruza de mes. Como los nombres de
+     columna del DataFrame son directamente las etiquetas visibles, no
+     hizo falta tocar el resto del Styler.
+
+     **`pandas.Styler` + `on_select`/`selection_mode` SÍ conviven en
+     `st.dataframe`.** Antes de tocar código no había certeza: el
+     semáforo (`_sty_delta`) y la barra de Volatilidad (`_sty_vol_bar`)
+     son un Styler, y el clic-para-enfocar de Proveedor/Producto (regla
+     #128) usa DataFrames planos con `column_config` — ningún drill de
+     este proyecto había combinado ambas cosas. Sí funciona: se le pasó
+     `on_select="rerun", selection_mode="single-row"` al mismo
+     `st.dataframe(sty, ...)` que ya traía el Styler, sin errores ni
+     efectos raros.
+
+     **Buscador con la key del `st.dataframe` atada al texto de
+     búsqueda** (`_rank_tab_key = f"compras_vol_rank_tab_{_q}"`), no una
+     key fija. Sin esto: el clic se resuelve por ÍNDICE de fila
+     (`ranking_vista[_ri][0]`), y si el usuario clickea una fila y LUEGO
+     escribe en el buscador, `_rows_sel` en `session_state` sigue
+     apuntando al índice viejo pero `ranking_vista` ya es una lista
+     distinta (filtrada) — el índice quedaría apuntando a otro insumo, o
+     fuera de rango. Con la key dinámica, cambiar el texto de búsqueda
+     crea un widget "nuevo" con selección vacía, así que no hay índice
+     viejo que reinterpretar mal. Mismo motivo que "el foco en la key" de
+     las reglas #120/#124, aplicado acá a filas de tabla en vez de
+     puntos de Plotly/columnas de chart.
+
+     **Sin botón "✕ Quitar foco"**, a diferencia de Proveedor/Producto
+     (regla #128). Ahí hace falta porque `None` es un estado propio
+     (vista agregada de "todos"), distinto de cualquier fila puntual, y
+     el grid no ofrece forma de deseleccionar con un clic (reclickear la
+     fila ya enfocada no dispara `on_select`: el valor del widget no
+     cambia, así que Streamlit ni siquiera rerunea). Acá no hay vista
+     agregada — siempre se muestra la vela de ALGÚN insumo — así que
+     `prod_focus = None` y "mostrar el primero del ranking" son
+     visualmente indistinguibles: no hay estado que "limpiar".
+     `prod_sel` cae a `ranking[0][0]` (ranking COMPLETO, no el filtrado)
+     cuando no hay foco — así una búsqueda que no matchea nada no le
+     quita el candlestick a lo que ya estaba enfocado.
+
+     **No se pudo verificar el clic en sí con el navegador del entorno
+     de desarrollo — mismo límite que la regla #74, pero más amplio de
+     lo que decía esa regla.** No es solo que Plotly no se pueda simular
+     ahí: `document.hidden` da `true` en este navegador, y el
+     `st.dataframe` (glide-data-grid) no llega a montar su canvas de
+     pintado mientras la página se considera oculta —
+     `document.elementsFromPoint` sobre la celda no encuentra ningún
+     `<canvas>` en todo el stack, y un clic sintético (`pointerdown` +
+     `pointerup` + `click` con `clientX/clientY` correctos) despachado
+     a mano no cambió el foco. La regla #12 hay que leerla como "ningún
+     componente que pinte en canvas (Plotly, `st.dataframe`) es
+     confiablemente clickeable en este entorno", no solo Plotly.
+
+     Lo que SÍ se pudo verificar ahí, porque son texto real en el DOM
+     (no canvas): el buscador con una query sin coincidencias muestra
+     `st.info(f"Ningún insumo coincide con «{_q}».")` y dado ese estado
+     vacío, la tarjeta de detalle de abajo sigue mostrando el insumo
+     top del ranking COMPLETO sin cambios — confirma que el fallback de
+     `prod_sel` es el correcto. **Falta un smoke test manual real
+     después de deployar**: clickear una fila que no sea la primera y
+     confirmar que el candlestick de abajo cambia al insumo correcto.

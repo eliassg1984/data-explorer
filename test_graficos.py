@@ -247,6 +247,11 @@ def _pruebas_puras():
     check("_vol_semanas insuficientes → None",
           _vol._vol_semanas_ventana(_fe2, minimo=4), None)
 
+    check("_vol_fmt_rango mismo mes",
+          _vol._vol_fmt_rango_semana(pd.Timestamp("2026-06-15")), "15-21 Jun")
+    check("_vol_fmt_rango cruza de mes",
+          _vol._vol_fmt_rango_semana(pd.Timestamp("2026-06-29")), "29 Jun - 5 Jul")
+
     # ── Comparativo vs Año Pasado (Ventas) ──────────────────────────────
     import datetime as _dt
     from graficos import ventas_comparativo as _vc
