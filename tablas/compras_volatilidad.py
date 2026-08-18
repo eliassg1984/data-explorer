@@ -26,7 +26,17 @@ from tema import (
     LAVANDA_FONDO, TEXTO_PRINCIPAL,
 )
 from tablas._css import _css_grid
-from tablas.ajuste_pivote import _ancho_header_periodo
+
+# Ancho FIJO (no por longitud de header, como ajuste_pivote.py): el
+# contenido de cada celda-semana es siempre corto ("+223.3%"), así que no
+# hace falta ganchar el ancho al texto de la cabecera -- eso fue justo el
+# bug reportado (autoSizeStrategy="fitGridWidth" estiraba las columnas
+# para llenar el ancho disponible, y en una tarjeta ancha solo entraban 3
+# de 8). Con ancho fijo y sin auto-fit, la cabecera larga ("29 Jun - 5
+# Jul") envuelve a dos líneas (wrapHeaderText/autoHeaderHeight ya
+# activos) en vez de ensanchar la columna.
+_ANCHO_COL_SEMANA = 84
+_ANCHO_COL_VOL = 92
 
 _FMT_PCT = JsCode("""
     function(params) {
@@ -116,7 +126,7 @@ def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, altura, key):
 
     for i, (col, prev_label) in enumerate(zip(cols_sem, labels_prev)):
         gb.configure_column(
-            col, type=["numericColumn"], minWidth=_ancho_header_periodo(col),
+            col, type=["numericColumn"], width=_ANCHO_COL_SEMANA,
             valueFormatter=_FMT_PCT, cellStyle=_STYLE_DELTA,
             tooltipValueGetter=_tooltip_delta(i, prev_label, col),
         )
@@ -124,14 +134,11 @@ def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, altura, key):
         gb.configure_column(f"__cur_{i}", hide=True)
 
     max_vol = (max((float(v) for v in tv["Volatilidad"]), default=0.0) or 1.0)
-    gb.configure_column("Volatilidad", type=["numericColumn"], minWidth=100,
+    gb.configure_column("Volatilidad", type=["numericColumn"], width=_ANCHO_COL_VOL,
                         valueFormatter=_FMT_1DEC, cellStyle=_style_vol(max_vol))
 
     gb.configure_selection(selection_mode="single", use_checkbox=False)
-    gb.configure_grid_options(
-        rowHeight=30, headerHeight=32, tooltipShowDelay=200,
-        autoSizeStrategy={"type": "fitGridWidth"},
-    )
+    gb.configure_grid_options(rowHeight=30, headerHeight=32, tooltipShowDelay=200)
     grid_options = gb.build()
 
     custom_css = dict(_css_grid(13))
