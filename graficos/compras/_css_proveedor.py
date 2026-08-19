@@ -99,7 +99,14 @@ CSS = """        <style>
                 top: calc(var(--nav-top-alto) + 8px) !important;
                 left: auto !important;
                 bottom: auto !important;
-                right: calc(var(--rail-der-res) + 10px) !important;
+                /* Era `calc(var(--rail-der-res) + 10px)`: se derivaba del
+                   rail para seguirlo al plegarse. Con el rail a la IZQUIERDA
+                   (2026-08-18) esa variable dejó de decir nada sobre este
+                   borde — y el borde derecho ya no se mueve cuando el rail se
+                   pliega, así que tampoco hace falta que lo siga. 64px es el
+                   borde derecho de la tarjeta de abajo: 80 de padding del
+                   contenedor menos los 16 que la tarjeta se sale. */
+                right: 64px !important;
                 z-index: 23 !important;
             }
         }
@@ -163,8 +170,7 @@ CSS = """        <style>
                dentro de la fila, no agrego ancho). */
             .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
                 left: 413px !important;
-                max-width: calc(100vw - 413px
-                                - (var(--rail-der-res) - 22px)) !important;
+                max-width: calc(100vw - 413px - 58px) !important;
             }
         }
         /* ── CUADRO DE CONTROL DE PROVEEDORES (reemplaza la leyenda) ──────

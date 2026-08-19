@@ -84,7 +84,11 @@ def pestillo(lado, key):
     El chevron apunta a dónde va a ir el rail si lo pulsas, no a dónde
     está: abierto el derecho, apunta a la derecha (= "guárdame")."""
     abierto = not plegado(lado)
-    icono = "chevron_right" if abierto else "chevron_left"
+    # Con el rail a la IZQUIERDA (2026-08-18) las dos flechas se dan
+    # vuelta: abierto, pulsar lo pliega hacia la izquierda; plegado, lo
+    # despliega hacia la derecha. La regla del docstring no cambia — el
+    # chevron apunta al destino, no al estado.
+    icono = "chevron_left" if abierto else "chevron_right"
     st.button(
         f":material/{icono}:",
         key=key,

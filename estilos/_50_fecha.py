@@ -75,7 +75,11 @@ CSS = """    /* ================================================================
     position: fixed !important;
     top: calc(var(--nav-top-alto) + 8px) !important;
     left: auto !important;
-    right: calc(var(--rail-der-res) - 15px) !important;  /* borde de la tarjeta */
+    /* 2026-08-18: era `calc(var(--rail-der-res) - 15px)`, que alineaba
+       con el borde de la tarjeta cuando el rail comía 153px por la
+       DERECHA. Ahora el rail está a la izquierda y ese borde lo fija el
+       padding base del contenedor (80) menos los mismos 15. */
+    right: 65px !important;                              /* borde de la tarjeta */
     width: fit-content !important;
     z-index: 23 !important;
     margin: 0 !important;
@@ -251,7 +255,7 @@ CSS = """    /* ================================================================
                el popover del calendario), así que los chips se quedan con
                ese ancho. */
             max-width: calc(100vw - 301px
-                            - (var(--rail-der-res) - 22px)) !important;
+                            - 58px) !important;   /* 80 de padding - 22, ver el pill */
         }
         .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
             [data-testid="stPopover"] button {
@@ -408,7 +412,7 @@ CSS = """    /* ================================================================
             display: block !important;
             position: fixed !important;
             top: calc(var(--nav-top-alto) + 8px) !important;
-            right: calc(var(--rail-der-res) - 15px) !important;
+            right: 65px !important;   /* borde de la tarjeta, ver el pill */
             left: auto !important;
             width: 176px !important;
             z-index: 23 !important;
@@ -521,7 +525,7 @@ CSS = """    /* ================================================================
         [data-testid="stAppViewContainer"]:has([class*="st-key-chartcard_ventas_comparativo_"])
             .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
             left: 577px !important;   /* 361 (pill) + 210 (su ancho) + 6, igual que la cuenta base */
-            max-width: calc(100vw - 577px - (var(--rail-der-res) - 22px)) !important;
+            max-width: calc(100vw - 577px - 58px) !important;   /* 80 de padding - 22, ver el pill */
         }
     }
 

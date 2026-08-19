@@ -31,7 +31,14 @@ CSS = """    /* ================================================================
            caería encima. En móvil la variable vale 0 y la cuenta vuelve a
            los 74 de siempre. */
         top: calc(var(--nav-top-alto) + 74px) !important;
-        right: 15px !important;            /* despega del scrollbar del navegador */
+        /* 2026-08-18, a pedido: el rail pasa del borde DERECHO al IZQUIERDO.
+           Es el sitio que dejó libre el rail de navegación al convertirse en
+           la franja superior (--nav-top-alto) unos commits antes: la columna
+           izquierda quedó vacía y el rail de vistas volvió a ella.
+           Las variables siguen llamándose `--rail-der-*`: el nombre quedó
+           histórico y renombrarlas toca ~15 sitios en 4 ficheros más un
+           test. Se dejó anotado en _00_base.py en vez de hacerlo a medias. */
+        left: 15px !important;             /* mismo despegue que tenía del scrollbar */
         /* El ancho es VARIABLE desde el 2026-08-15 (pestillo, ver
            _25_rails_pestillo.py). Hasta esa fecha había DOS `width` en este
            mismo bloque, 84px unas líneas más abajo, que ganaba por ir
@@ -65,7 +72,9 @@ CSS = """    /* ================================================================
        el :has() detecta el rail dentro del contenedor principal. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row),
     .block-container:has(.st-key-compras_tabs_row) {
-        padding-right: var(--rail-der-res) !important;   /* rail + aire + offset (_00_base) */
+        /* La reserva sigue al rail: era `padding-right` mientras vivía a la
+           derecha. El otro lado vuelve solo a los 80px de base. */
+        padding-left: var(--rail-der-res) !important;    /* rail + aire + offset (_00_base) */
     }
 
     /* Badge de categoría + separador entre secciones */
@@ -138,7 +147,15 @@ CSS = """    /* ================================================================
        769-900px sin decidir. */
     @media (min-width: 901px) {
         [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap {
-            margin-left: -16px !important;
+            /* 2026-08-18, al pasar el rail a la izquierda: el jalón vuelve
+               a medirse CONTRA EL RAIL, como antes de que el izquierdo se
+               retirara. Medido en vivo: con -16 la tarjeta arrancaba en 137
+               (38px del rail, que termina en 99) y sobraban 46px a la
+               derecha — corrida ~18px respecto del espejo exacto. Con -34
+               queda en 119: 20px del rail (los mismos que tenía del lado
+               derecho) y 64 hasta el borde (los mismos que tenía a la
+               izquierda). El layout es el de antes, reflejado. */
+            margin-left: -34px !important;
             width: calc(100% + 60px) !important;
             max-width: calc(100% + 60px) !important;
         }
@@ -309,9 +326,17 @@ CSS = """    /* ================================================================
     /* segundo se usa :has(.st-key-app_reporte_compras). Ver regla #16.     */
     /* =================================================================== */
     @media (max-width: 900px) {
-        /* El contenido recupera el ancho: fuera la reserva del rail. */
+        /* El contenido recupera el ancho: fuera la reserva del rail.
+           2026-08-18: esta línea decía `padding-right` porque la reserva
+           vivía a la derecha. Al pasar el rail a la izquierda dejó de
+           anular nada y los 153px se quedaban puestos en un viewport de
+           375 — medido: el contenido arrancaba en x=153, o sea 40% de la
+           pantalla comida por un rail que en móvil ni siquiera es una
+           columna. Anular AMBOS lados es lo correcto: la regla no tiene
+           que volver a tocarse si el rail vuelve a cambiar de borde. */
         [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row),
         .block-container:has(.st-key-compras_tabs_row) {
+            padding-left: 1rem !important;
             padding-right: 1rem !important;
         }
         /* Rail: de columna fija a tira horizontal en el flujo del documento. */
@@ -319,7 +344,8 @@ CSS = """    /* ================================================================
             position: static !important;
             width: 100% !important;
             height: auto !important;
-            top: auto !important; right: auto !important; bottom: auto !important;
+            top: auto !important; bottom: auto !important;
+            left: auto !important; right: auto !important;
             z-index: auto !important;
             overflow-x: auto !important;
             overflow-y: hidden !important;

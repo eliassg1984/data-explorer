@@ -5618,3 +5618,45 @@ salvo `icono`):
      LastModified de R2), pero **en local los números pueden ir atrasados sin
      avisar**: antes de dar por bueno un total de la app local, contrastarlo
      contra el parquet.
+
+135. **El rail de vistas pasó del borde derecho al IZQUIERDO (2026-08-18) —
+     y lo caro no fue moverlo, fue lo que estaba MEDIDO contra él.** Mover el
+     rail son dos líneas (`right: 15px` → `left: 15px` y la reserva
+     `padding-right` → `padding-left`). Lo que costó la vuelta son los cinco
+     sitios que daban por hecho de qué lado estaba:
+
+     1. **El jalón de la tarjeta.** `compras_prov_drill_wrap` llevaba
+        `margin-left: -16px`, un número medido cuando el lado libre era el
+        izquierdo. Reflejado quedaba corrido 18px: la tarjeta arrancaba a
+        38px del rail (tenía 20 del otro lado) y dejaba 46px al borde (tenía
+        64). Con -34 el layout es el de antes, espejado: 20 y 64.
+     2. **El pill flotante "Proveedores"** se anclaba con
+        `right: calc(var(--rail-der-res) + 10px)` — derivado del rail para
+        seguirlo al plegarse. Con el rail del otro lado esa variable dejó de
+        decir nada sobre ese borde. Pasó a `right: 64px`, el borde derecho
+        real de la tarjeta. De paso se arregló solo un desfase viejo: medido,
+        el pill quedaba 44px adentro del borde que su propio comentario
+        decía alinear.
+     3. **La sombra del "vistazo"** (`box-shadow: -6px 0`) caía sobre el
+        contenido. El contenido cambió de lado: ahora es `6px 0`.
+     4. **El chevron del pestillo.** Apunta al DESTINO, no al estado
+        (`pestillos.py`), así que las dos flechas se dan vuelta.
+     5. **El reset de móvil, que es el que casi se escapa.** Decía
+        `padding-right: 1rem` para anular la reserva; al mudarse la reserva a
+        `padding-left`, dejó de anular nada y los 153px se quedaban puestos
+        en un viewport de 375 — 40% de la pantalla comida por un rail que en
+        móvil ni siquiera es una columna. Se arregló anulando **los dos
+        lados**: así la regla no vuelve a tocarse si el rail cambia de borde
+        otra vez. Sólo apareció por mirar en 375px; en escritorio todo se
+        veía perfecto.
+
+     **Lo que NO hubo que tocar** vale igual de documentarlo: la franja
+     superior (pill de fecha, chips) no se movió ni un píxel. Vive en
+     y=48..74 y el rail arranca en y=114 — nunca se cruzan, así que el lado
+     le da igual. Se verificó midiendo, no suponiendo.
+
+     Las variables siguen llamándose `--rail-der-*`. El nombre quedó
+     histórico: renombrarlas toca ~15 sitios en 4 ficheros más un assert de
+     `test_graficos.py`, y se prefirió dejarlo anotado en `_00_base.py` a
+     hacer medio renombre dentro del commit que mueve el layout. Si alguien
+     lo hace, que sea completo y en un commit propio.

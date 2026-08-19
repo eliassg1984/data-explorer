@@ -152,6 +152,14 @@ CSS = """    <style>
            recalcularon restando esos 90px (_40_ajuste_franja.py,
            _50_fecha.py) y la franja inferior arranca en 0.
 
+             OJO con el nombre: desde 2026-08-18 el rail de vistas vive
+             a la IZQUIERDA (ocupó el sitio que dejó el rail de
+             navegación al pasar a franja superior). El `der` de estas
+             cuatro variables es histórico; se conservó para no repartir
+             un renombre por 4 ficheros y un test en el mismo commit que
+             mueve el layout. Lo que sí es cierto hoy: son el ancho y la
+             reserva del RAIL DE VISTAS, del lado que esté.
+
              --rail-der-w    ancho VIGENTE del rail de vistas
              --rail-der-full ancho desplegado
              --rail-min      ancho de la lengüeta cuando está plegado

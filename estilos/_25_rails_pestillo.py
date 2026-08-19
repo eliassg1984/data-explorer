@@ -98,7 +98,9 @@ CSS = """    /* ================================================================
        "esto está flotando encima", no adherido. */
     :root:has(style.rail-der-plegado) .st-key-compras_tabs_row:hover {
         width: var(--rail-der-full) !important;
-        box-shadow: -6px 0 22px rgba(16, 16, 20, 0.16) !important;
+        /* La sombra cae SOBRE el contenido, así que sigue al rail: con el
+           rail a la izquierda (2026-08-18) el contenido está a su derecha. */
+        box-shadow: 6px 0 22px rgba(16, 16, 20, 0.16) !important;
     }
     :root:has(style.rail-der-plegado) .st-key-compras_tabs_row:hover
         .st-key-graf_tipo_chips.st-key-graf_tipo_chips {
