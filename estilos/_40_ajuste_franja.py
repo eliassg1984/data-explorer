@@ -101,6 +101,23 @@ CSS = """    /* ================================================================
         padding-bottom: 0 !important;
         margin-top: calc(-1 * var(--cab-offset-contenido)) !important;
     }
+    /* ── La banda le cede su columna al RAIL (2026-08-19) ──────────────
+       Hasta hoy iba de borde a borde (left:0) y no chocaba con nada porque
+       el rail arrancaba 66px más abajo, ya pasada la banda. Al subir el rail
+       a la altura de los controles (_20_compras_rail.py) esa banda le
+       cruzaría por detrás: el rail es una tarjeta blanca con borde, y se
+       vería un rectángulo montado sobre la barra.
+       Sólo se recorta donde el rail EXISTE (`:has`), que es el mismo
+       criterio que usa la reserva de ancho: en Ventas / Inventario /
+       Movimientos no hay rail y la banda sigue tocando los dos bordes.
+       El `left` es la misma reserva que usa el contenido, así que la banda
+       arranca donde arrancan la franja y las tarjetas — una sola línea
+       izquierda para las tres capas (regla #137) — y sigue al rail cuando
+       se pliega. */
+    :root:has(.st-key-compras_tabs_row) .st-key-fila_ajuste_top::before {
+        left: var(--rail-der-res) !important;
+    }
+
     .st-key-fila_ajuste_top::before {
         content: "" !important;
         /* 2026-08-18: top:0 -> var(--nav-top-alto). La franja ya no toca el

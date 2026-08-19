@@ -5774,3 +5774,35 @@ salvo `icono`):
      Verificado midiendo en 1280 y 1440, en Compras y en Ajuste: borde
      izquierdo y derecho idénticos entre franja y tarjeta, cero desborde
      horizontal, y el plegado del rail mueve las dos capas a la vez.
+
+138. **El rail subió a la altura de la franja (2026-08-19), y eso obligó a
+     recortar la banda blanca.** Cierre del modelo de MSN Dinero que empezó
+     la regla #137: allá la barra lateral ocupa su columna DESDE ARRIBA y la
+     franja de contexto vive a su derecha. Acá el rail arrancaba 66px más
+     abajo que los controles de la franja (`top: calc(--nav-top-alto +
+     74px)`); ahora usa el mismo `+ 8px` que ellos, así que rail y controles
+     empiezan en la misma línea (y=48 medido).
+
+     **Los dos cambios van juntos o no van.** La banda blanca de la franja
+     (`.st-key-fila_ajuste_top::before`, `position: fixed`, y=40..86) iba de
+     **borde a borde** — `left: 0`, decisión deliberada de 2026-08-12 para
+     que no quedara un filo sin pintar. Eso no chocaba con nada mientras el
+     rail arrancara por debajo de ella. Al subirlo, la banda le pasaría por
+     detrás y se vería el rail —una tarjeta blanca con borde— montado sobre
+     la barra. Por eso la banda ahora arranca en `var(--rail-der-res)`, la
+     misma reserva que usan la franja y las tarjetas: **una sola línea
+     izquierda para las tres capas**, y las tres siguen al rail cuando se
+     pliega.
+
+     El recorte va acotado con `:root:has(.st-key-compras_tabs_row)`, el
+     mismo criterio que la reserva de ancho: donde no hay rail, la banda
+     sigue tocando los dos bordes. (Al verificar apareció que hoy **todos**
+     los reportes medidos —Compras, Ajuste, Ventas, Inventario Valorizado—
+     dibujan el rail: el comentario de `_20_compras_rail.py` que decía "no en
+     Ventas / Inventario / Requerimientos" quedó viejo. El `:has()` se
+     mantiene igual: es la guarda correcta, no una optimización.)
+
+     Lo que NO se tocó: los `margin-top` negativos de las tarjetas. Estaban
+     calibrados para que tarjeta y rail arrancaran en la misma línea, y ese
+     objetivo cambió a propósito — en el modelo de referencia la barra
+     lateral empieza ARRIBA y las tarjetas más abajo, debajo de la franja.

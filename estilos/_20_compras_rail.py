@@ -30,7 +30,17 @@ CSS = """    /* ================================================================
            navegación superior (--nav-top-alto), que también es fija y le
            caería encima. En móvil la variable vale 0 y la cuenta vuelve a
            los 74 de siempre. */
-        top: calc(var(--nav-top-alto) + 74px) !important;
+        /* 2026-08-19: 74px -> 8px. El rail arranca a la MISMA altura que los
+           controles de la franja (que usan este mismo `+ 8px`), no 66px por
+           debajo. Es el modelo de MSN Dinero, que motivó el cambio: la barra
+           lateral ocupa su columna desde arriba y la franja de contexto vive
+           a su derecha, no por encima.
+           Esto sólo es posible junto con el cambio hermano de
+           _40_ajuste_franja.py: la banda blanca de la franja iba de borde a
+           borde (left:0, y=40..90) y el rail se le habría montado encima.
+           Ahora esa banda arranca después de la columna del rail. Los dos
+           cambios van juntos o no van. */
+        top: calc(var(--nav-top-alto) + 8px) !important;
         /* 2026-08-18, a pedido: el rail pasa del borde DERECHO al IZQUIERDO.
            Es el sitio que dejó libre el rail de navegación al convertirse en
            la franja superior (--nav-top-alto) unos commits antes: la columna
@@ -55,7 +65,7 @@ CSS = """    /* ================================================================
            tantas vistas que no entran (activa el overflow-y:auto de abajo
            en vez de desbordar). */
         height: auto !important;
-        max-height: calc(100vh - var(--nav-top-alto) - 74px) !important;
+        max-height: calc(100vh - var(--nav-top-alto) - 8px) !important;
         z-index: 900 !important;
         overflow-y: auto !important;
         margin: 0 !important;
