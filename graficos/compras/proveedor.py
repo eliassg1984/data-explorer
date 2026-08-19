@@ -14,7 +14,9 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from tema import ACENTO, GRIS_BORDE
+from st_aggrid import AgGrid, JsCode
+
+from tema import ACENTO, GRIS_BORDE, LAVANDA_CHIP
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, titulo_en_franja,
 )
@@ -30,10 +32,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     """Dashboard de Proveedor.
 
     Tabla-ranking (izq.): un proveedor por fila, ordenados por valor, con
-    `ProgressColumn` haciendo de barra. Clic en una fila → selecciona ese
-    proveedor como foco y filtra los paneles A y B de abajo; destildar el
-    checkbox de esa fila lo limpia. Al lado, la evolución del proveedor
-    elegido.
+    la barra de "Valor" pintada como FONDO de la celda (un `linear-gradient`
+    cortado en el % del valor — ver el bloque del AgGrid). Clic en una fila
+    la enfoca y filtra los paneles A y B de abajo; clic en la MISMA fila
+    quita el foco. Sin checkbox: el gesto es la fila entera. Al lado, la
+    evolución del proveedor elegido.
 
     Panel A: Top N productos comprados al proveedor en foco (valor + cantidad).
     Panel B: proveedores del producto seleccionado en Panel A.
@@ -227,48 +230,20 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # había antes, que necesitaba la lista al revés por cómo dibuja barras
     # horizontales de abajo hacia arriba; con la tabla eso ya no aplica).
 
-    # ── Procesar clic ANTES de dibujar ────────────────────────────────────
-    # Leemos la selección que Streamlit guardó en session_state[key] en la
-    # interacción previa. Así actualizamos el foco y construimos la tabla
-    # UNA sola vez con el foco correcto: sin doble rerun = sin parpadeo.
-    # Clic en la MISMA fila → la desenfoca; en otra → cambia el foco. El
-    # foco es lo que ABRE el drill inferior (paneles A/B), así que esto es lo
-    # que mantiene viva esa navegación.
-    _rank_tab_key = "compras_prov_rank_tab"
-    _rows_sel = ((st.session_state.get(_rank_tab_key) or {})
-                 .get("selection", {}).get("rows", []))
-    if _rows_sel:
-        _ri = _rows_sel[0]
-        if 0 <= _ri < len(_rk_nombres):
-            _clicked = _rk_nombres[_ri]
-            # "Otros" no es un proveedor real: agrupa a los que quedaron
-            # fuera, así que no hay drill que abrir.
-            if _clicked != "Otros":
-                # Dedup para no reprocesar el mismo clic en cada rerun (la
-                # selección de un st.dataframe PERSISTE, igual que la de
-                # st.plotly_chart — CLAUDE.md).
-                if st.session_state.get("compras_prov_last_click") != _clicked:
-                    st.session_state["compras_prov_last_click"] = _clicked
-                    _misma_fila = (_clicked == prov_focus)
-                    prov_focus = None if _misma_fila else _clicked
-                    prod_focus = None
-                    st.session_state["compras_prov_focus"]     = prov_focus
-                    st.session_state["compras_prov_prodfocus"] = None
-                    # El período ya no sale de esta tabla (el ranking no
-                    # tiene eje de tiempo): lo fija el de evolución.
-                    st.session_state["compras_prov_perfocus"]  = None
-    elif st.session_state.get("compras_prov_last_click") is not None:
-        # Selección VACÍA habiendo habido un clic antes = el usuario
-        # DESTILDÓ el checkbox de la fila enfocada. Eso sí cambia el valor
-        # del widget (rows: [i] → []), así que sí llega acá. Es la única
-        # forma de quitar el foco desde que se sacó el botón "✕ Quitar
-        # foco" — reclickear la fila ya seleccionada no dispara nada.
-        st.session_state["compras_prov_last_click"] = None
-        prov_focus = None
-        prod_focus = None
-        st.session_state["compras_prov_focus"]     = None
-        st.session_state["compras_prov_prodfocus"] = None
-        st.session_state["compras_prov_perfocus"]  = None
+    # ── El foco del ranking ───────────────────────────────────────────────
+    # 2026-08-19: el ranking pasó de `st.dataframe` a AgGrid, y con eso
+    # cambió DE DÓNDE sale el clic. Antes había que leer
+    # `session_state[key]` ANTES de dibujar la tabla (la selección de un
+    # st.dataframe queda ahí de la interacción previa) y llevar un dedup con
+    # `compras_prov_last_click` para no reprocesar el mismo clic en cada
+    # rerun. AgGrid DEVUELVE su selección en la llamada, así que el foco se
+    # resuelve justo después de dibujar el grid, más abajo — y el dedup
+    # desaparece: la selección ES el estado, no un evento que se repite.
+    # Key NUEVA al cambiar de widget: la vieja ("compras_prov_rank_tab")
+    # quedó en session_state con la forma del `st.dataframe` (un dict con
+    # {"selection": {"rows": [...]}}), y una sesión abierta que la reusara le
+    # pasaría ese valor al componente nuevo, que espera otra cosa.
+    _rank_tab_key = "compras_prov_rank_grid"
 
     # ── Tabla-ranking: datos que consume ────────────────────────────────
     # 2026-08-17, a pedido: el ranking se UNE con la tabla resumen — eran
@@ -416,50 +391,113 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 # deja sin marco.
                 with st.container(border=True,
                                   key="compras_prov_card_ranking"):
-                    # 2026-08-18, a pedido: el botón "✕ Quitar foco" que vivía
-                    # acá (en su propia columna, al lado del título) SE FUE. Lo
-                    # reemplaza destildar el checkbox de la fila enfocada, que
-                    # sí vacía la selección del `st.dataframe` y por lo tanto sí
-                    # dispara `on_select` — el caso que se procesa arriba, en el
-                    # `elif not _rows_sel`. Lo que NO funciona, y por eso existía
-                    # el botón, es reclickear la MISMA fila ya seleccionada: el
-                    # valor del widget no cambia y Streamlit no manda rerun.
                     st.markdown('<div class="cp-rank-tit">Ranking de '
                                 'proveedores</div>', unsafe_allow_html=True)
-                    # `ProgressColumn` en "Valor" reemplaza la barra horizontal
-                    # que dibujaba Plotly: mismo dato (monto), misma lectura de
-                    # longitud-proporcional-al-valor, ahora como celda de tabla.
-                    # `key` estable (no depende de `prov_focus`): el clic se
-                    # procesa ARRIBA, antes de construir esta tabla, leyendo
-                    # `st.session_state[_rank_tab_key]` de la interacción
-                    # anterior — así el rerun que abre el drill ya sale con el
-                    # foco correcto, sin un segundo rerun para "alcanzarlo".
-                    st.dataframe(
-                        pd.DataFrame({
-                            "Proveedor": _rk_nombres,
-                            "Valor": _rk_valores,
-                            "Documentos": _rk_docs,
-                            "%": _rk_pct,
-                        }),
-                        hide_index=True,
-                        width="stretch",
-                        height=_ALTO_FRAME,
-                        on_select="rerun",
-                        selection_mode="single-row",
-                        key=_rank_tab_key,
-                        column_config={
-                            "Proveedor": st.column_config.TextColumn(
-                                "Proveedor", width="medium"),
-                            "Valor": st.column_config.ProgressColumn(
-                                "Valor", format="S/ %.0f", min_value=0,
-                                max_value=float(max(_rk_valores))
-                                if _rk_valores else 1.0),
-                            "Documentos": st.column_config.NumberColumn(
-                                "Docs", format="%.0f", width="small"),
-                            "%": st.column_config.NumberColumn(
-                                "%", format="%.0f%%", width="small"),
+                    # ── El ranking es un AgGrid, no un `st.dataframe` ──────
+                    # 2026-08-19, a pedido: los checkbox de selección se van y
+                    # el gesto pasa a ser "clic en la fila". No era posible con
+                    # `st.dataframe`: su columna de selección no se puede
+                    # ocultar (no hay parámetro en 1.59) ni esconder por CSS,
+                    # porque la grilla se dibuja en un CANVAS y no hay nodo que
+                    # tocar. Cambiar de widget era la única salida.
+                    #
+                    # La barra de "Valor" NO necesitó un `cellRenderer` (ni la
+                    # clase `init()/getGui()` de la regla #25, ni los
+                    # sparklines de AG Grid, que son Enterprise): es el FONDO
+                    # de la celda, un `linear-gradient` cortado en el % del
+                    # valor. Los colores salen de `tema.py` y no de
+                    # `var(--accent)` a propósito — el grid vive en un iframe
+                    # propio y las variables CSS del documento padre no llegan.
+                    _rk_max = float(max(_rk_valores)) if _rk_valores else 1.0
+                    _rk_df = pd.DataFrame({
+                        "Proveedor": _rk_nombres,
+                        "Valor": _rk_valores,
+                        "Docs": _rk_docs,
+                        "%": _rk_pct,
+                        # Columna oculta: el % de LLENADO de la barra (contra
+                        # el mayor), que no es el mismo número que la columna
+                        # "%" (esa es sobre el total del rango).
+                        "_barra": [v / _rk_max * 100 for v in _rk_valores],
+                    })
+                    _js_barra = JsCode(
+                        "function(p){"
+                        " var w = Math.max(0, Math.min(100, p.data._barra||0));"
+                        " return {'background': 'linear-gradient(90deg,"
+                        f" {ACENTO} 0 ' + w + '%, {LAVANDA_CHIP} ' + w"
+                        " + '% 100%)',"
+                        " 'display':'flex','alignItems':'center'};"
+                        "}")
+                    _js_soles = JsCode(
+                        "function(p){ return p.value==null ? '' :"
+                        " 'S/ ' + Math.round(p.value).toLocaleString('es-PE'); }")
+                    _js_pct = JsCode(
+                        "function(p){ return p.value==null ? '' :"
+                        " Math.round(p.value) + '%'; }")
+                    # Clic en la fila = TOGGLE. `enableClickSelection` va en
+                    # False y la selección la maneja este handler: AG Grid, por
+                    # sí solo, NO deselecciona al reclickear la fila ya
+                    # seleccionada (pide Ctrl+clic, que nadie descubre).
+                    # `setSelected(valor, true)` limpia las demás → sigue
+                    # siendo selección única.
+                    _js_toggle = JsCode(
+                        "function(e){ e.node.setSelected(!e.node.isSelected(),"
+                        " true); }")
+                    _resp_rank = AgGrid(
+                        _rk_df,
+                        gridOptions={
+                            "columnDefs": [
+                                {"field": "Proveedor", "flex": 2,
+                                 "tooltipField": "Proveedor"},
+                                {"field": "Valor", "flex": 2,
+                                 "type": "numericColumn",
+                                 "cellStyle": _js_barra,
+                                 "valueFormatter": _js_soles},
+                                {"field": "Docs", "width": 80,
+                                 "type": "numericColumn"},
+                                {"field": "%", "width": 80,
+                                 "type": "numericColumn",
+                                 "valueFormatter": _js_pct},
+                                {"field": "_barra", "hide": True},
+                            ],
+                            "rowSelection": {"mode": "singleRow",
+                                             "checkboxes": False,
+                                             "enableClickSelection": False},
+                            "onRowClicked": _js_toggle,
+                            "rowHeight": 35,
+                            "headerHeight": 38,
+                            "suppressCellFocus": True,
+                            "suppressMovableColumns": True,
                         },
+                        allow_unsafe_jscode=True,
+                        theme="streamlit",
+                        height=_ALTO_FRAME,
+                        update_on=["selectionChanged"],
+                        key=_rank_tab_key,
                     )
+                    # ── El foco sale de la selección del grid ──────────────
+                    # AgGrid devuelve la selección VIGENTE en cada run (no un
+                    # evento), así que no hace falta dedup: alcanza con
+                    # comparar contra el foco guardado. Selección vacía = el
+                    # usuario reclickeó la fila (el toggle de arriba) y se
+                    # quita el foco. "Otros" no es un proveedor real —agrupa a
+                    # los que quedaron fuera— así que no abre drill.
+                    _sel_rank = getattr(_resp_rank, "selected_rows", None)
+                    if _sel_rank is not None and len(_sel_rank):
+                        _fila = (_sel_rank.iloc[0] if hasattr(_sel_rank, "iloc")
+                                 else _sel_rank[0])
+                        _clicked = str(_fila["Proveedor"])
+                    else:
+                        _clicked = None
+                    if _clicked == "Otros":
+                        _clicked = prov_focus          # ignorar: no cambia nada
+                    if _clicked != prov_focus:
+                        prov_focus = _clicked
+                        prod_focus = None
+                        st.session_state["compras_prov_focus"]     = prov_focus
+                        st.session_state["compras_prov_prodfocus"] = None
+                        # El período ya no sale de esta tabla (el ranking no
+                        # tiene eje de tiempo): lo fija el de evolución.
+                        st.session_state["compras_prov_perfocus"]  = None
             with _c_evo:
                 # ── BLOQUE 2: la evolución, con su propio período ──
                 with st.container(border=True,

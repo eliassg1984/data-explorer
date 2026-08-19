@@ -5660,3 +5660,62 @@ salvo `icono`):
      `test_graficos.py`, y se prefirió dejarlo anotado en `_00_base.py` a
      hacer medio renombre dentro del commit que mueve el layout. Si alguien
      lo hace, que sea completo y en un commit propio.
+
+136. **El ranking de Proveedor pasó de `st.dataframe` a AgGrid para sacarle
+     los checkbox (2026-08-19) — y la barra NO necesitó un `cellRenderer`.**
+     El pedido era "que funcione con clic en la fila, sin los check". Con
+     `st.dataframe` es imposible: su columna de selección no tiene parámetro
+     que la oculte (revisada la firma en Streamlit 1.59.2) y tampoco se puede
+     esconder por CSS, porque la grilla se dibuja en un **canvas** — no hay
+     nodo que tocar. Cambiar de widget era la única salida.
+
+     **La barra es el FONDO de la celda.** Lo que hacía `column_config.
+     ProgressColumn` lo hace un `cellStyle` con `linear-gradient(90deg,
+     ACENTO 0 W%, LAVANDA_CHIP W% 100%)`, donde W sale de una columna oculta
+     (`_barra`, el % contra el mayor — que NO es la columna "%", esa es sobre
+     el total del rango). Tres caminos se descartaron con motivo:
+     los **sparklines** de AG Grid son Enterprise; un **`cellRenderer`**
+     propio obliga a la clase `init()/getGui()` de la regla #25; y el
+     gradiente no necesita ninguno de los dos.
+
+     **Los colores van desde `tema.py`, nunca `var(--accent)`:** el grid vive
+     en un iframe propio y las variables CSS del documento padre no llegan
+     ahí. Es el mismo motivo por el que `custom_css` de AgGrid ya recibía
+     hex de `tema.py` (CLAUDE.md § Colores).
+
+     **El toggle hay que escribirlo.** AG Grid, con `rowSelection: {mode:
+     "singleRow"}`, no deselecciona al reclickear la fila ya seleccionada
+     (pide Ctrl+clic, que nadie descubre). Se resuelve con
+     `enableClickSelection: false` + un `onRowClicked` que hace
+     `e.node.setSelected(!e.node.isSelected(), true)` — el segundo argumento
+     limpia las demás, así sigue siendo selección única. Con eso el gesto
+     queda igual al que había con el checkbox, pero en toda la fila.
+
+     **El clic dejó de procesarse ANTES de dibujar.** Con `st.dataframe` la
+     selección se leía de `session_state[key]` de la interacción previa, con
+     un dedup (`compras_prov_last_click`) para no reprocesar el mismo clic en
+     cada rerun. AgGrid DEVUELVE su selección en la llamada: el foco se
+     resuelve justo después de dibujar el grid y el dedup desapareció — la
+     selección ES el estado, no un evento que se repite. Todo lo que se
+     dibuja después (evolución, paneles A/B) ve el foco nuevo en el mismo
+     run, así que no hay doble rerun ni parpadeo.
+
+     **Key nueva al cambiar de widget.** Se renombró
+     `compras_prov_rank_tab` → `compras_prov_rank_grid`: la vieja quedaba en
+     `session_state` con la forma del `st.dataframe` (`{"selection":
+     {"rows": [...]}}`) y una sesión abierta se la habría pasado al
+     componente nuevo.
+
+     **Al verificar, dos falsos negativos que conviene reconocer:** el grid
+     se ve como un `stSkeleton` con el iframe en 0x0 durante los primeros
+     segundos (no es un error: es la negociación de alto del componente), y
+     una medición tomada a mitad de rerun mostró los paneles A/B con el
+     proveedor ANTERIOR mientras el título ya tenía el nuevo. Las dos veces
+     el diagnóstico correcto fue esperar y volver a medir, no tocar código.
+     Para mirar dentro del componente: `iframe.contentDocument` es
+     accesible (mismo origen) y ahí se ven `.ag-row` y los estilos ya
+     resueltos.
+
+     Pendiente deliberado: el Panel A y los dos rankings de `producto.py`
+     siguen con `st.dataframe` y sus checkbox. Se convierten con este mismo
+     patrón cuando toque.
