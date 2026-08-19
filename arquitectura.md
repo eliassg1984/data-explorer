@@ -19,7 +19,7 @@ actualiza este documento en el mismo commit.
 | Fichero | Trabajo (uno solo) |
 |---|---|
 | `app.py` | Orquestador: navegación, filtros, fragmentos, llama a los renderizadores. |
-| `estado_rango.py` | **Dueño único** del eje temporal de la franja superior: rango (`clave_rango`, `asegurar_rango`, `atajos_rango`, `aplicar_atajo`) **y corte** (`clave_corte`, `clave_modo`, `modo_fecha`, `corte_vigente`, `aplicar_corte`, `volver_a_rango`). Nadie escribe esas claves fuera de este módulo — ver reglas #24 y #62. |
+| `estado_rango.py` | **Dueño único** del eje temporal de la franja superior: rango (`clave_rango`, `asegurar_rango`, `atajos_rango`, `aplicar_atajo`) **y corte** (`clave_corte`, `clave_modo`, `modo_fecha`, `corte_vigente`, `aplicar_corte`, `volver_a_rango`). Nadie escribe esas claves fuera de este módulo — ver reglas #24 y #62. Su hermano chico es `graficos/periodo.py`, el rango POR VISTA (regla #133): no le disputa nada — la franja sigue mandando y una vista que no lo importe se comporta igual que antes. |
 | `cortes.py` | Agrupa fechas en **cortes**: las rachas de días de una misma sesión de inventario (salto ≤ `CORTE_MAX_SALTO_DIAS`). Un corte es un CONJUNTO de días, no un intervalo — ver regla #62. Sin dependencias de streamlit ni de `graficos/`, porque lo consumen los dos lados: la franja de `app.py` y `graficos/ajuste/_comun.py` (que lo reexporta con los nombres privados de siempre). |
 | `data.py` | Carga de datos: DuckDB + httpfs leyendo parquets de R2 (secrets). Sistema de refresco bajo demanda vía R2. |
 | `tablas/` | **Paquete de tablas AgGrid** (refactor 2026-08-01; antes un `tablas.py` de 2.028 líneas). `__init__.py` re-exporta la API pública. `_css.py` (CSS de grid y paneles), `_config.py` (estilos de celda/fila, sidebar, totales), `desktop.py` (`renderizar_aggrid_desktop`), `movil.py` (`renderizar_aggrid_movil`), `compras.py` (`renderizar_aggrid_compras`), `ajuste_pivote.py` (`renderizar_aggrid_pivote_ajuste`, tabla "Por fecha" de Ajuste de Inventario — ver regla #25). `renderizar_tabla_compras` se borró el 2026-08-08 (llevaba desde 2026-08-01 sin llamadores). |
@@ -5543,3 +5543,78 @@ salvo `icono`):
      `_css_proveedor.py` pone ahí para que la tabla y la evolución no se
      apreten. El título "Ranking de proveedores" ahora va a ancho
      completo, con el mismo `.cp-rank-tit`.
+
+134. **Piloto de "cada gráfico elige su rango" (2026-08-18): el módulo
+     `graficos/periodo.py` y su primera adopción, la evolución de Compras ›
+     Proveedor.** Nace de una observación del usuario: los webapps de
+     finanzas no ponen un calendario como puerta de entrada, ponen períodos.
+     La decisión fue pilotear en UN reporte antes de extenderlo.
+
+     **La mitad que ya era cierta.** "Cargar el parquet entero y filtrar en
+     memoria" no era una propuesta nueva: ya pasa en 7 de los 8 archivos.
+     El único con `carga_por_rango` es Ventas, y medido el 2026-08-18 se
+     entiende por qué: 11.5 MB en R2 → 222.391 filas × 59 columnas → **173 MB
+     de RAM** y 37s en frío (11s tibio). El resto es chico: ajusteinventario
+     235k×19 = 60 MB en 5s, requerimientos 144k×15 = 32 MB, compras 51k×27 =
+     18 MB. Las 10 columnas más pesadas de Ventas son llaves de texto
+     (`LLAVE LOCAL DOCUMENTO ITEM`, 7.4 MB) que ningún gráfico dibuja: si
+     algún día hay que cargarlo entero, el `SELECT` acotado es la palanca —
+     `.astype("category")` NO lo es, las columnas de texto ya vienen con el
+     dtype `str` de pandas 3 y el ahorro medido fue cero.
+
+     **La dependencia entre las dos mitades es real y va en un solo sentido:
+     rango por gráfico EXIGE carga total.** Mientras el loader de R2 dependa
+     del rango de la franja, una vista que pida su propia ventana pediría
+     datos que nadie descargó.
+
+     **Lo que hace el módulo.** `ventana()` y `recortar()` son puras (las fija
+     `test_graficos.py`, 16 asserts) y `selector()` es lo único que toca
+     Streamlit. La opción `HEREDA` ("Rango") no recorta nada: es el default
+     heredable, así que la franja sigue siendo el dueño del rango global.
+
+     **El ancla son los datos, no el calendario.** `estado_rango.atajos_rango`
+     ancla a `hoy` y hace bien (ahí el usuario elige fechas de calendario y
+     "Este mes" ES este mes). Una ventana relativa anclada a `hoy` es un error
+     caro: los parquets se regeneran de madrugada y los documentos entran con
+     retraso, así que "últimos 12 meses" terminaría en un tramo final vacío
+     que se lee como una caída del negocio. El ancla es el ÚLTIMO DÍA CON
+     DATOS. Hay un assert dedicado a esto.
+
+     **Qué reemplazó en Proveedor.** La evolución YA tenía ventana propia,
+     pero implícita: si el rango de la franja daba menos de 2 períodos,
+     conmutaba sola al histórico completo con un `tail(12)` fijo, y el usuario
+     se enteraba después por el sufijo "· todo el histórico". Acertaba y era
+     inauditable. Ahora la ventana es un control suyo (Rango · 3m · 12m · 24m
+     · Todo, default 12m) y el `tail(12)` se fue: contradecía al selector
+     (pedir 24m y ver 12 puntos). Las flechas de ventana (`_sl`) siguen siendo
+     del RANGO, así que sólo aplican cuando la tarjeta hereda.
+
+     **Dos trampas que costaron una vuelta cada una:**
+
+     1. **El aviso "1 solo período" NO puede ser un `st.caption`.** Con la
+        heurística muda fuera, elegir "Rango" sobre 15 días vuelve a dar un
+        punto suelto — y hay que decirlo, no corregirlo a escondidas. Como
+        caption medía **41px** (dos líneas en una columna de 399) y empujaba
+        la tarjeta de 556 a 576px = su `max-height`, con `scrollHeight` 615
+        contra `clientHeight` 574: scroll interno, o sea el aviso de que algo
+        no se ve tapando lo que sí se veía. Va en el sufijo del título, donde
+        cuesta cero alto y queda pegado a las pills que lo resuelven.
+     2. **La fila de pills sale del presupuesto vertical** (`alturas.
+        FRANJA_PILLS = 30`, medido: 24 de botón + 6 de margen). La figura de
+        al lado se lo resta (`_ALTO_EVO = _ALTO_FRAME - FRANJA_PILLS`) para
+        que las dos columnas terminen a la misma altura. El primer valor fue
+        42 a ojo y sobraba 12px: se corrigió MIDIENDO en el navegador, que es
+        la única forma que funciona acá.
+
+     **Y una lección de método, no de código:** verificando esto apareció un
+     número que no cerraba (agosto daba S/ 2.104 donde el parquet dice 8.821).
+     Antes de tocar nada se comprobó por el camino VIEJO (la opción "Rango",
+     que no pasa por el módulo nuevo) y daba lo mismo → no era el cambio. Era
+     el server local sirviendo un snapshot viejo de `compras.parquet`: su
+     atajo "Todo" decía `1 ene 2023 – 9 ago 2026` cuando el parquet ya llega
+     al 15. `data.cargar()` desde un proceso nuevo SÍ devuelve los datos
+     frescos, y `limpiar_cache()` desde otro proceso NO borra el `.memo`
+     persistido. En Cloud no pasa (`_vigilar_refresco` limpia al cambiar el
+     LastModified de R2), pero **en local los números pueden ir atrasados sin
+     avisar**: antes de dar por bueno un total de la app local, contrastarlo
+     contra el parquet.

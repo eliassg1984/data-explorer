@@ -152,6 +152,18 @@ UNA fila (Ventas › Por hora). Medida en el navegador el 2026-08-14, contra
 los 96 de `FRANJA_CONTROLES`, que es la de dos filas y dos hairlines."""
 
 
+FRANJA_PILLS = 30
+"""Alto de una fila de `st.pills` SOLA: sin título, sin hairline, sin tabs —
+el selector de período por tarjeta de `graficos/periodo.py`.
+
+24px de botón + 6 de margen inferior, MEDIDO en el navegador el 2026-08-18
+sobre Compras › Proveedor (con el aplanado de `_css_proveedor.py`: sin él
+Streamlit mete ~30px más de cromo alrededor del widget). Existe porque ese
+selector se agrega DENTRO de una tarjeta que ya estaba llena: los píxeles que
+ocupa hay que restárselos a la figura, o la tarjeta crece y su eje X termina
+debajo del borde (el modo de fallo de `FRANJA_CONTROLES`)."""
+
+
 # ── LA RESTA NO SE HACE ACÁ ────────────────────────────────────────────────
 # Acá vivió `reparto(alto_figura, ...)` durante un día: devolvía el alto del
 # panel que comparte la tarjeta con una figura, restando contra CONTENIDO.

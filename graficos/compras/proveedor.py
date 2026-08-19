@@ -20,7 +20,7 @@ from graficos.base import (
 )
 from graficos.compras._css_proveedor import CSS as CSS_PROVEEDOR
 from graficos.compras._documentos_proveedor import tabla_documentos
-from graficos import alturas
+from graficos import alturas, periodo
 
 
 @st.fragment
@@ -300,6 +300,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # (más abajo) para su `st.dataframe` — el alto de una FILA de tabla, no
     # el de una barra de gráfico (26px, lo que usaba el ranking viejo).
     _ALTO_FRAME = alturas.por_filas(8, px_fila=35, extra=45, minimo=0)
+    # La evolución comparte su columna con el selector de período, así que su
+    # figura mide una fila de pills MENOS que la tabla de al lado. Las dos
+    # columnas terminan a la misma altura.
+    _ALTO_EVO = max(alturas.MINI, _ALTO_FRAME - alturas.FRANJA_PILLS)
 
     # ── Selector de granularidad FLOTANTE sobre el gráfico ────────────────
     # El contenedor "compras_prov_card_chart" es posición relativa; dentro,
@@ -443,51 +447,72 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 if _prov_evo is None:
                     st.caption("Sin proveedores en el rango.")
                 else:
-                    # De dónde salen los períodos: el rango de la franja
-                    # suele tener UNO solo (un mes, o un año en granularidad
-                    # Año), y una línea de un punto no dibuja ninguna
-                    # evolución — se veía un punto suelto en el aire
-                    # (reportado con captura). Así que si el rango no da al
-                    # menos 2 períodos, la evolución se calcula sobre el
-                    # HISTÓRICO COMPLETO (`d_full`), que es exactamente lo
-                    # que el Panel B ya ofrece con su toggle "Todo".
-                    # El ranking de al lado sigue mirando el rango: son dos
-                    # preguntas distintas —"quién pesa más ACÁ" y "cómo viene
-                    # este proveedor"— y el caption lo dice cuando difieren.
-                    _evo_hist = False
+                    # ── El período de ESTA tarjeta, elegido por el usuario ──
+                    # Antes acá había una heurística muda: si el rango de la
+                    # franja daba menos de 2 períodos (un mes, o un año en
+                    # granularidad Año), la evolución se pasaba sola al
+                    # histórico completo — una línea de un punto no dibuja
+                    # ninguna evolución (reportado con captura). Acertaba,
+                    # pero el usuario se enteraba DESPUÉS, por el caption.
+                    #
+                    # Desde 2026-08-18 la ventana es un control suyo
+                    # (`graficos/periodo.py`): el ranking de al lado sigue
+                    # mirando el rango de la franja y la evolución mira lo
+                    # que le pidan. Son dos preguntas distintas —"quién pesa
+                    # más ACÁ" y "cómo viene este proveedor"— y ahora cada
+                    # una tiene su eje de tiempo, en vez de compartir uno y
+                    # corregirlo a escondidas.
+                    # El título se reserva ANTES del selector y se
+                    # rellena al final: nombra la ventana, así que no puede
+                    # escribirse hasta saber cuál eligió el usuario, pero
+                    # tiene que DIBUJARSE arriba de él (si no, la columna de
+                    # la evolución arranca con unas pills sueltas y su título
+                    # deja de alinear con el del ranking de al lado).
+                    _ph_tit_evo = st.empty()
+                    _op_evo = periodo.selector("cp_evo_periodo")
+                    _evo_hist = _op_evo != periodo.HEREDA
                     _src_evo = base
-                    if len(periodos) < 2 and d_full is not None and col_fecha:
+                    if _evo_hist and d_full is not None and col_fecha:
+                        # La ventana se recorta sobre `d_full` (sin el filtro
+                        # de fecha de la franja) ANTES de agrupar por período:
+                        # recortar después dejaría los períodos del borde
+                        # partidos a la mitad.
+                        _d_evo = periodo.recortar(d_full, col_fecha, _op_evo)
                         # `cant` y `docu` no los usa la línea, pero sí el
                         # resumen de abajo: tiene que poder sumar sobre la
                         # MISMA fuente que el gráfico que resume.
                         _bf = pd.DataFrame({
-                            "prov":  d_full[col_prov].astype(str).values,
-                            "valor": pd.to_numeric(d_full[col_valor],
+                            "prov":  _d_evo[col_prov].astype(str).values,
+                            "valor": pd.to_numeric(_d_evo[col_valor],
                                                    errors="coerce").fillna(0).values,
-                            "cant":  (pd.to_numeric(d_full[col_cant],
+                            "cant":  (pd.to_numeric(_d_evo[col_cant],
                                                     errors="coerce").fillna(0).values
                                       if col_cant else 0.0),
-                            "docu":  (d_full[col_docu].astype(str).values
+                            "docu":  (_d_evo[col_docu].astype(str).values
                                       if col_docu else ""),
-                            "fecha": pd.to_datetime(d_full[col_fecha],
+                            "fecha": pd.to_datetime(_d_evo[col_fecha],
                                                     errors="coerce").values,
                         })
                         _bf = _agregar_periodo(
                             _bf[_bf["prov"].notna() & (_bf["prov"] != "nan")])
                         if not _bf.empty:
                             _src_evo = _bf
-                            _evo_hist = True
+                        else:
+                            _evo_hist = False
                     _per_evo = (_src_evo[["_per_sort", "per"]].drop_duplicates()
                                 .sort_values("_per_sort")["per"].tolist())
                     _per_evo = list(dict.fromkeys(_per_evo))
                     _serie_evo = (_src_evo[_src_evo["prov"] == _prov_evo]
                                   .groupby("per")["valor"].sum()
                                   .reindex(_per_evo, fill_value=0))
-                    # Sobre el histórico se muestran los últimos períodos (no
-                    # la ventana de las flechas, que es del rango); sobre el
-                    # rango se respeta esa ventana.
+                    # Con ventana propia se dibuja lo que el usuario pidió,
+                    # entero: acá vivía un `tail(12)` fijo que tenía sentido
+                    # cuando la fuente era "todo el histórico" y nadie la
+                    # había elegido, pero ahora contradiría al selector (pedir
+                    # 24m y ver 12 puntos). Las flechas de ventana (`_sl`) son
+                    # del RANGO, así que solo se aplican cuando la tarjeta
+                    # hereda el rango.
                     if _evo_hist:
-                        _serie_evo = _serie_evo.tail(12)
                         _evo_x = list(_serie_evo.index)
                         _evo_y = [float(v) for v in _serie_evo.values]
                     else:
@@ -527,7 +552,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     _paso_evo = max(1, -(-len(_evo_x) // 6))
                     _tickv = [x for i, x in enumerate(_evo_x)
                               if i % _paso_evo == 0]
-                    _compras_layout(fig_evo, alto=_ALTO_FRAME)
+                    # La fila de pills sale del MISMO presupuesto que la
+                    # figura (alturas.py § LO QUE LA FIGURA NO ES): sin la
+                    # resta, la columna de la evolución crece 42px contra la
+                    # del ranking y la tarjeta empuja su propio borde.
+                    _compras_layout(fig_evo, alto=_ALTO_EVO)
                     fig_evo.update_layout(
                         margin=dict(l=10, r=10, t=6, b=10),
                         # size=10 (reportado "casi no se ven"): es el mismo
@@ -549,11 +578,30 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         showlegend=False,
                         hovermode="x unified",
                     )
-                    st.markdown(
+                    # El sufijo lo pone el propio módulo del período: es
+                    # la misma opción escrita en prosa ("últimos 12 meses"),
+                    # no un texto paralelo que un día quede desfasado del
+                    # control que tiene tres píxeles más arriba.
+                    _et_evo = periodo.etiqueta(_op_evo)
+                    # Un punto suelto no dibuja ninguna evolución. Antes eso
+                    # se corregía solo (se saltaba al histórico sin avisar);
+                    # ahora la ventana la eligió el usuario, así que la salida
+                    # correcta es DECIRLO y dejarle los controles que lo
+                    # arreglan, no pasar por encima de lo que pidió. Va en el
+                    # sufijo del título y no en un `st.caption` porque el
+                    # caption medía 41px (dos líneas en una columna de 399) y
+                    # empujaba la tarjeta a scroll interno: el aviso de que
+                    # algo no se ve terminaba tapando lo que sí se veía.
+                    # Acá cuesta cero alto y queda pegado a las pills que lo
+                    # resuelven, que están tres píxeles más abajo.
+                    _suf_evo = " · ".join(
+                        x for x in (_et_evo,
+                                    "1 solo período" if len(_evo_x) < 2 else "")
+                        if x)
+                    _ph_tit_evo.markdown(
                         f'<div class="cp-evo-tit">Evolución · '
                         f'{_compras_truncar(_prov_evo, 22)}'
-                        + ('<span> · todo el histórico</span>'
-                           if _evo_hist else '')
+                        + (f'<span> · {_suf_evo}</span>' if _suf_evo else '')
                         + '</div>',
                         unsafe_allow_html=True)
                     st.plotly_chart(

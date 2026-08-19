@@ -853,6 +853,90 @@ def _pruebas_estado_y_utils():
     return fallos
 
 
+def _pruebas_periodo_por_vista():
+    """graficos/periodo.py — la ventana PROPIA de una tarjeta.
+
+    Lo que fijan estos asserts no es aritmética de fechas, es el criterio que
+    motivó el módulo: la ventana se cuenta desde el ÚLTIMO DÍA CON DATOS, no
+    desde `hoy`. Anclarla a `hoy` con parquets que llegan con retraso deja un
+    tramo final vacío que se lee como una caída del negocio — y es
+    exactamente el error que nadie ve, porque el gráfico sale lindo.
+
+    El resto son los bordes que ya rompieron a otras vistas: heredar el rango
+    tiene que ser un no-op, y una ventana más larga que el histórico no puede
+    devolver un tramo que no existe (un eje de categorías dibujaría los meses
+    vacíos).
+    """
+    import pandas as pd
+    from graficos import periodo
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    periodo · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA periodo · {nombre}: got={got!r} exp={exp!r}")
+
+    ancla = pd.Timestamp("2026-08-15")
+
+    check("heredar no define ventana",
+          periodo.ventana(periodo.HEREDA, ancla), None)
+    check("sin ancla (df vacío) no define ventana",
+          periodo.ventana("12m", None), None)
+
+    # 12 meses que terminan el 15-ago arrancan el 16-ago del año pasado: el 15
+    # ya lo contó la ventana anterior.
+    check("12m arranca al día siguiente del año pasado",
+          periodo.ventana("12m", ancla)[0], pd.Timestamp("2025-08-16"))
+    check("12m termina en el ancla", periodo.ventana("12m", ancla)[1], ancla)
+    check("3m cuenta tres meses", periodo.ventana("3m", ancla)[0],
+          pd.Timestamp("2026-05-16"))
+
+    # El piso recorta: pedir 24m sobre 8 meses de histórico no puede devolver
+    # un arranque anterior al primer dato.
+    check("la ventana no arranca antes del primer dato",
+          periodo.ventana("24m", ancla, minimo=pd.Timestamp("2026-01-01"))[0],
+          pd.Timestamp("2026-01-01"))
+    check("Todo va del primer dato al ancla",
+          periodo.ventana("Todo", ancla, minimo=pd.Timestamp("2024-03-02")),
+          (pd.Timestamp("2024-03-02"), ancla))
+
+    # ── recortar() sobre un df real ──────────────────────────────────────
+    df = pd.DataFrame({
+        "f": pd.to_datetime(["2024-01-15", "2025-06-30", "2026-03-01",
+                             "2026-08-15"]),
+        "v": [1, 2, 3, 4],
+    })
+    check("heredar devuelve el df intacto",
+          len(periodo.recortar(df, "f", periodo.HEREDA)), 4)
+    # El ancla sale del propio df (2026-08-15), NO de la fecha de hoy: con
+    # `hoy` este mismo assert cambiaría de resultado cada día que pasa.
+    check("12m deja solo lo del último año", 
+          list(periodo.recortar(df, "f", "12m")["v"]), [3, 4])
+    check("Todo no descarta nada", len(periodo.recortar(df, "f", "Todo")), 4)
+    check("columna inexistente no revienta",
+          len(periodo.recortar(df, "no_existe", "12m")), 4)
+    check("df vacío no revienta",
+          len(periodo.recortar(df.iloc[:0], "f", "12m")), 0)
+
+    # Una fecha CON HORA no puede caerse del borde superior de su ventana.
+    df_h = pd.DataFrame({"f": pd.to_datetime(["2026-08-15 23:30:00"]),
+                         "v": [1]})
+    check("la última fecha con hora entra en la ventana",
+          len(periodo.recortar(df_h, "f", "12m", ancla=ancla)), 1)
+
+    # La etiqueta del título es la MISMA opción en prosa: si divergen, el
+    # título miente sobre el control que tiene encima.
+    check("etiqueta de heredar es vacía", periodo.etiqueta(periodo.HEREDA), "")
+    check("etiqueta de 12m", periodo.etiqueta("12m"), "últimos 12 meses")
+    check("etiqueta de Todo", periodo.etiqueta("Todo"), "todo el histórico")
+
+    return fallos
+
+
 def _pruebas_anomalias():
     """graficos/ajuste/_anomalias.py — "¿es raro PARA ESTE producto?".
 
@@ -1297,6 +1381,9 @@ def main():
 
     # ── Estado del rango y resolución de columnas (lógica pura) ─────────
     fallos += _pruebas_estado_y_utils()
+
+    # ── Ventana propia de una tarjeta (graficos/periodo.py) ─────────────
+    fallos += _pruebas_periodo_por_vista()
 
     # ── Deteccion de anomalias en Ajuste ────────────────────────────────
     fallos += _pruebas_anomalias()

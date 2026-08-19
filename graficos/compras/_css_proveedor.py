@@ -709,7 +709,8 @@ CSS = """        <style>
            muerto durante varios commits en Ano Pasado (arquitectura.md
            #107, 2do addendum). */
         .st-key-topn_float [data-testid="stButtonGroup"],
-        .st-key-panelb_scope_float [data-testid="stButtonGroup"] {
+        .st-key-panelb_scope_float [data-testid="stButtonGroup"],
+        .st-key-cp_evo_periodo [data-testid="stButtonGroup"] {
             border: none !important;
             border-radius: 0 !important;
             background: transparent !important;
@@ -720,12 +721,14 @@ CSS = """        <style>
            Familia. Sin capsula que los una, el aire es lo unico que separa
            una opcion de la otra. */
         .st-key-topn_float [data-testid="stButtonGroup"] > div,
-        .st-key-panelb_scope_float [data-testid="stButtonGroup"] > div {
+        .st-key-panelb_scope_float [data-testid="stButtonGroup"] > div,
+        .st-key-cp_evo_periodo [data-testid="stButtonGroup"] > div {
             gap: 14px !important;
             flex-wrap: nowrap !important;
         }
         .st-key-topn_float [data-testid="stButtonGroup"] button[data-variant="pills"],
-        .st-key-panelb_scope_float [data-testid="stButtonGroup"] button[data-variant="pills"] {
+        .st-key-panelb_scope_float [data-testid="stButtonGroup"] button[data-variant="pills"],
+        .st-key-cp_evo_periodo [data-testid="stButtonGroup"] button[data-variant="pills"] {
             background: transparent !important;
             border: none !important;
             border-radius: 0 !important;
@@ -741,6 +744,8 @@ CSS = """        <style>
         .st-key-topn_float [data-testid="stButtonGroup"]
             button[data-variant="pills"][data-selected="true"],
         .st-key-panelb_scope_float [data-testid="stButtonGroup"]
+            button[data-variant="pills"][data-selected="true"],
+        .st-key-cp_evo_periodo [data-testid="stButtonGroup"]
             button[data-variant="pills"][data-selected="true"] {
             border-bottom-color: var(--accent) !important;
             color: var(--accent-deep) !important;
@@ -749,8 +754,22 @@ CSS = """        <style>
         .st-key-topn_float [data-testid="stButtonGroup"]
             button[data-variant="pills"]:hover,
         .st-key-panelb_scope_float [data-testid="stButtonGroup"]
+            button[data-variant="pills"]:hover,
+        .st-key-cp_evo_periodo [data-testid="stButtonGroup"]
             button[data-variant="pills"]:hover {
             color: var(--accent) !important;
+        }
+
+        /* ── Selector de período de la EVOLUCIÓN (graficos/periodo.py) ────
+           Vive entre el título de la tarjeta y su gráfico. El alto total de
+           esta fila está presupuestado en `alturas.FRANJA_PILLS` y la figura
+           de al lado ya se lo restó: si se le agrega aire acá, hay que
+           cambiar esa constante o la tarjeta empuja su borde. */
+        .st-key-cp_evo_periodo {
+            margin: 0 0 6px !important; padding: 0 !important;
+        }
+        .st-key-cp_evo_periodo [data-testid="stButtonGroup"] {
+            margin: 0 !important; padding: 0 !important;
         }
 
         /* ── Panel B: tarjetas por proveedor (reemplaza el st.dataframe) ──
