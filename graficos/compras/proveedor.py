@@ -16,7 +16,7 @@ import streamlit as st
 
 from st_aggrid import AgGrid, JsCode
 
-from tema import ACENTO, GRIS_BORDE, LAVANDA_CHIP
+from tema import ACENTO, GRIS_BORDE, TEXTO_PRINCIPAL
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, titulo_en_franja,
 )
@@ -419,13 +419,34 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         # "%" (esa es sobre el total del rango).
                         "_barra": [v / _rk_max * 100 for v in _rk_valores],
                     })
+                    # Dos decisiones de legibilidad, las dos aprendidas
+                    # mirando la primera versión (2026-08-19):
+                    #
+                    # 1. La pista va TRANSPARENTE, no tintada. Con un color de
+                    #    fondo la columna entera se leía como un bloque
+                    #    lavanda —"una sombra"— compitiendo con las barras y
+                    #    tapando las bandas de fila del resto de la tabla.
+                    #    Sin pista, lo único que se ve es el dato.
+                    # 2. La barra llega hasta el 62% de la celda, no al 100%,
+                    #    y el texto va alineado a la DERECHA: así nunca se
+                    #    pisan. Antes el monto caía encima del morado y quedaba
+                    #    texto oscuro sobre fondo oscuro. El 62% no falsea la
+                    #    lectura: todas las barras se escalan igual, así que
+                    #    las proporciones entre filas se mantienen.
+                    #    (`justifyContent` es obligatorio: el `display:flex`
+                    #    de esta misma regla anula el alineado a la derecha
+                    #    que trae `type: numericColumn`.)
                     _js_barra = JsCode(
                         "function(p){"
-                        " var w = Math.max(0, Math.min(100, p.data._barra||0));"
+                        " var w = Math.max(0, Math.min(100, p.data._barra||0))"
+                        " * 0.62;"
                         " return {'background': 'linear-gradient(90deg,"
-                        f" {ACENTO} 0 ' + w + '%, {LAVANDA_CHIP} ' + w"
+                        f" {ACENTO} 0 ' + w + '%, transparent ' + w"
                         " + '% 100%)',"
-                        " 'display':'flex','alignItems':'center'};"
+                        " 'display':'flex','alignItems':'center',"
+                        " 'justifyContent':'flex-end',"
+                        f" 'color':'{TEXTO_PRINCIPAL}'"
+                        "};"
                         "}")
                     _js_soles = JsCode(
                         "function(p){ return p.value==null ? '' :"

@@ -5716,6 +5716,20 @@ salvo `icono`):
      accesible (mismo origen) y ahí se ven `.ag-row` y los estilos ya
      resueltos.
 
+     **Addendum del mismo día — la primera barra no se leía.** Reportado con
+     captura: (1) la pista tintada (`LAVANDA_CHIP`) hacía que la columna
+     entera se leyera como un bloque lavanda, "una sombra", compitiendo con
+     las barras y tapando las bandas de fila; (2) el monto caía ENCIMA del
+     morado, texto oscuro sobre fondo oscuro. Lo segundo tiene una causa que
+     no es obvia: el `display:flex` de la propia regla ANULA el alineado a la
+     derecha que trae `type: "numericColumn"`, así que el número se iba a la
+     izquierda, justo donde está la barra. Arreglo: pista `transparent`,
+     `justifyContent: flex-end`, y la barra escalada al **62%** del ancho de
+     la celda para que el texto tenga siempre su franja libre. El 62% no
+     falsea nada —todas las barras se escalan igual, las proporciones entre
+     filas se mantienen— y medido deja 23px entre el fin de la barra más
+     larga y el inicio del número más ancho.
+
      Pendiente deliberado: el Panel A y los dos rankings de `producto.py`
      siguen con `st.dataframe` y sus checkbox. Se convierten con este mismo
      patrón cuando toque.
