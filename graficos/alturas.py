@@ -152,6 +152,17 @@ UNA fila (Ventas › Por hora). Medida en el navegador el 2026-08-14, contra
 los 96 de `FRANJA_CONTROLES`, que es la de dos filas y dos hairlines."""
 
 
+CROMO_TARJETA = 18
+"""Alto que se come el marco de UNA tarjeta `compras_prov_card_*`: 16 de
+padding vertical (`padding: 16px 18px` en estilos/_80_cards.py) + 2 de la
+línea que Streamlit pinta con `border=True`.
+
+Distinto de `_PADDING_TARJETA`, que cuenta el padding de la tarjeta ÚNICA de
+una vista (8px). Éste es el precio de ANIDAR: cuando una figura pasa a vivir
+dentro de su propio bloque, sale de su alto — si no, el bloque crece y su eje
+X termina debajo del borde.
+"""
+
 FRANJA_PILLS = 30
 """Alto de una fila de `st.pills` SOLA: sin título, sin hairline, sin tabs —
 el selector de período por tarjeta de `graficos/periodo.py`.

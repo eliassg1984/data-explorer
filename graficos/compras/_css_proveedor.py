@@ -12,7 +12,20 @@ comportamiento, no una reorganizacion. El drill lo inyecta cuando toca.
 """
 
 CSS = """        <style>
-        .st-key-compras_prov_card_chart { position: relative; }
+        .st-key-compras_prov_marco { position: relative; }
+        /* El marco RESERVA arriba la banda donde flotan los tres controles
+           (granularidad, flechas de ventana, popover de proveedores).
+           Mientras fue tarjeta, ese hueco lo daba su padding; al partirse en
+           dos bloques (2026-08-18) el padding se fue con ella y los flotantes
+           quedaron montados sobre el borde superior de los bloques — medido
+           en el navegador: win_nav ocupaba 128..156 contra un bloque que
+           arrancaba en 149. El número sale de medir, no de sumar: el flujo
+           natural ya daba 32px de banda (marco en y=117, bloques en 149) y
+           el control más bajo —win_nav— termina en 156. Con 16px los bloques
+           arrancan en 165: 9px de aire, y el alto total queda en 554, o sea
+           donde estaba antes de partir la tarjeta (556). Si cambia el `top`
+           de esos controles hay que volver a medir esto. */
+        .st-key-compras_prov_marco { padding-top: 16px !important; }
         /* La leyenda se movió a la derecha (vertical); la banda superior solo
            tiene popover (izq) + toggle (der), alineados arriba. */
         .st-key-gran_float {
@@ -410,7 +423,7 @@ CSS = """        <style>
         /* Ocultar la barra de herramientas del propio gráfico (fullscreen).
            Sin `> div >`: el chart vive dentro de cp_chart_wrap (un nivel más
            abajo) y el selector directo dejaba de matchear. */
-        .st-key-compras_prov_card_chart [data-testid="stElementToolbar"] { display: none; }
+        .st-key-compras_prov_marco [data-testid="stElementToolbar"] { display: none; }
         /* Aplanado para no meter aire extra dentro de la tarjeta. */
         .st-key-cp_chart_wrap {
             padding: 0 !important; margin: 0 !important; gap: 0 !important;
