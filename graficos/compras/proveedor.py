@@ -633,11 +633,26 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             + (f'<span> · {_suf_evo}</span>' if _suf_evo else '')
                             + '</div>',
                             unsafe_allow_html=True)
-                        st.plotly_chart(
-                            fig_evo, width="stretch",
-                            key=f"cp_evo_{gran}_{_prov_evo}",
-                            config={"displayModeBar": False},
-                        )
+                        # 2026-08-19, a pedido: el resumen deja de ir DEBAJO
+                        # del gráfico y pasa a su COSTADO, en columna. Gana el
+                        # gráfico (recupera los ~97px de alto que le comía el
+                        # bloque) y gana el resumen (4 cifras en vertical se
+                        # leen de un barrido, no en un 2x2 que obliga a saltar
+                        # en zigzag). Es un nivel de anidado de columnas —
+                        # Streamlit permite exactamente uno, así que acá se
+                        # agota: si algún día hay que subdividir otra vez,
+                        # tiene que ser con contenedores, no con más columnas.
+                        # 2.6/1 y no 2/1: medido, con 2/1 el gráfico quedaba
+                        # en 243px para 13 puntos y la columna de cifras
+                        # sobraba (la más ancha, "S/ 20,711", pide ~86 y
+                        # tenía 117). El gráfico es el protagonista.
+                        _c_graf, _c_kpi = st.columns([2.6, 1], gap="small")
+                        with _c_graf:
+                            st.plotly_chart(
+                                fig_evo, width="stretch",
+                                key=f"cp_evo_{gran}_{_prov_evo}",
+                                config={"displayModeBar": False},
+                            )
                         # ── Resumen del proveedor ───────────────────────────
                         # Resume el ÚLTIMO período de la granularidad vigente (a
                         # pedido), no todo el tramo dibujado: es el último punto
@@ -650,34 +665,35 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         # gráfico tiene que sumar lo que ese gráfico muestra, o
                         # los números contradicen a la curva que tienen encima.
                         if _evo_x:
-                            _per_ult = _evo_x[-1]
-                            _ult = _src_evo[_src_evo["per"] == _per_ult]
-                            _f_evo = _ult[_ult["prov"] == _prov_evo]
-                            _r_val = float(_f_evo["valor"].sum())
-                            _r_cant = (float(_f_evo["cant"].sum())
-                                       if "cant" in _f_evo.columns else 0.0)
-                            _r_docs = (int(_f_evo["docu"].replace("", pd.NA)
-                                           .dropna().nunique())
-                                       if "docu" in _f_evo.columns else 0)
-                            # El % se mide contra lo comprado a TODOS los
-                            # proveedores en ese mismo período: "de lo que gasté
-                            # este mes, tanto fue con este proveedor".
-                            _tot_ult = float(_ult["valor"].sum()) or 1.0
-                            _r_pct = _r_val / _tot_ult * 100
-                            _celdas = [("Total compra", f"S/ {_r_val:,.0f}"),
-                                       ("% del total", f"{_r_pct:.1f}%"),
-                                       ("Cantidad", f"{_r_cant:,.0f}"),
-                                       ("Documentos", f"{_r_docs:,.0f}")]
-                            st.markdown(
-                                f'<div class="cp-evo-kpis-tit">'
-                                # "Semana" es femenino y las otras tres no: sin
-                                # esto salia "Último semana".
-                                f'{"Última" if gran == "Semana" else "Último"} '
-                                f'{gran.lower()} · {_etq_evo(_per_ult)}</div>'
-                                '<div class="cp-evo-kpis">'
-                                + "".join(f'<div><span>{_k}</span><b>{_v}</b></div>'
-                                          for _k, _v in _celdas)
-                                + '</div>', unsafe_allow_html=True)
+                            with _c_kpi:
+                                _per_ult = _evo_x[-1]
+                                _ult = _src_evo[_src_evo["per"] == _per_ult]
+                                _f_evo = _ult[_ult["prov"] == _prov_evo]
+                                _r_val = float(_f_evo["valor"].sum())
+                                _r_cant = (float(_f_evo["cant"].sum())
+                                           if "cant" in _f_evo.columns else 0.0)
+                                _r_docs = (int(_f_evo["docu"].replace("", pd.NA)
+                                               .dropna().nunique())
+                                           if "docu" in _f_evo.columns else 0)
+                                # El % se mide contra lo comprado a TODOS los
+                                # proveedores en ese mismo período: "de lo que gasté
+                                # este mes, tanto fue con este proveedor".
+                                _tot_ult = float(_ult["valor"].sum()) or 1.0
+                                _r_pct = _r_val / _tot_ult * 100
+                                _celdas = [("Total compra", f"S/ {_r_val:,.0f}"),
+                                           ("% del total", f"{_r_pct:.1f}%"),
+                                           ("Cantidad", f"{_r_cant:,.0f}"),
+                                           ("Documentos", f"{_r_docs:,.0f}")]
+                                st.markdown(
+                                    f'<div class="cp-evo-kpis-tit">'
+                                    # "Semana" es femenino y las otras tres no: sin
+                                    # esto salia "Último semana".
+                                    f'{"Última" if gran == "Semana" else "Último"} '
+                                    f'{gran.lower()} · {_etq_evo(_per_ult)}</div>'
+                                    '<div class="cp-evo-kpis">'
+                                    + "".join(f'<div><span>{_k}</span><b>{_v}</b></div>'
+                                              for _k, _v in _celdas)
+                                    + '</div>', unsafe_allow_html=True)
         # Navegacion de la ventana de periodos. El indice y el tamano viven en
         # session_state, asi que clicar una barra NO los mueve. El popover
         # central muestra cuantas agrupaciones se ven y permite cambiarlo.

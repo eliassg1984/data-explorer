@@ -214,16 +214,24 @@ CSS = """        <style>
             font-size: 10px;
             font-weight: 600;
             color: var(--text-secondary);
-            padding-left: 8px;
-            margin: 6px 0 4px;
+            padding-left: 0;
+            /* Sin margen superior: la columna arranca a la misma altura que
+               el gráfico de al lado, no 6px más abajo. */
+            margin: 0 0 4px;
         }
-        /* 2x2 y no una fila de 4: la columna mide ~380px y cuatro celdas en
-           linea dejaban ~90px para "S/ 20,711", que se cortaba. */
+        /* 2026-08-19: de 2x2 a UNA columna. El resumen dejó de ir debajo
+           del gráfico y pasó a su costado (proveedor.py), así que ahora tiene
+           ~130px de ancho y todo el alto: cuatro cifras apiladas se leen de un
+           barrido vertical, sin el zigzag del 2x2.
+           El motivo del 2x2 ya no aplica —era que cuatro celdas EN LINEA
+           dejaban ~90px para "S/ 20,711" y se cortaba—: apiladas, cada una
+           tiene la columna entera. `white-space: nowrap` en el <b> sigue
+           siendo la red por si una cifra crece. */
         .cp-evo-kpis {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr;
             gap: 6px;
-            padding-left: 8px;
+            padding-left: 0;
         }
         .cp-evo-kpis > div {
             display: flex;
@@ -444,6 +452,22 @@ CSS = """        <style>
            alto, pero legible) que apretadas. */
         .st-key-cp_chart_wrap [data-testid="stColumn"] {
             min-width: 300px !important;
+        }
+        /* ...pero ese selector es DESCENDIENTE, así que captura también las
+           columnas que se agreguen ADENTRO de los dos bloques. Al partir la
+           evolución en gráfico + resumen (2026-08-19) las dos columnas nuevas
+           heredaron el piso de 300px: 600 de mínimo en 378 disponibles → el
+           `flex-wrap` de Streamlit las apiló y el resumen volvió a quedar
+           DEBAJO del gráfico, que es justo lo que el cambio venía a evitar.
+           No se vio como un error: se vio como "el cambio no hizo nada".
+           Es el caso que documenta CLAUDE.md (§ "antes de agregar un widget
+           dentro de una tarjeta, grep estilos/"), en su versión CSS.
+           El piso de 300 es para las columnas de PRIMER nivel (ranking vs
+           evolución); adentro de un bloque no aplica. Va después para ganar
+           por orden: misma especificidad, ambas con !important. */
+        .st-key-compras_prov_card_evo [data-testid="stColumn"],
+        .st-key-compras_prov_card_ranking [data-testid="stColumn"] {
+            min-width: 0 !important;
         }
 
         /* Navegacion de ventana: flechas ‹ › + pills de tamano en la misma
