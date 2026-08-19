@@ -3,110 +3,115 @@ sunat.py — capa de datos del SIRE Compras (RCE) de SUNAT.
 
 Hermano de `data.py`: mismo papel (traer datos de una fuente remota y
 devolver un DataFrame) pero contra la API de SUNAT en vez de R2. La UI que
-lo consume vive en `graficos/compras/sunat.py`.
+lo consume vive en `graficos/compras/documentos_sunat.py`.
 
 QUÉ TRAE Y QUÉ NO
 -----------------
-El SIRE RCE devuelve el REGISTRO de los comprobantes que los proveedores
-emitieron hacia nuestro RUC: quién emitió, qué serie/número, cuándo, base
-imponible, IGV, total. Es la "propuesta" que SUNAT arma sola y que el
-contribuyente acepta cada período.
+Devuelve el REGISTRO de los comprobantes que los proveedores emitieron
+hacia nuestro RUC: quién emitió, serie/número, fechas, base imponible,
+IGV, moneda, estado, detracción. Es la "propuesta" que SUNAT arma sola a
+partir de los comprobantes electrónicos.
 
 NO devuelve el PDF ni el XML original del proveedor. Eso es otro servicio
-(la descarga masiva de CPE, del lado de `cpe.sunat.gob.pe`), con otras
-credenciales y otro flujo. Costó media hora de investigación descubrirlo,
-así que queda escrito acá: si alguien pide "el PDF que mandó el proveedor",
-no está en esta API.
+(descarga masiva de CPE, del lado de `cpe.sunat.gob.pe`), con otras
+credenciales y otro flujo. Queda escrito acá porque cuesta descubrirlo: si
+alguien pide "el PDF que mandó el proveedor", no está en esta API.
 
-Lo que SÍ se puede hacer con lo que hay —y es lo que hace `ficha_pdf()`—
-es RENDERIZAR el comprobante a partir de los datos del registro. Sale un
-PDF de verdad, legible e imprimible, con todo lo que SUNAT tiene anotado
-del documento. No es el original escaneado; es la ficha oficial del dato.
+Lo que SÍ se hace con lo que hay —y es lo que hace `ficha_pdf()`— es
+RENDERIZAR el comprobante a partir de los datos del registro. Sale un PDF
+de verdad, con todo lo que SUNAT tiene anotado. No es el original del
+proveedor; es la ficha del dato.
 
-EL FLUJO ES ASÍNCRONO (y no es un capricho del cliente)
--------------------------------------------------------
-SUNAT no devuelve los comprobantes en la respuesta. El camino es:
+EL ENDPOINT QUE SE USA, Y EL QUE NO (2026-08-19)
+------------------------------------------------
+Se consume `…/rce/propuesta/web/propuesta/{periodo}/busqueda`, que devuelve
+los comprobantes en JSON paginado, de forma SÍNCRONA. **No está en el
+manual oficial de SUNAT**: se descubrió mirando las llamadas XHR que hace
+el propio portal del SIRE.
 
-    1. exportacioncomprobantepropuesta  → devuelve un numTicket
-    2. consultaestadotickets            → se consulta hasta que termina
-    3. archivoreporte                   → baja un ZIP con el txt/csv
+El manual, en cambio, documenta un flujo ASÍNCRONO de tres pasos
+(`exportacioncomprobantepropuesta` → `consultaestadotickets` →
+`archivoreporte`) para bajar el mismo dato como ZIP. Ese flujo se
+implementó primero y **está roto del lado de SUNAT**: el ticket se crea, se
+procesa, termina con estado 06 (OK) y entrega un nombre de archivo… que
+después no existe. Verificado contra el RUC 20605204300, en dos períodos,
+con los dos endpoints de descarga que documenta el manual, con
+`codOrigenEnvio` 1 y 2, y con todos los valores de `codTipoArchivoReporte`
+(00/0/1/2/null/vacío). Siempre la misma respuesta:
 
-`obtener_comprobantes()` encapsula los tres pasos. Por eso tarda unos
-segundos la primera vez y por eso está cacheado: no es una consulta, es un
-trabajo que SUNAT encola.
+    422 · cod 2244 "El archivo solicitado no existe."
+    500 · com.mongodb.MongoGridFSException: No file found with the
+          filename: <RUC>-<fecha>-propuesta.zip and revision: -1
 
-ENDPOINTS: DE DÓNDE SALEN
--------------------------
-Transcritos del «Manual de servicios Web Api - SIRE_Compras v22» publicado
-en cpe.sunat.gob.pe (secciones 5.1, 5.31, 5.32, 5.33 y 5.34). No son
-inventados ni copiados de un blog. Existe una v27 más nueva: si algo
-responde 404, ese es el primer sitio donde mirar.
+O sea: SUNAT nunca escribe el archivo que su propio ticket anuncia. No es
+un parámetro mal puesto de nuestro lado. Si algún día lo arreglan, el
+flujo por tickets NO haría falta igual — `busqueda` es más rápido (sin
+encolar nada), trae más campos y no obliga a parsear un CSV.
+
+Dato de paso, por si vuelve a aparecer: la respuesta de
+`consultaestadotickets` trae el campo mal escrito, como
+`codTipoAchivoReporte` (sin la primera "r" de "Archivo"). El manual repite
+el typo. Leer el nombre correcto devuelve None en silencio.
 
 MODO DEMO
 ---------
-Igual que `data.py`: sin credenciales, datos sintéticos deterministas. No
-es decoración — permite abrir la vista, revisar el layout y correr los
-tests sin tocar SUNAT ni tener un RUC a mano.
+Igual que `data.py`: sin credenciales, datos sintéticos deterministas.
+Permite abrir la vista, revisar el layout y correr los tests sin tocar
+SUNAT ni tener un RUC a mano.
 """
 
 import io
-import zipfile
 
 import numpy as np
 import pandas as pd
 import streamlit as st
 
-from utils import _norm
-
 # ===========================================================================
-# ENDPOINTS  (Manual Web Api SIRE_Compras v22)
+# ENDPOINTS
 # ===========================================================================
 
 URL_TOKEN = ("https://api-seguridad.sunat.gob.pe/v1/clientessol/"
              "{client_id}/oauth2/token/")
-"""§5.1 Servicio Api Seguridad. OAuth2 `password` grant."""
+"""§5.1 del manual — Api Seguridad. OAuth2 `password` grant."""
 
 _BASE_SIRE = "https://api-sire.sunat.gob.pe/v1/contribuyente/migeigv/libros"
 
-URL_EXPORTAR_PROPUESTA = (
-    _BASE_SIRE + "/rce/propuesta/web/propuesta/{periodo}"
-    "/exportacioncomprobantepropuesta")
-"""§5.34 descargar propuesta. Devuelve `numTicket`, no los datos."""
+URL_BUSQUEDA = (_BASE_SIRE
+                + "/rce/propuesta/web/propuesta/{periodo}/busqueda")
+"""Comprobantes de la propuesta, JSON paginado y SÍNCRONO.
 
-URL_ESTADO_TICKET = (
-    _BASE_SIRE + "/rvierce/gestionprocesosmasivos/web/masivo"
-    "/consultaestadotickets")
-"""§5.31 consultar estado ticket."""
-
-URL_DESCARGAR_ARCHIVO = (
-    _BASE_SIRE + "/rvierce/gestionprocesosmasivos/web/masivo/archivoreporte")
-"""§5.32 descargar archivo (ZIP particionado)."""
+NO documentado en el manual: sale de las llamadas XHR del portal del SIRE
+(ver el docstring del módulo). Es el que usa `obtener_comprobantes`."""
 
 URL_PERIODOS = _BASE_SIRE + "/rvierce/padron/web/omisos/{cod_libro}/periodos"
-"""§5.33 consultar año y mes del RCE."""
+"""§5.33 — períodos habilitados para el contribuyente."""
+
+URL_RESUMEN = (_BASE_SIRE + "/rvierce/resumen/web/resumencomprobantes"
+               "/{periodo}/{tipo}/0/exporta")
+"""§5.35 — totales por tipo de comprobante (txt con `|`). Se usa como
+verificación cruzada barata de que el detalle cuadra: es otra vía de SUNAT
+al mismo período. `tipo`: 1 propuesta, 2 preliminar, 4 registro."""
 
 COD_LIBRO_RCE = "080000"
 """Código de libro del Registro de Compras Electrónico (§5.33)."""
 
-COD_ORIGEN_API = "2"
-"""`codOrigenEnvio`: 2 = Servicio API (§5.34, obligatorio)."""
-
 SCOPE = "https://api-sire.sunat.gob.pe"
 
-# Timeouts generosos: SUNAT es lenta y un timeout corto se lee como caída.
+# `codTipoOpe=1` es lo que manda el portal para listar la propuesta. Los
+# otros valores no están documentados y no se exploraron.
+COD_TIPO_OPE_PROPUESTA = 1
+
+# SUNAT corta la conexión si se la golpea seguido (verificado: varios
+# ConnectionReset al encadenar pruebas), así que conviene hacer pocas
+# llamadas. PERO 100 es el TOPE REAL del servidor, no una elección de
+# performance: perPage=150 y 200 devuelven 422 (JerseyViolationException)
+# — probado en vivo antes de subirlo "para optimizar". Sin ese chequeo,
+# subir este número rompe la paginación entera en silencio.
+FILAS_POR_PAGINA = 100
+MAX_PAGINAS = 40          # techo de seguridad, ver el bucle de paginación
+
 _TIMEOUT = 60
 _TIMEOUT_TOKEN = 30
-
-# Polling del ticket. SUNAT encola el trabajo; 40 intentos x 3s = 2 min de
-# techo, que en la práctica alcanza salvo períodos muy grandes.
-_POLL_INTENTOS = 40
-_POLL_ESPERA = 3
-
-# Estados de `codEstadoProceso` (§5.31). SUNAT documenta los códigos en el
-# Anexo I; los que importan acá son terminados-con-éxito vs terminados-con-
-# error. Se comparan como string porque la API los devuelve así.
-_TICKET_OK = {"06", "6"}
-_TICKET_ERROR = {"07", "7", "08", "8", "09", "9"}
 
 
 # ===========================================================================
@@ -123,7 +128,7 @@ _SECRETS_SUNAT = ("SUNAT_RUC", "SUNAT_USUARIO_SOL", "SUNAT_CLAVE_SOL",
 def secrets_disponibles():
     """True si están las 5 credenciales de SUNAT. Nunca lanza excepción.
 
-    Gemela de `data.py::secrets_disponibles`, y con el mismo propósito: que
+    Gemela de `data.py::secrets_disponibles`, con el mismo propósito: que
     la app abra en modo demo en vez de reventar cuando falta configuración.
     """
     try:
@@ -173,9 +178,10 @@ def periodos_entre(inicio, fin):
     return [f"{m.year:04d}{m.month:02d}" for m in meses]
 
 
-# Tipos de comprobante — tabla 10 del anexo de la RS 112-2021/SUNAT. Solo
-# los que aparecen en un registro de COMPRAS con volumen; el resto cae al
-# `.get(cod, cod)` y se muestra con su código, que es mejor que "Otro".
+# Tipos de comprobante — tabla 10 del anexo de la RS 112-2021/SUNAT. Es un
+# FALLBACK: la API ya manda `desTipoCDP` con el nombre resuelto, y ese gana
+# (ver `_normalizar_registro`). Esta tabla cubre el modo demo y cualquier
+# respuesta donde el campo venga vacío.
 TIPOS_CDP = {
     "01": "Factura",
     "03": "Boleta de venta",
@@ -184,6 +190,7 @@ TIPOS_CDP = {
     "14": "Recibo de servicios",
     "12": "Ticket de máquina registradora",
     "02": "Recibo por honorarios",
+    "30": "Documentos emitidos por Adquiriente",
     "50": "Declaración Única de Aduanas",
     "52": "Despacho simplificado",
     "91": "Comprobante de no domiciliado",
@@ -195,150 +202,88 @@ def nombre_tipo_cdp(cod):
     return TIPOS_CDP.get(str(cod).strip().zfill(2), str(cod).strip())
 
 
-# Mapa de columnas: nombre normalizado que manda SUNAT → nombre canónico
-# que usa la app. Se matchea por `_norm` (sin acentos, espacios ni guiones)
-# y por SUBCADENA, a propósito: el layout del archivo lo fija una resolución
-# (RS 112-2021, anexo 8) que ha cambiado de nombres entre versiones, y un
-# match exacto se rompe con que le agreguen un paréntesis a un encabezado.
-#
-# DENTRO de cada tupla los alias van del MÁS específico al más genérico, y
-# se prueban en ese orden (ver `normalizar_columnas`). Importa: el archivo
-# real trae tanto "Fecha de emisión" como "Año emisión CDP", y un alias
-# suelto `"emision"` primero se llevaría la que apareciera antes en el
-# archivo — o sea, el año en vez de la fecha, en silencio.
-#
-# Ojo con el "de" intercalado: `_norm("Fecha de emisión")` da
-# `fechadeemision`, que NO contiene `fechaemision`. Por eso ambas variantes
-# están listadas. Lo cazó test_sunat.py.
-_ALIAS_COLUMNAS = (
-    ("periodo",            ("periodo",)),
-    ("car",                ("carsunat", "codcar", "numcar")),
-    ("fecha_emision",      ("fechadeemision", "fechaemision", "fecemision")),
-    ("fecha_vencimiento",  ("fechadevcto", "fechavcto", "fechavencimiento",
-                            "fecvcto")),
-    ("tipo_cdp",           ("tipocpdoc", "codtipocdp", "tipocp",
-                            "tipodedocumento", "tipodocumento")),
-    ("serie",              ("seriedelcdp", "numseriecdp", "serie")),
-    ("numero",             ("nrocpodoc", "numcdp", "numerocp", "nrocp")),
-    ("ruc_proveedor",      ("nrodocidentidad", "numdocidentidad",
-                            "rucproveedor", "nrodedocidentidad")),
-    ("proveedor",          ("apellidosnombres", "razonsocial",
-                            "nombreproveedor")),
-    ("base_imponible",     ("bigravado", "baseimponible", "mtobigravado")),
-    ("igv",                ("igvipm", "mtoigv", "igv")),
-    ("no_gravado",         ("mtoinafecto", "inafecto", "exonerado")),
-    ("total",              ("totalcp", "mtototalcp", "importetotal", "total")),
-    ("moneda",             ("codmoneda", "tipomoneda", "moneda")),
-    ("tipo_cambio",        ("tipodecambio", "tipocambio")),
-)
-
-
-def normalizar_columnas(df):
-    """Renombra las columnas de SUNAT a los nombres canónicos de la app.
-
-    Devuelve una copia con SOLO las columnas reconocidas, en orden canónico.
-    Las que no se reconocen se descartan: son ~40 y la vista usa 13.
-
-    Por qué no un `df.rename(dict)` y listo: el archivo de la propuesta no
-    trae siempre los mismos encabezados (ver comentario de
-    `_ALIAS_COLUMNAS`), así que el match es por subcadena normalizada.
-
-    El recorrido es alias-por-alias y no columna-por-columna: así el alias
-    más específico se lleva su columna antes de que uno genérico pueda
-    robársela. Cada columna se consume una sola vez (`usadas`).
-    """
-    if df is None or df.empty:
-        return pd.DataFrame(columns=[c for c, _ in _ALIAS_COLUMNAS])
-
-    normalizadas = {c: _norm(c) for c in df.columns}
-    salida = {}
-    usadas = set()
-    for canonico, alias in _ALIAS_COLUMNAS:
-        elegida = None
-        for a in alias:
-            for col, norm in normalizadas.items():
-                if col not in usadas and a in norm:
-                    elegida = col
-                    break
-            if elegida:
-                break
-        if elegida:
-            salida[canonico] = df[elegida]
-            usadas.add(elegida)
-    return pd.DataFrame(salida)
-
-
-def _a_numero(serie):
-    """Serie numérica tolerante al formato de SUNAT (coma decimal, miles)."""
-    if serie is None:
-        return None
-    s = serie.astype(str).str.strip()
-    # "1.234,56" (europeo) vs "1234.56". Se detecta por la ÚLTIMA coma:
-    # si viene después del último punto, la coma es el separador decimal.
-    europeo = s.str.rfind(",") > s.str.rfind(".")
-    s = s.where(~europeo, s.str.replace(".", "", regex=False)
-                           .str.replace(",", ".", regex=False))
-    s = s.where(europeo, s.str.replace(",", "", regex=False))
-    return pd.to_numeric(s, errors="coerce")
-
-
-def parsear_propuesta(texto):
-    """DataFrame canónico a partir del contenido del archivo de la propuesta.
-
-    Acepta el csv (`codTipoArchivo=1`) y el txt separado por `|`
-    (`codTipoArchivo=0`), porque el delimitador se detecta de la primera
-    línea en vez de asumirse.
-    """
-    if not texto or not texto.strip():
-        return normalizar_columnas(None)
-
-    primera = texto.splitlines()[0]
-    sep = max("|,;\t", key=primera.count)
+def _num(valor):
+    """Float tolerante: None/""/no-numérico → 0.0."""
     try:
-        crudo = pd.read_csv(io.StringIO(texto), sep=sep, dtype=str,
-                            engine="python", on_bad_lines="skip")
-    except Exception:
-        return normalizar_columnas(None)
+        v = float(valor)
+    except (TypeError, ValueError):
+        return 0.0
+    return 0.0 if pd.isna(v) else v
 
-    df = normalizar_columnas(crudo)
-    if df.empty:
-        return df
 
-    for col in ("base_imponible", "igv", "no_gravado", "total", "tipo_cambio"):
-        if col in df.columns:
-            df[col] = _a_numero(df[col])
+def _normalizar_registro(reg):
+    """Un comprobante del JSON de SUNAT → dict con las columnas canónicas.
+
+    Los importes vienen anidados en `montos` y el tipo de cambio en
+    `tipoCambio`; acá se aplanan. `total` NO viene como campo propio: se
+    suma de sus componentes (gravado + IGV + no gravado + otros), que es
+    como lo arma el propio portal.
+
+    Función pura, para poder testear el aplanado sin red.
+    """
+    m = reg.get("montos") or {}
+    tc = reg.get("tipoCambio") or {}
+
+    base = (_num(m.get("mtoBIGravadaDG")) + _num(m.get("mtoBIGravadaDGNG"))
+            + _num(m.get("mtoBIGravadaDNG")))
+    igv = (_num(m.get("mtoIgvIpmDG")) + _num(m.get("mtoIgvIpmDGNG"))
+           + _num(m.get("mtoIgvIpmDNG")))
+    no_gravado = (_num(m.get("mtoValorAdqNG")) + _num(m.get("mtoInafecto"))
+                  + _num(m.get("mtoExonerado")))
+    otros = (_num(m.get("mtoISC")) + _num(m.get("mtoIcbper"))
+             + _num(m.get("mtoOtrosTributos")))
+
+    # Si SUNAT manda el total explícito, gana sobre la suma: evita que un
+    # campo de montos que no estemos contemplando descuadre la fila.
+    total_api = m.get("mtoTotalCP", m.get("mtoTotal"))
+    total = _num(total_api) if total_api is not None else (
+        base + igv + no_gravado + otros)
+
+    serie = str(reg.get("numSerieCDP") or "").strip()
+    numero = str(reg.get("numCDP") or "").strip()
+    cod_tipo = str(reg.get("codTipoCDP") or "").strip().zfill(2)
+
+    return {
+        "periodo": str(reg.get("perTributario") or ""),
+        "car": str(reg.get("codCar") or ""),
+        "fecha_emision": reg.get("fecEmision"),
+        "fecha_vencimiento": reg.get("fecVencPag"),
+        "tipo_cdp": cod_tipo,
+        # `desTipoCDP` viene resuelto por SUNAT: es preferible a nuestra
+        # tabla, que puede quedar vieja si agregan un tipo.
+        "tipo_nombre": (reg.get("desTipoCDP") or "").strip()
+                       or nombre_tipo_cdp(cod_tipo),
+        "serie": serie,
+        "numero": numero,
+        "documento": f"{serie}-{numero}" if serie or numero else "",
+        "ruc_proveedor": str(reg.get("numDocIdentidadProveedor") or ""),
+        "proveedor": str(reg.get("nomRazonSocialProveedor") or ""),
+        "base_imponible": base,
+        "igv": igv,
+        "no_gravado": no_gravado,
+        "total": total,
+        "moneda": str(reg.get("codMoneda") or ""),
+        "tipo_cambio": _num(tc.get("mtoTipoCambio")) or 1.0,
+        "estado": str(reg.get("desEstadoComprobante") or ""),
+        "detraccion": str(reg.get("indDetraccion") or ""),
+    }
+
+
+_COLUMNAS = ("periodo", "car", "fecha_emision", "fecha_vencimiento",
+             "tipo_cdp", "tipo_nombre", "serie", "numero", "documento",
+             "ruc_proveedor", "proveedor", "base_imponible", "igv",
+             "no_gravado", "total", "moneda", "tipo_cambio", "estado",
+             "detraccion")
+
+
+def registros_a_df(registros):
+    """Lista de comprobantes crudos de la API → DataFrame canónico."""
+    if not registros:
+        return pd.DataFrame(columns=list(_COLUMNAS))
+    df = pd.DataFrame([_normalizar_registro(r) for r in registros])
     for col in ("fecha_emision", "fecha_vencimiento"):
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
-    if "tipo_cdp" in df.columns:
-        df["tipo_cdp"] = df["tipo_cdp"].astype(str).str.strip().str.zfill(2)
-        df["tipo_nombre"] = df["tipo_cdp"].map(nombre_tipo_cdp)
-    if {"serie", "numero"} <= set(df.columns):
-        df["documento"] = (df["serie"].astype(str).str.strip() + "-"
-                           + df["numero"].astype(str).str.strip())
-    return df
-
-
-def _extraer_texto_zip(contenido):
-    """Texto del primer archivo de datos dentro del ZIP que manda SUNAT.
-
-    `archivoreporte` devuelve un ZIP (a veces particionado). Si lo que llega
-    no es un ZIP, se asume que ya es el texto plano — SUNAT lo devuelve así
-    cuando el reporte es chico, y tratarlo como error sería un falso
-    negativo.
-    """
-    if not contenido:
-        return ""
-    try:
-        with zipfile.ZipFile(io.BytesIO(contenido)) as z:
-            nombres = [n for n in z.namelist()
-                       if n.lower().endswith((".txt", ".csv"))] or z.namelist()
-            if not nombres:
-                return ""
-            with z.open(nombres[0]) as f:
-                return f.read().decode("latin-1", errors="replace")
-    except zipfile.BadZipFile:
-        return contenido.decode("latin-1", errors="replace")
+        df[col] = pd.to_datetime(df[col], errors="coerce")
+    return df.sort_values("fecha_emision").reset_index(drop=True)
 
 
 # ===========================================================================
@@ -396,7 +341,7 @@ def obtener_token():
     return token
 
 
-def _get(url, token, params=None, binario=False):
+def _get(url, token, params=None):
     import requests
 
     resp = requests.get(
@@ -405,43 +350,7 @@ def _get(url, token, params=None, binario=False):
                  "Accept": "application/json"},
     )
     resp.raise_for_status()
-    return resp.content if binario else resp.json()
-
-
-def _esperar_ticket(token, num_ticket, periodo, progreso=None):
-    """Consulta el ticket hasta que SUNAT termina de generar el archivo.
-
-    Devuelve `(nom_archivo, cod_tipo_archivo)` o lanza. `progreso` es un
-    callable opcional que recibe el intento — lo usa la UI para mover una
-    barra sin que este módulo sepa nada de Streamlit.
-    """
-    import time
-
-    for intento in range(_POLL_INTENTOS):
-        if progreso:
-            progreso(intento / _POLL_INTENTOS)
-        datos = _get(URL_ESTADO_TICKET, token, params={
-            "perIni": periodo, "perFin": periodo,
-            "page": 1, "perPage": 20, "numTicket": num_ticket,
-        })
-        for reg in (datos.get("registros") or []):
-            if str(reg.get("numTicket")) != str(num_ticket):
-                continue
-            estado = str(reg.get("codEstadoProceso", "")).strip()
-            archivo = reg.get("archivoReporte") or []
-            if isinstance(archivo, dict):
-                archivo = [archivo]
-            if estado in _TICKET_OK and archivo:
-                a = archivo[0]
-                return a.get("nomArchivoReporte"), a.get("codTipoArchivoReporte")
-            if estado in _TICKET_ERROR:
-                raise RuntimeError(
-                    "SUNAT terminó el proceso con error: "
-                    f"{reg.get('desEstadoProceso') or estado}")
-        time.sleep(_POLL_ESPERA)
-    raise TimeoutError(
-        f"SUNAT no terminó de generar el archivo del ticket {num_ticket} "
-        f"en {_POLL_INTENTOS * _POLL_ESPERA}s.")
+    return resp
 
 
 # ===========================================================================
@@ -474,8 +383,6 @@ def _datos_demo(periodo, filas=48):
     dias_mes = pd.Period(f"{anio}-{mes:02d}").days_in_month
 
     idx = rng.integers(0, len(_PROVEEDORES_DEMO), filas)
-    rucs = [_PROVEEDORES_DEMO[i][0] for i in idx]
-    nombres = [_PROVEEDORES_DEMO[i][1] for i in idx]
     tipos = rng.choice(["01", "01", "01", "03", "07", "14"], filas)
     dias = rng.integers(1, dias_mes + 1, filas)
     base = np.round(rng.gamma(2.2, 900, filas) + 60, 2)
@@ -483,6 +390,8 @@ def _datos_demo(periodo, filas=48):
     # cómo se lee un registro de compras real.
     base = np.where(tipos == "07", -base, base)
     igv = np.round(base * 0.18, 2)
+    series = ["E001" if t in ("01", "07") else "B001" for t in tipos]
+    numeros = [f"{n:08d}" for n in rng.integers(1, 99999, filas)]
 
     df = pd.DataFrame({
         "periodo": str(periodo),
@@ -490,20 +399,22 @@ def _datos_demo(periodo, filas=48):
         "fecha_emision": pd.to_datetime(
             [f"{anio}-{mes:02d}-{d:02d}" for d in dias]),
         "tipo_cdp": tipos,
-        "serie": [("F001" if t in ("01", "07") else "B001") for t in tipos],
-        "numero": [f"{n:08d}" for n in rng.integers(1, 99999, filas)],
-        "ruc_proveedor": rucs,
-        "proveedor": nombres,
+        "tipo_nombre": [nombre_tipo_cdp(t) for t in tipos],
+        "serie": series,
+        "numero": numeros,
+        "documento": [f"{s}-{n}" for s, n in zip(series, numeros)],
+        "ruc_proveedor": [_PROVEEDORES_DEMO[i][0] for i in idx],
+        "proveedor": [_PROVEEDORES_DEMO[i][1] for i in idx],
         "base_imponible": base,
         "igv": igv,
         "no_gravado": 0.0,
         "total": np.round(base + igv, 2),
         "moneda": "PEN",
         "tipo_cambio": 1.0,
+        "estado": "Activo",
+        "detraccion": "",
     })
     df["fecha_vencimiento"] = df["fecha_emision"] + pd.Timedelta(days=30)
-    df["tipo_nombre"] = df["tipo_cdp"].map(nombre_tipo_cdp)
-    df["documento"] = df["serie"] + "-" + df["numero"]
     return df.sort_values("fecha_emision").reset_index(drop=True)
 
 
@@ -515,16 +426,17 @@ def _datos_demo(periodo, filas=48):
 def obtener_comprobantes(periodo, _progreso=None):
     """Comprobantes que los proveedores emitieron hacia nuestro RUC.
 
-    Orquesta los tres pasos del flujo asíncrono (exportar → ticket →
-    descargar) y devuelve el DataFrame canónico ya parseado.
+    Pagina sobre `URL_BUSQUEDA` hasta traer el período completo y devuelve
+    el DataFrame canónico. Es síncrono: no encola nada en SUNAT, así que
+    responde en segundos.
 
-    Cacheado 1h porque cada llamada le encola un trabajo a SUNAT: sin caché,
-    cada rerun de Streamlit —y hay uno por clic— dispararía uno nuevo. El
-    botón "Actualizar" de la UI limpia la caché a mano cuando el usuario
-    quiere el dato fresco de verdad.
+    Cacheado 1h para no repetir la paginación en cada rerun de Streamlit
+    (hay uno por clic). El botón "Actualizar" de la UI limpia la caché a
+    mano cuando se quiere el dato fresco.
 
     `_progreso` va con guion bajo para que Streamlit NO lo hashee (es un
-    callable, y hashearlo invalidaría la caché en cada rerun).
+    callable, y hashearlo invalidaría la caché en cada rerun). Recibe la
+    fracción completada, 0..1.
     """
     if not periodo_valido(periodo):
         raise ValueError(f"Período '{periodo}' no cumple el formato yyyymm.")
@@ -533,19 +445,54 @@ def obtener_comprobantes(periodo, _progreso=None):
         return _datos_demo(periodo)
 
     token = obtener_token()
-    ticket = _get(URL_EXPORTAR_PROPUESTA.format(periodo=periodo), token,
-                  params={"codTipoArchivo": 1, "codOrigenEnvio": COD_ORIGEN_API})
-    num_ticket = ticket.get("numTicket")
-    if not num_ticket:
-        raise RuntimeError("SUNAT no devolvió numTicket al pedir la propuesta.")
 
-    nombre, cod_tipo = _esperar_ticket(token, num_ticket, periodo, _progreso)
-    contenido = _get(URL_DESCARGAR_ARCHIVO, token, binario=True, params={
-        "nomArchivoReporte": nombre,
-        # §5.32: si el ticket devolvió null hay que reenviar null, no "".
-        "codTipoArchivoReporte": cod_tipo if cod_tipo is not None else "null",
-    })
-    return parsear_propuesta(_extraer_texto_zip(contenido))
+    # ── LA PAGINACIÓN DE SUNAT SE SOLAPA, HAY QUE DEDUPLICAR ────────────
+    # Medido contra el RUC 20605204300, período 202607 (323 comprobantes),
+    # pidiendo perPage=100:
+    #     page=1 → 100 registros      page=3 → 123 (!)
+    #     page=2 → 200 registros (!)  page=4 →  23
+    # El OFFSET avanza bien, pero el LÍMITE crece con el número de página
+    # (devuelve `page * perPage` filas desde el offset), así que cada página
+    # se solapa con la anterior. Acumulando a ciegas salían 446 filas y un
+    # total de S/ 257.541 contra los 323 reales — un 38% inflado, sin error
+    # ni aviso. El modo de fallo más caro posible en un tablero de compras:
+    # el número se ve plausible y está mal.
+    #
+    # Se deduplica por `codCar` (Código de Anotación de Registro), que es el
+    # identificador único de la anotación en SUNAT. El bucle corta cuando
+    # junta el total declarado o cuando una página deja de aportar únicos.
+    vistos = {}
+    total_esperado = None
+
+    for pagina in range(1, MAX_PAGINAS + 1):
+        datos = _get(URL_BUSQUEDA.format(periodo=periodo), token, params={
+            "codTipoOpe": COD_TIPO_OPE_PROPUESTA,
+            "page": pagina,
+            "perPage": FILAS_POR_PAGINA,
+        }).json()
+
+        if total_esperado is None:
+            total_esperado = int(
+                (datos.get("paginacion") or {}).get("totalRegistros") or 0)
+
+        antes = len(vistos)
+        for reg in (datos.get("registros") or []):
+            # `codCar` como clave; si faltara, la tupla serie+número+fecha
+            # identifica igual al comprobante dentro de un período.
+            clave = reg.get("codCar") or (
+                reg.get("numSerieCDP"), reg.get("numCDP"), reg.get("fecEmision"))
+            vistos[clave] = reg
+
+        if _progreso and total_esperado:
+            _progreso(min(1.0, len(vistos) / total_esperado))
+
+        # Corta por ÚNICOS, no por filas recibidas (que vienen infladas), y
+        # también si la página no aportó nada nuevo — así no se queda
+        # pidiendo de más contra una API que corta la conexión.
+        if len(vistos) >= (total_esperado or 0) or len(vistos) == antes:
+            break
+
+    return registros_a_df(list(vistos.values()))
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -560,7 +507,8 @@ def periodos_disponibles():
         return [periodo_desde_fecha(hoy - pd.DateOffset(months=i))
                 for i in range(12)]
 
-    datos = _get(URL_PERIODOS.format(cod_libro=COD_LIBRO_RCE), obtener_token())
+    datos = _get(URL_PERIODOS.format(cod_libro=COD_LIBRO_RCE),
+                 obtener_token()).json()
     registros = datos if isinstance(datos, list) else datos.get("registros", [])
     periodos = [str(p.get("perTributario"))
                 for reg in registros
@@ -591,7 +539,8 @@ def _val(comprobante, clave, defecto="—"):
         return defecto
     if hasattr(v, "strftime"):
         return v.strftime("%d/%m/%Y")
-    return str(v)
+    s = str(v).strip()
+    return s if s else defecto
 
 
 def _soles(comprobante, clave):
@@ -617,11 +566,12 @@ def campos_ficha(comprobante):
         ("Documento", (
             ("Serie - Número", _val(comprobante, "documento")),
             ("Tipo de comprobante",
-             nombre_tipo_cdp(comprobante.get("tipo_cdp", ""))),
+             _val(comprobante, "tipo_nombre")),
             ("Fecha de emisión", _val(comprobante, "fecha_emision")),
             ("Fecha de vencimiento", _val(comprobante, "fecha_vencimiento")),
             ("Período tributario", _val(comprobante, "periodo")),
             ("Moneda", _val(comprobante, "moneda")),
+            ("Estado", _val(comprobante, "estado")),
         )),
         ("Importes", (
             ("Base imponible", _soles(comprobante, "base_imponible")),
@@ -659,9 +609,6 @@ def ficha_pdf(comprobante):
     def val(clave, defecto="—"):
         return _val(comprobante, clave, defecto)
 
-    def soles(clave):
-        return _soles(comprobante, clave)
-
     buf = io.BytesIO()
     with PdfPages(buf) as pdf:
         fig = plt.figure(figsize=(8.27, 11.69))   # A4 vertical, en pulgadas
@@ -676,7 +623,7 @@ def ficha_pdf(comprobante):
         tinta = "#18181d"
 
         ax.add_patch(plt.Rectangle((0, 0.93), 1, 0.07, color=morado))
-        ax.text(0.07, 0.955, nombre_tipo_cdp(comprobante.get("tipo_cdp", "")).upper(),
+        ax.text(0.07, 0.955, val("tipo_nombre", "COMPROBANTE").upper(),
                 color="white", fontsize=17, weight="bold", va="center")
         ax.text(0.93, 0.955, val("documento"), color="white", fontsize=15,
                 weight="bold", va="center", ha="right")
@@ -706,10 +653,12 @@ def ficha_pdf(comprobante):
                                    color="#f0edfe"))
         ax.text(0.10, y - 0.018, "TOTAL", color="#4938b8", fontsize=12,
                 weight="bold", va="center")
-        ax.text(0.90, y - 0.018, soles("total"), color="#4938b8", fontsize=15,
-                weight="bold", va="center", ha="right")
+        ax.text(0.90, y - 0.018, _soles(comprobante, "total"),
+                color="#4938b8", fontsize=15, weight="bold", va="center",
+                ha="right")
 
-        ax.text(0.07, 0.055, f"CAR SUNAT: {val('car')}", color=gris, fontsize=7.5)
+        ax.text(0.07, 0.055, f"CAR SUNAT: {val('car')}", color=gris,
+                fontsize=7.5)
         ax.plot([0.07, 0.93], [0.042, 0.042], color="#e6e6eb", lw=1)
         ax.text(0.07, 0.024, PIE_FICHA, color=gris, fontsize=7.5, va="top",
                 wrap=True)

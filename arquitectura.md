@@ -22,7 +22,7 @@ actualiza este documento en el mismo commit.
 | `estado_rango.py` | **Dueño único** del eje temporal de la franja superior: rango (`clave_rango`, `asegurar_rango`, `atajos_rango`, `aplicar_atajo`) **y corte** (`clave_corte`, `clave_modo`, `modo_fecha`, `corte_vigente`, `aplicar_corte`, `volver_a_rango`). Nadie escribe esas claves fuera de este módulo — ver reglas #24 y #62. Su hermano chico es `graficos/periodo.py`, el rango POR VISTA (regla #133): no le disputa nada — la franja sigue mandando y una vista que no lo importe se comporta igual que antes. |
 | `cortes.py` | Agrupa fechas en **cortes**: las rachas de días de una misma sesión de inventario (salto ≤ `CORTE_MAX_SALTO_DIAS`). Un corte es un CONJUNTO de días, no un intervalo — ver regla #62. Sin dependencias de streamlit ni de `graficos/`, porque lo consumen los dos lados: la franja de `app.py` y `graficos/ajuste/_comun.py` (que lo reexporta con los nombres privados de siempre). |
 | `data.py` | Carga de datos: DuckDB + httpfs leyendo parquets de R2 (secrets). Sistema de refresco bajo demanda vía R2. |
-| `sunat.py` | **Capa de datos del SIRE Compras (RCE) de SUNAT** (2026-08-19), hermana de `data.py` pero contra la API de SUNAT en vez de R2: OAuth2 (`obtener_token`), el flujo asíncrono exportar→ticket→descargar (`obtener_comprobantes`), parseo del archivo de la propuesta (`parsear_propuesta`, mapeo de columnas tolerante a variantes de encabezado) y la ficha del comprobante en dos formatos (`campos_ficha`, fuente única; `ficha_pdf`, con matplotlib). Modo demo sin credenciales, igual criterio que `data.py::_datos_demo`. Devuelve el REGISTRO del comprobante, no el PDF/XML del proveedor — ver regla #139. Testeado sin red en `test_sunat.py`. |
+| `sunat.py` | **Capa de datos del SIRE Compras (RCE) de SUNAT** (2026-08-19), hermana de `data.py` pero contra la API de SUNAT en vez de R2: OAuth2 (`obtener_token`), listado paginado y SÍNCRONO del detalle vía un endpoint NO documentado (`obtener_comprobantes` → `URL_BUSQUEDA`, descubierto por DevTools — ver regla #140), aplanado del JSON anidado de SUNAT (`_normalizar_registro`) y la ficha del comprobante en dos formatos (`campos_ficha`, fuente única; `ficha_pdf`, con matplotlib). Modo demo sin credenciales, igual criterio que `data.py::_datos_demo`. Devuelve el REGISTRO del comprobante, no el PDF/XML del proveedor — ver regla #139. Testeado sin red en `test_sunat.py`. |
 | `tablas/` | **Paquete de tablas AgGrid** (refactor 2026-08-01; antes un `tablas.py` de 2.028 líneas). `__init__.py` re-exporta la API pública. `_css.py` (CSS de grid y paneles), `_config.py` (estilos de celda/fila, sidebar, totales), `desktop.py` (`renderizar_aggrid_desktop`), `movil.py` (`renderizar_aggrid_movil`), `compras.py` (`renderizar_aggrid_compras`), `ajuste_pivote.py` (`renderizar_aggrid_pivote_ajuste`, tabla "Por fecha" de Ajuste de Inventario — ver regla #25). `renderizar_tabla_compras` se borró el 2026-08-08 (llevaba desde 2026-08-01 sin llamadores). |
 | `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `tiene_dashboard(reporte)` (para que `app.py` no enumere reportes ni importe `_DASHBOARDS`; ver regla #50). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), **`ajuste/` es un paquete** (refactor 2026-08-08; antes un `ajuste.py` de 2.607 líneas — el fichero con MÁS churn del repo, 80 de los últimos 200 commits): una vista por módulo — `_comun.py` (layout del rail, fechas de corte, periodos), `_evolucion.py`, `_pivote.py`, `_cascada.py`, `_panel_analisis.py`, `_heatmap.py`, `_distribucion.py` — y `__init__.py` con la config del rail, `categoria_rango_ajuste` y el entry point. Ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10, `ventas.py` (`ventas_resumen.py` aporta su vista "Resumen ejecutivo" — KPIs + venta diaria coloreada por tendencia + ticket promedio + top platos; nació con un candlestick, ver por qué se dio de baja en la regla #85) y `ventas_comparativo.py` (vista "Año Pasado": barras agrupadas Actual vs Año Pasado en día/semana/mes, con toggle de alineación fecha-calendario / día-de-semana en día, feriados y findes marcados, recorte del período en curso, modo "Descomposición" (%Δ venta/pax/ticket en un solo eje) y drill por clic al ranking de platos del período — ver reglas #86, #87 y #88), **`ventas_horario.py`** (2026-08-14, vista "Por hora": mapa de calor día × hora de hasta 4 períodos comparados en franjas, marcas rectangulares por arrastre —una por panel tocado—, drill con medidas a elección y árbol Grupo › Sub Grupo › Plato › **Tipo de descuento**; reusa los helpers de calendario de `ventas_comparativo` en vez de duplicarlos y sólo agrega la granularidad Año — ver reglas #112 a #115. Abre SIEMPRE en el período EN CURSO (uno solo: comparar es explícito y tiene su botón), recortado al último día con datos; los períodos a comparar NO tienen que ser consecutivos ni recientes — la lista es el atajo y el `date_input` abre el calendario entero. El eje de horas va en am/pm, y en el eje de días los fines de semana van en negro y los feriados en ámbar, con el MISMO calendario `_feriados_peru` que pinta las bandas de la vista Año Pasado), `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras). **`recetas_comun.py`** (2026-08-13) tiene la ÚNICA copia de los 5 gráficos que comparten Receta Base y Receta Venta (Sankey/Composición/Ranking/Ítems clave/Panorama de compras) más `_activo()` y `_chip_fuente()` — ver regla #97. `recetabase.py` y `recetaventa.py` son capas finas sobre ese módulo: resuelven columnas reales + llaman a lo compartido. `requerimientos.py` (2026-08-13, dashboard nuevo: evolución + sub almacén + estado, mismo layout que `salidas.py`) y **`movimientos_comun.py`** (chip Requerimiento/Salidas + vista "Comparativo" que cruza los dos parquets — ver regla #98) comparten nav ("Movimientos") con `salidas.py`. `legacy.py` (Inventario v1) se borró el 2026-08-08: 421 líneas sin un solo import. **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `producto.py` (2026-08-17, reemplaza a "Precio top 10" + "Precio por compra" + `cantidad.py`/"Cantidad por producto", que se borraron ese día: ranking de TODOS los productos —valor, cantidad, UM, precio real de inicio/fin de período y su variación— con el mismo patrón tabla-ranking + clic-para-enfocar que `proveedor.py`; el producto en foco muestra su evolución con un selector de texto plano Precio/Cantidad/Valor × Semana/Mes/Año que fusiona el promedio del período con el precio real de cada compra en un solo gráfico; debajo, un segundo ranking agrupa por Familia con mini ranking al clic — ver regla #128), `volatilidad.py` (`evolucion.py` —la vista "Evolución prov." del rail— se borró el 2026-08-16 a pedido: 377 líneas que quedaron sin un solo import al sacar la dimensión del rail; su pregunta la responde ahora el gráfico de evolución que vive DENTRO del drill de Proveedor) (ranking de insumos por volatilidad de precio → candlestick semanal → compras de la semana clickeada; ver regla #74) — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. `_COMPRAS_RAIL_CATEGORIAS` movió "Producto" a la categoría Dimensión (junto a Proveedor): al cubrir precio+cantidad+valor a la vez ya no es una vista de "Precios". El drill "Familia" (Familia→Subfamilia→productos) se eliminó el mismo día por redundante con el ranking por Familia que ya trae Producto — ver regla #129. El drill de Proveedor se siguió partiendo el 2026-08-08 (era una función de 1.577 líneas): `_css_proveedor.py` (sus 527 líneas de CSS, que NO van a `estilos/` a propósito — ver su docstring), `_etiquetas_proveedor.py` (texto de las barras: `fmt_k`, `abrev_nombre`, `etiqueta_serie`, `sufijo_granularidad`; puras y con asserts de valor en `test_graficos.py`) y `_documentos_proveedor.py` (`tabla_documentos`, la AgGrid pivote del pie). Quedó en 791 líneas; el resto NO se siguió cortando a propósito — ver regla #55. `documentos_sunat.py` (2026-08-19, drill "Documentos SUNAT": los comprobantes que los proveedores emitieron hacia el RUC, vía `sunat.py` — el único drill de Compras cuyo dato no sale del parquet, y el único que NO respeta los chips Familia/Subfamilia; ver regla #139) es el drill más nuevo. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
 | `estilos/` | **Paquete del CSS global** (refactor 2026-08-01; antes un `estilos.py` de 1.700 líneas). `__init__.py` mantiene la API pública (`TAM_FUENTE`, `get_css`, `inject_css`) y concatena las secciones. Una sección por módulo, con prefijo numérico que marca el orden: `_00_base`, `_20_compras_rail`, `_30_filtros`, `_40_ajuste_franja`, `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`, `_90_franja_inferior`, `_99_movil`. (`_10_vista` existió hasta el 2026-08-08: estilaba el selector Gráficos/Tabla y quedó 100% huérfano al borrarse ese widget — ver regla #49.) **El orden de `_SECCIONES` es parte del comportamiento**: hay `!important` en ambos lados de varios conflictos, así que gana la regla que va DESPUÉS — por eso `_99_movil` cierra. |
@@ -5853,3 +5853,82 @@ salvo `icono`):
      vive en otro servicio (descarga masiva de CPE) con otras credenciales,
      hoy sin conectar. `sunat.py` lo dice en su docstring para que nadie lo
      de por hecho leyendo solo la UI.
+
+140. **El flujo de descarga documentado por SUNAT para el SIRE Compras
+     está roto, y el que funciona no está en ningún manual** (2026-08-19,
+     verificado contra el RUC 20605204300 real, con datos de producción).
+
+     El manual oficial («Manual de servicios Web Api - SIRE_Compras v22»)
+     documenta un flujo ASÍNCRONO de 3 pasos para bajar el detalle de la
+     propuesta: `exportacioncomprobantepropuesta` (pide un ticket) →
+     `consultaestadotickets` (se sondea hasta que termina) →
+     `archivoreporte` (baja el ZIP). Se implementó tal cual el manual y
+     **nunca funcionó**: el ticket se procesa, termina con estado 06 (OK),
+     entrega un nombre de archivo… y `archivoreporte` responde que ese
+     archivo no existe:
+
+         422 · cod 2244 "El archivo solicitado no existe."
+         500 · com.mongodb.MongoGridFSException: No file found with the
+               filename: <RUC>-<fecha>-propuesta.zip and revision: -1
+
+     Se probaron las dos rutas de descarga que documenta el manual
+     (`gestionprocesosmasivos/web/masivo/archivoreporte` y una variante),
+     `codOrigenEnvio` 1 (portal) y 2 (API), y todos los valores de
+     `codTipoArchivoReporte` que tienen sentido (00, 0, 1, 2, null, vacío)
+     — siempre el mismo resultado. SUNAT nunca escribe el archivo que su
+     propio ticket anuncia. No es un parámetro mal puesto de este lado.
+
+     De paso, otro bug real de SUNAT que costó tiempo: la respuesta de
+     `consultaestadotickets` trae el campo **mal escrito**,
+     `codTipoAchivoReporte` (sin la primera "r" de "Archivo") — y el propio
+     manual repite el typo al citarlo. Leer el nombre bien escrito
+     devuelve `None` en silencio y arrastra el error de arriba con una
+     causa falsa (parecía un problema de parámetro, no de disponibilidad
+     del archivo).
+
+     **Lo que sí funciona** se encontró mirando la pestaña Network del
+     navegador mientras el propio portal del SIRE (`e-menu.sunat.gob.pe` →
+     Empresas → Sistema Integrado de Registros Electrónicos → Registro de
+     Compras Electronico → Gestión de Compras → pestaña "Propuesta del
+     RCE") pintaba su tabla paginada: un GET síncrono a
+
+         …/rce/propuesta/web/propuesta/{periodo}/busqueda
+             ?codTipoOpe=1&page={page}&perPage={perPage}
+
+     que devuelve el detalle completo en JSON — sin ticket, sin ZIP, sin
+     encolar nada. Responde en segundos. No está en el manual v22 (ni se
+     encontró en ninguna doc pública); es el mismo endpoint que consume el
+     frontend del SIRE. **Riesgo aceptado a propósito**: al no ser un
+     contrato público, SUNAT puede cambiarlo sin aviso. El día que empiece
+     a fallar, repetir el mismo diagnóstico (DevTools → Network → filtrar
+     XHR → reproducir la acción en el portal) antes de asumir que es un
+     bug nuestro.
+
+     **Y el propio endpoint bueno tiene DOS bugs más, encontrados recién
+     al comparar los totales contra el portal:**
+
+     - `perPage` tiene un TOPE DE 100 no documentado. Pedir 150 o 200 da
+       422 (`JerseyViolationException`). Se probó subirlo a 200 "para
+       hacer menos llamadas" sin verificar primero, y falló — quedó
+       comentado en `sunat.py::FILAS_POR_PAGINA` como advertencia para no
+       repetir el mismo apuro.
+     - **La paginación se SOLAPA.** El offset (`page`) avanza bien, pero
+       el límite de filas que devuelve cada página es `page * perPage`, no
+       `perPage`. Pidiendo `perPage=100` sobre 323 comprobantes reales:
+       `page=1` → 100 filas, `page=2` → **200** filas (les 100 de la
+       página 1 más 100 nuevas), `page=3` → 123, `page=4` → 23. Acumular
+       las páginas a ciegas da 446 filas y un total un 38% más alto que el
+       real — un número que se ve perfectamente plausible en un dashboard
+       de compras y está mal. `sunat.py::obtener_comprobantes` deduplica
+       por `codCar` (el identificador único de la anotación en SUNAT) y
+       corta cuando junta el `totalRegistros` que la propia API declara.
+       Verificado al cierre: con el fix, los 323 documentos, la base
+       imponible (S/ 160.147,83) y el IGV (S/ 27.493,38) coinciden EXACTOS
+       con la tabla "Resumen de CP" del portal, al centavo.
+
+     **Lección para la próxima vez que se integre una API de SUNAT sin
+     SDK oficial**: no confiar en que "el ticket dice OK" o "la respuesta
+     vino 200" significa que el dato está completo — verificar el TOTAL contra
+     una fuente independiente (acá, la tabla del propio portal) antes de
+     dar por buena una integración. El bug de paginación no daba NINGÚN
+     error; el número simplemente estaba mal.
