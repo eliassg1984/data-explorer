@@ -130,7 +130,8 @@ CSS = """    /* ================================================================
     /* =================================================================== */
     @media screen and (min-width: 769px) {
         div[class*="st-key-ajuste_graf_card_"],
-        div[class*="st-key-compras_prov_card_"] {
+        div[class*="st-key-compras_prov_card_"],
+        div[class*="st-key-sunat_card_"] {
             max-height: var(--alto-util);
             overflow-y: auto;
             overflow-x: hidden;
@@ -139,11 +140,13 @@ CSS = """    /* ================================================================
            (_85_asistente.py): la tarjeta ya es un marco, la barra no tiene
            que competir con el contenido. */
         div[class*="st-key-ajuste_graf_card_"]::-webkit-scrollbar,
-        div[class*="st-key-compras_prov_card_"]::-webkit-scrollbar {
+        div[class*="st-key-compras_prov_card_"]::-webkit-scrollbar,
+        div[class*="st-key-sunat_card_"]::-webkit-scrollbar {
             width: 6px;
         }
         div[class*="st-key-ajuste_graf_card_"]::-webkit-scrollbar-thumb,
-        div[class*="st-key-compras_prov_card_"]::-webkit-scrollbar-thumb {
+        div[class*="st-key-compras_prov_card_"]::-webkit-scrollbar-thumb,
+        div[class*="st-key-sunat_card_"]::-webkit-scrollbar-thumb {
             background: var(--scroll-thumb);
             border-radius: 3px;
         }

@@ -227,7 +227,9 @@ CSS = """    <style>
         margin: 0 !important;
         padding: 0 !important;
         overflow: visible !important;
+        display: block !important;
     }
+
 
     /* ============ BOTÓN PARA EXPANDIR EL SIDEBAR ============ */
     [data-testid*="SidebarCollaps"],

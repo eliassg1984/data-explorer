@@ -55,6 +55,7 @@ _COMPRAS_RAIL_CATEGORIAS = (
                    ("Producto",             "Producto"))),
     ("Precios",   (("Vs año pasado",        "Vs año pasado"),
                    ("Volatilidad",          "Volatilidad"))),
+    ("SUNAT",     (("Documentos SUNAT",     "Documentos"),)),
     ("Más",       (("Semanal",              "Semanal"),
                    ("Personalizado",        "Personalizado"),
                    ("Tabla",                "Tabla"))),
@@ -161,7 +162,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     _valor = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
 
     opciones = ["Proveedor", "Producto", "Vs año pasado", "Volatilidad",
-                "Semanal", "Personalizado", "Tabla"]
+                "Documentos SUNAT", "Semanal", "Personalizado", "Tabla"]
 
     # Rail vertical fijo al borde DERECHO (componente compartido _render_rail):
     # selector de tipo de gráfico agrupado por categoría. El activo se marca
@@ -211,6 +212,17 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         with st.container(border=True, key="ajuste_graf_card_izq_compras"):
             _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                                        col_valor, col_cant, col_um, col_moneda)
+        return
+
+    # Documentos SUNAT: los comprobantes que los proveedores emitieron hacia
+    # nuestro RUC, traídos del SIRE. Recibe `d` solo para sugerir el período
+    # tributario; su dato NO sale del parquet (ver su docstring). Import
+    # local a propósito: arrastra `sunat.py` y, con él, `requests` — no hay
+    # por qué pagarlo al importar Compras si nadie abre esta vista.
+    if graf == "Documentos SUNAT":
+        from graficos.compras.documentos_sunat import renderizar_documentos_sunat
+        with st.container(key="compras_sunat_drill_wrap"):
+            renderizar_documentos_sunat(d, col_fecha)
         return
 
     # Vs año pasado: Precio, Cantidad o Valor (selector "Ver") — unifica los
