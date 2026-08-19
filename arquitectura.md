@@ -5733,3 +5733,44 @@ salvo `icono`):
      Pendiente deliberado: el Panel A y los dos rankings de `producto.py`
      siguen con `st.dataframe` y sus checkbox. Se convierten con este mismo
      patrón cuando toque.
+
+137. **La franja y las tarjetas comparten UNA sola línea izquierda
+     (2026-08-19), y el ancla es la reserva del rail.** Vino de comparar con
+     MSN Dinero: ahí la barra lateral ocupa su columna y la franja de
+     contexto empieza **a su derecha**, sobre el mismo borde que las tarjetas
+     de abajo. En esta app las cuatro capas ya existían (franja de
+     navegación → franja de contexto → rail → tarjetas) pero la franja
+     cruzaba por encima de la columna del rail: arrancaba en x=85 y las
+     tarjetas en 119.
+
+     **El 85 era un fósil.** Todos los anclajes de la franja eran "85 + algo"
+     (chips 301 = 85+216; con título de vista: 197 = 85+112 y 413 = 85+328;
+     Ventas Comparativo: 361 = 85+276 y 577 = 85+492), y ese 85 venía de
+     `175 - 90 del rail retirado` — un número heredado de dos layouts atrás.
+     Ahora la cadena entera cuelga de `var(--rail-der-res)`, que es lo que el
+     contenido le reserva al rail. Dos cosas salen gratis de derivarlo:
+     la franja arranca donde arrancan las tarjetas en cualquier viewport, y
+     **al plegar el rail las dos se mueven juntas** (medido: 153 → 93 las
+     dos).
+
+     **La tarjeta de Compras soltó su jalón.** Tenía `margin-left` negativo y
+     `width: calc(100% + 60px)` para ganar ancho; lo ganaba rompiendo la
+     reja. Se quitó entero, incluido el ensanche a la derecha: medido, ese
+     `calc(100% + 16px)` NO daba el mismo sobrante en 1280 que en 1440 (el
+     `max-width` resuelve su 100% contra otra caja), así que el borde derecho
+     bailaba y nada podía alinearse con él. La tarjeta ES la caja de
+     contenido; paga ~34px de ancho y a cambio todo cae en la misma reja.
+
+     **La trampa del final: `position: fixed` y la barra de scroll.** El pill
+     flotante "Proveedores" quedaba 10px fuera del borde derecho de la
+     tarjeta, y el desfase cambiaba con el viewport. No era un cálculo mal
+     hecho: el pill es `fixed`, así que se posiciona contra el VIEWPORT
+     (1440 medido), mientras que la tarjeta vive dentro del contenedor, que
+     mide lo que queda descontada la barra de scroll (1430). Por eso su
+     `right` es 90 y no 80 — los 10 son la barra. Cualquier elemento `fixed`
+     que quiera alinear con contenido en flujo tiene este problema; si algún
+     día se saca el scroll de página, ese sumando vuelve a cero.
+
+     Verificado midiendo en 1280 y 1440, en Compras y en Ajuste: borde
+     izquierdo y derecho idénticos entre franja y tarjeta, cero desborde
+     horizontal, y el plegado del rail mueve las dos capas a la vez.

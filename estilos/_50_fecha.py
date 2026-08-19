@@ -160,7 +160,16 @@ CSS = """    /* ================================================================
                el control se ve apretado contra la línea inferior — fue
                justo el bug de la pasada anterior. Ver _40_ajuste_franja.py. */
             top: calc(var(--nav-top-alto) + 8px) !important;
-            left: 85px !important;   /* 175 - 90 del rail retirado */
+            /* 2026-08-19: era `left: 85px`, un numero heredado de cuando el
+               rail vivia a la IZQUIERDA y el contenido empezaba en otro
+               lado. Ahora arranca donde arranca el contenido -- la misma
+               reserva que usa el padding del contenedor -- asi la franja y
+               las tarjetas comparten UNA sola linea izquierda (el modelo de
+               MSN Dinero: barra lateral, y a su derecha franja y tarjetas
+               sobre el mismo borde). Al derivarlo de la variable, plegar el
+               rail mueve las dos cosas juntas. Toda la cadena de la franja
+               (chips, titulos de vista) cuelga de este mismo ancla. */
+            left: var(--rail-der-res) !important;
             right: auto !important;
         }
         /* ANCHO FIJO, no fit-content. Los chips se anclan a la derecha del
@@ -244,7 +253,8 @@ CSS = """    /* ================================================================
            el rail izquierdo. */
         .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
             top: calc(var(--nav-top-alto) + 8px) !important;  /* como el pill */
-            left: 301px !important;
+            /* pill (210) + 6 de aire, contado desde el mismo ancla. */
+            left: calc(var(--rail-der-res) + 216px) !important;
             right: auto !important;
             transform: none !important;
             /* Hasta el 2026-08-15 esta cuenta llevaba un sumando más, 255px,
@@ -254,8 +264,8 @@ CSS = """    /* ================================================================
                solapaban entre 901 y 1200px. Los atajos se fueron (están en
                el popover del calendario), así que los chips se quedan con
                ese ancho. */
-            max-width: calc(100vw - 301px
-                            - 58px) !important;   /* 80 de padding - 22, ver el pill */
+            max-width: calc(100vw - (var(--rail-der-res) + 216px)
+                            - 58px) !important;
         }
         .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
             [data-testid="stPopover"] button {
@@ -496,7 +506,7 @@ CSS = """    /* ================================================================
     .st-key-ventas_comp_titulo_franja {
         position: fixed !important;
         top: calc(var(--nav-top-alto) + 8px) !important;
-        left: 85px !important;   /* 175 - 90 del rail retirado */
+        left: var(--rail-der-res) !important;   /* ancla comun, ver el pill */
         width: 260px !important;
         z-index: 22 !important;
         margin: 0 !important;
@@ -520,12 +530,13 @@ CSS = """    /* ================================================================
         }
         [data-testid="stAppViewContainer"]:has([class*="st-key-chartcard_ventas_comparativo_"])
             .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill {
-            left: 361px !important;   /* 85 (título) + 260 (su ancho) + 16 de aire */
+            left: calc(var(--rail-der-res) + 276px) !important;   /* titulo (260) + 16 */
         }
         [data-testid="stAppViewContainer"]:has([class*="st-key-chartcard_ventas_comparativo_"])
             .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
-            left: 577px !important;   /* 361 (pill) + 210 (su ancho) + 6, igual que la cuenta base */
-            max-width: calc(100vw - 577px - 58px) !important;   /* 80 de padding - 22, ver el pill */
+            left: calc(var(--rail-der-res) + 492px) !important;   /* pill (210) + 6 */
+            max-width: calc(100vw - (var(--rail-der-res) + 492px)
+                            - 58px) !important;
         }
     }
 

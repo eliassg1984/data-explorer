@@ -103,10 +103,16 @@ CSS = """        <style>
                    rail para seguirlo al plegarse. Con el rail a la IZQUIERDA
                    (2026-08-18) esa variable dejó de decir nada sobre este
                    borde — y el borde derecho ya no se mueve cuando el rail se
-                   pliega, así que tampoco hace falta que lo siga. 64px es el
-                   borde derecho de la tarjeta de abajo: 80 de padding del
-                   contenedor menos los 16 que la tarjeta se sale. */
-                right: 64px !important;
+                   pliega, así que tampoco hace falta que lo siga.
+                   90 = 80 de padding del contenedor + 10 de BARRA DE SCROLL.
+                   Los 10 no son un fudge: este elemento es `position: fixed`,
+                   así que se posiciona contra el VIEWPORT (1440 medido),
+                   mientras que la tarjeta con la que alinea vive dentro del
+                   contenedor, que mide lo que queda descontada la barra
+                   (1430). Sin ese sumando el pill sobresale exactamente el
+                   ancho de la barra. Si algún día se saca el scroll de
+                   página, este número vuelve a 80. */
+                right: 90px !important;
                 z-index: 23 !important;
             }
         }
@@ -138,7 +144,7 @@ CSS = """        <style>
         .st-key-compras_prov_titulo_franja {
             position: fixed !important;
             top: calc(var(--nav-top-alto) + 8px) !important;
-            left: 85px !important;
+            left: var(--rail-der-res) !important;   /* ancla comun de la franja */
             right: auto !important;
             bottom: auto !important;
             width: 100px !important;
@@ -163,14 +169,15 @@ CSS = """        <style>
                estilos/_50_fecha.py, que ya usa la key duplicada (0,2,0),
                sin depender del orden en que se inyecten los archivos. */
             .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill {
-                left: 197px !important;
+                left: calc(var(--rail-der-res) + 112px) !important;
             }
             /* Los chips arrancan despues del pill corrido: 197 + 210 + 6.
                Da el MISMO 413 que antes (el titulo solo cambio de lugar
                dentro de la fila, no agrego ancho). */
             .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
-                left: 413px !important;
-                max-width: calc(100vw - 413px - 58px) !important;
+                left: calc(var(--rail-der-res) + 328px) !important;
+                max-width: calc(100vw - (var(--rail-der-res) + 328px)
+                                - 58px) !important;
             }
         }
         /* ── CUADRO DE CONTROL DE PROVEEDORES (reemplaza la leyenda) ──────

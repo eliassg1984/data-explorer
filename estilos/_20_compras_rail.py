@@ -155,9 +155,17 @@ CSS = """    /* ================================================================
                queda en 119: 20px del rail (los mismos que tenía del lado
                derecho) y 64 hasta el borde (los mismos que tenía a la
                izquierda). El layout es el de antes, reflejado. */
-            margin-left: -34px !important;
-            width: calc(100% + 60px) !important;
-            max-width: calc(100% + 60px) !important;
+            /* 2026-08-19: el jalon izquierdo SE VA. Existia para ganar
+               ancho, y lo ganaba rompiendo la reja: la tarjeta arrancaba
+               34px antes que la franja de arriba. Ahora las dos arrancan en
+               el borde del contenido (ver el ancla de la franja en
+               estilos/_50_fecha.py) y la tarjeta paga esos 34px de ancho.
+               Y el ensanche a la derecha tambien: medido, `calc(100% + 16px)`
+               no daba el mismo sobrante en 1280 que en 1440 (el `max-width`
+               resuelve su 100% contra otra caja), asi que el borde derecho
+               de la tarjeta bailaba y nada podia alinearse con el. La
+               tarjeta ES la caja de contenido: sin width propio, sus dos
+               bordes son los del contenedor en cualquier viewport. */
         }
     }
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_"] {
