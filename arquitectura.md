@@ -6200,3 +6200,34 @@ salvo `icono`):
      tocar cómo se arma `base_imponible` en `sunat._normalizar_registro`
      es una decisión de diseño aparte, no un bug de la agregación que
      pedía esta tanda.
+
+     **Addendum 4 (mismo día, cuarta ronda): resuelto — el usuario
+     confirmó la equivalencia y la diferencia de S/22.889 desapareció.**
+     El usuario aclaró en el mensaje siguiente: **"total neto = base
+     imponible"** — para su sistema, `TOTAL NETO` es el neto del
+     documento completo, gravado o no, sin distinguir. La comparación
+     correcta entonces no es `base_pq` vs `base_imponible` del SIRE, es
+     `base_pq` vs `base_imponible + no_gravado` (ambos campos ya salían
+     de `sunat._normalizar_registro`, solo faltaba sumarlos en el cruce —
+     no hizo falta tocar `sunat.py`). `cruzar_con_parquet` ahora arma
+     `base_sunat = base_imponible + no_gravado`.
+
+     Medido el efecto sobre el mismo cierre de ABRASA julio 2026 — antes
+     vs después de este addendum:
+     | | Coincide | Diferencia | Solo SUNAT | Solo sistema |
+     |---|---|---|---|---|
+     | Antes (solo `base_imponible`) | 154 | 85 (S/335,85 total · **S/22.889,45 base**) | 139 | 33 |
+     | Después (`+ no_gravado`) | **218** | **21** (S/335,72 total · **S/436,83 base**) | 139 | 33 |
+
+     **64 documentos** que mostraban "Diferencia" únicamente por el
+     split gravado/no-gravado pasaron a "Coincide" — eran falsos
+     positivos, no diferencias de negocio. Los 21 que quedan son reales
+     (ej. `F001-2400` de LA CESTA S.A.C., -S/202,00, ya visto en el
+     Addendum 1). El total nunca se movió (S/335,85→S/335,72, la
+     diferencia es solo redondeo) porque el Total nunca tuvo este
+     problema — solo la Base, que es justamente el campo que el KPI
+     compacto (`_kpis_cruce`) NO resume en soles (solo cuenta filas), así
+     que el error de S/22.889 en agregado no se veía en pantalla — otro
+     caso de "ningún error, un número plausible en el lugar equivocado"
+     (regla #140/#141), esta vez escondido por no estar en el resumen
+     visible.

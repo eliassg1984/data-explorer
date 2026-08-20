@@ -323,14 +323,23 @@ def _pruebas_puras():
 
     # cruzar_con_parquet: los 4 estados + el orden de desambiguación
     # (RUC exacto primero, nombre como red de seguridad después).
+    # E001-4: compra EXONERADA -- el SIRE la reporta con base_imponible=0
+    # y todo el importe en no_gravado (caso real medido: "LA CESTA
+    # S.A.C.", alimentos sin procesar). TOTAL NETO del parquet no separa
+    # gravado de no gravado, así que base_sunat tiene que sumar los dos
+    # campos del SIRE para ser comparable -- si no, esto saldría
+    # "Diferencia" pese a no haber ninguna real.
     _sire = pd.DataFrame({
-        "documento": ["E001-1", "E001-2", "E001-3", "E001-9"],
-        "proveedor": ["GIANO MARINE SAC", "PROVEEDOR B", "PROVEEDOR C", "SIN PAR"],
-        "ruc_proveedor": ["20111111111", "20222222222", "20333333333", "20999999999"],
-        "fecha_emision": pd.to_datetime(["2026-07-06"] * 4),
-        "base_imponible": [100.0, 200.0, 300.0, 400.0],
-        "total": [118.0, 236.0, 354.0, 472.0],
-        "situacion": ["Registrado"] * 4,
+        "documento": ["E001-1", "E001-2", "E001-3", "E001-9", "E001-4"],
+        "proveedor": ["GIANO MARINE SAC", "PROVEEDOR B", "PROVEEDOR C", "SIN PAR",
+                      "EXENTO SAC"],
+        "ruc_proveedor": ["20111111111", "20222222222", "20333333333",
+                          "20999999999", "20555555555"],
+        "fecha_emision": pd.to_datetime(["2026-07-06"] * 5),
+        "base_imponible": [100.0, 200.0, 300.0, 400.0, 0.0],
+        "no_gravado": [0.0, 0.0, 0.0, 0.0, 500.0],
+        "total": [118.0, 236.0, 354.0, 472.0, 500.0],
+        "situacion": ["Registrado"] * 5,
     })
     # E001-1: DOS candidatos con RUC distinto -- uno con el RUC EXACTO del
     # SIRE (debe ganar por RUC, aunque el nombre no se parezca en nada) y
@@ -340,14 +349,17 @@ def _pruebas_puras():
     # acá el RUC del parquet viene VACÍO en ambos candidatos (columna
     # ausente de esa fila), así que cae al fallback por nombre de siempre.
     _g2 = pd.DataFrame({
-        "documento": ["E001-1", "E001-1", "E001-2", "E001-2", "E001-3", "E001-8"],
-        "ruc_pq": ["20111111111", "20999999999", "", "", "20333333333", "20777777777"],
+        "documento": ["E001-1", "E001-1", "E001-2", "E001-2", "E001-3", "E001-8",
+                      "E001-4"],
+        "ruc_pq": ["20111111111", "20999999999", "", "", "20333333333",
+                  "20777777777", "20555555555"],
         "proveedor_pq": ["NOMBRE IRRECONOCIBLE SAC", "GIANO MARINE SAC",
                          "PROVEEDOR B SAC", "OTRO TOTAL",
-                         "PROVEEDOR C DIFERENTE", "SOLO SISTEMA SAC"],
-        "base_pq": [100.0, 999.0, 200.0, 9999.0, 305.0, 80.0],
-        "total_pq": [118.0, 1180.0, 236.0, 11800.0, 359.9, 94.4],
-        "fecha_pq": pd.to_datetime(["2026-07-06"] * 6),
+                         "PROVEEDOR C DIFERENTE", "SOLO SISTEMA SAC",
+                         "EXENTO SAC"],
+        "base_pq": [100.0, 999.0, 200.0, 9999.0, 305.0, 80.0, 500.0],
+        "total_pq": [118.0, 1180.0, 236.0, 11800.0, 359.9, 94.4, 500.0],
+        "fecha_pq": pd.to_datetime(["2026-07-06"] * 7),
     })
     _cruce = _ds.cruzar_con_parquet(_sire, _g2)
 
@@ -366,6 +378,11 @@ def _pruebas_puras():
           _fila("E001-3")["estado"], "Diferencia")
     check("cruce E001-9: no está en el parquet -> Solo SUNAT",
           _fila("E001-9")["estado"], "Solo SUNAT")
+    check("cruce E001-4: base_imponible=0 + no_gravado real -> Coincide, "
+          "no Diferencia",
+          _fila("E001-4")["estado"], "Coincide")
+    check("cruce E001-4: base_sunat suma base_imponible + no_gravado",
+          _fila("E001-4")["base_sunat"], 500.0)
     check("cruce E001-8: solo en el parquet -> Solo sistema",
           _cruce[(_cruce["documento"] == "E001-8")
                 & (_cruce["estado"] == "Solo sistema")].shape[0], 1)
@@ -380,8 +397,8 @@ def _pruebas_puras():
           ((_cruce["documento"] == "E001-2")
            & (_cruce["proveedor_sistema"] == "OTRO TOTAL")
            & (_cruce["estado"] == "Solo sistema")).any(), True)
-    check("cruce: sin filas de más (4 SIRE + 3 solo-sistema reales)",
-          len(_cruce), 7)
+    check("cruce: sin filas de más (5 SIRE + 3 solo-sistema reales)",
+          len(_cruce), 8)
 
     # ── Comparativo vs Año Pasado (Ventas) ──────────────────────────────
     import datetime as _dt

@@ -249,6 +249,13 @@ def cruzar_con_parquet(df_sire, g_parquet):
       "Diferencia"    — en ambas fuentes, con diferencia real de monto
       "Solo SUNAT"    — SUNAT lo reporta; no está cargado en el sistema
       "Solo sistema"  — está cargado; SUNAT no lo reporta (aún) para el RUC
+
+    `base_sunat` = `base_imponible + no_gravado` del SIRE, no solo
+    `base_imponible` — equivalencia confirmada por el usuario: `TOTAL
+    NETO` del parquet es el neto del documento completo, afecto a IGV o
+    no, mientras que SUNAT separa "base gravada" de "no gravado" en dos
+    campos. Sumarlos es lo que hace comparable a `base_pq` (ver
+    `arquitectura.md` regla #143, addendum 4).
     """
     cols_pq = ["documento", "ruc_pq", "proveedor_pq", "base_pq", "total_pq",
                "fecha_pq"]
@@ -286,7 +293,14 @@ def cruzar_con_parquet(df_sire, g_parquet):
                         elegido = cand
                         break
 
-        base_sunat = float(r.get("base_imponible") or 0)
+        # base_imponible (gravado) + no_gravado, no solo base_imponible:
+        # TOTAL NETO del parquet es el neto del documento completo, sin
+        # distinguir si está afecto a IGV o no -- SUNAT sí lo separa en
+        # dos campos. Sin sumar no_gravado, una compra exonerada (ej.
+        # alimentos sin procesar) mostraba base_imponible=0 contra un
+        # TOTAL NETO real, como "Diferencia" pese a no haber ninguna.
+        # Ver `arquitectura.md` regla #143, addendum 4.
+        base_sunat = float(r.get("base_imponible") or 0) + float(r.get("no_gravado") or 0)
         total_sunat = float(r.get("total") or 0)
         if elegido is not None:
             # La tripleta (documento, ruc, proveedor) es la clave REAL de
