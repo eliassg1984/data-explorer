@@ -19,8 +19,14 @@ Ver `arquitectura.md` regla #142.
 USO
 ---
     python herramientas/sunat_originales_sync.py --desde 202607 --hasta 202608
-    python herramientas/sunat_originales_sync.py --desde 202608 --hasta 202608 --limite 2   (probar primero)
-    python herramientas/sunat_originales_sync.py --desde 202607 --hasta 202608 --forzar      (repetir aunque ya esté en R2)
+    python herramientas/sunat_originales_sync.py --desde 202608 --hasta 202608 --limite 2 --ver   (probar primero, viendo la ventana)
+    python herramientas/sunat_originales_sync.py --desde 202607 --hasta 202608 --forzar           (repetir aunque ya esté en R2)
+
+Por default el navegador es INVISIBLE (headless): no abre ninguna ventana,
+no se ve ningún cursor moviéndose — corre como proceso de fondo, igual que
+cualquier otro script. Con `--ver` sí abre una ventana de Chrome de
+verdad y se puede mirar. Conviene usarlo la primera vez: más fácil
+describir "se quedó trabado en esta pantalla" que leer un stack trace.
 
 REQUIERE
 --------
@@ -103,9 +109,9 @@ def _log(msg: str) -> None:
 # adaptado de un proyecto de terceros (app-sire/services/sunat_pdf_downloader.py)
 # ===========================================================================
 
-def _iniciar_navegador(p):
+def _iniciar_navegador(p, headless: bool = True):
     navegador = p.chromium.launch(
-        headless=True,
+        headless=headless,
         args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
     )
     contexto = navegador.new_context(
@@ -298,6 +304,11 @@ def main() -> None:
                     help="Máximo de documentos a bajar en esta corrida (para probar)")
     ap.add_argument("--forzar", action="store_true",
                     help="Vuelve a bajar aunque ya exista en R2")
+    ap.add_argument("--ver", action="store_true",
+                    help="Abre el Chromium en una ventana visible en vez de "
+                        "invisible (headless). Más lento, pero para la "
+                        "primera corrida sirve para VER qué hace en vez de "
+                        "leer un stack trace si algo falla.")
     args = ap.parse_args()
 
     if not sunat.periodo_valido(args.desde) or not sunat.periodo_valido(args.hasta):
@@ -339,7 +350,7 @@ def main() -> None:
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
-        navegador, _contexto, pagina = _iniciar_navegador(p)
+        navegador, _contexto, pagina = _iniciar_navegador(p, headless=not args.ver)
         try:
             _login(pagina, sunat._cred("SUNAT_RUC"), sunat._cred("SUNAT_USUARIO_SOL"),
                   sunat._cred("SUNAT_CLAVE_SOL"))
