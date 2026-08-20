@@ -300,7 +300,22 @@ def _consultar_y_descargar(pagina, ruc_emisor: str, serie: str, numero: str,
     try:
         app_frame.get_by_text("Resultado", exact=True).wait_for(state="visible", timeout=15000)
     except Exception:
-        _log("    sin resultados (¿fuera de la ventana de consulta de SUNAT?)")
+        # Distinguir "SUNAT no encontró nada" (normal, seguir con el
+        # próximo documento) de "el servidor de SUNAT está caído en este
+        # momento" (transitorio, NO es que falte este documento — visto
+        # en vivo 2026-08-20: un modal "Error del Servidor" / "reintentar
+        # en 5 minutos" se etiquetaba igual que un resultado vacío).
+        if pagina.get_by_text("Error del Servidor", exact=False).is_visible():
+            _log("    ⚠️ SUNAT devolvió \"Error del Servidor\" (transitorio, no es "
+                "que falte el documento) — probá de nuevo en unos minutos")
+            try:
+                pagina.get_by_role("button", name="Aceptar").click(timeout=3000)
+            except Exception:
+                pass
+        elif app_frame.get_by_text("No hay resultados", exact=False).is_visible():
+            _log("    sin resultados (SUNAT no encontró el comprobante)")
+        else:
+            _log("    sin resultados (¿fuera de la ventana de consulta de SUNAT?)")
         return None, None
 
     pdf_bytes = None
