@@ -66,31 +66,31 @@ reinventó esa parte. Lo que SÍ cambia acá:
     máquina.
   · Salta lo que YA está en R2 (backfill incremental) salvo `--forzar`.
 
-QUÉ ESTÁ VERIFICADO Y QUÉ NO (2026-08-20)
-------------------------------------------
-VERIFICADO en vivo, contra el RUC real:
-  · Login (hizo falta visitar sunat.gob.pe antes y mandar `referer`; sin
-    eso SUNAT contesta "Error en la invocación" y nunca muestra el form).
-  · Un documento COMPLETO de punta a punta: consulta, PDF, XML, subida.
+VERIFICADO EN VIVO (2026-08-20, contra el RUC real)
+----------------------------------------------------
+  · **Tres documentos seguidos en una sola sesión: 3/3**, con PDF y XML,
+    cero errores. Costó tres arreglos, todos anotados en la regla #142:
+    el login necesita visitar `sunat.gob.pe` ANTES y mandar `referer`;
+    el panel "Resultado" tapaba el menú al pasar al 2º documento (reset
+    con `goto`); y "Nueva Consulta" resolvía a un acceso de Favoritos
+    OCULTO que SUNAT agrega tras el primer uso (`_click_texto_visible`).
+  · Los archivos que quedan en R2: PDF válidos y XML PLANOS (no el ZIP
+    que entrega SUNAT), con su detalle de líneas legible.
   · La selección: universo del parquet, ventana de 24 meses, orden
-    más-nuevo-primero, y el descarte de lo ya subido.
-
-NO VERIFICADO todavía: **dos o más documentos seguidos con éxito.** El
-primer intento rompió al pasar al 2º (el panel "Resultado" tapaba el menú
-→ reset con `goto`) y el segundo intento murió porque SUNAT estaba caído
-("Error del Servidor"), no por el código. Los dos arreglos están puestos
-pero nadie los vio funcionar en cadena. Por eso: **correlo primero con
-`--limite 3 --ver`**, mirá que los tres salgan, y recién ahí programalo de
-noche.
+    más-nuevo-primero y descarte de lo ya subido.
 
 RIESGO ACEPTADO A PROPÓSITO (igual que el endpoint no documentado de
 `sunat.py`, ver regla #140, pero un escalón más arriba): esto navega el
 portal SOL con técnicas anti-detección (esconder `navigator.webdriver`,
 user-agent de navegador real) porque sin eso Chromium headless no pasa el
 login. No es un contrato público de SUNAT — puede romperse con cualquier
-cambio del portal, y correrlo seguido sube el riesgo de que la cuenta
-quede señalada. Por eso es manual y local, no un cron: corré esto cuando
-lo necesites, no como un proceso de fondo.
+cambio del portal.
+
+Por eso, aunque esté pensado para correr de noche, conviene MIRAR EL LOG
+cada tanto en vez de darlo por hecho: el día que SUNAT cambie un selector,
+esto va a fallar en silencio salvo que alguien lea la salida. Y si empieza
+a fallar todo junto, el diagnóstico es el mismo de siempre: `--ver` para
+mirar la ventana, DevTools sobre el portal a mano, y comparar.
 """
 from __future__ import annotations
 

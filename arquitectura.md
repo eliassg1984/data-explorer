@@ -6041,14 +6041,27 @@ salvo `icono`):
      todos los documentos pendientes: más rápido y una señal de bot mucho
      más chica.
 
-     **Lo que NO está verificado contra SUNAT en vivo** (dejado explícito
-     en el docstring del script, no escondido): los selectores de
-     login/popups/primer formulario vienen de código de terceros ya
-     probado en producción; volver a "Nueva Consulta" para el SEGUNDO
-     documento en adelante, dentro de la misma sesión, es lógica nueva
-     que nadie corrió todavía — el proyecto original nunca lo necesitó
-     porque reabría el navegador por cada uno. Antes de soltarle un rango
-     grande, correrlo con `--limite 2` contra un período conocido.
+     **Verificado en vivo (2026-08-20), y costó tres arreglos que vale
+     anotar porque son la clase de cosa que vuelve a morder:**
+       · El login fallaba con "Error en la invocación" hasta que se
+         visitó `sunat.gob.pe` ANTES y se mandó `referer` explícito.
+         Saltar directo a la URL profunda no alcanza. La URL en sí era
+         correcta desde el principio — se sospechó de ella y se la
+         cambió por una peor (`AutenticaMenuInternet.htm` sin
+         parámetros, que es la página de VUELTA post-login, no un punto
+         de entrada). Un usuario copió la URL real de su sesión y
+         resultó idéntica a la original.
+       · Al pasar al 2º documento, el panel "Resultado" del anterior
+         tapaba el menú → reset con `goto` a la URL del menú antes de
+         cada documento.
+       · "Nueva Consulta de comprobantes de pago" resolvía a un acceso
+         de **Favoritos oculto** que SUNAT agrega tras el primer uso:
+         con `.first` se agarraba el escondido. `_click_texto_visible`
+         recorre todas las coincidencias y clickea la visible.
+     Resultado: **3 de 3 documentos en una sola sesión**, con PDF y XML,
+     cero errores. Los archivos en R2 quedaron como corresponde: PDF
+     válidos y XML planos con su detalle de líneas (1, 2, 3 y 14 líneas
+     según el comprobante).
 
 143. **Cruce SIRE ↔ parquet de Compras: la clave `serie-número` sola
      produce falsos positivos si no se acota por fecha primero**
