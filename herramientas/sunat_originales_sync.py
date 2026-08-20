@@ -78,6 +78,7 @@ lo necesites, no como un proceso de fondo.
 from __future__ import annotations
 
 import argparse
+import io
 import pathlib
 import sys
 import time
@@ -261,6 +262,40 @@ def _tipo_label(tipo_cdp: str, serie: str) -> str:
     return "Factura"
 
 
+def _xml_del_zip(crudo: bytes) -> bytes:
+    """El XML de la factura, sacado del ZIP que entrega SUNAT.
+
+    El botón "Descargar XML" del portal NO baja un XML: baja un ZIP con
+    DOS archivos — la factura (`<ruc>-01-<serie>-<numero>.xml`) y el CDR,
+    la constancia de recepción, que va con prefijo `R-`. Acá se devuelve
+    la factura.
+
+    La primera versión guardaba el ZIP crudo bajo la clave `.xml`
+    (verificado en vivo 2026-08-20 sobre el único documento sincronizado:
+    empezaba con `PK`). Eso rompía dos cosas: el botón "XML" de
+    la webapp entregaba un archivo `.xml` que ningún visor abre, y el
+    detalle de líneas —que es la razón de guardar el XML— quedaba detrás
+    de un unzip que nadie hacía.
+
+    Si el contenido no fuera un ZIP (o no trajera XML adentro), se
+    devuelve tal cual: mejor guardar algo que perder la descarga.
+    """
+    import zipfile
+
+    if crudo[:2] != b"PK":
+        return crudo
+    try:
+        with zipfile.ZipFile(io.BytesIO(crudo)) as z:
+            nombres = [n for n in z.namelist()
+                       if n.lower().endswith(".xml")
+                       and not pathlib.PurePath(n).name.upper().startswith("R-")]
+            if nombres:
+                return z.read(nombres[0])
+    except Exception:
+        pass
+    return crudo
+
+
 def _consultar_y_descargar(pagina, ruc_emisor: str, serie: str, numero: str,
                            tipo_cdp: str) -> tuple[bytes | None, bytes | None]:
     """Llena el formulario para UN comprobante y descarga PDF + XML.
@@ -332,7 +367,7 @@ def _consultar_y_descargar(pagina, ruc_emisor: str, serie: str, numero: str,
     if btn_xml.is_visible():
         with pagina.expect_download() as descarga:
             btn_xml.click()
-        xml_bytes = pathlib.Path(descarga.value.path()).read_bytes()
+        xml_bytes = _xml_del_zip(pathlib.Path(descarga.value.path()).read_bytes())
 
     return pdf_bytes, xml_bytes
 
