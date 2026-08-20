@@ -127,13 +127,24 @@ def _iniciar_navegador(p, headless: bool = True):
 
 
 def _login(pagina, ruc, usuario, clave) -> None:
+    """Login en SUNAT SOL.
+
+    Entra por la puerta pública normal — la misma página a la que llega
+    cualquier persona buscando "SUNAT operaciones en línea" — y deja que
+    el PROPIO portal arme su cadena de redirects hasta el formulario,
+    generando su propia sesión/`state` desde cero.
+
+    La primera versión de este script pegaba directo a una URL de login
+    con `state` COPIADO de una sesión ajena (capturada en el proyecto de
+    terceros del que se adaptó este flujo): SUNAT la rechazaba con
+    "Error en la invocación" — ese `state` es un nonce de una sola
+    sesión, no reutilizable entre corridas ni entre cuentas. Verificado
+    en vivo (2026-08-20): con la URL hardcodeada, SUNAT nunca llega a
+    mostrar el formulario.
+    """
     _log("Accediendo al login de SUNAT…")
-    pagina.goto(
-        "https://api-seguridad.sunat.gob.pe/v1/clientessol/"
-        "4f3b88b3-d9d6-402a-b85d-6a0bc857746a/oauth2/loginMenuSol"
-        "?lang=es-PE&showDni=true&showLanguages=false"
-        "&originalUrl=https://e-menu.sunat.gob.pe/cl-ti-itmenu/"
-        "AutenticaMenuInternet.htm")
+    pagina.goto("https://e-menu.sunat.gob.pe/cl-ti-itmenu/AutenticaMenuInternet.htm")
+    pagina.wait_for_selector("#txtRuc", timeout=30000)
     pagina.fill("#txtRuc", ruc)
     pagina.fill("#txtUsuario", usuario)
     pagina.fill("#txtContrasena", clave)
@@ -333,12 +344,16 @@ def main() -> None:
     s3 = data.get_s3_cliente()
     bucket = st.secrets["R2_BUCKET"]
 
+    _log(f"Chequeando contra R2 cuáles de esos {len(todos)} ya están sincronizados "
+        f"(sin aviso de más: son ~{len(todos) * 2} consultas chicas, puede tardar)…")
     pendientes = []
-    for _, doc in todos.iterrows():
+    for i, (_, doc) in enumerate(todos.iterrows(), 1):
         clave_pdf, clave_xml = sunat.claves_original(doc)
         if args.forzar or not (_ya_en_r2(s3, bucket, clave_pdf)
                               and _ya_en_r2(s3, bucket, clave_xml)):
             pendientes.append(doc)
+        if i % 100 == 0:
+            _log(f"  …{i}/{len(todos)} revisados")
     if args.limite is not None:
         pendientes = pendientes[:args.limite]
 
