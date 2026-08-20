@@ -273,10 +273,11 @@ def _pruebas_puras():
     # el RUC de la fila 2024 trae el espacio final real que se ve en el
     # parquet (~24% de las filas, medido) — tiene que llegar limpio.
     # E001-2 tiene DOS líneas de producto del mismo documento: prueba que
-    # total_pq salga de TOTAL DOCUMENTO con "first" (59.0, repetido en las
-    # dos líneas) y NO de sumar VALOR_BRUTO_COMPRA_MN por línea (40+30=70,
-    # el proxy que se usaba antes de que existiera la columna real — ver
-    # `COL_TOTAL_PARQUET`). base_pq sí se suma: VALOR_COMPRA es por línea.
+    # total_pq/base_pq salgan de TOTAL DOCUMENTO/TOTAL NETO con "first"
+    # (59.0/45.0, repetidos en las dos líneas) y NO de sumar
+    # VALOR_BRUTO_COMPRA_MN/VALOR_COMPRA por línea (40+30=70 / 30+20=50 —
+    # el proxy que se usaba antes de que existieran las columnas reales,
+    # ver `COL_TOTAL_PARQUET` / `COL_BASE_PARQUET`).
     _pq = pd.DataFrame({
         "NUM_DOCUMENTO": ["F0E001000000001", "F0E001000000001",
                           "F0E001000000002", "F0E001000000002"],
@@ -286,6 +287,7 @@ def _pruebas_puras():
                                  "20444444444", "20444444444"],
         "VALOR_COMPRA": [100.0, 500.0, 30.0, 20.0],
         "VALOR_BRUTO_COMPRA_MN": [118.0, 590.0, 40.0, 30.0],
+        "TOTAL NETO": [100.0, 500.0, 45.0, 45.0],
         "TOTAL DOCUMENTO": [118.0, 590.0, 59.0, 59.0],
         "FECHA_EMISION_DOC": pd.to_datetime(
             ["2026-07-06", "2024-01-01", "2026-07-10", "2026-07-10"]),
@@ -301,12 +303,13 @@ def _pruebas_puras():
     check("_parquet_agrupado total_pq usa TOTAL DOCUMENTO (first), no la "
           "suma por línea",
           float(_g.loc[_g["documento"] == "E001-2", "total_pq"].iloc[0]), 59.0)
-    check("_parquet_agrupado base_pq sí se suma por línea",
-          float(_g.loc[_g["documento"] == "E001-2", "base_pq"].iloc[0]), 50.0)
+    check("_parquet_agrupado base_pq usa TOTAL NETO (first), no la suma "
+          "por línea",
+          float(_g.loc[_g["documento"] == "E001-2", "base_pq"].iloc[0]), 45.0)
 
-    # Sin la columna TOTAL DOCUMENTO (red de seguridad: parquets viejos o
-    # un entorno donde todavía no se propagó), cae al proxy de siempre.
-    _pq_sin_total = _pq.drop(columns=["TOTAL DOCUMENTO"])
+    # Sin TOTAL DOCUMENTO/TOTAL NETO (red de seguridad: parquets viejos o
+    # un entorno donde todavía no se propagaron), cae al proxy de siempre.
+    _pq_sin_total = _pq.drop(columns=["TOTAL DOCUMENTO", "TOTAL NETO"])
     _g_sin_total = _ds._parquet_agrupado_por_documento(
         _pq_sin_total, "FECHA_EMISION_DOC",
         pd.Timestamp("2026-07-01"), pd.Timestamp("2026-07-31"))
@@ -314,6 +317,9 @@ def _pruebas_puras():
           "VALOR_BRUTO_COMPRA_MN",
           float(_g_sin_total.loc[_g_sin_total["documento"] == "E001-2",
                                  "total_pq"].iloc[0]), 70.0)
+    check("_parquet_agrupado sin TOTAL NETO cae a sumar VALOR_COMPRA",
+          float(_g_sin_total.loc[_g_sin_total["documento"] == "E001-2",
+                                 "base_pq"].iloc[0]), 50.0)
 
     # cruzar_con_parquet: los 4 estados + el orden de desambiguación
     # (RUC exacto primero, nombre como red de seguridad después).

@@ -50,12 +50,13 @@ siempre se compara `.strip()`. Con RUC de los dos lados, el emparejamiento
 ya no depende casi nunca de adivinar por nombre — eso queda como red de
 seguridad para cuando una fila puntual no tenga RUC utilizable.
 
-El total del lado parquet sale de `TOTAL DOCUMENTO` (misma tanda,
-2026-08-20, ver `COL_TOTAL_PARQUET`) — un campo de CABECERA que se agrega
-con `"first"`, no `"sum"`. Antes de que existiera, `total_pq` salía de
-sumar `VALOR_BRUTO_COMPRA_MN` línea por línea: una aproximación razonable
-casi siempre, pero una reconstrucción al fin, no el total real del
-documento.
+El total y la base imponible del lado parquet salen de `TOTAL DOCUMENTO`
+y `TOTAL NETO` (misma tanda de columnas agregadas 2026-08-20, ver
+`COL_TOTAL_PARQUET` / `COL_BASE_PARQUET`) — campos de CABECERA que se
+agregan con `"first"`, no `"sum"`. Antes de que existieran, `total_pq` y
+`base_pq` salían de sumar `VALOR_BRUTO_COMPRA_MN` / `VALOR_COMPRA` línea
+por línea: una aproximación razonable casi siempre, pero una
+reconstrucción al fin, no el dato real del documento.
 
 La clave de cruce (`serie-número`) NO es única en todo el historial: es
 el correlativo de CADA proveedor, y miles de emisores reusan "E001" como
@@ -96,9 +97,12 @@ _TOLERANCIA_CENTAVOS = 0.05
 """Diferencia de monto por debajo de la cual se considera "Coincide", no
 "Diferencia". Medido contra datos reales (RUC 20605204300, julio 2026,
 tras acotar por fecha — ver `_parquet_agrupado_por_documento`): el
-percentil 75 de la diferencia es exactamente 0.00. 5 centavos cubre ruido
-de redondeo sin tapar diferencias de negocio (la más chica real medida
-fue S/34.21)."""
+percentil 75 de la diferencia de total es exactamente 0.00, y la más
+chica real por encima del umbral es S/0,06 — remedido con `total_pq` y
+`base_pq` ya saliendo de `TOTAL DOCUMENTO`/`TOTAL NETO` (ver
+`COL_TOTAL_PARQUET` / `COL_BASE_PARQUET`), no de la suma por línea. 5
+centavos sigue alcanzando para cubrir ruido de redondeo sin tapar
+diferencias de negocio reales."""
 
 
 def _llave_documento_parquet(num_documento):
@@ -145,6 +149,20 @@ a 0 en 514 de 515 grupos. Aun así, `TOTAL DOCUMENTO` es la fuente
 correcta ahora que existe: es el campo real de SUNAT en el propio
 documento, no una reconstrucción."""
 
+COL_BASE_PARQUET = "TOTAL NETO"
+"""Nombre real de la columna de base imponible del documento en
+`compras.parquet` (agregada 2026-08-20, misma tanda que `TOTAL IGV` —
+tampoco existía antes). Mismo patrón que `COL_TOTAL_PARQUET`: campo de
+CABECERA (0 documentos con más de un valor distinto, ventana de 60 días
+sobre ABRASA), se agrega con `"first"`. `TOTAL NETO + TOTAL IGV ==
+TOTAL DOCUMENTO` cuadra en 512 de 515 grupos medidos (el resto, redondeo
+de centavos).
+
+Antes de que existiera, `base_pq` salía de sumar `VALOR_COMPRA` por línea
+— mismo defecto que tenía `total_pq` con `VALOR_BRUTO_COMPRA_MN` (ver
+`COL_TOTAL_PARQUET`): una reconstrucción que depende de que ninguna línea
+falte, no el campo real."""
+
 
 def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin):
     """Compras del parquet agrupadas a una fila por (documento, RUC),
@@ -190,23 +208,23 @@ def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin):
     dd["ruc_pq"] = (dd[COL_RUC_PARQUET].astype(str).str.strip()
                      if COL_RUC_PARQUET in dd.columns else "")
     dd["_fecha"] = fechas.loc[dd.index]
-    # total_pq: "first", no "sum" — TOTAL DOCUMENTO es de cabecera (se
-    # repite en cada línea del documento). base_pq sí se suma: VALOR_COMPRA
-    # es por línea de producto. Ver el docstring de COL_TOTAL_PARQUET.
-    if COL_TOTAL_PARQUET in dd.columns:
-        g = (dd.groupby(["documento", "ruc_pq", "NOMBRE_PROVEEDOR"], as_index=False)
-               .agg(base_pq=("VALOR_COMPRA", "sum"),
-                    total_pq=(COL_TOTAL_PARQUET, "first"),
-                    fecha_pq=("_fecha", "first"))
-               .rename(columns={"NOMBRE_PROVEEDOR": "proveedor_pq"}))
-    else:
-        # Red de seguridad si algún día falta la columna: la suma por
-        # línea es una aproximación, no el total real (ver docstring).
-        g = (dd.groupby(["documento", "ruc_pq", "NOMBRE_PROVEEDOR"], as_index=False)
-               .agg(base_pq=("VALOR_COMPRA", "sum"),
-                    total_pq=("VALOR_BRUTO_COMPRA_MN", "sum"),
-                    fecha_pq=("_fecha", "first"))
-               .rename(columns={"NOMBRE_PROVEEDOR": "proveedor_pq"}))
+    # base_pq y total_pq salen de los campos de CABECERA (TOTAL NETO /
+    # TOTAL DOCUMENTO) con "first" cuando existen -- se repiten igual en
+    # cada línea del documento, sumarlos multiplicaría el monto por la
+    # cantidad de líneas. Si algún día faltan (parquet viejo), cae al
+    # proxy de sumar por línea. Ver los docstrings de COL_BASE_PARQUET /
+    # COL_TOTAL_PARQUET.
+    col_base, agg_base = ((COL_BASE_PARQUET, "first")
+                          if COL_BASE_PARQUET in dd.columns
+                          else ("VALOR_COMPRA", "sum"))
+    col_total, agg_total = ((COL_TOTAL_PARQUET, "first")
+                            if COL_TOTAL_PARQUET in dd.columns
+                            else ("VALOR_BRUTO_COMPRA_MN", "sum"))
+    g = (dd.groupby(["documento", "ruc_pq", "NOMBRE_PROVEEDOR"], as_index=False)
+           .agg(base_pq=(col_base, agg_base),
+                total_pq=(col_total, agg_total),
+                fecha_pq=("_fecha", "first"))
+           .rename(columns={"NOMBRE_PROVEEDOR": "proveedor_pq"}))
     return g
 
 

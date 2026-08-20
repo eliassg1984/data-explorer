@@ -6169,3 +6169,34 @@ salvo `icono`):
      mismo documento donde la suma por línea (70) y el total real (59)
      **difieren a propósito**, para que el test falle si algún día alguien
      "simplifica" la agregación de vuelta a `"sum"`.
+
+     **Addendum 3 (mismo día, tercera ronda): mismo arreglo para la Base
+     imponible, con `TOTAL NETO`.** El usuario agregó `TOTAL NETO` y
+     `TOTAL IGV` a `compras.parquet` — hasta entonces `base_pq` salía de
+     sumar `VALOR_COMPRA` por línea, el mismo defecto que tenía `total_pq`
+     antes del Addendum 1. Mismo patrón: `TOTAL NETO` es de CABECERA (0 de
+     515 documentos con más de un valor distinto, misma ventana de
+     verificación de 60 días sobre ABRASA), se agrega con `"first"`. Cuadra
+     con el resto: `TOTAL NETO + TOTAL IGV == TOTAL DOCUMENTO` en 512 de
+     515 grupos (el resto, redondeo de centavos). `_parquet_agrupado_por_documento`
+     quedó simétrico — un solo bloque que elige columna+agregación para
+     base y total en vez de si/else duplicado por campo (`COL_BASE_PARQUET`
+     junto a `COL_TOTAL_PARQUET`), con la misma red de seguridad si la
+     columna no está.
+
+     Un hallazgo real, aparte, salió de remedir contra ABRASA julio 2026
+     con la Base ya corregida: varios documentos de proveedores como
+     "LA CESTA S.A.C." muestran `base_sunat = 0` con `total_sunat ≈
+     total_sistema` (diferencia de centavos). No es un bug del cruce —
+     el registro crudo del SIRE trae `no_gravado` (no `base_imponible`)
+     con el importe completo: son compras SIN IGV (ej. alimentos sin
+     procesar, exonerados), y SUNAT separa "base gravada" de "no gravado"
+     en dos campos distintos, mientras que `TOTAL NETO` del parquet no
+     distingue uno de otro. El Total sigue cuadrando (por eso el propio
+     KPI de "con diferencia" —que solo suma `dif_total`, no `dif_base`—
+     no se movió: 85 filas, S/335,85 antes y después de este addendum).
+     Queda anotado para una eventual mejora (sumar `no_gravado` al lado
+     SUNAT de la Base antes de comparar), no resuelto en esta pasada:
+     tocar cómo se arma `base_imponible` en `sunat._normalizar_registro`
+     es una decisión de diseño aparte, no un bug de la agregación que
+     pedía esta tanda.
