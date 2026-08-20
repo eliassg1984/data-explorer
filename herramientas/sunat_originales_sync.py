@@ -187,6 +187,30 @@ URL_MENU_SOL = "https://e-menu.sunat.gob.pe/cl-ti-itmenu/MenuInternet.htm?pestan
 """Confirmada en vivo (2026-08-20): a dónde aterriza un login exitoso."""
 
 
+def _click_texto_visible(pagina, texto: str, timeout_ms: int = 10000) -> None:
+    """Click en la coincidencia VISIBLE de `texto` exacto — no en `.first`.
+
+    SUNAT parece ir agregando accesos de "Favoritos"/recientes a medida
+    que se usa un ítem del menú: después del primer uso, el mismo texto
+    puede existir DOS veces en el DOM (el ítem real del menú + un acceso
+    directo todavía escondido), y `.first` no garantiza cuál de los dos
+    es — puede agarrar el escondido. Verificado en vivo (2026-08-20): con
+    `.first` a secas, el 2º y 3er documento de una corrida fallaban acá
+    con "Element is not visible", apuntando a un link
+    `class="aUltimo aOpcionNavbar"` — justo la pinta de un acceso de
+    Favoritos. Acá se revisan TODAS las coincidencias y se clickea la
+    que esté realmente visible en ESE momento.
+    """
+    limite = time.time() + timeout_ms / 1000
+    while time.time() < limite:
+        for candidato in pagina.get_by_text(texto, exact=True).all():
+            if candidato.is_visible():
+                candidato.click(force=True)
+                return
+        time.sleep(0.3)
+    raise Exception(f"'{texto}' no apareció visible en {timeout_ms}ms.")
+
+
 def _ir_a_consulta_comprobantes(pagina) -> None:
     """Camino Empresas → Comprobantes de Pago → Consulta → Nueva Consulta.
 
@@ -204,18 +228,13 @@ def _ir_a_consulta_comprobantes(pagina) -> None:
     pagina.locator(".list-group-item").filter(has_text="Empresas").first.click(force=True)
     time.sleep(1.5)
 
-    def paso(texto: str) -> None:
-        item = pagina.get_by_text(texto, exact=True).first
-        item.wait_for(state="visible", timeout=10000)
-        item.click(force=True)
-        time.sleep(0.8)
-
-    paso("Comprobantes de pago")
-    paso("Comprobantes de Pago")
-    paso("Consulta de Comprobantes de Pago")
-    link = pagina.get_by_text("Nueva Consulta de comprobantes de pago", exact=True).first
-    link.wait_for(state="visible", timeout=10000)
-    link.click(force=True)
+    _click_texto_visible(pagina, "Comprobantes de pago")
+    time.sleep(0.8)
+    _click_texto_visible(pagina, "Comprobantes de Pago")
+    time.sleep(0.8)
+    _click_texto_visible(pagina, "Consulta de Comprobantes de Pago")
+    time.sleep(0.8)
+    _click_texto_visible(pagina, "Nueva Consulta de comprobantes de pago")
 
 
 def _tipo_label(tipo_cdp: str, serie: str) -> str:
