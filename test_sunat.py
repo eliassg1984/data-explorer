@@ -309,6 +309,48 @@ ok(sunat.PREFIJO_SOLICITUDES != sunat.PREFIJO_ORIGINALES,
 ok(not sunat.clave_solicitud(_doc_ped).startswith(sunat.PREFIJO_ORIGINALES),
    "una señal nunca puede confundirse con un original ya bajado")
 
+# ── El archivo suelto del servidor NO puede divergir ───────────────────────
+print("\n── herramientas/servidor/sunat_originales.py (copia del servidor) ──")
+# Ese archivo vive suelto en C:\proyecto\ del servidor, fuera del repo, y
+# DUPLICA a propósito las funciones que arman las claves de R2 (ver su
+# docstring). Es la parte peligrosa de la copia: si divergen, el script
+# sube archivos con un nombre y la webapp los busca con otro — sin ningún
+# error, sólo originales que "nunca aparecen". Esta prueba es lo único que
+# lo caza, y corre antes de cada push.
+import importlib.util  # noqa: E402
+import pathlib  # noqa: E402
+
+_ruta_srv = pathlib.Path(__file__).parent / "herramientas" / "servidor" / "sunat_originales.py"
+ok(_ruta_srv.exists(), "el archivo del servidor existe donde se espera")
+if _ruta_srv.exists():
+    _spec = importlib.util.spec_from_file_location("_srv", _ruta_srv)
+    _srv = importlib.util.module_from_spec(_spec)
+    _argv = sys.argv
+    sys.argv = [str(_ruta_srv)]        # su argparse no debe ver los flags del test
+    try:
+        _spec.loader.exec_module(_srv)
+    finally:
+        sys.argv = _argv
+
+    ok(_srv.PREFIJO_ORIGINALES == sunat.PREFIJO_ORIGINALES,
+       "mismo prefijo de originales que sunat.py")
+    ok(_srv.PREFIJO_SOLICITUDES == sunat.PREFIJO_SOLICITUDES,
+       "mismo prefijo de solicitudes que sunat.py")
+    ok(_srv.ARCHIVO_REGISTRO == sunat.ARCHIVO_REGISTRO,
+       "mismo nombre de parquet del registro")
+
+    _casos = [
+        {"ruc_proveedor": "20606902311", "serie": "E001", "numero": "1839"},
+        {"ruc_proveedor": "20100047218", "serie": "FC03", "numero": "5563920"},
+        {"ruc_proveedor": " 20521308321 ", "serie": " F001 ", "numero": " 70886 "},
+        {"ruc_proveedor": None, "serie": None, "numero": None},
+    ]
+    ok(all(_srv.claves_original(c) == sunat.claves_original(c) for c in _casos),
+       "claves_original da EXACTAMENTE lo mismo en los dos (incluidos huecos)")
+    ok(all(_srv.clave_solicitud(c) == sunat.clave_solicitud(c) for c in _casos),
+       "clave_solicitud da EXACTAMENTE lo mismo en los dos")
+
+
 # ── Credenciales ───────────────────────────────────────────────────────────
 print("\n── credenciales ──")
 ok(len(sunat._SECRETS_SUNAT) == 5, "declara las 5 credenciales que pide SUNAT")
