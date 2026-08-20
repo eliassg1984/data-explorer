@@ -6286,3 +6286,55 @@ salvo `icono`):
      vive dentro del XML, o sea del lado caro (regla #142). Esa asimetría
      es la que ordena todo el diseño: **cabecera barata y completa desde
      el día 1; detalle caro y parcial, que se llena de a poco.**
+
+
+144. **Pedir un original a demanda: el mismo mecanismo de señales que ya
+     tenía la app, aplicado a otra cosa** (2026-08-20).
+
+     La corrida nocturna de originales (regla #142) baja de lo más nuevo
+     hacia atrás y tarda **semanas** en cubrir la ventana: medido con
+     datos reales, 9.821 documentos dentro de los 24 meses que SUNAT
+     sirve, a ~30 seg cada uno — ~41 noches a 2 h por noche. Mientras
+     tanto, un comprobante viejo simplemente no está, y esperar semanas a
+     que le llegue el turno no sirve cuando alguien lo necesita hoy.
+
+     **La solución no fue inventar nada:** el proyecto YA tenía un
+     mecanismo de señales para refrescar parquets bajo demanda
+     (`data.py::solicitar_refresco` escribe un JSON en R2, la CPU local
+     lo levanta y lo atiende). Acá se usa el mismo patrón con otro
+     prefijo: `sunat.solicitar_original()` deja la señal en
+     `_solicitudes_sunat/`, y `herramientas/atender_solicitudes_sunat.py`
+     la levanta, baja ESE comprobante y borra la señal. El usuario espera
+     menos de un minuto en vez de semanas.
+
+     **La webapp nunca abre un navegador ni habla con el portal SOL.**
+     Sólo pide. Es la misma línea que separa las reglas #142 y #143: la
+     app lee de R2 y deja pedidos; el trabajo sucio pasa en la máquina
+     local. Eso es lo que permite que todo esto conviva con Streamlit
+     Community Cloud, donde Playwright no entra.
+
+     Cuatro decisiones que parecen detalles y no lo son:
+
+     - **La clave de la señal es determinista**
+       (`_solicitudes_sunat/<ruc>_<serie>-<numero>.json`): dos clics sobre
+       el mismo documento pisan la misma señal en vez de encolar dos
+       pedidos idénticos que harían bajar el comprobante dos veces.
+     - **Prefijo PROPIO, separado de `sunat_originales/`.** Si la señal
+       cayera bajo el prefijo de los originales, `_claves_ya_en_r2` la
+       contaría como archivo sincronizado y el sync nocturno saltearía
+       ese documento **para siempre**, sin error ni aviso. Hay test.
+     - **La señal se borra SIEMPRE**, salga bien o mal. Si no, un
+       comprobante que SUNAT no puede servir (fuera de ventana, dado de
+       baja) dejaría a la webapp mostrando "⏳ pedido" eternamente y al
+       script reintentándolo en cada pasada. Que el usuario vea de nuevo
+       el botón y decida es mejor que un bucle mudo.
+     - **Varios pedidos, UN solo login.** Abrir Chromium y loguearse
+       cuesta ~15 seg, más que consultar un comprobante: si hay 3
+       pedidos, se abre el navegador una vez y se atienden los 3 en la
+       misma sesión. Y una pasada SIN pedidos sale en ~1 seg sin abrir
+       nada, así que es barato programarla cada minuto.
+
+     El panel del documento ahora tiene tres estados en vez de dos:
+     original disponible (botones de descarga), pedido en curso (aviso de
+     espera), o no sincronizado (botón para pedirlo). La ficha
+     renderizada del registro sigue estando siempre, en los tres.

@@ -289,6 +289,26 @@ finally:
 ok(sunat.ARCHIVO_REGISTRO.endswith(".parquet"),
    "ARCHIVO_REGISTRO nombra un parquet (lo comparte el sync)")
 
+# ── Pedir un original a demanda ────────────────────────────────────────────
+print("\n── clave_solicitud (contrato con atender_solicitudes_sunat.py) ──")
+_doc_ped = {"ruc_proveedor": "20608300393", "serie": "FA28",
+            "numero": "2334623", "tipo_cdp": "01"}
+ok(sunat.clave_solicitud(_doc_ped)
+   == "_solicitudes_sunat/20608300393_FA28-2334623.json",
+   "arma la key de la señal bajo su propio prefijo")
+# Determinista a propósito: dos clics sobre el MISMO documento tienen que
+# pisar la misma señal, no encolar dos pedidos idénticos que harían que la
+# CPU local baje el mismo comprobante dos veces.
+ok(sunat.clave_solicitud(_doc_ped) == sunat.clave_solicitud(dict(_doc_ped)),
+   "es determinista (dos clics no encolan dos pedidos)")
+ok(sunat.PREFIJO_SOLICITUDES != sunat.PREFIJO_ORIGINALES,
+   "las señales NO viven bajo el prefijo de los originales")
+# Si la señal cayera bajo `sunat_originales/`, `_claves_ya_en_r2` la
+# contaría como archivo sincronizado y el sync nocturno saltearía ese
+# documento para siempre — sin error, sin aviso.
+ok(not sunat.clave_solicitud(_doc_ped).startswith(sunat.PREFIJO_ORIGINALES),
+   "una señal nunca puede confundirse con un original ya bajado")
+
 # ── Credenciales ───────────────────────────────────────────────────────────
 print("\n── credenciales ──")
 ok(len(sunat._SECRETS_SUNAT) == 5, "declara las 5 credenciales que pide SUNAT")

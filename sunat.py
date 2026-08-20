@@ -761,6 +761,100 @@ def originales(doc):
 
 
 # ===========================================================================
+# PEDIR UN ORIGINAL A DEMANDA
+# ===========================================================================
+# La corrida nocturna baja de lo más nuevo hacia atrás y tarda semanas en
+# cubrir la ventana entera (~9.800 documentos a ~30 seg cada uno). Mientras
+# tanto, un documento viejo simplemente no está — y esperar semanas a que
+# le llegue el turno no sirve cuando alguien lo necesita HOY.
+#
+# Para eso está esto: la webapp deja una SEÑAL en R2 y la CPU local, que ya
+# vigila señales para los parquets (`data.py::solicitar_refresco` +
+# `atender_solicitudes.py`), la levanta y baja ese documento puntual. Es el
+# mismo mecanismo que ya existe en el proyecto, aplicado a otra cosa — no
+# uno nuevo. Del otro lado lo atiende
+# `herramientas/atender_solicitudes_sunat.py`.
+#
+# La webapp NUNCA abre un navegador ni habla con el portal SOL: sólo pide.
+# Ver regla #144.
+
+PREFIJO_SOLICITUDES = "_solicitudes_sunat"
+
+
+def clave_solicitud(doc):
+    """Key en R2 de la señal para pedir el original de un comprobante.
+
+    Determinista a propósito: dos clics sobre el mismo documento pisan la
+    misma señal en vez de encolar dos pedidos idénticos.
+    """
+    ruc = str(doc.get("ruc_proveedor") or "").strip()
+    serie = str(doc.get("serie") or "").strip()
+    numero = str(doc.get("numero") or "").strip()
+    return f"{PREFIJO_SOLICITUDES}/{ruc}_{serie}-{numero}.json"
+
+
+@st.cache_data(ttl=15, show_spinner=False)
+def _hay_senal(clave):
+    """True si la señal sigue en R2 (o sea, nadie la atendió todavía).
+
+    TTL corto (15 seg) y no una hora: esto cambia de estado mientras el
+    usuario mira la pantalla, y un cache largo lo dejaría viendo
+    "pendiente" mucho después de que el archivo ya llegó.
+    """
+    import data
+
+    if not data.secrets_disponibles():
+        return False
+    try:
+        data.get_s3_cliente().head_object(
+            Bucket=st.secrets["R2_BUCKET"], Key=clave)
+        return True
+    except Exception:
+        return False
+
+
+def solicitud_pendiente(doc):
+    """True si ya se pidió este original y todavía no lo atendieron."""
+    return _hay_senal(clave_solicitud(doc))
+
+
+def solicitar_original(doc):
+    """Deja en R2 la señal para que la CPU local baje este original.
+
+    Devuelve True si la señal quedó escrita. El payload lleva todo lo que
+    el script del otro lado necesita para hacer la consulta en el portal
+    (RUC del emisor, tipo, serie, número) — así no tiene que volver a
+    buscar el comprobante en ningún lado.
+    """
+    import json
+    from datetime import datetime, timezone
+
+    import data
+
+    if not data.secrets_disponibles():
+        return False
+    payload = {
+        "ruc_proveedor": str(doc.get("ruc_proveedor") or "").strip(),
+        "serie": str(doc.get("serie") or "").strip(),
+        "numero": str(doc.get("numero") or "").strip(),
+        "tipo_cdp": str(doc.get("tipo_cdp") or "01").strip(),
+        "documento": str(doc.get("documento") or "").strip(),
+        "solicitado_en": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        data.get_s3_cliente().put_object(
+            Bucket=st.secrets["R2_BUCKET"], Key=clave_solicitud(doc),
+            Body=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            ContentType="application/json")
+    except Exception:
+        return False
+    # Sin esto la UI seguiría mostrando el botón "pedir" durante los 15 seg
+    # del TTL, invitando a un segundo clic sobre algo ya pedido.
+    _hay_senal.clear()
+    return True
+
+
+# ===========================================================================
 # LA FICHA DEL COMPROBANTE
 # ===========================================================================
 # Dos representaciones del MISMO comprobante:

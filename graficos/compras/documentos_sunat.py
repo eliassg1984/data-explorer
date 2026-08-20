@@ -756,12 +756,14 @@ def _panel_documento(doc):
     # este documento — ver el docstring del módulo. Ninguno de los dos
     # `None` es un error: es el estado normal antes del primer sync.
     pdf_original, xml_original = sunat.originales(doc)
+
+    st.markdown(
+        f'<div style="font-size:10px;font-weight:700;color:{ACENTO};'
+        f'text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;'
+        f'padding-bottom:3px;border-bottom:1px solid {GRIS_BORDE};">'
+        f'Original del proveedor</div>', unsafe_allow_html=True)
+
     if pdf_original or xml_original:
-        st.markdown(
-            f'<div style="font-size:10px;font-weight:700;color:{ACENTO};'
-            f'text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;'
-            f'padding-bottom:3px;border-bottom:1px solid {GRIS_BORDE};">'
-            f'Original del proveedor</div>', unsafe_allow_html=True)
         c_pdf, c_xml = st.columns(2)
         with c_pdf:
             if pdf_original:
@@ -777,6 +779,31 @@ def _panel_documento(doc):
                     file_name=f"{doc.get('documento', 'comprobante')}.xml",
                     mime="application/xml", use_container_width=True,
                     key="sunat_dl_xml_original")
+        return
+
+    # Todavía no está en R2. La corrida nocturna va de lo más nuevo hacia
+    # atrás y tarda semanas en llegar a lo viejo (ver regla #142), así que
+    # acá se ofrece pedirlo puntualmente. La webapp NO abre ningún
+    # navegador: deja una señal en R2 y la CPU local hace el trabajo —
+    # mismo mecanismo que el refresco de parquets (regla #144).
+    if sunat.solicitud_pendiente(doc):
+        st.info("⏳ Pedido. La máquina local lo está trayendo de SUNAT — "
+                "suele tardar menos de un minuto. Volvé a entrar al "
+                "documento en un rato.", icon=None)
+        return
+
+    if st.button("⬇ Traer el original de SUNAT", use_container_width=True,
+                 key="sunat_pedir_original",
+                 help="Le pide a la máquina local que baje el PDF y el XML "
+                      "que emitió el proveedor. Tarda menos de un minuto; "
+                      "después queda guardado para siempre."):
+        if sunat.solicitar_original(doc):
+            st.rerun()
+        else:
+            st.error("No se pudo dejar el pedido. ¿Están las credenciales "
+                     "de R2 configuradas?")
+    st.caption("Todavía no sincronizado. Arriba está la ficha con los datos "
+               "del registro, que siempre está disponible.")
 
 
 def renderizar_documentos_sunat(d, col_fecha):
