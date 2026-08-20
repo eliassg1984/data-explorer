@@ -341,12 +341,27 @@ def _consultar_y_descargar(pagina, ruc_emisor: str, serie: str, numero: str,
 # R2
 # ===========================================================================
 
-def _ya_en_r2(s3, bucket: str, clave: str) -> bool:
-    try:
-        s3.head_object(Bucket=bucket, Key=clave)
-        return True
-    except Exception:
-        return False
+def _claves_ya_en_r2(s3, bucket: str) -> set:
+    """Todas las claves ya subidas bajo el prefijo de originales, en un set.
+
+    UNA llamada por cada 1000 claves, en vez de dos `head_object` por
+    documento. No es microoptimización: en el backfill de un par de años
+    (~24.000 documentos = ~48.000 claves) la diferencia es entre ~50
+    llamadas y ~48.000. Con head_object por documento, sólo el chequeo
+    de "¿qué falta?" tardaba varios minutos por cada mes consultado
+    (medido en vivo 2026-08-20, 1.034 documentos).
+    """
+    claves = set()
+    token = None
+    while True:
+        kw = {"Bucket": bucket, "Prefix": f"{sunat.PREFIJO_ORIGINALES}/"}
+        if token:
+            kw["ContinuationToken"] = token
+        resp = s3.list_objects_v2(**kw)
+        claves.update(o["Key"] for o in resp.get("Contents", []))
+        if not resp.get("IsTruncated"):
+            return claves
+        token = resp.get("NextContinuationToken")
 
 
 def _subir(s3, bucket: str, clave: str, contenido: bytes, content_type: str) -> None:
@@ -404,21 +419,31 @@ def main() -> None:
     s3 = data.get_s3_cliente()
     bucket = st.secrets["R2_BUCKET"]
 
-    _log(f"Chequeando contra R2 cuáles de esos {len(todos)} ya están sincronizados "
-        f"(sin aviso de más: son ~{len(todos) * 2} consultas chicas, puede tardar)…")
-    pendientes = []
-    for i, (_, doc) in enumerate(todos.iterrows(), 1):
-        clave_pdf, clave_xml = sunat.claves_original(doc)
-        if args.forzar or not (_ya_en_r2(s3, bucket, clave_pdf)
-                              and _ya_en_r2(s3, bucket, clave_xml)):
-            pendientes.append(doc)
-        if i % 100 == 0:
-            _log(f"  …{i}/{len(todos)} revisados")
-    if args.limite is not None:
-        pendientes = pendientes[:args.limite]
+    _log("Listando lo que ya está en R2…")
+    ya_en_r2 = _claves_ya_en_r2(s3, bucket)
 
-    _log(f"{len(pendientes)} por sincronizar "
-        f"(el resto ya está en R2 — usá --forzar para repetirlos).")
+    pendientes = []
+    for _, doc in todos.iterrows():
+        claves = set(sunat.claves_original(doc))
+        if args.forzar or not claves <= ya_en_r2:
+            pendientes.append(doc)
+
+    # El total REAL pendiente se informa ANTES de recortar por --limite.
+    # Antes se imprimía después, con el texto "el resto ya está en R2", y
+    # mentía en el caso más importante: con --limite 3 sobre 1.034
+    # documentos sin sincronizar decía "3 por sincronizar (el resto ya
+    # está en R2)" — dando a entender que faltaban 3 cuando faltaban
+    # 1.031. Un backfill se planifica con este número; si miente, se
+    # planifica mal.
+    total_pendiente = len(pendientes)
+    ya = len(todos) - total_pendiente
+    _log(f"{total_pendiente} sin sincronizar · {ya} ya en R2 "
+        f"(de {len(todos)} del rango).")
+    if args.limite is not None and args.limite < total_pendiente:
+        pendientes = pendientes[:args.limite]
+        _log(f"--limite {args.limite}: esta corrida intenta sólo "
+            f"{len(pendientes)}, quedan {total_pendiente - len(pendientes)} "
+            f"para después.")
     if not pendientes:
         return
 
