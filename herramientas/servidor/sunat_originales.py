@@ -134,36 +134,58 @@ def clave_solicitud(doc):
 # ===========================================================================
 
 def _credenciales_r2():
-    """Las 4 de R2, sacadas de `Extraer a parquet.py`.
+    """Las 4 de R2. Primero de `Extraer a parquet.py`; si no, del JSON.
 
-    Mismo mecanismo que `atender_solicitudes.py`: se carga ese script como
-    módulo (su nombre tiene espacios, así que no sirve un `import` normal)
-    y se leen sus variables. Así no hay que configurar R2 dos veces ni que
-    queden dos copias de la misma credencial en el servidor.
+    En el SERVIDOR salen de `Extraer a parquet.py` — mismo mecanismo que
+    `atender_solicitudes.py`: se carga ese script como módulo (su nombre
+    tiene espacios, así que no sirve un `import` normal) y se leen sus
+    variables. Así no hay que configurar R2 dos veces ni quedan dos copias
+    de la misma credencial dando vueltas.
+
+    FUERA del servidor ese archivo no existe, y sin fallback este script
+    sería imposible de probar en otro lado: habría que subirlo a ciegas y
+    descubrir los errores en producción. Por eso también se aceptan las 4
+    claves en `credenciales/sunat.json`, junto a las de SUNAT.
     """
     ruta = AQUI / NOMBRE_ARCHIVO_EXTRACTOR
-    if not ruta.exists():
+    if ruta.exists():
+        spec = importlib.util.spec_from_file_location("_extractor", ruta)
+        modulo = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(modulo)
+        return {
+            "account_id": modulo.R2_ACCOUNT_ID,
+            "access_key": modulo.R2_ACCESS_KEY,
+            "secret_key": modulo.R2_SECRET_KEY,
+            "bucket": modulo.R2_BUCKET,
+        }
+
+    datos = _leer_json_credenciales()
+    faltan = [k for k in ("R2_ACCOUNT_ID", "R2_ACCESS_KEY", "R2_SECRET_KEY",
+                          "R2_BUCKET") if not datos.get(k)]
+    if faltan:
         raise FileNotFoundError(
-            f"No se encontró '{NOMBRE_ARCHIVO_EXTRACTOR}' en {AQUI}. "
-            f"De ahí salen las credenciales de R2 — si el archivo cambió de "
-            f"nombre, actualizar NOMBRE_ARCHIVO_EXTRACTOR arriba.")
-    spec = importlib.util.spec_from_file_location("_extractor", ruta)
-    modulo = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(modulo)
+            f"No se encontró '{NOMBRE_ARCHIVO_EXTRACTOR}' en {AQUI} (de ahí "
+            f"salen las credenciales de R2 en el servidor), y a "
+            f"{ARCHIVO_CREDENCIALES_SUNAT} le faltan: {', '.join(faltan)}. "
+            f"Poner una de las dos cosas.")
     return {
-        "account_id": modulo.R2_ACCOUNT_ID,
-        "access_key": modulo.R2_ACCESS_KEY,
-        "secret_key": modulo.R2_SECRET_KEY,
-        "bucket": modulo.R2_BUCKET,
+        "account_id": datos["R2_ACCOUNT_ID"],
+        "access_key": datos["R2_ACCESS_KEY"],
+        "secret_key": datos["R2_SECRET_KEY"],
+        "bucket": datos["R2_BUCKET"],
     }
 
 
-def _credenciales_sunat():
+def _leer_json_credenciales():
     if not ARCHIVO_CREDENCIALES_SUNAT.exists():
         raise FileNotFoundError(
             f"Falta {ARCHIVO_CREDENCIALES_SUNAT}. Debe tener "
             f"SUNAT_RUC, SUNAT_USUARIO_SOL y SUNAT_CLAVE_SOL.")
-    datos = json.loads(ARCHIVO_CREDENCIALES_SUNAT.read_text(encoding="utf-8"))
+    return json.loads(ARCHIVO_CREDENCIALES_SUNAT.read_text(encoding="utf-8"))
+
+
+def _credenciales_sunat():
+    datos = _leer_json_credenciales()
     faltan = [k for k in ("SUNAT_RUC", "SUNAT_USUARIO_SOL", "SUNAT_CLAVE_SOL")
               if not datos.get(k)]
     if faltan:
@@ -528,7 +550,14 @@ def seleccionar_backfill(s3, bucket, meses_atras, limite):
     pendientes = [d for _, d in df.iterrows()
                   if not set(claves_original(d)) <= ya]
     log(f"{len(pendientes)} sin sincronizar · {len(df) - len(pendientes)} ya en R2.")
-    return pendientes[:limite] if limite else pendientes
+    # `is not None` y no `if limite`: con `--limite 0` (que es lo natural
+    # para "mirá qué falta pero no bajes nada"), un chequeo por verdadero
+    # lo trata como "sin límite" y arranca la corrida COMPLETA. Pasó de
+    # verdad al probar este archivo.
+    if limite is not None:
+        pendientes = pendientes[:limite]
+        log(f"--limite {limite}: esta corrida intenta sólo {len(pendientes)}.")
+    return pendientes
 
 
 def correr_backfill(pagina, s3, bucket, pendientes, corte_t):

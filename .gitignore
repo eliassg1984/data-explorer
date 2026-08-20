@@ -10,3 +10,7 @@ __pycache__/
 # Salida de herramientas/ver_figura.py: PNGs para mirar un gráfico sin
 # levantar la app. Artefactos de inspección, no fuente.
 herramientas/_figuras/
+
+# Credenciales del archivo suelto del servidor (Clave SOL en texto plano).
+# El .py SI va al repo; los valores NUNCA.
+herramientas/servidor/credenciales/
