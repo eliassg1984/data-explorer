@@ -34,6 +34,23 @@ CHEQUEA si ya está (`sunat.originales`). Por eso conviven dos estados
 normales para el mismo documento: sin sincronizar (solo la ficha
 renderizada) y sincronizado (ficha + originales de verdad). Ver
 `arquitectura.md` regla #142.
+
+EL CRUCE CONTRA EL PARQUET (vista "Cruce")
+-------------------------------------------
+SUNAT dice qué comprobantes existen; `compras.parquet` dice qué cargó el
+sistema. `cruzar_con_parquet()` compara ambas fuentes documento a
+documento — Fecha de emisión, RUC (solo SUNAT: el parquet no lo trae),
+Proveedor, Base imponible y Total — y marca cada uno "Coincide",
+"Diferencia", "Solo SUNAT" (falta cargarlo) o "Solo sistema" (cargado sin
+comprobante electrónico que lo respalde).
+
+La clave de cruce (`serie-número`) NO es única en todo el historial: es
+el correlativo de CADA proveedor, y miles de emisores reusan "E001" como
+su primera serie electrónica. Por eso `_parquet_agrupado_por_documento`
+ACOTA el parquet al mismo rango que se está mirando antes de armar la
+clave — ver su docstring para la medición real (sin acotar, la diferencia
+promedio era S/372 y llegaba a S/18.632 por colisiones entre años; acotado
+baja a S/6,9 y S/1.199). Ver `arquitectura.md` regla #143.
 """
 
 import pandas as pd
@@ -44,12 +61,310 @@ from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 import sunat
 from estado_rango import clave_rango
 from tema import (
-    ACENTO, ACENTO_TEXTO, ADVERTENCIA_TEXTO, GRIS_BORDE, GRIS_TEXTO,
+    ACENTO, ACENTO_TEXTO, ADVERTENCIA_TEXTO, ERROR, GRIS_BORDE, GRIS_TEXTO,
     LAVANDA_FONDO, TEXTO_PRINCIPAL,
 )
 from graficos.base import _compras_layout, _compras_truncar
 from graficos import alturas
 from tablas._css import _css_grid
+from utils import _norm
+
+
+# ===========================================================================
+# CRUCE contra el parquet de Compras
+# ===========================================================================
+# SUNAT dice qué comprobantes existen; el parquet dice qué cargó el propio
+# sistema. Son dos fuentes independientes del mismo hecho, y donde
+# discrepan hay algo que revisar — una compra sin registrar, un monto que
+# no cuadra, o una carga que no tiene comprobante electrónico detrás.
+
+_TOLERANCIA_CENTAVOS = 0.05
+"""Diferencia de monto por debajo de la cual se considera "Coincide", no
+"Diferencia". Medido contra datos reales (RUC 20605204300, julio 2026,
+tras acotar por fecha — ver `_parquet_agrupado_por_documento`): el
+percentil 75 de la diferencia es exactamente 0.00. 5 centavos cubre ruido
+de redondeo sin tapar diferencias de negocio (la más chica real medida
+fue S/34.21)."""
+
+
+def _llave_documento_parquet(num_documento):
+    """`"{serie}-{numero}"` desde `NUM_DOCUMENTO` del parquet de Compras.
+
+    El parquet lo arma como `"F0" + serie(4) + numero(9, con ceros a la
+    izquierda)` — verificado decodificando valores reales
+    (`"F0E001000001328"` → serie `"E001"`, número `"1328"`). Se le sacan
+    los ceros de más para que calce con `documento` del SIRE
+    (`sunat._normalizar_registro`, que ya viene sin ellos).
+    """
+    s = num_documento.astype(str)
+    serie = s.str[2:6]
+    numero = s.str[6:].str.lstrip("0")
+    numero = numero.where(numero != "", "0")   # el raro caso numero="000..."
+    return serie + "-" + numero
+
+
+def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin):
+    """Compras del parquet agrupadas a una fila por (documento, proveedor),
+    ACOTADAS al rango que se está comparando.
+
+    Acotar por fecha ANTES de armar la clave no es un detalle de
+    performance, es lo que hace confiable el cruce: `serie-número`
+    (p.ej. `"E001-1"`) NO es única en 3 años de historial — es el
+    correlativo de factura de CADA proveedor, y "E001" es la serie por
+    defecto que usan miles de emisores electrónicos distintos. Medido
+    cruzando sin acotar (RUC 20605204300, julio 2026): documentos
+    "coincidentes" por clave resultaban ser de proveedores Y AÑOS
+    distintos (2023-2025) con diferencias de hasta S/18.632. Acotando al
+    rango, el promedio de diferencia bajó de S/372 a S/6,9 y el máximo de
+    S/18.632 a S/1.199 — lo que queda ya son diferencias reales, no
+    colisiones de clave.
+
+    Se agrupa por (documento, proveedor) y NO solo por documento: 3 de
+    269 claves de julio tenían más de un proveedor compartiendo la misma
+    serie-número INCLUSO dentro del mes. `cruzar_con_parquet` decide con
+    cuál candidato parear mirando el nombre — nunca a ciegas.
+    """
+    columnas = ["documento", "proveedor_pq", "base_pq", "total_pq", "fecha_pq"]
+    if (not col_fecha or col_fecha not in d.columns or fecha_ini is None
+            or fecha_fin is None or "NUM_DOCUMENTO" not in d.columns):
+        return pd.DataFrame(columns=columnas)
+
+    fechas = pd.to_datetime(d[col_fecha], errors="coerce")
+    ini = pd.Timestamp(fecha_ini).normalize()
+    fin = pd.Timestamp(fecha_fin).normalize() + pd.Timedelta(days=1)
+    dd = d[(fechas >= ini) & (fechas < fin) & d["NUM_DOCUMENTO"].notna()].copy()
+    if dd.empty:
+        return pd.DataFrame(columns=columnas)
+
+    dd["documento"] = _llave_documento_parquet(dd["NUM_DOCUMENTO"])
+    dd["_fecha"] = fechas.loc[dd.index]
+    g = (dd.groupby(["documento", "NOMBRE_PROVEEDOR"], as_index=False)
+           .agg(base_pq=("VALOR_COMPRA", "sum"),
+                total_pq=("VALOR_BRUTO_COMPRA_MN", "sum"),
+                fecha_pq=("_fecha", "first"))
+           .rename(columns={"NOMBRE_PROVEEDOR": "proveedor_pq"}))
+    return g
+
+
+def cruzar_con_parquet(df_sire, g_parquet):
+    """Compara cada comprobante del SIRE contra su equivalente en el
+    parquet de Compras (`g_parquet` — ver `_parquet_agrupado_por_documento`,
+    YA acotado al mismo rango).
+
+    Empareja por `documento`. Cuando esa clave tiene más de un proveedor
+    candidato dentro de la ventana, se queda con el que más se parece por
+    NOMBRE (normalizado con `utils._norm`: sin acentos/espacios/mayúsculas,
+    acepta que uno contenga al otro). Si ningún candidato es plausible, NO
+    fuerza el emparejamiento — mejor un documento "Solo SUNAT" de más que
+    cruzarlo contra la factura de otro proveedor que casualmente comparte
+    serie y número.
+
+    Devuelve una fila por documento (unión SIRE ∪ parquet dentro del
+    rango) con `estado` en uno de:
+      "Coincide"      — en ambas fuentes, diferencia ≤ `_TOLERANCIA_CENTAVOS`
+      "Diferencia"    — en ambas fuentes, con diferencia real de monto
+      "Solo SUNAT"    — SUNAT lo reporta; no está cargado en el sistema
+      "Solo sistema"  — está cargado; SUNAT no lo reporta (aún) para el RUC
+
+    RUC solo sale del lado SUNAT: el parquet no lo trae (ver el docstring
+    del módulo — `COD_PROVEEDOR`/`LLAVE_PROVEEDOR` son un código interno,
+    no el RUC).
+    """
+    cols_pq = ["documento", "proveedor_pq", "base_pq", "total_pq", "fecha_pq"]
+    if g_parquet is None or g_parquet.empty:
+        g_parquet = pd.DataFrame(columns=cols_pq)
+    if df_sire is None:
+        df_sire = pd.DataFrame(columns=["documento"])
+
+    candidatos = {doc: sub for doc, sub in g_parquet.groupby("documento")}
+    vistos_pq = set()   # (documento, proveedor_pq) ya usados en un match
+    filas = []
+
+    for _, r in df_sire.iterrows():
+        doc = str(r.get("documento", ""))
+        prov_sire = str(r.get("proveedor", ""))
+        sub = candidatos.get(doc)
+        elegido = None
+        if sub is not None and len(sub):
+            if len(sub) == 1:
+                elegido = sub.iloc[0]
+            else:
+                n_sire = _norm(prov_sire)
+                for _, cand in sub.iterrows():
+                    n_pq = _norm(str(cand["proveedor_pq"]))
+                    if n_sire and n_pq and (n_sire in n_pq or n_pq in n_sire):
+                        elegido = cand
+                        break
+
+        base_sunat = float(r.get("base_imponible") or 0)
+        total_sunat = float(r.get("total") or 0)
+        if elegido is not None:
+            vistos_pq.add((doc, elegido["proveedor_pq"]))
+            base_sist, total_sist = float(elegido["base_pq"]), float(elegido["total_pq"])
+            dif_base = round(base_sunat - base_sist, 2)
+            dif_total = round(total_sunat - total_sist, 2)
+            estado = ("Coincide"
+                      if abs(dif_base) <= _TOLERANCIA_CENTAVOS
+                      and abs(dif_total) <= _TOLERANCIA_CENTAVOS
+                      else "Diferencia")
+            prov_sistema = elegido["proveedor_pq"]
+        else:
+            base_sist = total_sist = dif_base = dif_total = None
+            estado, prov_sistema = "Solo SUNAT", ""
+
+        filas.append({
+            "fecha_emision": r.get("fecha_emision"), "documento": doc,
+            "proveedor": prov_sire, "proveedor_sistema": prov_sistema,
+            "ruc_proveedor": r.get("ruc_proveedor"),
+            "situacion": r.get("situacion"),
+            "base_sunat": base_sunat, "base_sistema": base_sist,
+            "dif_base": dif_base,
+            "total_sunat": total_sunat, "total_sistema": total_sist,
+            "dif_total": dif_total, "estado": estado,
+        })
+
+    # Lo que quedó en el parquet sin usarse en NINGÚN match: son compras
+    # cargadas en el sistema que SUNAT no reporta (aún) para este RUC.
+    for _, cand in g_parquet.iterrows():
+        if (cand["documento"], cand["proveedor_pq"]) in vistos_pq:
+            continue
+        filas.append({
+            "fecha_emision": cand.get("fecha_pq"), "documento": cand["documento"],
+            "proveedor": "", "proveedor_sistema": cand["proveedor_pq"],
+            "ruc_proveedor": "", "situacion": "",
+            "base_sunat": None, "base_sistema": float(cand["base_pq"]),
+            "dif_base": None,
+            "total_sunat": None, "total_sistema": float(cand["total_pq"]),
+            "dif_total": None, "estado": "Solo sistema",
+        })
+
+    out = pd.DataFrame(filas)
+    if out.empty:
+        return out
+    out["fecha_emision"] = pd.to_datetime(out["fecha_emision"], errors="coerce")
+    return out.sort_values("fecha_emision").reset_index(drop=True)
+
+
+def _kpis_cruce(df):
+    """Resumen de UNA línea del cruce: cuántos documentos coinciden,
+    difieren, o faltan de un lado u otro. Mismo criterio compacto que
+    `_kpis` — ver su docstring sobre por qué no son `st.metric`.
+    """
+    if df is None or df.empty:
+        st.markdown('<div style="height:38px;"></div>', unsafe_allow_html=True)
+        return
+    conteos = df["estado"].value_counts()
+
+    def dato(valor, etiqueta, color=None):
+        c = color or TEXTO_PRINCIPAL
+        return (f'<span style="white-space:nowrap;">'
+                f'<b style="color:{c};font-weight:600;">{valor}</b>'
+                f'<span style="color:{GRIS_TEXTO};"> {etiqueta}</span></span>')
+
+    partes = [dato(f'{int(conteos.get("Coincide", 0)):,}', "coinciden")]
+
+    n_dif = int(conteos.get("Diferencia", 0))
+    if n_dif:
+        mto = float(df.loc[df["estado"] == "Diferencia", "dif_total"].abs().sum())
+        partes.append(dato(f"{n_dif:,}", f"con diferencia (S/ {mto:,.2f})",
+                           ADVERTENCIA_TEXTO))
+
+    n_ssu = int(conteos.get("Solo SUNAT", 0))
+    if n_ssu:
+        mto = float(df.loc[df["estado"] == "Solo SUNAT", "total_sunat"].sum())
+        partes.append(dato(f"{n_ssu:,}", f"solo en SUNAT (S/ {mto:,.2f})",
+                           ADVERTENCIA_TEXTO))
+
+    n_ssi = int(conteos.get("Solo sistema", 0))
+    if n_ssi:
+        mto = float(df.loc[df["estado"] == "Solo sistema", "total_sistema"].sum())
+        partes.append(dato(f"{n_ssi:,}", f"solo en el sistema (S/ {mto:,.2f})",
+                           ERROR))
+
+    st.markdown(
+        '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;'
+        'justify-content:flex-end;font-size:12.5px;height:38px;">'
+        + f'<span style="color:{GRIS_BORDE};">·</span>'.join(partes)
+        + '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _tabla_cruce(df_cruce, df_sire):
+    """AgGrid de la comparación SIRE vs sistema. Devuelve la fila COMPLETA
+    del SIRE (de `df_sire`, no de `df_cruce`) que corresponde a la
+    seleccionada — `df_cruce` solo trae las columnas de la comparación
+    (fecha/documento/montos/estado), y el panel derecho necesita el
+    registro entero (tipo, CAR, moneda) para armar la ficha.
+
+    Un "Solo sistema" seleccionado devuelve `None` a propósito: no hay
+    documento del SIRE que le corresponda — no es una carencia del panel,
+    es que ese comprobante no tiene contraparte ahí.
+
+    Sin `fit_columns_on_grid_load`: son 10 columnas y 4 de plata — forzar
+    el ancho del contenedor las dejaría ilegibles. Scrollea horizontal,
+    mismo criterio que la tabla pivote de Proveedor.
+    """
+    tv = pd.DataFrame({
+        "Fecha": pd.to_datetime(df_cruce["fecha_emision"], errors="coerce")
+                   .dt.strftime("%d/%m/%Y"),
+        "Documento": df_cruce["documento"],
+        "RUC": df_cruce["ruc_proveedor"].fillna(""),
+        "Proveedor SUNAT": df_cruce["proveedor"].fillna(""),
+        "Proveedor sistema": df_cruce["proveedor_sistema"].fillna(""),
+        "Base SUNAT": pd.to_numeric(df_cruce["base_sunat"], errors="coerce"),
+        "Base sistema": pd.to_numeric(df_cruce["base_sistema"], errors="coerce"),
+        "Total SUNAT": pd.to_numeric(df_cruce["total_sunat"], errors="coerce"),
+        "Total sistema": pd.to_numeric(df_cruce["total_sistema"], errors="coerce"),
+        "Estado": df_cruce["estado"],
+    })
+
+    _fmt_soles = JsCode(
+        "function(p){ if(p.value==null||isNaN(p.value)) return '—'; "
+        "return 'S/ ' + Number(p.value).toLocaleString('es-PE',"
+        "{minimumFractionDigits:2, maximumFractionDigits:2}); }")
+
+    gb = GridOptionsBuilder.from_dataframe(tv)
+    gb.configure_default_column(resizable=True, sortable=True, filter=False,
+                                editable=False, suppressMovable=True)
+    gb.configure_column("Fecha", width=90, pinned="left")
+    gb.configure_column("Documento", width=115, pinned="left")
+    gb.configure_column("RUC", width=105)
+    gb.configure_column("Proveedor SUNAT", minWidth=180)
+    gb.configure_column("Proveedor sistema", minWidth=180)
+    for col in ("Base SUNAT", "Base sistema", "Total SUNAT", "Total sistema"):
+        gb.configure_column(col, type=["numericColumn"], width=115,
+                            valueFormatter=_fmt_soles)
+    # Igual convención que "Pendiente" en _tabla: ámbar = revisar, rojo =
+    # más urgente todavía (plata cargada sin comprobante electrónico que
+    # la respalde). "Coincide" no se destaca — lo normal no compite por
+    # atención.
+    gb.configure_column(
+        "Estado", width=118, pinned="right",
+        cellStyle=JsCode(
+            "function(p){ var m={'Diferencia':'%s','Solo SUNAT':'%s',"
+            "'Solo sistema':'%s'}; var c=m[p.value]; "
+            "return c ? {'color':c,'fontWeight':'600'} : {'color':'%s'}; }"
+            % (ADVERTENCIA_TEXTO, ADVERTENCIA_TEXTO, ERROR, GRIS_TEXTO)))
+    gb.configure_selection(selection_mode="single", use_checkbox=False)
+    gb.configure_grid_options(rowHeight=30, headerHeight=32)
+
+    resp = AgGrid(
+        tv, gridOptions=gb.build(),
+        height=alturas.por_filas(len(tv), px_fila=30, rol=alturas.APOYO),
+        theme="material", custom_css=dict(_css_grid(13)),
+        allow_unsafe_jscode=True, fit_columns_on_grid_load=False,
+        key="sunat_cruce_grid",
+    )
+    sel = resp.selected_rows
+    if sel is None or (hasattr(sel, "empty") and sel.empty) or len(sel) == 0:
+        return None
+    fila = sel.iloc[0] if hasattr(sel, "iloc") else sel[0]
+    if fila["Estado"] == "Solo sistema":
+        return None
+    doc = str(fila["Documento"])
+    coincidencias = df_sire[df_sire["documento"].astype(str) == doc]
+    return coincidencias.iloc[0] if not coincidencias.empty else None
 
 
 def _kpis(df):
@@ -317,12 +632,9 @@ def _panel_documento(doc):
 def renderizar_documentos_sunat(d, col_fecha):
     """Punto de entrada del drill. Lo llama `graficos/compras/__init__.py`.
 
-    `d` y `col_fecha` (el parquet de Compras y su columna de fecha) están
-    reservados sin usar TODAVÍA: son la entrada natural para cruzar el
-    registro de SUNAT contra lo que el propio sistema tiene cargado —
-    ver el hallazgo en arquitectura.md regla #141 (77% de match verificado
-    entre ambas fuentes, por serie-número). Hasta que se implemente ese
-    cruce, todo lo que se muestra acá sale entero de SUNAT.
+    `d` y `col_fecha` (el parquet de Compras y su columna de fecha) SOLO
+    se usan para la vista "Cruce" (`cruzar_con_parquet`) — el resto de la
+    vista sigue saliendo entero de SUNAT. Ver `arquitectura.md` regla #143.
 
     LOS CONTROLES VIVEN DENTRO DE LA TARJETA IZQUIERDA, no en una franja
     aparte arriba de las dos columnas — mismo criterio que el selector "La
@@ -346,11 +658,15 @@ def renderizar_documentos_sunat(d, col_fecha):
 
     with col_izq:
         with st.container(border=True, key="sunat_card_izq"):
-            c_vista, c_sit, c_act, c_kpi = st.columns([1.4, 1.5, 0.7, 2.8])
+            c_vista, c_sit, c_act, c_kpi = st.columns([1.7, 1.3, 0.6, 2.8])
             with c_vista:
-                vista = st.radio("Ver", ["Por fecha", "Por proveedor"],
-                                 horizontal=True, key="sunat_vista",
-                                 label_visibility="collapsed")
+                vista = st.radio(
+                    "Ver", ["Por fecha", "Por proveedor", "Cruce"],
+                    horizontal=True, key="sunat_vista",
+                    label_visibility="collapsed",
+                    help="«Cruce» compara cada comprobante del SIRE contra "
+                         "el registro interno de compras (parquet): mismo "
+                         "documento, ¿coinciden los montos?")
             with c_sit:
                 situacion = st.radio(
                     "Situación", ["Todos", "Registrados", "Pendientes"],
@@ -391,27 +707,43 @@ def renderizar_documentos_sunat(d, col_fecha):
                         "en el rango elegido.")
                 return
 
-            with c_kpi:
-                _kpis(df)
-
-            # El filtro se aplica DESPUÉS de los KPIs a propósito: los
-            # totales de arriba describen el rango completo, y el filtro
-            # sirve para mirar un subconjunto sin perder la referencia.
+            # El filtro de situación se aplica ANTES de decidir qué mostrar
+            # arriba (KPIs normales o KPIs del cruce): en «Cruce», filtrar a
+            # Pendientes primero y cruzar después responde una pregunta
+            # real — "de lo que aún no presenté, ¿qué ya tengo cargado en
+            # el sistema?" — que se pierde si se cruza sobre el rango
+            # completo sin filtrar.
             vis = df if situacion == "Todos" else df[
                 df["situacion"] == situacion[:-1]]   # "Registrados"→"Registrado"
             if vis.empty:
                 st.info(f"No hay comprobantes «{situacion.lower()}» en el rango.")
                 return
 
-            _grafico(vis, vista)
-            doc = _tabla(vis)
-            st.download_button(
-                "⬇ Descargar CSV",
-                data=vis.to_csv(index=False).encode("utf-8-sig"),
-                file_name=(f"sunat_compras_{pd.Timestamp(f_ini):%Y%m%d}"
-                           f"_{pd.Timestamp(f_fin):%Y%m%d}.csv"),
-                mime="text/csv", key="sunat_dl_csv",
-            )
+            _sufijo = f"{pd.Timestamp(f_ini):%Y%m%d}_{pd.Timestamp(f_fin):%Y%m%d}"
+
+            if vista == "Cruce":
+                g_pq = _parquet_agrupado_por_documento(d, col_fecha, f_ini, f_fin)
+                df_cruce = cruzar_con_parquet(vis, g_pq)
+                with c_kpi:
+                    _kpis_cruce(df_cruce)
+                doc = _tabla_cruce(df_cruce, vis)
+                st.download_button(
+                    "⬇ Descargar CSV del cruce",
+                    data=df_cruce.to_csv(index=False).encode("utf-8-sig"),
+                    file_name=f"sunat_cruce_{_sufijo}.csv",
+                    mime="text/csv", key="sunat_dl_csv_cruce",
+                )
+            else:
+                with c_kpi:
+                    _kpis(df)
+                _grafico(vis, vista)
+                doc = _tabla(vis)
+                st.download_button(
+                    "⬇ Descargar CSV",
+                    data=vis.to_csv(index=False).encode("utf-8-sig"),
+                    file_name=f"sunat_compras_{_sufijo}.csv",
+                    mime="text/csv", key="sunat_dl_csv",
+                )
 
     with col_der:
         with st.container(border=True, key="sunat_card_doc"):

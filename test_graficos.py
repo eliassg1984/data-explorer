@@ -252,6 +252,87 @@ def _pruebas_puras():
     check("_vol_fmt_rango cruza de mes",
           _vol._vol_fmt_rango_semana(pd.Timestamp("2026-06-29")), "29 Jun - 5 Jul")
 
+    # ── Documentos SUNAT: cruce contra el parquet de Compras ────────────
+    # Sin red ni Streamlit: son funciones puras sobre DataFrames armados a
+    # mano, pensadas para reproducir el bug real que motivó acotar por
+    # fecha ANTES de armar la clave (ver el docstring de
+    # `_parquet_agrupado_por_documento`) — no una copia de la medición
+    # contra datos reales, sino el caso mínimo que la explica.
+    from graficos.compras import documentos_sunat as _ds
+
+    check("_llave_documento_parquet decodifica serie+numero",
+          _ds._llave_documento_parquet(pd.Series(["F0E001000001328"])).iloc[0],
+          "E001-1328")
+    check("_llave_documento_parquet sin ceros a la izquierda",
+          _ds._llave_documento_parquet(pd.Series(["F0F001000000012"])).iloc[0],
+          "F001-12")
+
+    # _parquet_agrupado_por_documento: ACOTA por fecha antes de agrupar.
+    # Dos filas con la MISMA clave ("E001-1") pero de años distintos — si
+    # no acotara, se sumarían como si fueran el mismo documento.
+    _pq = pd.DataFrame({
+        "NUM_DOCUMENTO": ["F0E001000000001", "F0E001000000001", "F0E001000000002"],
+        "NOMBRE_PROVEEDOR": ["GIANO MARINE SAC", "GIANO MARINE SAC", "OTRO PROVEEDOR"],
+        "VALOR_COMPRA": [100.0, 500.0, 50.0],
+        "VALOR_BRUTO_COMPRA_MN": [118.0, 590.0, 59.0],
+        "FECHA_EMISION_DOC": pd.to_datetime(
+            ["2026-07-06", "2024-01-01", "2026-07-10"]),
+    })
+    _g = _ds._parquet_agrupado_por_documento(
+        _pq, "FECHA_EMISION_DOC", pd.Timestamp("2026-07-01"), pd.Timestamp("2026-07-31"))
+    check("_parquet_agrupado acota por fecha (deja fuera el de 2024)",
+          len(_g), 2)
+    check("_parquet_agrupado no mezcla los dos años",
+          float(_g.loc[_g["documento"] == "E001-1", "total_pq"].iloc[0]), 118.0)
+
+    # cruzar_con_parquet: los 4 estados + la desambiguación por nombre.
+    _sire = pd.DataFrame({
+        "documento": ["E001-1", "E001-2", "E001-3", "E001-9"],
+        "proveedor": ["GIANO MARINE SAC", "PROVEEDOR B", "PROVEEDOR C", "SIN PAR"],
+        "ruc_proveedor": ["20111111111", "20222222222", "20333333333", "20999999999"],
+        "fecha_emision": pd.to_datetime(["2026-07-06"] * 4),
+        "base_imponible": [100.0, 200.0, 300.0, 400.0],
+        "total": [118.0, 236.0, 354.0, 472.0],
+        "situacion": ["Registrado"] * 4,
+    })
+    # E001-2: DOS candidatos en el parquet con la misma clave -- uno de
+    # nombre parecido a "PROVEEDOR B" (debe ganar) y otro que no calza.
+    _g2 = pd.DataFrame({
+        "documento": ["E001-1", "E001-2", "E001-2", "E001-3", "E001-8"],
+        "proveedor_pq": ["GIANO MARINE SAC", "PROVEEDOR B SAC", "OTRO TOTAL",
+                         "PROVEEDOR C DIFERENTE", "SOLO SISTEMA SAC"],
+        "base_pq": [100.0, 200.0, 9999.0, 305.0, 80.0],
+        "total_pq": [118.0, 236.0, 11800.0, 359.9, 94.4],
+        "fecha_pq": pd.to_datetime(["2026-07-06"] * 5),
+    })
+    _cruce = _ds.cruzar_con_parquet(_sire, _g2)
+
+    def _fila(doc):
+        return _cruce[_cruce["documento"] == doc].iloc[0]
+
+    check("cruce E001-1: monto exacto -> Coincide", _fila("E001-1")["estado"], "Coincide")
+    check("cruce E001-2: elige el candidato que calza por NOMBRE",
+          _fila("E001-2")["proveedor_sistema"], "PROVEEDOR B SAC")
+    check("cruce E001-2: NO el otro candidato con el mismo doc",
+          _fila("E001-2")["total_sistema"], 236.0)
+    check("cruce E001-3: diferencia real de monto -> Diferencia",
+          _fila("E001-3")["estado"], "Diferencia")
+    check("cruce E001-9: no está en el parquet -> Solo SUNAT",
+          _fila("E001-9")["estado"], "Solo SUNAT")
+    check("cruce E001-8: solo en el parquet -> Solo sistema",
+          _cruce[(_cruce["documento"] == "E001-8")
+                & (_cruce["estado"] == "Solo sistema")].shape[0], 1)
+    # "OTRO TOTAL" perdió la desambiguación de E001-2 por nombre: no debe
+    # quedar SILENCIOSAMENTE absorbido por ningún match -- tiene que
+    # aparecer como su propio "Solo sistema", o se estaría perdiendo una
+    # compra cargada de la vista.
+    check("cruce: el candidato descartado por nombre no se pierde",
+          ((_cruce["documento"] == "E001-2")
+           & (_cruce["proveedor_sistema"] == "OTRO TOTAL")
+           & (_cruce["estado"] == "Solo sistema")).any(), True)
+    check("cruce: sin filas de más (4 SIRE + 2 solo-sistema reales)",
+          len(_cruce), 6)
+
     # ── Comparativo vs Año Pasado (Ventas) ──────────────────────────────
     import datetime as _dt
     from graficos import ventas_comparativo as _vc
