@@ -269,10 +269,13 @@ def _pruebas_puras():
 
     # _parquet_agrupado_por_documento: ACOTA por fecha antes de agrupar.
     # Dos filas con la MISMA clave ("E001-1") pero de años distintos — si
-    # no acotara, se sumarían como si fueran el mismo documento.
+    # no acotara, se sumarían como si fueran el mismo documento. De paso,
+    # el RUC de la fila 2024 trae el espacio final real que se ve en el
+    # parquet (~24% de las filas, medido) — tiene que llegar limpio.
     _pq = pd.DataFrame({
         "NUM_DOCUMENTO": ["F0E001000000001", "F0E001000000001", "F0E001000000002"],
         "NOMBRE_PROVEEDOR": ["GIANO MARINE SAC", "GIANO MARINE SAC", "OTRO PROVEEDOR"],
+        "INDICADOR TRIBUTARIO": ["20111111111", "20111111111 ", "20444444444"],
         "VALOR_COMPRA": [100.0, 500.0, 50.0],
         "VALOR_BRUTO_COMPRA_MN": [118.0, 590.0, 59.0],
         "FECHA_EMISION_DOC": pd.to_datetime(
@@ -284,8 +287,11 @@ def _pruebas_puras():
           len(_g), 2)
     check("_parquet_agrupado no mezcla los dos años",
           float(_g.loc[_g["documento"] == "E001-1", "total_pq"].iloc[0]), 118.0)
+    check("_parquet_agrupado limpia el espacio final del RUC",
+          _g.loc[_g["documento"] == "E001-1", "ruc_pq"].iloc[0], "20111111111")
 
-    # cruzar_con_parquet: los 4 estados + la desambiguación por nombre.
+    # cruzar_con_parquet: los 4 estados + el orden de desambiguación
+    # (RUC exacto primero, nombre como red de seguridad después).
     _sire = pd.DataFrame({
         "documento": ["E001-1", "E001-2", "E001-3", "E001-9"],
         "proveedor": ["GIANO MARINE SAC", "PROVEEDOR B", "PROVEEDOR C", "SIN PAR"],
@@ -295,26 +301,36 @@ def _pruebas_puras():
         "total": [118.0, 236.0, 354.0, 472.0],
         "situacion": ["Registrado"] * 4,
     })
-    # E001-2: DOS candidatos en el parquet con la misma clave -- uno de
-    # nombre parecido a "PROVEEDOR B" (debe ganar) y otro que no calza.
+    # E001-1: DOS candidatos con RUC distinto -- uno con el RUC EXACTO del
+    # SIRE (debe ganar por RUC, aunque el nombre no se parezca en nada) y
+    # otro con nombre casi idéntico pero RUC ajeno (NO debe ganar: antes
+    # de tener RUC, el nombre solo lo habría elegido a él por error).
+    # E001-2: mismo caso que ya cubría el nombre como red de seguridad --
+    # acá el RUC del parquet viene VACÍO en ambos candidatos (columna
+    # ausente de esa fila), así que cae al fallback por nombre de siempre.
     _g2 = pd.DataFrame({
-        "documento": ["E001-1", "E001-2", "E001-2", "E001-3", "E001-8"],
-        "proveedor_pq": ["GIANO MARINE SAC", "PROVEEDOR B SAC", "OTRO TOTAL",
+        "documento": ["E001-1", "E001-1", "E001-2", "E001-2", "E001-3", "E001-8"],
+        "ruc_pq": ["20111111111", "20999999999", "", "", "20333333333", "20777777777"],
+        "proveedor_pq": ["NOMBRE IRRECONOCIBLE SAC", "GIANO MARINE SAC",
+                         "PROVEEDOR B SAC", "OTRO TOTAL",
                          "PROVEEDOR C DIFERENTE", "SOLO SISTEMA SAC"],
-        "base_pq": [100.0, 200.0, 9999.0, 305.0, 80.0],
-        "total_pq": [118.0, 236.0, 11800.0, 359.9, 94.4],
-        "fecha_pq": pd.to_datetime(["2026-07-06"] * 5),
+        "base_pq": [100.0, 999.0, 200.0, 9999.0, 305.0, 80.0],
+        "total_pq": [118.0, 1180.0, 236.0, 11800.0, 359.9, 94.4],
+        "fecha_pq": pd.to_datetime(["2026-07-06"] * 6),
     })
     _cruce = _ds.cruzar_con_parquet(_sire, _g2)
 
     def _fila(doc):
-        return _cruce[_cruce["documento"] == doc].iloc[0]
+        return _cruce[(_cruce["documento"] == doc)
+                      & (_cruce["estado"] != "Solo sistema")].iloc[0]
 
+    check("cruce E001-1: el RUC exacto gana aunque el nombre no calce",
+          _fila("E001-1")["proveedor_sistema"], "NOMBRE IRRECONOCIBLE SAC")
+    check("cruce E001-1: NO el candidato de nombre parecido con RUC ajeno",
+          _fila("E001-1")["total_sistema"], 118.0)
     check("cruce E001-1: monto exacto -> Coincide", _fila("E001-1")["estado"], "Coincide")
-    check("cruce E001-2: elige el candidato que calza por NOMBRE",
+    check("cruce E001-2: sin RUC utilizable, cae al nombre (red de seguridad)",
           _fila("E001-2")["proveedor_sistema"], "PROVEEDOR B SAC")
-    check("cruce E001-2: NO el otro candidato con el mismo doc",
-          _fila("E001-2")["total_sistema"], 236.0)
     check("cruce E001-3: diferencia real de monto -> Diferencia",
           _fila("E001-3")["estado"], "Diferencia")
     check("cruce E001-9: no está en el parquet -> Solo SUNAT",
@@ -322,16 +338,19 @@ def _pruebas_puras():
     check("cruce E001-8: solo en el parquet -> Solo sistema",
           _cruce[(_cruce["documento"] == "E001-8")
                 & (_cruce["estado"] == "Solo sistema")].shape[0], 1)
-    # "OTRO TOTAL" perdió la desambiguación de E001-2 por nombre: no debe
-    # quedar SILENCIOSAMENTE absorbido por ningún match -- tiene que
-    # aparecer como su propio "Solo sistema", o se estaría perdiendo una
-    # compra cargada de la vista.
-    check("cruce: el candidato descartado por nombre no se pierde",
+    # El candidato de E001-1 con RUC ajeno, y el de E001-2 descartado por
+    # nombre: ninguno de los dos debe perderse en silencio -- cada uno
+    # tiene que aparecer como su propio "Solo sistema".
+    check("cruce: el candidato con RUC ajeno no se pierde",
+          ((_cruce["documento"] == "E001-1")
+           & (_cruce["proveedor_sistema"] == "GIANO MARINE SAC")
+           & (_cruce["estado"] == "Solo sistema")).any(), True)
+    check("cruce: el candidato descartado por nombre tampoco se pierde",
           ((_cruce["documento"] == "E001-2")
            & (_cruce["proveedor_sistema"] == "OTRO TOTAL")
            & (_cruce["estado"] == "Solo sistema")).any(), True)
-    check("cruce: sin filas de más (4 SIRE + 2 solo-sistema reales)",
-          len(_cruce), 6)
+    check("cruce: sin filas de más (4 SIRE + 3 solo-sistema reales)",
+          len(_cruce), 7)
 
     # ── Comparativo vs Año Pasado (Ventas) ──────────────────────────────
     import datetime as _dt

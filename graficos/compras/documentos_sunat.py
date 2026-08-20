@@ -39,10 +39,16 @@ EL CRUCE CONTRA EL PARQUET (vista "Cruce")
 -------------------------------------------
 SUNAT dice qué comprobantes existen; `compras.parquet` dice qué cargó el
 sistema. `cruzar_con_parquet()` compara ambas fuentes documento a
-documento — Fecha de emisión, RUC (solo SUNAT: el parquet no lo trae),
-Proveedor, Base imponible y Total — y marca cada uno "Coincide",
-"Diferencia", "Solo SUNAT" (falta cargarlo) o "Solo sistema" (cargado sin
-comprobante electrónico que lo respalde).
+documento — Fecha de emisión, RUC, Proveedor, Base imponible y Total — y
+marca cada uno "Coincide", "Diferencia", "Solo SUNAT" (falta cargarlo) o
+"Solo sistema" (cargado sin comprobante electrónico que lo respalde).
+
+El RUC del parquet vive en `INDICADOR TRIBUTARIO` (columna agregada
+2026-08-20 a pedido, ver `COL_RUC_PARQUET`) — con un detalle sucio: ~24%
+de las filas lo traen con un espacio final (`"20609456052 "`), así que
+siempre se compara `.strip()`. Con RUC de los dos lados, el emparejamiento
+ya no depende casi nunca de adivinar por nombre — eso queda como red de
+seguridad para cuando una fila puntual no tenga RUC utilizable.
 
 La clave de cruce (`serie-número`) NO es única en todo el historial: es
 el correlativo de CADA proveedor, y miles de emisores reusan "E001" como
@@ -50,7 +56,8 @@ su primera serie electrónica. Por eso `_parquet_agrupado_por_documento`
 ACOTA el parquet al mismo rango que se está mirando antes de armar la
 clave — ver su docstring para la medición real (sin acotar, la diferencia
 promedio era S/372 y llegaba a S/18.632 por colisiones entre años; acotado
-baja a S/6,9 y S/1.199). Ver `arquitectura.md` regla #143.
+baja a S/6,9 y S/1.199 — esa medición es de ANTES de tener RUC, cuando la
+única defensa era el nombre). Ver `arquitectura.md` regla #143.
 """
 
 import pandas as pd
@@ -103,8 +110,17 @@ def _llave_documento_parquet(num_documento):
     return serie + "-" + numero
 
 
+COL_RUC_PARQUET = "INDICADOR TRIBUTARIO"
+"""Nombre real de la columna de RUC del proveedor en `compras.parquet`
+(agregada 2026-08-20). Trae el RUC limpio en la mayoría de las filas, pero
+~24% vienen con un espacio final (`"20609456052 "`, 12 caracteres en vez
+de 11) — verificado contando longitudes sobre el parquet real. Por eso
+`_parquet_agrupado_por_documento` siempre le aplica `.str.strip()`, nunca
+se compara crudo."""
+
+
 def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin):
-    """Compras del parquet agrupadas a una fila por (documento, proveedor),
+    """Compras del parquet agrupadas a una fila por (documento, RUC),
     ACOTADAS al rango que se está comparando.
 
     Acotar por fecha ANTES de armar la clave no es un detalle de
@@ -112,19 +128,26 @@ def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin):
     (p.ej. `"E001-1"`) NO es única en 3 años de historial — es el
     correlativo de factura de CADA proveedor, y "E001" es la serie por
     defecto que usan miles de emisores electrónicos distintos. Medido
-    cruzando sin acotar (RUC 20605204300, julio 2026): documentos
-    "coincidentes" por clave resultaban ser de proveedores Y AÑOS
-    distintos (2023-2025) con diferencias de hasta S/18.632. Acotando al
-    rango, el promedio de diferencia bajó de S/372 a S/6,9 y el máximo de
-    S/18.632 a S/1.199 — lo que queda ya son diferencias reales, no
-    colisiones de clave.
+    cruzando sin acotar (RUC 20605204300, julio 2026, ANTES de que el
+    parquet tuviera columna de RUC): documentos "coincidentes" solo por
+    `serie-número` resultaban ser de proveedores Y AÑOS distintos
+    (2023-2025), con diferencias de hasta S/18.632. Acotando al rango, el
+    promedio bajó de S/372 a S/6,9 y el máximo a S/1.199.
 
-    Se agrupa por (documento, proveedor) y NO solo por documento: 3 de
-    269 claves de julio tenían más de un proveedor compartiendo la misma
-    serie-número INCLUSO dentro del mes. `cruzar_con_parquet` decide con
-    cuál candidato parear mirando el nombre — nunca a ciegas.
+    Se agrupa por (documento, RUC, proveedor) — no solo por documento —
+    por la misma razón: la clave sola puede repetirse entre proveedores
+    incluso dentro de un mismo mes (3 de 269 casos medidos en julio, antes
+    de tener RUC). El PROVEEDOR entra en la clave de agrupación a
+    propósito, aunque el RUC ya esté: cuando el RUC viene vacío en dos
+    filas de proveedores DISTINTOS que comparten documento (fila floja de
+    origen, no inventada — ver `COL_RUC_PARQUET`), agrupar solo por
+    (documento, RUC) las fusionaría en una sola bajo la clave `("...", "")`
+    y sumaría montos de dos compras distintas. Con el nombre también en la
+    clave, quedan separadas y es `cruzar_con_parquet` quien decide cuál
+    corresponde — nunca la agregación.
     """
-    columnas = ["documento", "proveedor_pq", "base_pq", "total_pq", "fecha_pq"]
+    columnas = ["documento", "ruc_pq", "proveedor_pq", "base_pq", "total_pq",
+                "fecha_pq"]
     if (not col_fecha or col_fecha not in d.columns or fecha_ini is None
             or fecha_fin is None or "NUM_DOCUMENTO" not in d.columns):
         return pd.DataFrame(columns=columnas)
@@ -137,8 +160,10 @@ def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin):
         return pd.DataFrame(columns=columnas)
 
     dd["documento"] = _llave_documento_parquet(dd["NUM_DOCUMENTO"])
+    dd["ruc_pq"] = (dd[COL_RUC_PARQUET].astype(str).str.strip()
+                     if COL_RUC_PARQUET in dd.columns else "")
     dd["_fecha"] = fechas.loc[dd.index]
-    g = (dd.groupby(["documento", "NOMBRE_PROVEEDOR"], as_index=False)
+    g = (dd.groupby(["documento", "ruc_pq", "NOMBRE_PROVEEDOR"], as_index=False)
            .agg(base_pq=("VALOR_COMPRA", "sum"),
                 total_pq=("VALOR_BRUTO_COMPRA_MN", "sum"),
                 fecha_pq=("_fecha", "first"))
@@ -151,13 +176,15 @@ def cruzar_con_parquet(df_sire, g_parquet):
     parquet de Compras (`g_parquet` — ver `_parquet_agrupado_por_documento`,
     YA acotado al mismo rango).
 
-    Empareja por `documento`. Cuando esa clave tiene más de un proveedor
-    candidato dentro de la ventana, se queda con el que más se parece por
-    NOMBRE (normalizado con `utils._norm`: sin acentos/espacios/mayúsculas,
-    acepta que uno contenga al otro). Si ningún candidato es plausible, NO
-    fuerza el emparejamiento — mejor un documento "Solo SUNAT" de más que
-    cruzarlo contra la factura de otro proveedor que casualmente comparte
-    serie y número.
+    Empareja por `documento` y, entre los candidatos que compartan esa
+    clave, prioriza el que tenga el MISMO RUC (limpio con `.strip()` de
+    ambos lados — ver `COL_RUC_PARQUET`). Solo si ningún candidato calza
+    por RUC cae a desambiguar por NOMBRE (normalizado con `utils._norm`,
+    acepta que uno contenga al otro) como red de seguridad — para cuando
+    el RUC del parquet venga vacío o con un formato raro en esa fila
+    puntual. Si ningún candidato es plausible por ninguna de las dos vías,
+    NO fuerza el emparejamiento: mejor un documento "Solo SUNAT" de más
+    que cruzarlo contra la factura de otro proveedor.
 
     Devuelve una fila por documento (unión SIRE ∪ parquet dentro del
     rango) con `estado` en uno de:
@@ -165,30 +192,36 @@ def cruzar_con_parquet(df_sire, g_parquet):
       "Diferencia"    — en ambas fuentes, con diferencia real de monto
       "Solo SUNAT"    — SUNAT lo reporta; no está cargado en el sistema
       "Solo sistema"  — está cargado; SUNAT no lo reporta (aún) para el RUC
-
-    RUC solo sale del lado SUNAT: el parquet no lo trae (ver el docstring
-    del módulo — `COD_PROVEEDOR`/`LLAVE_PROVEEDOR` son un código interno,
-    no el RUC).
     """
-    cols_pq = ["documento", "proveedor_pq", "base_pq", "total_pq", "fecha_pq"]
+    cols_pq = ["documento", "ruc_pq", "proveedor_pq", "base_pq", "total_pq",
+               "fecha_pq"]
     if g_parquet is None or g_parquet.empty:
         g_parquet = pd.DataFrame(columns=cols_pq)
     if df_sire is None:
         df_sire = pd.DataFrame(columns=["documento"])
 
     candidatos = {doc: sub for doc, sub in g_parquet.groupby("documento")}
-    vistos_pq = set()   # (documento, proveedor_pq) ya usados en un match
+    vistos_pq = set()   # (documento, ruc_pq) ya usados en un match
     filas = []
 
     for _, r in df_sire.iterrows():
         doc = str(r.get("documento", ""))
+        ruc_sire = str(r.get("ruc_proveedor") or "").strip()
         prov_sire = str(r.get("proveedor", ""))
         sub = candidatos.get(doc)
         elegido = None
         if sub is not None and len(sub):
-            if len(sub) == 1:
+            por_ruc = sub[sub["ruc_pq"] == ruc_sire] if ruc_sire else sub.iloc[0:0]
+            if len(por_ruc) == 1:
+                elegido = por_ruc.iloc[0]
+            elif len(sub) == 1:
+                # Único candidato para esta clave: el RUC no calzó (o vino
+                # vacío), pero no hay con qué más comparar. Se acepta —
+                # es el mismo criterio de antes de tener columna de RUC.
                 elegido = sub.iloc[0]
             else:
+                # Varios candidatos y ninguno con el RUC exacto: red de
+                # seguridad por nombre, como se hacía antes de tener RUC.
                 n_sire = _norm(prov_sire)
                 for _, cand in sub.iterrows():
                     n_pq = _norm(str(cand["proveedor_pq"]))
@@ -199,7 +232,16 @@ def cruzar_con_parquet(df_sire, g_parquet):
         base_sunat = float(r.get("base_imponible") or 0)
         total_sunat = float(r.get("total") or 0)
         if elegido is not None:
-            vistos_pq.add((doc, elegido["proveedor_pq"]))
+            # La tripleta (documento, ruc, proveedor) es la clave REAL de
+            # `g_parquet` (la que arma `_parquet_agrupado_por_documento`),
+            # así que es lo único que identifica una fila sin ambigüedad.
+            # `(doc, ruc)` solo no alcanza: dos candidatos de PROVEEDORES
+            # distintos pueden compartir un `ruc_pq` vacío bajo el mismo
+            # documento (RUC flojo en el parquet, no un caso raro) — con
+            # esa clave más corta, marcar el primero como "visto" hacía
+            # que el segundo se diera por usado sin estarlo, y desaparecía
+            # de la vista en vez de aparecer como su propio "Solo sistema".
+            vistos_pq.add((doc, elegido["ruc_pq"], elegido["proveedor_pq"]))
             base_sist, total_sist = float(elegido["base_pq"]), float(elegido["total_pq"])
             dif_base = round(base_sunat - base_sist, 2)
             dif_total = round(total_sunat - total_sist, 2)
@@ -207,15 +249,15 @@ def cruzar_con_parquet(df_sire, g_parquet):
                       if abs(dif_base) <= _TOLERANCIA_CENTAVOS
                       and abs(dif_total) <= _TOLERANCIA_CENTAVOS
                       else "Diferencia")
-            prov_sistema = elegido["proveedor_pq"]
+            prov_sistema, ruc_sistema = elegido["proveedor_pq"], elegido["ruc_pq"]
         else:
             base_sist = total_sist = dif_base = dif_total = None
-            estado, prov_sistema = "Solo SUNAT", ""
+            estado, prov_sistema, ruc_sistema = "Solo SUNAT", "", ""
 
         filas.append({
             "fecha_emision": r.get("fecha_emision"), "documento": doc,
             "proveedor": prov_sire, "proveedor_sistema": prov_sistema,
-            "ruc_proveedor": r.get("ruc_proveedor"),
+            "ruc_proveedor": ruc_sire, "ruc_sistema": ruc_sistema,
             "situacion": r.get("situacion"),
             "base_sunat": base_sunat, "base_sistema": base_sist,
             "dif_base": dif_base,
@@ -226,12 +268,12 @@ def cruzar_con_parquet(df_sire, g_parquet):
     # Lo que quedó en el parquet sin usarse en NINGÚN match: son compras
     # cargadas en el sistema que SUNAT no reporta (aún) para este RUC.
     for _, cand in g_parquet.iterrows():
-        if (cand["documento"], cand["proveedor_pq"]) in vistos_pq:
+        if (cand["documento"], cand["ruc_pq"], cand["proveedor_pq"]) in vistos_pq:
             continue
         filas.append({
             "fecha_emision": cand.get("fecha_pq"), "documento": cand["documento"],
             "proveedor": "", "proveedor_sistema": cand["proveedor_pq"],
-            "ruc_proveedor": "", "situacion": "",
+            "ruc_proveedor": "", "ruc_sistema": cand["ruc_pq"], "situacion": "",
             "base_sunat": None, "base_sistema": float(cand["base_pq"]),
             "dif_base": None,
             "total_sunat": None, "total_sistema": float(cand["total_pq"]),
@@ -309,7 +351,8 @@ def _tabla_cruce(df_cruce, df_sire):
         "Fecha": pd.to_datetime(df_cruce["fecha_emision"], errors="coerce")
                    .dt.strftime("%d/%m/%Y"),
         "Documento": df_cruce["documento"],
-        "RUC": df_cruce["ruc_proveedor"].fillna(""),
+        "RUC SUNAT": df_cruce["ruc_proveedor"].fillna(""),
+        "RUC sistema": df_cruce["ruc_sistema"].fillna(""),
         "Proveedor SUNAT": df_cruce["proveedor"].fillna(""),
         "Proveedor sistema": df_cruce["proveedor_sistema"].fillna(""),
         "Base SUNAT": pd.to_numeric(df_cruce["base_sunat"], errors="coerce"),
@@ -329,7 +372,8 @@ def _tabla_cruce(df_cruce, df_sire):
                                 editable=False, suppressMovable=True)
     gb.configure_column("Fecha", width=90, pinned="left")
     gb.configure_column("Documento", width=115, pinned="left")
-    gb.configure_column("RUC", width=105)
+    gb.configure_column("RUC SUNAT", width=105)
+    gb.configure_column("RUC sistema", width=105)
     gb.configure_column("Proveedor SUNAT", minWidth=180)
     gb.configure_column("Proveedor sistema", minWidth=180)
     for col in ("Base SUNAT", "Base sistema", "Total SUNAT", "Total sistema"):

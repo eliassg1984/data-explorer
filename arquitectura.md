@@ -6054,10 +6054,11 @@ salvo `icono`):
      produce falsos positivos si no se acota por fecha primero**
      (2026-08-20). `graficos/compras/documentos_sunat.py::cruzar_con_parquet`
      compara cada comprobante del SIRE contra `compras.parquet` por
-     Fecha de emisión, RUC (solo del lado SUNAT — el parquet no lo trae,
-     solo `COD_PROVEEDOR`/`LLAVE_PROVEEDOR`, un código interno), Proveedor,
-     Base imponible y Total, y marca cada uno **Coincide / Diferencia /
-     Solo SUNAT / Solo sistema**.
+     Fecha de emisión, RUC, Proveedor, Base imponible y Total, y marca
+     cada uno **Coincide / Diferencia / Solo SUNAT / Solo sistema**. (En
+     el momento en que se escribió este párrafo el parquet no traía RUC
+     — solo `COD_PROVEEDOR`/`LLAVE_PROVEEDOR`, un código interno —; el
+     addendum de abajo cuenta qué cambió cuando se agregó.)
 
      **El bug que casi se publica:** el primer intento cruzó por
      `documento` (`serie-número`, ej. `"E001-1"`) contra el parquet
@@ -6099,3 +6100,36 @@ salvo `icono`):
      plausible en el lugar equivocado. La única defensa real es verificar
      agregados contra una fuente independiente antes de confiar en un
      cruce, no confiar en que "no hay excepción" signifique "está bien".
+
+     **Addendum (mismo día, unas horas después): el parquet sumó RUC, y
+     eso destapó un segundo bug de agregación.** El usuario agregó
+     `INDICADOR TRIBUTARIO` a `compras.parquet` — el RUC del proveedor,
+     que hasta entonces no existía ahí (solo `COD_PROVEEDOR`, un código
+     interno). Con RUC de los dos lados, `cruzar_con_parquet` pasó a
+     emparejar por **RUC exacto primero** y recién si no hay uno usa el
+     nombre como red de seguridad — verificado al cierre: de 85 filas
+     "Diferencia" contra ABRASA S.A.C., **0 tienen RUC distinto entre
+     SUNAT y el sistema**. Antes, con solo el nombre, no había forma de
+     afirmar eso con la misma certeza.
+
+     Antes de usarlo tal cual, dos detalles reales del dato:
+     - `INDICADOR TRIBUTARIO` trae ~24% de sus filas con un **espacio
+       final** (`"20609456052 "`, 12 caracteres en vez de 11) — contado
+       sobre el parquet real. `_parquet_agrupado_por_documento` siempre
+       lo pasa por `.str.strip()`; comparar crudo habría hecho fallar el
+       match por RUC en 1 de cada 4 filas, en silencio.
+     - `_parquet_agrupado_por_documento` agrupa por (documento, RUC,
+       **proveedor**) y no solo por (documento, RUC): cuando el RUC viene
+       vacío en dos filas de proveedores DISTINTOS que comparten
+       documento — pasa, es la misma flojera de origen del punto
+       anterior —, agrupar sin el proveedor las fusiona bajo la clave
+       `("...", "")` y SUMA los montos de dos compras distintas como si
+       fueran una. Lo cazó un test, no una corrida real: al escribir el
+       caso mínimo para probar el fallback por nombre, la clave de
+       "ya emparejado" de `cruzar_con_parquet` (que en ese momento era
+       solo `(documento, ruc)`) descartaba en silencio al segundo
+       candidato con RUC vacío en vez de dejarlo como su propio "Solo
+       sistema" — mismo síntoma de siempre: ningún error, un número
+       (acá, un conteo de filas) que daba 6 en vez de 7. Se corrigió
+       trackeando la tripleta completa, que es la clave real que arma
+       la agrupación.
