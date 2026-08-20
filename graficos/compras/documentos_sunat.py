@@ -482,7 +482,39 @@ def _tabla_cruce(df_cruce, df_sire):
     return coincidencias.iloc[0] if not coincidencias.empty else None
 
 
-def _kpis(df):
+def _sello_origen(origen):
+    """De dónde salió el dato, para la tira de KPIs.
+
+    Un proceso de madrugada sin alertas tiene un agujero conocido: si deja
+    de correr, nadie se entera — el dato viejo se ve igual de plausible
+    que el fresco (misma lección que la regla #141, donde un total
+    creíble bajo un título equivocado lo cazó un usuario, no un test).
+    Mostrar la antigüedad lo hace visible sin gastar alto: es un ítem más
+    de la línea que ya existe.
+    """
+    if origen != "parquet":
+        return ('<span style="white-space:nowrap;" title="Consultado a la '
+                'API de SUNAT en vivo: el parquet del registro todavía no '
+                'existe en R2.">en vivo</span>')
+    fecha = sunat.fecha_registro()
+    if fecha is None:
+        return '<span style="white-space:nowrap;">registro en R2</span>'
+    horas = (pd.Timestamp.now(tz="UTC") - pd.Timestamp(fecha)).total_seconds() / 3600
+    # Más de un día y medio sin actualizarse ya no es "de anoche": el sync
+    # se salteó al menos una corrida y conviene que se vea.
+    color = ADVERTENCIA_TEXTO if horas > 36 else GRIS_TEXTO
+    if horas < 24:
+        cuando = "hoy"
+    elif horas < 48:
+        cuando = "ayer"
+    else:
+        cuando = f"hace {int(horas // 24)} días"
+    return (f'<span style="white-space:nowrap;color:{color};" '
+            f'title="Última sincronización del registro: '
+            f'{pd.Timestamp(fecha):%d/%m/%Y %H:%M} UTC">{cuando}</span>')
+
+
+def _kpis(df, origen=None):
     """Tira compacta de totales del rango, para la fila de controles.
 
     NO son `st.metric`: cuatro métricas nativas ocupan 91px de alto y en
@@ -521,6 +553,9 @@ def _kpis(df):
             f'anotados en un registro presentado">'
             f'<b style="font-weight:600;">{n_pend:,}</b> pendientes '
             f'(S/ {mto_pend:,.2f})</span>')
+
+    if origen:
+        partes.append(_sello_origen(origen))
 
     st.markdown(
         '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;'
@@ -799,20 +834,21 @@ def renderizar_documentos_sunat(d, col_fecha):
                                "SUNAT_RUC, SUNAT_USUARIO_SOL, "
                                "SUNAT_CLAVE_SOL, SUNAT_CLIENT_ID y "
                                "SUNAT_CLIENT_SECRET a los secrets).")
-                # Limpia las dos cachés (la del rango y la de cada período):
-                # la del rango sola devolvería lo mismo, porque se apoya en
-                # la de período.
+                # Limpia TODAS las cachés de la cadena: la del parquet, la
+                # del rango y la de cada período. La del rango sola
+                # devolvería lo mismo, porque se apoya en las otras.
                 if st.button("⟳", key="sunat_actualizar", help=_ayuda,
                              use_container_width=True):
+                    sunat._registro_de_parquet.clear()
                     sunat.obtener_comprobantes.clear()
                     sunat.obtener_comprobantes_rango.clear()
                     sunat.periodos_con_estado.clear()
                     sunat._leer_original.clear()
                     st.rerun()
 
-            with st.spinner("Consultando el registro de compras en SUNAT…"):
+            with st.spinner("Cargando el registro de compras de SUNAT…"):
                 try:
-                    df = sunat.obtener_comprobantes_rango(f_ini, f_fin)
+                    df, _origen = sunat.comprobantes_rango(f_ini, f_fin)
                 except Exception as e:
                     st.error(f"No se pudo consultar a SUNAT: {e}")
                     return
@@ -850,7 +886,7 @@ def renderizar_documentos_sunat(d, col_fecha):
                 )
             else:
                 with c_kpi:
-                    _kpis(df)
+                    _kpis(df, _origen)
                 _grafico(vis, vista)
                 doc = _tabla(vis)
                 st.download_button(

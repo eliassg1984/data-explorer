@@ -252,6 +252,43 @@ ok(sunat.claves_original(_doc_para_claves)
        "sunat_originales/20606902311/E001-1839.xml"),
    "claves_original devuelve (pdf, xml) para una fila del df canónico")
 
+# ── El registro cacheado en parquet ────────────────────────────────────────
+print("\n── comprobantes_rango (parquet con fallback a la API) ──")
+# Sin red: se sustituyen las dos fuentes por stubs. Lo que se prueba es el
+# CONTRATO, que la vista consume desestructurando (`df, _origen = …`): si
+# alguien lo cambia por un df pelado, la vista revienta con un ValueError
+# que no dice nada sobre la causa.
+_df_falso = sunat.registros_a_df([REG_REAL])
+_df_falso["periodo_registro"] = "202607"
+_df_falso["situacion"] = "Registrado"
+
+_orig_parquet = sunat._registro_de_parquet
+_orig_api = sunat.obtener_comprobantes_rango
+try:
+    sunat._registro_de_parquet = lambda: _df_falso
+    _r = sunat.comprobantes_rango(pd.Timestamp("2026-04-01"),
+                                  pd.Timestamp("2026-04-30"))
+    ok(isinstance(_r, tuple) and len(_r) == 2, "devuelve (df, origen)")
+    ok(_r[1] == "parquet", "con parquet disponible, el origen es 'parquet'")
+    ok(len(_r[0]) == 1, "filtra por fecha de emisión dentro del rango")
+    _fuera = sunat.comprobantes_rango(pd.Timestamp("2020-01-01"),
+                                      pd.Timestamp("2020-01-31"))
+    ok(len(_fuera[0]) == 0, "un rango sin comprobantes devuelve df vacío")
+
+    # Sin parquet en R2 (el estado normal antes de la primera corrida del
+    # sync) tiene que caer a la API en vivo, no romperse.
+    sunat._registro_de_parquet = lambda: None
+    sunat.obtener_comprobantes_rango = lambda i, f, p=None: _df_falso
+    _r2 = sunat.comprobantes_rango(pd.Timestamp("2026-04-01"),
+                                   pd.Timestamp("2026-04-30"))
+    ok(_r2[1] == "api", "sin parquet cae a la API y lo declara")
+finally:
+    sunat._registro_de_parquet = _orig_parquet
+    sunat.obtener_comprobantes_rango = _orig_api
+
+ok(sunat.ARCHIVO_REGISTRO.endswith(".parquet"),
+   "ARCHIVO_REGISTRO nombra un parquet (lo comparte el sync)")
+
 # ── Credenciales ───────────────────────────────────────────────────────────
 print("\n── credenciales ──")
 ok(len(sunat._SECRETS_SUNAT) == 5, "declara las 5 credenciales que pide SUNAT")

@@ -616,6 +616,83 @@ def obtener_comprobantes_rango(fecha_ini, fecha_fin, _progreso=None):
 
 
 # ===========================================================================
+# EL REGISTRO CACHEADO EN UN PARQUET DE R2
+# ===========================================================================
+# `obtener_comprobantes_rango` (arriba) pregunta a SUNAT EN VIVO. Funciona,
+# pero paga dos costos en cada visita: es lento —la API sólo habla por mes,
+# así que un rango ancho son N llamadas encadenadas de ~9 seg— y hereda la
+# disponibilidad de SUNAT, que no es buena (verificado 2026-08-20: "Error
+# del Servidor, reintentar en 5 minutos").
+#
+# `herramientas/sunat_registro_sync.py` corre de madrugada en la CPU local,
+# trae TODOS los períodos y deja el resultado acá, en un parquet. Esta capa
+# lo lee. Es el mismo trato que tiene el resto de la app con sus datos.
+#
+# `comprobantes_rango` es la puerta que usa la vista: prefiere el parquet y
+# cae a la API en vivo si todavía no existe. Así la vista funciona igual
+# antes y después de la primera corrida del sync. Ver regla #143.
+
+ARCHIVO_REGISTRO = "sunat_compras.parquet"
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _registro_de_parquet():
+    """El registro completo desde el parquet de R2, o None si no está.
+
+    Devuelve None —en vez de lanzar— cuando el parquet todavía no existe:
+    es el estado normal antes de la primera corrida del sync, y quien
+    llama decide caer a la API en vivo.
+    """
+    import data
+
+    if not data.secrets_disponibles():
+        return None
+    try:
+        con = data.get_conn()
+        url = f"s3://{st.secrets['R2_BUCKET']}/{ARCHIVO_REGISTRO}"
+        df = con.execute(f"SELECT * FROM read_parquet('{url}')").df()
+    except Exception:
+        return None
+    if df is None or df.empty:
+        return None
+    for col in ("fecha_emision", "fecha_vencimiento"):
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors="coerce")
+    return df
+
+
+def fecha_registro():
+    """Cuándo se subió el parquet del registro (UTC), o None.
+
+    La vista lo muestra para que un sync que dejó de correr se vea en
+    pantalla en vez de pasar por dato fresco — el agujero que tiene
+    cualquier proceso de madrugada sin alertas.
+    """
+    import data
+
+    return data.fecha_ultima_actualizacion(ARCHIVO_REGISTRO)
+
+
+def comprobantes_rango(fecha_ini, fecha_fin, _progreso=None):
+    """Comprobantes emitidos en el rango. Prefiere el parquet; si no, la API.
+
+    Es la puerta que usa la vista. Devuelve `(df, origen)` donde `origen`
+    es "parquet" o "api", para que la pantalla pueda decir de dónde salió
+    el número — misma exigencia que dejó la regla #141: una vista con
+    datos externos tiene que mostrar su procedencia, no sólo el total.
+    """
+    df = _registro_de_parquet()
+    if df is None:
+        return obtener_comprobantes_rango(fecha_ini, fecha_fin, _progreso), "api"
+
+    ini = pd.Timestamp(fecha_ini).normalize()
+    fin = pd.Timestamp(fecha_fin).normalize() + pd.Timedelta(days=1)
+    m = (df["fecha_emision"] >= ini) & (df["fecha_emision"] < fin)
+    return (df[m].sort_values("fecha_emision").reset_index(drop=True),
+            "parquet")
+
+
+# ===========================================================================
 # ORIGINALES (PDF/XML tal como los emitió el proveedor) EN R2
 # ===========================================================================
 # Todo lo de arriba es el REGISTRO que arma SUNAT (ver el docstring del
