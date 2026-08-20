@@ -616,6 +616,74 @@ def obtener_comprobantes_rango(fecha_ini, fecha_fin, _progreso=None):
 
 
 # ===========================================================================
+# ORIGINALES (PDF/XML tal como los emitió el proveedor) EN R2
+# ===========================================================================
+# Todo lo de arriba es el REGISTRO que arma SUNAT (ver el docstring del
+# módulo) — nunca el archivo que mandó el proveedor. Ese original no tiene
+# API pública: sólo se puede pedir haciendo los mismos clics que una
+# persona en el portal SOL (Consulta de Comprobantes de Pago). Por eso NO
+# se trae acá — se trae con `herramientas/sunat_originales_sync.py`, un
+# script aparte que corrés a mano en tu máquina (usa un navegador de
+# verdad vía Playwright, que no cabe en Streamlit Cloud) y que sube lo que
+# descarga a R2 con las claves que arma `_clave_original`.
+#
+# Esta sección sólo LEE lo que ese script ya dejó — mismo trato que tiene
+# el resto de la app con los parquets: la webapp nunca escribe datos, sólo
+# los pide o los lee. Ver `arquitectura.md` regla #142.
+
+PREFIJO_ORIGINALES = "sunat_originales"
+
+
+def _clave_original(ruc_proveedor, serie, numero, extension):
+    """Key en R2 de un original de un comprobante.
+
+    Función pura, sin red: la comparte el script que SUBE (sync) y esta
+    capa que LEE, para que nunca puedan divergir en el nombre.
+    """
+    ruc = str(ruc_proveedor or "").strip()
+    doc = f"{str(serie or '').strip()}-{str(numero or '').strip()}"
+    return f"{PREFIJO_ORIGINALES}/{ruc}/{doc}.{extension}"
+
+
+def claves_original(doc):
+    """(clave_pdf, clave_xml) en R2 para una fila del df canónico."""
+    ruc = doc.get("ruc_proveedor", "")
+    serie = doc.get("serie", "")
+    numero = doc.get("numero", "")
+    return (_clave_original(ruc, serie, numero, "pdf"),
+            _clave_original(ruc, serie, numero, "xml"))
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _leer_original(clave):
+    """Bytes de un objeto de R2, o None si no existe / no hay credenciales.
+
+    Nunca lanza: un original todavía no sincronizado es un estado normal
+    de este drill (el sync corre aparte y a demanda), no un error a
+    mostrar en pantalla.
+    """
+    import data  # import local: sunat.py no necesita boto3 si nadie pide un original
+
+    if not data.secrets_disponibles():
+        return None
+    try:
+        s3 = data.get_s3_cliente()
+        return s3.get_object(Bucket=st.secrets["R2_BUCKET"], Key=clave)["Body"].read()
+    except Exception:
+        return None
+
+
+def originales(doc):
+    """(bytes_pdf|None, bytes_xml|None) de un comprobante ya sincronizado.
+
+    Ambos None si `sunat_originales_sync.py` todavía no pasó por este
+    documento — la UI lo trata como "no disponible aún", no como error.
+    """
+    clave_pdf, clave_xml = claves_original(doc)
+    return _leer_original(clave_pdf), _leer_original(clave_xml)
+
+
+# ===========================================================================
 # LA FICHA DEL COMPROBANTE
 # ===========================================================================
 # Dos representaciones del MISMO comprobante:

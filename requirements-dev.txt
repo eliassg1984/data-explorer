@@ -13,3 +13,9 @@ ruff>=0.16,<0.17
 # La primera vez hay que bajarle su Chrome, una sola vez por máquina:
 #     python -c "import kaleido; kaleido.get_chrome_sync()"
 kaleido>=1.0,<2
+
+# Bajar PDF/XML originales del portal SOL (herramientas/sunat_originales_sync.py).
+# Corre SOLO local — un Chromium real no cabe en Streamlit Cloud. La primera
+# vez hay que instalarle el navegador, una sola vez por máquina:
+#     playwright install chromium
+playwright>=1.47,<2

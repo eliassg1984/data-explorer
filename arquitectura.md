@@ -22,7 +22,7 @@ actualiza este documento en el mismo commit.
 | `estado_rango.py` | **Dueño único** del eje temporal de la franja superior: rango (`clave_rango`, `asegurar_rango`, `atajos_rango`, `aplicar_atajo`) **y corte** (`clave_corte`, `clave_modo`, `modo_fecha`, `corte_vigente`, `aplicar_corte`, `volver_a_rango`). Nadie escribe esas claves fuera de este módulo — ver reglas #24 y #62. Su hermano chico es `graficos/periodo.py`, el rango POR VISTA (regla #133): no le disputa nada — la franja sigue mandando y una vista que no lo importe se comporta igual que antes. |
 | `cortes.py` | Agrupa fechas en **cortes**: las rachas de días de una misma sesión de inventario (salto ≤ `CORTE_MAX_SALTO_DIAS`). Un corte es un CONJUNTO de días, no un intervalo — ver regla #62. Sin dependencias de streamlit ni de `graficos/`, porque lo consumen los dos lados: la franja de `app.py` y `graficos/ajuste/_comun.py` (que lo reexporta con los nombres privados de siempre). |
 | `data.py` | Carga de datos: DuckDB + httpfs leyendo parquets de R2 (secrets). Sistema de refresco bajo demanda vía R2. |
-| `sunat.py` | **Capa de datos del SIRE Compras (RCE) de SUNAT** (2026-08-19), hermana de `data.py` pero contra la API de SUNAT en vez de R2: OAuth2 (`obtener_token`), listado paginado y SÍNCRONO del detalle vía un endpoint NO documentado (`obtener_comprobantes` → `URL_BUSQUEDA`, descubierto por DevTools — ver regla #140), aplanado del JSON anidado de SUNAT (`_normalizar_registro`) y la ficha del comprobante en dos formatos (`campos_ficha`, fuente única; `ficha_pdf`, con matplotlib). `obtener_comprobantes_rango` + `periodos_a_consultar` + `periodos_con_estado` (2026-08-20) unen los períodos que hagan falta para cubrir un rango por FECHA DE EMISIÓN y marcan cada fila Registrado/Pendiente — ver regla #141. Modo demo sin credenciales, igual criterio que `data.py::_datos_demo`. Devuelve el REGISTRO del comprobante, no el PDF/XML del proveedor — ver regla #139. Testeado sin red en `test_sunat.py`. |
+| `sunat.py` | **Capa de datos del SIRE Compras (RCE) de SUNAT** (2026-08-19), hermana de `data.py` pero contra la API de SUNAT en vez de R2: OAuth2 (`obtener_token`), listado paginado y SÍNCRONO del detalle vía un endpoint NO documentado (`obtener_comprobantes` → `URL_BUSQUEDA`, descubierto por DevTools — ver regla #140), aplanado del JSON anidado de SUNAT (`_normalizar_registro`) y la ficha del comprobante en dos formatos (`campos_ficha`, fuente única; `ficha_pdf`, con matplotlib). `obtener_comprobantes_rango` + `periodos_a_consultar` + `periodos_con_estado` (2026-08-20) unen los períodos que hagan falta para cubrir un rango por FECHA DE EMISIÓN y marcan cada fila Registrado/Pendiente — ver regla #141. Modo demo sin credenciales, igual criterio que `data.py::_datos_demo`. Devuelve el REGISTRO del comprobante, no el PDF/XML del proveedor — ver regla #139. El original SÍ se puede leer (`originales`/`claves_original`, 2026-08-19) pero sólo lo que subió aparte `herramientas/sunat_originales_sync.py` (Playwright contra el portal SOL, corre local) — ver regla #142. Testeado sin red en `test_sunat.py`. |
 | `tablas/` | **Paquete de tablas AgGrid** (refactor 2026-08-01; antes un `tablas.py` de 2.028 líneas). `__init__.py` re-exporta la API pública. `_css.py` (CSS de grid y paneles), `_config.py` (estilos de celda/fila, sidebar, totales), `desktop.py` (`renderizar_aggrid_desktop`), `movil.py` (`renderizar_aggrid_movil`), `compras.py` (`renderizar_aggrid_compras`), `ajuste_pivote.py` (`renderizar_aggrid_pivote_ajuste`, tabla "Por fecha" de Ajuste de Inventario — ver regla #25). `renderizar_tabla_compras` se borró el 2026-08-08 (llevaba desde 2026-08-01 sin llamadores). |
 | `graficos/` | **Paquete de dashboards de gráficos** (refactor Fase 2, 2026-07-25). `__init__.py` es solo el dispatcher: dict `_DASHBOARDS = {reporte: render_fn}` (no cadena de if/elif), más `renderizar_graficos_reporte` (entry point) y `tiene_dashboard(reporte)` (para que `app.py` no enumere reportes ni importe `_DASHBOARDS`; ver regla #50). `render_vista_pills` (pestañas Gráficos/Tabla sueltas en la franja) se ELIMINÓ 2026-08-04: ver regla #18. Cada dashboard vive en su archivo: `base.py` (infraestructura compartida: cards nativos, motor genérico, resolución de columnas, helpers de layout), **`ajuste/` es un paquete** (refactor 2026-08-08; antes un `ajuste.py` de 2.607 líneas — el fichero con MÁS churn del repo, 80 de los últimos 200 commits): una vista por módulo — `_comun.py` (layout del rail, fechas de corte, periodos), `_evolucion.py`, `_pivote.py`, `_cascada.py`, `_panel_analisis.py`, `_heatmap.py`, `_distribucion.py` — y `__init__.py` con la config del rail, `categoria_rango_ajuste` y el entry point. Ojo: la **cascada NO es un gráfico Plotly** sino una tabla de filas — `st.columns` por familia + HTML en `st.markdown`, con una columna de barras flotantes que encadenan la cascada; ver reglas #8 y #10, `ventas.py` (`ventas_resumen.py` aporta su vista "Resumen ejecutivo" — KPIs + venta diaria coloreada por tendencia + ticket promedio + top platos; nació con un candlestick, ver por qué se dio de baja en la regla #85) y `ventas_comparativo.py` (vista "Año Pasado": barras agrupadas Actual vs Año Pasado en día/semana/mes, con toggle de alineación fecha-calendario / día-de-semana en día, feriados y findes marcados, recorte del período en curso, modo "Descomposición" (%Δ venta/pax/ticket en un solo eje) y drill por clic al ranking de platos del período — ver reglas #86, #87 y #88), **`ventas_horario.py`** (2026-08-14, vista "Por hora": mapa de calor día × hora de hasta 4 períodos comparados en franjas, marcas rectangulares por arrastre —una por panel tocado—, drill con medidas a elección y árbol Grupo › Sub Grupo › Plato › **Tipo de descuento**; reusa los helpers de calendario de `ventas_comparativo` en vez de duplicarlos y sólo agrega la granularidad Año — ver reglas #112 a #115. Abre SIEMPRE en el período EN CURSO (uno solo: comparar es explícito y tiene su botón), recortado al último día con datos; los períodos a comparar NO tienen que ser consecutivos ni recientes — la lista es el atajo y el `date_input` abre el calendario entero. El eje de horas va en am/pm, y en el eje de días los fines de semana van en negro y los feriados en ámbar, con el MISMO calendario `_feriados_peru` que pinta las bandas de la vista Año Pasado), `inventario.py` (v2), `salidas.py` (evolución con granularidad Día/Semana/Mes/Año + composición por subalmacén/tipo de descargo), `constructor.py` (Power BI, usado por Compras). **`recetas_comun.py`** (2026-08-13) tiene la ÚNICA copia de los 5 gráficos que comparten Receta Base y Receta Venta (Sankey/Composición/Ranking/Ítems clave/Panorama de compras) más `_activo()` y `_chip_fuente()` — ver regla #97. `recetabase.py` y `recetaventa.py` son capas finas sobre ese módulo: resuelven columnas reales + llaman a lo compartido. `requerimientos.py` (2026-08-13, dashboard nuevo: evolución + sub almacén + estado, mismo layout que `salidas.py`) y **`movimientos_comun.py`** (chip Requerimiento/Salidas + vista "Comparativo" que cruza los dos parquets — ver regla #98) comparten nav ("Movimientos") con `salidas.py`. `legacy.py` (Inventario v1) se borró el 2026-08-08: 421 líneas sin un solo import. **`compras/` es a su vez un paquete** (refactor 2026-08-01; antes un `compras.py` de 2.835 líneas): un drill por archivo — `_comun.py` (helpers, incluye `_periodo_serie` para granularidad temporal — reusar desde ahí, no duplicar), `proveedor.py`, `producto.py` (2026-08-17, reemplaza a "Precio top 10" + "Precio por compra" + `cantidad.py`/"Cantidad por producto", que se borraron ese día: ranking de TODOS los productos —valor, cantidad, UM, precio real de inicio/fin de período y su variación— con el mismo patrón tabla-ranking + clic-para-enfocar que `proveedor.py`; el producto en foco muestra su evolución con un selector de texto plano Precio/Cantidad/Valor × Semana/Mes/Año que fusiona el promedio del período con el precio real de cada compra en un solo gráfico; debajo, un segundo ranking agrupa por Familia con mini ranking al clic — ver regla #128), `volatilidad.py` (`evolucion.py` —la vista "Evolución prov." del rail— se borró el 2026-08-16 a pedido: 377 líneas que quedaron sin un solo import al sacar la dimensión del rail; su pregunta la responde ahora el gráfico de evolución que vive DENTRO del drill de Proveedor) (ranking de insumos por volatilidad de precio → candlestick semanal → compras de la semana clickeada; ver regla #74) — y `__init__.py` con la config del rail y `renderizar_graficos_compras`. `_COMPRAS_RAIL_CATEGORIAS` movió "Producto" a la categoría Dimensión (junto a Proveedor): al cubrir precio+cantidad+valor a la vez ya no es una vista de "Precios". El drill "Familia" (Familia→Subfamilia→productos) se eliminó el mismo día por redundante con el ranking por Familia que ya trae Producto — ver regla #129. El drill de Proveedor se siguió partiendo el 2026-08-08 (era una función de 1.577 líneas): `_css_proveedor.py` (sus 527 líneas de CSS, que NO van a `estilos/` a propósito — ver su docstring), `_etiquetas_proveedor.py` (texto de las barras: `fmt_k`, `abrev_nombre`, `etiqueta_serie`, `sufijo_granularidad`; puras y con asserts de valor en `test_graficos.py`) y `_documentos_proveedor.py` (`tabla_documentos`, la AgGrid pivote del pie). Quedó en 791 líneas; el resto NO se siguió cortando a propósito — ver regla #55. `documentos_sunat.py` (2026-08-19, drill "Documentos SUNAT": los comprobantes que los proveedores emitieron hacia el RUC, vía `sunat.py` — el único drill de Compras cuyo dato no sale del parquet, y el único que NO respeta los chips Familia/Subfamilia; ver regla #139) es el drill más nuevo. Cuando un dashboard crezca así, partirlo del mismo modo. **Agregar un dashboard nuevo = crear `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** |
 | `estilos/` | **Paquete del CSS global** (refactor 2026-08-01; antes un `estilos.py` de 1.700 líneas). `__init__.py` mantiene la API pública (`TAM_FUENTE`, `get_css`, `inject_css`) y concatena las secciones. Una sección por módulo, con prefijo numérico que marca el orden: `_00_base`, `_20_compras_rail`, `_30_filtros`, `_40_ajuste_franja`, `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`, `_90_franja_inferior`, `_99_movil`. (`_10_vista` existió hasta el 2026-08-08: estilaba el selector Gráficos/Tabla y quedó 100% huérfano al borrarse ese widget — ver regla #49.) **El orden de `_SECCIONES` es parte del comportamiento**: hay `!important` en ambos lados de varios conflictos, así que gana la regla que va DESPUÉS — por eso `_99_movil` cierra. |
@@ -5987,3 +5987,65 @@ salvo `icono`):
      usuario mirando la pantalla con atención, no un test ni una excepción
      — motivo de más para que cualquier vista que agregue datos externos
      muestre de dónde salió cada número, no sólo el total.
+
+142. **El PDF/XML ORIGINAL del proveedor (no la ficha renderizada) llega por
+     un camino totalmente distinto al resto de `sunat.py`, y a propósito
+     vive FUERA de la webapp** (2026-08-19).
+
+     El disparador: un usuario trajo el zip de un proyecto de terceros
+     (`app-sire`, escritorio Tkinter + Playwright) que resuelve justo el
+     hueco que el docstring de `sunat.py` venía marcando desde la regla
+     #139 — el original no tiene API pública, sólo se consigue con los
+     mismos clics que una persona en el portal SOL (Consulta de
+     Comprobantes de Pago). Ese proyecto también trae el flujo de
+     tickets/ZIP de la regla #140 (mismo hallazgo: roto del lado de
+     SUNAT) y una GUI de escritorio completa — de ahí sólo se rescató la
+     pieza que faltaba, el downloader de Playwright.
+
+     **Por qué no se integró en vivo a la webapp:** esa pieza abre un
+     Chromium real con técnicas anti-detección activas (esconde
+     `navigator.webdriver`, user-agent de navegador real) para que el
+     login pase — Streamlit Community Cloud no da un entorno confiable
+     para instalarlo/correrlo, y aunque lo diera, exponerlo a que
+     cualquier clic de cualquier visita dispare un login al portal SOL de
+     SUNAT es un patrón mucho más "bot" que las llamadas OAuth2 que ya
+     hace `sunat.py` — más plausible que la cuenta quede señalada. Mismo
+     tipo de riesgo aceptado que el endpoint no documentado de la regla
+     #140, un escalón más arriba.
+
+     **La solución — separar buscar de servir, mismo patrón que ya usa
+     toda la app con R2:**
+       · `herramientas/sunat_originales_sync.py` corre LOCAL, a mano. Usa
+         `sunat.py` para listar los comprobantes del rango, Playwright
+         para bajar cada PDF/XML del portal SOL, y sube ambos a R2 con la
+         clave que arma `sunat._clave_original`
+         (`sunat_originales/<ruc_proveedor>/<serie>-<numero>.<ext>`).
+         Salta lo que ya está subido (backfill incremental; `--forzar`
+         para repetir).
+       · `sunat.originales(doc)` sólo LEE esas claves de R2
+         (`_leer_original`, cacheada 1h). Nunca lanza: no encontrar nada
+         es el estado normal de un documento que el sync todavía no tocó,
+         no un error.
+       · `graficos/compras/documentos_sunat.py::_panel_documento` muestra
+         los botones de descarga del original SÓLO si `sunat.originales`
+         trajo bytes; si no, se queda con la ficha renderizada de siempre
+         (`ficha_pdf`, que no depende de ningún sync y sigue funcionando
+         para el 100% de los documentos). Los dos estados conviven — no es
+         un reemplazo, es un enriquecimiento cuando existe.
+
+     **Una mejora deliberada sobre el proyecto original, no una copia
+     literal:** el downloader de terceros abre navegador y se loguea DE
+     NUEVO por cada comprobante — para un período de cientos de
+     documentos son cientos de logins contra el mismo portal. El script
+     de este repo loguea UNA vez por corrida y reutiliza la sesión para
+     todos los documentos pendientes: más rápido y una señal de bot mucho
+     más chica.
+
+     **Lo que NO está verificado contra SUNAT en vivo** (dejado explícito
+     en el docstring del script, no escondido): los selectores de
+     login/popups/primer formulario vienen de código de terceros ya
+     probado en producción; volver a "Nueva Consulta" para el SEGUNDO
+     documento en adelante, dentro de la misma sesión, es lógica nueva
+     que nadie corrió todavía — el proyecto original nunca lo necesitó
+     porque reabría el navegador por cada uno. Antes de soltarle un rango
+     grande, correrlo con `--limite 2` contra un período conocido.

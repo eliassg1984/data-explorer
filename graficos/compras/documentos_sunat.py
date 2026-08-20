@@ -22,10 +22,18 @@ Es el único drill de Compras cuyo dato NO sale del parquet de R2: lo trae
 LO QUE SE VE Y LO QUE SE PUEDE BAJAR
 ------------------------------------
 La ficha PDF que ofrece el panel derecho la RENDERIZA la app con los datos
-del registro (`sunat.ficha_pdf`). No es el PDF que emitió el proveedor: esa
-API es otra (descarga masiva de CPE) y hoy no está conectada. El panel lo
-dice en pantalla — no en un comentario— porque confundir una cosa con la
-otra tiene consecuencias contables.
+del registro (`sunat.ficha_pdf`). No es el PDF que emitió el proveedor —
+ésa es otra API (descarga masiva de CPE) sin acceso público, y NO se trae
+acá en vivo. El panel lo dice en pantalla — no en un comentario— porque
+confundir una cosa con la otra tiene consecuencias contables.
+
+El original (PDF/XML tal como lo emitió el proveedor) SÍ puede aparecer,
+pero viene de un proceso aparte: `herramientas/sunat_originales_sync.py`
+lo baja del portal SOL a mano/localmente y lo sube a R2; acá sólo se
+CHEQUEA si ya está (`sunat.originales`). Por eso conviven dos estados
+normales para el mismo documento: sin sincronizar (solo la ficha
+renderizada) y sincronizado (ficha + originales de verdad). Ver
+`arquitectura.md` regla #142.
 """
 
 import pandas as pd
@@ -279,6 +287,32 @@ def _panel_documento(doc):
     st.caption("Ficha con los datos del SIRE. No es el PDF que emitió el "
                "proveedor.")
 
+    # El original vive en R2 solo si `sunat_originales_sync.py` ya pasó por
+    # este documento — ver el docstring del módulo. Ninguno de los dos
+    # `None` es un error: es el estado normal antes del primer sync.
+    pdf_original, xml_original = sunat.originales(doc)
+    if pdf_original or xml_original:
+        st.markdown(
+            f'<div style="font-size:10px;font-weight:700;color:{ACENTO};'
+            f'text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;'
+            f'padding-bottom:3px;border-bottom:1px solid {GRIS_BORDE};">'
+            f'Original del proveedor</div>', unsafe_allow_html=True)
+        c_pdf, c_xml = st.columns(2)
+        with c_pdf:
+            if pdf_original:
+                st.download_button(
+                    "📄 PDF original", data=pdf_original,
+                    file_name=f"{doc.get('documento', 'comprobante')}_original.pdf",
+                    mime="application/pdf", use_container_width=True,
+                    key="sunat_dl_pdf_original")
+        with c_xml:
+            if xml_original:
+                st.download_button(
+                    "🧾 XML", data=xml_original,
+                    file_name=f"{doc.get('documento', 'comprobante')}.xml",
+                    mime="application/xml", use_container_width=True,
+                    key="sunat_dl_xml_original")
+
 
 def renderizar_documentos_sunat(d, col_fecha):
     """Punto de entrada del drill. Lo llama `graficos/compras/__init__.py`.
@@ -342,6 +376,7 @@ def renderizar_documentos_sunat(d, col_fecha):
                     sunat.obtener_comprobantes.clear()
                     sunat.obtener_comprobantes_rango.clear()
                     sunat.periodos_con_estado.clear()
+                    sunat._leer_original.clear()
                     st.rerun()
 
             with st.spinner("Consultando el registro de compras en SUNAT…"):

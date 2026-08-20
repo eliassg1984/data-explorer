@@ -235,6 +235,23 @@ ok([t for t, _ in _secciones] == ["Emisor", "Documento", "Importes"],
 ok(any(e == "Estado" for _, filas in _secciones for e, _ in filas),
    "la ficha muestra el estado del comprobante")
 
+# ── Claves de originales en R2 ─────────────────────────────────────────────
+print("\n── _clave_original / claves_original (contrato con el sync) ──")
+ok(sunat._clave_original("20606902311", "E001", "1839", "pdf")
+   == "sunat_originales/20606902311/E001-1839.pdf",
+   "arma la key con ruc/serie-numero.extension")
+ok(sunat._clave_original(" 20606902311 ", " E001 ", " 1839 ", "xml")
+   == "sunat_originales/20606902311/E001-1839.xml",
+   "recorta espacios (mismo criterio que _normalizar_registro)")
+ok(sunat._clave_original(None, None, None, "pdf") == "sunat_originales//-.pdf",
+   "sin datos no revienta (aunque la key salga vacía)")
+
+_doc_para_claves = {"ruc_proveedor": "20606902311", "serie": "E001", "numero": "1839"}
+ok(sunat.claves_original(_doc_para_claves)
+   == ("sunat_originales/20606902311/E001-1839.pdf",
+       "sunat_originales/20606902311/E001-1839.xml"),
+   "claves_original devuelve (pdf, xml) para una fila del df canónico")
+
 # ── Credenciales ───────────────────────────────────────────────────────────
 print("\n── credenciales ──")
 ok(len(sunat._SECRETS_SUNAT) == 5, "declara las 5 credenciales que pide SUNAT")
