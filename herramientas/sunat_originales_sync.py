@@ -183,13 +183,24 @@ def _cerrar_popups(pagina) -> None:
         pass
 
 
+URL_MENU_SOL = "https://e-menu.sunat.gob.pe/cl-ti-itmenu/MenuInternet.htm?pestana=*&agrupacion=*"
+"""Confirmada en vivo (2026-08-20): a dónde aterriza un login exitoso."""
+
+
 def _ir_a_consulta_comprobantes(pagina) -> None:
     """Camino Empresas → Comprobantes de Pago → Consulta → Nueva Consulta.
 
-    Se llama UNA vez por documento (no sólo al principio): es la forma
-    conocida de llegar a un formulario en blanco. Ver el aviso de
-    verificación en el docstring del módulo.
+    Se llama UNA vez por documento. Arranca con un `goto` limpio al menú
+    — no navega desde donde haya quedado la página — porque después de
+    bajar un comprobante queda abierto un panel "Resultado" que tapa (o
+    directamente saca del layout) el ítem "Empresas", y el click al
+    segundo documento en adelante fallaba con "Element is not visible"
+    (verificado en vivo 2026-08-20, primera corrida real: documento 1 de
+    2 salió perfecto, el 2 rompió acá exactamente). Un reload cuesta un
+    par de segundos pero deja SIEMPRE el mismo estado conocido, sin
+    depender de qué panel dejó abierto el documento anterior.
     """
+    pagina.goto(URL_MENU_SOL, wait_until="domcontentloaded")
     pagina.locator(".list-group-item").filter(has_text="Empresas").first.click(force=True)
     time.sleep(1.5)
 
