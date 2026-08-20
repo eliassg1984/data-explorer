@@ -18,9 +18,19 @@ Ver `arquitectura.md` regla #142.
 
 USO
 ---
-    python herramientas/sunat_originales_sync.py --desde 202607 --hasta 202608
-    python herramientas/sunat_originales_sync.py --desde 202608 --hasta 202608 --limite 2 --ver   (probar primero, viendo la ventana)
-    python herramientas/sunat_originales_sync.py --desde 202607 --hasta 202608 --forzar           (repetir aunque ya esté en R2)
+    python herramientas/sunat_originales_sync.py --minutos 120        (la corrida nocturna)
+    python herramientas/sunat_originales_sync.py --limite 3 --ver     (probar, viendo la ventana)
+    python herramientas/sunat_originales_sync.py --desde 202608 --hasta 202608 --forzar
+
+Sin `--desde`/`--hasta` toma TODO el universo, **más nuevo primero** — que
+es lo que se quiere de noche: lo reciente es lo que la gente consulta, y
+lo viejo se llena de a poco detrás. `--minutos` es el tope natural de una
+corrida nocturna (acota el TIEMPO, no la cantidad, que es lo que importa
+cuando cada documento tarda distinto).
+
+Medido con datos reales (2026-08-20): de 16.577 comprobantes, 9.821 caen
+dentro de la ventana de 24 meses. A 2 h por noche son ~41 noches para
+cubrirlos todos; a 4 h, ~20 noches.
 
 Por default el navegador es INVISIBLE (headless): no abre ninguna ventana,
 no se ve ningún cursor moviéndose — corre como proceso de fondo, igual que
@@ -56,15 +66,22 @@ reinventó esa parte. Lo que SÍ cambia acá:
     máquina.
   · Salta lo que YA está en R2 (backfill incremental) salvo `--forzar`.
 
-SIN VERIFICAR CONTRA SUNAT EN VIVO — LEER ANTES DE CORRER EN SERIO
---------------------------------------------------------------------
-Todo lo de login/popups/primer formulario viene de código ya probado. Lo
-que NO probó nadie todavía es volver a "Nueva Consulta" DESPUÉS de bajar
-un documento, para el segundo en adelante dentro de la misma sesión — el
-proyecto original nunca lo necesitó porque reabría el navegador para cada
-uno. Es la parte más probable de necesitar un ajuste de selector. Por eso:
-correlo primero con `--limite 2` contra un período que conozcas, mirá el
-log, y recién después soltale un rango grande.
+QUÉ ESTÁ VERIFICADO Y QUÉ NO (2026-08-20)
+------------------------------------------
+VERIFICADO en vivo, contra el RUC real:
+  · Login (hizo falta visitar sunat.gob.pe antes y mandar `referer`; sin
+    eso SUNAT contesta "Error en la invocación" y nunca muestra el form).
+  · Un documento COMPLETO de punta a punta: consulta, PDF, XML, subida.
+  · La selección: universo del parquet, ventana de 24 meses, orden
+    más-nuevo-primero, y el descarte de lo ya subido.
+
+NO VERIFICADO todavía: **dos o más documentos seguidos con éxito.** El
+primer intento rompió al pasar al 2º (el panel "Resultado" tapaba el menú
+→ reset con `goto`) y el segundo intento murió porque SUNAT estaba caído
+("Error del Servidor"), no por el código. Los dos arreglos están puestos
+pero nadie los vio funcionar en cadena. Por eso: **correlo primero con
+`--limite 3 --ver`**, mirá que los tres salgan, y recién ahí programalo de
+noche.
 
 RIESGO ACEPTADO A PROPÓSITO (igual que el endpoint no documentado de
 `sunat.py`, ver regla #140, pero un escalón más arriba): esto navega el
@@ -407,22 +424,69 @@ def _subir(s3, bucket: str, clave: str, contenido: bytes, content_type: str) -> 
 # MAIN
 # ===========================================================================
 
-def _comprobantes_del_rango(desde: str, hasta: str) -> pd.DataFrame:
-    periodos = [p for p in sunat.periodos_disponibles() if desde <= p <= hasta]
-    if not periodos:
-        return sunat.registros_a_df([])
-    partes = [sunat.obtener_comprobantes(p) for p in periodos]
-    df = pd.concat(partes, ignore_index=True) if partes else sunat.registros_a_df([])
-    return df.drop_duplicates(subset="car") if not df.empty else df
+def _comprobantes(desde=None, hasta=None) -> pd.DataFrame:
+    """El universo de comprobantes candidatos, MÁS NUEVOS PRIMERO.
+
+    Sale del parquet que dejó `sunat_registro_sync.py` — que ya trae
+    TODOS los períodos deduplicados (regla #143) — y sólo cae a la API si
+    ese parquet todavía no existe. Es la diferencia entre arrancar en 1
+    segundo o en ~4 minutos de llamadas a SUNAT antes de bajar el primer
+    PDF.
+
+    El orden importa y es una decisión, no un default: se baja de lo más
+    nuevo hacia atrás porque es lo que la gente consulta. La contra está
+    documentada en `_MESES_VENTANA`.
+    """
+    df = sunat._registro_de_parquet()
+    if df is None:
+        _log("(el parquet del registro no está en R2todavía; "
+            "consultando la API — más lento)")
+        periodos = [p for p in sunat.periodos_disponibles()
+                    if (desde is None or p >= desde) and (hasta is None or p <= hasta)]
+        if not periodos:
+            return sunat.registros_a_df([])
+        df = pd.concat([sunat.obtener_comprobantes(p) for p in periodos],
+                       ignore_index=True)
+        df = df.drop_duplicates(subset="car")
+    elif desde or hasta:
+        per = df["periodo_registro"] if "periodo_registro" in df else df["periodo"]
+        if desde:
+            df = df[per >= desde]
+        if hasta:
+            df = df[per <= hasta]
+
+    if df.empty:
+        return df
+    return df.sort_values("fecha_emision", ascending=False).reset_index(drop=True)
+
+
+# SUNAT no entrega el original de comprobantes muy antiguos: el README del
+# proyecto de terceros del que salió este flujo avisa que pasados ~24 meses
+# la consulta sólo muestra datos generales, sin botón de descarga. NO está
+# verificado de primera mano acá — por eso es un flag y no una constante
+# escondida. Sirve para que una corrida nocturna no gaste horas insistiendo
+# con documentos que SUNAT nunca va a servir (cada intento fallido cuesta
+# el timeout de 15 seg esperando la tabla de resultados).
+_MESES_VENTANA = 24
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Baja PDF/XML originales de SUNAT (portal SOL) y los sube a R2.")
-    ap.add_argument("--desde", required=True, help="Período yyyymm inicial (inclusive)")
-    ap.add_argument("--hasta", required=True, help="Período yyyymm final (inclusive)")
+    ap.add_argument("--desde", help="Período yyyymm inicial (inclusive). "
+                    "Sin --desde/--hasta toma todo, más nuevo primero.")
+    ap.add_argument("--hasta", help="Período yyyymm final (inclusive)")
     ap.add_argument("--limite", type=int, default=None,
                     help="Máximo de documentos a bajar en esta corrida (para probar)")
+    ap.add_argument("--minutos", type=int, default=None,
+                    help="Corta la corrida pasados N minutos. Es el tope "
+                        "natural de una corrida nocturna: acota el tiempo, "
+                        "no la cantidad, que es lo que realmente importa "
+                        "cuando cada documento tarda distinto.")
+    ap.add_argument("--meses-atras", type=int, default=_MESES_VENTANA,
+                    help=f"No intentar documentos con más de N meses "
+                        f"(default {_MESES_VENTANA}: SUNAT deja de servir "
+                        f"el original pasada esa ventana). 0 = sin límite.")
     ap.add_argument("--forzar", action="store_true",
                     help="Vuelve a bajar aunque ya exista en R2")
     ap.add_argument("--ver", action="store_true",
@@ -432,9 +496,10 @@ def main() -> None:
                         "leer un stack trace si algo falla.")
     args = ap.parse_args()
 
-    if not sunat.periodo_valido(args.desde) or not sunat.periodo_valido(args.hasta):
-        _log("❌ --desde/--hasta deben tener formato yyyymm (ej: 202608).")
-        sys.exit(1)
+    for flag, val in (("--desde", args.desde), ("--hasta", args.hasta)):
+        if val is not None and not sunat.periodo_valido(val):
+            _log(f"❌ {flag} debe tener formato yyyymm (ej: 202608).")
+            sys.exit(1)
     if not sunat.secrets_disponibles():
         _log("❌ Faltan credenciales de SUNAT en .streamlit/secrets.toml "
             "(SUNAT_RUC, SUNAT_USUARIO_SOL, SUNAT_CLAVE_SOL, SUNAT_CLIENT_ID, "
@@ -445,11 +510,22 @@ def main() -> None:
             "(R2_ACCOUNT_ID, R2_ACCESS_KEY, R2_SECRET_KEY, R2_BUCKET).")
         sys.exit(1)
 
-    _log(f"Consultando el registro de SUNAT para {args.desde}–{args.hasta}…")
-    todos = _comprobantes_del_rango(args.desde, args.hasta)
-    _log(f"{len(todos)} comprobantes en el rango.")
+    _log("Cargando el registro de comprobantes…")
+    todos = _comprobantes(args.desde, args.hasta)
+    _log(f"{len(todos)} comprobantes en el universo (más nuevos primero).")
     if todos.empty:
         return
+
+    if args.meses_atras:
+        corte = (pd.Timestamp.today().normalize()
+                 - pd.DateOffset(months=args.meses_atras))
+        antes = len(todos)
+        todos = todos[todos["fecha_emision"] >= corte]
+        if antes != len(todos):
+            _log(f"{antes - len(todos)} documentos anteriores a "
+                f"{corte:%Y-%m} se saltan: fuera de la ventana de "
+                f"{args.meses_atras} meses en que SUNAT sirve el original "
+                f"(--meses-atras 0 para intentarlos igual).")
 
     s3 = data.get_s3_cliente()
     bucket = st.secrets["R2_BUCKET"]
@@ -492,7 +568,17 @@ def main() -> None:
             _cerrar_popups(pagina)
 
             ok = fallidos = 0
+            corte_t = (time.time() + args.minutos * 60) if args.minutos else None
             for i, doc in enumerate(pendientes, 1):
+                # El corte se chequea ANTES de empezar el documento, no en
+                # el medio: cortar a mitad de una descarga dejaría el PDF
+                # subido sin su XML, y el chequeo de "ya está en R2" exige
+                # los DOS para darlo por hecho — así que el documento se
+                # reintentaría entero igual. Mejor no empezarlo.
+                if corte_t and time.time() > corte_t:
+                    _log(f"\n⏱ Corte por --minutos {args.minutos}: quedan "
+                        f"{len(pendientes) - i + 1} para la próxima corrida.")
+                    break
                 etiqueta = f"{doc['serie']}-{doc['numero']} ({doc['proveedor']})"
                 _log(f"[{i}/{len(pendientes)}] {etiqueta}…")
                 try:
