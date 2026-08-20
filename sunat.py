@@ -496,25 +496,123 @@ def obtener_comprobantes(periodo, _progreso=None):
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def periodos_disponibles():
-    """Períodos `yyyymm` habilitados para el contribuyente (§5.33).
+@st.cache_data(ttl=3600, show_spinner=False)
+def periodos_con_estado():
+    """`[(periodo, cod_estado, descripcion)]`, del más reciente al más viejo.
 
-    En modo demo: los 12 meses hasta hoy, para que el selector tenga algo
-    que ofrecer sin inventar años que no existen.
+    `cod_estado` "01" = Presentado (el registro del mes ya se generó);
+    "03" = No Presentado (el período sigue abierto). La diferencia NO es
+    cosmética — cambia qué devuelve la propuesta, ver
+    `obtener_comprobantes_rango`.
     """
     if not secrets_disponibles():
         hoy = pd.Timestamp.today()
-        return [periodo_desde_fecha(hoy - pd.DateOffset(months=i))
+        # El mes en curso abierto y los 11 anteriores cerrados: la misma
+        # forma que tienen los datos reales, para que la vista se comporte
+        # igual en demo.
+        return [(periodo_desde_fecha(hoy - pd.DateOffset(months=i)),
+                 "03" if i == 0 else "01",
+                 "No Presentado" if i == 0 else "Presentado")
                 for i in range(12)]
 
     datos = _get(URL_PERIODOS.format(cod_libro=COD_LIBRO_RCE),
                  obtener_token()).json()
     registros = datos if isinstance(datos, list) else datos.get("registros", [])
-    periodos = [str(p.get("perTributario"))
-                for reg in registros
-                for p in (reg.get("lisPeriodos") or [])
-                if p.get("perTributario")]
-    return sorted(set(periodos), reverse=True)
+    filas = [(str(p.get("perTributario")),
+              str(p.get("codEstado") or ""),
+              str(p.get("desEstado") or ""))
+             for reg in registros
+             for p in (reg.get("lisPeriodos") or [])
+             if p.get("perTributario")]
+    # Un período podría venir repetido entre ejercicios: gana el primero.
+    vistos, salida = set(), []
+    for per, cod, des in sorted(filas, reverse=True):
+        if per not in vistos:
+            vistos.add(per)
+            salida.append((per, cod, des))
+    return salida
+
+
+def periodos_disponibles():
+    """Períodos `yyyymm` habilitados, del más reciente al más viejo."""
+    return [p for p, _, _ in periodos_con_estado()]
+
+
+def periodos_a_consultar(fecha_ini, fecha_fin, disponibles):
+    """Períodos que hay que pedir para cubrir el rango POR FECHA DE EMISIÓN.
+
+    No alcanza con el período del mes: un comprobante emitido en junio
+    puede estar anotado en junio, o seguir pendiente y aparecer recién en
+    la propuesta del mes abierto. Medido contra datos reales (RUC
+    20605204300): de los comprobantes emitidos en julio 2026, 323 estaban
+    en el período 202607 (Presentado) y otros 88 —DISTINTOS, cero
+    solapamiento por `codCar`— sólo aparecían en la propuesta de 202608.
+    Consultar un solo período deja agujeros en cualquiera de los dos
+    sentidos.
+
+    Por eso se piden todos los períodos desde el del `fecha_ini` hasta el
+    más reciente disponible: es la ventana donde puede estar anotado algo
+    emitido dentro del rango.
+    """
+    if not disponibles or fecha_ini is None or fecha_fin is None:
+        return []
+    desde = periodo_desde_fecha(min(pd.Timestamp(fecha_ini),
+                                    pd.Timestamp(fecha_fin)))
+    return sorted([p for p in disponibles if p >= desde], reverse=True)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def obtener_comprobantes_rango(fecha_ini, fecha_fin, _progreso=None):
+    """Comprobantes EMITIDOS dentro del rango, uniendo los períodos que hagan
+    falta y marcando la situación de cada uno.
+
+    Devuelve el DataFrame canónico más dos columnas:
+      · `periodo_registro` — en qué período tributario lo tiene SUNAT.
+      · `situacion` — "Registrado" si ese período ya está Presentado,
+        "Pendiente" si sigue abierto. Un "Pendiente" es una compra que
+        SUNAT ve y todavía no está anotada: crédito fiscal sin tomar.
+
+    El filtro final es por `fecha_emision`, que es la fecha que le importa
+    al negocio — y la que ordena el resto de los reportes de la app.
+    """
+    estados = {p: cod for p, cod, _ in periodos_con_estado()}
+    periodos = periodos_a_consultar(fecha_ini, fecha_fin, list(estados))
+    if not periodos:
+        return registros_a_df([])
+
+    partes = []
+    for i, per in enumerate(periodos):
+        if _progreso:
+            _progreso(i / len(periodos))
+        try:
+            d = obtener_comprobantes(per)
+        except Exception:
+            # Un período que falla no puede tumbar la vista entera: se
+            # sigue con los demás y el usuario ve lo que sí se pudo traer.
+            continue
+        if d.empty:
+            continue
+        d = d.copy()
+        d["periodo_registro"] = per
+        d["situacion"] = ("Registrado" if estados.get(per) == "01"
+                          else "Pendiente")
+        partes.append(d)
+
+    if not partes:
+        return registros_a_df([])
+
+    df = pd.concat(partes, ignore_index=True)
+    # Mismo criterio de deduplicación que dentro de un período (`codCar` es
+    # único por anotación). Entre períodos no debería haber repetidos —se
+    # verificó: cero solapamiento— pero si SUNAT llegara a devolver uno en
+    # dos sitios, gana el "Registrado": es el estado más definitivo.
+    df = (df.sort_values("situacion")            # "Pendiente" < "Registrado"
+            .drop_duplicates(subset="car", keep="last"))
+
+    ini = pd.Timestamp(fecha_ini).normalize()
+    fin = pd.Timestamp(fecha_fin).normalize() + pd.Timedelta(days=1)
+    df = df[(df["fecha_emision"] >= ini) & (df["fecha_emision"] < fin)]
+    return df.sort_values("fecha_emision").reset_index(drop=True)
 
 
 # ===========================================================================

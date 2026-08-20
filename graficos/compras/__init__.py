@@ -215,10 +215,12 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         return
 
     # Documentos SUNAT: los comprobantes que los proveedores emitieron hacia
-    # nuestro RUC, traídos del SIRE. Recibe `d` solo para sugerir el período
-    # tributario; su dato NO sale del parquet (ver su docstring). Import
-    # local a propósito: arrastra `sunat.py` y, con él, `requests` — no hay
-    # por qué pagarlo al importar Compras si nadie abre esta vista.
+    # nuestro RUC, traídos del SIRE. `d`/`col_fecha` van reservados para el
+    # cruce contra el parquet de Compras (ver docstring de
+    # renderizar_documentos_sunat); hoy el dato mostrado sale entero de
+    # SUNAT. Import local a propósito: arrastra `sunat.py` y, con él,
+    # `requests` — no hay por qué pagarlo al importar Compras si nadie abre
+    # esta vista.
     if graf == "Documentos SUNAT":
         from graficos.compras.documentos_sunat import renderizar_documentos_sunat
         with st.container(key="compras_sunat_drill_wrap"):

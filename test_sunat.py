@@ -168,6 +168,36 @@ ok(len({r["codCar"] for r in _crudo}) == 323,
 _df_dedup = sunat.registros_a_df(list({r["codCar"]: r for r in _crudo}.values()))
 ok(len(_df_dedup) == 323, "registros_a_df sobre lo deduplicado da 323 filas")
 
+# ── Selección de períodos por rango de fechas ──────────────────────────────
+print("\n── periodos_a_consultar (cubrir un rango por fecha de emisión) ──")
+# No alcanza con el período del mes: un comprobante emitido en julio puede
+# estar anotado en julio O seguir pendiente y aparecer en la propuesta del
+# mes abierto. Medido contra datos reales (RUC 20605204300): 290 de julio
+# en el período 202607 y otros 88 DISTINTOS en 202608 — cero solapamiento
+# por codCar. Por eso se piden todos los períodos desde el del inicio del
+# rango hasta el más reciente.
+_disp = ["202608", "202607", "202606", "202605", "202604"]
+ok(sunat.periodos_a_consultar(pd.Timestamp("2026-07-01"),
+                              pd.Timestamp("2026-07-31"), _disp)
+   == ["202608", "202607"],
+   "un mes cerrado pide también el período abierto (donde viven los pendientes)")
+ok(sunat.periodos_a_consultar(pd.Timestamp("2026-05-01"),
+                              pd.Timestamp("2026-06-30"), _disp)
+   == ["202608", "202607", "202606", "202605"],
+   "un rango de 2 meses pide desde su inicio hasta el más reciente")
+ok(sunat.periodos_a_consultar(pd.Timestamp("2026-08-01"),
+                              pd.Timestamp("2026-08-31"), _disp) == ["202608"],
+   "el mes en curso pide solo su período")
+ok(sunat.periodos_a_consultar(None, None, _disp) == [],
+   "sin rango no pide nada (no revienta)")
+ok(sunat.periodos_a_consultar(pd.Timestamp("2026-07-01"),
+                              pd.Timestamp("2026-07-31"), []) == [],
+   "sin períodos disponibles no pide nada")
+# El orden de los argumentos no debe importar: el rango se normaliza.
+ok(sunat.periodos_a_consultar(pd.Timestamp("2026-07-31"),
+                              pd.Timestamp("2026-07-01"), _disp)
+   == ["202608", "202607"], "rango invertido da lo mismo")
+
 # ── Modo demo ──────────────────────────────────────────────────────────────
 print("\n── modo demo ──")
 d1 = sunat._datos_demo("202608")

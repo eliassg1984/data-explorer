@@ -10,11 +10,14 @@ Es el único drill de Compras cuyo dato NO sale del parquet de R2: lo trae
     —eso es taxonomía nuestra, del maestro de productos— y el registro es
     por DOCUMENTO, no por línea de producto. Filtrar por familia acá daría
     un total que no cuadra con ningún papel. La franja de arriba lo dice.
-  · **El eje temporal es el PERÍODO TRIBUTARIO**, no el rango de fechas.
-    SUNAT cierra por mes; un rango del 15/01 al 03/03 son tres períodos.
-    El selector se preselecciona con el período del rango activo del
-    reporte (`_periodo_sugerido`) para que abrir la vista no obligue a
-    elegir a mano lo que ya se estaba mirando.
+  · **Se ordena por FECHA DE EMISIÓN**, como el resto del reporte — no
+    por período tributario. SUNAT razona por período (cierra por mes) y
+    ahí está la trampa: un comprobante emitido en julio puede estar
+    anotado en el período de julio O seguir pendiente y aparecer recién
+    en la propuesta del mes abierto. Son conjuntos DISTINTOS (medido: 290
+    y 88, cero solapamiento), así que consultar un solo período deja
+    agujeros. `sunat.obtener_comprobantes_rango` une los períodos que
+    hagan falta y recién después filtra por fecha de emisión.
 
 LO QUE SE VE Y LO QUE SE PUEDE BAJAR
 ------------------------------------
@@ -28,35 +31,21 @@ otra tiene consecuencias contables.
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from st_aggrid import AgGrid, GridOptionsBuilder
+from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 import sunat
+from estado_rango import clave_rango
 from tema import (
-    ACENTO, ACENTO_TEXTO, GRIS_BORDE, GRIS_TEXTO, LAVANDA_FONDO,
-    TEXTO_PRINCIPAL,
+    ACENTO, ACENTO_TEXTO, ADVERTENCIA_TEXTO, GRIS_BORDE, GRIS_TEXTO,
+    LAVANDA_FONDO, TEXTO_PRINCIPAL,
 )
 from graficos.base import _compras_layout, _compras_truncar
 from graficos import alturas
 from tablas._css import _css_grid
 
 
-def _periodo_sugerido(d, col_fecha):
-    """Período `yyyymm` del rango que el reporte tiene activo.
-
-    Sale de la fecha MÁXIMA de los datos ya filtrados: es el mes que el
-    usuario está mirando. None si no hay columna de fecha o viene vacía —
-    ahí manda el período más reciente que ofrezca SUNAT.
-    """
-    if not col_fecha or col_fecha not in d.columns:
-        return None
-    fechas = pd.to_datetime(d[col_fecha], errors="coerce").dropna()
-    if fechas.empty:
-        return None
-    return sunat.periodo_desde_fecha(fechas.max())
-
-
 def _kpis(df):
-    """Tira compacta de totales del período, para la fila de controles.
+    """Tira compacta de totales del rango, para la fila de controles.
 
     NO son `st.metric`: cuatro métricas nativas ocupan 91px de alto y en
     la columna de ~430px que le toca acá (al lado de período/vista/⟳)
@@ -75,15 +64,30 @@ def _kpis(df):
                 f'<b style="color:{TEXTO_PRINCIPAL};font-weight:600;">{valor}</b>'
                 f'<span style="color:{GRIS_TEXTO};"> {etiqueta}</span></span>')
 
+    partes = [
+        dato(f"{len(df):,}", "docs"),
+        dato(f"S/ {total:,.2f}", "total"),
+        dato(f"S/ {igv:,.2f}", "IGV"),
+        dato(f"{provs:,}", "proveedores"),
+    ]
+    # Los pendientes solo se nombran si los hay: un "0 pendientes" fijo
+    # gasta ancho en la fila de controles y no dice nada. Van en ámbar
+    # porque son plata — crédito fiscal que todavía no se tomó.
+    n_pend = int((df.get("situacion") == "Pendiente").sum()) if "situacion" in df else 0
+    if n_pend:
+        mto_pend = float(pd.to_numeric(
+            df.loc[df["situacion"] == "Pendiente", "total"], errors="coerce").sum())
+        partes.append(
+            f'<span style="white-space:nowrap;color:{ADVERTENCIA_TEXTO};" '
+            f'title="Comprobantes que SUNAT ve pero que aún no están '
+            f'anotados en un registro presentado">'
+            f'<b style="font-weight:600;">{n_pend:,}</b> pendientes '
+            f'(S/ {mto_pend:,.2f})</span>')
+
     st.markdown(
         '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;'
         'justify-content:flex-end;font-size:12.5px;height:38px;">'
-        + f'<span style="color:{GRIS_BORDE};">·</span>'.join([
-            dato(f"{len(df):,}", "docs"),
-            dato(f"S/ {total:,.2f}", "total"),
-            dato(f"S/ {igv:,.2f}", "IGV"),
-            dato(f"{provs:,}", "proveedores"),
-        ])
+        + f'<span style="color:{GRIS_BORDE};">·</span>'.join(partes)
         + '</div>',
         unsafe_allow_html=True,
     )
@@ -140,6 +144,7 @@ def _tabla(df):
         "Proveedor": df.get("proveedor", ""),
         "RUC": df.get("ruc_proveedor", ""),
         "Total": pd.to_numeric(df.get("total"), errors="coerce"),
+        "Situación": df.get("situacion", ""),
     })
 
     gb = GridOptionsBuilder.from_dataframe(tv)
@@ -154,6 +159,15 @@ def _tabla(df):
                         valueFormatter="'S/ ' + "
                         "Number(value).toLocaleString('es-PE',"
                         "{minimumFractionDigits:2, maximumFractionDigits:2})")
+    # «Pendiente» en ámbar: no es un error, es una compra que SUNAT ve y
+    # todavía no está anotada — o sea, crédito fiscal sin tomar. Merece
+    # saltar a la vista sin gritar como un rojo de error.
+    gb.configure_column(
+        "Situación", width=105,
+        cellStyle=JsCode(
+            "function(p){ return p.value === 'Pendiente' "
+            "? {'color':'%s','fontWeight':'600'} : {'color':'%s'}; }"
+            % (ADVERTENCIA_TEXTO, GRIS_TEXTO)))
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     gb.configure_grid_options(rowHeight=30, headerHeight=32)
 
@@ -269,8 +283,12 @@ def _panel_documento(doc):
 def renderizar_documentos_sunat(d, col_fecha):
     """Punto de entrada del drill. Lo llama `graficos/compras/__init__.py`.
 
-    `d` solo se usa para SUGERIR el período (ver `_periodo_sugerido`); los
-    datos que se muestran salen enteros de SUNAT.
+    `d` y `col_fecha` (el parquet de Compras y su columna de fecha) están
+    reservados sin usar TODAVÍA: son la entrada natural para cruzar el
+    registro de SUNAT contra lo que el propio sistema tiene cargado —
+    ver el hallazgo en arquitectura.md regla #141 (77% de match verificado
+    entre ambas fuentes, por serie-número). Hasta que se implemente ese
+    cruce, todo lo que se muestra acá sale entero de SUNAT.
 
     LOS CONTROLES VIVEN DENTRO DE LA TARJETA IZQUIERDA, no en una franja
     aparte arriba de las dos columnas — mismo criterio que el selector "La
@@ -284,72 +302,79 @@ def renderizar_documentos_sunat(d, col_fecha):
     Proveedor) y su borde inferior quedaba en 990 con un viewport de
     900 — 90px inalcanzables, sin error ni aviso.
     """
-    try:
-        periodos = sunat.periodos_disponibles()
-    except Exception as e:
-        st.error(f"No se pudo consultar los períodos habilitados: {e}")
+    rango = st.session_state.get(clave_rango("Compras", usa_carga_rango=False))
+    if not rango or len(rango) < 2 or rango[0] is None or rango[1] is None:
+        st.info("Elegí un rango de fechas en la franja de arriba.")
         return
-    if not periodos:
-        st.info("SUNAT no devolvió períodos habilitados para este RUC.")
-        return
-
-    sugerido = _periodo_sugerido(d, col_fecha)
-    idx = periodos.index(sugerido) if sugerido in periodos else 0
+    f_ini, f_fin = rango[0], rango[1]
 
     col_izq, col_der = st.columns([1.6, 1])
 
     with col_izq:
         with st.container(border=True, key="sunat_card_izq"):
-            c_per, c_vista, c_act, c_kpi = st.columns([1.1, 1.4, 0.7, 3.2])
-            with c_per:
-                periodo = st.selectbox(
-                    "Período", periodos, index=idx, key="sunat_periodo",
-                    format_func=lambda p: f"{p[4:]}/{p[:4]}",
-                    help="Los chips de Familia/Subfamilia no aplican acá: "
-                         "el registro de SUNAT es por documento, no por "
-                         "producto.",
-                )
+            c_vista, c_sit, c_act, c_kpi = st.columns([1.4, 1.5, 0.7, 2.8])
             with c_vista:
                 vista = st.radio("Ver", ["Por fecha", "Por proveedor"],
                                  horizontal=True, key="sunat_vista",
                                  label_visibility="collapsed")
+            with c_sit:
+                situacion = st.radio(
+                    "Situación", ["Todos", "Registrados", "Pendientes"],
+                    horizontal=True, key="sunat_situacion",
+                    label_visibility="collapsed",
+                    help="«Pendiente» = SUNAT ve la compra pero todavía no "
+                         "está anotada en un registro presentado. Es crédito "
+                         "fiscal sin tomar.",
+                )
             with c_act:
                 _ayuda = "Volver a consultar a SUNAT"
                 if not sunat.secrets_disponibles():
                     _ayuda += (". Sin credenciales configuradas: se "
-                              "muestran datos de ejemplo (agregá "
-                              "SUNAT_RUC, SUNAT_USUARIO_SOL, "
-                              "SUNAT_CLAVE_SOL, SUNAT_CLIENT_ID y "
-                              "SUNAT_CLIENT_SECRET a los secrets).")
-                # Limpia la caché de `obtener_comprobantes` (TTL 1h): es la
-                # única forma de forzar una consulta nueva antes de que
-                # expire.
+                               "muestran datos de ejemplo (agregá "
+                               "SUNAT_RUC, SUNAT_USUARIO_SOL, "
+                               "SUNAT_CLAVE_SOL, SUNAT_CLIENT_ID y "
+                               "SUNAT_CLIENT_SECRET a los secrets).")
+                # Limpia las dos cachés (la del rango y la de cada período):
+                # la del rango sola devolvería lo mismo, porque se apoya en
+                # la de período.
                 if st.button("⟳", key="sunat_actualizar", help=_ayuda,
                              use_container_width=True):
                     sunat.obtener_comprobantes.clear()
+                    sunat.obtener_comprobantes_rango.clear()
+                    sunat.periodos_con_estado.clear()
                     st.rerun()
 
             with st.spinner("Consultando el registro de compras en SUNAT…"):
                 try:
-                    df = sunat.obtener_comprobantes(periodo)
+                    df = sunat.obtener_comprobantes_rango(f_ini, f_fin)
                 except Exception as e:
-                    st.error(f"No se pudo obtener la propuesta de SUNAT: {e}")
+                    st.error(f"No se pudo consultar a SUNAT: {e}")
                     return
 
             if df is None or df.empty:
-                st.info(f"SUNAT no tiene comprobantes anotados en "
-                        f"{periodo[4:]}/{periodo[:4]}.")
+                st.info("SUNAT no tiene comprobantes emitidos hacia tu RUC "
+                        "en el rango elegido.")
                 return
 
             with c_kpi:
                 _kpis(df)
 
-            _grafico(df, vista)
-            doc = _tabla(df)
+            # El filtro se aplica DESPUÉS de los KPIs a propósito: los
+            # totales de arriba describen el rango completo, y el filtro
+            # sirve para mirar un subconjunto sin perder la referencia.
+            vis = df if situacion == "Todos" else df[
+                df["situacion"] == situacion[:-1]]   # "Registrados"→"Registrado"
+            if vis.empty:
+                st.info(f"No hay comprobantes «{situacion.lower()}» en el rango.")
+                return
+
+            _grafico(vis, vista)
+            doc = _tabla(vis)
             st.download_button(
-                "⬇ Descargar CSV del período",
-                data=df.to_csv(index=False).encode("utf-8-sig"),
-                file_name=f"sunat_compras_{periodo}.csv",
+                "⬇ Descargar CSV",
+                data=vis.to_csv(index=False).encode("utf-8-sig"),
+                file_name=(f"sunat_compras_{pd.Timestamp(f_ini):%Y%m%d}"
+                           f"_{pd.Timestamp(f_fin):%Y%m%d}.csv"),
                 mime="text/csv", key="sunat_dl_csv",
             )
 
