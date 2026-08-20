@@ -126,24 +126,39 @@ def _iniciar_navegador(p, headless: bool = True):
     return navegador, contexto, pagina
 
 
+URL_LOGIN_SOL = (
+    "https://api-seguridad.sunat.gob.pe/v1/clientessol/"
+    "4f3b88b3-d9d6-402a-b85d-6a0bc857746a/oauth2/loginMenuSol"
+    "?lang=es-PE&showDni=true&showLanguages=false"
+    "&originalUrl=https://e-menu.sunat.gob.pe/cl-ti-itmenu/"
+    "AutenticaMenuInternet.htm"
+    "&state=rO0ABXNyABFqYXZhLnV0aWwuSGFzaE1hcAUH2sHDFmDRAwACRgAKbG9hZEZhY3RvckkACXRo"
+    "cmVzaG9sZHhwP0AAAAAAAAx3CAAAABAAAAADdAADZXhlcHQABnBhcmFtc3QASyomKiYvY2wtdGktaXRt"
+    "ZW51L01lbnVJbnRlcm5ldC5odG0mYjY0ZDI2YThiNWFmMDkxOTIzYjIzYjY0MDdhMWMxZGI0MWU3MzNh"
+    "NnQABGV4ZWNweA=="
+)
+"""Confirmada CORRECTA en vivo (2026-08-20): un usuario copió esta misma
+URL, carácter por carácter, desde una sesión real recién logueada en su
+navegador de todos los días — así que el `state` no es un nonce de una
+sola vez, es un valor fijo que SUNAT arma siempre igual para este flujo.
+La primera versión de este script sospechaba de la URL y la cambió por
+una que resultó peor (regla #142 de arquitectura.md); esto la revierte."""
+
+
 def _login(pagina, ruc, usuario, clave) -> None:
     """Login en SUNAT SOL.
 
-    Entra por la puerta pública normal — la misma página a la que llega
-    cualquier persona buscando "SUNAT operaciones en línea" — y deja que
-    el PROPIO portal arme su cadena de redirects hasta el formulario,
-    generando su propia sesión/`state` desde cero.
-
-    La primera versión de este script pegaba directo a una URL de login
-    con `state` COPIADO de una sesión ajena (capturada en el proyecto de
-    terceros del que se adaptó este flujo): SUNAT la rechazaba con
-    "Error en la invocación" — ese `state` es un nonce de una sola
-    sesión, no reutilizable entre corridas ni entre cuentas. Verificado
-    en vivo (2026-08-20): con la URL hardcodeada, SUNAT nunca llega a
-    mostrar el formulario.
+    Visita primero el sitio público (como lo haría una persona) y RECIÉN
+    desde ahí navega a la URL de login, con `referer` explícito — para
+    que el pedido no llegue "de la nada", como sí pasa al saltar directo
+    a una URL profunda sin haber estado antes en ningún lado del dominio.
+    Sospecha en investigación (2026-08-20): con la URL confirmada CORRECTA
+    (ver `URL_LOGIN_SOL`), lo que quedaba fallando en vivo apuntaba a
+    detección de automatización, no a un dato mal armado.
     """
     _log("Accediendo al login de SUNAT…")
-    pagina.goto("https://e-menu.sunat.gob.pe/cl-ti-itmenu/AutenticaMenuInternet.htm")
+    pagina.goto("https://www.sunat.gob.pe/", wait_until="domcontentloaded")
+    pagina.goto(URL_LOGIN_SOL, referer="https://www.sunat.gob.pe/")
     pagina.wait_for_selector("#txtRuc", timeout=30000)
     pagina.fill("#txtRuc", ruc)
     pagina.fill("#txtUsuario", usuario)
