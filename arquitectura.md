@@ -6133,3 +6133,39 @@ salvo `icono`):
        (acá, un conteo de filas) que daba 6 en vez de 7. Se corrigió
        trackeando la tripleta completa, que es la clave real que arma
        la agrupación.
+
+     **Addendum 2 (mismo día, otra ronda): el parquet sumó `TOTAL
+     DOCUMENTO`, y el "Total" del cruce estaba comparando contra un
+     proxy.** El usuario también agregó `TOTAL DOCUMENTO` — antes no
+     existía, y `total_pq` salía de sumar `VALOR_BRUTO_COMPRA_MN` (un
+     valor POR LÍNEA de producto) para todas las líneas del documento.
+     Es una aproximación razonable la mayoría de las veces, pero no el
+     total real: es una reconstrucción, sujeta a redondeo y a que ninguna
+     línea falte.
+
+     `TOTAL DOCUMENTO` es un campo de CABECERA — se repite igual en cada
+     línea del mismo documento (0 de 515 documentos con más de un valor
+     distinto, verificado agrupando por documento+RUC+proveedor en una
+     ventana de 60 días sobre datos reales de ABRASA) —, así que
+     `_parquet_agrupado_por_documento` lo agrega con `"first"`, nunca
+     `"sum"`: sumarlo multiplicaría el total por la cantidad de líneas del
+     documento (`COL_TOTAL_PARQUET`). `base_pq` sigue sumando
+     `VALOR_COMPRA`, que sí es por línea — no cambia.
+
+     Medido el efecto sobre el mismo cierre de julio 2026 (ABRASA): los 4
+     estados no se movieron (154/85/139/33) y la suma de diferencias de
+     "Diferencia" tampoco (S/335,85) — la vieja reconstrucción por línea
+     ya era casi exacta cuando el cruce está bien acotado por
+     fecha+RUC+proveedor (ver arriba). El cambio no es cosmético igual:
+     es la fuente correcta ahora que existe, deja de depender de que
+     todas las líneas de un documento estén cargadas y sin ese error de
+     redondeo acumulado, y sin él un documento con una línea faltante
+     habría mostrado una "Diferencia" que no es tal.
+
+     Trae red de seguridad: si `TOTAL DOCUMENTO` no está en el parquet
+     (columnas viejas, entorno sin propagar), `_parquet_agrupado_por_documento`
+     cae al proxy de siempre (`sum(VALOR_BRUTO_COMPRA_MN)`) en vez de
+     reventar. Cubierto en `test_graficos.py`: un caso con dos líneas del
+     mismo documento donde la suma por línea (70) y el total real (59)
+     **difieren a propósito**, para que el test falle si algún día alguien
+     "simplifica" la agregación de vuelta a `"sum"`.

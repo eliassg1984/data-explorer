@@ -50,6 +50,13 @@ siempre se compara `.strip()`. Con RUC de los dos lados, el emparejamiento
 ya no depende casi nunca de adivinar por nombre — eso queda como red de
 seguridad para cuando una fila puntual no tenga RUC utilizable.
 
+El total del lado parquet sale de `TOTAL DOCUMENTO` (misma tanda,
+2026-08-20, ver `COL_TOTAL_PARQUET`) — un campo de CABECERA que se agrega
+con `"first"`, no `"sum"`. Antes de que existiera, `total_pq` salía de
+sumar `VALOR_BRUTO_COMPRA_MN` línea por línea: una aproximación razonable
+casi siempre, pero una reconstrucción al fin, no el total real del
+documento.
+
 La clave de cruce (`serie-número`) NO es única en todo el historial: es
 el correlativo de CADA proveedor, y miles de emisores reusan "E001" como
 su primera serie electrónica. Por eso `_parquet_agrupado_por_documento`
@@ -118,6 +125,26 @@ de 11) — verificado contando longitudes sobre el parquet real. Por eso
 `_parquet_agrupado_por_documento` siempre le aplica `.str.strip()`, nunca
 se compara crudo."""
 
+COL_TOTAL_PARQUET = "TOTAL DOCUMENTO"
+"""Nombre real de la columna de total del documento en `compras.parquet`
+(agregada 2026-08-20, junto con `COL_RUC_PARQUET` — no existía antes).
+Es un campo de CABECERA: se repite igual en cada línea de producto del
+mismo documento (0 documentos con más de un valor distinto, verificado
+agrupando por documento+RUC+proveedor dentro de una ventana acotada), así
+que se agrega con `"first"`, nunca `"sum"` — sumarlo multiplicaría el
+total por la cantidad de líneas.
+
+Antes de que existiera, el total del cruce salía de sumar
+`VALOR_BRUTO_COMPRA_MN` (un valor POR LÍNEA) — una aproximación, no el
+total real. Medido sin acotar por fecha/RUC/proveedor daba diferencias de
+hasta S/32.915 contra `TOTAL DOCUMENTO`, pero eso resultó ser en su
+mayoría el mismo problema de colisión de `serie-número` entre documentos
+distintos que ya describe `_parquet_agrupado_por_documento` — acotado
+correctamente (ventana de 60 días, ABRASA, agosto 2026) la diferencia caía
+a 0 en 514 de 515 grupos. Aun así, `TOTAL DOCUMENTO` es la fuente
+correcta ahora que existe: es el campo real de SUNAT en el propio
+documento, no una reconstrucción."""
+
 
 def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin):
     """Compras del parquet agrupadas a una fila por (documento, RUC),
@@ -163,11 +190,23 @@ def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin):
     dd["ruc_pq"] = (dd[COL_RUC_PARQUET].astype(str).str.strip()
                      if COL_RUC_PARQUET in dd.columns else "")
     dd["_fecha"] = fechas.loc[dd.index]
-    g = (dd.groupby(["documento", "ruc_pq", "NOMBRE_PROVEEDOR"], as_index=False)
-           .agg(base_pq=("VALOR_COMPRA", "sum"),
-                total_pq=("VALOR_BRUTO_COMPRA_MN", "sum"),
-                fecha_pq=("_fecha", "first"))
-           .rename(columns={"NOMBRE_PROVEEDOR": "proveedor_pq"}))
+    # total_pq: "first", no "sum" — TOTAL DOCUMENTO es de cabecera (se
+    # repite en cada línea del documento). base_pq sí se suma: VALOR_COMPRA
+    # es por línea de producto. Ver el docstring de COL_TOTAL_PARQUET.
+    if COL_TOTAL_PARQUET in dd.columns:
+        g = (dd.groupby(["documento", "ruc_pq", "NOMBRE_PROVEEDOR"], as_index=False)
+               .agg(base_pq=("VALOR_COMPRA", "sum"),
+                    total_pq=(COL_TOTAL_PARQUET, "first"),
+                    fecha_pq=("_fecha", "first"))
+               .rename(columns={"NOMBRE_PROVEEDOR": "proveedor_pq"}))
+    else:
+        # Red de seguridad si algún día falta la columna: la suma por
+        # línea es una aproximación, no el total real (ver docstring).
+        g = (dd.groupby(["documento", "ruc_pq", "NOMBRE_PROVEEDOR"], as_index=False)
+               .agg(base_pq=("VALOR_COMPRA", "sum"),
+                    total_pq=("VALOR_BRUTO_COMPRA_MN", "sum"),
+                    fecha_pq=("_fecha", "first"))
+               .rename(columns={"NOMBRE_PROVEEDOR": "proveedor_pq"}))
     return g
 
 
