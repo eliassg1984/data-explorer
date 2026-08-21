@@ -1,0 +1,113 @@
+# Sincroniza el REGISTRO del SIRE Compras (proceso "A") a R2.
+#
+# Por qué acá y no en una máquina: no necesita navegador —son ~4 minutos de
+# API REST contra SUNAT— así que no hace falta ningún equipo prendido, y el
+# código no queda en el servidor compartido de la empresa. Ver
+# DESPLIEGUE_SUNAT.md.
+#
+# El proceso "B" (los PDF/XML originales) NO puede correr acá: necesita
+# Chromium ~2 h por noche, y desde un datacenter es mucho más probable que
+# SUNAT lo marque como bot. Ese vive en el servidor, como archivo suelto.
+
+name: Registro SUNAT a R2
+
+on:
+  schedule:
+    # 08:30 UTC = 03:30 en Perú (UTC-5, sin horario de verano).
+    # OJO: GitHub apaga los workflows programados si el repo pasa 60 días
+    # sin actividad. Avisa por mail antes de hacerlo.
+    - cron: '30 8 * * *'
+  # Permite lanzarlo a mano desde la pestaña Actions, sin esperar al horario.
+  workflow_dispatch:
+
+jobs:
+  sincronizar:
+    runs-on: ubuntu-latest
+    # La corrida real tarda ~4 min; 30 es techo de seguridad para que una
+    # llamada colgada contra SUNAT no deje el job corriendo indefinidamente.
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Comprobar que estén los 9 secrets
+        # Se chequea ANTES de instalar credenciales a medias: sin esto, un
+        # secret faltante hace fallar al script con un error de SUNAT que no
+        # se parece en nada a "falta configuración".
+        env:
+          SUNAT_RUC: ${{ secrets.SUNAT_RUC }}
+          SUNAT_USUARIO_SOL: ${{ secrets.SUNAT_USUARIO_SOL }}
+          SUNAT_CLAVE_SOL: ${{ secrets.SUNAT_CLAVE_SOL }}
+          SUNAT_CLIENT_ID: ${{ secrets.SUNAT_CLIENT_ID }}
+          SUNAT_CLIENT_SECRET: ${{ secrets.SUNAT_CLIENT_SECRET }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
+          R2_SECRET_KEY: ${{ secrets.R2_SECRET_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          faltan=""
+          for nombre in SUNAT_RUC SUNAT_USUARIO_SOL SUNAT_CLAVE_SOL \
+                        SUNAT_CLIENT_ID SUNAT_CLIENT_SECRET \
+                        R2_ACCOUNT_ID R2_ACCESS_KEY R2_SECRET_KEY R2_BUCKET; do
+            if [ -z "${!nombre}" ]; then faltan="$faltan $nombre"; fi
+          done
+          if [ -n "$faltan" ]; then
+            echo "Faltan estos secrets en Settings > Secrets and variables > Actions:"
+            echo "  $faltan"
+            exit 1
+          fi
+          echo "Los 9 secrets están presentes."
+
+      - name: Escribir secrets.toml
+        # El proyecto lee su configuración con `st.secrets`, que sale de este
+        # archivo. Vive sólo en el runner efímero de GitHub y se destruye con
+        # él; nunca se commitea (está en .gitignore).
+        env:
+          SUNAT_RUC: ${{ secrets.SUNAT_RUC }}
+          SUNAT_USUARIO_SOL: ${{ secrets.SUNAT_USUARIO_SOL }}
+          SUNAT_CLAVE_SOL: ${{ secrets.SUNAT_CLAVE_SOL }}
+          SUNAT_CLIENT_ID: ${{ secrets.SUNAT_CLIENT_ID }}
+          SUNAT_CLIENT_SECRET: ${{ secrets.SUNAT_CLIENT_SECRET }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
+          R2_SECRET_KEY: ${{ secrets.R2_SECRET_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          mkdir -p .streamlit
+          python - <<'PY'
+          import json, os, pathlib, tomllib
+          claves = ["SUNAT_RUC", "SUNAT_USUARIO_SOL", "SUNAT_CLAVE_SOL",
+                    "SUNAT_CLIENT_ID", "SUNAT_CLIENT_SECRET",
+                    "R2_ACCOUNT_ID", "R2_ACCESS_KEY", "R2_SECRET_KEY",
+                    "R2_BUCKET"]
+          # `json.dumps` y no un f-string con comillas a mano: una credencial
+          # que contenga `"` o `\` rompería el TOML, y el síntoma aparecería
+          # recién al leerlo, disfrazado de "falta la credencial". Las
+          # comillas de TOML básico se escapan igual que las de JSON.
+          lineas = [f"{k} = {json.dumps(os.environ[k])}" for k in claves]
+          destino = pathlib.Path(".streamlit/secrets.toml")
+          destino.write_text("\n".join(lineas) + "\n", encoding="utf-8")
+          # Releer y confirmar que las 9 volvieron enteras. Si una credencial
+          # tuviera algo que rompa el formato, mejor fallar acá —con un
+          # mensaje claro— que dos pasos después contra SUNAT.
+          leido = tomllib.loads(destino.read_text(encoding="utf-8"))
+          malas = [k for k in claves if leido.get(k) != os.environ[k]]
+          if malas:
+              raise SystemExit(f"El TOML no conserva: {', '.join(malas)}")
+          print(f"secrets.toml escrito y verificado: {len(claves)} claves.")
+          PY
+
+      - name: Sincronizar el registro a R2
+        # Sale con código 2 si algún período falló y quedó fuera del parquet.
+        # Eso marca el job como fallido a propósito: el parquet se subió pero
+        # está incompleto, y conviene enterarse por el mail de GitHub en vez
+        # de descubrirlo semanas después mirando un total que no cuadra.
+        run: python herramientas/sunat_registro_sync.py
