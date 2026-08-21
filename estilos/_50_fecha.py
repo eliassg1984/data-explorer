@@ -603,6 +603,11 @@ CSS = """    /* ================================================================
        sombra ni esquinas quedaba un rectángulo blanco recortado contra el
        gris — medido en vivo, no a ojo. En Compras se unifican: toda la
        página pasa al blanco de las tarjetas y el recorte desaparece.
+       ACTUALIZADO 2026-08-21: la página sigue blanca, pero las tarjetas
+       ya NO — se les devolvió el gris con `--bg-card-tenue`, o sea el
+       mismo par de tonos de siempre con los papeles cambiados. Esta regla
+       sigue siendo la dueña del fondo de la PÁGINA; el de las tarjetas lo
+       pinta el bloque final de estilos/_80_cards.py.
        Los paneles de abajo (fam_comp / fam_top) NO hicieron falta tocarlos:
        ya eran transparentes y sin sombra desde antes (la regla
        `[class*="st-key-ajuste_graf_card_"] [class*="st-key-chartcard_"]`

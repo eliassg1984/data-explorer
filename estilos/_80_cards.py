@@ -1242,4 +1242,39 @@ CSS = """    /* ================================================================
         padding: 0 !important;
         line-height: 1 !important;
     }
+
+    /* =================================================================== */
+    /* COMPRAS: PÁGINA BLANCA, TARJETAS TENUES                              */
+    /*                                                                       */
+    /* El resto de la app usa el reparto normal: lienzo gris (--bg-primary) */
+    /* y tarjetas blancas recortadas contra él. Compras invirtió la mitad    */
+    /* de eso hace tiempo — toda la página pasó al blanco de las tarjetas    */
+    /* (_50_fecha.py, "4ta vuelta") — y quedó blanco sobre blanco, con la    */
+    /* separación colgando de un hairline de 1px y nada más.                 */
+    /*                                                                       */
+    /* Esto cierra la inversión: la página se queda blanca y el gris pasa a  */
+    /* las tarjetas. Mismo par de tonos de siempre, mismo contraste ya       */
+    /* probado en los otros reportes, con los papeles cambiados.             */
+    /*                                                                       */
+    /* Va al FINAL del módulo a propósito: las reglas de más arriba pintan   */
+    /* estas mismas familias con `background: var(--bg-card) !important`, y  */
+    /* con !important en ambos lados gana la que aparece DESPUÉS (misma      */
+    /* mecánica que el orden de _SECCIONES, ver CLAUDE.md).                  */
+    /*                                                                       */
+    /* Scopeado por el marker `st-key-app_reporte_compras` que inyecta       */
+    /* app.py: las mismas familias existen en Inventario, Salidas, Ventas y  */
+    /* Requerimientos (`ajuste_graf_card_izq_inv`, `..._sal`, ...) y ahí el  */
+    /* reparto normal sigue intacto.                                         */
+    /*                                                                       */
+    /* Lo que NO se toca y es lo que hace que se lea: las superficies de     */
+    /* DATOS siguen blancas — el AgGrid del ranking, el `st.dataframe` de    */
+    /* productos y las fichas `.pb-card` del panel B. Tabla blanca sobre     */
+    /* marco gris es el patrón, no un olvido.                                */
+    /* =================================================================== */
+    :root:has(.st-key-app_reporte_compras) div[class*="st-key-ajuste_graf_card_"],
+    :root:has(.st-key-app_reporte_compras) div[class*="st-key-compras_prov_card_"],
+    :root:has(.st-key-app_reporte_compras) div[class*="st-key-compras_prod_card_"],
+    :root:has(.st-key-app_reporte_compras) div[class*="st-key-sunat_card_"] {
+        background: var(--bg-card-tenue) !important;
+    }
 """

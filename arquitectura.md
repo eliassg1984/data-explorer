@@ -6419,3 +6419,42 @@ salvo `icono`):
      1.7/1 (`compras/__init__.py`) y 1/1 (`volatilidad.py`). El esqueleto de
      la página salta al navegar por el rail. Al unificarlos, ampliar
      `_ARCHIVOS` en la guarda a todo `graficos/compras`.
+
+146. **Compras invierte la figura y el fondo: página blanca, tarjetas
+     tenues.** El resto de la app usa el reparto normal — lienzo
+     `--bg-primary` (#f6f6f8) y tarjetas `--bg-card` (#ffffff) recortadas
+     contra él. Compras había invertido sólo la mitad (regla de la "4ta
+     vuelta" en `estilos/_50_fecha.py`): toda la página pasó al blanco de
+     las tarjetas para que no quedara un rectángulo recortado bajo la
+     franja. El resultado era blanco sobre blanco, con la separación
+     colgando de un hairline de 1px y nada más.
+
+     Desde 2026-08-21 la inversión está completa: la página se queda
+     blanca y el gris pasa a las tarjetas, vía `--bg-card-tenue` en el
+     `:root` de `estilos/_00_base.py`. **Es un alias de `--bg-primary`, no
+     un hex nuevo** — el contraste entre esos dos tonos ya está probado en
+     todos los demás reportes, sólo que al revés. Retocar el tinte de
+     Compras = cambiar esa línea, y sólo esa.
+
+     Tres cosas que no son obvias:
+
+     - **La regla va al FINAL de `_80_cards.py`.** Las familias
+       (`ajuste_graf_card_`, `compras_prov_card_`, `compras_prod_card_`,
+       `sunat_card_`) ya se pintan más arriba en ese mismo módulo con
+       `background: var(--bg-card) !important`. Con `!important` en ambos
+       lados gana la que aparece DESPUÉS — misma mecánica que el orden de
+       `_SECCIONES` (ver CLAUDE.md).
+     - **Scopeado por el marker `st-key-app_reporte_compras`.** Las mismas
+       familias existen en Inventario, Salidas, Ventas y Requerimientos
+       (`ajuste_graf_card_izq_inv`, `..._sal`, ...). Verificado en el
+       navegador: Inventario sigue con página #f6f6f8 y tarjetas #ffffff.
+     - **Las superficies de DATOS se quedan blancas a propósito**: el
+       AgGrid del ranking, el `st.dataframe` de productos y las fichas
+       `.pb-card` del panel B. Tabla blanca sobre marco gris es el patrón
+       (es lo que hace que la tabla resalte), no un olvido.
+
+     Los KPIs de la tarjeta de evolución no hicieron falta tocarlos y vale
+     la pena saber por qué: su fondo es `rgba(113,113,122,.06)`, o sea
+     TRANSLÚCIDO. Sobre blanco daban ~#f7f7f8 y sobre el gris dan ~#eeeef0
+     — el mismo escalón de 8 puntos en los dos casos. Un fondo opaco
+     habría necesitado retoque; uno translúcido sigue al contenedor solo.

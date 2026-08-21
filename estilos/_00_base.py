@@ -13,6 +13,14 @@ CSS = """    <style>
         --bg-secondary: #ffffff;
         --bg-sidebar: #ffffff;      /* sidebar blanco estilo CallAI */
         --bg-card: #ffffff;
+        /* Tarjeta TENUE: el mismo gris que el lienzo, usado al revés.
+           En el resto de la app la página es --bg-primary y las tarjetas
+           blancas; en Compras la página quedó blanca (ver _50_fecha.py) y
+           las tarjetas se separan con este gris. Es un alias a propósito y
+           no un hex nuevo: la relación entre los dos tonos ya está probada
+           en todos los demás reportes, sólo que invertida. Retocar el tinte
+           de Compras = cambiar esta línea. */
+        --bg-card-tenue: var(--bg-primary);
         --bg-hover: #f0edfe;        /* hover lavanda suave */
         --text-primary: #18181d;    /* casi negro */
         --text-secondary: #71717a;
