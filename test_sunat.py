@@ -289,6 +289,50 @@ finally:
 ok(sunat.ARCHIVO_REGISTRO.endswith(".parquet"),
    "ARCHIVO_REGISTRO nombra un parquet (lo comparte el sync)")
 
+# ── Detalle de líneas del XML ──────────────────────────────────────────────
+print("\n── lineas_xml (lo que el parquet NO tiene) ──")
+_XML_FACTURA = b"""<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+ xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+ xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cac:InvoiceLine>
+    <cbc:InvoicedQuantity unitCode="NIU">12.0000</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount>44.58</cbc:LineExtensionAmount>
+    <cac:Item>
+      <cbc:Description>Agua Tonica 150ml</cbc:Description>
+      <cac:SellersItemIdentification><cbc:ID>3400304</cbc:ID></cac:SellersItemIdentification>
+    </cac:Item>
+    <cac:Price><cbc:PriceAmount>3.7150</cbc:PriceAmount></cac:Price>
+  </cac:InvoiceLine>
+</Invoice>"""
+
+_l = sunat.lineas_xml(_XML_FACTURA)
+ok(len(_l) == 1, "encuentra la línea de la factura")
+ok(_l[0]["cantidad"] == 12.0, "lee la cantidad")
+ok(_l[0]["descripcion"] == "Agua Tonica 150ml", "lee la descripción")
+ok(_l[0]["codigo"] == "3400304", "lee el código del proveedor")
+ok(_l[0]["importe"] == 44.58, "lee el importe de la línea")
+ok(_l[0]["precio_unitario"] == 3.715, "lee el precio unitario")
+# El código de unidad crudo (NIU) no le dice nada a nadie en pantalla.
+ok(_l[0]["unidad"] == "unidad", "traduce el código de unidad de SUNAT")
+
+# Las notas de crédito usan otro nombre de nodo. Sin esto, el detalle de
+# una nota de crédito saldría vacío sin ningún error.
+_XML_NC = _XML_FACTURA.replace(b"InvoiceLine", b"CreditNoteLine").replace(
+    b"InvoicedQuantity", b"CreditedQuantity")
+ok(len(sunat.lineas_xml(_XML_NC)) == 1,
+   "también lee CreditNoteLine (notas de crédito)")
+
+# Robustez: esto se llama con lo que haya en R2, sea lo que sea.
+ok(sunat.lineas_xml(b"no soy xml") == [], "un XML corrupto devuelve vacío")
+ok(sunat.lineas_xml(None) == [], "None devuelve vacío")
+ok(sunat.lineas_xml(b"<Invoice/>") == [], "un XML sin líneas devuelve vacío")
+_sin_precio = _XML_FACTURA.replace(
+    b"<cac:Price><cbc:PriceAmount>3.7150</cbc:PriceAmount></cac:Price>", b"")
+ok(sunat.lineas_xml(_sin_precio)[0]["precio_unitario"] is None,
+   "un campo ausente queda en None, no revienta")
+
+
 # ── Pedir un original a demanda ────────────────────────────────────────────
 print("\n── clave_solicitud (contrato con atender_solicitudes_sunat.py) ──")
 _doc_ped = {"ruc_proveedor": "20608300393", "serie": "FA28",

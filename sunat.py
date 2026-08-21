@@ -793,6 +793,118 @@ def originales(doc):
 
 
 # ===========================================================================
+# VER EL ORIGINAL EN PANTALLA
+# ===========================================================================
+# El PDF NO se puede embeber: Chrome no renderiza un `data:application/pdf`
+# dentro de un iframe con `sandbox`, y Streamlit monta todos sus iframes
+# así (probado y descartado el 2026-08-19, ver el docstring de
+# `_ficha_html` en la vista). La salida es renderizarlo a imagen del lado
+# del servidor y mostrar ESO, que además funciona igual en el teléfono.
+
+# Unidades de medida del catálogo 03 de SUNAT. Solo las que aparecen de
+# verdad en comprobantes de compras; el resto se muestra con su código,
+# que es preferible a inventar una traducción.
+_UNIDADES = {
+    "NIU": "unidad", "ZZ": "servicio", "KGM": "kg", "GRM": "g",
+    "LTR": "litro", "MLT": "ml", "MTR": "m", "CMT": "cm",
+    "BX": "caja", "PK": "paquete", "BG": "bolsa", "CA": "lata",
+    "BO": "botella", "TU": "tubo", "SET": "juego", "DZN": "docena",
+    "GLL": "galón", "MTQ": "m³", "MTK": "m²", "HUR": "hora",
+    "DAY": "día", "MON": "mes",
+}
+
+_NS_UBL = {
+    "cac": "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2",
+    "cbc": "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2",
+}
+
+
+def _num_xml(txt):
+    try:
+        return float(txt)
+    except (TypeError, ValueError):
+        return None
+
+
+def lineas_xml(xml_bytes):
+    """Las líneas de detalle de un XML de comprobante → lista de dicts.
+
+    Esto es lo que el parquet del registro NO tiene: qué se compró,
+    cuánto y a qué precio. El registro es por DOCUMENTO; el detalle vive
+    únicamente acá adentro.
+
+    Función pura y tolerante: un XML raro devuelve lista vacía en vez de
+    reventar la pantalla. Las notas de crédito usan `CreditNoteLine` y
+    `CreditedQuantity` en vez de `InvoiceLine`/`InvoicedQuantity`.
+    """
+    import xml.etree.ElementTree as ET
+
+    if not xml_bytes:
+        return []
+    try:
+        raiz = ET.fromstring(xml_bytes)
+    except Exception:
+        return []
+
+    filas = raiz.findall(".//cac:InvoiceLine", _NS_UBL)
+    if not filas:
+        filas = raiz.findall(".//cac:CreditNoteLine", _NS_UBL)
+    if not filas:
+        filas = raiz.findall(".//cac:DebitNoteLine", _NS_UBL)
+
+    salida = []
+    for linea in filas:
+        cant = linea.find("cbc:InvoicedQuantity", _NS_UBL)
+        if cant is None:
+            cant = linea.find("cbc:CreditedQuantity", _NS_UBL)
+        if cant is None:
+            cant = linea.find("cbc:DebitedQuantity", _NS_UBL)
+
+        desc = linea.find("cac:Item/cbc:Description", _NS_UBL)
+        precio = linea.find("cac:Price/cbc:PriceAmount", _NS_UBL)
+        importe = linea.find("cbc:LineExtensionAmount", _NS_UBL)
+        codigo = linea.find("cac:Item/cac:SellersItemIdentification/cbc:ID",
+                            _NS_UBL)
+
+        unidad = (cant.get("unitCode") or "") if cant is not None else ""
+        salida.append({
+            "codigo": (codigo.text or "").strip() if codigo is not None else "",
+            "descripcion": (desc.text or "").strip() if desc is not None else "",
+            "cantidad": _num_xml(cant.text) if cant is not None else None,
+            "unidad": _UNIDADES.get(unidad.upper(), unidad),
+            "precio_unitario": _num_xml(precio.text) if precio is not None else None,
+            "importe": _num_xml(importe.text) if importe is not None else None,
+        })
+    return salida
+
+
+@st.cache_data(ttl=1800, show_spinner=False, max_entries=20)
+def paginas_pdf(pdf_bytes, escala=2):
+    """El PDF → lista de PNG (bytes), una por página.
+
+    Cacheado y con `max_entries` acotado a propósito: cada página son
+    ~350 KB de PNG, así que sin tope la caché de un usuario que hojea
+    muchos comprobantes crecería sin control.
+    """
+    if not pdf_bytes:
+        return []
+    try:
+        import pypdfium2 as pdfium
+    except ImportError:
+        return []
+    try:
+        doc = pdfium.PdfDocument(io.BytesIO(pdf_bytes))
+        salida = []
+        for pagina in doc:
+            buf = io.BytesIO()
+            pagina.render(scale=escala).to_pil().save(buf, format="PNG")
+            salida.append(buf.getvalue())
+        return salida
+    except Exception:
+        return []
+
+
+# ===========================================================================
 # PEDIR UN ORIGINAL A DEMANDA
 # ===========================================================================
 # La corrida nocturna baja de lo más nuevo hacia atrás y tarda semanas en

@@ -10,3 +10,8 @@ streamlit-option-menu>=0.3.6
 boto3>=1.34.0
 groq>=0.11.0
 requests>=2.31.0
+# Renderiza el PDF original a imagen para verlo en pantalla: Chrome no
+# muestra un data:application/pdf dentro de un iframe con sandbox, y
+# Streamlit monta todos sus iframes asi (arquitectura.md regla #139).
+# Wheel puro, sin dependencias de sistema.
+pypdfium2>=4.30,<5

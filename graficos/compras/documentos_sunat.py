@@ -626,7 +626,11 @@ def _tabla(df):
     gb.configure_column("Fecha", width=95)
     gb.configure_column("Tipo", width=110)
     gb.configure_column("Documento", width=125)
-    gb.configure_column("Proveedor", minWidth=190, tooltipField="Proveedor")
+    # `flex=1` en la única columna de largo variable: absorbe todo el ancho
+    # que sobra después de las de tamaño fijo, en vez de dejar un hueco
+    # muerto a la derecha de "Situación".
+    gb.configure_column("Proveedor", minWidth=190, flex=1,
+                        tooltipField="Proveedor")
     gb.configure_column("RUC", width=115)
     gb.configure_column("Total", type=["numericColumn"], width=115,
                         valueFormatter="'S/ ' + "
@@ -713,6 +717,100 @@ def _ficha_html(doc):
     )
 
 
+def _tabla_detalle(lineas):
+    """Las líneas del XML, como tabla. Es lo que el registro NO tiene."""
+    if not lineas:
+        st.caption("El XML no trae líneas de detalle legibles.")
+        return
+    tv = pd.DataFrame(lineas)
+    st.dataframe(
+        tv, use_container_width=True, hide_index=True,
+        column_config={
+            "codigo": st.column_config.TextColumn("Código", width="small"),
+            "descripcion": st.column_config.TextColumn("Descripción",
+                                                       width="large"),
+            "cantidad": st.column_config.NumberColumn("Cant.", format="%.2f",
+                                                      width="small"),
+            "unidad": st.column_config.TextColumn("Unidad", width="small"),
+            "precio_unitario": st.column_config.NumberColumn(
+                "P. unitario", format="S/ %.2f"),
+            "importe": st.column_config.NumberColumn("Importe",
+                                                     format="S/ %.2f"),
+        },
+    )
+
+
+@st.dialog("Original del proveedor", width="large")
+def _visor_original(doc, pdf_bytes, xml_bytes):
+    """Ventana con el comprobante en pantalla y sus descargas.
+
+    EL PDF SE MUESTRA COMO IMAGEN, no embebido: Chrome no renderiza un
+    `data:application/pdf` dentro de un iframe con `sandbox` y Streamlit
+    monta todos sus iframes así (ver `_ficha_html`). Renderizarlo del lado
+    del servidor además funciona igual en el teléfono, donde un visor de
+    PDF embebido es incómodo.
+    """
+    st.markdown(
+        f'<div style="font-size:13px;color:{GRIS_TEXTO};margin:-8px 0 10px;">'
+        f'<b style="color:{TEXTO_PRINCIPAL};">{doc.get("documento", "")}</b>'
+        f' · {_compras_truncar(str(doc.get("proveedor", "")), 52)}</div>',
+        unsafe_allow_html=True)
+
+    lineas = sunat.lineas_xml(xml_bytes) if xml_bytes else []
+    nombres = []
+    if pdf_bytes:
+        nombres.append("📄 Comprobante")
+    if lineas:
+        nombres.append(f"📋 Detalle ({len(lineas)})")
+    if xml_bytes:
+        nombres.append("🧾 XML")
+
+    if not nombres:
+        st.info("No hay nada que mostrar todavía.")
+        return
+
+    for nombre, tab in zip(nombres, st.tabs(nombres)):
+        with tab:
+            if nombre.startswith("📄"):
+                with st.spinner("Preparando el comprobante…"):
+                    paginas = sunat.paginas_pdf(pdf_bytes)
+                if not paginas:
+                    st.warning("No se pudo mostrar el PDF en pantalla. "
+                               "Se puede descargar igual, abajo.")
+                for i, png in enumerate(paginas, 1):
+                    st.image(png, use_container_width=True)
+                    if len(paginas) > 1:
+                        st.caption(f"Página {i} de {len(paginas)}")
+            elif nombre.startswith("📋"):
+                _tabla_detalle(lineas)
+            else:
+                # Recortado: un XML de 30 KB dentro de un `st.code` cuelga
+                # el navegador al resaltar la sintaxis.
+                txt = xml_bytes.decode("utf-8", errors="replace")
+                if len(txt) > 20000:
+                    st.caption(f"Mostrando los primeros 20.000 de "
+                               f"{len(txt):,} caracteres. Descargalo para verlo entero.")
+                    txt = txt[:20000]
+                st.code(txt, language="xml")
+
+    st.divider()
+    c1, c2 = st.columns(2)
+    with c1:
+        if pdf_bytes:
+            st.download_button(
+                "⬇ Descargar PDF", data=pdf_bytes,
+                file_name=f"{doc.get('documento', 'comprobante')}.pdf",
+                mime="application/pdf", use_container_width=True,
+                key="sunat_visor_dl_pdf")
+    with c2:
+        if xml_bytes:
+            st.download_button(
+                "⬇ Descargar XML", data=xml_bytes,
+                file_name=f"{doc.get('documento', 'comprobante')}.xml",
+                mime="application/xml", use_container_width=True,
+                key="sunat_visor_dl_xml")
+
+
 def _panel_documento(doc):
     """Panel derecho: ficha del comprobante + visor PDF + descargas."""
     if doc is None:
@@ -764,21 +862,16 @@ def _panel_documento(doc):
         f'Original del proveedor</div>', unsafe_allow_html=True)
 
     if pdf_original or xml_original:
-        c_pdf, c_xml = st.columns(2)
-        with c_pdf:
-            if pdf_original:
-                st.download_button(
-                    "📄 PDF original", data=pdf_original,
-                    file_name=f"{doc.get('documento', 'comprobante')}_original.pdf",
-                    mime="application/pdf", use_container_width=True,
-                    key="sunat_dl_pdf_original")
-        with c_xml:
-            if xml_original:
-                st.download_button(
-                    "🧾 XML", data=xml_original,
-                    file_name=f"{doc.get('documento', 'comprobante')}.xml",
-                    mime="application/xml", use_container_width=True,
-                    key="sunat_dl_xml_original")
+        # UN solo botón que ABRE, en vez de dos que descargan a ciegas:
+        # bajar el archivo y buscarlo en la carpeta de descargas para
+        # recién ahí ver qué era es un rodeo. Las descargas siguen
+        # existiendo, adentro del visor.
+        if st.button("🔍 Ver el original", use_container_width=True,
+                     key="sunat_ver_original",
+                     help="Abre el comprobante en pantalla: el PDF, el "
+                          "detalle de líneas del XML, y las descargas."):
+            _visor_original(doc, pdf_original, xml_original)
+        st.caption("PDF y XML tal como los emitió el proveedor.")
         return
 
     # Todavía no está en R2. La corrida nocturna va de lo más nuevo hacia
@@ -937,5 +1030,10 @@ def renderizar_documentos_sunat(d, col_fecha):
                 )
 
     with col_der:
+        # La tarjeta izquierda arranca con la fila de controles (38px, ver
+        # `_kpis`), así que sin esto la derecha empieza más arriba que el
+        # contenido de su vecina y las dos se ven desalineadas. El
+        # espaciador la baja hasta la altura del gráfico.
+        st.markdown('<div style="height:38px;"></div>', unsafe_allow_html=True)
         with st.container(border=True, key="sunat_card_doc"):
             _panel_documento(doc)
