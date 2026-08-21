@@ -518,6 +518,26 @@ def pedidos_pendientes(s3, bucket):
     return salida
 
 
+def marcar_fallo(s3, bucket, clave_senal, motivo):
+    """Deja constancia de que un pedido no se pudo servir.
+
+    Sin esto, un pedido fallido es indistinguible de uno que nunca se
+    hizo: la webapp borra la señal, no aparece ningún archivo, y el
+    usuario vuelve a ver el botón — invitándolo a apretarlo de nuevo para
+    obtener exactamente el mismo silencio. Con la marca, la pantalla
+    puede decir POR QUÉ y ofrecer reintentar a conciencia.
+    """
+    try:
+        s3.put_object(
+            Bucket=bucket, Key=clave_senal.replace(".json", ".fallo.json"),
+            Body=json.dumps({"motivo": motivo,
+                             "cuando": time.strftime("%Y-%m-%d %H:%M:%S")},
+                            ensure_ascii=False).encode("utf-8"),
+            ContentType="application/json")
+    except Exception:
+        pass
+
+
 def atender_pedidos(pagina, s3, bucket):
     """Baja lo que la webapp pidió. Devuelve cuántos pedidos procesó."""
     pedidos = pedidos_pendientes(s3, bucket)
@@ -531,12 +551,19 @@ def atender_pedidos(pagina, s3, bucket):
                 log("    subido")
             else:
                 log("    SUNAT no devolvió el archivo")
+                marcar_fallo(s3, bucket, clave_senal,
+                             "SUNAT no tiene disponible este comprobante para "
+                             "descarga. Suele pasar con comprobantes de más de "
+                             "24 meses o de ciertos emisores.")
         except Exception as e:
             log(f"    error: {str(e)[:160]}")
+            marcar_fallo(s3, bucket, clave_senal,
+                         f"Error al consultarlo en SUNAT: {str(e)[:120]}")
         # La señal se borra SIEMPRE, salga bien o mal. Si no, un
         # comprobante que SUNAT no puede servir dejaría a la webapp
         # mostrando "pedido" para siempre y a este script reintentándolo
-        # en cada pasada.
+        # en cada pasada. Lo que queda para explicar el fracaso es la
+        # marca de `marcar_fallo`, no la señal.
         try:
             s3.delete_object(Bucket=bucket, Key=clave_senal)
         except Exception:
@@ -577,6 +604,16 @@ def seleccionar_backfill(s3, bucket, meses_atras, limite):
 def correr_backfill(pagina, s3, bucket, pendientes, corte_t):
     ok = fallidos = 0
     for i, doc in enumerate(pendientes, 1):
+        # Antes de cada documento se mira si alguien pidió algo desde la
+        # webapp, y se atiende EN EL ACTO. Es casi gratis —el navegador ya
+        # está abierto y logueado, y la consulta a R2 son milisegundos
+        # contra los ~23 seg que tarda un documento— y sin esto un pedido
+        # hecho durante las 2 h del backfill esperaba a que terminara TODO:
+        # el candado lo dejaba afuera. Verificado en producción con dos
+        # pedidos encolados mientras corría el nocturno.
+        if pedidos_pendientes(s3, bucket):
+            atender_pedidos(pagina, s3, bucket)
+
         # El corte se chequea ANTES de empezar el documento: cortar a
         # mitad dejaría el PDF sin su XML, y el chequeo de "ya está en R2"
         # exige los dos, así que se reintentaría entero igual.

@@ -818,6 +818,38 @@ def solicitud_pendiente(doc):
     return _hay_senal(clave_solicitud(doc))
 
 
+def clave_fallo(doc):
+    """Key de la marca que deja el servidor cuando un pedido no se pudo servir."""
+    return clave_solicitud(doc).replace(".json", ".fallo.json")
+
+
+@st.cache_data(ttl=15, show_spinner=False)
+def _leer_fallo(clave):
+    import json
+
+    import data
+
+    if not data.secrets_disponibles():
+        return None
+    try:
+        crudo = data.get_s3_cliente().get_object(
+            Bucket=st.secrets["R2_BUCKET"], Key=clave)["Body"].read()
+        return json.loads(crudo)
+    except Exception:
+        return None
+
+
+def fallo_solicitud(doc):
+    """`{motivo, cuando}` si el último pedido de este original falló, o None.
+
+    Existe porque un pedido fallido, sin esto, es indistinguible de uno
+    que nunca se hizo: la señal se borra, no aparece ningún archivo, y el
+    usuario vuelve a ver el mismo botón. Apretarlo de nuevo da
+    exactamente el mismo silencio.
+    """
+    return _leer_fallo(clave_fallo(doc))
+
+
 def solicitar_original(doc):
     """Deja en R2 la señal para que la CPU local baje este original.
 
@@ -841,16 +873,25 @@ def solicitar_original(doc):
         "documento": str(doc.get("documento") or "").strip(),
         "solicitado_en": datetime.now(timezone.utc).isoformat(),
     }
+    s3 = data.get_s3_cliente()
     try:
-        data.get_s3_cliente().put_object(
+        s3.put_object(
             Bucket=st.secrets["R2_BUCKET"], Key=clave_solicitud(doc),
             Body=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
             ContentType="application/json")
     except Exception:
         return False
+    # Si había una marca de fallo anterior, se limpia: este pedido es un
+    # reintento, y dejarla haría que la pantalla siguiera mostrando el
+    # error viejo mientras el nuevo intento está en curso.
+    try:
+        s3.delete_object(Bucket=st.secrets["R2_BUCKET"], Key=clave_fallo(doc))
+    except Exception:
+        pass
     # Sin esto la UI seguiría mostrando el botón "pedir" durante los 15 seg
     # del TTL, invitando a un segundo clic sobre algo ya pedido.
     _hay_senal.clear()
+    _leer_fallo.clear()
     return True
 
 

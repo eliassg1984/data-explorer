@@ -349,6 +349,13 @@ if _ruta_srv.exists():
        "claves_original da EXACTAMENTE lo mismo en los dos (incluidos huecos)")
     ok(all(_srv.clave_solicitud(c) == sunat.clave_solicitud(c) for c in _casos),
        "clave_solicitud da EXACTAMENTE lo mismo en los dos")
+    # La marca de fallo la ESCRIBE el servidor y la LEE la webapp. Si las
+    # dos formas de derivar esa clave se separan, la webapp buscaría una
+    # marca que nadie escribió y volvería a mostrar el botón mudo — el
+    # bug que esa marca existe para evitar.
+    ok(all(_srv.clave_solicitud(c).replace(".json", ".fallo.json")
+           == sunat.clave_fallo(c) for c in _casos),
+       "la clave de la marca de fallo coincide en los dos lados")
 
 
 # ── Credenciales ───────────────────────────────────────────────────────────

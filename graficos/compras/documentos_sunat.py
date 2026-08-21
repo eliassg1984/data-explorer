@@ -792,7 +792,18 @@ def _panel_documento(doc):
                 "documento en un rato.", icon=None)
         return
 
-    if st.button("⬇ Traer el original de SUNAT", use_container_width=True,
+    # Un intento anterior que falló: sin esto el usuario ve el mismo botón
+    # de siempre y no tiene forma de saber que ya se intentó y no se pudo.
+    fallo = sunat.fallo_solicitud(doc)
+    if fallo:
+        st.warning(f"No se pudo traer: {fallo.get('motivo', 'error desconocido')}",
+                   icon="⚠️")
+        st.caption(f"Último intento: {fallo.get('cuando', '—')}")
+        etiqueta = "↻ Intentar de nuevo"
+    else:
+        etiqueta = "⬇ Traer el original de SUNAT"
+
+    if st.button(etiqueta, use_container_width=True,
                  key="sunat_pedir_original",
                  help="Le pide a la máquina local que baje el PDF y el XML "
                       "que emitió el proveedor. Tarda menos de un minuto; "
@@ -802,8 +813,9 @@ def _panel_documento(doc):
         else:
             st.error("No se pudo dejar el pedido. ¿Están las credenciales "
                      "de R2 configuradas?")
-    st.caption("Todavía no sincronizado. Arriba está la ficha con los datos "
-               "del registro, que siempre está disponible.")
+    if not fallo:
+        st.caption("Todavía no sincronizado. Arriba está la ficha con los "
+                   "datos del registro, que siempre está disponible.")
 
 
 def renderizar_documentos_sunat(d, col_fecha):
