@@ -76,6 +76,7 @@ import argparse
 import importlib.util
 import io
 import json
+import os
 import pathlib
 import sys
 import time
@@ -586,6 +587,51 @@ def correr_backfill(pagina, s3, bucket, pendientes, corte_t):
 
 
 # ===========================================================================
+# CANDADO — una sola sesión de SUNAT a la vez
+# ===========================================================================
+# Las dos tareas programadas se pisan: el backfill corre 2 horas y la de
+# pedidos salta cada minuto, así que durante esas 2 horas habría DOS
+# navegadores logueados a la vez en la misma cuenta SOL. SUNAT puede
+# invalidar una sesión, o tomarlo como comportamiento anómalo de la cuenta.
+#
+# El candado es un archivo con la hora de arranque. Se toma antes de abrir
+# el navegador y se suelta al terminar.
+
+ARCHIVO_CANDADO = AQUI / "logs" / "sunat.lock"
+
+# Un candado más viejo que esto se considera basura de una corrida que murió
+# sin limpiar (corte de luz, kill, excepción no atrapada). Va holgado sobre
+# las 2 h del backfill: mejor esperar de más que quedar bloqueado para
+# siempre por un archivo huérfano.
+CANDADO_VENCE_HORAS = 4
+
+
+def tomar_candado():
+    """True si se pudo tomar. False si ya hay otra corrida en curso."""
+    ARCHIVO_CANDADO.parent.mkdir(parents=True, exist_ok=True)
+    if ARCHIVO_CANDADO.exists():
+        edad_h = (time.time() - ARCHIVO_CANDADO.stat().st_mtime) / 3600
+        if edad_h < CANDADO_VENCE_HORAS:
+            log(f"Ya hay otra corrida en curso (candado de hace "
+                f"{edad_h * 60:.0f} min). Se sale sin hacer nada.")
+            return False
+        log(f"Candado vencido ({edad_h:.1f} h): se ignora y se sigue.")
+    # El contenido es informativo (para saber quién dejó el candado si hay
+    # que borrarlo a mano); lo que importa es que el archivo exista.
+    ARCHIVO_CANDADO.write_text(
+        f"{time.strftime('%Y-%m-%d %H:%M:%S')} pid={os.getpid()}",
+        encoding="utf-8")
+    return True
+
+
+def soltar_candado():
+    try:
+        ARCHIVO_CANDADO.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+# ===========================================================================
 # MAIN
 # ===========================================================================
 
@@ -636,6 +682,9 @@ def main():
         log("Nada que hacer.")
         return
 
+    if not tomar_candado():
+        return
+
     corte_t = (time.time() + args.minutos * 60) if args.minutos else None
     from playwright.sync_api import sync_playwright
 
@@ -657,6 +706,7 @@ def main():
                 f"{fallidos} sin datos/con error.")
         finally:
             navegador.close()
+            soltar_candado()
 
 
 if __name__ == "__main__":
