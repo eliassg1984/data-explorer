@@ -299,4 +299,34 @@ CSS = """    /* ================================================================
             margin: 6px 0 0 0 !important;
         }
     }
+
+    /* =================================================================== */
+    /* DOCUMENTOS SUNAT: SIN CHIPS DE FAMILIA/SUBFAMILIA                     */
+    /*                                                                       */
+    /* SUNAT no sabe de familias —eso es taxonomía nuestra, del maestro de   */
+    /* productos— y su registro es por DOCUMENTO, no por línea de producto.  */
+    /* Filtrar por familia ahí daría un total que no cuadra con ningún       */
+    /* papel, así que ese drill IGNORA los chips (lo dice el docstring de    */
+    /* graficos/compras/documentos_sunat.py). Hasta hoy los chips seguían    */
+    /* dibujados igual: dos controles a la vista que no hacían nada.         */
+    /*                                                                       */
+    /* Se esconden con CSS y NO se dejan de renderizar en Python, por dos    */
+    /* motivos distintos:                                                    */
+    /*   1. Los chips se dibujan ANTES de que se sepa qué vista eligió el    */
+    /*      rail (`_render_rail` corre después, y es quien resuelve el       */
+    /*      deep-link `?vista=`). Saberlo antes obligaría a duplicar esa     */
+    /*      resolución.                                                       */
+    /*   2. Un widget que deja de renderizarse PIERDE su estado (CLAUDE.md). */
+    /*      Escondiéndolo, la Familia que el usuario tenía elegida sigue     */
+    /*      ahí al volver a Proveedor o Producto.                            */
+    /*                                                                       */
+    /* El pill de FECHA se queda: SUNAT sí lo usa — es el rango que consulta */
+    /* al SIRE (`comprobantes_rango`), y sin él la vista no tiene qué pedir. */
+    /* Marker: `compras_sunat_drill_wrap`, el contenedor que sólo existe     */
+    /* cuando ese drill está en pantalla. Va desde `:root` porque los chips  */
+    /* son `position: fixed` y viven fuera del wrapper.                      */
+    /* =================================================================== */
+    :root:has(.st-key-compras_sunat_drill_wrap) .st-key-chips_ajuste_tabla {
+        display: none !important;
+    }
 """
