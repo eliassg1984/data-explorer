@@ -975,17 +975,26 @@ def renderizar_documentos_sunat(d, col_fecha):
         with st.container(border=True, key="sunat_card_izq"):
             c_vista, c_sit, c_act, c_kpi = st.columns([1.7, 1.3, 0.6, 2.8])
             with c_vista:
-                vista = st.radio(
+                # 2026-08-21, a pedido: de radio horizontal a selectbox. Con
+                # `horizontal=True` en una columna de 166px las 3 opciones
+                # NO entraban en una fila y Streamlit las apilaba en 3 líneas
+                # (medido: 99px de alto, contra ~40 de un selectbox) — el
+                # widget se veía roto, no compacto. El selectbox es la misma
+                # idea que un `st.radio` (una sola elección entre pocas) pero
+                # SIEMPRE en una línea: muestra el valor elegido + una
+                # flecha, y la lista aparece recién al abrir. Mismos values,
+                # misma key: session_state no pierde la selección previa.
+                vista = st.selectbox(
                     "Ver", ["Por fecha", "Por proveedor", "Cruce"],
-                    horizontal=True, key="sunat_vista",
+                    key="sunat_vista",
                     label_visibility="collapsed",
                     help="«Cruce» compara cada comprobante del SIRE contra "
                          "el registro interno de compras (parquet): mismo "
                          "documento, ¿coinciden los montos?")
             with c_sit:
-                situacion = st.radio(
+                situacion = st.selectbox(
                     "Situación", ["Todos", "Registrados", "Pendientes"],
-                    horizontal=True, key="sunat_situacion",
+                    key="sunat_situacion",
                     label_visibility="collapsed",
                     help="«Pendiente» = SUNAT ve la compra pero todavía no "
                          "está anotada en un registro presentado. Es crédito "
