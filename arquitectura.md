@@ -1606,6 +1606,28 @@ salvo `icono`):
       reparten la fila) o del alto (máximo, comparten la fila) del propio
       elemento pineado — es decir, cuando el elemento ES básicamente el
       botón, no un contenedor mayor que de casualidad tiene alguno adentro.
+    - **El área SOLA no alcanza: falta un corte por CANTIDAD** (encontrado
+      2026-08-21 pineando el rail, `compras_tabs_row`). El rail son ~12
+      `st.button` apilados con `use_container_width=True`, cada uno casi
+      tan ancho como la tarjeta: la SUMA de anchos daba ~2.400px contra 230
+      de ancho del contenedor (ratio ≈10), así que el `>=60%` daba
+      verdadero SIEMPRE. Resultado: el contorno violeta marcaba la tarjeta
+      y los sliders escribían en los 12 items — el único síntoma era un
+      cambio que aparecía donde no se esperaba. La suma de anchos supone
+      botones repartiéndose UNA fila; en una columna no significa nada.
+      **Arreglo (dos cortes, en orden):** primero cantidad — varios botones
+      SUELTOS (fuera de un `[data-testid="stButtonGroup"]`) = el elemento
+      es una LISTA de botones y no se redirige; después el área de siempre,
+      que ahora solo decide entre "pills de un mismo grupo" y "un botón
+      suelto en su wrapper". Sospecha para la próxima vez: cualquier
+      criterio que sume una dimensión asume implícitamente un EJE (fila);
+      probarlo también contra el caso apilado antes de confiar.
+    - **Y el contorno no puede mentir:** el overlay trackea siempre el
+      elemento pineado (`trackear(res.el)`), no el destino del estilo, así
+      que cuando la redirección aplica hay dos objetivos distintos en
+      pantalla y uno solo dibujado. El panel ahora abre con una línea
+      `Estilo → N botones internos. Tamaño y posición → el contorno.`
+      cuando `destinosDeEstilo(elemento)[0] !== elemento`.
     - **Padding/tamaño de letra sobre el botón redirigido no crecían nada
       por sí solos:** los botones de Streamlit traen `box-sizing:border-box`
       con `width`/`height` explícitos (`getComputedStyle` los mostraba en

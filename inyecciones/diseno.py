@@ -52,9 +52,16 @@ redirige a los `<button>` de adentro cuando el elemento pineado ES
 básicamente un botón/pill (st.pills, segmented_control, un st.button o
 st.popover sueltos) — esos widgets guardan la key en un wrapper de layout
 sin ningún borde/relleno/tipografía propios; lo visualmente real vive en
-el/los botones, que no tienen key. El criterio es de ÁREA (botones >=60%
-del ancho o alto del elemento), no "hay un botón adentro": una tarjeta
-grande con flechitas ▸ salpicadas por sus filas NO debe redirigir ahí.
+el/los botones, que no tienen key. Dos cortes, en este orden:
+CANTIDAD primero (varios botones SUELTOS, fuera de un `stButtonGroup`, =
+lista de botones — el rail, no un botón) y recién después ÁREA (>=60% del
+ancho o alto del elemento), que descarta la tarjeta grande con flechitas ▸
+salpicadas por sus filas. El corte por cantidad no es redundante: la suma
+de anchos de una COLUMNA de botones supera siempre al contenedor, así que
+el área sola daba verdadero en cualquier rail (ver arquitectura.md #48).
+Cuando la redirección SÍ aplica, el panel lo dice en una línea arriba de
+los controles — el contorno violeta marca el elemento pineado y no puede
+marcar dos cosas a la vez.
 `width`/`height`/`flex`/`max-width`/`max-height` siempre van al elemento
 mismo, para que coincida con lo que trackean el overlay y las manijas.
 

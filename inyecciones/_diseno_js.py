@@ -227,10 +227,20 @@ JS = """
             var candidatos = enGrupo.length ? Array.prototype.slice.call(enGrupo)
                                              : Array.prototype.slice.call(elemento.querySelectorAll('button'));
             if (!candidatos.length) return [elemento];
+            // Varios botones SUELTOS (fuera de un stButtonGroup) = el
+            // elemento es una LISTA de botones, no un boton. El caso real
+            // es el rail (compras_tabs_row): 12 st.button apilados con
+            // use_container_width, cada uno casi tan ancho como la tarjeta.
+            // La SUMA de anchos de una COLUMNA da ~10x el ancho del
+            // contenedor, asi que el >=60% de abajo siempre daba verdadero
+            // y los controles de estilo terminaban en los items del rail
+            // mientras el contorno violeta seguia marcando la tarjeta.
+            if (!enGrupo.length && candidatos.length > 1) return [elemento];
             var rEl = elemento.getBoundingClientRect();
             if (rEl.width <= 0 || rEl.height <= 0) return [elemento];
-            // Ancho: SUMA (varios pills lado a lado ocupan la fila entre
-            // todos). Alto: MAXIMO (comparten la misma fila, no se apilan).
+            // Ancho: SUMA — llegado aca son pills de un MISMO stButtonGroup
+            // (se reparten la fila entre todos) o un unico boton suelto.
+            // Alto: MAXIMO (comparten la fila, no se apilan).
             var anchoBotones = 0, altoMaxBotones = 0;
             candidatos.forEach(function(b) {
                 var rb = b.getBoundingClientRect();
@@ -520,7 +530,21 @@ JS = """
             // al que van a ESCRIBIR los controles de estilo — si no, el
             // slider arranca mostrando el radio/tamaño de un wrapper
             // invisible en vez del boton real que se ve en pantalla.
-            var lectura = destinosDeEstilo(elemento)[0];
+            var destinos = destinosDeEstilo(elemento);
+            var lectura = destinos[0];
+
+            // El contorno violeta marca SIEMPRE el elemento pineado, pero
+            // los controles de ESTILO pueden escribir en otro lado. Decirlo
+            // aca: si no, el unico sintoma es un cambio que aparece donde
+            // no se esperaba, y nada en pantalla explica por que.
+            if (lectura !== elemento) {
+                var aviso = doc.createElement('div');
+                aviso.style.cssText = 'font:11px/1.4 -apple-system,sans-serif;color:#9385ec;background:#1c1c24;border:1px solid #34343f;border-radius:4px;padding:6px 7px;margin-bottom:10px';
+                aviso.textContent = 'Estilo → ' + destinos.length
+                    + (destinos.length > 1 ? ' botones internos' : ' botón interno')
+                    + '. Tamaño y posición → el contorno.';
+                panel.appendChild(aviso);
+            }
 
             var tamVal = spanValor('');
             panel.appendChild(filaSoloLectura('Tamaño', tamVal));
