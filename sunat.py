@@ -731,14 +731,36 @@ def claves_original(doc):
             _clave_original(ruc, serie, numero, "xml"))
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def _leer_original(clave):
-    """Bytes de un objeto de R2, o None si no existe / no hay credenciales.
+# EXISTENCIA y CONTENIDO se cachean por SEPARADO, y con TTL muy distintos.
+# No es microoptimización: con una sola función cacheada 1 h, el flujo de
+# "pedir un original" quedaba roto. El usuario abre el documento (se cachea
+# "no está" por una hora), lo pide, llega en 30 segundos… y la pantalla
+# sigue diciendo que no está hasta una hora después. El botón ⟳ lo
+# arreglaba, pero nadie iba a adivinarlo.
+#
+# La existencia se pregunta seguido y es barata (un head_object). El
+# contenido es caro pero INMUTABLE —un PDF ya subido no cambia nunca— así
+# que una vez leído se puede cachear largo sin riesgo.
 
-    Nunca lanza: un original todavía no sincronizado es un estado normal
-    de este drill (el sync corre aparte y a demanda), no un error a
-    mostrar en pantalla.
-    """
+@st.cache_data(ttl=20, show_spinner=False)
+def _existe_original(clave):
+    """True si el objeto ya está en R2. TTL corto: esto cambia mientras el
+    usuario mira la pantalla, esperando su pedido."""
+    import data
+
+    if not data.secrets_disponibles():
+        return False
+    try:
+        data.get_s3_cliente().head_object(
+            Bucket=st.secrets["R2_BUCKET"], Key=clave)
+        return True
+    except Exception:
+        return False
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _bytes_original(clave):
+    """Bytes de un objeto de R2, o None. TTL largo: el archivo no cambia."""
     import data  # import local: sunat.py no necesita boto3 si nadie pide un original
 
     if not data.secrets_disponibles():
@@ -748,6 +770,16 @@ def _leer_original(clave):
         return s3.get_object(Bucket=st.secrets["R2_BUCKET"], Key=clave)["Body"].read()
     except Exception:
         return None
+
+
+def _leer_original(clave):
+    """Bytes del original, o None si todavía no está en R2.
+
+    Nunca lanza: un original todavía no sincronizado es un estado normal
+    de este drill (el sync corre aparte y a demanda), no un error a
+    mostrar en pantalla.
+    """
+    return _bytes_original(clave) if _existe_original(clave) else None
 
 
 def originales(doc):

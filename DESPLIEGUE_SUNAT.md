@@ -70,10 +70,48 @@ horas. Con 9.813 pendientes son **~31 noches** para cubrir la ventana de 24
 meses. Para ir más rápido las primeras semanas, subir a `--minutos 240`
 (~16 noches).
 
-> **El usuario de la tarea importa.** Python, sus paquetes y el Chromium
-> quedan bajo el perfil de quien haya corrido el `pip install`
-> (`Administrador`). Si la tarea programada corre con otro usuario, falla
-> con "No module named pandas" aunque a mano funcione perfecto.
+> **⚠️ EL USUARIO DEL SERVICIO/TAREA ES EL ERROR MÁS PROBABLE.** Costó 40
+> minutos de diagnóstico en el despliegue real (2026-08-20).
+>
+> NSSM instala el servicio como **LocalSystem** por defecto. Con esa
+> cuenta, Python y sus paquetes SÍ se encuentran (viven en la carpeta de
+> instalación), así que el servicio arranca y parece sano — pero
+> **Chromium no**, porque `playwright install` lo deja en el perfil del
+> usuario que lo corrió. El síntoma es este, en bucle cada 15 seg:
+>
+> ```
+> ERROR en el ciclo: BrowserType.launch: Executable doesn't exist at
+> C:\Windows\system32\config\systemprofile\AppData\Local\ms-playwright\...
+> ```
+>
+> `C:\Windows\system32\config\systemprofile` es el perfil de SYSTEM: si
+> aparece esa ruta, el servicio está corriendo con la cuenta equivocada.
+> Se arregla en `nssm edit <servicio>` → pestaña **Log on** → *This
+> account* → `.\Administrador`. Verificable con `sc qc <servicio>`: la
+> línea NOMBRE_INICIO_SERVICIO tiene que decir `.\Administrador`, no
+> `LocalSystem`.
+>
+> Lo mismo aplica a la tarea programada del nocturno.
+
+### Cortar el nocturno a mano: hay que matar el proceso, no la tarea
+
+"Finalizar" en el Programador mata el `.bat`, **no el `python.exe` que
+lanzó** — el backfill sigue corriendo y sigue teniendo el candado tomado.
+Para cortarlo de verdad:
+
+```
+wmic process where "name='python.exe'" get processid,commandline
+taskkill /F /PID <el que diga sunat_originales.py --minutos>
+```
+
+Nunca `taskkill /F /IM python.exe`: eso mataría también los servicios.
+
+Y como un proceso matado a la fuerza no ejecuta su `finally`, **el candado
+queda huérfano**. Se borra a mano (o se espera a que venza a las 4 h):
+
+```
+del C:\proyecto\logs\sunat.lock
+```
 
 ### Antes de programar, probar
 

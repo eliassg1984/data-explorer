@@ -882,7 +882,8 @@ def renderizar_documentos_sunat(d, col_fecha):
                     sunat.obtener_comprobantes.clear()
                     sunat.obtener_comprobantes_rango.clear()
                     sunat.periodos_con_estado.clear()
-                    sunat._leer_original.clear()
+                    sunat._existe_original.clear()
+                    sunat._bytes_original.clear()
                     st.rerun()
 
             with st.spinner("Cargando el registro de compras de SUNAT…"):
