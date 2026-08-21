@@ -908,7 +908,12 @@ CSS = """        <style>
             0%   { opacity: 0; transform: translateX(-14px); }
             100% { opacity: 1; transform: translateX(0); }
         }
-        .st-key-compras_prov_card_paneles {
+        /* 2026-08-21: eran UNA tarjeta (`compras_prov_card_paneles`) y pasaron
+           a ser DOS bloques hermanos, uno por columna, para que caigan sobre
+           la misma grilla que la fila de arriba. La animación se aplica a los
+           dos: entran juntos, que es lo que hacía la tarjeta única. */
+        .st-key-compras_prov_card_prods,
+        .st-key-compras_prov_card_provde {
             animation: unfoldRight 0.32s cubic-bezier(0.4, 0, 0.2, 1) backwards;
         }
         /* ── PESTILLO como PILL: solo queda el de "Detalle de documentos por
@@ -980,10 +985,11 @@ CSS = """        <style>
            título/gráfico. Nada se encima; a cambio la tarjeta crece un poco
            en alto, barato en móvil.
            ── Dos breakpoints, por qué distintos:
-           · Paneles A/B viven en st.columns(2), que colapsa a 1 columna recién
-             por debajo de ~640px. ENTRE 640 y 900px cada panel es media
-             pantalla y su título + los 5 pills ya no caben en la cabecera →
-             el fix de topn_float/panelb_scope_float aplica desde 900px.
+           · Paneles A/B viven en `st.columns(COLUMNAS_DRILL)`, que colapsa a
+             1 columna recién por debajo de ~640px. ENTRE 640 y 900px cada
+             panel es media pantalla y su título + los 5 pills ya no caben en
+             la cabecera → el fix de topn_float/panelb_scope_float aplica
+             desde 900px.
            · El gráfico principal (y su win_nav / floats de tope) es de ancho
              completo: solo se aprieta de verdad por debajo de ~640px.
            ══════════════════════════════════════════════════════════════ */

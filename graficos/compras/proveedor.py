@@ -20,6 +20,7 @@ from tema import ACENTO, GRIS_BORDE, TEXTO_PRINCIPAL
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, titulo_en_franja,
 )
+from graficos.compras._comun import COLUMNAS_DRILL, GAP_DRILL
 from graficos.compras._css_proveedor import CSS as CSS_PROVEEDOR
 from graficos.compras._documentos_proveedor import tabla_documentos
 from graficos import alturas, periodo
@@ -326,6 +327,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 unsafe_allow_html=True,
             )
             with st.popover("Proveedores", icon=":material/groups:"):
+                # columnas-internas: botonera del popover, no el eje de la vista.
                 _bt = st.columns(5)
                 _bt[0].button("Top 3", key="cp_topn3", use_container_width=True,
                               on_click=_cp_set_topn, args=(3,))
@@ -378,7 +380,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             # se UNEN acá en una sola tabla con `ProgressColumn` haciendo de
             # barra. Muestra 8 filas fijas (`_ALTO_FRAME`) y scrollea el
             # resto por dentro (scroll nativo de `st.dataframe`).
-            _c_tabla, _c_evo = st.columns([1.6, 1], gap="small")
+            _c_tabla, _c_evo = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
             with _c_tabla:
                 # ── BLOQUE 1: el ranking ─────────────────────────
                 # 2026-08-18, a pedido: lo que era UNA tarjeta con la
@@ -705,6 +707,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         # en 243px para 13 puntos y la columna de cifras
                         # sobraba (la más ancha, "S/ 20,711", pide ~86 y
                         # tenía 117). El gráfico es el protagonista.
+                        # columnas-internas: el chart y su pila de KPIs parten
+                        # DENTRO de una tarjeta. No es el eje de la página,
+                        # que lo manda COLUMNAS_DRILL.
                         _c_graf, _c_kpi = st.columns([2.6, 1], gap="small")
                         with _c_graf:
                             st.plotly_chart(
@@ -832,11 +837,18 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # primero" pasarian a ser el mismo estado, y ya no se podria volver
         # al vacio ni distinguir un clic deliberado.
         _prod_top = None
-        with st.container(border=True, key="compras_prov_card_paneles"):
-            pa, pb = st.columns(2)
+        # 2026-08-21: los paneles A/B eran UNA tarjeta ancha
+        # (`compras_prov_card_paneles`) partida al 50% con dos `_card`
+        # transparentes adentro, mientras la fila de arriba son DOS tarjetas
+        # partidas al 61.5%. El ojo veía dos cajas arriba y una abajo, con el
+        # canal gris cortado a media página y el eje corrido ~200px. Ahora son
+        # cuatro bloques `compras_prov_card_*` sobre la MISMA grilla, así que
+        # la vista se lee como un 2x2. Ver `_comun.COLUMNAS_DRILL`.
+        pa, pb = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
 
-            # Panel A: Top N productos del proveedor en foco
-            with pa:
+        # Panel A: Top N productos del proveedor en foco
+        with pa:
+            with st.container(border=True, key="compras_prov_card_prods"):
                 _ta = ("Selecciona un proveedor arriba para ver sus productos"
                        if prov_focus is None
                        else f"Productos · {_compras_truncar(prov_focus, 24)}")
@@ -928,8 +940,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 tv,
                                 hide_index=True,
                                 use_container_width=True,
-                                height=alturas.por_filas(len(tv), px_fila=35,
-                                                         extra=45, minimo=0),
+                                # Mismo frame de 8 filas que el ranking de
+                                # arriba (`_ALTO_FRAME`), y por el mismo
+                                # motivo: con `por_filas(len(tv), ...)` el
+                                # alto salía de los datos — 80px con 1
+                                # producto, 430 con 12 — y la tarjeta cambiaba
+                                # de tamaño en cada clic del ranking. Lo que
+                                # no entra scrollea DENTRO.
+                                height=_ALTO_FRAME,
                                 on_select="rerun",
                                 selection_mode="single-row",
                                 key=f"cp_prov_prods_tab_{prov_focus}_{prod_focus}_{_pan_inst}",
@@ -956,8 +974,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                     st.rerun(scope="fragment")
 
 
-            # Panel B: proveedores del producto seleccionado
-            with pb:
+        # Panel B: proveedores del producto seleccionado
+        with pb:
+            with st.container(border=True, key="compras_prov_card_provde"):
                 # Sin eleccion del usuario, cae al primero de la tabla de al
                 # lado (a pedido: antes el panel arrancaba vacio, con solo el
                 # titulo "Proveedores del producto" y nada debajo, y no habia

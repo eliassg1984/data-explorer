@@ -227,6 +227,24 @@ _hueca = {"documento": "F001-1", "tipo_nombre": "Factura", "total": None,
           "proveedor": None}
 ok(sunat.ficha_pdf(_hueca)[:4] == b"%PDF", "un comprobante con huecos no revienta")
 
+# NaT NO es None ni un float, y SÍ tiene .strftime — llamarlo lanza
+# ValueError. El chequeo viejo (`isinstance(v, float) and pd.isna(v)`) lo
+# dejaba pasar y tumbaba el panel entero con un traceback. No era un borde
+# raro: 9.524 de 16.583 comprobantes reales (57%) no traen fecha de
+# vencimiento, porque las facturas al contado no la tienen.
+ok(sunat._val({"f": pd.NaT}, "f") == "—", "una fecha NaT se muestra como —")
+ok(sunat._val({"f": float('nan')}, "f") == "—", "un NaN se muestra como —")
+ok(sunat._val({"f": None}, "f") == "—", "un None se muestra como —")
+ok(sunat._val({"f": pd.Timestamp("2026-08-05")}, "f") == "05/08/2026",
+   "una fecha de verdad sigue formateándose bien")
+_sin_venc = {"documento": "E001-9247", "tipo_nombre": "Factura",
+             "fecha_emision": pd.Timestamp("2026-08-05"),
+             "fecha_vencimiento": pd.NaT, "total": 236.0}
+ok(sunat.ficha_pdf(_sin_venc)[:4] == b"%PDF",
+   "el PDF de un comprobante sin vencimiento tampoco revienta")
+ok(any(v == "—" for _, filas in sunat.campos_ficha(_sin_venc) for _, v in filas),
+   "campos_ficha resuelve el vencimiento ausente sin lanzar")
+
 # La ficha en pantalla y el PDF salen de la MISMA fuente: si divergen, es
 # porque alguien agregó un campo en un solo lado.
 _secciones = sunat.campos_ficha(n)

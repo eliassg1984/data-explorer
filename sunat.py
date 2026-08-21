@@ -1055,10 +1055,26 @@ def solicitar_original(doc):
 # null). De ahí que la pantalla sea HTML y la descarga un PDF de verdad.
 
 def _val(comprobante, clave, defecto="—"):
-    """Valor de un campo, formateado para mostrar. `—` si falta."""
+    """Valor de un campo, formateado para mostrar. `—` si falta.
+
+    El chequeo de "falta" usa `pd.isna` y NO `isinstance(v, float)`, que es
+    lo que había y tumbaba la pantalla: una fecha ausente llega como
+    `pd.NaT`, que **no es un float** —así que pasaba el filtro— y **sí
+    tiene `.strftime`**, que lanza ValueError al llamarlo. El panel entero
+    reventaba con un traceback.
+
+    No era un caso raro: 9.524 de 16.583 comprobantes reales (57%) no
+    traen fecha de vencimiento, porque las facturas al contado no la
+    tienen. Más de la mitad del reporte era imposible de abrir.
+    """
     v = comprobante.get(clave)
-    if v is None or (isinstance(v, float) and pd.isna(v)):
+    if v is None:
         return defecto
+    try:
+        if pd.isna(v):
+            return defecto
+    except (TypeError, ValueError):
+        pass          # listas/arrays: `pd.isna` devuelve otro array, no aplica
     if hasattr(v, "strftime"):
         return v.strftime("%d/%m/%Y")
     s = str(v).strip()

@@ -3,6 +3,10 @@
 Cosas chicas que usan dos o mas drills: deteccion de movil, lectura de
 la seleccion de un plotly_chart, mini barras horizontales y etiquetas de
 periodo segun granularidad.
+
+Y la GRILLA (`COLUMNAS_DRILL` / `GAP_DRILL`): la proporcion con la que parte
+en dos una fila de un drill. Vive aca y no en cada modulo porque el eje
+vertical tiene que caer en el mismo sitio en TODAS las filas de una vista.
 """
 
 import plotly.graph_objects as go
@@ -19,6 +23,39 @@ from graficos.base import _compras_truncar, _slug
 # sus dos consumidores.
 from graficos.base import _es_movil  # noqa: F401
 from graficos import alturas
+
+
+# ===========================================================================
+# LA GRILLA: UNA SOLA PROPORCIÓN POR VISTA
+# ===========================================================================
+# Hermana de `tema.py` (dueño del color) y `alturas.py` (dueño del alto): el
+# EJE VERTICAL de una vista tampoco puede escribirse a mano en cada fila.
+#
+# POR QUÉ EXISTE (2026-08-21). El drill de Proveedor tenía dos filas de dos
+# columnas y cada una partía en un sitio distinto: la de arriba con
+# `st.columns([1.6, 1])` (61.5%) y la de abajo con `st.columns(2)` (50%). Con
+# ~1750px de ancho útil eso son ~200px de salto — el canal gris que baja entre
+# las columnas se cortaba a media página y la vista dejaba de leerse como una
+# grilla. No lo cazaba nada: los dos números son correctos por separado.
+#
+# La regla: la proporción que parte una FILA de un drill sale de acá. Las
+# subdivisiones DENTRO de una tarjeta (el chart y su pila de KPIs, una
+# botonera) son otra cosa y siguen siendo literales — se marcan con un
+# comentario `# columnas-internas: <por qué>` y `test_graficos.py` las
+# distingue por esa marca.
+COLUMNAS_DRILL = [1.6, 1]
+"""Proporción izq./der. de una fila de dos columnas en un drill de Compras.
+
+1.6/1 y no 1/1: la columna izquierda lleva siempre la tabla con nombres
+largos (proveedores, productos) y la derecha un panel de apoyo. La grilla de
+4 métricas del Panel B ya colapsa sola a 2x2 en anchos chicos
+(`@container (max-width: 380px)` en `_css_proveedor.py`), así que angostarla
+es seguro."""
+
+GAP_DRILL = "small"
+"""Gap entre las columnas de un drill. Va con `COLUMNAS_DRILL`: si las dos
+filas parten en el mismo sitio pero con gaps distintos, el canal gris cambia
+de ancho a media página y el salto se ve igual."""
 
 
 def _first_point(evt):
