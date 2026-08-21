@@ -44,21 +44,24 @@ script.
 
 ### Las dos tareas
 
-```
-python sunat_originales.py --pedidos
-```
-**Cada minuto.** Atiende lo que alguien pidió desde la webapp con el botón
-"Traer el original de SUNAT". Si no hay pedidos sale en ~1 segundo **sin
-abrir el navegador**, así que correrla seguido es barato.
+Copiar también `sunat_pedidos.bat` y `sunat_nocturno.bat` a `C:\proyecto\`
+y programarlos — traen la ruta completa al `python.exe` y mandan la salida
+a `logs\`.
 
-```
-python sunat_originales.py --minutos 120
-```
-**Una vez de noche.** Atiende los pedidos que haya y después usa el tiempo
-que sobra para ir bajando lo que falta, de lo más nuevo hacia atrás. Con
-~9.800 documentos pendientes dentro de la ventana de 24 meses que sirve
-SUNAT, tarda ~41 noches a 2 h por noche. Para ir más rápido al principio,
-`--minutos 240` unas semanas.
+| `.bat` | Cuándo | Qué hace |
+|---|---|---|
+| `sunat_pedidos.bat` | cada minuto | Atiende lo que alguien pidió con el botón "Traer el original". Sin pedidos sale en ~1 seg **sin abrir el navegador**. |
+| `sunat_nocturno.bat` | 1 vez de noche | Atiende pedidos y con el tiempo restante baja lo que falta, de lo más nuevo hacia atrás. Corta a los 120 min. |
+
+**Medido en el servidor: ~23 seg por documento**, o sea ~313 por noche a 2
+horas. Con 9.813 pendientes son **~31 noches** para cubrir la ventana de 24
+meses. Para ir más rápido las primeras semanas, subir a `--minutos 240`
+(~16 noches).
+
+> **El usuario de la tarea importa.** Python, sus paquetes y el Chromium
+> quedan bajo el perfil de quien haya corrido el `pip install`
+> (`Administrador`). Si la tarea programada corre con otro usuario, falla
+> con "No module named pandas" aunque a mano funcione perfecto.
 
 ### Antes de programar, probar
 
