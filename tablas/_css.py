@@ -64,7 +64,17 @@ def _css_grid(font_px):
             "color": f"{ACENTO_TEXTO_OSCURO} !important",
             "font-size": f"{font_px + 1}px !important",
         },
-        ".ag-paging-panel": {
+        # `:not(.ag-hidden)` NO es decoracion: AG Grid deja el panel de
+        # paginacion SIEMPRE en el DOM y lo tapa con la clase `ag-hidden`
+        # cuando la tabla no pagina. El `display: flex !important` de aca
+        # pisaba esa senial, asi que los grids sin paginacion mostraban una
+        # barra de 44px con los numeros VACIOS ("to of ... Page of ...").
+        # Reportado con captura el 2026-08-21 sobre Documentos SUNAT; le
+        # pasaba igual al top de Inventario y al ranking de Volatilidad,
+        # que comparten este mismo `_css_grid`. Las tablas que SI paginan
+        # (tablas/compras.py, tablas/desktop.py) no llevan `ag-hidden`, asi
+        # que siguen viendo la regla intacta.
+        ".ag-paging-panel:not(.ag-hidden)": {
             "display": "flex !important",
             "align-items": "center !important",
             "justify-content": "space-between !important",
