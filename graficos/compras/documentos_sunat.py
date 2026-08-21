@@ -323,12 +323,20 @@ def cruzar_con_parquet(df_sire, g_parquet):
                       and abs(dif_total) <= _TOLERANCIA_CENTAVOS
                       else "Diferencia")
             prov_sistema, ruc_sistema = elegido["proveedor_pq"], elegido["ruc_pq"]
+            # La fecha del parquet se descartaba: `fecha_emision` se quedaba
+            # con la del SIRE y la del sistema no se veia nunca. A pedido
+            # 2026-08-21 se comparan las dos — un documento cargado con otra
+            # fecha de emision es un error contable real, y hasta hoy la
+            # vista lo daba por "Coincide" mientras los montos calzaran.
+            fecha_sist = elegido.get("fecha_pq")
         else:
             base_sist = total_sist = dif_base = dif_total = None
             estado, prov_sistema, ruc_sistema = "Solo SUNAT", "", ""
+            fecha_sist = None
 
         filas.append({
             "fecha_emision": r.get("fecha_emision"), "documento": doc,
+            "fecha_sunat": r.get("fecha_emision"), "fecha_sistema": fecha_sist,
             "proveedor": prov_sire, "proveedor_sistema": prov_sistema,
             "ruc_proveedor": ruc_sire, "ruc_sistema": ruc_sistema,
             "situacion": r.get("situacion"),
@@ -345,6 +353,7 @@ def cruzar_con_parquet(df_sire, g_parquet):
             continue
         filas.append({
             "fecha_emision": cand.get("fecha_pq"), "documento": cand["documento"],
+            "fecha_sunat": None, "fecha_sistema": cand.get("fecha_pq"),
             "proveedor": "", "proveedor_sistema": cand["proveedor_pq"],
             "ruc_proveedor": "", "ruc_sistema": cand["ruc_pq"], "situacion": "",
             "base_sunat": None, "base_sistema": float(cand["base_pq"]),
@@ -356,7 +365,8 @@ def cruzar_con_parquet(df_sire, g_parquet):
     out = pd.DataFrame(filas)
     if out.empty:
         return out
-    out["fecha_emision"] = pd.to_datetime(out["fecha_emision"], errors="coerce")
+    for _c in ("fecha_emision", "fecha_sunat", "fecha_sistema"):
+        out[_c] = pd.to_datetime(out[_c], errors="coerce")
     return out.sort_values("fecha_emision").reset_index(drop=True)
 
 
@@ -420,13 +430,29 @@ def _tabla_cruce(df_cruce, df_sire):
     el ancho del contenedor las dejaría ilegibles. Scrollea horizontal,
     mismo criterio que la tabla pivote de Proveedor.
     """
+    def _f(s):
+        """dd/mm/yyyy, y "" cuando no hay fecha — un NaT crudo en la grilla
+        sale como "NaT" y el usuario lo lee como un dato."""
+        return pd.to_datetime(s, errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
+
     tv = pd.DataFrame({
-        "Fecha": pd.to_datetime(df_cruce["fecha_emision"], errors="coerce")
-                   .dt.strftime("%d/%m/%Y"),
+        # Las dos fechas, para poder compararlas (a pedido 2026-08-21). El
+        # `fecha_emision` de antes mostraba la del SIRE en las filas
+        # emparejadas y la del parquet en las "Solo sistema" — o sea una
+        # sola columna que cambiaba de fuente segun la fila, imposible de
+        # comparar contra nada.
+        "Fecha SUNAT": _f(df_cruce["fecha_sunat"]),
+        "Fecha sistema": _f(df_cruce["fecha_sistema"]),
+        # `Documento` va UNA sola vez a proposito: es la CLAVE por la que se
+        # emparejan las dos fuentes (`cruzar_con_parquet` busca por
+        # `documento` exacto), asi que un "Documento sistema" seria una
+        # copia byte a byte de esta columna en toda fila emparejada. No hay
+        # nada que comparar ahi.
         "Documento": df_cruce["documento"],
         "RUC SUNAT": df_cruce["ruc_proveedor"].fillna(""),
         "RUC sistema": df_cruce["ruc_sistema"].fillna(""),
-        "Proveedor SUNAT": df_cruce["proveedor"].fillna(""),
+        # "Proveedor SUNAT" se retiro a pedido: con los dos RUC al lado, el
+        # nombre del SIRE era la tercera forma de decir lo mismo.
         "Proveedor sistema": df_cruce["proveedor_sistema"].fillna(""),
         "Base SUNAT": pd.to_numeric(df_cruce["base_sunat"], errors="coerce"),
         "Base sistema": pd.to_numeric(df_cruce["base_sistema"], errors="coerce"),
@@ -451,11 +477,22 @@ def _tabla_cruce(df_cruce, df_sire):
     # scroll horizontal, que es el comportamiento de siempre) y en pantalla
     # completa (se reparten el ancho de sobra). Sin los mínimos, el fit
     # rompería justo lo que el docstring de arriba pide evitar.
-    gb.configure_column("Fecha", width=90, minWidth=90, pinned="left")
+    # Misma convencion de color que los montos: ambar = revisar. Se pinta
+    # la fecha del SISTEMA porque es la corregible — la del SIRE es la que
+    # SUNAT ya tiene registrada. Solo marca cuando HAY las dos y difieren:
+    # un "Solo SUNAT" no tiene fecha de sistema y no es una discrepancia de
+    # fecha, es una ausencia, y eso ya lo dice la columna Estado.
+    _style_fecha = JsCode(
+        "function(p){ var o=p.data['Fecha SUNAT']; "
+        "if(p.value && o && p.value !== o) "
+        "return {'color':'%s','fontWeight':'600'}; "
+        "return {'color':'%s'}; }" % (ADVERTENCIA_TEXTO, GRIS_TEXTO))
+    gb.configure_column("Fecha SUNAT", width=105, minWidth=105, pinned="left")
+    gb.configure_column("Fecha sistema", width=110, minWidth=110,
+                        pinned="left", cellStyle=_style_fecha)
     gb.configure_column("Documento", width=115, minWidth=115, pinned="left")
     gb.configure_column("RUC SUNAT", width=105, minWidth=105)
     gb.configure_column("RUC sistema", width=105, minWidth=105)
-    gb.configure_column("Proveedor SUNAT", minWidth=180)
     gb.configure_column("Proveedor sistema", minWidth=180)
     for col in ("Base SUNAT", "Base sistema", "Total SUNAT", "Total sistema"):
         gb.configure_column(col, type=["numericColumn"], width=115,
