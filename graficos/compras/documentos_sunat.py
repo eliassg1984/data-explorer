@@ -477,9 +477,10 @@ def _tabla_cruce(df_cruce, df_sire):
     fila = sel.iloc[0] if hasattr(sel, "iloc") else sel[0]
     if fila["Estado"] == "Solo sistema":
         return None
-    doc = str(fila["Documento"])
-    coincidencias = df_sire[df_sire["documento"].astype(str) == doc]
-    return coincidencias.iloc[0] if not coincidencias.empty else None
+    # Mismo criterio que `_tabla`: por RUC + documento, nunca por documento
+    # solo — 1.422 comprobantes comparten serie-número con otro proveedor.
+    # Ver `_fila_de`.
+    return _fila_de(df_sire, fila)
 
 
 def _sello_origen(origen):
@@ -602,6 +603,38 @@ def _grafico(df, vista):
     st.plotly_chart(fig, use_container_width=True, key="sunat_g_dia")
 
 
+def _fila_de(df, fila_vista):
+    """La fila COMPLETA del df que corresponde a la fila clickeada.
+
+    Busca por `car` —el identificador único de la anotación en SUNAT— y no
+    por serie-número, que NO identifica un comprobante.
+
+    Medido sobre los 16.583 comprobantes reales: **1.422 documentos
+    comparten serie-número con otro de un proveedor DISTINTO.** Series como
+    `E001` las usa cualquier emisor chico numerando desde 1, así que
+    `E001-1`, `E001-100`, `E001-1002` aparecen tres o más veces, cada una
+    de otra empresa. Buscando sólo por `documento`, el panel podía mostrar
+    los datos de OTRO proveedor —importes, fechas, RUC— sin ningún error:
+    exactamente el modo de fallo de las reglas #140 y #141, un dato
+    plausible en el lugar equivocado.
+
+    Verificado como clave: `documento` deja 1.422 colisiones,
+    `ruc+documento` deja 3, `car` deja CERO.
+    """
+    car = str(fila_vista.get("_car", "") or "")
+    if car:
+        coincidencias = df[df["car"].astype(str) == car]
+        if not coincidencias.empty:
+            return coincidencias.iloc[0]
+    # Sin `car` (no debería pasar) se cae al criterio viejo, que al menos
+    # acierta el proveedor si además se compara el RUC.
+    doc = str(fila_vista.get("Documento", ""))
+    ruc = str(fila_vista.get("RUC", fila_vista.get("RUC SUNAT", "")))
+    coincidencias = df[(df["documento"].astype(str) == doc)
+                       & (df["ruc_proveedor"].astype(str) == ruc)]
+    return coincidencias.iloc[0] if not coincidencias.empty else None
+
+
 def _tabla(df):
     """AgGrid de una fila por documento. Devuelve la fila clickeada o None.
 
@@ -618,11 +651,14 @@ def _tabla(df):
         "RUC": df.get("ruc_proveedor", ""),
         "Total": pd.to_numeric(df.get("total"), errors="coerce"),
         "Situación": df.get("situacion", ""),
+        # Oculta, sólo para identificar la fila clickeada. Ver `_car_de`.
+        "_car": df.get("car", ""),
     })
 
     gb = GridOptionsBuilder.from_dataframe(tv)
     gb.configure_default_column(resizable=True, sortable=True, filter=False,
                                 editable=False, suppressMovable=True)
+    gb.configure_column("_car", hide=True)
     gb.configure_column("Fecha", width=95)
     gb.configure_column("Tipo", width=110)
     gb.configure_column("Documento", width=125)
@@ -658,12 +694,9 @@ def _tabla(df):
     sel = resp.selected_rows
     if sel is None or (hasattr(sel, "empty") and sel.empty) or len(sel) == 0:
         return None
-    fila = sel.iloc[0] if hasattr(sel, "iloc") else sel[0]
     # Se devuelve el registro COMPLETO del df, no la fila de la vista: la
-    # ficha PDF necesita campos que la tabla no muestra (CAR, base, moneda).
-    doc = str(fila["Documento"])
-    coincidencias = df[df["documento"].astype(str) == doc]
-    return coincidencias.iloc[0] if not coincidencias.empty else None
+    # ficha PDF necesita campos que la tabla no muestra (base, moneda).
+    return _fila_de(df, sel.iloc[0] if hasattr(sel, "iloc") else sel[0])
 
 
 def _ficha_html(doc):

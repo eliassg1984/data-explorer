@@ -289,6 +289,39 @@ finally:
 ok(sunat.ARCHIVO_REGISTRO.endswith(".parquet"),
    "ARCHIVO_REGISTRO nombra un parquet (lo comparte el sync)")
 
+# ── Identificar la fila clickeada ──────────────────────────────────────────
+print("\n── _fila_de: serie-número NO identifica un comprobante ──")
+# Bug real (2026-08-21): la tabla buscaba el documento sólo por
+# serie-número. Medido sobre los 16.583 comprobantes reales, 1.422
+# comparten serie-número con otro de un proveedor DISTINTO — series como
+# E001 las usa cualquier emisor chico numerando desde 1. El panel podía
+# mostrar los datos de otra empresa sin ningún error.
+from graficos.compras.documentos_sunat import _fila_de  # noqa: E402
+
+_dos_iguales = pd.DataFrame([
+    {"car": "CAR-A", "documento": "E001-1", "ruc_proveedor": "20111111111",
+     "proveedor": "EMPRESA A", "total": 100.0},
+    {"car": "CAR-B", "documento": "E001-1", "ruc_proveedor": "20222222222",
+     "proveedor": "EMPRESA B", "total": 999.0},
+])
+
+_r = _fila_de(_dos_iguales, {"_car": "CAR-B", "Documento": "E001-1",
+                             "RUC": "20222222222"})
+ok(_r is not None and _r["proveedor"] == "EMPRESA B",
+   "con dos comprobantes de igual serie-número, devuelve el clickeado")
+ok(_r["total"] == 999.0, "y por lo tanto su importe, no el del otro")
+
+# Sin `car` (no debería pasar) el RUC todavía desambigua.
+_r2 = _fila_de(_dos_iguales, {"_car": "", "Documento": "E001-1",
+                              "RUC": "20111111111"})
+ok(_r2 is not None and _r2["proveedor"] == "EMPRESA A",
+   "sin car, el RUC alcanza para no confundir proveedores")
+
+ok(_fila_de(_dos_iguales, {"_car": "NO-EXISTE", "Documento": "X-9",
+                           "RUC": "0"}) is None,
+   "una fila que no está en el df devuelve None, no revienta")
+
+
 # ── Detalle de líneas del XML ──────────────────────────────────────────────
 print("\n── lineas_xml (lo que el parquet NO tiene) ──")
 _XML_FACTURA = b"""<?xml version="1.0" encoding="UTF-8"?>
