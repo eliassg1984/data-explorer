@@ -6351,3 +6351,71 @@ salvo `icono`):
      original disponible (botones de descarga), pedido en curso (aviso de
      espera), o no sincronizado (botón para pedirlo). La ficha
      renderizada del registro sigue estando siempre, en los tres.
+
+145. **La GRILLA tiene un dueño, igual que el color y el alto**
+     (`graficos/compras/_comun.py::COLUMNAS_DRILL`). Tercera cara del mismo
+     patrón que `tema.py` (color) y `alturas.py` (alto vertical): el EJE
+     HORIZONTAL de una vista tampoco puede escribirse a mano en cada fila.
+
+     El bug (2026-08-21, reportado con captura). El drill de Proveedor tenía
+     dos filas de dos columnas y cada una partía en un sitio distinto: la de
+     arriba con `st.columns([1.6, 1])` (61.5%) y la de abajo con
+     `st.columns(2)` (50%). Los dos números son correctos leídos por
+     separado — y por eso nadie los miraba juntos. Medido en el navegador,
+     viewport 1536x864: el canal gris entre columnas caía en x=949 arriba y
+     en x=800 abajo, o sea el eje de la página saltaba ~150px a media
+     altura. La vista dejaba de leerse como una grilla.
+
+     Encima venían dos asimetrías más, que son la misma enfermedad:
+
+     - **La fila de abajo bailaba con los datos.** El ranking de arriba
+       tiene el alto congelado (`_ALTO_FRAME` = 8 filas = 325px, lo que
+       sobra scrollea dentro), pero la tabla del Panel A lo sacaba de
+       `por_filas(len(tv), ..., minimo=0)`: 80px con 1 producto, 430 con 12.
+       Cada clic en el ranking cambiaba el alto de la tarjeta y empujaba la
+       tabla de documentos de abajo. Ahora usa el MISMO `_ALTO_FRAME`.
+     - **Arriba dos tarjetas, abajo una.** Los paneles A/B eran UNA tarjeta
+       ancha (`compras_prov_card_paneles`) con dos `_card` transparentes
+       adentro, mientras la fila de arriba son dos bloques
+       `compras_prov_card_*` separados por el gris del app. Ahora son cuatro
+       bloques sobre la misma grilla y la vista se lee como un 2x2.
+
+     **El piso de una fila, además del techo.** `estilos/_80_cards.py` ya
+     clampeaba las tarjetas a una pantalla (`max-height: var(--alto-util)`,
+     regla #101). Faltaba lo contrario: que dos tarjetas de la MISMA fila
+     midan lo mismo aunque una tenga menos contenido. Medido: Productos
+     393px contra Proveedores-del-producto 182px, 211px de escalón, y
+     cambiando en cada clic porque el panel derecho es una lista elástica.
+
+     Por qué hace falta CSS y no basta el flexbox de Streamlit — medido
+     elemento por elemento: las COLUMNAS sí se estiran solas
+     (`stHorizontalBlock` trae `align-items: stretch`, las dos miden 393).
+     Lo que no se estira es el **contenedor de elemento** que Streamlit mete
+     entre la columna y la tarjeta: nace con `flex: 0 1 auto`. La tarjeta ya
+     trae `flex: 1 1 0%`, así que basta con hacer crecer a ese intermedio:
+
+     ```css
+     .stColumn > .stVerticalBlock
+     > div:has(> div[class*="st-key-compras_prov_card_"]) { flex: 1 1 auto; }
+     ```
+
+     `:has()` porque es el único modo de alcanzar al PADRE de la tarjeta. Un
+     navegador sin soporte ignora la regla y vuelve al escalón: degrada, no
+     rompe. Va dentro del mismo `@media (min-width: 769px)` que el techo —
+     en móvil las columnas se apilan y la regla no tendría sentido.
+
+     La guarda: `test_graficos.py::_pruebas_grilla_horizontal`. Verifica que
+     ninguna fila de `proveedor.py` vuelva a partirse con un literal, que las
+     dos filas usen `COLUMNAS_DRILL`, y que nadie redeclare la constante
+     fuera de `_comun.py`. Escape hatch para las subdivisiones DENTRO de una
+     tarjeta (el chart y su pila de KPIs, una botonera): un comentario
+     `# columnas-internas: <por qué>` en la línea o en las 3 de encima —
+     mismo idioma que el `# alto-fijo-justificado:` de la regla del
+     presupuesto vertical.
+
+     **PENDIENTE.** La guarda cubre `proveedor.py`, que es donde se arregló.
+     El resto de los drills de Compras siguen con literales y entre ellos hay
+     cuatro ejes distintos: 1.6/1 (`producto.py` x2, `documentos_sunat.py`),
+     1.7/1 (`compras/__init__.py`) y 1/1 (`volatilidad.py`). El esqueleto de
+     la página salta al navegar por el rail. Al unificarlos, ampliar
+     `_ARCHIVOS` en la guarda a todo `graficos/compras`.

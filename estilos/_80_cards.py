@@ -150,6 +150,38 @@ CSS = """    /* ================================================================
             background: var(--scroll-thumb);
             border-radius: 3px;
         }
+
+        /* ─────────────────────────────────────────────────────────────── */
+        /* DOS TARJETAS EN UNA FILA MIDEN LO MISMO                          */
+        /*                                                                  */
+        /* La otra mitad del encuadre de arriba: aquél pone el TECHO, éste  */
+        /* el PISO. Sin él, en una fila de dos columnas la tarjeta con      */
+        /* menos contenido se queda corta y el borde inferior de la fila    */
+        /* sale en escalón. Medido el 2026-08-21 en el drill de Proveedor,  */
+        /* viewport 1536x864: Productos 393px contra Proveedores-del-       */
+        /* producto 182px — 211px de escalón, y cambiando en cada clic      */
+        /* porque el panel de la derecha es una lista elástica.             */
+        /*                                                                  */
+        /* Por qué hace falta una regla y no basta el flexbox de Streamlit: */
+        /* las columnas SÍ se estiran solas (`stHorizontalBlock` tiene      */
+        /* `align-items: stretch`, medido: las dos miden 393). Lo que no se */
+        /* estira es el contenedor de ELEMENTO que Streamlit mete entre la  */
+        /* columna y la tarjeta: nace con `flex: 0 1 auto`, o sea se ajusta */
+        /* al contenido. La tarjeta ya trae `flex: 1 1 0%`, así que en      */
+        /* cuanto ese contenedor crece, la tarjeta lo sigue sola.           */
+        /*                                                                  */
+        /* `:has()` para alcanzar al PADRE de la tarjeta, que es el único   */
+        /* que se puede seleccionar por su hijo. Un navegador sin `:has()`  */
+        /* ignora la regla y vuelve al escalón — degrada, no rompe.         */
+        /*                                                                  */
+        /* Scopeado a `compras_prov_card_` a propósito: `ajuste_graf_card_` */
+        /* y `sunat_card_` comparten el techo de arriba pero su piso no     */
+        /* está medido todavía. Al medirlos, sumarlos acá.                  */
+        /* ─────────────────────────────────────────────────────────────── */
+        .stColumn > .stVerticalBlock
+        > div:has(> div[class*="st-key-compras_prov_card_"]) {
+            flex: 1 1 auto;
+        }
     }
 
     /* =================================================================== */

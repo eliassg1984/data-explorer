@@ -129,6 +129,30 @@ ya están medidas y documentadas en `arquitectura.md` reglas #101 y #102:
 contenedor** — `height="stretch"` estira el wrapper pero el SVG se queda
 en 450px, así que el alto sale de `fig.layout.height`, o sea de Python.
 
+## Grilla: nunca un `st.columns([...])` suelto en un drill
+
+Tercera cara del mismo patrón (color / alto / **eje horizontal**). La
+proporción que parte en dos una fila de un drill de Compras sale de
+`graficos/compras/_comun.py::COLUMNAS_DRILL`, no de un literal.
+
+Nació de un bug con captura: el drill de Proveedor partía la fila de arriba
+con `[1.6, 1]` y la de abajo con `st.columns(2)`. Los dos números son
+correctos por separado; juntos corren el eje de la página ~150px a media
+altura y la vista deja de leerse como una grilla.
+
+Las subdivisiones **dentro** de una tarjeta (un chart y su pila de KPIs, una
+botonera) sí son literales: se marcan con `# columnas-internas: <por qué>`
+en la línea o en las 3 de encima. `test_graficos.py` distingue por esa marca
+— mismo idioma que el `# alto-fijo-justificado:` del presupuesto vertical.
+
+Y la gemela vertical de eso: **dos tarjetas de la misma fila miden lo
+mismo**. El techo lo pone `max-height: var(--alto-util)`; el piso, una regla
+con `:has()` en `estilos/_80_cards.py`. Las columnas de Streamlit sí se
+estiran solas, pero el contenedor de elemento que mete entre la columna y la
+tarjeta nace con `flex: 0 1 auto`. Detalle en `arquitectura.md` regla #145,
+que también lista los cuatro ejes distintos que quedan pendientes en el
+resto de `graficos/compras/`.
+
 ## Streamlit — trampas que ya costaron bugs
 
 - **`st.markdown` no ejecuta `<script>`.** Animaciones y DOM se hacen con CSS

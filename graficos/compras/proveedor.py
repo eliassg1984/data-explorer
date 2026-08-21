@@ -841,7 +841,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # (`compras_prov_card_paneles`) partida al 50% con dos `_card`
         # transparentes adentro, mientras la fila de arriba son DOS tarjetas
         # partidas al 61.5%. El ojo veía dos cajas arriba y una abajo, con el
-        # canal gris cortado a media página y el eje corrido ~200px. Ahora son
+        # canal gris cortado a media página y el eje corrido ~150px en un
+        # viewport de 1536 (~200 en uno de 1920, crece con el ancho). Ahora son
         # cuatro bloques `compras_prov_card_*` sobre la MISMA grilla, así que
         # la vista se lee como un 2x2. Ver `_comun.COLUMNAS_DRILL`.
         pa, pb = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)

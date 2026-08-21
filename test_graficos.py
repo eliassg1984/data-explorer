@@ -1415,6 +1415,89 @@ def _pruebas_presupuesto_vertical():
     return fallos
 
 
+def _pruebas_grilla_horizontal():
+    """El contrato de la GRILLA (graficos/compras/_comun.py).
+
+    Gemela horizontal de `_pruebas_presupuesto_vertical`, y por el mismo
+    motivo: el bug es invisible desde el código. El drill de Proveedor partía
+    su fila de arriba con `st.columns([1.6, 1])` y la de abajo con
+    `st.columns(2)`. Los dos números son correctos leídos por separado; juntos
+    corren el eje de la página ~200px a media altura y la vista deja de
+    leerse como una grilla.
+
+    Lo que se puede romper en silencio y aquí falla ruidoso:
+
+      1. Que una fila del drill vuelva a partirse con un literal en vez de
+         `COLUMNAS_DRILL`. El escape hatch para las subdivisiones DENTRO de
+         una tarjeta (el chart y sus KPIs, una botonera) es un comentario
+         `# columnas-internas: <por qué>` en la línea o justo encima.
+      2. Que alguien redeclare la constante en otro módulo, que es cómo
+         empezó este bug la primera vez.
+
+    PENDIENTE: la guarda cubre `proveedor.py`, que es donde se arregló. Los
+    otros drills de Compras siguen con literales y entre ellos hay cuatro ejes
+    distintos (1.6/1 en producto.py y documentos_sunat.py, 1.7/1 en
+    __init__.py, 1/1 en volatilidad.py), así que el esqueleto salta al navegar
+    por el rail. Al unificarlos, ampliar `_ARCHIVOS` a todo `graficos/compras`.
+    """
+    import pathlib
+    import re
+
+    fallos = 0
+
+    def check(nombre, ok, detalle=""):
+        nonlocal fallos
+        if ok:
+            print(f"OK    grilla · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA grilla · {nombre}{': ' + detalle if detalle else ''}")
+
+    raiz = pathlib.Path(__file__).parent
+    _ARCHIVOS = [raiz / "graficos" / "compras" / "proveedor.py"]
+
+    # ── 1) Ninguna fila partida con un literal ──────────────────────────
+    culpables = []
+    for py in _ARCHIVOS:
+        lineas = py.read_text(encoding="utf-8").split("\n")
+        for i, linea in enumerate(lineas, 1):
+            if "st.columns(" not in linea or linea.lstrip().startswith("#"):
+                continue
+            if "COLUMNAS_DRILL" in linea:
+                continue
+            # La marca vale en la propia línea o en las 3 de encima: una
+            # llamada con la marca al final no siempre entra en el ancho.
+            ventana = "\n".join(lineas[max(0, i - 4):i])
+            if "columnas-internas:" in ventana:
+                continue
+            culpables.append(f"{py.relative_to(raiz)}:{i}")
+    check("ninguna fila de un drill partida con un literal "
+          "(usar COLUMNAS_DRILL, o marcar `# columnas-internas:`)",
+          not culpables, ", ".join(culpables[:6]))
+
+    # ── 2) Las dos filas del drill de Proveedor usan la constante ───────
+    # Positiva, no negativa: sin esto, borrar las dos llamadas dejaría la
+    # guarda #1 en verde.
+    prov = (raiz / "graficos" / "compras" / "proveedor.py").read_text(
+        encoding="utf-8")
+    n_filas = len(re.findall(r"st\.columns\(COLUMNAS_DRILL", prov))
+    check("las 2 filas del drill de Proveedor parten con COLUMNAS_DRILL",
+          n_filas == 2, f"se encontraron {n_filas}")
+
+    # ── 3) La constante tiene UN dueño ──────────────────────────────────
+    intrusos = []
+    for py in sorted(raiz.rglob("*.py")):
+        if py.name in ("_comun.py", pathlib.Path(__file__).name):
+            continue
+        for i, linea in enumerate(py.read_text(encoding="utf-8").split("\n"), 1):
+            if re.match(r"\s*(COLUMNAS_DRILL|GAP_DRILL)\s*=", linea):
+                intrusos.append(f"{py.relative_to(raiz)}:{i}")
+    check("COLUMNAS_DRILL/GAP_DRILL solo los declara compras/_comun.py",
+          not intrusos, ", ".join(intrusos[:6]))
+
+    return fallos
+
+
 def main():
     df, df_min = _df_completo(), _df_minimo()
     fallos = 0
@@ -1541,6 +1624,9 @@ def main():
 
     # ── Presupuesto vertical: que las tarjetas sigan entrando en pantalla ─
     fallos += _pruebas_presupuesto_vertical()
+
+    # ── Grilla horizontal: que todas las filas partan en el mismo sitio ──
+    fallos += _pruebas_grilla_horizontal()
 
     print()
     if fallos:
