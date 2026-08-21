@@ -68,6 +68,8 @@ baja a S/6,9 y S/1.199 — esa medición es de ANTES de tener RUC, cuando la
 única defensa era el nombre). Ver `arquitectura.md` regla #143.
 """
 
+import io
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -989,6 +991,20 @@ def _panel_documento(doc):
                    "datos del registro, que siempre está disponible.")
 
 
+def _excel_bytes(df, hoja="Datos"):
+    """El df como .xlsx en memoria, para `st.download_button`.
+
+    xlsx y no CSV (a pedido 2026-08-21): el CSV obliga a pelear con el
+    separador y la coma decimal cada vez que se abre en Excel con locale
+    es-PE, y las columnas de plata entran como texto. El motor es
+    `xlsxwriter` — wheel puro, solo-escritura, en requirements.txt.
+    """
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as w:
+        df.to_excel(w, index=False, sheet_name=hoja)
+    return buf.getvalue()
+
+
 def renderizar_documentos_sunat(d, col_fecha):
     """Punto de entrada del drill. Lo llama `graficos/compras/__init__.py`.
 
@@ -1023,8 +1039,14 @@ def renderizar_documentos_sunat(d, col_fecha):
     # ancho (ver `_ficha_html`, que reparte los grupos en columnas para no
     # quedar como una lista larguisima de dos palabras por fila).
     with st.container(border=True, key="sunat_card_izq"):
-        c_vista, c_sit, c_act, c_kpi = st.columns([1.7, 1.3, 0.6, 2.8])
-        with c_vista:
+        # 2026-08-21, a pedido: los dos selectores APILADOS y sin caja, y
+        # las acciones en iconos. Antes iban lado a lado y cada uno con su
+        # marco de 40px de alto (borde 1px + fondo blanco sobre el
+        # `div[role="group"]` de react-aria, medido). Ahora se leen como dos
+        # lineas de texto con su chevron — el CSS vive en
+        # `estilos/_30_filtros.py`, scopeado a `sunat_card_izq`.
+        c_sel, c_act, c_kpi = st.columns([1.5, 0.8, 4.1])
+        with c_sel:
             # 2026-08-21, a pedido: de radio horizontal a selectbox. Con
             # `horizontal=True` en una columna de 166px las 3 opciones
             # NO entraban en una fila y Streamlit las apilaba en 3 líneas
@@ -1041,7 +1063,6 @@ def renderizar_documentos_sunat(d, col_fecha):
                 help="«Cruce» compara cada comprobante del SIRE contra "
                      "el registro interno de compras (parquet): mismo "
                      "documento, ¿coinciden los montos?")
-        with c_sit:
             situacion = st.selectbox(
                 "Situación", ["Todos", "Registrados", "Pendientes"],
                 key="sunat_situacion",
@@ -1051,6 +1072,8 @@ def renderizar_documentos_sunat(d, col_fecha):
                      "fiscal sin tomar.",
             )
         with c_act:
+            _c_ref, _c_xls = st.columns(2)  # columnas-internas: 2 iconos de accion
+        with _c_ref:
             _ayuda = "Volver a consultar a SUNAT"
             if not sunat.secrets_disponibles():
                 _ayuda += (". Sin credenciales configuradas: se "
@@ -1070,6 +1093,14 @@ def renderizar_documentos_sunat(d, col_fecha):
                 sunat._existe_original.clear()
                 sunat._bytes_original.clear()
                 st.rerun()
+        with _c_xls:
+            # El boton de exportar vive ARRIBA (a pedido) pero los datos que
+            # exporta se calculan MAS ABAJO — depende de la vista y del
+            # filtro de situacion. `st.empty()` reserva el sitio ahora y se
+            # rellena cuando el df existe: es la unica forma de tener un
+            # control arriba que dependa de algo de abajo sin partir el
+            # flujo en dos reruns.
+            _slot_excel = st.empty()
 
         with st.spinner("Cargando el registro de compras de SUNAT…"):
             try:
@@ -1103,22 +1134,25 @@ def renderizar_documentos_sunat(d, col_fecha):
             with c_kpi:
                 _kpis_cruce(df_cruce)
             doc = _tabla_cruce(df_cruce, vis)
-            st.download_button(
-                "⬇ Descargar CSV del cruce",
-                data=df_cruce.to_csv(index=False).encode("utf-8-sig"),
-                file_name=f"sunat_cruce_{_sufijo}.csv",
-                mime="text/csv", key="sunat_dl_csv_cruce",
-            )
+            _exportable, _nombre_xls = df_cruce, f"sunat_cruce_{_sufijo}.xlsx"
         else:
             with c_kpi:
                 _kpis(df, _origen)
             _grafico(vis, vista)
             doc = _tabla(vis)
+            _exportable, _nombre_xls = vis, f"sunat_compras_{_sufijo}.xlsx"
+
+        # Se rellena el hueco reservado ARRIBA, junto al boton de refrescar.
+        # Exporta lo que la tabla esta mostrando: el cruce si la vista es
+        # «Cruce», el registro filtrado por situacion si no.
+        with _slot_excel:
             st.download_button(
-                "⬇ Descargar CSV",
-                data=vis.to_csv(index=False).encode("utf-8-sig"),
-                file_name=f"sunat_compras_{_sufijo}.csv",
-                mime="text/csv", key="sunat_dl_csv",
+                "⬇", data=_excel_bytes(_exportable),
+                file_name=_nombre_xls,
+                mime=("application/vnd.openxmlformats-officedocument"
+                      ".spreadsheetml.sheet"),
+                key="sunat_dl_xlsx", use_container_width=True,
+                help="Exportar a Excel lo que muestra la tabla",
             )
 
     # La ficha va DEBAJO de la tabla, no al costado. Sin espaciador: el que

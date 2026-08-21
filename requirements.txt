@@ -15,3 +15,8 @@ requests>=2.31.0
 # Streamlit monta todos sus iframes asi (arquitectura.md regla #139).
 # Wheel puro, sin dependencias de sistema.
 pypdfium2>=4.30,<5
+# Exportar a Excel de verdad (.xlsx) desde el drill de Documentos SUNAT.
+# Wheel puro, sin dependencias de sistema, y solo-escritura: es lo unico
+# que hace falta (nadie LEE xlsx en esta app). Se eligio sobre openpyxl,
+# que ademas sabe leer y pesa mas, por eso mismo.
+xlsxwriter>=3.2,<4

@@ -21,4 +21,69 @@ CSS = """    /* ================================================================
         background: var(--accent-tint) !important;
         color: var(--accent-deep) !important;
     }
+
+    /* =================================================================== */
+    /* DOCUMENTOS SUNAT — LOS DOS SELECTORES, COMO TEXTO                     */
+    /*                                                                       */
+    /* A pedido 2026-08-21: "mas minimalista, una encima de la otra, pero    */
+    /* como si fuesen textos". Un `st.selectbox` de Streamlit 1.59 se pinta  */
+    /* con react-aria, y la CAJA (borde 1px + fondo blanco + 40px de alto)   */
+    /* no la lleva ni el `stSelectbox` ni el `input`, sino el                */
+    /* `div[role="group"]` que hay entre los dos — medido en el navegador,   */
+    /* porque por el nombre de la clase (emotion, cambia entre builds) no    */
+    /* se puede adivinar. Estilar el ancestro no alcanza: hay que ir a ese   */
+    /* nodo.                                                                 */
+    /*                                                                       */
+    /* Se conserva el chevron: sin ninguna affordance, un texto que despliega */
+    /* una lista al hacer clic no se distingue de una etiqueta muerta.       */
+    /* =================================================================== */
+    .st-key-sunat_card_izq [data-testid="stSelectbox"] div[role="group"] {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        min-height: 0 !important;
+    }
+    .st-key-sunat_card_izq [data-testid="stSelectbox"] input {
+        padding: 0 !important;
+        height: auto !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        color: var(--text-primary) !important;
+        cursor: pointer !important;
+    }
+    /* El alto lo fija el `input` (40px de la altura de control de
+       Streamlit), no el grupo — bajarlo ahi es lo que convierte la caja en
+       una linea de texto. */
+    .st-key-sunat_card_izq [data-testid="stSelectbox"] input,
+    .st-key-sunat_card_izq [data-testid="stSelectbox"] div[role="group"],
+    .st-key-sunat_card_izq [data-testid="stSelectbox"] .react-aria-ComboBox {
+        height: 26px !important;
+    }
+    /* Las dos filas, juntas: el bloque vertical de Streamlit mete 1rem de
+       GAP (no margen — por eso hay que atacar al padre, no al widget) y
+       separaba los selectores como si fueran dos secciones distintas, en
+       vez de dos lineas de la misma lista. El `:has()` acota al bloque que
+       de verdad contiene los selectores: sin el, cualquier otra pila de la
+       tarjeta se comprimiria tambien. */
+    .st-key-sunat_card_izq [data-testid="stVerticalBlock"]:has(
+        > [data-testid="stElementContainer"] > [data-testid="stSelectbox"]) {
+        gap: 2px !important;
+    }
+    /* Los dos iconos de accion (refrescar / exportar) a la altura del texto
+       y sin el marco de boton de Streamlit. */
+    .st-key-sunat_actualizar button,
+    .st-key-sunat_dl_xlsx button {
+        min-height: 0 !important;
+        height: 30px !important;
+        padding: 0 !important;
+        border: 1px solid var(--border) !important;
+        background: transparent !important;
+        color: var(--text-secondary) !important;
+    }
+    .st-key-sunat_actualizar button:hover,
+    .st-key-sunat_dl_xlsx button:hover {
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+        border-color: var(--accent-light) !important;
+    }
 """
