@@ -442,28 +442,49 @@ def _tabla_cruce(df_cruce, df_sire):
     gb = GridOptionsBuilder.from_dataframe(tv)
     gb.configure_default_column(resizable=True, sortable=True, filter=False,
                                 editable=False, suppressMovable=True)
-    gb.configure_column("Fecha", width=90, pinned="left")
-    gb.configure_column("Documento", width=115, pinned="left")
-    gb.configure_column("RUC SUNAT", width=105)
-    gb.configure_column("RUC sistema", width=105)
+    # `minWidth` = `width` en cada columna, y no es redundante: es lo que
+    # hace SEGURO al `sizeColumnsToFit()` de `onGridSizeChanged` (más abajo).
+    # `sizeColumnsToFit` respeta los mínimos — si no entran, deja cada
+    # columna en su mínimo y scrollea, en vez de aplastarlas. Así el mismo
+    # handler sirve para los dos estados: angosto (columnas en su mínimo,
+    # scroll horizontal, que es el comportamiento de siempre) y en pantalla
+    # completa (se reparten el ancho de sobra). Sin los mínimos, el fit
+    # rompería justo lo que el docstring de arriba pide evitar.
+    gb.configure_column("Fecha", width=90, minWidth=90, pinned="left")
+    gb.configure_column("Documento", width=115, minWidth=115, pinned="left")
+    gb.configure_column("RUC SUNAT", width=105, minWidth=105)
+    gb.configure_column("RUC sistema", width=105, minWidth=105)
     gb.configure_column("Proveedor SUNAT", minWidth=180)
     gb.configure_column("Proveedor sistema", minWidth=180)
     for col in ("Base SUNAT", "Base sistema", "Total SUNAT", "Total sistema"):
         gb.configure_column(col, type=["numericColumn"], width=115,
-                            valueFormatter=_fmt_soles)
+                            minWidth=115, valueFormatter=_fmt_soles)
     # Igual convención que "Pendiente" en _tabla: ámbar = revisar, rojo =
     # más urgente todavía (plata cargada sin comprobante electrónico que
     # la respalde). "Coincide" no se destaca — lo normal no compite por
     # atención.
     gb.configure_column(
-        "Estado", width=118, pinned="right",
+        "Estado", width=118, minWidth=118, pinned="right",
         cellStyle=JsCode(
             "function(p){ var m={'Diferencia':'%s','Solo SUNAT':'%s',"
             "'Solo sistema':'%s'}; var c=m[p.value]; "
             "return c ? {'color':c,'fontWeight':'600'} : {'color':'%s'}; }"
             % (ADVERTENCIA_TEXTO, ADVERTENCIA_TEXTO, ERROR, GRIS_TEXTO)))
     gb.configure_selection(selection_mode="single", use_checkbox=False)
-    gb.configure_grid_options(rowHeight=30, headerHeight=32)
+    # Re-reparte las columnas cada vez que el grid cambia de TAMANIO, que es
+    # exactamente lo que pasa al entrar y salir de pantalla completa
+    # (`inject_maximize_aggrid`). Sin esto el maximizado daba mas lienzo pero
+    # las columnas se quedaban con el ancho de la tarjeta angosta: la tabla
+    # ocupaba 1365px con la mitad derecha vacia y los encabezados igual de
+    # cortados que antes. Reportado con captura el 2026-08-21.
+    # Es seguro en el estado angosto porque cada columna declara `minWidth`
+    # (ver arriba): `sizeColumnsToFit` los respeta y scrollea en vez de
+    # aplastar. Es la receta de la propia documentacion de AG Grid, y no
+    # entra en bucle: el evento no se re-dispara por el propio ajuste.
+    gb.configure_grid_options(
+        rowHeight=30, headerHeight=32,
+        onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"),
+    )
 
     resp = AgGrid(
         tv, gridOptions=gb.build(),
@@ -683,7 +704,20 @@ def _tabla(df):
             "? {'color':'%s','fontWeight':'600'} : {'color':'%s'}; }"
             % (ADVERTENCIA_TEXTO, GRIS_TEXTO)))
     gb.configure_selection(selection_mode="single", use_checkbox=False)
-    gb.configure_grid_options(rowHeight=30, headerHeight=32)
+    # Re-reparte las columnas cada vez que el grid cambia de TAMANIO, que es
+    # exactamente lo que pasa al entrar y salir de pantalla completa
+    # (`inject_maximize_aggrid`). Sin esto el maximizado daba mas lienzo pero
+    # las columnas se quedaban con el ancho de la tarjeta angosta: la tabla
+    # ocupaba 1365px con la mitad derecha vacia y los encabezados igual de
+    # cortados que antes. Reportado con captura el 2026-08-21.
+    # Es seguro en el estado angosto porque cada columna declara `minWidth`
+    # (ver arriba): `sizeColumnsToFit` los respeta y scrollea en vez de
+    # aplastar. Es la receta de la propia documentacion de AG Grid, y no
+    # entra en bucle: el evento no se re-dispara por el propio ajuste.
+    gb.configure_grid_options(
+        rowHeight=30, headerHeight=32,
+        onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"),
+    )
 
     resp = AgGrid(
         tv, gridOptions=gb.build(),

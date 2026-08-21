@@ -6550,3 +6550,61 @@ salvo `icono`):
      score de cada ítem. En MSN son una calificación (Valoración 3/6, Estado
      4/6); acá los ítems del rail son destinos de navegación, no entidades
      puntuadas. No hay dato que poner ahí sin inventarlo.
+
+148. **Maximizar un AgGrid necesita DOS mitades: soltar el ancho y
+     re-repartir las columnas.** El botón ⛶ (`inject_maximize_aggrid`)
+     existía desde antes y "funcionaba": la tabla entraba en pantalla
+     completa. Pero al ponerlo en Documentos SUNAT (2026-08-21) el usuario
+     reportó con captura que no servía de nada — la tabla ocupaba los
+     1365px de alto y el grid seguía con el ancho de la tarjeta angosta,
+     media pantalla vacía a la derecha y los encabezados igual de cortados
+     (`F...`, `D...`, `E...`).
+
+     **Mitad 1 — el CSS forzaba alto y NUNCA ancho.** `_FS_CSS_IFRAME`
+     (`inyecciones/_fragmentos.py`) ponía `height: 100vh` en toda la cadena
+     `#root > div > .ag-theme-* > .ag-root-wrapper` y ni una regla de
+     `width`. No se nota en una tabla que ya ocupa el ancho de la página
+     (el caso para el que nació, la pivote de Proveedor); se nota mucho en
+     una que vive en media columna. Medido en el navegador: con el iframe
+     llevado a 1600px, el `body` del iframe pasaba a 1600 y
+     `.ag-root-wrapper` se quedaba clavado en 474 — st_aggrid le fija al
+     contenedor un ancho en PÍXELES, medido al montar contra su tarjeta.
+
+     **Mitad 2 — soltar el ancho no mueve las columnas.** Con el
+     contenedor ya en 1600px las columnas seguían sumando 457: AG Grid da
+     más lienzo pero no re-reparte solo. Hace falta `sizeColumnsToFit()`,
+     y el sitio correcto para llamarlo es el evento `gridSizeChanged`, que
+     dispara justo al entrar y al salir de pantalla completa. Se declara
+     desde Python, no desde el JS de la inyección:
+
+     ```python
+     gb.configure_grid_options(
+         onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"))
+     ```
+
+     **Por qué es seguro en el estado angosto**, que es la trampa: la
+     tabla del cruce declara a propósito `fit_columns_on_grid_load=False`
+     porque son 10 columnas y forzarlas al ancho de la tarjeta las deja
+     ilegibles. Un `sizeColumnsToFit()` incondicional rompería justo eso.
+     La salida NO es un umbral de píxeles a ojo: es darle `minWidth` a cada
+     columna. `sizeColumnsToFit` respeta los mínimos — si no entran, deja
+     cada una en su mínimo y scrollea, en vez de aplastar. Así el mismo
+     handler sirve para los dos estados sin ninguna condición.
+
+     **Cómo se verificó, porque el entorno no deja probar fullscreen.**
+     `requestFullscreen()` no corre en el panel de preview, y el
+     `ResizeObserver` de AG Grid tampoco dispara con la pestaña oculta
+     (misma familia de límites que las animaciones CSS, regla del
+     `getAnimations().finish()`). Se probó por partes, sin simular nada:
+     inyectando el `_FS_CSS_IFRAME` REAL del proyecto + la clase
+     `fs-activo` (`.ag-root-wrapper` 474 → 1600, o sea la mitad 1 anda), y
+     después recuperando el handler VERDADERO del grid con
+     `api.getGridOption('onGridSizeChanged')` para invocarlo — columnas de
+     457 a 1583px, Proveedor de 190 a 366. La API del grid se alcanza
+     caminando el fiber de React desde el div del tema
+     (`__reactFiber$…` → `.return` × 2 → `stateNode.api`); `st_aggrid` no
+     la expone de otra forma —`__ag_grid_instance` es sólo un id numérico.
+
+     Ese camino (fiber → `stateNode.api` → `getGridOption`) es la forma de
+     verificar CUALQUIER handler de AgGrid desde el navegador acá, sin
+     depender de que el evento llegue a dispararse solo.

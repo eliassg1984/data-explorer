@@ -208,15 +208,31 @@ html.fs-activo, html.fs-activo body {{
   max-height: 100vh !important;
   overflow: hidden !important;
 }}
+/* ANCHO, no solo alto. Hasta 2026-08-21 este bloque forzaba `height:
+   100vh` en toda la cadena y NUNCA tocaba el ancho: st_aggrid le fija al
+   contenedor del grid un ancho en PIXELES, medido al montar contra la
+   tarjeta donde vive. Resultado, reportado con captura: en pantalla
+   completa la tabla ocupaba los 1365px de alto pero el grid seguia en los
+   ~474px de la tarjeta angosta -- media pantalla vacia a la derecha y las
+   columnas igual de cortadas que antes. Medido en el navegador: el body
+   del iframe pasaba a 1600px y `.ag-root-wrapper` se quedaba en 474.
+   Con el ancho suelto, el ResizeObserver de AG Grid dispara
+   `gridSizeChanged` y ahi re-reparte las columnas quien lo haya declarado
+   (ver `onGridSizeChanged` en graficos/compras/documentos_sunat.py). Las
+   dos mitades hacen falta: sin el ancho no hay evento, y sin el handler
+   hay lienzo pero las columnas no se mueven. */
 html.fs-activo #root {{
   height: 100vh !important;
+  width: 100vw !important;
   overflow: hidden !important;
 }}
 html.fs-activo #root > div {{
   height: 100vh !important;
+  width: 100% !important;
 }}
 html.fs-activo #root [class*="ag-theme-"]:not(.ag-dnd-ghost):not(.ag-popup) {{
   height: 100vh !important;
+  width: 100% !important;
 }}
 html.fs-activo .ag-dnd-ghost,
 html.fs-activo .ag-popup,
@@ -225,7 +241,7 @@ html.fs-activo body > [class*="ag-theme-"]:not(#gridContainer) {{
   min-height: 0 !important;
 }}
 html.fs-activo .ag-root-wrapper {{
-  height: 100% !important; border-radius: 0 !important;
+  height: 100% !important; width: 100% !important; border-radius: 0 !important;
 }}
 html.fs-activo .ag-column-panel,
 html.fs-activo .ag-filter-toolpanel {{
