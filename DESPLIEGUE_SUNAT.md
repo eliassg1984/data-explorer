@@ -48,10 +48,22 @@ Copiar también `sunat_pedidos.bat` y `sunat_nocturno.bat` a `C:\proyecto\`
 y programarlos — traen la ruta completa al `python.exe` y mandan la salida
 a `logs\`.
 
-| `.bat` | Cuándo | Qué hace |
+| Qué | Cómo | Cuándo |
 |---|---|---|
-| `sunat_pedidos.bat` | cada minuto | Atiende lo que alguien pidió con el botón "Traer el original". Sin pedidos sale en ~1 seg **sin abrir el navegador**. |
-| `sunat_nocturno.bat` | 1 vez de noche | Atiende pedidos y con el tiempo restante baja lo que falta, de lo más nuevo hacia atrás. Corta a los 120 min. |
+| **Pedidos** | Servicio con NSSM: `sunat_originales.py --vigilar` | permanente |
+| **Backfill** | Tarea programada: `sunat_nocturno.bat` | 1 vez de noche |
+
+Los pedidos van como **servicio**, no como tarea cada minuto — mismo
+patrón que `atender_solicitudes.py`, y por lo mismo: el arranque pesado
+(importar pandas, cargar el extractor, crear el cliente de R2) ocurre una
+vez en lugar de en cada revisión.
+
+> **El intervalo es 15 seg, no 5.** No es gusto, es presupuesto: cada
+> revisión es una operación Class A de R2, y el tier gratuito da 1.000.000
+> al mes. `atender_solicitudes.py` a 5 seg ya consume ~518.000; otro
+> proceso igual sumaría ~1.036.000 y se pasaría. A 15 seg esto usa
+> ~173.000 y el total queda en ~700.000. Como la descarga tarda ~23 seg,
+> esperar hasta 15 no cambia nada para quien apretó el botón.
 
 **Medido en el servidor: ~23 seg por documento**, o sea ~313 por noche a 2
 horas. Con 9.813 pendientes son **~31 noches** para cubrir la ventana de 24

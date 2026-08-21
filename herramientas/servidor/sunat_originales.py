@@ -101,6 +101,19 @@ ARCHIVO_REGISTRO = "sunat_compras.parquet"
 PAUSA_ENTRE_DOCS_SEG = 1.5
 MESES_VENTANA = 24        # SUNAT deja de servir el original pasada esta ventana
 
+# Cada cuánto revisa R2 el modo --vigilar. NO son los 5 seg que usa
+# `atender_solicitudes.py`, y la diferencia es de presupuesto, no de gusto:
+# cada revisión es un list_objects_v2, o sea una operación Class A de R2, y
+# el tier gratuito da 1.000.000 al mes. A 5 seg son ~518.000 — que es
+# justo lo que ya consume `atender_solicitudes.py`. Los dos juntos a 5 seg
+# darían ~1.036.000 y se pasarían del límite. A 15 seg esto usa ~173.000 y
+# el total queda en ~700.000, con aire.
+#
+# No se pierde casi nada: la descarga de un comprobante tarda ~23 seg, así
+# que sumar hasta 15 de espera no cambia la experiencia de quien apretó el
+# botón.
+INTERVALO_VIGILAR_SEG = 15
+
 
 def log(msg):
     print(f"{time.strftime('%Y-%m-%d %H:%M:%S')}  {msg}", flush=True)
@@ -635,13 +648,90 @@ def soltar_candado():
 # MAIN
 # ===========================================================================
 
+def una_sesion(cred_sunat, s3, bucket, headless, pedidos_hay, pendientes,
+               corte_t):
+    """Abre el navegador UNA vez, atiende pedidos y backfill, y lo cierra.
+
+    El navegador se abre por tanda, no por documento ni para siempre: abrir
+    Chromium y loguearse cuesta ~15 seg, pero dejarlo vivo indefinidamente
+    en modo servicio sería peor —400 MB tomados todo el día y una sesión de
+    SUNAT abierta durante días, que además vence sola.
+    """
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        navegador, _ctx, pagina = iniciar_navegador(p, headless=headless)
+        try:
+            login(pagina, cred_sunat)
+            cerrar_popups(pagina)
+
+            # Los pedidos van PRIMERO: hay una persona esperando del otro
+            # lado. El backfill se come lo que sobre del tiempo asignado.
+            n_ped = atender_pedidos(pagina, s3, bucket) if pedidos_hay else 0
+
+            ok = fallidos = 0
+            if pendientes:
+                ok, fallidos = correr_backfill(pagina, s3, bucket,
+                                               pendientes, corte_t)
+            log(f"Listo: {n_ped} pedido(s) · backfill {ok} subidos, "
+                f"{fallidos} sin datos/con error.")
+        finally:
+            navegador.close()
+
+
+def bucle_pedidos(cred_sunat, s3, bucket, headless, intervalo):
+    """Modo servicio: vigila los pedidos para siempre.
+
+    Mismo patrón que `atender_solicitudes.py` del servidor, y por las
+    mismas razones: el arranque pesado (importar pandas, cargar el
+    extractor, crear el cliente de R2) ocurre UNA vez en vez de en cada
+    revisión, y un error puntual se anota sin matar el servicio.
+
+    El candado se toma POR TANDA, no al arrancar: si se tomara una vez y
+    se sostuviera, el backfill nocturno no podría correr nunca.
+    """
+    log(f"Modo servicio: vigilando pedidos cada {intervalo}s. Ctrl+C para salir.")
+    ultimo_latido = time.time()
+    LATIDO_SEG = 300      # una línea cada 5 min para saber que sigue vivo
+
+    while True:
+        try:
+            pedidos = pedidos_pendientes(s3, bucket)
+            if pedidos:
+                if tomar_candado():
+                    try:
+                        una_sesion(cred_sunat, s3, bucket, headless,
+                                   True, [], None)
+                    finally:
+                        soltar_candado()
+                    ultimo_latido = time.time()
+                else:
+                    log("Hay pedidos pero el backfill está corriendo; "
+                        "se atienden apenas termine.")
+            elif time.time() - ultimo_latido >= LATIDO_SEG:
+                log("Servicio activo (sin pedidos recientes).")
+                ultimo_latido = time.time()
+        except Exception as e:
+            # Un tropiezo puntual (R2 caído, SUNAT caído, sesión rechazada)
+            # no puede matar el servicio: se anota y se sigue.
+            log(f"ERROR en el ciclo: {str(e)[:200]}")
+        time.sleep(intervalo)
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Baja PDF/XML originales de SUNAT y los sube a R2.")
     ap.add_argument("--pedidos", action="store_true",
                     help="Sólo atender pedidos de la webapp, sin backfill. "
-                         "Es el modo para correr cada minuto: si no hay "
-                         "nada pendiente sale en ~1 seg sin abrir el navegador.")
+                         "Una pasada: si no hay nada sale en ~1 seg sin "
+                         "abrir el navegador.")
+    ap.add_argument("--vigilar", action="store_true",
+                    help="Modo SERVICIO: queda vigilando pedidos para "
+                         "siempre (implica --pedidos). Pensado para NSSM, "
+                         "al lado de atender_solicitudes.py.")
+    ap.add_argument("--cada", type=int, default=INTERVALO_VIGILAR_SEG,
+                    help=f"Con --vigilar: segundos entre revisiones "
+                         f"(default {INTERVALO_VIGILAR_SEG}).")
     ap.add_argument("--minutos", type=int, default=None,
                     help="Tope de tiempo del backfill. Acota el TIEMPO y no "
                          "la cantidad, que es lo que importa cuando cada "
@@ -664,6 +754,11 @@ def main():
 
     s3 = _cliente_r2(cred_r2)
     bucket = cred_r2["bucket"]
+    headless = not args.ver
+
+    if args.vigilar:
+        bucle_pedidos(cred_sunat, s3, bucket, headless, args.cada)
+        return
 
     # Se mira si hay trabajo ANTES de abrir el navegador: arrancar Chromium
     # y loguearse cuesta ~15 seg, y en el modo --pedidos la enorme mayoría
@@ -686,27 +781,11 @@ def main():
         return
 
     corte_t = (time.time() + args.minutos * 60) if args.minutos else None
-    from playwright.sync_api import sync_playwright
-
-    with sync_playwright() as p:
-        navegador, _ctx, pagina = iniciar_navegador(p, headless=not args.ver)
-        try:
-            login(pagina, cred_sunat)
-            cerrar_popups(pagina)
-
-            # Los pedidos van PRIMERO: hay una persona esperando del otro
-            # lado. El backfill se come lo que sobre del tiempo asignado.
-            n_ped = atender_pedidos(pagina, s3, bucket)
-
-            ok = fallidos = 0
-            if pendientes:
-                ok, fallidos = correr_backfill(pagina, s3, bucket,
-                                               pendientes, corte_t)
-            log(f"Listo: {n_ped} pedido(s) · backfill {ok} subidos, "
-                f"{fallidos} sin datos/con error.")
-        finally:
-            navegador.close()
-            soltar_candado()
+    try:
+        una_sesion(cred_sunat, s3, bucket, headless, bool(pedidos),
+                   pendientes, corte_t)
+    finally:
+        soltar_candado()
 
 
 if __name__ == "__main__":
