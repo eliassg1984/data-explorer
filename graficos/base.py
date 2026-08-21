@@ -105,6 +105,32 @@ def publicar_contexto_ia(reporte, df, filtros=None):
     }
 
 
+def vista_activa(categorias, state_key):
+    """Que item del rail esta activo, SIN dibujarlo.
+
+    Existe para `app.py`: la franja superior se dibuja en la linea ~500 y
+    el rail recien en `_render_contenido()`, mas de 600 lineas despues, asi
+    que cuando la franja tiene que decidir su layout todavia no sabe que
+    vista eligio el usuario. Leer `session_state` a secas no alcanza: en la
+    PRIMERA carga de un deep-link (`?vista=...`) la clave aun no existe —la
+    siembra `_render_rail`— y la franja se dibujaria una vez con el layout
+    equivocado antes de corregirse. Eso es un parpadeo visible.
+
+    Resuelve con el MISMO criterio que `_render_rail` (y llamada por el,
+    para que no haya dos copias que se puedan desincronizar): lo guardado
+    si sigue siendo valido, si no el `?vista=` de la URL normalizado, si no
+    el primer item.
+    """
+    _todos = [item[0] for _, items in categorias for item in items]
+    if not _todos:
+        return None
+    sel = st.session_state.get(state_key)
+    if sel in _todos:
+        return sel
+    _por_norm = {_norm(o): o for o in _todos}
+    return _por_norm.get(_norm(st.query_params.get("vista", ""))) or _todos[0]
+
+
 def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
     """Rail vertical fijo al borde DERECHO — selector de tipo de gráfico.
 
@@ -138,7 +164,6 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
     # concreta eran 3-5 clics encadenados, cada uno con su rerun. Además
     # no se podía compartir "mirá ESTA pantalla": había que describirla.
     # Va acá, en el rail COMPARTIDO, así vale para los 6 dashboards de una.
-    _por_norm = {_norm(o): o for o in _todos}
     sel = st.session_state.get(state_key)
     if sel not in _todos:
         # Todavía no hay selección válida: primera carga, o venimos de otro
@@ -146,7 +171,7 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
         # que exista en ESTE rail; si no, el primer item de siempre.
         # El match va por `_norm` (ignora acentos Y separadores), así entra
         # igual "comparativo_vs_ano_pasado" que "Comparativo vs Año Pasado".
-        sel = _por_norm.get(_norm(st.query_params.get("vista", ""))) or _todos[0]
+        sel = vista_activa(categorias, state_key)
         st.session_state[state_key] = sel
     # Marcador del pestillo (ver pestillos.py). Solo existe si ESTE reporte
     # dibuja el rail: los que no lo usan tampoco reservan ancho para él.

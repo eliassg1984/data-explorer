@@ -86,4 +86,49 @@ CSS = """    /* ================================================================
         color: var(--accent-deep) !important;
         border-color: var(--accent-light) !important;
     }
+
+    /* El pill de FECHA, cuando lo dibuja el drill dentro de su tarjeta.
+       ────────────────────────────────────────────────────────────────
+       Es el MISMO widget de la franja (`franja_fecha.render()`), sólo que
+       llamado desde otro sitio — no una copia. Y por eso arrastra el
+       `position: fixed` + coordenadas que le ponen `_40_ajuste_franja.py`
+       y `_50_fecha.py` para anclarlo arriba a la izquierda: sin devolverlo
+       al flujo normal se quedaría flotando sobre la franja, que es justo
+       de donde lo sacamos.
+
+       Scopeado por `sunat_card_izq`: la MISMA key `fecha_ajuste_pill` sigue
+       viviendo en la franja en todos los demás reportes y vistas, con su
+       posicionamiento intacto. */
+    .st-key-sunat_card_izq .st-key-fecha_ajuste_pill {
+        position: static !important;
+        top: auto !important; left: auto !important;
+        right: auto !important; bottom: auto !important;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 0 2px 0 !important;
+        z-index: auto !important;
+    }
+    /* El trigger, con el mismo lenguaje que los dos selectores de al lado:
+       texto + icono, sin caja. Sin esto entra con el marco de 210px de
+       ancho fijo que necesita la franja para anclar los chips a su
+       derecha (esa aritmética de tres números vive en _50_fecha.py). */
+    .st-key-sunat_card_izq .st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
+        min-width: 0 !important;
+        width: 100% !important;
+        justify-content: flex-start !important;
+        height: 26px !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        color: var(--text-primary) !important;
+    }
+    .st-key-sunat_card_izq .st-key-fecha_ajuste_pill
+    [data-testid="stPopover"] button:hover {
+        background: transparent !important;
+        color: var(--accent-deep) !important;
+    }
 """

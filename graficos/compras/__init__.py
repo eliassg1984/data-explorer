@@ -31,7 +31,8 @@ from tema import GRIS_BORDE
 from utils import _norm
 from graficos.base import (
     PALETA_CALLAI, _compras_layout, _compras_truncar, _render_rail,
-    _resolver, publicar_contexto_ia, renderizar_graficos_genericos
+    _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
+    vista_activa,
 )
 from graficos.constructor import _constructor_grafico
 from graficos.compras._comun import (  # noqa: F401  (re-export)
@@ -66,6 +67,26 @@ _COMPRAS_RAIL_CATEGORIAS = (
                    ("Personalizado",    "Personalizado", ":material/tune:"),
                    ("Tabla",            "Tabla",         ":material/table_rows:"))),
 )
+
+# Vistas de Compras que dibujan el selector de fecha DENTRO de su tarjeta en
+# vez de dejarlo en la franja superior. Hoy solo Documentos SUNAT: ahi la
+# fecha no es contexto global sino EL filtro de la tabla (es el rango que se
+# le consulta al SIRE), asi que vivia lejos de lo que filtra.
+_VISTAS_CON_FECHA_PROPIA = {"Documentos SUNAT"}
+
+
+def vista_quiere_fecha_propia():
+    """True si la vista activa de Compras se queda el pill de fecha.
+
+    La consulta `app.py` ANTES de dibujar la franja, para saber si le toca
+    dibujarlo a el o al drill — el widget no se puede duplicar (su key es la
+    clave canonica del rango, ver `franja_fecha`). Se resuelve sin dibujar el
+    rail con `vista_activa`, que usa el mismo criterio que el rail usara
+    despues, deep-link incluido.
+    """
+    return vista_activa(_COMPRAS_RAIL_CATEGORIAS,
+                        "compras_graf_tipo") in _VISTAS_CON_FECHA_PROPIA
+
 
 def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=None):
     """Dashboard dedicado de Compras: 5 gráficos con pestañas + 5 mini-tops.
@@ -176,6 +197,23 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     graf = _render_rail(_COMPRAS_RAIL_CATEGORIAS, "compras_graf_tipo")
     if graf not in opciones:
         graf = opciones[0]
+
+    # ── Quien dibuja el pill de fecha: la franja o el drill ──────────────
+    # Hay UNA vista que se lo queda (Documentos SUNAT). El problema es de
+    # ORDEN: la franja de `app.py` se dibuja mucho antes que este rail, y
+    # ademas `_render_contenido` es un `@st.fragment`, asi que un clic aca
+    # NO re-ejecuta `app.py`. En ese rerun parcial la franja sigue con la
+    # decision de la vista ANTERIOR:
+    #   · entrando a SUNAT  -> la franja ya dibujo la fecha Y el drill la
+    #     dibujaria de nuevo: dos widgets con la misma key -> excepcion.
+    #   · saliendo de SUNAT -> no la dibujo ninguno de los dos y la vista
+    #     se queda sin selector de fecha (medido: eso pasaba).
+    # Cuando no coinciden se fuerza un rerun COMPLETO, que es la unica
+    # forma de que `app.py` vuelva a decidir. Cuesta un render extra al
+    # cruzar esa frontera y nada el resto del tiempo.
+    _quiere_propia = graf in _VISTAS_CON_FECHA_PROPIA
+    if st.session_state.get("_franja_dibujo_fecha", True) == _quiere_propia:
+        st.rerun(scope="app")
 
     # Tabla: usa el mismo AgGrid de la vista Tabla, pero como una opción más
     # del selector. `d` ya viene filtrado por los chips Familia/Subfamilia.

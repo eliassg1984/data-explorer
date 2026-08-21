@@ -16,11 +16,11 @@ from data import (
 from estilos import TAM_FUENTE, inject_css
 from estado_rango import (
     clave_rango, asegurar_rango, debug_estado_rango,
-    atajos_rango, aplicar_atajo,
-    clave_corte, clave_modo, modo_fecha, corte_vigente, aplicar_corte,
-    alternar_corte, volver_a_rango, MODOS_FECHA,
+    clave_corte, corte_vigente, aplicar_corte,
 )
-from cortes import cortes_disponibles, corte_contiguo
+from cortes import cortes_disponibles
+import franja_fecha
+from graficos.compras import vista_quiere_fecha_propia
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_diseno_visual, inject_footer_actualizacion, inject_calendario_es, inject_fullscreen_app
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil
 from graficos import renderizar_graficos_reporte, tiene_dashboard
@@ -31,32 +31,6 @@ from navegacion import inject_navegacion
 from perf import perf                                                       # ⚡ PERF
 
 ZONA_PERU = ZoneInfo("America/Lima")  # UTC-5 fijo, sin horario de verano
-
-_MESES_ES = ["ene", "feb", "mar", "abr", "may", "jun",
-             "jul", "ago", "sep", "oct", "nov", "dic"]
-
-
-def _fmt_rango_es(ini, fin):
-    """Label del pill de fecha de la franja. ABREVIADO a propósito.
-
-    Hasta 2026-08-09 devolvía el mes completo y el año en los dos extremos
-    ("1 Agosto 2026 - 5 Agosto 2026", hasta 37 caracteres). El pill ahora
-    tiene ANCHO FIJO (estilos/_50_fecha.py, bloque min-width:901px) porque
-    los chips se anclan justo a su derecha con un left: en px — y un left
-    fijo solo funciona si el ancho del vecino es predecible. Con mes
-    abreviado y el año una sola vez cuando coincide, el peor caso
-    ("30 sep 2025 – 31 dic 2026") entra en los 210px del pill; con el
-    formato viejo no entraba y el texto se cortaba con ellipsis.
-    Si se vuelve al formato largo hay que volver a centrar los chips o
-    ensanchar el pill — no es solo cosmético."""
-    if ini == fin:
-        return f"{ini.day} {_MESES_ES[ini.month - 1]} {ini.year}"
-    if ini.year == fin.year:
-        return (f"{ini.day} {_MESES_ES[ini.month - 1]} – "
-                f"{fin.day} {_MESES_ES[fin.month - 1]} {fin.year}")
-    return (f"{ini.day} {_MESES_ES[ini.month - 1]} {ini.year} – "
-            f"{fin.day} {_MESES_ES[fin.month - 1]} {fin.year}")
-
 
 # ===========================================================================
 # CONFIGURACIÓN INICIAL
@@ -508,132 +482,39 @@ with _fila_top:
             if isinstance(_fecha_actualizacion, datetime.datetime):
                 if _fecha_actualizacion.tzinfo is not None:
                     _fecha_actualizacion = _fecha_actualizacion.astimezone(ZONA_PERU)
-            # El estado ya quedó sembrado y recortado por asegurar_rango()
-            # arriba (una sola vez, antes del widget). Aquí solo se LEE.
-            # El texto del rango es el TRIGGER de un panel (Opción B):
-            # atajos rápidos a la izquierda + calendario manual a la
-            # derecha. El date_input, los atajos y el label leen/escriben
-            # la MISMA clave → no pueden desincronizarse.
-            _rango_actual = st.session_state.get(_k_rango_franja)
-            if _corte_apl:
-                # En modo Cortes el label dice el CORTE, no las fechas: son
-                # dos filtros distintos ("30 jul – 2 ago" sugiere 4 días;
-                # el corte puede ser 3) y el usuario tiene que poder ver de
-                # un vistazo cuál de los dos está activo. Con varios cortes
-                # la etiqueta ya viene con su propio encabezado ("3 cortes
-                # · …"), así que el prefijo "Corte" sobra.
-                _label_fecha = _corte_apl["etiqueta"]
-                if _corte_apl["n_cortes"] == 1:
-                    _label_fecha = f"Corte {_label_fecha}"
-            elif (isinstance(_rango_actual, (tuple, list))
-                    and len(_rango_actual) == 2 and all(_rango_actual)):
-                _label_fecha = _fmt_rango_es(_rango_actual[0], _rango_actual[1])
-            else:
-                _label_fecha = "Seleccionar rango"
-
-            # Atajos válidos para la data actual (los calcula el dueño único).
-            _atajos = atajos_rango(_hoy, (fecha_min_full, fecha_max_full))
-
-            with st.container(key="fecha_ajuste_pill"):
-                with st.popover(_label_fecha, use_container_width=False,
-                                icon=":material/calendar_month:"):
-                    # Contenedor keyed → permite scopear el ancho del panel
-                    # por CSS aunque el popover se renderice en un portal.
-                    with st.container(key="fecha_panel"):
-                        # Selector de modo: solo si el reporte tiene cortes.
-                        # Sin él, `modo_fecha()` devuelve "Rango" y todo el
-                        # panel queda exactamente como estaba.
-                        _modo = "Rango"
-                        if _cortes_franja:
-                            _modo = st.segmented_control(
-                                "Modo de filtro de fecha", MODOS_FECHA,
-                                default=modo_fecha(_k_corte),
-                                key=clave_modo(_k_corte),
-                                label_visibility="collapsed",
-                            ) or modo_fecha(_k_corte)
-                        _c_izq, _c_cal = st.columns([1, 1.5])
-                        with _c_izq:
-                            if _modo != "Rango":
-                                _sel_claves = set(
-                                    (st.session_state.get(_k_corte) or {})
-                                    .get("claves", [])
-                                )
-                                # Varios y Corte comparten TODO menos qué
-                                # hace el clic: alternar (agrega/saca) vs.
-                                # reemplazar. Un solo bloque para los dos —
-                                # duplicar la lista es garantía de que un
-                                # día una de las dos copias quede vieja.
-                                _multi = (_modo == "Varios")
-                                # El VERBO va acá, no en el nombre del modo:
-                                # el segmentado nombra la unidad de tiempo
-                                # (Rango/Corte/Varios) y esta línea dice qué
-                                # les hace. Sin ella "Varios" no aclara que
-                                # los días se SUMAN en un solo período.
-                                _cap = ("Suma las sesiones que elijas"
-                                        if _multi else "Sesión de inventario")
-                                if _multi and len(_sel_claves) > 1:
-                                    _cap += f" · {len(_sel_claves)} sumadas"
-                                st.caption(_cap)
-                                # Del más reciente al más viejo: el conteo que
-                                # se revisa es casi siempre el último.
-                                for _co in reversed(_cortes_franja):
-                                    _act = _co["clave"] in _sel_claves
-                                    st.button(
-                                        _co["etiqueta_anio"],
-                                        use_container_width=True,
-                                        type="primary" if _act else "secondary",
-                                        key=f"corte_{reporte}_{_co['clave']}".replace(" ", "_"),
-                                        on_click=alternar_corte if _multi else aplicar_corte,
-                                        args=((_k_rango_franja, _k_corte, _co,
-                                               _cortes_franja, reporte,
-                                               _usa_carga_rango) if _multi else
-                                              (_k_rango_franja, _k_corte, _co,
-                                               reporte, _usa_carga_rango)),
-                                    )
-                            else:
-                                st.caption("Atajos")
-                                for _ca, _et, _rg in _atajos:
-                                    st.button(
-                                        _et, use_container_width=True,
-                                        key=f"atajo_{reporte}_{_ca}".replace(" ", "_"),
-                                        on_click=aplicar_atajo,
-                                        args=(_k_rango_franja, _rg, reporte,
-                                              _usa_carga_rango),
-                                    )
-                        with _c_cal:
-                            st.caption("Rango manual")
-                            # El date_input se dibuja SIEMPRE, en los dos
-                            # modos. Streamlit descarta el estado de un
-                            # widget que deja de renderizarse: esconderlo en
-                            # modo Cortes borraría el rango del reporte, que
-                            # es la clave que leen el label, el loader de R2
-                            # y `asegurar_rango`. En modo Cortes muestra el
-                            # rango que fijó el corte — y tocarlo a mano
-                            # vuelve a modo Rango (on_change).
-                            st.date_input(
-                                "Rango a Evaluar",
-                                min_value=fecha_min_full,
-                                max_value=fecha_max_full,
-                                format="DD/MM/YYYY",
-                                key=_k_rango_franja,
-                                label_visibility="collapsed",
-                                on_change=volver_a_rango, args=(_k_corte,),
-                            )
-                            if _modo != "Rango" and _corte_apl:
-                                if corte_contiguo(_corte_apl):
-                                    st.caption("Corte contiguo: mismo resultado "
-                                               "que el rango.")
-                                else:
-                                    _ajenos = ((_corte_apl["fin"] - _corte_apl["ini"]).days
-                                               + 1 - _corte_apl["n_dias"])
-                                    _que = ("de esta sesión"
-                                            if _corte_apl["n_cortes"] == 1
-                                            else "de las sesiones elegidas")
-                                    st.caption(
-                                        f"Filtra {_corte_apl['n_dias']} días de "
-                                        f"conteo y deja fuera {_ajenos} del rango "
-                                        f"que no son {_que}."
-                                    )
+            # El panel de fecha se saco a `franja_fecha.py` (2026-08-21).
+            # Vive alla y no aca porque hay UNA vista que lo quiere dentro
+            # de su tarjeta —Compras > Documentos SUNAT, donde la fecha es
+            # EL filtro de la tabla y no contexto global— y el widget no se
+            # puede duplicar: su key ES la clave canonica del rango. Ver el
+            # docstring del modulo.
+            #
+            # Se PUBLICA siempre (el drill lo necesita igual) y se DIBUJA
+            # solo si la vista activa no se lo quedo. `vista_quiere_fecha_
+            # propia()` se resuelve SIN dibujar el rail —que corre mucho mas
+            # abajo, en _render_contenido— leyendo el mismo estado/deep-link
+            # que usaria el rail, asi que no parpadea en la primera carga.
+            franja_fecha.publicar(
+                k_rango=_k_rango_franja, k_corte=_k_corte,
+                corte_apl=_corte_apl, cortes=_cortes_franja,
+                fecha_min=fecha_min_full, fecha_max=fecha_max_full,
+                reporte=reporte, usa_carga_rango=_usa_carga_rango,
+                hoy=_hoy,
+            )
+            # Se DEJA CONSTANCIA de quien dibujo la fecha en este render.
+            # No es telemetria: es lo que le permite al dashboard detectar
+            # que la franja quedo desfasada. `_render_contenido` es un
+            # `@st.fragment`, asi que un clic en el rail NO vuelve a
+            # ejecutar este archivo — la franja se entera de que cambio la
+            # vista recien en el siguiente rerun COMPLETO. Sin esta bandera,
+            # entrar a Documentos SUNAT dejaba la fecha arriba y abajo a la
+            # vez (dos widgets, misma key) y salir la dejaba en ninguna
+            # parte. Ver `graficos/compras/__init__.py`, que reconcilia.
+            _franja_dibuja_fecha = not (
+                reporte == "Compras" and vista_quiere_fecha_propia())
+            st.session_state["_franja_dibujo_fecha"] = _franja_dibuja_fecha
+            if _franja_dibuja_fecha:
+                franja_fecha.render()
 
             # ── Stepper del corte activo ──────────────────────────────────
             # Recorrer conteo por conteo sin abrir el panel: es EL gesto de

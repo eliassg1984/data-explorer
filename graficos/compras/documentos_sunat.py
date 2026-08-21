@@ -77,6 +77,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 import sunat
 from estado_rango import clave_rango
+import franja_fecha
 from tema import (
     ACENTO, ACENTO_TEXTO, ADVERTENCIA_TEXTO, ERROR, GRIS_BORDE, GRIS_TEXTO,
     LAVANDA_FONDO, TEXTO_PRINCIPAL,
@@ -1084,6 +1085,15 @@ def renderizar_documentos_sunat(d, col_fecha):
         # `estilos/_30_filtros.py`, scopeado a `sunat_card_izq`.
         c_sel, c_act, c_kpi = st.columns([1.5, 0.8, 4.1])
         with c_sel:
+            # El pill de fecha, DENTRO de la tarjeta (a pedido 2026-08-21).
+            # Aca la fecha no es contexto global: es EL filtro de la tabla —
+            # el rango que se le consulta al SIRE— asi que vivia lejos de lo
+            # que filtra. NO es una copia del de la franja: es la MISMA
+            # llamada, movida. `app.py` lo publica y deja de dibujarlo
+            # cuando esta vista esta activa (`vista_quiere_fecha_propia`),
+            # porque el widget no se puede duplicar: su key es la clave
+            # canonica del rango. Ver el docstring de `franja_fecha`.
+            franja_fecha.render()
             # 2026-08-21, a pedido: de radio horizontal a selectbox. Con
             # `horizontal=True` en una columna de 166px las 3 opciones
             # NO entraban en una fila y Streamlit las apilaba en 3 líneas

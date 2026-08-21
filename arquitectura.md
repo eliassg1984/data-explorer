@@ -6647,3 +6647,61 @@ salvo `icono`):
      La regla general: **cambiar el ANCHO de un contenedor puede romper el
      contenido aunque el contenido no se toque.** Un `space-between` es
      correcto en 400px y absurdo en 1150px.
+
+150. **Mover un widget de sitio cuando su KEY es el estado: el pill de fecha
+     de la franja.** A pedido 2026-08-21, Compras › Documentos SUNAT dibuja
+     el selector de fecha DENTRO de su tarjeta: ahi la fecha no es contexto
+     global sino EL filtro de la tabla (el rango que se le consulta al SIRE),
+     y vivia lejos de lo que filtra.
+
+     **Por que no se puede copiar.** El `st.date_input` del panel usa como
+     key la clave canonica del rango (`clave_rango(...)`). O sea el widget no
+     es una vista del estado: ES el estado. De ahi que:
+       · dos widgets no puedan compartir key, y
+       · escribir esa clave desde afuera despues de instanciar el widget tire
+         `StreamlitAPIException`.
+     "Mover la fecha" solo puede significar mover la LLAMADA. Por eso el
+     panel salio de `app.py` a `franja_fecha.py`: para que la misma llamada
+     se pueda hacer desde dos sitios, uno por render, nunca los dos.
+
+     **El contexto se PUBLICA, no se pasa por parametro.** El panel necesita
+     nueve valores que solo `app.py` conoce (bounds, cortes, corte vigente,
+     claves de estado...). Enhebrarlos por la firma del dispatcher hasta el
+     drill serian tres capas de parametros que ninguna otra vista usa.
+     `app.py` los publica con `franja_fecha.publicar()` y quien dibuje llama
+     a `render()` — mismo patron que `publicar_contexto_ia()`.
+
+     **El problema de ORDEN, que es el que costo caro.** La franja se dibuja
+     en `app.py` ~600 lineas antes de que el rail exista, asi que cuando
+     decide su layout no sabe que vista esta activa. Se resolvio con
+     `graficos.base.vista_activa()`, que aplica el MISMO criterio que
+     `_render_rail` (y es llamada por el, para que no haya dos copias):
+     lo guardado si sigue siendo valido, si no el `?vista=` normalizado, si
+     no el primer item. Leer `session_state` a secas NO alcanza: en la
+     primera carga de un deep-link la clave todavia no existe.
+
+     **Y el problema de FRAGMENTO, que es peor y no se ve venir.**
+     `_render_contenido` es un `@st.fragment`. Un clic en el rail rerunea
+     SOLO el fragmento: `app.py` no se vuelve a ejecutar, asi que la franja
+     se queda con la decision de la vista ANTERIOR. Medido en el navegador,
+     los dos sintomas:
+       · entrando a SUNAT  -> dos pills a la vez (uno `fixed` en la franja,
+         otro `static` en la tarjeta), porque la franja ya lo habia dibujado
+         en el ultimo render completo y su DOM sobrevive al rerun parcial;
+       · saliendo de SUNAT -> NINGUN pill, porque la franja no lo dibujo y
+         el drill que se lo quedaba ya no esta.
+     La reconciliacion vive en `renderizar_graficos_compras`: `app.py` deja
+     en `_franja_dibujo_fecha` quien lo dibujo, y si no coincide con lo que
+     la vista activa quiere, se fuerza `st.rerun(scope="app")`. Cuesta un
+     render extra al cruzar esa frontera y nada el resto del tiempo.
+
+     **La regla que deja, y vale para cualquier control de la franja:**
+     antes de mover algo de la franja a un dashboard, mirar DOS cosas — si
+     su key es el estado (no se puede duplicar) y si quien decide corre
+     dentro de un fragmento (la franja se entera un render tarde).
+
+     El CSS tambien hay que devolverlo al flujo: el pill arrastra el
+     `position: fixed` + coordenadas que le ponen `_40_ajuste_franja.py` y
+     `_50_fecha.py`, asi que dentro de la tarjeta se neutraliza con
+     `position: static` scopeado a `sunat_card_izq` (`estilos/_30_filtros.py`)
+     — la misma key sigue anclada a la franja en todos los demas reportes.
