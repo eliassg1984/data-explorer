@@ -1277,4 +1277,32 @@ CSS = """    /* ================================================================
     :root:has(.st-key-app_reporte_compras) div[class*="st-key-sunat_card_"] {
         background: var(--bg-card-tenue) !important;
     }
+
+    /* La barra de herramientas de elemento, teñida en vez de escondida.
+       ────────────────────────────────────────────────────────────────
+       Streamlit monta al hover un chip sobre cada gráfico, tabla o
+       componente. Medido: fondo BLANCO opaco, radio 8px y sombra
+       `1px 2px 8px rgba(0,0,0,.08)`. Mientras las tarjetas de Compras
+       también eran blancas era blanco sobre blanco y no se veía; con el
+       tinte de arriba pasó a leerse como un cuadrado blanco encima del
+       gris. El tinte no lo creó, lo destapó.
+
+       Se TIÑE y no se esconde. El proyecto ya esconde esa barra en siete
+       contenedores puntuales (`grep stElementToolbar estilos/ graficos/`),
+       y extender eso a todo Compras era la opción obvia hasta contar los
+       botones: en un `st.plotly_chart` o en un AgGrid la barra trae sólo
+       Fullscreen, pero en un `st.dataframe` trae CUATRO — Show/hide
+       columns, Download as CSV, Search y Fullscreen. En Compras hay cinco
+       `st.dataframe` (Proveedor › Productos, Producto › ranking y familia,
+       Documentos SUNAT › líneas del comprobante, Volatilidad › precios), y
+       esconder la barra les sacaba la descarga a CSV para arreglar un
+       problema que era de color. Tiñendo el chip no se pierde ninguna.
+
+       Las de AgGrid no dependen de esto: traen su propio menú de columna
+       con filtro, orden y export. */
+    :root:has(.st-key-app_reporte_compras)
+    [data-testid="stElementToolbarButtonContainer"] {
+        background: var(--bg-card-tenue) !important;
+        box-shadow: none !important;
+    }
 """

@@ -6458,3 +6458,37 @@ salvo `icono`):
      TRANSLÚCIDO. Sobre blanco daban ~#f7f7f8 y sobre el gris dan ~#eeeef0
      — el mismo escalón de 8 puntos en los dos casos. Un fondo opaco
      habría necesitado retoque; uno translúcido sigue al contenedor solo.
+
+     **Consecuencia que apareció al día siguiente: la barra de herramientas
+     de elemento.** Streamlit monta al hover un chip sobre cada gráfico,
+     tabla o componente. Medido: fondo BLANCO opaco, radio 8px y sombra
+     `1px 2px 8px rgba(0,0,0,.08)`. Mientras las tarjetas de Compras también
+     eran blancas era blanco sobre blanco y no se notaba; con el tinte pasó
+     a leerse como un cuadrado blanco sobre el gris. El tinte no lo creó, lo
+     destapó — vale para cualquier chrome opaco que herede el color viejo.
+
+     Se TIÑE, no se esconde:
+
+     ```css
+     :root:has(.st-key-app_reporte_compras)
+     [data-testid="stElementToolbarButtonContainer"] {
+         background: var(--bg-card-tenue) !important;
+         box-shadow: none !important;
+     }
+     ```
+
+     El proyecto ya esconde esa barra en siete contenedores puntuales
+     (`grep -rn stElementToolbar estilos/ graficos/`) y extenderlo a todo
+     Compras era la opción obvia — hasta CONTAR los botones. En un
+     `st.plotly_chart` o en un AgGrid la barra trae sólo Fullscreen, pero en
+     un `st.dataframe` trae cuatro: **Show/hide columns, Download as CSV,
+     Search y Fullscreen**. En Compras hay cinco `st.dataframe`
+     (Proveedor › Productos, Producto › ranking y por familia, Documentos
+     SUNAT › líneas del comprobante, Volatilidad › precios), así que
+     esconder la barra les sacaba la descarga a CSV para arreglar un
+     problema que era de color. Las de AgGrid no dependían de ella: traen su
+     propio menú de columna con filtro, orden y export.
+
+     La regla general que deja: **antes de esconder chrome de Streamlit,
+     contar qué hay adentro.** Un `display: none` sobre un contenedor
+     genérico se lleva puestas funciones que nadie enumeró.
