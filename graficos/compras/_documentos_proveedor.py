@@ -7,10 +7,13 @@ Filas/Columnas/Valores desde el panel derecho.
 
 Salio de _compras_proveedor_drill el 2026-08-08. Es la pieza del drill
 con MENOS acoplamiento hacia atras: solo necesita 6 valores ya
-calculados (abajo, en la firma), y su estado de abierto/cerrado
-(`cp_docs_*`) es suyo y de nadie mas — nada fuera de este modulo lo lee.
-El resto del drill comparte ~50 locales entre secciones, y por eso no se
-siguio cortando sin antes decidir como se pasa ese estado.
+calculados (abajo, en la firma). El resto del drill comparte ~50 locales
+entre secciones, y por eso no se siguio cortando sin antes decidir como
+se pasa ese estado.
+
+2026-08-21, a pedido: la tabla esta SIEMPRE visible. Hasta hoy el bloque
+era colapsable y guardaba su estado en `cp_docs_*` — que no leia nadie
+fuera de este modulo, asi que sacarlo no toco nada mas.
 """
 
 import json
@@ -25,7 +28,7 @@ from graficos import alturas
 
 
 def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
-    """Dibuja el bloque colapsable con la tabla pivotable de documentos.
+    """Dibuja el bloque con la tabla pivotable de documentos.
 
     base:      DataFrame normalizado del drill (columnas prov/prod/fecha/
                docu/per/cant/punit/valor).
@@ -41,55 +44,18 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
     """
     # Por defecto: filas = Proveedor→Fecha→Documento→Producto,
     # columnas = Período (Semana/Mes/Año), valor = suma. Gran total al pie.
-    if "cp_docs_abierto" not in st.session_state:
-        st.session_state["cp_docs_abierto"] = True
-    # -- Pestillo (carrete) + titulo en linea. Mismo patron que paneles A/B:
-    #    SVG del carrete pintado por CSS sobre ::before del boton; rotacion
-    #    de estado (abierto = 180) fijada por <style> inyectado.
-    _docs_ab = st.session_state["cp_docs_abierto"]
-    # Instance id (mismo patron que paneles A/B): fuerza remount del AgGrid
-    # cada vez que el bloque se reabre, para que fit_columns_on_grid_load
-    # vuelva a medir el ancho del contenedor.
-    if _docs_ab and not st.session_state.get("cp_docs_prev_ab", False):
-        st.session_state["cp_docs_inst"] = (
-            st.session_state.get("cp_docs_inst", 0) + 1)
-    st.session_state["cp_docs_prev_ab"] = _docs_ab
-    _docs_inst = st.session_state.get("cp_docs_inst", 0)
-    _rot_d = "180deg" if _docs_ab else "0deg"
-    # Mismo patron que paneles A/B: abierto -> icono chico en gutter;
-    # cerrado -> pill inline con titulo visible.
-    _collapse_docs_css = ("""
-        .st-key-docs_row { position: relative !important; }
-        .st-key-docs_row .st-key-latch_docs {
-            position: absolute !important;
-            left: -50px !important;
-            top: 18px !important;
-            margin: 0 !important; z-index: 5;
-        }
-        .st-key-docs_row .st-key-latch_docs button {
-            padding: 8px !important; border-radius: 8px !important;
-        }
-        .st-key-docs_row .st-key-latch_docs button p {
-            display: none !important;
-        }
-        .st-key-docs_row .st-key-latch_docs button::before {
-            width: 24px !important; height: 24px !important;
-        }
-    """ if _docs_ab else "")
-    st.markdown(
-        f"<style>.st-key-latch_docs button::before"
-        f"{{transform:rotate({_rot_d});}}{_collapse_docs_css}</style>",
-        unsafe_allow_html=True,
-    )
+    #
+    # 2026-08-21, a pedido: el bloque dejó de ser COLAPSABLE. Acá vivía un
+    # pestillo (`latch_docs` + `cp_btn_docs`) cuyo botón ERA el título, con su
+    # estado en `cp_docs_abierto` y un `cp_docs_inst` que forzaba el remount
+    # del AgGrid al reabrir para que `fit_columns_on_grid_load` volviera a
+    # medir el ancho. Sin abrir/cerrar no hay reapertura, así que el instance
+    # id se fue con él: la key del grid vuelve a depender sólo de `gran`.
+    # El título pasa a ser texto dentro de la tarjeta, con el mismo
+    # `.cp-rank-tit` que usa el ranking de arriba.
     with st.container(key="docs_row"):
-        with st.container(key="latch_docs"):
-            if st.button(f"Detalle de documentos por proveedor · vista {gran}",
-                         key="cp_btn_docs",
-                         help="Abrir / cerrar el detalle de documentos"):
-                st.session_state["cp_docs_abierto"] = not _docs_ab
-                st.rerun()
         _bd = base[base["prov"].isin(top_provs)].copy()
-        if _docs_ab and not _bd.empty:
+        if not _bd.empty:
             _fe = pd.to_datetime(_bd["fecha"], errors="coerce")
             _pv_docs = pd.DataFrame({
                 "Proveedor": _bd["prov"].astype(str).values,
@@ -195,6 +161,11 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
             # Alto del iframe inline (no fullscreen). En fullscreen lo sobrescribe
             # _FS_CSS_IFRAME a 100vh. 460 ≈ 14 filas visibles con scroll interno.
             with _pv_box:
+                st.markdown(
+                    '<div class="cp-rank-tit">Detalle de documentos por '
+                    f'proveedor · vista {gran}</div>',
+                    unsafe_allow_html=True,
+                )
                 AgGrid(
                     _pv_docs,
                     gridOptions=_grid_pv,
@@ -203,7 +174,7 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
                     height=alturas.PROTAGONISTA,
                     enable_enterprise_modules=True,
                     fit_columns_on_grid_load=True,
-                    key=f"cp_prov_pivot_docs_{gran}_{_docs_inst}",
+                    key=f"cp_prov_pivot_docs_{gran}",
                 )
                 # Botón ⛶ de pantalla completa nativa (mismo patrón que las
                 # tablas de tablas/): ancla el ⛶ en el riel de la tabla y usa

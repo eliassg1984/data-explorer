@@ -916,13 +916,11 @@ CSS = """        <style>
         .st-key-compras_prov_card_provde {
             animation: unfoldRight 0.32s cubic-bezier(0.4, 0, 0.2, 1) backwards;
         }
-        /* ── PESTILLO como PILL: solo queda el de "Detalle de documentos por
-           proveedor" (latch_docs). El boton ES el titulo: clic en cualquier
-           parte del pill abre/cierra. El icono (carrete SVG) va como
-           background-image en ::before, a la izquierda del label, y gira
-           180deg cuando el bloque esta abierto (rotacion inyectada desde
-           Python con <style>). El detalle A/B ya no tiene pestillo ni boton
-           de cerrar: lo abre y lo cierra el clic en la barra. */
+        /* 2026-08-21: acá vivía el PESTILLO del detalle de documentos
+           (`latch_docs`): un pill donde el botón ERA el título y un icono de
+           carrete en ::before que giraba 180deg al abrir. La tabla pasó a
+           estar siempre visible, así que se fue el botón y con él sus ~55
+           líneas de CSS. Lo que queda es sólo la separación del bloque. */
         .st-key-docs_row {
             margin: 8px 0 6px;
         }
@@ -931,50 +929,6 @@ CSS = """        <style>
            bloque vertical de Streamlit mete entre hermanos. */
         .st-key-paneles_row {
             margin: -10px 0 6px !important;
-        }
-        .st-key-latch_docs {
-            width: auto !important;
-            margin: 0 0 8px 0 !important;
-            display: inline-block;
-        }
-        .st-key-latch_docs button {
-            display: inline-flex !important;
-            align-items: center; justify-content: flex-start;
-            gap: 8px !important;
-            width: auto !important; min-width: 0 !important;
-            height: auto !important; min-height: 0 !important;
-            padding: 6px 16px 6px 10px !important;
-            margin: 0 !important;
-            border: 0.5px solid #d4cdf7 !important;
-            border-radius: 999px !important;
-            background: #f0edfe !important; box-shadow: none !important;
-            cursor: pointer !important;
-            transition: background .15s, border-color .15s !important;
-        }
-        .st-key-latch_docs button:hover {
-            background: #e5e0fc !important;
-            border-color: #b9adf1 !important;
-        }
-        .st-key-latch_docs button:focus,
-        .st-key-latch_docs button:active {
-            outline: none !important; box-shadow: none !important;
-        }
-        /* Label del boton (el <p> que Streamlit inserta): tipografia del titulo. */
-        .st-key-latch_docs button p {
-            display: inline !important;
-            font-size: 13px !important; font-weight: 500 !important;
-            line-height: 1 !important;
-            color: #4d3fb3 !important;
-            margin: 0 !important; padding: 0 !important;
-        }
-        /* Icono de carrete: solo el pestillo de documentos (la X del detalle
-           A/B no lo lleva). */
-        .st-key-latch_docs button::before {
-            content: ""; display: inline-block;
-            width: 16px; height: 16px; flex-shrink: 0;
-            background: center / contain no-repeat
-                url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22' fill='none'><circle cx='11' cy='11' r='3' fill='%236c5ce7'/><ellipse cx='11' cy='4' rx='5' ry='2.5' fill='%236c5ce7' opacity='.85'/><ellipse cx='11' cy='18' rx='5' ry='2.5' fill='%236c5ce7' opacity='.85'/><rect x='8' y='4' width='6' height='14' fill='%236c5ce7' opacity='.45' rx='1'/><line x1='11' y1='4' x2='11' y2='18' stroke='%23ffffff' stroke-width='1' opacity='.4'/><line x1='11' y1='4' x2='6.5' y2='3' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='4' x2='15.5' y2='3' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='18' x2='6.5' y2='19' stroke='%23ffffff' stroke-width='.8' opacity='.5'/><line x1='11' y1='18' x2='15.5' y2='19' stroke='%23ffffff' stroke-width='.8' opacity='.5'/></svg>");
-            transition: transform .55s cubic-bezier(.4, 0, .2, 1);
         }
 
         /* ══════════════════════════════════════════════════════════════
