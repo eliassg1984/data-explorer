@@ -73,19 +73,31 @@ Abre la ventana del navegador y baja 3 documentos. Si los 3 dicen
 
 ---
 
-## A · Registro — decisión pendiente
+## A · Registro — en GitHub Actions
 
-Este necesita `sunat_registro_sync.py` + `sunat.py` + `data.py` del repo.
-Dos opciones, según dónde se quiera que viva el código:
+`.github/workflows/sunat-registro.yml` corre todos los días a las **08:30
+UTC = 03:30 de Perú**, en ~4 minutos.
 
-**GitHub Actions** — el código no toca ninguna máquina de la empresa,
-corre en infraestructura de GitHub, es gratis y no depende de que nada
-esté prendido. Las credenciales van a GitHub Secrets. Falta escribir
-`.github/workflows/sunat-registro.yml`.
+Se eligió Actions sobre el servidor porque este proceso **no necesita
+navegador**: así el código no queda en una máquina compartida de uso
+administrativo, no depende de que ningún equipo esté prendido, y sigue
+funcionando igual el día que el repo pase a privado.
 
-**El servidor** — clonar el repo (7 MB) y programar la tarea. Más simple
-de administrar (todo en un lugar), pero el código queda en una máquina
-compartida.
+Lo único a configurar, una vez, en **Settings → Secrets and variables →
+Actions** del repo: los 9 secrets con sus valores.
+
+```
+SUNAT_RUC            SUNAT_CLIENT_ID       R2_ACCOUNT_ID    R2_SECRET_KEY
+SUNAT_USUARIO_SOL    SUNAT_CLIENT_SECRET   R2_ACCESS_KEY    R2_BUCKET
+SUNAT_CLAVE_SOL
+```
+
+Para probarlo sin esperar al horario: **Actions → "Registro SUNAT a R2" →
+Run workflow**. Si falta algún secret, el primer paso lo dice por nombre
+en vez de fallar con un error críptico de SUNAT.
+
+> GitHub apaga los workflows programados si el repo pasa 60 días sin
+> actividad (avisa por mail antes).
 
 ---
 
