@@ -116,8 +116,13 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
     ~40 referencias en estilos.py/navegacion.py.
 
     Parámetros
-      · categorias: `((nombre_categoria, ((id, label), …)), …)`. `nombre` puede
-        ser "" para omitir el badge de categoría (rail plano de una sección).
+      · categorias: `((nombre_categoria, ((id, label[, icono]), …)), …)`.
+        `nombre` puede ser "" para omitir el badge de categoría (rail plano de
+        una sección). El tercer elemento es OPCIONAL y va directo al `icon=`
+        de `st.button` (shortcode Material, `":material/tune:"`): lo usa
+        Compras para su rail en formato lista, y los rails que no lo pasan
+        siguen siendo tuplas de 2 y se dibujan igual que siempre. No leer
+        `items` con `for oid, label in …`: rompe con las tuplas de 3.
       · state_key: clave de session_state donde se persiste la selección.
       · btn_prefix: prefijo de las keys de los botones (único por reporte si dos
         rails pudieran coexistir; hoy solo hay un reporte activo por vez).
@@ -125,7 +130,7 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
     Devuelve el id de la opción seleccionada (persistida en session_state, así
     sobrevive al rerun del clic sin doble render).
     """
-    _todos = [oid for _, items in categorias for oid, _ in items]
+    _todos = [item[0] for _, items in categorias for item in items]
     if not _todos:
         return None
     # ── Deep-link: el item del rail viaja en ?vista= ─────────────────────
@@ -158,10 +163,12 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
                         f'<div class="rail-cat-badge">{cat_nombre}</div>',
                         unsafe_allow_html=True,
                     )
-                for oid, label in items:
+                for item in items:
+                    oid, label = item[0], item[1]
                     st.button(
                         label,
                         key=f"{btn_prefix}{_slug(oid)}",
+                        icon=(item[2] if len(item) > 2 else None),
                         type=("primary" if oid == sel else "secondary"),
                         use_container_width=True,
                         on_click=_rail_set, args=(state_key, oid),

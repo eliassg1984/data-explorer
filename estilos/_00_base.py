@@ -182,6 +182,25 @@ CSS = """    <style>
         --rail-der-res: calc(var(--rail-der-w) + 15px + 54px);
     }
 
+    /* Compras pide más ancho: su rail no es una columna de etiquetas sino una
+       LISTA (icono + nombre + chevron), ver el bloque final de
+       _20_compras_rail.py. La excepción vive ACÁ y no allá a propósito: los
+       anchos de rail tienen un solo dueño y `test_graficos.py` lo verifica —
+       nació de tenerlo escrito en seis sitios que se derivaban entre sí, con
+       el resultado de que plegar el rail dejaba la franja flotando.
+
+       Se pisa `--rail-der-full` (el ancho DESPLEGADO) y no `--rail-der-w` (el
+       VIGENTE, que el pestillo reescribe al plegar): así plegar y desplegar
+       siguen funcionando sin enterarse, y `--rail-der-res` se deriva sola.
+
+       Sin `@media`: en móvil el rail deja de ser columna (pasa a `width:100%`
+       estático) y la reserva del contenido se anula, así que el valor no lo
+       lee nadie. Ganar por especificidad alcanza — `:root:has()` le gana a
+       `:root` sin depender del orden. */
+    :root:has(.st-key-app_reporte_compras) {
+        --rail-der-full: 230px;
+    }
+
     /* ============ HEADER NATIVO + ESPACIO SUPERIOR ============ */
     header[data-testid="stHeader"],
     .stAppHeader {

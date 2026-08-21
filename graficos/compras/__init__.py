@@ -46,19 +46,25 @@ from graficos import alturas
 
 
 
-# Rail derecho de Compras — cabecera "Compras / Gráficos" + secciones
-# agrupadas por categoría (variante 2). El id interno (izquierda de cada tupla)
-# es el string que consume el resto del dashboard; el label (derecha) es lo que
-# se pinta en el botón del rail.
+# Rail de Compras — cabecera "Compras / Gráficos" + secciones agrupadas por
+# categoría (variante 2). Cada tupla es (id, label, icono):
+#   · id     — el string que consume el resto del dashboard.
+#   · label  — lo que se pinta en el botón del rail.
+#   · icono  — shortcode Material que va al `icon=` de st.button.
+# El icono es el TERCER elemento y `_render_rail` lo trata como opcional, así
+# que los otros rails (Ajuste) siguen con tuplas de 2 sin enterarse. Nombres
+# validados contra `streamlit.string_util.validate_material_icon`: si uno no
+# existe, Streamlit tira StreamlitAPIException al dibujar el rail, o sea la
+# pantalla entera. Ver arquitectura.md regla #147.
 _COMPRAS_RAIL_CATEGORIAS = (
-    ("Dimensión", (("Proveedor",            "Proveedor"),
-                   ("Producto",             "Producto"))),
-    ("Precios",   (("Vs año pasado",        "Vs año pasado"),
-                   ("Volatilidad",          "Volatilidad"))),
-    ("SUNAT",     (("Documentos SUNAT",     "Documentos"),)),
-    ("Más",       (("Semanal",              "Semanal"),
-                   ("Personalizado",        "Personalizado"),
-                   ("Tabla",                "Tabla"))),
+    ("Dimensión", (("Proveedor",        "Proveedor",     ":material/local_shipping:"),
+                   ("Producto",         "Producto",      ":material/inventory_2:"))),
+    ("Precios",   (("Vs año pasado",    "Vs año pasado", ":material/compare_arrows:"),
+                   ("Volatilidad",      "Volatilidad",   ":material/candlestick_chart:"))),
+    ("SUNAT",     (("Documentos SUNAT", "Documentos",    ":material/receipt_long:"),)),
+    ("Más",       (("Semanal",          "Semanal",       ":material/calendar_view_week:"),
+                   ("Personalizado",    "Personalizado", ":material/tune:"),
+                   ("Tabla",            "Tabla",         ":material/table_rows:"))),
 )
 
 def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=None):

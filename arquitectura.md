@@ -6492,3 +6492,61 @@ salvo `icono`):
      La regla general que deja: **antes de esconder chrome de Streamlit,
      contar qué hay adentro.** Un `display: none` sobre un contenedor
      genérico se lleva puestas funciones que nadie enumeró.
+
+147. **El rail de Compras en formato LISTA (icono + nombre + chevron).**
+     A pedido 2026-08-21, tomando como referencia el rail de MSN Dinero. El
+     rail era una columna de 84px con etiquetas de 11px; pasa a ser una lista
+     de filas de 47px, cada vista con su icono Material, su nombre y un
+     chevron, separadas por hairlines.
+
+     **El icono es un parámetro, no un hack.** Streamlit 1.59 acepta
+     `st.button(icon=":material/tune:")`, así que no hace falta HTML dentro
+     del botón. `_COMPRAS_RAIL_CATEGORIAS` pasó de tuplas `(id, label)` a
+     `(id, label, icono)` y `_render_rail` lee el tercer elemento como
+     OPCIONAL — el rail es COMPARTIDO con Ajuste (regla #16) y sus tuplas de
+     2 siguen funcionando igual. Cuidado con lo que eso implica: cualquier
+     código que recorra `items` con `for oid, label in …` revienta con las
+     tuplas de 3. Ya pasó al escribirlo: `_todos` se armaba así y hubo que
+     cambiarlo a `item[0]`.
+
+     Los nombres de icono se validan contra
+     `streamlit.string_util.validate_material_icon`. Si uno no existe,
+     Streamlit tira `StreamlitAPIException` **al dibujar el rail**, o sea que
+     se cae la pantalla entera, no sólo el icono. Los ocho de hoy están
+     verificados uno por uno.
+
+     **El ancho: pisar `--rail-der-full`, nunca `--rail-der-w`.** 84 → 230px.
+     `--rail-der-w` es la variable VIGENTE y la reescribe el pestillo al
+     plegar (`_25_rails_pestillo.py`); pisándola, el rail se queda ancho y
+     plegar deja de funcionar. Pisando la DESPLEGADA, todo lo demás se deriva
+     solo. Verificado en el navegador: desplegado da rail 230 / contenido en
+     x=299; plegado da `--rail-der-w: 24px`, rail 24 / contenido en x=93, y
+     al desplegar vuelve a 230.
+
+     Y la excepción vive en `estilos/_00_base.py`, junto al valor base, no en
+     `_20_compras_rail.py` donde está el resto del formato. No es capricho:
+     `test_graficos.py` tiene una guarda de que los anchos de rail se
+     declaran en un solo sitio (nació de tenerlos en seis que se derivaban
+     entre sí) — **y la guarda saltó** cuando se escribió acá por primera
+     vez. Funcionó como debía.
+
+     **Dos scopes distintos, a propósito:**
+     - El formato va scopeado a `app_reporte_compras`: es una decisión del
+       REPORTE. Verificado que Ajuste sigue con su rail de 84px, sin iconos,
+       sin chevron y con fuente de 11px.
+     - Todo el bloque va dentro de `@media (min-width: 901px)` y al FINAL del
+       módulo. La media, para no pisar el bloque móvil (`max-width: 900px`),
+       donde el rail deja de ser columna y pasa a ser una tira horizontal de
+       chips: ahí ni el chevron ni los hairlines significan nada. El final
+       del módulo, para ganarle por orden a las reglas de arriba que estilan
+       estos mismos botones.
+
+     Los iconos SÍ aparecen en la tira móvil, porque salen de Python y no del
+     CSS. Es deliberado: un chip con icono se lee mejor y la tira scrollea en
+     horizontal, así que el ancho extra no rompe nada (medido: sin desborde a
+     375px).
+
+     **Lo que NO se puede portar de la referencia:** la fila de puntitos de
+     score de cada ítem. En MSN son una calificación (Valoración 3/6, Estado
+     4/6); acá los ítems del rail son destinos de navegación, no entidades
+     puntuadas. No hay dato que poner ahí sin inventarlo.

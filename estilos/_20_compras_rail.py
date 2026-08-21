@@ -438,4 +438,91 @@ CSS = """    /* ================================================================
            misma especificidad, debe ir después en el archivo para ganar por
            orden de fuente. Ver bloque "chips_ajuste_tabla — reset móvil".) */
     }
+
+    /* =================================================================== */
+    /* COMPRAS: EL RAIL EN FORMATO LISTA (icono + label + chevron)           */
+    /*                                                                       */
+    /* A pedido 2026-08-21, tomando de referencia el rail de MSN Dinero. El  */
+    /* rail de 84px y 11px de fuente era una columna de etiquetas; esto lo    */
+    /* convierte en una lista: cada vista es una fila con su icono, su        */
+    /* nombre y un chevron, separadas por hairlines.                          */
+    /*                                                                       */
+    /* Va al FINAL del módulo y dentro de min-width:901px por dos razones     */
+    /* distintas: por ORDEN, para ganarle a las reglas de arriba que estilan  */
+    /* estos mismos botones; y por MEDIA, para no pisar el bloque móvil       */
+    /* (max-width:900px), donde el rail deja de ser columna y pasa a ser una  */
+    /* tira horizontal de chips — ahí ni el chevron ni los hairlines tienen   */
+    /* sentido.                                                               */
+    /*                                                                       */
+    /* Scopeado a `app_reporte_compras` y no a `compras_tabs_row`: el rail es */
+    /* COMPARTIDO con Ajuste (ver regla #16), y esto es una decisión del      */
+    /* reporte, no del componente.                                            */
+    /* =================================================================== */
+    @media screen and (min-width: 901px) {
+        /* El ANCHO de este rail NO se declara aca: vive en _00_base.py,
+           junto al valor base. Es la regla de "los anchos de rail tienen un
+           solo duenio" (test_graficos.py la verifica) y no es burocracia --
+           nacio de que el ancho estaba escrito en seis sitios que se
+           derivaban entre si y plegar el rail dejaba la franja flotando. */
+        /* La fila: icono, label, chevron y un hairline abajo. */
+        :root:has(.st-key-app_reporte_compras) .st-key-graf_tipo_chips
+        [data-testid="stButton"] > button {
+            padding: 10px 12px 10px 9px !important;
+            gap: 10px !important;
+            border-bottom: 1px solid var(--border) !important;
+        }
+        /* El último ítem no lleva línea: quedaría flotando sobre el padding
+           inferior del rail, sin nada debajo que separar. */
+        :root:has(.st-key-app_reporte_compras) .st-key-graf_tipo_chips
+        > div:last-child [data-testid="stButton"] > button {
+            border-bottom: none !important;
+        }
+        /* Con una línea por fila, el separador de categoría la duplica. El
+           badge sigue siendo el que agrupa. */
+        :root:has(.st-key-app_reporte_compras)
+        .st-key-compras_tabs_row .rail-sep { display: none !important; }
+        :root:has(.st-key-app_reporte_compras)
+        .st-key-compras_tabs_row .rail-cat-badge {
+            font-size: 9.5px !important;
+            padding: 13px 12px 5px !important;
+        }
+        /* 11px era el tamaño para una columna de 84px. */
+        :root:has(.st-key-app_reporte_compras) .st-key-graf_tipo_chips
+        [data-testid="stButton"] > button p {
+            font-size: 13px !important;
+            white-space: nowrap !important;
+        }
+        /* El icono de `st.button(icon=...)`. `color: inherit` a propósito:
+           así sigue los estados hover/activo del botón sin reglas propias.
+           Es un <span>, y la regla que aplana los descendientes del botón
+           (más arriba en este archivo) excluye `span` — por eso no hace
+           falta deshacer nada acá. */
+        :root:has(.st-key-app_reporte_compras) .st-key-graf_tipo_chips
+        [data-testid="stButton"] > button [data-testid="stIconMaterial"] {
+            font-size: 19px !important;
+            color: inherit !important;
+            flex: 0 0 auto !important;
+            margin: 0 !important;
+        }
+        /* Chevron. Va en ::after porque ::before ya está ocupado (y anulado)
+           por la viñeta vieja. `margin-left:auto` lo empuja al borde
+           derecho: funciona porque el wrapper del label es `flex: 0 1 auto`
+           y no se estira — si alguien le pone flex:1, el chevron se pega al
+           texto y deja de haber margen que repartir. */
+        :root:has(.st-key-app_reporte_compras) .st-key-graf_tipo_chips
+        [data-testid="stButton"] > button::after {
+            content: "›";
+            margin-left: auto !important;
+            font-size: 17px !important;
+            line-height: 1 !important;
+            color: var(--text-muted) !important;
+            flex: 0 0 auto !important;
+        }
+        :root:has(.st-key-app_reporte_compras) .st-key-graf_tipo_chips
+        [data-testid="stButton"] > button[kind="primary"]::after,
+        :root:has(.st-key-app_reporte_compras) .st-key-graf_tipo_chips
+        [data-testid="stButton"] > button:hover::after {
+            color: inherit !important;
+        }
+    }
 """
