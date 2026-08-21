@@ -75,6 +75,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 import sunat
 from estado_rango import clave_rango
+from inyecciones import inject_maximize_aggrid
 from tema import (
     ACENTO, ACENTO_TEXTO, ADVERTENCIA_TEXTO, ERROR, GRIS_BORDE, GRIS_TEXTO,
     LAVANDA_FONDO, TEXTO_PRINCIPAL,
@@ -1053,6 +1054,15 @@ def renderizar_documentos_sunat(d, col_fecha):
                 with c_kpi:
                     _kpis_cruce(df_cruce)
                 doc = _tabla_cruce(df_cruce, vis)
+                # ⛶ pantalla completa nativa (mismo mecanismo que la tabla
+                # pivotable de Documentos en el drill de Proveedor): esta
+                # tabla es angosta porque comparte fila con el panel del
+                # documento (col_izq/col_der más abajo) y, sin
+                # `fit_columns_on_grid_load` (10 columnas, ver docstring de
+                # `_tabla_cruce`), ya scrollea horizontal. El botón deja ver
+                # las 10 sin scrollear, sin remontar el grid — la selección
+                # de fila sobrevive al ir y volver.
+                inject_maximize_aggrid()
                 st.download_button(
                     "⬇ Descargar CSV del cruce",
                     data=df_cruce.to_csv(index=False).encode("utf-8-sig"),
@@ -1064,6 +1074,11 @@ def renderizar_documentos_sunat(d, col_fecha):
                     _kpis(df, _origen)
                 _grafico(vis, vista)
                 doc = _tabla(vis)
+                # ⛶ pantalla completa nativa — ver el comentario gemelo en
+                # la rama "Cruce" de arriba. Acá el achique lo hace
+                # `fit_columns_on_grid_load` (medido: Proveedor se queda al
+                # piso de 190px con nombres largos cortados).
+                inject_maximize_aggrid()
                 st.download_button(
                     "⬇ Descargar CSV",
                     data=vis.to_csv(index=False).encode("utf-8-sig"),
