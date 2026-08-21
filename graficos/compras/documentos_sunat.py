@@ -75,7 +75,6 @@ from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 import sunat
 from estado_rango import clave_rango
-from inyecciones import inject_maximize_aggrid
 from tema import (
     ACENTO, ACENTO_TEXTO, ADVERTENCIA_TEXTO, ERROR, GRIS_BORDE, GRIS_TEXTO,
     LAVANDA_FONDO, TEXTO_PRINCIPAL,
@@ -471,15 +470,14 @@ def _tabla_cruce(df_cruce, df_sire):
             "return c ? {'color':c,'fontWeight':'600'} : {'color':'%s'}; }"
             % (ADVERTENCIA_TEXTO, ADVERTENCIA_TEXTO, ERROR, GRIS_TEXTO)))
     gb.configure_selection(selection_mode="single", use_checkbox=False)
-    # Re-reparte las columnas cada vez que el grid cambia de TAMANIO, que es
-    # exactamente lo que pasa al entrar y salir de pantalla completa
-    # (`inject_maximize_aggrid`). Sin esto el maximizado daba mas lienzo pero
-    # las columnas se quedaban con el ancho de la tarjeta angosta: la tabla
-    # ocupaba 1365px con la mitad derecha vacia y los encabezados igual de
-    # cortados que antes. Reportado con captura el 2026-08-21.
-    # Es seguro en el estado angosto porque cada columna declara `minWidth`
-    # (ver arriba): `sizeColumnsToFit` los respeta y scrollea en vez de
-    # aplastar. Es la receta de la propia documentacion de AG Grid, y no
+    # Re-reparte las columnas cada vez que el grid cambia de TAMANIO. Con la
+    # tabla ya apilada a todo el ancho, los dos casos que quedan son plegar
+    # el rail de vistas y redimensionar la ventana: sin esto las columnas se
+    # quedan con el ancho que midieron al montar y sobra hueco a la derecha.
+    # `fit_columns_on_grid_load` solo actua una vez, al cargar.
+    # Es seguro aunque el ancho sea chico porque cada columna declara
+    # `minWidth` (ver arriba): `sizeColumnsToFit` los respeta y scrollea en
+    # vez de aplastar. Es la receta de la documentacion de AG Grid, y no
     # entra en bucle: el evento no se re-dispara por el propio ajuste.
     gb.configure_grid_options(
         rowHeight=30, headerHeight=32,
@@ -704,15 +702,14 @@ def _tabla(df):
             "? {'color':'%s','fontWeight':'600'} : {'color':'%s'}; }"
             % (ADVERTENCIA_TEXTO, GRIS_TEXTO)))
     gb.configure_selection(selection_mode="single", use_checkbox=False)
-    # Re-reparte las columnas cada vez que el grid cambia de TAMANIO, que es
-    # exactamente lo que pasa al entrar y salir de pantalla completa
-    # (`inject_maximize_aggrid`). Sin esto el maximizado daba mas lienzo pero
-    # las columnas se quedaban con el ancho de la tarjeta angosta: la tabla
-    # ocupaba 1365px con la mitad derecha vacia y los encabezados igual de
-    # cortados que antes. Reportado con captura el 2026-08-21.
-    # Es seguro en el estado angosto porque cada columna declara `minWidth`
-    # (ver arriba): `sizeColumnsToFit` los respeta y scrollea en vez de
-    # aplastar. Es la receta de la propia documentacion de AG Grid, y no
+    # Re-reparte las columnas cada vez que el grid cambia de TAMANIO. Con la
+    # tabla ya apilada a todo el ancho, los dos casos que quedan son plegar
+    # el rail de vistas y redimensionar la ventana: sin esto las columnas se
+    # quedan con el ancho que midieron al montar y sobra hueco a la derecha.
+    # `fit_columns_on_grid_load` solo actua una vez, al cargar.
+    # Es seguro aunque el ancho sea chico porque cada columna declara
+    # `minWidth` (ver arriba): `sizeColumnsToFit` los respeta y scrollea en
+    # vez de aplastar. Es la receta de la documentacion de AG Grid, y no
     # entra en bucle: el evento no se re-dispara por el propio ajuste.
     gb.configure_grid_options(
         rowHeight=30, headerHeight=32,
@@ -753,25 +750,38 @@ def _ficha_html(doc):
     Un beneficio lateral: al no haber iframe, este panel no cae en la regla
     de `estilos/_00_base.py` que oculta todos los iframes por defecto.
     """
+    # Un GRUPO por bloque, y los bloques en columnas. Cuando la ficha vivia
+    # en la columna angosta de la derecha, apilar todo en una lista era lo
+    # correcto; apilada bajo la tabla, a todo el ancho, esa misma lista
+    # queda larguisima y con la etiqueta y el valor separados por medio
+    # metro de vacio (son filas `space-between`). El grid reparte los
+    # grupos en cuantas columnas entren, sin numero fijo: `auto-fit` +
+    # `minmax(260px, 1fr)` da 1 columna en el telefono y 3-4 en desktop.
+    # `break-inside: avoid` no hace falta porque cada grupo es un item del
+    # grid, no texto fluyendo en `column-count`.
     filas = []
     for titulo, campos in sunat.campos_ficha(doc):
-        filas.append(
+        grupo = [
             f'<div style="font-size:10px;font-weight:700;color:{ACENTO};'
-            f'text-transform:uppercase;letter-spacing:.05em;margin:12px 0 4px;'
+            f'text-transform:uppercase;letter-spacing:.05em;margin:0 0 4px;'
             f'padding-bottom:3px;border-bottom:1px solid {GRIS_BORDE};">'
             f'{titulo}</div>'
-        )
+        ]
         for etiqueta, valor in campos:
-            filas.append(
+            grupo.append(
                 f'<div style="display:flex;justify-content:space-between;'
                 f'gap:10px;padding:3px 0;font-size:12px;">'
                 f'<span style="color:{GRIS_TEXTO};">{etiqueta}</span>'
                 f'<span style="color:{TEXTO_PRINCIPAL};font-weight:500;'
                 f'text-align:right;">{valor}</span></div>'
             )
+        filas.append(f'<div>{"".join(grupo)}</div>')
 
     st.markdown(
-        f'<div style="padding:2px 2px 8px;">{"".join(filas)}'
+        f'<div style="padding:2px 2px 8px;">'
+        f'<div style="display:grid;gap:14px 28px;'
+        f'grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">'
+        f'{"".join(filas)}</div>'
         f'<div style="display:flex;justify-content:space-between;'
         f'align-items:center;background:{LAVANDA_FONDO};border-radius:8px;'
         f'padding:9px 12px;margin-top:14px;">'
@@ -1004,127 +1014,115 @@ def renderizar_documentos_sunat(d, col_fecha):
         return
     f_ini, f_fin = rango[0], rango[1]
 
-    col_izq, col_der = st.columns([1.6, 1])
+    # 2026-08-21, a pedido: de DOS COLUMNAS a apilado. La tabla vivia en
+    # `st.columns([1.6, 1])`, o sea ~474px utiles: medido,
+    # `fit_columns_on_grid_load` aplastaba Fecha a 36px y Situacion a 43.
+    # Se probo antes resolverlo con el ⛶ de pantalla completa y se descarto
+    # a pedido — tapaba el resto de la vista. Ahora la tabla toma el ancho
+    # entero del canvas y la ficha del documento pasa DEBAJO, tambien a lo
+    # ancho (ver `_ficha_html`, que reparte los grupos en columnas para no
+    # quedar como una lista larguisima de dos palabras por fila).
+    with st.container(border=True, key="sunat_card_izq"):
+        c_vista, c_sit, c_act, c_kpi = st.columns([1.7, 1.3, 0.6, 2.8])
+        with c_vista:
+            # 2026-08-21, a pedido: de radio horizontal a selectbox. Con
+            # `horizontal=True` en una columna de 166px las 3 opciones
+            # NO entraban en una fila y Streamlit las apilaba en 3 líneas
+            # (medido: 99px de alto, contra ~40 de un selectbox) — el
+            # widget se veía roto, no compacto. El selectbox es la misma
+            # idea que un `st.radio` (una sola elección entre pocas) pero
+            # SIEMPRE en una línea: muestra el valor elegido + una
+            # flecha, y la lista aparece recién al abrir. Mismos values,
+            # misma key: session_state no pierde la selección previa.
+            vista = st.selectbox(
+                "Ver", ["Por fecha", "Por proveedor", "Cruce"],
+                key="sunat_vista",
+                label_visibility="collapsed",
+                help="«Cruce» compara cada comprobante del SIRE contra "
+                     "el registro interno de compras (parquet): mismo "
+                     "documento, ¿coinciden los montos?")
+        with c_sit:
+            situacion = st.selectbox(
+                "Situación", ["Todos", "Registrados", "Pendientes"],
+                key="sunat_situacion",
+                label_visibility="collapsed",
+                help="«Pendiente» = SUNAT ve la compra pero todavía no "
+                     "está anotada en un registro presentado. Es crédito "
+                     "fiscal sin tomar.",
+            )
+        with c_act:
+            _ayuda = "Volver a consultar a SUNAT"
+            if not sunat.secrets_disponibles():
+                _ayuda += (". Sin credenciales configuradas: se "
+                           "muestran datos de ejemplo (agregá "
+                           "SUNAT_RUC, SUNAT_USUARIO_SOL, "
+                           "SUNAT_CLAVE_SOL, SUNAT_CLIENT_ID y "
+                           "SUNAT_CLIENT_SECRET a los secrets).")
+            # Limpia TODAS las cachés de la cadena: la del parquet, la
+            # del rango y la de cada período. La del rango sola
+            # devolvería lo mismo, porque se apoya en las otras.
+            if st.button("⟳", key="sunat_actualizar", help=_ayuda,
+                         use_container_width=True):
+                sunat._registro_de_parquet.clear()
+                sunat.obtener_comprobantes.clear()
+                sunat.obtener_comprobantes_rango.clear()
+                sunat.periodos_con_estado.clear()
+                sunat._existe_original.clear()
+                sunat._bytes_original.clear()
+                st.rerun()
 
-    with col_izq:
-        with st.container(border=True, key="sunat_card_izq"):
-            c_vista, c_sit, c_act, c_kpi = st.columns([1.7, 1.3, 0.6, 2.8])
-            with c_vista:
-                # 2026-08-21, a pedido: de radio horizontal a selectbox. Con
-                # `horizontal=True` en una columna de 166px las 3 opciones
-                # NO entraban en una fila y Streamlit las apilaba en 3 líneas
-                # (medido: 99px de alto, contra ~40 de un selectbox) — el
-                # widget se veía roto, no compacto. El selectbox es la misma
-                # idea que un `st.radio` (una sola elección entre pocas) pero
-                # SIEMPRE en una línea: muestra el valor elegido + una
-                # flecha, y la lista aparece recién al abrir. Mismos values,
-                # misma key: session_state no pierde la selección previa.
-                vista = st.selectbox(
-                    "Ver", ["Por fecha", "Por proveedor", "Cruce"],
-                    key="sunat_vista",
-                    label_visibility="collapsed",
-                    help="«Cruce» compara cada comprobante del SIRE contra "
-                         "el registro interno de compras (parquet): mismo "
-                         "documento, ¿coinciden los montos?")
-            with c_sit:
-                situacion = st.selectbox(
-                    "Situación", ["Todos", "Registrados", "Pendientes"],
-                    key="sunat_situacion",
-                    label_visibility="collapsed",
-                    help="«Pendiente» = SUNAT ve la compra pero todavía no "
-                         "está anotada en un registro presentado. Es crédito "
-                         "fiscal sin tomar.",
-                )
-            with c_act:
-                _ayuda = "Volver a consultar a SUNAT"
-                if not sunat.secrets_disponibles():
-                    _ayuda += (". Sin credenciales configuradas: se "
-                               "muestran datos de ejemplo (agregá "
-                               "SUNAT_RUC, SUNAT_USUARIO_SOL, "
-                               "SUNAT_CLAVE_SOL, SUNAT_CLIENT_ID y "
-                               "SUNAT_CLIENT_SECRET a los secrets).")
-                # Limpia TODAS las cachés de la cadena: la del parquet, la
-                # del rango y la de cada período. La del rango sola
-                # devolvería lo mismo, porque se apoya en las otras.
-                if st.button("⟳", key="sunat_actualizar", help=_ayuda,
-                             use_container_width=True):
-                    sunat._registro_de_parquet.clear()
-                    sunat.obtener_comprobantes.clear()
-                    sunat.obtener_comprobantes_rango.clear()
-                    sunat.periodos_con_estado.clear()
-                    sunat._existe_original.clear()
-                    sunat._bytes_original.clear()
-                    st.rerun()
-
-            with st.spinner("Cargando el registro de compras de SUNAT…"):
-                try:
-                    df, _origen = sunat.comprobantes_rango(f_ini, f_fin)
-                except Exception as e:
-                    st.error(f"No se pudo consultar a SUNAT: {e}")
-                    return
-
-            if df is None or df.empty:
-                st.info("SUNAT no tiene comprobantes emitidos hacia tu RUC "
-                        "en el rango elegido.")
+        with st.spinner("Cargando el registro de compras de SUNAT…"):
+            try:
+                df, _origen = sunat.comprobantes_rango(f_ini, f_fin)
+            except Exception as e:
+                st.error(f"No se pudo consultar a SUNAT: {e}")
                 return
 
-            # El filtro de situación se aplica ANTES de decidir qué mostrar
-            # arriba (KPIs normales o KPIs del cruce): en «Cruce», filtrar a
-            # Pendientes primero y cruzar después responde una pregunta
-            # real — "de lo que aún no presenté, ¿qué ya tengo cargado en
-            # el sistema?" — que se pierde si se cruza sobre el rango
-            # completo sin filtrar.
-            vis = df if situacion == "Todos" else df[
-                df["situacion"] == situacion[:-1]]   # "Registrados"→"Registrado"
-            if vis.empty:
-                st.info(f"No hay comprobantes «{situacion.lower()}» en el rango.")
-                return
+        if df is None or df.empty:
+            st.info("SUNAT no tiene comprobantes emitidos hacia tu RUC "
+                    "en el rango elegido.")
+            return
 
-            _sufijo = f"{pd.Timestamp(f_ini):%Y%m%d}_{pd.Timestamp(f_fin):%Y%m%d}"
+        # El filtro de situación se aplica ANTES de decidir qué mostrar
+        # arriba (KPIs normales o KPIs del cruce): en «Cruce», filtrar a
+        # Pendientes primero y cruzar después responde una pregunta
+        # real — "de lo que aún no presenté, ¿qué ya tengo cargado en
+        # el sistema?" — que se pierde si se cruza sobre el rango
+        # completo sin filtrar.
+        vis = df if situacion == "Todos" else df[
+            df["situacion"] == situacion[:-1]]   # "Registrados"→"Registrado"
+        if vis.empty:
+            st.info(f"No hay comprobantes «{situacion.lower()}» en el rango.")
+            return
 
-            if vista == "Cruce":
-                g_pq = _parquet_agrupado_por_documento(d, col_fecha, f_ini, f_fin)
-                df_cruce = cruzar_con_parquet(vis, g_pq)
-                with c_kpi:
-                    _kpis_cruce(df_cruce)
-                doc = _tabla_cruce(df_cruce, vis)
-                # ⛶ pantalla completa nativa (mismo mecanismo que la tabla
-                # pivotable de Documentos en el drill de Proveedor): esta
-                # tabla es angosta porque comparte fila con el panel del
-                # documento (col_izq/col_der más abajo) y, sin
-                # `fit_columns_on_grid_load` (10 columnas, ver docstring de
-                # `_tabla_cruce`), ya scrollea horizontal. El botón deja ver
-                # las 10 sin scrollear, sin remontar el grid — la selección
-                # de fila sobrevive al ir y volver.
-                inject_maximize_aggrid()
-                st.download_button(
-                    "⬇ Descargar CSV del cruce",
-                    data=df_cruce.to_csv(index=False).encode("utf-8-sig"),
-                    file_name=f"sunat_cruce_{_sufijo}.csv",
-                    mime="text/csv", key="sunat_dl_csv_cruce",
-                )
-            else:
-                with c_kpi:
-                    _kpis(df, _origen)
-                _grafico(vis, vista)
-                doc = _tabla(vis)
-                # ⛶ pantalla completa nativa — ver el comentario gemelo en
-                # la rama "Cruce" de arriba. Acá el achique lo hace
-                # `fit_columns_on_grid_load` (medido: Proveedor se queda al
-                # piso de 190px con nombres largos cortados).
-                inject_maximize_aggrid()
-                st.download_button(
-                    "⬇ Descargar CSV",
-                    data=vis.to_csv(index=False).encode("utf-8-sig"),
-                    file_name=f"sunat_compras_{_sufijo}.csv",
-                    mime="text/csv", key="sunat_dl_csv",
-                )
+        _sufijo = f"{pd.Timestamp(f_ini):%Y%m%d}_{pd.Timestamp(f_fin):%Y%m%d}"
 
-    with col_der:
-        # La tarjeta izquierda arranca con la fila de controles (38px, ver
-        # `_kpis`), así que sin esto la derecha empieza más arriba que el
-        # contenido de su vecina y las dos se ven desalineadas. El
-        # espaciador la baja hasta la altura del gráfico.
-        st.markdown('<div style="height:38px;"></div>', unsafe_allow_html=True)
-        with st.container(border=True, key="sunat_card_doc"):
-            _panel_documento(doc)
+        if vista == "Cruce":
+            g_pq = _parquet_agrupado_por_documento(d, col_fecha, f_ini, f_fin)
+            df_cruce = cruzar_con_parquet(vis, g_pq)
+            with c_kpi:
+                _kpis_cruce(df_cruce)
+            doc = _tabla_cruce(df_cruce, vis)
+            st.download_button(
+                "⬇ Descargar CSV del cruce",
+                data=df_cruce.to_csv(index=False).encode("utf-8-sig"),
+                file_name=f"sunat_cruce_{_sufijo}.csv",
+                mime="text/csv", key="sunat_dl_csv_cruce",
+            )
+        else:
+            with c_kpi:
+                _kpis(df, _origen)
+            _grafico(vis, vista)
+            doc = _tabla(vis)
+            st.download_button(
+                "⬇ Descargar CSV",
+                data=vis.to_csv(index=False).encode("utf-8-sig"),
+                file_name=f"sunat_compras_{_sufijo}.csv",
+                mime="text/csv", key="sunat_dl_csv",
+            )
+
+    # La ficha va DEBAJO de la tabla, no al costado. Sin espaciador: el que
+    # habia (38px) existia solo para alinear el tope de las dos columnas, y
+    # apilado no hay nada que alinear.
+    with st.container(border=True, key="sunat_card_doc"):
+        _panel_documento(doc)

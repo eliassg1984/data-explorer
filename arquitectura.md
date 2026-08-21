@@ -6608,3 +6608,42 @@ salvo `icono`):
      Ese camino (fiber → `stateNode.api` → `getGridOption`) es la forma de
      verificar CUALQUIER handler de AgGrid desde el navegador acá, sin
      depender de que el evento llegue a dispararse solo.
+
+149. **Documentos SUNAT: de dos columnas a APILADO** (2026-08-21, a
+     pedido). La tabla vivía en `st.columns([1.6, 1])` con la ficha del
+     comprobante al costado — ~474px útiles para 7 columnas, y medido en el
+     navegador `fit_columns_on_grid_load` aplastaba Fecha a 36px y
+     Situación a 43. Ahora la tabla toma el ancho entero del canvas y la
+     ficha pasa DEBAJO, también a lo ancho.
+
+     **El camino descartado importa tanto como el elegido.** Antes de
+     apilar se probó resolverlo con el ⛶ de pantalla completa
+     (`inject_maximize_aggrid`), que ya existía para la pivote de
+     Proveedor. Se descartó a pedido con una razón que no estaba en la
+     mesa: *"no deseo una pantalla completa, ya que oculta todo"*. Un modo
+     que tapa el resto de la vista no sirve para trabajar comparando — y
+     eso no se deduce midiendo píxeles. El botón se retiró de este drill;
+     sigue en Proveedor, donde la tabla es el único contenido.
+
+     Lo que SÍ quedó de ese intento, porque son arreglos reales:
+     `_FS_CSS_IFRAME` ahora suelta el ancho además del alto (regla #148), y
+     las dos tablas declaran `onGridSizeChanged` + `minWidth` por columna.
+     Apilada, ese handler ya no sirve para fullscreen sino para los dos
+     casos que quedan: plegar el rail y redimensionar la ventana.
+     `fit_columns_on_grid_load` sólo actúa una vez, al cargar.
+
+     **La ficha necesitó su propio arreglo, y es el que casi se pasa por
+     alto.** Mover un panel de una columna angosta a todo el ancho no es
+     gratis: sus filas son `display:flex; justify-content:space-between`,
+     así que a 1147px la etiqueta y el valor quedaban separados por medio
+     metro de vacío, en una lista vertical larguísima. `_ficha_html` pasó a
+     envolver cada GRUPO (`sunat.campos_ficha` ya los devuelve agrupados)
+     en su propio bloque, y los bloques van en
+     `grid-template-columns: repeat(auto-fit, minmax(260px, 1fr))`. Sin
+     número fijo de columnas a propósito: medido, da 3 lado a lado en
+     desktop (Emisor · Documento · Importes, 348px cada uno, mismo `top`) y
+     1 en móvil a 375px, sin desborde.
+
+     La regla general: **cambiar el ANCHO de un contenedor puede romper el
+     contenido aunque el contenido no se toque.** Un `space-between` es
+     correcto en 400px y absurdo en 1150px.
