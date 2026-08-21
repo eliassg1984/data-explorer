@@ -99,6 +99,13 @@ PREFIJO_SOLICITUDES = "_solicitudes_sunat"
 ARCHIVO_REGISTRO = "sunat_compras.parquet"
 
 PAUSA_ENTRE_DOCS_SEG = 1.5
+
+# El default de Playwright para esperar una descarga son 30 seg, y no
+# alcanza: SUNAT genera el PDF en el momento, y los comprobantes con muchas
+# líneas tardan más. Visto en producción — un PDF de 303 KB (contra los ~90
+# KB habituales) contra uno que se pasó de los 30 seg y se dio por fallido
+# sin que hubiera nada roto.
+TIMEOUT_DESCARGA_MS = 60000
 MESES_VENTANA = 24        # SUNAT deja de servir el original pasada esta ventana
 
 # Cada cuánto revisa R2 el modo --vigilar. NO son los 5 seg que usa
@@ -461,14 +468,14 @@ def consultar_y_descargar(pagina, ruc_emisor, serie, numero, tipo_cdp):
     pdf_bytes = xml_bytes = None
     btn_pdf = app.locator("button[ngbtooltip='Descargar PDF']").first
     if btn_pdf.is_visible():
-        with pagina.expect_download() as d:
+        with pagina.expect_download(timeout=TIMEOUT_DESCARGA_MS) as d:
             btn_pdf.click()
         pdf_bytes = pathlib.Path(d.value.path()).read_bytes()
 
     time.sleep(1)
     btn_xml = app.locator("button[ngbtooltip='Descargar XML']").first
     if btn_xml.is_visible():
-        with pagina.expect_download() as d:
+        with pagina.expect_download(timeout=TIMEOUT_DESCARGA_MS) as d:
             btn_xml.click()
         xml_bytes = xml_del_zip(pathlib.Path(d.value.path()).read_bytes())
 
@@ -566,8 +573,18 @@ def atender_pedidos(pagina, s3, bucket):
                              "24 meses o de ciertos emisores.")
         except Exception as e:
             log(f"    error: {str(e)[:160]}")
-            marcar_fallo(s3, bucket, clave_senal,
-                         f"Error al consultarlo en SUNAT: {str(e)[:120]}")
+            # El texto crudo de Playwright ("Timeout 30000ms exceeded while
+            # waiting for event download") no le dice nada a quien está
+            # mirando la pantalla. El caso más común tiene una explicación
+            # simple y una acción clara, así que se traduce.
+            crudo = str(e)
+            if "download" in crudo and "Timeout" in crudo:
+                motivo = ("SUNAT tardó demasiado en generar el archivo. Suele "
+                          "pasar con comprobantes de muchas líneas; volvé a "
+                          "intentarlo.")
+            else:
+                motivo = f"Error al consultarlo en SUNAT: {crudo[:120]}"
+            marcar_fallo(s3, bucket, clave_senal, motivo)
         # La señal se borra SIEMPRE, salga bien o mal. Si no, un
         # comprobante que SUNAT no puede servir dejaría a la webapp
         # mostrando "pedido" para siempre y a este script reintentándolo
