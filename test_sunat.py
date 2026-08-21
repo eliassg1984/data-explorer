@@ -357,6 +357,23 @@ if _ruta_srv.exists():
            == sunat.clave_fallo(c) for c in _casos),
        "la clave de la marca de fallo coincide en los dos lados")
 
+    # Una marca de fallo NO puede tomarse por un pedido. Pasó en producción:
+    # `.fallo.json` también termina en `.json`, el servicio la levantaba
+    # como pedido, fallaba (el payload no trae RUC ni serie) y le agregaba
+    # otro `.fallo` cada 15 seg — se llegó a `.fallo.fallo.fallo.fallo.json`
+    # — borrando de paso la marca original que la webapp necesitaba leer.
+    _clave_ped = sunat.clave_solicitud(_doc_ped)
+    _clave_fal = sunat.clave_fallo(_doc_ped)
+
+    def _lo_toma(clave):
+        """Réplica del filtro de `_srv.pedidos_pendientes`."""
+        return clave.endswith(".json") and ".fallo." not in clave
+
+    ok(_lo_toma(_clave_ped), "un pedido normal SÍ se toma")
+    ok(not _lo_toma(_clave_fal), "una marca de fallo NO se toma como pedido")
+    ok(not _lo_toma(_clave_fal.replace(".json", ".fallo.json")),
+       "ni una marca doble (si quedara alguna de antes del fix)")
+
 
 # ── Credenciales ───────────────────────────────────────────────────────────
 print("\n── credenciales ──")

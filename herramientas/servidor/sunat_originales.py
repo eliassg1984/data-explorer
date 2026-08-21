@@ -503,7 +503,16 @@ def pedidos_pendientes(s3, bucket):
     salida = []
     for obj in resp.get("Contents", []):
         clave = obj["Key"]
-        if not clave.endswith(".json"):
+        # `.fallo.json` también termina en `.json`, así que sin este filtro
+        # una MARCA DE FALLO se toma como un pedido nuevo: el servicio la
+        # levanta, intenta bajar un comprobante sin RUC ni serie (el payload
+        # es {motivo, cuando}), falla, y le agrega otro `.fallo` — cada 15
+        # segundos, para siempre. Visto en producción con cuatro niveles
+        # (`.fallo.fallo.fallo.fallo.json`). Y de paso BORRABA la marca
+        # original, así que la webapp buscaba `X.fallo.json`, no la
+        # encontraba, y no mostraba el error que esa marca existe para
+        # mostrar.
+        if not clave.endswith(".json") or ".fallo." in clave:
             continue
         try:
             crudo = s3.get_object(Bucket=bucket, Key=clave)["Body"].read()
