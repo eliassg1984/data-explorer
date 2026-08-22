@@ -6765,3 +6765,22 @@ salvo `icono`):
        ni en `estilos/`, y muere al recargar. El panel lo dice con un
        aviso arriba de los controles cuando el pineado es uno, para que
        nadie lo busque después en el repo.
+
+152. **En una herramienta para PROBAR, el 0 de un slider es un valor, no un
+     "sin cambio"** (2026-08-21, del pedido "¿puedo ver las puntas en
+     ángulo en vez de redondeadas?"). Los cuatro sliders de caja del modo
+     diseño (radio, padding, borde, sombra) mandaban `null` en su mínimo, y
+     `null` en `establecerCambioEstilo()` significa *sacar el override y
+     volver a lo que dice `estilos/`*. O sea: arrastrar "Radio de borde" a
+     0 sobre el rail RESTAURABA sus 12px en vez de cuadrar las esquinas. El
+     síntoma es el peor de todos, "el control no hace nada", y encima
+     justo en el caso que más se quiere previsualizar: quitar. Lo mismo
+     pasaba con borde 0 (volvía el hairline del CSS) y sombra 0.
+     **Arreglo:** 0 se aplica como valor real — `0px` para radio/padding/
+     letter-spacing y `none` para borde/sombra. Volver al original no se
+     perdió: es exactamente lo que hace el botón "Ver original", que
+     restaura `cssTextOriginal` y sigue funcionando como A/B.
+     **Regla general:** un centinela que se solapa con un valor legítimo
+     del rango se rompe siempre en el extremo del rango; si hace falta
+     distinguir "sin cambio" de "cero", el estado va aparte del valor
+     (acá, `registro.cambios[prop]` existe o no), nunca dentro.

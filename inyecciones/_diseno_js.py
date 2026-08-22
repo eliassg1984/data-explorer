@@ -392,6 +392,15 @@ JS = """
             el.style.setProperty('transition', 'none', 'important');
         }
 
+        // CERO_ES_UN_VALOR (2026-08-21): `valor === null` significa "sacar el
+        // override y volver a lo que dice estilos/", y los sliders lo usaban
+        // para su minimo — radio 0, padding 0, borde 0, sombra 0. En una
+        // herramienta que existe para PROBAR, el 0 de esos cuatro es
+        // justamente lo que se quiere ver ("y si las esquinas fueran en
+        // angulo?"): mandarlo a null hacia que arrastrar a 0 RESTAURARA el
+        // valor del CSS (12px de radio, en el rail), o sea el sintoma exacto
+        // de "el control no hace nada". Ahora 0 se aplica como 0px/none y
+        // volver al original es lo que hace el boton "Ver original".
         function establecerCambioEstilo(elemento, registro, prop, valor) {
             var destinos = destinosDeEstilo(elemento);
             registro.transicionNeutralizada = true;
@@ -692,7 +701,9 @@ JS = """
                 var ctx = elementoActivo(); if (!ctx) return;
                 var v = parseInt(inpRadio.value, 10);
                 radioLbl.textContent = v + 'px';
-                establecerCambioEstilo(ctx.el, ctx.registro, 'border-radius', v === 0 ? null : v + 'px');
+                // 0 se APLICA como 0px, no se traduce a "sacar el override".
+                // Ver el comentario de CERO_ES_UN_VALOR mas abajo.
+                establecerCambioEstilo(ctx.el, ctx.registro, 'border-radius', v + 'px');
             });
             panel.appendChild(filaControl('Radio de borde', inpRadio, radioLbl));
 
@@ -706,7 +717,7 @@ JS = """
                 var ctx = elementoActivo(); if (!ctx) return;
                 var v = parseInt(inpPad.value, 10);
                 padLbl.textContent = v + 'px';
-                establecerCambioEstilo(ctx.el, ctx.registro, 'padding', v === 0 ? null : v + 'px');
+                establecerCambioEstilo(ctx.el, ctx.registro, 'padding', v + 'px');
             });
             panel.appendChild(filaControl('Padding', inpPad, padLbl));
 
@@ -719,7 +730,8 @@ JS = """
             inpBordeColor.style.cssText = 'width:100%;height:24px;border:0;border-radius:4px;padding:0;cursor:pointer;margin-top:8px;background:transparent';
             function aplicarBorde(ctx) {
                 establecerCambioEstilo(ctx.el, ctx.registro, 'border',
-                    ctx.registro.bordeAncho === 0 ? null : (ctx.registro.bordeAncho + 'px solid ' + ctx.registro.bordeColor));
+                    ctx.registro.bordeAncho === 0 ? 'none'
+                        : (ctx.registro.bordeAncho + 'px solid ' + ctx.registro.bordeColor));
             }
             inpBordeAncho.addEventListener('input', function() {
                 var ctx = elementoActivo(); if (!ctx) return;
@@ -751,7 +763,7 @@ JS = """
                 ctx.registro.sombraNivel = parseInt(inpSombra.value, 10);
                 sombraLbl.textContent = ctx.registro.sombraNivel === 0 ? 'sin sombra' : ('nivel ' + ctx.registro.sombraNivel);
                 establecerCambioEstilo(ctx.el, ctx.registro, 'box-shadow',
-                    ctx.registro.sombraNivel === 0 ? null : SOMBRAS[ctx.registro.sombraNivel]);
+                    ctx.registro.sombraNivel === 0 ? 'none' : SOMBRAS[ctx.registro.sombraNivel]);
             });
             panel.appendChild(filaControl('Sombra', inpSombra, sombraLbl));
 
@@ -834,7 +846,7 @@ JS = """
                 var ctx = elementoActivo(); if (!ctx) return;
                 var v = parseFloat(inpLs.value);
                 lsLbl.textContent = v + 'px';
-                establecerCambioEstilo(ctx.el, ctx.registro, 'letter-spacing', v === 0 ? null : v + 'px');
+                establecerCambioEstilo(ctx.el, ctx.registro, 'letter-spacing', v + 'px');
             });
             panel.appendChild(filaControl('Espaciado entre letras', inpLs, lsLbl));
 
