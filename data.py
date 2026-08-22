@@ -699,7 +699,7 @@ def limpiar_cache(archivo):
     confirmado en R2. `cargar()` ya no es cacheable directamente (ver su
     docstring) — el `@st.cache_data` real vive en `_cargar_cacheable`, así
     que es esa la que hay que limpiar. Llamado desde app.py::_vigilar_refresco
-    y navegacion.py::_fragment_boton_refresco."""
+    y navegacion.py::boton_refresco."""
     _cargar_cacheable.clear(archivo)
 
 

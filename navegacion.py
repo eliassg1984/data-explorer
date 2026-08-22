@@ -218,28 +218,17 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     font-size:17px !important; line-height:1 !important;
 }}
 
-/* Refrescar NO es un reporte: es la única acción de la franja. Va al extremo
-   derecho (antes al fondo del rail vertical, misma idea espejada) y conserva
-   su ícono a propósito — es lo que lo separa de la lista de texto.
-   Vive dentro de un `st.fragment`, que le agrega DOS wrappers propios
-   (stLayoutWrapper > stVerticalBlock). Tampoco heredan el alto: medido, el
-   botón se quedaba en 17px mientras los reportes ya ocupaban los 40, así que
-   su tinte de hover salía como una tira fina a media franja. No se les toca
-   el `flex`: es lo que reparte el espacio libre y lo que hace que el
-   `margin-left:auto` de abajo lo empuje al extremo derecho. */
-.st-key-nav_rail [data-testid="stLayoutWrapper"],
-.st-key-nav_rail [data-testid="stVerticalBlock"] [data-testid="stVerticalBlock"] {{
-    height:100% !important;
-    align-items:stretch !important;
-}}
-.st-key-navbtn_refresh {{ margin-left:auto !important; }}
-.st-key-nav_rail .st-key-navbtn_refresh button {{
-    color:{GRIS_TEXTO} !important;
-    padding:0 10px !important;
-}}
-.st-key-nav_rail .st-key-navbtn_refresh button p {{
-    font-size:12.5px !important; font-weight:500 !important;
-}}
+/* Refrescar VIVIÓ ACÁ hasta el 2026-08-22: era la única acción de la franja,
+   empujada al extremo derecho con `margin-left:auto`, y arrastraba consigo un
+   `stLayoutWrapper > stVerticalBlock` (los dos wrappers que le agrega su
+   `st.fragment`) al que había que forzarle el alto para que el hover no
+   saliera como una tira fina a media franja.
+   Se fue al RAIL DE VISTAS (`graficos/base.py::_render_rail`, key
+   `rail_refresh`), a pedido: la franja superior es NAVEGACIÓN pura —una lista
+   de reportes— y una acción metida al final se leía como un reporte más.
+   En el rail va al pie, bajo una divisoria, que es donde el ojo ya busca las
+   acciones. Su CSS vive ahora en estilos/_20_compras_rail.py y su plegado en
+   estilos/_25_rails_pestillo.py. Ver arquitectura.md regla #164. */
 
 /* ═══════════════════════════════════════════════════════════════════════
    MÓVIL — la franja superior BAJA y se vuelve barra inferior (bottom nav).
@@ -332,13 +321,6 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     .st-key-nav_rail [class*="st-key-navbtn_"] button p > span {{
         font-size:18px !important;
     }}
-
-    /* 6) Refresh: con anchos fijos de 25vw ya no hay espacio libre que
-       repartir, el margin-left:auto de escritorio no aplica en esta fila. */
-    .st-key-navbtn_refresh {{
-        margin-top:0 !important;
-        margin-left:0 !important;
-    }}
 }}
 </style>
 """
@@ -428,16 +410,30 @@ html body [data-testid="stMain"] { overflow-x: clip !important; }
 
 
 @st.fragment
-def _fragment_boton_refresco(reporte_activo, archivo):
+def boton_refresco():
     """Botón de refresco AISLADO en su propio fragment. El clic se maneja
     por VALOR DE RETORNO (no on_click): el rerun sigue siendo SOLO de este
     fragment (la tabla no se re-monta), pero la lógica corre en el cuerpo,
     donde toast/error se pintan de forma fiable. FIX: con on_click dentro
-    del fragment el callback no se disparaba (clic perdido en silencio)."""
+    del fragment el callback no se disparaba (clic perdido en silencio).
+
+    LO DIBUJA EL RAIL DE VISTAS, no esta franja: `graficos/base.py::
+    _render_rail` lo llama al pie del rail (ver arquitectura.md regla #164).
+    Sigue viviendo acá porque es quien importa la capa de refresco de R2
+    (`data.py`) y `graficos/` no la conoce.
+
+    SIN parámetros a propósito: quién es el reporte activo y cuál su parquet
+    lo sabe `inject_navegacion`, que corre en app.py:129 —MUCHO antes que el
+    rail, dibujado dentro de `_render_contenido()` unas 900 líneas después—.
+    Pasarlos por argumento obligaría a que `_render_rail` (compartido por los
+    ocho dashboards que lo llaman) los recibiera y los fuera pasando; se
+    dejan en `session_state` y el botón los lee al dibujarse."""
+
+    reporte_activo, archivo = st.session_state.get("_ctx_refresco", ("", None))
 
     pulsado = st.button(
         ":material/refresh: Refrescar",
-        key="navbtn_refresh",
+        key="rail_refresh",
         help=f"Actualizar datos de «{reporte_activo}»",
     )
 
@@ -483,6 +479,13 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     # DISEÑO UNIFICADO: la cabecera fija (antes exclusiva de Ajuste de
     # Inventario) aplica a TODOS los reportes; el título vive en la franja.
     st.markdown(_CSS_AJUSTE, unsafe_allow_html=True)
+
+    # Contexto del botón de refresco, que YA NO SE DIBUJA ACÁ (2026-08-22):
+    # lo dibuja el rail de vistas, mil líneas después en el mismo run. Ver
+    # `boton_refresco` arriba y arquitectura.md regla #164.
+    st.session_state["_ctx_refresco"] = (
+        reporte_activo, reportes.get(reporte_activo, {}).get("archivo"),
+    )
 
     visibles = {
         nombre: info
@@ -539,6 +542,3 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
                 on_click=_on_nav_click,
                 args=(nombre,),
             )
-        _fragment_boton_refresco(
-            reporte_activo, reportes.get(reporte_activo, {}).get("archivo")
-        )

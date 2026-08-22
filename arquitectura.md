@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-163 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+164 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (60)
 
@@ -275,7 +275,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#156** — Un transform en un ancestro CAPTURA a sus hijos position: fixed — y por eso…
 - **#158** — Las cinco herramientas de diagnóstico vivían en tres URLs y dos scripts que había que pegar a…
 
-**Decisiones de diseño y UX** (27)
+**Decisiones de diseño y UX** (28)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -304,6 +304,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#147** — El rail de Compras en formato LISTA (icono + nombre + chevron)
 - **#149** — Documentos SUNAT: de dos columnas a APILADO
 - **#150** — Mover un widget de sitio cuando su KEY es el estado: el pill de fecha de la franja
+- **#164** — El botón Refrescar dejó de vivir en la franja superior de navegación y pasó al pie del rail…
 
 **Mantenimiento y trampas del lenguaje** (6)
 
@@ -7473,13 +7474,49 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        Plotly) salía indexada bajo SUNAT. Se arregló con un marcador
        explícito `<!-- REGLAS:FIN -->`.
 
+164. **El botón Refrescar dejó de vivir en la franja superior de navegación
+     y pasó al pie del rail de vistas** (2026-08-22, a pedido). Hasta ese
+     día `navegacion.py::inject_navegacion` dibujaba el botón como el ítem
+     final de `nav_rail` (`_fragment_boton_refresco`, empujado al extremo
+     derecho con `margin-left:auto`) — una acción mezclada en una franja que
+     por lo demás es una lista pura de reportes.
+
+     Ahora lo dibuja `graficos/base.py::_render_rail` (renombrado a
+     `boton_refresco`, sin parámetros), al pie de CADA rail de vistas —
+     Compras, Ajuste, Ventas, Inventario, Salidas, Requerimientos, Receta
+     Base/Venta: los ocho dashboards que llaman a `_render_rail` heredan el
+     botón de una sola vez, igual que antes lo heredaban los ocho reportes
+     de la franja superior.
+
+     **El truco: `_render_rail` no sabe qué archivo/reporte activo hay que
+     refrescar** (esa información la resuelve `inject_navegacion`, que corre
+     en `app.py:129`, casi 900 líneas antes de que `_render_contenido()`
+     dibuje el rail). En vez de encadenar el dato por parámetro a través de
+     los ocho dashboards, `inject_navegacion` lo deja en
+     `st.session_state["_ctx_refresco"]` y `boton_refresco()` lo lee al
+     dibujarse — incluso quedó sin argumentos.
+
+     El botón se dibuja FUERA de `graf_tipo_chips` (misma razón que el
+     pestillo, regla #6): ese contenedor estila a todo lo que cuelga de él
+     como ítem de la lista de vistas, y Refrescar no lo es. Hereda el
+     esconder/mostrar del pestillo plegado (`estilos/_25_rails_pestillo.py`)
+     con el mismo criterio que `graf_tipo_chips` — mismo `:has(style.rail-
+     der-plegado)`, misma reaparición en el `:hover` de vistazo, mismo
+     forzado-visible en el `@media (max-width:900px)` que ya deshace el
+     plegado en móvil.
+
+     **Regla:** una acción (no una vista) que vive dentro de un componente
+     de layout COMPARTIDO por N pantallas no necesita que las N pantallas se
+     enteren de sus datos — puede leerlos de `session_state`, escrito por
+     quien sí los tiene a mano en ese momento del run.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#164**.
+> próxima regla nueva es la **#165**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

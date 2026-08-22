@@ -331,6 +331,60 @@ CSS = """    /* ================================================================
         border-left-color: var(--accent) !important;  /* pinta el reservado */
     }
 
+    /* PIE DEL RAIL — Refrescar, la única ACCIÓN (no una vista). Llegó acá el
+       2026-08-22 desde la franja superior de navegación (arquitectura.md
+       regla #164): mismo componente compartido (`_render_rail`), lo dibuja
+       fuera de `graf_tipo_chips` a propósito, igual que el pestillo (regla
+       #6 — ese contenedor estila TODO lo que cuelga de él como ítem de
+       lista; Refrescar no lo es). `.rail-sep` de arriba es la divisoria. */
+    .st-key-rail_refresh {
+        width: 100% !important;
+        display: flex !important;
+        margin: 2px 0 0 0 !important;
+        padding: 0 7px !important;
+    }
+    .st-key-rail_refresh button {
+        width: 100% !important;
+        min-height: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        gap: 6px !important;
+        padding: 5px 3px !important;
+        border: none !important;
+        border-radius: 6px !important;
+        background: transparent !important;
+        color: var(--text-muted) !important;
+        box-shadow: none !important;
+        font-weight: 400 !important;
+        transition: background 0.12s !important;
+    }
+    .st-key-rail_refresh button:hover {
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+    }
+    .st-key-rail_refresh button p {
+        margin: 0 !important;
+        padding: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        font-size: 11px !important;
+        line-height: 1.15 !important;
+        font-weight: inherit !important;
+        color: inherit !important;
+        white-space: normal !important;
+    }
+    /* El ícono va INLINE en el label (":material/refresh: Refrescar"), no
+       por `icon=` — mismo mecanismo que `pestillos.py::pestillo`. Streamlit
+       lo renderiza como `span[role="img"]` dentro del `<p>`, NO como
+       `[data-testid="stIconMaterial"]` (ese selector es el de los ítems del
+       rail que sí usan `icon=`, ver `graf_tipo_chips` arriba). */
+    .st-key-rail_refresh button p span[role="img"] {
+        font-size: 15px !important;
+        line-height: 1 !important;
+    }
+
     /* =================================================================== */
     /* RAIL EN MÓVIL (<=900px): el rail vertical fijo de 84px + el          */
     /* padding-right de 153px se comen casi la mitad de un viewport de      */

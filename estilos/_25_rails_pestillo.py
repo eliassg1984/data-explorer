@@ -87,8 +87,11 @@ CSS = """    /* ================================================================
     }
     /* Los ítems se ESCONDEN, no se dejan de dibujar: si no se renderizaran,
        Streamlit perdería el estado de sus botones (CLAUDE.md § Streamlit).
-       Con `display:none` siguen existiendo. */
-    :root:has(style.rail-der-plegado) .st-key-graf_tipo_chips.st-key-graf_tipo_chips {
+       Con `display:none` siguen existiendo. `.st-key-rail_refresh` (el pie
+       del rail, 2026-08-22) se esconde con el mismo criterio que la lista de
+       vistas — ver arquitectura.md regla #164. */
+    :root:has(style.rail-der-plegado) .st-key-graf_tipo_chips.st-key-graf_tipo_chips,
+    :root:has(style.rail-der-plegado) .st-key-rail_refresh {
         display: none !important;
     }
 
@@ -103,7 +106,9 @@ CSS = """    /* ================================================================
         box-shadow: 6px 0 22px rgba(16, 16, 20, 0.16) !important;
     }
     :root:has(style.rail-der-plegado) .st-key-compras_tabs_row:hover
-        .st-key-graf_tipo_chips.st-key-graf_tipo_chips {
+        .st-key-graf_tipo_chips.st-key-graf_tipo_chips,
+    :root:has(style.rail-der-plegado) .st-key-compras_tabs_row:hover
+        .st-key-rail_refresh {
         display: flex !important;
     }
 
@@ -180,7 +185,8 @@ CSS = """    /* ================================================================
             width: 100% !important;
             min-height: 0 !important;
         }
-        :root:has(style.rail-der-plegado) .st-key-graf_tipo_chips.st-key-graf_tipo_chips {
+        :root:has(style.rail-der-plegado) .st-key-graf_tipo_chips.st-key-graf_tipo_chips,
+        :root:has(style.rail-der-plegado) .st-key-rail_refresh {
             display: flex !important;
         }
     }

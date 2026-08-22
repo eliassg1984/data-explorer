@@ -15,6 +15,7 @@ import plotly.express as px
 import streamlit as st
 
 import pestillos
+from navegacion import boton_refresco
 from utils import buscar_columna, _norm
 from tema import (
     BLANCO, ESCALA_CONTINUA, GRIS_BORDE, SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
@@ -201,6 +202,11 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
                 if i < len(categorias) - 1:
                     st.markdown('<div class="rail-sep"></div>',
                                 unsafe_allow_html=True)
+        # PIE DEL RAIL — la única ACCIÓN, fuera de graf_tipo_chips por lo
+        # mismo que el pestillo: ese contenedor estila a todos sus botones
+        # como ítems de la lista de vistas (regla #6), y refrescar no es una
+        # vista. Vino de la franja superior el 2026-08-22 (regla #164).
+        boton_refresco()
     _final = st.session_state.get(state_key, _todos[0])
     # Espejo hacia la URL. Escribir query_params NO dispara rerun, pero se
     # compara antes igual: reescribir en cada rerun es ruido inútil.

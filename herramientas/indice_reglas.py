@@ -91,10 +91,20 @@ def _reglas(texto):
     lo que viniera después —hoy la nota sobre qué número toca— y la
     clasificaba con esas palabras. Costó un diagnóstico: la #161, que es de
     Plotly, salía indexada bajo SUNAT porque esa nota nombra la serie de
-    SUNAT."""
-    corte = texto.find(FIN_REGLAS)
-    if corte != -1:
-        texto = texto[:corte]
+    SUNAT.
+
+    ANCLADO A INICIO DE LÍNEA (2026-08-22): un `texto.find()` a secas corta
+    en la PRIMERA aparición de la subcadena, y la propia regla #163 nombra
+    el marcador entre backticks al explicar por qué existe
+    (`` `<!-- REGLAS:FIN -->` `` en medio de un párrafo) — eso quedaba ANTES
+    que el marcador real, así que la #164 (la primera regla escrita después
+    de la #163) desaparecía del índice sin ningún error: `_reglas()` seguía
+    devolviendo una lista, sólo que una más corta. `^` + `re.M` exige que el
+    marcador abra la línea, que la mención en prosa no hace (empieza con
+    "explícito ` <!--…")."""
+    m_fin = re.search(r"^" + re.escape(FIN_REGLAS), texto, re.M)
+    if m_fin:
+        texto = texto[:m_fin.start()]
     marcas = [(int(m.group(1)), m.start()) for m in
               re.finditer(r"^(\d{1,3})\. \*\*", texto, re.M)]
     fuera = []

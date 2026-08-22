@@ -76,9 +76,10 @@ va en `NOMBRE_ARCHIVO_EXTRACTOR`), porque lo carga dinámicamente vía
 
 ### Cómo se dispara un refresco puntual
 
-1. El usuario pulsa el botón refrescar (rail, `navegacion.py::_fragment_boton_refresco`).
-   El botón vive en su **propio `@st.fragment`** para que su clic no dispare
-   un rerun completo de `app.py`.
+1. El usuario pulsa el botón refrescar (pie del rail de vistas —
+   `graficos/base.py::_render_rail` llama a `navegacion.py::boton_refresco`,
+   ver arquitectura.md regla #164). El botón vive en su **propio
+   `@st.fragment`** para que su clic no dispare un rerun completo de `app.py`.
 2. `navegacion.py` llama a `data.py::solicitar_refresco(archivo, reporte)`:
    escribe un JSON en R2 `_solicitudes_refresco/{archivo}.json` con
    `{reporte, archivo, solicitado_en}`. **NO limpia el caché aquí** — el
