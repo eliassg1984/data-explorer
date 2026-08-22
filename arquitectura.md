@@ -1067,7 +1067,7 @@ salvo `icono`):
     `dt.strftime("%Y-%m")` (396 ms); para el día es al revés, `strftime`
     (14 ms) le gana a `dt.date.astype(str)` (61 ms). No unificarlos.
 
-33. **`st.markdown(..., unsafe_allow_html=True)` cuyo HTML arranca con un tag
+162. **`st.markdown(..., unsafe_allow_html=True)` cuyo HTML arranca con un tag
     de bloque (`<div>`, no `<span>`/`<p>`) hereda un `margin-bottom: -16px`
     nativo de Streamlit en `stMarkdownContainer`, pensado para cancelar el
     margen de un `<p>` que en este caso no existe.** CommonMark reconoce
@@ -7245,4 +7245,11 @@ salvo `icono`):
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#162**.
+> próxima regla nueva es la **#163**.
+>
+> **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
+> `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
+> duplicando el número de la #33 y se renumeró el 2026-08-22 con el mismo
+> criterio que la #160 — se movió el NÚMERO, no la regla: de las dos #33,
+> la que conservó el número es la del `window.__agApi`, porque es a la que
+> apuntan las seis referencias que hay en el código.

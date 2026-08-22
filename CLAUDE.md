@@ -23,7 +23,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_docs.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -41,6 +41,16 @@ importadores. Ver `arquitectura.md` regla #53.
 `test_graficos.py` construye todas las figuras + verifica los contratos del
 dispatcher (que cada dashboard acepte `tabla_cb`, la aridad de la llamada, y
 que no haya vuelto a aparecer una lista de reportes hardcodeada).
+
+`test_docs.py` verifica que la documentación no se contradiga con el código:
+numeración de las reglas (sin duplicados ni huecos), referencias cruzadas
+`#NNN` que apunten a una regla que exista, y que lo que ESTE fichero afirma
+del código siga siendo cierto (los módulos de `estilos/` y su orden, los
+símbolos que nombra, las herramientas que manda usar). Nació el 2026-08-22:
+`arquitectura.md` pasó los 7.200 renglones y a ese tamaño los duplicados y
+las citas equivocadas ya no se ven a ojo — había TRES pares de reglas con el
+mismo número (#33, #143, #157) y un parche citando una regla ajena. No juzga
+el contenido de las reglas, sólo lo que tiene respuesta objetiva.
 
 `test_asistente_datos.py` cubre la capa de datos del asistente IA: validación
 del SQL que escribe el modelo (blocklist, una sola sentencia, `LIMIT`
@@ -70,9 +80,9 @@ herramientas). Dos cosas que ya costaron bugs:
 pública no cambió: `from estilos import TAM_FUENTE, inject_css`.
 
 Cada sección tiene su módulo, con prefijo numérico que marca el orden:
-`_00_base` → `_20_compras_rail` → `_30_filtros` → `_40_ajuste_franja` →
-`_50_fecha` → `_60_calendario` → `_70_chrome` → `_80_cards` →
-`_90_franja_inferior` → `_99_movil`.
+`_00_base` → `_20_compras_rail` → `_25_rails_pestillo` → `_30_filtros` →
+`_40_ajuste_franja` → `_50_fecha` → `_60_calendario` → `_70_chrome` →
+`_80_cards` → `_85_asistente` → `_90_franja_inferior` → `_99_movil`.
 
 **El orden de `_SECCIONES` en `__init__.py` es parte del comportamiento**, no
 estética: hay `!important` en ambos lados de varios conflictos, así que gana
