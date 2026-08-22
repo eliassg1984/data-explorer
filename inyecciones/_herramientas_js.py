@@ -425,6 +425,14 @@ JS = """
         doc.removeEventListener('keydown', win.__herramientasKeyHandler, true);
     }
     win.__herramientasKeyHandler = function (e) {
+        // Alt+T alterna el silenciador del tooltip, o sea EXACTAMENTE lo que
+        // muestra el boton Inspector de esta barra. Sin repintar acá, el
+        // boton se queda con el color viejo hasta el proximo rerun: dos
+        // caminos al mismo estado, uno de ellos mintiendo. Ver regla #164.
+        if (e.altKey && (e.key === 't' || e.key === 'T')) {
+            win.setTimeout(construirBarra, 0);
+            return;
+        }
         if (e.altKey && (e.key === 'i' || e.key === 'I')) {
             // Corre DESPUES del handler del inspector (que es quien
             // reescribe la URL); el setTimeout lo deja leer el estado ya

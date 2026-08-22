@@ -908,37 +908,34 @@ JS = """
             // se probo con una constante y se superponian, porque el alto
             // de la barra cambia cuando muestra un aviso. El comentario
             // gemelo esta en el docstring de herramientas.py.
+            // Se ve como TEXTO DE AYUDA, no como un control: era una pastilla
+            // de acento con un boton adentro, y desde que la barra unificada
+            // tiene su propio toggle de Inspector eso eran DOS controles del
+            // mismo estado, uno encima del otro. Ver regla #164.
             badge.style.cssText = [
                 'position:fixed','bottom:10px','left:72px','z-index:2147483646',
-                'background:var(--accent-deep)','color:#fff',
-                'font:600 11px/1 -apple-system,sans-serif',
-                'padding:5px 10px','border-radius:20px','display:none',
-                'align-items:center','gap:6px','box-shadow:0 2px 8px rgba(0,0,0,0.3)'
+                'background:rgba(16,16,20,.82)','color:#cfcfd6',
+                'font:400 10px/1.4 -apple-system,sans-serif',
+                'padding:3px 9px','border-radius:10px','display:none',
+                'align-items:center','pointer-events:none'
             ].join(';');
-            badge.innerHTML = 'Inspector ON' +
-                '&nbsp;<button id="el-inspector-silenciar-btn" style="background:rgba(255,255,255,.18);color:#fff;border:0;padding:3px 9px;border-radius:12px;cursor:pointer;font:600 11px/1.4 sans-serif">\\uD83D\\uDC41 Ocultar tooltip</button>' +
-                '&nbsp;<span style="opacity:.6;font-weight:400">C copiar &middot; clic-derecho fija y copia &middot; T oculta tooltip &middot; Alt+I salir</span>';
+            // Solo ATAJOS: el estado ("Inspector ON") y el toggle del tooltip
+            // los muestra y los maneja la barra unificada. Esto es lo unico
+            // que aportaba y que no vive en ningun otro lado.
+            badge.innerHTML = 'C copiar &middot; clic-derecho fija y copia '
+                + '&middot; T oculta tooltip &middot; Alt+I salir';
             doc.body.appendChild(badge);
-
-            var silenciarBtn = doc.getElementById('el-inspector-silenciar-btn');
-            silenciarBtn.addEventListener('click', function(ev) {
-                ev.preventDefault(); ev.stopPropagation();
-                win.__inspectorAlternarSilenciado && win.__inspectorAlternarSilenciado();
-            });
         }
 
         function actualizarBadge() {
             badge.style.display = inspectorActivo() ? 'flex' : 'none';
-            var silenciarBtn = doc.getElementById('el-inspector-silenciar-btn');
-            if (silenciarBtn) {
-                silenciarBtn.textContent = win.__inspectorTooltipSilenciado
-                    ? '👁 Mostrar tooltip' : '👁 Ocultar tooltip';
-            }
         }
         actualizarBadge();
 
-        // Compartido por el boton del badge y el atajo Alt+T. Se reasigna en
-        // win en cada rerun (mismo motivo que __inspectorEjecutarCopia mas
+        // Lo llaman el atajo Alt+T y el boton Inspector de la barra
+        // unificada (inyecciones/herramientas.py). El badge ya no tiene
+        // boton propio: era el mismo toggle dos veces. Se reasigna en win
+        // en cada rerun (mismo motivo que __inspectorEjecutarCopia mas
         // abajo: el realm del iframe que lo definio puede haber muerto).
         win.__inspectorAlternarSilenciado = function() {
             win.__inspectorTooltipSilenciado = !win.__inspectorTooltipSilenciado;

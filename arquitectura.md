@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-164 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+165 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (60)
 
@@ -99,7 +99,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#145** — La GRILLA tiene un dueño, igual que el color y el alto
 - **#161** — Un número de píxeles escrito en un comentario no se entera de que el layout cambió: el eje X…
 
-**Plotly y figuras** (38)
+**Plotly y figuras** (39)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -139,6 +139,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#126** — El ranking (barras Plotly) y la tabla resumen del drill de Proveedor —dos vistas de los…
 - **#127** — hovermode="x unified" de Plotly renderiza su caja de hover con la clase SVG .legend —…
 - **#161** — Un número de píxeles escrito en un comentario no se entera de que el layout cambió: el eje X…
+- **#165** — Al agregar una barra de modos quedaron DOS controles del mismo estado, uno encima del otro —…
 
 **AgGrid y tablas** (26)
 
@@ -264,7 +265,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (8)
+**Herramientas de desarrollo** (9)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -274,6 +275,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#155** — Navegar la jerarquía de contenedores era de solo lectura — texto plano para copiar, sin forma…
 - **#156** — Un transform en un ancestro CAPTURA a sus hijos position: fixed — y por eso…
 - **#158** — Las cinco herramientas de diagnóstico vivían en tres URLs y dos scripts que había que pegar a…
+- **#165** — Al agregar una barra de modos quedaron DOS controles del mismo estado, uno encima del otro —…
 
 **Decisiones de diseño y UX** (28)
 
@@ -7510,13 +7512,55 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      enteren de sus datos — puede leerlos de `session_state`, escrito por
      quien sí los tiene a mano en ese momento del run.
 
+165. **Al agregar una barra de modos quedaron DOS controles del mismo
+     estado, uno encima del otro — y se desincronizaban** (2026-08-22, de la
+     pregunta "¿es lógico tener esto, ahora que ya hay un toggle abajo?").
+
+     La barra unificada (#158) puso un botón "🔍 Inspector" que alterna el
+     silenciador del tooltip. Pero el badge "Inspector ON" de `inspector.py`
+     ya tenía su propio botón "👁 Ocultar tooltip", que alterna EXACTAMENTE
+     lo mismo — y quedó apilado 8px encima. Dos pastillas de acento, con
+     aspecto de control las dos, para un único booleano.
+
+     **No era sólo redundancia visual: mentían.** La barra se repinta en
+     `construirBarra()`, que corre después de SUS clics. El botón del badge
+     llamaba a `__inspectorAlternarSilenciado` directo, así que el estado
+     cambiaba y el botón de la barra **se quedaba con el color viejo** hasta
+     el siguiente rerun de Streamlit. Dos caminos al mismo estado, uno de
+     ellos mostrando lo contrario de la verdad.
+
+     Arreglo, en dos partes:
+     - **El badge deja de ser control y deja de ser estado.** Se le sacan el
+       botón y el rótulo "Inspector ON" —eso ahora lo dice el color del botón
+       de la barra— y queda SÓLO con lo único que aportaba y no vive en
+       ningún otro lado: los atajos (`C copiar · clic-derecho fija y copia ·
+       T oculta tooltip · Alt+I salir`). Se reestiliza como texto de ayuda
+       (gris translúcido, `pointer-events: none`) en vez de pastilla de
+       acento: si no se puede clickear, no tiene que parecer clickeable.
+       Bajó de 31px a 20px y la huella del par, de 75px a 64px.
+     - **`Alt+T` también repinta la barra.** Era el OTRO camino al
+       silenciador y tenía el mismo problema que el botón del badge. El
+       handler de la barra ya interceptaba `Alt+I`; ahora hace lo propio con
+       `Alt+T`.
+
+     La regla general, que es la que vale para la próxima: **cuando una
+     superficie nueva absorbe una función, la vieja tiene que soltarla — no
+     quedarse "por las dudas".** Un estado con dos dueños se desincroniza
+     siempre; la pregunta no es si va a pasar sino cuándo. Y si el control
+     duplicado tiene su propio camino de teclado, ése también cuenta como
+     dueño.
+
+     Verificado en la app: alternando por la barra Y por `Alt+T`, el booleano
+     y el color del botón quedan siempre de acuerdo; el badge tiene 0 botones
+     y `pointer-events: none`.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#165**.
+> próxima regla nueva es la **#166**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
