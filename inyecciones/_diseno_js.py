@@ -34,6 +34,9 @@ JS = """
         if (win.__disenoState.panelColapsado === undefined) {
             win.__disenoState.panelColapsado = false;
         }
+        if (!win.__disenoState.mocks) { win.__disenoState.mocks = []; }
+        if (win.__disenoState.mockN === undefined) { win.__disenoState.mockN = 0; }
+        if (!win.__disenoState.mockPos) { win.__disenoState.mockPos = 'despues'; }
 
         function registroPara(key) {
             var st = win.__disenoState.porKey;
@@ -75,6 +78,125 @@ JS = """
         function numDe(str, fallback) {
             var n = parseFloat(str);
             return isNaN(n) ? fallback : n;
+        }
+
+        // ---- mocks: elementos de mentira para ver "como se veria" -------
+        // Nacen con la clase `st-key-<key>` A PROPOSITO. elementoPineado()
+        // resuelve por `.st-key-<key>` y el inspector saca la key del
+        // className con el mismo regex, asi que un mock se fija con clic
+        // derecho igual que un widget real y hereda TODO el panel
+        // (tipografia, color, borde, sombra, mover, resize) sin una linea
+        // de codigo extra. No tocan Python ni estilos/: son DOM efimero y
+        // mueren al recargar la pagina, como el resto del modo diseno.
+        function colorPaleta(nombre) {
+            for (var i = 0; i < PALETA.length; i++) {
+                if (PALETA[i].nombre === nombre) return PALETA[i].hex;
+            }
+            return PALETA.length ? PALETA[0].hex : 'currentColor';
+        }
+
+        var TIPOS_MOCK = [['texto', 'Texto'], ['linea', 'Línea'],
+                          ['barra', 'Barra'], ['espacio', 'Espacio']];
+
+        function nodoMock(m) {
+            var el = doc.createElement('div');
+            el.className = 'st-key-' + m.key;
+            el.setAttribute('data-diseno-mock', m.tipo);
+            if (m.tipo === 'texto') {
+                el.textContent = m.texto;
+                el.contentEditable = 'true';
+                el.spellcheck = false;
+                // Se escribe en el lugar. El atajo "C" del inspector ya
+                // ignora isContentEditable, asi que tipear una c aca no
+                // dispara "copiar para IA" (ver _inspector_js.py).
+                el.style.cssText = 'font:600 14px/1.4 -apple-system,"Segoe UI",sans-serif;padding:4px 2px;outline:0;cursor:text;color:'
+                    + colorPaleta('Texto principal');
+                el.addEventListener('input', function() { m.texto = el.textContent; });
+            } else if (m.tipo === 'linea') {
+                el.style.cssText = 'height:1px;margin:8px 0;opacity:.35;background:' + colorPaleta('Gris texto');
+            } else if (m.tipo === 'barra') {
+                el.style.cssText = 'height:34px;margin:6px 0;border-radius:8px;background:' + colorPaleta('Acento');
+            } else {
+                // Aire: no pinta nada, pero hay que PODER verlo y agarrarlo
+                // mientras se disena -> outline, que no ocupa layout (un
+                // border si, y falsearia el alto que se esta probando).
+                el.style.cssText = 'height:16px;opacity:.5;outline-offset:-1px;outline:1px dashed ' + colorPaleta('Gris texto');
+            }
+            return el;
+        }
+
+        function anclaEfectiva(m) {
+            var ancla = doc.querySelector('.st-key-' + m.anclaKey);
+            if (!ancla || !ancla.parentNode) return null;
+            // 'despues' se encadena detras del ULTIMO hermano ya insertado:
+            // sin esto, agregar titulo y despues linea los deja al reves
+            // (cada uno entra pegado al ancla y empuja al anterior).
+            // 'antes' y 'dentro' salen en orden solos.
+            if (m.posicion !== 'despues') return ancla;
+            var ms = win.__disenoState.mocks;
+            for (var i = 0; i < ms.length && ms[i].key !== m.key; i++) {
+                if (ms[i].anclaKey !== m.anclaKey || ms[i].posicion !== 'despues') continue;
+                var prev = doc.querySelector('.st-key-' + ms[i].key);
+                if (prev && prev.parentNode === ancla.parentNode) ancla = prev;
+            }
+            return ancla;
+        }
+
+        function insertarMock(m) {
+            var ancla = anclaEfectiva(m);
+            if (!ancla) return false;
+            var el = nodoMock(m);
+            if (m.posicion === 'antes') ancla.parentNode.insertBefore(el, ancla);
+            else if (m.posicion === 'dentro') ancla.appendChild(el);
+            else ancla.parentNode.insertBefore(el, ancla.nextSibling);
+            // El nodo es NUEVO (llegamos aca porque un rerun se llevo el
+            // anterior): reaplicarle lo que el panel ya le habia editado,
+            // igual que aplicarEstado hace con los widgets reales.
+            var reg = win.__disenoState.porKey[m.key];
+            if (reg) {
+                Object.keys(reg.cambios).forEach(function(prop) {
+                    el.style.setProperty(prop, reg.cambios[prop], 'important');
+                });
+                aplicarTransform(el, reg);
+            }
+            return true;
+        }
+
+        function reponerMocks() {
+            var ms = win.__disenoState.mocks;
+            for (var i = 0; i < ms.length; i++) {
+                if (!doc.querySelector('.st-key-' + ms[i].key)) insertarMock(ms[i]);
+            }
+        }
+
+        function agregarMock(tipo) {
+            var res = elementoPineado();
+            if (!res || !res.el) return;   // sin ancla no hay donde insertar
+            win.__disenoState.mockN += 1;
+            var m = {
+                key: 'diseno_' + tipo + '_' + win.__disenoState.mockN,
+                tipo: tipo,
+                anclaKey: res.key,
+                posicion: win.__disenoState.mockPos,
+                texto: 'Texto de prueba'
+            };
+            win.__disenoState.mocks.push(m);
+            insertarMock(m);
+            panel.dataset.builtForKey = '';   // cambio el contador de la lista
+            sync();
+        }
+
+        function quitarMock(key) {
+            var n = doc.querySelector('.st-key-' + key);
+            if (n && n.parentNode) n.parentNode.removeChild(n);
+            win.__disenoState.mocks = win.__disenoState.mocks.filter(function(m) {
+                return m.key !== key;
+            });
+            delete win.__disenoState.porKey[key];
+        }
+
+        function esMock(key) {
+            return win.__disenoState.mocks.some(function(m) { return m.key === key; });
         }
 
         // ---- overlay (outline + manijas) y panel lateral ----
@@ -164,7 +286,7 @@ JS = """
             panel.appendChild(header);
             var texto = doc.createElement('div');
             texto.style.cssText = 'font:12px/1.6 "Courier New",monospace;white-space:pre-wrap';
-            texto.textContent = 'Modo diseno activo\\n\\nClic derecho en un elemento para empezar (mismo Fijar del inspector).';
+            texto.textContent = 'Modo diseno activo\\n\\nClic derecho en un elemento para empezar (mismo Fijar del inspector). Insertar texto/linea/barra sale del mismo lugar: el elemento fijado es el ancla.';
             panel.appendChild(texto);
         }
 
@@ -546,6 +668,13 @@ JS = """
                 panel.appendChild(aviso);
             }
 
+            if (esMock(key)) {
+                var avisoMock = doc.createElement('div');
+                avisoMock.style.cssText = 'font:11px/1.4 -apple-system,sans-serif;color:#e4e4e8;background:#1c1c24;border:1px dashed #6c5ce7;border-radius:4px;padding:6px 7px;margin-bottom:10px';
+                avisoMock.textContent = 'Insertado por el modo diseño: no existe en el código ni en estilos/. Se va al recargar.';
+                panel.appendChild(avisoMock);
+            }
+
             var tamVal = spanValor('');
             panel.appendChild(filaSoloLectura('Tamaño', tamVal));
             var posVal = spanValor('');
@@ -750,6 +879,73 @@ JS = """
                 aplicarEstado(ctx.el, ctx.registro);
             });
             panel.appendChild(btnOriginal);
+
+            // ---- insertar: elementos de mentira ----
+            panel.appendChild(seccion('Insertar'));
+
+            var POSICIONES = [['antes', 'Antes'], ['dentro', 'Dentro'], ['despues', 'Después']];
+            var posWrap = doc.createElement('div');
+            posWrap.style.cssText = 'display:flex;gap:4px;margin-top:6px';
+            var posBotones = [];
+            POSICIONES.forEach(function(par) {
+                var b = doc.createElement('button');
+                b.textContent = par[1];
+                b.style.cssText = 'flex:1;background:' + (par[0] === win.__disenoState.mockPos ? '#3C3489' : '#1c1c24') + ';color:#fff;border:1px solid #34343f;border-radius:4px;padding:5px 2px;font:11px sans-serif;cursor:pointer';
+                b.addEventListener('click', function() {
+                    win.__disenoState.mockPos = par[0];
+                    posBotones.forEach(function(x) { x.style.background = '#1c1c24'; });
+                    b.style.background = '#3C3489';
+                });
+                posBotones.push(b);
+                posWrap.appendChild(b);
+            });
+            panel.appendChild(filaControl('Dónde (respecto del contorno)', posWrap, spanValor('')));
+
+            var addWrap = doc.createElement('div');
+            addWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;margin-top:6px';
+            TIPOS_MOCK.forEach(function(par) {
+                var b = doc.createElement('button');
+                b.textContent = '+ ' + par[1];
+                b.style.cssText = 'flex:1 1 46%;background:#1c1c24;color:#fff;border:1px solid #34343f;border-radius:4px;padding:6px 2px;font:11px sans-serif;cursor:pointer';
+                b.addEventListener('click', function() { agregarMock(par[0]); });
+                addWrap.appendChild(b);
+            });
+            panel.appendChild(filaControl('Agregar', addWrap, spanValor('')));
+
+            // Quitar: el que esta fijado (si es un mock) y el resto. Ambos
+            // fuerzan la reconstruccion del panel porque cambia el conteo,
+            // y la key fijada no cambia -> sync() sola no lo redibujaria.
+            function rehacerPanel() {
+                panel.dataset.builtForKey = '';
+                sync();
+            }
+
+            if (esMock(key)) {
+                var btnQuitarEste = doc.createElement('button');
+                btnQuitarEste.textContent = 'Quitar este';
+                btnQuitarEste.style.cssText = 'width:100%;margin-top:8px;background:#1c1c24;color:#e4e4e8;border:1px solid #34343f;border-radius:4px;padding:7px;font:11px sans-serif;cursor:pointer';
+                btnQuitarEste.addEventListener('click', function() {
+                    quitarMock(key);
+                    if (win.__inspectorTogglePin) win.__inspectorTogglePin(true);
+                    rehacerPanel();
+                });
+                panel.appendChild(btnQuitarEste);
+            }
+
+            var nMocks = win.__disenoState.mocks.length;
+            if (nMocks) {
+                var btnLimpiar = doc.createElement('button');
+                btnLimpiar.textContent = nMocks === 1 ? 'Quitar el insertado'
+                                                      : ('Quitar los ' + nMocks + ' insertados');
+                btnLimpiar.style.cssText = 'width:100%;margin-top:6px;background:#1c1c24;color:#8b8b95;border:1px solid #34343f;border-radius:4px;padding:7px;font:11px sans-serif;cursor:pointer';
+                btnLimpiar.addEventListener('click', function() {
+                    var pineadoEraMock = esMock(key);
+                    win.__disenoState.mocks.slice().forEach(function(m) { quitarMock(m.key); });
+                    if (pineadoEraMock && win.__inspectorTogglePin) win.__inspectorTogglePin(true);
+                    rehacerPanel();
+                });
+                panel.appendChild(btnLimpiar);
+            }
         }
 
         function actualizarReadouts(elemento, registro) {
@@ -774,6 +970,9 @@ JS = """
                 panel.style.display = 'none';
                 return;
             }
+            // Antes de resolver el pin: un mock puede SER el pineado, y
+            // Streamlit se lo lleva cuando re-renderiza su rama.
+            reponerMocks();
             var res = elementoPineado();
 
             // Panel: colapsado se ve igual (una pill chica) haya o no algo

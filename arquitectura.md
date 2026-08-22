@@ -6727,3 +6727,41 @@ salvo `icono`):
      `_50_fecha.py`, asi que dentro de la tarjeta se neutraliza con
      `position: static` scopeado a `sunat_card_izq` (`estilos/_30_filtros.py`)
      — la misma key sigue anclada a la franja en todos los demas reportes.
+
+
+151. **Modo diseño fase C — insertar elementos de mentira ("mocks") para
+     ver cómo se vería algo que todavía no existe** (2026-08-21). El modo
+     diseño sabía editar lo que YA estaba en pantalla; no había forma de
+     preguntarse "¿y si acá hubiera un título, una línea, una franja?"
+     sin escribir Python, pushear y esperar el deploy.
+     - **El truco que lo hace barato: el mock nace con la clase
+       `st-key-<key>`.** `elementoPineado()` resuelve por
+       `.st-key-<key>` y el inspector saca la key del `className` con el
+       mismo regex (`/st-key-([A-Za-z0-9_]+)/`), así que un `<div>`
+       inyectado a mano se fija con clic derecho igual que un widget real
+       y hereda TODO el panel — tipografía, color, borde, sombra, mover,
+       resize — sin una línea de código extra. No hubo que tocar
+       `inspector.py` ni duplicar controles: la key ES la interfaz.
+     - **Cuatro tipos** (`TIPOS_MOCK`): Texto (`contenteditable`, se
+       escribe en el lugar — el atajo `C` del inspector ya ignora
+       `isContentEditable`, así que tipear no dispara "copiar para IA"),
+       Línea, Barra y Espacio. El Espacio se marca con `outline` y no con
+       `border`: `border` ocupa layout y falsearía el alto que se está
+       probando. Los colores salen de `PALETA` por NOMBRE
+       (`colorPaleta('Acento')`), no por índice ni por hex suelto.
+     - **Anclaje relativo al pineado** (`antes` / `dentro` / `después`):
+       sin elemento fijado no hay dónde insertar, y el panel de espera lo
+       dice. Un mock puede anclarse a otro mock, así se apilan.
+     - **Sobreviven al rerun igual que los estilos inline, pero por otra
+       vía:** los cambios de estilo aguantan porque Streamlit reconcilia
+       por key y el nodo no se toca; un mock, en cambio, NO existe para
+       React y desaparece en cuanto Streamlit re-renderiza esa rama. Por
+       eso `sync()` llama a `reponerMocks()` ANTES de resolver el pin (un
+       mock puede SER el pineado): si el nodo no está, se re-inserta desde
+       el registro y se le reaplican `cambios` + `transformState`. El
+       texto tipeado vive en el registro (se guarda en el evento `input`),
+       nunca se reescribe en cada tick — hacerlo mataría el cursor.
+     - **Nunca persiste.** Un mock no es un widget: no está en el código
+       ni en `estilos/`, y muere al recargar. El panel lo dice con un
+       aviso arriba de los controles cuando el pineado es uno, para que
+       nadie lo busque después en el repo.

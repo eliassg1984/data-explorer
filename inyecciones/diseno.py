@@ -39,6 +39,17 @@ serializa al script igual que `_mapas_desarrollador()` en inspector.py
 (`json.dumps` + placeholder), para no hardcodear hex sueltos (CLAUDE.md
 "nunca un #hex suelto").
 
+Fase C agrega INSERTAR: elementos de mentira ("mocks") para ver cómo se
+vería algo que todavía no existe — Texto (editable en el lugar), Línea,
+Barra y Espacio, anclados antes/dentro/después del elemento pineado. Nacen
+con la clase `st-key-<key>`, así que se fijan con clic derecho como
+cualquier widget y heredan todos los controles de arriba sin código extra.
+No existen para React: `reponerMocks()` (en cada tick de `sync()`, antes de
+resolver el pin) los vuelve a insertar cuando Streamlit re-renderiza esa
+rama, con sus cambios de estilo reaplicados. Nunca persisten: no están en
+el código ni en `estilos/` y mueren al recargar — el panel lo avisa.
+Detalle en arquitectura.md regla #151.
+
 El panel se puede colapsar a una pill chica (botón "–" en su cabecera,
 click en la pill para expandir, o Alt+D) — pensado para el caso "el panel
 ocupa lugar aunque no haya nada que ajustar todavía". Colapsar/expandir es
