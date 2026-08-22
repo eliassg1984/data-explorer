@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-167 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+168 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (61)
 
@@ -266,7 +266,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (11)
+**Herramientas de desarrollo** (12)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -279,8 +279,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#165** — Al agregar una barra de modos quedaron DOS controles del mismo estado, uno encima del otro —…
 - **#166** — El contorno del modo diseño se dibujaba ENCIMA del borde real del elemento — así que para ver…
 - **#167** — El fondo general de la app no se podía editar con el modo diseño: el lienzo es el único…
+- **#168** — Las manijas del modo diseño quedaban FUERA DE LA PANTALLA cuando el elemento tocaba un borde
 
-**Decisiones de diseño y UX** (29)
+**Decisiones de diseño y UX** (30)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -311,6 +312,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#150** — Mover un widget de sitio cuando su KEY es el estado: el pill de fecha de la franja
 - **#164** — El botón Refrescar dejó de vivir en la franja superior de navegación y pasó al pie del rail…
 - **#166** — El contorno del modo diseño se dibujaba ENCIMA del borde real del elemento — así que para ver…
+- **#168** — Las manijas del modo diseño quedaban FUERA DE LA PANTALLA cuando el elemento tocaba un borde
 
 **Mantenimiento y trampas del lenguaje** (6)
 
@@ -7636,13 +7638,51 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      flujo pensado es probar el color en vivo, apretar "Copiar CSS" y pegar
      el valor en esos dos sitios.
 
+168. **Las manijas del modo diseño quedaban FUERA DE LA PANTALLA cuando el
+     elemento tocaba un borde** (2026-08-22, reportado con captura: "¿cómo
+     puedo hacer clic cuando la perilla para arrastrar está fuera de la
+     pantalla?").
+
+     Las cuatro manijas cuelgan del contorno con offsets NEGATIVOS a
+     propósito —viven por fuera del elemento para no taparlo—: la perilla de
+     mover en `top:-13px; left:-13px`, las de resize en `-5`/`-6`. Con el
+     contorno además 4px afuera (regla #166), un elemento pegado al borde
+     superior deja la perilla en **y = -17**: inalcanzable, y sin ninguna
+     alternativa para moverlo. Pasó con `nav_rail`, que vive en `top: 0`.
+
+     `clampManijas()` las mete ADENTRO cuando no hay sitio afuera. Dos
+     detalles que no son obvios:
+     - **El clamp se calcula contra el viewport ABSOLUTO, no contra el
+       contorno.** Con el contorno ya 4px afuera, el atajo de "ponerle 2px"
+       la dejaba igual medio fuera de la pantalla (y = -2). Hay que resolver
+       el mínimo en coordenadas de ventana.
+     - **El PANEL lateral también tapa**, y el síntoma es idéntico. Un
+       elemento ancho (`nav_rail` mide 1264px) llega por debajo suyo y sus
+       manijas derechas quedan *dentro* del viewport pero incliqueables — el
+       primer arreglo no las cubría, lo destapó medir `elementFromPoint`
+       sobre el centro de cada manija en vez de mirar sólo el rect. Se toma
+       el borde izquierdo del panel como límite derecho real, y **sólo
+       cuando el panel se cruza verticalmente con el elemento**: si no, un
+       panel colapsado abajo a la derecha recortaría manijas que se ven bien.
+
+     Verificado con `nav_rail` (top:0, 1264px de ancho): las cuatro manijas
+     pasan a estar dentro y clicables — la perilla de mover de y=-17 a la
+     caja (4,4)-(28,28), y las derechas corridas a x≈1046 con el panel
+     empezando en 1050. Y con una tarjeta en medio de la pantalla los
+     offsets vuelven a los negativos originales: **el clamp no se activa
+     cuando no hace falta.**
+
+     Queda un caso vecino que NO es esto y tiene salida propia: el TOOLTIP
+     del inspector puede tapar una manija (medido: un `<pre>` sobre la manija
+     inferior). Se resuelve con la tecla `T`, que lo oculta.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#168**.
+> próxima regla nueva es la **#169**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

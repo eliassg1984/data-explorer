@@ -455,10 +455,56 @@ JS = """
             var r = el.getBoundingClientRect();
             var s = SEPARACION_CONTORNO;
             overlay.style.display = win.__disenoContornoOculto ? 'none' : 'block';
-            overlay.style.left = Math.round(r.left - s) + 'px';
-            overlay.style.top = Math.round(r.top - s) + 'px';
-            overlay.style.width = Math.round(r.width + s * 2) + 'px';
-            overlay.style.height = Math.round(r.height + s * 2) + 'px';
+            var ox = Math.round(r.left - s), oy = Math.round(r.top - s);
+            var ow = Math.round(r.width + s * 2), oh = Math.round(r.height + s * 2);
+            overlay.style.left = ox + 'px';
+            overlay.style.top = oy + 'px';
+            overlay.style.width = ow + 'px';
+            overlay.style.height = oh + 'px';
+            clampManijas(ox, oy, ow, oh);
+        }
+
+        // Las manijas cuelgan del contorno con offsets NEGATIVOS (viven por
+        // FUERA del elemento, para no taparlo). Si el elemento toca un borde
+        // de la ventana esa posicion cae fuera del viewport y la manija se
+        // vuelve INALCANZABLE: reportado con `nav_rail`, que vive en top:0 —
+        // la perilla de mover quedaba en y=-17 y no habia forma de agarrarla
+        // (regla #168).
+        //
+        // Cuando no hay sitio afuera, la manija se mete ADENTRO. El clamp se
+        // calcula contra el viewport ABSOLUTO y no contra el overlay: con el
+        // overlay ya 4px afuera, un simple "poner 2px" seguia dejandola medio
+        // fuera de la pantalla.
+        function clampManijas(ox, oy, ow, oh) {
+            var vw = win.innerWidth, vh = win.innerHeight, M = 2;
+            // El PANEL lateral tambien tapa: un elemento ancho (nav_rail mide
+            // 1264px) llega por debajo suyo y sus manijas derechas quedan
+            // dentro del viewport pero incliqueables. Se trata su borde
+            // izquierdo como el limite derecho real, y solo cuando el panel
+            // se cruza verticalmente con el elemento — si no, un panel
+            // colapsado abajo a la derecha recortaria manijas que se ven bien.
+            var pnl = doc.getElementById('el-diseno-panel');
+            if (pnl && pnl.style.display !== 'none') {
+                var pr = pnl.getBoundingClientRect();
+                if (pr.width > 0 && pr.bottom > oy && pr.top < oy + oh) {
+                    vw = Math.min(vw, Math.round(pr.left));
+                }
+            }
+            function pos(id, prop, deseado, calcularMin) {
+                var h = doc.getElementById(id);
+                if (!h) return;
+                var min = calcularMin();
+                h.style[prop] = (deseado < min ? min : deseado) + 'px';
+            }
+            // mover: top/left negativos -> su borde sup/izq no puede ser < M
+            pos('el-diseno-mover', 'top', -13, function() { return -oy + M; });
+            pos('el-diseno-mover', 'left', -13, function() { return -ox + M; });
+            // resize: right/bottom negativos -> su borde der/inf no puede
+            // pasarse de vw-M / vh-M
+            pos('el-diseno-rh-e', 'right', -5, function() { return ox + ow - vw + M; });
+            pos('el-diseno-rh-s', 'bottom', -5, function() { return oy + oh - vh + M; });
+            pos('el-diseno-rh-se', 'right', -6, function() { return ox + ow - vw + M; });
+            pos('el-diseno-rh-se', 'bottom', -6, function() { return oy + oh - vh + M; });
         }
 
         // ---- aplicar/retirar cambios sobre el elemento real ----
