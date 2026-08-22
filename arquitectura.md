@@ -7080,3 +7080,58 @@ salvo `icono`):
        `transform: translate(40px, 25px)` en el `.cp-rank-tit` y el
        `style.transform` de la tarjeta VACÍO, y el bloque copiado salió
        anclado al hijo.
+
+158. **Las cinco herramientas de diagnóstico vivían en tres URLs y dos
+     scripts que había que pegar a mano — ahora hay UNA barra**
+     (2026-08-22, del pedido "me gustaría verlas todas en la misma
+     visualización, con la opción de cambiar de modo"). El síntoma que lo
+     disparó: `rayos_x.js` se creó ese mismo día y la primera pregunta
+     fue "¿dónde la veo?" — no había dónde, había que abrir DevTools.
+
+     `inyecciones/herramientas.py` + `_herramientas_js.py`. Se activa con
+     `?debug=1`, el flag que ya existía: no hay uno nuevo que recordar.
+     Cinco botones — Inspector, Diseño, Rayos X, Layout, Gráficos.
+
+     - **Cada modo es un query param**, no una variable en memoria
+       (`?diseno=1`, `?rayosx=1`). Así la combinación queda compartible y
+       marcable, sobrevive el rerun de Streamlit sin estado extra, y es el
+       mismo idiom que el Alt+I del inspector ya usaba. Salir con Alt+I
+       CONSERVA `?rayosx=1`: al volver a entrar, los modos se restauran.
+     - **Los modos son combinables a propósito.** Rayos X + Inspector es
+       justo la combinación útil (estructura pintada + detalle al hover).
+       Cuando dos se estorban se AVISA en la barra en vez de bloquearlos:
+       hoy el único par es Diseño + Rayos X (regla #156).
+     - **UNA SOLA FUENTE para los auditores.** Este módulo no
+       reimplementa nada: LEE los ficheros de `herramientas/*.js` y los
+       embebe. Siguen siendo pegables en consola — dos formas de correr el
+       mismo código, sin dos copias que se desincronicen (riesgo real:
+       `auditar_layout.js` ya cambió cuatro veces). Se ejecutan inyectando
+       un `<script>` en el documento del PADRE y no en el iframe de
+       `components.html`: están escritos para la consola y usan
+       `document`/`window` directo, así que corriéndolos en el iframe
+       medirían un DOM vacío. Efecto lateral bueno: quedan definidos en
+       `win`, o sea llamables a mano desde la consola sin pegar nada.
+     - **El botón Inspector NO toca `?debug=1`** — ese flag es el que hace
+       visible a la barra, apagarlo la mataría a ella también. Alterna el
+       silenciador que `inspector.py` ya exponía
+       (`__inspectorTooltipSilenciado` / `__inspectorAlternarSilenciado`),
+       segunda dependencia de solo lectura hacia ese módulo después de la
+       del modo diseño (#46).
+     - **Espacio compartido, y la trampa que dejó** (Regla viva #4): la
+       barra ocupa `bottom:10px; left:72px`, que era del badge
+       "Inspector ON". Se probó primero subir el badge a una constante
+       (`bottom:46px`) y **se superponían igual**: la barra mide 36px, no
+       28, y encima CRECE cuando muestra el aviso de conflicto. La versión
+       que quedó lo mide y escribe `badge.style.bottom` en cada repintado
+       — verificado: barra 36→38px mueve el badge 54→56px y el hueco se
+       mantiene en 8px. Moraleja repetida de la regla #145: dos números
+       coordinados a mano en ficheros distintos se desincronizan; si uno
+       depende del otro, que lo lea.
+
+     Verificado en vivo (Compras > Proveedor, viewport 1912): la barra
+     monta sus 5 botones, las 3 fuentes se cargan en el realm del padre,
+     Rayos X pinta 71 recuadros, el panel de Layout arma 3 tablas / 75
+     filas, y Alt+I limpia barra + panel + capa de una. El auditor de
+     gráficos encontró de paso un solape real que nadie había reportado:
+     `CP_EVO_MES_VIBEJ-COLIBRI-SAC` pisa "may 26" con "ago 26" por 4px.
+

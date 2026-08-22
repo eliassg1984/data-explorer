@@ -232,6 +232,16 @@ editor y usar `herramientas/auditar_layout.js`:
    de los que superan umbrales, outliers dentro de una misma familia de key
    y desborde horizontal — todo con selectores para saltar al elemento.
 
+> **Atajo: no hace falta pegar nada.** Con **`?debug=1`** aparece abajo a la
+> izquierda una **barra con las cinco herramientas** — Inspector, Diseño,
+> Rayos X, Layout y Gráficos — y los dos auditores muestran su resultado en
+> un panel DENTRO de la app, sin abrir DevTools. Los modos se combinan y
+> cada uno es un query param (`?rayosx=1`), así que la combinación se puede
+> compartir por URL. La barra lee los `.js` de `herramientas/` (una sola
+> fuente: siguen siendo pegables en consola). Detalle en `arquitectura.md`
+> regla #158. Lo de abajo describe cada herramienta y sus trampas, que
+> valen igual desde la barra.
+
 Antes de discutir por qué "algo se ve grande", medir. `auditar()` responde
 en 10 segundos y evita ida-y-vuelta de deploys + capturas.
 

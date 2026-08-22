@@ -21,7 +21,7 @@ from estado_rango import (
 from cortes import cortes_disponibles
 import franja_fecha
 from graficos.compras import vista_quiere_fecha_propia
-from inyecciones import inject_error_overlay, inject_element_inspector, inject_diseno_visual, inject_footer_actualizacion, inject_calendario_es, inject_fullscreen_app
+from inyecciones import inject_error_overlay, inject_element_inspector, inject_diseno_visual, inject_herramientas, inject_footer_actualizacion, inject_calendario_es, inject_fullscreen_app
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil
 from graficos import renderizar_graficos_reporte, tiene_dashboard
 from graficos.base import _render_rail
@@ -52,6 +52,10 @@ inject_css()
 inject_error_overlay()
 inject_element_inspector()
 inject_diseno_visual()   # modo diseño (?debug=1&diseno=1), lee el pin de arriba
+# Barra unificada (?debug=1): prende/apaga inspector, diseño, rayos X y los
+# dos auditores. Va DESPUÉS de los dos de arriba: lee el silenciador que
+# expone el inspector y comparte su esquina inferior izquierda.
+inject_herramientas()
 inject_calendario_es()
 inject_fullscreen_app()   # botón ⛶ pantalla completa (móvil)
 

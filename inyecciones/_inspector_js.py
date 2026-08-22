@@ -899,6 +899,15 @@ JS = """
         if (!badge) {
             badge = doc.createElement('div');
             badge.id = 'el-inspector-badge';
+            // ESPACIO COMPARTIDO (Regla viva, arquitectura.md #4): el
+            // bottom:10px de esta esquina lo ocupa desde 2026-08-22 la barra
+            // unificada de inyecciones/herramientas.py, que apila este badge
+            // ENCIMA suyo escribiendole `style.bottom` en cada repintado.
+            // El 10px de aca es el valor de arranque (y el que queda si esa
+            // barra no llega a cargar); NO se coordina a mano con ella —
+            // se probo con una constante y se superponian, porque el alto
+            // de la barra cambia cuando muestra un aviso. El comentario
+            // gemelo esta en el docstring de herramientas.py.
             badge.style.cssText = [
                 'position:fixed','bottom:10px','left:72px','z-index:2147483646',
                 'background:var(--accent-deep)','color:#fff',
