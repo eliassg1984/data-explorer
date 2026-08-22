@@ -6784,3 +6784,74 @@ salvo `icono`):
      del rango se rompe siempre en el extremo del rango; si hace falta
      distinguir "sin cambio" de "cero", el estado va aparte del valor
      (acá, `registro.cambios[prop]` existe o no), nunca dentro.
+
+153. **Fase D del modo diseño: paleta de superficie, revertir por
+     propiedad, y "Copiar CSS" para cerrar el circuito** (2026-08-21, del
+     pedido "¿qué mejoras le harías al panel?"). Cuatro cambios chicos que
+     comparten un mismo hilo — el panel sabía PREVISUALIZAR pero se quedaba
+     corto en tres puntos concretos.
+     - **La paleta era solo de DATO** (acento, semáforo, ajuste ±): once
+       colores, ninguno de superficie. Probar "¿este gris de tarjeta o el
+       lienzo?" —el pedido que motivó la sesión— era literalmente
+       imposible: ese gris no estaba en la lista. Se sumaron
+       `GRIS_FONDO`/`GRIS_BORDE`/`GRIS_LINEA`/`GRIS_TEXTO_SUAVE`/
+       `LAVANDA_FONDO` de `tema.py`, más un swatch "Transparente"
+       (checkerboard, manda el valor CSS `transparent`) para Fondo y un
+       `<input type=color>` libre para Texto y Fondo — antes solo lo tenía
+       Borde completo.
+     - **Deshacer era todo o nada.** "Ver original" apaga los N cambios
+       juntos; arrepentirse de uno solo obligaba a rehacer el resto. Cada
+       fila con valor editable ahora tiene un botón "↺" que llama a
+       `establecerCambioEstilo` con el tercer argumento en `null` SOLO para
+       esa propiedad (mismo `null` que la regla #152 le sacó a los sliders
+       de su mínimo — acá no hay overload porque es una acción explícita,
+       no un valor del rango) y reconstruye el panel. Los compuestos (Borde
+       completo, Sombra) también resetean su variable de estado
+       (`bordeAncho`/`sombraNivel`) para que el slider vuelva a cero y no
+       quede leyendo un número sin efecto.
+     - **Margen**, hermano de Padding con el mismo tratamiento (mismo
+       rango, mismo revert) — pedido explícito: "un poco más de aire
+       arriba" era el ajuste más común y no había forma de probarlo.
+     - **"Copiar CSS" — la que cambia el flujo.** Hasta acá el panel
+       sabía mostrar pero no sabía entregar: bajar los cambios a
+       `estilos/` era leerlos a ojo del panel y dictarlos. `registro.cambios`
+       ya tenía todo lo necesario; `construirBloqueCSS()` solo lo junta:
+       separa geometría (siempre va a `div[class*="st-key-<key>"]`) de
+       estilo (puede ir redirigido, mismo criterio que `destinosDeEstilo` —
+       si redirige, arma DOS bloques con selectores distintos) y formatea
+       cada propiedad cambiada como declaración CSS.
+       **El fallback de "Ctrl+C" mentía** en el primer intento: a
+       diferencia del inspector (que ya tiene un `<pre>` visible para
+       seleccionar cuando el Clipboard API y `execCommand` fallan los dos
+       — caso real en Streamlit Cloud, iframe anidado, regla #39), el botón
+       nuevo no mostraba el CSS en ningún lado — decía "seleccionado:
+       Ctrl+C" sin haber nada seleccionado. Se agregó un `<textarea>` en el
+       panel que aparece y se autoselecciona SOLO cuando el copiado
+       automático falla.
+     - **El bug que costó más diagnosticar: una secuencia de escape sin
+       doblar rompe TODO el script, no solo la línea.** Al construir el
+       bloque de texto con saltos de línea reales usé, en el fuente Python
+       de `_diseno_js.py`, un solo backslash antes de la ene donde hacían
+       falta dos. Ese archivo es un string Python NO-raw (lo dice el propio
+       docstring: "NO CONVERTIR A RAW STRING"), así que Python colapsó cada
+       una de esas secuencias a un byte de salto de línea real ANTES de que
+       el JS la viera — y un salto de línea crudo metido dentro de una
+       cadena JS de comillas simples es `SyntaxError: Invalid or unexpected
+       token`. Como es un IIFE completo, el error mata el `<script>`
+       ENTERO: nada de diseño (overlay, panel, pin) se ejecuta, sin dejar
+       pista de cuál línea — el pin seguía funcionando (lo pone
+       `inspector.py`, OTRO script) así que el síntoma parecía "el panel no
+       aparece" y no "hay un error de sintaxis". Mismo patrón ya vivido en
+       esta misma sesión con el texto de `panelEspera()` — la lección no
+       prendió a la primera, y hasta esta propia regla se rompió así una
+       vez al redactarla (un heredoc de bash volvió a colapsar la secuencia
+       antes de llegar al archivo). **Diagnóstico que sirvió:** un
+       tokenizer chico en Python que recorre el JS ya parseado carácter por
+       carácter, trackeando si al final de cada línea seguís "dentro" de
+       una comilla simple/doble sin cerrar — eso apunta la línea exacta sin
+       ejecutar nada en el navegador. **Regla:** en `_diseno_js.py`/
+       `_inspector_js.py`, cualquier salto de línea intencional dentro de
+       un string JS necesita DOS backslashes en el fuente Python (uno
+       colapsa a uno solo, que es lo que JS necesita ver) — y al escribir
+       el fix con una herramienta de texto (heredoc, editor), verificar el
+       archivo YA ESCRITO, nunca el texto fuente que se cree haber tipeado.

@@ -267,11 +267,15 @@ pasar el cursor). El inspector NO agrega elementos visibles en la página
 entorno/performance usar **`?diagnostico=1`** (independiente de debug).
 Y con **`?debug=1&diseno=1`** se suma el **modo diseño**: fijás un elemento
 con clic derecho y un panel lateral lo edita en vivo (caja, tipografía,
-color, mover/redimensionar), o **inserta** texto/línea/barra/espacio de
-mentira para ver "cómo se vería" algo que todavía no existe. Nada de eso
-persiste: es DOM efímero, muere al recargar y no toca `estilos/`. Los
-valores que te gusten los bajás a `estilos/` a mano. Detalle en
-`arquitectura.md` reglas #46 a #48 y #151.
+color, mover/redimensionar, con "↺" por fila para revertir solo esa
+propiedad), o **inserta** texto/línea/barra/espacio de mentira para ver
+"cómo se vería" algo que todavía no existe. La paleta cubre dato Y
+superficie (grises/lavanda de `tema.py`, más transparente y un picker
+libre), y el botón **"Copiar CSS"** arma el bloque listo para pegar en
+`estilos/` — ya no hace falta leer los valores a ojo del panel. Nada de
+esto persiste: es DOM efímero, muere al recargar y no toca `estilos/`
+hasta que vos pegás el bloque copiado. Detalle en `arquitectura.md`
+reglas #46 a #48, #151 y #153.
 Se pueden combinar: `?debug=1&diagnostico=1`. El tooltip incluye
 `codigo` (archivo:línea donde está declarada la key, buscado en `app.py`
 + `graficos/` + `tablas/`), `estilos` (archivos de `estilos/` que

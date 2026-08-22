@@ -225,7 +225,13 @@ JS = """
             'color:#cfcfd6',
             'font:12px/1.5 -apple-system,sans-serif',
             'border-left:1px solid #6c5ce7',
-            'padding:12px',
+            // padding-bottom aparte y mas grande: Streamlit Cloud clava su
+            // propio badge "Manage app" fixed al fondo del viewport, ancho
+            // completo, por ENCIMA de este panel (z-index mayor, fuera de
+            // nuestro control). Sin este colchon, las ultimas filas quedan
+            // tapadas aun con scroll al fondo — no es que falte scrollear,
+            // es que ese espacio ya no es clickeable.
+            'padding:12px 12px 64px 12px',
             'box-sizing:border-box',
             'overflow-y:auto',
             'display:none'
@@ -588,14 +594,29 @@ JS = """
             return inp;
         }
 
-        function filaControl(etiquetaTexto, controlEl, valorEl) {
+        // `onRevertir`, si se pasa, agrega un "↺" junto a la etiqueta que
+        // saca SOLO esta propiedad (vuelve a lo que dice estilos/) sin
+        // tocar el resto de los cambios — "Ver original" abajo del panel
+        // sigue siendo el A/B de TODO junto; esto es por fila.
+        function filaControl(etiquetaTexto, controlEl, valorEl, onRevertir) {
             var div = doc.createElement('div');
             div.style.cssText = 'margin:12px 0';
             var lbl = doc.createElement('div');
-            lbl.style.cssText = 'font-size:11px;color:#8b8b95;margin-bottom:4px;display:flex;justify-content:space-between';
+            lbl.style.cssText = 'font-size:11px;color:#8b8b95;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center';
+            var izq = doc.createElement('span');
+            izq.style.cssText = 'display:flex;align-items:center;gap:5px';
             var txt = doc.createElement('span');
             txt.textContent = etiquetaTexto;
-            lbl.appendChild(txt);
+            izq.appendChild(txt);
+            if (onRevertir) {
+                var btnRev = doc.createElement('button');
+                btnRev.textContent = '↺';
+                btnRev.title = 'Revertir esta propiedad a estilos/';
+                btnRev.style.cssText = 'background:transparent;color:#6f6f7a;border:0;padding:0;font-size:12px;line-height:1;cursor:pointer';
+                btnRev.addEventListener('click', function(ev) { ev.stopPropagation(); onRevertir(); });
+                izq.appendChild(btnRev);
+            }
+            lbl.appendChild(izq);
             lbl.appendChild(valorEl);
             div.appendChild(lbl);
             div.appendChild(controlEl);
@@ -612,11 +633,23 @@ JS = """
             return div;
         }
 
-        function construirSwatches(valorActual, onPick) {
+        // `opciones.transparente` agrega un swatch a cuadros (no hay forma de
+        // "pintar" transparente en un swatch solido) que manda 'transparent'
+        // — antes no existia manera de probar "sacale el fondo a la
+        // tarjeta". `opciones.libre` agrega un <input type=color> igual al
+        // que ya tenia Borde completo, para no limitar Texto/Fondo a los
+        // 16 tonos fijos de PALETA.
+        function construirSwatches(valorActual, onPick, opciones) {
+            opciones = opciones || {};
             var wrap = doc.createElement('div');
-            wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;margin-top:6px';
+            wrap.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:6px';
             var botones = [];
             var actualNorm = (valorActual || '').toLowerCase();
+            function marcar(b) {
+                botones.forEach(function(x) { x.style.outline = ''; });
+                b.style.outline = '2px solid #fff';
+                b.style.outlineOffset = '1px';
+            }
             PALETA.forEach(function(c) {
                 var b = doc.createElement('button');
                 b.title = c.nombre;
@@ -624,15 +657,126 @@ JS = """
                 b.style.cssText = 'width:20px;height:20px;border-radius:4px;border:0;padding:0;cursor:pointer;background:' + c.hex
                     + (seleccionado ? ';outline:2px solid #fff;outline-offset:1px' : '');
                 b.addEventListener('click', function() {
-                    botones.forEach(function(x) { x.style.outline = ''; });
-                    b.style.outline = '2px solid #fff';
-                    b.style.outlineOffset = '1px';
+                    marcar(b);
                     onPick(c.hex);
                 });
                 botones.push(b);
                 wrap.appendChild(b);
             });
+            if (opciones.transparente) {
+                var bT = doc.createElement('button');
+                bT.title = 'Transparente';
+                bT.style.cssText = 'width:20px;height:20px;border-radius:4px;border:1px solid #34343f;padding:0;cursor:pointer;background-color:#1c1c24;'
+                    + 'background-image:linear-gradient(45deg,#3a3a44 25%,transparent 25%),linear-gradient(-45deg,#3a3a44 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#3a3a44 75%),linear-gradient(-45deg,transparent 75%,#3a3a44 75%);'
+                    + 'background-size:8px 8px;background-position:0 0,0 4px,4px -4px,-4px 0px'
+                    + (actualNorm === 'transparent' ? ';outline:2px solid #fff;outline-offset:1px' : '');
+                bT.addEventListener('click', function() {
+                    marcar(bT);
+                    onPick('transparent');
+                });
+                botones.push(bT);
+                wrap.appendChild(bT);
+            }
+            if (opciones.libre) {
+                var inpLibre = doc.createElement('input');
+                inpLibre.type = 'color';
+                // <input type=color> exige un #rrggbb valido — 'transparent'
+                // o 'sin cambio' (null) no sirven de semilla, cae a un
+                // neutral en vez de reventar con un valor invalido.
+                inpLibre.value = /^#[0-9a-f]{6}$/i.test(valorActual || '') ? valorActual : '#6c5ce7';
+                inpLibre.title = 'Elegir cualquier color';
+                inpLibre.style.cssText = 'width:20px;height:20px;border:0;border-radius:4px;padding:0;cursor:pointer;background:transparent';
+                inpLibre.addEventListener('input', function() {
+                    botones.forEach(function(x) { x.style.outline = ''; });
+                    onPick(inpLibre.value);
+                });
+                wrap.appendChild(inpLibre);
+            }
             return wrap;
+        }
+
+        // ---- copiar CSS: cerrar el circuito previsualizar -> estilos/ ----
+        // Hasta aca el panel sabia MOSTRAR una vista previa pero no sabia
+        // ENTREGARLA: bajar 6 cambios a estilos/ era leerlos a ojo del
+        // panel y dictarlos. registro.cambios ya tiene todo lo que hace
+        // falta — esto solo lo junta y lo formatea.
+        function fusionar(a, b) {
+            var out = {};
+            Object.keys(a).forEach(function(k) { out[k] = a[k]; });
+            Object.keys(b).forEach(function(k) { out[k] = b[k]; });
+            return out;
+        }
+
+        function construirBloqueCSS(key, elemento, registro) {
+            var ancla = 'div[class*="st-key-' + key + '"]';
+            var destinos = destinosDeEstilo(elemento);
+            var redirigido = destinos[0] !== elemento;
+            // Mismo criterio que destinosDeEstilo: pills de un stButtonGroup
+            // comparten selector de grupo; un boton/popover suelto, no.
+            var selEstilo = !redirigido ? ancla
+                : (elemento.querySelector('[data-testid="stButtonGroup"] button')
+                    ? ancla + ' [data-testid="stButtonGroup"] button'
+                    : ancla + ' button');
+
+            var geo = {}, est = {};
+            Object.keys(registro.cambios).forEach(function(prop) {
+                (PROPS_GEOMETRIA[prop] ? geo : est)[prop] = registro.cambios[prop];
+            });
+            var t = registro.transformState;
+            if (t.translateX || t.translateY || t.rotateDeg) {
+                // El mover/rotar siempre va sobre el elemento mismo (igual
+                // que aplicarTransform), nunca redirigido.
+                geo.transform = 'translate(' + t.translateX + 'px,' + t.translateY + 'px) rotate(' + t.rotateDeg + 'deg)';
+            }
+
+            var bloques = [];
+            function agregarBloque(sel, props) {
+                var claves = Object.keys(props);
+                if (!claves.length) return;
+                var lineas = claves.map(function(p) { return '    ' + p + ': ' + props[p] + ';'; });
+                bloques.push(sel + ' {\\n' + lineas.join('\\n') + '\\n}');
+            }
+            if (selEstilo === ancla) {
+                agregarBloque(ancla, fusionar(geo, est));
+            } else {
+                agregarBloque(ancla, geo);
+                agregarBloque(selEstilo, est);
+            }
+            if (!bloques.length) return null;
+
+            var encabezado = '/* copiado del modo diseño — ' + key + ' */';
+            var pie = redirigido
+                ? '\\n/* estilo redirigido a los botones internos — ver destinosDeEstilo() en _diseno_js.py */'
+                : '';
+            return encabezado + '\\n' + bloques.join('\\n\\n') + pie;
+        }
+
+        // Duplica (a proposito, ver docstring de diseno.py) el fallback de
+        // copiarTexto() de _inspector_js.py: este script corre en OTRO
+        // iframe de components.html, sin acceso a esa funcion local.
+        function copiarTextoDiseno(texto, cb) {
+            var terminado = false;
+            var marcar = function(ok) { if (!terminado) { terminado = true; cb(ok); } };
+            function fallback() {
+                if (terminado) return;
+                var ta = doc.createElement('textarea');
+                ta.value = texto;
+                ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0';
+                doc.body.appendChild(ta);
+                ta.focus(); ta.select();
+                var ok = false;
+                try { ok = doc.execCommand('copy'); } catch(_) {}
+                doc.body.removeChild(ta);
+                marcar(ok);
+            }
+            if (win.navigator.clipboard && win.navigator.clipboard.writeText && win.isSecureContext) {
+                try {
+                    win.navigator.clipboard.writeText(texto).then(function() { marcar(true); }, fallback);
+                    setTimeout(function() { if (!terminado) fallback(); }, 300);
+                    return;
+                } catch(_) {}
+            }
+            fallback();
         }
 
         function construirControles(key, elemento, registro) {
@@ -656,6 +800,52 @@ JS = """
             header.appendChild(botonColapsar());
             header.appendChild(btnSoltar);
             panel.appendChild(header);
+
+            // Fila propia y arriba de todo a propósito: es la accion que
+            // cierra el circuito (previsualizar -> bajarlo a estilos/) y
+            // conviene que este a mano sin scrollear el panel entero.
+            var filaCopiar = doc.createElement('div');
+            filaCopiar.style.cssText = 'margin-bottom:10px;display:flex;gap:6px;align-items:center';
+            var btnCopiarCSS = doc.createElement('button');
+            btnCopiarCSS.textContent = '📋 Copiar CSS';
+            btnCopiarCSS.style.cssText = 'flex:1;background:#3C3489;color:#fff;border:0;border-radius:4px;padding:7px;font:600 11px sans-serif;cursor:pointer';
+            var estadoCopiar = spanValor('');
+            estadoCopiar.style.fontSize = '10px';
+            // Fallback manual, oculto hasta que haga falta: si el automatico
+            // falla (frecuente en Streamlit Cloud, el iframe anidado de
+            // components.html — arquitectura.md § Reglas #39) no hay nada
+            // mas en pantalla para seleccionar, a diferencia del inspector
+            // que ya tiene su <pre> visible. Sin este textarea, "Ctrl+C"
+            // seria un mensaje que miente.
+            var taManual = doc.createElement('textarea');
+            taManual.readOnly = true;
+            taManual.style.cssText = 'display:none;width:100%;height:90px;margin-top:6px;background:#1c1c24;color:#e4e4e8;border:1px solid #34343f;border-radius:4px;padding:6px;font:10px/1.4 "Courier New",monospace;box-sizing:border-box';
+            btnCopiarCSS.addEventListener('click', function() {
+                var ctx = elementoActivo();
+                var bloque = ctx ? construirBloqueCSS(ctx.key, ctx.el, ctx.registro) : null;
+                if (!bloque) {
+                    estadoCopiar.textContent = 'nada que copiar';
+                    estadoCopiar.style.color = '#8b8b95';
+                    taManual.style.display = 'none';
+                    return;
+                }
+                copiarTextoDiseno(bloque, function(ok) {
+                    estadoCopiar.textContent = ok ? 'copiado ✓' : 'automático bloqueado: seleccionado abajo';
+                    estadoCopiar.style.color = ok ? '#74ab7e' : '#f0997b';
+                    if (ok) {
+                        taManual.style.display = 'none';
+                    } else {
+                        taManual.value = bloque;
+                        taManual.style.display = 'block';
+                        taManual.focus();
+                        taManual.select();
+                    }
+                });
+            });
+            filaCopiar.appendChild(btnCopiarCSS);
+            filaCopiar.appendChild(estadoCopiar);
+            panel.appendChild(filaCopiar);
+            panel.appendChild(taManual);
 
             // Para LEER valores iniciales/computados, usar el mismo destino
             // al que van a ESCRIBIR los controles de estilo — si no, el
@@ -705,7 +895,11 @@ JS = """
                 // Ver el comentario de CERO_ES_UN_VALOR mas abajo.
                 establecerCambioEstilo(ctx.el, ctx.registro, 'border-radius', v + 'px');
             });
-            panel.appendChild(filaControl('Radio de borde', inpRadio, radioLbl));
+            panel.appendChild(filaControl('Radio de borde', inpRadio, radioLbl, function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                establecerCambioEstilo(ctx.el, ctx.registro, 'border-radius', null);
+                rehacerPanel();
+            }));
 
             // padding (uniforme)
             var padVal = registro.cambios['padding']
@@ -719,7 +913,31 @@ JS = """
                 padLbl.textContent = v + 'px';
                 establecerCambioEstilo(ctx.el, ctx.registro, 'padding', v + 'px');
             });
-            panel.appendChild(filaControl('Padding', inpPad, padLbl));
+            panel.appendChild(filaControl('Padding', inpPad, padLbl, function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                establecerCambioEstilo(ctx.el, ctx.registro, 'padding', null);
+                rehacerPanel();
+            }));
+
+            // margen (uniforme) — hermano de padding, mismo tratamiento;
+            // pedido explicito: "un poco mas de aire arriba" es el ajuste
+            // mas comun de todos y no habia forma de probarlo en vivo.
+            var margVal = registro.cambios['margin']
+                ? numDe(registro.cambios['margin'], 0)
+                : numDe(win.getComputedStyle(lectura).marginTop, 0);
+            var inpMarg = rango(0, 48, 1, margVal);
+            var margLbl = spanValor(Math.round(margVal) + 'px');
+            inpMarg.addEventListener('input', function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                var v = parseInt(inpMarg.value, 10);
+                margLbl.textContent = v + 'px';
+                establecerCambioEstilo(ctx.el, ctx.registro, 'margin', v + 'px');
+            });
+            panel.appendChild(filaControl('Margen', inpMarg, margLbl, function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                establecerCambioEstilo(ctx.el, ctx.registro, 'margin', null);
+                rehacerPanel();
+            }));
 
             // borde completo (ancho + color -> shorthand 'border')
             var inpBordeAncho = rango(0, 8, 1, registro.bordeAncho);
@@ -753,7 +971,12 @@ JS = """
                 aplicarBorde(ctx);
             }));
             bordeWrap.appendChild(inpBordeColor);
-            panel.appendChild(filaControl('Borde completo', bordeWrap, bordeLbl));
+            panel.appendChild(filaControl('Borde completo', bordeWrap, bordeLbl, function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                ctx.registro.bordeAncho = 0;
+                establecerCambioEstilo(ctx.el, ctx.registro, 'border', null);
+                rehacerPanel();
+            }));
 
             // sombra
             var inpSombra = rango(0, 4, 1, registro.sombraNivel);
@@ -765,7 +988,12 @@ JS = """
                 establecerCambioEstilo(ctx.el, ctx.registro, 'box-shadow',
                     ctx.registro.sombraNivel === 0 ? 'none' : SOMBRAS[ctx.registro.sombraNivel]);
             });
-            panel.appendChild(filaControl('Sombra', inpSombra, sombraLbl));
+            panel.appendChild(filaControl('Sombra', inpSombra, sombraLbl, function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                ctx.registro.sombraNivel = 0;
+                establecerCambioEstilo(ctx.el, ctx.registro, 'box-shadow', null);
+                rehacerPanel();
+            }));
 
             // ---- tipografía ----
             panel.appendChild(seccion('Tipografía'));
@@ -781,7 +1009,11 @@ JS = """
                 fsLbl.textContent = v + 'px';
                 establecerCambioEstilo(ctx.el, ctx.registro, 'font-size', v + 'px');
             });
-            panel.appendChild(filaControl('Tamaño de letra', inpFs, fsLbl));
+            panel.appendChild(filaControl('Tamaño de letra', inpFs, fsLbl, function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                establecerCambioEstilo(ctx.el, ctx.registro, 'font-size', null);
+                rehacerPanel();
+            }));
 
             var PESOS = [['400', 'Normal'], ['600', 'Semibold'], ['700', 'Bold']];
             var pesoWrap = doc.createElement('div');
@@ -848,7 +1080,11 @@ JS = """
                 lsLbl.textContent = v + 'px';
                 establecerCambioEstilo(ctx.el, ctx.registro, 'letter-spacing', v + 'px');
             });
-            panel.appendChild(filaControl('Espaciado entre letras', inpLs, lsLbl));
+            panel.appendChild(filaControl('Espaciado entre letras', inpLs, lsLbl, function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                establecerCambioEstilo(ctx.el, ctx.registro, 'letter-spacing', null);
+                rehacerPanel();
+            }));
 
             var inpRot = rango(-45, 45, 1, registro.transformState.rotateDeg);
             var rotLbl = spanValor(registro.transformState.rotateDeg + '°');
@@ -859,7 +1095,12 @@ JS = """
                 ctx.registro.transformState.rotateDeg = v;
                 aplicarTransform(ctx.el, ctx.registro);
             });
-            panel.appendChild(filaControl('Rotar (orientación)', inpRot, rotLbl));
+            panel.appendChild(filaControl('Rotar (orientación)', inpRot, rotLbl, function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                ctx.registro.transformState.rotateDeg = 0;
+                aplicarTransform(ctx.el, ctx.registro);
+                rehacerPanel();
+            }));
 
             // ---- color por rol ----
             panel.appendChild(seccion('Color'));
@@ -870,7 +1111,11 @@ JS = """
                 var ctx = elementoActivo(); if (!ctx) return;
                 establecerCambioEstilo(ctx.el, ctx.registro, 'color', hex);
                 colorTextoLbl.textContent = hex;
-            }), colorTextoLbl));
+            }, { libre: true }), colorTextoLbl, function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                establecerCambioEstilo(ctx.el, ctx.registro, 'color', null);
+                rehacerPanel();
+            }));
 
             var colorFondoActual = registro.cambios['background-color'] || null;
             var colorFondoLbl = spanValor(colorFondoActual || 'sin cambio');
@@ -878,7 +1123,11 @@ JS = """
                 var ctx = elementoActivo(); if (!ctx) return;
                 establecerCambioEstilo(ctx.el, ctx.registro, 'background-color', hex);
                 colorFondoLbl.textContent = hex;
-            }), colorFondoLbl));
+            }, { libre: true, transparente: true }), colorFondoLbl, function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                establecerCambioEstilo(ctx.el, ctx.registro, 'background-color', null);
+                rehacerPanel();
+            }));
 
             // ver original
             var btnOriginal = doc.createElement('button');

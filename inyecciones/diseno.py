@@ -91,12 +91,18 @@ import streamlit.components.v1 as components
 
 from inyecciones._diseno_js import JS
 from tema import (
-    ACENTO, ACENTO_FUERTE, ACENTO_TEXTO_OSCURO,
+    ACENTO, ACENTO_FUERTE, ACENTO_TEXTO_OSCURO, LAVANDA_FONDO,
     EXITO, ADVERTENCIA, ERROR,
     AJUSTE_POS, AJUSTE_NEG,
-    TEXTO_PRINCIPAL, GRIS_TEXTO, BLANCO,
+    TEXTO_PRINCIPAL, GRIS_TEXTO, GRIS_TEXTO_SUAVE, BLANCO,
+    GRIS_FONDO, GRIS_BORDE, GRIS_LINEA,
 )
 
+# Dos familias, a propósito separadas: DATO (acento + semáforo + ajuste) es
+# lo que ya traía la paleta desde la fase B; SUPERFICIE (grises + lavanda
+# tenue) se agregó el 2026-08-21 porque faltaba justo lo que más se prueba
+# en Fondo/Borde — probar "¿este gris de tarjeta, o el lienzo?" no se podía
+# hacer sin ella (ver arquitectura.md regla #153).
 _PALETA = [
     {"hex": ACENTO, "nombre": "Acento"},
     {"hex": ACENTO_FUERTE, "nombre": "Acento fuerte"},
@@ -107,8 +113,13 @@ _PALETA = [
     {"hex": AJUSTE_POS, "nombre": "Ajuste positivo"},
     {"hex": AJUSTE_NEG, "nombre": "Ajuste negativo"},
     {"hex": TEXTO_PRINCIPAL, "nombre": "Texto principal"},
-    {"hex": GRIS_TEXTO, "nombre": "Gris texto"},
     {"hex": BLANCO, "nombre": "Blanco"},
+    {"hex": GRIS_FONDO, "nombre": "Gris lienzo"},
+    {"hex": GRIS_BORDE, "nombre": "Gris borde"},
+    {"hex": GRIS_LINEA, "nombre": "Gris linea"},
+    {"hex": GRIS_TEXTO, "nombre": "Gris texto"},
+    {"hex": GRIS_TEXTO_SUAVE, "nombre": "Gris texto suave"},
+    {"hex": LAVANDA_FONDO, "nombre": "Lavanda tenue"},
 ]
 
 
