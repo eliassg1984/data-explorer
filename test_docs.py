@@ -93,6 +93,32 @@ for f in RAIZ.rglob("*"):
 ok(not _rotas, "ninguna referencia apunta a una regla inexistente",
    "; ".join(f"#{n} en {', '.join(sorted(v)[:3])}" for n, v in sorted(_rotas.items())))
 
+# ── Índice temático ────────────────────────────────────────────────────────
+print("\n── índice de arquitectura.md ──")
+
+# El índice se genera; si alguien agrega una regla y no lo regenera, queda
+# invisible en la única estructura que hace navegable un fichero de 7.100
+# renglones. Por eso se verifica acá y no se confía en que alguien se acuerde.
+sys.path.insert(0, str(RAIZ / "herramientas"))
+try:
+    import indice_reglas
+except ImportError:
+    indice_reglas = None
+
+ok(indice_reglas is not None, "herramientas/indice_reglas.py se puede importar")
+if indice_reglas is not None:
+    ok(indice_reglas.INI in arq and indice_reglas.FIN in arq,
+       "arquitectura.md tiene el bloque del índice")
+    _esperado = indice_reglas.aplicar(arq, indice_reglas.construir_indice(arq))
+    ok(_esperado == arq, "el índice está al día",
+       "corré: python herramientas/indice_reglas.py")
+
+    _indexadas = {int(n) for n in re.findall(
+        r"^- \*\*#(\d+)\*\*", arq[arq.index(indice_reglas.INI):
+                                  arq.index(indice_reglas.FIN)], re.M)}
+    _sin = sorted(_conjunto - _indexadas)
+    ok(not _sin, "todas las reglas aparecen en el índice", f"faltan: {_sin}")
+
 # ── CLAUDE.md contra el código ─────────────────────────────────────────────
 print("\n── CLAUDE.md dice la verdad sobre el código ──")
 

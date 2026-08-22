@@ -3,10 +3,21 @@
 Webapp Streamlit (Community Cloud) que lee parquets de Cloudflare R2 con
 DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 
-> **`arquitectura.md` es el documento principal.** Tiene el mapa completo de
-> ficheros, el pipeline de datos, la config de `REPORTES` y las reglas
-> aprendidas de bugs reales. Este fichero es solo el atajo: lo que más
-> se rompe, en una pantalla. Ante la duda, abre `arquitectura.md`.
+> **Dos documentos, y se usan distinto.** Este fichero es el atajo: lo que
+> más se rompe, en una pantalla.
+>
+> - **`mapa.md`** — qué hay y cómo encaja: tabla de ficheros, pipeline de
+>   datos, config de `REPORTES`. Son ~130 líneas y se lee ENTERO. Ante la
+>   duda de "¿dónde vive esto?", empieza acá.
+> - **`arquitectura.md`** — la bitácora: 162 reglas sacadas de bugs reales.
+>   Son 7.100 líneas: **no se lee de arriba a abajo, se busca**. Arranca con
+>   un índice por tema para eso. Ante la duda de "¿esto ya me mordió?",
+>   busca ahí.
+>
+> Estaban en un solo fichero hasta el 2026-08-22; se partieron porque juntos
+> daban 115k tokens — un "documento principal" que nadie podía abrir. Las
+> reglas conservaron el nombre `arquitectura.md` porque hay 166 citas
+> `arquitectura.md #NNN` en el código. Ver regla #163.
 
 ## Flujo de trabajo
 
