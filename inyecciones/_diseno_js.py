@@ -75,6 +75,40 @@ JS = """
             return (r && r.el) ? { el: r.el, key: r.key, registro: registroPara(r.key) } : null;
         }
 
+        // ── Jerarquía (regla #155) ───────────────────────────────────────
+        // Duplica A PROPOSITO cadenaKeys()/keyDeElemento() de
+        // _inspector_js.py (mismo criterio que copiarTextoDiseno() con
+        // copiarTexto(): son dos realms/iframes separados y "ninguna
+        // funcion depende de otra" es la regla del paquete inyecciones/ —
+        // ver docstring de diseno.py). El modo diseno no tiene su PROPIO
+        // pin: lee win.__inspectorPinned/__inspectorUltimo (acoplamiento de
+        // solo lectura documentado ahi), asi que saltar de key tambien pasa
+        // por las funciones que el inspector expuso en win, igual que ya
+        // hace el boton "Soltar" de mas abajo con __inspectorTogglePin.
+        function cadenaKeysDiseno(el) {
+            var out = [];
+            var cur = el;
+            while (cur && cur !== doc.body && out.length < 12) {
+                var m = /st-key-([A-Za-z0-9_]+)/.exec((cur.className || '').toString());
+                if (m && out.indexOf(m[1]) === -1) out.push(m[1]);
+                cur = cur.parentElement;
+            }
+            return out;
+        }
+
+        function saltarADiseno(key) {
+            var el = doc.querySelector('.st-key-' + key);
+            if (!el || !win.__inspectorMouseMoveHandler) return;
+            var r = el.getBoundingClientRect();
+            var cx = r.left + Math.min(12, r.width / 2);
+            var cy = r.top + Math.min(12, r.height / 2);
+            if (win.__inspectorPinned && win.__inspectorTogglePin) win.__inspectorTogglePin(true);
+            win.__inspectorMouseMoveHandler({ target: el, clientX: cx, clientY: cy });
+            if (win.__inspectorTogglePin) win.__inspectorTogglePin();
+            panel.dataset.builtForKey = '';   // fuerza reconstruir con la key nueva
+            sync();
+        }
+
         function numDe(str, fallback) {
             var n = parseFloat(str);
             return isNaN(n) ? fallback : n;
@@ -872,6 +906,43 @@ JS = """
             header.appendChild(botonColapsar());
             header.appendChild(btnSoltar);
             panel.appendChild(header);
+
+            // Jerarquía: árbol vertical, RAÍZ primero (inverso de
+            // cadenaKeysDiseno, que camina de la hoja al body) — se lee de
+            // arriba hacia abajo como el anidamiento real en el código,
+            // a diferencia de las migas horizontales del inspector
+            // (elemento -> raíz). Un clic en cualquier ancestro salta el
+            // pin ahí sin tener que ubicarlo a ojo en la pantalla.
+            var cadenaDiseno = cadenaKeysDiseno(elemento).slice().reverse();
+            if (cadenaDiseno.length > 1) {
+                var arbolBox = doc.createElement('div');
+                arbolBox.style.cssText = 'margin-bottom:10px;padding:8px 9px;background:#1c1c24;border:1px solid #2a2a35;border-radius:6px;overflow-x:auto';
+                cadenaDiseno.forEach(function(k, i) {
+                    var esActual = (k === key);
+                    var fila = doc.createElement('div');
+                    fila.style.cssText = 'display:flex;align-items:center;gap:4px;padding:2px 0;padding-left:' + (i * 11) + 'px;white-space:nowrap';
+                    if (i > 0) {
+                        var rama = doc.createElement('span');
+                        rama.textContent = '└';
+                        rama.style.cssText = 'color:#3f3f4c;flex-shrink:0;font-size:11px';
+                        fila.appendChild(rama);
+                    }
+                    var nodo = doc.createElement(esActual ? 'span' : 'button');
+                    nodo.textContent = k;
+                    nodo.style.cssText = 'font:11px "Courier New",monospace;background:transparent;border:0;padding:1px 3px;border-radius:3px;'
+                        + 'color:' + (esActual ? '#e4e4e8' : '#9385ec') + ';'
+                        + 'font-weight:' + (esActual ? '700' : '400')
+                        + (esActual ? '' : ';cursor:pointer');
+                    if (!esActual) {
+                        nodo.addEventListener('mouseenter', function() { nodo.style.background = '#2A2A35'; });
+                        nodo.addEventListener('mouseleave', function() { nodo.style.background = 'transparent'; });
+                        nodo.addEventListener('click', function() { saltarADiseno(k); });
+                    }
+                    fila.appendChild(nodo);
+                    arbolBox.appendChild(fila);
+                });
+                panel.appendChild(arbolBox);
+            }
 
             // Fila propia y arriba de todo a propósito: es la accion que
             // cierra el circuito (previsualizar -> bajarlo a estilos/) y

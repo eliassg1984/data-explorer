@@ -263,19 +263,24 @@ el navegador manda.
 También existe el inspector propio: **`?debug=1` en la URL o `Alt+I`**
 activa `inject_element_inspector` (tooltip con selectores y estilos al
 pasar el cursor). El inspector NO agrega elementos visibles en la página
-— se ve como producción. Para los paneles de diagnóstico de
-entorno/performance usar **`?diagnostico=1`** (independiente de debug).
+— se ve como producción. Con un elemento fijado, la línea "Cadena de
+contenedores st-key" del tooltip es clicable: **migas de pan** que saltan
+el pin a cualquier ancestro sin ir a buscarlo a ojo en la pantalla. Para
+los paneles de diagnóstico de entorno/performance usar **`?diagnostico=1`**
+(independiente de debug).
 Y con **`?debug=1&diseno=1`** se suma el **modo diseño**: fijás un elemento
 con clic derecho y un panel lateral lo edita en vivo (caja, tipografía,
 color, mover/redimensionar, con "↺" por fila para revertir solo esa
 propiedad), o **inserta** texto/línea/barra/espacio de mentira para ver
-"cómo se vería" algo que todavía no existe. La paleta cubre dato Y
-superficie (grises/lavanda de `tema.py`, más transparente y un picker
-libre), y el botón **"Copiar CSS"** arma el bloque listo para pegar en
-`estilos/` — ya no hace falta leer los valores a ojo del panel. Nada de
-esto persiste: es DOM efímero, muere al recargar y no toca `estilos/`
-hasta que vos pegás el bloque copiado. Detalle en `arquitectura.md`
-reglas #46 a #48, #151, #153 y #154.
+"cómo se vería" algo que todavía no existe. El panel abre con un **árbol
+de jerarquía** (raíz → elemento, clicable igual que las migas del
+inspector — misma idea, orientación vertical en vez de horizontal). La
+paleta cubre dato Y superficie (grises/lavanda de `tema.py`, más
+transparente y un picker libre), y el botón **"Copiar CSS"** arma el
+bloque listo para pegar en `estilos/` — ya no hace falta leer los valores
+a ojo del panel. Nada de esto persiste: es DOM efímero, muere al recargar
+y no toca `estilos/` hasta que vos pegás el bloque copiado. Detalle en
+`arquitectura.md` reglas #46 a #48, #151, #153, #154 y #155.
 Se pueden combinar: `?debug=1&diagnostico=1`. El tooltip incluye
 `codigo` (archivo:línea donde está declarada la key, buscado en `app.py`
 + `graficos/` + `tablas/`), `estilos` (archivos de `estilos/` que

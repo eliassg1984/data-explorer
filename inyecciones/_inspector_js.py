@@ -739,6 +739,69 @@ JS = """
             return lines.join('\\n');
         }
 
+        // ── Migas de pan clicables (regla #155) ─────────────────────────
+        // "Cadena de contenedores st-key (elemento -> raiz)" ya vivia en el
+        // texto plano (bloqueParaIA de arriba) pero como texto: para saltar
+        // a un ancestro habia que ubicarlo A OJO en la pantalla y clic-
+        // derecho ahi. Reusa la MISMA lista (`keysCad`, mismo orden) como
+        // botones de verdad.
+        //
+        // saltarAAncestro no dispara un mousemove real ni usa dispatchEvent:
+        // el handler solo lee target/clientX/clientY del objeto que recibe
+        // (ver mousemove handler mas abajo), asi que un objeto armado a mano
+        // alcanza -- mismo truco liviano que __inspectorContextMenuHandler ya
+        // usa para "recalcular en la posicion actual" reusando el handler
+        // directo en vez de simular un evento de DOM real.
+        function saltarAAncestro(key) {
+            var el = doc.querySelector('.st-key-' + key);
+            if (!el || !win.__inspectorMouseMoveHandler) return;
+            var r = el.getBoundingClientRect();
+            var cx = r.left + Math.min(12, r.width / 2);
+            var cy = r.top + Math.min(12, r.height / 2);
+            // Soltar primero: el handler ignora todo (`return` temprano) si
+            // sigue fijado, sea a este elemento o a otro.
+            if (win.__inspectorPinned && win.__inspectorTogglePin) win.__inspectorTogglePin(true);
+            win.__inspectorMouseMoveHandler({ target: el, clientX: cx, clientY: cy });
+            // Re-fijar sobre el ancestro nuevo: sin esto, el proximo
+            // mousemove real (el cursor sigue donde estaba, no sobre el
+            // ancestro) pisaria el salto al instante.
+            if (win.__inspectorTogglePin) win.__inspectorTogglePin();
+        }
+
+        function pintarMigas(cadena) {
+            var box = doc.getElementById('el-inspector-migas');
+            if (!box) return;
+            box.innerHTML = '';
+            if (!cadena || cadena.length < 2) { box.style.display = 'none'; return; }
+            box.style.display = 'flex';
+            cadena.forEach(function(k, i) {
+                if (i > 0) {
+                    var sep = doc.createElement('span');
+                    sep.textContent = '\\u203a';
+                    sep.style.cssText = 'color:#54546a;flex-shrink:0;padding:0 1px;font:11px sans-serif';
+                    box.appendChild(sep);
+                }
+                var esActual = (i === 0);
+                var b = doc.createElement('button');
+                b.textContent = k;
+                b.title = esActual ? 'este elemento' : ('saltar a st-key-' + k);
+                b.style.cssText = 'background:transparent;border:0;padding:2px 4px;'
+                    + 'border-radius:3px;font:11px "Courier New",monospace;'
+                    + 'cursor:' + (esActual ? 'default' : 'pointer') + ';'
+                    + 'color:' + (esActual ? '#cfcfd6' : '#9385ec') + ';'
+                    + 'white-space:nowrap;flex-shrink:0';
+                if (!esActual) {
+                    b.addEventListener('mouseenter', function() { b.style.background = '#2A2A35'; });
+                    b.addEventListener('mouseleave', function() { b.style.background = 'transparent'; });
+                    b.addEventListener('click', function(ev) {
+                        ev.preventDefault(); ev.stopPropagation();
+                        saltarAAncestro(k);
+                    });
+                }
+                box.appendChild(b);
+            });
+        }
+
         function inspectorActivo() {
             return new URL(win.location.href).searchParams.get('debug') === '1';
         }
@@ -809,6 +872,12 @@ JS = """
                 '  <button id="el-inspector-pin" title="Clic derecho sobre un elemento fija Y copia (este boton solo fija)" style="background:#2A2A35;color:#fff;border:0;padding:5px 10px;border-radius:4px;cursor:pointer;font:600 11px/1 sans-serif">\\uD83D\\uDCCC Fijar</button>' +
                 '  <span id="el-inspector-status" style="color:#5DCAA5;font:11px/1.4 sans-serif;align-self:center"></span>' +
                 '</div>' +
+                // Migas de pan clicables (regla #155): "Cadena de contenedores"
+                // ya estaba en el texto plano, ilegible como lista de saltos.
+                // pointer-events:auto explicito por la misma razon que btnrow:
+                // el <pre> de abajo es plano (pre-wrap) y el tip contenedor
+                // puede estar en pointer-events:none si todavia no esta fijado.
+                '<div id="el-inspector-migas" style="display:none;flex-wrap:wrap;align-items:center;gap:1px;padding:0 0 6px;margin-bottom:6px;border-bottom:1px solid #2a2a35;pointer-events:auto"></div>' +
                 '<pre id="el-inspector-text" style="margin:0;font:12px/1.55 \\'Courier New\\',monospace;color:var(--border);white-space:pre-wrap"></pre>';
             doc.body.appendChild(tip);
 
@@ -1477,6 +1546,7 @@ JS = """
                 var pre = doc.getElementById('el-inspector-text');
                 if (pre) pre.textContent = etiquetaFinal;
                 else tip.textContent = etiquetaFinal;
+                pintarMigas(keysCad);
                 // Silenciado (Alt+T): el hover pasivo no muestra el tooltip
                 // (__inspectorUltimo ya se actualizo arriba igual, sin
                 // depender de esto). Este bloque nunca corre estando fijado

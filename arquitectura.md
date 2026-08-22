@@ -6906,3 +6906,59 @@ salvo `icono`):
        ("Tipografía/color de texto → el `<p>` del label...") cuando
        `lecturaTexto !== lectura`, para no depender de que alguien vuelva
        a diagnosticarlo a mano.
+
+155. **Navegar la jerarquía de contenedores era de solo lectura — texto
+     plano para copiar, sin forma de SALTAR** (2026-08-21, del pedido de
+     entender 5 capturas de tooltip anidadas del drill de Proveedor:
+     "¿qué relación tienen, cómo los veo de forma más amplia?"). Tres
+     agregados, ninguno toca `estilos/`:
+     - **Migas de pan clicables en el inspector**
+       (`inyecciones/_inspector_js.py`): la línea "Cadena de contenedores
+       st-key (elemento -> raíz)" ya vivía en `bloqueParaIA()` como texto
+       — para saltar a un ancestro había que ubicarlo A OJO en la
+       pantalla y clic-derecho ahí. `pintarMigas(keysCad)` reusa la MISMA
+       lista como una fila de `<button>` reales, insertada en un
+       `<div id="el-inspector-migas">` nuevo entre el btnrow y el
+       `<pre>`. `saltarAAncestro(key)` resuelve `.st-key-<key>`, arma un
+       objeto plano `{target, clientX, clientY}` (no un `MouseEvent` de
+       verdad — el handler solo lee esas tres props, ver el propio
+       mousemove handler) y lo pasa DIRECTO a
+       `win.__inspectorMouseMoveHandler`, el mismo truco liviano que
+       `__inspectorContextMenuHandler` ya usaba para "recalcular en la
+       posición actual" sin simular un evento real de DOM. Soltar-antes-
+       de-saltar y re-fijar-después es necesario: el handler tiene
+       `if (win.__inspectorPinned) return;` al principio (fijado =
+       congelado a propósito), y sin re-fijar al final el próximo
+       mousemove real (el cursor sigue en su posición vieja) pisaría el
+       salto al instante.
+     - **Árbol vertical en el modo diseño**
+       (`inyecciones/_diseno_js.py`): mismo mecanismo, complementario en
+       vez de redundante — la miga del inspector es horizontal y lee
+       elemento→raíz; el árbol de diseño es vertical, indentado por
+       profundidad, y lee RAÍZ→elemento (mismo orden en que aparece en el
+       código). `cadenaKeysDiseno()` duplica A PROPÓSITO
+       `cadenaKeys()`/`keyDeElemento()` del inspector — mismo criterio
+       que `copiarTextoDiseno()` con `copiarTexto()` (arquitectura.md
+       docstring de `diseno.py`): son dos realms/iframes distintos y
+       "ninguna función depende de otra" es la regla del paquete. Saltar
+       (`saltarADiseno`) pasa por las MISMAS funciones que expone el
+       inspector en `win` — el modo diseño no tiene su propio pin, lee
+       `win.__inspectorPinned`/`__inspectorUltimo` de solo lectura (regla
+       #46), y esto extiende esa lectura a también invocar
+       `__inspectorMouseMoveHandler`/`__inspectorTogglePin`, ya
+       establecido como categoría de acoplamiento por el botón "Soltar"
+       (que ya llamaba `__inspectorTogglePin` antes de este agregado).
+     - **Diagrama de UN caso concreto, no una herramienta**: para "ver de
+       manera más amplia" la cadena completa `compras_prov_drill_wrap` →
+       `compras_prov_marco` → `cp_chart_wrap` → `compras_prov_card_ranking`
+       → `compras_prov_rank_grid`, un artifact aparte (fuera del repo)
+       documentó esa jerarquía puntual con su archivo:línea, su CSS y el
+       aviso de familia wildcard — sirve como referencia externa, no
+       reemplaza al inspector.
+     - **Lo que quedó afuera a propósito:** el árbol de diseño NO marca
+       qué ancestros están bajo una regla wildcard-por-familia (lo que sí
+       hace el tooltip del inspector, `AVISO - ... reglas WILDCARD`) — esa
+       lectura requiere `selectoresCompartidos()`, una función de solo
+       inspector.py, cara (recorre TODAS las hojas de estilo) y no
+       expuesta en `win`. Si hace falta ese aviso en el árbol de diseño,
+       exponerla ahí es el próximo paso, no reimplicarla.
