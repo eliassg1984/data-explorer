@@ -354,6 +354,20 @@ JS = """
             var enGrupo = elemento.querySelectorAll('[data-testid="stButtonGroup"] button');
             var candidatos = enGrupo.length ? Array.prototype.slice.call(enGrupo)
                                              : Array.prototype.slice.call(elemento.querySelectorAll('button'));
+            // Filtrar candidatos de 0x0 ANTES de contar: un st.button con
+            // help= (tooltip) renderiza un SEGUNDO <button> fantasma de
+            // 0x0px (mismo testid, mismo texto) — encontrado en
+            // navbtn_Compras, que tiene help=grupo. Sin este filtro, "1
+            // boton real + 1 fantasma" contaba como 2 y el guard de
+            // cantidad de abajo (pensado para el rail) lo trataba igual
+            // que 12 botones apilados: dejaba de redirigir y el font-size
+            // se aplicaba al wrapper en vez de al boton visible — "el
+            // control no hace nada" otra vez, mismo sintoma que la regla
+            // #48, causa nueva.
+            candidatos = candidatos.filter(function(b) {
+                var rb = b.getBoundingClientRect();
+                return rb.width > 0 && rb.height > 0;
+            });
             if (!candidatos.length) return [elemento];
             // Varios botones SUELTOS (fuera de un stButtonGroup) = el
             // elemento es una LISTA de botones, no un boton. El caso real
@@ -386,6 +400,32 @@ JS = """
         // demas en `cambios` es "estilo" y va a destinosDeEstilo().
         var PROPS_GEOMETRIA = { width: 1, height: 1, flex: 1, 'max-width': 1, 'max-height': 1 };
 
+        // Props de TEXTO: ademas de destinosDeEstilo(), tambien van al <p>
+        // de adentro si existe (ver extenderATexto). border/padding/
+        // background/box-shadow NO estan en esta lista a proposito: esas
+        // son "chrome" del boton, ponerlas tambien en el <p> duplicaria
+        // bordes/relleno visualmente (dos rectangulos anidados).
+        var PROPS_TEXTO = { 'font-size': 1, 'font-weight': 1, 'text-align': 1, 'text-decoration': 1, 'letter-spacing': 1, color: 1 };
+
+        // Muchos widgets (st.button entre ellos) envuelven su label en
+        // `[data-testid="stMarkdownContainer"] p`, y ESTE proyecto le fija
+        // font-size/font-weight propios ahi (navegacion.py, los botones del
+        // nav-rail: ver arquitectura.md regla #154) — un elemento con su
+        // propio valor explicito no hereda el del padre, asi que aplicar
+        // font-size al <button> redirigido no mueve un pixel el texto
+        // visible. Si el <p> existe, tambien es destino de las props de
+        // TEXTO (ademas del boton, no en su lugar: barato y sin efecto
+        // visible cuando el boton no tiene un p con su propio override).
+        function extenderATexto(destinos) {
+            var out = [];
+            destinos.forEach(function(d) {
+                out.push(d);
+                var p = d.querySelector && d.querySelector('[data-testid="stMarkdownContainer"] p');
+                if (p && out.indexOf(p) === -1) out.push(p);
+            });
+            return out;
+        }
+
         // Hallazgo real (no hipotetico): un boton con `transition: all
         // 0.15s` puede terminar con la propiedad SIN aplicar aunque el
         // inline style tenga !important y el valor correcto -- el
@@ -409,6 +449,7 @@ JS = """
         // volver al original es lo que hace el boton "Ver original".
         function establecerCambioEstilo(elemento, registro, prop, valor) {
             var destinos = destinosDeEstilo(elemento);
+            if (PROPS_TEXTO[prop]) destinos = extenderATexto(destinos);
             registro.transicionNeutralizada = true;
             destinos.forEach(neutralizarTransicion);
             if (valor === null) {
@@ -450,9 +491,18 @@ JS = """
                 neutralizarTransicion(elemento);
                 destinos.forEach(neutralizarTransicion);
             }
+            var destinosTexto = null;
             for (var prop in registro.cambios) {
                 if (PROPS_GEOMETRIA[prop]) {
                     elemento.style.setProperty(prop, registro.cambios[prop], 'important');
+                } else if (PROPS_TEXTO[prop]) {
+                    if (!destinosTexto) {
+                        if (!destinos) destinos = destinosDeEstilo(elemento);
+                        destinosTexto = extenderATexto(destinos);
+                    }
+                    for (var dt = 0; dt < destinosTexto.length; dt++) {
+                        destinosTexto[dt].style.setProperty(prop, registro.cambios[prop], 'important');
+                    }
                 } else {
                     if (!destinos) destinos = destinosDeEstilo(elemento);
                     for (var di = 0; di < destinos.length; di++) {
@@ -717,10 +767,22 @@ JS = """
                 : (elemento.querySelector('[data-testid="stButtonGroup"] button')
                     ? ancla + ' [data-testid="stButtonGroup"] button'
                     : ancla + ' button');
+            // Mismo criterio que extenderATexto en runtime: si el destino de
+            // estilo tiene su propio <p> de label (navegacion.py se lo fija
+            // a los botones del nav-rail — arquitectura.md regla #154), las
+            // props de TEXTO van a ESE selector. Pegar el bloque con el
+            // selector del boton se veria "no hace nada" — el mismo bug que
+            // motivo este agregado.
+            var hayTextoPropio = destinos.some(function(d) {
+                return d.querySelector && d.querySelector('[data-testid="stMarkdownContainer"] p');
+            });
+            var selTexto = hayTextoPropio ? ancla + ' [data-testid="stMarkdownContainer"] p' : selEstilo;
 
-            var geo = {}, est = {};
+            var geo = {}, estBoton = {}, estTexto = {};
             Object.keys(registro.cambios).forEach(function(prop) {
-                (PROPS_GEOMETRIA[prop] ? geo : est)[prop] = registro.cambios[prop];
+                if (PROPS_GEOMETRIA[prop]) { geo[prop] = registro.cambios[prop]; }
+                else if (PROPS_TEXTO[prop]) { estTexto[prop] = registro.cambios[prop]; }
+                else { estBoton[prop] = registro.cambios[prop]; }
             });
             var t = registro.transformState;
             if (t.translateX || t.translateY || t.rotateDeg) {
@@ -729,25 +791,35 @@ JS = """
                 geo.transform = 'translate(' + t.translateX + 'px,' + t.translateY + 'px) rotate(' + t.rotateDeg + 'deg)';
             }
 
+            // Agrupar por selector (no por grupo geo/boton/texto): cuando
+            // dos grupos terminan en el MISMO selector (el caso comun, sin
+            // redireccion) se funden en un solo bloque en vez de salir
+            // duplicados.
+            var grupos = {};
+            function sumar(sel, props) {
+                if (!Object.keys(props).length) return;
+                grupos[sel] = fusionar(grupos[sel] || {}, props);
+            }
+            sumar(ancla, geo);
+            sumar(selEstilo, estBoton);
+            sumar(selTexto, estTexto);
+
             var bloques = [];
-            function agregarBloque(sel, props) {
-                var claves = Object.keys(props);
-                if (!claves.length) return;
-                var lineas = claves.map(function(p) { return '    ' + p + ': ' + props[p] + ';'; });
+            Object.keys(grupos).forEach(function(sel) {
+                var props = grupos[sel];
+                var lineas = Object.keys(props).map(function(p) { return '    ' + p + ': ' + props[p] + ';'; });
                 bloques.push(sel + ' {\\n' + lineas.join('\\n') + '\\n}');
-            }
-            if (selEstilo === ancla) {
-                agregarBloque(ancla, fusionar(geo, est));
-            } else {
-                agregarBloque(ancla, geo);
-                agregarBloque(selEstilo, est);
-            }
+            });
             if (!bloques.length) return null;
 
-            var encabezado = '/* copiado del modo diseño — ' + key + ' */';
-            var pie = redirigido
-                ? '\\n/* estilo redirigido a los botones internos — ver destinosDeEstilo() en _diseno_js.py */'
+            var notas = [];
+            if (redirigido) notas.push('caja redirigida a los botones internos');
+            if (hayTextoPropio) notas.push('texto redirigido al <p> del label, que trae su propio font-size/weight');
+            var pie = notas.length
+                ? '\\n/* ' + notas.join(' — ') + ' — ver destinosDeEstilo()/extenderATexto() en _diseno_js.py */'
                 : '';
+
+            var encabezado = '/* copiado del modo diseño — ' + key + ' */';
             return encabezado + '\\n' + bloques.join('\\n\\n') + pie;
         }
 
@@ -853,6 +925,14 @@ JS = """
             // invisible en vez del boton real que se ve en pantalla.
             var destinos = destinosDeEstilo(elemento);
             var lectura = destinos[0];
+            // Idem para TEXTO, un nivel mas adentro (ver extenderATexto):
+            // si no, "Tamaño de letra" arranca mostrando el font-size del
+            // <button> (16px, el default del navegador) en vez del <p> que
+            // en realidad se ve en pantalla (13.5px, fijado por
+            // navegacion.py) — el slider parece "no hacer nada" porque
+            // arranca leyendo el numero equivocado.
+            var destinosTexto = extenderATexto(destinos);
+            var lecturaTexto = destinosTexto[destinosTexto.length - 1];
 
             // El contorno violeta marca SIEMPRE el elemento pineado, pero
             // los controles de ESTILO pueden escribir en otro lado. Decirlo
@@ -865,6 +945,17 @@ JS = """
                     + (destinos.length > 1 ? ' botones internos' : ' botón interno')
                     + '. Tamaño y posición → el contorno.';
                 panel.appendChild(aviso);
+            }
+            // Un nivel mas adentro que el aviso de arriba: el LABEL (texto)
+            // puede vivir en su propio <p> con font-size/weight fijados
+            // aparte del boton (arquitectura.md regla #154) — sin decirlo
+            // ahi, "Tamaño de letra" parece no hacer nada aunque el inline
+            // este aplicado y confirmado en el boton.
+            if (lecturaTexto !== lectura) {
+                var avisoTexto = doc.createElement('div');
+                avisoTexto.style.cssText = 'font:11px/1.4 -apple-system,sans-serif;color:#9385ec;background:#1c1c24;border:1px solid #34343f;border-radius:4px;padding:6px 7px;margin-bottom:10px';
+                avisoTexto.textContent = 'Tipografía/color de texto → el <p> del label (trae su propio tamaño/peso), no el botón.';
+                panel.appendChild(avisoTexto);
             }
 
             if (esMock(key)) {
@@ -1000,7 +1091,7 @@ JS = """
 
             var fsVal = registro.cambios['font-size']
                 ? numDe(registro.cambios['font-size'], 14)
-                : numDe(win.getComputedStyle(lectura).fontSize, 14);
+                : numDe(win.getComputedStyle(lecturaTexto).fontSize, 14);
             var inpFs = rango(10, 32, 1, fsVal);
             var fsLbl = spanValor(Math.round(fsVal) + 'px');
             inpFs.addEventListener('input', function() {
@@ -1019,7 +1110,7 @@ JS = """
             var pesoWrap = doc.createElement('div');
             pesoWrap.style.cssText = 'display:flex;gap:4px;margin-top:6px';
             var pesoBotones = [];
-            var pesoActual = registro.cambios['font-weight'] || String(numDe(win.getComputedStyle(lectura).fontWeight, 400));
+            var pesoActual = registro.cambios['font-weight'] || String(numDe(win.getComputedStyle(lecturaTexto).fontWeight, 400));
             PESOS.forEach(function(par) {
                 var b = doc.createElement('button');
                 b.textContent = par[1];
@@ -1039,7 +1130,7 @@ JS = """
             var alinWrap = doc.createElement('div');
             alinWrap.style.cssText = 'display:flex;gap:4px;margin-top:6px';
             var alinBotones = [];
-            var alinActual = registro.cambios['text-align'] || win.getComputedStyle(lectura).textAlign;
+            var alinActual = registro.cambios['text-align'] || win.getComputedStyle(lecturaTexto).textAlign;
             ALINEACIONES.forEach(function(par) {
                 var b = doc.createElement('button');
                 b.textContent = par[1];

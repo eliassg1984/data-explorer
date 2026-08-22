@@ -275,7 +275,7 @@ libre), y el botón **"Copiar CSS"** arma el bloque listo para pegar en
 `estilos/` — ya no hace falta leer los valores a ojo del panel. Nada de
 esto persiste: es DOM efímero, muere al recargar y no toca `estilos/`
 hasta que vos pegás el bloque copiado. Detalle en `arquitectura.md`
-reglas #46 a #48, #151 y #153.
+reglas #46 a #48, #151, #153 y #154.
 Se pueden combinar: `?debug=1&diagnostico=1`. El tooltip incluye
 `codigo` (archivo:línea donde está declarada la key, buscado en `app.py`
 + `graficos/` + `tablas/`), `estilos` (archivos de `estilos/` que

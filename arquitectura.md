@@ -6855,3 +6855,54 @@ salvo `icono`):
        colapsa a uno solo, que es lo que JS necesita ver) — y al escribir
        el fix con una herramienta de texto (heredoc, editor), verificar el
        archivo YA ESCRITO, nunca el texto fuente que se cree haber tipeado.
+
+154. **`destinosDeEstilo` necesitaba DOS niveles de redirección, no uno —
+     y el guard de cantidad de la regla #48 tenía un falso positivo con
+     `st.button(help=...)`** (2026-08-21, del pedido "¿por qué el tamaño de
+     letra no aumenta?" sobre `navbtn_Compras`, un botón del nav-rail).
+     - **Falso positivo del guard de cantidad:** `st.button(..., help=grupo)`
+       renderiza un SEGUNDO `<button>` con el mismo testid y texto, de
+       0×0px — un fantasma de medición/accesibilidad de Streamlit, no un
+       botón real. El guard de la regla #48 (`candidatos.length > 1` →
+       "es una lista, no redirijas") lo contaba igual que un botón real:
+       "1 real + 1 fantasma" pasaba como 2 y el guard, pensado para el
+       rail (12 botones reales apilados), bloqueaba la redirección
+       también acá — el font-size se aplicaba al DIV contenedor
+       (`st-key-navbtn_Compras`) en vez de al `<button>`, sin efecto
+       visible. **Arreglo:** filtrar candidatos con `getBoundingClientRect()`
+       de 0×0 ANTES de contar — no son botones "de mentira" a propósito
+       como el fantasma, son simplemente invisibles y no deben pesar en
+       la cuenta.
+     - **El segundo nivel, más de fondo:** aun con la redirección al
+       `<button>` corregida, cambiar el tamaño de letra seguía sin efecto
+       visible. Causa: `navegacion.py` envuelve el label de los botones
+       del nav-rail en `[data-testid="stMarkdownContainer"] p` y le fija
+       SU PROPIO `font-size`/`font-weight` con `!important`
+       (`.st-key-nav_rail [class*="st-key-navbtn_"] button p`) — un
+       elemento con su propio valor explícito no hereda el del padre, así
+       que aplicar `font-size` al `<button>` nunca iba a mover un píxel
+       el texto que realmente se ve. **Arreglo:** `PROPS_TEXTO` (font-size,
+       font-weight, text-align, text-decoration, letter-spacing, color) se
+       separó de las demás props de "estilo" (border-radius, padding,
+       margin, border, box-shadow — el "chrome" del botón, deliberadamente
+       NO extendido: ponerlas también en el `<p>` duplicaría bordes/relleno
+       visualmente). `extenderATexto(destinos)` agrega, para cada destino
+       que tenga un `[data-testid="stMarkdownContainer"] p` adentro, ESE
+       `<p>` como destino ADICIONAL (no en reemplazo) solo para
+       `PROPS_TEXTO` — en `establecerCambioEstilo`, en el reaplicado
+       defensivo de `aplicarEstado`, y en la LECTURA inicial de los
+       sliders (`lecturaTexto`, así "Tamaño de letra" arranca mostrando el
+       13.5px real del `<p>` y no el 16px default del `<button>`) y en
+       `construirBloqueCSS` (el bloque copiado usa el selector del `<p>`
+       para esas props, no el del botón — si no, pegarlo en `estilos/` se
+       vería "no hace nada", el mismo bug otra vez pero esta vez en el
+       código que el usuario pega).
+     - **El patrón general que deja:** "redirigir del wrapper al botón" no
+       es necesariamente el fondo del pozo — un widget puede anidar un
+       nivel MÁS que carga su propio override explícito de una propiedad
+       puntual. La señal es la misma que en la regla #48: un control que
+       no tiene efecto visible pese al inline `!important` confirmado
+       presente. El panel ahora lo dice con una segunda línea de aviso
+       ("Tipografía/color de texto → el `<p>` del label...") cuando
+       `lecturaTexto !== lectura`, para no depender de que alguien vuelva
+       a diagnosticarlo a mano.
