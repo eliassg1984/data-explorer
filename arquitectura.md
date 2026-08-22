@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-165 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+166 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (60)
 
@@ -265,7 +265,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (9)
+**Herramientas de desarrollo** (10)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -276,8 +276,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#156** — Un transform en un ancestro CAPTURA a sus hijos position: fixed — y por eso…
 - **#158** — Las cinco herramientas de diagnóstico vivían en tres URLs y dos scripts que había que pegar a…
 - **#165** — Al agregar una barra de modos quedaron DOS controles del mismo estado, uno encima del otro —…
+- **#166** — El contorno del modo diseño se dibujaba ENCIMA del borde real del elemento — así que para ver…
 
-**Decisiones de diseño y UX** (28)
+**Decisiones de diseño y UX** (29)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -307,6 +308,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#149** — Documentos SUNAT: de dos columnas a APILADO
 - **#150** — Mover un widget de sitio cuando su KEY es el estado: el pill de fecha de la franja
 - **#164** — El botón Refrescar dejó de vivir en la franja superior de navegación y pasó al pie del rail…
+- **#166** — El contorno del modo diseño se dibujaba ENCIMA del borde real del elemento — así que para ver…
 
 **Mantenimiento y trampas del lenguaje** (6)
 
@@ -7554,13 +7556,45 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      y el color del botón quedan siempre de acuerdo; el badge tiene 0 botones
      y `pointer-events: none`.
 
+166. **El contorno del modo diseño se dibujaba ENCIMA del borde real del
+     elemento — así que para ver "Borde completo" había que soltar el pin**
+     (2026-08-22, reportado con captura: "veo enorme el cuadrado y pequeño
+     lo que contiene... al seleccionar todo el marco se colorea y debo
+     deseleccionarlo para ver el cambio").
+
+     `trackear()` posicionaba el `overlay` con el `getBoundingClientRect()`
+     EXACTO del elemento, `box-sizing: border-box`. Sus 2px de borde violeta
+     caían justo sobre el borde propio del widget — que es precisamente lo
+     que uno está ajustando con el control "Borde completo" del panel. El
+     único jeito de ver el resultado real era soltar el pin (con lo que se
+     perdía el panel de edición) y volver a fijar para seguir.
+
+     Dos cambios, ninguno toca cómo se mide el elemento en sí:
+     - **El contorno se separa 4px** (`SEPARACION_CONTORNO`) del rect real en
+       vez de coincidir con él. Las manijas de resize son hijas del overlay,
+       así que se corren con él — pero `iniciarArrastre()` mide
+       `ctx.el.getBoundingClientRect()`, nunca el overlay, así que el
+       redimensionado no cambió (verificado: +40px pedidos, +40px reales).
+     - **Botón para ocultar el contorno del todo, sin soltar el pin.** La
+       separación de 4px alcanza para ver un borde fino, pero para juzgar
+       color/sombra/el look final hace falta la vista completamente limpia.
+       El botón nuevo (`▣`/`□`) vive en la cabecera del panel, junto a
+       "Soltar" — la diferencia es que éste SÍ mantiene el panel de edición
+       abierto y el pin activo.
+
+     La regla, para la próxima herramienta de overlay que se agregue: **una
+     capa de selección que coincide exactamente con la caja de lo
+     seleccionado tapa lo único para lo que existe** — bordes, sombras, cualquier
+     cosa que se dibuje sobre el perímetro. Necesita margen propio, y
+     además una forma de apagarse sin perder el estado de edición.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#166**.
+> próxima regla nueva es la **#167**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

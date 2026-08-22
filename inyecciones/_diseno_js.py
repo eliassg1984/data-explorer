@@ -440,13 +440,25 @@ JS = """
             panel.appendChild(texto);
         }
 
+        // El contorno se dibuja SEPARADO del elemento, no encima. Iba en su
+        // rect exacto y con box-sizing:border-box, o sea que sus 2px violetas
+        // caian justo sobre el borde propio del elemento: al mover "Borde
+        // completo" no se veia nada y habia que soltar el pin para juzgar el
+        // cambio (reportado 2026-08-22, ver regla #166).
+        // No rompe el redimensionado: iniciarArrastre() mide
+        // ctx.el.getBoundingClientRect(), nunca el overlay. Y las manijas,
+        // que son hijas suyas, quedan 4px mas afuera — de paso dejan de
+        // taparle las esquinas.
+        var SEPARACION_CONTORNO = 4;
+
         function trackear(el) {
             var r = el.getBoundingClientRect();
-            overlay.style.display = 'block';
-            overlay.style.left = Math.round(r.left) + 'px';
-            overlay.style.top = Math.round(r.top) + 'px';
-            overlay.style.width = Math.round(r.width) + 'px';
-            overlay.style.height = Math.round(r.height) + 'px';
+            var s = SEPARACION_CONTORNO;
+            overlay.style.display = win.__disenoContornoOculto ? 'none' : 'block';
+            overlay.style.left = Math.round(r.left - s) + 'px';
+            overlay.style.top = Math.round(r.top - s) + 'px';
+            overlay.style.width = Math.round(r.width + s * 2) + 'px';
+            overlay.style.height = Math.round(r.height + s * 2) + 'px';
         }
 
         // ---- aplicar/retirar cambios sobre el elemento real ----
@@ -1006,7 +1018,22 @@ JS = """
             btnSoltar.addEventListener('click', function() {
                 if (win.__inspectorTogglePin) win.__inspectorTogglePin(true);
             });
+            // Ocultar el contorno SIN soltar el pin: separarlo 4px alcanza
+            // para ver el borde, pero para juzgar color/sombra/el look final
+            // hace falta la vista limpia — y soltar el pin obligaba a volver
+            // a fijarlo para seguir editando (regla #166).
+            var btnContorno = doc.createElement('button');
+            btnContorno.title = 'Ocultar/mostrar el contorno de seleccion (el pin no se suelta)';
+            btnContorno.textContent = win.__disenoContornoOculto ? '□' : '▣';
+            btnContorno.style.cssText = 'background:#2A2A35;color:#fff;border:0;border-radius:4px;padding:4px 7px;font:600 11px sans-serif;cursor:pointer;flex:0 0 auto';
+            btnContorno.addEventListener('click', function() {
+                win.__disenoContornoOculto = !win.__disenoContornoOculto;
+                btnContorno.textContent = win.__disenoContornoOculto ? '□' : '▣';
+                overlay.style.display = win.__disenoContornoOculto ? 'none' : 'block';
+            });
+
             header.appendChild(headerKey);
+            header.appendChild(btnContorno);
             header.appendChild(botonColapsar());
             header.appendChild(btnSoltar);
             panel.appendChild(header);
