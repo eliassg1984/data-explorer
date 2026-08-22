@@ -378,6 +378,42 @@ def _wrap_cat(labels, width=14):
     return out
 
 
+def paso_etiquetas(total_columnas, largo_etiqueta, ancho, px_fuente=10):
+    """Cada cuántas columnas se escribe una etiqueta en el eje X.
+
+    Gemela horizontal de `alturas.por_filas`: ahí el alto sale de los px por
+    fila, acá la densidad de etiquetas sale de los px por etiqueta. Vive en
+    `base` y no en un dashboard porque la usan dos paquetes distintos
+    (`ventas_horario` y `compras/proveedor`) — hasta 2026-08-22 había TRES
+    copias del mismo cálculo, y la única con la fórmula buena era privada de
+    `ventas_horario`.
+
+    CUENTA PRIMERO CUÁNTAS ENTRAN (`ancho // px_etiqueta`) y recién después
+    cada cuántas hay que saltar. El orden importa: calcular el paso directo
+    con `ceil(total * px_etiqueta / ancho)` —como se hacía antes— redondea
+    DOS veces (una acá y otra en el `ceil(total / paso)` implícito al
+    filtrar), y el sobrante se va siempre para el lado de dibujar etiquetas
+    de MÁS. A 770px de ancho el error queda diluido y no se nota; a 206px
+    daba 5 etiquetas donde entran 4.4 y las cuatro parejas se pisaban entre
+    -1 y -5px (medido en Compras › Proveedor, ver arquitectura.md #161).
+
+    `px_fuente` es el tamaño del tick. El ancho de un carácter va a ~0.5 de
+    la fuente: medido, "ago 25" (6 caracteres) ocupa 41px con la fuente en
+    13px, o sea 6.8 por carácter. Más 8px de aire entre etiqueta y etiqueta.
+    El default de 10 conserva la calibración original (5px por carácter).
+
+    `ancho` es OBLIGATORIO a propósito: era un default de módulo
+    (`_ANCHO_UTIL`) y por eso nadie notó que el gráfico de Proveedor había
+    pasado de ~380px a 206 al partirse su columna en dos. Que cada llamador
+    tenga que escribir su ancho lo obliga a mirarlo.
+    """
+    ancho = max(1, int(ancho))
+    px_etiqueta = 8 + max(1.0, 0.5 * px_fuente) * max(1, int(largo_etiqueta))
+    total = max(1, int(total_columnas))
+    caben = max(1, int(ancho // px_etiqueta))
+    return max(1, -(-total // caben))          # ceil(total / caben)
+
+
 def _resolver(df, candidatos):
     """Resuelve una lista de candidatos (o un string) a la columna real."""
     if candidatos is None:

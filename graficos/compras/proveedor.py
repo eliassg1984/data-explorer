@@ -18,7 +18,8 @@ from st_aggrid import AgGrid, JsCode
 
 from tema import ACENTO, GRIS_BORDE, TEXTO_PRINCIPAL
 from graficos.base import (
-    PALETA_CALLAI, _card, _compras_layout, _compras_truncar, titulo_en_franja,
+    PALETA_CALLAI, _card, _compras_layout, _compras_truncar, paso_etiquetas,
+    titulo_en_franja,
 )
 from graficos.compras._comun import COLUMNAS_DRILL, GAP_DRILL
 from graficos.compras._css_proveedor import CSS as CSS_PROVEEDOR
@@ -283,6 +284,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # manda el alto de la fila.
     _ALTO_EVO = max(alturas.MINI,
                     _ALTO_FRAME - alturas.FRANJA_PILLS - alturas.CROMO_TARJETA)
+    # Ancho de la figura de evolución, MEDIDO en el navegador (viewport 1912,
+    # rails desplegados). No sale de una cuenta porque su columna cuelga de
+    # dos repartos anidados —COLUMNAS_DRILL y el [2.6, 1] de acá abajo— sobre
+    # un ancho que Python no conoce. Lo consume `paso_etiquetas` para decidir
+    # cuántas etiquetas entran en el eje X; es el número que quedó obsoleto
+    # (era ~380 cuando la figura ocupaba la columna entera) y nadie revisó al
+    # partirla. Si se cambia el reparto de columnas, volver a medir: con
+    # ?debug=1 → Rayos X, o auditarGraficos() desde la misma barra.
+    _ANCHO_EVO = 206
 
     # ── Selector de granularidad FLOTANTE sobre el gráfico ────────────────
     # El contenedor "compras_prov_marco" es posición relativa; dentro, las
@@ -621,12 +631,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 else None,
                             hovertemplate="%{x}<br>S/ %{y:,.0f}<extra></extra>",
                         ))
-                        # Etiquetas del eje X: con 12 períodos en ~380px las
-                        # "2026-08" se pisan entre sí y quedan ilegibles
-                        # (reportado con captura). Dos cosas juntas: se acortan
-                        # a "ago 26" y se muestra UNA CADA N para que nunca
-                        # entren más de ~6. El punto sin etiqueta sigue estando
-                        # en el hover, que trae el período completo.
+                        # Etiquetas del eje X: las "2026-08" se pisan entre sí
+                        # y quedan ilegibles (reportado con captura). Dos cosas
+                        # juntas: se acortan a "ago 26" y se muestra UNA CADA N.
+                        # El punto sin etiqueta sigue estando en el hover, que
+                        # trae el período completo.
                         _MES_AB = ("ene", "feb", "mar", "abr", "may", "jun",
                                    "jul", "ago", "sep", "oct", "nov", "dic")
 
@@ -639,7 +648,20 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                     return _t
                             return _t
 
-                        _paso_evo = max(1, -(-len(_evo_x) // 6))
+                        # El paso sale del ANCHO real, no de un divisor fijo.
+                        # Acá había un `// 6` calibrado contra los ~380px que
+                        # medía esta figura antes de que el 2026-08-19 su
+                        # columna se partiera en [2.6, 1] para poner los KPIs
+                        # al costado. Nadie revisó el número: quedó pidiendo 5
+                        # etiquetas en 206px, y las CUATRO parejas se pisaban
+                        # (-1 a -5px, medido en el navegador). Con el ancho de
+                        # verdad da 4 y el peor hueco pasa a +11px.
+                        _tickf_evo = 13
+                        _etqs_evo = [_etq_evo(x) for x in _evo_x]
+                        _paso_evo = paso_etiquetas(
+                            len(_evo_x),
+                            max((len(e) for e in _etqs_evo), default=1),
+                            ancho=_ANCHO_EVO, px_fuente=_tickf_evo)
                         _tickv = [x for i, x in enumerate(_evo_x)
                                   if i % _paso_evo == 0]
                         # La fila de pills sale del MISMO presupuesto que la

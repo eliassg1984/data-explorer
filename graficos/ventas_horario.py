@@ -90,7 +90,7 @@ from tema import (
 )
 from graficos import alturas
 from graficos.base import (
-    _card, _resolver, franja_linea_inferior, publicar_var_px,
+    _card, _resolver, franja_linea_inferior, paso_etiquetas, publicar_var_px,
 )
 # Los helpers de calendario NO se duplican: son los mismos que usa la vista
 # "Año Pasado" y ya están cubiertos por test_graficos.py. Acá sólo se extienden
@@ -669,19 +669,19 @@ def _alto_mapa(n_horas, con_drill=False, varios=False):
 
 
 def _paso_etiquetas(total_columnas, largo_etiqueta, ancho=None):
-    """Cada cuántas columnas se escribe una etiqueta en el eje X.
+    """Cada cuántas columnas se escribe una etiqueta en el eje X, con el
+    ancho de ESTE mapa (`_ANCHO_UTIL`) por defecto.
 
-    Sale del ancho que le toca a cada columna (`ancho / total`) comparado con
-    lo que ocupa una etiqueta (~5px por carácter más aire): si entra, se
-    escriben todas. Devuelve 1 cuando hay sitio, y crece sólo lo justo.
+    El cálculo se mudó a `graficos.base.paso_etiquetas` el 2026-08-22: lo
+    necesitaba también el drill de Proveedor y había que arreglarle un
+    redondeo de más (ver su docstring y arquitectura.md #161). Acá queda
+    sólo el default del ancho, que sí es propio de este módulo.
 
     Reemplaza a los umbrales por panel (`1 si n<=12, 2 si n<=16, si no 5`) que
     tenían el defecto de mirar UN panel: un mes en curso de 13 días saltaba
     un día de por medio con medio gráfico vacío al lado."""
-    ancho = _ANCHO_UTIL if ancho is None else ancho
-    px_etiqueta = 8 + 5 * max(1, int(largo_etiqueta))
-    total = max(1, int(total_columnas))
-    return max(1, -(-total * px_etiqueta // ancho))   # ceil de la división
+    return paso_etiquetas(total_columnas, largo_etiqueta,
+                          _ANCHO_UTIL if ancho is None else ancho)
 
 
 def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,

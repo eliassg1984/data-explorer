@@ -7178,8 +7178,71 @@ salvo `icono`):
      seis lugares, pero la #150 es la del pill de fecha de Documentos
      SUNAT. Se corrigió a ésta al documentarla.
 
+161. **Un número de píxeles escrito en un comentario no se entera de que el
+     layout cambió: el eje X de la evolución de Proveedor pedía 5 etiquetas
+     donde entran 4** (2026-08-22, encontrado por `auditarGraficos()` desde
+     la barra nueva — nadie lo había reportado a ojo).
+
+     El código decía:
+
+     ```python
+     _paso_evo = max(1, -(-len(_evo_x) // 6))     # "nunca más de ~6"
+     ```
+
+     y el comentario de arriba, *"con 12 períodos en **~380px** las
+     '2026-08' se pisan"*. Pero esa figura **mide 206px**: el 2026-08-19 su
+     columna se partió en `[2.6, 1]` para poner los KPIs al costado (ver el
+     comentario de ese cambio, que documenta la partición pero no revisó el
+     divisor que dependía del ancho viejo). El `6` quedó calibrado contra un
+     gráfico que ya no existía.
+
+     Medido en el navegador: 5 etiquetas de 41-45px en 206px → las **cuatro**
+     parejas pisándose entre -1 y -5px. El auditor sólo marcó UNA porque su
+     umbral es 3px: **una herramienta con umbral no dice "está bien", dice
+     "no pasó el umbral"** — al ir a mirar el caso reportado aparecieron los
+     otros tres.
+
+     **La corrección de fondo no fue el número sino la duplicación.** Había
+     TRES implementaciones del mismo cálculo:
+     - `ventas_horario.py::_paso_etiquetas` — la buena (deriva del ancho)
+     - `ventas_comparativo.py::MAX_ETIQUETAS` — un tope fijo de 14
+     - `compras/proveedor.py` — el `// 6` suelto, sin ancho ninguno
+
+     La buena vivía PRIVADA en un dashboard de Ventas, así que un drill de
+     Compras no podía usarla sin un import cruzado feo. Se movió a
+     `graficos/base.py::paso_etiquetas` (gemela horizontal de
+     `alturas.por_filas`: ahí el alto sale de los px por fila, acá la
+     densidad de etiquetas sale de los px por etiqueta).
+
+     **Y al moverla apareció que la fórmula buena tampoco era correcta.**
+     Calculaba `ceil(total * px_etiqueta / ancho)`, que redondea DOS veces
+     —una ahí y otra en el `ceil(total / paso)` implícito al filtrar— y el
+     sobrante se va siempre para el lado de dibujar etiquetas de MÁS. A
+     770px el error queda diluido y por eso nunca se vio; a 206px daba 5
+     donde entran 4.4. La forma correcta es contar primero **cuántas
+     entran** (`ancho // px_etiqueta`) y recién después cada cuántas saltar.
+
+     No era sólo teórico: con la fórmula vieja, `ventas_horario` a 70
+     columnas pedía 24 etiquetas × 33px = **792px en 770** — el mismo bug
+     esperando a ~2,3 meses de datos. La nueva da 18 (594px). Verificado que
+     los tres casos reales de ese módulo (13, 31 y 124 columnas) devuelven
+     el paso idéntico al anterior: se arregla un latente sin mover lo que
+     ya andaba.
+
+     **`ancho` es obligatorio a propósito.** Era un default de módulo
+     (`_ANCHO_UTIL = 770`) y por eso nadie notó que Proveedor había pasado a
+     206. Que cada llamador tenga que escribir su ancho lo obliga a mirarlo.
+     El de Proveedor va como `_ANCHO_EVO = 206` con su medición al lado, y
+     no sale de una cuenta porque su columna cuelga de dos repartos anidados
+     (`COLUMNAS_DRILL` y el `[2.6, 1]` interno) sobre un ancho que Python no
+     conoce.
+
+     Resultado medido: 4 etiquetas, huecos +12/+13/+11px, cero solapes, y la
+     fuente de 13px intacta (bajarla a 11 también resolvía, pero deshacía la
+     decisión de que sea el único texto legible sin hover).
+
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#161**.
+> próxima regla nueva es la **#162**.
