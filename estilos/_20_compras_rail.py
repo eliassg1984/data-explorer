@@ -40,7 +40,12 @@ CSS = """    /* ================================================================
            borde (left:0, y=40..90) y el rail se le habría montado encima.
            Ahora esa banda arranca después de la columna del rail. Los dos
            cambios van juntos o no van. */
-        top: calc(var(--nav-top-alto) + 8px) !important;
+        /* 2026-08-22: el `+ 8px` baja a `- 2px` (10px mas arriba), a pedido.
+           Viene de un `transform: translate(4px,-10px)` del modo diseno, que
+           NO se copio tal cual: el rail ya es position:fixed, asi que un
+           transform encima seria redundante Y capturaria a sus hijos fixed
+           (regla #156). Se traduce al `top`/`left` que ya existen. */
+        top: calc(var(--nav-top-alto) - 2px) !important;
         /* 2026-08-18, a pedido: el rail pasa del borde DERECHO al IZQUIERDO.
            Es el sitio que dejó libre el rail de navegación al convertirse en
            la franja superior (--nav-top-alto) unos commits antes: la columna
@@ -48,7 +53,7 @@ CSS = """    /* ================================================================
            Las variables siguen llamándose `--rail-der-*`: el nombre quedó
            histórico y renombrarlas toca ~15 sitios en 4 ficheros más un
            test. Se dejó anotado en _00_base.py en vez de hacerlo a medias. */
-        left: 15px !important;             /* mismo despegue que tenía del scrollbar */
+        left: 19px !important;             /* 15 + 4 del ajuste del 2026-08-22 (era el translate X) */
         /* El ancho es VARIABLE desde el 2026-08-15 (pestillo, ver
            _25_rails_pestillo.py). Hasta esa fecha había DOS `width` en este
            mismo bloque, 84px unas líneas más abajo, que ganaba por ir

@@ -198,7 +198,13 @@ CSS = """    <style>
        lee nadie. Ganar por especificidad alcanza — `:root:has()` le gana a
        `:root` sin depender del orden. */
     :root:has(.st-key-app_reporte_compras) {
-        --rail-der-full: 230px;
+        /* 2026-08-22: 230px -> 270px, a pedido (probado con el modo diseno).
+           Va sobre la VARIABLE y no como `width` en la regla del rail: el
+           pestillo reescribe `--rail-der-w` al plegar, asi que un ancho
+           suelto en `.st-key-compras_tabs_row` dejaria el rail sin poder
+           plegarse — es justo lo que traia el CSS copiado del modo diseno,
+           que exporta pixeles y no conoce la variable. Ver regla #169. */
+        --rail-der-full: 270px;
     }
 
     /* ============ HEADER NATIVO + ESPACIO SUPERIOR ============ */

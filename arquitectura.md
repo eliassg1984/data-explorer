@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-168 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+169 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (61)
+**CSS y estilos** (62)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -81,6 +81,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#156** — Un transform en un ancestro CAPTURA a sus hijos position: fixed — y por eso…
 - **#157** — El modo diseño sólo sabía agarrar elementos con st-key-*, y la mitad de lo que uno quiere…
 - **#167** — El fondo general de la app no se podía editar con el modo diseño: el lienzo es el único…
+- **#169** — El CSS que exporta el modo diseño es una FOTO DE PÍXELES, no la intención: pegarlo tal cual…
 
 **Layout y alturas** (15)
 
@@ -281,7 +282,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#167** — El fondo general de la app no se podía editar con el modo diseño: el lienzo es el único…
 - **#168** — Las manijas del modo diseño quedaban FUERA DE LA PANTALLA cuando el elemento tocaba un borde
 
-**Decisiones de diseño y UX** (30)
+**Decisiones de diseño y UX** (31)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -313,6 +314,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#164** — El botón Refrescar dejó de vivir en la franja superior de navegación y pasó al pie del rail…
 - **#166** — El contorno del modo diseño se dibujaba ENCIMA del borde real del elemento — así que para ver…
 - **#168** — Las manijas del modo diseño quedaban FUERA DE LA PANTALLA cuando el elemento tocaba un borde
+- **#169** — El CSS que exporta el modo diseño es una FOTO DE PÍXELES, no la intención: pegarlo tal cual…
 
 **Mantenimiento y trampas del lenguaje** (6)
 
@@ -7676,13 +7678,58 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      del inspector puede tapar una manija (medido: un `<pre>` sobre la manija
      inferior). Se resuelve con la tecla `T`, que lo oculta.
 
+169. **El CSS que exporta el modo diseño es una FOTO DE PÍXELES, no la
+     intención: pegarlo tal cual rompe las variables que hacen funcionar la
+     app** (2026-08-22, de un "Copiar CSS" del rail que traía cinco
+     propiedades y sólo dos eran deseadas).
+
+     El bloque copiado sobre `compras_tabs_row` (la key del rail COMPARTIDO
+     por 8 dashboards) decía:
+
+     ```css
+     flex: none; max-width: none; max-height: none;
+     height: 688px; width: 270px;
+     transform: translate(4px,-10px) rotate(0deg);
+     ```
+
+     Qué habría roto cada línea, y por qué la herramienta no puede saberlo:
+     - **`width: 270px`** pisa `var(--rail-der-w)`, que el PESTILLO reescribe
+       al plegar (`_25_rails_pestillo.py`). Con un ancho fijo el rail deja de
+       plegarse. Lo correcto es mover `--rail-der-full` (230 → 270): el
+       pestillo sigue vivo y `--rail-der-res` —la reserva que el contenido le
+       hace al rail— **se recalcula sola**. Verificado: pasa a
+       `calc(270px + 15px + 54px)` sin tocar nada más.
+     - **`height: 688px`** es el alto que el rail tenía EN ESA PANTALLA. El
+       CSS real usa `height: auto` a propósito y documentado (regla #99: "el
+       rail debe reducirse, no ser tan largo"). Un alto fijo se rompe en
+       cualquier otro monitor.
+     - **`max-height: none`** mata la red que activa el scroll interno si
+       algún día hay más vistas de las que entran.
+     - **`transform: translate(...)`** sobre un elemento que YA es
+       `position: fixed` es redundante y encima captura a sus hijos `fixed`
+       (regla #156). Se traduce al `top`/`left` que el rail ya tiene.
+     - **`flex: none` y `max-width: none`** ni siquiera son del usuario: los
+       agrega la herramienta para poder redimensionar un flex item (regla
+       #47). Copiarlos propaga andamiaje interno al CSS de producción.
+
+     **La regla de uso, que es lo que hay que recordar:** el "Copiar CSS" es
+     un punto de partida para CONVERSAR sobre el cambio, no un parche para
+     pegar. Antes de aplicarlo hay que preguntarse, propiedad por propiedad,
+     si detrás hay una variable, una regla documentada o simple andamiaje —
+     y traducir la intención, no los píxeles. Acá de cinco propiedades
+     sobrevivieron dos, y ninguna en la forma en que venía escrita.
+
+     Verificado tras traducir: ancho 270 con el ciclo del pestillo intacto
+     (270 → 24 → 270), `top`/`left` aplicados sin `transform`, y el alto
+     seguido midiendo el contenido con su `max-height` de red.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#169**.
+> próxima regla nueva es la **#170**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
