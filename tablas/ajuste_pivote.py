@@ -35,6 +35,7 @@ from tema import (
     GRIS_TEXTO, GRIS_TEXTO_SUAVE, ICON_MUTED, LAVANDA_BORDE,
     LAVANDA_CABECERA_GRUPO, LAVANDA_FONDO, TEXTO_PRINCIPAL,
 )
+from tablas._config import _parchar_iconos
 from tablas._css import _css_base, _css_franjas_sidebar
 
 _COL_TOTAL_ID = "periodo_total"
@@ -389,6 +390,7 @@ def renderizar_aggrid_pivote_ajuste(df_wide, periodos, col_familia,
         """),
     )
     grid_options = gb.build()
+    _parchar_iconos(grid_options)  # cuadrados negros en Chrome < 120: arquitectura.md #159
 
     # Columnas sintéticas (sin field propio): se agregan directo al dict ya
     # construido porque GridOptionsBuilder.configure_column exige que la

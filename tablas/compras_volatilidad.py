@@ -25,6 +25,7 @@ from tema import (
     ACENTO, ERROR, ERROR_FONDO, EXITO, EXITO_FONDO, GRIS_TEXTO,
     LAVANDA_FONDO, TEXTO_PRINCIPAL,
 )
+from tablas._config import _parchar_iconos
 from tablas._css import _css_grid
 
 # Ancho FIJO (no por longitud de header, como ajuste_pivote.py): el
@@ -140,6 +141,7 @@ def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, altura, key):
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     gb.configure_grid_options(rowHeight=30, headerHeight=32, tooltipShowDelay=200)
     grid_options = gb.build()
+    _parchar_iconos(grid_options)  # cuadrados negros en Chrome < 120: arquitectura.md #159
 
     custom_css = dict(_css_grid(13))
     custom_css[".ag-tooltip"] = {

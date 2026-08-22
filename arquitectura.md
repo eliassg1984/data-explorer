@@ -7135,3 +7135,43 @@ salvo `icono`):
      gráficos encontró de paso un solape real que nadie había reportado:
      `CP_EVO_MES_VIBEJ-COLIBRI-SAC` pisa "may 26" con "ago 26" por 4px.
 
+159. **Cuadrados negros en vez de iconos en Chrome < 120: AG Grid 34 emite
+     `mask-image` sin la variante `-webkit-`** (2026-08-22). La Theming API
+     de AG Grid 34 dibuja TODOS sus iconos igual: un cuadrado de
+     `background-color: currentcolor` del tamaño del icono, recortado con
+     `mask-image: url("data:image/svg+xml,...")`. En el bundle de
+     `st_aggrid` hay **192 `mask-image` y CERO `-webkit-mask-image`** (sí
+     está `-webkit-mask-size`, que solo no alcanza).
+
+     Chrome y Edge entienden `mask-image` sin prefijo recién desde la 120
+     (diciembre 2023). En una versión anterior el navegador DESCARTA la
+     declaración, el recorte nunca se aplica y queda el cuadrado entero
+     pintado: un **rectángulo negro** en cada chevron de grupo, cada icono
+     de cabecera y cada botón del sidebar. Windows 7/8.1 se quedaron en
+     Chrome 109, así que "que actualicen el navegador" no siempre es una
+     opción.
+
+     `tablas/_config.py::_parchar_iconos` **no trae los SVG de vuelta**:
+     copia las reglas que el propio tema ya puso en su `<style>` y las
+     reemite con el prefijo. Por eso no envejece si `st_aggrid` sube de
+     versión — no conoce ningún icono concreto, sólo reescribe la
+     propiedad. En un navegador moderno no hace absolutamente nada:
+     `CSS.supports('mask-image','none')` corta en la primera línea.
+
+     **Se engancha al primer hook LIBRE, no a uno fijo**, porque cada
+     renderizador ya usa los suyos: `desktop.py` ocupa `onGridReady` Y
+     `onFirstDataRendered`, `compras.py` sólo el segundo y
+     `ajuste_pivote.py` sólo el primero. Los tres disparan después de que
+     el tema inyectó su `<style>`, que es lo único que el parche necesita.
+     Si algún día los tres de `_HOOKS_PARCHE` están ocupados, **lanza
+     `RuntimeError` en vez de fallar en silencio** — un parche que no se
+     engancha se vería como "los cuadrados negros volvieron", sin pista.
+
+     Va después de `gb.build()` y no antes: así ve los handlers que el
+     renderizador realmente declaró. Los cinco renderizadores de `tablas/`
+     lo llaman (`desktop`, `movil`, `compras`, `compras_volatilidad`,
+     `ajuste_pivote`) — si se agrega una grilla nueva, va también.
+
+     **Ojo con la referencia cruzada:** el código citaba "regla #150" en
+     seis lugares, pero la #150 es la del pill de fecha de Documentos
+     SUNAT. Se corrigió a ésta al documentarla.

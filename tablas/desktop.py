@@ -15,7 +15,7 @@ from perf import perf
 from tema import (
     ACENTO, ACENTO_TEXTO_OSCURO, BLANCO, EXIT_HOVER, GRIS_BORDE, GRIS_FONDO, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_SUAVE, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FILA, LAVANDA_FILA_ALT, LAVANDA_FOCO, LAVANDA_FONDO, SCROLL_THUMB, TEXTO_PRINCIPAL,
 )
-from tablas._config import _config_sidebar, _estilo_fila, _estilos_celda, _fila_totales, _titulo_es
+from tablas._config import _config_sidebar, _estilo_fila, _estilos_celda, _fila_totales, _parchar_iconos, _titulo_es
 from tablas._css import _css_base, _css_franjas_sidebar
 
 
@@ -599,6 +599,7 @@ def renderizar_aggrid_desktop(df_grid, cols_mostrar, reporte, font_px=14,
     else:
         gb.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
     grid_options = gb.build()
+    _parchar_iconos(grid_options)  # cuadrados negros en Chrome < 120: arquitectura.md #159
 
     custom_css = _css_base(font_px)
 

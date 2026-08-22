@@ -8,6 +8,7 @@ import pandas as pd
 from st_aggrid import AgGrid, GridOptionsBuilder
 from utils import _norm, LOCALE_ES
 from inyecciones import inject_grid_health_check
+from tablas._config import _parchar_iconos
 from tema import (
     ACENTO, BLANCO, EXIT_HOVER, GRIS_BORDE, GRIS_FONDO, GRIS_LINEA, ICON_MUTED, LAVANDA_FONDO, TEXTO_PRINCIPAL,
 )
@@ -57,6 +58,7 @@ def renderizar_aggrid_movil(df_grid, columnas_fijas, reporte, font_px=14):
 
     gb.configure_grid_options(**opciones_grid)
     grid_options = gb.build()
+    _parchar_iconos(grid_options)  # cuadrados negros en Chrome < 120: arquitectura.md #159
 
     custom_css = {
         ".ag-root-wrapper": {"background-color": f"{BLANCO}", "border": f"1px solid {GRIS_BORDE}", "border-radius": "8px", "width": "100% !important"},

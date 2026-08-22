@@ -18,7 +18,7 @@ from perf import perf
 from tema import (
     ACENTO, ACENTO_TEXTO_OSCURO, BLANCO, GRIS_BORDE, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FILA, LAVANDA_FILA_ALT, LAVANDA_FONDO,
 )
-from tablas._config import _config_sidebar, _titulo_es
+from tablas._config import _config_sidebar, _parchar_iconos, _titulo_es
 from tablas._css import _css_base, _css_franjas_sidebar
 
 
@@ -166,6 +166,7 @@ def renderizar_aggrid_compras(df_grid: pd.DataFrame, font_px: int = 14):
     gb.configure_pagination(
         enabled=True, paginationAutoPageSize=False, paginationPageSize=50)
     grid_options = gb.build()
+    _parchar_iconos(grid_options)  # cuadrados negros en Chrome < 120: arquitectura.md #159
 
     custom_css = _css_base(font_px)
     custom_css[".ag-row-even"] = {"background-color": BLANCO + " !important"}

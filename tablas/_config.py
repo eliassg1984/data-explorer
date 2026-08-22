@@ -216,3 +216,71 @@ def _fila_totales(df_grid, cols_valor, cols_precio, cols_stock, primera_col):
         else:
             fila_totales[c] = None
     return fila_totales
+
+
+# ============================================================================
+# Parche de iconos para navegadores viejos (arquitectura.md regla #159)
+# ============================================================================
+# AG Grid 34 (la Theming API) dibuja TODOS sus iconos igual: un cuadrado de
+# `background-color: currentcolor` del tamaño del icono, recortado con
+# `mask-image: url("data:image/svg+xml,...")`. No emite la variante
+# `-webkit-mask-image` -- en el bundle de st_aggrid hay 192 `mask-image` y
+# CERO `-webkit-mask-image` (sí está `-webkit-mask-size`, que solo no sirve).
+#
+# Chrome y Edge entienden `mask-image` sin prefijo recién desde la 120
+# (diciembre 2023). En una versión anterior el navegador DESCARTA esa
+# declaración, el recorte nunca se aplica y queda el cuadrado entero pintado:
+# el usuario ve un RECTÁNGULO NEGRO en cada chevron de grupo, en cada icono de
+# cabecera y en cada botón del sidebar. Windows 7/8.1 se quedaron en Chrome
+# 109, así que "que actualicen el navegador" no siempre es una opción.
+#
+# El parche no trae los SVG de vuelta: copia las reglas que el propio tema ya
+# puso en su <style> y las reemite con el prefijo. Por eso no envejece si
+# st_aggrid sube de versión. En un navegador moderno no hace absolutamente
+# nada: `CSS.supports` corta en la primera línea.
+_JS_ICONOS_MASK = r"""
+function(params) {
+    try {
+        if (window.CSS && CSS.supports && CSS.supports('mask-image','none')) return;
+        var d = document;
+        if (d.getElementById('ag-parche-mask')) return;
+        var css = '';
+        var hojas = d.querySelectorAll('style');
+        for (var i = 0; i < hojas.length; i++) {
+            var t = hojas[i].textContent || '';
+            if (t.indexOf('.ag-icon-') < 0 || t.indexOf('mask-image') < 0) continue;
+            var reglas = t.match(/[^{}]+\{[^{}]*mask-image[^{}]*\}/g) || [];
+            for (var j = 0; j < reglas.length; j++) {
+                css += reglas[j].replace(/([{;])\s*mask-image\s*:/g, '$1-webkit-mask-image:');
+            }
+        }
+        if (!css) return;
+        var e = d.createElement('style');
+        e.id = 'ag-parche-mask';
+        e.textContent = css;
+        d.head.appendChild(e);
+    } catch (err) {}
+}
+"""
+
+# No hay un hook fijo porque cada renderizador ya usa los suyos: desktop.py
+# ocupa onGridReady Y onFirstDataRendered, compras.py solo el segundo y
+# ajuste_pivote.py solo el primero. Los tres disparan después de que el tema
+# inyectó su <style>, que es lo único que el parche necesita.
+_HOOKS_PARCHE = ("onGridReady", "onFirstDataRendered", "onModelUpdated")
+
+
+def _parchar_iconos(grid_options):
+    """Engancha el parche de iconos al primer hook libre de la grilla.
+
+    Se llama con el dict YA construido (`gb.build()`), no antes: así ve los
+    handlers que el renderizador realmente declaró."""
+    for hook in _HOOKS_PARCHE:
+        if hook not in grid_options:
+            grid_options[hook] = JsCode(_JS_ICONOS_MASK)
+            return grid_options
+    raise RuntimeError(
+        "Ningún hook de _HOOKS_PARCHE quedó libre: el parche de iconos de "
+        "tablas/_config.py no tiene dónde engancharse. Sumá otro evento de "
+        "AG Grid a la lista, o llamá al parche desde el handler existente."
+    )
