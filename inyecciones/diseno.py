@@ -50,6 +50,21 @@ rama, con sus cambios de estilo reaplicados. Nunca persisten: no están en
 el código ni en `estilos/` y mueren al recargar — el panel lo avisa.
 Detalle en arquitectura.md regla #151.
 
+El pin baja a un hijo SIN key propia (sub-pin, arquitectura.md #157): el
+inspector ancla siempre al contenedor con `st-key-*` mas cercano, asi que
+un titulo de `st.markdown` (`<div class="cp-rank-tit">`) pineaba la TARJETA
+y "Mover" corria los 929x388 px del contenedor sin mover el titulo adentro.
+El arbol de jerarquia suma hojas con las clases DE AUTOR de los hijos (las
+que escribe este proyecto; se filtran `st-*`, `st[A-Z]`, `ag-*`, los hashes
+sin prefijo de emotion tipo `e1rw0b1u1` y todo lo que viva dentro de otro
+`st-key-`): un clic baja el pin ahi, un clic en la fila de la key lo sube.
+Se guarda la CLASE, nunca el nodo, y el indice de
+`win.__disenoState.porKey` pasa a ser el `id` (`key .clase`), no la key —
+la tarjeta y cada hijo llevan cambios independientes. `construirBloqueCSS`
+y los mocks siguen el sub hasta el final: el CSS copiado sale anclado a
+`div[class*="st-key-K"] .cp-rank-tit` y `anclaSub` inserta el mock pegado
+al hijo, no a la tarjeta.
+
 El panel se puede colapsar a una pill chica (botón "–" en su cabecera,
 click en la pill para expandir, o Alt+D) — pensado para el caso "el panel
 ocupa lugar aunque no haya nada que ajustar todavía". Colapsar/expandir es

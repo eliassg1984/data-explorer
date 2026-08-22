@@ -7014,3 +7014,69 @@ salvo `icono`):
      regla: sin eso, con el modo diseño abierto los recuadros salen
      corridos. Medido en Compras > Proveedor: 35 cajas en el flujo, 8
      escapados, 1 pseudo.
+
+157. **El modo diseño sólo sabía agarrar elementos con `st-key-*`, y la
+     mitad de lo que uno quiere mover no tiene key** (2026-08-22, del
+     pedido "¿por qué esto no puedo moverlo con mi herramienta de
+     diseño?" sobre el título "Ranking de proveedores" del drill de
+     Proveedor).
+     - **El síntoma:** clic derecho sobre `<div class="cp-rank-tit">`
+       (`graficos/compras/proveedor.py:396`, un `st.markdown` con HTML) y
+       arrastrar la manija "Mover" corría los 929×388 px de la TARJETA
+       entera (`compras_prov_card_ranking`). El título no se movía ni un
+       píxel DENTRO de ella. No se lee como un bug del pin: se lee como
+       "la herramienta no puede mover esto".
+     - **La causa:** `elementoPineado()` resolvía SIEMPRE
+       `doc.querySelector('.st-key-' + key)`, y la key viene del
+       inspector, que ancla al contenedor con `st-key-*` más cercano
+       (`contenedorConKey`, `_inspector_js.py`). Un nodo sin key propia
+       nunca era direccionable: el pin subía al ancestro y todos los
+       controles —geometría, transform, estilo— iban a parar ahí. El
+       volcado del tooltip ya lo delataba y nadie lo leía así:
+       `Tamaño actual: 929 x 388 px` y `padding=16px 18px` son la
+       tarjeta, no un título de 18px de alto.
+     - **El arreglo — sub-pin.** `win.__disenoState.sub` guarda
+       `{key, clase}`: la CLASE del hijo, nunca el nodo (un rerun lo
+       recrea igual que al widget con key, y la regla de este módulo es
+       re-resolver siempre). `elementoPineado()` devuelve ahora
+       `{key, sub, id, el}`, donde `id = 'key .clase'` — y **el `id`, no
+       la key, es el índice de `win.__disenoState.porKey`**: la tarjeta y
+       cada hijo pineable llevan su propio juego de cambios y no se
+       pisan. El sub muere solo cuando el pin salta a otra key (si no, su
+       clase podría existir allá adentro y bajar a un hijo distinto sin
+       aviso), y si el hijo no está en este render se cae a
+       `panelPerdido` en vez de volver al contenedor — aplicar los
+       cambios del hijo a la tarjeta entera sería peor que no aplicar
+       nada.
+     - **Cómo se llega:** el árbol de jerarquía de la regla #155 suma
+       hojas — los hijos con clase **de autor** del widget pineado, en
+       azul y prefijadas con `.` para distinguirlas de las keys. Clic
+       para bajar; clic en la fila de la key (que con un sub activo deja
+       de ser "la actual" y vuelve a ser clicable) para subir.
+     - **Qué es una clase "de autor" y por qué importa:** las que escribe
+       ESTE proyecto (`cp-rank-tit`, `cp-evo-kpis`) sirven como selector
+       para pegar en `estilos/`; las de Streamlit no. Se filtran cuatro
+       familias: `st-*` (incluye `st-key-*` y `st-emotion-cache-*`),
+       `st[A-Z]` (`stMarkdown`, `stVerticalBlock`), `ag-*` (internos de
+       AgGrid, que se estilan por su `custom_css`) y —la menos obvia, que
+       apareció recién al probarlo en vivo— la clase *target* que
+       `@emotion/babel-plugin` le pone a cada componente **sin prefijo
+       alguno**: `e1rw0b1u1`, `eqmt79k2`, `etxdrby0`. Sin ese corte se
+       colaban tres de ésas ANTES de `.cp-rank-tit` en el árbol, y
+       cambian con cada build de Streamlit. También se saltan los nodos
+       SVG (un Plotly sin key propia inunda la lista con
+       `main-svg`/`trace`/`point`) y todo lo que viva dentro de otro
+       `st-key-` más adentro: eso es otro widget y se pinea por su key.
+     - **Los dos acoplamientos que había que seguir hasta el final**, o
+       el sub-pin quedaba a medias: `construirBloqueCSS` emite
+       `div[class*="st-key-K"] .cp-rank-tit` (si no, pegar el bloque
+       movería la tarjeta — el mismo "pegarlo no hace lo que probé" de la
+       regla #154, esta vez en el código que el usuario copia), y los
+       mocks de la regla #151 guardan `anclaSub`: insertar "antes" de un
+       título y "antes" de la tarjeta que lo contiene son dos lugares
+       distintos.
+     - **Verificado en vivo** (no sólo por lectura): con el sub activo,
+       arrastrar "Mover" 40×25 px dejó
+       `transform: translate(40px, 25px)` en el `.cp-rank-tit` y el
+       `style.transform` de la tarjeta VACÍO, y el bloque copiado salió
+       anclado al hijo.

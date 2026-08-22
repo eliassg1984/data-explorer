@@ -287,7 +287,10 @@ color, mover/redimensionar, con "↺" por fila para revertir solo esa
 propiedad), o **inserta** texto/línea/barra/espacio de mentira para ver
 "cómo se vería" algo que todavía no existe. El panel abre con un **árbol
 de jerarquía** (raíz → elemento, clicable igual que las migas del
-inspector — misma idea, orientación vertical en vez de horizontal). La
+inspector — misma idea, orientación vertical en vez de horizontal), y sus
+hojas azules bajan el pin a un **hijo sin key propia** (un
+`<div class="cp-rank-tit">` de un `st.markdown`): sin eso, "Mover" corría
+la tarjeta entera y el título de adentro no se movía — regla #157. La
 paleta cubre dato Y superficie (grises/lavanda de `tema.py`, más
 transparente y un picker libre), y el botón **"Copiar CSS"** arma el
 bloque listo para pegar en `estilos/` — ya no hace falta leer los valores

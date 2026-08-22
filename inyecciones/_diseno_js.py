@@ -37,12 +37,19 @@ JS = """
         if (!win.__disenoState.mocks) { win.__disenoState.mocks = []; }
         if (win.__disenoState.mockN === undefined) { win.__disenoState.mockN = 0; }
         if (!win.__disenoState.mockPos) { win.__disenoState.mockPos = 'despues'; }
+        // Sub-pin (regla #157): {key, clase} del hijo SIN key propia al que
+        // bajo el pin, o null. Se guarda la CLASE, nunca el nodo — un rerun
+        // lo recrea, igual que al widget con key.
+        if (win.__disenoState.sub === undefined) { win.__disenoState.sub = null; }
 
-        function registroPara(key) {
+        // El indice es el `id` de elementoPineado(), no la key: con sub-pin
+        // vale `compras_prov_card_ranking .cp-rank-tit`, asi la tarjeta y
+        // cada hijo pineable llevan su propio juego de cambios.
+        function registroPara(id) {
             var st = win.__disenoState.porKey;
-            if (!st[key]) {
-                st[key] = {
-                    key: key,
+            if (!st[id]) {
+                st[id] = {
+                    key: id,
                     cssTextOriginal: null,
                     cambios: {},
                     transformState: { translateX: 0, translateY: 0, rotateDeg: 0 },
@@ -54,7 +61,65 @@ JS = """
                     verOriginalActivo: false
                 };
             }
-            return st[key];
+            return st[id];
+        }
+
+        // ── Sub-pin: bajar a un hijo sin key propia (regla #157) ─────────
+        // El pin del inspector se ancla SIEMPRE al contenedor con
+        // `st-key-*` mas cercano. Un titulo de `st.markdown`
+        // (`<div class="cp-rank-tit">`) no tiene key, asi que pinearlo
+        // pineaba la TARJETA entera: "Mover" corria los 929x388 px del
+        // contenedor y el titulo no se movia ni un pixel DENTRO de el.
+        //
+        // Clases "de autor" = las que escribe ESTE proyecto en su HTML. Las
+        // de Streamlit no sirven como selector estable: `st-emotion-cache-
+        // 1f3w014` cambia con cada build y `stMarkdown`/`stVerticalBlock`
+        // matchean media pagina. `ag-*` queda afuera aparte: el estilo de
+        // AgGrid va por su `custom_css`, no por `estilos/`.
+        var CLASES_DE_STREAMLIT = { 'element-container': 1, 'row-widget': 1,
+                                    'main': 1, 'block-container': 1, 'stApp': 1 };
+        function esClaseDeAutor(c) {
+            if (!c || CLASES_DE_STREAMLIT[c]) return false;
+            if (c.indexOf('st-') === 0) return false;   // st-key-*, st-emotion-cache-*, st-ae
+            if (c.indexOf('ag-') === 0) return false;   // internos de AgGrid
+            if (c.indexOf('css-') === 0) return false;  // emotion, clase de estilo
+            // Gemela de la anterior y MENOS obvia: @emotion/babel-plugin le
+            // pone a cada componente una clase "target" sin prefijo alguno
+            // (`e1rw0b1u1`, `eqmt79k2`, `etxdrby0`). Verificado en vivo: sin
+            // este corte se colaban 3 de esas ANTES de `.cp-rank-tit` en el
+            // arbol. Cambian con cada build de Streamlit, o sea que como
+            // selector para pegar en estilos/ son una trampa.
+            if (c.indexOf('-') === -1 && c.length >= 6 && /^e[a-z0-9]*[0-9]/.test(c)) return false;
+            return !/^st[A-Z]/.test(c);                 // stMarkdown, stVerticalBlock, ...
+        }
+
+        // Hijos del widget pineado que tienen clase propia pero NO key: los
+        // unicos que el modo diseno no podia tocar. Se excluye lo que viva
+        // dentro de OTRO `st-key-` mas adentro (eso es otro widget: se pinea
+        // por su key, no bajando desde aca) y lo que sea SVG (un Plotly sin
+        // key propia inunda la lista con `main-svg`/`trace`/`point`).
+        function hijosConClasePropia(key) {
+            var base = doc.querySelector('.st-key-' + key);
+            if (!base) return [];
+            var out = [], vistas = {};
+            var cand = base.querySelectorAll('[class]');
+            for (var i = 0; i < cand.length && out.length < 12; i++) {
+                var n = cand[i];
+                if (n.ownerSVGElement || (n.tagName || '').toLowerCase() === 'svg') continue;
+                var cur = n.parentElement, propio = true;
+                while (cur && cur !== base) {
+                    if (/st-key-[A-Za-z0-9_]+/.test((cur.className || '').toString())) { propio = false; break; }
+                    cur = cur.parentElement;
+                }
+                if (!propio || cur !== base) continue;
+                var cls = n.classList || [];
+                for (var j = 0; j < cls.length; j++) {
+                    if (!esClaseDeAutor(cls[j]) || vistas[cls[j]]) continue;
+                    vistas[cls[j]] = 1;
+                    out.push(cls[j]);
+                }
+            }
+            return out;
         }
 
         function elementoPineado() {
@@ -63,8 +128,18 @@ JS = """
             if (!win.__inspectorPinned || !win.__inspectorUltimo) return null;
             var key = win.__inspectorUltimo.key;
             if (!key) return null;
-            var el = doc.querySelector('.st-key-' + key);
-            return { key: key, el: el };  // el.el puede ser null (ya no renderiza)
+            var base = doc.querySelector('.st-key-' + key);
+            var sub = win.__disenoState.sub;
+            // El sub muere con su key: si el pin salto a otro widget, lo que
+            // haya guardado ya no aplica (y su clase podria existir alla
+            // adentro y pinear un hijo distinto sin aviso).
+            if (sub && sub.key !== key) { win.__disenoState.sub = null; sub = null; }
+            if (!sub) return { key: key, sub: '', id: key, el: base };
+            // `el: null` si el hijo no esta => panelPerdido, igual que con la
+            // key. Caer de vuelta al contenedor seria peor: aplicaria los
+            // cambios del hijo a la tarjeta entera sin que nadie lo pida.
+            return { key: key, sub: sub.clase, id: key + ' .' + sub.clase,
+                     el: base ? base.querySelector('.' + sub.clase) : null };
         }
 
         function elementoActivo() {
@@ -72,7 +147,16 @@ JS = """
             // en el momento del evento, nunca confia en una referencia
             // capturada cuando se construyeron los controles.
             var r = elementoPineado();
-            return (r && r.el) ? { el: r.el, key: r.key, registro: registroPara(r.key) } : null;
+            return (r && r.el) ? { el: r.el, key: r.key, sub: r.sub, id: r.id,
+                                   registro: registroPara(r.id) } : null;
+        }
+
+        function bajarASub(clase) {
+            var r = elementoPineado();
+            if (!r) return;
+            win.__disenoState.sub = { key: r.key, clase: clase };
+            panel.dataset.builtForKey = '';   // fuerza reconstruir con el sub
+            sync();
         }
 
         // ── Jerarquía (regla #155) ───────────────────────────────────────
@@ -99,6 +183,10 @@ JS = """
         function saltarADiseno(key) {
             var el = doc.querySelector('.st-key-' + key);
             if (!el || !win.__inspectorMouseMoveHandler) return;
+            // Saltar de contenedor suelta el sub-pin. Tambien es el camino de
+            // VUELTA: con un sub activo la fila de su propia key deja de ser
+            // "la actual" y vuelve a ser clicable, y este clic sube el pin.
+            win.__disenoState.sub = null;
             var r = el.getBoundingClientRect();
             var cx = r.left + Math.min(12, r.width / 2);
             var cy = r.top + Math.min(12, r.height / 2);
@@ -161,6 +249,10 @@ JS = """
 
         function anclaEfectiva(m) {
             var ancla = doc.querySelector('.st-key-' + m.anclaKey);
+            // Con sub-pin el ancla es el HIJO, no la tarjeta: insertar "antes"
+            // de un titulo y "antes" de la tarjeta que lo contiene son dos
+            // lugares distintos, y el pin ya dice cual de los dos se eligio.
+            if (ancla && m.anclaSub) ancla = ancla.querySelector('.' + m.anclaSub);
             if (!ancla || !ancla.parentNode) return null;
             // 'despues' se encadena detras del ULTIMO hermano ya insertado:
             // sin esto, agregar titulo y despues linea los deja al reves
@@ -170,6 +262,7 @@ JS = """
             var ms = win.__disenoState.mocks;
             for (var i = 0; i < ms.length && ms[i].key !== m.key; i++) {
                 if (ms[i].anclaKey !== m.anclaKey || ms[i].posicion !== 'despues') continue;
+                if ((ms[i].anclaSub || '') !== (m.anclaSub || '')) continue;
                 var prev = doc.querySelector('.st-key-' + ms[i].key);
                 if (prev && prev.parentNode === ancla.parentNode) ancla = prev;
             }
@@ -211,6 +304,7 @@ JS = """
                 key: 'diseno_' + tipo + '_' + win.__disenoState.mockN,
                 tipo: tipo,
                 anclaKey: res.key,
+                anclaSub: res.sub,
                 posicion: win.__disenoState.mockPos,
                 texto: 'Texto de prueba'
             };
@@ -295,7 +389,7 @@ JS = """
 
         function pintarPill() {
             var res = elementoPineado();
-            var etiqueta = (res && res.el) ? ('🎨 ' + res.key) : '🎨 Modo diseno';
+            var etiqueta = (res && res.el) ? ('🎨 ' + res.id) : '🎨 Modo diseno';
             panel.style.cssText = [
                 'position:fixed','bottom:16px','right:16px','z-index:2147483600',
                 'background:#101014','color:#cfcfd6','border:1px solid #6c5ce7',
@@ -791,8 +885,13 @@ JS = """
             return out;
         }
 
-        function construirBloqueCSS(key, elemento, registro) {
-            var ancla = 'div[class*="st-key-' + key + '"]';
+        function construirBloqueCSS(key, elemento, registro, sub) {
+            // Con sub-pin el selector baja al hijo: `.cp-rank-tit` es una
+            // clase de autor y pegar `div[class*="st-key-K"] .cp-rank-tit`
+            // en estilos/ hace exactamente lo que se vio en pantalla. Sin
+            // esto el bloque copiado moveria la tarjeta entera — el mismo
+            // "pegarlo no hace lo que probe" que motivo la regla #154.
+            var ancla = 'div[class*="st-key-' + key + '"]' + (sub ? ' .' + sub : '');
             var destinos = destinosDeEstilo(elemento);
             var redirigido = destinos[0] !== elemento;
             // Mismo criterio que destinosDeEstilo: pills de un stButtonGroup
@@ -853,7 +952,7 @@ JS = """
                 ? '\\n/* ' + notas.join(' — ') + ' — ver destinosDeEstilo()/extenderATexto() en _diseno_js.py */'
                 : '';
 
-            var encabezado = '/* copiado del modo diseño — ' + key + ' */';
+            var encabezado = '/* copiado del modo diseño — ' + key + (sub ? ' .' + sub : '') + ' */';
             return encabezado + '\\n' + bloques.join('\\n\\n') + pie;
         }
 
@@ -885,7 +984,12 @@ JS = """
             fallback();
         }
 
-        function construirControles(key, elemento, registro) {
+        // `res` es el objeto de elementoPineado() entero (key + sub + el),
+        // no la key suelta: el arbol necesita saber si el actual es el
+        // contenedor o un hijo suyo, y "Copiar CSS" necesita el sub.
+        function construirControles(res, registro) {
+            var key = res.key;
+            var elemento = res.el;
             panel.style.cssText = PANEL_CSS_EXPANDIDO;
             panel.style.display = 'block';
             panel.onclick = null;
@@ -895,7 +999,7 @@ JS = """
             header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #2a2a35';
             var headerKey = doc.createElement('div');
             headerKey.style.cssText = 'font-size:11px;color:#9385ec;word-break:break-all;font-family:"Courier New",monospace;flex:1;min-width:0';
-            headerKey.textContent = key;
+            headerKey.textContent = res.sub ? (key + ' .' + res.sub) : key;
             var btnSoltar = doc.createElement('button');
             btnSoltar.textContent = 'Soltar';
             btnSoltar.style.cssText = 'background:#2A2A35;color:#fff;border:0;border-radius:4px;padding:4px 8px;font:600 11px sans-serif;cursor:pointer;flex:0 0 auto';
@@ -914,11 +1018,20 @@ JS = """
             // (elemento -> raíz). Un clic en cualquier ancestro salta el
             // pin ahí sin tener que ubicarlo a ojo en la pantalla.
             var cadenaDiseno = cadenaKeysDiseno(elemento).slice().reverse();
-            if (cadenaDiseno.length > 1) {
+            // Hojas SIN key: hijos con clase de autor del widget pineado. Son
+            // el unico camino para bajar el pin a un `st.markdown` con HTML
+            // propio — la razon por la que el arbol tambien se dibuja cuando
+            // la cadena tiene un solo eslabon.
+            var hojasSub = hijosConClasePropia(key);
+            if (res.sub && hojasSub.indexOf(res.sub) === -1) hojasSub.unshift(res.sub);
+            if (cadenaDiseno.length > 1 || hojasSub.length) {
                 var arbolBox = doc.createElement('div');
                 arbolBox.style.cssText = 'margin-bottom:10px;padding:8px 9px;background:#1c1c24;border:1px solid #2a2a35;border-radius:6px;overflow-x:auto';
                 cadenaDiseno.forEach(function(k, i) {
-                    var esActual = (k === key);
+                    // Con un sub activo el "actual" es la hoja, no su
+                    // contenedor: la fila de la key queda clicable a
+                    // proposito, y ese clic es el camino de vuelta.
+                    var esActual = (k === key && !res.sub);
                     var fila = doc.createElement('div');
                     fila.style.cssText = 'display:flex;align-items:center;gap:4px;padding:2px 0;padding-left:' + (i * 11) + 'px;white-space:nowrap';
                     if (i > 0) {
@@ -937,6 +1050,30 @@ JS = """
                         nodo.addEventListener('mouseenter', function() { nodo.style.background = '#2A2A35'; });
                         nodo.addEventListener('mouseleave', function() { nodo.style.background = 'transparent'; });
                         nodo.addEventListener('click', function() { saltarADiseno(k); });
+                    }
+                    fila.appendChild(nodo);
+                    arbolBox.appendChild(fila);
+                });
+                hojasSub.forEach(function(c) {
+                    var esActualSub = (c === res.sub);
+                    var fila = doc.createElement('div');
+                    fila.style.cssText = 'display:flex;align-items:center;gap:4px;padding:2px 0;padding-left:'
+                        + (cadenaDiseno.length * 11) + 'px;white-space:nowrap';
+                    var rama = doc.createElement('span');
+                    rama.textContent = '└';
+                    rama.style.cssText = 'color:#3f3f4c;flex-shrink:0;font-size:11px';
+                    fila.appendChild(rama);
+                    var nodo = doc.createElement(esActualSub ? 'span' : 'button');
+                    nodo.textContent = '.' + c;
+                    nodo.title = 'Bajar el pin a este hijo (no tiene key propia)';
+                    nodo.style.cssText = 'font:11px "Courier New",monospace;background:transparent;border:0;padding:1px 3px;border-radius:3px;'
+                        + 'color:' + (esActualSub ? '#e4e4e8' : '#7fb2e5') + ';'
+                        + 'font-weight:' + (esActualSub ? '700' : '400')
+                        + (esActualSub ? '' : ';cursor:pointer');
+                    if (!esActualSub) {
+                        nodo.addEventListener('mouseenter', function() { nodo.style.background = '#2A2A35'; });
+                        nodo.addEventListener('mouseleave', function() { nodo.style.background = 'transparent'; });
+                        nodo.addEventListener('click', function() { bajarASub(c); });
                     }
                     fila.appendChild(nodo);
                     arbolBox.appendChild(fila);
@@ -965,7 +1102,7 @@ JS = """
             taManual.style.cssText = 'display:none;width:100%;height:90px;margin-top:6px;background:#1c1c24;color:#e4e4e8;border:1px solid #34343f;border-radius:4px;padding:6px;font:10px/1.4 "Courier New",monospace;box-sizing:border-box';
             btnCopiarCSS.addEventListener('click', function() {
                 var ctx = elementoActivo();
-                var bloque = ctx ? construirBloqueCSS(ctx.key, ctx.el, ctx.registro) : null;
+                var bloque = ctx ? construirBloqueCSS(ctx.key, ctx.el, ctx.registro, ctx.sub) : null;
                 if (!bloque) {
                     estadoCopiar.textContent = 'nada que copiar';
                     estadoCopiar.style.color = '#8b8b95';
@@ -1406,11 +1543,11 @@ JS = """
             } else if (!res) {
                 panelEspera();
             } else if (!res.el) {
-                panelPerdido(res.key);
+                panelPerdido(res.id);
             } else {
-                if (panel.dataset.builtForKey !== res.key) {
-                    construirControles(res.key, res.el, registroPara(res.key));
-                    panel.dataset.builtForKey = res.key;
+                if (panel.dataset.builtForKey !== res.id) {
+                    construirControles(res, registroPara(res.id));
+                    panel.dataset.builtForKey = res.id;
                 }
                 panel.style.display = 'block';
             }
@@ -1419,7 +1556,9 @@ JS = """
                 overlay.style.display = 'none';
                 return;
             }
-            var registro = registroPara(res.key);
+            // Por `id`, no por key: la tarjeta y cada uno de sus hijos
+            // pineables llevan su propio registro de cambios.
+            var registro = registroPara(res.id);
             aplicarEstado(res.el, registro);
             trackear(res.el);
             actualizarReadouts(res.el, registro);
