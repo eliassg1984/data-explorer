@@ -6962,3 +6962,55 @@ salvo `icono`):
        inspector.py, cara (recorre TODAS las hojas de estilo) y no
        expuesta en `win`. Si hace falta ese aviso en el árbol de diseño,
        exponerla ahí es el próximo paso, no reimplicarla.
+
+156. **Un `transform` en un ancestro CAPTURA a sus hijos `position: fixed`
+     — y por eso mover/redimensionar con el modo diseño NO es una vista
+     previa fiel** (2026-08-22, de la pregunta "achiqué la franja, ¿qué
+     efecto tiene?"). Es comportamiento estándar de CSS, pero muerde
+     fuerte acá porque este proyecto usa `position: fixed` a propósito y
+     en cantidad — los "títulos fantasma" y los controles que suben a la
+     franja (regla #120) — y el modo diseño mueve con `transform`.
+
+     Un elemento con `transform` deja de ser transparente para el
+     posicionamiento: pasa a ser el bloque contenedor de todo descendiente
+     `fixed`, que abandona el viewport y se ancla a él. Medido en vivo
+     sobre `fila_ajuste_top` (viewport 1912, app real, sin modo diseño vs
+     con `translate(574px,46px)` aplicado a mano):
+
+     | | sin transform | con transform |
+     |---|---|---|
+     | `::before` (la banda blanca) | 981px de ancho, left 299 | 592px, left 1172 |
+     | `fecha_ajuste_pill` | left 299 | left 1172 |
+
+     El pill saltó 873px sin que nadie tocara SU CSS: sólo cambió quién
+     era su marco de referencia. Y la banda se recalcula contra la caja
+     del ancestro, así que **achicar el contenedor colapsa la banda** —
+     con `left: 299` y `right: 0` contra una caja de 236px el ancho da
+     negativo y se clampea a 0, o sea la franja blanca desaparece. La
+     aritmética cierra exacta: `width = ancho_caja - 299`,
+     `bottom = alto_caja - 40 - 46`.
+
+     Consecuencia práctica: **al mover o redimensionar un contenedor que
+     tenga hijos `fixed`, se ven DOS cambios mezclados** — el pedido y el
+     colateral de que sus hijos flotantes dejaron de ser libres. Para
+     elementos sin hijos `fixed` la previsualización sí es fiel. Es la
+     contracara de la regla #48 ("nada de esto persiste"): además de
+     efímero, en este caso puntual es *distinto* de lo que produciría el
+     mismo CSS escrito a mano.
+
+     De acá salió **`herramientas/rayos_x.js`**, el cuarto auditor (con
+     `auditar_layout.js`, `auditar_graficos.js` y `ver_figura.py`). Los
+     otros tres miden y reportan en texto, y el inspector marca UN
+     elemento por vez; ninguno respondía "¿qué caja es cada cosa de las
+     que veo?". `rayosX()` pinta la estructura en una capa aparte
+     (`pointer-events:none`, no toca la página) y distingue las tres
+     cosas que a simple vista son indistinguibles: cajas EN EL FLUJO
+     (línea llena, color por nivel de anidado), ESCAPADOS (`fixed`/
+     `absolute`, línea cortada, con una línea trazada hasta el padre al
+     que pertenecen en el CÓDIGO) y PSEUDO-ELEMENTOS (línea de puntos —
+     los que pintan bandas que uno busca en el árbol y no encuentra
+     porque no están en el HTML). Calcula las cajas de los escapados
+     contra su ancestro transformado si lo hay, justamente por esta
+     regla: sin eso, con el modo diseño abierto los recuadros salen
+     corridos. Medido en Compras > Proveedor: 35 cajas en el flujo, 8
+     escapados, 1 pseudo.

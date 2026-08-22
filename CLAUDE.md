@@ -243,6 +243,19 @@ anotaciones viven en el segundo, no en el primero), y hay que **recargar
 después de cambiar el tamaño de la ventana** o reporta recortes que no
 existen. Ver `arquitectura.md` regla #96.
 
+**Para VER la ESTRUCTURA (qué caja es cada cosa): pegá
+`herramientas/rayos_x.js` y llamá `rayosX()`.** Los otros auditores miden y
+reportan en texto; el inspector marca un elemento por vez. Éste pinta la
+página entera en una capa aparte y separa las tres cosas que a simple vista
+son indistinguibles: **cajas en el flujo** (línea llena, color = nivel de
+anidado), **escapados** (`fixed`/`absolute`, línea cortada, con una línea
+trazada hasta el padre al que pertenecen en el código) y
+**pseudo-elementos** (línea de puntos: pintan bandas que no existen en el
+HTML). Ojo con la trampa que motivó la herramienta: **un `transform` en un
+ancestro captura a sus hijos `fixed`**, así que mover/redimensionar con el
+modo diseño NO es vista previa fiel si el contenedor tiene hijos flotantes
+— ver `arquitectura.md` regla #156.
+
 **Para VER un gráfico sin levantar la app: `herramientas/ver_figura.py`.**
 Vuelca a PNG lo que dibuja un dashboard, sin navegador:
 
