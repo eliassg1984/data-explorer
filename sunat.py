@@ -630,7 +630,7 @@ def obtener_comprobantes_rango(fecha_ini, fecha_fin, _progreso=None):
 #
 # `comprobantes_rango` es la puerta que usa la vista: prefiere el parquet y
 # cae a la API en vivo si todavía no existe. Así la vista funciona igual
-# antes y después de la primera corrida del sync. Ver regla #143.
+# antes y después de la primera corrida del sync. Ver regla #160.
 
 ARCHIVO_REGISTRO = "sunat_compras.parquet"
 

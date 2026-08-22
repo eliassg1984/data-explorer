@@ -428,7 +428,7 @@ def _comprobantes(desde=None, hasta=None) -> pd.DataFrame:
     """El universo de comprobantes candidatos, MÁS NUEVOS PRIMERO.
 
     Sale del parquet que dejó `sunat_registro_sync.py` — que ya trae
-    TODOS los períodos deduplicados (regla #143) — y sólo cae a la API si
+    TODOS los períodos deduplicados (regla #160) — y sólo cae a la API si
     ese parquet todavía no existe. Es la diferencia entre arrancar en 1
     segundo o en ~4 minutos de llamadas a SUNAT antes de bajar el primer
     PDF.
