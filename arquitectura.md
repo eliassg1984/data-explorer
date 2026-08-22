@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-166 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+167 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (60)
+**CSS y estilos** (61)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -80,6 +80,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#154** — destinosDeEstilo necesitaba DOS niveles de redirección, no uno — y el guard de cantidad de la…
 - **#156** — Un transform en un ancestro CAPTURA a sus hijos position: fixed — y por eso…
 - **#157** — El modo diseño sólo sabía agarrar elementos con st-key-*, y la mitad de lo que uno quiere…
+- **#167** — El fondo general de la app no se podía editar con el modo diseño: el lienzo es el único…
 
 **Layout y alturas** (15)
 
@@ -265,7 +266,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (10)
+**Herramientas de desarrollo** (11)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -277,6 +278,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#158** — Las cinco herramientas de diagnóstico vivían en tres URLs y dos scripts que había que pegar a…
 - **#165** — Al agregar una barra de modos quedaron DOS controles del mismo estado, uno encima del otro —…
 - **#166** — El contorno del modo diseño se dibujaba ENCIMA del borde real del elemento — así que para ver…
+- **#167** — El fondo general de la app no se podía editar con el modo diseño: el lienzo es el único…
 
 **Decisiones de diseño y UX** (29)
 
@@ -7588,13 +7590,59 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      cosa que se dibuje sobre el perímetro. Necesita margen propio, y
      además una forma de apagarse sin perder el estado de edición.
 
+167. **El fondo general de la app no se podía editar con el modo diseño:
+     el lienzo es el único contenedor que no tiene `st-key-*`** (2026-08-22,
+     del pedido "quiero con mi herramienta de diseño poder editar el color
+     de fondo").
+
+     Todo el sistema de pin resuelve por esa convención: `contenedorConKey()`
+     (inspector) sube desde el elemento hasta `body` buscando la primera
+     clase `st-key-*`, y el modo diseño re-resuelve con
+     `doc.querySelector('.st-key-' + key)`. Pero los cuatro contenedores del
+     lienzo —`stApp`, `stAppViewContainer`, `stMain`,
+     `stMainBlockContainer`— los genera Streamlit, no un
+     `st.container(key=...)`, así que **ninguno tiene key**. Medido en la app
+     antes del arreglo: clic derecho sobre cualquier zona vacía resolvía a
+     `null`, no abría el panel, y el control "Fondo" quedaba inalcanzable
+     justo para lo único que la mayoría quiere cambiar ahí.
+
+     **Arreglo: una key SINTÉTICA, no tocar la lógica del pin.**
+     `marcarLienzo()` en `_inspector_js.py` le agrega
+     `st-key-app_lienzo` a `stAppViewContainer`. Con eso
+     `contenedorConKey()` lo encuentra solo y el modo diseño lo re-resuelve
+     con su `.st-key-<key>` de siempre — **cero cambios en la lógica de
+     ninguno de los dos módulos**, que es lo que hace el arreglo barato y
+     difícil de romper.
+
+     Detalles que sí importan:
+     - **El nombre se eligió después de verificar los wildcards.** Los
+       selectores por familia de `estilos/` van todos con prefijo propio
+       (`app_reporte_`, `chartcard_`, `grid_`, …) y **no hay ninguno genérico
+       `[class*="st-key-"]`**; `app_lienzo` no matchea ninguno. Es
+       exactamente la trampa que advierte CLAUDE.md, y acá se comprobó ANTES
+       de elegir el nombre, no después de un bug.
+     - **Sólo con el inspector activo** (`inspectorActivo()`): en producción
+       el DOM queda intacto, sin clases de mentira.
+     - **El cambio se ve en toda la pantalla** porque el lienzo la cubre
+       entera (medido: 1280×720 de 1280×720). El modo diseño aplica con
+       `!important`, así que gana sobre
+       `[data-testid="stAppViewContainer"] { background: var(--bg-primary); }`
+       de `_00_base.py`, que no lo lleva.
+
+     **Ojo con lo que esto NO hace: no persiste.** Como todo el modo diseño,
+     es DOM efímero y muere al recargar. Para dejar el fondo cambiado de
+     verdad hay que tocar las DOS caras de la paleta (regla #1):
+     `GRIS_FONDO` en `tema.py` y `--bg-primary` en `estilos/_00_base.py`. El
+     flujo pensado es probar el color en vivo, apretar "Copiar CSS" y pegar
+     el valor en esos dos sitios.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#167**.
+> próxima regla nueva es la **#168**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

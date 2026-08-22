@@ -806,6 +806,34 @@ JS = """
             return new URL(win.location.href).searchParams.get('debug') === '1';
         }
 
+        // El LIENZO de la app (el fondo general) no se podia fijar: todo el
+        // sistema de pin resuelve por la convencion `st-key-*`, y
+        // stAppViewContainer lo genera Streamlit, no un st.container(key=...).
+        // Sin key, contenedorConKey() sube hasta el body, no encuentra nada y
+        // devuelve null: clic derecho sobre una zona vacia no abria el panel,
+        // asi que el control "Fondo" del modo diseno era inalcanzable para lo
+        // unico que la mayoria quiere cambiar ahi (regla #167).
+        //
+        // Se le pone una key SINTETICA en vez de tocar la logica del pin: con
+        // eso contenedorConKey() lo encuentra solo y el modo diseno lo
+        // re-resuelve con su `.st-key-<key>` de siempre, sin cambios en
+        // ninguno de los dos modulos.
+        //
+        // `app_lienzo` y no `app_...` a secas: los wildcards de estilos/ van
+        // todos con prefijo propio (`app_reporte_`, `chartcard_`, ...) y
+        // ninguno matchea este nombre — verificado antes de elegirlo, que es
+        // justo la trampa que advierte CLAUDE.md sobre las familias de key.
+        //
+        // Solo con el inspector activo: en produccion el DOM queda intacto.
+        function marcarLienzo() {
+            if (!inspectorActivo()) return;
+            var lienzo = doc.querySelector('[data-testid="stAppViewContainer"]');
+            if (lienzo && lienzo.className.toString().indexOf('st-key-app_lienzo') === -1) {
+                lienzo.classList.add('st-key-app_lienzo');
+            }
+        }
+        marcarLienzo();
+
         function copiarTexto(texto, onOk, onFail) {
             var okDone = false;
             var mark = function() { if (!okDone) { okDone = true; onOk(); } };
