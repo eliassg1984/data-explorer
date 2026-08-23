@@ -188,6 +188,15 @@ Evolución de Compras › Proveedor: 28px de fila de botones + 8 de margen
 inferior, MEDIDO en el navegador el 2026-08-23. Mismo traslado y mismo
 motivo que `FRANJA_GRAN` (ver ese docstring)."""
 
+FRANJA_ATAJOS = 24
+"""Alto de la fila de atajos de fecha (Esta semana/Este mes/Últimos 30
+días/Este año) agregada DENTRO de la tarjeta de Ranking de Compras ›
+Proveedor, MEDIDO en el navegador el 2026-08-23 (tarjeta: 436px sin la
+fila, 460px con ella). A diferencia de `FRANJA_GRAN`/`FRANJA_WIN_NAV`
+(que se restan de una FIGURA), ésta se resta de la `height=` del AgGrid
+del ranking — mismo motivo: la fila es nueva, nadie le había hecho lugar
+todavía."""
+
 
 # ── LA RESTA NO SE HACE ACÁ ────────────────────────────────────────────────
 # Acá vivió `reparto(alto_figura, ...)` durante un día: devolvía el alto del

@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-178 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+179 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (66)
 
@@ -179,7 +179,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#159** — Cuadrados negros en vez de iconos en Chrome < 120: AG Grid 34 emite mask-image sin la…
 - **#163** — arquitectura.md creció hasta ser un documento que nadie podía abrir: 115k tokens, y CLAUDE.md…
 
-**Streamlit** (52)
+**Streamlit** (53)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -233,6 +233,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#173** — El overlay del modo diseño tiene pointer-events:none a propósito (para poder ver/medir lo de…
 - **#176** — st.markdown/st.caption aceptan help= en este Streamlit (1.59.2) — no hace falta inventar un…
 - **#178** — Mover un control de "flotando sobre el marco compartido" a "adentro de una tarjeta" no es un…
+- **#179** — Un atajo de fecha (nuevo o viejo) no sobrevive cambiar de REPORTE y volver — mismo mecanismo…
 
 **Datos, R2 y DuckDB** (19)
 
@@ -268,12 +269,13 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#149** — Documentos SUNAT: de dos columnas a APILADO
 - **#163** — arquitectura.md creció hasta ser un documento que nadie podía abrir: 115k tokens, y CLAUDE.md…
 
-**Fechas, rangos y cortes** (4)
+**Fechas, rangos y cortes** (5)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
 - **#63** — Dos controles del MISMO concepto no se pisan el estado, pero igual es un bug (2026-08-09)
 - **#65** — Datos demo que no tienen la FORMA del dato real no verifican nada (2026-08-09)
+- **#179** — Un atajo de fecha (nuevo o viejo) no sobrevive cambiar de REPORTE y volver — mismo mecanismo…
 
 **Asistente IA** (2)
 
@@ -8018,13 +8020,21 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      La resta no devolvió los 66px completos: `_ALTO_EVO` pegó contra el piso `alturas.MINI = 240` (240 < 211, el resultado teórico de restar las tres franjas), así que la tarjeta quedó en 436px — 29px más que el original 407px, el precio de no dejar que el gráfico se encoja por debajo del mínimo legible. No se persiguió ese resto: `MINI` es un piso a propósito (regla viva de `alturas.py`), no un número para forzar. 29px de aire de más es más barato que un gráfico ilegible.
 
+179. **Un atajo de fecha (nuevo o viejo) no sobrevive cambiar de REPORTE y volver — mismo mecanismo que "un widget que deja de renderizarse pierde su estado" (CLAUDE.md § Streamlit), cruzando reportes en vez de modos.** Al agregar los atajos minimalistas dentro de la tarjeta de Ranking ("Este mes"/"Últimos 30 días"/"Este año", reusando `estado_rango.atajos_rango()`/`aplicar_atajo()` — pedido 2026-08-23, "si agregalos de manera minimalista dentro de la tarjeta"), medir el resultado con el panel de siempre llevó a una falsa alarma. `debug_estado_rango()` (el panel de `?diagnostico=1`, que vive en `app.py` FUERA de `@st.fragment`) no mostraba ningún cambio tras clickear un atajo, ni siquiera forzando un rerun completo (cambiar a Ventas y volver a Compras) — parecía que el `on_click` no escribía nada.
+
+     Antes de sospechar del callback se agregó un `st.caption` de diagnóstico TEMPORAL dentro del propio fragment, leyendo `franja_fecha.contexto()` + `st.session_state.get(k_rango)`. Ese sí mostró el valor nuevo (`(2026, 1, 1)` tras clickear "Este año") de inmediato. La discrepancia era de DÓNDE se medía, no de si el click funcionaba: `debug_estado_rango()` no re-ejecuta en un rerun de solo-fragmento — el mismo problema que ya describe el docstring de `navegacion.py` para el cambio de vista, con otro disparador. Medir el estado de un fragment exige un elemento que viva DENTRO de ese mismo fragment; un panel de afuera muestra la foto del último rerun completo, no el estado real.
+
+     Confirmado que la escritura sí ocurre, quedaba la pregunta real: ¿sobrevive un rerun COMPLETO? Repitiendo la prueba con un `st.write` temporal en `app.py` justo antes y después de `asegurar_rango()`: tras clickear "Este año" en Ranking y navegar Compras→Ventas→Compras, `asegurar_rango` recibía `valor=None` — la clave había DESAPARECIDO de `session_state`, no solo revertido a un valor viejo. La causa: `_k_rango_franja` es POR REPORTE (`clave_rango()` arma `f"rango_franja_{reporte}"`), y mientras se ve OTRO reporte no se instancia ningún `st.date_input` con esa key en ningún punto del árbol — Streamlit descarta el estado de un widget que un run entero no reclama, la misma regla que CLAUDE.md ya documenta para los 3 modos de fecha ("esconderlo borraría la clave del rango del reporte"), solo que acá el límite que dispara el olvido es el REPORTE completo, no el modo dentro de un reporte.
+
+     Para descartar que fuera un bug introducido por los atajos nuevos, se repitió el experimento con un mecanismo VIEJO y no relacionado: la pill global de Ajuste (`ajuste_rango_aplicado_visual`), clickeando "Últimos 30 días" (cambia a `25 jul – 5 ago 2026`, confirmado en el `debug_estado_rango()` de AFUERA porque ese botón sí vive fuera de cualquier fragment — no hace falta el truco del caption interno) y repitiendo Ajuste→Compras→Ajuste: mismo reset, al mismo default (`1 ago – 5 ago 2026`). Es una propiedad general y preexistente de tener una key de rango por reporte, no algo que los atajos de Ranking rompieron — arreglarlo (persistir el rango de cada reporte cruzando navegación entre reportes) es un cambio de arquitectura aparte, fuera de lo pedido. En el uso real no se nota: cambiar de VISTA dentro de Compras (Familia/Proveedor/Producto/…) no dispara este reset, porque `franja_fecha.render()` se llama sin condición para cualquier vista de Compras salvo Documentos SUNAT (regla #176) — el widget queda montado todo el tiempo que uno se queda adentro del reporte, y sólo se desmonta al salir de Compras del todo.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#173**.
+> próxima regla nueva es la **#180**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

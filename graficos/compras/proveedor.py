@@ -16,6 +16,8 @@ import streamlit as st
 
 from st_aggrid import AgGrid, JsCode
 
+import franja_fecha
+from estado_rango import atajos_rango, aplicar_atajo
 from tema import ACENTO, GRIS_BORDE, TEXTO_PRINCIPAL
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, paso_etiquetas,
@@ -432,10 +434,57 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         with st.popover(":material/info:",
                                         key="compras_prov_rank_ayuda",
                                         use_container_width=False):
-                            st.caption("Se agrupa por Día, Semana, Mes o "
-                                       "Año (arriba). El rango de fechas "
-                                       "se ajusta desde otra pestaña de "
-                                       "Compras.")
+                            # 2026-08-23, 3ra vuelta: el texto original
+                            # decía "el rango se ajusta desde otra pestaña"
+                            # — cierto hasta hace un momento, falso ahora
+                            # que los atajos de abajo viven acá mismo.
+                            st.caption("Suma TODO el rango elegido (atajos "
+                                       "de abajo, o el calendario completo "
+                                       "desde otra pestaña). Día/Semana/"
+                                       "Mes/Año, en Evolución, solo agrupa "
+                                       "esa curva — no cambia este total.")
+                    # 2026-08-23, a pedido ("pensé que [Día/Semana/Mes/Año]
+                    # debería funcionar como un selector de fecha... este
+                    # mes, esta semana, este año, últimos 30 días"): eso
+                    # YA existe — es `estado_rango.atajos_rango()`, el
+                    # mismo que arma la lista de "Atajos" del popover de
+                    # fecha que esta vista oculta (regla #177). En vez de
+                    # reinventar el filtro, se reusa: mismo `aplicar_atajo`,
+                    # misma clave canónica del rango
+                    # (`franja_fecha.contexto()["k_rango"]`) — un solo
+                    # dueño, dos lugares desde donde tocarlo.
+                    # Minimalista a pedido: de la lista completa (Todo +
+                    # semana/mes/d30/año + un chip por año) sólo se muestran
+                    # los 4 relativos que el usuario nombró; "Todo" y los
+                    # años sueltos se quedan en el popover original.
+                    _ctx_fecha = franja_fecha.contexto()
+                    _atajos_rank = []
+                    if _ctx_fecha:
+                        _claves_rank = ("semana", "mes", "d30", "anio")
+                        _atajos_rank = [
+                            a for a in atajos_rango(
+                                _ctx_fecha["hoy"],
+                                (_ctx_fecha["fecha_min"],
+                                 _ctx_fecha["fecha_max"]))
+                            if a[0] in _claves_rank]
+                        if _atajos_rank:
+                            with st.container(key="compras_prov_rank_atajos"):
+                                for _ca, _et, _rg in _atajos_rank:
+                                    st.button(
+                                        _et, key=f"atajo_rank_{_ca}",
+                                        on_click=aplicar_atajo,
+                                        args=(_ctx_fecha["k_rango"], _rg,
+                                              _ctx_fecha["reporte"],
+                                              _ctx_fecha["usa_carga_rango"]))
+                    # La fila de atajos (si se dibujó) le come FRANJA_ATAJOS
+                    # al AgGrid de abajo — mismo motivo que FRANJA_GRAN/
+                    # FRANJA_WIN_NAV en Evolución: nadie le hacía lugar
+                    # todavía. Condicional a que la fila exista de verdad
+                    # (`_atajos_rank` puede salir vacía si ningún atajo
+                    # intersecta el rango de datos): restar sin que la fila
+                    # se haya dibujado dejaría el grid más chico sin motivo.
+                    _ALTO_RANK = (_ALTO_FRAME - alturas.FRANJA_ATAJOS
+                                  if _atajos_rank else _ALTO_FRAME)
                     # ── El ranking es un AgGrid, no un `st.dataframe` ──────
                     # 2026-08-19, a pedido: los checkbox de selección se van y
                     # el gesto pasa a ser "clic en la fila". No era posible con
@@ -534,7 +583,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         },
                         allow_unsafe_jscode=True,
                         theme="streamlit",
-                        height=_ALTO_FRAME,
+                        height=_ALTO_RANK,
                         update_on=["selectionChanged"],
                         key=_rank_tab_key,
                     )

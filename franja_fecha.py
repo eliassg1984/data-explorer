@@ -73,6 +73,16 @@ def hay_contexto():
     return _CLAVE_CTX in st.session_state
 
 
+def contexto():
+    """El mismo dict que arma `publicar()`, para quien quiera dibujar SUS
+    propios atajos en otro lugar (2026-08-23: Compras > Proveedor, dentro
+    de la tarjeta de Ranking) sin reimplementar `atajos_rango()`/
+    `aplicar_atajo()` a mano ni duplicar el contexto. `None` si `app.py`
+    todavía no publicó (no debería pasar dentro de un reporte real, pero
+    mejor `None` explícito que un KeyError críptico)."""
+    return st.session_state.get(_CLAVE_CTX)
+
+
 def render():
     """Dibuja el pill + su panel con el contexto publicado.
 

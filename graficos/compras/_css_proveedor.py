@@ -528,6 +528,44 @@ CSS = """        <style>
             opacity: .35 !important;
             box-shadow: none !important;
         }
+        /* 2026-08-23, a pedido ("agregalos de manera minimalista dentro
+           de la tarjeta"): atajos de fecha (Esta semana/Este mes/Últimos
+           30 días/Este año) dentro de la tarjeta de Ranking — mismo
+           lenguaje visual que win_nav (chips chicos, sombra leve, sin
+           estado "activo" — el original de franja_fecha.py tampoco lo
+           marca) para leerse como de la misma familia de controles. */
+        .st-key-compras_prov_rank_atajos {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: wrap !important;
+            gap: 6px !important;
+            margin: 2px 0 10px !important;
+        }
+        .st-key-compras_prov_rank_atajos [data-testid="stElementContainer"] {
+            width: auto !important;
+        }
+        .st-key-compras_prov_rank_atajos [data-testid="stElementToolbar"] {
+            display: none;
+        }
+        .st-key-compras_prov_rank_atajos button {
+            min-width: 0 !important;
+            height: 22px !important;
+            min-height: 22px !important;
+            padding: 0 10px !important;
+            border-radius: 999px !important;
+            border: 0.5px solid rgba(0,0,0,0.08) !important;
+            background: #ffffff !important;
+            color: #5a5a6a !important;
+            font-size: 11px !important;
+            font-weight: 500 !important;
+            line-height: 1 !important;
+            box-shadow: 0 1px 2px rgba(15,15,30,0.06) !important;
+            transition: background .12s, color .12s !important;
+        }
+        .st-key-compras_prov_rank_atajos button:hover {
+            background: #f0edfe !important;
+            color: #4d3fb3 !important;
+        }
         /* Flechas: mas chicas en X, glifo mas grande. */
         .st-key-cp_win_prev button,
         .st-key-cp_win_next button {
