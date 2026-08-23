@@ -176,35 +176,27 @@ CSS = """    <style>
                              despegan del borde + 54px de aire hasta la
                              tarjeta (84 + 15 + 54 = 153, el valor histórico).
            ================================================================== */
-        --rail-der-full: 84px;
+        /* 2026-08-23 (arquitectura.md regla #174): 84px -> 270px como
+           default ÚNICO, y se borra la excepción `:has(.st-key-app_reporte_
+           compras)` que vivía acá (pisaba esta misma variable a 270px SOLO
+           para Compras). Tenía sentido hasta el 2026-08-22: este rail
+           dibujaba VISTAS, contenido que variaba por reporte —angosto en
+           casi todos, una lista icono+nombre+chevron sólo en Compras—. Con
+           la inversión Reportes↔Vistas (regla #170) el rail pasó a dibujar
+           siempre REPORTES: la MISMA lista de 6 ítems (icono+nombre+KPI,
+           regla #171), sin importar cuál esté activo. La excepción quedó
+           pisando el reporte equivocado: cualquiera menos Compras se
+           quedaba en 84px, muy angosto para "S/ -56.3k" o el nombre más
+           largo, con un salto visible de 270→84px al navegar. Verificado en
+           vivo (preview local, datos reales): con la excepción, Compras
+           medía 270px y Ajuste de Inventario/Ventas medían 84px sobre el
+           mismo `.st-key-compras_tabs_row`; con el default único los tres
+           dan 270px. El valor 270px en sí (antes 230px) se sigue debiendo
+           al pedido del 2026-08-22 — ver regla #169 para esa parte. */
+        --rail-der-full: 270px;
         --rail-min: 24px;
         --rail-der-w: var(--rail-der-full);
         --rail-der-res: calc(var(--rail-der-w) + 15px + 54px);
-    }
-
-    /* Compras pide más ancho: su rail no es una columna de etiquetas sino una
-       LISTA (icono + nombre + chevron), ver el bloque final de
-       _20_compras_rail.py. La excepción vive ACÁ y no allá a propósito: los
-       anchos de rail tienen un solo dueño y `test_graficos.py` lo verifica —
-       nació de tenerlo escrito en seis sitios que se derivaban entre sí, con
-       el resultado de que plegar el rail dejaba la franja flotando.
-
-       Se pisa `--rail-der-full` (el ancho DESPLEGADO) y no `--rail-der-w` (el
-       VIGENTE, que el pestillo reescribe al plegar): así plegar y desplegar
-       siguen funcionando sin enterarse, y `--rail-der-res` se deriva sola.
-
-       Sin `@media`: en móvil el rail deja de ser columna (pasa a `width:100%`
-       estático) y la reserva del contenido se anula, así que el valor no lo
-       lee nadie. Ganar por especificidad alcanza — `:root:has()` le gana a
-       `:root` sin depender del orden. */
-    :root:has(.st-key-app_reporte_compras) {
-        /* 2026-08-22: 230px -> 270px, a pedido (probado con el modo diseno).
-           Va sobre la VARIABLE y no como `width` en la regla del rail: el
-           pestillo reescribe `--rail-der-w` al plegar, asi que un ancho
-           suelto en `.st-key-compras_tabs_row` dejaria el rail sin poder
-           plegarse — es justo lo que traia el CSS copiado del modo diseno,
-           que exporta pixeles y no conoce la variable. Ver regla #169. */
-        --rail-der-full: 270px;
     }
 
     /* ============ HEADER NATIVO + ESPACIO SUPERIOR ============ */

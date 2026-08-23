@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-173 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+174 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (63)
+**CSS y estilos** (64)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -83,6 +83,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#167** — El fondo general de la app no se podía editar con el modo diseño: el lienzo es el único…
 - **#169** — El CSS que exporta el modo diseño es una FOTO DE PÍXELES, no la intención: pegarlo tal cual…
 - **#172** — help= en un st.button() rompe cualquier selector CSS que escriba .stButton > button (hijo…
+- **#174** — Al invertir QUÉ dibuja un contenedor compartido (regla #170: compras_tabs_row pasó de Vistas…
 
 **Layout y alturas** (15)
 
@@ -7965,6 +7966,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      `st.query_params` reenvía ESE snapshot completo al navegador. Sólo
      importa para quien apaga el modo diseño a mano y sigue navegando por
      la app esperando que quede apagado.
+
+174. **Al invertir QUÉ dibuja un contenedor compartido (regla #170: `compras_tabs_row` pasó de Vistas a Reportes), una excepción CSS que asumía el contenido VIEJO se queda pisando el reporte equivocado — no se cae sola.** Pedido directo 2026-08-23: "quiero que todos los reportes tengan el mismo rail izquierdo". Causa: `estilos/_00_base.py` definía `--rail-der-full: 84px` como default y sólo lo pisaba a `270px` bajo `:root:has(.st-key-app_reporte_compras)` — una excepción del 2026-08-15 (antes de la regla #170), cuando este rail dibujaba VISTAS y el contenido variaba de verdad por reporte (una columna de etiquetas angosta en casi todos, una lista icono+nombre+chevron sólo en Compras). Desde la regla #170 el rail dibuja siempre REPORTES —la MISMA lista de 6 ítems, sin importar cuál esté activo (regla #171)— así que la condición `:has(.st-key-app_reporte_compras)` dejó de tener sentido, pero nadie la tocó porque **no rompía nada visiblemente en Compras**: sólo se notaba navegando a cualquier OTRO reporte, donde el rail se quedaba en 84px (angosto para "S/ -56.3k" o el nombre más largo) y saltaba de 270→84px al cambiar de reporte.
+
+     Verificado en vivo (preview local, datos reales, viewport 1280×800 — ojo, un viewport de ~857px cae en el breakpoint de 900px que vuelve el rail horizontal, regla #132, y da lecturas que parecen el mismo bug sin serlo): con la excepción, `.st-key-compras_tabs_row` medía 270px en Compras y 84px en Ajuste de Inventario/Ventas/Receta Base — mismo contenedor, mismos 6 ítems, sólo cambiaba el ancho. Fix: se sube `270px` al default único de `:root` y se borra el bloque `:has(.st-key-app_reporte_compras)` entero (no se deja como comentario "removido" — CLAUDE.md). Los tres reportes dan 270px después del cambio, medido de nuevo en la misma sesión.
+
+     Moraleja para el resto del código: cuando un contenedor cambia de DUEÑO de contenido (no sólo este caso — cualquier `:has(.st-key-app_reporte_X)` o similar), hay que grepear ese contenedor por selectores condicionados a un reporte específico y volver a preguntar si la condición sigue significando lo mismo. El bug no tira error ni se ve mal en el reporte que la excepción sí cubre — se ve mal en todos los demás, que es donde nadie mira primero.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
