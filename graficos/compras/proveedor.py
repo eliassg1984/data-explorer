@@ -282,8 +282,16 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # que su figura mide eso menos que la tabla de al lado. La tabla no paga
     # el cromo: su columna tenía 119px de aire medidos, la evolución es la que
     # manda el alto de la fila.
+    # 2026-08-23: se le suman dos filas más (FRANJA_GRAN, FRANJA_WIN_NAV) —
+    # `gran_float`/`win_nav` se mudaron DENTRO de esta tarjeta (antes
+    # flotaban afuera, sin costarle alto a nadie). Sin restarlas, la tarjeta
+    # de Evolución crecía 66px y la de Ranking se estiraba igual para
+    # empatarla (regla de _80_cards.py "dos tarjetas de la misma fila miden
+    # lo mismo") — verificado en vivo: las dos daban 473px de alto en vez
+    # de la fila "natural" de Ranking, dejando aire de más al fondo.
     _ALTO_EVO = max(alturas.MINI,
-                    _ALTO_FRAME - alturas.FRANJA_PILLS - alturas.CROMO_TARJETA)
+                    _ALTO_FRAME - alturas.FRANJA_PILLS - alturas.FRANJA_GRAN
+                    - alturas.FRANJA_WIN_NAV - alturas.CROMO_TARJETA)
     # Ancho de la figura de evolución, MEDIDO en el navegador (viewport 1912,
     # rails desplegados). No sale de una cuenta porque su columna cuelga de
     # dos repartos anidados —COLUMNAS_DRILL y el [2.6, 1] de acá abajo— sobre
@@ -363,9 +371,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                           help="Muestra el nombre del proveedor "
                           "sobre cada barra. Se abrevia segun el ancho "
                           "disponible.")
-        with st.container(key="gran_float"):
-            st.pills("Periodo", ["Día", "Semana", "Mes", "Año"], default="Mes",
-                     key="compras_prov_gran", label_visibility="collapsed")
+        # 2026-08-23: la pill Día/Semana/Mes/Año (key `gran_float`) se movió
+        # DENTRO de la tarjeta de Evolución, a pedido — ver ese bloque más
+        # abajo (justo debajo de `cp_evo_periodo`). Se queda el nombre de
+        # la key aunque ya no flote (mismo criterio que `--rail-der-*`
+        # después de que el rail cambió de lado: renombrar 15 sitios en 4
+        # ficheros por una etiqueta no paga el riesgo).
 
         # El scroll horizontal y el ancho mínimo por barra que vivían acá se
         # fueron con las barras verticales: existían porque muchas series en
@@ -599,21 +610,72 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             format_func=lambda o: (
                                 "📅" if o == periodo.HEREDA else o))
                         _evo_hist = _op_evo != periodo.HEREDA
-                        # 2026-08-23, a pedido ("agreguemos para el gráfico
-                        # de abajo los toggles Día/Semana/Mes/Año — Auto/
-                        # Todo"): esos controles YA gobiernan esta curva
-                        # (gran vía _agregar_periodo más arriba, la ventana
-                        # vía win_nav cuando _op_evo es 📅/HEREDA) — son
-                        # `gran_float`/`win_nav`, flotando sobre el marco
-                        # compartido, no duplicables acá (misma key). Se
-                        # decidió NO clonar los widgets (dos controles
-                        # escribiendo el mismo estado es una fuente clásica
-                        # de bugs de sincronización) y en cambio dejar
-                        # explícito, minimalista, cuál granularidad ya
-                        # aplica — la respuesta a "¿esto también me
-                        # afecta?" sin agregar un control nuevo que pueda
-                        # desincronizarse del de arriba.
-                        st.caption(f"Agrupado por {gran.lower()}")
+                        # 2026-08-23 (2), a pedido ("que no estén arriba de
+                        # Evolución sino que estén dentro... eliges si van
+                        # sobre el gráfico interno o debajo, pero dentro de
+                        # la tarjeta"): `gran_float` (Día/Semana/Mes/Año) y
+                        # `win_nav` (‹ Auto/N/Todo ›) se mudan ACÁ, arriba
+                        # del `st.plotly_chart` — mismo lugar que
+                        # `cp_evo_periodo`, para que las tres filas de
+                        # controles de tiempo de esta tarjeta queden
+                        # juntas. La vuelta anterior (el caption "Agrupado
+                        # por X") ya no hace falta: el control real está
+                        # ahora al lado, no hace falta resumirlo en texto.
+                        #
+                        # Los dos siguen siendo, de verdad, compartidos con
+                        # el Ranking (`gran` entra en `_agregar_periodo()`
+                        # para las dos columnas; `win_nav` solo afecta a
+                        # Evolución hoy — ver arquitectura.md regla #176,
+                        # segunda mitad). Vivir DENTRO de la tarjeta de
+                        # Evolución es una eleccion de UBICACION visual, no
+                        # cambia a qué datos afectan.
+                        with st.container(key="gran_float"):
+                            st.pills("Periodo",
+                                     ["Día", "Semana", "Mes", "Año"],
+                                     default="Mes", key="compras_prov_gran",
+                                     label_visibility="collapsed")
+
+                        def _win_mover(_delta):
+                            st.session_state["cp_prov_win_ini"] = min(
+                                max(0, _win_ini + _delta), _ini_max)
+
+                        def _win_size(_n):
+                            st.session_state["cp_prov_win_size"] = _n
+
+                        with st.container(key="win_nav"):
+                            st.button("‹", key="cp_win_prev",
+                                      disabled=_win_ini <= 0,
+                                      help="Periodos anteriores",
+                                      on_click=_win_mover, args=(-_ventana,))
+                            # Pill activo marcado via <style> con la key
+                            # exacta (no se puede aplicar :active desde
+                            # Python porque Streamlit re-renderiza).
+                            _sel_key = (
+                                "cp_win_auto" if _win_size_sel is None
+                                else "cp_win_all" if _win_size_sel == _n_per
+                                else f"cp_win_{int(_win_size_sel)}")
+                            st.markdown(
+                                f"<style>.st-key-{_sel_key} button{{"
+                                f"background:#6c5ce7 !important;"
+                                f"color:#fff !important;"
+                                f"border-color:#6c5ce7 !important;"
+                                f"box-shadow:0 2px 5px rgba(76,60,180,0.28),"
+                                f"inset 0 1px 0 rgba(255,255,255,0.18) "
+                                f"!important;}}</style>",
+                                unsafe_allow_html=True)
+                            st.button(f"Auto {_ventana_auto}",
+                                      key="cp_win_auto",
+                                      on_click=_win_size, args=(None,))
+                            for _op in (1, 2, 3, 6, 12, 24):
+                                if _op < _n_per:
+                                    st.button(str(_op), key=f"cp_win_{_op}",
+                                              on_click=_win_size, args=(_op,))
+                            st.button(f"Todo {_n_per}", key="cp_win_all",
+                                      on_click=_win_size, args=(_n_per,))
+                            st.button("›", key="cp_win_next",
+                                      disabled=_win_ini >= _ini_max,
+                                      help="Periodos siguientes",
+                                      on_click=_win_mover, args=(_ventana,))
                         _src_evo = base
                         if _evo_hist and d_full is not None and col_fecha:
                             # La ventana se recorta sobre `d_full` (sin el filtro
@@ -823,44 +885,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                     + "".join(f'<div><span>{_k}</span><b>{_v}</b></div>'
                                               for _k, _v in _celdas)
                                     + '</div>', unsafe_allow_html=True)
-        # Navegacion de la ventana de periodos. El indice y el tamano viven en
-        # session_state, asi que clicar una barra NO los mueve. El popover
-        # central muestra cuantas agrupaciones se ven y permite cambiarlo.
-        def _win_mover(_delta):
-            st.session_state["cp_prov_win_ini"] = min(
-                max(0, _win_ini + _delta), _ini_max)
-
-        def _win_size(_n):
-            st.session_state["cp_prov_win_size"] = _n     # None = automatico
-
-        with st.container(key="win_nav"):
-            st.button("‹", key="cp_win_prev", disabled=_win_ini <= 0,
-                      help="Periodos anteriores",
-                      on_click=_win_mover, args=(-_ventana,))
-            # Pills de tamano inline (sin popover). El pill activo se marca
-            # via <style> inyectado con la key exacta (no se puede aplicar
-            # la clase :active desde Python porque Streamlit re-renderiza).
-            _sel_key = ("cp_win_auto" if _win_size_sel is None
-                        else "cp_win_all" if _win_size_sel == _n_per
-                        else f"cp_win_{int(_win_size_sel)}")
-            st.markdown(
-                f"<style>.st-key-{_sel_key} button{{"
-                f"background:#6c5ce7 !important;color:#fff !important;"
-                f"border-color:#6c5ce7 !important;"
-                f"box-shadow:0 2px 5px rgba(76,60,180,0.28),"
-                f"inset 0 1px 0 rgba(255,255,255,0.18) !important;}}</style>",
-                unsafe_allow_html=True)
-            st.button(f"Auto {_ventana_auto}", key="cp_win_auto",
-                      on_click=_win_size, args=(None,))
-            for _op in (1, 2, 3, 6, 12, 24):
-                if _op < _n_per:
-                    st.button(str(_op), key=f"cp_win_{_op}",
-                              on_click=_win_size, args=(_op,))
-            st.button(f"Todo {_n_per}", key="cp_win_all",
-                      on_click=_win_size, args=(_n_per,))
-            st.button("›", key="cp_win_next", disabled=_win_ini >= _ini_max,
-                      help="Periodos siguientes",
-                      on_click=_win_mover, args=(_ventana,))
+        # 2026-08-23: `win_nav` (‹ Auto/N/Todo ›, navegación de la ventana de
+        # períodos) se movió DENTRO de la tarjeta de Evolución, junto con
+        # `gran_float` — ver ese bloque, debajo de `cp_evo_periodo`. Sigue
+        # siendo lectura/escritura de `_win_ini`/`_ventana`/etc., calculados
+        # arriba: mover DÓNDE se dibuja el control no cambia CUÁNDO corren
+        # sus callbacks (Streamlit los corre antes del script, no en el
+        # orden de render) ni qué valores ve — Python normal, un solo scope.
 
     # ── Paneles A y B ─────────────────────────────────────────────────────
     def _um_de(grp):

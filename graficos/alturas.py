@@ -174,6 +174,20 @@ selector se agrega DENTRO de una tarjeta que ya estaba llena: los píxeles que
 ocupa hay que restárselos a la figura, o la tarjeta crece y su eje X termina
 debajo del borde (el modo de fallo de `FRANJA_CONTROLES`)."""
 
+FRANJA_GRAN = 30
+"""Alto de la fila Día/Semana/Mes/Año (`gran_float`) dentro de la tarjeta de
+Evolución de Compras › Proveedor: 22px de cápsula + 8 de margen inferior,
+MEDIDO en el navegador el 2026-08-23. Antes flotaba `position:absolute`
+sobre el marco compartido (no sumaba alto a ninguna tarjeta); se mudó DENTRO
+de la tarjeta de Evolución a pedido, y ahí sí hay que restarla — mismo
+motivo que `FRANJA_PILLS`."""
+
+FRANJA_WIN_NAV = 36
+"""Alto de la fila ‹ Auto/N/Todo › (`win_nav`) dentro de la tarjeta de
+Evolución de Compras › Proveedor: 28px de fila de botones + 8 de margen
+inferior, MEDIDO en el navegador el 2026-08-23. Mismo traslado y mismo
+motivo que `FRANJA_GRAN` (ver ese docstring)."""
+
 
 # ── LA RESTA NO SE HACE ACÁ ────────────────────────────────────────────────
 # Acá vivió `reparto(alto_figura, ...)` durante un día: devolvía el alto del

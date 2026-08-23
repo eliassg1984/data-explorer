@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-177 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+178 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (66)
 
@@ -87,7 +87,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#175** — Las manijas de resize del modo diseño (regla #46) redimensionan CUALQUIER elemento salvo un…
 - **#177** — "COMPRAS: PÁGINA BLANCA, TARJETAS TENUES" (regla #16 y media docena de "vueltas" entre…
 
-**Layout y alturas** (16)
+**Layout y alturas** (17)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -105,6 +105,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#145** — La GRILLA tiene un dueño, igual que el color y el alto
 - **#161** — Un número de píxeles escrito en un comentario no se entera de que el layout cambió: el eje X…
 - **#177** — "COMPRAS: PÁGINA BLANCA, TARJETAS TENUES" (regla #16 y media docena de "vueltas" entre…
+- **#178** — Mover un control de "flotando sobre el marco compartido" a "adentro de una tarjeta" no es un…
 
 **Plotly y figuras** (40)
 
@@ -178,7 +179,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#159** — Cuadrados negros en vez de iconos en Chrome < 120: AG Grid 34 emite mask-image sin la…
 - **#163** — arquitectura.md creció hasta ser un documento que nadie podía abrir: 115k tokens, y CLAUDE.md…
 
-**Streamlit** (51)
+**Streamlit** (52)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -231,6 +232,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#172** — help= en un st.button() rompe cualquier selector CSS que escriba .stButton > button (hijo…
 - **#173** — El overlay del modo diseño tiene pointer-events:none a propósito (para poder ver/medir lo de…
 - **#176** — st.markdown/st.caption aceptan help= en este Streamlit (1.59.2) — no hace falta inventar un…
+- **#178** — Mover un control de "flotando sobre el marco compartido" a "adentro de una tarjeta" no es un…
 
 **Datos, R2 y DuckDB** (19)
 
@@ -8007,6 +8009,14 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Las dos mitades se borraron juntas (no se dejaron como comentario "// removed" — CLAUDE.md), con una nota corta en cada archivo señalando a esta regla en vez de repetir la historia completa. El propio comentario de la "3ra vuelta" ya anticipaba una generalización, pero en el sentido CONTRARIO ("generalizar a los 8 reportes es sacar este `:has()`" — o sea, llevar el blanco de Compras a todos): el pedido real fue al revés, llevar el default de siempre (el de Ajuste) a Compras. Un comentario que anticipa una dirección no ata la decisión futura — quien pide define el sentido, no el código viejo.
 
      Verificado en vivo tras el cambio, Compras vs. Ajuste con los mismos selectores: `html`/`body`/`stAppViewContainer` → `rgb(246,246,248)` en los dos; tarjetas (`compras_prov_card_ranking`, `compras_prov_card_evo`) → blanco, `border-radius:20px`, sombra `0 1px 4px rgba(16,16,20,.06)` en los dos; `fila_ajuste_top::before` → mismo blanco al 88% + `blur(14px)` + borde lavanda de 2px en los dos. Sin errores de consola nuevos (sólo el watermark de licencia de AG Grid, preexistente). `test_graficos.py` sigue en verde: ninguna de las dos mitades tenía un `alto`/`ancho` propio que ese test vigile, sólo color y sombra.
+
+178. **Mover un control de "flotando sobre el marco compartido" a "adentro de una tarjeta" no es un cambio de CSS solo — hay que devolverle a `alturas.py` el alto que dejó de regalar gratis.** Pedido directo 2026-08-23: `gran_float` (Día/Semana/Mes/Año) y `win_nav` (‹ Auto/N/Todo ›) — los mismos dos controles de la regla #176, que quedaron flotando sobre `compras_prov_marco` porque duplicarlos adentro de Evolución hubiera sido dos widgets escribiendo el mismo estado — pasaron a vivir DENTRO de `compras_prov_card_evo`, arriba del `st.plotly_chart`, junto a `cp_evo_periodo` (📅/3m/12m/24m/Todo). La razón de fondo para NO duplicarlos seguía siendo válida; lo que cambió es que "adentro de la tarjeta" ya no significa clonar el widget — es MOVER el único que hay, cortando el bloque de Python de donde estaba y pegándolo más abajo, con la MISMA key (`gran_float`, `win_nav` se quedan con el nombre aunque ya no floten — mismo criterio que `--rail-der-*`).
+
+     El movimiento de Python es seguro sin más: los callbacks de `st.button`/`st.pills` corren ANTES del script en el próximo rerun (no en el momento de click), así que DÓNDE se dibuja el widget en el árbol no cambia CUÁNDO ni CON QUÉ VALORES corre su callback — mismo scope de función, mismas variables (`_win_ini`, `_ventana`, etc.) ya calculadas más arriba. Verificado en vivo con clicks reales (no simulados a medias): clickear "Semana" actualizó el eje X, el título del KPI ("Último mes" → "Última semana"), Y el pie de página ("Detalle de documentos... vista Mes" → "...vista Semana") — la propagación a session_state funciona idéntica a cuando el widget flotaba.
+
+     Lo que SÍ había que arreglar: `_ALTO_EVO` (`graficos/compras/proveedor.py`) restaba `FRANJA_PILLS` (el presupuesto de altura de `cp_evo_periodo`) para que la figura le devolviera esos píxeles a la tarjeta — pero `gran_float`/`win_nav` NUNCA habían estado adentro de una tarjeta antes: flotando, no le costaban un píxel a nadie. Medido en vivo ANTES de tocar la fórmula: la tarjeta de Evolución pasó de 407px (su alto de antes de esta sesión) a 473px — 66px de más, EXACTOS a la suma de las dos filas nuevas (22+8 de `gran_float`, 28+8 de `win_nav`) — y la de Ranking se estiró igual para empatarla (`_80_cards.py`, "dos tarjetas de la misma fila miden lo mismo"), dejando aire de sobra al fondo de su AgGrid. Fix: dos constantes nuevas en `graficos/alturas.py` (`FRANJA_GRAN = 30`, `FRANJA_WIN_NAV = 36`, mismo patrón y misma disciplina de medición que `FRANJA_PILLS`) restadas también en `_ALTO_EVO`.
+
+     La resta no devolvió los 66px completos: `_ALTO_EVO` pegó contra el piso `alturas.MINI = 240` (240 < 211, el resultado teórico de restar las tres franjas), así que la tarjeta quedó en 436px — 29px más que el original 407px, el precio de no dejar que el gráfico se encoja por debajo del mínimo legible. No se persiguió ese resto: `MINI` es un piso a propósito (regla viva de `alturas.py`), no un número para forzar. 29px de aire de más es más barato que un gráfico ilegible.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

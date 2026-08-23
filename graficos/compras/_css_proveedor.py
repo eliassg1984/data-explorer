@@ -13,28 +13,27 @@ comportamiento, no una reorganizacion. El drill lo inyecta cuando toca.
 
 CSS = """        <style>
         .st-key-compras_prov_marco { position: relative; }
-        /* El marco RESERVA arriba la banda donde flotan los tres controles
-           (granularidad, flechas de ventana, popover de proveedores).
-           Mientras fue tarjeta, ese hueco lo daba su padding; al partirse en
-           dos bloques (2026-08-18) el padding se fue con ella y los flotantes
-           quedaron montados sobre el borde superior de los bloques — medido
-           en el navegador: win_nav ocupaba 128..156 contra un bloque que
-           arrancaba en 149. El número sale de medir, no de sumar: el flujo
-           natural ya daba 32px de banda (marco en y=117, bloques en 149) y
-           el control más bajo —win_nav— termina en 156. Con 16px los bloques
-           arrancan en 165: 9px de aire, y el alto total queda en 554, o sea
-           donde estaba antes de partir la tarjeta (556). Si cambia el `top`
-           de esos controles hay que volver a medir esto. */
+        /* El marco RESERVA arriba la banda donde flota el ÚNICO flotante que
+           le queda (el popover de Proveedores) — hasta el 2026-08-23 también
+           flotaban acá `gran_float` y `win_nav`, mudados adentro de la
+           tarjeta de Evolución a pedido (ver ese bloque, más abajo en este
+           archivo). Con un solo flotante más bajo que antes, este
+           padding-top probablemente pueda bajar de 16px, pero se deja igual
+           hasta remedir en vivo — de más no rompe nada, solo deja algo de
+           aire de sobra. */
         .st-key-compras_prov_marco { padding-top: 16px !important; }
-        /* La leyenda se movió a la derecha (vertical); la banda superior solo
-           tiene popover (izq) + toggle (der), alineados arriba. */
+        /* 2026-08-23: `gran_float` DEJÓ de flotar acá — se mudó DENTRO de la
+           tarjeta de Evolución (compras_prov_card_evo), a pedido ("que no
+           estén arriba de Evolución sino dentro"). El nombre de la key se
+           mantiene (mismo criterio que --rail-der-* tras el flip de lado).
+           Estas reglas siguen aplicando, solo que ahora sobre un contenedor
+           en flujo normal en vez de uno `position:absolute`. */
         .st-key-gran_float {
-            position: absolute; top: 14px; right: 16px; z-index: 5;
             width: auto !important;
             /* Aplanar todo lo que Streamlit mete arriba del ButtonGroup
                (label oculto, padding del stElementContainer). Sin esto el
                grupo de pills queda ~14px más abajo que la fila de proveedores. */
-            padding: 0 !important; margin: 0 !important;
+            padding: 0 !important; margin: 0 0 8px !important;
             line-height: 0 !important;
         }
         .st-key-gran_float [data-testid="stElementContainer"],
@@ -477,60 +476,27 @@ CSS = """        <style>
             min-width: 0 !important;
         }
 
-        /* Navegacion de ventana: flechas ‹ › + pills de tamano en la misma
-           fila, flotando (no suman alto a la tarjeta). El key de un
-           container SIN borde ES el stVerticalBlock, por eso la direccion
-           FILA se fija aqui directo.
-           2026-08-16, a pedido: subio de abajo-derecha (bottom:4px) a la
-           MISMA fila que la granularidad Dia/Semana/Mes/Ano, a su
-           izquierda. Los tres numeros van acoplados y salen de medir en
-           vivo, no a ojo:
-             · gran_float esta en right:16px y mide 227px de ancho, asi que
-               su borde izquierdo cae a 243px del borde derecho de la
-               tarjeta; +12px de aire => right:255px para win_nav.
-             · gran_float esta en top:14px y mide 22px de alto (centro a
-               25px); win_nav mide 28px, asi que top = 25 - 14 = 11px lo
-               deja centrado contra el.
-           Si cambian las opciones de granularidad (hoy 4 fijas) cambia su
-           ancho y hay que recalcular el right de aca.
-           `bottom:auto` es obligatorio: sin el, top Y bottom activos a la
-           vez estiran el contenedor de arriba a abajo de la tarjeta.
-           Ya no lleva fondo translucido ni blur: eso existia para leerse
-           como "chip apoyado" SOBRE el grafico; en la banda superior se
-           apoya en el fondo de la tarjeta y el translucido era invisible
-           (blanco 55% sobre blanco) pagando el costo de pintado del blur.
-           z-index 6 y NO 20 (era 20, reportado: "al hacer scroll se
-           superpone a la franja superior"): la franja `fila_ajuste_top` es
-           sticky con z-index 20, y la tarjeta que contiene a win_nav no
-           crea contexto de apilado propio (position:relative con z-index
-           auto), asi que el 20 de win_nav competia DE IGUAL A IGUAL con el
-           de la franja — y a igual z-index gana el que va despues en el
-           DOM, que es la tarjeta. Al scrollear, la nav de periodos pasaba
-           por encima de la franja en vez de por debajo. 6 lo deja sobre el
-           grafico y debajo de la franja, alineado con la convencion de sus
-           vecinos flotantes (gran_float y prov_pop_float usan 5,
-           cp_leyenda_float usa 6). */
+        /* Navegacion de ventana: flechas ‹ › + pills de tamano en una fila.
+           El key de un container SIN borde ES el stVerticalBlock, por eso
+           la direccion FILA se fija aqui directo.
+           2026-08-23: dejó de flotar sobre `compras_prov_marco` — se mudó
+           DENTRO de la tarjeta de Evolución, debajo de `gran_float`, a
+           pedido ("que no estén arriba de Evolución sino dentro"). Toda la
+           coordinación de `top`/`right` contra `gran_float` y contra la
+           franja sticky (que existía porque los dos flotaban con
+           `position:absolute` sobre el mismo marco) dejó de aplicar: en
+           flujo normal, dentro de su propia tarjeta, no hay nada que
+           coordinar. El nombre de la key se mantiene (mismo criterio que
+           --rail-der-* tras el flip de lado). */
         .st-key-win_nav {
-            position: absolute; top: 11px; right: 255px; bottom: auto;
-            z-index: 6;
             width: auto !important;
             display: flex !important; flex-direction: row !important;
             align-items: center !important;
             gap: 2px !important;
             padding: 1px 2px !important;
+            margin: 0 0 8px !important;
             background: transparent !important;
             border-radius: 6px !important;
-        }
-        /* Banda 641-768px: el `right` de arriba deja de servir porque
-           STREAMLIT (no este CSS) ensancha sus pills abajo de 768px —
-           padding 12px -> 16px, medido en vivo: gran_float pasa de 227px a
-           259px y win_nav se le encimaba 20px. Mismo breakpoint que usa
-           estilos/_99_movil.py. El limite inferior es 641px porque de ahi
-           para abajo win_nav ya deja de flotar (position:static, mas
-           abajo en este archivo) y el right no aplica.
-           right = 16 (el de gran_float) + 259 (su ancho aca) + 12 de aire. */
-        @media (max-width: 768px) and (min-width: 641px) {
-            .st-key-win_nav { right: 287px !important; }
         }
         .st-key-win_nav [data-testid="stElementToolbar"] { display: none; }
         .st-key-win_nav [data-testid="stElementContainer"] { width: auto !important; }
@@ -960,32 +926,35 @@ CSS = """        <style>
             }
         }
         @media (max-width: 640px) {
-            /* Navegación de periodos: fluye bajo el gráfico y puede envolver
-               en dos filas en vez de cortarse. */
+            /* Navegación de periodos: ya vive en flujo normal (2026-08-23,
+               dentro de la tarjeta de Evolución — ver más arriba), así que
+               acá solo queda el ancho completo + wrap para que quepa en una
+               pantalla angosta, sin el `position:static` que hacía falta
+               cuando todavía flotaba. */
             .st-key-win_nav {
-                position: static !important;
                 width: 100% !important;
                 margin: 4px 0 0 0 !important;
                 flex-wrap: wrap !important;
                 justify-content: flex-start !important;
             }
-            /* Controles del tope del gráfico. En desktop flotan absolutos
-               sobre la esquina del plot (Proveedores a la izq., pills de
-               periodo a la der.); en 375px sus anchos se cruzan y se solapan.
-               En móvil dejan de flotar y fluyen como fila de controles ARRIBA
-               del gráfico, apilados: Proveedores en su línea, y la
-               granularidad como segmentado a ancho completo (4 segmentos
-               iguales = tap targets grandes). Nada se encima; el plot baja un
-               poco, que en móvil es barato. */
-            .st-key-prov_pop_float,
-            .st-key-gran_float {
+            /* Popover de Proveedores: en desktop flota absoluto sobre la
+               esquina del plot; en 375px su ancho se cruzaba con el resto.
+               En móvil deja de flotar y fluye como fila de controles ARRIBA
+               del gráfico. */
+            .st-key-prov_pop_float {
                 position: static !important;
                 top: auto !important; left: auto !important; right: auto !important;
                 width: 100% !important;
                 margin: 0 0 6px 0 !important;
             }
-            /* Granularidad Día/Semana/Mes/Año a ancho completo, segmentos que
-               se reparten el ancho por igual. */
+            /* Granularidad Día/Semana/Mes/Año: mismo criterio que win_nav
+               arriba (ya está en flujo normal, dentro de la tarjeta de
+               Evolución) — acá solo el ancho completo y los 4 segmentos
+               repartidos por igual, tap targets grandes. */
+            .st-key-gran_float {
+                width: 100% !important;
+                margin: 0 0 6px 0 !important;
+            }
             .st-key-gran_float [data-testid="stButtonGroup"] {
                 width: 100% !important;
                 display: flex !important;
