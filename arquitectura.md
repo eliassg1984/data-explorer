@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-170 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+171 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (62)
 
@@ -172,7 +172,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#159** — Cuadrados negros en vez de iconos en Chrome < 120: AG Grid 34 emite mask-image sin la…
 - **#163** — arquitectura.md creció hasta ser un documento que nadie podía abrir: 115k tokens, y CLAUDE.md…
 
-**Streamlit** (47)
+**Streamlit** (48)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -221,6 +221,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#150** — Mover un widget de sitio cuando su KEY es el estado: el pill de fecha de la franja
 - **#154** — destinosDeEstilo necesitaba DOS niveles de redirección, no uno — y el guard de cantidad de la…
 - **#157** — El modo diseño sólo sabía agarrar elementos con st-key-*, y la mitad de lo que uno quiere…
+- **#171** — Los KPIs del rail (regla #170) se rehicieron a las pocas horas: "no se ve bien" con una…
 
 **Datos, R2 y DuckDB** (19)
 
@@ -7831,13 +7832,73 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      ítem sin excepciones. Sin errores de servidor en toda la sesión de
      pruebas.
 
+171. **Los KPIs del rail (regla #170) se rehicieron a las pocas horas:
+     "no se ve bien" con una captura, y una segunda con la referencia
+     exacta — el panel "Vistos recientemente" de MSN Money: nombre a la
+     izquierda, valor grande alineado a la derecha EN LA MISMA FILA, y un
+     dato secundario chico debajo de cada uno.** La primera versión
+     dibujaba los KPIs como una tercera línea suelta debajo del botón — un
+     `st.markdown` hermano — y el resultado se leía flotando entre dos
+     filas, sin quedar claro de cuál era. El problema no era de tipografía
+     ni de color: era que texto en un renglón propio, por definición, NO
+     comparte fila con nada.
+
+     **`st.button()` escapa el HTML de su label — verificado en vivo, no
+     asumido.** Se armó un server descartable de una línea
+     (`st.button('<span style="color:red">rojo</span>')`) y el resultado
+     fue el texto literal `&lt;span...&gt;`, no HTML renderizado. Cerrada
+     esa puerta, la única forma de que nombre y valores compartan fila es
+     SUPERPONERLOS: cada ítem del rail pasa a envolverse en su propio
+     `st.container(key=f"navitem_{slug}")` (botón + su `st.markdown` de
+     valores, juntos) — ese contenedor es el ancla real de
+     `position:absolute` que los dos elementos necesitaban y no tenían
+     (antes eran hermanos sueltos sin ancestro en común más cercano que
+     `graf_tipo_chips`, compartido por TODOS los ítems).
+
+     **Trampa que costó un diagnóstico propio: Streamlit le da
+     `position:relative` a TODO `stElementContainer` por defecto** (para
+     sus propias decoraciones internas — toolbar, etc.), y ese wrapper del
+     `st.markdown` —alto 0, más CERCANO en el DOM a `.nav-kpis-valores`
+     que el propio `navitem_`— se colaba como ancla de
+     `position:absolute` antes de llegar a `navitem_`. Medido: el bloque
+     de valores aparecía centrado contra una caja de 0px de alto en vez
+     del botón de 40px, corrido ~20px hacia abajo — con la caja del ancla
+     equivocada, "centrado verticalmente" da un resultado que SE VE
+     centrado sobre algo, sólo que sobre lo que no es. Se apaga con
+     `position:static` SÓLO en el `stElementContainer` que envuelve a
+     `.nav-kpis-valores` (con `:has()`, no en todos los del `navitem_` — el
+     del botón necesita el suyo).
+
+     **El chevron (›) se sacó**, no se reubicó: ocupaba la misma esquina
+     derecha que ahora ocupan los valores, y entre los dos el valor es el
+     que aporta información — el chevron sólo decía "hay más", que ya lo
+     dice el propio hover de un ítem de lista.
+
+     **El hairline se simplificó de rebote.** La versión anterior (regla
+     #170) necesitaba lógica de hermanos (`:has(+ div .nav-kpis)`) porque
+     botón y KPI eran hijos SUELTOS de `graf_tipo_chips`, y había que
+     decidir cuál de los dos cerraba la línea de cada reporte. Con los dos
+     adentro de un único `navitem_`, cada reporte vuelve a ser exactamente
+     un hijo directo — un hairline por hijo, apagado en el último, sin
+     `:has()` ni casos especiales.
+
+     Verificado en vivo, con los 6 reportes reales: los 6 items dan
+     `centrado:true` (centro del valor vs. centro del botón, tolerancia
+     2px); ningún label choca con su valor (el hueco más chico, Ventas
+     con 3 datos en el secundario, da 12px libres); el activo (Compras)
+     colorea sus valores en `--accent-deep` sobre el fondo `accent-light`,
+     igual que el label; hairline limpio en los 5 primeros, apagado en el
+     último; mobile sigue ocultando los valores (0 visibles de 4 en DOM,
+     `position:static` — el layout de fila no tiene "debajo" donde
+     superponer nada).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#171**.
+> próxima regla nueva es la **#172**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

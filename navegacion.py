@@ -81,18 +81,32 @@ def _on_nav_click(nombre):
 
 
 def _formatear_kpis(info):
-    """Línea chica '· '-separada con los KPIs del reporte, o None si no
-    definió `kpis`, si la consulta no trajo nada (parquet sin esa columna,
-    R2 caído — resumen_kpis() ya devuelve {} en esos casos) o si es la
-    primera carga y todavía no hay nada cacheado.
+    """(primario, secundario) para el ítem del rail — estilo lista de
+    cotizaciones (referencia: el panel "Vistos recientemente" de MSN Money,
+    a pedido 2026-08-22): el NOMBRE va a la izquierda, los NÚMEROS a la
+    derecha en dos renglones — grande arriba, chico y apagado abajo. No es
+    una línea `· `-separada como la primera versión: esa se leía flotando
+    entre dos filas sin quedar claro de cuál era, porque no compartía
+    renglón con su nombre. Acá los dos textos se superponen en la MISMA
+    fila del botón vía CSS (`position:absolute`) — ver el contenedor
+    `navitem_<slug>` que los envuelve a los dos en `inject_navegacion`.
+
+    `secundario` es None cuando el reporte define un solo KPI (Ajuste,
+    Inventario, Receta Base/Venta): no hay nada natural que poner en el
+    segundo renglón, y dejarlo vacío se lee mejor que inventar un dato.
 
     Caso especial VENTAS: si el reporte trae "Venta" Y "Pax" (únicos dos
-    KPIs que hoy comparten reporte), se agrega un tercer valor DERIVADO
-    —Ticket promedio = Venta / Pax— que no sale de ninguna columna del
-    parquet por sí sola. No hay una forma genérica de expresar "un KPI es
-    la razón entre otros dos" en `REPORTES[x]["kpis"]` que valga la pena
-    para un solo caso; se resuelve acá, a mano, igual que ya hace
-    `graficos/ventas_resumen.py` con el mismo cálculo."""
+    KPIs que hoy comparten reporte), el secundario suma un tercer valor
+    DERIVADO —Ticket promedio = Venta / Pax— que no sale de ninguna
+    columna del parquet por sí sola. No hay una forma genérica de expresar
+    "un KPI es la razón entre otros dos" en `REPORTES[x]["kpis"]` que
+    valga la pena para un solo caso; se resuelve acá, a mano, igual que ya
+    hace `graficos/ventas_resumen.py` con el mismo cálculo.
+
+    Retorna `None` (no una tupla) si no definió `kpis`, si la consulta no
+    trajo nada (parquet sin esa columna, R2 caído — resumen_kpis() ya
+    devuelve {} en esos casos) o si es la primera carga y todavía no hay
+    nada cacheado."""
     kpis = info.get("kpis")
     if not kpis:
         return None
@@ -100,19 +114,21 @@ def _formatear_kpis(info):
                            info.get("kpi_fecha"), info.get("kpi_dedup"))
     if not valores:
         return None
-    partes = []
-    for etiqueta, _col, agregacion in kpis:
-        v = valores.get(etiqueta)
-        if v is None:
-            continue
+
+    def _fmt(etiqueta, agregacion, v):
         if agregacion == "sum":
-            partes.append(fmt_k(v))
-        else:
-            suf = _SUFIJO_KPI.get(etiqueta, "")
-            partes.append(f"{v:,.0f}{(' ' + suf) if suf else ''}")
+            return fmt_k(v)
+        suf = _SUFIJO_KPI.get(etiqueta, "")
+        return f"{v:,.0f}{(' ' + suf) if suf else ''}"
+
+    partes = [_fmt(et, ag, valores[et])
+              for et, _col, ag in kpis if valores.get(et) is not None]
+    if not partes:
+        return None
     if "Venta" in valores and "Pax" in valores and valores["Pax"]:
         partes.append(f"S/ {valores['Venta'] / valores['Pax']:.1f}")
-    return " · ".join(partes) if partes else None
+    primario, resto = partes[0], partes[1:]
+    return primario, (" · ".join(resto) if resto else None)
 
 
 # ── CSS de la FRANJA HORIZONTAL (hoy: Vistas) ───────────────────────────
@@ -291,17 +307,72 @@ _CSS_FRANJA_VISTAS = f"""
 # ── CSS del RAIL VERTICAL (hoy: Reportes) ───────────────────────────────
 # El ANCHO/posición/pestillo/breakpoint móvil son de `estilos/_20_compras_
 # rail.py` + `_25_rails_pestillo.py` (contenedor por POSICIÓN, ver docstring
-# del módulo) — no se duplican acá. Lo único propio de Reportes es la línea
-# de KPIs, que no existía antes de este cambio.
+# del módulo) — no se duplican acá. Lo único propio de Reportes son los
+# KPIs, que no existían antes de este cambio.
+#
+# 2026-08-22, segunda vuelta: la primera versión dibujaba los KPIs como una
+# TERCERA LÍNEA suelta debajo del botón (un `st.markdown` hermano) —
+# reportado con captura: "no se ve bien", el texto quedaba flotando entre
+# dos filas sin quedar claro a cuál pertenecía. A pedido, se rehace tomando
+# de referencia el panel "Vistos recientemente" de MSN Money: nombre a la
+# IZQUIERDA, valores a la DERECHA en la MISMA fila (grande arriba, chico y
+# apagado abajo).
+#
+# `st.button()` ESCAPA el HTML de su label — verificado en vivo (server de
+# prueba descartable, `<span style="...">` salió como texto literal
+# `&lt;span...&gt;`, no como HTML — no hay forma de meter los valores
+# DENTRO del botón. La solución es superponerlos: cada ítem del rail se
+# envuelve en su PROPIO `st.container(key=f"navitem_{slug}")`
+# (`inject_navegacion`, más abajo) — eso da un ancestro común real para
+# `position:relative`, y los valores se posicionan `absolute` sobre la
+# esquina derecha de esa misma caja, centrados verticalmente contra el
+# alto del botón. Sin el contenedor por ítem no hay ancestro que compartan
+# el botón y su texto de valores (son hermanos sueltos en el flujo), y
+# `position:absolute` necesita ANCLAR contra algo.
 _CSS_KPIS = """
 <style>
-/* Hermano del boton (st.markdown propio, NO texto del <p> del boton — un
-   st.button no acepta HTML anidado en su label). La regla "NUCLEAR" de
-   estilos/_20_compras_rail.py (.st-key-graf_tipo_chips *:not(button):...)
-   ya deja el stElementContainer/stMarkdownContainer que lo envuelve en
-   margin/padding:0, asi que queda pegado al boton de arriba sin gap propio
-   que anular aca. */
-.st-key-graf_tipo_chips .nav-kpis {
+.st-key-graf_tipo_chips [class*="st-key-navitem_"] {
+    position: relative !important;
+}
+/* Streamlit le da `position:relative` a TODO stElementContainer por
+   defecto (para sus propias decoraciones internas — toolbar, etc.), y ese
+   wrapper del st.markdown (alto 0, más CERCANO en el DOM a .nav-kpis-
+   valores que el propio navitem_) se cuela como ancla del `position:
+   absolute` antes de llegar a navitem_ — medido en vivo: el valor
+   aparecía centrado contra una caja de 0px de alto en vez del botón de
+   40px, corrido hacia abajo. Se apaga SOLO en el contenedor que envuelve
+   a `.nav-kpis-valores` (con `:has()`, no en TODOS los stElementContainer
+   del navitem_ — el del botón necesita el suyo para sus propias
+   decoraciones) para que `position:absolute` salte a `navitem_`, que es
+   el ancla que sí tiene el alto correcto. */
+.st-key-graf_tipo_chips [class*="st-key-navitem_"]
+    [data-testid="stElementContainer"]:has(.nav-kpis-valores) {
+    position: static !important;
+}
+/* Hermano del boton (st.markdown propio dentro del mismo navitem_). La
+   regla "NUCLEAR" de estilos/_20_compras_rail.py excluye esta clase de su
+   zeroing de margin/padding — si no, perdía la pelea de especificidad. */
+.st-key-graf_tipo_chips .nav-kpis-valores {
+    display: block !important;
+    position: absolute !important;
+    right: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    text-align: right !important;
+    max-width: 46% !important;
+    pointer-events: none !important;   /* no le roba el clic al boton de abajo */
+}
+.st-key-graf_tipo_chips .nav-kpis-primario {
+    display: block !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    color: var(--text-primary) !important;
+    line-height: 1.3 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+.st-key-graf_tipo_chips .nav-kpis-secundario {
     display: block !important;
     font-size: 9.5px !important;
     font-weight: 400 !important;
@@ -310,10 +381,18 @@ _CSS_KPIS = """
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    /* Alinea con el LABEL del boton de arriba, no con su borde izquierdo:
-       9px de padding-left del boton + ~19px de icono + 10px de gap. */
-    padding: 0 10px 4px 38px !important;
-    margin-top: -4px !important;
+}
+/* Sobre fondo activo (accent-light) el texto muted pierde contraste —
+   mismo tratamiento que el label del botón en ese estado. El botón y el
+   texto de valores NO son hermanos directos (cada uno cuelga de su propio
+   stElementContainer dentro de navitem_), así que no sirve un combinador
+   `~` entre ellos: se sube al ANCESTRO común (`navitem_`) con `:has()` y
+   se baja de nuevo a los dos textos. */
+.st-key-graf_tipo_chips [class*="st-key-navitem_"]:has(button[kind="primary"])
+    .nav-kpis-primario,
+.st-key-graf_tipo_chips [class*="st-key-navitem_"]:has(button[kind="primary"])
+    .nav-kpis-secundario {
+    color: var(--accent-deep) !important;
 }
 </style>
 """
@@ -539,41 +618,56 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
                     destino = st.session_state.get(f"_ultimo_{grupo}", miembros[0])
                     if destino not in miembros:
                         destino = miembros[0]
-                    st.button(
-                        grupo,
-                        key=f"navbtn_{_slug(grupo)}",
-                        help=grupo,
-                        icon=info.get("icono"),
-                        type="primary" if reporte_activo in miembros else "secondary",
-                        use_container_width=True,
-                        on_click=_on_nav_click,
-                        args=(destino,),
-                    )
+                    # navitem_<slug> es el ancestro común que necesita el CSS
+                    # de los valores (position:relative + el :has() del
+                    # estado activo) — ver el docstring de _CSS_KPIS. Los
+                    # grupos no tienen KPI propio (¿de cuál de sus miembros
+                    # sería? Movimientos = Salidas + Requerimientos, no hay
+                    # una respuesta sin ambigüedad) así que este contenedor
+                    # sólo envuelve al botón, pero se mantiene por
+                    # UNIFORMIDAD: el hairline entre ítems (estilos/_20_
+                    # compras_rail.py) asume que cada reporte es exactamente
+                    # un `navitem_`, agrupado o no.
+                    with st.container(key=f"navitem_{_slug(grupo)}"):
+                        st.button(
+                            grupo,
+                            key=f"navbtn_{_slug(grupo)}",
+                            help=grupo,
+                            icon=info.get("icono"),
+                            type="primary" if reporte_activo in miembros else "secondary",
+                            use_container_width=True,
+                            on_click=_on_nav_click,
+                            args=(destino,),
+                        )
                     continue
                 etiqueta = info.get("label_corto") or nombre.split()[0][:10]
-                st.button(
-                    etiqueta,
-                    key=f"navbtn_{_slug(nombre)}",
-                    help=nombre,
-                    icon=info.get("icono"),
-                    type="primary" if nombre == reporte_activo else "secondary",
-                    use_container_width=True,
-                    on_click=_on_nav_click,
-                    args=(nombre,),
-                )
-                # Línea de KPIs, si el reporte definió `kpis`. Va DENTRO del
-                # <p> del label (el mismo truco que la tarjeta de la franja
-                # de fecha: un <span> hijo hereda tipografía/color propios
-                # sin que el botón necesite un segundo widget). unsafe_
-                # allow_html=True porque va como HTML crudo en el propio
-                # label del botón — st.button no acepta children.
-                linea = _formatear_kpis(info) if not info.get("tool") else None
-                if linea:
-                    st.markdown(
-                        f'<div class="nav-kpis" '
-                        f'style="margin-top:-2px">{linea}</div>',
-                        unsafe_allow_html=True,
+                with st.container(key=f"navitem_{_slug(nombre)}"):
+                    st.button(
+                        etiqueta,
+                        key=f"navbtn_{_slug(nombre)}",
+                        help=nombre,
+                        icon=info.get("icono"),
+                        type="primary" if nombre == reporte_activo else "secondary",
+                        use_container_width=True,
+                        on_click=_on_nav_click,
+                        args=(nombre,),
                     )
+                    # Valores del KPI, superpuestos a la derecha de ESTE
+                    # MISMO botón vía CSS — ver el docstring de _CSS_KPIS
+                    # para por qué no van dentro del label (st.button
+                    # escapa el HTML) y por qué hace falta el
+                    # `navitem_<slug>` que los envuelve a los dos.
+                    par = _formatear_kpis(info) if not info.get("tool") else None
+                    if par:
+                        primario, secundario = par
+                        st.markdown(
+                            '<div class="nav-kpis-valores">'
+                            f'<span class="nav-kpis-primario">{primario}</span>'
+                            + (f'<span class="nav-kpis-secundario">{secundario}</span>'
+                               if secundario else '')
+                            + '</div>',
+                            unsafe_allow_html=True,
+                        )
         # PIE DEL RAIL — Refrescar, la única ACCIÓN (no un reporte). Fuera de
         # graf_tipo_chips por lo mismo que el pestillo (regla #6).
         boton_refresco()

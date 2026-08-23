@@ -241,15 +241,17 @@ CSS = """    /* ================================================================
         padding: 0 !important;
     }
     /* NUCLEAR: cero margin/padding/gap en TODO descendiente del rail excepto
-       el <button>, el texto y la línea de KPIs (.nav-kpis, navegacion.py —
-       excluida el 2026-08-22: sin esto, esta regla le gana en especificidad
-       al padding/margin propios que le da _CSS_KPIS, por la doble-clase de
-       acá abajo — medido: (0,4,3,0) contra (0,2,0,0), gana ésta aunque las
-       dos lleven !important). Especificidad reforzada duplicando la clase
-       del contenedor (.st-key-graf_tipo_chips.st-key-graf_tipo_chips) para
-       ganarle a cualquier regla base de Streamlit con clase única + !important. */
+       el <button> y el texto. Los valores del KPI (navegacion.py,
+       .nav-kpis-valores/-primario/-secundario) NO necesitan excepción acá
+       pese a llevar su propio CSS en `_CSS_KPIS`: van con `position:
+       absolute` (fuera del flujo, el margin/padding de layout no les
+       aplica) y `-primario`/`-secundario` son `<span>`, ya cubiertos por
+       el `:not(span)` de abajo. Especificidad reforzada duplicando la
+       clase del contenedor (.st-key-graf_tipo_chips.st-key-graf_tipo_chips)
+       para ganarle a cualquier regla base de Streamlit con clase única +
+       !important. */
     .st-key-graf_tipo_chips.st-key-graf_tipo_chips
-        *:not(button):not(p):not(span):not(.rail-cat-badge):not(.rail-sep):not(.nav-kpis) {
+        *:not(button):not(p):not(span):not(.rail-cat-badge):not(.rail-sep) {
         margin: 0 !important;
         padding: 0 !important;
         gap: 0 !important;
@@ -451,23 +453,25 @@ CSS = """    /* ================================================================
         .st-key-compras_tabs_row .rail-sep {
             display: none !important;
         }
-        /* La línea de KPIs (navegacion.py, 2026-08-22) también se oculta acá.
-           Es un segundo RENGLÓN pensado para apilarse BAJO su botón en una
-           columna; en la fila horizontal de chips no hay debajo de nada —
-           medido en vivo (375px): el div.nav-kpis se convertía en un
-           flex-item más DE LA MISMA FILA que los chips, flotando a la
-           altura de arriba en vez de bajo su reporte. Mismo criterio que
-           categorías/separadores: lo que solo tiene sentido en columna no
-           sobrevive el paso a fila.
+        /* Los valores de KPI (navegacion.py, 2026-08-22 — reescrito en su
+           segunda vuelta el mismo día: primero fue una línea de texto
+           debajo del botón, ahora es un bloque superpuesto a su derecha
+           vía `position:absolute`, ver `_CSS_KPIS`) también se ocultan
+           acá. Ese `position:absolute` ancla contra `navitem_<slug>`, que
+           en mobile pasa a ser un CHIP angosto en una fila horizontal —
+           "superponer a la derecha" ahí no tiene ancho donde caer y se ve
+           roto. Mismo criterio que categorías/separadores: lo que solo
+           tiene sentido en columna no sobrevive el paso a fila.
            Clase DUPLICADA a propósito: navegacion.py::_CSS_KPIS pone
-           `display:block` con la MISMA especificidad (.st-key-graf_tipo_
-           chips .nav-kpis, 0-2-0-0) y se inyecta DESPUÉS en el orden de
-           carga (inject_css() en estilos/ corre antes que inject_navegacion()
-           en app.py) — a igual especificidad gana la que va después, así
-           que esta regla perdía en silencio (medido: kpisVisibles seguía
-           en 4 después de agregarla sin la clase doblada). Con
-           (0,3,0,0) gana siempre, sin depender del orden de inyección. */
-        .st-key-graf_tipo_chips.st-key-graf_tipo_chips .nav-kpis {
+           `display:block` con la MISMA especificidad
+           (.st-key-graf_tipo_chips .nav-kpis-valores, 0-2-0-0) y se
+           inyecta DESPUÉS en el orden de carga (inject_css() en estilos/
+           corre antes que inject_navegacion() en app.py) — a igual
+           especificidad gana la que va después, así que esta regla perdía
+           en silencio si no se dobla la clase (medido con la versión
+           anterior de este bloque). Con (0,3,0,0) gana siempre, sin
+           depender del orden de inyección. */
+        .st-key-graf_tipo_chips.st-key-graf_tipo_chips .nav-kpis-valores {
             display: none !important;
         }
         /* El bug del "encimado": los verdaderos flex-items de la fila NO son
@@ -552,34 +556,28 @@ CSS = """    /* ================================================================
            solo duenio" (test_graficos.py la verifica) y no es burocracia --
            nacio de que el ancho estaba escrito en seis sitios que se
            derivaban entre si y plegar el rail dejaba la franja flotando. */
-        /* La fila: icono, label, chevron. El hairline NO va acá (ver abajo):
+        /* La fila: icono + label. Ya no hay chevron (ver más abajo, donde se
+           explica por qué se sacó) — el hairline NO va en el <button>:
            medido en vivo (2026-08-22), un `button[kind="primary"]` global de
            _00_base.py (`border: none !important`) le gana en especificidad
-           a cualquier regla de acá que sólo mencione `button` a secas —
-           agregarle `[kind="primary"]` a esta regla para emparejar
-           specificidad hubiera sido posible, pero habría dejado la línea
-           CORTANDO entre el ícono+label y su propia línea de KPIs (ver
-           siguiente comentario) — se resolvió mejor, no más forzado. */
+           a cualquier regla de acá que sólo mencione `button` a secas. */
         .st-key-graf_tipo_chips
         [data-testid="stButton"] > button {
             padding: 10px 12px 10px 9px !important;
             gap: 10px !important;
         }
-        /* El hairline separa UN REPORTE del siguiente — no el ícono+label de
-           su propia línea de KPIs (navegacion.py, 2026-08-22). Por eso vive
-           en el CONTENEDOR (`> div`, el stElementContainer que Streamlit
-           pone alrededor de cada st.button/st.markdown), no en el <button>:
-           así evita también la pelea de especificidad de arriba, porque acá
-           no hay `button[kind=...]` compitiendo.
-           Default: hairline en TODO hijo directo. Se apaga en el div del
-           BOTÓN cuando el siguiente hermano es su propia línea de KPIs —
-           ahí la línea la lleva el KPI, un renglón más abajo, cerrando el
-           PAR entero. Y se apaga siempre en el último hijo de la lista
-           (quedaría flotando sobre el padding inferior del rail). */
+        /* El hairline separa UN REPORTE del siguiente. Desde que cada
+           reporte es un único `navitem_<slug>` (navegacion.py, 2026-08-22 —
+           el botón Y sus valores de KPI envueltos juntos, ver el docstring
+           de `_CSS_KPIS`), esto es simple: un hairline por hijo directo de
+           `graf_tipo_chips` —que hoy es exactamente un `navitem_` por
+           reporte—, apagado sólo en el último (quedaría flotando sobre el
+           padding inferior del rail). Va en el CONTENEDOR y no en el
+           <button> también por lo de arriba: acá no compite ningún
+           `button[kind=...]` de mayor especificidad. */
         .st-key-graf_tipo_chips > div {
             border-bottom: 1px solid var(--border) !important;
         }
-        .st-key-graf_tipo_chips > div:has(+ div .nav-kpis),
         .st-key-graf_tipo_chips > div:last-child {
             border-bottom: none !important;
         }
@@ -611,26 +609,14 @@ CSS = """    /* ================================================================
             flex: 0 0 auto !important;
             margin: 0 !important;
         }
-        /* Chevron. Va en ::after porque ::before ya está ocupado (y anulado)
-           por la viñeta vieja. `margin-left:auto` lo empuja al borde
-           derecho: funciona porque el wrapper del label es `flex: 0 1 auto`
-           y no se estira — si alguien le pone flex:1, el chevron se pega al
-           texto y deja de haber margen que repartir. */
-        .st-key-graf_tipo_chips
-        [data-testid="stButton"] > button::after {
-            content: "›";
-            margin-left: auto !important;
-            font-size: 17px !important;
-            line-height: 1 !important;
-            color: var(--text-muted) !important;
-            flex: 0 0 auto !important;
-        }
-        .st-key-graf_tipo_chips
-        [data-testid="stButton"] > button[kind="primary"]::after,
-        .st-key-graf_tipo_chips
-        [data-testid="stButton"] > button:hover::after {
-            color: inherit !important;
-        }
+        /* El chevron (›) que hasta acá vivía en `button::after` SE SACÓ el
+           2026-08-22 (regla #170, segunda vuelta): con los valores del KPI
+           ahora ocupando la esquina derecha de la fila (navegacion.py,
+           `.nav-kpis-valores`, `position:absolute; right:12px`), un
+           chevron en el mismo rincón se superponía con el texto del
+           monto. Entre los dos, el valor es el que aporta información;
+           el chevron sólo indicaba "hay más" — que ya lo dice el propio
+           hover/cursor del ítem de una lista de navegación. */
     }
 
     /* =================================================================== */
