@@ -107,6 +107,14 @@ cambiaba de reporte a mitad de una sesión de diseño. `esUIPropiaDeDiseno()`
 #173) bloquean cualquier click que no sea sobre la UI del propio
 diseño/inspector/barra mientras `disenoActivo()`. El clic derecho
 (`contextmenu`, el pin de inspector.py) no se toca.
+
+Las manijas de resize (arriba) mueven `width`/`height` del contenedor, pero
+un Plotly o un AgGrid no le hacen caso a eso — cada uno tiene su propio
+tamaño fijo por dentro (arquitectura.md #175). `contenidoRedimensionable()`
++ `sincronizarContenidoRedimensionable()` detectan el caso y empujan el
+tamaño nuevo hacia adentro: `Plotly.relayout()` para gráficos, y forzar
+iframe + `#gridContainer` (mismo origen, se entra sin CORS) para AgGrid,
+que después se reacomoda solo.
 """
 
 import json

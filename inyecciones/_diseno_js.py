@@ -677,6 +677,58 @@ JS = """
             }
         }
 
+        // ── Gráficos y tablas: redimensionar el contenedor NO ALCANZA ──────
+        // Verificado en vivo (2026-08-23, arquitectura.md regla #175):
+        // CLAUDE.md ya avisa que "Plotly no llena su contenedor" — acá se
+        // confirmó por qué. Un Plotly (`st.plotly_chart`) trae ancho/alto
+        // EXPLICITOS en `fig.layout` (nunca autosize: así vive el contrato
+        // de alturas de graficos/alturas.py), así que agrandar el `<div
+        // class="js-plotly-plot">` de afuera no mueve un píxel el SVG de
+        // adentro — hace falta `Plotly.relayout(gd, {width, height})`, la
+        // misma API que usaría cualquier código que lo redimensione a mano.
+        // AgGrid (`st_aggrid`) es peor: son TRES cajas con tamaño fijo en
+        // cascada, cada una ciega a que la de afuera cambió — el `<iframe>`
+        // trae un `height=` HTML (lo pone Streamlit vía postMessage, el
+        // protocolo de custom components) y, DENTRO del iframe (mismo
+        // origen que la app — se puede entrar sin CORS), el propio React de
+        // st_aggrid le clava un `style="width:...px;height:...px"` a su
+        // `#gridContainer`. Ninguna de las tres cede con solo agrandar la
+        // de afuera. Una vez las tres ceden, ag-grid SÍ se reacomoda solo
+        // (su propio ResizeObserver interno) — no hace falta pedirle nada,
+        // a diferencia de Plotly.
+        function contenidoRedimensionable(elemento) {
+            var gd = elemento.classList.contains('js-plotly-plot')
+                ? elemento : elemento.querySelector('.js-plotly-plot');
+            if (gd) return {tipo: 'plotly', gd: gd};
+            var ifr = elemento.querySelector('iframe[title="st_aggrid.AgGrid.agGrid"]');
+            if (ifr) return {tipo: 'aggrid', iframe: ifr};
+            return null;
+        }
+        function sincronizarContenidoRedimensionable(elemento, anchoPx, altoPx) {
+            if (!anchoPx && !altoPx) return;
+            var res = contenidoRedimensionable(elemento);
+            if (!res) return;
+            if (res.tipo === 'plotly') {
+                if (!win.Plotly) return;   // aun no cargo el bundle de Plotly
+                var layout = {};
+                if (anchoPx) layout.width = anchoPx;
+                if (altoPx) layout.height = altoPx;
+                try { win.Plotly.relayout(res.gd, layout); } catch (err) {}
+                return;
+            }
+            // aggrid
+            if (anchoPx) res.iframe.style.setProperty('width', anchoPx + 'px', 'important');
+            if (altoPx) res.iframe.style.setProperty('height', altoPx + 'px', 'important');
+            try {
+                var doc3 = res.iframe.contentDocument;
+                var gridContainer = doc3 && doc3.getElementById('gridContainer');
+                if (gridContainer) {
+                    if (anchoPx) gridContainer.style.setProperty('width', anchoPx + 'px', 'important');
+                    if (altoPx) gridContainer.style.setProperty('height', altoPx + 'px', 'important');
+                }
+            } catch (err) {}   // cross-origin en algun despliegue raro: degrada a "solo el iframe cambio"
+        }
+
         function aplicarEstado(elemento, registro) {
             // snapshot para "ver original", una sola vez (primer touch de la key)
             if (registro.cssTextOriginal === null) {
@@ -733,6 +785,16 @@ JS = """
                     }
                 }
             }
+            // Reaplicado defensivo (cada 150ms, ver sync()): un Plotly que
+            // recién se re-montó tras un rerun real vuelve con su ancho/
+            // alto de Python — hay que re-empujar el tamaño elegido igual
+            // que el resto de `cambios`, o el chart "salta" de vuelta a su
+            // tamaño original hasta el próximo drag.
+            if (registro.cambios.width !== undefined || registro.cambios.height !== undefined) {
+                sincronizarContenidoRedimensionable(elemento,
+                    registro.cambios.width ? parseInt(registro.cambios.width, 10) : null,
+                    registro.cambios.height ? parseInt(registro.cambios.height, 10) : null);
+            }
             aplicarTransform(elemento, registro);
         }
 
@@ -777,14 +839,21 @@ JS = """
                     vivo.registro.transformState.translateY = Math.round(startTY + dy);
                     aplicarTransform(vivo.el, vivo.registro);
                 } else {
+                    var nuevoAncho = null, nuevoAlto = null;
                     if (modo.indexOf('e') !== -1) {
-                        establecerCambio(vivo.el, vivo.registro, 'width',
-                            Math.max(60, Math.round(startW + dx)) + 'px');
+                        nuevoAncho = Math.max(60, Math.round(startW + dx));
+                        establecerCambio(vivo.el, vivo.registro, 'width', nuevoAncho + 'px');
                     }
                     if (modo.indexOf('s') !== -1) {
-                        establecerCambio(vivo.el, vivo.registro, 'height',
-                            Math.max(40, Math.round(startH + dy)) + 'px');
+                        nuevoAlto = Math.max(40, Math.round(startH + dy));
+                        establecerCambio(vivo.el, vivo.registro, 'height', nuevoAlto + 'px');
                     }
+                    // En vivo, arrastrando: mismo mecanismo que el reaplicado
+                    // defensivo de aplicarEstado(), pero con los numeros del
+                    // gesto actual (mas fresco que esperar al proximo tick de
+                    // 150ms — se veria trabado un cuarto de segundo detras
+                    // del cursor).
+                    sincronizarContenidoRedimensionable(vivo.el, nuevoAncho, nuevoAlto);
                 }
                 trackear(vivo.el);
                 actualizarReadouts(vivo.el, vivo.registro);
@@ -1263,6 +1332,19 @@ JS = """
                 avisoMock.style.cssText = 'font:11px/1.4 -apple-system,sans-serif;color:#e4e4e8;background:#1c1c24;border:1px dashed #6c5ce7;border-radius:4px;padding:6px 7px;margin-bottom:10px';
                 avisoMock.textContent = 'Insertado por el modo diseño: no existe en el código ni en estilos/. Se va al recargar.';
                 panel.appendChild(avisoMock);
+            }
+
+            // El tamaño de un Plotly/AgGrid SÍ se ve arrastrando las manijas
+            // (arquitectura.md #175) pero el número real que hay que llevar
+            // al código NO es CSS — "Copiar CSS" no sirve para esto.
+            var contenidoResz = contenidoRedimensionable(elemento);
+            if (contenidoResz) {
+                var avisoResz = doc.createElement('div');
+                avisoResz.style.cssText = 'font:11px/1.4 -apple-system,sans-serif;color:#9385ec;background:#1c1c24;border:1px solid #34343f;border-radius:4px;padding:6px 7px;margin-bottom:10px';
+                avisoResz.textContent = contenidoResz.tipo === 'plotly'
+                    ? 'El tamaño de un gráfico Plotly vive en Python (fig.update_layout / graficos/alturas.py), no en CSS — "Copiar CSS" no lo va a incluir. Anotá el "Tamaño" de abajo y llevalo ahí.'
+                    : 'El tamaño de una tabla AgGrid vive en Python (el height= de tablas/), no en CSS — "Copiar CSS" no lo va a incluir. Anotá el "Tamaño" de abajo y llevalo ahí.';
+                panel.appendChild(avisoResz);
             }
 
             var tamVal = spanValor('');

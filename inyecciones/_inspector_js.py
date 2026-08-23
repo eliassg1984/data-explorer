@@ -131,7 +131,12 @@ JS = """
         }
         function keyDeElemento(el) {
             if (!el || !el.className || !el.className.toString) return '';
-            var m = /st-key-([A-Za-z0-9_]+)/.exec(el.className.toString());
+            // Incluye '-': una key armada desde un dato real (proveedor,
+            // producto — ej. `cp_evo_Mes_VIBEJ-COLIBRI-SAC`) puede traer
+            // guiones que _slug() en Python no siempre limpia. Sin ellos en
+            // la clase el match cortaba en el primer '-' y el pin de ese
+            // elemento quedaba sin resolver (arquitectura.md #175).
+            var m = /st-key-([A-Za-z0-9_-]+)/.exec(el.className.toString());
             return m ? m[1] : '';
         }
         function contenedorConKey(el) {

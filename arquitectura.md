@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-174 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+175 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (64)
+**CSS y estilos** (65)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -84,6 +84,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#169** — El CSS que exporta el modo diseño es una FOTO DE PÍXELES, no la intención: pegarlo tal cual…
 - **#172** — help= en un st.button() rompe cualquier selector CSS que escriba .stButton > button (hijo…
 - **#174** — Al invertir QUÉ dibuja un contenedor compartido (regla #170: compras_tabs_row pasó de Vistas…
+- **#175** — Las manijas de resize del modo diseño (regla #46) redimensionan CUALQUIER elemento salvo un…
 
 **Layout y alturas** (15)
 
@@ -103,7 +104,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#145** — La GRILLA tiene un dueño, igual que el color y el alto
 - **#161** — Un número de píxeles escrito en un comentario no se entera de que el layout cambió: el eje X…
 
-**Plotly y figuras** (39)
+**Plotly y figuras** (40)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -144,6 +145,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#127** — hovermode="x unified" de Plotly renderiza su caja de hover con la clase SVG .legend —…
 - **#161** — Un número de píxeles escrito en un comentario no se entera de que el layout cambió: el eje X…
 - **#165** — Al agregar una barra de modos quedaron DOS controles del mismo estado, uno encima del otro —…
+- **#175** — Las manijas de resize del modo diseño (regla #46) redimensionan CUALQUIER elemento salvo un…
 
 **AgGrid y tablas** (26)
 
@@ -7972,6 +7974,16 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Verificado en vivo (preview local, datos reales, viewport 1280×800 — ojo, un viewport de ~857px cae en el breakpoint de 900px que vuelve el rail horizontal, regla #132, y da lecturas que parecen el mismo bug sin serlo): con la excepción, `.st-key-compras_tabs_row` medía 270px en Compras y 84px en Ajuste de Inventario/Ventas/Receta Base — mismo contenedor, mismos 6 ítems, sólo cambiaba el ancho. Fix: se sube `270px` al default único de `:root` y se borra el bloque `:has(.st-key-app_reporte_compras)` entero (no se deja como comentario "removido" — CLAUDE.md). Los tres reportes dan 270px después del cambio, medido de nuevo en la misma sesión.
 
      Moraleja para el resto del código: cuando un contenedor cambia de DUEÑO de contenido (no sólo este caso — cualquier `:has(.st-key-app_reporte_X)` o similar), hay que grepear ese contenedor por selectores condicionados a un reporte específico y volver a preguntar si la condición sigue significando lo mismo. El bug no tira error ni se ve mal en el reporte que la excepción sí cubre — se ve mal en todos los demás, que es donde nadie mira primero.
+
+175. **Las manijas de resize del modo diseño (regla #46) redimensionan CUALQUIER elemento salvo un Plotly o un AgGrid — para esos dos, agrandar el contenedor no movía un píxel el contenido de adentro.** Pedido directo 2026-08-23: "necesito alguna forma... para poder cambiar el tamaño de los gráficos y tablas". Verificado en vivo ANTES del fix (`.js-plotly-plot` real de la app, no un mock): fijar `width`/`height` en el contenedor del gráfico con `!important` —exactamente lo que hace `iniciarArrastre()`— dejaba el `<svg class="main-svg">` clavado en su tamaño viejo; `Plotly.Plots.resize(gd)` (la API "pensada para esto") tampoco hacía nada. CLAUDE.md ya avisaba la causa ("Plotly no llena su contenedor"): estos gráficos declaran `width`/`height` EXPLÍCITOS en `fig.layout` (nunca `autosize`, es el contrato de `graficos/alturas.py`), así que Plotly no tiene ninguna razón para mirar el tamaño del contenedor. Lo que sí funciona, confirmado en vivo: `Plotly.relayout(gd, {width, height})`.
+
+     AgGrid es peor — tres cajas con tamaño fijo, en cascada, cada una ciega a que la de afuera cambió: el `<iframe>` del custom component trae un `height=` HTML (Streamlit se lo pone vía el protocolo de `Streamlit.setFrameHeight()`, no CSS) y, DENTRO del iframe —mismo origen que la app, se entra sin CORS—, el propio React de `st_aggrid` le clava `style="width:...px;height:...px"` a su `#gridContainer`. Medido en vivo: agrandar sólo el wrapper de afuera dejaba el iframe Y el `#gridContainer` exactamente en su tamaño de antes. Una vez que las tres capas ceden (wrapper, `iframe.style` con `!important`, y `#gridContainer.style` con `!important` adentro del iframe), ag-grid SÍ se reacomoda solo — tiene su propio `ResizeObserver` interno, a diferencia de Plotly no hace falta pedirle nada.
+
+     Fix, todo en `_diseno_js.py`: `contenidoRedimensionable(elemento)` detecta si el pineado ES o CONTIENE un `.js-plotly-plot` o un `iframe[title="st_aggrid.AgGrid.agGrid"]`; `sincronizarContenidoRedimensionable(elemento, ancho, alto)` aplica el mecanismo que corresponda, llamada desde `onMove()` (en vivo, arrastrando) y desde `aplicarEstado()` (el reaplicado defensivo de cada 150ms — un rerun real vuelve a montar el gráfico con su tamaño de Python, y sin este segundo llamado el resize "saltaría" de vuelta hasta el próximo drag). El panel suma un aviso cuando el pineado es de este tipo: el tamaño que se ve arrastrando NO sale de CSS (así que "Copiar CSS" no lo va a incluir) — el número real hay que llevarlo a mano a `graficos/alturas.py`/`fig.update_layout` o al `height=` de `tablas/`.
+
+     **Bug aparte, encontrado mientras se armaba esto (no hipotético — bloqueaba probar el fix en el gráfico real de "Evolución · proveedor"):** `keyDeElemento()` (`_inspector_js.py`, la función que toda esta herramienta usa para saber QUÉ está pineado) leía la key con `/st-key-([A-Za-z0-9_]+)/` — sin guion en la clase de caracteres. Una key armada desde un dato real (`cp_evo_Mes_VIBEJ-COLIBRI-SAC`, el nombre del proveedor con espacios convertidos a `-`, no a `_` como `_slug()`) se leía truncada en `cp_evo_Mes_VIBEJ`, `doc.querySelector('.st-key-' + key)` no encontraba nada, y el pin quedaba en `panelPerdido()` — mudo, sin decir por qué. Fix: agregar `-` a la clase de caracteres. Sólo se tocó esa función (`keyDeElemento`, la que resuelve pines) — las otras dos ocurrencias del mismo patrón en el archivo (`archivoDeSelector`, `selectoresCompartidos`) matchean selectores ESCRITOS A MANO en `estilos/*.py`, que siguen la convención `_slug()` de guion bajo y nunca traen `-`; tocarlas no arregla nada y son un cambio sin verificar de más.
+
+     Verificado en vivo, extremo a extremo (evento real de `mousedown`+`mousemove`+`mouseup` sobre la manija `el-diseno-rh-se`, no una llamada directa a la función): el gráfico de Evolución pasó de 192×277 a 342×377 CON el drag, en el mismo frame que el contenedor; la tabla Ranking de proveedores pasó de 472×333 a 652×483 y su `.ag-root-wrapper` interno confirmó el mismo tamaño tras el `ResizeObserver`. Pineando un botón común (`navitem_Compras`) el aviso nuevo NO aparece y el resize normal sigue igual — sin regresión.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
