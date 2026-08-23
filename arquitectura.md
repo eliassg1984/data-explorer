@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-171 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+172 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (62)
+**CSS y estilos** (63)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -82,6 +82,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#157** — El modo diseño sólo sabía agarrar elementos con st-key-*, y la mitad de lo que uno quiere…
 - **#167** — El fondo general de la app no se podía editar con el modo diseño: el lienzo es el único…
 - **#169** — El CSS que exporta el modo diseño es una FOTO DE PÍXELES, no la intención: pegarlo tal cual…
+- **#172** — help= en un st.button() rompe cualquier selector CSS que escriba .stButton > button (hijo…
 
 **Layout y alturas** (15)
 
@@ -172,7 +173,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#159** — Cuadrados negros en vez de iconos en Chrome < 120: AG Grid 34 emite mask-image sin la…
 - **#163** — arquitectura.md creció hasta ser un documento que nadie podía abrir: 115k tokens, y CLAUDE.md…
 
-**Streamlit** (48)
+**Streamlit** (49)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -222,6 +223,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#154** — destinosDeEstilo necesitaba DOS niveles de redirección, no uno — y el guard de cantidad de la…
 - **#157** — El modo diseño sólo sabía agarrar elementos con st-key-*, y la mitad de lo que uno quiere…
 - **#171** — Los KPIs del rail (regla #170) se rehicieron a las pocas horas: "no se ve bien" con una…
+- **#172** — help= en un st.button() rompe cualquier selector CSS que escriba .stButton > button (hijo…
 
 **Datos, R2 y DuckDB** (19)
 
@@ -7892,13 +7894,25 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      `position:static` — el layout de fila no tiene "debajo" donde
      superponer nada).
 
+172. **`help=` en un `st.button()` rompe cualquier selector CSS que escriba `.stButton > button` (hijo directo): TODO el look propio del rail de Reportes llevaba desde la regla #170 corriendo con el default de Streamlit, sin que se notara.** El pedido que lo destapó fue simple —"quiero `border-radius:0` en todos los botones del rail, como ya lo tiene Compras"— pero medir en vivo (misma disciplina que ya había hecho falta tres veces en la regla #171: no confiar en la especificidad de memoria) mostró algo peor que lo pedido: ni el activo NI los inactivos tenían `border-radius:0`, tenían 10px/8px — el `border-radius:0 !important` de `_20_compras_rail.py` no ganaba, **no aplicaba**. Tampoco el padding (`10px 16px` por defecto de Streamlit en vez de `1px 10px 1px 7px`), ni el fondo/color propios (activo se veía "parecido" solo porque el `background: var(--accent) !important` global de `_00_base.py` para `button[kind="primary"]` da un morado que a simple vista pasa por bueno).
+
+     Causa: los botones de Reportes usan `help=grupo`/`help=nombre` (`navegacion.py`, para el tooltip con el nombre completo cuando el label se trunca) desde que existen. `help=` hace que Streamlit envuelva el `<button>` real en `div > span.stTooltipIcon > span.stTooltipHoverTarget` — el mismo wrapper que la regla #164 ya había documentado como origen de la "copia fantasma" del tooltip. Un selector `[data-testid="stButton"] > button` (combinador HIJO) exige que `<button>` sea hijo directo de `stButton`; con el wrapper de por medio, deja de serlo, y la regla entera no matchea NUNCA — no es un problema de especificidad (que sí se puede perder contra otra regla), es que el selector no encuentra el elemento.
+
+     El bug es silencioso porque el resultado "por accidente" no se ve roto: un botón `kind="primary"` de Streamlit sin estilizar YA es morado con texto blanco (el chrome global de `_00_base.py`), y uno `kind="secondary"` ya es blanco con texto oscuro — visualmente pasable como "rail con estado activo/inactivo" aunque ninguno de los ~10 selectors específicos del rail (`_20_compras_rail.py`, ~9 bloques: base, `::before`, wrappers de label, `p`, `:hover`, `[kind="primary"]`, más los mismos 3 repetidos dentro de `@media max-width:900px`, más otros 3 en `@media min-width:901px` para padding/gap/tamaño de ícono) estuviera aplicando una sola declaración.
+
+     Fix: cambiar el combinador de hijo (`>`) a descendiente (` `, espacio) en las ~12 declaraciones afectadas — `.stButton button` en vez de `.stButton > button` (y análogo para `[data-testid="stButton"] > button`). Es seguro porque `.stButton` sólo envuelve UN botón (con o sin wrapper de tooltip en el medio), así que el descendiente no puede matchear de más. Las declaraciones que apuntan a hijos DEL botón (`> button > div`, `> button p`) conservan su propio `>` — el combinador roto era sólo el primero, entre `.stButton`/`stButton"]` y `button`.
+
+     Verificado en vivo tras el fix, en desktop (1280px, fuera de ambos breakpoints móviles): activo y 5 inactivos dan `border-radius:0px` (antes 10px/8px), padding `10px 12px 10px 9px` (antes `10px 16px` default), `border-left` 3px acento en el activo / 3px transparente en los demás, fondo `accent-light`/gris propio (no el morado/blanco default), ícono a 19px, label `<p>` a 13px, hairline 1px entre ítems apagado en el último, y los bloques de KPI (regla #171) siguen centrados y alineados a la derecha sin corrimiento — el fix no tocó su selector porque `.nav-kpis-valores` es un `st.markdown`, no un `st.button`, y nunca tuvo el problema. `.st-key-rail_refresh button` (Refrescar, también con `help=`) ya usaba descendiente desde el principio y no necesitó cambio — por eso nunca se notó ahí.
+
+     Moraleja para el resto del código: cualquier `st.button(..., help=...)` existente o futuro necesita que su CSS lo apunte con descendiente, no con hijo directo, si el selector menciona el `<button>` mismo (no sus hijos). `graficos/base.py::_render_rail` (Vistas, franja horizontal) no usa `help=` — su CSS con `>` sigue siendo correcto tal cual.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#172**.
+> próxima regla nueva es la **#173**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

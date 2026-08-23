@@ -271,9 +271,21 @@ CSS = """    /* ================================================================
     /* Cada ítem del rail: botón estilo lista, sin borde ni fondo por defecto.
        Un dot a la izquierda (::before) precede al texto. border-left:3px
        transparent reservado en base = el texto no se corre cuando pasa a
-       activo (activo reemplaza el transparent por accent). */
-    .st-key-graf_tipo_chips [data-testid="stButton"] > button,
-    .st-key-graf_tipo_chips .stButton > button {
+       activo (activo reemplaza el transparent por accent).
+
+       Combinador DESCENDIENTE (` `), no hijo directo (`>`): desde que Reportes
+       usa `help=` en cada st.button (navegacion.py, regla #170), Streamlit
+       mete `div > span.stTooltipIcon > span.stTooltipHoverTarget` entre
+       `.stButton` y el `<button>` real (mismo wrapper que dispara la "copia
+       fantasma", ver bloque DEFENSA ANTI-TOOLTIP-FANTASMA más abajo). Con `>`
+       NINGUNA de estas reglas matcheaba — ni las del ítem activo — y el rail
+       corría con el look default de Streamlit (button[kind] de _00_base.py)
+       sin que se notara a simple vista. Se detectó recién cuando el usuario
+       pidió `border-radius:0` para todos los ítems: medir en vivo mostró
+       10px/8px reales (ni el 0 del activo ni el 0 del inactivo aplicaban).
+       Ver arquitectura.md regla #172. */
+    .st-key-graf_tipo_chips [data-testid="stButton"] button,
+    .st-key-graf_tipo_chips .stButton button {
         display: flex !important;
         justify-content: flex-start !important;
         align-items: center !important;
@@ -294,8 +306,8 @@ CSS = """    /* ================================================================
     }
     /* Viñeta eliminada — la barra izquierda de acento (border-left activo)
        ya marca el ítem seleccionado; el dot sumaba ruido sin agregar info. */
-    .st-key-graf_tipo_chips [data-testid="stButton"] > button::before,
-    .st-key-graf_tipo_chips .stButton > button::before {
+    .st-key-graf_tipo_chips [data-testid="stButton"] button::before,
+    .st-key-graf_tipo_chips .stButton button::before {
         display: none !important;
     }
     /* Wrappers del label — NO expandirse (si crecen con flex:1 el texto queda
@@ -303,10 +315,10 @@ CSS = """    /* ================================================================
        intermedio entre el <button> y el stMarkdownContainer, con display:flex
        y justify-content:center por default → hay que aplanar TODOS los div
        descendientes del botón. */
-    .st-key-graf_tipo_chips [data-testid="stButton"] > button > div,
-    .st-key-graf_tipo_chips .stButton > button > div,
-    .st-key-graf_tipo_chips [data-testid="stButton"] > button [data-testid="stMarkdownContainer"],
-    .st-key-graf_tipo_chips .stButton > button [data-testid="stMarkdownContainer"] {
+    .st-key-graf_tipo_chips [data-testid="stButton"] button > div,
+    .st-key-graf_tipo_chips .stButton button > div,
+    .st-key-graf_tipo_chips [data-testid="stButton"] button [data-testid="stMarkdownContainer"],
+    .st-key-graf_tipo_chips .stButton button [data-testid="stMarkdownContainer"] {
         display: block !important;             /* deja al <p> tomar su ancho */
         flex: 0 1 auto !important;
         width: auto !important;
@@ -316,8 +328,8 @@ CSS = """    /* ================================================================
         margin: 0 !important;
         padding: 0 !important;
     }
-    .st-key-graf_tipo_chips [data-testid="stButton"] > button p,
-    .st-key-graf_tipo_chips .stButton > button p {
+    .st-key-graf_tipo_chips [data-testid="stButton"] button p,
+    .st-key-graf_tipo_chips .stButton button p {
         margin: 0 !important;
         padding: 0 !important;
         display: block !important;
@@ -328,14 +340,14 @@ CSS = """    /* ================================================================
         font-weight: inherit !important;
         color: inherit !important;
     }
-    .st-key-graf_tipo_chips [data-testid="stButton"] > button:hover,
-    .st-key-graf_tipo_chips .stButton > button:hover {
+    .st-key-graf_tipo_chips [data-testid="stButton"] button:hover,
+    .st-key-graf_tipo_chips .stButton button:hover {
         background: var(--accent-tint) !important;   /* hover suave */
         color: var(--accent-deep) !important;
     }
     /* Activo: kind="primary" del st.button */
-    .st-key-graf_tipo_chips [data-testid="stButton"] > button[kind="primary"],
-    .st-key-graf_tipo_chips .stButton > button[kind="primary"] {
+    .st-key-graf_tipo_chips [data-testid="stButton"] button[kind="primary"],
+    .st-key-graf_tipo_chips .stButton button[kind="primary"] {
         background: var(--accent-light) !important;   /* activo saturado */
         color: var(--accent-deep) !important;
         font-weight: 500 !important;
@@ -492,8 +504,8 @@ CSS = """    /* ================================================================
         .st-key-graf_tipo_chips .stButton {
             width: auto !important; flex: 0 0 auto !important;
         }
-        .st-key-graf_tipo_chips [data-testid="stButton"] > button,
-        .st-key-graf_tipo_chips .stButton > button {
+        .st-key-graf_tipo_chips [data-testid="stButton"] button,
+        .st-key-graf_tipo_chips .stButton button {
             width: auto !important;
             white-space: nowrap !important;
             border-left: none !important;
@@ -501,12 +513,12 @@ CSS = """    /* ================================================================
             padding: 5px 12px !important;
             background: var(--bg-primary) !important;
         }
-        .st-key-graf_tipo_chips [data-testid="stButton"] > button[kind="primary"],
-        .st-key-graf_tipo_chips .stButton > button[kind="primary"] {
+        .st-key-graf_tipo_chips [data-testid="stButton"] button[kind="primary"],
+        .st-key-graf_tipo_chips .stButton button[kind="primary"] {
             border-left: none !important;
         }
-        .st-key-graf_tipo_chips [data-testid="stButton"] > button p,
-        .st-key-graf_tipo_chips .stButton > button p {
+        .st-key-graf_tipo_chips [data-testid="stButton"] button p,
+        .st-key-graf_tipo_chips .stButton button p {
             white-space: nowrap !important;
         }
         /* Sin el rail fijo arriba, la vieja compensación negativa de las
@@ -562,7 +574,7 @@ CSS = """    /* ================================================================
            _00_base.py (`border: none !important`) le gana en especificidad
            a cualquier regla de acá que sólo mencione `button` a secas. */
         .st-key-graf_tipo_chips
-        [data-testid="stButton"] > button {
+        [data-testid="stButton"] button {
             padding: 10px 12px 10px 9px !important;
             gap: 10px !important;
         }
@@ -593,7 +605,7 @@ CSS = """    /* ================================================================
         }
         /* 11px era el tamaño para una columna de 84px. */
         .st-key-graf_tipo_chips
-        [data-testid="stButton"] > button p {
+        [data-testid="stButton"] button p {
             font-size: 13px !important;
             white-space: nowrap !important;
         }
@@ -603,7 +615,7 @@ CSS = """    /* ================================================================
            (más arriba en este archivo) excluye `span` — por eso no hace
            falta deshacer nada acá. */
         .st-key-graf_tipo_chips
-        [data-testid="stButton"] > button [data-testid="stIconMaterial"] {
+        [data-testid="stButton"] button [data-testid="stIconMaterial"] {
             font-size: 19px !important;
             color: inherit !important;
             flex: 0 0 auto !important;
