@@ -14,6 +14,33 @@ def _norm(s):
     """Normaliza texto: quita acentos, espacios, guiones y pasa a minúsculas."""
     s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode()
     return s.lower().replace(" ", "").replace("_", "").replace("-", "")
+
+
+def fmt_k(v):
+    """Monto compacto: S/ 4.0k, S/ 1.2M.
+
+    Vivía solo en `graficos/compras/_etiquetas_proveedor.py` (etiquetas de
+    barra del drill de Proveedor); se movió acá el 2026-08-22 al necesitarlo
+    también `navegacion.py` para los KPIs del rail de Reportes — es
+    formateo genérico, no algo propio de Compras. Ese módulo reexporta este
+    mismo símbolo para no romper sus imports existentes (mismo patrón que
+    `graficos/compras/_comun.py::_es_movil`, ver CLAUDE.md).
+
+    Negativos: la magnitud (no `v` directo) decide el corte k/M — sin esto,
+    ningún negativo entraba nunca en `>= 1_000`/`>= 1_000_000` (comparación
+    siempre falsa contra un número negativo) y caía al `else` sin abreviar
+    ni agrupar miles: "S/ -56320" en vez de "S/ -56.3k". Se detectó al
+    verificar el rail de Reportes con datos reales — Ajuste de Inventario
+    puede dar Ajuste Valorizado negativo (mermas), a diferencia de los
+    montos de venta/compra que motivaron la función original y siempre son
+    positivos. El signo lo sigue poniendo el propio `:.1f`/`:.0f` sobre `v`
+    (negativo), no hace falta agregarlo a mano."""
+    m = abs(v)
+    if m >= 1_000_000:
+        return f"S/ {v / 1_000_000:.1f}M"
+    if m >= 1_000:
+        return f"S/ {v / 1_000:.1f}k"
+    return f"S/ {v:.0f}"
  
  
 def buscar_columna(df, *candidatos):

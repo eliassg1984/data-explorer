@@ -241,11 +241,15 @@ CSS = """    /* ================================================================
         padding: 0 !important;
     }
     /* NUCLEAR: cero margin/padding/gap en TODO descendiente del rail excepto
-       el <button> y el texto. Especificidad reforzada duplicando la clase del
-       contenedor (.st-key-graf_tipo_chips.st-key-graf_tipo_chips) para ganarle
-       a cualquier regla base de Streamlit con clase única + !important. */
+       el <button>, el texto y la línea de KPIs (.nav-kpis, navegacion.py —
+       excluida el 2026-08-22: sin esto, esta regla le gana en especificidad
+       al padding/margin propios que le da _CSS_KPIS, por la doble-clase de
+       acá abajo — medido: (0,4,3,0) contra (0,2,0,0), gana ésta aunque las
+       dos lleven !important). Especificidad reforzada duplicando la clase
+       del contenedor (.st-key-graf_tipo_chips.st-key-graf_tipo_chips) para
+       ganarle a cualquier regla base de Streamlit con clase única + !important. */
     .st-key-graf_tipo_chips.st-key-graf_tipo_chips
-        *:not(button):not(p):not(span):not(.rail-cat-badge):not(.rail-sep) {
+        *:not(button):not(p):not(span):not(.rail-cat-badge):not(.rail-sep):not(.nav-kpis) {
         margin: 0 !important;
         padding: 0 !important;
         gap: 0 !important;
@@ -336,12 +340,16 @@ CSS = """    /* ================================================================
         border-left-color: var(--accent) !important;  /* pinta el reservado */
     }
 
-    /* PIE DEL RAIL — Refrescar, la única ACCIÓN (no una vista). Llegó acá el
-       2026-08-22 desde la franja superior de navegación (arquitectura.md
-       regla #164): mismo componente compartido (`_render_rail`), lo dibuja
-       fuera de `graf_tipo_chips` a propósito, igual que el pestillo (regla
-       #6 — ese contenedor estila TODO lo que cuelga de él como ítem de
-       lista; Refrescar no lo es). `.rail-sep` de arriba es la divisoria. */
+    /* PIE DEL RAIL — Refrescar, la única ACCIÓN (no un ítem del rail). Esta
+       regla es de POSICIÓN (key `rail_refresh`), no le importa si el rail
+       dibuja Vistas o Reportes — no se tocó en la inversión del 2026-08-22
+       (regla #170). Historial: vino de la franja superior de navegación a
+       este rail el 2026-08-22 (regla #164, cuando el rail todavía era de
+       Vistas); hoy lo dibuja `navegacion.py::inject_navegacion` al pie del
+       rail de Reportes, mismo criterio ("la acción vive al pie del rail
+       VERTICAL, sea cual sea su contenido"). Fuera de `graf_tipo_chips` a
+       propósito, igual que el pestillo (regla #6 — ese contenedor estila
+       TODO lo que cuelga de él como ítem de lista; Refrescar no lo es). */
     .st-key-rail_refresh {
         width: 100% !important;
         display: flex !important;
@@ -391,16 +399,16 @@ CSS = """    /* ================================================================
     }
 
     /* =================================================================== */
-    /* RAIL EN MÓVIL (<=900px): el rail vertical fijo de 84px + el          */
-    /* padding-right de 153px se comen casi la mitad de un viewport de      */
-    /* 375px. En móvil el rail deja de estar fijo y se vuelve una tira      */
-    /* horizontal scrollable arriba del dashboard; los botones quedan en    */
-    /* fila (chips) y el contenido recupera todo el ancho. Scopeado con     */
-    /* :has(.st-key-compras_tabs_row) — la key del RAIL COMPARTIDO, asi     */
-    /* aplica en Compras y Ajuste (ambos usan el rail) y no en Ventas /     */
-    /* Inventario / Requerimientos (que no lo usan). Esto es correcto: es   */
-    /* comportamiento "del rail", no "del reporte Compras" — para lo        */
-    /* segundo se usa :has(.st-key-app_reporte_compras). Ver regla #16.     */
+    /* RAIL EN MÓVIL (<=900px): el rail vertical fijo de 270px + su reserva  */
+    /* de ancho se comen casi la mitad de un viewport de 375px. En móvil el */
+    /* rail deja de estar fijo y se vuelve una tira horizontal scrollable   */
+    /* arriba del dashboard; los botones quedan en fila (chips) y el        */
+    /* contenido recupera todo el ancho. Scopeado con                      */
+    /* :has(.st-key-compras_tabs_row) — la key del RAIL, que desde el       */
+    /* 2026-08-22 dibuja Reportes (antes Vistas, ver arquitectura.md regla  */
+    /* #170): aplica siempre, en TODOS los reportes, porque Reportes vive   */
+    /* en este contenedor sin excepción — a diferencia de cuando era el     */
+    /* rail de Vistas, que sólo dibujaban los dashboards que lo llamaban.   */
     /* =================================================================== */
     @media (max-width: 900px) {
         /* El contenido recupera el ancho: fuera la reserva del rail.
@@ -441,6 +449,25 @@ CSS = """    /* ================================================================
         /* Las categorías y separadores verticales no aplican en horizontal. */
         .st-key-compras_tabs_row .rail-cat-badge,
         .st-key-compras_tabs_row .rail-sep {
+            display: none !important;
+        }
+        /* La línea de KPIs (navegacion.py, 2026-08-22) también se oculta acá.
+           Es un segundo RENGLÓN pensado para apilarse BAJO su botón en una
+           columna; en la fila horizontal de chips no hay debajo de nada —
+           medido en vivo (375px): el div.nav-kpis se convertía en un
+           flex-item más DE LA MISMA FILA que los chips, flotando a la
+           altura de arriba en vez de bajo su reporte. Mismo criterio que
+           categorías/separadores: lo que solo tiene sentido en columna no
+           sobrevive el paso a fila.
+           Clase DUPLICADA a propósito: navegacion.py::_CSS_KPIS pone
+           `display:block` con la MISMA especificidad (.st-key-graf_tipo_
+           chips .nav-kpis, 0-2-0-0) y se inyecta DESPUÉS en el orden de
+           carga (inject_css() en estilos/ corre antes que inject_navegacion()
+           en app.py) — a igual especificidad gana la que va después, así
+           que esta regla perdía en silencio (medido: kpisVisibles seguía
+           en 4 después de agregarla sin la clase doblada). Con
+           (0,3,0,0) gana siempre, sin depender del orden de inyección. */
+        .st-key-graf_tipo_chips.st-key-graf_tipo_chips .nav-kpis {
             display: none !important;
         }
         /* El bug del "encimado": los verdaderos flex-items de la fila NO son
@@ -499,12 +526,18 @@ CSS = """    /* ================================================================
     }
 
     /* =================================================================== */
-    /* COMPRAS: EL RAIL EN FORMATO LISTA (icono + label + chevron)           */
+    /* EL RAIL EN FORMATO LISTA (icono + label + chevron)                    */
     /*                                                                       */
-    /* A pedido 2026-08-21, tomando de referencia el rail de MSN Dinero. El  */
-    /* rail de 84px y 11px de fuente era una columna de etiquetas; esto lo    */
-    /* convierte en una lista: cada vista es una fila con su icono, su        */
-    /* nombre y un chevron, separadas por hairlines.                          */
+    /* Nació a pedido 2026-08-21 para Compras, tomando de referencia el      */
+    /* rail de MSN Dinero, y estaba scopeado a `app_reporte_compras` — sólo   */
+    /* vestía las VISTAS de Compras. El 2026-08-22 se generalizó (regla      */
+    /* #170, inversión Reportes↔Vistas): este contenedor pasó a dibujar      */
+    /* SIEMPRE Reportes, para TODOS los reportes por igual, así que ya no    */
+    /* tiene sentido que el formato dependa de cuál esté activo — se le      */
+    /* sacó el scope y aplica siempre. El pedido original de Reportes era    */
+    /* "ícono + texto" nomás; se reusa este formato ya hecho (ícono+chevron+  */
+    /* hairline) en vez de inventar uno nuevo porque cumple lo pedido y de    */
+    /* paso mejor.                                                            */
     /*                                                                       */
     /* Va al FINAL del módulo y dentro de min-width:901px por dos razones     */
     /* distintas: por ORDEN, para ganarle a las reglas de arriba que estilan  */
@@ -512,10 +545,6 @@ CSS = """    /* ================================================================
     /* (max-width:900px), donde el rail deja de ser columna y pasa a ser una  */
     /* tira horizontal de chips — ahí ni el chevron ni los hairlines tienen   */
     /* sentido.                                                               */
-    /*                                                                       */
-    /* Scopeado a `app_reporte_compras` y no a `compras_tabs_row`: el rail es */
-    /* COMPARTIDO con Ajuste (ver regla #16), y esto es una decisión del      */
-    /* reporte, no del componente.                                            */
     /* =================================================================== */
     @media screen and (min-width: 901px) {
         /* El ANCHO de este rail NO se declara aca: vive en _00_base.py,
@@ -523,30 +552,49 @@ CSS = """    /* ================================================================
            solo duenio" (test_graficos.py la verifica) y no es burocracia --
            nacio de que el ancho estaba escrito en seis sitios que se
            derivaban entre si y plegar el rail dejaba la franja flotando. */
-        /* La fila: icono, label, chevron y un hairline abajo. */
-        :root:has(.st-key-app_reporte_compras) .st-key-graf_tipo_chips
+        /* La fila: icono, label, chevron. El hairline NO va acá (ver abajo):
+           medido en vivo (2026-08-22), un `button[kind="primary"]` global de
+           _00_base.py (`border: none !important`) le gana en especificidad
+           a cualquier regla de acá que sólo mencione `button` a secas —
+           agregarle `[kind="primary"]` a esta regla para emparejar
+           specificidad hubiera sido posible, pero habría dejado la línea
+           CORTANDO entre el ícono+label y su propia línea de KPIs (ver
+           siguiente comentario) — se resolvió mejor, no más forzado. */
+        .st-key-graf_tipo_chips
         [data-testid="stButton"] > button {
             padding: 10px 12px 10px 9px !important;
             gap: 10px !important;
+        }
+        /* El hairline separa UN REPORTE del siguiente — no el ícono+label de
+           su propia línea de KPIs (navegacion.py, 2026-08-22). Por eso vive
+           en el CONTENEDOR (`> div`, el stElementContainer que Streamlit
+           pone alrededor de cada st.button/st.markdown), no en el <button>:
+           así evita también la pelea de especificidad de arriba, porque acá
+           no hay `button[kind=...]` compitiendo.
+           Default: hairline en TODO hijo directo. Se apaga en el div del
+           BOTÓN cuando el siguiente hermano es su propia línea de KPIs —
+           ahí la línea la lleva el KPI, un renglón más abajo, cerrando el
+           PAR entero. Y se apaga siempre en el último hijo de la lista
+           (quedaría flotando sobre el padding inferior del rail). */
+        .st-key-graf_tipo_chips > div {
             border-bottom: 1px solid var(--border) !important;
         }
-        /* El último ítem no lleva línea: quedaría flotando sobre el padding
-           inferior del rail, sin nada debajo que separar. */
-        :root:has(.st-key-app_reporte_compras) .st-key-graf_tipo_chips
-        > div:last-child [data-testid="stButton"] > button {
+        .st-key-graf_tipo_chips > div:has(+ div .nav-kpis),
+        .st-key-graf_tipo_chips > div:last-child {
             border-bottom: none !important;
         }
         /* Con una línea por fila, el separador de categoría la duplica. El
-           badge sigue siendo el que agrupa. */
-        :root:has(.st-key-app_reporte_compras)
+           badge sigue siendo el que agrupa. Nota: ninguno de los dos ya
+           aparece en este contenedor (Reportes no dibuja categorías) — se
+           dejan por si el día de mañana alguna vista los reintroduce, no
+           hacen daño estando inertes. */
         .st-key-compras_tabs_row .rail-sep { display: none !important; }
-        :root:has(.st-key-app_reporte_compras)
         .st-key-compras_tabs_row .rail-cat-badge {
             font-size: 9.5px !important;
             padding: 13px 12px 5px !important;
         }
         /* 11px era el tamaño para una columna de 84px. */
-        :root:has(.st-key-app_reporte_compras) .st-key-graf_tipo_chips
+        .st-key-graf_tipo_chips
         [data-testid="stButton"] > button p {
             font-size: 13px !important;
             white-space: nowrap !important;
@@ -556,7 +604,7 @@ CSS = """    /* ================================================================
            Es un <span>, y la regla que aplana los descendientes del botón
            (más arriba en este archivo) excluye `span` — por eso no hace
            falta deshacer nada acá. */
-        :root:has(.st-key-app_reporte_compras) .st-key-graf_tipo_chips
+        .st-key-graf_tipo_chips
         [data-testid="stButton"] > button [data-testid="stIconMaterial"] {
             font-size: 19px !important;
             color: inherit !important;
@@ -568,7 +616,7 @@ CSS = """    /* ================================================================
            derecho: funciona porque el wrapper del label es `flex: 0 1 auto`
            y no se estira — si alguien le pone flex:1, el chevron se pega al
            texto y deja de haber margen que repartir. */
-        :root:has(.st-key-app_reporte_compras) .st-key-graf_tipo_chips
+        .st-key-graf_tipo_chips
         [data-testid="stButton"] > button::after {
             content: "›";
             margin-left: auto !important;
@@ -577,11 +625,30 @@ CSS = """    /* ================================================================
             color: var(--text-muted) !important;
             flex: 0 0 auto !important;
         }
-        :root:has(.st-key-app_reporte_compras) .st-key-graf_tipo_chips
+        .st-key-graf_tipo_chips
         [data-testid="stButton"] > button[kind="primary"]::after,
-        :root:has(.st-key-app_reporte_compras) .st-key-graf_tipo_chips
+        .st-key-graf_tipo_chips
         [data-testid="stButton"] > button:hover::after {
             color: inherit !important;
         }
+    }
+
+    /* =================================================================== */
+    /* DEFENSA ANTI-TOOLTIP-FANTASMA — portada de navegacion.py el           */
+    /* 2026-08-22 (regla #170). Reportes usa `help=` en sus botones (para el */
+    /* tooltip con el nombre completo del reporte); Vistas nunca lo usó y    */
+    /* nunca necesitó esta defensa. Con `help=`, Streamlit envuelve el botón */
+    /* en `div > span.stTooltipIcon > span.stTooltipHoverTarget`, y deja     */
+    /* además una COPIA FANTASMA suelta sin envolver dentro del mismo        */
+    /* `stButton` — invisible mientras nadie le da alto/ancho explícitos,    */
+    /* visible (y duplicada) en cuanto algo se los da. Se oculta acotando    */
+    /* por la ausencia de tooltip, sólo cuando hay un hermano que sí lo      */
+    /* lleva. Ver el detalle completo en el docstring original,             */
+    /* arquitectura.md regla #164 (ahí se documentó por primera vez, para    */
+    /* la franja horizontal; acá es la misma trampa, mismo mecanismo,        */
+    /* aplicada al rail vertical porque Reportes se mudó a él). */
+    .st-key-graf_tipo_chips [data-testid="stButton"]:has(.stTooltipIcon)
+        > div:not(:has(.stTooltipIcon)) {
+        display: none !important;
     }
 """

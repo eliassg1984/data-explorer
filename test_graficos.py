@@ -165,6 +165,11 @@ def _pruebas_puras():
     check("fmt_k millones", _ep.fmt_k(1_200_000), "S/ 1.2M")
     # El umbral es >=, no >: 1000 ya es "1.0k" y no "S/ 1000".
     check("fmt_k borde 1000", _ep.fmt_k(1000), "S/ 1.0k")
+    # Negativo (2026-08-22, KPIs del rail: Ajuste Valorizado puede dar merma).
+    # La magnitud decide el corte, no v directo — sin abs(), ningún negativo
+    # entraba nunca en >= 1000 y "S/ -56320" salía sin abreviar ni agrupar.
+    check("fmt_k negativo miles", _ep.fmt_k(-56320), "S/ -56.3k")
+    check("fmt_k negativo unidades", _ep.fmt_k(-940), "S/ -940")
 
     check("sufijo gran conocida", _ep.sufijo_granularidad("Mes"), "del Mes")
     check("sufijo gran desconocida",

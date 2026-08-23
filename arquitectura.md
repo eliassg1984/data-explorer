@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-169 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+170 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (62)
 
@@ -222,7 +222,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#154** — destinosDeEstilo necesitaba DOS niveles de redirección, no uno — y el guard de cantidad de la…
 - **#157** — El modo diseño sólo sabía agarrar elementos con st-key-*, y la mitad de lo que uno quiere…
 
-**Datos, R2 y DuckDB** (18)
+**Datos, R2 y DuckDB** (19)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -242,6 +242,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#134** — Piloto de "cada gráfico elige su rango" (2026-08-18): el módulo graficos/periodo.py y su…
 - **#143** — Cruce SIRE ↔ parquet de Compras: la clave serie-número sola produce falsos positivos si no se…
 - **#160** — El registro del SIRE pasó de consulta EN VIVO a parquet en R2, y eso cambia lo que se le…
+- **#170** — Se invirtieron Reportes y Vistas: Reportes al rail vertical izquierdo, Vistas a la franja…
 
 **SUNAT y SIRE** (9)
 
@@ -282,7 +283,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#167** — El fondo general de la app no se podía editar con el modo diseño: el lienzo es el único…
 - **#168** — Las manijas del modo diseño quedaban FUERA DE LA PANTALLA cuando el elemento tocaba un borde
 
-**Decisiones de diseño y UX** (31)
+**Decisiones de diseño y UX** (32)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -315,6 +316,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#166** — El contorno del modo diseño se dibujaba ENCIMA del borde real del elemento — así que para ver…
 - **#168** — Las manijas del modo diseño quedaban FUERA DE LA PANTALLA cuando el elemento tocaba un borde
 - **#169** — El CSS que exporta el modo diseño es una FOTO DE PÍXELES, no la intención: pegarlo tal cual…
+- **#170** — Se invirtieron Reportes y Vistas: Reportes al rail vertical izquierdo, Vistas a la franja…
 
 **Mantenimiento y trampas del lenguaje** (6)
 
@@ -7723,13 +7725,119 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      (270 → 24 → 270), `top`/`left` aplicados sin `transform`, y el alto
      seguido midiendo el contenido con su `max-height` de red.
 
+170. **Se invirtieron Reportes y Vistas: Reportes al rail vertical
+     izquierdo, Vistas a la franja horizontal superior — y de paso, un KPI
+     chico por reporte en el rail** (2026-08-22, a pedido explícito). Es la
+     reversión de la regla #99 (2026-08-18: Reportes bajó de rail a franja,
+     referencia MSN Dinero) — documentada acá porque revertir una decisión
+     razonada no es volver al código viejo sin más: la razón original
+     ("una franja horizontal no compite por ancho") ahora aplica a Vistas,
+     y hay que releerla desde ese lado.
+
+     **Enfoque: contenedor por POSICIÓN, no por contenido** — mismo patrón
+     que el repo ya usó con `--rail-der-*` tras el flip del 2026-08-18
+     (nombre histórico, comportamiento actual). `compras_tabs_row` sigue
+     siendo LA KEY DEL RAIL VERTICAL (hoy dibuja Reportes); `nav_rail` sigue
+     siendo LA KEY DE LA FRANJA HORIZONTAL (hoy dibuja Vistas). Con esto,
+     `estilos/_00_base.py` (las 5 variables), `_25_rails_pestillo.py`,
+     `pestillos.py` y los dos asserts de geometría de `test_graficos.py`
+     quedaron **sin tocar una línea** — apuntan a la key del contenedor, no
+     a lo que dibuja adentro.
+
+     **Por qué `inject_navegacion()` y los 9 `_render_rail(...)` NO se
+     movieron de sitio en el script**, aunque cambiaron de contenedor —
+     esto es lo más importante de la regla, lo que un "mové el dibujo
+     nomás" se hubiera comido crudo: `reporte`/`cfg`/`df_f` se calculan en
+     `app.py` ANTES del `@st.fragment` que envuelve `_render_contenido()`,
+     y quedan capturados en su closure. Si Reportes se dibujara DENTRO del
+     fragment (junto a Vistas), un clic en un reporte sólo re-ejecutaría el
+     fragment: el botón se vería activo pero `df_f` quedaría **congelado
+     en el reporte anterior** — bug silencioso, no un error visible, del
+     tipo que se descubre días después con una captura de pantalla que "no
+     tiene nada raro". `inject_navegacion()` se sigue llamando en
+     `app.py:129`, mismo punto de siempre; sólo cambió qué `key=` de
+     contenedor abre.
+
+     **El CSS Compras-específico de lista (ícono+chevron+hairline,
+     `estilos/_20_compras_rail.py`, nacido 2026-08-21) se GENERALIZÓ, no se
+     borró.** Estaba scopeado `:has(.st-key-app_reporte_compras)` porque
+     antes vestía las VISTAS de Compras, activas sólo cuando ese reporte
+     lo estaba. Como ahora vive en `compras_tabs_row`/`graf_tipo_chips`
+     dibujando REPORTES — presentes SIEMPRE, no condicionados a qué
+     reporte esté activo — se le sacó el scope. El pedido era "ícono +
+     texto"; reusar este formato ya hecho lo cumple de sobra.
+
+     **La defensa "tooltip fantasma"** (`help=` deja una copia suelta sin
+     envolver dentro del mismo `stButton`, invisible mientras nada le da
+     alto/ancho explícitos) viajó de `navegacion.py` a
+     `estilos/_20_compras_rail.py`: Reportes usa `help=` (tooltip con el
+     nombre completo) y se mudó al rail; Vistas nunca lo usó. Verificado
+     con la copia real: `getBoundingClientRect()` da `0×0` — oculta de
+     verdad, no por casualidad de layout como en el hallazgo original.
+
+     **Los KPIs, agregados DuckDB baratos** (mirror de
+     `data.py::rango_fechas`, no descargan el parquet completo):
+     `REPORTES[x]["kpis"]` declara `(etiqueta, columna, agregación)`,
+     resuelto contra el ESQUEMA REAL de cada parquet (consultado con
+     `DESCRIBE` contra R2, no adivinado — los nombres de columna de
+     `REPORTES[x]["fecha"]` vienen en Title Case por el `buscar_columna`
+     tolerante que los resuelve en tiempo de carga; el nombre CRUDO del
+     parquet puede ser otro — Salidas/Requerimientos son
+     `"FECHA REGISTRO"` en mayúsculas contra el parquet, no
+     `"Fecha registro"` como dice su propio `REPORTES[x]["fecha"]`).
+     `kpi_dedup` resuelve el caso Ventas (Pax se repite por LÍNEA de venta,
+     no por pedido — sin dedup, sumarlo infla el conteo): agrupa por
+     `LLAVE LOCAL PEDIDO` ANTES de agregar, en la misma consulta.
+
+     Tres bugs que sólo aparecieron verificando en el navegador, no antes:
+     - **`fmt_k` no manejaba negativos** (`utils.py`): Ajuste Valorizado
+       puede ser negativo (merma), y `v >= 1_000` es SIEMPRE falso para un
+       negativo — "S/ -56320" salía sin abreviar ni agrupar en vez de
+       "S/ -56.3k". La magnitud (`abs(v)`) decide el corte, no `v` directo.
+       Agregado a `test_graficos.py`.
+     - **La línea de KPIs no sobrevivía el paso a fila en mobile**
+       (`nav-kpis`, pensada para apilarse BAJO su botón en columna):
+       medido en 375px, se convertía en un flex-item más DE LA MISMA FILA
+       que los chips, flotando arriba en vez de bajo su reporte. Se oculta
+       en `@media(max-width:900px)`, mismo criterio que ya ocultaba
+       categorías/separadores ahí. Ojo con la ESPECIFICIDAD al ocultarla:
+       la regla base (`navegacion.py::_CSS_KPIS`) y el override móvil
+       tienen la MISMA especificidad nominal, y `estilos/` se inyecta
+       ANTES que `inject_navegacion()` — a igual especificidad gana la que
+       va DESPUÉS en el DOM, así que el override perdía en silencio hasta
+       duplicar la clase del contenedor (mismo truco que ya usa el resto
+       del archivo).
+     - **El hairline entre ítems vivía en el `<button>`, y un
+       `button[kind="primary"]` global de `_00_base.py` (`border: none`)
+       le ganaba en especificidad** al ítem ACTIVO específicamente (los
+       inactivos sí mostraban la línea — sólo el reporte activo la
+       perdía). La causa de fondo no era la especificidad sino el DISEÑO:
+       la línea tiene que separar UN REPORTE del siguiente, no el
+       ícono+label de su propia línea de KPIs un renglón más abajo. Se
+       movió el hairline del `<button>` al `<div>` contenedor (evita la
+       pelea de especificidad por completo) y se apaga selectivamente en
+       el div del botón cuando el siguiente hermano es su propio
+       `.nav-kpis` — así la línea cierra el PAR completo
+       (ícono+label+KPIs), no corta en el medio.
+
+     Verificado en la app real con datos de R2 (no demo): switch de
+     reporte dispara rerun completo y los datos cambian de verdad (probado
+     Compras→Ventas: la franja pasó de 8 vistas de Compras a 11 de Ventas
+     propias); switch de vista es rápido —fragment, ~6s vs ~30-40s de un
+     reporte con `carga_por_rango`—; pestillo pliega 270→24→270px; mobile
+     con los DOS breakpoints ya existentes (768px franja→bottom-nav, 900px
+     rail→tira horizontal) sin solape; deep-link en frío
+     (`?reporte=Ajuste de Inventario`, sin `?vista=`) resuelve al primer
+     ítem sin excepciones. Sin errores de servidor en toda la sesión de
+     pruebas.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#170**.
+> próxima regla nueva es la **#171**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

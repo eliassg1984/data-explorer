@@ -14,8 +14,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-import pestillos
-from navegacion import boton_refresco
+from navegacion import _CSS_FRANJA_VISTAS
 from utils import buscar_columna, _norm
 from tema import (
     BLANCO, ESCALA_CONTINUA, GRIS_BORDE, SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
@@ -133,23 +132,34 @@ def vista_activa(categorias, state_key):
 
 
 def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
-    """Rail vertical fijo al borde DERECHO — selector de tipo de gráfico.
+    """Vistas del reporte activo — fila de TABS DE TEXTO en la franja
+    superior. Selector de tipo de gráfico/pantalla dentro de un reporte.
 
     Componente COMPARTIDO: es el layout estándar de los dashboards (Compras,
-    Ajuste, …). El rail, la franja superior, la posición de la fecha y el
-    padding del contenido los activa el CSS de estilos.py scopeado a
-    `:has(.st-key-compras_tabs_row)`. Esa key es HISTÓRICA (nació en Compras)
-    pero hoy es LA KEY DEL RAIL COMPARTIDO — no renombrar sin actualizar sus
-    ~40 referencias en estilos.py/navegacion.py.
+    Ajuste, …). Dibuja dentro de `st.container(key="nav_rail")` — la MISMA
+    key que usa `navegacion.py::inject_navegacion` para la franja de
+    Reportes: son dos contenidos que ocupan la franja superior en dos
+    momentos DISTINTOS del script (Reportes se resuelve antes del
+    `@st.fragment` de `_render_contenido`, Vistas adentro — ver el docstring
+    de `inject_navegacion`), nunca simultáneos, así que compartir la key no
+    los pisa. Ver arquitectura.md regla #170 (inversión Reportes↔Vistas).
+
+    Hasta el 2026-08-22 este rail era VERTICAL, a la izquierda, con
+    categorías agrupadas por badge (`rail-cat-badge`) — ese lugar y ese
+    formato los ocupa ahora Reportes (`compras_tabs_row`, ver
+    `inject_navegacion`). Acá las categorías se APLANAN a una sola fila de
+    texto: una franja horizontal no tiene el alto para mostrar grupos, mismo
+    criterio que ya se aplicó a Reportes cuando bajó de rail a franja el
+    2026-08-18.
 
     Parámetros
       · categorias: `((nombre_categoria, ((id, label[, icono]), …)), …)`.
-        `nombre` puede ser "" para omitir el badge de categoría (rail plano de
-        una sección). El tercer elemento es OPCIONAL y va directo al `icon=`
-        de `st.button` (shortcode Material, `":material/tune:"`): lo usa
-        Compras para su rail en formato lista, y los rails que no lo pasan
-        siguen siendo tuplas de 2 y se dibujan igual que siempre. No leer
-        `items` con `for oid, label in …`: rompe con las tuplas de 3.
+        El nombre de categoría y el ícono (3er elemento opcional de la
+        tupla) NO se dibujan acá — se ignoran a propósito, ver arriba. Se
+        mantiene la MISMA forma de parámetro que antes del swap para no
+        tocar los 9 call sites; son los dashboards los que siguen agrupando
+        sus vistas por categoría en el código, aunque visualmente ya no se
+        note.
       · state_key: clave de session_state donde se persiste la selección.
       · btn_prefix: prefijo de las keys de los botones (único por reporte si dos
         rails pudieran coexistir; hoy solo hay un reporte activo por vez).
@@ -164,7 +174,7 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
     # Sin esto, la URL sólo decía el reporte y llegar a una pantalla
     # concreta eran 3-5 clics encadenados, cada uno con su rerun. Además
     # no se podía compartir "mirá ESTA pantalla": había que describirla.
-    # Va acá, en el rail COMPARTIDO, así vale para los 6 dashboards de una.
+    # Va acá, en el rail COMPARTIDO, así vale para los 9 dashboards de una.
     sel = st.session_state.get(state_key)
     if sel not in _todos:
         # Todavía no hay selección válida: primera carga, o venimos de otro
@@ -174,39 +184,23 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
         # igual "comparativo_vs_ano_pasado" que "Comparativo vs Año Pasado".
         sel = vista_activa(categorias, state_key)
         st.session_state[state_key] = sel
-    # Marcador del pestillo (ver pestillos.py). Solo existe si ESTE reporte
-    # dibuja el rail: los que no lo usan tampoco reservan ancho para él.
-    pestillos.marcar(pestillos.DER)
-    with st.container(key="compras_tabs_row"):
-        # FUERA de graf_tipo_chips a propósito: ese contenedor estila a
-        # TODOS sus botones como ítems de la lista de vistas (regla #6 —
-        # acotar al widget, no al contenedor). El pestillo no es una vista.
-        pestillos.pestillo(pestillos.DER, "rail_pestillo")
-        with st.container(key="graf_tipo_chips"):
-            for i, (cat_nombre, items) in enumerate(categorias):
-                if cat_nombre:
-                    st.markdown(
-                        f'<div class="rail-cat-badge">{cat_nombre}</div>',
-                        unsafe_allow_html=True,
-                    )
-                for item in items:
-                    oid, label = item[0], item[1]
-                    st.button(
-                        label,
-                        key=f"{btn_prefix}{_slug(oid)}",
-                        icon=(item[2] if len(item) > 2 else None),
-                        type=("primary" if oid == sel else "secondary"),
-                        use_container_width=True,
-                        on_click=_rail_set, args=(state_key, oid),
-                    )
-                if i < len(categorias) - 1:
-                    st.markdown('<div class="rail-sep"></div>',
-                                unsafe_allow_html=True)
-        # PIE DEL RAIL — la única ACCIÓN, fuera de graf_tipo_chips por lo
-        # mismo que el pestillo: ese contenedor estila a todos sus botones
-        # como ítems de la lista de vistas (regla #6), y refrescar no es una
-        # vista. Vino de la franja superior el 2026-08-22 (regla #164).
-        boton_refresco()
+    # SIN wrapper interno propio (a diferencia del rail vertical, que abre
+    # `graf_tipo_chips` adentro): los botones van DIRECTOS dentro de
+    # `nav_rail`, igual que dibujaba Reportes antes del 2026-08-22. Así el
+    # CSS de la franja (navegacion.py::_CSS_FRANJA, que ya sabía estilar
+    # `.st-key-nav_rail [data-testid="stVerticalBlock"]` como fila) se
+    # reusa sin tener que enseñarle a atravesar un nivel de anidado extra.
+    st.markdown(_CSS_FRANJA_VISTAS, unsafe_allow_html=True)
+    with st.container(key="nav_rail"):
+        for _cat_nombre, items in categorias:
+            for item in items:
+                oid, label = item[0], item[1]
+                st.button(
+                    label,
+                    key=f"{btn_prefix}{_slug(oid)}",
+                    type=("primary" if oid == sel else "secondary"),
+                    on_click=_rail_set, args=(state_key, oid),
+                )
     _final = st.session_state.get(state_key, _todos[0])
     # Espejo hacia la URL. Escribir query_params NO dispara rerun, pero se
     # compara antes igual: reescribir en cada rerun es ruido inútil.

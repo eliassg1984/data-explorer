@@ -1,54 +1,73 @@
 """
-Navegación de la app: BARRA HORIZONTAL SUPERIOR de reportes, solo texto.
+Navegación de la app: Reportes en el RAIL VERTICAL izquierdo, Vistas (dentro
+de cada reporte) en la FRANJA HORIZONTAL superior.
+
+2026-08-22 — INVERSIÓN REPORTES ↔ VISTAS
+-----------------------------------------
+Hasta hoy era al revés: Reportes en la franja superior (desde el
+2026-08-18, ver la vuelta anterior de este mismo docstring en el historial
+de git) y Vistas en el rail izquierdo. Se invirtió a pedido.
+
+El contenedor por POSICIÓN, no por contenido — mismo criterio que ya usa
+este repo con `--rail-der-*` desde el flip de 2026-08-18 (nombre histórico,
+comportamiento actual): `compras_tabs_row` sigue siendo LA KEY DEL RAIL
+VERTICAL (hoy dibuja Reportes, antes Vistas); `nav_rail` sigue siendo LA KEY
+DE LA FRANJA HORIZONTAL (hoy dibuja Vistas — ver `graficos/base.py::
+_render_rail` —, antes Reportes). Ningún CSS estructural de `_00_base.py`,
+`_25_rails_pestillo.py` ni `pestillos.py` se tocó: apuntan a la KEY del
+contenedor, no a su contenido.
+
+Por qué NO alcanza con "mover el dibujo de sitio": `reporte`/`cfg`/`df_f` se
+calculan en app.py ANTES del `@st.fragment` que envuelve
+`_render_contenido()`, y quedan capturados en su closure. Un clic en
+Reportes tiene que disparar un RERUN COMPLETO (para que esos tres se
+recalculen) — por eso `inject_navegacion()` sigue llamándose en app.py:129,
+en el mismo punto de ejecución de siempre, ANTES del fragment, aunque ahora
+dibuje en el contenedor vertical en vez del horizontal. Si Reportes se
+dibujara dentro del fragment (junto a Vistas), un clic solo re-ejecutaría el
+fragment: el botón se vería activo pero `df_f` quedaría congelado en el
+reporte anterior — bug silencioso, no un error visible.
+
+ÍCONOS: `data.py::REPORTES[x]["icono"]` volvió a usarse (estaba parqueado
+sin consumidor desde el 2026-08-18) — son shortcodes Material Symbols
+válidos, no los nombres de Bootstrap Icons que tenía antes de esa fecha
+(revalidados/traducidos el 2026-08-22, ver el propio dict). El rail
+vertical reusa el CSS de "lista con ícono+chevron+hairline" que ya existía
+en estilos/_20_compras_rail.py para Compras — generalizado (se le sacó el
+scope a Compras: ver ese archivo) porque ahora aplica siempre, a Reportes.
+
+KPIS: cada ítem del rail suma una segunda línea chica con 1-3 KPIs del
+reporte (ver `data.py::resumen_kpis`, agregado DuckDB barato contra R2, sin
+descargar el parquet completo). Viven en `REPORTES[x]["kpis"]`.
 
 Implementación con BOTONES NATIVOS de Streamlit (sin iframes ni manipulación
 del DOM): el click lo maneja Streamlit directamente vía on_click, por lo que
-cambiar de reporte es fiable en cada pulsación (no se cuelga ni "deja de hacer
-caso"). app.py lee la selección desde st.session_state["_nav_reporte"].
-
-2026-08-18 — DE RAIL LATERAL A FRANJA SUPERIOR
-----------------------------------------------
-Hasta hoy esto era una columna fija de 90px a la izquierda, con ícono arriba y
-etiqueta debajo, plegable con un pestillo. Pasó a ser una franja de 40px
-pegada al borde superior, con los reportes en fila y SOLO TEXTO, a pedido y
-con referencia concreta (la barra de MSN Dinero): es la jerarquía que usan
-casi todas las webapps de reportes financieros, de arriba hacia abajo.
-
-Lo que cambió de raíz, y por qué toca a media docena de módulos de `estilos/`:
-
-  * Los 90px que el rail reservaba en ANCHO los recuperó el contenido. Todo
-    lo que estaba anclado con un `left` medido desde el borde de la ventana
-    (fecha, chips, título de Ventas) se corrió 90px a la izquierda.
-  * Los 40px de la franja salen ahora del ALTO. Todo lo que estaba pegado al
-    borde superior (la banda de fecha/chips, el rail derecho de vistas) se
-    corre `var(--nav-top-alto)` hacia abajo, y el contenido arranca 40px más
-    abajo (`--cab-offset-contenido`, con su gemelo `_CAB_OFFSET` en
-    graficos/alturas.py).
-  * Ya no hay pestillo izquierdo: una franja horizontal no compite por el
-    ancho de la tarjeta, así que no hay nada que recuperar plegándola.
-
-El ALTO de la franja no se escribe acá: es `--nav-top-alto` en
-estilos/_00_base.py, porque media docena de reglas de `estilos/` lo restan.
-En móvil esa variable vale 0 y esta misma barra se va abajo (bottom nav).
+cambiar de reporte es fiable en cada pulsación (no se cuelga ni "deja de
+hacer caso"). app.py lee la selección desde st.session_state["_nav_reporte"].
 """
 
 import re
 import streamlit as st
 import datetime
 from zoneinfo import ZoneInfo
-from data import solicitar_refresco, secrets_disponibles, fecha_ultima_actualizacion, limpiar_cache
-from tema import (
-    ACENTO, ACENTO_TEXTO, LAVANDA_FONDO, GRIS_BORDE, GRIS_TEXTO,
+import pestillos
+from data import (
+    solicitar_refresco, secrets_disponibles, fecha_ultima_actualizacion,
+    limpiar_cache, resumen_kpis,
 )
+from utils import fmt_k
+from tema import GRIS_BORDE
 
 ZONA_PERU = ZoneInfo("America/Lima")
 
-
-# El mapa de iconos Bootstrap -> Material Symbols vivió acá hasta el
-# 2026-08-18: los botones de navegación eran ícono + etiqueta apilados. La
-# franja superior es SOLO TEXTO (a pedido, referencia MSN Dinero), así que el
-# `icono` de data.py ya no lo consume la navegación. Sigue en data.py porque
-# es parte de la identidad del reporte, por si algún día lo usa otra vista.
+# Sufijo de unidad para los KPIs que son un CONTEO (no un monto — esos usan
+# fmt_k, que ya trae su propio "S/"). Vive acá y no en data.py::REPORTES
+# porque es un detalle de PRESENTACIÓN, no del dato: la query de
+# resumen_kpis() no necesita saber cómo se va a mostrar el número.
+_SUFIJO_KPI = {
+    "Documentos": "docs", "Requerim.": "reqs", "Recetas": "recetas",
+    "Platos": "platos", "Pax": "pax",
+}
 
 
 def _slug(s):
@@ -61,35 +80,71 @@ def _on_nav_click(nombre):
     st.session_state["_nav_reporte"] = nombre
 
 
-# ── CSS: convierte el contenedor de botones en la franja fija superior ─────
-# El ALTO no se escribe acá — es `--nav-top-alto` en estilos/_00_base.py, que
-# es de donde lo restan la franja de fecha/chips y el rail derecho.
+def _formatear_kpis(info):
+    """Línea chica '· '-separada con los KPIs del reporte, o None si no
+    definió `kpis`, si la consulta no trajo nada (parquet sin esa columna,
+    R2 caído — resumen_kpis() ya devuelve {} en esos casos) o si es la
+    primera carga y todavía no hay nada cacheado.
+
+    Caso especial VENTAS: si el reporte trae "Venta" Y "Pax" (únicos dos
+    KPIs que hoy comparten reporte), se agrega un tercer valor DERIVADO
+    —Ticket promedio = Venta / Pax— que no sale de ninguna columna del
+    parquet por sí sola. No hay una forma genérica de expresar "un KPI es
+    la razón entre otros dos" en `REPORTES[x]["kpis"]` que valga la pena
+    para un solo caso; se resuelve acá, a mano, igual que ya hace
+    `graficos/ventas_resumen.py` con el mismo cálculo."""
+    kpis = info.get("kpis")
+    if not kpis:
+        return None
+    valores = resumen_kpis(info["archivo"], kpis,
+                           info.get("kpi_fecha"), info.get("kpi_dedup"))
+    if not valores:
+        return None
+    partes = []
+    for etiqueta, _col, agregacion in kpis:
+        v = valores.get(etiqueta)
+        if v is None:
+            continue
+        if agregacion == "sum":
+            partes.append(fmt_k(v))
+        else:
+            suf = _SUFIJO_KPI.get(etiqueta, "")
+            partes.append(f"{v:,.0f}{(' ' + suf) if suf else ''}")
+    if "Venta" in valores and "Pax" in valores and valores["Pax"]:
+        partes.append(f"S/ {valores['Venta'] / valores['Pax']:.1f}")
+    return " · ".join(partes) if partes else None
+
+
+# ── CSS de la FRANJA HORIZONTAL (hoy: Vistas) ───────────────────────────
+# Vivía acá cuando esta franja dibujaba Reportes (hasta el 2026-08-22); se
+# queda en el MISMO archivo tras la inversión (regla #170) porque el
+# contrato de click y el de estilo de "fila de tabs de texto" siguen siendo
+# los de este módulo — lo único que cambió es QUIÉN la inyecta:
+# `graficos/base.py::_render_rail` (Vistas, el nuevo dueño del contenido de
+# `nav_rail`) la importa y la inyecta en cada uno de sus 9 call sites, en
+# vez de `inject_navegacion` inyectarla una sola vez. CSS igual, disparador
+# distinto — es lo esperable dado que ahora el contenido de la franja
+# depende de qué REPORTE está activo, y no se conoce hasta adentro del
+# fragment de cada dashboard.
 #
-# NAV_X0: dónde arranca el primer reporte. Alinea la fila con el borde
-# izquierdo de la TARJETA, no con el de la ventana: es el padding-left que
-# Streamlit le pone al block-container, el mismo número del que salen los
-# `left` de los chips (_40_ajuste_franja.py) y de la fecha (_50_fecha.py).
-NAV_X0 = 64
+# Generalizada: los 9 `_render_rail(...)` traen `btn_prefix` propios por
+# dashboard (`aj_rail_btn_`, `ventas_rail_btn_`, …, no todos `navbtn_`). En
+# vez de forzar los 9 call sites a un prefijo común, se le sacó a esta CSS
+# la dependencia del prefijo literal — matchea por `data-testid`
+# estructural, sin filtrar por clase de key.
+#
+# Se le sacó también la defensa "tres capas del tooltip / copia fantasma"
+# que traía cuando dibujaba Reportes: esa trampa la dispara `help=`, que
+# Reportes usaba y Vistas nunca usó. Reportes se llevó la defensa consigo a
+# estilos/_20_compras_rail.py (scopeada a `graf_tipo_chips`, su nuevo hogar).
+NAV_X0 = 64        # Ver comentario original más abajo, junto al CSS.
+NAV_MOVIL_ALTO = 60  # Debe coincidir con estilos/_00_base.py, ver ese archivo.
 
-# ALTURA DE LA BARRA INFERIOR EN MÓVIL (bottom nav). Si cambias este valor,
-# actualiza también los "bottom" del bloque móvil de estilos.py
-# (.stApp::after, .st-key-footer_actualizacion, toast/aviso y el
-# padding-bottom del block-container), que asumen 60px.
-NAV_MOVIL_ALTO = 60
-
-_CSS = f"""
+_CSS_FRANJA_VISTAS = f"""
 <style>
-section[data-testid="stSidebar"] {{ display:none !important; }}
-
-/* Sin rail lateral no hay margen izquierdo que reservar. El aire de ARRIBA
-   tampoco se pone acá: lo pone el padding-top del block-container
-   (--cab-offset-contenido), que ya cuenta esta franja Y la de fecha/chips.
-   Sumar un padding-top propio lo contaría dos veces. */
-.stApp {{ margin-left:0 !important; padding-top:0 !important; }}
-
-/* Contenedor del rail -> FRANJA HORIZONTAL fija arriba, de borde a borde.
-   Blanca con una línea inferior: es cromo, no una tarjeta, así que no lleva
-   ni sombra fuerte ni redondeo (los tenía cuando flotaba sobre el canvas). */
+/* Contenedor -> FRANJA HORIZONTAL fija arriba, de borde a borde. Blanca con
+   una línea inferior: es cromo, no una tarjeta, así que no lleva ni sombra
+   fuerte ni redondeo. */
 .st-key-nav_rail {{
     position:fixed !important; top:0 !important; left:0 !important; right:0 !important;
     width:100vw !important;
@@ -100,15 +155,11 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     border-bottom:1px solid {GRIS_BORDE} !important;
     border-radius:0 !important;
     box-shadow:none !important;
-    /* NAV_X0 alinea el primer reporte con el borde izquierdo de la tarjeta
-       (ver la constante). A la derecha basta un respiro para «Refrescar». */
+    /* NAV_X0 alinea el primer ítem con el borde izquierdo de la tarjeta. */
     padding:0 18px 0 {NAV_X0}px !important;
     display:flex !important;
     flex-direction:row !important;
     align-items:center !important;
-    /* Si algún día hay tantos reportes que no entran a lo ancho, la fila
-       scrollea en vez de desbordar. Sin barra visible: en una franja de 40px
-       se comería la mitad del alto. */
     overflow-x:auto !important; overflow-y:hidden !important;
     scrollbar-width:none !important;
 }}
@@ -124,11 +175,10 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     overflow:visible !important;
 }}
 
-/* CONTENEDORES DE BOTONES: en fila miden su contenido (en columna medían
-   el 100% del rail) y se estiran a lo alto para que el subrayado del activo
-   aterrice en el borde inferior de la franja, no a media altura. */
+/* CONTENEDORES DE BOTONES: en fila miden su contenido y se estiran a lo
+   alto para que el subrayado del activo aterrice en el borde inferior de
+   la franja, no a media altura. */
 .st-key-nav_rail [data-testid="stElementContainer"],
-.st-key-nav_rail [class*="st-key-navbtn_"],
 .st-key-nav_rail [data-testid="stButton"] {{
     width:auto !important; min-width:0 !important;
     flex:0 0 auto !important;
@@ -136,110 +186,56 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
     display:flex !important;
     align-items:center !important;
 }}
-
-/* LAS TRES CAPAS DEL TOOLTIP. Con `help=`, Streamlit envuelve el botón en
-   `div > span.stTooltipIcon > span.stTooltipHoverTarget`, y NINGUNA hereda el
-   alto: medido en vivo, el botón medía 14px —lo que su texto— dentro de una
-   franja de 40, así que el subrayado del activo y el tinte del hover salían
-   como una tira fina a media altura en vez de ocupar la franja entera. En el
-   rail vertical no se notaba porque allá el alto lo ponía el propio botón
-   (50px fijos) y no había nada que heredar.
-
-   LA COPIA FANTASMA: dentro de un mismo `stButton` con `help=`, Streamlit
-   deja DOS hijos — el botón envuelto en el tooltip y una copia suelta sin
-   envolver. La copia no está oculta por nada: medía 0x0 sólo porque su alto
-   salía del contenido y el rail vertical le daba alto al BOTÓN, no a ella.
-   En cuanto la franja horizontal le puso alto y ancho explícitos, la copia
-   se dibujó entera y cada reporte apareció DOS VECES, uno al lado del otro.
-   Se oculta acotando por la ausencia de tooltip, y sólo cuando hay un
-   hermano que sí lo lleva (si algún día un botón va sin `help=`, su único
-   hijo no matchea y sigue visible). */
-.st-key-nav_rail [class*="st-key-navbtn_"] [data-testid="stButton"]:has(.stTooltipIcon)
-    > div:not(:has(.stTooltipIcon)) {{
-    display:none !important;
-}}
-.st-key-nav_rail [class*="st-key-navbtn_"] [data-testid="stButton"] {{
+.st-key-nav_rail [data-testid="stButton"] {{
     align-items:stretch !important;
     height:100% !important;
 }}
-.st-key-nav_rail [class*="st-key-navbtn_"] [data-testid="stButton"] > div:has(.stTooltipIcon),
-.st-key-nav_rail [class*="st-key-navbtn_"] .stTooltipIcon,
-.st-key-nav_rail [class*="st-key-navbtn_"] .stTooltipHoverTarget {{
-    display:flex !important;
-    align-items:stretch !important;
-    height:100% !important;
-    width:auto !important;
-}}
 
-/* Cada botón -> ítem de menú de TEXTO (2026-08-18; antes tile de ícono).
-   Reposo: gris secundario. Hover: tinte lavanda. Activo: texto acento +
-   subrayado de 2px pegado al filo de la franja — el mismo tab-subrayado que
-   ya usan las franjas de control dentro de las tarjetas (_80_cards.py), así
-   que la barra de arriba habla el idioma del resto de la app.
-   El subrayado va por `box-shadow: inset` y no por `border-bottom`: no
-   participa del box model, así que el texto no se mueve un píxel al
-   activarse (con border, los ítems inactivos bailarían 2px). */
-.st-key-nav_rail [class*="st-key-navbtn_"] button {{
+/* Cada botón -> ítem de menú de TEXTO. Reposo: gris secundario. Hover:
+   tinte lavanda. Activo: texto acento + subrayado de 2px pegado al filo de
+   la franja — mismo tab-subrayado que las franjas de control dentro de las
+   tarjetas (_80_cards.py). El subrayado va por `box-shadow: inset` y no por
+   `border-bottom`: no participa del box model, el texto no se mueve un
+   píxel al activarse. */
+.st-key-nav_rail [data-testid="stButton"] button {{
     width:auto !important; height:100% !important; min-height:0 !important;
     margin:0 !important;
     padding:0 14px !important;
     border:none !important; border-radius:0 !important;
-    background:transparent !important; color:{GRIS_TEXTO} !important;
+    background:transparent !important; color:var(--text-secondary) !important;
     box-shadow:none !important;
     display:flex !important; align-items:center !important; justify-content:center !important;
     transition:background .2s, color .2s !important;
     flex-shrink:0 !important;
     white-space:nowrap !important;
 }}
-.st-key-nav_rail [class*="st-key-navbtn_"] button:hover {{
-    background:{LAVANDA_FONDO} !important; color:{ACENTO} !important;
+.st-key-nav_rail [data-testid="stButton"] button:hover {{
+    background:var(--accent-tint) !important; color:var(--accent) !important;
 }}
-.st-key-nav_rail [class*="st-key-navbtn_"] button[kind="primary"] {{
-    background:transparent !important; color:{ACENTO_TEXTO} !important;
-    box-shadow:inset 0 -2px 0 0 {ACENTO} !important;
+.st-key-nav_rail [data-testid="stButton"] button[kind="primary"] {{
+    background:transparent !important; color:var(--accent-deep) !important;
+    box-shadow:inset 0 -2px 0 0 var(--accent) !important;
 }}
-.st-key-nav_rail [class*="st-key-navbtn_"] button[kind="primary"]:hover {{
-    background:{LAVANDA_FONDO} !important;
+.st-key-nav_rail [data-testid="stButton"] button[kind="primary"]:hover {{
+    background:var(--accent-tint) !important;
 }}
-/* Etiqueta en LÍNEA (antes apilada bajo el ícono). */
-.st-key-nav_rail [class*="st-key-navbtn_"] button p {{
+.st-key-nav_rail [data-testid="stButton"] button p {{
     display:flex !important; flex-direction:row !important;
     align-items:center !important; gap:6px !important;
     font-size:13.5px !important; font-weight:600 !important;
     line-height:1 !important; margin:0 !important;
     white-space:nowrap !important;
 }}
-.st-key-nav_rail [class*="st-key-navbtn_"] button[kind="primary"] p {{
+.st-key-nav_rail [data-testid="stButton"] button[kind="primary"] p {{
     font-weight:700 !important;
 }}
-/* El único ícono que queda en la franja es el de Refrescar (ver abajo). */
-.st-key-nav_rail [class*="st-key-navbtn_"] button [data-testid="stIconMaterial"],
-.st-key-nav_rail [class*="st-key-navbtn_"] button p > span {{
-    font-size:17px !important; line-height:1 !important;
-}}
-
-/* Refrescar VIVIÓ ACÁ hasta el 2026-08-22: era la única acción de la franja,
-   empujada al extremo derecho con `margin-left:auto`, y arrastraba consigo un
-   `stLayoutWrapper > stVerticalBlock` (los dos wrappers que le agrega su
-   `st.fragment`) al que había que forzarle el alto para que el hover no
-   saliera como una tira fina a media franja.
-   Se fue al RAIL DE VISTAS (`graficos/base.py::_render_rail`, key
-   `rail_refresh`), a pedido: la franja superior es NAVEGACIÓN pura —una lista
-   de reportes— y una acción metida al final se leía como un reporte más.
-   En el rail va al pie, bajo una divisoria, que es donde el ojo ya busca las
-   acciones. Su CSS vive ahora en estilos/_20_compras_rail.py y su plegado en
-   estilos/_25_rails_pestillo.py. Ver arquitectura.md regla #164. */
 
 /* ═══════════════════════════════════════════════════════════════════════
    MÓVIL — la franja superior BAJA y se vuelve barra inferior (bottom nav).
-   Es el patrón estándar de apps móviles: la navegación al alcance del
-   pulgar. Los botones son LOS MISMOS (mismas keys, mismo estado), solo
-   cambian de sitio y de tamaño.
    Acá `--nav-top-alto` vale 0 (_99_movil.py), así que todo lo que el resto
    de `estilos/` corre hacia abajo por la franja vuelve solo a su sitio.
    ═══════════════════════════════════════════════════════════════════════ */
 @media (max-width:768px) {{
-    /* 1) La franja pasa de arriba a abajo, y crece al alto táctil */
     .st-key-nav_rail {{
         display:flex !important;
         flex-direction:row !important;
@@ -257,14 +253,6 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
         overflow-x:auto !important; overflow-y:hidden !important;
         -webkit-overflow-scrolling:touch !important;
     }}
-
-    /* 2) El bloque interno de botones.
-       min-width 100% garantiza que la fila llegue al borde derecho
-       aunque haya pocos ítems; max-content permite scroll si hay muchos.
-       El padding-right de 150px es una COLA de espacio: Streamlit Cloud
-       superpone sus insignias (avatar + "Hosted with Streamlit") sobre la
-       esquina inferior derecha; con esta cola, al deslizar hasta el final
-       el último ítem queda a la izquierda de esa zona, nunca oculto. */
     .st-key-nav_rail [data-testid="stVerticalBlock"] {{
         flex-direction:row !important;
         gap:4px !important;
@@ -274,54 +262,59 @@ section[data-testid="stSidebar"] {{ display:none !important; }}
         height:100% !important;
         align-items:center !important;
     }}
-
-    /* 3) Cada wrapper de botón mide 1/4 del viewport: se ven exactamente
-       4 ítems a la vez y el resto se alcanza deslizando la barra. */
     .st-key-nav_rail [data-testid="stElementContainer"],
-    .st-key-nav_rail [class*="st-key-navbtn_"],
     .st-key-nav_rail [data-testid="stButton"] {{
         width:calc(25vw - 8px) !important;
         flex:0 0 calc(25vw - 8px) !important;
         align-self:center !important;
     }}
-
-    /* 4) Las capas del tooltip vuelven a llenar el ANCHO (en escritorio
-       miden su contenido) y sueltan el alto: acá el botón manda con sus
-       48px táctiles dentro de una barra de 60. */
-    .st-key-nav_rail [class*="st-key-navbtn_"] [data-testid="stButton"],
-    .st-key-nav_rail [class*="st-key-navbtn_"] [data-testid="stButton"] > div:has(.stTooltipIcon),
-    .st-key-nav_rail [class*="st-key-navbtn_"] .stTooltipIcon,
-    .st-key-nav_rail [class*="st-key-navbtn_"] .stTooltipHoverTarget {{
-        align-items:center !important;
-        height:auto !important;
-        width:100% !important;
-    }}
-
-    /* 5) El botón llena su wrapper; el área táctil se mantiene sobre 44 px.
-       Acá el activo SÍ vuelve a la píldora lavanda: en 25vw de ancho el
-       subrayado de escritorio queda demasiado tenue para leerse de un
-       vistazo, y la píldora es lo que ya usaban las bottom nav. */
-    .st-key-nav_rail [class*="st-key-navbtn_"] button {{
+    .st-key-nav_rail [data-testid="stButton"] button {{
         width:100% !important; height:48px !important; min-height:48px !important;
         padding:0 6px !important;
         border-radius:10px !important;
     }}
-    .st-key-nav_rail [class*="st-key-navbtn_"] button[kind="primary"] {{
-        background:{LAVANDA_FONDO} !important;
+    .st-key-nav_rail [data-testid="stButton"] button[kind="primary"] {{
+        background:var(--accent-tint) !important;
         box-shadow:none !important;
     }}
-    /* Etiqueta compacta para la barra inferior */
-    .st-key-nav_rail [class*="st-key-navbtn_"] button p {{
+    .st-key-nav_rail [data-testid="stButton"] button p {{
         font-size:11px !important;
         gap:2px !important;
         overflow:hidden !important;
         text-overflow:ellipsis !important;
     }}
-    .st-key-nav_rail [class*="st-key-navbtn_"] button [data-testid="stIconMaterial"],
-    .st-key-nav_rail [class*="st-key-navbtn_"] button p > span {{
-        font-size:18px !important;
-    }}
 }}
+</style>
+"""
+
+
+# ── CSS del RAIL VERTICAL (hoy: Reportes) ───────────────────────────────
+# El ANCHO/posición/pestillo/breakpoint móvil son de `estilos/_20_compras_
+# rail.py` + `_25_rails_pestillo.py` (contenedor por POSICIÓN, ver docstring
+# del módulo) — no se duplican acá. Lo único propio de Reportes es la línea
+# de KPIs, que no existía antes de este cambio.
+_CSS_KPIS = """
+<style>
+/* Hermano del boton (st.markdown propio, NO texto del <p> del boton — un
+   st.button no acepta HTML anidado en su label). La regla "NUCLEAR" de
+   estilos/_20_compras_rail.py (.st-key-graf_tipo_chips *:not(button):...)
+   ya deja el stElementContainer/stMarkdownContainer que lo envuelve en
+   margin/padding:0, asi que queda pegado al boton de arriba sin gap propio
+   que anular aca. */
+.st-key-graf_tipo_chips .nav-kpis {
+    display: block !important;
+    font-size: 9.5px !important;
+    font-weight: 400 !important;
+    color: var(--text-muted) !important;
+    line-height: 1.3 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    /* Alinea con el LABEL del boton de arriba, no con su borde izquierdo:
+       9px de padding-left del boton + ~19px de icono + 10px de gap. */
+    padding: 0 10px 4px 38px !important;
+    margin-top: -4px !important;
+}
 </style>
 """
 
@@ -413,21 +406,21 @@ html body [data-testid="stMain"] { overflow-x: clip !important; }
 def boton_refresco():
     """Botón de refresco AISLADO en su propio fragment. El clic se maneja
     por VALOR DE RETORNO (no on_click): el rerun sigue siendo SOLO de este
-    fragment (la tabla no se re-monta), pero la lógica corre en el cuerpo,
-    donde toast/error se pintan de forma fiable. FIX: con on_click dentro
-    del fragment el callback no se disparaba (clic perdido en silencio).
+    fragment, pero la lógica corre en el cuerpo, donde toast/error se pintan
+    de forma fiable. FIX: con on_click dentro del fragment el callback no se
+    disparaba (clic perdido en silencio).
 
-    LO DIBUJA EL RAIL DE VISTAS, no esta franja: `graficos/base.py::
-    _render_rail` lo llama al pie del rail (ver arquitectura.md regla #164).
-    Sigue viviendo acá porque es quien importa la capa de refresco de R2
-    (`data.py`) y `graficos/` no la conoce.
+    LO DIBUJA inject_navegacion, al pie del rail de Reportes (ver más abajo)
+    — volvió ahí el 2026-08-22 al invertirse Reportes↔Vistas (arquitectura.md
+    regla #170): la acción vive donde vive el rail VERTICAL, sea cual sea su
+    contenido, porque es "el pie de una lista", no "lo último de Reportes"
+    ni "lo último de Vistas". Su CSS (`.st-key-rail_refresh`) no se tocó —
+    vive en estilos/_20_compras_rail.py, scopeado a la KEY del contenedor,
+    no a lo que dibuja adentro.
 
     SIN parámetros a propósito: quién es el reporte activo y cuál su parquet
-    lo sabe `inject_navegacion`, que corre en app.py:129 —MUCHO antes que el
-    rail, dibujado dentro de `_render_contenido()` unas 900 líneas después—.
-    Pasarlos por argumento obligaría a que `_render_rail` (compartido por los
-    ocho dashboards que lo llaman) los recibiera y los fuera pasando; se
-    dejan en `session_state` y el botón los lee al dibujarse."""
+    lo sabe `inject_navegacion`, que los setea en session_state ANTES de
+    llamar a este fragment, en la misma función."""
 
     reporte_activo, archivo = st.session_state.get("_ctx_refresco", ("", None))
 
@@ -467,22 +460,39 @@ def boton_refresco():
         st.error("⚠️ No se pudo enviar la solicitud de refresco.")
 
 
+@st.fragment
+def _pestillo_reportes():
+    """El pestillo AISLADO en su propio fragment. Necesario porque
+    `inject_navegacion()` corre ANTES del `@st.fragment` que envuelve
+    `_render_contenido()` (tiene que ser así — ver el docstring del módulo,
+    es lo que permite que un clic en un REPORTE dispare un rerun completo).
+    Sin este fragment propio, un clic acá TAMBIÉN dispararía ese rerun
+    completo — funciona, pero es más lento y parpadea más de lo que hacía
+    plegar el rail cuando vivía adentro de `_render_contenido` (hasta el
+    2026-08-22). Mismo patrón que ya usa `boton_refresco` arriba."""
+    pestillos.pestillo(pestillos.DER, "rail_pestillo")
+
+
 def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
-    """Dibuja la franja superior de navegación (botones nativos, solo texto).
+    """Dibuja Reportes en el RAIL VERTICAL (key `compras_tabs_row`).
+
+    Hasta el 2026-08-22 dibujaba la franja HORIZONTAL (key `nav_rail`) —
+    ver el docstring del módulo para el porqué de la inversión y por qué
+    esta función se sigue llamando en el MISMO punto de app.py (línea 129,
+    antes del fragment) aunque cambió qué contenedor dibuja.
 
     Hasta el 2026-08-18 dibujaba además un `#nav-topbar`: una barra fija para
     el título del reporte. Se borró porque llevaba tiempo muerta — el título
     vive en la franja de fecha/chips, así que el topbar salía SIEMPRE vacío y
     con `display:none` desde el CSS de la cabecera."""
-    st.markdown(_CSS, unsafe_allow_html=True)
+    st.markdown(_CSS_KPIS, unsafe_allow_html=True)
 
     # DISEÑO UNIFICADO: la cabecera fija (antes exclusiva de Ajuste de
     # Inventario) aplica a TODOS los reportes; el título vive en la franja.
     st.markdown(_CSS_AJUSTE, unsafe_allow_html=True)
 
-    # Contexto del botón de refresco, que YA NO SE DIBUJA ACÁ (2026-08-22):
-    # lo dibuja el rail de vistas, mil líneas después en el mismo run. Ver
-    # `boton_refresco` arriba y arquitectura.md regla #164.
+    # Contexto del botón de refresco: se dibuja al PIE de este mismo rail,
+    # más abajo en esta misma función (ver boton_refresco()).
     st.session_state["_ctx_refresco"] = (
         reporte_activo, reportes.get(reporte_activo, {}).get("archivo"),
     )
@@ -502,43 +512,68 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     if _grupo_activo:
         st.session_state[f"_ultimo_{_grupo_activo}"] = reporte_activo
 
-    # La franja NO se pliega: horizontal, no le quita ancho a la tarjeta, así
-    # que no hay nada que recuperar. El pestillo (`pestillos.py`) quedó solo
-    # para el rail DERECHO de vistas, que sí compite por el ancho.
+    # El rail VERTICAL sí compite por el ancho de la tarjeta (a diferencia de
+    # la franja horizontal que ocupaba hasta hoy) — de ahí el pestillo, que
+    # antes de este cambio era exclusivo del rail de Vistas.
+    pestillos.marcar(pestillos.DER)
     _grupos_dibujados = set()
-    with st.container(key="nav_rail"):
-        for nombre, info in visibles.items():
-            grupo = info.get("grupo_nav")
-            if grupo:
-                # Un solo botón por grupo — las demás entradas del grupo se
-                # saltan (ya comparten etiqueta, no tiene sentido un botón
-                # por cada una). Navega al último miembro visitado, o al
-                # primero del dict la primera vez.
-                if grupo in _grupos_dibujados:
+    with st.container(key="compras_tabs_row"):
+        # rail_pestillo FUERA de graf_tipo_chips a propósito: ese contenedor
+        # estila a TODOS sus botones como ítems de la lista de Reportes
+        # (regla #6 — acotar al widget, no al contenedor). El pestillo no es
+        # un reporte.
+        _pestillo_reportes()
+        with st.container(key="graf_tipo_chips"):
+            for nombre, info in visibles.items():
+                grupo = info.get("grupo_nav")
+                if grupo:
+                    # Un solo botón por grupo — las demás entradas del grupo
+                    # se saltan (ya comparten etiqueta, no tiene sentido un
+                    # botón por cada una). Navega al último miembro
+                    # visitado, o al primero del dict la primera vez.
+                    if grupo in _grupos_dibujados:
+                        continue
+                    _grupos_dibujados.add(grupo)
+                    miembros = [n for n, i in visibles.items()
+                               if i.get("grupo_nav") == grupo]
+                    destino = st.session_state.get(f"_ultimo_{grupo}", miembros[0])
+                    if destino not in miembros:
+                        destino = miembros[0]
+                    st.button(
+                        grupo,
+                        key=f"navbtn_{_slug(grupo)}",
+                        help=grupo,
+                        icon=info.get("icono"),
+                        type="primary" if reporte_activo in miembros else "secondary",
+                        use_container_width=True,
+                        on_click=_on_nav_click,
+                        args=(destino,),
+                    )
                     continue
-                _grupos_dibujados.add(grupo)
-                miembros = [n for n, i in visibles.items() if i.get("grupo_nav") == grupo]
-                destino = st.session_state.get(f"_ultimo_{grupo}", miembros[0])
-                if destino not in miembros:
-                    destino = miembros[0]
+                etiqueta = info.get("label_corto") or nombre.split()[0][:10]
                 st.button(
-                    grupo,
-                    key=f"navbtn_{_slug(grupo)}",
-                    help=grupo,
-                    type="primary" if reporte_activo in miembros else "secondary",
+                    etiqueta,
+                    key=f"navbtn_{_slug(nombre)}",
+                    help=nombre,
+                    icon=info.get("icono"),
+                    type="primary" if nombre == reporte_activo else "secondary",
+                    use_container_width=True,
                     on_click=_on_nav_click,
-                    args=(destino,),
+                    args=(nombre,),
                 )
-                continue
-            # SOLO TEXTO desde el 2026-08-18 (antes ":material/x: etiqueta",
-            # con el ícono apilado encima). Respaldo si un reporte nuevo no
-            # trae `label_corto`: la primera palabra del nombre, recortada.
-            etiqueta = info.get("label_corto") or nombre.split()[0][:10]
-            st.button(
-                etiqueta,
-                key=f"navbtn_{_slug(nombre)}",
-                help=nombre,
-                type="primary" if nombre == reporte_activo else "secondary",
-                on_click=_on_nav_click,
-                args=(nombre,),
-            )
+                # Línea de KPIs, si el reporte definió `kpis`. Va DENTRO del
+                # <p> del label (el mismo truco que la tarjeta de la franja
+                # de fecha: un <span> hijo hereda tipografía/color propios
+                # sin que el botón necesite un segundo widget). unsafe_
+                # allow_html=True porque va como HTML crudo en el propio
+                # label del botón — st.button no acepta children.
+                linea = _formatear_kpis(info) if not info.get("tool") else None
+                if linea:
+                    st.markdown(
+                        f'<div class="nav-kpis" '
+                        f'style="margin-top:-2px">{linea}</div>',
+                        unsafe_allow_html=True,
+                    )
+        # PIE DEL RAIL — Refrescar, la única ACCIÓN (no un reporte). Fuera de
+        # graf_tipo_chips por lo mismo que el pestillo (regla #6).
+        boton_refresco()

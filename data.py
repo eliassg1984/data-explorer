@@ -47,7 +47,14 @@ REPORTES = {
     "Compras": {
         "label_corto": "Compras",
         "archivo": "compras.parquet",
-        "icono": "cart",
+        # Shortcode Material Symbols (no Bootstrap Icons — ver el comentario
+        # grande más abajo de "El mapa de iconos..."). Confirmados contra
+        # compras.parquet real (2026-08-22): valorizado = VALOR_COMPRA,
+        # documentos = NUM_DOCUMENTO, fecha = FECHA_EMISION_DOC.
+        "icono": ":material/shopping_cart:",
+        "kpis": (("Valorizado", "VALOR_COMPRA", "sum"),
+                 ("Documentos", "NUM_DOCUMENTO", "count_distinct")),
+        "kpi_fecha": "FECHA_EMISION_DOC",
     },
     # Requerimientos y Salidas comparten UN ítem de nav ("Movimientos", ver
     # `grupo_nav` en navegacion.py::inject_navegacion) — el par describe un
@@ -67,7 +74,10 @@ REPORTES = {
         "label_corto": "Salidas",
         "grupo_nav": "Movimientos",
         "archivo": "salidas.parquet",
-        "icono": "arrow-left-right",
+        "icono": ":material/sync_alt:",
+        "kpis": (("Valorizado", "VALOR NETO", "sum"),
+                 ("Documentos", "DOCUMENTO", "count_distinct")),
+        "kpi_fecha": "FECHA REGISTRO",
         # Columnas confirmadas contra el parquet real (2026-08-04): destino
         # de la salida es "Sub Almacen" (no "Nombre Area" — no hay tal
         # columna en este reporte), cantidad/valorizado son "Cant Salida" /
@@ -86,7 +96,10 @@ REPORTES = {
         "label_corto": "Requerim.",
         "grupo_nav": "Movimientos",
         "archivo": "requerimientos.parquet",
-        "icono": "arrow-left-right",
+        "icono": ":material/sync_alt:",
+        "kpis": (("Valorizado", "VALOR ITEM", "sum"),
+                 ("Requerim.", "COD REQUERIMIENTO", "count_distinct")),
+        "kpi_fecha": "FECHA REGISTRO",
         # Columnas confirmadas contra el parquet real (2026-08-13, DuckDB
         # directo): destino del requerimiento es "Sub Almacen" (el área de
         # producción que lo pide — Cocina/Barra/Pastelería/...), cantidad/
@@ -118,19 +131,24 @@ REPORTES = {
         "label_corto": "R. Base",
         "grupo_nav": "Recetas",
         "archivo": "recetabase.parquet",
-        "icono": "receta",
+        "icono": ":material/receipt_long:",
+        # Catálogo sin fecha: el KPI es un conteo, no un agregado por período
+        # (kpi_fecha ausente a propósito — resumen_kpis() agrega la tabla
+        # entera cuando no hay fecha, igual que hace este reporte mismo).
+        "kpis": (("Recetas", "COD RB", "count_distinct"),),
     },
     "Receta Venta": {
         "fecha": None,  # catálogo (foto completa): sin filtro de fecha
         "label_corto": "R. Venta",
         "grupo_nav": "Recetas",
         "archivo": "recetaventa.parquet",
-        "icono": "receta",
+        "icono": ":material/receipt_long:",
+        "kpis": (("Platos", "COD RV", "count_distinct"),),
     },
     "Nueva Receta": {
         "label_corto": "+ Nueva",
         "grupo_nav": "Recetas",
-        "icono": "receta",
+        "icono": ":material/receipt_long:",
         # No es un parquet: arma y costea una receta de venta a mano contra
         # inventariovalorizado.parquet, y la guarda como PROPUESTA en R2
         # (_recetas_propuestas/), sin tocar recetaventa.parquet directo. Ver
@@ -140,7 +158,9 @@ REPORTES = {
     "Ajuste de Inventario": {
         "label_corto": "Ajuste",
         "archivo": "ajusteinventario.parquet",
-        "icono": "sliders",
+        "icono": ":material/tune:",
+        "kpis": (("Ajuste Valoriz.", "AJUSTE VALORIZADO", "sum"),),
+        "kpi_fecha": "FECHA APERTURA INVENTARIO",
         "filtros_cat": [],  # Sin filtros de Área/Familia/Subfamilia en el popover
         "agrupar": [],      # Sin opción de "Agrupar por" en el popover
         "columnas_iniciales": [
@@ -176,7 +196,10 @@ REPORTES = {
     "Inventario Valorizado": {
         "label_corto": "Inventario",
         "archivo": "inventariovalorizado.parquet",
-        "icono": "boxes",
+        "icono": ":material/inventory_2:",
+        # Foto sin fecha (igual que Receta Base/Venta): kpi_fecha ausente a
+        # propósito, resumen_kpis() agrega la tabla entera.
+        "kpis": (("Valorizado", "VALORIZADO TOTAL", "sum"),),
         "columnas": [
             "Nombre Familia", "Nombre Subfamilia", "Nombre Producto",
             "Unidad Kardex", "Codigo Producto", "Nombre Area", "Codigo Area", "Stock al Dia", "Precio Promedio", "Valorizado total"
@@ -197,7 +220,19 @@ REPORTES = {
     "Ventas": {
         "label_corto": "Ventas",
         "archivo": "ventas.parquet",
-        "icono": "cash-coin",
+        "icono": ":material/payments:",
+        # "Pax" se repite en cada línea de un mismo pedido (una fila por
+        # ítem vendido): sumarlo directo infla el conteo. kpi_dedup agrupa
+        # por pedido ANTES de sumar/contar — mismo criterio que ya usa
+        # graficos/ventas_resumen.py (groupby pedido, max pax, sum por día).
+        # "Venta" no necesita el dedup por sí sola (sumar por línea o por
+        # pedido-ya-sumado da lo mismo, es asociativo), pero como
+        # resumen_kpis() aplica el mismo dedup a toda la tupla de kpis de
+        # un reporte, viaja gratis en la misma consulta.
+        "kpis": (("Venta", "VENTA ITEM DDOCUMENTO", "sum"),
+                 ("Pax", "CANT PAX", "sum_dedup")),
+        "kpi_fecha": "FEC REG DOCUMENTO",
+        "kpi_dedup": "LLAVE LOCAL PEDIDO",
         # Carga filtrada por rango de fechas DENTRO de DuckDB (no baja todo
         # el parquet). Al primer acceso: 01-del-mes-actual → hoy. El rango
         # aplicado vive en st.session_state[f"rango_carga_{reporte}"] y el
@@ -208,7 +243,7 @@ REPORTES = {
         "label_corto": "Inspector",
         # Herramienta de verificación de datos crudos (no es un parquet propio):
         # permite inspeccionar cualquiera de los archivos de arriba.
-        "icono": "search",
+        "icono": ":material/search:",
         "tool": True,
     },
 }
@@ -800,3 +835,82 @@ def rango_fechas(archivo, col_fecha):
         return _rango_fechas_cacheable(archivo, col_fecha)
     except Exception:
         return None
+
+
+_AGREGACIONES_KPI = {"sum": "SUM", "count_distinct": "COUNT(DISTINCT",
+                     "sum_dedup": "SUM"}
+
+
+def _expr_fecha_kpi(col_fecha):
+    """Mismo COALESCE de dos intentos de cast que cargar_rango()/
+    rango_fechas(): la columna puede ser DATE/TIMESTAMP real o texto
+    dd/mm/yyyy, y acá no hay como saber cuál sin ir a mirar el parquet."""
+    return (f'COALESCE(TRY_CAST("{col_fecha}" AS DATE), '
+            f'TRY_CAST(TRY_STRPTIME(CAST("{col_fecha}" AS VARCHAR), '
+            f"'%d/%m/%Y') AS DATE))")
+
+
+@st.cache_data(ttl=3600, persist="disk")
+def _resumen_kpis_cacheable(archivo, kpis, col_fecha, col_dedup):
+    """Agregados SUM/COUNT DISTINCT directo en DuckDB, sin materializar
+    filas — mismo espíritu que `_rango_fechas_cacheable`. Acota al MES EN
+    CURSO cuando `col_fecha` viene dado (mismo default que usa la franja de
+    fecha en app.py: `hoy.replace(day=1)` → hoy); si no, agrega la tabla
+    entera — es el caso de los catálogos sin fecha (Receta Base/Venta,
+    Inventario Valorizado)."""
+    if not secrets_disponibles():
+        return {}
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    url = f"s3://{bucket}/{archivo}"
+
+    where = ""
+    if col_fecha:
+        hoy = datetime.now(timezone.utc).date()
+        ini = hoy.replace(day=1)
+        where = f"WHERE {_expr_fecha_kpi(col_fecha)} BETWEEN '{ini}' AND '{hoy}'"
+
+    if col_dedup:
+        # Dedup: agrupar por col_dedup ANTES de agregar (ver docstring de
+        # REPORTES["Ventas"]["kpi_dedup"] en data.py — una columna que se
+        # repite por línea, no por registro real). count_distinct no tiene
+        # sentido bajo dedup (ya es 1 fila por grupo) y no se usa hoy.
+        selects = ", ".join(
+            f'{("MAX" if agg == "sum_dedup" else agg.upper())}("{col}") AS k{i}'
+            for i, (_et, col, agg) in enumerate(kpis)
+        )
+        sql = (f'SELECT {", ".join(f"SUM(k{i}) AS k{i}" for i in range(len(kpis)))} '
+               f'FROM (SELECT {selects} FROM read_parquet(\'{url}\') {where} '
+               f'GROUP BY "{col_dedup}")')
+    else:
+        partes = []
+        for i, (_et, col, agg) in enumerate(kpis):
+            fn = _AGREGACIONES_KPI[agg]
+            cierre = ")" if agg == "count_distinct" else ""
+            partes.append(f'{fn}("{col}"){cierre} AS k{i}')
+        sql = f'SELECT {", ".join(partes)} FROM read_parquet(\'{url}\') {where}'
+
+    fila = con.execute(sql).fetchone()
+    return {etiqueta: fila[i] for i, (etiqueta, _col, _agg) in enumerate(kpis)}
+
+
+def resumen_kpis(archivo, kpis, col_fecha=None, col_dedup=None):
+    """KPIs chicos para el rail de Reportes (navegacion.py): 1-3 números por
+    reporte, vía un agregado DuckDB directo contra R2 — no descarga el
+    parquet completo, mismo espíritu que `rango_fechas()`.
+
+    `kpis`: tupla de (etiqueta, columna, agregación), agregación en
+    {"sum", "count_distinct", "sum_dedup"}. Viven en `REPORTES[x]["kpis"]`
+    (config de DATOS, no de despacho — mismo criterio que `columnas_movil`).
+
+    Retorna {etiqueta: valor} — dict vacío si no hay secrets (demo), si el
+    reporte no definió `kpis`, o si la consulta falla (parquet sin esa
+    columna, R2 caído, etc.). NO cacheada en esta capa (la interna sí): un
+    blip transitorio de R2 no debe quedar cacheado como vacío 1h y apagar
+    los KPIs del rail. Mismo patrón que `cargar()`/`rango_fechas()`."""
+    if not kpis:
+        return {}
+    try:
+        return _resumen_kpis_cacheable(archivo, kpis, col_fecha, col_dedup)
+    except Exception:
+        return {}

@@ -20,6 +20,8 @@ llamador decide cuanto abreviar a partir del ancho estimado por barra
 
 import pandas as pd
 
+from utils import fmt_k  # noqa: F401 -- reexport, lo consume test_graficos.py (_ep.fmt_k)
+
 # Verde/rojo de la variacion. Son de DATO (sube/baja), no de interfaz: no
 # salen de tema.py a proposito -- van dentro del <span> que se manda a
 # Plotly, y su par en la app son los verdes/rojos de celda del grid.
@@ -48,15 +50,6 @@ def sufijo_granularidad(gran):
     'periodo' (que es el fallback si llega una granularidad desconocida).
     """
     return _SUFIJO_GRAN.get(gran, "del período")
-
-
-def fmt_k(v):
-    """Monto compacto para etiquetas angostas: S/ 4.0k, S/ 1.2M."""
-    if v >= 1_000_000:
-        return f"S/ {v / 1_000_000:.1f}M"
-    if v >= 1_000:
-        return f"S/ {v / 1_000:.1f}k"
-    return f"S/ {v:.0f}"
 
 
 def abrev_nombre(nombre, max_chars):
