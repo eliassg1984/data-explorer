@@ -403,8 +403,17 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 # deja sin marco.
                 with st.container(border=True,
                                   key="compras_prov_card_ranking"):
+                    # help= a pedido 2026-08-23 ("minimalista, solo
+                    # contexto"): st.markdown SÍ acepta help (Streamlit
+                    # 1.59) — un ⓘ con tooltip, sin agregar texto visible
+                    # ni un widget nuevo. Texto acotado a lo que sigue
+                    # visible en esta vista: el pill de fecha de la franja
+                    # se oculta acá (más abajo, CSS_PROVEEDOR).
                     st.markdown('<div class="cp-rank-tit">Ranking de '
-                                'proveedores</div>', unsafe_allow_html=True)
+                                'proveedores</div>', unsafe_allow_html=True,
+                                help="Se agrupa por Día, Semana, Mes o Año "
+                                     "(arriba). El rango de fechas se ajusta "
+                                     "desde otra pestaña de Compras.")
                     # ── El ranking es un AgGrid, no un `st.dataframe` ──────
                     # 2026-08-19, a pedido: los checkbox de selección se van y
                     # el gesto pasa a ser "clic en la fila". No era posible con
@@ -569,8 +578,31 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         # la evolución arranca con unas pills sueltas y su título
                         # deja de alinear con el del ranking de al lado).
                         _ph_tit_evo = st.empty()
-                        _op_evo = periodo.selector("cp_evo_periodo")
+                        # 2026-08-23, a pedido ("quita el texto que dice
+                        # Rango, todo minimalista"): la pill de heredar el
+                        # rango de la franja pasa a un ícono — el valor
+                        # sigue siendo la cadena "Rango" (periodo.HEREDA),
+                        # solo cambia lo que se VE.
+                        _op_evo = periodo.selector(
+                            "cp_evo_periodo",
+                            format_func=lambda o: (
+                                "📅" if o == periodo.HEREDA else o))
                         _evo_hist = _op_evo != periodo.HEREDA
+                        # 2026-08-23, a pedido ("agreguemos para el gráfico
+                        # de abajo los toggles Día/Semana/Mes/Año — Auto/
+                        # Todo"): esos controles YA gobiernan esta curva
+                        # (gran vía _agregar_periodo más arriba, la ventana
+                        # vía win_nav cuando _op_evo es 📅/HEREDA) — son
+                        # `gran_float`/`win_nav`, flotando sobre el marco
+                        # compartido, no duplicables acá (misma key). Se
+                        # decidió NO clonar los widgets (dos controles
+                        # escribiendo el mismo estado es una fuente clásica
+                        # de bugs de sincronización) y en cambio dejar
+                        # explícito, minimalista, cuál granularidad ya
+                        # aplica — la respuesta a "¿esto también me
+                        # afecta?" sin agregar un control nuevo que pueda
+                        # desincronizarse del de arriba.
+                        st.caption(f"Agrupado por {gran.lower()}")
                         _src_evo = base
                         if _evo_hist and d_full is not None and col_fecha:
                             # La ventana se recorta sobre `d_full` (sin el filtro

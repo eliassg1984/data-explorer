@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-175 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+176 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (65)
 
@@ -176,7 +176,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#159** — Cuadrados negros en vez de iconos en Chrome < 120: AG Grid 34 emite mask-image sin la…
 - **#163** — arquitectura.md creció hasta ser un documento que nadie podía abrir: 115k tokens, y CLAUDE.md…
 
-**Streamlit** (50)
+**Streamlit** (51)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -228,6 +228,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#171** — Los KPIs del rail (regla #170) se rehicieron a las pocas horas: "no se ve bien" con una…
 - **#172** — help= en un st.button() rompe cualquier selector CSS que escriba .stButton > button (hijo…
 - **#173** — El overlay del modo diseño tiene pointer-events:none a propósito (para poder ver/medir lo de…
+- **#176** — st.markdown/st.caption aceptan help= en este Streamlit (1.59.2) — no hace falta inventar un…
 
 **Datos, R2 y DuckDB** (19)
 
@@ -7984,6 +7985,14 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      **Bug aparte, encontrado mientras se armaba esto (no hipotético — bloqueaba probar el fix en el gráfico real de "Evolución · proveedor"):** `keyDeElemento()` (`_inspector_js.py`, la función que toda esta herramienta usa para saber QUÉ está pineado) leía la key con `/st-key-([A-Za-z0-9_]+)/` — sin guion en la clase de caracteres. Una key armada desde un dato real (`cp_evo_Mes_VIBEJ-COLIBRI-SAC`, el nombre del proveedor con espacios convertidos a `-`, no a `_` como `_slug()`) se leía truncada en `cp_evo_Mes_VIBEJ`, `doc.querySelector('.st-key-' + key)` no encontraba nada, y el pin quedaba en `panelPerdido()` — mudo, sin decir por qué. Fix: agregar `-` a la clase de caracteres. Sólo se tocó esa función (`keyDeElemento`, la que resuelve pines) — las otras dos ocurrencias del mismo patrón en el archivo (`archivoDeSelector`, `selectoresCompartidos`) matchean selectores ESCRITOS A MANO en `estilos/*.py`, que siguen la convención `_slug()` de guion bajo y nunca traen `-`; tocarlas no arregla nada y son un cambio sin verificar de más.
 
      Verificado en vivo, extremo a extremo (evento real de `mousedown`+`mousemove`+`mouseup` sobre la manija `el-diseno-rh-se`, no una llamada directa a la función): el gráfico de Evolución pasó de 192×277 a 342×377 CON el drag, en el mismo frame que el contenedor; la tabla Ranking de proveedores pasó de 472×333 a 652×483 y su `.ag-root-wrapper` interno confirmó el mismo tamaño tras el `ResizeObserver`. Pineando un botón común (`navitem_Compras`) el aviso nuevo NO aparece y el resize normal sigue igual — sin regresión.
+
+176. **`st.markdown`/`st.caption` aceptan `help=` en este Streamlit (1.59.2) — no hace falta inventar un widget para un ícono ⓘ de "solo contexto".** Pedido directo 2026-08-23 ("minimalista, solo contexto") sobre el título de "Ranking de proveedores" (`graficos/compras/proveedor.py`, un `st.markdown` con HTML crudo, sin label propio). Antes de asumir que hacía falta un widget con `label=`/`help=` puesto al lado (como `periodo.selector()` ya hace con `st.pills`), se comprobó la firma instalada con `inspect.signature(st.markdown)`: trae `help: str | None = None` desde hace rato. Con eso, el ⓘ sale del MISMO elemento — cero layout nuevo, cero widget nuevo, mismo patrón visual que "Help for Período" en el resto de la app. Moraleja: antes de armar un widget-señuelo solo para colgarle un tooltip, revisar si el elemento que ya está ahí acepta `help=` directo — cada vez son más los que lo aceptan.
+
+     De paso, en el mismo pedido: **cambiar el TEXTO visible de una opción de `st.pills` sin tocar su VALOR** (la pill "Rango" de `periodo.selector()` pasó a mostrar "📅", pero `periodo.HEREDA` sigue siendo la cadena `"Rango"` en todas las comparaciones) se resuelve con el `format_func` que `st.pills` ya trae — se le agregó el parámetro a `periodo.selector()` (antes no lo exponía) y el call site pasa `format_func=lambda o: "📅" if o == periodo.HEREDA else o`. Ningún otro caller de `periodo.selector()` existe hoy (grepeado), así que no hay riesgo de que un tercero dependa del texto "Rango" tal cual.
+
+     **Decisión de diseño, no bug: "agreguemos los toggles Día/Semana/Mes/Año y Auto/Todo para el gráfico de Evolución" NO se resolvió duplicando esos widgets.** Ya existen (`gran_float`/`win_nav` en `_css_proveedor.py`, flotando `position:absolute` sobre `compras_prov_marco`) y YA gobiernan la curva de Evolución — medido en vivo a 1557px (el viewport real del pedido, vía "Copiar para IA"): ambos caen horizontalmente DENTRO del ancho de `compras_prov_card_evo` (1045–1467px), a solo 9–24px de su borde superior — visualmente ya están "encima" de ese gráfico, no del ranking. `gran` (compartido) entra en `_agregar_periodo()` para las dos columnas por igual, así que un segundo `st.pills` con su propia key escribiendo la MISMA idea sería dos fuentes de verdad para un solo estado — la clase de bug que `session_state` con key única existe para evitar. Se optó por un `st.caption(f"Agrupado por {gran.lower()}")` de solo lectura, pegado a las pills propias de Evolución (Rango/3m/12m/24m/Todo): sin estado nuevo, sin riesgo de desincronización, responde "¿esto también me afecta?" desde adentro de la tarjeta que preguntaba.
+
+     Cuarto cambio del mismo pedido, sin código propio — CSS puro: **ocultar el pill de fecha de la franja (`fecha_ajuste_pill`, `franja_fecha.py`) solo en el drill de Proveedor, agregando la regla a `_css_proveedor.py::CSS_PROVEEDOR`.** No hizo falta un `:has()` — ese bloque YA se inyecta nada más que cuando `_compras_proveedor_drill()` se dibuja (docstring del módulo, "el drill lo inyecta cuando toca"), así que la regla es naturalmente inerte en cualquier otra vista. Se ocultó, no se dejó de llamar `franja_fecha.render()`: el `date_input` de adentro ES la clave canónica del rango (CLAUDE.md § Streamlit), esconderlo del árbol se la habría borrado. Verificado en vivo: con el pill oculto en Proveedor, cambiar a la vista Producto lo vuelve a mostrar con el MISMO rango ("1 ago – 9 ago 2026") — el estado sobrevivió el ciclo ocultar/mostrar.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

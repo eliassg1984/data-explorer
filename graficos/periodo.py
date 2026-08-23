@@ -51,7 +51,7 @@ OPCIONES = (HEREDA, "3m", "12m", "24m", "Todo")
 _MESES = {"3m": 3, "12m": 12, "24m": 24}
 
 AYUDA = ("Ventana propia de esta tarjeta, contada desde el último día con "
-         "datos. «Rango» usa la fecha de la franja de arriba.")
+         "datos. La primera opción usa la fecha de la franja de arriba.")
 
 
 def ventana(opcion, ancla, minimo=None):
@@ -118,12 +118,19 @@ def etiqueta(opcion):
     return f"últimos {meses} meses" if meses else ""
 
 
-def selector(clave, default="12m", opciones=OPCIONES, label="Período"):
+def selector(clave, default="12m", opciones=OPCIONES, label="Período",
+             format_func=None):
     """Fila de pills con la ventana de ESTA tarjeta. Devuelve la opción viva.
 
     Deseleccionar (clic en la pill activa) devuelve `None` en Streamlit; acá
     cae al default en vez de dejar la vista sin ventana — "ninguna" no es un
     estado que signifique algo para un eje de tiempo.
+
+    `format_func` cambia solo el TEXTO de la pill, nunca el valor que
+    devuelve ni el de `opciones` — así una vista puede mostrar `HEREDA`
+    ("Rango") como ícono sin tocar las comparaciones (`opcion == HEREDA`)
+    que dependen de la cadena literal.
     """
     return st.pills(label, list(opciones), default=default, key=clave,
-                    label_visibility="collapsed", help=AYUDA) or default
+                    label_visibility="collapsed", help=AYUDA,
+                    format_func=format_func) or default

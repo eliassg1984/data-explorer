@@ -995,5 +995,18 @@ CSS = """        <style>
                 min-width: 0 !important;
             }
         }
+
+        /* 2026-08-23, a pedido ("eliminemos el widget de fecha... que ya
+           no sea visible"): el pill de fecha de la franja superior
+           (fecha_ajuste_pill, franja_fecha.py) se oculta SOLO en este
+           drill — este bloque se inyecta nada más que cuando el drill de
+           Proveedor se dibuja (ver el docstring del módulo), así que en
+           cualquier otra vista/pestaña de Compras el pill sigue como
+           siempre. Se oculta con CSS, no se deja de LLAMAR
+           `franja_fecha.render()`: el date_input de adentro es el DUEÑO
+           del rango (su key ES la clave canónica), y un widget que deja
+           de renderizarse pierde su estado (CLAUDE.md § Streamlit). El
+           rango se sigue pudiendo cambiar desde cualquier otra vista. */
+        .st-key-fecha_ajuste_pill { display: none !important; }
         </style>
 """
