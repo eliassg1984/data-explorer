@@ -1008,5 +1008,38 @@ CSS = """        <style>
            de renderizarse pierde su estado (CLAUDE.md § Streamlit). El
            rango se sigue pudiendo cambiar desde cualquier otra vista. */
         .st-key-fecha_ajuste_pill { display: none !important; }
+
+        /* 2026-08-23 (2), a pedido ("que sea como el segundo" — o sea con
+           clic, como un popover, no el help= hover-only del primer
+           intento): ícono de ayuda de Ranking de proveedores, discreto
+           hasta que se busca — mismo espíritu que .st-key-rail_pestillo
+           button (estilos/_25_rails_pestillo.py). Acotado a SU propia key
+           (CLAUDE.md: estilar el widget puntual, no el contenedor). */
+        .st-key-compras_prov_rank_ayuda button {
+            min-width: 0 !important;
+            min-height: 0 !important;
+            padding: 2px !important;
+            border: none !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            color: var(--text-muted) !important;
+            /* Sin esto el line-height default (24px) infla el boton por
+               encima del icono de 16px y lo descentra ~5px contra el
+               titulo (medido en vivo). */
+            line-height: 1 !important;
+        }
+        .st-key-compras_prov_rank_ayuda button:hover {
+            background: var(--accent-tint) !important;
+            color: var(--accent-deep) !important;
+        }
+        .st-key-compras_prov_rank_ayuda [data-testid="stIconMaterial"] {
+            font-size: 16px !important;
+        }
+        /* Fila título + ícono: st.columns por defecto alinea arriba, y el
+           botón (más alto que el texto de 16px del título) queda pegado
+           al techo de su columna en vez de centrado contra el texto. */
+        .st-key-compras_prov_card_ranking [data-testid="stHorizontalBlock"] {
+            align-items: center !important;
+        }
         </style>
 """

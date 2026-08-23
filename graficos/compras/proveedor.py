@@ -403,17 +403,28 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 # deja sin marco.
                 with st.container(border=True,
                                   key="compras_prov_card_ranking"):
-                    # help= a pedido 2026-08-23 ("minimalista, solo
-                    # contexto"): st.markdown SÍ acepta help (Streamlit
-                    # 1.59) — un ⓘ con tooltip, sin agregar texto visible
-                    # ni un widget nuevo. Texto acotado a lo que sigue
-                    # visible en esta vista: el pill de fecha de la franja
-                    # se oculta acá (más abajo, CSS_PROVEEDOR).
-                    st.markdown('<div class="cp-rank-tit">Ranking de '
-                                'proveedores</div>', unsafe_allow_html=True,
-                                help="Se agrupa por Día, Semana, Mes o Año "
-                                     "(arriba). El rango de fechas se ajusta "
-                                     "desde otra pestaña de Compras.")
+                    # 2026-08-23, segunda vuelta: el `help=` de st.markdown
+                    # (primer intento) es hover-only — el usuario esperaba
+                    # que abriera con CLIC, como un popover. `st.popover`
+                    # con el label como shortcode de ícono (sin texto) es
+                    # el mismo patrón que ya usa `pestillos.py::pestillo`
+                    # para un botón de solo-ícono; acá va en su propia
+                    # columna angosta para quedar pegado al título.
+                    # columnas-internas: título + ícono de ayuda dentro de
+                    # ESTA tarjeta, no el eje de la página (ese lo marca
+                    # COLUMNAS_DRILL más abajo).
+                    _c_rank_tit, _c_rank_ayuda = st.columns([16, 1], gap="small")
+                    with _c_rank_tit:
+                        st.markdown('<div class="cp-rank-tit">Ranking de '
+                                    'proveedores</div>', unsafe_allow_html=True)
+                    with _c_rank_ayuda:
+                        with st.popover(":material/info:",
+                                        key="compras_prov_rank_ayuda",
+                                        use_container_width=False):
+                            st.caption("Se agrupa por Día, Semana, Mes o "
+                                       "Año (arriba). El rango de fechas "
+                                       "se ajusta desde otra pestaña de "
+                                       "Compras.")
                     # ── El ranking es un AgGrid, no un `st.dataframe` ──────
                     # 2026-08-19, a pedido: los checkbox de selección se van y
                     # el gesto pasa a ser "clic en la fila". No era posible con
