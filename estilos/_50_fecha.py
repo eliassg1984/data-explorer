@@ -540,112 +540,20 @@ CSS = """    /* ================================================================
         }
     }
 
-    /* PROTOTIPO (2026-08-16), 3ra vuelta — "fusionar" de verdad, referencia
-       Google Finance: NADA de tarjeta (ni sombra ni esquinas, en ningún
-       lado), toda la superficie de un color, de borde a borde. La 1ra
-       vuelta solo sacaba la línea + esquinas SUPERIORES y dejaba la
-       sombra + esquinas inferiores tal cual — el resultado se leía como
-       "la franja se ensanchó" (sin nada que marque un límite, no como
-       "franja y tarjeta fundidas en una forma"); la 2da sacó también
-       sombra y esquinas inferiores, pero acotado solo a Familia.
-       Esta vuelta amplía el alcance a TODO Compras (no solo Familia):
-       scope por `app_reporte_compras` (el marker de reporte que ya usan
-       otras reglas de esta app — ver estilos/_20_compras_rail.py) en vez
-       de por la presencia del título de Familia. La regla de la tarjeta
-       (`.st-key-ajuste_graf_card_izq_compras`) ya era exclusiva de
-       Compras por el nombre de su key —no necesita :has()— pero se deja
-       agrupada bajo el mismo scope por legibilidad. Vistas de Compras que
-       NO usan ese wrapper (Proveedor, con `compras_prov_drill_wrap` y
-       borde propio por bloque) no se tocan: nada matchea ahí. Si gusta,
-       generalizar a los 8 reportes es sacar este :has() (son las mismas
-       reglas wildcard que ya documenta CLAUDE.md/arquitectura.md). */
-    /* 5ta vuelta — la línea inferior de la franja VUELVE, a pedido ("deseo
-       que exista una línea acá a manera de separación visual"): sin nada
-       que marcara el límite, la franja y el contenido se leían como una
-       sola masa. Pero NO vuelve como estaba (2px de --border-lavender):
-       eso era el lenguaje de tarjetas de antes. Vuelve como HAIRLINE de
-       1px en --border, que es el mismo recurso con el que ya se separan
-       el nav-rail, el rail derecho, la franja inferior y los bloques del
-       drill de Proveedor — y es como separa paneles la referencia
-       (Google Finance usa líneas, no sombras). Es la corrección del
-       criterio, no una marcha atrás: la fusión sacó la sombra y las
-       esquinas (que dibujaban una TARJETA), esto devuelve solo el
-       límite. */
-    /* 6ta vuelta — franja OPACA al scrollear, a pedido. La regla base
-       (estilos/_40_ajuste_franja.py) la pinta con --bg-card al 88% +
-       `backdrop-filter: blur(14px)`: el contenido pasa por debajo y se
-       adivina desenfocado detrás de los controles. Ese efecto "cristal
-       esmerilado" nació cuando la franja era una banda tintada sobre un
-       lienzo GRIS, donde el contraste lo sostenía el color. Con Compras ya
-       en blanco uniforme (ver la regla de --bg-card más abajo) lo único
-       que aporta es ruido bajo el texto de los controles.
-       Se opaca con el MISMO token, sin el 88%, y se apaga el
-       backdrop-filter: con un fondo opaco no tiene nada que desenfocar y
-       solo cuesta pintado en cada frame del scroll. Ojo con el
-       `-webkit-` — hay que apagar los dos, si no Safari/Chrome viejos
-       siguen componiendo la capa. */
-    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
-        .st-key-fila_ajuste_top::before {
-        border-bottom: 1px solid var(--border) !important;
-        background: var(--bg-card) !important;
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-    }
-    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
-        .st-key-ajuste_graf_card_izq_compras {
-        border-radius: 0 !important;
-        box-shadow: none !important;
-    }
-
-    /* 4ta vuelta — el ÚLTIMO borde visible no era una línea ni una sombra:
-       era un CAMBIO DE COLOR. La app tiene dos fondos (`--bg-primary`
-       #f6f6f8 "lienzo general" y `--bg-card` #ffffff), así que aun sin
-       sombra ni esquinas quedaba un rectángulo blanco recortado contra el
-       gris — medido en vivo, no a ojo. En Compras se unifican: toda la
-       página pasa al blanco de las tarjetas y el recorte desaparece.
-       ACTUALIZADO 2026-08-21: la página sigue blanca, pero las tarjetas
-       ya NO — se les devolvió el gris con `--bg-card-tenue`, o sea el
-       mismo par de tonos de siempre con los papeles cambiados. Esta regla
-       sigue siendo la dueña del fondo de la PÁGINA; el de las tarjetas lo
-       pinta el bloque final de estilos/_80_cards.py.
-       Los paneles de abajo (fam_comp / fam_top) NO hicieron falta tocarlos:
-       ya eran transparentes y sin sombra desde antes (la regla
-       `[class*="st-key-ajuste_graf_card_"] [class*="st-key-chartcard_"]`
-       de estilos/_80_cards.py los aplana por ser hijos de la tarjeta).
-       Se scopea con `:root:has()` y no con `stAppViewContainer:has()` como
-       las reglas de arriba porque html/body están FUERA de ese contenedor
-       (y el nav-rail vive en su propio position:fixed): `:root` es el
-       único ancestro común garantizado. */
-    :root:has(.st-key-app_reporte_compras),
-    :root:has(.st-key-app_reporte_compras) body,
-    :root:has(.st-key-app_reporte_compras) [data-testid="stAppViewContainer"] {
-        background: var(--bg-card) !important;
-    }
-    /* El nav-rail izquierdo es una tarjeta blanca que hasta ahora se
-       distinguía SOLO por el contraste contra el lienzo gris: su borde es
-       `none` y su sombra un 5% (navegacion.py). Con la página en blanco
-       quedaría blanco sobre blanco, así que se le devuelve el límite con
-       un hairline de 1px — el mismo recurso que ya usan el rail DERECHO
-       (compras_tabs_row) y la franja inferior, y el que usa la referencia
-       (Google Finance separa sus paneles con líneas, no con sombras). */
-    :root:has(.st-key-app_reporte_compras) .st-key-nav_rail {
-        border: 1px solid var(--border) !important;
-    }
-    /* Los 4 bloques del drill de Proveedor (gráfico, panel A, panel B,
-       tabla) son la OTRA familia de tarjetas de Compras: no usan el
-       wrapper `ajuste_graf_card_izq_compras` sino `compras_prov_card_*`,
-       así que las reglas de arriba no los alcanzaban y quedaban con
-       sombra + 20px flotando sobre la página ya blanca — inconsistentes
-       dentro del mismo reporte. Se aplanan igual, pero CON hairline: a
-       diferencia de la tarjeta principal (que se funde con la franja a
-       propósito), estos cuatro sí necesitan separarse entre sí — es su
-       razón de existir (ver el docstring de graficos/compras/__init__.py:
-       "cada uno lleva su propio borde para separación visual limpia").
-       Hairline en vez de sombra es exactamente el recurso de la
-       referencia. */
-    :root:has(.st-key-app_reporte_compras) [class*="st-key-compras_prov_card_"] {
-        border: 1px solid var(--border) !important;
-        border-radius: 0 !important;
-        box-shadow: none !important;
-    }
+    /* 2026-08-23 — "PÁGINA BLANCA, TARJETAS TENUES" (3ra a 6ta vuelta,
+       2026-08-16/21) se REVIRTIÓ acá, a pedido explícito ("apliquemos el
+       mismo color de fondo del reporte de Ajuste, para todos los
+       reportes"): esas ~6 reglas invertían el reparto normal de la app
+       SOLO para Compras (lienzo blanco + tarjetas `--bg-card-tenue`, con
+       hairlines donde antes había sombra, para compensar el blanco sobre
+       blanco que la inversión creaba en cadena). El par gemelo en
+       estilos/_80_cards.py ("COMPRAS: PÁGINA BLANCA, TARJETAS TENUES")
+       se revirtió junto con esto — son las dos mitades de la misma
+       decisión, no se puede sacar una sin la otra sin dejar blanco sobre
+       blanco o gris sobre gris. Detalle y verificación en vivo en
+       arquitectura.md regla #177. El propio comentario de la 3ra vuelta
+       ya dejaba la salida escrita ("generalizar... es sacar este :has()")
+       pensando en el sentido inverso (llevar el blanco de Compras a los
+       8 reportes); el pedido fue al revés: llevar el gris/blanco de
+       Ajuste (el default de siempre) a Compras. */
 """

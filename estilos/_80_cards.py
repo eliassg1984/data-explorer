@@ -1243,66 +1243,11 @@ CSS = """    /* ================================================================
         line-height: 1 !important;
     }
 
-    /* =================================================================== */
-    /* COMPRAS: PÁGINA BLANCA, TARJETAS TENUES                              */
-    /*                                                                       */
-    /* El resto de la app usa el reparto normal: lienzo gris (--bg-primary) */
-    /* y tarjetas blancas recortadas contra él. Compras invirtió la mitad    */
-    /* de eso hace tiempo — toda la página pasó al blanco de las tarjetas    */
-    /* (_50_fecha.py, "4ta vuelta") — y quedó blanco sobre blanco, con la    */
-    /* separación colgando de un hairline de 1px y nada más.                 */
-    /*                                                                       */
-    /* Esto cierra la inversión: la página se queda blanca y el gris pasa a  */
-    /* las tarjetas. Mismo par de tonos de siempre, mismo contraste ya       */
-    /* probado en los otros reportes, con los papeles cambiados.             */
-    /*                                                                       */
-    /* Va al FINAL del módulo a propósito: las reglas de más arriba pintan   */
-    /* estas mismas familias con `background: var(--bg-card) !important`, y  */
-    /* con !important en ambos lados gana la que aparece DESPUÉS (misma      */
-    /* mecánica que el orden de _SECCIONES, ver CLAUDE.md).                  */
-    /*                                                                       */
-    /* Scopeado por el marker `st-key-app_reporte_compras` que inyecta       */
-    /* app.py: las mismas familias existen en Inventario, Salidas, Ventas y  */
-    /* Requerimientos (`ajuste_graf_card_izq_inv`, `..._sal`, ...) y ahí el  */
-    /* reparto normal sigue intacto.                                         */
-    /*                                                                       */
-    /* Lo que NO se toca y es lo que hace que se lea: las superficies de     */
-    /* DATOS siguen blancas — el AgGrid del ranking, el `st.dataframe` de    */
-    /* productos y las fichas `.pb-card` del panel B. Tabla blanca sobre     */
-    /* marco gris es el patrón, no un olvido.                                */
-    /* =================================================================== */
-    :root:has(.st-key-app_reporte_compras) div[class*="st-key-ajuste_graf_card_"],
-    :root:has(.st-key-app_reporte_compras) div[class*="st-key-compras_prov_card_"],
-    :root:has(.st-key-app_reporte_compras) div[class*="st-key-compras_prod_card_"],
-    :root:has(.st-key-app_reporte_compras) div[class*="st-key-sunat_card_"] {
-        background: var(--bg-card-tenue) !important;
-    }
-
-    /* La barra de herramientas de elemento, teñida en vez de escondida.
-       ────────────────────────────────────────────────────────────────
-       Streamlit monta al hover un chip sobre cada gráfico, tabla o
-       componente. Medido: fondo BLANCO opaco, radio 8px y sombra
-       `1px 2px 8px rgba(0,0,0,.08)`. Mientras las tarjetas de Compras
-       también eran blancas era blanco sobre blanco y no se veía; con el
-       tinte de arriba pasó a leerse como un cuadrado blanco encima del
-       gris. El tinte no lo creó, lo destapó.
-
-       Se TIÑE y no se esconde. El proyecto ya esconde esa barra en siete
-       contenedores puntuales (`grep stElementToolbar estilos/ graficos/`),
-       y extender eso a todo Compras era la opción obvia hasta contar los
-       botones: en un `st.plotly_chart` o en un AgGrid la barra trae sólo
-       Fullscreen, pero en un `st.dataframe` trae CUATRO — Show/hide
-       columns, Download as CSV, Search y Fullscreen. En Compras hay cinco
-       `st.dataframe` (Proveedor › Productos, Producto › ranking y familia,
-       Documentos SUNAT › líneas del comprobante, Volatilidad › precios), y
-       esconder la barra les sacaba la descarga a CSV para arreglar un
-       problema que era de color. Tiñendo el chip no se pierde ninguna.
-
-       Las de AgGrid no dependen de esto: traen su propio menú de columna
-       con filtro, orden y export. */
-    :root:has(.st-key-app_reporte_compras)
-    [data-testid="stElementToolbarButtonContainer"] {
-        background: var(--bg-card-tenue) !important;
-        box-shadow: none !important;
-    }
+    /* 2026-08-23 — "COMPRAS: PÁGINA BLANCA, TARJETAS TENUES" (y el tinte de
+       stElementToolbarButtonContainer que dependía de ella) se REVIRTIÓ
+       acá, a pedido ("apliquemos el mismo color de fondo del reporte de
+       Ajuste, para todos los reportes"). Esta era la mitad "tarjetas" de
+       la inversión; la mitad "página" vivía en estilos/_50_fecha.py y se
+       revirtió junto con esto — son un par, no se puede sacar una sin la
+       otra. Detalle en arquitectura.md regla #177. */
 """

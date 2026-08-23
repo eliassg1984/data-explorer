@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-176 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+177 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (65)
+**CSS y estilos** (66)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -85,8 +85,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#172** — help= en un st.button() rompe cualquier selector CSS que escriba .stButton > button (hijo…
 - **#174** — Al invertir QUÉ dibuja un contenedor compartido (regla #170: compras_tabs_row pasó de Vistas…
 - **#175** — Las manijas de resize del modo diseño (regla #46) redimensionan CUALQUIER elemento salvo un…
+- **#177** — "COMPRAS: PÁGINA BLANCA, TARJETAS TENUES" (regla #16 y media docena de "vueltas" entre…
 
-**Layout y alturas** (15)
+**Layout y alturas** (16)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -103,6 +104,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#145** — La GRILLA tiene un dueño, igual que el color y el alto
 - **#161** — Un número de píxeles escrito en un comentario no se entera de que el layout cambió: el eje X…
+- **#177** — "COMPRAS: PÁGINA BLANCA, TARJETAS TENUES" (regla #16 y media docena de "vueltas" entre…
 
 **Plotly y figuras** (40)
 
@@ -7995,6 +7997,16 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      **Decisión de diseño, no bug: "agreguemos los toggles Día/Semana/Mes/Año y Auto/Todo para el gráfico de Evolución" NO se resolvió duplicando esos widgets.** Ya existen (`gran_float`/`win_nav` en `_css_proveedor.py`, flotando `position:absolute` sobre `compras_prov_marco`) y YA gobiernan la curva de Evolución — medido en vivo a 1557px (el viewport real del pedido, vía "Copiar para IA"): ambos caen horizontalmente DENTRO del ancho de `compras_prov_card_evo` (1045–1467px), a solo 9–24px de su borde superior — visualmente ya están "encima" de ese gráfico, no del ranking. `gran` (compartido) entra en `_agregar_periodo()` para las dos columnas por igual, así que un segundo `st.pills` con su propia key escribiendo la MISMA idea sería dos fuentes de verdad para un solo estado — la clase de bug que `session_state` con key única existe para evitar. Se optó por un `st.caption(f"Agrupado por {gran.lower()}")` de solo lectura, pegado a las pills propias de Evolución (Rango/3m/12m/24m/Todo): sin estado nuevo, sin riesgo de desincronización, responde "¿esto también me afecta?" desde adentro de la tarjeta que preguntaba.
 
      Cuarto cambio del mismo pedido, sin código propio — CSS puro: **ocultar el pill de fecha de la franja (`fecha_ajuste_pill`, `franja_fecha.py`) solo en el drill de Proveedor, agregando la regla a `_css_proveedor.py::CSS_PROVEEDOR`.** No hizo falta un `:has()` — ese bloque YA se inyecta nada más que cuando `_compras_proveedor_drill()` se dibuja (docstring del módulo, "el drill lo inyecta cuando toca"), así que la regla es naturalmente inerte en cualquier otra vista. Se ocultó, no se dejó de llamar `franja_fecha.render()`: el `date_input` de adentro ES la clave canónica del rango (CLAUDE.md § Streamlit), esconderlo del árbol se la habría borrado. Verificado en vivo: con el pill oculto en Proveedor, cambiar a la vista Producto lo vuelve a mostrar con el MISMO rango ("1 ago – 9 ago 2026") — el estado sobrevivió el ciclo ocultar/mostrar.
+
+177. **"COMPRAS: PÁGINA BLANCA, TARJETAS TENUES" (regla #16 y media docena de "vueltas" entre 2026-08-16 y 2026-08-21) se REVIRTIÓ completa — Compras vuelve al mismo lienzo gris + tarjetas blancas que usan los otros 7 reportes.** Pedido directo 2026-08-23: "apliquemos el mismo color de fondo del reporte de Ajuste, para todos los reportes" — con captura de Ajuste (gris visible entre el rail y la tarjeta) y otra de Compras (blanco ahí mismo) señalando la diferencia con flechas. Medido ANTES de tocar nada (`getComputedStyle` en vivo, no a ojo): `html`/`body`/`[data-testid="stAppViewContainer"]` daban `rgb(246,246,248)` en Ajuste y Ventas, pero `rgb(255,255,255)` en Compras — la única diferencia real, ninguna otra reportada por el usuario existía en el código (se descartó a mano comparando Ajuste vs. Ventas primero, que SÍ coincidían, antes de sospechar de Compras).
+
+     La causa era una decisión vieja e intencional, no un bug: Compras invertía el reparto normal (lienzo gris + tarjeta blanca) a "página blanca + tarjeta `--bg-card-tenue`", partida en DOS mitades gemelas que hay que revertir juntas o queda blanco-sobre-blanco (mitad página) o gris-sobre-gris (mitad tarjetas):
+     - `estilos/_50_fecha.py`, ~110 líneas ("3ra a 6ta vuelta"): pintaba `:root:has(.st-key-app_reporte_compras)` (y `body`/`stAppViewContainer` del mismo `:has()`) con `background: var(--bg-card)`, aplanaba `fila_ajuste_top::before` a opaco sin blur, le devolvía un hairline compensatorio a `nav_rail` (que sin la página blanca no le hace falta — su borde/sombra de base, `navegacion.py`, ya alcanza) y aplanaba `compras_prov_card_*` con hairline en vez de sombra.
+     - `estilos/_80_cards.py`, ~65 líneas ("COMPRAS: PÁGINA BLANCA, TARJETAS TENUES", iba al FINAL del módulo a propósito para ganar por orden de `!important` — ver CLAUDE.md): pintaba esas mismas familias de tarjeta con `--bg-card-tenue`, y encima teñía `stElementToolbarButtonContainer` (el chip de Fullscreen/Download que Streamlit monta al hover) porque blanco-sobre-blanco lo volvía invisible.
+
+     Las dos mitades se borraron juntas (no se dejaron como comentario "// removed" — CLAUDE.md), con una nota corta en cada archivo señalando a esta regla en vez de repetir la historia completa. El propio comentario de la "3ra vuelta" ya anticipaba una generalización, pero en el sentido CONTRARIO ("generalizar a los 8 reportes es sacar este `:has()`" — o sea, llevar el blanco de Compras a todos): el pedido real fue al revés, llevar el default de siempre (el de Ajuste) a Compras. Un comentario que anticipa una dirección no ata la decisión futura — quien pide define el sentido, no el código viejo.
+
+     Verificado en vivo tras el cambio, Compras vs. Ajuste con los mismos selectores: `html`/`body`/`stAppViewContainer` → `rgb(246,246,248)` en los dos; tarjetas (`compras_prov_card_ranking`, `compras_prov_card_evo`) → blanco, `border-radius:20px`, sombra `0 1px 4px rgba(16,16,20,.06)` en los dos; `fila_ajuste_top::before` → mismo blanco al 88% + `blur(14px)` + borde lavanda de 2px en los dos. Sin errores de consola nuevos (sólo el watermark de licencia de AG Grid, preexistente). `test_graficos.py` sigue en verde: ninguna de las dos mitades tenía un `alto`/`ancho` propio que ese test vigile, sólo color y sombra.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
