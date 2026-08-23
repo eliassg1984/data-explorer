@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-172 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+173 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (63)
 
@@ -173,7 +173,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#159** — Cuadrados negros en vez de iconos en Chrome < 120: AG Grid 34 emite mask-image sin la…
 - **#163** — arquitectura.md creció hasta ser un documento que nadie podía abrir: 115k tokens, y CLAUDE.md…
 
-**Streamlit** (49)
+**Streamlit** (50)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -224,6 +224,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#157** — El modo diseño sólo sabía agarrar elementos con st-key-*, y la mitad de lo que uno quiere…
 - **#171** — Los KPIs del rail (regla #170) se rehicieron a las pocas horas: "no se ve bien" con una…
 - **#172** — help= en un st.button() rompe cualquier selector CSS que escriba .stButton > button (hijo…
+- **#173** — El overlay del modo diseño tiene pointer-events:none a propósito (para poder ver/medir lo de…
 
 **Datos, R2 y DuckDB** (19)
 
@@ -271,7 +272,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (12)
+**Herramientas de desarrollo** (13)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -285,6 +286,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#166** — El contorno del modo diseño se dibujaba ENCIMA del borde real del elemento — así que para ver…
 - **#167** — El fondo general de la app no se podía editar con el modo diseño: el lienzo es el único…
 - **#168** — Las manijas del modo diseño quedaban FUERA DE LA PANTALLA cuando el elemento tocaba un borde
+- **#173** — El overlay del modo diseño tiene pointer-events:none a propósito (para poder ver/medir lo de…
 
 **Decisiones de diseño y UX** (32)
 
@@ -7905,6 +7907,64 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Verificado en vivo tras el fix, en desktop (1280px, fuera de ambos breakpoints móviles): activo y 5 inactivos dan `border-radius:0px` (antes 10px/8px), padding `10px 12px 10px 9px` (antes `10px 16px` default), `border-left` 3px acento en el activo / 3px transparente en los demás, fondo `accent-light`/gris propio (no el morado/blanco default), ícono a 19px, label `<p>` a 13px, hairline 1px entre ítems apagado en el último, y los bloques de KPI (regla #171) siguen centrados y alineados a la derecha sin corrimiento — el fix no tocó su selector porque `.nav-kpis-valores` es un `st.markdown`, no un `st.button`, y nunca tuvo el problema. `.st-key-rail_refresh button` (Refrescar, también con `help=`) ya usaba descendiente desde el principio y no necesitó cambio — por eso nunca se notó ahí.
 
      Moraleja para el resto del código: cualquier `st.button(..., help=...)` existente o futuro necesita que su CSS lo apunte con descendiente, no con hijo directo, si el selector menciona el `<button>` mismo (no sus hijos). `graficos/base.py::_render_rail` (Vistas, franja horizontal) no usa `help=` — su CSS con `>` sigue siendo correcto tal cual.
+
+173. **El overlay del modo diseño tiene `pointer-events:none` a propósito
+     (para poder ver/medir lo de abajo), así que un click normal SIEMPRE
+     seguía de largo hasta el widget real — en un botón del rail eso
+     disparaba `on_click` → `session_state["_nav_reporte"]` → Streamlit
+     cambiaba de reporte a mitad de una sesión de diseño y todo lo que se
+     estaba ajustando (keys de OTRO reporte) desaparecía.** Pedido directo
+     2026-08-23, con dos síntomas reportados que se sospechó eran la misma
+     causa: (1) "seleccionar" un elemento del rail para diseñarlo a veces
+     navegaba a otro reporte y perdía el trabajo, y (2) después de pinear
+     algo, un click posterior "desactivaba" el panel lateral
+     (`el-diseno-panel`, 230×720 fijo a la derecha — distinto del toolbar
+     inferior de la regla #158, que en este proyecto se sigue llamando
+     "la barra").
+
+     El (2) no es un bug propio del panel: `sync()` (el poll de 150ms) lo
+     oculta cada vez que `disenoActivo()` da `false`, y esa función relee
+     el URL fresco en cada tick, nunca lo cachea. Verificado en vivo que
+     un click en un `st.button` nativo del rail (`navegacion.py`, sin
+     iframes) SÍ dispara su `on_click` con `?diseno=1` puesto, y que
+     `st.query_params["reporte"] = reporte` (app.py) preserva `debug`/
+     `diseno` en el merge — así que probando el (2) tal cual se reportó
+     (pinear `navbtn_Compras`, click en otro ítem del rail) NO se llegó a
+     reproducir con ese mecanismo. Lo que sí se confirmó, reproducible al
+     100%, fue el (1): el reporte cambia por debajo del panel pineado.
+
+     Fix: `_diseno_js.py` agrega un listener de `click` en CAPTURA sobre
+     `document` (el documento PADRE, no el iframe de `components.html`),
+     activo solo si `disenoActivo()`. Para cualquier objetivo que NO sea
+     parte de la UI propia (`el-diseno-overlay` —cubre manijas y "mover",
+     son hijos suyos—, `el-diseno-panel`, `herr-barra`, `herr-panel`,
+     `el-inspector-tip`, `el-inspector-badge`) llama
+     `preventDefault()+stopPropagation()` ANTES de que el evento baje al
+     árbol de React de Streamlit — el listener delegado de React vive más
+     abajo en el DOM, así que nunca se entera del click. El clic derecho
+     (pin, `contextmenu`) no se toca: sigue siendo la única forma de
+     seleccionar, y sigue funcionando exactamente igual.
+
+     Verificado en vivo (Compras, viewport 1280×720, con datos reales de
+     R2): con diseño activo, un click en "Recetas" del rail ya NO cambia
+     `st-key-app_reporte_*` (antes del fix sí navegaba); con un elemento
+     pineado, ese mismo click deja `pinned`, `diseno=1` y el panel
+     (230×720) intactos; los controles DENTRO del panel (colapsar con
+     "Ocultar panel", swatches de color, árbol de jerarquía) siguen
+     recibiendo sus clicks normalmente por estar adentro de
+     `el-diseno-panel`; y apagando "Diseño" desde la barra, un click en el
+     rail vuelve a navegar como siempre — el bloqueo relee el flag en cada
+     evento, no queda pegado.
+
+     Efecto colateral encontrado y NO corregido (fuera de alcance de este
+     pedido): con `st.query_params["reporte"] = reporte` de por medio,
+     `debug`/`diseno` pueden RESUCITAR después de apagarlos a mano desde
+     la barra, porque el snapshot de query params que guarda el backend de
+     Streamlit es el de la conexión inicial (cuando `?debug=1&diseno=1`
+     sí estaba en la URL) y cualquier escritura de Python a
+     `st.query_params` reenvía ESE snapshot completo al navegador. Sólo
+     importa para quien apaga el modo diseño a mano y sigue navegando por
+     la app esperando que quede apagado.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

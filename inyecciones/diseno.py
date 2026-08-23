@@ -98,6 +98,15 @@ inline `!important` confirmado presente y todo, porque el setInterval de
 150ms de `sync()` reinicia la transición en cada tick casi a la par de su
 propia duración y nunca llega a destino. No tira error: se ve como "mi
 cambio no hizo nada".
+
+El overlay tiene `pointer-events:none` a propósito (para poder ver/medir
+lo de abajo), así que un click normal SIEMPRE llegaba al widget real por
+debajo — en un botón del rail eso disparaba su `on_click` y Streamlit
+cambiaba de reporte a mitad de una sesión de diseño. `esUIPropiaDeDiseno()`
++ un listener de `click` en captura sobre `document` (arquitectura.md
+#173) bloquean cualquier click que no sea sobre la UI del propio
+diseño/inspector/barra mientras `disenoActivo()`. El clic derecho
+(`contextmenu`, el pin de inspector.py) no se toca.
 """
 
 import json

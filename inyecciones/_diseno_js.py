@@ -28,6 +28,25 @@ JS = """
             return u.searchParams.get('debug') === '1' && u.searchParams.get('diseno') === '1';
         }
 
+        // El overlay tiene pointer-events:none a proposito (regla de mas
+        // abajo: hay que poder ver/medir lo de ABAJO), asi que un click
+        // izquierdo normal siempre sigue de largo hasta el widget real. En
+        // un boton del rail eso dispara on_click -> session_state["_nav_reporte"]
+        // -> Streamlit cambia de reporte a mitad de una sesion de diseno:
+        // las keys que se estaban ajustando ya no existen en el DOM nuevo.
+        // Pedido explicito 2026-08-23: "inactivar el clickeo" mientras se
+        // disena. Contenedores en esta lista quedan exceptuados (son la UI
+        // del propio diseno/inspector/barra, no la app).
+        function esUIPropiaDeDiseno(nodo) {
+            var ids = ['el-diseno-overlay', 'el-diseno-panel', 'herr-barra',
+                       'herr-panel', 'el-inspector-tip', 'el-inspector-badge'];
+            for (var i = 0; i < ids.length; i++) {
+                var c = doc.getElementById(ids[i]);
+                if (c && c.contains(nodo)) return true;
+            }
+            return false;
+        }
+
         if (!win.__disenoState) {
             win.__disenoState = { porKey: {}, panelColapsado: false };
         }
@@ -1649,6 +1668,7 @@ JS = """
         if (win.__disenoScrollHandler) { win.removeEventListener('scroll', win.__disenoScrollHandler, true); }
         if (win.__disenoResizeHandler) { win.removeEventListener('resize', win.__disenoResizeHandler); }
         if (win.__disenoKeydownHandler) { win.removeEventListener('keydown', win.__disenoKeydownHandler); }
+        if (win.__disenoClickBlocker) { doc.removeEventListener('click', win.__disenoClickBlocker, true); }
 
         win.__disenoScrollHandler = sync;
         win.__disenoResizeHandler = sync;
@@ -1659,9 +1679,22 @@ JS = """
                 sync();
             }
         };
+        // Captura en el documento PADRE, antes de que el click baje hasta el
+        // arbol de React de Streamlit: parar la propagacion aca hace que el
+        // widget real nunca se entere del click (no le hace falta tocar
+        // preventDefault de un <a> — los botones del rail son <button>
+        // nativos manejados por el listener delegado de React, que vive mas
+        // abajo en el arbol y jamas ve un evento detenido en `document`).
+        win.__disenoClickBlocker = function(e) {
+            if (!disenoActivo()) return;
+            if (esUIPropiaDeDiseno(e.target)) return;
+            e.preventDefault();
+            e.stopPropagation();
+        };
         win.addEventListener('scroll', win.__disenoScrollHandler, true);
         win.addEventListener('resize', win.__disenoResizeHandler);
         win.addEventListener('keydown', win.__disenoKeydownHandler);
+        doc.addEventListener('click', win.__disenoClickBlocker, true);
 
         win.__disenoPollInterval = win.setInterval(sync, 150);
         sync();
