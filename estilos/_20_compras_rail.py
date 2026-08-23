@@ -603,10 +603,12 @@ CSS = """    /* ================================================================
             font-size: 9.5px !important;
             padding: 13px 12px 5px !important;
         }
-        /* 11px era el tamaño para una columna de 84px. */
+        /* 11px era el tamaño para una columna de 84px; 13px, para 270px.
+           2026-08-23: +20% a pedido, junto con el ancho del rail
+           (_00_base.py, +30%) y el ícono/KPIs de abajo. */
         .st-key-graf_tipo_chips
         [data-testid="stButton"] button p {
-            font-size: 13px !important;
+            font-size: 16px !important;
             white-space: nowrap !important;
         }
         /* El icono de `st.button(icon=...)`. `color: inherit` a propósito:
@@ -616,7 +618,7 @@ CSS = """    /* ================================================================
            falta deshacer nada acá. */
         .st-key-graf_tipo_chips
         [data-testid="stButton"] button [data-testid="stIconMaterial"] {
-            font-size: 19px !important;
+            font-size: 23px !important;    /* 19px + ~20%, junto con el label */
             color: inherit !important;
             flex: 0 0 auto !important;
             margin: 0 !important;

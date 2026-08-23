@@ -374,7 +374,7 @@ _CSS_KPIS = """
 }
 .st-key-graf_tipo_chips .nav-kpis-primario {
     display: block !important;
-    font-size: 12px !important;
+    font-size: 14px !important;   /* 2026-08-23: 12px + ~20%, junto con el rail */
     font-weight: 600 !important;
     color: var(--text-primary) !important;
     line-height: 1.3 !important;
@@ -384,7 +384,7 @@ _CSS_KPIS = """
 }
 .st-key-graf_tipo_chips .nav-kpis-secundario {
     display: block !important;
-    font-size: 9.5px !important;
+    font-size: 11.5px !important;   /* 2026-08-23: 9.5px + ~20% */
     font-weight: 400 !important;
     color: var(--text-muted) !important;
     line-height: 1.3 !important;

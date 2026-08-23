@@ -192,8 +192,11 @@ CSS = """    <style>
            medía 270px y Ajuste de Inventario/Ventas medían 84px sobre el
            mismo `.st-key-compras_tabs_row`; con el default único los tres
            dan 270px. El valor 270px en sí (antes 230px) se sigue debiendo
-           al pedido del 2026-08-22 — ver regla #169 para esa parte. */
-        --rail-der-full: 270px;
+           al pedido del 2026-08-22 — ver regla #169 para esa parte.
+           2026-08-23 (2): 270px -> 350px (+30%), a pedido ("los veo muy
+           delgados") — junto con el texto/ícono de los ítems, ver
+           estilos/_20_compras_rail.py y navegacion.py::_CSS_KPIS. */
+        --rail-der-full: 350px;
         --rail-min: 24px;
         --rail-der-w: var(--rail-der-full);
         --rail-der-res: calc(var(--rail-der-w) + 15px + 54px);
