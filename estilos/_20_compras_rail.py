@@ -575,7 +575,10 @@ CSS = """    /* ================================================================
            a cualquier regla de acá que sólo mencione `button` a secas. */
         .st-key-graf_tipo_chips
         [data-testid="stButton"] button {
-            padding: 10px 12px 10px 9px !important;
+            /* Vertical 10px -> 17px (2026-08-23, a pedido: "el largo
+               vertical", no el ancho — ver _00_base.py). Horizontal
+               sin tocar. */
+            padding: 17px 12px 17px 9px !important;
             gap: 10px !important;
         }
         /* El hairline separa UN REPORTE del siguiente. Desde que cada

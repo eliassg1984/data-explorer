@@ -193,10 +193,16 @@ CSS = """    <style>
            mismo `.st-key-compras_tabs_row`; con el default único los tres
            dan 270px. El valor 270px en sí (antes 230px) se sigue debiendo
            al pedido del 2026-08-22 — ver regla #169 para esa parte.
-           2026-08-23 (2): 270px -> 350px (+30%), a pedido ("los veo muy
-           delgados") — junto con el texto/ícono de los ítems, ver
-           estilos/_20_compras_rail.py y navegacion.py::_CSS_KPIS. */
-        --rail-der-full: 350px;
+           2026-08-23 (2): 270px -> 350px, a pedido ("los veo muy
+           delgados") entendido como ancho — junto con el texto/ícono de
+           los ítems, ver estilos/_20_compras_rail.py y
+           navegacion.py::_CSS_KPIS.
+           2026-08-23 (3): 350px -> 280px. El pedido "delgados" era sobre
+           el LARGO VERTICAL de cada fila, no el ancho — el ancho vuelve
+           cerca del original (270px) y el alto de fila sube por el
+           padding vertical del botón (_20_compras_rail.py). El texto/
+           ícono (2) se queda: ese sí era el pedido correcto. */
+        --rail-der-full: 280px;
         --rail-min: 24px;
         --rail-der-w: var(--rail-der-full);
         --rail-der-res: calc(var(--rail-der-w) + 15px + 54px);
