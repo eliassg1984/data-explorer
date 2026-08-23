@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-179 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+180 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (66)
 
@@ -179,7 +179,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#159** — Cuadrados negros en vez de iconos en Chrome < 120: AG Grid 34 emite mask-image sin la…
 - **#163** — arquitectura.md creció hasta ser un documento que nadie podía abrir: 115k tokens, y CLAUDE.md…
 
-**Streamlit** (53)
+**Streamlit** (54)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -234,6 +234,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#176** — st.markdown/st.caption aceptan help= en este Streamlit (1.59.2) — no hace falta inventar un…
 - **#178** — Mover un control de "flotando sobre el marco compartido" a "adentro de una tarjeta" no es un…
 - **#179** — Un atajo de fecha (nuevo o viejo) no sobrevive cambiar de REPORTE y volver — mismo mecanismo…
+- **#180** — Un widget DENTRO de un @st.fragment que escribe estado consumido AFUERA no cambia nada en…
 
 **Datos, R2 y DuckDB** (19)
 
@@ -8028,13 +8029,19 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      Para descartar que fuera un bug introducido por los atajos nuevos, se repitió el experimento con un mecanismo VIEJO y no relacionado: la pill global de Ajuste (`ajuste_rango_aplicado_visual`), clickeando "Últimos 30 días" (cambia a `25 jul – 5 ago 2026`, confirmado en el `debug_estado_rango()` de AFUERA porque ese botón sí vive fuera de cualquier fragment — no hace falta el truco del caption interno) y repitiendo Ajuste→Compras→Ajuste: mismo reset, al mismo default (`1 ago – 5 ago 2026`). Es una propiedad general y preexistente de tener una key de rango por reporte, no algo que los atajos de Ranking rompieron — arreglarlo (persistir el rango de cada reporte cruzando navegación entre reportes) es un cambio de arquitectura aparte, fuera de lo pedido. En el uso real no se nota: cambiar de VISTA dentro de Compras (Familia/Proveedor/Producto/…) no dispara este reset, porque `franja_fecha.render()` se llama sin condición para cualquier vista de Compras salvo Documentos SUNAT (regla #176) — el widget queda montado todo el tiempo que uno se queda adentro del reporte, y sólo se desmonta al salir de Compras del todo.
 
+180. **Un widget DENTRO de un `@st.fragment` que escribe estado consumido AFUERA no cambia nada en pantalla hasta que alguien pida `st.rerun(scope="app")` — y verificar "cambió `session_state`" NO prueba que el reporte cambió.** Los atajos de fecha que la regla #179 metió en la tarjeta de Ranking (`graficos/compras/proveedor.py`) escribían el rango correctamente y aun así la vista no se movía: reportado por el usuario ("cuando hago click, parece que no cambia nada"). El filtro que consume ese rango está en `app.py:619`, fuera del fragment; `_compras_proveedor_drill` recibe `d` YA filtrado por el último rerun COMPLETO. Un clic adentro re-ejecuta sólo el fragment, que vuelve a dibujar exactamente el mismo `d`. Los atajos del pill original (`franja_fecha.render()`) nunca tuvieron el problema porque se dibujan desde `app.py`, fuera de todo fragment — su clic ya es un rerun completo.
+
+     **La lección de método es más cara que el fix.** Al cerrar la #179 se dio por verificado el feature midiendo `st.session_state[k_rango]` con un `st.caption` de diagnóstico: cambiaba de `(2026,8,1)` a `(2026,1,1)` y eso se leyó como "funciona". La medición era correcta y la conclusión falsa — probaba que el `on_click` ESCRIBÍA, no que la pantalla RE-FILTRARA. En la misma sesión el texto de la página ya mostraba "Total compra S/ 2,104" idéntico antes y después del clic, y pasó desapercibido por estar mirando la métrica equivocada. Regla de verificación: para un control que filtra, la evidencia es el DATO (filas del grid, KPIs, conteo de períodos), nunca el estado intermedio. Acá la prueba buena fueron tres señales a la vez: el ranking pasó de 16 a 24 proveedores, `win_nav` de "Todo 1" a "Todo 8", y ambas volvieron al clickear "Este mes".
+
+     Fix: `_aplicar_atajo_rank()` como `on_click` — delega en `aplicar_atajo` (el dueño único sigue siendo `estado_rango`, no se duplica la escritura) y deja `_cp_rank_atajo_pendiente = True`; al inicio del fragment, `if st.session_state.pop(...): st.rerun(scope="app")`. La bandera no es ceremonia: el `on_click` corre como CALLBACK, antes del rerun del fragment, y `st.rerun()` hay que pedirlo desde el CUERPO. Y no se puede saltear el callback escribiendo el rango desde el cuerpo, porque `k_rango` es la key del `date_input` que `app.py` ya instanció en ese mismo run — escribirla después del widget es `StreamlitAPIException` (el invariante de `estado_rango.py`). O sea: la escritura sólo es legal en el callback, y el rerun sólo es posible en el cuerpo; hacen falta los dos. Mismo patrón que `graficos/compras/__init__.py:216`, que ya cruzaba esta misma frontera por otro motivo (quién dibuja el pill de fecha).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#180**.
+> próxima regla nueva es la **#181**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

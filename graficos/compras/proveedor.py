@@ -29,6 +29,25 @@ from graficos.compras._documentos_proveedor import tabla_documentos
 from graficos import alturas, periodo
 
 
+def _aplicar_atajo_rank(clave, rango, reporte, usa_carga_rango):
+    """`on_click` de los atajos de fecha del Ranking: aplica Y marca escalada.
+
+    Delega la escritura en `aplicar_atajo` (el dueño único, `estado_rango`)
+    y deja una bandera para que el fragment pida un rerun COMPLETO — ver el
+    bloque que la consume al inicio de `_compras_proveedor_drill`.
+
+    Por qué una bandera y no `st.rerun()` acá: esto corre como CALLBACK,
+    antes del rerun del fragment, y el rerun hay que pedirlo desde el
+    cuerpo. Y por qué no se escribe el rango desde el cuerpo en vez de por
+    callback: `clave` es la key del `date_input` de `franja_fecha.render()`,
+    que `app.py` ya instanció en este mismo run — escribirla después del
+    widget es `StreamlitAPIException`. El callback es el único momento en
+    que la escritura es legal.
+    """
+    aplicar_atajo(clave, rango, reporte, usa_carga_rango)
+    st.session_state["_cp_rank_atajo_pendiente"] = True
+
+
 @st.fragment
 def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                              col_punit, col_um, col_fecha, col_docu=None,
@@ -45,6 +64,18 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     Panel A: Top N productos comprados al proveedor en foco (valor + cantidad).
     Panel B: proveedores del producto seleccionado en Panel A.
     """
+    # ── Escalada a rerun COMPLETO tras un atajo de fecha ───────────────────
+    # Los atajos del Ranking (más abajo) escriben el rango con
+    # `aplicar_atajo`, pero el FILTRO que consume ese rango vive en
+    # `app.py:619`, FUERA de este fragment. Un clic acá solo re-ejecuta el
+    # fragment, que recibe `d` YA filtrado por el último rerun completo:
+    # sin escalar, el estado cambia y la pantalla no — botón que responde,
+    # datos quietos. Mismo patrón y mismo motivo que
+    # `graficos/compras/__init__.py:216`. Va ANTES de dibujar nada para no
+    # gastar un render que se va a descartar. Ver arquitectura.md #180.
+    if st.session_state.pop("_cp_rank_atajo_pendiente", False):
+        st.rerun(scope="app")
+
     if not (col_prov and col_valor):
         st.info("Faltan columnas (Proveedor, Valor) para este gráfico.")
         return
@@ -472,7 +503,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 for _ca, _et, _rg in _atajos_rank:
                                     st.button(
                                         _et, key=f"atajo_rank_{_ca}",
-                                        on_click=aplicar_atajo,
+                                        on_click=_aplicar_atajo_rank,
                                         args=(_ctx_fecha["k_rango"], _rg,
                                               _ctx_fecha["reporte"],
                                               _ctx_fecha["usa_carga_rango"]))
