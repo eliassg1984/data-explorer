@@ -106,7 +106,15 @@ def _formatear_kpis(info):
     Retorna `None` (no una tupla) si no definió `kpis`, si la consulta no
     trajo nada (parquet sin esa columna, R2 caído — resumen_kpis() ya
     devuelve {} en esos casos) o si es la primera carga y todavía no hay
-    nada cacheado."""
+    nada cacheado.
+
+    Tercer elemento `negativo`: True si el KPI primario es un monto
+    (`sum`) con signo negativo — hoy sólo le pasa a Ajuste Valorizado
+    (mermas), pero se detecta genérico por signo, no por nombre de
+    reporte, para no hardcodear qué reporte puede ir negativo. Referencia
+    MSN Money, a pedido 2026-08-22: el delta ahí se colorea por signo, acá
+    el equivalente es el monto mismo (el rail no tiene "vs. período
+    anterior" para calcular un delta real)."""
     kpis = info.get("kpis")
     if not kpis:
         return None
@@ -121,14 +129,16 @@ def _formatear_kpis(info):
         suf = _SUFIJO_KPI.get(etiqueta, "")
         return f"{v:,.0f}{(' ' + suf) if suf else ''}"
 
-    partes = [_fmt(et, ag, valores[et])
-              for et, _col, ag in kpis if valores.get(et) is not None]
-    if not partes:
+    items = [(et, ag, valores[et])
+             for et, _col, ag in kpis if valores.get(et) is not None]
+    if not items:
         return None
+    partes = [_fmt(et, ag, v) for et, ag, v in items]
     if "Venta" in valores and "Pax" in valores and valores["Pax"]:
         partes.append(f"S/ {valores['Venta'] / valores['Pax']:.1f}")
     primario, resto = partes[0], partes[1:]
-    return primario, (" · ".join(resto) if resto else None)
+    negativo = items[0][2] < 0
+    return primario, (" · ".join(resto) if resto else None), negativo
 
 
 # ── CSS de la FRANJA HORIZONTAL (hoy: Vistas) ───────────────────────────
@@ -393,6 +403,19 @@ _CSS_KPIS = """
 .st-key-graf_tipo_chips [class*="st-key-navitem_"]:has(button[kind="primary"])
     .nav-kpis-secundario {
     color: var(--accent-deep) !important;
+}
+/* KPI primario negativo (hoy: sólo Ajuste Valorizado, ver docstring de
+   _formatear_kpis) — referencia MSN Money, 2026-08-22, medido en vivo con
+   sus propias herramientas de desarrollador: rgb(209,52,56) para el
+   descenso. Acá se reusa --danger-text en vez de ese literal (CLAUDE.md:
+   "nunca un #hex suelto"; es el mismo par que ya usa Ajuste para sus
+   mermas/sobrantes). El segundo selector repite el de "activo" arriba +
+   `.kpi-neg`: a propósito MÁS específico que ese, así el rojo gana incluso
+   si el reporte negativo (Ajuste) está también activo. */
+.st-key-graf_tipo_chips .nav-kpis-primario.kpi-neg,
+.st-key-graf_tipo_chips [class*="st-key-navitem_"]:has(button[kind="primary"])
+    .nav-kpis-primario.kpi-neg {
+    color: var(--danger-text) !important;
 }
 </style>
 """
@@ -659,10 +682,11 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
                     # `navitem_<slug>` que los envuelve a los dos.
                     par = _formatear_kpis(info) if not info.get("tool") else None
                     if par:
-                        primario, secundario = par
+                        primario, secundario, negativo = par
+                        clase_primario = "nav-kpis-primario kpi-neg" if negativo else "nav-kpis-primario"
                         st.markdown(
                             '<div class="nav-kpis-valores">'
-                            f'<span class="nav-kpis-primario">{primario}</span>'
+                            f'<span class="{clase_primario}">{primario}</span>'
                             + (f'<span class="nav-kpis-secundario">{secundario}</span>'
                                if secundario else '')
                             + '</div>',
