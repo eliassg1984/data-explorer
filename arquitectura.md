@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-192 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+193 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (69)
 
@@ -157,7 +157,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
 
-**AgGrid y tablas** (32)
+**AgGrid y tablas** (33)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -191,6 +191,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#190** — Compras › Producto perdió sus dos botones "✕ Quitar foco" (2026-08-24, a pedido) — mismo fix…
 - **#191** — _ALTO_FRAME en Compras › Proveedor tenía TRES consumidores, no uno — achicar sus filas a…
 - **#192** — El Panel A de Productos (Compras › Proveedor) pasó de st.dataframe a AgGrid por el mismo…
+- **#193** — flex en un columnDef de AgGrid no alcanza: st_aggrid le clava width: 200 a toda columna sin…
 
 **Streamlit** (57)
 
@@ -8217,13 +8218,27 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      **Corrección a la regla #190, que quedó desactualizada sin que nadie la hubiera verificado en pantalla:** su nota final decía que `producto.py` se había quedado en `st.dataframe` "a propósito" porque "el clic en Producto no tiene la limitación de checkboxes-obligatorios que sí forzó la migración en Proveedor". Eso confunde dos problemas DISTINTOS de `st.dataframe` con `selection_mode="single-row"`: (a) el checkbox visible, que es cosmético y viene con el modo de selección sin importar la tabla, y (b) que reclickear la fila ya elegida no dispara `on_select` (el problema real que resolvían el botón "✕ Quitar foco" y el `elif` de la #190). `producto.py` (`graficos/compras/producto.py:263` y `:411`) usa exactamente la misma llamada — `st.dataframe(..., on_select="rerun", selection_mode="single-row", ...)` — que tenía el Ranking de Proveedor antes de la #136 y que tenía este Panel A antes de hoy: el checkbox tiene que estar ahí también. No se migró como parte de este cambio (no era lo pedido, y las dos tablas de `producto.py` tienen su propio `elif` funcionando para el problema (b), que sigue siendo válido); queda para cuando alguien lo pida.
 
+193. **`flex` en un columnDef de AgGrid no alcanza: `st_aggrid` le clava `width: 200` a toda columna sin `width` propio, y ese `width` explícito le gana al `flex` en el render inicial.** Pedido 2026-08-24: "las dos tablas de la vista de Producto, también sin checkbox y con filas delgadas como las de Proveedor" — los dos rankings de `graficos/compras/producto.py` (Ranking de productos: 8 columnas; Compras por familia: 4) pasaron de `st.dataframe` a AgGrid, mismo patrón que la #136/#192.
+
+     El síntoma, en el ranking de 8 columnas: a 1280px de viewport, la columna "Var" (la octava) directamente NO aparecía en el header — ni truncada, ni con scroll visible, ausente. Antes de sospechar cualquier otra causa se verificó `api.getColumnDefs()` (mismo camino a la api vía fiber de React que ya usa la regla #188): el colDef resuelto de "Producto" (`flex: 2`) traía **también** `width: 200`, que nadie había puesto ahí — ni yo, ni ningún default que pasara explícito. `st_aggrid` (o el propio ag-grid-community por debajo) inyecta ese `width: 200` en cualquier columna sin uno propio, y **cuando un colDef trae `width` Y `flex` juntos, `width` fija el tamaño INICIAL y el flex nunca llega a repartir nada** — los dos `flex` (Producto 2, Valor 1.3) se comían 400px fijos de los ~492 disponibles, y "Var" quedaba empujado fuera del viewport con una scrollbar de apenas 1px de alto (verificado: SÍ scrollea — vía `.ag-center-cols-viewport`, no `.ag-body-viewport`, que es sólo un wrapper — pero el drag con mouse sobre 1px es poco menos que inusable).
+
+     Primer intento, insuficiente: agregar `minWidth` a las columnas `flex` (para que al menos tuvieran un piso más chico que 200). No alcanzó — `width: 200` seguía ganando el render inicial, `minWidth` sólo importa cuando el flex SÍ está calculando. Fix real: sacar `flex` de las ocho columnas y darle a TODAS un `width` explícito — mismo criterio que ya usaban las columnas angostas (%, Cant., UM, Inicio, Fin) desde el principio, así que dejaron de ser la excepción. Con eso, el orden de resolución de AG Grid deja de importar: ancho fijo es ancho fijo, sin ambigüedad entre dos mecanismos compitiendo por el mismo colDef.
+
+     **Regla general para este proyecto: en un columnDef de AgGrid, no combinar `flex` con ausencia de `width` esperando que "el flex gane" — no gana. Si se quiere una columna que se adapte al espacio disponible, hay que probarlo en pantalla con `api.getColumnDefs()`, no asumirlo por la documentación de AG Grid en abstracto.** (El Ranking de Proveedor, regla #136, usa `flex` en sus dos columnas anchas y nunca mostró el problema — pero es porque nunca cruzó el umbral: con sólo 4 columnas y más espacio disponible, `width: 200 + width: 200` alcanzaba a mostrarse entero sin competir por sitio. El bug estaba ahí, dormido, esperando una tabla con más columnas en menos espacio.)
+
+     Sin relación con el ancho: la columna "Cant." repitió el bug de la regla #192 (el punto en el `field` se resuelve como notación de path y la celda sale vacía en silencio) — mismo fix, `field: "Cant"` + `headerName: "Cant."`. Y las tres filas de `elif`/`last_click` que tenía cada tabla (el fix de la regla #190 para "reclickear no dispara `on_select`") se BORRARON enteras: con AG Grid, el toggle del `onRowClicked` hace que deseleccionar sea un gesto real, y la comparación contra `prod_focus`/`fam_focus` (por NOMBRE, leyendo `selected_rows`, no por índice) alcanza sola — mismo patrón que ya usaba el Panel A de Proveedor en la #192.
+
+     "Filas delgadas" ya estaba resuelto de antes (`_ALTO_FILA = 28`, puesto el mismo día que esta sesión para el `row_height=` de `st.dataframe`, con el comentario explícito de que ya apuntaba al mismo número que usa AgGrid en Proveedor) — la migración sólo tuvo que llevar la constante de `row_height=` a `rowHeight` en `gridOptions`, sin cambiar el valor.
+
+     Verificado en vivo con datos de R2, en las DOS tablas: cero columnas de checkbox, `rowHeight` de 28px, las ocho/cuatro columnas visibles con sus anchos exactos (sin depender de flex), clic enfoca (Producto → detalle de precio/cantidad/valor; Familia → mini-ranking de productos), reclic limpia el foco, sin excepciones en 375px ni en los dos viewports de escritorio probados (1280 y 1912).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#193**.
+> próxima regla nueva es la **#194**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

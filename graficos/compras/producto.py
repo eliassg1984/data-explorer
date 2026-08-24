@@ -21,18 +21,22 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from tema import ACENTO, ERROR, EXITO, GRIS_TEXTO
+from st_aggrid import AgGrid, JsCode
+
+from tema import ACENTO, ERROR, EXITO, GRIS_TEXTO, TEXTO_PRINCIPAL
 from graficos.base import _compras_layout, _compras_truncar
 from graficos.compras._comun import _compras_mini_barras
 from graficos import alturas
 
 _ALTO_FILA = 28
 """Filas "algo delgadas" a pedido (2026-08-24) para los dos rankings de este
-drill — más finas que el default de `st.dataframe` (~35px, el mismo número
-que usa el `rowHeight` de AgGrid en Proveedor/Inventario). Con `row_height=`
-explícito, `_ALTO_FRAME` tiene que usar el mismo número: si no, el frame se
-calcula para filas de 35px y filas reales de 28px dejan aire de sobra
-abajo (o de más, si `_ALTO_FRAME` quedara más chico que 8 filas reales)."""
+drill — el mismo número que usa el `rowHeight` de AgGrid en Proveedor/
+Inventario (antes era el `row_height=` de `st.dataframe`; con el pase a
+AgGrid del mismo día, la constante es `rowHeight` en `gridOptions`). Con un
+alto de fila explícito, `_ALTO_FRAME` tiene que usar el mismo número: si no,
+el frame se calcula para un alto y las filas reales dibujan otro, dejando
+aire de sobra abajo (o de más, si `_ALTO_FRAME` quedara más chico que 8
+filas reales)."""
 
 _ALTO_FRAME = alturas.por_filas(8, px_fila=_ALTO_FILA, extra=45, minimo=0)
 
@@ -105,6 +109,67 @@ _CSS_SELECTOR_TEXTO = f"""
 }}
 </style>
 """
+
+
+# ── AgGrid: los dos rankings de este drill, sin checkbox ──────────────────
+# 2026-08-24, a pedido ("como en Proveedor, sin el check de selección, y
+# con filas delgadas"): mismo patrón que la regla #136/#192 de
+# arquitectura.md — `st.dataframe` dibuja su columna de selección en un
+# CANVAS (glide-data-grid), no hay nodo DOM por celda, así que no hay CSS
+# que apunte "sólo esa columna". Cambiar a AgGrid es la única salida.
+#
+# Los dos rankings de este archivo (Producto y Familia) comparten el mismo
+# toggle y los mismos formatters — se definen UNA vez a nivel de módulo
+# (mismo criterio que `_EJE_X_GRAN`, arriba) en vez de recrear los `JsCode`
+# en cada corrida del fragment.
+_js_toggle_prod = JsCode(
+    "function(e){ e.node.setSelected(!e.node.isSelected(), true); }")
+
+# La barra es el FONDO de la celda (regla #136): un `linear-gradient`
+# cortado en el % de LLENADO contra el MAYOR valor de la lista (`_barra`,
+# columna oculta) — no contra el total, que es lo que ya muestra la
+# columna "%".
+_js_barra_prod = JsCode(
+    "function(p){"
+    " var w = Math.max(0, Math.min(100, p.data._barra||0))"
+    " * 0.62;"
+    " return {'background': 'linear-gradient(90deg,"
+    f" {ACENTO} 0 ' + w + '%, transparent ' + w"
+    " + '% 100%)',"
+    " 'display':'flex','alignItems':'center',"
+    " 'justifyContent':'flex-end',"
+    f" 'color':'{TEXTO_PRINCIPAL}'"
+    "};"
+    "}")
+
+# Montos GRANDES (Valor): redondeado, CON separador de miles.
+_js_soles0_prod = JsCode(
+    "function(p){ return p.value==null ? '' :"
+    " 'S/ ' + Math.round(p.value).toLocaleString('es-PE'); }")
+
+# Precios UNITARIOS (Inicio/Fin): 2 decimales, SIN separador de miles —
+# mismo criterio que el `format="S/ %.2f"` que tenían como
+# `column_config.NumberColumn`: un precio unitario no necesita agrupar.
+_js_soles2_prod = JsCode(
+    "function(p){ return p.value==null ? '' :"
+    " 'S/ ' + p.value.toFixed(2); }")
+
+_js_pct_prod = JsCode(
+    "function(p){ return p.value==null ? '' :"
+    " Math.round(p.value) + '%'; }")
+
+# Var: con signo y 1 decimal (`%+.1f%%` en Python). `toFixed` ya antepone
+# el signo "-" en un negativo; sólo hace falta el "+" del lado positivo.
+_js_pct_signed_prod = JsCode(
+    "function(p){ if(p.value==null) return '';"
+    " return (p.value>=0?'+':'') + p.value.toFixed(1) + '%'; }")
+
+# Conteos (Cant./Productos): redondeado, CON separador de miles — mismo
+# criterio que "Valor", consistente con el resto de las tablas AgGrid de
+# este drill (Proveedor).
+_js_num0_prod = JsCode(
+    "function(p){ return p.value==null ? '' :"
+    " Math.round(p.value).toLocaleString('es-PE'); }")
 
 
 # ── Funciones puras ───────────────────────────────────────────────────────
@@ -227,57 +292,93 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
         if prod_focus not in set(ranking["producto"]):
             prod_focus = None
 
-        # Procesar clic ANTES de construir la tabla (mismo patrón que
-        # Proveedor): así el rerun que cambia el foco sale correcto a la
-        # primera, sin un segundo rerun para "alcanzarlo".
-        _rank_tab_key = "compras_prod_rank_tab"
-        _rows_sel = ((st.session_state.get(_rank_tab_key) or {})
-                     .get("selection", {}).get("rows", []))
-        if _rows_sel:
-            _ri = _rows_sel[0]
-            if 0 <= _ri < len(ranking):
-                _clicked = ranking.iloc[_ri]["producto"]
-                if st.session_state.get("compras_prod_last_click") != _clicked:
-                    st.session_state["compras_prod_last_click"] = _clicked
-                    prod_focus = None if _clicked == prod_focus else _clicked
-                    st.session_state["compras_prod_focus"] = prod_focus
-        elif st.session_state.get("compras_prod_last_click") is not None:
-            # Sin el botón "✕ Quitar foco" (regla #133, mismo fix que ya
-            # tiene Proveedor), destildar la fila enfocada es la ÚNICA
-            # salida: reclickearla no dispara `on_select` (el valor del
-            # widget no cambia), pero destildar sí — `rows: [i]` → `[]`.
-            st.session_state["compras_prod_last_click"] = None
-            prod_focus = None
-            st.session_state["compras_prod_focus"] = None
-
         col_tabla, col_detalle = st.columns([1.6, 1], gap="small")
         with col_tabla:
             st.markdown('<div class="cp-prod-rank-tit">Ranking de productos</div>',
                        unsafe_allow_html=True)
 
+            # SIN el punto en "Cant": AG Grid resuelve `field` con notación
+            # de PATH ("a.b" -> row.a.b), así que un campo "Cant." se parte
+            # en ["Cant", ""] y la celda sale vacía en silencio, sin ningún
+            # error (arquitectura.md regla #192). El punto vuelve como
+            # `headerName` en el columnDef, así que el rótulo no cambia.
             disp = ranking.rename(columns={
                 "producto": "Producto", "valor": "Valor", "pct": "%",
-                "cantidad": "Cant.", "um": "UM", "inicio": "Inicio",
+                "cantidad": "Cant", "um": "UM", "inicio": "Inicio",
                 "fin": "Fin", "var_pct": "Var",
             })
-            st.dataframe(
-                disp[["Producto", "Valor", "%", "Cant.", "UM", "Inicio", "Fin", "Var"]],
-                hide_index=True, width="stretch", height=_ALTO_FRAME,
-                row_height=_ALTO_FILA,
-                on_select="rerun", selection_mode="single-row", key=_rank_tab_key,
-                column_config={
-                    "Producto": st.column_config.TextColumn("Producto", width="medium"),
-                    "Valor": st.column_config.ProgressColumn(
-                        "Valor", format="S/ %.0f", min_value=0,
-                        max_value=float(ranking["valor"].max())),
-                    "%": st.column_config.NumberColumn("%", format="%.0f%%", width="small"),
-                    "Cant.": st.column_config.NumberColumn("Cant.", format="%.0f", width="small"),
-                    "UM": st.column_config.TextColumn("UM", width="small"),
-                    "Inicio": st.column_config.NumberColumn("Inicio", format="S/ %.2f"),
-                    "Fin": st.column_config.NumberColumn("Fin", format="S/ %.2f"),
-                    "Var": st.column_config.NumberColumn("Var", format="%+.1f%%"),
+            _val_max_prod = float(ranking["valor"].max()) if len(ranking) else 1.0
+            disp["_barra"] = disp["Valor"] / _val_max_prod * 100
+            _resp_prod = AgGrid(
+                disp[["Producto", "Valor", "%", "Cant", "UM", "Inicio",
+                     "Fin", "Var", "_barra"]],
+                gridOptions={
+                    # Ocho columnas visibles, y NINGUNA lleva `flex`: se
+                    # probó (Producto/Valor con flex:2/1.3 + minWidth) y
+                    # `st_aggrid` le clava `width: 200` a cada columna que
+                    # no trae un `width` propio — verificado con
+                    # `api.getColumnDefs()`, que devolvía flex Y width:200
+                    # JUNTOS en el mismo colDef resuelto. AG Grid prioriza
+                    # el `width` explícito para el tamaño inicial, así que
+                    # el flex nunca llegaba a repartir nada: a 1280px
+                    # Producto+Valor se comían 400px fijos y "Var" quedaba
+                    # fuera del viewport, con una scrollbar de 1px. Ancho
+                    # fijo en las OCHO columnas —mismo criterio que ya
+                    # usaban las seis angostas— saca el problema de raíz.
+                    "columnDefs": [
+                        {"field": "Producto", "width": 150,
+                         "tooltipField": "Producto"},
+                        {"field": "Valor", "width": 96,
+                         "type": "numericColumn",
+                         "cellStyle": _js_barra_prod,
+                         "valueFormatter": _js_soles0_prod},
+                        {"field": "%", "width": 52,
+                         "type": "numericColumn",
+                         "valueFormatter": _js_pct_prod},
+                        {"field": "Cant", "headerName": "Cant.",
+                         "width": 60, "type": "numericColumn",
+                         "valueFormatter": _js_num0_prod},
+                        {"field": "UM", "width": 56},
+                        {"field": "Inicio", "width": 72,
+                         "type": "numericColumn",
+                         "valueFormatter": _js_soles2_prod},
+                        {"field": "Fin", "width": 72,
+                         "type": "numericColumn",
+                         "valueFormatter": _js_soles2_prod},
+                        {"field": "Var", "width": 60,
+                         "type": "numericColumn",
+                         "valueFormatter": _js_pct_signed_prod},
+                        {"field": "_barra", "hide": True},
+                    ],
+                    "rowSelection": {"mode": "singleRow",
+                                     "checkboxes": False,
+                                     "enableClickSelection": False},
+                    "onRowClicked": _js_toggle_prod,
+                    "rowHeight": _ALTO_FILA,
+                    "headerHeight": 38,
+                    "suppressCellFocus": True,
+                    "suppressMovableColumns": True,
                 },
+                allow_unsafe_jscode=True,
+                theme="streamlit",
+                height=_ALTO_FRAME,
+                update_on=["selectionChanged"],
+                key="compras_prod_rank_tab",
             )
+            # AgGrid devuelve la selección VIGENTE en cada corrida (no un
+            # evento) — comparar contra `prod_focus` alcanza, sin dedup.
+            # Selección vacía (reclic en la fila ya elegida, el toggle de
+            # `_js_toggle_prod`) TAMBIÉN limpia el foco.
+            _sel_prod = getattr(_resp_prod, "selected_rows", None)
+            if _sel_prod is not None and len(_sel_prod):
+                _fila_sel = (_sel_prod.iloc[0] if hasattr(_sel_prod, "iloc")
+                            else _sel_prod[0])
+                _clicked = str(_fila_sel["Producto"])
+            else:
+                _clicked = None
+            if _clicked != prod_focus:
+                prod_focus = _clicked
+                st.session_state["compras_prod_focus"] = prod_focus
             st.caption("UM = unidad de kardex · Inicio/Fin = primera y última "
                       "compra real del período · % es sobre el total del rango.")
 
@@ -381,24 +482,6 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
         if fam_focus not in set(fam_ranking["familia"]):
             fam_focus = None
 
-        _fam_tab_key = "compras_prod_fam_rank_tab"
-        _fam_rows_sel = ((st.session_state.get(_fam_tab_key) or {})
-                         .get("selection", {}).get("rows", []))
-        if _fam_rows_sel:
-            _ri = _fam_rows_sel[0]
-            if 0 <= _ri < len(fam_ranking):
-                _clicked = fam_ranking.iloc[_ri]["familia"]
-                if st.session_state.get("compras_prod_fam_last_click") != _clicked:
-                    st.session_state["compras_prod_fam_last_click"] = _clicked
-                    fam_focus = None if _clicked == fam_focus else _clicked
-                    st.session_state["compras_prod_fam_focus"] = fam_focus
-        elif st.session_state.get("compras_prod_fam_last_click") is not None:
-            # Mismo fix que el ranking de arriba (regla #133): sin botón,
-            # destildar la fila es la única forma de limpiar el foco.
-            st.session_state["compras_prod_fam_last_click"] = None
-            fam_focus = None
-            st.session_state["compras_prod_fam_focus"] = None
-
         col_famtabla, col_famdet = st.columns([1.6, 1], gap="small")
         with col_famtabla:
             st.markdown('<div class="cp-prod-rank-tit">Compras por familia</div>',
@@ -408,21 +491,55 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                 "familia": "Familia", "valor": "Valor", "pct": "%",
                 "productos": "Productos",
             })
-            st.dataframe(
-                disp_fam[["Familia", "Valor", "%", "Productos"]],
-                hide_index=True, width="stretch", height=_ALTO_FRAME,
-                row_height=_ALTO_FILA,
-                on_select="rerun", selection_mode="single-row", key=_fam_tab_key,
-                column_config={
-                    "Familia": st.column_config.TextColumn("Familia", width="medium"),
-                    "Valor": st.column_config.ProgressColumn(
-                        "Valor", format="S/ %.0f", min_value=0,
-                        max_value=float(fam_ranking["valor"].max())),
-                    "%": st.column_config.NumberColumn("%", format="%.0f%%", width="small"),
-                    "Productos": st.column_config.NumberColumn(
-                        "Productos", format="%.0f", width="small"),
+            _val_max_fam = (float(fam_ranking["valor"].max())
+                           if len(fam_ranking) else 1.0)
+            disp_fam["_barra"] = disp_fam["Valor"] / _val_max_fam * 100
+            _resp_fam = AgGrid(
+                disp_fam[["Familia", "Valor", "%", "Productos", "_barra"]],
+                gridOptions={
+                    # Sin `flex`: mismo motivo que el ranking de arriba
+                    # (`st_aggrid` le clava `width: 200` a toda columna sin
+                    # `width` propio, y ese `width` le gana al `flex`).
+                    "columnDefs": [
+                        {"field": "Familia", "width": 210,
+                         "tooltipField": "Familia"},
+                        {"field": "Valor", "width": 110,
+                         "type": "numericColumn",
+                         "cellStyle": _js_barra_prod,
+                         "valueFormatter": _js_soles0_prod},
+                        {"field": "%", "width": 56,
+                         "type": "numericColumn",
+                         "valueFormatter": _js_pct_prod},
+                        {"field": "Productos", "width": 80,
+                         "type": "numericColumn",
+                         "valueFormatter": _js_num0_prod},
+                        {"field": "_barra", "hide": True},
+                    ],
+                    "rowSelection": {"mode": "singleRow",
+                                     "checkboxes": False,
+                                     "enableClickSelection": False},
+                    "onRowClicked": _js_toggle_prod,
+                    "rowHeight": _ALTO_FILA,
+                    "headerHeight": 38,
+                    "suppressCellFocus": True,
+                    "suppressMovableColumns": True,
                 },
+                allow_unsafe_jscode=True,
+                theme="streamlit",
+                height=_ALTO_FRAME,
+                update_on=["selectionChanged"],
+                key="compras_prod_fam_rank_tab",
             )
+            _sel_fam = getattr(_resp_fam, "selected_rows", None)
+            if _sel_fam is not None and len(_sel_fam):
+                _fila_fam = (_sel_fam.iloc[0] if hasattr(_sel_fam, "iloc")
+                            else _sel_fam[0])
+                _clicked_fam = str(_fila_fam["Familia"])
+            else:
+                _clicked_fam = None
+            if _clicked_fam != fam_focus:
+                fam_focus = _clicked_fam
+                st.session_state["compras_prod_fam_focus"] = fam_focus
             st.caption("% sobre el total comprado en el rango.")
 
         with col_famdet:
