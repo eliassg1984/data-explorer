@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-184 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+185 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (67)
 
@@ -153,7 +153,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#182** — El modo diseño ya llega a los textos de Plotly y de AgGrid — y para esos dos el "Copiar CSS"…
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 
-**AgGrid y tablas** (26)
+**AgGrid y tablas** (27)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -181,6 +181,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#148** — Maximizar un AgGrid necesita DOS mitades: soltar el ancho y re-repartir las columnas
 - **#159** — Cuadrados negros en vez de iconos en Chrome < 120: AG Grid 34 emite mask-image sin la…
 - **#163** — arquitectura.md creció hasta ser un documento que nadie podía abrir: 115k tokens, y CLAUDE.md…
+- **#185** — Un contextmenu dentro de un iframe NO sube al documento padre: el clic derecho sobre la…
 
 **Streamlit** (54)
 
@@ -286,7 +287,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (16)
+**Herramientas de desarrollo** (17)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -304,6 +305,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#181** — Un bloqueo de interacción SIN acuse de recibo es indistinguible de una app rota — el que…
 - **#183** — opacity: 0 NO deja de recibir clics, y pointer-events: none en el padre no alcanza si un hijo…
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
+- **#185** — Un contextmenu dentro de un iframe NO sube al documento padre: el clic derecho sobre la…
 
 **Decisiones de diseño y UX** (33)
 
@@ -8090,13 +8092,23 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      Verificado el ciclo completo en vivo: fijar «Aug 2026» → señalar el título da `.cp-prod-rank-tit` con el campo de texto en "Ranking de productos"; volver al texto de Plotly da `svgtext «Aug 2026»`; y volver otra vez al título vuelve a `.cp-prod-rank-tit`. Ida y vuelta, que es lo que fallaba.
 
+185. **Un `contextmenu` dentro de un iframe NO sube al documento padre: el clic derecho sobre la grilla de AgGrid no fijaba nada, y el modo diseño parecía no soportar tablas.** Preguntado 2026-08-23: "creo que cuando selecciono las tablas no me permite diseñarlo, ¿o sí?" — con captura del panel en estado de espera ("Clic derecho en un elemento para empezar") pese a tener la tabla señalada. Medido antes de responder: un `contextmenu` despachado sobre una celda real dejaba `__inspectorPinned` en `false` y `sub` en `null`. La pregunta tenía razón para el gesto que estaba usando.
+
+     El listener de clic derecho del inspector vive en el documento PADRE. La grilla corre en un iframe con su propio documento, y los eventos no cruzan esa frontera — ni burbujeando ni en captura. Editar la tabla YA era posible desde la regla #182, pero solo por el camino indirecto (fijar la tarjeta → hoja ▦ del árbol), y ese camino no lo adivina nadie: el gesto que todo el mundo prueba primero es el clic derecho sobre la cosa que quiere tocar.
+
+     Fix: `engancharIframes()` recorre los iframes same-origin y les instala su PROPIO listener de `contextmenu`, que traduce el nodo de adentro (`e.target`) a un sub-pin `agtext` y pinea el contenedor con key de afuera. Se llama desde `sync()` en cada tick — barato por el guard `fdoc.__disenoEnganchado`, y hay que reintentar siempre porque Streamlit recrea el iframe en cada rerun y el listener se va con el documento viejo.
+
+     El detalle de orden que obligó a una bandera: el handler no puede escribir `__disenoState.sub` directo, porque acto seguido llama a `saltarADiseno(key)` — que arranca poniendo `sub = null` y re-pinea. Se deja `win.__disenoSubForzado` y lo consume `sincronizarSubConElPin()` en el `sync()` siguiente, **antes** de su guard por nodo: el nodo pineado es el CONTENEDOR (el iframe no tiene representación propia en el árbol del padre), así que el guard de la regla #184 lo saltearía y el sub se perdería.
+
+     Verificado el ciclo entero: clic derecho sobre el encabezado "Proveedor" deja el panel con controles (ya no en espera), header `compras_prov_rank_grid «Proveedor»`, y desde ahí se estila de verdad — 22px y "Proveedor"→"PROVEEDOR" aplicados al nodo real dentro del iframe. Y el camino de siempre sigue sano: señalar el título fuera del iframe da `.cp-rank-tit` con la bandera ya consumida.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#185**.
+> próxima regla nueva es la **#186**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

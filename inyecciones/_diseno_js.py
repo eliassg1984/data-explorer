@@ -325,6 +325,56 @@ JS = """
         // sub viejo. Se noto recien ahora porque las hojas de texto
         // (regla #182) multiplicaron por diez los subs posibles por
         // tarjeta. Ver arquitectura.md #184.
+        // Clic derecho DENTRO de un iframe (la grilla de AgGrid).
+        //
+        // Reportado 2026-08-23: "cuando selecciono las tablas no me permite
+        // disenarlo". Y era cierto para el gesto natural: el listener de
+        // `contextmenu` del inspector vive en el documento PADRE, y un
+        // clic sobre una celda ocurre dentro del documento del iframe, que
+        // no propaga al padre. Medido: clic derecho sobre una celda dejaba
+        // `__inspectorPinned` en false y el panel en estado de espera.
+        // El camino indirecto (fijar la tarjeta -> hoja ▦ del arbol) ya
+        // andaba desde la regla #182, pero nadie lo adivina.
+        // Se engancha un listener PROPIO en cada iframe same-origin, que
+        // traduce el nodo de adentro a un sub-pin y pinea el contenedor
+        // con key de afuera. Ver arquitectura.md #185.
+        function engancharIframes() {
+            var ifs = doc.querySelectorAll('iframe');
+            for (var i = 0; i < ifs.length; i++) {
+                var fdoc = null;
+                try { fdoc = ifs[i].contentDocument; } catch (e) { continue; }
+                if (!fdoc || !fdoc.body || fdoc.__disenoEnganchado) continue;
+                fdoc.__disenoEnganchado = true;
+                (function (frame, d2) {
+                    d2.addEventListener('contextmenu', function (e) {
+                        if (!disenoActivo()) return;
+                        e.preventDefault();
+                        var cont = frame.closest('[class*="st-key-"]');
+                        if (!cont) return;
+                        var m = /st-key-([A-Za-z0-9_-]+)/.exec(
+                            (cont.className || '').toString());
+                        if (!m) return;
+                        var key = m[1];
+                        var ns = nodosDeTexto(key, 'agtext'), idx = -1;
+                        for (var j = 0; j < ns.length; j++) {
+                            if (ns[j] === e.target || ns[j].contains(e.target)) {
+                                idx = j; break;
+                            }
+                        }
+                        // El sub va por una bandera y no directo: mas abajo
+                        // `saltarADiseno` limpia el sub y re-pinea, asi que
+                        // escribirlo aca se perderia. La consume
+                        // sincronizarSubConElPin() en el sync() siguiente.
+                        win.__disenoSubForzado = (idx >= 0)
+                            ? { key: key, tipo: 'agtext', idx: idx,
+                                txt: (ns[idx].textContent || '').trim() }
+                            : null;
+                        saltarADiseno(key);
+                    }, true);
+                })(ifs[i], fdoc);
+            }
+        }
+
         function sincronizarSubConElPin() {
             var u = win.__inspectorUltimo;
             // OJO: `u.elemento` ya es el CONTENEDOR con key que resolvio el
@@ -337,6 +387,17 @@ JS = """
                 // Soltar el pin habilita volver a fijar EL MISMO nodo y que
                 // se recalcule igual (si no, el guard de abajo lo saltea).
                 win.__disenoUltimoNodoPin = null;
+                return;
+            }
+            // Sub pedido desde adentro de un iframe: gana, y se consume una
+            // sola vez. Va ANTES del guard por nodo porque el nodo pineado
+            // es el CONTENEDOR (el iframe no tiene representacion propia en
+            // el arbol del padre), asi que el guard lo saltearia.
+            if (win.__disenoSubForzado) {
+                win.__disenoUltimoNodoPin = nodo;
+                win.__disenoState.sub = win.__disenoSubForzado;
+                win.__disenoSubForzado = null;
+                panel.dataset.builtForKey = '';
                 return;
             }
             if (win.__disenoUltimoNodoPin === nodo) return;
@@ -2082,6 +2143,10 @@ JS = """
             // Antes de resolver el pin: un mock puede SER el pineado, y
             // Streamlit se lo lleva cuando re-renderiza su rama.
             reponerMocks();
+            // Barato por el guard `__disenoEnganchado`, y hay que reintentar
+            // en cada tick: Streamlit recrea el iframe de AgGrid en cada
+            // rerun y el listener se va con el documento viejo.
+            engancharIframes();
             // Antes de resolver: si el inspector fijo un nodo distinto, el
             // sub tiene que reflejar ESE nodo y no el anterior.
             sincronizarSubConElPin();
