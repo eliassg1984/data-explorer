@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-202 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+203 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (71)
+**CSS y estilos** (72)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -91,6 +91,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#188** — "Solo me deja acortar" no era la herramienta: el elemento SÍ crece, lo recorta un ancestro —…
 - **#201** — Sacarle el wrapper interno a un contenedor NO hace que el CSS viejo "se reuse solo":…
 - **#202** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
+- **#203** — Un calendario de DOS meses no se puede pedir: st.date_input dibuja uno solo. Construirlo con…
 
 **Layout y alturas** (19)
 
@@ -197,7 +198,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#192** — El Panel A de Productos (Compras › Proveedor) pasó de st.dataframe a AgGrid por el mismo…
 - **#193** — flex en un columnDef de AgGrid no alcanza: st_aggrid le clava width: 200 a toda columna sin…
 
-**Streamlit** (58)
+**Streamlit** (59)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -257,6 +258,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#187** — Meter None entre las opciones de un st.selectbox le agrega un botón ✕ "Clear value" que no…
 - **#190** — Compras › Producto perdió sus dos botones "✕ Quitar foco" (2026-08-24, a pedido) — mismo fix…
 - **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
+- **#203** — Un calendario de DOS meses no se puede pedir: st.date_input dibuja uno solo. Construirlo con…
 
 **Datos, R2 y DuckDB** (24)
 
@@ -8782,13 +8784,100 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      (`alturas.MINI`) que tenía la figura, medido después en 240px con la
      tarjeta cerrando justo en el borde del viewport.
 
+203. **Un calendario de DOS meses no se puede pedir: `st.date_input`
+     dibuja uno solo. Construirlo con `st.button` sí se puede, y lo
+     caro son tres cosas que no dan error.**
+
+     Pedido el 2026-08-24: en Compras › **Semanal** el selector de fecha baja de
+     la franja superior a la tarjeta, y muestra **dos meses** — desde/hasta a la
+     vista, como cualquier selector de rango de la web. Vive en
+     `graficos/compras/_calendario.py`.
+
+     **Por qué no alcanza con el widget nativo.** `st.date_input` en modo rango
+     dibuja **un solo mes**. No es un tema de CSS: medido en el bundle de
+     Streamlit 1.59.2 (`static/js/DateInput.CcrfZFeJ.js`), a BaseWeb le pasa
+     `value / minDate / maxDate / range / clearable` y **nunca `monthsShown`**,
+     que es el prop que controla cuántos meses renderiza. El segundo mes no
+     está oculto — no existe en el DOM.
+
+     **Se eligió botones y no una figura Plotly** porque el precedente ya estaba
+     corriendo: `graficos/ajuste/_heatmap.py` hace una grilla clickeable de
+     `st.button` en `st.columns` con CSS generado por key, sin tope de tamaño
+     (Familia × Área pasa de 100 celdas). 62 botones es menos que eso. Con
+     Plotly habría que fabricar a mano el hover, el foco de teclado y el cursor,
+     y la key tendría que cambiar en CADA clic para esquivar el toggle infinito
+     del `on_select`.
+
+     Las tres trampas, todas medidas, y ninguna tira una excepción:
+
+       1. **El estado del rango se pierde al entrar a la vista.** El
+          `st.date_input` de la franja deja de dibujarse, y Streamlit descarta
+          el estado de un widget que no se renderizó. Al PRIMER rerun después de
+          cruzar la frontera la clave desaparece y `asegurar_rango` la vuelve a
+          sembrar con el DEFAULT: el usuario abre la vista y su rango se
+          evaporó. El cull ocurre **una sola vez**; reescribir la clave con su
+          propio valor **desde el cuerpo del script** la convierte en clave
+          normal de `session_state` y a partir de ahí sobrevive sola (verificado
+          a tres reruns). Eso es `_pin_rango()`, y no es opcional.
+
+          Corolario para la próxima vista que se quede la fecha: hay **dos**
+          formas de hacerlo y `_VISTAS_CON_FECHA_PROPIA` no distingue. Documentos
+          SUNAT MUEVE la llamada (`franja_fecha.render()`, el widget sigue
+          existiendo) y no necesita pin; Semanal lo REEMPLAZA y sí. Ojo también
+          con `bounds_fecha_de_la_vista()`, que estaba escrita asumiendo que la
+          única vista con fecha propia era SUNAT: se le agregó
+          `_VISTAS_CON_BOUNDS_SUNAT` para que una vista nueva no herede los
+          límites del SIRE sin pedirlos.
+
+       2. **La regla por día tiene que ir scopeada BAJO el contenedor.** El
+          reset de la grilla (`.st-key-compras_sem_cal .stButton button`, dos
+          clases) le gana por especificidad a `.st-key-cal_d_YYYYMMDD button`
+          (una clase), y como las dos llevan `!important` venir después no
+          salva. Síntoma: la banda del rango no se pinta, TODAS las celdas
+          transparentes, cero mensajes.
+
+       3. **El nodo de la fuente es `stMarkdownContainer`, no `stMarkdown`.**
+          Apuntarle a `stMarkdown` no hace nada — ese div ya sale en DM Sans; el
+          cambio ocurre un nivel más adentro (medido recorriendo el DOM hacia
+          arriba desde una celda). Hace falta porque Streamlit no le pone
+          `font-family` propia a un `st.button` (los números heredan la del
+          proyecto) pero el markdown sí cae a su Source Sans: sin el override,
+          los encabezados Lu/Ma/Mi salen en otra tipografía que los números.
+          La causa de fondo es que `estilos/_00_base.py` declara la fuente
+          **sin `!important`**. Misma piedra que ya se había comido el heatmap.
+
+     Y dos medidas más que salieron de verlo corriendo, no de razonar:
+
+       · **La celda no puede tener ancho fijo en px.** Se arrancó con 42px (la
+         medida real de una celda de BaseWeb) y clipeaba: la tarjeta es la
+         columna izquierda de un `st.columns([1.7, 1])`, o sea ~230px por mes a
+         1280 de viewport contra los 7×42 = 294 que pide la fila — y con
+         `overflow-x: hidden` en la tarjeta, sábado y domingo se perdían sin
+         aviso. Un px fijo más chico sólo mueve el ancho de ventana en el que
+         vuelve a pasar. `flex: 1 1 0` + `min-width: 0` no clipea nunca. Pero
+         `width: 100%` en el botón **no alcanza solo**: se resuelve contra un
+         `.stButton` auto-width, o sea contra el ancho del TEXTO (medido: celdas
+         de 16px separadas por 17 de hueco). Hay que estirar también
+         `stElementContainer`, `stVerticalBlock` y `.stButton`.
+
+       · **El mes de referencia va a la DERECHA**, o sea se muestran
+         `[mes-1, mes]`. Con el parquet real, que termina el 9 de agosto,
+         anclarlo a la izquierda daba agosto + un septiembre entero
+         deshabilitado: la mitad del calendario muerta. Además es lo que hace
+         cualquier selector de rango — uno mira hacia atrás desde una fecha.
+
+     Detalle menor pero con costo real: el `width: 100%` del CSS vive dentro de
+     una cadena que cierra un operador `%`, así que va escapado (`100%%`) o
+     revienta en runtime. Lo agarró **`ruff` (F509)**, no un test — buen
+     recordatorio de por qué el `ruff check` va antes de cada push.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#203**.
+> próxima regla nueva es la **#204**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

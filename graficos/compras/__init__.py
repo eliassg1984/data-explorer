@@ -68,11 +68,23 @@ _COMPRAS_RAIL_CATEGORIAS = (
                    ("Tabla",            "Tabla",         ":material/table_rows:"))),
 )
 
-# Vistas de Compras que dibujan el selector de fecha DENTRO de su tarjeta en
-# vez de dejarlo en la franja superior. Hoy solo Documentos SUNAT: ahi la
-# fecha no es contexto global sino EL filtro de la tabla (es el rango que se
-# le consulta al SIRE), asi que vivia lejos de lo que filtra.
-_VISTAS_CON_FECHA_PROPIA = {"Documentos SUNAT"}
+# Vistas de Compras que se quedan el selector de fecha DENTRO de su tarjeta
+# en vez de dejarlo en la franja superior. Las dos por el mismo motivo —
+# ahi la fecha no es contexto global sino EL tema de la vista— pero lo
+# resuelven distinto, y la diferencia importa:
+#
+#   · Documentos SUNAT dibuja el MISMO pill, movido: llama a
+#     `franja_fecha.render()`. El `st.date_input` sigue existiendo.
+#   · Semanal (2026-08-24) lo REEMPLAZA por un calendario de dos meses
+#     (`_calendario.py`). Ahi el `date_input` deja de dibujarse, y por eso
+#     ese modulo tiene que pinear la clave del rango — ver su docstring.
+_VISTAS_CON_FECHA_PROPIA = {"Documentos SUNAT", "Semanal"}
+
+# Subconjunto del anterior: las que ademas necesitan OTROS topes de
+# calendario que los del parquet de Compras. Se separa a proposito — atar
+# los bounds a `_VISTAS_CON_FECHA_PROPIA` haria que cualquier vista nueva
+# que se quede la fecha heredara los limites del SIRE sin pedirlos.
+_VISTAS_CON_BOUNDS_SUNAT = {"Documentos SUNAT"}
 
 
 def vista_quiere_fecha_propia():
@@ -94,7 +106,8 @@ def bounds_fecha_de_la_vista():
     Gemela de `vista_quiere_fecha_propia` y con el mismo cliente: la
     consulta `app.py` antes de sembrar/recortar el rango. Devuelve None
     para el resto de las vistas — cada una se queda con los topes de su
-    propio dato.
+    propio dato, incluida la Semanal, que filtra el parquet de Compras
+    como todas las demas y por lo tanto NO quiere los topes del SIRE.
 
     Documentos SUNAT es la excepción porque no filtra el parquet de
     Compras: le pregunta al SIRE. Y los dos extremos salen de sitios
@@ -110,7 +123,8 @@ def bounds_fecha_de_la_vista():
         pedir en vivo los días que el parquet todavía no trajo. Ver
         `arquitectura.md` regla #197.
     """
-    if not vista_quiere_fecha_propia():
+    if vista_activa(_COMPRAS_RAIL_CATEGORIAS,
+                    "compras_graf_tipo") not in _VISTAS_CON_BOUNDS_SUNAT:
         return None
     import datetime
     import zoneinfo
@@ -234,8 +248,9 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     if graf not in opciones:
         graf = opciones[0]
 
-    # ── Quien dibuja el pill de fecha: la franja o el drill ──────────────
-    # Hay UNA vista que se lo queda (Documentos SUNAT). El problema es de
+    # ── Quien dibuja el selector de fecha: la franja o el drill ─────────
+    # Hay DOS vistas que se lo quedan (Documentos SUNAT y Semanal, ver
+    # `_VISTAS_CON_FECHA_PROPIA`). El problema es de
     # ORDEN: la franja de `app.py` se dibuja mucho antes que este rail, y
     # ademas `_render_contenido` es un `@st.fragment`, asi que un clic aca
     # NO re-ejecuta `app.py`. En ese rerun parcial la franja sigue con la
@@ -329,6 +344,18 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             if graf == "Semanal" and col_prod and col_fecha:
                 # Compra por SEMANA: barras apiladas (valor) por producto
                 # (top 8 + Otros); el hover muestra valor y cantidad.
+                #
+                # El selector de fecha vive ACA arriba, no en la franja
+                # (2026-08-24, a pedido): en esta vista el eje de tiempo es
+                # el tema del grafico, no contexto global. Y no es el pill
+                # movido como en Documentos SUNAT sino un calendario de DOS
+                # meses — `st.date_input` solo sabe dibujar uno. `app.py`
+                # deja de dibujar la fecha cuando esta vista esta activa
+                # (`_VISTAS_CON_FECHA_PROPIA`); el pin de la clave del
+                # rango lo hace `_calendario.render()`, y sin el se pierde
+                # el rango en silencio. Ver el docstring de ese modulo.
+                from graficos.compras._calendario import render as _cal_render
+                _cal_render()
                 _dias_ini = {"Lunes": 0, "Sábado": 5, "Domingo": 6}
                 _cd, _ = st.columns([1, 2.2])
                 with _cd:
