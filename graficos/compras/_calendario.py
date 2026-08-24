@@ -63,6 +63,8 @@ from tema import (ACENTO, ACENTO_FUERTE, ACENTO_TEXTO, GRIS_TEXTO_SUAVE,
 # Claves de esta vista. El RANGO no esta aca: es de `estado_rango`.
 _K_PEND = "compras_sem_cal_pend"    # 1er clic a la espera del 2do
 _K_ANCLA = "compras_sem_cal_ancla"  # (anio, mes) del mes IZQUIERDO
+_K_PICK = "compras_sem_cal_pick"    # el selector de mes/ano esta abierto
+_K_VISTO = "compras_sem_cal_visto"  # ultimo rango que vio el calendario
 
 _MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
           "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
@@ -75,6 +77,23 @@ def _mes_siguiente(anio, mes):
 
 def _mes_anterior(anio, mes):
     return (anio - 1, 12) if mes == 1 else (anio, mes - 1)
+
+
+def _meses_disponibles(fmin, fmax):
+    """Lista de `(anio, mes)` entre los topes del dato, del mas viejo al mas
+    nuevo. Es lo que ofrece el selector del titulo."""
+    if not (fmin and fmax):
+        hoy = datetime.date.today()
+        return [(hoy.year, hoy.month)]
+    salida, anio, mes = [], fmin.year, fmin.month
+    while (anio, mes) <= (fmax.year, fmax.month):
+        salida.append((anio, mes))
+        anio, mes = _mes_siguiente(anio, mes)
+    return salida
+
+
+def _etiqueta_mes(t):
+    return "%s %d" % (_MESES[t[1] - 1], t[0])
 
 
 def _pin_rango(k_rango):
@@ -104,6 +123,19 @@ def _clic_dia(f, k_rango, reporte, usa_carga_rango):
     ini, fin = (pend, f) if pend <= f else (f, pend)
     st.session_state[_K_PEND] = None
     aplicar_atajo(k_rango, (ini, fin), reporte, usa_carga_rango)
+
+
+def _abrir_selector():
+    st.session_state[_K_PICK] = True
+
+
+def _elegir_mes(anio, mes):
+    st.session_state[_K_ANCLA] = (anio, mes)
+    st.session_state[_K_PICK] = False
+
+
+def _cerrar_selector():
+    st.session_state[_K_PICK] = False
 
 
 def _mover(paso):
@@ -192,7 +224,7 @@ def _css(dias_estado):
         'padding: 0 !important; border: 0 !important; '
         'border-radius: 0 !important; background: transparent !important; '
         'box-shadow: none !important; color: %s !important; '
-        'font-size: 11.5px !important; font-weight: 500 !important; '
+        'font-size: 10.5px !important; font-weight: 500 !important; '
         'font-variant-numeric: tabular-nums !important; }' % TEXTO_PRINCIPAL,
         '.st-key-compras_sem_cal .stButton button:hover '
         '{ background: %s !important; border-radius: 8px !important; }'
@@ -200,12 +232,51 @@ def _css(dias_estado):
         # TRAMPA 2, arriba.
         '.st-key-compras_sem_cal [data-testid="stMarkdownContainer"] '
         "{ font-family: 'DM Sans', 'Inter', sans-serif !important; }",
+        # El TITULO es un boton, pero tiene que leerse como un titulo:
+        # sin marco, sin fondo, centrado. El hover si lo insinua.
+        '[class*="st-key-cal_tit_"] button '
+        '{ background: transparent !important; border: 0 !important; '
+        'box-shadow: none !important; height: 18px !important; '
+        'min-height: 18px !important; padding: 0 !important; '
+        'font-size: 11px !important; font-weight: 700 !important; '
+        'color: %s !important; }' % TEXTO_PRINCIPAL,
+        '[class*="st-key-cal_tit_"] button:hover '
+        '{ color: %s !important; text-decoration: underline !important; }'
+        % ACENTO,
+        # Selector de mes/ano: filas compactas de 12 meses por ano.
+        '.st-key-cal_pick [data-testid="stHorizontalBlock"] '
+        '{ gap: 2px !important; flex-wrap: nowrap !important; }',
+        '.st-key-cal_pick [data-testid="stColumn"] '
+        '{ min-width: 0 !important; }',
+        '.st-key-cal_pick [data-testid="stElementContainer"], '
+        '.st-key-cal_pick [data-testid="stVerticalBlock"], '
+        '.st-key-cal_pick .stButton '
+        '{ width: 100% !important; margin: 0 !important; }',
+        '.st-key-cal_pick [data-testid="stMarkdownContainer"] '
+        '{ margin-bottom: 0 !important; }',
+        '[class*="st-key-cal_pick_2"] button '
+        '{ width: 100%% !important; height: 24px !important; '
+        'min-height: 24px !important; padding: 0 !important; '
+        'border: 0 !important; border-radius: 5px !important; '
+        'background: transparent !important; box-shadow: none !important; '
+        'font-size: 9.5px !important; font-weight: 600 !important; '
+        'color: %s !important; }' % TEXTO_PRINCIPAL,
+        '[class*="st-key-cal_pick_2"] button:hover:not([disabled]) '
+        '{ background: %s !important; }' % LAVANDA_FONDO,
+        '[class*="st-key-cal_pick_2"] button[disabled] '
+        '{ color: %s !important; opacity: .45 !important; }' % GRIS_TEXTO_SUAVE,
+        '.st-key-cal_pick_volver button '
+        '{ height: 26px !important; min-height: 26px !important; '
+        'margin-top: 6px !important; font-size: 10.5px !important; '
+        'border: 1px solid %s !important; border-radius: 6px !important; '
+        'color: %s !important; background: transparent !important; }'
+        % (LAVANDA_BORDE, ACENTO_TEXTO),
         # La navegacion son botones tambien, pero fuera de `cal_mes_`: se
         # las devuelve a un tamano normal.
         '.st-key-cal_nav_ant button, .st-key-cal_nav_sig button '
         '{ width: 24px !important; height: 22px !important; '
         'min-height: 22px !important; color: %s !important; '
-        'font-size: 14px !important; border-radius: 6px !important; }'
+        'font-size: 13px !important; border-radius: 6px !important; }'
         % ACENTO,
         # El panel FLOTA, asi que su ancho no lo limita la columna de la
         # tarjeta (~230px por mes, que fue lo que obligo a achicar la
@@ -217,7 +288,7 @@ def _css(dias_estado):
         # un marco vacio (medido: 23 arriba + 36 de navegacion + 16 de gap
         # = 75px antes del primer dia).
         '[data-testid="stPopoverBody"]:has(.st-key-compras_sem_cal) '
-        '{ min-width: 470px !important; padding: 8px !important; }',
+        '{ min-width: 430px !important; padding: 8px !important; }',
         # Gap del contenedor: entre la fila de navegacion y los meses
         # alcanza con un respiro, no con los 16px de un bloque normal.
         '.st-key-compras_sem_cal { gap: 2px !important; }',
@@ -285,18 +356,30 @@ def _estado_de_los_dias(anio, mes, ini, fin, pend, fmin, fmax):
 
 def _pintar_mes(anio, mes, lado, fmin, fmax, k_rango, reporte, usa_carga_rango):
     with st.container(key="cal_mes_%s" % lado):
-        st.markdown(
-            "<div style='height:18px;display:flex;align-items:center;"
-            "justify-content:center;font-size:12px;font-weight:700;"
-            "color:%s;'>%s %d</div>" % (TEXTO_PRINCIPAL, _MESES[mes - 1], anio),
-            unsafe_allow_html=True,
-        )
+        # El titulo ES el boton que abre el selector de mes/ano (pedido
+        # 2026-08-24: "pense que se podia seleccionar mes y ano"). Con
+        # solo las flechas, ir a enero del ano pasado son doce clics.
+        #
+        # POR QUE UN BOTON Y NO UN `st.selectbox`: se probo primero con
+        # selectbox y NO FUNCIONA dentro de un `st.popover`. El
+        # desplegable es virtualizado y mide su alto al montarse; adentro
+        # del popover mide 0, renderiza CERO filas y nunca vuelve a
+        # medir. Medido: el listbox abre con el espaciador correcto
+        # (1760px = 40 opciones) y el html en 109 caracteres, o sea
+        # ninguna opcion; al forzar un `resize` aparecen 12 de golpe. Un
+        # `st.button` no tiene ese problema — es lo mismo con lo que esta
+        # hecha toda la grilla.
+        st.button(_etiqueta_mes((anio, mes)),
+                  key="cal_tit_%s" % lado,
+                  on_click=_abrir_selector,
+                  use_container_width=True,
+                  help="Elegir mes y año")
         cab = st.columns(7)
         for i, nombre in enumerate(_DOW):
             with cab[i]:
                 st.markdown(
                     "<div style='height:16px;display:flex;align-items:center;"
-                    "justify-content:center;font-size:10px;font-weight:600;"
+                    "justify-content:center;font-size:9.5px;font-weight:600;"
                     "color:%s;'>%s</div>" % (GRIS_TEXTO_SUAVE, nombre),
                     unsafe_allow_html=True,
                 )
@@ -359,13 +442,25 @@ def render():
         st.session_state[_K_ANCLA] = _mes_anterior(ref.year, ref.month)
     anio_a, mes_a = st.session_state[_K_ANCLA]
     anio_b, mes_b = _mes_siguiente(anio_a, mes_a)
-    # Re-sembrar si la referencia se fue a otro lado desde AFUERA (un atajo
-    # de otra vista, un deep-link): sin esto el calendario se queda mirando
-    # dos meses que ya no tienen nada seleccionado.
-    if (ref.year, ref.month) not in ((anio_a, mes_a), (anio_b, mes_b)):
+
+    # Re-sembrar el ancla SOLO si el rango cambio desde AFUERA (un atajo de
+    # otra vista, un deep-link) y ademas quedo fuera de los dos meses a la
+    # vista. Las dos condiciones importan:
+    #
+    #   · sin comparar contra el rango ANTERIOR, la guarda corria en cada
+    #     render y pisaba cualquier navegacion deliberada — elegir enero
+    #     2025 en el selector volvia solo a julio 2026, y las flechas no
+    #     podian alejarse mas de un mes del rango (medido, 2026-08-24);
+    #   · sin la segunda, elegir un rango DENTRO del calendario saltaria de
+    #     mes al soltar el 2do clic.
+    _visto = st.session_state.get(_K_VISTO)
+    _actual = (ini, fin)
+    if (_visto is not None and _visto != _actual
+            and (ref.year, ref.month) not in ((anio_a, mes_a), (anio_b, mes_b))):
         st.session_state[_K_ANCLA] = _mes_anterior(ref.year, ref.month)
         anio_a, mes_a = st.session_state[_K_ANCLA]
         anio_b, mes_b = _mes_siguiente(anio_a, mes_a)
+    st.session_state[_K_VISTO] = _actual
 
     if pend is not None:
         _label = "Elegí la fecha de finalización"
@@ -424,6 +519,10 @@ def _panel(anio_a, mes_a, anio_b, mes_b, ini, fin, pend, fmin, fmax,
                 st.button("›", key="cal_sig", on_click=_mover, args=(1,),
                           help="Mes siguiente")
 
+        if st.session_state.get(_K_PICK):
+            _selector_mes(anio_a, mes_a, fmin, fmax)
+            return
+
         col_a, col_b = st.columns(2)
         with col_a:
             _pintar_mes(anio_a, mes_a, "a", fmin, fmax, k_rango, reporte,
@@ -431,3 +530,38 @@ def _panel(anio_a, mes_a, anio_b, mes_b, ini, fin, pend, fmin, fmax,
         with col_b:
             _pintar_mes(anio_b, mes_b, "b", fmin, fmax, k_rango, reporte,
                         usa_carga_rango)
+
+
+def _selector_mes(anio_ancla, mes_ancla, fmin, fmax):
+    """Elegir mes y ano de un golpe: una fila de 12 meses por cada ano con
+    datos. Reemplaza a las dos grillas mientras esta abierto.
+
+    Todo con `st.button` a proposito — ver el comentario del titulo en
+    `_pintar_mes`: un `st.selectbox` dentro de un `st.popover` abre un
+    desplegable VACIO.
+    """
+    meses = _meses_disponibles(fmin, fmax)
+    anios = sorted({a for a, _ in meses})
+    disponibles = set(meses)
+
+    with st.container(key="cal_pick"):
+        for anio in anios:
+            cols = st.columns([1.4] + [1] * 12)
+            with cols[0]:
+                st.markdown(
+                    "<div style='height:24px;display:flex;align-items:center;"
+                    "justify-content:flex-end;padding-right:6px;font-size:11px;"
+                    "font-weight:700;color:%s;'>%d</div>"
+                    % (TEXTO_PRINCIPAL, anio),
+                    unsafe_allow_html=True,
+                )
+            for m in range(1, 13):
+                with cols[m]:
+                    st.button(
+                        _MESES[m - 1][:3],
+                        key="cal_pick_%d_%02d" % (anio, m),
+                        disabled=(anio, m) not in disponibles,
+                        on_click=_elegir_mes, args=(anio, m),
+                    )
+        st.button("Volver al calendario", key="cal_pick_volver",
+                  on_click=_cerrar_selector, use_container_width=True)

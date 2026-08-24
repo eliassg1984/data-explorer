@@ -8902,6 +8902,32 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
          vio en una captura del usuario. Para esto están `rayos_x()` y
          `auditarGraficos()`, y la comprobación barata es restar
          `bottom` del de arriba menos `y` del de abajo.
+       · **Un `st.selectbox` DENTRO de un `st.popover` abre una lista
+         VACÍA.** Se intentó primero así el selector de mes/año y no
+         funciona: el desplegable es virtualizado y mide su alto al
+         montarse; adentro del popover mide 0, renderiza CERO filas y no
+         vuelve a medir. Medido: el listbox abre con el espaciador
+         correcto (1760px = 40 opciones) pero su HTML son 109 caracteres,
+         o sea ninguna opción; al forzar un `resize` aparecen 12 de golpe.
+         La salida es `st.button`, que es con lo que ya está hecha la
+         grilla. Revisado el resto del repo: no hay otro selectbox
+         anidado en un popover, pero conviene mirarlo antes de meter uno.
+
+         De paso: en Streamlit 1.59.2 el `st.selectbox` **ya no es
+         BaseWeb**, es react-aria (`data-rac`, `div[role="group"]` de
+         marco y un `input[role="combobox"]` que lleva el valor en su
+         atributo `value`, por eso `innerText` da vacío). Cualquier CSS
+         que le apunte a `[data-baseweb="select"]` no matchea nada.
+
+       · **Una guarda que corre en CADA render le gana al usuario.** El
+         ancla del calendario se "re-sembraba" cuando el inicio del rango
+         no estaba en los dos meses a la vista — pensado para un rango
+         cambiado desde afuera. Efecto real: elegir enero 2025 volvía solo
+         a julio 2026, y las flechas no podían alejarse más de un mes del
+         rango. La corrección es comparar contra el rango ANTERIOR
+         (`_K_VISTO`): re-sembrar sólo si cambió **y** quedó fuera de
+         vista. Regla general: una guarda que corrige estado tiene que
+         mirar si algo cambió, no correr incondicionalmente.
        · **El padding por defecto del popover son 23px** y hay que apretarlo
          a mano. En un panel que es casi todo grilla se lee como un marco
          vacío: medido, 23 arriba + 36 de navegación + 16 de gap = 75px
