@@ -150,6 +150,15 @@ JS = """
             for (var i = 0; i < cand.length && out.length < 12; i++) {
                 var n = cand[i];
                 if (n.ownerSVGElement || (n.tagName || '').toLowerCase() === 'svg') continue;
+                // Internos de Plotly (.js-plotly-plot, .plot-container,
+                // .svg-container, .gl-container, .user-select-none...):
+                // son de la libreria, no del autor, y `esClaseDeAutor` no
+                // los agarra porque no llevan prefijo st-/ag-/css-. Sin
+                // este corte, el arbol de un grafico abre con seis hojas
+                // azules que nadie va a estilar nunca y empujan a las
+                // utiles fuera del tope de 12. El asa del autor para un
+                // grafico es su contenedor con key, no el DOM de Plotly.
+                if (n.closest && n.closest('.js-plotly-plot')) continue;
                 var cur = n.parentElement, propio = true;
                 while (cur && cur !== base) {
                     if (/st-key-[A-Za-z0-9_]+/.test((cur.className || '').toString())) { propio = false; break; }
@@ -275,6 +284,65 @@ JS = """
             win.__disenoState.sub = { key: r.key, clase: clase };
             panel.dataset.builtForKey = '';   // fuerza reconstruir con el sub
             sync();
+        }
+
+        // Que sub-pin le corresponde al nodo que el usuario senalo de verdad.
+        // Devuelve null si apunto al contenedor pelado (ahi el pin es la
+        // tarjeta, como siempre).
+        function subDesdeNodo(key, nodo) {
+            var base = doc.querySelector('.st-key-' + key);
+            if (!base || !nodo || nodo === base) return null;
+            var tipos = ['svgtext', 'agtext'], t, i;
+            for (t = 0; t < tipos.length; t++) {
+                var ns = nodosDeTexto(key, tipos[t]);
+                for (i = 0; i < ns.length; i++) {
+                    if (ns[i] === nodo || ns[i].contains(nodo)) {
+                        return { key: key, tipo: tipos[t], idx: i,
+                                 txt: (ns[i].textContent || '').trim() };
+                    }
+                }
+            }
+            // Sin coincidencia de texto: subir hasta el primer hijo con
+            // clase de autor (el camino viejo, el de `.cp-rank-tit`).
+            var cur = nodo;
+            while (cur && cur !== base) {
+                var cls = cur.classList || [];
+                for (i = 0; i < cls.length; i++) {
+                    if (esClaseDeAutor(cls[i])) return { key: key, clase: cls[i] };
+                }
+                cur = cur.parentElement;
+            }
+            return null;
+        }
+
+        // El sub-pin se RECALCULA cada vez que el inspector fija un nodo
+        // distinto. Antes solo se soltaba al cambiar de KEY
+        // (`sub.key !== key` en elementoPineado), asi que fijar otra cosa
+        // DENTRO de la misma tarjeta dejaba vivo el sub anterior.
+        // Reportado 2026-08-23 con captura: con «Aug 2026» (un texto de
+        // Plotly) ya elegido, hacer clic derecho sobre el titulo "Ranking
+        // de productos" seguia mostrando el texto de Plotly — misma key,
+        // sub viejo. Se noto recien ahora porque las hojas de texto
+        // (regla #182) multiplicaron por diez los subs posibles por
+        // tarjeta. Ver arquitectura.md #184.
+        function sincronizarSubConElPin() {
+            var u = win.__inspectorUltimo;
+            // OJO: `u.elemento` ya es el CONTENEDOR con key que resolvio el
+            // inspector — usarlo aca daria siempre la tarjeta y nunca un
+            // sub. El nodo que el usuario senalo de verdad es
+            // `elementoOriginal`, y es el unico que sabe si apunto al
+            // titulo o a un tick del grafico.
+            var nodo = u ? (u.elementoOriginal || u.elemento) : null;
+            if (!win.__inspectorPinned || !u || !nodo || !u.key) {
+                // Soltar el pin habilita volver a fijar EL MISMO nodo y que
+                // se recalcule igual (si no, el guard de abajo lo saltea).
+                win.__disenoUltimoNodoPin = null;
+                return;
+            }
+            if (win.__disenoUltimoNodoPin === nodo) return;
+            win.__disenoUltimoNodoPin = nodo;
+            win.__disenoState.sub = subDesdeNodo(u.key, nodo);
+            panel.dataset.builtForKey = '';   // reconstruir con el sub nuevo
         }
 
         function bajarASubTexto(hoja) {
@@ -2014,6 +2082,9 @@ JS = """
             // Antes de resolver el pin: un mock puede SER el pineado, y
             // Streamlit se lo lleva cuando re-renderiza su rama.
             reponerMocks();
+            // Antes de resolver: si el inspector fijo un nodo distinto, el
+            // sub tiene que reflejar ESE nodo y no el anterior.
+            sincronizarSubConElPin();
             var res = elementoPineado();
 
             // Panel: colapsado se ve igual (una pill chica) haya o no algo

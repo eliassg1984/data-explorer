@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-183 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+184 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (67)
 
@@ -108,7 +108,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#177** — "COMPRAS: PÁGINA BLANCA, TARJETAS TENUES" (regla #16 y media docena de "vueltas" entre…
 - **#178** — Mover un control de "flotando sobre el marco compartido" a "adentro de una tarjeta" no es un…
 
-**Plotly y figuras** (41)
+**Plotly y figuras** (42)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -151,6 +151,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#165** — Al agregar una barra de modos quedaron DOS controles del mismo estado, uno encima del otro —…
 - **#175** — Las manijas de resize del modo diseño (regla #46) redimensionan CUALQUIER elemento salvo un…
 - **#182** — El modo diseño ya llega a los textos de Plotly y de AgGrid — y para esos dos el "Copiar CSS"…
+- **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 
 **AgGrid y tablas** (26)
 
@@ -285,7 +286,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (15)
+**Herramientas de desarrollo** (16)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -302,6 +303,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#173** — El overlay del modo diseño tiene pointer-events:none a propósito (para poder ver/medir lo de…
 - **#181** — Un bloqueo de interacción SIN acuse de recibo es indistinguible de una app rota — el que…
 - **#183** — opacity: 0 NO deja de recibir clics, y pointer-events: none en el padre no alcanza si un hijo…
+- **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 
 **Decisiones de diseño y UX** (33)
 
@@ -8076,13 +8078,25 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      **La trampa para la próxima vez:** una herramienta de desarrollo que se monta en producción "pero oculta" no es gratis. Acá el costo lo pagó el usuario final durante días, en un reporte que no tenía nada que ver con el inspector, y el reporte de bug llegó como "el rail está roto". Ocultar con `opacity` es lo primero que uno escribe y lo último en lo que uno sospecha.
 
+184. **El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa DENTRO de la misma tarjeta seguía mostrando la selección anterior.** Reportado 2026-08-23 con captura: "con el cursor seleccioné el texto «Ranking de productos» de la tabla, pero en la herramienta se seleccionó el texto del gráfico «Aug 2026»". El árbol del panel listaba correctamente `.cp-prod-rank-tit`; lo que estaba mal era cuál figuraba como ACTIVO.
+
+     La causa estaba en `elementoPineado()`: `if (sub && sub.key !== key) { sub = null; }`. Soltaba el sub solo si el pin saltaba a OTRO widget. Con un sub ya elegido, volver a fijar algo dentro de la MISMA tarjeta no lo tocaba — y como el gráfico de precio (`compras_g_prod_precio_Mes`) vive anidado dentro de `compras_prod_card_ranking`, el texto de Plotly y el título del ranking comparten contenedor. El bug era latente desde la regla #157; salió a la luz recién ahora porque las hojas de texto (regla #182) multiplicaron por diez los subs posibles por tarjeta, y con uno solo (`.cp-rank-tit`) casi nunca se notaba.
+
+     Fix: `sincronizarSubConElPin()`, llamada al principio de `sync()`, que RECALCULA el sub cada vez que el inspector fija un nodo distinto, con `subDesdeNodo(key, nodo)`: primero busca coincidencia exacta contra las listas de texto (Plotly/AgGrid), si no sube hasta el primer ancestro con clase de autor, y si no devuelve `null` (el pin queda en la tarjeta, como siempre). Se guarda el último nodo procesado para no recalcular en cada uno de los ticks de 150ms — y ese guard es justo lo que hace que clickear una hoja del árbol siga mandando: el nodo pineado no cambió, así que `sincronizarSubConElPin` sale temprano y no pisa lo que el usuario eligió a mano.
+
+     **La trampa que costó un intento:** `win.__inspectorUltimo.elemento` NO es el nodo que el usuario señaló — es `ctxCont ? ctxCont.el : el`, o sea el contenedor con key que el inspector ya resolvió. Usarlo daba siempre la tarjeta y jamás un sub. El nodo real es **`elementoOriginal`**, el único que distingue si se apuntó al título o a un tick del eje.
+
+     De paso, y en el mismo camino: `hijosConClasePropia()` ahora saltea todo lo que esté dentro de un `.js-plotly-plot`. Los internos de la librería (`.plot-container`, `.svg-container`, `.gl-container`, `.user-select-none`…) no llevan prefijo `st-`/`ag-`/`css-`, así que `esClaseDeAutor()` los daba por buenos y el árbol de cualquier gráfico abría con seis hojas azules que nadie va a estilar nunca — encima empujando a las útiles fuera del tope de 12. El asa del autor para un gráfico es su contenedor con key, no el DOM que Plotly arma adentro.
+
+     Verificado el ciclo completo en vivo: fijar «Aug 2026» → señalar el título da `.cp-prod-rank-tit` con el campo de texto en "Ranking de productos"; volver al texto de Plotly da `svgtext «Aug 2026»`; y volver otra vez al título vuelve a `.cp-prod-rank-tit`. Ida y vuelta, que es lo que fallaba.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#184**.
+> próxima regla nueva es la **#185**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
