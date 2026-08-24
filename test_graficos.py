@@ -398,6 +398,39 @@ def _pruebas_puras():
           ((_cruce["documento"] == "E001-1")
            & (_cruce["proveedor_sistema"] == "GIANO MARINE SAC")
            & (_cruce["estado"] == "Solo sistema")).any(), True)
+
+    # Numero de documento DEL SISTEMA (columna "Documento sistema", a
+    # pedido 2026-08-24). Es el NUM_DOCUMENTO crudo del parquet, no la
+    # llave normalizada: la llave ya se muestra en "Documento SUNAT" y
+    # seria una copia byte a byte. Ver `arquitectura.md` regla #143.
+    check("_parquet_agrupado arrastra el NUM_DOCUMENTO crudo",
+          _g.loc[_g["documento"] == "E001-1", "num_doc_pq"].iloc[0],
+          "F0E001000000001")
+    _sire2 = pd.DataFrame({
+        "documento": ["E001-1", "E001-9"],
+        "proveedor": ["GIANO MARINE SAC", "SIN PAR"],
+        "ruc_proveedor": ["20111111111", "20999999999"],
+        "fecha_emision": pd.to_datetime(["2026-07-06"] * 2),
+        "base_imponible": [100.0, 400.0], "no_gravado": [0.0, 0.0],
+        "total": [118.0, 472.0], "situacion": ["Registrado"] * 2,
+    })
+    _cruce2 = _ds.cruzar_con_parquet(_sire2, _g)
+    check("cruce: la fila emparejada trae el numero crudo del sistema",
+          _cruce2.loc[(_cruce2["documento"] == "E001-1")
+                      & (_cruce2["estado"] != "Solo sistema"),
+                      "documento_sistema"].iloc[0], "F0E001000000001")
+    check("cruce: un 'Solo SUNAT' no inventa numero de sistema",
+          _cruce2.loc[_cruce2["estado"] == "Solo SUNAT",
+                      "documento_sistema"].iloc[0], "")
+    check("cruce: un 'Solo sistema' SI lo trae",
+          _cruce2.loc[_cruce2["estado"] == "Solo sistema",
+                      "documento_sistema"].iloc[0], "F0E001000000002")
+    # `cruzar_con_parquet` es publica y hay llamadores (estos tests) que
+    # arman el df del parquet a mano, sin la columna nueva: no puede
+    # reventar por eso.
+    check("cruce: sin columna num_doc_pq no revienta, queda vacio",
+          _cruce.loc[_cruce["estado"] == "Coincide",
+                     "documento_sistema"].iloc[0], "")
     check("cruce: el candidato descartado por nombre tampoco se pierde",
           ((_cruce["documento"] == "E001-2")
            & (_cruce["proveedor_sistema"] == "OTRO TOTAL")

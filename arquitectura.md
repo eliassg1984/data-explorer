@@ -6502,6 +6502,66 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      (regla #140/#141), esta vez escondido por no estar en el resumen
      visible.
 
+     **Addendum 5 (2026-08-24, a pedido): "Documento sistema" y
+     "Proveedor SUNAT" — las dos columnas que se habían descartado, y por
+     qué esta vez sí.** El pedido fue literal: "una columna con el número
+     del documento que figura en sistema, así como el nombre del
+     proveedor que figura en SUNAT". Las dos tenían un comentario EN EL
+     CÓDIGO explicando por qué no estaban, así que valía releerlo antes
+     de tocar nada — y el resultado fue distinto para cada una.
+
+     - **"Documento sistema" con la llave normalizada seguiría siendo
+       inútil**, tal como decía el comentario: `cruzar_con_parquet`
+       empareja por `documento` EXACTO, así que esa columna sería una
+       copia byte a byte de la de al lado en toda fila emparejada. Lo que
+       sí falta —y no se ve en ningún otro lado de la app— es el
+       `NUM_DOCUMENTO` **crudo** del parquet: `F0FA28002312219` contra
+       `FA28-2312219`. Es lo que hay que tipear para ir a buscar el
+       documento al ERP, y el prefijo de dos letras codifica el TIPO, que
+       el cruce no compara. Eso es lo que muestra la columna.
+     - **"Proveedor SUNAT" vuelve tal cual**. Se había sacado con el
+       argumento de que "con los dos RUC al lado, el nombre del SIRE es
+       la tercera forma de decir lo mismo". El argumento es cierto y no
+       alcanza: nadie reconoce un proveedor por su RUC de memoria.
+
+     Lo que el dato real mostró, y que es el verdadero valor del cambio:
+     los 12 **"Solo sistema"** de la ventana medida (1-10 agosto 2026) se
+     veían como `0000-283`, `0000-284`… — plausibles y desconcertantes,
+     porque SUNAT no reporta nada parecido. Con el número crudo al lado
+     se explican solos: son `Z00000000000283`, prefijo `Z0` y serie
+     `0000`, documentos INTERNOS de ABRASA a sí misma. Nunca iban a estar
+     en el SIRE. La llave normalizada les inventaba una forma de
+     comprobante electrónico que no tienen.
+
+     **Tres cosas medidas antes de escribir el código:**
+
+     1. **`num_doc_pq` se agrega con `"first"` y es seguro:** dentro de un
+        grupo `(llave, RUC, proveedor)` hay UN solo `NUM_DOCUMENTO` crudo
+        — 693 grupos desde junio 2026, cero con más de uno. Si no fuera
+        así (una factura y una boleta con la misma serie-número del mismo
+        proveedor) el cruce ya las estaría fusionando en una sola fila
+        desde antes, y esto lo habría destapado.
+     2. **`cruzar_con_parquet` es pública y hay llamadores que arman el df
+        del parquet a mano** (los propios tests, sin la columna nueva).
+        Por eso lee con `.get("num_doc_pq")`, no `[...]`, y hay un test
+        que fija justamente ese caso — un `KeyError` acá rompería la
+        vista entera, no una columna.
+     3. **Los nombres difieren en 39 de 77 emparejadas, y casi siempre por
+        nada.** `COMPANIA` (SUNAT) contra `COMPAÑIA` (sistema), `VIBEJ
+        COLIBRI SAC` contra `VIBEJ COLIBRI SOCIEDAD ANONIMA CERRADA`. Por
+        eso la columna NO se pinta en ámbar como sí se pinta "Fecha
+        sistema" cuando difiere (ver el `cellStyle` de esa columna):
+        marcar la mitad de la tabla como "revisar" enseña a ignorar el
+        color, y el día que haya una diferencia de razón social de verdad
+        no la va a ver nadie.
+
+     La columna nueva tampoco se pinea a la izquierda aunque sea un
+     identificador: con `Fecha SUNAT` + `Fecha sistema` + `Documento
+     SUNAT` ya hay 330px fijos, y un cuarto pin deja una laptop sin ancho
+     para los cuatro montos, que son el punto de la vista. AG Grid dibuja
+     las no pineadas justo después de las pineadas, así que igual queda
+     pegada a su pareja.
+
 
 160. **El registro del SIRE pasó de consulta EN VIVO a parquet en R2, y
      eso cambia lo que se le puede pedir a la vista** (2026-08-20;

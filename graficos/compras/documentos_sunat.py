@@ -195,7 +195,7 @@ def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin):
     corresponde — nunca la agregación.
     """
     columnas = ["documento", "ruc_pq", "proveedor_pq", "base_pq", "total_pq",
-                "fecha_pq"]
+                "fecha_pq", "num_doc_pq"]
     if (not col_fecha or col_fecha not in d.columns or fecha_ini is None
             or fecha_fin is None or "NUM_DOCUMENTO" not in d.columns):
         return pd.DataFrame(columns=columnas)
@@ -226,7 +226,14 @@ def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin):
     g = (dd.groupby(["documento", "ruc_pq", "NOMBRE_PROVEEDOR"], as_index=False)
            .agg(base_pq=(col_base, agg_base),
                 total_pq=(col_total, agg_total),
-                fecha_pq=("_fecha", "first"))
+                fecha_pq=("_fecha", "first"),
+                # El numero CRUDO del sistema (`F0FA28002305799`), que es
+                # lo que se ve en el ERP -- `documento` ya es la llave
+                # normalizada. "first" es seguro: dentro de un grupo
+                # (llave, RUC, proveedor) hay UN solo valor crudo, medido
+                # sobre el parquet real (693 grupos desde junio 2026, cero
+                # con mas de uno). Ver `arquitectura.md` regla #143.
+                num_doc_pq=("NUM_DOCUMENTO", "first"))
            .rename(columns={"NOMBRE_PROVEEDOR": "proveedor_pq"}))
     return g
 
@@ -324,6 +331,9 @@ def cruzar_con_parquet(df_sire, g_parquet):
                       and abs(dif_total) <= _TOLERANCIA_CENTAVOS
                       else "Diferencia")
             prov_sistema, ruc_sistema = elegido["proveedor_pq"], elegido["ruc_pq"]
+            # `.get()` y no `[...]`: `cruzar_con_parquet` es publica y se
+            # llama con df armados a mano en los tests, sin esta columna.
+            doc_sistema = str(elegido.get("num_doc_pq") or "")
             # La fecha del parquet se descartaba: `fecha_emision` se quedaba
             # con la del SIRE y la del sistema no se veia nunca. A pedido
             # 2026-08-21 se comparan las dos — un documento cargado con otra
@@ -334,9 +344,11 @@ def cruzar_con_parquet(df_sire, g_parquet):
             base_sist = total_sist = dif_base = dif_total = None
             estado, prov_sistema, ruc_sistema = "Solo SUNAT", "", ""
             fecha_sist = None
+            doc_sistema = ""
 
         filas.append({
             "fecha_emision": r.get("fecha_emision"), "documento": doc,
+            "documento_sistema": doc_sistema,
             "fecha_sunat": r.get("fecha_emision"), "fecha_sistema": fecha_sist,
             "proveedor": prov_sire, "proveedor_sistema": prov_sistema,
             "ruc_proveedor": ruc_sire, "ruc_sistema": ruc_sistema,
@@ -354,6 +366,7 @@ def cruzar_con_parquet(df_sire, g_parquet):
             continue
         filas.append({
             "fecha_emision": cand.get("fecha_pq"), "documento": cand["documento"],
+            "documento_sistema": str(cand.get("num_doc_pq") or ""),
             "fecha_sunat": None, "fecha_sistema": cand.get("fecha_pq"),
             "proveedor": "", "proveedor_sistema": cand["proveedor_pq"],
             "ruc_proveedor": "", "ruc_sistema": cand["ruc_pq"], "situacion": "",
@@ -427,7 +440,7 @@ def _tabla_cruce(df_cruce, df_sire):
     documento del SIRE que le corresponda — no es una carencia del panel,
     es que ese comprobante no tiene contraparte ahí.
 
-    Sin `fit_columns_on_grid_load`: son 10 columnas y 4 de plata — forzar
+    Sin `fit_columns_on_grid_load`: son 13 columnas y 4 de plata — forzar
     el ancho del contenedor las dejaría ilegibles. Scrollea horizontal,
     mismo criterio que la tabla pivote de Proveedor.
     """
@@ -444,16 +457,24 @@ def _tabla_cruce(df_cruce, df_sire):
         # comparar contra nada.
         "Fecha SUNAT": _f(df_cruce["fecha_sunat"]),
         "Fecha sistema": _f(df_cruce["fecha_sistema"]),
-        # `Documento` va UNA sola vez a proposito: es la CLAVE por la que se
-        # emparejan las dos fuentes (`cruzar_con_parquet` busca por
-        # `documento` exacto), asi que un "Documento sistema" seria una
-        # copia byte a byte de esta columna en toda fila emparejada. No hay
-        # nada que comparar ahi.
-        "Documento": df_cruce["documento"],
+        # Las dos formas del MISMO numero, a pedido 2026-08-24. Un
+        # "Documento sistema" con la llave normalizada (`FA28-2305799`)
+        # SERIA una copia byte a byte de la columna de al lado -- por eso
+        # esta columna muestra el numero CRUDO del ERP
+        # (`F0FA28002305799`, con su prefijo de tipo y sus ceros), que es
+        # lo que hay que tipear para ir a buscar el documento al sistema y
+        # NO se ve en ningun otro lado de la app.
+        "Documento SUNAT": df_cruce["documento"],
+        "Documento sistema": df_cruce.get(
+            "documento_sistema", pd.Series("", index=df_cruce.index)).fillna(""),
         "RUC SUNAT": df_cruce["ruc_proveedor"].fillna(""),
         "RUC sistema": df_cruce["ruc_sistema"].fillna(""),
-        # "Proveedor SUNAT" se retiro a pedido: con los dos RUC al lado, el
-        # nombre del SIRE era la tercera forma de decir lo mismo.
+        # "Proveedor SUNAT" se habia retirado (con los dos RUC al lado, el
+        # nombre del SIRE parecia la tercera forma de decir lo mismo) y
+        # volvio a pedido 2026-08-24: el RUC es un numero que nadie
+        # reconoce de memoria, y ver los dos NOMBRES al lado es lo que
+        # caza un proveedor cargado con otra razon social.
+        "Proveedor SUNAT": df_cruce["proveedor"].fillna(""),
         "Proveedor sistema": df_cruce["proveedor_sistema"].fillna(""),
         "Base SUNAT": pd.to_numeric(df_cruce["base_sunat"], errors="coerce"),
         "Base sistema": pd.to_numeric(df_cruce["base_sistema"], errors="coerce"),
@@ -491,9 +512,17 @@ def _tabla_cruce(df_cruce, df_sire):
     gb.configure_column("Fecha SUNAT", width=105, minWidth=105, pinned="left")
     gb.configure_column("Fecha sistema", width=110, minWidth=110,
                         pinned="left", cellStyle=_style_fecha)
-    gb.configure_column("Documento", width=115, minWidth=115, pinned="left")
+    gb.configure_column("Documento SUNAT", width=115, minWidth=115,
+                        pinned="left")
+    # Sin pinear: cuatro columnas fijas a la izquierda se comen 450px y en
+    # una laptop no queda ancho para los montos, que son el punto de la
+    # vista. Igual queda pegada a "Documento SUNAT" -- AG Grid dibuja las
+    # no pineadas justo despues de las pineadas, en orden.
+    gb.configure_column("Documento sistema", width=140, minWidth=140,
+                        cellStyle={"color": GRIS_TEXTO})
     gb.configure_column("RUC SUNAT", width=105, minWidth=105)
     gb.configure_column("RUC sistema", width=105, minWidth=105)
+    gb.configure_column("Proveedor SUNAT", minWidth=180)
     gb.configure_column("Proveedor sistema", minWidth=180)
     for col in ("Base SUNAT", "Base sistema", "Total SUNAT", "Total sistema"):
         gb.configure_column(col, type=["numericColumn"], width=115,
@@ -688,7 +717,8 @@ def _fila_de(df, fila_vista):
             return coincidencias.iloc[0]
     # Sin `car` (no debería pasar) se cae al criterio viejo, que al menos
     # acierta el proveedor si además se compara el RUC.
-    doc = str(fila_vista.get("Documento", ""))
+    doc = str(fila_vista.get("Documento",
+                             fila_vista.get("Documento SUNAT", "")))
     ruc = str(fila_vista.get("RUC", fila_vista.get("RUC SUNAT", "")))
     coincidencias = df[(df["documento"].astype(str) == doc)
                        & (df["ruc_proveedor"].astype(str) == ruc)]
