@@ -61,6 +61,7 @@ SUNAT ni tener un RUC a mano.
 """
 
 import io
+import re
 
 import numpy as np
 import pandas as pd
@@ -819,6 +820,70 @@ _NS_UBL = {
 }
 
 
+# ---------------------------------------------------------------------------
+# DESCRIPCIONES EMPAQUETADAS
+# ---------------------------------------------------------------------------
+# Algunos emisores no usan `cbc:Description` como descripción: meten ahí el
+# renglón ENTERO del ticket, con los campos pegados con `@@` de separador.
+#
+#     2028@@CHIRCUMEXXKG@@ 1.330 X     11.49@@15.28@@
+#     └cód┘ └──nombre───┘ └cant┘ └precio┘ └total┘
+#
+# El resultado en pantalla es una columna "Descripción" ilegible que además
+# repite —peor, con OTROS números: los del ticket llevan IGV y los del XML
+# no— lo que las columnas de al lado ya muestran bien.
+#
+# Medido sobre R2 el 2026-08-24 antes de escribir esto, para no adivinar la
+# forma: 3 de 123 proveedores con original sincronizado emiten así, y sus
+# 503 líneas siguen todas el mismo patrón, en dos variantes — con total
+# final (`cód@@nombre@@ cant X precio@@total@@`) y sin él. El nombre es
+# SIEMPRE el segundo trozo, en 503 de 503.
+#
+# Aun así la elección no es "el trozo [1]" sino "el primer trozo que parece
+# un nombre": el día que aparezca un cuarto emisor con los campos en otro
+# orden, el peor caso es mostrar el texto crudo (lo de hoy), no una
+# cantidad donde va el producto.
+#
+# Lo que NO se hace acá: inventarle espacios al nombre. `CHIRCUMEXXKG` sale
+# así del sistema del proveedor, que abrevia a lo que le entra en el campo
+# (`QUES.BRI.FLO`, `SALCHICHA DE HU`). Separarlo a ojo sería adivinar.
+#
+# Y lo que se DESCARTA a sabiendas: el primer trozo es un código de barras
+# de verdad (429 de esas 503 líneas pasan el dígito de control), pero NO
+# aporta una columna, y eso también está medido, no supuesto:
+#
+#   - 221 son EAN internacionales GS1 (prefijos 775 Perú, 800 Italia, 779
+#     Argentina, 841 España…) y las 221 coinciden con el
+#     `SellersItemIdentification` que ya se muestra en "Código".
+#   - 147 difieren del código, y las 147 son de circulación RESTRINGIDA
+#     (prefijo 2x, o PLU corto de balanza tipo `4002`): peso embebido,
+#     distinto en cada línea del mismo producto — `0211033002309` y
+#     `0211033002408` son los dos QUES.BRI.FLO del código `110334`.
+#
+# O sea: cuando el EAN sirve, ya está en pantalla; cuando difiere, difiere
+# justamente porque NO identifica al producto sino a ESA pesada. Se tira;
+# el identificador estable es el del emisor.
+
+# " 1.330 X     11.49" — dígitos, separadores y una X en el medio.
+_TROZO_CANT_X_PRECIO = re.compile(r"^[\d.,\s]+[Xx][\d.,\s]+$")
+
+
+def _descripcion_limpia(texto):
+    """El nombre del producto, sin el resto del renglón empaquetado.
+
+    Función pura. Sin `@@` devuelve el texto tal cual: la enorme mayoría de
+    los emisores manda una descripción normal y no hay que tocarla.
+    """
+    if "@@" not in (texto or ""):
+        return texto
+    for trozo in texto.split("@@"):
+        trozo = trozo.strip()
+        if (trozo and re.search(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]", trozo)
+                and not _TROZO_CANT_X_PRECIO.match(trozo)):
+            return trozo
+    return texto
+
+
 def _num_xml(txt):
     try:
         return float(txt)
@@ -869,7 +934,8 @@ def lineas_xml(xml_bytes):
         unidad = (cant.get("unitCode") or "") if cant is not None else ""
         salida.append({
             "codigo": (codigo.text or "").strip() if codigo is not None else "",
-            "descripcion": (desc.text or "").strip() if desc is not None else "",
+            "descripcion": _descripcion_limpia(
+                (desc.text or "").strip()) if desc is not None else "",
             "cantidad": _num_xml(cant.text) if cant is not None else None,
             "unidad": _UNIDADES.get(unidad.upper(), unidad),
             "precio_unitario": _num_xml(precio.text) if precio is not None else None,

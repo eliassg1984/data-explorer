@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-194 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+195 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (69)
 
@@ -255,7 +255,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#190** — Compras › Producto perdió sus dos botones "✕ Quitar foco" (2026-08-24, a pedido) — mismo fix…
 - **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
 
-**Datos, R2 y DuckDB** (19)
+**Datos, R2 y DuckDB** (20)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -276,8 +276,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#143** — Cruce SIRE ↔ parquet de Compras: la clave serie-número sola produce falsos positivos si no se…
 - **#160** — El registro del SIRE pasó de consulta EN VIVO a parquet en R2, y eso cambia lo que se le…
 - **#170** — Se invirtieron Reportes y Vistas: Reportes al rail vertical izquierdo, Vistas a la franja…
+- **#195** — Hay emisores que usan cbc:Description como un renglón de TICKET, no como una descripción:…
 
-**SUNAT y SIRE** (9)
+**SUNAT y SIRE** (10)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -288,6 +289,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#144** — Pedir un original a demanda: el mismo mecanismo de señales que ya tenía la app, aplicado a…
 - **#149** — Documentos SUNAT: de dos columnas a APILADO
 - **#163** — arquitectura.md creció hasta ser un documento que nadie podía abrir: 115k tokens, y CLAUDE.md…
+- **#195** — Hay emisores que usan cbc:Description como un renglón de TICKET, no como una descripción:…
 
 **Fechas, rangos y cortes** (5)
 
@@ -8254,13 +8256,66 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      De paso se corrigió una nota vieja de `construirBloqueCSS`: `redirigido`/`hayTextoPropio` describen al ELEMENTO (tiene botones adentro, sus labels traen `<p>` propio), no al bloque exportado, y se emitían siempre. Un export de pura caja — el caso típico de Unificar, que sólo mueve esquinas y ancho — salía con un "texto redirigido al `<p>` del label" abajo que no aplicaba a ninguna de las líneas de arriba. Ahora cada nota sale sólo si ese grupo de props tiene algo.
 
 
+195. **Hay emisores que usan `cbc:Description` como un renglón de TICKET,
+     no como una descripción: `2028@@CHIRCUMEXXKG@@ 1.330 X 11.49@@15.28@@`.**
+     Reportado 2026-08-24 con la captura del PDF al lado del XML: la columna
+     "Descripción" del detalle de un comprobante (Compras › Documentos SUNAT)
+     salía ilegible. No es un bug de parseo — `lineas_xml` leía bien el campo;
+     el campo venía así del proveedor, con el código, el nombre, la cantidad,
+     el precio y el total pegados con `@@`.
+
+     Lo caro de esto no es el arreglo (una función pura de ocho líneas), es
+     decidir la forma sin adivinarla. Se midió contra R2 ANTES de escribir
+     nada, bajando un XML por proveedor (123) y después los 200 XML de los
+     tres que sí empaquetan:
+
+     - **3 de 123 proveedores** emiten así, y sus **503 líneas siguen todas
+       el mismo patrón**, en dos variantes: con total final
+       (`cód@@nombre@@ cant X precio@@total@@`) y sin él.
+     - El nombre es **el segundo trozo en 503 de 503**. Aun así el código
+       elige "el primer trozo que parece un nombre" (tiene letras y no es
+       `cant X precio`), no "el trozo `[1]`": el día que aparezca un cuarto
+       emisor con los campos en otro orden, el peor caso es mostrar el texto
+       crudo —lo de hoy— en vez de una cantidad donde va el producto.
+     - **Los números del texto llevan IGV y los del XML no** (109.90 contra
+       93.14). Por eso el arreglo toca SÓLO la descripción: las columnas de
+       cantidad, precio e importe ya salían bien de sus campos propios, y
+       tomarlas del texto habría sido cambiar un dato correcto por uno que
+       no cuadra con el total del comprobante. Hay un test que lo fija.
+
+     **El primer trozo es un código de barras de verdad, y se descarta a
+     propósito.** Fue la primera pregunta al ver el patrón ("¿es un EAN?
+     ¿internacional?") y la respuesta salió del mismo sondeo: 429 de las 503
+     pasan el dígito de control, y por prefijo GS1 son 174 de Perú (775), 11
+     de Italia (800), 10 de Argentina (779), 8 de España (841)… pero el
+     cruce contra el `SellersItemIdentification` es lo que decide:
+
+     - **221 son EAN internacionales y las 221 ya coinciden** con el código
+       que la tabla muestra. Columna nueva: cero información.
+     - **147 difieren, y las 147 son de circulación restringida** (prefijo
+       `2x`, o PLU corto de balanza tipo `4002`): peso embebido, distinto en
+       cada línea del MISMO producto — `0211033002309` y `0211033002408` son
+       las dos pesadas de `QUES.BRI.FLO`, código `110334`.
+
+     O sea: cuando el EAN sirve ya está en pantalla, y cuando difiere es
+     porque identifica a esa PESADA, no al producto. Agregarlo como columna
+     habría llenado de ruido justo el caso inútil.
+
+     Y lo que el arreglo NO hace: **inventarle espacios al nombre.**
+     `CHIRCUMEXXKG` se lee "chirimoya Cumex x kg" y da ganas de separarlo,
+     pero el proveedor abrevia a lo que le entra en su campo (`QUES.BRI.FLO`,
+     `SALCHICHA DE HU`, `AC OLIVA PURO L`); dónde van los espacios es
+     adivinanza, y una adivinanza en una columna de datos se lee igual que un
+     dato. Sale tal cual lo escribió el emisor, sin el empaquetado.
+
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#195**.
+> próxima regla nueva es la **#196**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

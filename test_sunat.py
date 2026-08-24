@@ -384,6 +384,44 @@ ok(sunat.lineas_xml(_sin_precio)[0]["precio_unitario"] is None,
    "un campo ausente queda en None, no revienta")
 
 
+# Descripciones EMPAQUETADAS: hay emisores que meten el renglón entero del
+# ticket en `cbc:Description`, con los campos pegados con `@@`. Sin esto la
+# columna "Descripción" muestra `2028@@CHIRCUMEXXKG@@ 1.330 X 11.49@@15.28@@`
+# — ilegible, y repitiendo con OTROS números (los del ticket llevan IGV) lo
+# que las columnas de al lado ya muestran bien. Ver `arquitectura.md` #195.
+print("\n── descripciones empaquetadas con @@ ──")
+_XML_PACK = _XML_FACTURA.replace(
+    b"<cbc:Description>Agua Tonica 150ml</cbc:Description>",
+    b"<cbc:Description><![CDATA[2028@@CHIRCUMEXXKG@@ 1.330 X"
+    b"     11.49@@15.28@@]]></cbc:Description>")
+ok(sunat.lineas_xml(_XML_PACK)[0]["descripcion"] == "CHIRCUMEXXKG",
+   "el nombre sale limpio del renglón empaquetado")
+# Los NÚMEROS siguen saliendo de los campos del XML, no del texto: los del
+# texto llevan IGV (11.49 con, 3.715 sin) y son los que NO hay que mostrar.
+ok(sunat.lineas_xml(_XML_PACK)[0]["precio_unitario"] == 3.715,
+   "el precio sigue siendo el del XML, no el del texto empaquetado")
+
+# Las dos variantes reales, medidas sobre R2: con total final y sin él.
+ok(sunat._descripcion_limpia("8008857611105@@PASTA CALAMARAT@@ 2 X    14.90")
+   == "PASTA CALAMARAT", "variante sin total final")
+ok(sunat._descripcion_limpia("0211033002309@@QUES.BRI.FLO@@ 0.230 X  109.90@@25.27@@")
+   == "QUES.BRI.FLO", "variante con total final")
+ok(sunat._descripcion_limpia("4086@@HABAS WONG@@ 0.365 X   4.99")
+   == "HABAS WONG", "código corto (PLU de balanza) en vez de EAN")
+
+# Lo de siempre —la enorme mayoría de los emisores— no se toca.
+ok(sunat._descripcion_limpia("Agua Tonica 150ml") == "Agua Tonica 150ml",
+   "una descripción normal pasa intacta")
+ok(sunat._descripcion_limpia("SERVICIO DE FLETE X KG") == "SERVICIO DE FLETE X KG",
+   "un 'X' en una descripción normal no la confunde con cantidad X precio")
+ok(sunat._descripcion_limpia("") == "" and sunat._descripcion_limpia(None) is None,
+   "vacío y None no revientan")
+# Peor caso de un emisor futuro con los campos en otro orden: texto crudo,
+# que es lo que se ve hoy. Nunca una cantidad donde va el producto.
+ok(sunat._descripcion_limpia("123@@456@@") == "123@@456@@",
+   "si ningún trozo parece un nombre, devuelve el texto crudo")
+
+
 # ── Pedir un original a demanda ────────────────────────────────────────────
 print("\n── clave_solicitud (contrato con atender_solicitudes_sunat.py) ──")
 _doc_ped = {"ruc_proveedor": "20608300393", "serie": "FA28",
