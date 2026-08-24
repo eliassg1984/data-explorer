@@ -136,7 +136,7 @@ def _css(dias_estado):
         # Va PRIMERO: la regla de `cal_mes_` de mas abajo tiene la MISMA
         # especificidad y gana por orden para las filas de semana.
         '.st-key-compras_sem_cal [data-testid="stHorizontalBlock"] '
-        '{ gap: 8px !important; }',
+        '{ gap: 6px !important; }',
         # SOLAPE: `st.markdown` con HTML de bloque sale con
         # `margin-bottom: -16px` (arquitectura.md regla #162). Medido aca:
         # el contenedor del titulo colapsaba a 10px de alto mientras el div
@@ -178,15 +178,21 @@ def _css(dias_estado):
         # El boton trae su propio alto minimo y padding. El ancho es 100%
         # de su columna — asi la banda del rango sigue siendo continua sin
         # depender de cuanto mida la celda.
+        #
+        # OJO CON SEGUIR ACHICANDO: el panel se compacto en dos vueltas a
+        # pedido (620x334 -> 520x278 -> 470x237) y con 26px de alto la
+        # celda queda en ~32x26. Es chico pero todavia clickeable en
+        # escritorio; por debajo de eso hay que cambiar de forma (un mes
+        # por vez, o volver a un input de texto), no seguir bajando px.
         # OJO: `100%%` escapado — esta cadena la cierra un `% TEXTO_PRINCIPAL`
         # y un `%` suelto seguido de espacio revienta en runtime (lo agarro
         # ruff con F509, no un test).
         '.st-key-compras_sem_cal .stButton button { width: 100%% !important; '
-        'height: 30px !important; min-height: 30px !important; '
+        'height: 26px !important; min-height: 26px !important; '
         'padding: 0 !important; border: 0 !important; '
         'border-radius: 0 !important; background: transparent !important; '
         'box-shadow: none !important; color: %s !important; '
-        'font-size: 12px !important; font-weight: 500 !important; '
+        'font-size: 11.5px !important; font-weight: 500 !important; '
         'font-variant-numeric: tabular-nums !important; }' % TEXTO_PRINCIPAL,
         '.st-key-compras_sem_cal .stButton button:hover '
         '{ background: %s !important; border-radius: 8px !important; }'
@@ -197,9 +203,9 @@ def _css(dias_estado):
         # La navegacion son botones tambien, pero fuera de `cal_mes_`: se
         # las devuelve a un tamano normal.
         '.st-key-cal_nav_ant button, .st-key-cal_nav_sig button '
-        '{ width: 28px !important; height: 26px !important; '
-        'min-height: 26px !important; color: %s !important; '
-        'font-size: 15px !important; border-radius: 8px !important; }'
+        '{ width: 24px !important; height: 22px !important; '
+        'min-height: 22px !important; color: %s !important; '
+        'font-size: 14px !important; border-radius: 6px !important; }'
         % ACENTO,
         # El panel FLOTA, asi que su ancho no lo limita la columna de la
         # tarjeta (~230px por mes, que fue lo que obligo a achicar la
@@ -211,10 +217,10 @@ def _css(dias_estado):
         # un marco vacio (medido: 23 arriba + 36 de navegacion + 16 de gap
         # = 75px antes del primer dia).
         '[data-testid="stPopoverBody"]:has(.st-key-compras_sem_cal) '
-        '{ min-width: 520px !important; padding: 10px !important; }',
+        '{ min-width: 470px !important; padding: 8px !important; }',
         # Gap del contenedor: entre la fila de navegacion y los meses
         # alcanza con un respiro, no con los 16px de un bloque normal.
-        '.st-key-compras_sem_cal { gap: 4px !important; }',
+        '.st-key-compras_sem_cal { gap: 2px !important; }',
         # Trigger: pill outline, mismo idioma que el resto de controles de
         # la app. Compacto a proposito — es una linea arriba del grafico,
         # no un encabezado.
@@ -280,8 +286,8 @@ def _estado_de_los_dias(anio, mes, ini, fin, pend, fmin, fmax):
 def _pintar_mes(anio, mes, lado, fmin, fmax, k_rango, reporte, usa_carga_rango):
     with st.container(key="cal_mes_%s" % lado):
         st.markdown(
-            "<div style='height:22px;display:flex;align-items:center;"
-            "justify-content:center;font-size:12.5px;font-weight:700;"
+            "<div style='height:18px;display:flex;align-items:center;"
+            "justify-content:center;font-size:12px;font-weight:700;"
             "color:%s;'>%s %d</div>" % (TEXTO_PRINCIPAL, _MESES[mes - 1], anio),
             unsafe_allow_html=True,
         )
@@ -289,8 +295,8 @@ def _pintar_mes(anio, mes, lado, fmin, fmax, k_rango, reporte, usa_carga_rango):
         for i, nombre in enumerate(_DOW):
             with cab[i]:
                 st.markdown(
-                    "<div style='height:20px;display:flex;align-items:center;"
-                    "justify-content:center;font-size:10.5px;font-weight:600;"
+                    "<div style='height:16px;display:flex;align-items:center;"
+                    "justify-content:center;font-size:10px;font-weight:600;"
                     "color:%s;'>%s</div>" % (GRIS_TEXTO_SUAVE, nombre),
                     unsafe_allow_html=True,
                 )
@@ -300,7 +306,7 @@ def _pintar_mes(anio, mes, lado, fmin, fmax, k_rango, reporte, usa_carga_rango):
                 with cols[i]:
                     if dia == 0:
                         # Mismo alto que el boton, o la fila se descuadra.
-                        st.markdown("<div style='height:30px'></div>",
+                        st.markdown("<div style='height:26px'></div>",
                                     unsafe_allow_html=True)
                         continue
                     f = datetime.date(anio, mes, dia)
