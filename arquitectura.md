@@ -8866,6 +8866,28 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
          deshabilitado: la mitad del calendario muerta. Además es lo que hace
          cualquier selector de rango — uno mira hacia atrás desde una fecha.
 
+     Y una corrección del mismo día, que vale para cualquier control que se
+     meta dentro de una tarjeta: **dibujado inline se comía media tarjeta**
+     apenas se entraba a la vista. Ahora va PLEGADO — el trigger es una
+     línea de 32px con el rango y los dos meses salen en un popover.
+     `st.popover` y no `st.expander`: el expander EMPUJA lo que tiene
+     debajo, y la tarjeta está clampeada a `--alto-util`, así que abrirlo
+     mandaba el gráfico fuera de vista. Tres consecuencias que conviene
+     saber antes de repetirlo:
+
+       · **El popover NO se cierra** cuando un widget de adentro dispara un
+         rerun — medido con el pill de la franja antes de escribir nada. Sin
+         eso, un protocolo de dos clics adentro de un popover sería
+         imposible.
+       · **El CSS se inyecta AFUERA del popover.** Su cuerpo vive en un
+         portal que sólo existe en el DOM mientras está abierto: un
+         `<style>` ahí adentro se lleva puesto el estilo del propio trigger
+         cada vez que se cierra. Un `<style>` suelto en el documento alcanza
+         igual al portal.
+       · **Al flotar, el ancho deja de depender de la columna.** Es lo que
+         devolvió la celda a ~40px: el panel se fija en 620px y ya no le
+         importa que la tarjeta mida 522.
+
      Detalle menor pero con costo real: el `width: 100%` del CSS vive dentro de
      una cadena que cierra un operador `%`, así que va escapado (`100%%`) o
      revienta en runtime. Lo agarró **`ruff` (F509)**, no un test — buen

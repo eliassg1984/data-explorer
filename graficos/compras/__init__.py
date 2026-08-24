@@ -347,7 +347,9 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                 #
                 # El selector de fecha vive ACA arriba, no en la franja
                 # (2026-08-24, a pedido): en esta vista el eje de tiempo es
-                # el tema del grafico, no contexto global. Y no es el pill
+                # el tema del grafico, no contexto global. Va PLEGADO (una
+                # linea con el rango + popover con los dos meses): inline se
+                # comia media tarjeta. Y no es el pill
                 # movido como en Documentos SUNAT sino un calendario de DOS
                 # meses — `st.date_input` solo sabe dibujar uno. `app.py`
                 # deja de dibujar la fecha cuando esta vista esta activa

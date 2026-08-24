@@ -4,6 +4,14 @@ Lo usa la vista "Semanal" de Compras (2026-08-24, a pedido): ahi el eje de
 tiempo ES el tema del grafico, asi que el selector de fecha vive arriba de
 la tarjeta en vez de en la franja superior.
 
+Va PLEGADO: el trigger es una linea de 32px con el rango, y los dos meses
+salen en un popover. Primero se dibujaba inline y se comia media tarjeta
+(reportado el mismo dia). Popover y no `st.expander` porque el expander
+EMPUJA lo que tiene debajo, y la tarjeta esta clampeada a `--alto-util`:
+al abrirlo el grafico se iba fuera de vista. De yapa, al flotar el panel
+deja de estar limitado por el ancho de la columna y la celda recupero sus
+~40px.
+
 POR QUE NO ES UN st.date_input
 ------------------------------
 Porque Streamlit dibuja UN SOLO MES y no hay forma de pedirle dos. Medido
@@ -49,8 +57,8 @@ import streamlit as st
 
 import franja_fecha
 from estado_rango import aplicar_atajo
-from tema import (ACENTO, ACENTO_FUERTE, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
-                  LAVANDA_FONDO, TEXTO_PRINCIPAL)
+from tema import (ACENTO, ACENTO_FUERTE, ACENTO_TEXTO, GRIS_TEXTO_SUAVE,
+                  LAVANDA_BORDE, LAVANDA_FONDO, TEXTO_PRINCIPAL)
 
 # Claves de esta vista. El RANGO no esta aca: es de `estado_rango`.
 _K_PEND = "compras_sem_cal_pend"    # 1er clic a la espera del 2do
@@ -180,6 +188,26 @@ def _css(dias_estado):
         'min-height: 30px !important; color: %s !important; '
         'font-size: 16px !important; border-radius: 8px !important; }'
         % ACENTO,
+        # El panel FLOTA, asi que su ancho no lo limita la columna de la
+        # tarjeta (~230px por mes, que fue lo que obligo a achicar la
+        # celda cuando el calendario iba inline). Con 620px cada mes
+        # vuelve a tener sus ~42px de celda.
+        '[data-testid="stPopoverBody"]:has(.st-key-compras_sem_cal) '
+        '{ min-width: 620px !important; }',
+        # Trigger: pill outline, mismo idioma que el resto de controles de
+        # la app. Compacto a proposito — es una linea arriba del grafico,
+        # no un encabezado.
+        '.st-key-compras_sem_cal_pill [data-testid="stPopover"] button '
+        '{ min-height: 32px !important; padding: 4px 12px !important; '
+        'border: 1.5px solid %s !important; border-radius: 8px !important; '
+        'background: transparent !important; color: %s !important; '
+        'font-size: 13px !important; font-weight: 600 !important; '
+        'white-space: nowrap !important; }' % (LAVANDA_BORDE, ACENTO_TEXTO),
+        '.st-key-compras_sem_cal_pill [data-testid="stPopover"] button:hover '
+        '{ background: %s !important; border-color: %s !important; }'
+        % (LAVANDA_FONDO, ACENTO),
+        '.st-key-compras_sem_cal_pill [data-testid="stIconMaterial"] '
+        '{ color: %s !important; font-size: 17px !important; }' % ACENTO,
     ]
 
     # TRAMPA 1, arriba: cada regla por dia va bajo el contenedor.
@@ -312,40 +340,62 @@ def render():
         anio_a, mes_a = st.session_state[_K_ANCLA]
         anio_b, mes_b = _mes_siguiente(anio_a, mes_a)
 
+    if pend is not None:
+        _label = "Elegí la fecha de finalización"
+    elif ini and fin:
+        _label = franja_fecha.fmt_rango_es(ini, fin)
+    else:
+        _label = "Seleccionar rango"
+
+    estados = {}
+    estados.update(_estado_de_los_dias(anio_a, mes_a, ini, fin, pend, fmin, fmax))
+    estados.update(_estado_de_los_dias(anio_b, mes_b, ini, fin, pend, fmin, fmax))
+
+    with st.container(key="compras_sem_cal_pill"):
+        # El CSS se inyecta AFUERA del popover a proposito. Streamlit
+        # renderiza el cuerpo del popover en un portal que solo existe en
+        # el DOM mientras esta abierto: un <style> ahi adentro se lleva
+        # puesto el estilo del propio trigger cada vez que se cierra. Un
+        # <style> suelto en el documento alcanza igual al portal.
+        _css(estados)
+        with st.popover(_label, use_container_width=False,
+                        icon=":material/calendar_month:"):
+            _panel(anio_a, mes_a, anio_b, mes_b, ini, fin, pend,
+                   fmin, fmax, k_rango, reporte, usa_carga_rango)
+
+    return (ini, fin) if (ini and fin) else None
+
+
+def _panel(anio_a, mes_a, anio_b, mes_b, ini, fin, pend, fmin, fmax,
+           k_rango, reporte, usa_carga_rango):
+    """El contenido del desplegable: navegacion + los dos meses.
+
+    El CSS NO se inyecta aca: lo hace `render()` afuera del popover, ver
+    el comentario alla.
+    """
     with st.container(key="compras_sem_cal"):
         # Fila de navegacion. Sus columnas son hermanas de `cal_mes_*`, no
-        # descendientes, asi que la regla de 42px no las toca.
+        # descendientes, asi que la regla del ancho de celda no las toca.
         c_ant, c_lbl, c_sig = st.columns([1, 6, 1], vertical_alignment="center")
         with c_ant:
             with st.container(key="cal_nav_ant"):
                 st.button("‹", key="cal_ant", on_click=_mover, args=(-1,),
                           help="Mes anterior")
         with c_lbl:
+            # El rango ya lo dice el trigger del desplegable, que queda a
+            # la vista con el panel abierto: repetirlo aca seria decir dos
+            # veces lo mismo. Solo se usa para la pista del 2do clic, que
+            # es lo unico que el trigger no puede explicar.
             if pend is not None:
-                _txt = "Elegí la fecha de finalización"
-                _color = ACENTO
-            elif ini and fin:
-                # Mismo formateador que el pill de la franja: si el label
-                # se toca, se toca en un solo lugar.
-                _txt = franja_fecha.fmt_rango_es(ini, fin)
-                _color = GRIS_TEXTO
-            else:
-                _txt = "Elegí una fecha de inicio"
-                _color = GRIS_TEXTO
-            st.markdown(
-                "<div style='text-align:center;font-size:12.5px;"
-                "color:%s;'>%s</div>" % (_color, _txt),
-                unsafe_allow_html=True,
-            )
+                st.markdown(
+                    "<div style='text-align:center;font-size:12.5px;"
+                    "color:%s;'>Elegí la fecha de finalización</div>" % ACENTO,
+                    unsafe_allow_html=True,
+                )
         with c_sig:
             with st.container(key="cal_nav_sig"):
                 st.button("›", key="cal_sig", on_click=_mover, args=(1,),
                           help="Mes siguiente")
-
-        estados = {}
-        estados.update(_estado_de_los_dias(anio_a, mes_a, ini, fin, pend, fmin, fmax))
-        estados.update(_estado_de_los_dias(anio_b, mes_b, ini, fin, pend, fmin, fmax))
-        _css(estados)
 
         col_a, col_b = st.columns(2)
         with col_a:
@@ -354,5 +404,3 @@ def render():
         with col_b:
             _pintar_mes(anio_b, mes_b, "b", fmin, fmax, k_rango, reporte,
                         usa_carga_rango)
-
-    return (ini, fin) if (ini and fin) else None
