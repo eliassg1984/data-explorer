@@ -26,7 +26,15 @@ from graficos.base import _compras_layout, _compras_truncar
 from graficos.compras._comun import _compras_mini_barras
 from graficos import alturas
 
-_ALTO_FRAME = alturas.por_filas(8, px_fila=35, extra=45, minimo=0)
+_ALTO_FILA = 28
+"""Filas "algo delgadas" a pedido (2026-08-24) para los dos rankings de este
+drill — más finas que el default de `st.dataframe` (~35px, el mismo número
+que usa el `rowHeight` de AgGrid en Proveedor/Inventario). Con `row_height=`
+explícito, `_ALTO_FRAME` tiene que usar el mismo número: si no, el frame se
+calcula para filas de 35px y filas reales de 28px dejan aire de sobra
+abajo (o de más, si `_ALTO_FRAME` quedara más chico que 8 filas reales)."""
+
+_ALTO_FRAME = alturas.por_filas(8, px_fila=_ALTO_FILA, extra=45, minimo=0)
 
 # Eje X por granularidad: forzado a propósito. Con pocos puntos (rango de
 # fecha corto, o un producto con 1-2 compras) Plotly no tiene de dónde sacar
@@ -255,6 +263,7 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
             st.dataframe(
                 disp[["Producto", "Valor", "%", "Cant.", "UM", "Inicio", "Fin", "Var"]],
                 hide_index=True, width="stretch", height=_ALTO_FRAME,
+                row_height=_ALTO_FILA,
                 on_select="rerun", selection_mode="single-row", key=_rank_tab_key,
                 column_config={
                     "Producto": st.column_config.TextColumn("Producto", width="medium"),
@@ -404,6 +413,7 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
             st.dataframe(
                 disp_fam[["Familia", "Valor", "%", "Productos"]],
                 hide_index=True, width="stretch", height=_ALTO_FRAME,
+                row_height=_ALTO_FILA,
                 on_select="rerun", selection_mode="single-row", key=_fam_tab_key,
                 column_config={
                     "Familia": st.column_config.TextColumn("Familia", width="medium"),
