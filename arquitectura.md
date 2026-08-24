@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-189 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+190 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (69)
 
@@ -158,7 +158,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
 
-**AgGrid y tablas** (28)
+**AgGrid y tablas** (29)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -188,8 +188,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#163** — arquitectura.md creció hasta ser un documento que nadie podía abrir: 115k tokens, y CLAUDE.md…
 - **#185** — Un contextmenu dentro de un iframe NO sube al documento padre: el clic derecho sobre la…
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
+- **#190** — Compras › Producto perdió sus dos botones "✕ Quitar foco" (2026-08-24, a pedido) — mismo fix…
 
-**Streamlit** (56)
+**Streamlit** (57)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -247,6 +248,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#180** — Un widget DENTRO de un @st.fragment que escribe estado consumido AFUERA no cambia nada en…
 - **#186** — Un st.container anidado NO es hijo directo del flex que lo contiene: Streamlit le mete un…
 - **#187** — Meter None entre las opciones de un st.selectbox le agrega un botón ✕ "Clear value" que no…
+- **#190** — Compras › Producto perdió sus dos botones "✕ Quitar foco" (2026-08-24, a pedido) — mismo fix…
 
 **Datos, R2 y DuckDB** (19)
 
@@ -8174,13 +8176,23 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      - El **signo**. La columna "Valorizado" muestra el valor con signo, pero la barra se llena por MAGNITUD (`_barra`, columna oculta) y se pinta de `AJUSTE_NEG` cuando el valor es negativo (`_neg`, otra columna oculta) — el mismo criterio de la regla #80 que ya usaban las barras. Sin `_neg`, un ajuste de S/ -4.461 pintaría una barra indistinguible de una compra del mismo tamaño.
      - La **fila seleccionada**. `_css_grid` (`tablas/_css.py`) no estila `.ag-row-selected` porque ninguna de las tablas que lo comparten tiene selección de fila, y acá esa fila ES el foco del drill: sin marcarla no se ve sobre qué categoría está mirando el panel de la derecha. Se agrega mergeando una regla local (`LAVANDA_CABECERA_GRUPO` + `font-weight: 600`) sobre el dict compartido — no tocando `_css_grid`, que lo consumen otras cinco tablas.
 
+190. **Compras › Producto perdió sus dos botones "✕ Quitar foco" (2026-08-24, a pedido) — mismo fix de la regla #133, portado dos años después a donde la #128 decía explícitamente que faltaba.** La #128 ya había documentado por qué existían: `producto.py` copia el patrón de ranking de `st.dataframe` + `ProgressColumn` de Proveedor "casi literal", con el mismo problema de que reclickear la fila ENFOCADA no dispara `on_select` (el valor del widget no cambia, Streamlit no manda rerun) — de ahí el botón, en las DOS tablas del drill (Ranking de productos y Compras por familia). Cuando Proveedor perdió el suyo (#133), la nota fue explícita: "el cambio fue sólo en Proveedor" — `producto.py` se quedó con el suyo porque nadie le sumó el `elif` que lo reemplaza.
+
+     Ese `elif` es lo que se porta ahora, dos veces (una por tabla, con sus propias keys `compras_prod_last_click`/`compras_prod_focus` y `compras_prod_fam_last_click`/`compras_prod_fam_focus`): el bloque que procesa el clic ANTES de dibujar la tabla sólo miraba `if _rows_sel:` (selección con fila marcada). Se le suma `elif st.session_state.get("..._last_click") is not None:` → limpia foco y `last_click` cuando la selección pasa a estar VACÍA. Funciona porque DESTILDAR la fila sí cambia el valor del widget (`rows: [i]` → `[]`) y por lo tanto sí dispara `on_select` — es exactamente el caso que reclickear la misma fila no puede producir, y ahora es la única salida sin botón.
+
+     Mismo efecto lateral aceptado que ya nombraba la #133: si Streamlit resetea la selección de la tabla por otra razón (cambia el rango de fecha y la tabla se remonta con otros datos), el foco se limpia con ella — coherente, si la fila ya no está marcada el panel de detalle no debería seguir apuntándole.
+
+     De paso desaparece el `st.columns([3, 1])` que partía el título de cada tabla para hacerle sitio al botón: el título ("Ranking de productos"/"Compras por familia", `.cp-prod-rank-tit`) pasa a ancho completo — no tenía ningún `min-width` que reservarle, a diferencia del caso de Proveedor en la #133.
+
+     **Nota para cuando se toque Proveedor otra vez:** la #133 describe un fix que ya NO vive en `proveedor.py` — su ranking migró de `st.dataframe` a AgGrid (regla nueva de Inventario, 2026-08-23, mismo día que el resto de esta sesión) y el clic-en-fila de AgGrid es un toggle real (`setSelected(!isSelected())`), sin el problema de "reclic no dispara evento" que motivó el `elif` en primer lugar. `producto.py` se queda en `st.dataframe` a propósito (decisión explícita: "achicar filas sí, migrar a AgGrid no" — el clic en Producto no tiene la limitación de checkboxes-obligatorios que sí forzó la migración en Proveedor), así que el `elif` acá SÍ hace falta y no es código muerto.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#190**.
+> próxima regla nueva es la **#191**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

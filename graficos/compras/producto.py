@@ -241,19 +241,19 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                     st.session_state["compras_prod_last_click"] = _clicked
                     prod_focus = None if _clicked == prod_focus else _clicked
                     st.session_state["compras_prod_focus"] = prod_focus
+        elif st.session_state.get("compras_prod_last_click") is not None:
+            # Sin el botón "✕ Quitar foco" (regla #133, mismo fix que ya
+            # tiene Proveedor), destildar la fila enfocada es la ÚNICA
+            # salida: reclickearla no dispara `on_select` (el valor del
+            # widget no cambia), pero destildar sí — `rows: [i]` → `[]`.
+            st.session_state["compras_prod_last_click"] = None
+            prod_focus = None
+            st.session_state["compras_prod_focus"] = None
 
         col_tabla, col_detalle = st.columns([1.6, 1], gap="small")
         with col_tabla:
-            c_tit, c_clear = st.columns([3, 1])
-            with c_tit:
-                st.markdown('<div class="cp-prod-rank-tit">Ranking de productos</div>',
-                           unsafe_allow_html=True)
-            with c_clear:
-                if st.button("✕ Quitar foco", key="compras_prod_clear_focus",
-                             disabled=(prod_focus is None), width="stretch"):
-                    st.session_state["compras_prod_focus"] = None
-                    st.session_state["compras_prod_last_click"] = None
-                    st.rerun(scope="fragment")
+            st.markdown('<div class="cp-prod-rank-tit">Ranking de productos</div>',
+                       unsafe_allow_html=True)
 
             disp = ranking.rename(columns={
                 "producto": "Producto", "valor": "Valor", "pct": "%",
@@ -392,19 +392,17 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                     st.session_state["compras_prod_fam_last_click"] = _clicked
                     fam_focus = None if _clicked == fam_focus else _clicked
                     st.session_state["compras_prod_fam_focus"] = fam_focus
+        elif st.session_state.get("compras_prod_fam_last_click") is not None:
+            # Mismo fix que el ranking de arriba (regla #133): sin botón,
+            # destildar la fila es la única forma de limpiar el foco.
+            st.session_state["compras_prod_fam_last_click"] = None
+            fam_focus = None
+            st.session_state["compras_prod_fam_focus"] = None
 
         col_famtabla, col_famdet = st.columns([1.6, 1], gap="small")
         with col_famtabla:
-            c_tit, c_clear = st.columns([3, 1])
-            with c_tit:
-                st.markdown('<div class="cp-prod-rank-tit">Compras por familia</div>',
-                           unsafe_allow_html=True)
-            with c_clear:
-                if st.button("✕ Quitar foco", key="compras_prod_fam_clear_focus",
-                             disabled=(fam_focus is None), width="stretch"):
-                    st.session_state["compras_prod_fam_focus"] = None
-                    st.session_state["compras_prod_fam_last_click"] = None
-                    st.rerun(scope="fragment")
+            st.markdown('<div class="cp-prod-rank-tit">Compras por familia</div>',
+                       unsafe_allow_html=True)
 
             disp_fam = fam_ranking.rename(columns={
                 "familia": "Familia", "valor": "Valor", "pct": "%",
