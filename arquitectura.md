@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-182 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+183 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (67)
 
@@ -285,7 +285,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (14)
+**Herramientas de desarrollo** (15)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -301,6 +301,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#168** — Las manijas del modo diseño quedaban FUERA DE LA PANTALLA cuando el elemento tocaba un borde
 - **#173** — El overlay del modo diseño tiene pointer-events:none a propósito (para poder ver/medir lo de…
 - **#181** — Un bloqueo de interacción SIN acuse de recibo es indistinguible de una app rota — el que…
+- **#183** — opacity: 0 NO deja de recibir clics, y pointer-events: none en el padre no alcanza si un hijo…
 
 **Decisiones de diseño y UX** (33)
 
@@ -8058,13 +8059,30 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      **Lo importante para el que venga:** el export de estas hojas devuelve el DESTINO en prosa, no un bloque CSS. Un `div[class*="st-key-K"] …` para un texto de Plotly (dibujado en el servidor desde Python) o de AgGrid (dentro de un iframe) es CSS que se pega, no falla, y no hace nada — media hora de diagnóstico para descubrir que el selector nunca podía alcanzar el nodo. Es la regla #169 (“el CSS que exporta el modo diseño es una FOTO DE PÍXELES, no la intención”) llevada a su conclusión: cuando la intención no es expresable en `estilos/`, lo honesto es decir en qué archivo Python vive. Verificado en vivo de punta a punta: encabezado de AgGrid 12→24px y "Proveedor"→"Nombre del proveedor" DENTRO del iframe; tick de Plotly 13→26px, "ago 25"→"AGO-2025" y `fill` inline aplicado.
 
+183. **`opacity: 0` NO deja de recibir clics, y `pointer-events: none` en el padre no alcanza si un hijo lo revierte — el tooltip del inspector estuvo comiéndose el primer item del rail EN PRODUCCIÓN, para todos los usuarios.** Reportado 2026-08-23: "cuando pongo el cursor sobre la pestaña Proveedor, no se sombrea, no permite seleccionar", con captura de la app desplegada — URL `visorsapiens.streamlit.app/?reporte=Compras&vista=producto`, **sin `?debug=1` ni `?diseno=1`**.
+
+     Ese detalle de la URL es lo que descartó al sospechoso obvio. El día anterior se había reportado un síntoma casi idéntico y la causa había sido el click-blocker del modo diseño (regla #181); acá no podía serlo, porque `disenoActivo()` exige los dos query params. La pista que reorientó todo fue **"no se sombrea"**: si ni el `:hover` llega, no es que el clic se procese mal — es que el puntero nunca toca el botón. O sea: algo transparente encima.
+
+     Medido en la app desplegada (el iframe de Streamlit Cloud es same-origin, así que `contentDocument` abre y se puede instrumentar producción directamente), con `elementFromPoint` sobre el centro de cada pestaña: "Producto", "Vs año pasado" y "Volatilidad" recibían el puntero; **"Proveedor" no**. El intruso: `el-inspector-btnrow`, la fila "Copiar para IA / 📌 Fijar", en una caja de 194×53 anclada en la esquina superior izquierda — exactamente encima del primer item del rail (`x 64–155` contra `x 0–194`).
+
+     La cadena de tres causas, y ninguna sola habría bastado:
+     1. El tooltip se crea SIEMPRE, con `?debug=1` o sin él; sin debug simplemente se queda "oculto".
+     2. Oculto = `opacity: 0`, que es puramente visual: el elemento sigue siendo hit-testeable al 100%.
+     3. El contenedor tiene `pointer-events: none` (a propósito, para poder medir lo de abajo), lo que debería salvar el caso — pero `el-inspector-btnrow` lleva `pointer-events: auto` inline, y **un descendiente puede volver a optar por el puntero aunque un ancestro lo haya apagado**. Ese `auto` es necesario: sin él los botones no andan cuando el tooltip SÍ se ve.
+
+     Fix: `tipVisible(el, visible)`, único punto para mostrar/ocultar, que mueve `opacity` **y** `visibility`. `visibility` es la única de las tres que corta el hit-test de la rama entera — un hijo no puede revertirla con `pointer-events`. Se reemplazaron los 9 sitios que tocaban `.style.opacity` a mano (quedaron 0 crudos) y se agregó `visibility:hidden` al `cssText` inicial, que es la gemela obligatoria del `opacity:0` que ya estaba ahí.
+
+     Verificado en las dos direcciones, que es lo que importa en un fix de hit-testing: sin debug, las tres primeras pestañas reciben el puntero y el clic en "Proveedor" cambia de vista de verdad (`?vista=proveedor`, "Ranking de proveedores" en pantalla); con `?debug=1` y el tooltip abierto, `elementFromPoint` sobre la fila devuelve `BUTTON#el-inspector-copiar` — los botones del inspector siguen clicables. Arreglar el fantasma sin romper lo que el fantasma servía.
+
+     **La trampa para la próxima vez:** una herramienta de desarrollo que se monta en producción "pero oculta" no es gratis. Acá el costo lo pagó el usuario final durante días, en un reporte que no tenía nada que ver con el inspector, y el reporte de bug llegó como "el rail está roto". Ocultar con `opacity` es lo primero que uno escribe y lo último en lo que uno sospecha.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#183**.
+> próxima regla nueva es la **#184**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

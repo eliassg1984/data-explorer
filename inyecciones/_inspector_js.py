@@ -866,6 +866,32 @@ JS = """
             }
         }
 
+        // Mostrar/ocultar el tooltip. SIEMPRE por aca, nunca tocando
+        // `.style.opacity` a mano.
+        //
+        // Por que existe (2026-08-23, bug de PRODUCCION reportado como "la
+        // pestana Proveedor no se sombrea, no permite seleccionar"):
+        // `opacity:0` deja el elemento invisible pero PLENAMENTE
+        // hit-testeable. El contenedor tiene `pointer-events:none`, que
+        // deberia alcanzar — salvo que su hijo `el-inspector-btnrow` lleva
+        // `pointer-events:auto` inline (lo necesita: son los botones
+        // "Copiar para IA"/"Fijar", que tienen que andar cuando el tooltip
+        // SI se ve). Y un descendiente PUEDE volver a optar por el puntero
+        // aunque el ancestro lo haya apagado. Resultado: una caja fantasma
+        // de 194x53 en la esquina superior izquierda comiendose los clicks
+        // del primer item del rail de vistas, en todos los reportes y para
+        // todos los usuarios — sin ?debug=1, porque el tooltip se crea
+        // igual y solo se mantiene "oculto".
+        // `visibility` es la unica de las tres que corta el hit-test de la
+        // rama ENTERA: un hijo no puede revertirla con pointer-events.
+        // Ver arquitectura.md #183.
+        function tipVisible(el, visible) {
+            if (!el) return;
+            el.style.opacity = visible ? '1' : '0';
+            el.style.visibility = visible ? 'visible' : 'hidden';
+        }
+        win.__inspectorTipVisible = tipVisible;
+
         var tip = doc.getElementById('el-inspector-tip');
         if (!tip) {
             tip = doc.createElement('div');
@@ -892,6 +918,10 @@ JS = """
                 'border:1px solid var(--accent)',
                 'white-space:pre',
                 'opacity:0',
+                // Gemela OBLIGATORIA del opacity:0 de arriba — ver
+                // tipVisible(). Sin esto el tooltip nace invisible pero
+                // atrapando el cursor en la esquina superior izquierda.
+                'visibility:hidden',
                 'transition:opacity 0.1s',
                 'max-width:480px',
                 'max-height:60vh',
@@ -976,7 +1006,7 @@ JS = """
             // apagar de inmediato si se acaba de silenciar y no hay nada fijado
             if (win.__inspectorTooltipSilenciado && !win.__inspectorPinned) {
                 var tipS = doc.getElementById('el-inspector-tip');
-                if (tipS) tipS.style.opacity = '0';
+                if (tipS) tipVisible(tipS, false);
                 resaltarEl(null, null);
             }
         };
@@ -1336,7 +1366,7 @@ JS = """
                 pinBtnEl.textContent = pinear ? '\\uD83D\\uDCCC Fijado (clic para soltar)' : '\\uD83D\\uDCCC Fijar';
                 pinBtnEl.style.background = pinear ? '#3C3489' : '#2A2A35';
             }
-            if (!pinear && tipEl) tipEl.style.opacity = '0'; // el proximo mousemove lo re-muestra si corresponde
+            if (!pinear && tipEl) tipVisible(tipEl, false); // el proximo mousemove lo re-muestra si corresponde
         };
 
         // Logica de copiado compartida por el boton "Copiar para IA", la tecla
@@ -1453,7 +1483,7 @@ JS = """
                 if (txp + twp > win.innerWidth - 8) txp = e.clientX - twp - 16;
                 if (typ + thp > win.innerHeight - 8) typ = e.clientY - thp - 10;
                 if (typ < 6) typ = 6;
-                tipEl.style.opacity = '1';
+                tipVisible(tipEl, true);
                 tipEl.style.left = txp + 'px';
                 tipEl.style.top = typ + 'px';
             }
@@ -1465,7 +1495,7 @@ JS = """
                 var tip = doc.getElementById('el-inspector-tip');
                 if (!tip) return;
                 if (!inspectorActivo()) {
-                    tip.style.opacity = '0';
+                    tipVisible(tip, false);
                     resaltarEl(null, null);
                     return;
                 }
@@ -1593,7 +1623,7 @@ JS = """
                 // siempre revela el tooltip via __inspectorContextMenuHandler,
                 // no acá.
                 if (!win.__inspectorTooltipSilenciado) {
-                    tip.style.opacity = '1';
+                    tipVisible(tip, true);
                     var x = e.clientX + 16;
                     var y = e.clientY - 10;
                     var tw = tip.offsetWidth  || 260;
@@ -1604,10 +1634,10 @@ JS = """
                     tip.style.left = x + 'px';
                     tip.style.top  = y + 'px';
                 } else {
-                    tip.style.opacity = '0';
+                    tipVisible(tip, false);
                 }
             } else {
-                tip.style.opacity = '0';
+                tipVisible(tip, false);
             }
               } catch(err) {
                 if (win.__logErr) win.__logErr('Inspector mousemove: ' + err.message);
@@ -1617,7 +1647,7 @@ JS = """
             win.__inspectorMouseLeaveHandler = function() {
                 if (win.__inspectorPinned) return; // fijado: se queda visible aunque el cursor salga
                 var tip = doc.getElementById('el-inspector-tip');
-                if (tip) tip.style.opacity = '0';
+                if (tip) tipVisible(tip, false);
                 resaltarEl(null, null);
             };
 
@@ -1649,7 +1679,7 @@ JS = """
                     if (!inspectorActivo()) {
                         if (win.__inspectorPinned) win.__inspectorTogglePin(true);
                         var tip = doc.getElementById('el-inspector-tip');
-                        if (tip) tip.style.opacity = '0';
+                        if (tip) tipVisible(tip, false);
                         resaltarEl(null, null);
                     }
                 }
