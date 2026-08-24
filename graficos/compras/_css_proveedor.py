@@ -796,7 +796,7 @@ CSS = """        <style>
         .st-key-cp_evo_ctrl {
             display: flex !important; flex-direction: row !important;
             align-items: center !important;
-            gap: 12px !important;
+            gap: 8px !important;
             width: auto !important;
             margin: 0 0 6px !important; padding: 0 !important;
         }
@@ -836,7 +836,11 @@ CSS = """        <style>
         .st-key-cp_evo_ctrl [data-testid="stSelectbox"] input {
             padding: 0 !important;
             height: auto !important;
-            font-size: 12px !important;
+            /* 11px y no 12: al entrar el TERCER desplegable (ver abajo) los
+               textos a 12px sumaban ~289px en una fila de 279.5. Además es
+               la escala real de esta tarjeta — el título es 11px y las
+               flechas 10.5. Los 12px eran el número raro. */
+            font-size: 11px !important;
             font-weight: 600 !important;
             color: var(--text-primary) !important;
             cursor: pointer !important;
@@ -854,16 +858,58 @@ CSS = """        <style>
         .st-key-cp_evo_ctrl [data-testid="stSelectbox"]:hover input {
             color: var(--accent-deep) !important;
         }
+        /* El botón ✕ "Clear value" aparece SOLO en el selector de cuántos
+           períodos, y no por capricho: su lista incluye `None` (la opción
+           "Auto"), y con un `None` entre las opciones Streamlit considera al
+           widget vaciable. Acá esa ✕ es redundante —vaciarlo deja `None`,
+           que es exactamente "Auto", una opción que ya está en la lista— y
+           encima cobraba caro: entre la ✕ (24px) y el chevron (26px) le
+           dejaban 14px al texto en un control de 64, así que "Auto 4" salía
+           cortado (medido). Fuera.
+
+           Y el botón del chevron se achica: 26px de ancho para un ícono de
+           14 son ~10px de padding que en esta fila no sobran. Se identifican
+           por `aria-label`/`aria-haspopup` y NO por su clase: las de emotion
+           cambian entre builds (regla vieja de este proyecto). */
+        .st-key-cp_evo_ctrl [data-testid="stSelectbox"]
+            button[aria-label="Clear value"] {
+            display: none !important;
+        }
+        .st-key-cp_evo_ctrl [data-testid="stSelectbox"] button[aria-haspopup] {
+            width: 16px !important;
+            min-width: 0 !important;
+            padding: 0 !important;
+            flex: 0 0 auto !important;
+        }
         /* Anchos EXPLÍCITOS, uno por control. Un input de react-aria no se
            auto-dimensiona: sin esto pide el 100% del contenedor y el chevron
            termina contra el borde derecho de la tarjeta, a ~300px de su
            propio texto (el `width: auto` que ya tenía `gran_float` le ganaba
            al 100% en el contenedor, pero no en el input). Están medidos
-           sobre la opción MÁS LARGA de cada lista — "📅 Rango" y "Por
-           semana"; si se agregan opciones, revisarlos. */
-        .st-key-cp_evo_ctrl > .st-key-cp_evo_periodo { width: 96px !important; }
-        .st-key-cp_evo_ctrl .st-key-gran_float { width: 104px !important; }
+           sobre la opción MÁS LARGA de cada lista — "Rango", "Por semana" y
+           "Todo NN"/"Auto NN"; si se agregan opciones, revisarlos.
+
+           El presupuesto HORIZONTAL de la fila, medido con `measureText` a
+           11px/600 sobre 279.5px de ancho útil:
+               56 (ventana) + 84 (grano) + 64 (cuántos) + ~46 (flechas)
+             + 3 huecos de 8  =  ~274.
+           Queda poco margen a propósito: es lo que costó meter las tres
+           filas de controles en una. Si algo tiene que crecer, primero
+           medir de nuevo — con el emoji 📅 en la primera opción ya NO
+           entraba (se pasaba ~18px, por eso se fue). */
+        .st-key-cp_evo_ctrl > .st-key-cp_evo_periodo { width: 56px !important; }
+        .st-key-cp_evo_ctrl .st-key-gran_float { width: 84px !important; }
+        .st-key-cp_evo_ctrl .st-key-win_size { width: 64px !important; }
         .st-key-cp_evo_ctrl [data-testid="stSelectbox"] { width: 100% !important; }
+        /* Las flechas ‹ › entran al renglón compartido: pierden el margen
+           inferior que tenían cuando eran una fila propia, y se pegan al
+           final de la línea. Todo su ASPECTO (tamaño, sombra, hover) sigue
+           saliendo del bloque `.st-key-win_nav` de más arriba — acá sólo se
+           corrige lo que cambió al mudarse. */
+        .st-key-cp_evo_ctrl .st-key-win_nav {
+            margin: 0 !important;
+            flex: 0 0 auto !important;
+        }
 
         /* ── Panel B: tarjetas por proveedor (reemplaza el st.dataframe) ──
            Reemplaza la tabla de 5 columnas por un stack de tarjetas: swatch
@@ -1024,24 +1070,16 @@ CSS = """        <style>
                 width: 100% !important;
                 margin: 0 0 6px 0 !important;
             }
-            /* Los dos selectores de tiempo (ventana + granularidad): en
-               desktop comparten renglón con anchos fijos medidos sobre la
-               opción más larga; en 375px eso deja el resto de la línea
-               muerto, así que se reparten el ancho a la mitad — sigue siendo
-               UNA línea (que es lo pedido), con tap targets más grandes.
-               El alto sube a 32px: 24 es cómodo con mouse, no con el dedo. */
+            /* Los tres selectores de tiempo + las flechas: en 375px la
+               tarjeta tiene 291px de ancho útil y los anchos de desktop
+               suman ~274, así que ENTRAN tal cual — no hace falta
+               repartirlos. Hubo una vuelta con `flex: 1 1 0` (tercios
+               iguales) cuando eran dos controles; con tres deja 57px de
+               texto y "Por semana" (64px a 11px/600, medido) salía cortado.
+               Lo único que cambia en móvil es el alto: 24px es cómodo con
+               mouse, no con el dedo. */
             .st-key-cp_evo_ctrl {
                 width: 100% !important;
-                gap: 8px !important;
-            }
-            .st-key-cp_evo_ctrl > .st-key-cp_evo_periodo,
-            .st-key-cp_evo_ctrl > [data-testid="stLayoutWrapper"] {
-                flex: 1 1 0 !important;
-                width: auto !important;
-                min-width: 0 !important;
-            }
-            .st-key-cp_evo_ctrl .st-key-gran_float {
-                width: auto !important;
             }
             .st-key-cp_evo_ctrl [data-testid="stSelectbox"] input,
             .st-key-cp_evo_ctrl [data-testid="stSelectbox"] div[role="group"],

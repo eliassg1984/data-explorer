@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-186 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+187 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (68)
 
@@ -89,7 +89,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#182** — El modo diseño ya llega a los textos de Plotly y de AgGrid — y para esos dos el "Copiar CSS"…
 - **#186** — Un st.container anidado NO es hijo directo del flex que lo contiene: Streamlit le mete un…
 
-**Layout y alturas** (17)
+**Layout y alturas** (18)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -108,6 +108,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#161** — Un número de píxeles escrito en un comentario no se entera de que el layout cambió: el eje X…
 - **#177** — "COMPRAS: PÁGINA BLANCA, TARJETAS TENUES" (regla #16 y media docena de "vueltas" entre…
 - **#178** — Mover un control de "flotando sobre el marco compartido" a "adentro de una tarjeta" no es un…
+- **#187** — Meter None entre las opciones de un st.selectbox le agrega un botón ✕ "Clear value" que no…
 
 **Plotly y figuras** (42)
 
@@ -184,7 +185,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#163** — arquitectura.md creció hasta ser un documento que nadie podía abrir: 115k tokens, y CLAUDE.md…
 - **#185** — Un contextmenu dentro de un iframe NO sube al documento padre: el clic derecho sobre la…
 
-**Streamlit** (55)
+**Streamlit** (56)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -241,6 +242,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#179** — Un atajo de fecha (nuevo o viejo) no sobrevive cambiar de REPORTE y volver — mismo mecanismo…
 - **#180** — Un widget DENTRO de un @st.fragment que escribe estado consumido AFUERA no cambia nada en…
 - **#186** — Un st.container anidado NO es hijo directo del flex que lo contiene: Streamlit le mete un…
+- **#187** — Meter None entre las opciones de un st.selectbox le agrega un botón ✕ "Clear value" que no…
 
 **Datos, R2 y DuckDB** (19)
 
@@ -8126,13 +8128,31 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      **Corrección de documentación en el mismo commit:** el comentario que había en `proveedor.py` sobre estos controles afirmaba que `gran` era "compartido con el Ranking (`gran` entra en `_agregar_periodo()` para las dos columnas)" y citaba la regla **#176**, que es la de `help=` en `st.markdown`. Las dos cosas estaban mal. El Ranking NO mira períodos: suma por proveedor sobre todo el rango, y el propio código lo dice en el comentario de `_tot_por_prov`. `_agregar_periodo()` se le aplica a `base`, que sí alimenta a las dos columnas, pero lo único que hace además de crear `per` es descartar filas con fecha inválida — y una fecha inválida lo es en las cuatro granularidades por igual, así que los números del ranking salen idénticos con Día, Semana, Mes o Año. Lo que `gran` SÍ gobierna fuera de la tarjeta de Evolución es `win_nav` (cuántos períodos entran en la ventana) y la tabla pivotable de documentos del fondo del drill, cuyas COLUMNAS son los períodos. La regla que correspondía citar es la #178. Moraleja: un comentario que afirma un ACOPLAMIENTO es tan verificable como el código — se comprueba leyendo al consumidor, no se hereda de la vuelta anterior.
 
+187. **Meter `None` entre las opciones de un `st.selectbox` le agrega un botón ✕ "Clear value" que no pediste — y en un control angosto se come el texto.** Pedido 2026-08-23, en la misma sesión que la #186: "que entre en la misma línea que el resto". La tercera fila de controles de la tarjeta de Evolución de Compras › Proveedor (`win_nav`: `‹ Auto/N/Todo ›`) se partió en dos para caber en el renglón compartido — el TAMAÑO de la ventana pasó a ser el tercer desplegable (`win_size`) y las FLECHAS se quedaron como botones, porque mover una ventana es navegación de un clic y meterla en una lista la volvería de dos.
+
+     Su lista de opciones incluye `None` (la opción "Auto"), que es el valor que `cp_prov_win_size` ya usaba. Con un `None` entre las opciones Streamlit considera al widget vaciable y le dibuja una ✕. Acá esa ✕ era redundante —vaciar deja `None`, o sea "Auto", que ya está en la lista— y encima cara: medido, entre la ✕ (24px) y el chevron (26px) le dejaban **14px al texto en un control de 64**, así que "Auto 4" salía cortado. Fix: ocultar la ✕ con `button[aria-label="Clear value"]` y achicar el botón del chevron a 16px (26 para un ícono de 14 son ~10px de padding que en esa fila no sobran). Los dos se identifican por `aria-label`/`aria-haspopup` y NO por su clase: las de emotion cambian entre builds.
+
+     Tres cosas más del mismo cambio, todas del mismo tipo — **lo que era gratis con botones deja de serlo con un desplegable**:
+
+     · **`format_func=None` no es "sin formato": revienta.** Al quitarle el ícono 📅 a la opción `HEREDA` quedó `format_func=None` explícito y Streamlit lo llama igual → `TypeError: 'NoneType' object is not callable`, con la pantalla del drill entera en rojo. El default real es `str`; `periodo.selector()` lo repone con `format_func or str`.
+
+     · **Una lista de opciones DINÁMICA obliga a clampear el estado, no sólo el número derivado.** Las opciones de ventana dependen de cuántos períodos haya (`[None] + [1,2,3,6,12,24 < n] + [n]`). Con los botones de antes eso no importaba: escribían cualquier int y `_ventana` lo acotaba al usarlo. Un `st.selectbox` con un valor guardado que no está entre sus opciones revienta al construirse, así que el clamp tiene que subir de nivel y corregir `session_state` — y correr ANTES del widget (CLAUDE.md, "el clamp de bounds va justo antes del widget"). Se ve funcionando: elegir "3" con 13 períodos y después volver a un rango de 1 período deja el control en "Auto" solo, sin error.
+
+     · **El ancho de una etiqueta también es un contrato.** `f"Todo {n}"` con granularidad Día sobre todo el histórico da "Todo 730" = 50px sobre 48 disponibles (`measureText` a 11px/600, la fuente real). Se acota a "Todo" a partir de 3 dígitos. "Auto" no necesita el corte: su número sale de `_ventana_auto`, acotado a 4..12.
+
+     **Y un hueco que el cambio destapó, este de comportamiento y no de layout:** la ventana es del RANGO — `_sl` sólo se aplica cuando la tarjeta hereda el rango de la franja, cosa que el código ya hacía y decía. Pero eso no se VEÍA: con una ventana propia elegida (`12m`, que es el default) los dos controles seguían habilitados sin hacer nada. Con un rango de franja corto las flechas salían apagadas por sus propios topes y disimulaba; con un rango ancho quedaban encendidas y muertas. Ahora los dos llevan `disabled=_evo_hist` y un `help` que dice por qué — mismo criterio que el bloqueo de clicks del modo diseño: si no va a pasar nada, avisar antes, no después.
+
+     El presupuesto: `FRANJA_WIN_NAV` (36) desaparece — era la tercera fila y ya no existe. De las tres constantes que hubo ese día queda `FRANJA_CTRL_EVO = 30` sola, y la figura pasó de 241 a **277px**. Medido al terminar: los cuatro controles centrados en la misma línea (mismo centro vertical, 196.6), fila de 24px, 5.5px de holgura a la derecha en un viewport de 1280, ningún texto cortado en el peor caso de cada lista, las dos tarjetas de la fila iguales y sin scroll interno. En 375px entran los mismos anchos (274 sobre 291 disponibles) y sólo sube el alto a 32px; la vuelta anterior los repartía en tercios iguales, que con TRES controles dejaba 57px de texto y cortaba "Por semana" (64px).
+
+     **Lo que este cambio NO arregló, y empeoró:** la tarjeta de Evolución tiene ahora ~61px de aire muerto al fondo (eran ~46). El alto de la fila lo fija la tarjeta de Ranking vía el `:has()` de `_80_cards.py`, y el presupuesto cuenta el alto de cada FILA pero nunca los 16px de gap que Streamlit mete entre los hijos del bloque: cada fila que desaparece libera fila+gap y la figura sólo reclama la fila. Está medido y anotado aparte; arreglarlo toca `_ALTO_FRAME`, que gobierna la fila entera.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#187**.
+> próxima regla nueva es la **#188**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

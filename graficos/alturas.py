@@ -168,29 +168,24 @@ FRANJA_CTRL_EVO = 30
 Evolución de Compras › Proveedor: la ventana (`cp_evo_periodo`) y la
 granularidad (`gran_float`), los DOS en el mismo renglón.
 
-MEDIDO en el navegador el 2026-08-23. Reemplaza a `FRANJA_PILLS` (30) y
-`FRANJA_GRAN` (30), que eran dos filas apiladas de `st.pills`: al pasar los
-dos selectores a `st.selectbox` aplanado a texto entraron en una línea sola
-y los ~30px de la fila que sobraba volvieron a la figura.
+MEDIDO en el navegador el 2026-08-23. Reemplaza a las TRES constantes que
+hubo ese día — `FRANJA_PILLS` (30), `FRANJA_GRAN` (30) y `FRANJA_WIN_NAV`
+(36), que eran tres filas apiladas de controles: al pasar los selectores a
+`st.selectbox` aplanado a texto entraron los tres en una línea sola (con las
+flechas ‹ › al final) y los ~66px de las dos filas que sobraban volvieron a
+la figura.
 
 Existe por lo mismo que existían aquellas: estos controles viven DENTRO de
 una tarjeta que ya estaba llena, así que los píxeles que ocupan hay que
 restárselos a la figura, o la tarjeta crece y su eje X termina debajo del
 borde (el modo de fallo de `FRANJA_CONTROLES`)."""
 
-FRANJA_WIN_NAV = 36
-"""Alto de la fila ‹ Auto/N/Todo › (`win_nav`) dentro de la tarjeta de
-Evolución de Compras › Proveedor: 28px de fila de botones + 8 de margen
-inferior, MEDIDO en el navegador el 2026-08-23. Se mudó adentro de la
-tarjeta el mismo día y por el mismo motivo que `FRANJA_CTRL_EVO` (ver ese
-docstring)."""
-
 FRANJA_ATAJOS = 24
 """Alto de la fila de atajos de fecha (Esta semana/Este mes/Últimos 30
 días/Este año) agregada DENTRO de la tarjeta de Ranking de Compras ›
 Proveedor, MEDIDO en el navegador el 2026-08-23 (tarjeta: 436px sin la
-fila, 460px con ella). A diferencia de `FRANJA_CTRL_EVO`/`FRANJA_WIN_NAV`
-(que se restan de una FIGURA), ésta se resta de la `height=` del AgGrid
+fila, 460px con ella). A diferencia de `FRANJA_CTRL_EVO` (que se resta de
+una FIGURA), ésta se resta de la `height=` del AgGrid
 del ranking — mismo motivo: la fila es nueva, nadie le había hecho lugar
 todavía."""
 

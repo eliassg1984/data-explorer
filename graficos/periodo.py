@@ -143,6 +143,11 @@ def selector(clave, default="12m", opciones=OPCIONES, label="Período",
     dependen de la cadena literal.
     """
     ops = list(opciones)
+    # `format_func=None` NO es "sin formato": Streamlit lo llama igual y
+    # revienta con "'NoneType' object is not callable". El default real es
+    # `str`, así que hay que reponerlo a mano cuando el llamador no pasa uno
+    # (pasó al quitarle el ícono a la opción HEREDA, 2026-08-23).
+    fmt = format_func or str
     if widget == "lista":
         # `index` sólo fija el arranque: si `clave` ya está en session_state
         # (rerun, o una sesión que venía de las pills), Streamlit usa ese
@@ -151,7 +156,7 @@ def selector(clave, default="12m", opciones=OPCIONES, label="Período",
         idx = ops.index(default) if default in ops else 0
         return st.selectbox(label, ops, index=idx, key=clave,
                             label_visibility="collapsed", help=AYUDA,
-                            format_func=format_func) or default
+                            format_func=fmt) or default
     return st.pills(label, ops, default=default, key=clave,
                     label_visibility="collapsed", help=AYUDA,
-                    format_func=format_func) or default
+                    format_func=fmt) or default

@@ -230,6 +230,18 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     _n_series = len(orden_provs) + (1 if (_hay_otros and _otros_seleccionado) else 0)
     _n_per = len(periodos)
     _ventana_auto = max(4, min(12, int(1200 / (16 * max(1, _n_series)))))
+    # Opciones de la ventana. La lista es DINÁMICA (depende de cuántos
+    # períodos haya), y desde 2026-08-23 la consume un `st.selectbox`: si el
+    # valor guardado no está entre ellas, Streamlit revienta al construir el
+    # widget. Con los botones de antes no pasaba —escribían cualquier int y
+    # `_ventana` lo clampeaba— así que el clamp tiene que subir de nivel:
+    # ahora se corrige el ESTADO, no sólo el número derivado. Va acá, lejos
+    # del widget pero antes que él, que es lo único que importa (CLAUDE.md,
+    # "el clamp de bounds va justo antes del widget").
+    _ops_win = ([None] + [o for o in (1, 2, 3, 6, 12, 24) if o < _n_per]
+                + [_n_per])
+    if st.session_state.get("cp_prov_win_size") not in _ops_win:
+        st.session_state["cp_prov_win_size"] = None
     _win_size_sel = st.session_state.get("cp_prov_win_size")   # None = auto
     _ventana = (_ventana_auto if _win_size_sel is None
                 else min(int(_win_size_sel), _n_per))
@@ -315,20 +327,22 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # que su figura mide eso menos que la tabla de al lado. La tabla no paga
     # el cromo: su columna tenía 119px de aire medidos, la evolución es la que
     # manda el alto de la fila.
-    # 2026-08-23: se le suma una fila más (FRANJA_WIN_NAV) — `gran_float` y
+    # 2026-08-23: se le suman dos filas más — `gran_float` y
     # `win_nav` se mudaron DENTRO de esta tarjeta (antes flotaban afuera, sin
     # costarle alto a nadie). Sin restarlas, la tarjeta de Evolución crecía
     # 66px y la de Ranking se estiraba igual para empatarla (regla de
     # _80_cards.py "dos tarjetas de la misma fila miden lo mismo") —
     # verificado en vivo: las dos daban 473px de alto en vez de la fila
     # "natural" de Ranking, dejando aire de más al fondo.
-    # Más tarde el mismo día: la granularidad dejó de tener fila propia (se
-    # metió en el renglón del selector de ventana, ver `cp_evo_ctrl` abajo),
-    # así que las dos constantes de aquellas dos filas son ahora una sola,
-    # `FRANJA_CTRL_EVO`, y los ~30px que sobraban volvieron a la figura.
+    # Más tarde el mismo día, en dos vueltas: primero la granularidad y
+    # después la navegación de ventana dejaron de tener fila propia — las
+    # tres viven en un solo renglón (`cp_evo_ctrl`, abajo). De las tres
+    # constantes que hubo (FRANJA_PILLS, FRANJA_GRAN, FRANJA_WIN_NAV) queda
+    # una, `FRANJA_CTRL_EVO`, y los ~66px de las dos filas que desaparecieron
+    # volvieron a la figura.
     _ALTO_EVO = max(alturas.MINI,
                     _ALTO_FRAME - alturas.FRANJA_CTRL_EVO
-                    - alturas.FRANJA_WIN_NAV - alturas.CROMO_TARJETA)
+                    - alturas.CROMO_TARJETA)
     # Ancho de la figura de evolución, MEDIDO en el navegador (viewport 1912,
     # rails desplegados). No sale de una cuenta porque su columna cuelga de
     # dos repartos anidados —COLUMNAS_DRILL y el [2.6, 1] de acá abajo— sobre
@@ -512,8 +526,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                               _ctx_fecha["reporte"],
                                               _ctx_fecha["usa_carga_rango"]))
                     # La fila de atajos (si se dibujó) le come FRANJA_ATAJOS
-                    # al AgGrid de abajo — mismo motivo que FRANJA_CTRL_EVO/
-                    # FRANJA_WIN_NAV en Evolución: nadie le hacía lugar
+                    # al AgGrid de abajo — mismo motivo que FRANJA_CTRL_EVO
+                    # en Evolución: nadie le hacía lugar
                     # todavía. Condicional a que la fila exista de verdad
                     # (`_atajos_rank` puede salir vacía si ningún atajo
                     # intersecta el rango de datos): restar sin que la fila
@@ -709,11 +723,55 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         # pasa a "Por mes" — es la información que daba el
                         # caption "Agrupado por X" que se quitó cuando el
                         # control estaba a la vista.
+                        def _win_mover(_delta):
+                            st.session_state["cp_prov_win_ini"] = min(
+                                max(0, _win_ini + _delta), _ini_max)
+
+                        def _fmt_win(_o):
+                            """Etiqueta de una opción de ventana. `None` es
+                            automático y `_n_per` es "todas": los dos llevan
+                            el número al lado porque el usuario elige CUÁNTOS
+                            períodos ve, y sin la cifra "Auto" no dice nada.
+
+                            El número de "Todo" se cae a partir de 3 dígitos,
+                            y no por gusto: el control mide 64px (48 para el
+                            texto) y "Todo 730" —granularidad Día sobre todo
+                            el histórico, un caso que pasa— pide 50. Medido
+                            con `measureText` a 11px/600, que es la fuente
+                            real. "Auto" no necesita el corte: su número sale
+                            de `_ventana_auto`, acotado a 4..12."""
+                            if _o is None:
+                                return f"Auto {_ventana_auto}"
+                            if _o == _n_per:
+                                return f"Todo {_n_per}" if _n_per < 100 else "Todo"
+                            return str(_o)
+
                         with st.container(key="cp_evo_ctrl"):
+                            # 2026-08-23 (4), a pedido ("que entre en la
+                            # misma línea que el resto"): `win_nav` era la
+                            # TERCERA fila de controles de tiempo de esta
+                            # tarjeta y se parte en dos para caber en el
+                            # renglón compartido:
+                            #
+                            #   · el TAMAÑO de la ventana (cuántos períodos
+                            #     se ven a la vez) pasa a ser el tercer
+                            #     desplegable, hermano de los otros dos;
+                            #   · las FLECHAS ‹ › se quedan como están —
+                            #     mover una ventana es navegación de un
+                            #     clic, y meterla en una lista la volvería
+                            #     de dos.
+                            #
+                            # El emoji 📅 del primero se fue en la misma
+                            # vuelta: medidos los textos a 11px, los tres
+                            # desplegables más las flechas suman ~270px en
+                            # una fila de 279.5, y con el emoji se pasaban.
+                            # Era decorativo; "Rango" solo dice lo mismo.
                             _op_evo = periodo.selector(
-                                "cp_evo_periodo", widget="lista",
-                                format_func=lambda o: (
-                                    "📅 Rango" if o == periodo.HEREDA else o))
+                                "cp_evo_periodo", widget="lista")
+                            # Se resuelve ACÁ y no después del bloque porque
+                            # los dos controles de ventana de más abajo lo
+                            # necesitan para saber si les toca estar vivos.
+                            _evo_hist = _op_evo != periodo.HEREDA
                             # `gran_float` conserva la key aunque ya no
                             # flote ni sea pills (mismo criterio que
                             # --rail-der-* tras el flip de lado): la nombra
@@ -732,7 +790,58 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                     index=2, key="compras_prov_gran",
                                     format_func=lambda g: f"Por {g.lower()}",
                                     label_visibility="collapsed")
-                        _evo_hist = _op_evo != periodo.HEREDA
+                            # El TAMAÑO de la ventana. El widget es dueño
+                            # DIRECTO de `cp_prov_win_size`, la misma clave
+                            # que antes escribían los `on_click` de los
+                            # botones: no hace falta callback ni una clave
+                            # espejo. Por eso desapareció `_win_size()`, y
+                            # con él el `st.markdown` con un `<style>` que
+                            # pintaba de acento el botón activo — un
+                            # desplegable ya muestra cuál está elegido.
+                            # El clamp de `_ops_win` vive arriba, donde se
+                            # calcula la ventana: la lista es dinámica y un
+                            # valor viejo fuera de ella rompe el widget.
+                            # La ventana es del RANGO: `_sl` sólo se aplica
+                            # cuando la tarjeta hereda el rango de la franja
+                            # (ver el bloque de `_evo_x`, más abajo, que ya
+                            # era así). Hasta ahora eso no se veía: con una
+                            # ventana propia elegida, estos dos controles
+                            # seguían habilitados y no hacían nada. Con el
+                            # rango de franja corto las flechas salían
+                            # apagadas por sus propios topes y disimulaba,
+                            # pero con un rango ancho quedaban encendidas y
+                            # muertas. Mismo criterio que el bloqueo de
+                            # clicks del modo diseño: si no va a pasar nada,
+                            # decirlo antes, no después.
+                            _ayuda_win = ("Sólo cuando la tarjeta hereda el "
+                                          "rango de la franja (opción "
+                                          "«Rango»)")
+                            with st.container(key="win_size"):
+                                st.selectbox(
+                                    "Períodos visibles", _ops_win,
+                                    index=0, key="cp_prov_win_size",
+                                    format_func=_fmt_win, disabled=_evo_hist,
+                                    help=_ayuda_win if _evo_hist else None,
+                                    label_visibility="collapsed")
+                            # Las flechas se quedan como botones: son
+                            # navegación de UN clic. `win_nav` conserva la
+                            # key, y ahora le queda mejor que antes — mover
+                            # la ventana es lo único que hace, el tamaño
+                            # nunca fue "navegación".
+                            with st.container(key="win_nav"):
+                                st.button("‹", key="cp_win_prev",
+                                          disabled=_evo_hist or _win_ini <= 0,
+                                          help=(_ayuda_win if _evo_hist
+                                                else "Periodos anteriores"),
+                                          on_click=_win_mover,
+                                          args=(-_ventana,))
+                                st.button("›", key="cp_win_next",
+                                          disabled=(_evo_hist
+                                                    or _win_ini >= _ini_max),
+                                          help=(_ayuda_win if _evo_hist
+                                                else "Periodos siguientes"),
+                                          on_click=_win_mover,
+                                          args=(_ventana,))
                         # ALCANCE de los tres controles de tiempo de esta
                         # tarjeta, que NO es el mismo (corregido 2026-08-23:
                         # el comentario anterior afirmaba que `gran` era
@@ -740,7 +849,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         # y citaba la regla #176, que es la de `help=` en
                         # st.markdown — las dos cosas estaban mal):
                         #
-                        #   · `cp_evo_periodo` → sólo esta tarjeta.
+                        #   · `cp_evo_periodo` → sólo esta tarjeta, y
+                        #     además MANDA sobre los dos controles de
+                        #     ventana (`win_size`/`win_nav`): con una
+                        #     ventana propia elegida quedan deshabilitados.
                         #   · `gran` → esta tarjeta, `win_nav` (cuántos
                         #     períodos entran en la ventana) y la tabla
                         #     pivotable de documentos del fondo del drill,
@@ -757,47 +869,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         # una fecha inválida lo es en las cuatro
                         # granularidades por igual. Ver arquitectura.md #178.
 
-                        def _win_mover(_delta):
-                            st.session_state["cp_prov_win_ini"] = min(
-                                max(0, _win_ini + _delta), _ini_max)
-
-                        def _win_size(_n):
-                            st.session_state["cp_prov_win_size"] = _n
-
-                        with st.container(key="win_nav"):
-                            st.button("‹", key="cp_win_prev",
-                                      disabled=_win_ini <= 0,
-                                      help="Periodos anteriores",
-                                      on_click=_win_mover, args=(-_ventana,))
-                            # Pill activo marcado via <style> con la key
-                            # exacta (no se puede aplicar :active desde
-                            # Python porque Streamlit re-renderiza).
-                            _sel_key = (
-                                "cp_win_auto" if _win_size_sel is None
-                                else "cp_win_all" if _win_size_sel == _n_per
-                                else f"cp_win_{int(_win_size_sel)}")
-                            st.markdown(
-                                f"<style>.st-key-{_sel_key} button{{"
-                                f"background:#6c5ce7 !important;"
-                                f"color:#fff !important;"
-                                f"border-color:#6c5ce7 !important;"
-                                f"box-shadow:0 2px 5px rgba(76,60,180,0.28),"
-                                f"inset 0 1px 0 rgba(255,255,255,0.18) "
-                                f"!important;}}</style>",
-                                unsafe_allow_html=True)
-                            st.button(f"Auto {_ventana_auto}",
-                                      key="cp_win_auto",
-                                      on_click=_win_size, args=(None,))
-                            for _op in (1, 2, 3, 6, 12, 24):
-                                if _op < _n_per:
-                                    st.button(str(_op), key=f"cp_win_{_op}",
-                                              on_click=_win_size, args=(_op,))
-                            st.button(f"Todo {_n_per}", key="cp_win_all",
-                                      on_click=_win_size, args=(_n_per,))
-                            st.button("›", key="cp_win_next",
-                                      disabled=_win_ini >= _ini_max,
-                                      help="Periodos siguientes",
-                                      on_click=_win_mover, args=(_ventana,))
                         _src_evo = base
                         if _evo_hist and d_full is not None and col_fecha:
                             # La ventana se recorta sobre `d_full` (sin el filtro
