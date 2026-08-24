@@ -47,6 +47,31 @@ JS = """
             return false;
         }
 
+        // Cartelito efimero que explica un click comido por el bloqueador.
+        // Vive en el overlay propio (no en el arbol de Streamlit) para que un
+        // rerun no lo borre a mitad de la animacion, y se auto-borra a los
+        // 1.6s. `pointer-events:none` para que no se coma el click siguiente.
+        function avisarBloqueo(x, y) {
+            var prev = doc.getElementById('el-diseno-aviso-bloqueo');
+            if (prev) { prev.remove(); }
+            var av = doc.createElement('div');
+            av.id = 'el-diseno-aviso-bloqueo';
+            av.textContent = '🎨 Modo diseño: navegación bloqueada · apagalo en la barra de abajo';
+            av.style.cssText = [
+                'position:fixed', 'z-index:2147483647', 'pointer-events:none',
+                'left:' + Math.min(x + 14, win.innerWidth - 340) + 'px',
+                'top:' + Math.max(y - 40, 8) + 'px',
+                'max-width:330px', 'padding:7px 11px', 'border-radius:8px',
+                'background:rgba(28,26,48,.94)', 'color:#fff',
+                'font:500 11.5px/1.35 -apple-system,Segoe UI,sans-serif',
+                'box-shadow:0 4px 14px rgba(15,15,30,.28)',
+                'transition:opacity .25s', 'opacity:1',
+            ].join(';');
+            doc.body.appendChild(av);
+            win.setTimeout(function () { av.style.opacity = '0'; }, 1200);
+            win.setTimeout(function () { av.remove(); }, 1600);
+        }
+
         if (!win.__disenoState) {
             win.__disenoState = { porKey: {}, panelColapsado: false };
         }
@@ -1767,11 +1792,19 @@ JS = """
         // preventDefault de un <a> — los botones del rail son <button>
         // nativos manejados por el listener delegado de React, que vive mas
         // abajo en el arbol y jamas ve un evento detenido en `document`).
+        // El bloqueo SILENCIOSO era indistinguible de una app rota: reportado
+        // 2026-08-23 ("no puedo seleccionar Proveedor, no se sombrea") — el
+        // usuario habia dejado el modo diseno prendido y los clicks del rail
+        // se los comia esta funcion sin decir nada. Se conserva el bloqueo
+        // (es lo que se pidio: no perder el trabajo por navegar sin querer)
+        // y se le agrega ACUSE DE RECIBO: un cartelito junto al cursor que
+        // dice por que no paso nada y como salir. Ver arquitectura.md #181.
         win.__disenoClickBlocker = function(e) {
             if (!disenoActivo()) return;
             if (esUIPropiaDeDiseno(e.target)) return;
             e.preventDefault();
             e.stopPropagation();
+            avisarBloqueo(e.clientX, e.clientY);
         };
         win.addEventListener('scroll', win.__disenoScrollHandler, true);
         win.addEventListener('resize', win.__disenoResizeHandler);

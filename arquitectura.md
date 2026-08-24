@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-180 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+181 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (66)
 
@@ -283,7 +283,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (13)
+**Herramientas de desarrollo** (14)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -298,8 +298,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#167** — El fondo general de la app no se podía editar con el modo diseño: el lienzo es el único…
 - **#168** — Las manijas del modo diseño quedaban FUERA DE LA PANTALLA cuando el elemento tocaba un borde
 - **#173** — El overlay del modo diseño tiene pointer-events:none a propósito (para poder ver/medir lo de…
+- **#181** — Un bloqueo de interacción SIN acuse de recibo es indistinguible de una app rota — el que…
 
-**Decisiones de diseño y UX** (32)
+**Decisiones de diseño y UX** (33)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -333,6 +334,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#168** — Las manijas del modo diseño quedaban FUERA DE LA PANTALLA cuando el elemento tocaba un borde
 - **#169** — El CSS que exporta el modo diseño es una FOTO DE PÍXELES, no la intención: pegarlo tal cual…
 - **#170** — Se invirtieron Reportes y Vistas: Reportes al rail vertical izquierdo, Vistas a la franja…
+- **#181** — Un bloqueo de interacción SIN acuse de recibo es indistinguible de una app rota — el que…
 
 **Mantenimiento y trampas del lenguaje** (6)
 
@@ -8035,13 +8037,21 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      Fix: `_aplicar_atajo_rank()` como `on_click` — delega en `aplicar_atajo` (el dueño único sigue siendo `estado_rango`, no se duplica la escritura) y deja `_cp_rank_atajo_pendiente = True`; al inicio del fragment, `if st.session_state.pop(...): st.rerun(scope="app")`. La bandera no es ceremonia: el `on_click` corre como CALLBACK, antes del rerun del fragment, y `st.rerun()` hay que pedirlo desde el CUERPO. Y no se puede saltear el callback escribiendo el rango desde el cuerpo, porque `k_rango` es la key del `date_input` que `app.py` ya instanció en ese mismo run — escribirla después del widget es `StreamlitAPIException` (el invariante de `estado_rango.py`). O sea: la escritura sólo es legal en el callback, y el rerun sólo es posible en el cuerpo; hacen falta los dos. Mismo patrón que `graficos/compras/__init__.py:216`, que ya cruzaba esta misma frontera por otro motivo (quién dibuja el pill de fecha).
 
+181. **Un bloqueo de interacción SIN acuse de recibo es indistinguible de una app rota — el que bloquea tiene que decir que bloqueó.** El click-blocker del modo diseño (regla #173) hace exactamente lo que se pidió: mientras se diseña, un clic fuera de la UI de diseño no llega al widget, así no se pierde el trabajo por navegar sin querer. Pero lo hacía en SILENCIO. Reportado 2026-08-23 como bug de la app: "tengo problema para seleccionar la visualización Proveedor, esta no se sombrea" — con captura del rail y flecha roja. El usuario había dejado `?diseno=1` prendido de una sesión anterior; el clic del rail se lo comía el blocker y no pasaba absolutamente nada visible.
+
+     Reproducido con la tabla de verdad completa antes de tocar nada, porque el sospechoso obvio era otro (el `st.rerun(scope="app")` de la #180, recién agregado en el mismo drill): con `?debug=1&diseno=1` el clic en "Proveedor" deja el rail en "Producto" y la vista sin cambiar; sacando `diseno=1` de la URL el mismo clic pasa a `primary` y renderiza el drill. Se probó además la secuencia sospechosa de la #180 (atajo → Producto → Proveedor) SIN diseño: funciona perfecto. O sea el rerun nuevo no tenía nada que ver — el blocker sí, al 100%.
+
+     Fix: se conserva el bloqueo (es la función pedida, no un accidente) y se le agrega `avisarBloqueo(x, y)` — un cartelito fijo junto al cursor, "🎨 Modo diseño: navegación bloqueada · apagalo en la barra de abajo", que se desvanece a los 1.2s y se borra a los 1.6s. Tres detalles que no son cosméticos: va en `doc.body` y no en el árbol de Streamlit (un rerun lo borraría a mitad de la animación), lleva `pointer-events:none` (si no, se come el clic siguiente), y se remueve el anterior antes de crear uno nuevo (clickear repetido apilaba carteles).
+
+     La lección general, más allá de esta herramienta: cuando se agrega un guard que descarta eventos del usuario, el costo real no es implementarlo sino que su modo de falla es MUDO. El usuario no tiene forma de distinguir "esto está deshabilitado a propósito" de "esto está roto", y va a reportar lo segundo — como pasó acá, contra una feature que él mismo había pedido dos días antes.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#181**.
+> próxima regla nueva es la **#182**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
