@@ -4,6 +4,24 @@ Lo usa la vista "Semanal" de Compras (2026-08-24, a pedido): ahi el eje de
 tiempo ES el tema del grafico, asi que el selector de fecha vive arriba de
 la tarjeta en vez de en la franja superior.
 
+FUNCIONALIDAD: la del selector de rango de MSN Dinero, que se tomo de
+referencia — dos meses, campos de fecha escribibles, y Cancelar/Aplicar.
+Lo que NO se copio es su tamano: el suyo mide 556x413 con celdas de 32x36
+y letra de 13.3px (medido en vivo el 2026-08-24); este mide 430x296 con
+celdas de 29x26, a pedido explicito. Ver la regla #203.
+
+EL BORRADOR
+-----------
+Los clics y los campos escriben un BORRADOR (`_K_BORR`), no el rango. El
+rango real se toca solo en Aplicar. Mientras hay borrador sin aplicar el
+trigger lo marca con un punto y el pie dice "Sin aplicar" — el texto del
+trigger NO cambia, porque cambiarlo haria creer que ya se aplico.
+
+Un limite conocido: Streamlit no puede CERRAR un `st.popover` desde
+Python, asi que Aplicar y Cancelar hacen su trabajo pero el panel queda
+abierto (se cierra clickeando afuera). La alternativa seria `st.dialog`,
+que si se cierra solo, a cambio de oscurecer la pagina.
+
 Va PLEGADO: el trigger es una linea de 32px con el rango, y los dos meses
 salen en un popover. Primero se dibujaba inline y se comia media tarjeta
 (reportado el mismo dia). Popover y no `st.expander` porque el expander
@@ -65,6 +83,9 @@ _K_PEND = "compras_sem_cal_pend"    # 1er clic a la espera del 2do
 _K_ANCLA = "compras_sem_cal_ancla"  # (anio, mes) del mes IZQUIERDO
 _K_PICK = "compras_sem_cal_pick"    # el selector de mes/ano esta abierto
 _K_VISTO = "compras_sem_cal_visto"  # ultimo rango que vio el calendario
+_K_BORR = "compras_sem_cal_borrador"  # (ini, fin) elegido pero SIN aplicar
+_K_TXT_I = "compras_sem_cal_txt_ini"  # campo escribible "desde"
+_K_TXT_F = "compras_sem_cal_txt_fin"  # campo escribible "hasta"
 
 _MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
           "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
@@ -108,21 +129,89 @@ def _pin_rango(k_rango):
         st.session_state[k_rango] = tuple(r)
 
 
-def _clic_dia(f, k_rango, reporte, usa_carga_rango):
-    """Protocolo de dos clics: 1o fija el inicio, 2o cierra el rango.
+def _fmt_campo(f):
+    return f.strftime("%d/%m/%Y") if f else ""
 
-    El PRIMER clic no toca el rango: solo deja la fecha pendiente. Asi el
-    grafico no se redibuja con un rango de un dia entre clic y clic (y en
-    un reporte con `carga_por_rango` tampoco se dispara una lectura de R2
-    a medio elegir). Un rango completo = una sola escritura.
+
+def _parse_campo(txt):
+    """`dd/mm/aaaa` -> date, o None si no se entiende. Tolera `-` y `.`."""
+    if not txt:
+        return None
+    limpio = txt.strip().replace("-", "/").replace(".", "/")
+    try:
+        d, m, a = (int(x) for x in limpio.split("/"))
+        return datetime.date(a if a > 99 else 2000 + a, m, d)
+    except (ValueError, TypeError):
+        return None
+
+
+def _sembrar_campos(ini, fin):
+    """Deja los dos campos de texto en sintonia con el borrador.
+
+    Se llama desde CALLBACKS (clic de dia, Cancelar), o sea antes de que
+    los `st.text_input` se instancien en el rerun siguiente: escribir la
+    key de un widget ya instanciado seria un error de Streamlit. Es la
+    misma mecanica que usa `aplicar_atajo` con el rango.
+    """
+    st.session_state[_K_TXT_I] = _fmt_campo(ini)
+    st.session_state[_K_TXT_F] = _fmt_campo(fin)
+
+
+def _clic_dia(f, fmin, fmax):
+    """Protocolo de dos clics sobre el BORRADOR. No aplica nada.
+
+    El primer clic solo deja la fecha pendiente; el segundo cierra el
+    rango. Nada de esto toca el rango real hasta que se apreta Aplicar —
+    igual que el calendario de MSN que se tomo de referencia.
     """
     pend = st.session_state.get(_K_PEND)
     if pend is None:
         st.session_state[_K_PEND] = f
+        _sembrar_campos(f, None)
         return
     ini, fin = (pend, f) if pend <= f else (f, pend)
     st.session_state[_K_PEND] = None
-    aplicar_atajo(k_rango, (ini, fin), reporte, usa_carga_rango)
+    st.session_state[_K_BORR] = (ini, fin)
+    _sembrar_campos(ini, fin)
+
+
+def _editar_campo(cual, fmin, fmax):
+    """Callback de los campos escribibles. Lo que no se entiende se
+    ignora en silencio y el campo se repinta con el valor vigente: un
+    error de tipeo no puede dejar el calendario en un estado invalido."""
+    ini, fin = st.session_state.get(_K_BORR) or (None, None)
+    nuevo = _parse_campo(st.session_state.get(
+        _K_TXT_I if cual == "ini" else _K_TXT_F))
+    if nuevo is not None:
+        if fmin and nuevo < fmin:
+            nuevo = fmin
+        if fmax and nuevo > fmax:
+            nuevo = fmax
+        if cual == "ini":
+            ini = nuevo
+        else:
+            fin = nuevo
+        if ini and fin and ini > fin:
+            ini, fin = fin, ini
+        st.session_state[_K_BORR] = (ini, fin)
+        st.session_state[_K_PEND] = None
+    _sembrar_campos(*(st.session_state.get(_K_BORR) or (None, None)))
+
+
+def _aplicar(k_rango, reporte, usa_carga_rango):
+    borr = st.session_state.get(_K_BORR)
+    if borr and all(borr):
+        st.session_state[_K_PEND] = None
+        aplicar_atajo(k_rango, tuple(borr), reporte, usa_carga_rango)
+
+
+def _cancelar(k_rango):
+    """Vuelve el borrador al rango que está aplicado de verdad."""
+    r = st.session_state.get(k_rango)
+    if isinstance(r, (tuple, list)) and len(r) == 2 and all(r):
+        st.session_state[_K_BORR] = tuple(r)
+        _sembrar_campos(*r)
+    st.session_state[_K_PEND] = None
 
 
 def _abrir_selector():
@@ -271,6 +360,29 @@ def _css(dias_estado):
         'border: 1px solid %s !important; border-radius: 6px !important; '
         'color: %s !important; background: transparent !important; }'
         % (LAVANDA_BORDE, ACENTO_TEXTO),
+        # Campos escribibles de fecha, compactos: van en la fila de
+        # navegacion, en el hueco que las flechas ya dejaban vacio.
+        '.st-key-compras_sem_cal [data-testid="stTextInput"] input '
+        '{ height: 24px !important; min-height: 24px !important; '
+        'padding: 0 8px !important; font-size: 10.5px !important; '
+        'text-align: center !important; border-radius: 5px !important; '
+        'font-variant-numeric: tabular-nums !important; }',
+        '.st-key-compras_sem_cal [data-testid="stTextInput"] > div '
+        '{ border-color: %s !important; }' % LAVANDA_BORDE,
+        # Pie: Cancelar / Aplicar. Pastillas como las de la referencia.
+        '.st-key-cal_pie { border-top: 1px solid %s !important; '
+        'padding-top: 5px !important; margin-top: 3px !important; }'
+        % LAVANDA_BORDE,
+        '.st-key-cal_aplicar button, .st-key-cal_cancelar button '
+        '{ height: 24px !important; min-height: 24px !important; '
+        'padding: 0 10px !important; font-size: 10.5px !important; '
+        'font-weight: 600 !important; border-radius: 12px !important; }',
+        '.st-key-cal_aplicar button:not([disabled]) '
+        '{ background: %s !important; color: #fff !important; '
+        'border: 0 !important; }' % ACENTO,
+        '.st-key-cal_cancelar button:not([disabled]) '
+        '{ background: transparent !important; color: %s !important; '
+        'border: 1px solid %s !important; }' % (ACENTO_TEXTO, LAVANDA_BORDE),
         # La navegacion son botones tambien, pero fuera de `cal_mes_`: se
         # las devuelve a un tamano normal.
         '.st-key-cal_nav_ant button, .st-key-cal_nav_sig button '
@@ -354,7 +466,7 @@ def _estado_de_los_dias(anio, mes, ini, fin, pend, fmin, fmax):
     return salida
 
 
-def _pintar_mes(anio, mes, lado, fmin, fmax, k_rango, reporte, usa_carga_rango):
+def _pintar_mes(anio, mes, lado, fmin, fmax):
     with st.container(key="cal_mes_%s" % lado):
         # El titulo ES el boton que abre el selector de mes/ano (pedido
         # 2026-08-24: "pense que se podia seleccionar mes y ano"). Con
@@ -398,8 +510,7 @@ def _pintar_mes(anio, mes, lado, fmin, fmax, k_rango, reporte, usa_carga_rango):
                         str(dia),
                         key="cal_d_%s" % f.strftime("%Y%m%d"),
                         disabled=bool(fuera),
-                        on_click=_clic_dia,
-                        args=(f, k_rango, reporte, usa_carga_rango),
+                        on_click=_clic_dia, args=(f, fmin, fmax),
                     )
 
 
@@ -423,10 +534,29 @@ def render():
     _pin_rango(k_rango)
 
     rango = st.session_state.get(k_rango)
-    ini = fin = None
+    aplicado = None
     if isinstance(rango, (tuple, list)) and len(rango) == 2 and all(rango):
-        ini, fin = rango
+        aplicado = tuple(rango)
+
+    # El BORRADOR es lo que se ve y lo que se va a aplicar; el rango real
+    # no se toca hasta Aplicar. Se siembra con lo aplicado, y se vuelve a
+    # sembrar si el rango cambio desde AFUERA (otra vista, un deep-link):
+    # si no, el panel mostraria un borrador viejo que ya no corresponde.
+    _borr = st.session_state.get(_K_BORR)
+    _visto_prev = st.session_state.get(_K_VISTO)
+    if _borr is None or (_visto_prev is not None and _visto_prev != aplicado):
+        _borr = aplicado
+        st.session_state[_K_BORR] = _borr
+        if _borr:
+            _sembrar_campos(*_borr)
+    if _K_TXT_I not in st.session_state:
+        _sembrar_campos(*(_borr or (None, None)))
+
+    ini = fin = None
+    if _borr and all(_borr):
+        ini, fin = _borr
     pend = st.session_state.get(_K_PEND)
+    sucio = (ini, fin) != (aplicado or (None, None))
 
     # Ancla = mes IZQUIERDO, y el mes de referencia va a la DERECHA — o sea
     # se muestra [mes-1, mes], no [mes, mes+1].
@@ -453,8 +583,8 @@ def render():
     #     podian alejarse mas de un mes del rango (medido, 2026-08-24);
     #   · sin la segunda, elegir un rango DENTRO del calendario saltaria de
     #     mes al soltar el 2do clic.
-    _visto = st.session_state.get(_K_VISTO)
-    _actual = (ini, fin)
+    _visto = _visto_prev
+    _actual = aplicado
     if (_visto is not None and _visto != _actual
             and (ref.year, ref.month) not in ((anio_a, mes_a), (anio_b, mes_b))):
         st.session_state[_K_ANCLA] = _mes_anterior(ref.year, ref.month)
@@ -462,12 +592,15 @@ def render():
         anio_b, mes_b = _mes_siguiente(anio_a, mes_a)
     st.session_state[_K_VISTO] = _actual
 
-    if pend is not None:
-        _label = "Elegí la fecha de finalización"
-    elif ini and fin:
-        _label = franja_fecha.fmt_rango_es(ini, fin)
+    # El trigger dice lo que esta APLICADO de verdad — es lo que muestra
+    # el grafico. Si hay un borrador sin aplicar se marca con un punto,
+    # no cambiando el texto: cambiarlo haria creer que ya se aplico.
+    if aplicado:
+        _label = franja_fecha.fmt_rango_es(*aplicado)
     else:
         _label = "Seleccionar rango"
+    if sucio or pend is not None:
+        _label += " •"
 
     estados = {}
     estados.update(_estado_de_los_dias(anio_a, mes_a, ini, fin, pend, fmin, fmax))
@@ -483,37 +616,43 @@ def render():
         with st.popover(_label, use_container_width=False,
                         icon=":material/calendar_month:"):
             _panel(anio_a, mes_a, anio_b, mes_b, ini, fin, pend,
-                   fmin, fmax, k_rango, reporte, usa_carga_rango)
+                   fmin, fmax, k_rango, reporte, usa_carga_rango, sucio)
 
-    return (ini, fin) if (ini and fin) else None
+    return aplicado
 
 
 def _panel(anio_a, mes_a, anio_b, mes_b, ini, fin, pend, fmin, fmax,
-           k_rango, reporte, usa_carga_rango):
-    """El contenido del desplegable: navegacion + los dos meses.
+           k_rango, reporte, usa_carga_rango, sucio):
+    """El contenido del desplegable: campos + navegacion + los dos meses +
+    el pie con Cancelar/Aplicar.
+
+    `ini`/`fin` son el BORRADOR, no el rango aplicado: lo que se pinta es
+    lo que se va a aplicar. `sucio` dice si el borrador difiere de lo
+    aplicado, y es lo unico que habilita Aplicar.
 
     El CSS NO se inyecta aca: lo hace `render()` afuera del popover, ver
     el comentario alla.
     """
     with st.container(key="compras_sem_cal"):
-        # Fila de navegacion. Sus columnas son hermanas de `cal_mes_*`, no
-        # descendientes, asi que la regla del ancho de celda no las toca.
-        c_ant, c_lbl, c_sig = st.columns([1, 6, 1], vertical_alignment="center")
+        # Los dos campos escribibles van EN la fila de navegacion, en el
+        # hueco que las flechas ya dejaban vacio. Asi se suman sin
+        # engordar el panel — el unico alto nuevo es el del pie.
+        c_ant, c_i, c_f, c_sig = st.columns(
+            [0.5, 3, 3, 0.5], vertical_alignment="center")
         with c_ant:
             with st.container(key="cal_nav_ant"):
                 st.button("‹", key="cal_ant", on_click=_mover, args=(-1,),
                           help="Mes anterior")
-        with c_lbl:
-            # El rango ya lo dice el trigger del desplegable, que queda a
-            # la vista con el panel abierto: repetirlo aca seria decir dos
-            # veces lo mismo. Solo se usa para la pista del 2do clic, que
-            # es lo unico que el trigger no puede explicar.
-            if pend is not None:
-                st.markdown(
-                    "<div style='text-align:center;font-size:12.5px;"
-                    "color:%s;'>Elegí la fecha de finalización</div>" % ACENTO,
-                    unsafe_allow_html=True,
-                )
+        with c_i:
+            st.text_input("Fecha de inicio", key=_K_TXT_I,
+                          label_visibility="collapsed",
+                          placeholder="dd/mm/aaaa",
+                          on_change=_editar_campo, args=("ini", fmin, fmax))
+        with c_f:
+            st.text_input("Fecha de finalización", key=_K_TXT_F,
+                          label_visibility="collapsed",
+                          placeholder="dd/mm/aaaa",
+                          on_change=_editar_campo, args=("fin", fmin, fmax))
         with c_sig:
             with st.container(key="cal_nav_sig"):
                 st.button("›", key="cal_sig", on_click=_mover, args=(1,),
@@ -525,11 +664,35 @@ def _panel(anio_a, mes_a, anio_b, mes_b, ini, fin, pend, fmin, fmax,
 
         col_a, col_b = st.columns(2)
         with col_a:
-            _pintar_mes(anio_a, mes_a, "a", fmin, fmax, k_rango, reporte,
-                        usa_carga_rango)
+            _pintar_mes(anio_a, mes_a, "a", fmin, fmax)
         with col_b:
-            _pintar_mes(anio_b, mes_b, "b", fmin, fmax, k_rango, reporte,
-                        usa_carga_rango)
+            _pintar_mes(anio_b, mes_b, "b", fmin, fmax)
+
+        with st.container(key="cal_pie"):
+            c_txt, c_can, c_apl = st.columns([2.4, 1.3, 1.3],
+                                             vertical_alignment="center")
+            with c_txt:
+                if pend is not None:
+                    _msg, _col = "Elegí la fecha de finalización", ACENTO
+                elif sucio:
+                    _msg, _col = "Sin aplicar", ACENTO
+                else:
+                    _msg, _col = "", GRIS_TEXTO_SUAVE
+                st.markdown(
+                    "<div style='height:24px;display:flex;align-items:center;"
+                    "font-size:10.5px;color:%s;'>%s</div>" % (_col, _msg),
+                    unsafe_allow_html=True,
+                )
+            with c_can:
+                st.button("Cancelar", key="cal_cancelar", disabled=not sucio,
+                          on_click=_cancelar, args=(k_rango,),
+                          use_container_width=True)
+            with c_apl:
+                st.button("Aplicar", key="cal_aplicar",
+                          disabled=not (sucio and pend is None),
+                          on_click=_aplicar,
+                          args=(k_rango, reporte, usa_carga_rango),
+                          use_container_width=True)
 
 
 def _selector_mes(anio_ancla, mes_ancla, fmin, fmax):

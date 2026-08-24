@@ -8934,6 +8934,41 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
          antes del primer día. Con 12px de padding y 6 de gap el panel
          pasó de 334px de alto a 302.
 
+     **La referencia, medida** (MSN Dinero, 2026-08-24, con el navegador
+     sobre la página real). Vale guardarla porque tres rondas de "hacelo
+     más chico" se hicieron a ojo, y los números dijeron que se había ido
+     demasiado lejos:
+
+       | | MSN | el nuestro |
+       |---|---|---|
+       | panel | 556 × 413 | 430 × 296 |
+       | celda | 32 × 36 | 29 × 26 |
+       | letra del día | 13.3px | 10.5px |
+       | encabezado Lu/Ma | 16px | 9.5px |
+       | título del mes | 16px | 11px |
+       | gap entre meses | 40px | 6px |
+       | padding | 8px | 8px |
+
+     Su estructura: cada mes con su propio label + campo (244×36, 14px), y
+     un pie de 540×32 con Aplicar (relleno) y Cancelar (outline), los dos
+     en pastilla de radio 20px. El día elegido va con radio 6px y peso 700.
+     Usa `react-calendar` (MIT) dentro de un `role="dialog"` modal.
+
+     Se replicó la FUNCIONALIDAD (campos escribibles + Cancelar/Aplicar
+     sobre un borrador) y **no** el tamaño, a pedido explícito. Los clics y
+     los campos escriben un borrador; el rango real se toca solo en
+     Aplicar, y mientras tanto el trigger lo marca con un punto sin
+     cambiar su texto — cambiarlo haría creer que ya se aplicó.
+
+     Limitación a saber antes de repetir el patrón: **Streamlit no puede
+     cerrar un `st.popover` desde Python**, así que Aplicar y Cancelar
+     hacen su trabajo pero el panel queda abierto. Un `st.dialog` sí se
+     cierra solo, a cambio de oscurecer la página.
+
+     Y los campos escribibles se hicieron con `st.text_input`, no con
+     `st.date_input`: lo único que hacía falta era teclear, y meter otro
+     datepicker adentro del panel habría anidado un popover en otro.
+
      Detalle menor pero con costo real: el `width: 100%` del CSS vive dentro de
      una cadena que cierra un operador `%`, así que va escapado (`100%%`) o
      revienta en runtime. Lo agarró **`ruff` (F509)**, no un test — buen
