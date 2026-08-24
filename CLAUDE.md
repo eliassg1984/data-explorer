@@ -314,8 +314,9 @@ los paneles de diagnóstico de entorno/performance usar **`?diagnostico=1`**
 (independiente de debug).
 Y con **`?debug=1&diseno=1`** se suma el **modo diseño**: fijás un elemento
 con clic derecho y un panel lateral lo edita en vivo (caja, tipografía,
-color, mover/redimensionar, con "↺" por fila para revertir solo esa
-propiedad), o **inserta** texto/línea/barra/espacio de mentira para ver
+color, mover/redimensionar, **alto de fila** si es una tabla AgGrid, con
+"↺" por fila para revertir solo esa propiedad), o **inserta**
+texto/línea/barra/espacio de mentira para ver
 "cómo se vería" algo que todavía no existe. El panel abre con un **árbol
 de jerarquía** (raíz → elemento, clicable igual que las migas del
 inspector — misma idea, orientación vertical en vez de horizontal), y sus
@@ -325,9 +326,12 @@ la tarjeta entera y el título de adentro no se movía — regla #157. La
 paleta cubre dato Y superficie (grises/lavanda de `tema.py`, más
 transparente y un picker libre), y el botón **"Copiar CSS"** arma el
 bloque listo para pegar en `estilos/` — ya no hace falta leer los valores
-a ojo del panel. Nada de esto persiste: es DOM efímero, muere al recargar
-y no toca `estilos/` hasta que vos pegás el bloque copiado. Detalle en
-`arquitectura.md` reglas #46 a #48, #151, #153, #154 y #155.
+a ojo del panel. Si al redimensionar no pasa nada en pantalla, mirá la
+fila **"Recortado por"**: el elemento SÍ creció, pero un ancestro con
+`overflow` recortante se come lo que sobresale. Nada de esto persiste: es
+DOM efímero, muere al recargar y no toca `estilos/` hasta que vos pegás el
+bloque copiado. Detalle en `arquitectura.md` reglas #46 a #48, #151, #153,
+#154, #155 y #188.
 Se pueden combinar: `?debug=1&diagnostico=1`. El tooltip incluye
 `codigo` (archivo:línea donde está declarada la key, buscado en `app.py`
 + `graficos/` + `tablas/`), `estilos` (archivos de `estilos/` que

@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-187 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+188 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (68)
+**CSS y estilos** (69)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -88,8 +88,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#177** — "COMPRAS: PÁGINA BLANCA, TARJETAS TENUES" (regla #16 y media docena de "vueltas" entre…
 - **#182** — El modo diseño ya llega a los textos de Plotly y de AgGrid — y para esos dos el "Copiar CSS"…
 - **#186** — Un st.container anidado NO es hijo directo del flex que lo contiene: Streamlit le mete un…
+- **#188** — "Solo me deja acortar" no era la herramienta: el elemento SÍ crece, lo recorta un ancestro —…
 
-**Layout y alturas** (18)
+**Layout y alturas** (19)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -109,6 +110,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#177** — "COMPRAS: PÁGINA BLANCA, TARJETAS TENUES" (regla #16 y media docena de "vueltas" entre…
 - **#178** — Mover un control de "flotando sobre el marco compartido" a "adentro de una tarjeta" no es un…
 - **#187** — Meter None entre las opciones de un st.selectbox le agrega un botón ✕ "Clear value" que no…
+- **#188** — "Solo me deja acortar" no era la herramienta: el elemento SÍ crece, lo recorta un ancestro —…
 
 **Plotly y figuras** (42)
 
@@ -8146,13 +8148,25 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      **Lo que este cambio NO arregló, y empeoró:** la tarjeta de Evolución tiene ahora ~61px de aire muerto al fondo (eran ~46). El alto de la fila lo fija la tarjeta de Ranking vía el `:has()` de `_80_cards.py`, y el presupuesto cuenta el alto de cada FILA pero nunca los 16px de gap que Streamlit mete entre los hijos del bloque: cada fila que desaparece libera fila+gap y la figura sólo reclama la fila. Está medido y anotado aparte; arreglarlo toca `_ALTO_FRAME`, que gobierna la fila entera.
 
+188. **"Solo me deja acortar" no era la herramienta: el elemento SÍ crece, lo recorta un ancestro — y el alto de FILA de una tabla no es CSS en absoluto.** Preguntado 2026-08-23 con captura del modo diseño sobre el ranking de proveedores: "¿puedo comprimir el largo o ancho de las tablas? Creo que solo me permite acortar", y después la aclaración de lo que en realidad se quería: "me refiero a achicar las filas". Dos cosas distintas, las dos medidas antes de contestar.
+
+     **Lo primero era un recorte invisible.** Arrastrar la manija hacia afuera funciona: pedir 700px sobre una grilla de 473 deja el elemento en 700px en el DOM. Lo que pasa es que la tarjeta que la contiene trae `overflow-x: hidden` (`estilos/_80_cards.py`) y **corta 226 de esos píxeles sin dibujar barra de scroll** — `scrollWidth` 736 contra `clientWidth` 510. Achicar se ve; ensanchar no cambia nada en pantalla, así que se lee como "solo acorta". El alto, en cambio, sí crece a la vista: hasta `--alto-util` (576px medidos) la tarjeta se estira, y a partir de ahí sigue creciendo pero por dentro (`overflow-y: auto`). Y hay un techo de fondo: esa grilla YA ocupa el ancho útil entero de su tarjeta (473.5 sobre 509.5 menos 18+18 de padding), así que no tiene a dónde crecer sin ensanchar la tarjeta, cuyo ancho reparte `COLUMNAS_DRILL`.
+
+     Fix: `ancestroQueRecorta()` + una fila "Recortado por" en el panel, que se recalcula en cada tick (aparece **a mitad del arrastre**, que es cuando sirve) y nombra al culpable: "Recortado por compras_prov_card_ranking — 226px a la derecha". Dos sutilezas que necesitó para no mentir: el borde que corta es el de la **caja de contenido** (el padding no recorta, pero corre dónde empieza el corte: 18px por lado acá), y `overflow: auto`/`scroll` **no cuentan como recorte** si ese eje sí tiene por dónde scrollear. Mismo criterio que el bloqueo de clicks: si no va a pasar nada, avisarlo mientras pasa, no después.
+
+     **Lo segundo no sale por CSS, y no es un descuido.** ag-grid posiciona cada fila en ABSOLUTO: `transform: translateY(indice * alto)` más un `height` inline, los dos calculados en JS. Bajarle el `height` con una regla deja las filas en su vieja posición y se pisan. Así que el control nuevo ("Alto de fila (AgGrid)") reescribe lo mismo que escribe ag-grid — alto de cada `.ag-row`, su `translateY`, y la altura total de los contenedores de filas — y se REAPLICA en cada tick, porque ag-grid recicla filas al scrollear y las reescribe con SUS valores (mismo motivo y mismo patrón que el override de texto). El readout dice cuántas filas entran con el alto probado ("24px · entran 10 filas", contra 7 a 35px), que es la pregunta real detrás del pedido.
+
+     **El bug que apareció construyéndolo, y que vale por la regla entera:** el total de filas no se puede sacar dividiendo el alto del contenedor por el de una fila. Entre un tick y el siguiente se puede estar en un estado MIXTO —ag-grid ya reescribió las filas con SU alto, el contenedor sigue con el nuestro— y ahí la división miente. Reproducido a mano: devolver UNA sola fila a 35px con el override en 24 dejaba el contenedor en 264px en vez de 384, o sea la grilla perdía cuatro filas de alto sin que nadie tocara los datos. La fuente correcta es `aria-rowcount` del `.ag-root` menos las `.ag-header-row`: es la contabilidad de la propia ag-grid y no depende de ningún alto, ni del suyo ni del nuestro.
+
+     **Y el número hay que llevarlo a Python de a DOS.** "Copiar CSS" ahora emite la nota aunque no haya ni una propiedad CSS tocada —que es justo el caso de "solo vine a achicar las filas"— y nombra las dos mitades: el `"rowHeight"` del gridOptions y el `px_fila` de `alturas.por_filas()`, que es de donde sale el `height=` del grid. Si se cambia una sola, el alto del marco deja de coincidir con lo que ocupan las filas — la misma disciplina de dos caras que ya tienen los colores (`tema.py` / `:root`) y las alturas (`alturas.py` / `--alto-util`).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#188**.
+> próxima regla nueva es la **#189**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

@@ -101,6 +101,7 @@ JS = """
                     bordeColor: '#6c5ce7',
                     sombraNivel: 0,
                     texto: { original: null, actual: null },
+                    filaAlto: { original: null, actual: null },
                     reorder: { tocado: false, ordenOriginal: null, ordenActual: null },
                     verOriginalActivo: false
                 };
@@ -966,6 +967,163 @@ JS = """
             } catch (err) {}   // cross-origin en algun despliegue raro: degrada a "solo el iframe cambio"
         }
 
+        // ── Un ancestro que RECORTA hace invisible la mitad del resize ───
+        // Pedido 2026-08-23: "puedo comprimir el largo o ancho de las
+        // tablas? creo que solo me permite acortar". No era la herramienta:
+        // arrastrar hacia afuera SI agranda el elemento (medido: pedir 700px
+        // sobre una grilla de 473 da 700 en el DOM), pero la tarjeta que la
+        // contiene trae `overflow-x: hidden` (estilos/_80_cards.py) y corta
+        // 226 de esos px SIN dibujar barra de scroll. Achicar se ve,
+        // ensanchar no pasa nada en pantalla — de ahi la lectura de que
+        // "solo acorta".
+        //
+        // Mismo criterio que el bloqueo de clicks: si no va a pasar nada,
+        // decirlo mientras pasa, no despues. Devuelve el primer ancestro que
+        // este recortando de verdad (no cualquiera que PODRIA recortar).
+        var OVERFLOW_RECORTA = { hidden: 1, clip: 1, auto: 1, scroll: 1 };
+        function keyDeNodo(nodo) {
+            var cls = (nodo.className && nodo.className.toString
+                       ? nodo.className.toString() : '').split(' ');
+            for (var i = 0; i < cls.length; i++) {
+                if (cls[i].indexOf('st-key-') === 0) return cls[i].slice(7);
+            }
+            return nodo.getAttribute('data-testid') || nodo.tagName.toLowerCase();
+        }
+        function ancestroQueRecorta(elemento) {
+            if (!elemento || !elemento.parentElement) return null;
+            var r = elemento.getBoundingClientRect();
+            var nodo = elemento.parentElement;
+            while (nodo && nodo !== doc.body) {
+                var cs = win.getComputedStyle(nodo);
+                var cortaX = OVERFLOW_RECORTA[cs.overflowX];
+                var cortaY = OVERFLOW_RECORTA[cs.overflowY];
+                if (cortaX || cortaY) {
+                    var rn = nodo.getBoundingClientRect();
+                    // El borde de la CAJA DE CONTENIDO, no el del elemento:
+                    // el padding no recorta, pero si corre donde empieza el
+                    // corte (18px por lado en las tarjetas de este proyecto).
+                    var derecha = rn.right - parseFloat(cs.borderRightWidth || 0)
+                                  - parseFloat(cs.paddingRight || 0);
+                    var abajo = rn.bottom - parseFloat(cs.borderBottomWidth || 0)
+                                - parseFloat(cs.paddingBottom || 0);
+                    var exX = cortaX ? Math.round(r.right - derecha) : 0;
+                    var exY = cortaY ? Math.round(r.bottom - abajo) : 0;
+                    // `auto`/`scroll` no recortan: scrollean. Solo cuentan
+                    // como recorte real si ese eje NO tiene por donde
+                    // scrollear (su scrollWidth/Height no crecio).
+                    if (cs.overflowX === 'auto' || cs.overflowX === 'scroll') {
+                        if (nodo.scrollWidth > nodo.clientWidth + 1) exX = 0;
+                    }
+                    if (cs.overflowY === 'auto' || cs.overflowY === 'scroll') {
+                        if (nodo.scrollHeight > nodo.clientHeight + 1) exY = 0;
+                    }
+                    if (exX > 1 || exY > 1) {
+                        return {nodo: nodo, key: keyDeNodo(nodo),
+                                x: Math.max(0, exX), y: Math.max(0, exY),
+                                overflowX: cs.overflowX, overflowY: cs.overflowY};
+                    }
+                }
+                nodo = nodo.parentElement;
+            }
+            return null;
+        }
+
+        // ── ALTO DE FILA de un AgGrid (preview, como todo aca) ────────
+        // Pedido 2026-08-23: "me refiero a achicar las filas". No sale por
+        // CSS, y no es un descuido del modo diseno: ag-grid posiciona cada
+        // fila en ABSOLUTO, con `transform: translateY(indice * alto)` y un
+        // `height` inline, los dos calculados en JS. Bajarle el `height` con
+        // una regla deja las filas en su vieja posicion y se pisan.
+        //
+        // Asi que se reescribe lo mismo que escribe ag-grid: el alto de cada
+        // `.ag-row` y su translateY, mas la altura total de los contenedores
+        // de filas. Hecho eso, la grilla se ve exactamente como se veria con
+        // otro `rowHeight` — que es el numero a llevar a Python (el
+        // `rowHeight` del gridOptions y el `px_fila` de alturas.por_filas,
+        // que van de a dos).
+        //
+        // Se REAPLICA en cada tick por lo mismo que el override de texto:
+        // ag-grid recicla filas al scrollear y las reescribe con SUS
+        // valores. La guarda de "ya esta aplicado" lo hace barato.
+        var CONTENEDORES_FILAS = ['.ag-center-cols-container',
+                                  '.ag-pinned-left-cols-container',
+                                  '.ag-pinned-right-cols-container',
+                                  '.ag-full-width-container',
+                                  '.ag-body-vertical-scroll-container'];
+        function docDeAgGrid(elemento) {
+            if (!elemento || !elemento.querySelector) return null;
+            var ifr = elemento.querySelector('iframe[title="st_aggrid.AgGrid.agGrid"]');
+            if (!ifr) return null;
+            try {
+                var d = ifr.contentDocument;
+                return (d && d.querySelector('.ag-row')) ? d : null;
+            } catch (err) { return null; }   // cross-origin en algun despliegue raro
+        }
+        function altoFilaDe(gdoc) {
+            var f = gdoc.querySelector('.ag-row');
+            if (!f) return null;
+            var h = parseFloat(f.style.height);
+            return (isFinite(h) && h > 0) ? h : null;
+        }
+        function filasQueEntran(gdoc, alto) {
+            var vp = gdoc.querySelector('.ag-body-viewport');
+            if (!vp || !alto) return null;
+            return Math.floor(vp.getBoundingClientRect().height / alto);
+        }
+        function aplicarAltoFila(elemento, registro) {
+            var destino = registro.filaAlto && registro.filaAlto.actual;
+            if (!destino) return;
+            var gdoc = docDeAgGrid(elemento);
+            if (!gdoc) return;
+            var previo = altoFilaDe(gdoc);
+            if (!previo || previo === destino) return;   // idempotente
+            // El total de filas NO se cuenta con querySelectorAll: ag-grid
+            // virtualiza y solo renderiza las visibles.
+            //
+            // Y TAMPOCO sale de dividir el alto del contenedor por el de una
+            // fila, que fue el primer intento: entre un tick y el siguiente
+            // se puede estar en un estado MIXTO (ag-grid ya reescribio las
+            // filas con SU alto, el contenedor sigue con el nuestro), y ahi
+            // la division miente. Reproducido a mano: devolver UNA fila a
+            // 35px con el override en 24 dejaba el contenedor en 264px en vez
+            // de 384 — la grilla perdia cuatro filas de alto sin que nadie
+            // hubiera tocado los datos.
+            //
+            // `aria-rowcount` es la contabilidad de la PROPIA ag-grid: no
+            // depende de ningun alto, ni del nuestro ni del suyo. Incluye las
+            // filas de encabezado, que se descuentan.
+            var total = null;
+            var raiz = gdoc.querySelector('.ag-root[aria-rowcount]');
+            if (raiz) {
+                var arc = parseInt(raiz.getAttribute('aria-rowcount'), 10);
+                var nCab = gdoc.querySelectorAll('.ag-header-row').length;
+                if (isFinite(arc) && arc > nCab) total = arc - nCab;
+            }
+            if (total === null) {
+                // Fallback por si una version futura deja de emitir el
+                // atributo: la division de antes, con su riesgo conocido.
+                for (var c = 0; c < CONTENEDORES_FILAS.length && total === null; c++) {
+                    var cont = gdoc.querySelector(CONTENEDORES_FILAS[c]);
+                    var ch = cont && parseFloat(cont.style.height);
+                    if (isFinite(ch) && ch > 0) total = Math.round(ch / previo);
+                }
+            }
+            var filas = gdoc.querySelectorAll('.ag-row');
+            for (var i = 0; i < filas.length; i++) {
+                var idx = parseInt(filas[i].getAttribute('row-index'), 10);
+                filas[i].style.height = destino + 'px';
+                if (isFinite(idx)) {
+                    filas[i].style.transform = 'translateY(' + (idx * destino) + 'px)';
+                }
+            }
+            if (total) {
+                for (var j = 0; j < CONTENEDORES_FILAS.length; j++) {
+                    var cj = gdoc.querySelector(CONTENEDORES_FILAS[j]);
+                    if (cj) cj.style.height = (total * destino) + 'px';
+                }
+            }
+        }
+
         // ── Override de TEXTO (efimero, como todo el modo diseno) ────────
         // `registro.texto` existia en registroPara() desde la fase A y
         // nunca se habia usado — quedo previsto para esto.
@@ -1078,6 +1236,10 @@ JS = """
                     registro.cambios.width ? parseInt(registro.cambios.width, 10) : null,
                     registro.cambios.height ? parseInt(registro.cambios.height, 10) : null);
             }
+            // Mismo reaplicado defensivo que el de arriba, y por un motivo
+            // mas fuerte: ag-grid recicla filas al scrollear y las reescribe
+            // con SU rowHeight. La guarda de idempotencia esta adentro.
+            aplicarAltoFila(elemento, registro);
             aplicarTransform(elemento, registro);
             // Vale tambien para HTML normal (un `.cp-rank-tit`, el label de
             // un boton): la guarda de "sin hijos elemento" que trae adentro
@@ -1422,7 +1584,24 @@ JS = """
                 var lineas = Object.keys(props).map(function(p) { return '    ' + p + ': ' + props[p] + ';'; });
                 bloques.push(sel + ' {\\n' + lineas.join('\\n') + '\\n}');
             });
-            if (!bloques.length) return null;
+            // El alto de fila probado tampoco es CSS (ver aplicarAltoFila):
+            // va al gridOptions de Python. Se emite aunque no haya ni una
+            // propiedad CSS tocada — es justo el caso de "solo vine a
+            // achicar las filas".
+            var notaFila = '';
+            if (registro.filaAlto && registro.filaAlto.actual) {
+                notaFila = '/* AgGrid — alto de fila probado: '
+                    + registro.filaAlto.actual + 'px (era '
+                    + (registro.filaAlto.original || '?') + 'px)\\n'
+                    + '   NO es CSS: va en el gridOptions de la tabla, en Python\\n'
+                    + '     "rowHeight": ' + registro.filaAlto.actual + '\\n'
+                    + '   Y su gemela en graficos/alturas.py, que es de donde sale\\n'
+                    + '   el height= del grid:  por_filas(n, px_fila='
+                    + registro.filaAlto.actual + ', ...)\\n'
+                    + '   Las dos juntas o ninguna: si se cambia una sola, el alto\\n'
+                    + '   del marco deja de coincidir con lo que ocupan las filas. */';
+            }
+            if (!bloques.length) return notaFila || null;
 
             var notas = [];
             if (redirigido) notas.push('caja redirigida a los botones internos');
@@ -1432,7 +1611,8 @@ JS = """
                 : '';
 
             var encabezado = '/* copiado del modo diseño — ' + key + (sub ? ' .' + sub : '') + ' */';
-            return encabezado + '\\n' + bloques.join('\\n\\n') + pie;
+            return encabezado + '\\n' + bloques.join('\\n\\n') + pie
+                   + (notaFila ? '\\n\\n' + notaFila : '');
         }
 
         // Duplica (a proposito, ver docstring de diseno.py) el fallback de
@@ -1779,7 +1959,7 @@ JS = """
                 avisoResz.style.cssText = 'font:11px/1.4 -apple-system,sans-serif;color:#9385ec;background:#1c1c24;border:1px solid #34343f;border-radius:4px;padding:6px 7px;margin-bottom:10px';
                 avisoResz.textContent = contenidoResz.tipo === 'plotly'
                     ? 'El tamaño de un gráfico Plotly vive en Python (fig.update_layout / graficos/alturas.py), no en CSS — "Copiar CSS" no lo va a incluir. Anotá el "Tamaño" de abajo y llevalo ahí.'
-                    : 'El tamaño de una tabla AgGrid vive en Python (el height= de tablas/), no en CSS — "Copiar CSS" no lo va a incluir. Anotá el "Tamaño" de abajo y llevalo ahí.';
+                    : 'El tamaño de una tabla AgGrid vive en Python (el height= de tablas/), no en CSS — "Copiar CSS" no lo va a incluir. Anotá el "Tamaño" de abajo y llevalo ahí. Para las FILAS usá "Alto de fila": tampoco es CSS (ag-grid las posiciona en absoluto), pero el botón de copiar te deja el rowHeight listo.';
                 panel.appendChild(avisoResz);
             }
 
@@ -1787,8 +1967,61 @@ JS = """
             panel.appendChild(filaSoloLectura('Tamaño', tamVal));
             var posVal = spanValor('');
             panel.appendChild(filaSoloLectura('Posición (nudge)', posVal));
+            // Se actualiza en cada tick desde actualizarReadouts(); nace
+            // oculta y solo aparece cuando hay recorte de verdad.
+            var recorteVal = spanValor('');
+            recorteVal.style.color = '#f0a500';
+            var filaRecorte = filaSoloLectura('Recortado por', recorteVal);
+            filaRecorte.style.display = 'none';
+            panel.appendChild(filaRecorte);
             panel.__tamVal = tamVal;
             panel.__posVal = posVal;
+            panel.__recorteVal = recorteVal;
+            panel.__filaRecorte = filaRecorte;
+
+            // ── Alto de fila (solo AgGrid) ────────────────────────
+            // Preview de `rowHeight`: lo unico del panel que no se toca
+            // arrastrando ni se copia como CSS. Ver aplicarAltoFila().
+            var gdocPanel = docDeAgGrid(elemento);
+            if (gdocPanel) {
+                var altoAhora = altoFilaDe(gdocPanel);
+                if (registro.filaAlto.original === null && altoAhora) {
+                    registro.filaAlto.original = altoAhora;
+                }
+                var base = registro.filaAlto.actual || altoAhora
+                           || registro.filaAlto.original || 35;
+                var inpFila = rango(16, 56, 1, base);
+                var filaLbl = spanValor('');
+                function pintarFilaLbl(v) {
+                    var n = filasQueEntran(gdocPanel, v);
+                    filaLbl.textContent = Math.round(v) + 'px'
+                        + (n ? ' · entran ' + n + ' filas' : '');
+                }
+                pintarFilaLbl(base);
+                inpFila.addEventListener('input', function() {
+                    var ctx = elementoActivo(); if (!ctx) return;
+                    var v = parseInt(inpFila.value, 10);
+                    ctx.registro.filaAlto.actual = v;
+                    aplicarAltoFila(ctx.el, ctx.registro);
+                    pintarFilaLbl(v);
+                });
+                panel.appendChild(filaControl('Alto de fila (AgGrid)', inpFila,
+                                              filaLbl, function() {
+                    var ctx = elementoActivo(); if (!ctx) return;
+                    var orig = ctx.registro.filaAlto.original;
+                    if (orig) {
+                        // Restaurar es aplicar el original y recien despues
+                        // soltar el override: si se pone `actual = null` a
+                        // secas, las filas se quedan con el alto probado
+                        // hasta que ag-grid decida redibujar solo.
+                        ctx.registro.filaAlto.actual = orig;
+                        aplicarAltoFila(ctx.el, ctx.registro);
+                        inpFila.value = orig;
+                        pintarFilaLbl(orig);
+                    }
+                    ctx.registro.filaAlto.actual = null;
+                }));
+            }
 
             // radio de borde
             var radioVal = registro.cambios['border-radius']
@@ -2123,6 +2356,26 @@ JS = """
             var r = elemento.getBoundingClientRect();
             panel.__tamVal.textContent = Math.round(r.width) + ' x ' + Math.round(r.height) + ' px';
             panel.__posVal.textContent = Math.round(registro.transformState.translateX) + ', ' + Math.round(registro.transformState.translateY) + ' px';
+            // Aviso de recorte: se recalcula en cada tick porque depende del
+            // tamano de AHORA — aparece a mitad de un arrastre, que es
+            // justo cuando sirve.
+            if (panel.__filaRecorte) {
+                var rec = ancestroQueRecorta(elemento);
+                if (rec) {
+                    var ejes = [];
+                    if (rec.x > 1) ejes.push(rec.x + 'px a la derecha');
+                    if (rec.y > 1) ejes.push(rec.y + 'px abajo');
+                    panel.__recorteVal.textContent = ejes.join(' + ');
+                    panel.__filaRecorte.title = 'El ancestro `' + rec.key
+                        + '` tiene overflow ' + rec.overflowX + '/' + rec.overflowY
+                        + ' y corta lo que sobresale: el elemento SI crecio, pero'
+                        + ' esa parte no se dibuja.';
+                    panel.__filaRecorte.firstChild.textContent = 'Recortado por ' + rec.key;
+                    panel.__filaRecorte.style.display = 'flex';
+                } else {
+                    panel.__filaRecorte.style.display = 'none';
+                }
+            }
         }
 
         // sync() es la UNICA fuente de verdad del tracking, y se llama tanto
