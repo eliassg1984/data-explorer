@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-201 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+202 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (70)
+**CSS y estilos** (71)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -89,7 +89,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#182** — El modo diseño ya llega a los textos de Plotly y de AgGrid — y para esos dos el "Copiar CSS"…
 - **#186** — Un st.container anidado NO es hijo directo del flex que lo contiene: Streamlit le mete un…
 - **#188** — "Solo me deja acortar" no era la herramienta: el elemento SÍ crece, lo recorta un ancestro —…
-- **#201** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
+- **#201** — Sacarle el wrapper interno a un contenedor NO hace que el CSS viejo "se reuse solo":…
+- **#202** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
 
 **Layout y alturas** (19)
 
@@ -158,7 +159,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#182** — El modo diseño ya llega a los textos de Plotly y de AgGrid — y para esos dos el "Copiar CSS"…
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
-- **#201** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
+- **#202** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
 
 **AgGrid y tablas** (33)
 
@@ -333,7 +334,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 - **#185** — Un contextmenu dentro de un iframe NO sube al documento padre: el clic derecho sobre la…
 
-**Decisiones de diseño y UX** (34)
+**Decisiones de diseño y UX** (35)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -369,6 +370,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#170** — Se invirtieron Reportes y Vistas: Reportes al rail vertical izquierdo, Vistas a la franja…
 - **#181** — Un bloqueo de interacción SIN acuse de recibo es indistinguible de una app rota — el que…
 - **#200** — Una vista comparativa no puede heredar el rango de la franja: el rango corriente le deja el…
+- **#201** — Sacarle el wrapper interno a un contenedor NO hace que el CSS viejo "se reuse solo":…
 
 **Mantenimiento y trampas del lenguaje** (6)
 
@@ -8637,7 +8639,87 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      demás están completos de los dos lados. Hermana de la regla que ya
      hacía lo mismo en Ventas › Año Pasado con el período EN CURSO.
 
-201. **Una barra pintada como FONDO de celda no se acota con un % del
+201. **Sacarle el wrapper interno a un contenedor NO hace que el CSS viejo
+     "se reuse solo": convierte sus selectores DESCENDIENTES en selectores
+     muertos, y el que se muere en silencio es el que no deja huella
+     visible.** El rail horizontal de Vistas (`nav_rail`) desbordaba a 900px
+     — el último ítem ("Tabla") con el borde derecho en x=924, 24px fuera
+     de pantalla, en los 8 dashboards a la vez.
+
+     `st.container(key="nav_rail")` renderiza UN stVerticalBlock que YA
+     lleva la clase `st-key-nav_rail`. Cuando el rail abría un wrapper
+     adentro, `.st-key-nav_rail [data-testid="stVerticalBlock"]` matcheaba
+     ese wrapper. En la inversión Reportes↔Vistas del 2026-08-22
+     (`_render_rail` pasó a poner los botones DIRECTOS dentro del
+     contenedor, ver regla #170) el wrapper desapareció y el selector pasó
+     a matchear CERO elementos: el descendiente que buscaba era el
+     contenedor mismo.
+
+     Lo que hace la trampa cara es CUÁL de las declaraciones se nota:
+
+     · `display:flex`, `flex-direction:row`, `flex-wrap:nowrap` estaban
+       DUPLICADAS en `.st-key-nav_rail` (que sigue existiendo), así que el
+       rail se siguió viendo como una fila. Nada rojo, nada roto.
+     · `gap:0` estaba SOLO en la regla muerta. Sin ella volvió el
+       `gap:1rem` que Streamlit le pone de fábrica a todo stVerticalBlock.
+       Con 8 vistas son 7 huecos × 16px = **112px** de más. El contenido
+       pasó de 830px a 942px y se comió el margen que tenía a 900.
+
+     O sea: la regla murió entera, pero como el 80% de sus declaraciones
+     tenía respaldo, el síntoma no fue "el rail se desarmó" sino "el último
+     botón se sale un poco". Un default heredado que nadie escribió
+     ocupando el lugar de un `!important` que nadie borró.
+
+     El arreglo va sobre el elemento que EXISTE, listando los dos
+     selectores a propósito para que un wrapper futuro tampoco pueda
+     reintroducir el hueco:
+
+     ```css
+     .st-key-nav_rail,
+     .st-key-nav_rail [data-testid="stVerticalBlock"] { gap:0 !important; }
+     ```
+
+     Dos corolarios que cuestan si se pasan por alto:
+
+     · **No se hereda `min-width:max-content`.** En el wrapper servía; sobre
+       el rail sería un bug — lo estira hasta el ancho del contenido y
+       anula el `overflow-x:auto` que es la válvula del rail en viewports
+       angostos. Al mudar declaraciones de un descendiente al contenedor
+       hay que revisarlas UNA POR UNA: las que hablaban del contenido no
+       significan lo mismo dichas sobre la caja.
+     · El bloque `@media (max-width:768px)` tenía el MISMO selector muerto.
+       Borrarlo fue un no-op medido (el rail ya traía `gap:4px`,
+       `align-items:center` y `padding:0` sobre sí mismo). No se resucitó
+       su `padding:6px 150px 6px 10px`: reservaba 150px para un flotante
+       que hoy no está en esa esquina, llevaba muerto desde el 2026-08-22
+       sin que nadie lo extrañara, y devolverlo habría sido un hueco nuevo
+       de 150px disfrazado de arreglo. **Una declaración muerta no es una
+       declaración vigente: antes de resucitarla, medir si su motivo sigue
+       ahí.**
+
+     Cómo detectarlo sin adivinar — un selector muerto se prueba en una
+     línea, y conviene hacerlo cada vez que se saca o se agrega un nivel de
+     anidado:
+
+     ```js
+     document.querySelectorAll('.st-key-nav_rail [data-testid="stVerticalBlock"]').length  // 0 = muerto
+     ```
+
+     Lo que NO era el bug, y por qué importa: el rail ya scrolleaba
+     (`overflow-x:auto`), así que la tentación era sumar un criterio nuevo
+     (wrap, media query de padding). No hacía falta ninguno — el criterio
+     de este proyecto para un rail que no entra ya es el scroll horizontal,
+     el mismo del `compras_tabs_row` en `<=900px`. El desborde no venía de
+     que el diseño no alcanzara, venía de 112px que nadie pidió.
+
+     Pendiente medido en el mismo pase, que **no** es el mismo bug: Ventas
+     tiene 11 vistas y a 900px queda en 952px de contenido, o sea 52px
+     fuera, aun con el `gap:0` puesto (antes del arreglo eran 1112px). Ahí
+     el ancho falta de verdad y lo que corresponde es decidir la
+     afordancia del scroll —hoy la barra va oculta a propósito
+     (`scrollbar-width:none`)—, no volver a tocar el gap.
+
+202. **Una barra pintada como FONDO de celda no se acota con un % del
      ancho: se acota con un GUTTER EN PX del tamaño del texto más largo.
      Y el ancho de esa columna no se pide con `flex`, se pide con el
      ancho BASE.** Salió de reemplazar el gráfico «Top proveedores del
@@ -8706,7 +8788,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#202**.
+> próxima regla nueva es la **#203**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
