@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-191 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+192 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (69)
 
@@ -157,7 +157,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
 
-**AgGrid y tablas** (31)
+**AgGrid y tablas** (32)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -190,6 +190,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
 - **#190** — Compras › Producto perdió sus dos botones "✕ Quitar foco" (2026-08-24, a pedido) — mismo fix…
 - **#191** — _ALTO_FRAME en Compras › Proveedor tenía TRES consumidores, no uno — achicar sus filas a…
+- **#192** — El Panel A de Productos (Compras › Proveedor) pasó de st.dataframe a AgGrid por el mismo…
 
 **Streamlit** (57)
 
@@ -8208,13 +8209,21 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      Regla general: antes de cambiar una constante de alto compartida, grepear su nombre en TODO el fichero (o el módulo) — `_ALTO_FRAME` se lee como "el alto de ESTE frame" y en una función de 1.400 líneas es fácil asumir que sólo lo usa el bloque que se está mirando.
 
+192. **El Panel A de Productos (Compras › Proveedor) pasó de `st.dataframe` a AgGrid por el mismo motivo de la regla #136 — y de paso salió a la luz un `field` con un punto que AG Grid devolvía en silencio vacío.** Pedido 2026-08-24: "que sea como la de arriba, osea que no tenga el check de selección", señalando `chartcard_prov_prods` (la tabla de productos del proveedor en foco) contra el Ranking de al lado, que ya había migrado el 2026-08-19. Mismo diagnóstico que entonces, verificado de nuevo antes de tocar nada: la columna de selección de `st.dataframe` se dibuja en un **canvas** (glide-data-grid), no hay nodo DOM por celda, así que no existe selector CSS que apunte "sólo esa columna" — cambiar de widget era la única salida, otra vez.
+
+     Se portó el patrón completo de la #136: `checkboxes: false` + `enableClickSelection: false` + un `onRowClicked` que hace el toggle a mano (`e.node.setSelected(!e.node.isSelected(), true)`) — y ESE `JsCode` se **reutiliza tal cual** desde el Ranking (`_js_toggle`, definido unas 600 líneas antes): no depende de ninguna columna en particular, y como las dos tablas viven en la misma función (`_paneles_card` es una función anidada dentro de `_compras_proveedor_drill`), el closure lo alcanza sin duplicar una línea. La barra de "Valor" reproduce el mismo `linear-gradient` de fondo escalado contra una columna `_barra` oculta (el % contra el MAYOR producto de esta lista — no contra el total, que es lo que ya muestra la columna "%").
+
+     **El bug nuevo, que no tiene nada que ver con el checkbox:** la columna "Cant." (con el punto final, el mismo rótulo que traía `column_config.NumberColumn("Cant.", ...)`) salía **vacía en las 10 filas**, sin ningún error en consola ni en pantalla — silenciosa. La causa: AG Grid resuelve `field` con notación de PATH por default (`field: "a.b"` busca `row.a.b`, para datos anidados), así que `field: "Cant."` se partía en `["Cant", ""]` y no encontraba nada. Verificado antes de asumir cualquier otra causa: se leyó `textContent` celda por celda y las otras cuatro columnas (sin punto en el nombre) llegaban perfectas. Fix: la clave del DataFrame pasa a `"Cant"` (sin punto) y el rótulo original vuelve por `headerName: "Cant."` en el columnDef — dato y etiqueta se separan, cosa que `column_config.NumberColumn` hacía gratis y AG Grid no. **Regla general: cualquier `field` de un columnDef que lleve un punto en el nombre hay que revisarlo — o renombrar la columna, o pasar por `valueGetter` en vez de `field`.**
+
+     **Corrección a la regla #190, que quedó desactualizada sin que nadie la hubiera verificado en pantalla:** su nota final decía que `producto.py` se había quedado en `st.dataframe` "a propósito" porque "el clic en Producto no tiene la limitación de checkboxes-obligatorios que sí forzó la migración en Proveedor". Eso confunde dos problemas DISTINTOS de `st.dataframe` con `selection_mode="single-row"`: (a) el checkbox visible, que es cosmético y viene con el modo de selección sin importar la tabla, y (b) que reclickear la fila ya elegida no dispara `on_select` (el problema real que resolvían el botón "✕ Quitar foco" y el `elif` de la #190). `producto.py` (`graficos/compras/producto.py:263` y `:411`) usa exactamente la misma llamada — `st.dataframe(..., on_select="rerun", selection_mode="single-row", ...)` — que tenía el Ranking de Proveedor antes de la #136 y que tenía este Panel A antes de hoy: el checkbox tiene que estar ahí también. No se migró como parte de este cambio (no era lo pedido, y las dos tablas de `producto.py` tienen su propio `elif` funcionando para el problema (b), que sigue siendo válido); queda para cuando alguien lo pida.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#192**.
+> próxima regla nueva es la **#193**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

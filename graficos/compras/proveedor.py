@@ -1225,56 +1225,133 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 "Producto": prod_cats,
                                 "Valor": _val,
                                 "%": _val / _tot_sub * 100,
-                                "Cant.": agg["cant"].to_numpy(dtype=float),
+                                # SIN el punto en la clave: AG Grid resuelve
+                                # `field` con notacion de PATH ("a.b" ->
+                                # row.a.b), asi que un campo "Cant." se
+                                # partia en ["Cant", ""] y la celda salia
+                                # vacia en las 10 filas — visto en pantalla,
+                                # no en la consola (ningun error: AG Grid
+                                # solo devuelve `undefined` en silencio). El
+                                # punto vuelve como `headerName` en el
+                                # columnDef, asi que el rotulo no cambia.
+                                "Cant": agg["cant"].to_numpy(dtype=float),
                                 # _um_de devuelve la unidad con un espacio
                                 # delante (viene de concatenarse a una etiqueta).
                                 "UM": [_um_de(sub[sub["prod"] == p]).strip()
                                        for p in prod_cats],
                             })
-                            # La key lleva `prod_focus` a proposito: la seleccion
-                            # de un st.dataframe PERSISTE entre reruns igual que
-                            # la de un plotly_chart (CLAUDE.md), asi que con key
-                            # estable el mismo clic se re-procesaria en cada
-                            # rerun. Al variar la key el widget remonta sin
-                            # seleccion. El `!=` de mas abajo es el segundo
-                            # cinturon, para el caso de reclic en la MISMA fila
-                            # (ahi la key no cambia).
-                            _aevt = st.dataframe(
+                            # 2026-08-24, a pedido ("que sea como la de
+                            # arriba, sin el check de seleccion"): pasa de
+                            # `st.dataframe` a AgGrid, mismo patron que el
+                            # Ranking de al lado (`_resp_rank`, mas arriba).
+                            #
+                            # No era un cambio de CSS: `st.dataframe` dibuja
+                            # la grilla entera —incluida la columna de
+                            # seleccion— en UN SOLO `<canvas>` (glide-data-
+                            # grid). No hay DOM por celda, asi que no existe
+                            # un selector que apunte "solo esa columna" — el
+                            # checkbox no se puede ocultar sin cambiar de
+                            # widget.
+                            #
+                            # `checkboxes: False` + `enableClickSelection:
+                            # False` + un `onRowClicked` que hace el TOGGLE a
+                            # mano (`_js_toggle`, definido arriba para el
+                            # Ranking y reutilizado aca: no depende de
+                            # ninguna columna en particular) — AG Grid, solo,
+                            # NO deselecciona al reclickear la fila ya
+                            # seleccionada.
+                            #
+                            # La key deja de llevar prov_focus/prod_focus: la
+                            # razon de variarla (que la seleccion de
+                            # st.dataframe PERSISTE entre reruns) no aplica
+                            # aca — AgGrid devuelve la seleccion VIGENTE en
+                            # cada corrida, igual que el Ranking, asi que
+                            # alcanza con comparar contra `prod_focus`. Se
+                            # conserva `_pan_inst`: SI hace falta seguir
+                            # forzando remount cuando el panel pasa de
+                            # cerrado a abierto (ver el comentario de
+                            # `_pan_inst`, mas abajo — sin eso la tabla no se
+                            # re-mide el ancho del contenedor al reabrir).
+                            _val_max = float(_val.max()) if len(_val) else 1.0
+                            # Columna oculta: el % de LLENADO de la barra
+                            # (contra el MAYOR producto de esta lista), que
+                            # no es el mismo numero que la columna "%" (esa
+                            # es contra el total del proveedor en el ambito
+                            # vigente) — misma distincion que `_barra` vs
+                            # `%` en el Ranking de arriba.
+                            tv["_barra"] = _val / _val_max * 100
+                            _js_barra_prod = JsCode(
+                                "function(p){"
+                                " var w = Math.max(0, Math.min(100, p.data._barra||0))"
+                                " * 0.62;"
+                                " return {'background': 'linear-gradient(90deg,"
+                                f" {ACENTO} 0 ' + w + '%, transparent ' + w"
+                                " + '% 100%)',"
+                                " 'display':'flex','alignItems':'center',"
+                                " 'justifyContent':'flex-end',"
+                                f" 'color':'{TEXTO_PRINCIPAL}'"
+                                "};"
+                                "}")
+                            _js_soles_prod = JsCode(
+                                "function(p){ return p.value==null ? '' :"
+                                " 'S/ ' + Math.round(p.value).toLocaleString('es-PE'); }")
+                            _js_pct_prod = JsCode(
+                                "function(p){ return p.value==null ? '' :"
+                                " Math.round(p.value) + '%'; }")
+                            _js_cant_prod = JsCode(
+                                "function(p){ return p.value==null ? '' :"
+                                " Math.round(p.value).toLocaleString('es-PE'); }")
+                            _resp_prods = AgGrid(
                                 tv,
-                                hide_index=True,
-                                use_container_width=True,
-                                # Mismo frame de 8 filas que el ranking de
-                                # arriba (`_ALTO_FRAME`), y por el mismo
-                                # motivo: con `por_filas(len(tv), ...)` el
-                                # alto salía de los datos — 80px con 1
-                                # producto, 430 con 12 — y la tarjeta cambiaba
-                                # de tamaño en cada clic del ranking. Lo que
-                                # no entra scrollea DENTRO.
-                                height=_ALTO_FRAME,
-                                on_select="rerun",
-                                selection_mode="single-row",
-                                key=f"cp_prov_prods_tab_{prov_focus}_{prod_focus}_{_pan_inst}",
-                                column_config={
-                                    "Producto": st.column_config.TextColumn(
-                                        "Producto", width="medium"),
-                                    "Valor": st.column_config.ProgressColumn(
-                                        "Valor", format="S/ %.0f",
-                                        min_value=0,
-                                        max_value=float(_val.max())),
-                                    "%": st.column_config.NumberColumn(
-                                        "%", format="%.0f%%", width="small"),
-                                    "Cant.": st.column_config.NumberColumn(
-                                        "Cant.", format="%.0f", width="small"),
-                                    "UM": st.column_config.TextColumn(
-                                        "UM", width="small"),
+                                gridOptions={
+                                    "columnDefs": [
+                                        {"field": "Producto", "flex": 2,
+                                         "tooltipField": "Producto"},
+                                        {"field": "Valor", "flex": 2,
+                                         "type": "numericColumn",
+                                         "cellStyle": _js_barra_prod,
+                                         "valueFormatter": _js_soles_prod},
+                                        {"field": "%", "width": 70,
+                                         "type": "numericColumn",
+                                         "valueFormatter": _js_pct_prod},
+                                        {"field": "Cant", "headerName": "Cant.",
+                                         "width": 80, "type": "numericColumn",
+                                         "valueFormatter": _js_cant_prod},
+                                        {"field": "UM", "width": 70},
+                                        {"field": "_barra", "hide": True},
+                                    ],
+                                    "rowSelection": {"mode": "singleRow",
+                                                     "checkboxes": False,
+                                                     "enableClickSelection": False},
+                                    "onRowClicked": _js_toggle,
+                                    "rowHeight": 35,
+                                    "headerHeight": 38,
+                                    "suppressCellFocus": True,
+                                    "suppressMovableColumns": True,
                                 },
+                                allow_unsafe_jscode=True,
+                                theme="streamlit",
+                                height=_ALTO_FRAME,
+                                update_on=["selectionChanged"],
+                                key=f"cp_prov_prods_tab_{_pan_inst}",
                             )
-                            _rows = (_aevt or {}).get("selection", {}).get("rows", [])
-                            if _rows and 0 <= _rows[0] < len(prod_cats):
-                                _psel = prod_cats[_rows[0]]
-                                if _psel != prod_focus:
-                                    st.session_state["compras_prov_prodfocus"] = _psel
-                                    st.rerun(scope="fragment")
+                            # Mismo criterio que el Ranking: seleccion vacia
+                            # (reclic en la fila ya elegida) TAMBIEN limpia el
+                            # foco — antes, con `st.dataframe`, deseleccionar
+                            # no hacia nada (el bloque viejo solo actuaba
+                            # `if _rows`); con el toggle de AG Grid deseleccionar
+                            # es un gesto explicito y ahora se respeta.
+                            _sel_prod = getattr(_resp_prods, "selected_rows", None)
+                            if _sel_prod is not None and len(_sel_prod):
+                                _fila_prod = (_sel_prod.iloc[0]
+                                              if hasattr(_sel_prod, "iloc")
+                                              else _sel_prod[0])
+                                _psel = str(_fila_prod["Producto"])
+                            else:
+                                _psel = None
+                            if _psel != prod_focus:
+                                st.session_state["compras_prov_prodfocus"] = _psel
+                                st.rerun(scope="fragment")
 
 
         # Panel B: proveedores del producto seleccionado
