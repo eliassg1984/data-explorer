@@ -119,18 +119,39 @@ def etiqueta(opcion):
 
 
 def selector(clave, default="12m", opciones=OPCIONES, label="Período",
-             format_func=None):
-    """Fila de pills con la ventana de ESTA tarjeta. Devuelve la opción viva.
+             format_func=None, widget="pills"):
+    """La ventana de ESTA tarjeta. Devuelve la opción viva.
+
+    `widget` elige la FORMA, no el contrato — las dos escriben la misma clave
+    de `session_state` y devuelven la misma cadena de `opciones`:
+
+      · `"pills"` (default): fila de pastillas, las 5 opciones a la vista.
+      · `"lista"`: desplegable. Ocupa una línea en vez de una fila, a costa
+        de esconder las opciones hasta el clic. Pedido 2026-08-23 para la
+        tarjeta de Evolución de Compras › Proveedor, donde el selector
+        comparte renglón con la granularidad.
 
     Deseleccionar (clic en la pill activa) devuelve `None` en Streamlit; acá
     cae al default en vez de dejar la vista sin ventana — "ninguna" no es un
-    estado que signifique algo para un eje de tiempo.
+    estado que signifique algo para un eje de tiempo. El desplegable no tiene
+    ese estado (no se puede "des-elegir" un `st.selectbox`), pero el `or`
+    igual cubre a los dos.
 
-    `format_func` cambia solo el TEXTO de la pill, nunca el valor que
-    devuelve ni el de `opciones` — así una vista puede mostrar `HEREDA`
-    ("Rango") como ícono sin tocar las comparaciones (`opcion == HEREDA`)
-    que dependen de la cadena literal.
+    `format_func` cambia solo el TEXTO que se ve, nunca el valor que devuelve
+    ni el de `opciones` — así una vista puede mostrar `HEREDA` ("Rango") con
+    otra etiqueta sin tocar las comparaciones (`opcion == HEREDA`) que
+    dependen de la cadena literal.
     """
-    return st.pills(label, list(opciones), default=default, key=clave,
+    ops = list(opciones)
+    if widget == "lista":
+        # `index` sólo fija el arranque: si `clave` ya está en session_state
+        # (rerun, o una sesión que venía de las pills), Streamlit usa ese
+        # valor y lo ignora. Los dos widgets comparten el dominio de valores,
+        # así que el cambio de forma no invalida una sesión abierta.
+        idx = ops.index(default) if default in ops else 0
+        return st.selectbox(label, ops, index=idx, key=clave,
+                            label_visibility="collapsed", help=AYUDA,
+                            format_func=format_func) or default
+    return st.pills(label, ops, default=default, key=clave,
                     label_visibility="collapsed", help=AYUDA,
                     format_func=format_func) or default

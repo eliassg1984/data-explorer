@@ -163,36 +163,33 @@ dentro de su propio bloque, sale de su alto — si no, el bloque crece y su eje
 X termina debajo del borde.
 """
 
-FRANJA_PILLS = 30
-"""Alto de una fila de `st.pills` SOLA: sin título, sin hairline, sin tabs —
-el selector de período por tarjeta de `graficos/periodo.py`.
+FRANJA_CTRL_EVO = 30
+"""Alto de la fila de controles de tiempo (`cp_evo_ctrl`) de la tarjeta de
+Evolución de Compras › Proveedor: la ventana (`cp_evo_periodo`) y la
+granularidad (`gran_float`), los DOS en el mismo renglón.
 
-24px de botón + 6 de margen inferior, MEDIDO en el navegador el 2026-08-18
-sobre Compras › Proveedor (con el aplanado de `_css_proveedor.py`: sin él
-Streamlit mete ~30px más de cromo alrededor del widget). Existe porque ese
-selector se agrega DENTRO de una tarjeta que ya estaba llena: los píxeles que
-ocupa hay que restárselos a la figura, o la tarjeta crece y su eje X termina
-debajo del borde (el modo de fallo de `FRANJA_CONTROLES`)."""
+MEDIDO en el navegador el 2026-08-23. Reemplaza a `FRANJA_PILLS` (30) y
+`FRANJA_GRAN` (30), que eran dos filas apiladas de `st.pills`: al pasar los
+dos selectores a `st.selectbox` aplanado a texto entraron en una línea sola
+y los ~30px de la fila que sobraba volvieron a la figura.
 
-FRANJA_GRAN = 30
-"""Alto de la fila Día/Semana/Mes/Año (`gran_float`) dentro de la tarjeta de
-Evolución de Compras › Proveedor: 22px de cápsula + 8 de margen inferior,
-MEDIDO en el navegador el 2026-08-23. Antes flotaba `position:absolute`
-sobre el marco compartido (no sumaba alto a ninguna tarjeta); se mudó DENTRO
-de la tarjeta de Evolución a pedido, y ahí sí hay que restarla — mismo
-motivo que `FRANJA_PILLS`."""
+Existe por lo mismo que existían aquellas: estos controles viven DENTRO de
+una tarjeta que ya estaba llena, así que los píxeles que ocupan hay que
+restárselos a la figura, o la tarjeta crece y su eje X termina debajo del
+borde (el modo de fallo de `FRANJA_CONTROLES`)."""
 
 FRANJA_WIN_NAV = 36
 """Alto de la fila ‹ Auto/N/Todo › (`win_nav`) dentro de la tarjeta de
 Evolución de Compras › Proveedor: 28px de fila de botones + 8 de margen
-inferior, MEDIDO en el navegador el 2026-08-23. Mismo traslado y mismo
-motivo que `FRANJA_GRAN` (ver ese docstring)."""
+inferior, MEDIDO en el navegador el 2026-08-23. Se mudó adentro de la
+tarjeta el mismo día y por el mismo motivo que `FRANJA_CTRL_EVO` (ver ese
+docstring)."""
 
 FRANJA_ATAJOS = 24
 """Alto de la fila de atajos de fecha (Esta semana/Este mes/Últimos 30
 días/Este año) agregada DENTRO de la tarjeta de Ranking de Compras ›
 Proveedor, MEDIDO en el navegador el 2026-08-23 (tarjeta: 436px sin la
-fila, 460px con ella). A diferencia de `FRANJA_GRAN`/`FRANJA_WIN_NAV`
+fila, 460px con ella). A diferencia de `FRANJA_CTRL_EVO`/`FRANJA_WIN_NAV`
 (que se restan de una FIGURA), ésta se resta de la `height=` del AgGrid
 del ranking — mismo motivo: la fila es nueva, nadie le había hecho lugar
 todavía."""

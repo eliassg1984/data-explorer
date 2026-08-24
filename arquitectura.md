@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-185 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+186 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (67)
+**CSS y estilos** (68)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -87,6 +87,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#175** — Las manijas de resize del modo diseño (regla #46) redimensionan CUALQUIER elemento salvo un…
 - **#177** — "COMPRAS: PÁGINA BLANCA, TARJETAS TENUES" (regla #16 y media docena de "vueltas" entre…
 - **#182** — El modo diseño ya llega a los textos de Plotly y de AgGrid — y para esos dos el "Copiar CSS"…
+- **#186** — Un st.container anidado NO es hijo directo del flex que lo contiene: Streamlit le mete un…
 
 **Layout y alturas** (17)
 
@@ -183,7 +184,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#163** — arquitectura.md creció hasta ser un documento que nadie podía abrir: 115k tokens, y CLAUDE.md…
 - **#185** — Un contextmenu dentro de un iframe NO sube al documento padre: el clic derecho sobre la…
 
-**Streamlit** (54)
+**Streamlit** (55)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -239,6 +240,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#178** — Mover un control de "flotando sobre el marco compartido" a "adentro de una tarjeta" no es un…
 - **#179** — Un atajo de fecha (nuevo o viejo) no sobrevive cambiar de REPORTE y volver — mismo mecanismo…
 - **#180** — Un widget DENTRO de un @st.fragment que escribe estado consumido AFUERA no cambia nada en…
+- **#186** — Un st.container anidado NO es hijo directo del flex que lo contiene: Streamlit le mete un…
 
 **Datos, R2 y DuckDB** (19)
 
@@ -8028,6 +8030,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      Lo que SÍ había que arreglar: `_ALTO_EVO` (`graficos/compras/proveedor.py`) restaba `FRANJA_PILLS` (el presupuesto de altura de `cp_evo_periodo`) para que la figura le devolviera esos píxeles a la tarjeta — pero `gran_float`/`win_nav` NUNCA habían estado adentro de una tarjeta antes: flotando, no le costaban un píxel a nadie. Medido en vivo ANTES de tocar la fórmula: la tarjeta de Evolución pasó de 407px (su alto de antes de esta sesión) a 473px — 66px de más, EXACTOS a la suma de las dos filas nuevas (22+8 de `gran_float`, 28+8 de `win_nav`) — y la de Ranking se estiró igual para empatarla (`_80_cards.py`, "dos tarjetas de la misma fila miden lo mismo"), dejando aire de sobra al fondo de su AgGrid. Fix: dos constantes nuevas en `graficos/alturas.py` (`FRANJA_GRAN = 30`, `FRANJA_WIN_NAV = 36`, mismo patrón y misma disciplina de medición que `FRANJA_PILLS`) restadas también en `_ALTO_EVO`.
 
+     **Addendum del mismo día (ver #186):** de las tres constantes que nombra este párrafo sobreviven dos. `FRANJA_PILLS` y `FRANJA_GRAN` se fusionaron en `FRANJA_CTRL_EVO = 30` cuando los dos selectores pasaron a `st.selectbox` y entraron en un solo renglón; `FRANJA_WIN_NAV` sigue igual. La disciplina no cambió — sigue siendo una constante medida por fila que existe dentro de la tarjeta.
+
      La resta no devolvió los 66px completos: `_ALTO_EVO` pegó contra el piso `alturas.MINI = 240` (240 < 211, el resultado teórico de restar las tres franjas), así que la tarjeta quedó en 436px — 29px más que el original 407px, el precio de no dejar que el gráfico se encoja por debajo del mínimo legible. No se persiguió ese resto: `MINI` es un piso a propósito (regla viva de `alturas.py`), no un número para forzar. 29px de aire de más es más barato que un gráfico ilegible.
 
 179. **Un atajo de fecha (nuevo o viejo) no sobrevive cambiar de REPORTE y volver — mismo mecanismo que "un widget que deja de renderizarse pierde su estado" (CLAUDE.md § Streamlit), cruzando reportes en vez de modos.** Al agregar los atajos minimalistas dentro de la tarjeta de Ranking ("Este mes"/"Últimos 30 días"/"Este año", reusando `estado_rango.atajos_rango()`/`aplicar_atajo()` — pedido 2026-08-23, "si agregalos de manera minimalista dentro de la tarjeta"), medir el resultado con el panel de siempre llevó a una falsa alarma. `debug_estado_rango()` (el panel de `?diagnostico=1`, que vive en `app.py` FUERA de `@st.fragment`) no mostraba ningún cambio tras clickear un atajo, ni siquiera forzando un rerun completo (cambiar a Ventas y volver a Compras) — parecía que el `on_click` no escribía nada.
@@ -8102,13 +8106,33 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      Verificado el ciclo entero: clic derecho sobre el encabezado "Proveedor" deja el panel con controles (ya no en espera), header `compras_prov_rank_grid «Proveedor»`, y desde ahí se estila de verdad — 22px y "Proveedor"→"PROVEEDOR" aplicados al nodo real dentro del iframe. Y el camino de siempre sigue sano: señalar el título fuera del iframe da `.cp-rank-tit` con la bandera ya consumida.
 
+186. **Un `st.container` anidado NO es hijo directo del flex que lo contiene: Streamlit le mete un `stLayoutWrapper` en el medio, y cualquier regla con `>` contra su key no matchea nada.** Pedido 2026-08-23: "que sea una lista desplegable, pero minimalista... y que esté en una línea, no una debajo de otra" — las dos filas de pills de la tarjeta de Evolución de Compras › Proveedor (`cp_evo_periodo`, la ventana 📅/3m/12m/24m/Todo; y `gran_float`, la granularidad Día/Semana/Mes/Año) pasaron a dos `st.selectbox` aplanados a texto, compartiendo un renglón dentro de un container flex nuevo (`cp_evo_ctrl`).
+
+     El síntoma: `.st-key-cp_evo_ctrl > .st-key-gran_float { width: 104px }` no hacía nada y el control salía de 171.5px, estirado a todo el espacio libre. La hermana de al lado, con la MISMA forma de selector, sí funcionaba (96px clavados). La diferencia no está en el CSS: `cp_evo_periodo` es un WIDGET, así que su `st-key-` cae sobre el `stElementContainer` que es hijo directo del bloque; `gran_float` es un CONTAINER anidado, y ahí Streamlit envuelve el subárbol en un `[data-testid="stLayoutWrapper"]` que se cuela entre el flex y la key. Medido en el navegador enumerando `card.children` — por el nombre de la clase (emotion) no se puede adivinar.
+
+     Fix: el flex-item es el wrapper (`.st-key-cp_evo_ctrl > [data-testid="stLayoutWrapper"] { flex: 0 0 auto; width: auto }`) y el ancho va por descendencia, no por hijo directo (`.st-key-cp_evo_ctrl .st-key-gran_float { width: 104px }`). Regla general: **`>` sólo es seguro contra la key de un widget; contra la key de un container, usar descendiente.**
+
+     Otras dos trampas del mismo cambio, las dos por heredar CSS escrito para `st.pills`:
+
+     · **`line-height: 0`** estaba puesto en `.st-key-gran_float` para aplanar el cromo que Streamlit mete arriba del ButtonGroup. Sobre pastillas era inofensivo; sobre el `<input>` de un selectbox le rompe el alto. Se sacó, y el comentario que quedó en su lugar dice por qué no volver a ponerlo.
+
+     · **Un `<input>` de react-aria no se auto-dimensiona.** Sin ancho explícito pide el 100% del contenedor y el chevron termina contra el borde derecho de la tarjeta, a ~300px de su propio texto. Los anchos (96px y 104px) están medidos sobre la opción MÁS LARGA de cada lista ("📅 Rango" y "Por semana"), verificado con `scrollWidth === clientWidth` en las dos.
+
+     Lo que se aplanó es la receta ya escrita para los dos selectores de Documentos SUNAT (`estilos/_30_filtros.py`): la CAJA no la lleva ni el `stSelectbox` ni el `input`, sino el `div[role="group"]` que hay entre los dos, y el alto lo fija el `input`. El chevron se CONSERVA a propósito — sin ninguna affordance, un texto que despliega una lista no se distingue de una etiqueta muerta.
+
+     El presupuesto vertical: las dos filas eran `FRANJA_PILLS` (30) + `FRANJA_GRAN` (30) de la regla #178; ahora son una sola, `FRANJA_CTRL_EVO = 30`, medida en el navegador (24px de control + 6 de margen). Los ~30px de la fila que desapareció volvieron a la figura (211 → 241px), con las dos tarjetas de la fila iguales en 435.8px y sin scroll interno (`scrollHeight === clientHeight`).
+
+     Verificado el ciclo entero en local con datos de R2: cambiar la granularidad renombra la key del chart (`cp_evo_Mes_…` → `cp_evo_Semana_…`) y la de la tabla pivotable del fondo (`cp_prov_pivot_docs_Semana`), recalcula `win_nav` y ajusta el género del KPI ("Última semana"); elegir "📅 Rango" devuelve la cadena literal `periodo.HEREDA` pese al `format_func` (el sufijo del título desaparece, que es lo que hace `periodo.etiqueta()` con `HEREDA`). El popup del selectbox sale por un portal a nivel `body`, así que el `overflow: hidden auto` de la tarjeta NO lo recorta — pero por lo mismo su aspecto no se puede estilar colgando de la key de la tarjeta. En 375px los dos se reparten el ancho a la mitad y suben a 32px de alto: 24 es cómodo con mouse, no con el dedo.
+
+     **Corrección de documentación en el mismo commit:** el comentario que había en `proveedor.py` sobre estos controles afirmaba que `gran` era "compartido con el Ranking (`gran` entra en `_agregar_periodo()` para las dos columnas)" y citaba la regla **#176**, que es la de `help=` en `st.markdown`. Las dos cosas estaban mal. El Ranking NO mira períodos: suma por proveedor sobre todo el rango, y el propio código lo dice en el comentario de `_tot_por_prov`. `_agregar_periodo()` se le aplica a `base`, que sí alimenta a las dos columnas, pero lo único que hace además de crear `per` es descartar filas con fecha inválida — y una fecha inválida lo es en las cuatro granularidades por igual, así que los números del ranking salen idénticos con Día, Semana, Mes o Año. Lo que `gran` SÍ gobierna fuera de la tarjeta de Evolución es `win_nav` (cuántos períodos entran en la ventana) y la tabla pivotable de documentos del fondo del drill, cuyas COLUMNAS son los períodos. La regla que correspondía citar es la #178. Moraleja: un comentario que afirma un ACOPLAMIENTO es tan verificable como el código — se comprueba leyendo al consumidor, no se hereda de la vuelta anterior.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#186**.
+> próxima regla nueva es la **#187**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

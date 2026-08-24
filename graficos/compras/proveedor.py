@@ -315,15 +315,19 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # que su figura mide eso menos que la tabla de al lado. La tabla no paga
     # el cromo: su columna tenía 119px de aire medidos, la evolución es la que
     # manda el alto de la fila.
-    # 2026-08-23: se le suman dos filas más (FRANJA_GRAN, FRANJA_WIN_NAV) —
-    # `gran_float`/`win_nav` se mudaron DENTRO de esta tarjeta (antes
-    # flotaban afuera, sin costarle alto a nadie). Sin restarlas, la tarjeta
-    # de Evolución crecía 66px y la de Ranking se estiraba igual para
-    # empatarla (regla de _80_cards.py "dos tarjetas de la misma fila miden
-    # lo mismo") — verificado en vivo: las dos daban 473px de alto en vez
-    # de la fila "natural" de Ranking, dejando aire de más al fondo.
+    # 2026-08-23: se le suma una fila más (FRANJA_WIN_NAV) — `gran_float` y
+    # `win_nav` se mudaron DENTRO de esta tarjeta (antes flotaban afuera, sin
+    # costarle alto a nadie). Sin restarlas, la tarjeta de Evolución crecía
+    # 66px y la de Ranking se estiraba igual para empatarla (regla de
+    # _80_cards.py "dos tarjetas de la misma fila miden lo mismo") —
+    # verificado en vivo: las dos daban 473px de alto en vez de la fila
+    # "natural" de Ranking, dejando aire de más al fondo.
+    # Más tarde el mismo día: la granularidad dejó de tener fila propia (se
+    # metió en el renglón del selector de ventana, ver `cp_evo_ctrl` abajo),
+    # así que las dos constantes de aquellas dos filas son ahora una sola,
+    # `FRANJA_CTRL_EVO`, y los ~30px que sobraban volvieron a la figura.
     _ALTO_EVO = max(alturas.MINI,
-                    _ALTO_FRAME - alturas.FRANJA_PILLS - alturas.FRANJA_GRAN
+                    _ALTO_FRAME - alturas.FRANJA_CTRL_EVO
                     - alturas.FRANJA_WIN_NAV - alturas.CROMO_TARJETA)
     # Ancho de la figura de evolución, MEDIDO en el navegador (viewport 1912,
     # rails desplegados). No sale de una cuenta porque su columna cuelga de
@@ -508,7 +512,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                               _ctx_fecha["reporte"],
                                               _ctx_fecha["usa_carga_rango"]))
                     # La fila de atajos (si se dibujó) le come FRANJA_ATAJOS
-                    # al AgGrid de abajo — mismo motivo que FRANJA_GRAN/
+                    # al AgGrid de abajo — mismo motivo que FRANJA_CTRL_EVO/
                     # FRANJA_WIN_NAV en Evolución: nadie le hacía lugar
                     # todavía. Condicional a que la fila exista de verdad
                     # (`_atajos_rank` puede salir vacía si ningún atajo
@@ -680,40 +684,78 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         # la evolución arranca con unas pills sueltas y su título
                         # deja de alinear con el del ranking de al lado).
                         _ph_tit_evo = st.empty()
-                        # 2026-08-23, a pedido ("quita el texto que dice
-                        # Rango, todo minimalista"): la pill de heredar el
-                        # rango de la franja pasa a un ícono — el valor
-                        # sigue siendo la cadena "Rango" (periodo.HEREDA),
-                        # solo cambia lo que se VE.
-                        _op_evo = periodo.selector(
-                            "cp_evo_periodo",
-                            format_func=lambda o: (
-                                "📅" if o == periodo.HEREDA else o))
-                        _evo_hist = _op_evo != periodo.HEREDA
-                        # 2026-08-23 (2), a pedido ("que no estén arriba de
-                        # Evolución sino que estén dentro... eliges si van
-                        # sobre el gráfico interno o debajo, pero dentro de
-                        # la tarjeta"): `gran_float` (Día/Semana/Mes/Año) y
-                        # `win_nav` (‹ Auto/N/Todo ›) se mudan ACÁ, arriba
-                        # del `st.plotly_chart` — mismo lugar que
-                        # `cp_evo_periodo`, para que las tres filas de
-                        # controles de tiempo de esta tarjeta queden
-                        # juntas. La vuelta anterior (el caption "Agrupado
-                        # por X") ya no hace falta: el control real está
-                        # ahora al lado, no hace falta resumirlo en texto.
+                        # 2026-08-23 (3), a pedido ("que sea una lista
+                        # desplegable, minimalista... y que esté en una
+                        # línea, no una debajo de otra"): las DOS filas de
+                        # pills que había acá —la ventana (📅/3m/12m/24m/
+                        # Todo) y la granularidad (Día/Semana/Mes/Año)—
+                        # pasan a `st.selectbox` aplanados a texto y
+                        # comparten un solo renglón (`cp_evo_ctrl`, flex
+                        # row; mismo recurso que `win_nav`, no `st.columns`
+                        # — es una fila DENTRO de una tarjeta).
                         #
-                        # Los dos siguen siendo, de verdad, compartidos con
-                        # el Ranking (`gran` entra en `_agregar_periodo()`
-                        # para las dos columnas; `win_nav` solo afecta a
-                        # Evolución hoy — ver arquitectura.md regla #176,
-                        # segunda mitad). Vivir DENTRO de la tarjeta de
-                        # Evolución es una eleccion de UBICACION visual, no
-                        # cambia a qué datos afectan.
-                        with st.container(key="gran_float"):
-                            st.pills("Periodo",
-                                     ["Día", "Semana", "Mes", "Año"],
-                                     default="Mes", key="compras_prov_gran",
-                                     label_visibility="collapsed")
+                        # Lo que se gana son los ~30px de la fila que
+                        # desaparece, y van a la figura (ver `_ALTO_EVO`,
+                        # arriba: `FRANJA_CTRL_EVO` reemplazó a las dos
+                        # constantes que había). Lo que se paga es que las
+                        # opciones dejan de verse hasta el clic — aceptado
+                        # explícitamente al elegir esta opción sobre un
+                        # popover.
+                        #
+                        # El ícono 📅 vuelve a ser texto: como pastilla se
+                        # entendía porque las cinco se veían juntas, pero
+                        # como valor CERRADO de un desplegable un emoji
+                        # solo no dice nada. Igual la granularidad, que
+                        # pasa a "Por mes" — es la información que daba el
+                        # caption "Agrupado por X" que se quitó cuando el
+                        # control estaba a la vista.
+                        with st.container(key="cp_evo_ctrl"):
+                            _op_evo = periodo.selector(
+                                "cp_evo_periodo", widget="lista",
+                                format_func=lambda o: (
+                                    "📅 Rango" if o == periodo.HEREDA else o))
+                            # `gran_float` conserva la key aunque ya no
+                            # flote ni sea pills (mismo criterio que
+                            # --rail-der-* tras el flip de lado): la nombra
+                            # arquitectura.md #178 y la usa el bloque móvil
+                            # de _css_proveedor.py.
+                            with st.container(key="gran_float"):
+                                # El label va COLAPSADO, así que sólo lo
+                                # ve un lector de pantalla — y por eso
+                                # dejó de llamarse "Periodo": ahora que
+                                # comparte renglón con `cp_evo_periodo`
+                                # (cuyo label ES "Período"), dos controles
+                                # vecinos se anunciaban casi igual.
+                                st.selectbox(
+                                    "Agrupar por",
+                                    ["Día", "Semana", "Mes", "Año"],
+                                    index=2, key="compras_prov_gran",
+                                    format_func=lambda g: f"Por {g.lower()}",
+                                    label_visibility="collapsed")
+                        _evo_hist = _op_evo != periodo.HEREDA
+                        # ALCANCE de los tres controles de tiempo de esta
+                        # tarjeta, que NO es el mismo (corregido 2026-08-23:
+                        # el comentario anterior afirmaba que `gran` era
+                        # "compartido con el Ranking para las dos columnas"
+                        # y citaba la regla #176, que es la de `help=` en
+                        # st.markdown — las dos cosas estaban mal):
+                        #
+                        #   · `cp_evo_periodo` → sólo esta tarjeta.
+                        #   · `gran` → esta tarjeta, `win_nav` (cuántos
+                        #     períodos entran en la ventana) y la tabla
+                        #     pivotable de documentos del fondo del drill,
+                        #     cuyas COLUMNAS son los períodos
+                        #     (`_documentos_proveedor.py`).
+                        #   · `win_nav` → sólo esta tarjeta.
+                        #
+                        # El Ranking de al lado NO mira períodos: suma por
+                        # proveedor sobre todo el rango (ver el comentario
+                        # de `_tot_por_prov`, arriba). `_agregar_periodo()`
+                        # se le aplica a `base`, que alimenta a las dos
+                        # columnas, pero lo único que hace además de crear
+                        # `per` es descartar filas con fecha inválida — y
+                        # una fecha inválida lo es en las cuatro
+                        # granularidades por igual. Ver arquitectura.md #178.
 
                         def _win_mover(_delta):
                             st.session_state["cp_prov_win_ini"] = min(

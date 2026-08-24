@@ -26,32 +26,24 @@ CSS = """        <style>
            tarjeta de Evolución (compras_prov_card_evo), a pedido ("que no
            estén arriba de Evolución sino dentro"). El nombre de la key se
            mantiene (mismo criterio que --rail-der-* tras el flip de lado).
-           Estas reglas siguen aplicando, solo que ahora sobre un contenedor
-           en flujo normal en vez de uno `position:absolute`. */
+           Más tarde el mismo día dejó de ser pills: hoy es un `st.selectbox`
+           aplanado a texto, compartiendo renglón con `cp_evo_periodo` dentro
+           de `cp_evo_ctrl` (ver ese bloque, más abajo, que es el que le da
+           el ancho y el aspecto). Acá queda sólo el aplanado del cromo que
+           Streamlit mete alrededor. */
         .st-key-gran_float {
-            width: auto !important;
-            /* Aplanar todo lo que Streamlit mete arriba del ButtonGroup
-               (label oculto, padding del stElementContainer). Sin esto el
-               grupo de pills queda ~14px más abajo que la fila de proveedores. */
-            padding: 0 !important; margin: 0 0 8px !important;
-            line-height: 0 !important;
+            /* Aplanar todo lo que Streamlit mete arriba del widget (label
+               oculto, padding del stElementContainer). Sin esto el control
+               queda ~14px más abajo que su vecino de renglón.
+               OJO: acá había además un `line-height: 0`, que sobre las pills
+               era inofensivo pero le rompe el alto al `<input>` del
+               selectbox — se sacó al hacer el cambio, no volver a ponerlo. */
+            padding: 0 !important; margin: 0 !important;
         }
         .st-key-gran_float [data-testid="stElementContainer"],
         .st-key-gran_float [data-testid="stElementContainer"] > div,
         .st-key-gran_float [data-testid="stVerticalBlock"] {
             padding: 0 !important; margin: 0 !important; gap: 0 !important;
-        }
-        /* Contenedor de las pills Día/Semana/Mes/Año: solo más delgado,
-           sin tocar la fuente ni la ubicación originales. */
-        .st-key-gran_float [data-testid="stButtonGroup"] {
-            margin: 0 !important; padding: 0 !important;
-        }
-        .st-key-gran_float [data-testid="stButtonGroup"] button {
-            min-height: 0 !important;
-            height: auto !important;
-            padding-top: 1px !important;
-            padding-bottom: 1px !important;
-            line-height: 1.3 !important;
         }
         /* Popover de proveedores flotando arriba-IZQUIERDA (compacto).
            Es el fallback para 641-900px; en desktop sube a la franja (ver
@@ -723,48 +715,24 @@ CSS = """        <style>
             line-height: 1 !important;
         }
 
-        /* ── Cápsula segmentada: unir las pills en un solo control ──
-           2026-08-16: la capsula quedo SOLO para `gran_float` (la barra de
-           granularidad del grafico, que convive con los chips de win_nav y
-           mantiene ese lenguaje). Los dos encabezados de PANEL —topn_float
-           (Rango/Seleccion + 5/10/20) y panelb_scope_float (En rango/Todo)—
-           salieron de aca a pedido ("que esto no sea toggle, sino que sea
-           texto") y pasan a tabs de texto subrayado, mas abajo. */
-        .st-key-gran_float [data-testid="stButtonGroup"] {
-            gap: 0 !important;
-            border: 1px solid rgba(49,51,63,0.2);
-            border-radius: 999px;
-            overflow: hidden;
-            /* Antes: var(--background-color), que NO existe en el :root de
-               este proyecto (es un nombre del tema de Streamlit). La
-               propiedad quedaba invalida y la capsula salia transparente en
-               vez de solida. Sin verificar en local: los datos demo de
-               compras.parquet no traen Proveedor/Valor, asi que este drill
-               no se puede abrir sin R2. */
-            background: var(--bg-card);
-        }
-        .st-key-gran_float [data-testid="stButtonGroup"] button {
-            border: 0 !important;
-            border-radius: 0 !important;
-            margin: 0 !important;
-        }
-        .st-key-gran_float [data-testid="stButtonGroup"] button:not(:first-child) {
-            border-left: 1px solid rgba(49,51,63,0.15) !important;
-        }
+        /* 2026-08-23 (3): acá vivía la "cápsula segmentada" que unía las
+           pills de `gran_float` en un solo control con forma de píldora.
+           Se fue entera cuando la granularidad pasó a `st.selectbox`: ya no
+           hay ButtonGroup que encapsular. Su aspecto de hoy lo fija el
+           bloque `cp_evo_ctrl`, más abajo. */
 
         /* ── Encabezados de panel: TABS DE TEXTO, no pastillas ────────────
            Mismo lenguaje que ya usan las franjas de control de Ventas (Por
            dia, Ano Pasado) y Compras > Familia en estilos/_80_cards.py: el
            activo se marca con un subrayado de acento, no con un relleno.
-           `[data-selected="true"]` y NO `[aria-pressed="true"]`: los cuatro
+           `[data-selected="true"]` y NO `[aria-pressed="true"]`: los dos
            grupos de aca son single-select (st.pills sin selection_mode), y
            Streamlit los marca con role="radio" + data-selected; aria-pressed
            es el marcado de los MULTI-select. Ese error ya costo un selector
            muerto durante varios commits en Ano Pasado (arquitectura.md
            #107, 2do addendum). */
         .st-key-topn_float [data-testid="stButtonGroup"],
-        .st-key-panelb_scope_float [data-testid="stButtonGroup"],
-        .st-key-cp_evo_periodo [data-testid="stButtonGroup"] {
+        .st-key-panelb_scope_float [data-testid="stButtonGroup"] {
             border: none !important;
             border-radius: 0 !important;
             background: transparent !important;
@@ -775,14 +743,12 @@ CSS = """        <style>
            Familia. Sin capsula que los una, el aire es lo unico que separa
            una opcion de la otra. */
         .st-key-topn_float [data-testid="stButtonGroup"] > div,
-        .st-key-panelb_scope_float [data-testid="stButtonGroup"] > div,
-        .st-key-cp_evo_periodo [data-testid="stButtonGroup"] > div {
+        .st-key-panelb_scope_float [data-testid="stButtonGroup"] > div {
             gap: 14px !important;
             flex-wrap: nowrap !important;
         }
         .st-key-topn_float [data-testid="stButtonGroup"] button[data-variant="pills"],
-        .st-key-panelb_scope_float [data-testid="stButtonGroup"] button[data-variant="pills"],
-        .st-key-cp_evo_periodo [data-testid="stButtonGroup"] button[data-variant="pills"] {
+        .st-key-panelb_scope_float [data-testid="stButtonGroup"] button[data-variant="pills"] {
             background: transparent !important;
             border: none !important;
             border-radius: 0 !important;
@@ -798,8 +764,6 @@ CSS = """        <style>
         .st-key-topn_float [data-testid="stButtonGroup"]
             button[data-variant="pills"][data-selected="true"],
         .st-key-panelb_scope_float [data-testid="stButtonGroup"]
-            button[data-variant="pills"][data-selected="true"],
-        .st-key-cp_evo_periodo [data-testid="stButtonGroup"]
             button[data-variant="pills"][data-selected="true"] {
             border-bottom-color: var(--accent) !important;
             color: var(--accent-deep) !important;
@@ -808,23 +772,98 @@ CSS = """        <style>
         .st-key-topn_float [data-testid="stButtonGroup"]
             button[data-variant="pills"]:hover,
         .st-key-panelb_scope_float [data-testid="stButtonGroup"]
-            button[data-variant="pills"]:hover,
-        .st-key-cp_evo_periodo [data-testid="stButtonGroup"]
             button[data-variant="pills"]:hover {
             color: var(--accent) !important;
         }
 
-        /* ── Selector de período de la EVOLUCIÓN (graficos/periodo.py) ────
-           Vive entre el título de la tarjeta y su gráfico. El alto total de
-           esta fila está presupuestado en `alturas.FRANJA_PILLS` y la figura
-           de al lado ya se lo restó: si se le agrega aire acá, hay que
-           cambiar esa constante o la tarjeta empuja su borde. */
-        .st-key-cp_evo_periodo {
+        /* ── Controles de tiempo de la EVOLUCIÓN: UNA sola línea ──────────
+           2026-08-23 (3), a pedido ("que sea una lista desplegable, pero
+           minimalista... y que esté en una línea, no una debajo de otra"):
+           `cp_evo_periodo` (la ventana, graficos/periodo.py) y `gran_float`
+           (la granularidad) eran DOS filas de pills apiladas; pasan a dos
+           `st.selectbox` aplanados a TEXTO, compartiendo un renglón.
+
+           El alto total de la fila está presupuestado en
+           `alturas.FRANJA_CTRL_EVO` y la figura de al lado ya se lo restó:
+           si se le agrega aire acá, hay que cambiar esa constante o la
+           tarjeta empuja su borde.
+
+           Por qué un flex y no `st.columns`: la proporción de las columnas
+           de un drill sale de `COLUMNAS_DRILL` (CLAUDE.md), y esto es una
+           subdivisión DENTRO de una tarjeta. Mismo recurso que `win_nav` un
+           renglón más abajo — el key de un container SIN borde ES el
+           stVerticalBlock, así que la dirección FILA se fija acá directo. */
+        .st-key-cp_evo_ctrl {
+            display: flex !important; flex-direction: row !important;
+            align-items: center !important;
+            gap: 12px !important;
+            width: auto !important;
             margin: 0 0 6px !important; padding: 0 !important;
         }
-        .st-key-cp_evo_periodo [data-testid="stButtonGroup"] {
+        /* OJO con el `>`: `cp_evo_periodo` SÍ es hijo directo del flex (es un
+           stElementContainer), pero `gran_float` NO — al ser un container
+           anidado, Streamlit le mete un `stLayoutWrapper` en el medio. Un
+           `> .st-key-gran_float` no matchea nada y el control se estira a
+           todo el espacio libre (medido: 171px en vez de 104). */
+        .st-key-cp_evo_ctrl > .st-key-cp_evo_periodo,
+        .st-key-cp_evo_ctrl > [data-testid="stLayoutWrapper"] {
+            flex: 0 0 auto !important;
             margin: 0 !important; padding: 0 !important;
         }
+        .st-key-cp_evo_ctrl > [data-testid="stLayoutWrapper"] {
+            width: auto !important;
+        }
+        /* La CAJA del selectbox (borde 1px + fondo + 40px de alto) no la
+           lleva ni el `stSelectbox` ni el `input`, sino el `div[role=group]`
+           que hay entre los dos — misma receta, mismo hallazgo medido en el
+           navegador, que los dos selectores de Documentos SUNAT en
+           estilos/_30_filtros.py. Estilar el ancestro no alcanza. */
+        .st-key-cp_evo_ctrl [data-testid="stSelectbox"] div[role="group"] {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            min-height: 0 !important;
+        }
+        /* El alto lo fija el `input` (los 40px de la altura de control de
+           Streamlit), no el grupo — bajarlo ahí es lo que convierte la caja
+           en una línea de texto. */
+        .st-key-cp_evo_ctrl [data-testid="stSelectbox"] input,
+        .st-key-cp_evo_ctrl [data-testid="stSelectbox"] div[role="group"],
+        .st-key-cp_evo_ctrl [data-testid="stSelectbox"] .react-aria-ComboBox {
+            height: 24px !important;
+            min-height: 0 !important;
+        }
+        .st-key-cp_evo_ctrl [data-testid="stSelectbox"] input {
+            padding: 0 !important;
+            height: auto !important;
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            color: var(--text-primary) !important;
+            cursor: pointer !important;
+            text-overflow: ellipsis !important;
+        }
+        /* El chevron se CONSERVA, y en acento: sin ninguna affordance un
+           texto que despliega una lista no se distingue de una etiqueta
+           muerta (misma decisión que en Documentos SUNAT). Es lo único que
+           dice "esto se puede tocar" ahora que no hay caja ni pastilla. */
+        .st-key-cp_evo_ctrl [data-testid="stSelectbox"] svg {
+            width: 14px !important; height: 14px !important;
+            fill: var(--accent) !important;
+            color: var(--accent) !important;
+        }
+        .st-key-cp_evo_ctrl [data-testid="stSelectbox"]:hover input {
+            color: var(--accent-deep) !important;
+        }
+        /* Anchos EXPLÍCITOS, uno por control. Un input de react-aria no se
+           auto-dimensiona: sin esto pide el 100% del contenedor y el chevron
+           termina contra el borde derecho de la tarjeta, a ~300px de su
+           propio texto (el `width: auto` que ya tenía `gran_float` le ganaba
+           al 100% en el contenedor, pero no en el input). Están medidos
+           sobre la opción MÁS LARGA de cada lista — "📅 Rango" y "Por
+           semana"; si se agregan opciones, revisarlos. */
+        .st-key-cp_evo_ctrl > .st-key-cp_evo_periodo { width: 96px !important; }
+        .st-key-cp_evo_ctrl .st-key-gran_float { width: 104px !important; }
+        .st-key-cp_evo_ctrl [data-testid="stSelectbox"] { width: 100% !important; }
 
         /* ── Panel B: tarjetas por proveedor (reemplaza el st.dataframe) ──
            Reemplaza la tabla de 5 columnas por un stack de tarjetas: swatch
@@ -985,21 +1024,29 @@ CSS = """        <style>
                 width: 100% !important;
                 margin: 0 0 6px 0 !important;
             }
-            /* Granularidad Día/Semana/Mes/Año: mismo criterio que win_nav
-               arriba (ya está en flujo normal, dentro de la tarjeta de
-               Evolución) — acá solo el ancho completo y los 4 segmentos
-               repartidos por igual, tap targets grandes. */
-            .st-key-gran_float {
+            /* Los dos selectores de tiempo (ventana + granularidad): en
+               desktop comparten renglón con anchos fijos medidos sobre la
+               opción más larga; en 375px eso deja el resto de la línea
+               muerto, así que se reparten el ancho a la mitad — sigue siendo
+               UNA línea (que es lo pedido), con tap targets más grandes.
+               El alto sube a 32px: 24 es cómodo con mouse, no con el dedo. */
+            .st-key-cp_evo_ctrl {
                 width: 100% !important;
-                margin: 0 0 6px 0 !important;
+                gap: 8px !important;
             }
-            .st-key-gran_float [data-testid="stButtonGroup"] {
-                width: 100% !important;
-                display: flex !important;
-            }
-            .st-key-gran_float [data-testid="stButtonGroup"] button {
+            .st-key-cp_evo_ctrl > .st-key-cp_evo_periodo,
+            .st-key-cp_evo_ctrl > [data-testid="stLayoutWrapper"] {
                 flex: 1 1 0 !important;
+                width: auto !important;
                 min-width: 0 !important;
+            }
+            .st-key-cp_evo_ctrl .st-key-gran_float {
+                width: auto !important;
+            }
+            .st-key-cp_evo_ctrl [data-testid="stSelectbox"] input,
+            .st-key-cp_evo_ctrl [data-testid="stSelectbox"] div[role="group"],
+            .st-key-cp_evo_ctrl [data-testid="stSelectbox"] .react-aria-ComboBox {
+                height: 32px !important;
             }
         }
 
