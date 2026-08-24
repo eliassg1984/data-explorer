@@ -88,6 +88,43 @@ def vista_quiere_fecha_propia():
                         "compras_graf_tipo") in _VISTAS_CON_FECHA_PROPIA
 
 
+def bounds_fecha_de_la_vista():
+    """`(min, max)` que la vista activa necesita en el calendario, o None.
+
+    Gemela de `vista_quiere_fecha_propia` y con el mismo cliente: la
+    consulta `app.py` antes de sembrar/recortar el rango. Devuelve None
+    para el resto de las vistas — cada una se queda con los topes de su
+    propio dato.
+
+    Documentos SUNAT es la excepción porque no filtra el parquet de
+    Compras: le pregunta al SIRE. Y los dos extremos salen de sitios
+    distintos a propósito:
+
+      · el PISO, de `sunat.limites_registro()` — antes de la primera
+        factura del registro no hay nada que pedir;
+      · el TECHO, de HOY — no del tope del parquet. Un techo puesto en
+        "hasta donde llegó el último sync" siempre atrasa lo que tarde en
+        correr el sync, así que el día de HOY nunca se puede elegir. Eso
+        fue el bug: 2026-08-24, con comprobantes del 24 ya visibles en
+        SUNAT, el calendario cortaba en el 21. `comprobantes_rango` sabe
+        pedir en vivo los días que el parquet todavía no trajo. Ver
+        `arquitectura.md` regla #197.
+    """
+    if not vista_quiere_fecha_propia():
+        return None
+    import datetime
+    import zoneinfo
+
+    import sunat
+
+    # HOY en Lima, no en UTC: Streamlit Cloud corre en UTC y a partir de
+    # las 19:00 de Perú ya está en el día siguiente — el calendario
+    # ofrecería un mañana que SUNAT todavía no puede tener.
+    hoy = datetime.datetime.now(zoneinfo.ZoneInfo("America/Lima")).date()
+    limites = sunat.limites_registro()
+    return (limites[0] if limites else None), hoy
+
+
 def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=None):
     """Dashboard dedicado de Compras: 5 gráficos con pestañas + 5 mini-tops.
 

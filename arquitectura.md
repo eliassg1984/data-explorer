@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-196 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+197 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (69)
 
@@ -255,7 +255,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#190** — Compras › Producto perdió sus dos botones "✕ Quitar foco" (2026-08-24, a pedido) — mismo fix…
 - **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
 
-**Datos, R2 y DuckDB** (20)
+**Datos, R2 y DuckDB** (21)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -277,8 +277,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#160** — El registro del SIRE pasó de consulta EN VIVO a parquet en R2, y eso cambia lo que se le…
 - **#170** — Se invirtieron Reportes y Vistas: Reportes al rail vertical izquierdo, Vistas a la franja…
 - **#195** — Hay emisores que usan cbc:Description como un renglón de TICKET, no como una descripción:…
+- **#197** — Un techo de calendario sacado de "hasta dónde llegó el último sync" hace que HOY no se pueda…
 
-**SUNAT y SIRE** (11)
+**SUNAT y SIRE** (12)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -291,6 +292,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#163** — arquitectura.md creció hasta ser un documento que nadie podía abrir: 115k tokens, y CLAUDE.md…
 - **#195** — Hay emisores que usan cbc:Description como un renglón de TICKET, no como una descripción:…
 - **#196** — Un return temprano que se lleva puesto el ÚNICO control capaz de arreglar el estado que lo…
+- **#197** — Un techo de calendario sacado de "hasta dónde llegó el último sync" hace que HOY no se pueda…
 
 **Fechas, rangos y cortes** (6)
 
@@ -8423,6 +8425,77 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      y ensancharlo cambia el calendario de las otras siete vistas de
      Compras, donde esos días están vacíos de verdad.
 
+     **Resuelto en la #197** — y no como se anticipa acá: el techo de esta
+     vista tampoco es el del SIRE. Es HOY.
+
+
+197. **Un techo de calendario sacado de "hasta dónde llegó el último sync"
+     hace que HOY no se pueda elegir NUNCA — y el arreglo no es mover el
+     techo a otro dataset, es dejar que la vista pregunte en vivo.**
+     Reportado 2026-08-24: "hoy día estamos 24, por qué no puedo
+     seleccionarlo, si ya tengo comprobantes en SUNAT con fecha 24".
+     Medido antes de tocar nada, contra R2 y contra la API real:
+
+     | fuente | último día | subido |
+     |---|---|---|
+     | `compras.parquet` | 2026-08-21 | 22/08 08:00 UTC |
+     | `sunat_compras.parquet` (SIRE) | 2026-08-23 | 24/08 09:13 UTC |
+     | API del SIRE, en vivo | **2026-08-24** (2 comprobantes) | — |
+
+     La #196 ya había dejado anotado el primer error —el calendario de
+     Compras › Documentos SUNAT tomaba sus topes de `df_f[col_fecha]`, o
+     sea del parquet de Compras, y esta vista no filtra ese dataset— y
+     también la corrección que parecía obvia: mover el techo al del
+     registro del SIRE. **Esa corrección no alcanzaba, y la medición de
+     arriba dice por qué:** el registro también es un sync de madrugada.
+     Su techo es "hasta donde llegó la corrida de las 4 AM", así que el
+     día en curso queda afuera por definición, todos los días. Con el
+     techo en el SIRE el usuario habría pasado de no poder elegir el 22 a
+     no poder elegir el 24 — el mismo reporte, un par de días después.
+
+     El techo correcto de una vista que sabe consultar en vivo es HOY. Y
+     "hoy" en Lima, no en UTC: Streamlit Cloud corre en UTC y a partir de
+     las 19:00 de Perú ofrecería un mañana que SUNAT no puede tener.
+
+     Pero un techo en hoy es una MENTIRA mientras la capa de datos no lo
+     sostenga, y ahí estaba el segundo error, invisible hasta que se
+     arreglaba el primero: `comprobantes_rango` prefería el parquet y no
+     caía a la API salvo que el parquet no existiera ENTERO. Con el
+     calendario abierto hasta el 24, elegir el 24 habría mostrado "SUNAT
+     no tiene comprobantes emitidos hacia tu RUC en el rango elegido" —
+     **peor que el día gris**, porque un vacío falso se lee como una
+     respuesta. Es la regla #141 una vez más.
+
+     Cómo quedó, en tres piezas:
+
+     · **`sunat.tramo_pendiente(tope, ini, fin)`** — pura y testeada,
+       decide qué pedazo del rango no cubre el parquet. Corta
+       ESTRICTAMENTE después del tope: un rango que termina en un día ya
+       sincronizado no consulta nada y la vista sigue siendo instantánea,
+       que es el caso normal (casi todo lo que se mira es pasado). El
+       precio, escrito para que no sorprenda: un comprobante de fecha
+       vieja que SUNAT recién anota hoy sigue esperando al próximo sync —
+       ése es el agujero de cualquier proceso de madrugada y ya estaba.
+     · **`comprobantes_rango` pega parquet + cola** y deduplica por `car`
+       (la única clave sin colisiones, ver #143 y `_fila_de`), quedándose
+       con la fila EN VIVO, que trae la situación más fresca.
+     · **Cuatro orígenes en vez de dos**, porque el sello de la tira de
+       KPIs es lo único que separa un dato fresco de uno viejo: `api`,
+       `parquet`, `parquet+vivo` y **`parquet-sin-cola`** — este último
+       para cuando hacía falta consultar y SUNAT no contestó. Sin ese
+       cuarto estado, un SUNAT caído devolvía el parquet con el sello
+       "hoy": completo a la vista, con los últimos días faltando.
+
+     **Y una lección de la prueba, no del código:** el bloque de
+     `test_sunat.py` que cubre `comprobantes_rango` dice "Sin red: se
+     sustituyen las dos fuentes por stubs" y era cierto para el código
+     viejo — la rama de la API sólo se alcanzaba sin parquet, y ese caso
+     sí tenía su stub. Al abrir la rama nueva, el caso "parquet presente"
+     empezó a llamar a la API… que en esa altura del test todavía era la
+     real. En una máquina con las credenciales cargadas, el test se fue a
+     SUNAT de verdad y falló con datos de producción. **Un stub que cubre
+     las ramas de hoy no cubre las que abra el próximo cambio:** los
+     stubs se instalan por FUENTE, antes del primer caso, no por rama.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
@@ -8430,7 +8503,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#197**.
+> próxima regla nueva es la **#198**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

@@ -17,6 +17,7 @@ SILENCIO y con datos que parecen razonables:
 Se ejecuta solo:  python test_sunat.py
 """
 
+import datetime as dt
 import sys
 
 import pandas as pd
@@ -280,21 +281,81 @@ _df_falso = sunat.registros_a_df([REG_REAL])
 _df_falso["periodo_registro"] = "202607"
 _df_falso["situacion"] = "Registrado"
 
+# El tope del parquet falso es la fecha de emisión de su única fila
+# (2026-04-10): todo lo que pase de ahí es "cola" y sale por la API.
+_TOPE_FALSO = pd.Timestamp("2026-04-10")
+
+# La fila de la cola es OTRO comprobante (otro `car`) el mismo mes, un día
+# después del tope.
+_reg_cola = dict(REG_REAL, codCar="CAR-COLA", numCDP="9999",
+                 fecEmision="2026-04-11")
+_df_cola = sunat.registros_a_df([_reg_cola])
+_df_cola["periodo_registro"] = "202607"
+_df_cola["situacion"] = "Pendiente"
+
 _orig_parquet = sunat._registro_de_parquet
 _orig_api = sunat.obtener_comprobantes_rango
 try:
+    _pedidos = []          # qué se le pidió a la API, para probar que NO se
+
+    def _api_falsa(i, f, p=None):
+        _pedidos.append((pd.Timestamp(i).date(), pd.Timestamp(f).date()))
+        return _df_cola
+
     sunat._registro_de_parquet = lambda: _df_falso
-    _r = sunat.comprobantes_rango(pd.Timestamp("2026-04-01"),
-                                  pd.Timestamp("2026-04-30"))
+    sunat.obtener_comprobantes_rango = _api_falsa
+
+    # 1) Rango que el parquet YA cubre entero: ni se toca la API.
+    _r = sunat.comprobantes_rango(pd.Timestamp("2026-04-01"), _TOPE_FALSO)
     ok(isinstance(_r, tuple) and len(_r) == 2, "devuelve (df, origen)")
-    ok(_r[1] == "parquet", "con parquet disponible, el origen es 'parquet'")
+    ok(_r[1] == "parquet", "con el rango ya sincronizado, el origen es 'parquet'")
     ok(len(_r[0]) == 1, "filtra por fecha de emisión dentro del rango")
+    ok(not _pedidos, "un rango cubierto por el parquet NO consulta a SUNAT")
+
     _fuera = sunat.comprobantes_rango(pd.Timestamp("2020-01-01"),
                                       pd.Timestamp("2020-01-31"))
     ok(len(_fuera[0]) == 0, "un rango sin comprobantes devuelve df vacío")
 
-    # Sin parquet en R2 (el estado normal antes de la primera corrida del
-    # sync) tiene que caer a la API en vivo, no romperse.
+    # 2) EL BUG (regla #197): el rango pasa del tope del parquet. Los días
+    # que el sync todavía no trajo se piden en vivo y se pegan.
+    _pedidos.clear()
+    _r3 = sunat.comprobantes_rango(pd.Timestamp("2026-04-01"),
+                                   pd.Timestamp("2026-04-30"))
+    ok(_r3[1] == "parquet+vivo", "si el rango pasa del tope, pide la cola en vivo")
+    ok(len(_r3[0]) == 2, "y la pega a lo que ya tenía el parquet")
+    ok(_pedidos == [(dt.date(2026, 4, 11), dt.date(2026, 4, 30))],
+       "la cola arranca el día DESPUÉS del tope, no antes")
+
+    # 3) Elegir UN SOLO día que el parquet no trajo — el gesto del reporte
+    # original ("hoy estamos 24 y no lo puedo seleccionar").
+    _un_dia = sunat.comprobantes_rango(pd.Timestamp("2026-04-11"),
+                                       pd.Timestamp("2026-04-11"))
+    ok(_un_dia[1] == "parquet+vivo" and len(_un_dia[0]) == 1,
+       "un día suelto que solo existe en vivo devuelve ese día")
+
+    # 4) La misma anotación en los dos lados no se cuenta dos veces: la
+    # clave es `car`, y gana la versión EN VIVO (situación más fresca).
+    _df_repetido = _df_falso.copy()
+    _df_repetido["fecha_emision"] = pd.Timestamp("2026-04-11")
+    sunat.obtener_comprobantes_rango = lambda i, f, p=None: _df_repetido
+    _r4 = sunat.comprobantes_rango(pd.Timestamp("2026-04-01"),
+                                   pd.Timestamp("2026-04-30"))
+    ok(len(_r4[0]) == 1, "un comprobante que está en los dos lados no se duplica")
+
+    # 5) SUNAT caído con cola pendiente: se devuelve lo que hay, pero
+    # DECLARADO incompleto. Un total al que le faltan días sin decirlo es
+    # la regla #141.
+    def _api_caida(i, f, p=None):
+        raise RuntimeError("Error del Servidor, reintentar en 5 minutos")
+
+    sunat.obtener_comprobantes_rango = _api_caida
+    _r5 = sunat.comprobantes_rango(pd.Timestamp("2026-04-01"),
+                                   pd.Timestamp("2026-04-30"))
+    ok(_r5[1] == "parquet-sin-cola", "si SUNAT no contesta, lo declara incompleto")
+    ok(len(_r5[0]) == 1, "y aun así muestra lo que el parquet sí tenía")
+
+    # 6) Sin parquet en R2 (el estado normal antes de la primera corrida
+    # del sync) tiene que caer a la API en vivo, no romperse.
     sunat._registro_de_parquet = lambda: None
     sunat.obtener_comprobantes_rango = lambda i, f, p=None: _df_falso
     _r2 = sunat.comprobantes_rango(pd.Timestamp("2026-04-01"),
@@ -303,6 +364,29 @@ try:
 finally:
     sunat._registro_de_parquet = _orig_parquet
     sunat.obtener_comprobantes_rango = _orig_api
+
+# ── tramo_pendiente: la decisión de molestar (o no) a la API ────────────────
+print()
+print("── tramo_pendiente (pura) ──")
+_t = dt.date(2026, 8, 23)
+ok(sunat.tramo_pendiente(_t, dt.date(2026, 7, 1), dt.date(2026, 7, 31)) is None,
+   "un rango viejo no consulta nada")
+ok(sunat.tramo_pendiente(_t, dt.date(2026, 8, 1), _t) is None,
+   "un rango que termina EN el tope tampoco")
+ok(sunat.tramo_pendiente(_t, dt.date(2026, 8, 24), dt.date(2026, 8, 24))
+   == (dt.date(2026, 8, 24), dt.date(2026, 8, 24)),
+   "el día de hoy, que el sync todavía no trajo, sí")
+ok(sunat.tramo_pendiente(_t, dt.date(2026, 8, 1), dt.date(2026, 8, 24))
+   == (dt.date(2026, 8, 24), dt.date(2026, 8, 24)),
+   "de un rango que cruza el tope solo se pide la cola")
+ok(sunat.tramo_pendiente(None, dt.date(2026, 8, 1), dt.date(2026, 8, 24))
+   == (dt.date(2026, 8, 1), dt.date(2026, 8, 24)),
+   "sin parquet, todo el rango es cola")
+ok(sunat.tramo_pendiente(_t, None, dt.date(2026, 8, 24)) is None,
+   "sin rango no hay nada que pedir")
+ok(sunat.tramo_pendiente(_t, dt.date(2026, 8, 24), dt.date(2026, 8, 20))
+   == (dt.date(2026, 8, 24), dt.date(2026, 8, 24)),
+   "un rango al revés se endereza antes de decidir")
 
 ok(sunat.ARCHIVO_REGISTRO.endswith(".parquet"),
    "ARCHIVO_REGISTRO nombra un parquet (lo comparte el sync)")

@@ -20,7 +20,7 @@ from estado_rango import (
 )
 from cortes import cortes_disponibles
 import franja_fecha
-from graficos.compras import vista_quiere_fecha_propia
+from graficos.compras import bounds_fecha_de_la_vista, vista_quiere_fecha_propia
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_diseno_visual, inject_herramientas, inject_footer_actualizacion, inject_calendario_es, inject_fullscreen_app
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil
 from graficos import renderizar_graficos_reporte, tiene_dashboard
@@ -425,6 +425,31 @@ _categoria_ajuste_rango = (
 _k_rango_franja = clave_rango(reporte, _usa_carga_rango,
                               categoria=_categoria_ajuste_rango)
 _franja_con_fecha = bool(col_fecha) and fecha_min_full is not None
+
+# Una vista puede filtrar OTRO dataset que el del reporte, y entonces los
+# topes del calendario no son los del parquet. Hoy solo Compras >
+# Documentos SUNAT, que le pregunta al SIRE: otra fuente, que llega más
+# adelante y que además sabe contestar EN VIVO por el día de hoy. Medido
+# el 2026-08-24: el parquet de Compras llegaba al 21 y en SUNAT ya había
+# comprobantes del 24 — tres días que existían y que el calendario no
+# dejaba ni elegir.
+#
+# Se ENSANCHA, nunca se reemplaza: la unión de los dos. Y al salir de esa
+# vista los topes vuelven a los del parquet, así que `asegurar_rango`
+# (justo acá abajo) recorta el rango guardado — un rango que quedó en días
+# que solo el SIRE cubre se corre al último día del parquet en vez de
+# reventar el `date_input` con un valor fuera de bounds. Ver
+# `arquitectura.md` regla #197.
+if _franja_con_fecha and reporte == "Compras":
+    _b_vista = bounds_fecha_de_la_vista()
+    if _b_vista:
+        # Cada extremo por separado: el piso puede faltar (sin parquet del
+        # registro) y el techo —hoy— existe siempre.
+        if _b_vista[0]:
+            fecha_min_full = min(fecha_min_full, _b_vista[0])
+        if _b_vista[1]:
+            fecha_max_full = max(fecha_max_full, _b_vista[1])
+
 # INVARIANTE: sembrar el default Y recortar a bounds AQUÍ, justo antes de
 # dibujar el widget en este mismo render. Nunca clampear después del
 # widget (se vería un render tarde → desync overlay/calendario/datos).

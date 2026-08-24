@@ -1016,7 +1016,9 @@ def _pruebas_estado_y_utils():
     check("resolver_columnas reporta faltantes", falt, ["ni_idea"])
 
     # ── estado_rango: qué clave usa cada reporte ────────────────────────
-    from estado_rango import _fin_de_mes, atajos_rango, clave_rango
+    from estado_rango import (
+        _fin_de_mes, _recortar_media, atajos_rango, clave_rango,
+    )
 
     check("clave_rango carga_por_rango",
           clave_rango("Ventas", True), "rango_carga_Ventas")
@@ -1047,6 +1049,28 @@ def _pruebas_estado_y_utils():
     # "Este año" (1-ene..31-dic) SÍ intersecta, y se recorta a los bounds.
     check("atajos recorta a bounds", atajos.get("anio"), bounds)
     check("atajos sin bounds no ofrece nada", atajos_rango(hoy, None), [])
+
+    # _recortar_media: una media selección se queda a medias (la aridad es
+    # el estado normal entre los dos clics, regla #196) pero SÍ se recorta,
+    # porque los bounds encogen al salir de Documentos SUNAT y Streamlit no
+    # perdona un valor fuera de [min_value, max_value] — tira
+    # StreamlitAPIException y se cae la página. Ver regla #197.
+    _b = (datetime.date(2026, 1, 1), datetime.date(2026, 8, 21))
+    check("media selección por encima del tope se recorta",
+          _recortar_media("_k_test", (datetime.date(2026, 8, 24),), _b),
+          (datetime.date(2026, 8, 21),))
+    check("media selección por debajo del piso se recorta",
+          _recortar_media("_k_test", (datetime.date(2025, 1, 1),), _b),
+          (datetime.date(2026, 1, 1),))
+    check("y sigue siendo media selección, no un rango",
+          len(_recortar_media("_k_test", (datetime.date(2026, 8, 24),), _b)), 1)
+    check("dentro de bounds no se toca",
+          _recortar_media("_k_test", (datetime.date(2026, 8, 10),), _b),
+          (datetime.date(2026, 8, 10),))
+    check("sin bounds no se toca",
+          _recortar_media("_k_test", (datetime.date(2026, 8, 24),), None),
+          (datetime.date(2026, 8, 24),))
+    check("una tupla vacía pasa tal cual", _recortar_media("_k_test", (), _b), ())
     # Un año presente en la data se ofrece como chip propio.
     check("atajos incluye el año de la data", "y2023" in dict(
         (c, r) for c, _, r in atajos_rango(

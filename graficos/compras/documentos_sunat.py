@@ -582,11 +582,26 @@ def _sello_origen(origen):
     creíble bajo un título equivocado lo cazó un usuario, no un test).
     Mostrar la antigüedad lo hace visible sin gastar alto: es un ítem más
     de la línea que ya existe.
+
+    Los cuatro orígenes que puede devolver `sunat.comprobantes_rango` se
+    ven distinto acá, y el que más importa es el ÚLTIMO: cuando hacía
+    falta consultar en vivo y SUNAT no contestó, lo que hay en pantalla
+    está incompleto y tiene que decirlo. Un total creíble al que le faltan
+    los últimos días es la regla #141 otra vez. Ver regla #197.
     """
-    if origen != "parquet":
+    if origen == "api":
         return ('<span style="white-space:nowrap;" title="Consultado a la '
                 'API de SUNAT en vivo: el parquet del registro todavía no '
                 'existe en R2.">en vivo</span>')
+    if origen == "parquet+vivo":
+        return ('<span style="white-space:nowrap;" title="El rango pasa del '
+                'último día que trajo el sync de madrugada: esos días se le '
+                'preguntaron a SUNAT en el momento.">registro + en vivo</span>')
+    if origen == "parquet-sin-cola":
+        return (f'<span style="white-space:nowrap;color:{ADVERTENCIA_TEXTO};" '
+                'title="El rango incluye días que el sync todavía no trajo y '
+                'SUNAT no respondió la consulta en vivo. Faltan esos días: '
+                'probá de nuevo con ⟳.">faltan los últimos días</span>')
     fecha = sunat.fecha_registro()
     if fecha is None:
         return '<span style="white-space:nowrap;">registro en R2</span>'

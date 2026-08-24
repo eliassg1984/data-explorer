@@ -60,6 +60,7 @@ Permite abrir la vista, revisar el layout y correr los tests sin tocar
 SUNAT ni tener un RUC a mano.
 """
 
+import datetime
 import io
 import re
 
@@ -674,13 +675,81 @@ def fecha_registro():
     return data.fecha_ultima_actualizacion(ARCHIVO_REGISTRO)
 
 
-def comprobantes_rango(fecha_ini, fecha_fin, _progreso=None):
-    """Comprobantes emitidos en el rango. Prefiere el parquet; si no, la API.
+def limites_registro():
+    """`(primera, ultima)` fecha de emisión que YA cubre el parquet, o None.
 
-    Es la puerta que usa la vista. Devuelve `(df, origen)` donde `origen`
-    es "parquet" o "api", para que la pantalla pueda decir de dónde salió
-    el número — misma exigencia que dejó la regla #141: una vista con
-    datos externos tiene que mostrar su procedencia, no sólo el total.
+    Es un dato, no una política: dice hasta dónde llegó la última corrida
+    del sync, nada más. El PISO del calendario de la vista sale de acá
+    (antes de la primera factura no hay nada que pedir); el TECHO no —
+    ése es HOY, porque los días que el parquet todavía no trajo se piden
+    en vivo (ver `comprobantes_rango` y `tramo_pendiente`). Ver
+    `arquitectura.md` regla #197.
+
+    Barato: es un min/max sobre el df que `_registro_de_parquet` ya tiene
+    cacheado en memoria, no una lectura nueva.
+    """
+    df = _registro_de_parquet()
+    if df is None or df.empty or "fecha_emision" not in df.columns:
+        return None
+    fechas = pd.to_datetime(df["fecha_emision"], errors="coerce").dropna()
+    if fechas.empty:
+        return None
+    return fechas.min().date(), fechas.max().date()
+
+
+def tramo_pendiente(tope_parquet, fecha_ini, fecha_fin):
+    """El pedazo de `[fecha_ini, fecha_fin]` que el parquet NO cubre, o None.
+
+    Función PURA (sin red ni Streamlit, testeada en `test_sunat.py`): es la
+    decisión de "¿hace falta molestar a la API?", separada de la lectura
+    para poder probarla sin credenciales.
+
+    El corte es **estrictamente después** del tope: si el rango termina en
+    un día que el parquet ya tiene, no se consulta nada y la vista sigue
+    siendo instantánea — que es el caso normal, porque casi todo lo que se
+    mira es pasado. Sólo la cola verdaderamente nueva sale por la API.
+
+    El precio de ese corte, escrito para que no sorprenda: un comprobante
+    con fecha de emisión VIEJA que SUNAT recién anota hoy no aparece hasta
+    la próxima corrida del sync. Es el agujero que tiene cualquier proceso
+    de madrugada y ya estaba antes; lo que este tramo arregla es el otro,
+    el que sí se veía en pantalla — los días recientes que no existían en
+    el parquet y que el calendario, encima, no dejaba ni elegir.
+    """
+    if fecha_ini is None or fecha_fin is None:
+        return None
+    ini = pd.Timestamp(fecha_ini).normalize().date()
+    fin = pd.Timestamp(fecha_fin).normalize().date()
+    if fin < ini:
+        ini, fin = fin, ini
+    if tope_parquet is None:            # parquet vacío: todo es cola
+        return ini, fin
+    tope = pd.Timestamp(tope_parquet).normalize().date()
+    if fin <= tope:
+        return None
+    return max(ini, tope + datetime.timedelta(days=1)), fin
+
+
+def comprobantes_rango(fecha_ini, fecha_fin, _progreso=None):
+    """Comprobantes emitidos en el rango: el parquet, más la cola en vivo.
+
+    Es la puerta que usa la vista. Devuelve `(df, origen)` para que la
+    pantalla pueda decir de dónde salió el número — misma exigencia que
+    dejó la regla #141: una vista con datos externos tiene que mostrar su
+    procedencia, no sólo el total. Los cuatro orígenes posibles:
+
+      · `"api"` — el parquet todavía no existe en R2 y todo salió en vivo.
+      · `"parquet"` — el rango entero ya estaba sincronizado.
+      · `"parquet+vivo"` — el rango pasa del tope del parquet y la cola se
+        pidió a SUNAT en el momento.
+      · `"parquet-sin-cola"` — hacía falta esa cola y SUNAT no contestó. Lo
+        que se devuelve está INCOMPLETO y la vista tiene que decirlo: un
+        total creíble al que le faltan los últimos días es exactamente el
+        modo de fallo de la regla #141.
+
+    Preguntar por la cola no es un lujo: el sync corre de madrugada, así
+    que entre esa corrida y ahora hay hasta un día entero de comprobantes
+    que existen en SUNAT y no en R2. Ver `arquitectura.md` regla #197.
     """
     df = _registro_de_parquet()
     if df is None:
@@ -689,8 +758,46 @@ def comprobantes_rango(fecha_ini, fecha_fin, _progreso=None):
     ini = pd.Timestamp(fecha_ini).normalize()
     fin = pd.Timestamp(fecha_fin).normalize() + pd.Timedelta(days=1)
     m = (df["fecha_emision"] >= ini) & (df["fecha_emision"] < fin)
-    return (df[m].sort_values("fecha_emision").reset_index(drop=True),
-            "parquet")
+    del_parquet = df[m]
+
+    def _solo_parquet(origen):
+        return (del_parquet.sort_values("fecha_emision").reset_index(drop=True),
+                origen)
+
+    tope = df["fecha_emision"].max()
+    cola = tramo_pendiente(None if pd.isna(tope) else tope, fecha_ini, fecha_fin)
+    if cola is None:
+        return _solo_parquet("parquet")
+
+    try:
+        vivo = obtener_comprobantes_rango(cola[0], cola[1], _progreso)
+    except Exception:
+        # SUNAT caído no puede tumbar la vista entera: lo que el parquet SÍ
+        # tiene se muestra igual, con el sello que avisa que falta la cola.
+        return _solo_parquet("parquet-sin-cola")
+
+    if vivo is None or vivo.empty:
+        # Sin filas no hay forma de distinguir "esos días no tienen nada"
+        # de "no se pudo": `obtener_comprobantes_rango` se traga los
+        # períodos que fallan con un `continue`. Se informa como consulta
+        # hecha, que es lo que pasó.
+        return _solo_parquet("parquet+vivo")
+
+    # El `del_parquet.empty` no es paranoia: es EL caso del bug —
+    # elegir un solo día que el parquet todavía no trajo. Y un
+    # `concat` con un df vacío está deprecado en pandas 2.
+    unido = (vivo.copy() if del_parquet.empty
+             else pd.concat([del_parquet, vivo], ignore_index=True))
+    # `car` es el identificador de la anotación en SUNAT y es la ÚNICA
+    # clave sin colisiones: medido sobre los 16.583 comprobantes reales,
+    # serie-número deja 1.422 duplicados de proveedores distintos y
+    # RUC+documento deja 3 (ver `documentos_sunat._fila_de`). Gana la fila
+    # en vivo (`keep="last"`), que es la más fresca: la situación de un
+    # comprobante cambia de Pendiente a Registrado cuando cierra el período.
+    if "car" in unido.columns:
+        unido = unido.drop_duplicates(subset="car", keep="last")
+    return (unido.sort_values("fecha_emision").reset_index(drop=True),
+            "parquet+vivo")
 
 
 # ===========================================================================

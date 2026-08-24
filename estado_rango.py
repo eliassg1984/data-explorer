@@ -87,6 +87,31 @@ def clave_rango(reporte, usa_carga_rango, categoria=None):
     return f"rango_franja_{reporte}"
 
 
+def _recortar_media(clave, cur, bounds):
+    """Una media selección se queda a medias, pero dentro de bounds.
+
+    La ARIDAD se respeta a propósito (regla #196: `st.date_input` en modo
+    rango commitea una tupla de un elemento apenas se hace el primer clic,
+    y ése es el estado normal de "quiero ver un día"). Lo que sí se toca
+    es el VALOR, porque los bounds pueden ENCOGERSE entre un render y el
+    siguiente: Compras > Documentos SUNAT abre el calendario hasta HOY
+    —le pregunta al SIRE en vivo— y el resto de las vistas de Compras
+    vuelve al tope del parquet. Elegir hoy ahí y cambiar de vista dejaba
+    en `session_state` una fecha por encima del `max_value` del widget, y
+    Streamlit no la recorta: tira `StreamlitAPIException` y se cae la
+    página entera. Ver `arquitectura.md` regla #197.
+    """
+    if not (bounds and all(bounds)
+            and isinstance(cur, (tuple, list)) and len(cur) == 1 and cur[0]):
+        return cur
+    min_b, max_b = bounds
+    d = min(max(cur[0], min_b), max_b)
+    if d == cur[0]:
+        return cur
+    st.session_state[clave] = (d,)
+    return (d,)
+
+
 def asegurar_rango(clave, default, bounds=None, reporte=None,
                    usa_carga_rango=False):
     """Punto ÚNICO para sembrar/normalizar el rango. Idempotente.
@@ -97,16 +122,17 @@ def asegurar_rango(clave, default, bounds=None, reporte=None,
     3. Mantiene el espejo `rango_carga_ok_{reporte}` para reportes por rango
        (lo consume el loader cuando el usuario deja una selección a medias).
 
-    Devuelve la tupla (ini, fin) vigente. Si el estado es una selección a
-    medias (1 sola fecha mientras el usuario elige la 2ª), la respeta y la
-    devuelve tal cual, sin recortar.
+    Devuelve la tupla (ini, fin) vigente. Una selección a medias (1 sola
+    fecha mientras el usuario elige la 2ª) se respeta COMO TAL —no se
+    convierte en rango— pero igual se recorta a bounds: ver
+    `_recortar_media`.
     """
     if clave not in st.session_state:
         st.session_state[clave] = tuple(default)
 
     cur = st.session_state.get(clave)
     if not (isinstance(cur, (tuple, list)) and len(cur) == 2 and all(cur)):
-        return cur  # selección a medias: no tocar
+        return _recortar_media(clave, cur, bounds)
 
     ini, fin = cur
     if bounds and all(bounds):
