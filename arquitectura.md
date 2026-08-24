@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-190 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+191 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (69)
 
@@ -158,7 +158,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
 
-**AgGrid y tablas** (29)
+**AgGrid y tablas** (30)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -189,6 +189,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#185** — Un contextmenu dentro de un iframe NO sube al documento padre: el clic derecho sobre la…
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
 - **#190** — Compras › Producto perdió sus dos botones "✕ Quitar foco" (2026-08-24, a pedido) — mismo fix…
+- **#191** — _ALTO_FRAME en Compras › Proveedor tenía TRES consumidores, no uno — achicar sus filas a…
 
 **Streamlit** (57)
 
@@ -8186,13 +8187,21 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      **Nota para cuando se toque Proveedor otra vez:** la #133 describe un fix que ya NO vive en `proveedor.py` — su ranking migró de `st.dataframe` a AgGrid (regla nueva de Inventario, 2026-08-23, mismo día que el resto de esta sesión) y el clic-en-fila de AgGrid es un toggle real (`setSelected(!isSelected())`), sin el problema de "reclic no dispara evento" que motivó el `elif` en primer lugar. `producto.py` se queda en `st.dataframe` a propósito (decisión explícita: "achicar filas sí, migrar a AgGrid no" — el clic en Producto no tiene la limitación de checkboxes-obligatorios que sí forzó la migración en Proveedor), así que el `elif` acá SÍ hace falta y no es código muerto.
 
+191. **`_ALTO_FRAME` en Compras › Proveedor tenía TRES consumidores, no uno — achicar sus filas a secas se habría llevado puesta la Evolución y el Panel A de productos.** Pedido 2026-08-24: "hagamos mas delgadas las filas" sobre `compras_prov_rank_grid` (el AgGrid del ranking, `rowHeight: 35`). El reflejo era bajar `px_fila` en `_ALTO_FRAME = alturas.por_filas(8, px_fila=35, extra=45, minimo=0)` — pero grepeando el nombre antes de tocarlo aparecen tres usos: `_ALTO_RANK` (el ranking, el único que el pedido señalaba), `_ALTO_EVO` (la figura de Evolución, al lado) y `height=_ALTO_FRAME` del Panel A de productos (mucho más abajo, con su propio comentario: "Mismo frame de 8 filas que el ranking de arriba"). Ninguno de los otros dos pidió filas más finas.
+
+     Fix: constante propia, `_ALTO_FILA_RANK = 28` + `_ALTO_FRAME_RANK = alturas.por_filas(8, px_fila=_ALTO_FILA_RANK, extra=45, minimo=0)`, que alimenta SOLO `_ALTO_RANK` y el `rowHeight` del AgGrid — mismo número a los dos lados, misma disciplina de la regla #188 ("el número hay que llevarlo a Python de a DOS"). `_ALTO_FRAME` se queda en 35px, intacto, para sus otros dos consumidores.
+
+     Verificado en vivo que la división no dejó un hueco: `compras_prov_card_ranking` y `compras_prov_card_evo` miden 380px las dos (el `:has()` de la regla de "dos tarjetas de la misma fila miden lo mismo" en `_80_cards.py` las sigue igualando), y el contenido propio del ranking (título 26 + atajos 38 + grid 253 + padding 32) suma casi exactamente esos 380 — no quedó aire muerto abajo pese a que el grid mide menos que antes. Si algún día vuelve a crecer la diferencia entre las dos tarjetas, ahí sí aparecería el hueco: no es un problema hoy, pero tampoco una garantía para siempre.
+
+     Regla general: antes de cambiar una constante de alto compartida, grepear su nombre en TODO el fichero (o el módulo) — `_ALTO_FRAME` se lee como "el alto de ESTE frame" y en una función de 1.400 líneas es fácil asumir que sólo lo usa el bloque que se está mirando.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#191**.
+> próxima regla nueva es la **#192**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

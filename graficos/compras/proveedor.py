@@ -321,7 +321,20 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # px_fila=35/extra=45 son los mismos que ya usa la tabla de Panel A
     # (más abajo) para su `st.dataframe` — el alto de una FILA de tabla, no
     # el de una barra de gráfico (26px, lo que usaba el ranking viejo).
+    # SIN TOCAR a propósito: además de la Evolución de al lado (`_ALTO_EVO`,
+    # abajo), este mismo número fija el frame del Panel A de productos (más
+    # abajo, `height=_ALTO_FRAME`) — ninguno de los dos pidió filas más
+    # finas, y si se achica acá se achican los tres.
     _ALTO_FRAME = alturas.por_filas(8, px_fila=35, extra=45, minimo=0)
+    # Filas del RANKING, más delgadas a pedido (2026-08-24) — mismo número
+    # que graficos/compras/producto.py. Constante propia y no un ajuste de
+    # `_ALTO_FRAME`: si la Evolución se achicara con él, perdería piso sin
+    # que nadie se lo pidiera (la comparten `_ALTO_EVO` y el Panel A de
+    # arriba). El `:has()` de _80_cards.py sigue igualando el alto de las
+    # dos tarjetas de la fila aunque el ranking pida menos.
+    _ALTO_FILA_RANK = 28
+    _ALTO_FRAME_RANK = alturas.por_filas(8, px_fila=_ALTO_FILA_RANK, extra=45,
+                                         minimo=0)
     # La evolución comparte su columna con el selector de período Y con el
     # cromo de su propia tarjeta (2026-08-18: son dos bloques, no uno), así
     # que su figura mide eso menos que la tabla de al lado. La tabla no paga
@@ -532,8 +545,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     # (`_atajos_rank` puede salir vacía si ningún atajo
                     # intersecta el rango de datos): restar sin que la fila
                     # se haya dibujado dejaría el grid más chico sin motivo.
-                    _ALTO_RANK = (_ALTO_FRAME - alturas.FRANJA_ATAJOS
-                                  if _atajos_rank else _ALTO_FRAME)
+                    _ALTO_RANK = (_ALTO_FRAME_RANK - alturas.FRANJA_ATAJOS
+                                  if _atajos_rank else _ALTO_FRAME_RANK)
                     # ── El ranking es un AgGrid, no un `st.dataframe` ──────
                     # 2026-08-19, a pedido: los checkbox de selección se van y
                     # el gesto pasa a ser "clic en la fila". No era posible con
@@ -625,7 +638,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                              "checkboxes": False,
                                              "enableClickSelection": False},
                             "onRowClicked": _js_toggle,
-                            "rowHeight": 35,
+                            "rowHeight": _ALTO_FILA_RANK,
                             "headerHeight": 38,
                             "suppressCellFocus": True,
                             "suppressMovableColumns": True,
