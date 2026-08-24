@@ -90,7 +90,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#186** — Un st.container anidado NO es hijo directo del flex que lo contiene: Streamlit le mete un…
 - **#188** — "Solo me deja acortar" no era la herramienta: el elemento SÍ crece, lo recorta un ancestro —…
 
-**Layout y alturas** (19)
+**Layout y alturas** (18)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -110,7 +110,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#177** — "COMPRAS: PÁGINA BLANCA, TARJETAS TENUES" (regla #16 y media docena de "vueltas" entre…
 - **#178** — Mover un control de "flotando sobre el marco compartido" a "adentro de una tarjeta" no es un…
 - **#187** — Meter None entre las opciones de un st.selectbox le agrega un botón ✕ "Clear value" que no…
-- **#188** — "Solo me deja acortar" no era la herramienta: el elemento SÍ crece, lo recorta un ancestro —…
 
 **Plotly y figuras** (43)
 
@@ -158,7 +157,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
 
-**AgGrid y tablas** (30)
+**AgGrid y tablas** (31)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -187,6 +186,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#159** — Cuadrados negros en vez de iconos en Chrome < 120: AG Grid 34 emite mask-image sin la…
 - **#163** — arquitectura.md creció hasta ser un documento que nadie podía abrir: 115k tokens, y CLAUDE.md…
 - **#185** — Un contextmenu dentro de un iframe NO sube al documento padre: el clic derecho sobre la…
+- **#188** — "Solo me deja acortar" no era la herramienta: el elemento SÍ crece, lo recorta un ancestro —…
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
 - **#190** — Compras › Producto perdió sus dos botones "✕ Quitar foco" (2026-08-24, a pedido) — mismo fix…
 - **#191** — _ALTO_FRAME en Compras › Proveedor tenía TRES consumidores, no uno — achicar sus filas a…
@@ -8164,6 +8164,19 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      **El bug que apareció construyéndolo, y que vale por la regla entera:** el total de filas no se puede sacar dividiendo el alto del contenedor por el de una fila. Entre un tick y el siguiente se puede estar en un estado MIXTO —ag-grid ya reescribió las filas con SU alto, el contenedor sigue con el nuestro— y ahí la división miente. Reproducido a mano: devolver UNA sola fila a 35px con el override en 24 dejaba el contenedor en 264px en vez de 384, o sea la grilla perdía cuatro filas de alto sin que nadie tocara los datos. La fuente correcta es `aria-rowcount` del `.ag-root` menos las `.ag-header-row`: es la contabilidad de la propia ag-grid y no depende de ningún alto, ni del suyo ni del nuestro.
 
      **Y el número hay que llevarlo a Python de a DOS.** "Copiar CSS" ahora emite la nota aunque no haya ni una propiedad CSS tocada —que es justo el caso de "solo vine a achicar las filas"— y nombra las dos mitades: el `"rowHeight"` del gridOptions y el `px_fila` de `alturas.por_filas()`, que es de donde sale el `height=` del grid. Si se cambia una sola, el alto del marco deja de coincidir con lo que ocupan las filas — la misma disciplina de dos caras que ya tienen los colores (`tema.py` / `:root`) y las alturas (`alturas.py` / `--alto-util`).
+
+     **Corrección el mismo día, tras reporte con captura ("al hacer scroll mira como se ve"): reescribir el DOM a mano era la receta equivocada, y se cambió por la API real de la grilla.** El primer intento (arriba) reescribía `.ag-row` y sus contenedores a mano, y se veía bien... hasta que el usuario scrolleaba: las filas quedaban separadas por huecos gigantes, exactamente como en la captura. Dos motivos, y el segundo no tenía arreglo posible por DOM:
+
+     1. La guarda de idempotencia miraba la PRIMERA `.ag-row` del documento. Al reciclar filas por scroll, ag-grid reescribe solo algunas — si la primera todavía tenía el alto nuestro, el tick se iba sin corregir las recién recicladas y quedaban conviviendo dos alturas a la vez.
+     2. El motivo de fondo: la **virtualización** de ag-grid sigue calculándose con SU `rowHeight` interno, no con el `style.height` que se le pisa desde afuera. Decide qué filas renderizar dividiendo `scrollTop` por su propio alto — con el override activo esa cuenta da un rango de filas que no corresponde a la banda visible, y el resto queda en blanco. Ningún parche de DOM lo arregla: la cuenta vive adentro de la grilla, invisible desde fuera del iframe.
+
+     Fix: dejar de tocar el DOM y mover la perilla de verdad — `api.setGridOption('rowHeight', n)` seguido de `api.resetRowHeights()`, el mismo método que usaría cualquier código que redimensionara la grilla desde Python. Con eso ag-grid recalcula alturas, posiciones, altura total y virtualización juntos, consistentes, y el scroll vuelve a comportarse.
+
+     La única dificultad real fue CONSEGUIR la api: esta grilla (`compras_prov_rank_grid`, `st_aggrid.AgGrid`) no publica ningún handle propio — a diferencia de `tablas/desktop.py`, que se guarda `window.__agApi` en su `onGridReady` (la muleta de la regla #33/#162). Se sube por el **fiber de React** desde `.ag-root-wrapper` hasta el `stateNode` que trae `setGridOption`/`getGridOption`/`resetRowHeights`: verificado en vivo, aparece 5 niveles arriba del wrapper. Se cachea en el propio `document` del iframe (`gdoc.__disenoAgApi`) porque Streamlit recrea el iframe entero en cada rerun, así que la cache muere sola cuando corresponde — reintentar sería gratis pero innecesario.
+
+     Un timing a tener en cuenta si se retoca: tras `resetRowHeights()` las posiciones se acomodan en el frame SIGUIENTE, no en el mismo tick — medir `translateY` inmediatamente después de la llamada todavía muestra el espaciado viejo. No es un bug, es cómo React aplica el cambio; no hace falta compensarlo, alcanza con no leer el DOM en la misma vuelta que se escribe.
+
+     Verificado en vivo con las dos grillas del drill de Proveedor (`compras_prov_rank_grid`, 16 filas sin virtualizar; `cp_prov_pivot_docs_Mes`, 34 filas renderizadas con virtualización real): alto cambiado, scroll al fondo, sin huecos ni filas fuera de posición — y el "sabotaje" de simular un rerun (`setGridOption('rowHeight', 35)` desde afuera, como si Streamlit hubiera vuelto a montar la grilla con su valor de Python) se corrige solo en el tick siguiente, igual que el resto de los overrides de este modo. El panel además deja de OFRECER el control si la api no aparece (grilla cross-origin en algún despliegue raro, o una versión de ag-grid que cambie su árbol interno): mejor no mostrar un slider que miente que mostrarlo roto.
 
 189. **El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las dos muletas de la regla #76 y de la #79.** Pedido 2026-08-23: "conviertámoslo en una tabla, con barra de progreso como tengo en compras", señalando la tarjeta izquierda de Inventario Valorizado (`ajuste_graf_card_izq_inv`). El componente ya existía: es el Ranking de proveedores de `graficos/compras/proveedor.py`, o sea AgGrid con la barra pintada como FONDO de la celda (un `linear-gradient` cortado en el % del valor) y no un `cellRenderer` — la regla #25 no aplica porque no hay que devolver HTML, y los sparklines de AG Grid son Enterprise.
 

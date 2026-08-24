@@ -1030,98 +1030,113 @@ JS = """
 
         // ── ALTO DE FILA de un AgGrid (preview, como todo aca) ────────
         // Pedido 2026-08-23: "me refiero a achicar las filas". No sale por
-        // CSS, y no es un descuido del modo diseno: ag-grid posiciona cada
-        // fila en ABSOLUTO, con `transform: translateY(indice * alto)` y un
-        // `height` inline, los dos calculados en JS. Bajarle el `height` con
-        // una regla deja las filas en su vieja posicion y se pisan.
+        // CSS y no es un descuido: ag-grid posiciona cada fila en ABSOLUTO,
+        // con `transform: translateY(indice * alto)` y un `height` inline,
+        // los dos calculados en JS. Una regla que baje el `height` deja las
+        // filas en su vieja posicion y se pisan.
         //
-        // Asi que se reescribe lo mismo que escribe ag-grid: el alto de cada
-        // `.ag-row` y su translateY, mas la altura total de los contenedores
-        // de filas. Hecho eso, la grilla se ve exactamente como se veria con
-        // otro `rowHeight` — que es el numero a llevar a Python (el
-        // `rowHeight` del gridOptions y el `px_fila` de alturas.por_filas,
-        // que van de a dos).
+        // PRIMER INTENTO, DESCARTADO: reescribir a mano lo mismo que escribe
+        // ag-grid (alto de cada `.ag-row`, su translateY, y la altura de los
+        // contenedores). Se ve bien... hasta que el usuario SCROLLEA, que es
+        // exactamente como lo reporto (con captura: filas separadas por
+        // huecos enormes). Dos motivos, y el segundo no tiene arreglo por
+        // DOM:
+        //   1. La guarda de idempotencia miraba la PRIMERA `.ag-row` del
+        //      documento. Al reciclar, ag-grid reescribe solo algunas: si la
+        //      primera todavia tenia el alto nuestro, el tick se iba sin
+        //      corregir las recien recicladas y quedaban conviviendo dos
+        //      alturas.
+        //   2. Peor: la VIRTUALIZACION sigue calculandose con el rowHeight
+        //      de ag-grid. Decide que filas renderizar dividiendo el
+        //      scrollTop por SU alto, asi que con el override activo pinta
+        //      un rango de filas que no corresponde a la banda visible y
+        //      deja el resto en blanco. Ningun parche de DOM lo arregla:
+        //      la cuenta vive adentro de la grilla.
         //
-        // Se REAPLICA en cada tick por lo mismo que el override de texto:
-        // ag-grid recicla filas al scrollear y las reescribe con SUS
-        // valores. La guarda de "ya esta aplicado" lo hace barato.
-        var CONTENEDORES_FILAS = ['.ag-center-cols-container',
-                                  '.ag-pinned-left-cols-container',
-                                  '.ag-pinned-right-cols-container',
-                                  '.ag-full-width-container',
-                                  '.ag-body-vertical-scroll-container'];
+        // LO QUE SE HACE AHORA: manejar la perilla de verdad,
+        // `setGridOption('rowHeight', n)` + `resetRowHeights()`, con lo cual
+        // ag-grid recalcula alturas, posiciones, altura total y
+        // virtualizacion — todo consistente, y el scroll se comporta. La
+        // unica gracia es CONSEGUIR la api: esta grilla no publica ningun
+        // handle (a diferencia de `tablas/desktop.py`, que se guarda
+        // `window.__agApi` en su `onGridReady`), asi que se sube por el
+        // fiber de React desde `.ag-root-wrapper` hasta el `stateNode` que
+        // la tiene. Verificado en vivo: aparece 5 niveles arriba.
+        //
+        // Ojo con el timing: despues de `resetRowHeights()` las posiciones
+        // se acomodan en el frame SIGUIENTE (medido: justo despues de la
+        // llamada los translateY siguen con el espaciado viejo). No es un
+        // bug ni hay que compensarlo — solo no sirve medir en la misma
+        // vuelta.
         function docDeAgGrid(elemento) {
             if (!elemento || !elemento.querySelector) return null;
             var ifr = elemento.querySelector('iframe[title="st_aggrid.AgGrid.agGrid"]');
             if (!ifr) return null;
             try {
                 var d = ifr.contentDocument;
-                return (d && d.querySelector('.ag-row')) ? d : null;
+                return (d && d.querySelector('.ag-root-wrapper')) ? d : null;
             } catch (err) { return null; }   // cross-origin en algun despliegue raro
         }
+        function esApiGrid(o) {
+            return o && typeof o === 'object'
+                   && typeof o.setGridOption === 'function'
+                   && typeof o.getGridOption === 'function'
+                   && typeof o.resetRowHeights === 'function';
+        }
+        function apiDeAgGrid(gdoc) {
+            if (!gdoc) return null;
+            // Cacheada en el documento del iframe: Streamlit lo recrea entero
+            // en cada rerun, asi que la cache muere sola cuando corresponde.
+            var cache = gdoc.__disenoAgApi;
+            if (cache) {
+                try {
+                    if (typeof cache.isDestroyed !== 'function' || !cache.isDestroyed()) return cache;
+                } catch (err) {}
+                gdoc.__disenoAgApi = null;
+            }
+            var root = gdoc.querySelector('.ag-root-wrapper');
+            if (!root) return null;
+            var fk = null;
+            for (var k in root) { if (k.indexOf('__reactFiber$') === 0) { fk = k; break; } }
+            if (!fk) return null;
+            var f = root[fk], pasos = 0;
+            while (f && pasos < 40) {
+                var sn = f.stateNode;
+                if (sn && typeof sn === 'object') {
+                    if (esApiGrid(sn)) { gdoc.__disenoAgApi = sn; return sn; }
+                    for (var kk in sn) {
+                        try {
+                            if (esApiGrid(sn[kk])) { gdoc.__disenoAgApi = sn[kk]; return sn[kk]; }
+                        } catch (err2) {}   // getters que tiran al leerse
+                    }
+                }
+                f = f.return; pasos++;
+            }
+            return null;
+        }
         function altoFilaDe(gdoc) {
-            var f = gdoc.querySelector('.ag-row');
-            if (!f) return null;
-            var h = parseFloat(f.style.height);
-            return (isFinite(h) && h > 0) ? h : null;
+            var api = apiDeAgGrid(gdoc);
+            if (!api) return null;
+            try {
+                var h = api.getGridOption('rowHeight');
+                return (isFinite(h) && h > 0) ? h : null;
+            } catch (err) { return null; }
         }
         function filasQueEntran(gdoc, alto) {
-            var vp = gdoc.querySelector('.ag-body-viewport');
+            var vp = gdoc && gdoc.querySelector('.ag-body-viewport');
             if (!vp || !alto) return null;
             return Math.floor(vp.getBoundingClientRect().height / alto);
         }
         function aplicarAltoFila(elemento, registro) {
             var destino = registro.filaAlto && registro.filaAlto.actual;
             if (!destino) return;
-            var gdoc = docDeAgGrid(elemento);
-            if (!gdoc) return;
-            var previo = altoFilaDe(gdoc);
-            if (!previo || previo === destino) return;   // idempotente
-            // El total de filas NO se cuenta con querySelectorAll: ag-grid
-            // virtualiza y solo renderiza las visibles.
-            //
-            // Y TAMPOCO sale de dividir el alto del contenedor por el de una
-            // fila, que fue el primer intento: entre un tick y el siguiente
-            // se puede estar en un estado MIXTO (ag-grid ya reescribio las
-            // filas con SU alto, el contenedor sigue con el nuestro), y ahi
-            // la division miente. Reproducido a mano: devolver UNA fila a
-            // 35px con el override en 24 dejaba el contenedor en 264px en vez
-            // de 384 — la grilla perdia cuatro filas de alto sin que nadie
-            // hubiera tocado los datos.
-            //
-            // `aria-rowcount` es la contabilidad de la PROPIA ag-grid: no
-            // depende de ningun alto, ni del nuestro ni del suyo. Incluye las
-            // filas de encabezado, que se descuentan.
-            var total = null;
-            var raiz = gdoc.querySelector('.ag-root[aria-rowcount]');
-            if (raiz) {
-                var arc = parseInt(raiz.getAttribute('aria-rowcount'), 10);
-                var nCab = gdoc.querySelectorAll('.ag-header-row').length;
-                if (isFinite(arc) && arc > nCab) total = arc - nCab;
-            }
-            if (total === null) {
-                // Fallback por si una version futura deja de emitir el
-                // atributo: la division de antes, con su riesgo conocido.
-                for (var c = 0; c < CONTENEDORES_FILAS.length && total === null; c++) {
-                    var cont = gdoc.querySelector(CONTENEDORES_FILAS[c]);
-                    var ch = cont && parseFloat(cont.style.height);
-                    if (isFinite(ch) && ch > 0) total = Math.round(ch / previo);
-                }
-            }
-            var filas = gdoc.querySelectorAll('.ag-row');
-            for (var i = 0; i < filas.length; i++) {
-                var idx = parseInt(filas[i].getAttribute('row-index'), 10);
-                filas[i].style.height = destino + 'px';
-                if (isFinite(idx)) {
-                    filas[i].style.transform = 'translateY(' + (idx * destino) + 'px)';
-                }
-            }
-            if (total) {
-                for (var j = 0; j < CONTENEDORES_FILAS.length; j++) {
-                    var cj = gdoc.querySelector(CONTENEDORES_FILAS[j]);
-                    if (cj) cj.style.height = (total * destino) + 'px';
-                }
-            }
+            var api = apiDeAgGrid(docDeAgGrid(elemento));
+            if (!api) return;
+            try {
+                if (api.getGridOption('rowHeight') === destino) return;   // idempotente
+                api.setGridOption('rowHeight', destino);
+                api.resetRowHeights();
+            } catch (err) {}
         }
 
         // ── Override de TEXTO (efimero, como todo el modo diseno) ────────
@@ -1959,7 +1974,7 @@ JS = """
                 avisoResz.style.cssText = 'font:11px/1.4 -apple-system,sans-serif;color:#9385ec;background:#1c1c24;border:1px solid #34343f;border-radius:4px;padding:6px 7px;margin-bottom:10px';
                 avisoResz.textContent = contenidoResz.tipo === 'plotly'
                     ? 'El tamaño de un gráfico Plotly vive en Python (fig.update_layout / graficos/alturas.py), no en CSS — "Copiar CSS" no lo va a incluir. Anotá el "Tamaño" de abajo y llevalo ahí.'
-                    : 'El tamaño de una tabla AgGrid vive en Python (el height= de tablas/), no en CSS — "Copiar CSS" no lo va a incluir. Anotá el "Tamaño" de abajo y llevalo ahí. Para las FILAS usá "Alto de fila": tampoco es CSS (ag-grid las posiciona en absoluto), pero el botón de copiar te deja el rowHeight listo.';
+                    : 'El tamaño de una tabla AgGrid vive en Python (el height= de tablas/), no en CSS — "Copiar CSS" no lo va a incluir. Anotá el "Tamaño" de abajo y llevalo ahí. Para las FILAS usá "Alto de fila": tampoco es CSS (mueve la perilla rowHeight de la propia grilla), pero el botón de copiar te deja el número listo.';
                 panel.appendChild(avisoResz);
             }
 
@@ -1982,8 +1997,12 @@ JS = """
             // ── Alto de fila (solo AgGrid) ────────────────────────
             // Preview de `rowHeight`: lo unico del panel que no se toca
             // arrastrando ni se copia como CSS. Ver aplicarAltoFila().
+            // Sin api alcanzable NO se dibuja el control: un slider que
+            // mueve el DOM pero no la virtualizacion se ve bien hasta el
+            // primer scroll y despues miente (ver el comentario de
+            // aplicarAltoFila). Mejor no ofrecerlo que ofrecerlo roto.
             var gdocPanel = docDeAgGrid(elemento);
-            if (gdocPanel) {
+            if (gdocPanel && apiDeAgGrid(gdocPanel)) {
                 var altoAhora = altoFilaDe(gdocPanel);
                 if (registro.filaAlto.original === null && altoAhora) {
                     registro.filaAlto.original = altoAhora;
