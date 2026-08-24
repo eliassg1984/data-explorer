@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-181 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+182 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (66)
+**CSS y estilos** (67)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -86,6 +86,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#174** — Al invertir QUÉ dibuja un contenedor compartido (regla #170: compras_tabs_row pasó de Vistas…
 - **#175** — Las manijas de resize del modo diseño (regla #46) redimensionan CUALQUIER elemento salvo un…
 - **#177** — "COMPRAS: PÁGINA BLANCA, TARJETAS TENUES" (regla #16 y media docena de "vueltas" entre…
+- **#182** — El modo diseño ya llega a los textos de Plotly y de AgGrid — y para esos dos el "Copiar CSS"…
 
 **Layout y alturas** (17)
 
@@ -107,7 +108,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#177** — "COMPRAS: PÁGINA BLANCA, TARJETAS TENUES" (regla #16 y media docena de "vueltas" entre…
 - **#178** — Mover un control de "flotando sobre el marco compartido" a "adentro de una tarjeta" no es un…
 
-**Plotly y figuras** (40)
+**Plotly y figuras** (41)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -149,6 +150,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#161** — Un número de píxeles escrito en un comentario no se entera de que el layout cambió: el eje X…
 - **#165** — Al agregar una barra de modos quedaron DOS controles del mismo estado, uno encima del otro —…
 - **#175** — Las manijas de resize del modo diseño (regla #46) redimensionan CUALQUIER elemento salvo un…
+- **#182** — El modo diseño ya llega a los textos de Plotly y de AgGrid — y para esos dos el "Copiar CSS"…
 
 **AgGrid y tablas** (26)
 
@@ -8045,13 +8047,24 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      La lección general, más allá de esta herramienta: cuando se agrega un guard que descarta eventos del usuario, el costo real no es implementarlo sino que su modo de falla es MUDO. El usuario no tiene forma de distinguir "esto está deshabilitado a propósito" de "esto está roto", y va a reportar lo segundo — como pasó acá, contra una feature que él mismo había pedido dos días antes.
 
+182. **El modo diseño ya llega a los textos de Plotly y de AgGrid — y para esos dos el "Copiar CSS" NO puede devolver CSS, porque pegarlo en `estilos/` no haría nada.** Pedido 2026-08-23: "editar los textos dentro de las tablas y gráficos". El ejemplo que se dio («Ranking de proveedores») resultó ser el único de los tres casos que YA funcionaba —`.cp-rank-tit` es clase de autor y aparece como hoja azul del árbol desde la regla #157—, o sea que ahí el problema era de descubribilidad, no de capacidad. Los otros dos sí eran huecos reales, y por motivos distintos:
+
+     · **Plotly**: sus rótulos son `<text>` dentro del SVG, y `hijosConClasePropia()` saltea SVG a propósito (`if (n.ownerSVGElement …) continue`) porque sus clases (`.xtick`, `.gtitle`) se repiten en cada nodo y no sirven de selector único.
+     · **AgGrid**: la grilla corre dentro de un **iframe**, y `doc.querySelectorAll` del documento padre no entra ahí jamás. Medido en vivo: el iframe es same-origin, así que `contentDocument` SÍ abre — pero hay que pedirlo explícito, nodo por nodo.
+
+     Por eso estas hojas se direccionan por `(tipo, idx, txt)` y no por clase. El texto va PRIMERO en la resolución y el índice es el fallback: Plotly redibuja su SVG entero al cambiar de granularidad y reordena los nodos, así que un índice guardado apunta a otro rótulo. Y como cambiar el texto rompería ese mismo ancla, el override se guarda además en `sub.txtVivo`.
+
+     Tres cosas que hubo que tratar distinto y no se veían venir: (1) en SVG el color se pinta con `fill`, no con `color` — sin traducir la propiedad, mover el color no hacía absolutamente nada visible; (2) las hojas de texto cortan ANTES de `destinosDeEstilo()`, cuyas redirecciones (regla #154) están pensadas para wrappers de widgets de Streamlit y no tienen a quién redirigir sobre un `<text>`; (3) el override de texto se REAPLICA en cada tick del poll de 150ms, porque Plotly redibuja y AgGrid recicla sus filas al scrollear — escrito una sola vez, se pierde solo. La guarda "sin hijos elemento" no es paranoia: `textContent` sobre un contenedor borraría toda la tarjeta.
+
+     **Lo importante para el que venga:** el export de estas hojas devuelve el DESTINO en prosa, no un bloque CSS. Un `div[class*="st-key-K"] …` para un texto de Plotly (dibujado en el servidor desde Python) o de AgGrid (dentro de un iframe) es CSS que se pega, no falla, y no hace nada — media hora de diagnóstico para descubrir que el selector nunca podía alcanzar el nodo. Es la regla #169 (“el CSS que exporta el modo diseño es una FOTO DE PÍXELES, no la intención”) llevada a su conclusión: cuando la intención no es expresable en `estilos/`, lo honesto es decir en qué archivo Python vive. Verificado en vivo de punta a punta: encabezado de AgGrid 12→24px y "Proveedor"→"Nombre del proveedor" DENTRO del iframe; tick de Plotly 13→26px, "ago 25"→"AGO-2025" y `fill` inline aplicado.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#182**.
+> próxima regla nueva es la **#183**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

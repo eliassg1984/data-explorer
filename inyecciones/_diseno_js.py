@@ -166,6 +166,70 @@ JS = """
             return out;
         }
 
+        // ── Hojas de TEXTO: Plotly (SVG) y AgGrid (iframe) ───────────────
+        // Pedido 2026-08-23: "editar los textos dentro de las tablas y
+        // graficos". Son los dos huecos que `hijosConClasePropia` NO puede
+        // cubrir, y por motivos distintos:
+        //  · Plotly dibuja <text> dentro del SVG, y esa funcion saltea SVG
+        //    a proposito: sus clases (.xtick, .gtitle) se repiten en cada
+        //    nodo, asi que no sirven como selector unico.
+        //  · AgGrid vive en un IFRAME, y `doc.querySelectorAll` del padre
+        //    no entra ahi nunca. Es same-origin (medido en vivo), asi que
+        //    `contentDocument` SI abre — pero hay que pedirlo explicito.
+        // Por eso se direccionan por (tipo, indice, texto) y no por clase.
+        // Ver arquitectura.md #182.
+        function nodosDeTexto(key, tipo) {
+            var base = doc.querySelector('.st-key-' + key);
+            if (!base) return [];
+            var out = [], i;
+            if (tipo === 'svgtext') {
+                var ts = base.querySelectorAll('.js-plotly-plot text');
+                for (i = 0; i < ts.length; i++) {
+                    if ((ts[i].textContent || '').trim()) out.push(ts[i]);
+                }
+                return out;
+            }
+            var ifs = base.querySelectorAll('iframe');
+            for (var f = 0; f < ifs.length; f++) {
+                var d = null;
+                try { d = ifs[f].contentDocument; } catch (e) { continue; }
+                if (!d) continue;
+                var cs = d.querySelectorAll('.ag-header-cell-text, .ag-cell');
+                for (i = 0; i < cs.length; i++) {
+                    if ((cs[i].textContent || '').trim()) out.push(cs[i]);
+                }
+            }
+            return out;
+        }
+
+        // Tope de 10 por familia: un grid con 200 celdas haria un arbol
+        // inusable, y para "ver como se veria" alcanza con las primeras.
+        function hojasDeTexto(key) {
+            var out = [];
+            ['svgtext', 'agtext'].forEach(function (tipo) {
+                var ns = nodosDeTexto(key, tipo);
+                for (var i = 0; i < ns.length && i < 10; i++) {
+                    out.push({ tipo: tipo, idx: i,
+                               txt: (ns[i].textContent || '').trim() });
+                }
+            });
+            return out;
+        }
+
+        // Por TEXTO antes que por indice: Plotly reordena sus <text> al
+        // redibujar (cambiar de granularidad reescribe el eje entero), y
+        // ahi el indice guardado apunta a otro rotulo. `txtVivo` es el
+        // override aplicado — sin el, cambiar el texto rompia el ancla.
+        function resolverNodoTexto(key, sub) {
+            var ns = nodosDeTexto(key, sub.tipo);
+            if (!ns.length) return null;
+            for (var i = 0; i < ns.length; i++) {
+                var t = (ns[i].textContent || '').trim();
+                if (t === sub.txt || (sub.txtVivo && t === sub.txtVivo)) return ns[i];
+            }
+            return ns[sub.idx] || null;
+        }
+
         function elementoPineado() {
             // win.__inspectorUltimo.elemento es el nodo del momento del pin;
             // no confiar en esa referencia — re-resolver por key siempre.
@@ -179,6 +243,15 @@ JS = """
             // adentro y pinear un hijo distinto sin aviso).
             if (sub && sub.key !== key) { win.__disenoState.sub = null; sub = null; }
             if (!sub) return { key: key, sub: '', id: key, el: base };
+            // Hoja de texto (Plotly/AgGrid): no tiene clase que sirva de
+            // ancla, se resuelve por (tipo, idx, texto). El id lleva el
+            // texto para que dos rotulos del MISMO grafico no compartan
+            // registro de cambios.
+            if (sub.tipo) {
+                return { key: key, sub: '', subTexto: sub,
+                         id: key + ' «' + sub.txt + '»',
+                         el: base ? resolverNodoTexto(key, sub) : null };
+            }
             // `el: null` si el hijo no esta => panelPerdido, igual que con la
             // key. Caer de vuelta al contenedor seria peor: aplicaria los
             // cambios del hijo a la tarjeta entera sin que nadie lo pida.
@@ -192,6 +265,7 @@ JS = """
             // capturada cuando se construyeron los controles.
             var r = elementoPineado();
             return (r && r.el) ? { el: r.el, key: r.key, sub: r.sub, id: r.id,
+                                   subTexto: r.subTexto,
                                    registro: registroPara(r.id) } : null;
         }
 
@@ -200,6 +274,15 @@ JS = """
             if (!r) return;
             win.__disenoState.sub = { key: r.key, clase: clase };
             panel.dataset.builtForKey = '';   // fuerza reconstruir con el sub
+            sync();
+        }
+
+        function bajarASubTexto(hoja) {
+            var r = elementoPineado();
+            if (!r) return;
+            win.__disenoState.sub = { key: r.key, tipo: hoja.tipo,
+                                      idx: hoja.idx, txt: hoja.txt };
+            panel.dataset.builtForKey = '';
             sync();
         }
 
@@ -754,6 +837,34 @@ JS = """
             } catch (err) {}   // cross-origin en algun despliegue raro: degrada a "solo el iframe cambio"
         }
 
+        // ── Override de TEXTO (efimero, como todo el modo diseno) ────────
+        // `registro.texto` existia en registroPara() desde la fase A y
+        // nunca se habia usado — quedo previsto para esto.
+        // Se REAPLICA en cada tick (aplicarEstado corre desde el poll de
+        // 150ms): Plotly redibuja su SVG entero al cambiar de granularidad
+        // y AgGrid recicla las filas al scrollear, asi que un textContent
+        // escrito una sola vez se pierde solo. Idempotente por el `!==`.
+        function aplicarTextoOverride(elemento, registro) {
+            var t = registro.texto;
+            if (!t || t.actual === null || t.actual === undefined) return;
+            // Nunca sobre un nodo con hijos ELEMENTO: textContent los
+            // borraria de cuajo (una tarjeta entera reducida a una cadena).
+            if (elemento.children && elemento.children.length) return;
+            if (t.original === null) t.original = elemento.textContent || '';
+            if ((elemento.textContent || '') !== t.actual) {
+                elemento.textContent = t.actual;
+            }
+        }
+
+        function restaurarTexto(elemento, registro) {
+            var t = registro.texto;
+            if (!t || t.original === null || t.original === undefined) return;
+            if (elemento.children && elemento.children.length) return;
+            if ((elemento.textContent || '') !== t.original) {
+                elemento.textContent = t.original;
+            }
+        }
+
         function aplicarEstado(elemento, registro) {
             // snapshot para "ver original", una sola vez (primer touch de la key)
             if (registro.cssTextOriginal === null) {
@@ -761,6 +872,24 @@ JS = """
             }
             if (registro.verOriginalActivo) {
                 elemento.style.cssText = registro.cssTextOriginal;
+                restaurarTexto(elemento, registro);
+                return;
+            }
+            // ── Hoja de texto: SVG de Plotly, o nodo dentro del iframe de
+            // AgGrid. Se corta ACA, antes de destinosDeEstilo(): esas
+            // redirecciones estan pensadas para wrappers de widgets de
+            // Streamlit (regla #154) y no tienen sentido sobre un <text>
+            // — el nodo ES el texto, no hay a quien redirigir.
+            // Y en SVG el color se pinta con `fill`: sin traducir, mover el
+            // color no hacia absolutamente nada visible.
+            var esSVGTexto = !!elemento.ownerSVGElement;
+            var esDeOtroDoc = elemento.ownerDocument !== doc;
+            if (esSVGTexto || esDeOtroDoc) {
+                for (var pt in registro.cambios) {
+                    var pr = (esSVGTexto && pt === 'color') ? 'fill' : pt;
+                    elemento.style.setProperty(pr, registro.cambios[pt], 'important');
+                }
+                aplicarTextoOverride(elemento, registro);
                 return;
             }
             // reaplicado defensivo completo — barato e idempotente, cubre el
@@ -821,6 +950,10 @@ JS = """
                     registro.cambios.height ? parseInt(registro.cambios.height, 10) : null);
             }
             aplicarTransform(elemento, registro);
+            // Vale tambien para HTML normal (un `.cp-rank-tit`, el label de
+            // un boton): la guarda de "sin hijos elemento" que trae adentro
+            // es la que decide si el nodo es de verdad una hoja de texto.
+            aplicarTextoOverride(elemento, registro);
         }
 
         // ---- arrastre: resize (bordes/esquina) y mover (nudge) ----
@@ -1056,7 +1189,53 @@ JS = """
             return out;
         }
 
-        function construirBloqueCSS(key, elemento, registro, sub) {
+        function construirBloqueCSS(key, elemento, registro, sub, subTexto) {
+            // ── Hoja de texto: el export NO es CSS de estilos/ ───────────
+            // Devolver el bloque de siempre seria mentir dos veces: en
+            // Plotly el SVG se dibuja en el servidor y esas propiedades
+            // salen de Python; en AgGrid el nodo vive DENTRO de un iframe,
+            // donde una regla de `estilos/` no entra ni por casualidad.
+            // Pegarlo no haria nada y el "no hace lo que probe" tardaria
+            // media hora en diagnosticarse — exactamente la regla #169.
+            // Asi que se entrega el DESTINO, no un selector inutil.
+            if (subTexto) {
+                var props = [];
+                for (var p in registro.cambios) {
+                    props.push('  ' + p + ': ' + registro.cambios[p] + ';');
+                }
+                var txtNuevo = (registro.texto && registro.texto.actual !== null
+                                && registro.texto.actual !== undefined)
+                    ? registro.texto.actual : null;
+                var out = [];
+                if (subTexto.tipo === 'svgtext') {
+                    out.push('/* Texto de PLOTLY — «' + subTexto.txt + '»');
+                    out.push('   Esto NO va en estilos/: Plotly dibuja el SVG en el');
+                    out.push('   servidor y el tamano/color del texto sale de Python.');
+                    out.push('   Buscar la figura en graficos/ y tocar su layout:');
+                    out.push('     fig.update_layout(font=dict(size=..., color=...))');
+                    out.push('     o el eje puntual: fig.update_xaxes(tickfont=...)');
+                    out.push('   Color: desde tema.py, nunca un #hex suelto (regla #1). */');
+                } else {
+                    out.push('/* Texto de AGGRID — «' + subTexto.txt + '»');
+                    out.push('   Esto NO va en estilos/: la grilla corre dentro de un');
+                    out.push('   IFRAME y una regla del documento padre no lo alcanza.');
+                    out.push('   Va en el `custom_css` del AgGrid (mismo modulo que');
+                    out.push('   arma la tabla), o en el column_def si es el rotulo:');
+                    out.push('     custom_css={".ag-header-cell-text": {...}}');
+                    out.push('   Color: desde tema.py (regla #1). */');
+                }
+                if (props.length) {
+                    out.push('/* Lo que se probo en pantalla: */');
+                    out.push('/*');
+                    out.push.apply(out, props);
+                    out.push('*/');
+                }
+                if (txtNuevo !== null) {
+                    out.push('/* Texto probado: «' + txtNuevo + '»');
+                    out.push('   (preview: el valor real sale de los datos o de Python) */');
+                }
+                return out.join('\\n');
+            }
             // Con sub-pin el selector baja al hijo: `.cp-rank-tit` es una
             // clase de autor y pegar `div[class*="st-key-K"] .cp-rank-tit`
             // en estilos/ hace exactamente lo que se vio en pantalla. Sin
@@ -1170,7 +1349,9 @@ JS = """
             header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #2a2a35';
             var headerKey = doc.createElement('div');
             headerKey.style.cssText = 'font-size:11px;color:#9385ec;word-break:break-all;font-family:"Courier New",monospace;flex:1;min-width:0';
-            headerKey.textContent = res.sub ? (key + ' .' + res.sub) : key;
+            headerKey.textContent = res.subTexto
+                ? (key + ' «' + res.subTexto.txt + '»')
+                : (res.sub ? (key + ' .' + res.sub) : key);
             var btnSoltar = doc.createElement('button');
             btnSoltar.textContent = 'Soltar';
             btnSoltar.style.cssText = 'background:#2A2A35;color:#fff;border:0;border-radius:4px;padding:4px 8px;font:600 11px sans-serif;cursor:pointer;flex:0 0 auto';
@@ -1210,7 +1391,8 @@ JS = """
             // la cadena tiene un solo eslabon.
             var hojasSub = hijosConClasePropia(key);
             if (res.sub && hojasSub.indexOf(res.sub) === -1) hojasSub.unshift(res.sub);
-            if (cadenaDiseno.length > 1 || hojasSub.length) {
+            var hojasTxt = hojasDeTexto(key);
+            if (cadenaDiseno.length > 1 || hojasSub.length || hojasTxt.length) {
                 var arbolBox = doc.createElement('div');
                 arbolBox.style.cssText = 'margin-bottom:10px;padding:8px 9px;background:#1c1c24;border:1px solid #2a2a35;border-radius:6px;overflow-x:auto';
                 cadenaDiseno.forEach(function(k, i) {
@@ -1264,6 +1446,40 @@ JS = """
                     fila.appendChild(nodo);
                     arbolBox.appendChild(fila);
                 });
+                // Hojas de TEXTO en ambar, para que se distingan de un
+                // vistazo de las hojas-por-clase (azules): no se estilan
+                // igual ni se exportan al mismo sitio — una va a estilos/
+                // y estas dos a Python. Se rotulan con su texto, no con un
+                // selector: ".xtick" no le dice nada a nadie, «ago 25» si.
+                var ETIQ_TXT = { svgtext: '📈', agtext: '▦' };
+                hojasTxt.forEach(function(h) {
+                    var st = res.subTexto;
+                    var esActualTxt = !!(st && st.tipo === h.tipo && st.idx === h.idx);
+                    var fila = doc.createElement('div');
+                    fila.style.cssText = 'display:flex;align-items:center;gap:4px;padding:2px 0;padding-left:'
+                        + (cadenaDiseno.length * 11) + 'px;white-space:nowrap';
+                    var rama = doc.createElement('span');
+                    rama.textContent = '└';
+                    rama.style.cssText = 'color:#3f3f4c;flex-shrink:0;font-size:11px';
+                    fila.appendChild(rama);
+                    var nodo = doc.createElement(esActualTxt ? 'span' : 'button');
+                    var corto = h.txt.length > 22 ? h.txt.slice(0, 21) + '…' : h.txt;
+                    nodo.textContent = ETIQ_TXT[h.tipo] + ' ' + corto;
+                    nodo.title = (h.tipo === 'svgtext'
+                        ? 'Texto de Plotly (SVG). Se dibuja en el servidor: el cambio real va en graficos/.'
+                        : 'Texto de AgGrid (dentro de su iframe). El cambio real va en el custom_css / la columna, en Python.');
+                    nodo.style.cssText = 'font:11px "Courier New",monospace;background:transparent;border:0;padding:1px 3px;border-radius:3px;'
+                        + 'color:' + (esActualTxt ? '#e4e4e8' : '#e0a35c') + ';'
+                        + 'font-weight:' + (esActualTxt ? '700' : '400')
+                        + (esActualTxt ? '' : ';cursor:pointer');
+                    if (!esActualTxt) {
+                        nodo.addEventListener('mouseenter', function() { nodo.style.background = '#2A2A35'; });
+                        nodo.addEventListener('mouseleave', function() { nodo.style.background = 'transparent'; });
+                        nodo.addEventListener('click', function() { bajarASubTexto(h); });
+                    }
+                    fila.appendChild(nodo);
+                    arbolBox.appendChild(fila);
+                });
                 panel.appendChild(arbolBox);
             }
 
@@ -1288,7 +1504,8 @@ JS = """
             taManual.style.cssText = 'display:none;width:100%;height:90px;margin-top:6px;background:#1c1c24;color:#e4e4e8;border:1px solid #34343f;border-radius:4px;padding:6px;font:10px/1.4 "Courier New",monospace;box-sizing:border-box';
             btnCopiarCSS.addEventListener('click', function() {
                 var ctx = elementoActivo();
-                var bloque = ctx ? construirBloqueCSS(ctx.key, ctx.el, ctx.registro, ctx.sub) : null;
+                var bloque = ctx ? construirBloqueCSS(ctx.key, ctx.el, ctx.registro,
+                                                      ctx.sub, ctx.subTexto) : null;
                 if (!bloque) {
                     estadoCopiar.textContent = 'nada que copiar';
                     estadoCopiar.style.color = '#8b8b95';
@@ -1312,6 +1529,71 @@ JS = """
             filaCopiar.appendChild(estadoCopiar);
             panel.appendChild(filaCopiar);
             panel.appendChild(taManual);
+
+            // ── Cambiar el TEXTO (preview efimero) ───────────────────────
+            // Solo si el nodo pineado es de verdad una hoja de texto (sin
+            // hijos elemento): sobre un contenedor, escribir textContent
+            // borraria todo lo de adentro.
+            // Es PREVIEW y se dice explicito en el caption: el texto real
+            // sale de los datos (una celda de AgGrid), de Python (un
+            // rotulo de eje) o de un `st.markdown` — nunca del navegador.
+            if (elemento && (!elemento.children || !elemento.children.length)) {
+                var cajaTxt = doc.createElement('div');
+                cajaTxt.style.cssText = 'margin-bottom:10px;padding:8px 9px;background:#1c1c24;border:1px solid #2a2a35;border-radius:6px';
+                var lblTxt = doc.createElement('div');
+                lblTxt.textContent = 'Texto (preview)';
+                lblTxt.style.cssText = 'font:600 10px sans-serif;color:#8a8a99;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em';
+                cajaTxt.appendChild(lblTxt);
+                var filaTxt = doc.createElement('div');
+                filaTxt.style.cssText = 'display:flex;gap:5px;align-items:center';
+                var inpTxt = doc.createElement('input');
+                inpTxt.type = 'text';
+                inpTxt.value = (registro.texto && registro.texto.actual !== null
+                                && registro.texto.actual !== undefined)
+                    ? registro.texto.actual : (elemento.textContent || '');
+                inpTxt.style.cssText = 'flex:1;min-width:0;background:#12121a;color:#e4e4e8;border:1px solid #33333f;border-radius:4px;padding:5px 7px;font:11px sans-serif';
+                inpTxt.addEventListener('input', function() {
+                    var a = elementoActivo();
+                    if (!a) return;
+                    if (a.registro.texto.original === null) {
+                        a.registro.texto.original = a.el.textContent || '';
+                    }
+                    a.registro.texto.actual = inpTxt.value;
+                    aplicarEstado(a.el, a.registro);
+                    // El ancla se direcciona por texto: sin esto, el
+                    // siguiente tick no encuentra el nodo que acaba de
+                    // cambiar de nombre y el pin se "pierde" solo.
+                    if (win.__disenoState.sub && win.__disenoState.sub.tipo) {
+                        win.__disenoState.sub.txtVivo = inpTxt.value;
+                    }
+                });
+                var btnTxtRev = doc.createElement('button');
+                btnTxtRev.textContent = '↺';
+                btnTxtRev.title = 'Volver al texto original';
+                btnTxtRev.style.cssText = 'background:#2A2A35;color:#fff;border:0;border-radius:4px;padding:5px 8px;font:600 11px sans-serif;cursor:pointer;flex:0 0 auto';
+                btnTxtRev.addEventListener('click', function() {
+                    var a = elementoActivo();
+                    if (!a) return;
+                    restaurarTexto(a.el, a.registro);
+                    a.registro.texto.actual = null;
+                    if (win.__disenoState.sub && win.__disenoState.sub.tipo) {
+                        win.__disenoState.sub.txtVivo = null;
+                    }
+                    inpTxt.value = a.el.textContent || '';
+                });
+                filaTxt.appendChild(inpTxt);
+                filaTxt.appendChild(btnTxtRev);
+                cajaTxt.appendChild(filaTxt);
+                var capTxt = doc.createElement('div');
+                capTxt.textContent = res.subTexto
+                    ? (res.subTexto.tipo === 'svgtext'
+                        ? 'Solo preview. El rótulo real lo dibuja Plotly desde graficos/.'
+                        : 'Solo preview. El valor real sale de los datos o del column_def.')
+                    : 'Solo preview: no persiste al recargar.';
+                capTxt.style.cssText = 'margin-top:5px;font:10px sans-serif;color:#7a7a88;line-height:1.35';
+                cajaTxt.appendChild(capTxt);
+                panel.appendChild(cajaTxt);
+            }
 
             // Para LEER valores iniciales/computados, usar el mismo destino
             // al que van a ESCRIBIR los controles de estilo — si no, el
