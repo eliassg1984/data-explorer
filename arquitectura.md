@@ -8887,6 +8887,21 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        · **Al flotar, el ancho deja de depender de la columna.** Es lo que
          devolvió la celda a ~40px: el panel se fija en 620px y ya no le
          importa que la tarjeta mida 522.
+       · **El título del mes se dibujaba ENCIMA de la fila Lu/Ma/Mi…** Es la
+         regla #162 mordiendo en otro sitio: un `st.markdown` con HTML de
+         bloque sale con `margin-bottom: -16px`. Medido: el
+         `stElementContainer` del título colapsaba a 10px de alto mientras
+         el `<div>` de adentro seguía midiendo 26 — o sea 16px de texto
+         pisando el encabezado de días. Se arregla con `margin-bottom: 0`
+         sobre `stMarkdownContainer`, y hay que scopearlo al mes entero
+         porque las celdas VACÍAS del mes también son markdown.
+
+         Lo importante no es el fix sino cómo apareció: **medir cajas no
+         detecta solapes**. Ancho, gap y recorte daban todos correctos
+         porque el solape es vertical y entre dos elementos distintos; se
+         vio en una captura del usuario. Para esto están `rayos_x()` y
+         `auditarGraficos()`, y la comprobación barata es restar
+         `bottom` del de arriba menos `y` del de abajo.
        · **El padding por defecto del popover son 23px** y hay que apretarlo
          a mano. En un panel que es casi todo grilla se lee como un marco
          vacío: medido, 23 arriba + 36 de navegación + 16 de gap = 75px
