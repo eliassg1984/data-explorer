@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-188 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+189 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (69)
 
@@ -112,7 +112,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#187** — Meter None entre las opciones de un st.selectbox le agrega un botón ✕ "Clear value" que no…
 - **#188** — "Solo me deja acortar" no era la herramienta: el elemento SÍ crece, lo recorta un ancestro —…
 
-**Plotly y figuras** (42)
+**Plotly y figuras** (43)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -156,8 +156,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#175** — Las manijas de resize del modo diseño (regla #46) redimensionan CUALQUIER elemento salvo un…
 - **#182** — El modo diseño ya llega a los textos de Plotly y de AgGrid — y para esos dos el "Copiar CSS"…
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
+- **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
 
-**AgGrid y tablas** (27)
+**AgGrid y tablas** (28)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -186,6 +187,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#159** — Cuadrados negros en vez de iconos en Chrome < 120: AG Grid 34 emite mask-image sin la…
 - **#163** — arquitectura.md creció hasta ser un documento que nadie podía abrir: 115k tokens, y CLAUDE.md…
 - **#185** — Un contextmenu dentro de un iframe NO sube al documento padre: el clic derecho sobre la…
+- **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
 
 **Streamlit** (56)
 
@@ -8160,13 +8162,25 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      **Y el número hay que llevarlo a Python de a DOS.** "Copiar CSS" ahora emite la nota aunque no haya ni una propiedad CSS tocada —que es justo el caso de "solo vine a achicar las filas"— y nombra las dos mitades: el `"rowHeight"` del gridOptions y el `px_fila` de `alturas.por_filas()`, que es de donde sale el `height=` del grid. Si se cambia una sola, el alto del marco deja de coincidir con lo que ocupan las filas — la misma disciplina de dos caras que ya tienen los colores (`tema.py` / `:root`) y las alturas (`alturas.py` / `--alto-util`).
 
+189. **El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las dos muletas de la regla #76 y de la #79.** Pedido 2026-08-23: "conviertámoslo en una tabla, con barra de progreso como tengo en compras", señalando la tarjeta izquierda de Inventario Valorizado (`ajuste_graf_card_izq_inv`). El componente ya existía: es el Ranking de proveedores de `graficos/compras/proveedor.py`, o sea AgGrid con la barra pintada como FONDO de la celda (un `linear-gradient` cortado en el % del valor) y no un `cellRenderer` — la regla #25 no aplica porque no hay que devolver HTML, y los sparklines de AG Grid son Enterprise.
+
+     **Lo interesante no es la barra, es lo que se pudo BORRAR.** `_grafico_ranking` llevaba dos parches que sólo existían por el widget:
+     - La **key dinámica por foco** (`f"{key}_{foco or 'none'}"`) y el `st.rerun()` de la regla #76: la selección de `st.plotly_chart(on_select=...)` persiste entre reruns, así que con key estática cada rerun re-procesaba el mismo clic → toggle infinito. AgGrid devuelve la selección VIGENTE en cada run: **es estado, no un evento que se repite**, así que el foco sale de `resp.selected_rows` y no hace falta ni la key dinámica ni el dedup ni el rerun. Misma conclusión a la que ya había llegado el ranking de proveedores.
+     - El **encogimiento con foco activo** de la regla #79 (`min(280, max(190, 22·n+50))` cuando `clic and foco`): existía porque un `go.Bar` de 21 áreas mide 774px y no hay forma de mostrar menos sin borrar datos. Una tabla scrollea por dentro: el marco se pide una vez con `alturas.por_filas(n, px_fila=35, extra=45, minimo=0, rol=alturas.APOYO)` y las filas que no entran se buscan con la rueda. Medido en vivo con los datos reales: la tarjeta izquierda pasó de chocar contra el techo de `--alto-util` (576px, con scroll interno) a 517px sin foco y sin scroll de página.
+
+     La regla #79 sigue viva **para el detalle**: `_grafico_detalle_foco` conserva la barra horizontal (con la fórmula compacta, ahora `alturas.por_filas(..., px_fila=22, minimo=190, extra=50, rol=alturas.MINI)`) porque ahí no hay nada que elegir y la columna es angosta. Al quedar como su único caller, el gráfico se inlineó adentro: `_grafico_ranking` desapareció, y con él los parámetros `clic`/`state_key`/`compacto` que ya no tenían quién los pasara, más los colores de foco `ACENTO_FUERTE`/`AJUSTE_NEG_TEXTO` del import.
+
+     **Dos detalles que la tabla no hereda gratis del gráfico:**
+     - El **signo**. La columna "Valorizado" muestra el valor con signo, pero la barra se llena por MAGNITUD (`_barra`, columna oculta) y se pinta de `AJUSTE_NEG` cuando el valor es negativo (`_neg`, otra columna oculta) — el mismo criterio de la regla #80 que ya usaban las barras. Sin `_neg`, un ajuste de S/ -4.461 pintaría una barra indistinguible de una compra del mismo tamaño.
+     - La **fila seleccionada**. `_css_grid` (`tablas/_css.py`) no estila `.ag-row-selected` porque ninguna de las tablas que lo comparten tiene selección de fila, y acá esa fila ES el foco del drill: sin marcarla no se ve sobre qué categoría está mirando el panel de la derecha. Se agrega mergeando una regla local (`LAVANDA_CABECERA_GRUPO` + `font-weight: 600`) sobre el dict compartido — no tocando `_css_grid`, que lo consumen otras cinco tablas.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#189**.
+> próxima regla nueva es la **#190**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

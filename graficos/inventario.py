@@ -3,9 +3,10 @@ graficos.inventario — dashboard de Inventario Valorizado (v3). Layout unificad
 con chips en franja blanca + card con pills.
 
 v3 (2026-08-10) reemplaza las 4 vistas de v2 (Área y familia / Torta / Top
-valor / Top cantidad) por 3: **Por área**, **Por familia** (misma barra
-horizontal ordenada para las dos, con un toggle Valor/Cantidad — la torta se
-rompía apenas una familia concentraba >70% del total) y **Buscar producto**
+valor / Top cantidad) por 3: **Por área**, **Por familia** (mismo ranking
+ordenado para las dos — desde 2026-08-23 una TABLA con barra de progreso en
+la celda, como el Ranking de proveedores de Compras; la torta se rompía
+apenas una familia concentraba >70% del total) y **Buscar producto**
 (nueva: ficha de un producto puntual, o de un grupo — Subfamilia — completo,
 con cantidad + valorizado + precio promedio + unidad de medida por área).
 Se agrega un KPI "Valorizado total" — vive DENTRO de la card izquierda (no
@@ -24,7 +25,7 @@ import streamlit as st
 
 
 from tema import (
-    ACENTO, ACENTO_FUERTE, AJUSTE_NEG, AJUSTE_NEG_TEXTO, LAVANDA_BORDE, TEXTO_PRINCIPAL,
+    ACENTO, AJUSTE_NEG, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, TEXTO_PRINCIPAL,
 )
 from graficos.base import (
     _compras_layout, _compras_truncar, _render_rail,
@@ -63,119 +64,134 @@ def _rango_con_holgura(*series, factor=0.28):
     return [lo - pad if lo < 0 else 0, hi + pad]
 
 
-def _grafico_ranking(d, col_grp, col_val, titulo, key, clic=False, state_key=None,
-                     compacto=False):
-    """Barra horizontal ordenada de mayor a menor — Por área/Por familia.
-    Siempre valorizado (sin toggle Valor/Cantidad — se sacó a pedido: acá
-    solo importa el valorizado). Cada barra lleva su % de participación
-    sobre el total NETO (mismo total que el KPI "Valorizado total" de la
-    card — no sobre la suma de absolutos, para que sumen 100% de verdad
-    con lo que el usuario ya está viendo arriba).
+def _tabla_ranking(d, col_grp, col_val, nombre_grp, key):
+    """Ranking de Por área/Por familia como TABLA con barra de progreso.
 
-    `clic=True` agrega click-drill (mismo patrón que el Panel de composición
-    del drill de Proveedor en compras/proveedor.py): clic en una barra la
-    resalta y guarda la categoría en
-    `st.session_state[state_key]` — clic de nuevo la quita. Devuelve la
-    categoría en foco (o None) para que el caller filtre el panel derecho
-    y muestre el detalle del siguiente nivel debajo.
+    Reemplaza (2026-08-23, a pedido) la barra horizontal de Plotly que vivía
+    en esta tarjeta. Es el mismo componente que el Ranking de proveedores de
+    Compras (`compras/proveedor.py`): la barra NO es un `cellRenderer` (ni la
+    clase `init()/getGui()` de la regla #25, ni los sparklines de AG Grid,
+    que son Enterprise) sino el FONDO de la celda, un `linear-gradient`
+    cortado en el % del valor. Los colores salen de `tema.py` y no de
+    `var(--accent)` a propósito: el grid vive en un iframe propio y las
+    variables CSS del documento padre no llegan.
 
-    `compacto=True` fuerza el formato bajito (menos px/barra) — lo usa el
-    caller para el detalle de `_grafico_detalle_foco`. Con foco activo,
-    ESTE gráfico (el ranking de arriba) también se achica solo, sin que el
-    caller tenga que pedirlo: no tiene sentido mantenerlo a tamaño completo
-    cuando ya cumplió su función (elegir la categoría) y lo que importa
-    ahora es el detalle de abajo."""
+    Clic en una fila = TOGGLE del foco; devuelve la categoría elegida (o
+    None) para que el caller filtre el panel derecho y muestre el detalle
+    del siguiente nivel. A diferencia de `plotly_chart(on_select=...)`,
+    AgGrid devuelve la selección VIGENTE en cada run —es estado, no un
+    evento que se repite—, así que acá no hacen falta ni la key dinámica por
+    foco ni el `st.rerun()` que evitaban el toggle infinito del gráfico."""
+    from st_aggrid import AgGrid, JsCode
+    from tablas._css import _css_grid
+
     met = pd.to_numeric(d[col_val], errors="coerce").fillna(0)
-    serie = met.groupby(d[col_grp].astype(str)).sum().sort_values()
+    serie = met.groupby(d[col_grp].astype(str)).sum().sort_values(ascending=False)
     if serie.empty:
         st.info("Sin datos.")
         return None
-    total = float(serie.sum())
-    _texto = [
-        f"S/ {v:,.0f} · {(v / total * 100):.1f}%" if total else f"S/ {v:,.0f}"
-        for v in serie.values
-    ]
-    foco = st.session_state.get(state_key) if clic else None
-    if foco and foco not in serie.index:
-        foco = None
-        st.session_state[state_key] = None
-    # Un valor negativo (ajuste/devolución) dibujado hacia la izquierda
-    # descentra el gráfico: el resto de las barras arranca en x=0 y esa
-    # queda flotando sola contra el margen. Mismo lado que todas (barra
-    # hacia la derecha, largo = magnitud) pero en un color de la familia
-    # AJUSTE_NEG — el mismo que usa el heatmap de Ajuste para "negativo" —
-    # así el signo se lee por color, no por dirección. El texto/hover
-    # siguen con el valor real con signo.
-    color = [
-        (AJUSTE_NEG_TEXTO if (clic and i == foco) else AJUSTE_NEG) if v < 0
-        else (ACENTO_FUERTE if (clic and i == foco) else ACENTO)
-        for i, v in zip(serie.index, serie.values)
-    ]
-    fig = go.Figure(go.Bar(
-        x=np.abs(serie.values),
-        y=[_compras_truncar(i, 30) for i in serie.index],
-        orientation="h",
-        marker=dict(color=color, opacity=0.85),
-        text=_texto,
-        textposition="outside", cliponaxis=False,
-        customdata=serie.values,
-        hovertemplate="%{y}<br>S/ %{customdata:,.2f}<extra></extra>",
-    ))
-    # Con foco activo el ranking se achica (menos px por barra, tope más
-    # bajo) para dejarle sitio al detalle de abajo dentro de la misma
-    # pantalla — sin esto, ranking completo + detalle sumaban más que el
-    # viewport y el usuario tenía que hacer scroll para ver lo que acababa
-    # de pedir con el clic. MISMA fórmula para el ranking enfocado y para
-    # el detalle (antes el ranking tenía un tope más bajo que el detalle:
-    # con pocas categorías pegaba contra el piso de 140px y el título
-    # quedaba encimado con la primera barra — se notaba MÁS chico que el
-    # detalle en vez de solo "ya cumplió su función").
-    if compacto or (clic and foco):
-        alto = min(280, max(190, 22 * len(serie) + 50))
-    else:
-        alto = min(900, max(360, 34 * len(serie) + 60))
-    _compras_layout(fig, alto=alto)
-    fig.update_layout(title=titulo)
-    # El detalle (compacto=True) vive en col_der, angosta (~1/2.7 del ancho
-    # de la card izq) — el mismo factor de holgura que alcanza en la card
-    # ancha se queda corto ahí y la etiqueta de la barra más larga se corta
-    # contra el borde (mismo bug de la regla #44, con otra causa: antes era
-    # la barra al 100%, ahora es la columna angosta).
-    _factor = 3.2 if compacto else 0.5
-    fig.update_xaxes(visible=False,
-                     range=_rango_con_holgura(np.abs(serie.values), factor=_factor))
-    fig.update_yaxes(showgrid=False)  # sin esto la cuadrícula de _compras_layout
-    # cruza cada barra horizontal a la altura de su fila — tiene sentido en un
-    # eje de VALORES, no acá donde el eje Y son nombres de categoría.
-    if not clic:
-        st.plotly_chart(fig, use_container_width=True, key=key)
-        return None
 
-    # La selección de on_select persiste entre reruns: con key estática,
-    # cada rerun re-procesa el mismo clic → toggle infinito (parpadeo).
-    # El foco (valor de ANTES de este clic) va en la key, así al cambiar
-    # de foco el widget es uno nuevo y no arrastra la selección vieja.
-    evt = st.plotly_chart(fig, use_container_width=True, key=f"{key}_{foco or 'none'}",
-                          on_select="rerun", selection_mode="points")
-    puntos = ((evt or {}).get("selection", {}) or {}).get("points", [])
-    p = puntos[0] if puntos else None
-    if p is not None:
-        idx = p.get("point_index")
-        if idx is None:
-            idx = p.get("point_number")
-        if idx is not None and 0 <= idx < len(serie):
-            cat = str(serie.index[idx])
-            st.session_state[state_key] = None if foco == cat else cat
-            st.rerun()
-    return st.session_state.get(state_key)
+    # % sobre el total NETO — el mismo que el KPI "Valorizado total" de
+    # arriba, para que sumen 100% con lo que el usuario ya está viendo (no
+    # sobre la suma de absolutos).
+    total = float(serie.sum())
+    _mayor = float(np.abs(serie.values).max()) or 1.0
+    col_nombre = nombre_grp.capitalize()
+    tabla = pd.DataFrame({
+        col_nombre: serie.index.astype(str),
+        "Valorizado": serie.values,
+        "%": [(v / total * 100) if total else 0.0 for v in serie.values],
+        # Ocultas: el % de LLENADO de la barra (contra la mayor MAGNITUD, que
+        # no es el mismo número que la columna "%"), y el signo — que se lee
+        # por color y no por dirección, igual que en los gráficos de este
+        # dashboard (regla #80). La columna visible mantiene el valor con
+        # signo; sin `_neg`, un ajuste negativo pintaría una barra larga
+        # indistinguible de una compra grande.
+        "_barra": [abs(v) / _mayor * 100 for v in serie.values],
+        "_neg": [bool(v < 0) for v in serie.values],
+    })
+
+    # La barra llega al 62% de la celda y el texto va a la DERECHA: así
+    # nunca se pisan (con la barra al 100% el monto caía sobre el morado,
+    # texto oscuro sobre fondo oscuro). No falsea la lectura — todas se
+    # escalan igual, las proporciones entre filas se mantienen. La pista va
+    # transparente, no tintada: con fondo, la columna entera se lee como un
+    # bloque lavanda que compite con las barras.
+    # `justifyContent` es obligatorio: el `display:flex` de esta misma regla
+    # anula el alineado a la derecha que trae `type: numericColumn`.
+    _js_barra = JsCode(
+        "function(p){"
+        " var w = Math.max(0, Math.min(100, p.data._barra||0)) * 0.62;"
+        f" var c = p.data._neg ? '{AJUSTE_NEG}' : '{ACENTO}';"
+        " return {'background': 'linear-gradient(90deg, ' + c + ' 0 ' + w"
+        " + '%, transparent ' + w + '% 100%)',"
+        " 'display':'flex','alignItems':'center','justifyContent':'flex-end',"
+        f" 'color':'{TEXTO_PRINCIPAL}'"
+        "};"
+        "}")
+    _js_soles = JsCode(
+        "function(p){ return p.value==null ? '' :"
+        " 'S/ ' + Math.round(p.value).toLocaleString('es-PE'); }")
+    _js_pct = JsCode(
+        "function(p){ return p.value==null ? '' : p.value.toFixed(1) + '%'; }")
+    # AG Grid, por sí solo, NO deselecciona al reclickear la fila ya
+    # seleccionada (pide Ctrl+clic, que nadie descubre). `setSelected(valor,
+    # true)` limpia las demás → sigue siendo selección única.
+    _js_toggle = JsCode(
+        "function(e){ e.node.setSelected(!e.node.isSelected(), true); }")
+
+    resp = AgGrid(
+        tabla,
+        gridOptions={
+            "columnDefs": [
+                {"field": col_nombre, "flex": 2, "tooltipField": col_nombre},
+                {"field": "Valorizado", "flex": 2, "type": "numericColumn",
+                 "cellStyle": _js_barra, "valueFormatter": _js_soles},
+                {"field": "%", "width": 80, "type": "numericColumn",
+                 "valueFormatter": _js_pct},
+                {"field": "_barra", "hide": True},
+                {"field": "_neg", "hide": True},
+            ],
+            "rowSelection": {"mode": "singleRow", "checkboxes": False,
+                             "enableClickSelection": False},
+            "onRowClicked": _js_toggle,
+            "rowHeight": 35,
+            "headerHeight": 38,
+            "suppressCellFocus": True,
+            "suppressMovableColumns": True,
+        },
+        allow_unsafe_jscode=True,
+        theme="material",
+        # `_css_grid` no estila la fila SELECCIONADA (ninguna de las tablas
+        # que lo comparten tiene selección de fila), y acá esa fila ES el
+        # foco del drill: sin marcarla, el usuario no ve sobre qué categoría
+        # está mirando el panel de la derecha.
+        custom_css={**_css_grid(12),
+                    ".ag-row-selected": {
+                        "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
+                        "font-weight": "600 !important",
+                    }},
+        height=alturas.por_filas(len(serie), px_fila=35, extra=45, minimo=0,
+                                 rol=alturas.APOYO),
+        update_on=["selectionChanged"],
+        key=key,
+    )
+    sel = getattr(resp, "selected_rows", None)
+    if sel is None or not len(sel):
+        return None
+    fila = sel.iloc[0] if hasattr(sel, "iloc") else sel[0]
+    return str(fila[col_nombre])
 
 
 def _grafico_detalle_foco(d, graf, col_grp, foco, col_fam, col_subfam, col_val):
-    """Debajo del ranking principal, cuando hay una barra en foco: siguiente
-    nivel de desglose del grupo elegido (Área → Familia, Familia →
-    Subfamilia) — la pregunta natural después de "cuánto vale GASTOS" es
-    "de qué se compone". Sin clic propio (no hay drill anidado, dos niveles
-    alcanza) — así no compite con el ranking de arriba por la selección."""
+    """Al lado del ranking, cuando hay una categoría en foco: siguiente nivel
+    de desglose del grupo elegido (Área → Familia, Familia → Subfamilia) — la
+    pregunta natural después de "cuánto vale GASTOS" es "de qué se compone".
+    Sin clic propio (no hay drill anidado, dos niveles alcanza) — así no
+    compite con el ranking por la selección.
+
+    Barra horizontal y no tabla, a diferencia del ranking: acá no hay nada
+    que elegir, y el gráfico se lee de un vistazo en una columna angosta."""
     dd = d[d[col_grp].astype(str) == foco]
     if graf == "Por área":
         col_next, nombre_next = col_fam, "familia"
@@ -184,8 +200,48 @@ def _grafico_detalle_foco(d, graf, col_grp, foco, col_fam, col_subfam, col_val):
     if not col_next or dd.empty:
         st.caption(f"Sin desglose adicional para {foco}.")
         return
-    _grafico_ranking(dd, col_next, col_val, f"{foco} — por {nombre_next}",
-                     key=f"inv_g_detalle_{_slug(foco)}", compacto=True)
+
+    met = pd.to_numeric(dd[col_val], errors="coerce").fillna(0)
+    serie = met.groupby(dd[col_next].astype(str)).sum().sort_values()
+    if serie.empty:
+        st.info("Sin datos.")
+        return
+    total = float(serie.sum())
+    _texto = [
+        f"S/ {v:,.0f} · {(v / total * 100):.1f}%" if total else f"S/ {v:,.0f}"
+        for v in serie.values
+    ]
+    # Un valor negativo (ajuste/devolución) dibujado hacia la izquierda
+    # descentra el gráfico: el resto de las barras arranca en x=0 y esa queda
+    # flotando sola contra el margen. Mismo lado que todas (largo = magnitud)
+    # pero en un color de la familia AJUSTE_NEG — el mismo que usa el heatmap
+    # de Ajuste para "negativo" — así el signo se lee por color, no por
+    # dirección. El texto/hover siguen con el valor real con signo.
+    fig = go.Figure(go.Bar(
+        x=np.abs(serie.values),
+        y=[_compras_truncar(i, 30) for i in serie.index],
+        orientation="h",
+        marker=dict(color=[AJUSTE_NEG if v < 0 else ACENTO for v in serie.values],
+                    opacity=0.85),
+        text=_texto,
+        textposition="outside", cliponaxis=False,
+        customdata=serie.values,
+        hovertemplate="%{y}<br>S/ %{customdata:,.2f}<extra></extra>",
+    ))
+    _compras_layout(fig, alto=alturas.por_filas(
+        len(serie), px_fila=22, minimo=190, extra=50, rol=alturas.MINI))
+    fig.update_layout(title=f"{foco} — por {nombre_next}")
+    # Esta figura vive en col_der, angosta (~1/2.7 del ancho de la card izq):
+    # el factor de holgura que alcanza en una card ancha se queda corto y la
+    # etiqueta de la barra más larga se corta contra el borde (mismo bug de la
+    # regla #44, con otra causa — antes era la barra al 100%, acá la columna).
+    fig.update_xaxes(visible=False,
+                     range=_rango_con_holgura(np.abs(serie.values), factor=3.2))
+    fig.update_yaxes(showgrid=False)  # sin esto la cuadrícula de _compras_layout
+    # cruza cada barra horizontal a la altura de su fila — tiene sentido en un
+    # eje de VALORES, no acá donde el eje Y son nombres de categoría.
+    st.plotly_chart(fig, use_container_width=True,
+                    key=f"inv_g_detalle_{_slug(foco)}")
 
 
 def _ficha_producto(d, prod_sel, col_prod, col_area, col_val, col_cant,
@@ -664,11 +720,10 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                 if not col_grp:
                     st.info(f"No se encontró la columna de {nombre_grp}.")
                 else:
-                    _state_key = f"inv_focus_{'area' if graf == 'Por área' else 'familia'}"
-                    foco = _grafico_ranking(
-                        d, col_grp, col_val, f"Valorizado por {nombre_grp}",
-                        key=f"inv_g_{'area' if graf == 'Por área' else 'familia'}",
-                        clic=True, state_key=_state_key,
+                    st.markdown(f"**Valorizado por {nombre_grp}**")
+                    foco = _tabla_ranking(
+                        d, col_grp, col_val, nombre_grp,
+                        key=f"inv_rank_grid_{'area' if graf == 'Por área' else 'familia'}",
                     )
                     # El detalle NO se apila acá abajo: con foco activo se
                     # dibuja lateral, en col_der (ver más abajo) — el Top
