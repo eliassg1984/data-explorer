@@ -8887,6 +8887,11 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        · **Al flotar, el ancho deja de depender de la columna.** Es lo que
          devolvió la celda a ~40px: el panel se fija en 620px y ya no le
          importa que la tarjeta mida 522.
+       · **El padding por defecto del popover son 23px** y hay que apretarlo
+         a mano. En un panel que es casi todo grilla se lee como un marco
+         vacío: medido, 23 arriba + 36 de navegación + 16 de gap = 75px
+         antes del primer día. Con 12px de padding y 6 de gap el panel
+         pasó de 334px de alto a 302.
 
      Detalle menor pero con costo real: el `width: 100%` del CSS vive dentro de
      una cadena que cierra un operador `%`, así que va escapado (`100%%`) o

@@ -192,8 +192,16 @@ def _css(dias_estado):
         # tarjeta (~230px por mes, que fue lo que obligo a achicar la
         # celda cuando el calendario iba inline). Con 620px cada mes
         # vuelve a tener sus ~42px de celda.
+        # El panel FLOTA, asi que su ancho no lo limita la columna de la
+        # tarjeta. Y el padding va apretado a mano: Streamlit le pone 23px
+        # por defecto, que en un panel que es CASI TODO grilla se lee como
+        # un marco vacio (medido: 23 arriba + 36 de navegacion + 16 de gap
+        # = 75px antes del primer dia).
         '[data-testid="stPopoverBody"]:has(.st-key-compras_sem_cal) '
-        '{ min-width: 620px !important; }',
+        '{ min-width: 620px !important; padding: 12px !important; }',
+        # Gap del contenedor: entre la fila de navegacion y los meses
+        # alcanza con un respiro, no con los 16px de un bloque normal.
+        '.st-key-compras_sem_cal { gap: 6px !important; }',
         # Trigger: pill outline, mismo idioma que el resto de controles de
         # la app. Compacto a proposito — es una linea arriba del grafico,
         # no un encabezado.
