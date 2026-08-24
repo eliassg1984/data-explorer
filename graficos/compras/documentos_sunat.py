@@ -68,6 +68,7 @@ baja a S/6,9 y S/1.199 — esa medición es de ANTES de tener RUC, cuando la
 única defensa era el nombre). Ver `arquitectura.md` regla #143.
 """
 
+import datetime
 import io
 
 import pandas as pd
@@ -1073,6 +1074,40 @@ def _excel_bytes(df, hoja="Datos"):
     return buf.getvalue()
 
 
+def _rango_vigente():
+    """`(inicio, fin)` del filtro de fecha, o `(None, None)` si no hay nada.
+
+    UNA fecha suelta vale como rango de UN DÍA, y eso no es tolerancia
+    cosmética: `st.date_input` en modo rango COMMITEA una tupla de un solo
+    elemento apenas se hace el PRIMER clic del calendario, y rerunea con
+    eso. O sea que "media selección" no es un estado raro — es el estado
+    normal entre los dos clics, y el que queda fijo si alguien elige un
+    día y cierra el calendario (el gesto natural para "quiero ver hoy").
+
+    Antes esto se leía con `len(rango) < 2 → no hay rango`, y el drill
+    cortaba con un `st.info` ANTES de dibujar su tarjeta. Como el pill de
+    fecha vive DENTRO de esa tarjeta desde el 2026-08-21 (y `app.py` deja
+    de dibujarlo arriba cuando esta vista está activa, ver
+    `vista_quiere_fecha_propia`), el mensaje pedía elegir una fecha en un
+    control que él mismo acababa de borrar de la pantalla: sin salida,
+    salvo cambiar de vista. Ver `arquitectura.md` regla #115.
+    """
+    return _dia_o_rango(
+        st.session_state.get(clave_rango("Compras", usa_carga_rango=False)))
+
+
+def _dia_o_rango(rango):
+    """La parte PURA de `_rango_vigente`, para poder testearla sin
+    `session_state` ni runtime de Streamlit."""
+    if isinstance(rango, (datetime.date, datetime.datetime, pd.Timestamp)):
+        return rango, rango          # no debería pasar, pero es un día válido
+    if not isinstance(rango, (tuple, list)) or not len(rango) or rango[0] is None:
+        return None, None
+    ini = rango[0]
+    fin = rango[1] if len(rango) > 1 and rango[1] is not None else ini
+    return ini, fin
+
+
 def renderizar_documentos_sunat(d, col_fecha):
     """Punto de entrada del drill. Lo llama `graficos/compras/__init__.py`.
 
@@ -1092,11 +1127,7 @@ def renderizar_documentos_sunat(d, col_fecha):
     Proveedor) y su borde inferior quedaba en 990 con un viewport de
     900 — 90px inalcanzables, sin error ni aviso.
     """
-    rango = st.session_state.get(clave_rango("Compras", usa_carga_rango=False))
-    if not rango or len(rango) < 2 or rango[0] is None or rango[1] is None:
-        st.info("Elegí un rango de fechas en la franja de arriba.")
-        return
-    f_ini, f_fin = rango[0], rango[1]
+    f_ini, f_fin = _rango_vigente()
 
     # 2026-08-21, a pedido: de DOS COLUMNAS a apilado. La tabla vivia en
     # `st.columns([1.6, 1])`, o sea ~474px utiles: medido,
@@ -1179,58 +1210,79 @@ def renderizar_documentos_sunat(d, col_fecha):
             # flujo en dos reruns.
             _slot_excel = st.empty()
 
-        with st.spinner("Cargando el registro de compras de SUNAT…"):
-            try:
-                df, _origen = sunat.comprobantes_rango(f_ini, f_fin)
-            except Exception as e:
-                st.error(f"No se pudo consultar a SUNAT: {e}")
-                return
+        # El cuerpo va en una funcion anidada por una razon concreta: sus
+        # cuatro salidas tempranas (sin rango, SUNAT caido, sin
+        # comprobantes, sin comprobantes de esa situacion) eran `return`
+        # del render ENTERO, asi que cualquiera de ellas se llevaba puesta
+        # tambien la tarjeta de la ficha de abajo -- la pantalla perdia una
+        # caja y el resto saltaba. Ahora cada salida devuelve `None` y las
+        # dos tarjetas se dibujan siempre. Es la regla #115 aplicada a este
+        # drill: dibujar las tarjetas siempre y decidir el CONTENIDO adentro.
+        def _cuerpo():
+            """La tabla y su dato. Devuelve el documento elegido, o None."""
+            if f_ini is None:
+                # Practicamente inalcanzable (`app.py::asegurar_rango`
+                # siembra un default), pero si pasara, el pill de fecha ya
+                # esta dibujado JUSTO ARRIBA de este mensaje.
+                st.info("Elegí una fecha en el calendario de acá arriba.")
+                return None
 
-        if df is None or df.empty:
-            st.info("SUNAT no tiene comprobantes emitidos hacia tu RUC "
-                    "en el rango elegido.")
-            return
+            with st.spinner("Cargando el registro de compras de SUNAT…"):
+                try:
+                    df, _origen = sunat.comprobantes_rango(f_ini, f_fin)
+                except Exception as e:
+                    st.error(f"No se pudo consultar a SUNAT: {e}")
+                    return None
 
-        # El filtro de situación se aplica ANTES de decidir qué mostrar
-        # arriba (KPIs normales o KPIs del cruce): en «Cruce», filtrar a
-        # Pendientes primero y cruzar después responde una pregunta
-        # real — "de lo que aún no presenté, ¿qué ya tengo cargado en
-        # el sistema?" — que se pierde si se cruza sobre el rango
-        # completo sin filtrar.
-        vis = df if situacion == "Todos" else df[
-            df["situacion"] == situacion[:-1]]   # "Registrados"→"Registrado"
-        if vis.empty:
-            st.info(f"No hay comprobantes «{situacion.lower()}» en el rango.")
-            return
+            if df is None or df.empty:
+                st.info("SUNAT no tiene comprobantes emitidos hacia tu RUC "
+                        "en el rango elegido.")
+                return None
 
-        _sufijo = f"{pd.Timestamp(f_ini):%Y%m%d}_{pd.Timestamp(f_fin):%Y%m%d}"
+            # El filtro de situación se aplica ANTES de decidir qué mostrar
+            # arriba (KPIs normales o KPIs del cruce): en «Cruce», filtrar a
+            # Pendientes primero y cruzar después responde una pregunta
+            # real — "de lo que aún no presenté, ¿qué ya tengo cargado en
+            # el sistema?" — que se pierde si se cruza sobre el rango
+            # completo sin filtrar.
+            vis = df if situacion == "Todos" else df[
+                df["situacion"] == situacion[:-1]]   # "Registrados"→"Registrado"
+            if vis.empty:
+                st.info(f"No hay comprobantes «{situacion.lower()}» en el rango.")
+                return None
 
-        if vista == "Cruce":
-            g_pq = _parquet_agrupado_por_documento(d, col_fecha, f_ini, f_fin)
-            df_cruce = cruzar_con_parquet(vis, g_pq)
-            with c_kpi:
-                _kpis_cruce(df_cruce)
-            doc = _tabla_cruce(df_cruce, vis)
-            _exportable, _nombre_xls = df_cruce, f"sunat_cruce_{_sufijo}.xlsx"
-        else:
-            with c_kpi:
-                _kpis(df, _origen)
-            _grafico(vis, vista)
-            doc = _tabla(vis)
-            _exportable, _nombre_xls = vis, f"sunat_compras_{_sufijo}.xlsx"
+            _sufijo = f"{pd.Timestamp(f_ini):%Y%m%d}_{pd.Timestamp(f_fin):%Y%m%d}"
 
-        # Se rellena el hueco reservado ARRIBA, junto al boton de refrescar.
-        # Exporta lo que la tabla esta mostrando: el cruce si la vista es
-        # «Cruce», el registro filtrado por situacion si no.
-        with _slot_excel:
-            st.download_button(
-                "⬇", data=_excel_bytes(_exportable),
-                file_name=_nombre_xls,
-                mime=("application/vnd.openxmlformats-officedocument"
-                      ".spreadsheetml.sheet"),
-                key="sunat_dl_xlsx", use_container_width=True,
-                help="Exportar a Excel lo que muestra la tabla",
-            )
+            if vista == "Cruce":
+                g_pq = _parquet_agrupado_por_documento(d, col_fecha, f_ini, f_fin)
+                df_cruce = cruzar_con_parquet(vis, g_pq)
+                with c_kpi:
+                    _kpis_cruce(df_cruce)
+                doc = _tabla_cruce(df_cruce, vis)
+                _exportable, _nombre_xls = df_cruce, f"sunat_cruce_{_sufijo}.xlsx"
+            else:
+                with c_kpi:
+                    _kpis(df, _origen)
+                _grafico(vis, vista)
+                doc = _tabla(vis)
+                _exportable, _nombre_xls = vis, f"sunat_compras_{_sufijo}.xlsx"
+
+            # Se rellena el hueco reservado ARRIBA, junto al boton de refrescar.
+            # Exporta lo que la tabla esta mostrando: el cruce si la vista es
+            # «Cruce», el registro filtrado por situacion si no.
+            with _slot_excel:
+                st.download_button(
+                    "⬇", data=_excel_bytes(_exportable),
+                    file_name=_nombre_xls,
+                    mime=("application/vnd.openxmlformats-officedocument"
+                          ".spreadsheetml.sheet"),
+                    key="sunat_dl_xlsx", use_container_width=True,
+                    help="Exportar a Excel lo que muestra la tabla",
+                )
+
+            return doc
+
+        doc = _cuerpo()
 
     # La ficha va DEBAJO de la tabla, no al costado. Sin espaciador: el que
     # habia (38px) existia solo para alinear el tope de las dos columnas, y

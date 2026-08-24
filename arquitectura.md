@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-195 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+196 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (69)
 
@@ -278,7 +278,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#170** — Se invirtieron Reportes y Vistas: Reportes al rail vertical izquierdo, Vistas a la franja…
 - **#195** — Hay emisores que usan cbc:Description como un renglón de TICKET, no como una descripción:…
 
-**SUNAT y SIRE** (10)
+**SUNAT y SIRE** (11)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -290,14 +290,16 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#149** — Documentos SUNAT: de dos columnas a APILADO
 - **#163** — arquitectura.md creció hasta ser un documento que nadie podía abrir: 115k tokens, y CLAUDE.md…
 - **#195** — Hay emisores que usan cbc:Description como un renglón de TICKET, no como una descripción:…
+- **#196** — Un return temprano que se lleva puesto el ÚNICO control capaz de arreglar el estado que lo…
 
-**Fechas, rangos y cortes** (5)
+**Fechas, rangos y cortes** (6)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
 - **#63** — Dos controles del MISMO concepto no se pisan el estado, pero igual es un bug (2026-08-09)
 - **#65** — Datos demo que no tienen la FORMA del dato real no verifican nada (2026-08-09)
 - **#179** — Un atajo de fecha (nuevo o viejo) no sobrevive cambiar de REPORTE y volver — mismo mecanismo…
+- **#196** — Un return temprano que se lleva puesto el ÚNICO control capaz de arreglar el estado que lo…
 
 **Asistente IA** (2)
 
@@ -8369,13 +8371,66 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      dato. Sale tal cual lo escribió el emisor, sin el empaquetado.
 
 
+196. **Un `return` temprano que se lleva puesto el ÚNICO control capaz
+     de arreglar el estado que lo disparó.** Reportado 2026-08-24 con
+     captura: en Compras › Documentos, elegir un día en el calendario
+     dejaba la vista con "Elegí un rango de fechas en la franja de
+     arriba"… y sin ningún calendario en pantalla. Sin salida: la única
+     forma de recuperarse era irse a otra vista y volver.
+
+     Son dos errores que por separado no rompen nada y juntos hacen un
+     callejón sin salida:
+
+     1. **Media selección no es "no hay rango".** `st.date_input` en modo
+        rango COMMITEA una tupla de UN elemento apenas se hace el primer
+        clic del calendario, y rerunea con eso. O sea que la media
+        selección no es un estado raro: es el estado normal entre los dos
+        clics, y el que queda FIJO si alguien elige un día y cierra el
+        panel — el gesto natural para "quiero ver hoy". El resto de la app
+        ya lo sabía: `estado_rango.asegurar_rango` la respeta explícitamente
+        (`no tocar`), y `movimientos_comun.py` / `recetas_comun.py` la leen
+        con `len(rango) >= 1`. Este drill era el único que la trataba como
+        ausencia de rango. Ahora una fecha suelta vale como rango de un
+        día (`_dia_o_rango`, pura y testeada).
+     2. **El guard corría ANTES de dibujar la tarjeta**, y el pill de fecha
+        se había mudado ADENTRO de esa tarjeta el 2026-08-21 (con `app.py`
+        dejando de dibujarlo arriba cuando esta vista está activa, ver
+        `vista_quiere_fecha_propia`). El mensaje quedó apuntando a "la
+        franja de arriba", donde ya no hay nada. Verificado en el navegador:
+        `document.querySelectorAll('.st-key-fecha_ajuste_pill').length === 1`
+        y ese único pill está DENTRO de `.st-key-sunat_card_izq` — el
+        `return` borraba el 100% de los controles de fecha de la pantalla.
+
+     Es la regla #115 con una vuelta de tuerca: allá el `return` temprano
+     borraba tarjetas y el layout saltaba; acá borra el control que el
+     propio mensaje te manda a usar. **Cuando un control se muda adentro de
+     un bloque, hay que revisar qué guards quedaron ARRIBA de ese bloque**
+     — el mensaje que escribieron sigue siendo cierto en su texto y falso
+     en su instrucción.
+
+     El arreglo aplica #115 en serio: el cuerpo pasó a una función anidada
+     y sus CUATRO salidas tempranas (sin rango, SUNAT caído, sin
+     comprobantes, sin comprobantes de esa situación) devuelven `None` en
+     vez de cortar el render. Antes, cualquiera de las cuatro se llevaba
+     también la tarjeta de la ficha de abajo.
+
+     **Queda pendiente, medido el mismo día:** los topes del calendario
+     salen de `df_f[col_fecha]`, o sea del parquet de Compras — pero esta
+     vista consulta el REGISTRO DEL SIRE, que es otro dataset y va más
+     adelante (24/08/2026: parquet hasta el 21, SIRE hasta el 23). Los
+     comprobantes de los últimos días existen y no se pueden pedir desde
+     el calendario. No se tocó porque `fecha_max_full` es global al reporte
+     y ensancharlo cambia el calendario de las otras siete vistas de
+     Compras, donde esos días están vacíos de verdad.
+
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#196**.
+> próxima regla nueva es la **#197**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

@@ -431,6 +431,22 @@ def _pruebas_puras():
     check("cruce: sin columna num_doc_pq no revienta, queda vacio",
           _cruce.loc[_cruce["estado"] == "Coincide",
                      "documento_sistema"].iloc[0], "")
+
+    # Media seleccion del calendario = UN DIA, no "no hay rango". Reportado
+    # 2026-08-24: elegir un solo dia (hoy/ayer) dejaba la vista con un
+    # mensaje pidiendo elegir fecha... y sin el pill de fecha en pantalla,
+    # porque el `return` temprano se lo llevaba puesto. Ver regla #115.
+    import datetime as _dt
+    _h, _a = _dt.date(2026, 8, 24), _dt.date(2026, 8, 23)
+    check("media seleccion (1 fecha) vale como rango de un dia",
+          _ds._dia_o_rango((_h,)), (_h, _h))
+    check("segunda fecha en None tambien es un dia",
+          _ds._dia_o_rango((_h, None)), (_h, _h))
+    check("un rango completo pasa tal cual", _ds._dia_o_rango((_a, _h)), (_a, _h))
+    check("una fecha suelta (no tupla) es un dia", _ds._dia_o_rango(_h), (_h, _h))
+    check("sin rango en session_state", _ds._dia_o_rango(None), (None, None))
+    check("tupla vacia", _ds._dia_o_rango(()), (None, None))
+    check("tupla de Nones", _ds._dia_o_rango((None, None)), (None, None))
     check("cruce: el candidato descartado por nombre tampoco se pierde",
           ((_cruce["documento"] == "E001-2")
            & (_cruce["proveedor_sistema"] == "OTRO TOTAL")
