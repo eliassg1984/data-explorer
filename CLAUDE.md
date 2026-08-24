@@ -317,7 +317,13 @@ con clic derecho y un panel lateral lo edita en vivo (caja, tipografía,
 color, mover/redimensionar, **alto de fila** si es una tabla AgGrid, con
 "↺" por fila para revertir solo esa propiedad), o **inserta**
 texto/línea/barra/espacio de mentira para ver
-"cómo se vería" algo que todavía no existe. El panel abre con un **árbol
+"cómo se vería" algo que todavía no existe, o **unifica** dos tarjetas
+vecinas: la sección "Unificar" lista las que arrancan en el mismo borde a
+menos de 40px y las pega como una sola superficie (cierra el hueco, saca
+las esquinas del lado que se tocan). Es el LOOK — unirlas de verdad, un
+solo `st.container` con las dos cosas adentro, es un cambio de Python; el
+CSS que copia sale con las dos mitades y con ese aviso. Regla #194.
+El panel abre con un **árbol
 de jerarquía** (raíz → elemento, clicable igual que las migas del
 inspector — misma idea, orientación vertical en vez de horizontal), y sus
 hojas azules bajan el pin a un **hijo sin key propia** (un
@@ -331,7 +337,7 @@ fila **"Recortado por"**: el elemento SÍ creció, pero un ancestro con
 `overflow` recortante se come lo que sobresale. Nada de esto persiste: es
 DOM efímero, muere al recargar y no toca `estilos/` hasta que vos pegás el
 bloque copiado. Detalle en `arquitectura.md` reglas #46 a #48, #151, #153,
-#154, #155 y #188.
+#154, #155, #188 y #194.
 Se pueden combinar: `?debug=1&diagnostico=1`. El tooltip incluye
 `codigo` (archivo:línea donde está declarada la key, buscado en `app.py`
 + `graficos/` + `tablas/`), `estilos` (archivos de `estilos/` que

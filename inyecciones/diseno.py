@@ -50,6 +50,20 @@ rama, con sus cambios de estilo reaplicados. Nunca persisten: no están en
 el código ni en `estilos/` y mueren al recargar — el panel lo avisa.
 Detalle en arquitectura.md regla #151.
 
+Fase D agrega UNIFICAR: pegar dos tarjetas VECINAS para verlas como una
+sola. La seccion lista las cajas con key que arrancan en el mismo borde a
+menos de 40px (`vecinasUnibles`, que prefiere la que PINTA — fondo, sombra
+o borde — porque la tarjeta y su wrapper de layout miden lo mismo y por
+geometria son indistinguibles), y al elegir una escribe en `cambios` de las
+DOS keys: esquinas del lado que se tocan a 0 y el hueco cerrado. Al lado
+crece la primera (`width: calc(100% + N) + max-width: none`, regla #47 —
+sin sacar el max-width el calc queda clampeado); apiladas se corre la
+segunda hacia arriba, que es lo que haria una tarjeta unica de verdad.
+No mueve ningun nodo a proposito: sacar un subarbol de Streamlit de su
+padre revienta a React en el rerun siguiente. Y no unifica nada de verdad
+— eso es un `st.container` en Python; el bloque copiado sale con las dos
+mitades y con el aviso. Ver arquitectura.md regla #194.
+
 El pin baja a un hijo SIN key propia (sub-pin, arquitectura.md #157): el
 inspector ancla siempre al contenedor con `st-key-*` mas cercano, asi que
 un titulo de `st.markdown` (`<div class="cp-rank-tit">`) pineaba la TARJETA

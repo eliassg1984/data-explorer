@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-193 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+194 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (69)
 
@@ -90,7 +90,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#186** — Un st.container anidado NO es hijo directo del flex que lo contiene: Streamlit le mete un…
 - **#188** — "Solo me deja acortar" no era la herramienta: el elemento SÍ crece, lo recorta un ancestro —…
 
-**Layout y alturas** (18)
+**Layout y alturas** (19)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -110,6 +110,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#177** — "COMPRAS: PÁGINA BLANCA, TARJETAS TENUES" (regla #16 y media docena de "vueltas" entre…
 - **#178** — Mover un control de "flotando sobre el marco compartido" a "adentro de una tarjeta" no es un…
 - **#187** — Meter None entre las opciones de un st.selectbox le agrega un botón ✕ "Clear value" que no…
+- **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
 
 **Plotly y figuras** (43)
 
@@ -193,7 +194,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#192** — El Panel A de Productos (Compras › Proveedor) pasó de st.dataframe a AgGrid por el mismo…
 - **#193** — flex en un columnDef de AgGrid no alcanza: st_aggrid le clava width: 200 a toda columna sin…
 
-**Streamlit** (57)
+**Streamlit** (58)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -252,6 +253,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#186** — Un st.container anidado NO es hijo directo del flex que lo contiene: Streamlit le mete un…
 - **#187** — Meter None entre las opciones de un st.selectbox le agrega un botón ✕ "Clear value" que no…
 - **#190** — Compras › Producto perdió sus dos botones "✕ Quitar foco" (2026-08-24, a pedido) — mismo fix…
+- **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
 
 **Datos, R2 y DuckDB** (19)
 
@@ -8231,6 +8233,26 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      "Filas delgadas" ya estaba resuelto de antes (`_ALTO_FILA = 28`, puesto el mismo día que esta sesión para el `row_height=` de `st.dataframe`, con el comentario explícito de que ya apuntaba al mismo número que usa AgGrid en Proveedor) — la migración sólo tuvo que llevar la constante de `row_height=` a `rowHeight` en `gridOptions`, sin cambiar el valor.
 
      Verificado en vivo con datos de R2, en las DOS tablas: cero columnas de checkbox, `rowHeight` de 28px, las ocho/cuatro columnas visibles con sus anchos exactos (sin depender de flex), clic enfoca (Producto → detalle de precio/cantidad/valor; Familia → mini-ranking de productos), reclic limpia el foco, sin excepciones en 375px ni en los dos viewports de escritorio probados (1280 y 1912).
+194. **"Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un subárbol de Streamlit de su padre y meterlo en otro revienta a React en el rerun siguiente.** Pedido 2026-08-24: "puedo hacer que en el modo diseño pueda unificar tarjetas". La tentación es la versión fiel — mover el contenido de la tarjeta B adentro de la A y quedarse con una sola caja, una sola sombra, un solo padding. No se hizo, y no por prolijidad: React guarda la referencia al padre VIEJO de cada nodo que montó, así que cuando Streamlit re-renderice esa rama va a llamar `padreViejo.removeChild(nodo)` sobre un nodo que ya no vive ahí y tira `NotFoundError` — la app se cae entera, y no en el momento del gesto sino en el rerun siguiente, que es lo peor para diagnosticar.
+
+     Lo que se hizo: la sección "Unificar" del panel escribe en `registro.cambios` de las DOS keys y deja que el resto de la maquinaria haga su trabajo. Esquinas del lado que se tocan a `0` en las dos, y el hueco cerrado. Sale gratis todo lo que ya existía: `aplicarEstado` las reaplica tras un rerun, "Ver original" hace el A/B, "Separar" borra exactamente las props que puso (`propsDeUnion` es el espejo de `aplicarUnion` — si una se agrega allá y no acá, "Separar" deja la tarjeta pegada por esa sola propiedad y no hay forma de sacarla desde el panel), y "Copiar CSS" entrega las dos mitades juntas.
+
+     **Tres cosas se midieron en vivo y ninguna se habría adivinado:**
+
+     1. **Cerrar el hueco de a lado corriendo la SEGUNDA hacia la izquierda deja la unión más angosta que la fila.** `margin-left: -16px` sobre `compras_prov_card_evo` sí cierra la costura, pero el borde derecho del par se mete 16px adentro (medido: 349..1174 contra los 349..1190 de la tarjeta de documentos justo abajo) — un escaloncito exactamente donde uno está mirando si alinea. Lo correcto es hacer crecer la PRIMERA hacia la derecha, y ahí aparece la regla #47 de nuevo: `width: calc(100% + 16px)` con `!important` **no hace nada** sobre un contenedor de Streamlit porque `max-width: 100%` lo clampea (medido: la tarjeta seguía en 509.5px con el width nuevo puesto). Con `max-width: none` al lado, 349..875 pegado a 875..1190. Apiladas es al revés: se corre la SEGUNDA hacia arriba y está bien, porque una tarjeta única de verdad también subiría todo lo que viene después.
+
+     2. **La tarjeta y su wrapper de layout miden LO MISMO, así que "la caja más grande" no la distingue.** `docs_row` y `compras_prov_card_docs` dan los dos 841x547 y el empate lo ganaba el orden del DOM, o sea el wrapper — al que sacarle una esquina no cambia un píxel porque es transparente. El desempate es `pintaAlgo()`: fondo opaco, sombra o borde propio. Es lo único que separa "la tarjeta" de "la caja que la envuelve" sin depender de convenciones de nombres de key.
+
+     3. **La lista de vecinas se arma midiendo rects, y al fijar la tarjeta el layout todavía se está acomodando.** Fijando el ranking del drill de Proveedor, el "▼ compras_prov_card_docs" aparecía o no según cuándo se pineaba: esa tarjeta monta un iframe de AgGrid y se ubica tarde. El panel entero sólo se reconstruye cuando cambia la key pineada, así que la lista quedaba congelada en lo que hubiera en pantalla ese instante. Fix: la lista vive en su propia caja y se repinta sola 1 de cada 7 ticks (~1 segundo), con una firma (`lado:key:hueco`) que corta el repintado cuando no cambió nada. Reconstruir el panel ENTERO en cada tick no era opción — le sacaría el foco a un slider a mitad de un arrastre.
+
+     El umbral de vecindad quedó en 40px de hueco (los reales son 16: el `gap` de `st.columns` y el `margin-top` de `_80_cards.py` entre apiladas). Con 80 se colaban dos falsos vecinos que están cerca pero no al lado — el item del rail a 51px y la franja de arriba a 53px — y la lista salía con más ruido que candidatas.
+
+     La sombra pide un trato distinto por eje: apiladas, la de la tarjeta de ARRIBA cae justo sobre la costura (`0 1px 4px`, offset hacia abajo) y se ve como una línea que parte la tarjeta al medio, así que se apaga; al lado no molesta porque esa sombra no se proyecta a los costados.
+
+     Y lo que la herramienta NO hace, dicho en el panel y otra vez en el CSS que copia: **esto las hace VER como una sola tarjeta.** Unificarlas de verdad — un solo `st.container` con las dos cosas adentro — es un cambio de Python en `graficos/`. Mismo criterio que la regla #169: si pegar el bloque no va a hacer lo que se probó en pantalla, decirlo EN el bloque.
+
+     De paso se corrigió una nota vieja de `construirBloqueCSS`: `redirigido`/`hayTextoPropio` describen al ELEMENTO (tiene botones adentro, sus labels traen `<p>` propio), no al bloque exportado, y se emitían siempre. Un export de pura caja — el caso típico de Unificar, que sólo mueve esquinas y ancho — salía con un "texto redirigido al `<p>` del label" abajo que no aplicaba a ninguna de las líneas de arriba. Ahora cada nota sale sólo si ese grupo de props tiene algo.
+
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
@@ -8238,7 +8260,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#194**.
+> próxima regla nueva es la **#195**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

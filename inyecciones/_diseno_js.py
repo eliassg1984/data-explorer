@@ -81,6 +81,11 @@ JS = """
         if (!win.__disenoState.mocks) { win.__disenoState.mocks = []; }
         if (win.__disenoState.mockN === undefined) { win.__disenoState.mockN = 0; }
         if (!win.__disenoState.mockPos) { win.__disenoState.mockPos = 'despues'; }
+        // Uniones (regla #194): pares de tarjetas VECINAS que se ven como
+        // una sola. Se guardan las dos keys + el eje + el hueco medido al
+        // unirlas, nunca los nodos — un rerun los recrea, igual que los
+        // mocks y el sub-pin.
+        if (!win.__disenoState.uniones) { win.__disenoState.uniones = []; }
         // Sub-pin (regla #157): {key, clase} del hijo SIN key propia al que
         // bajo el pin, o null. Se guarda la CLASE, nunca el nodo — un rerun
         // lo recrea, igual que al widget con key.
@@ -582,6 +587,301 @@ JS = """
 
         function esMock(key) {
             return win.__disenoState.mocks.some(function(m) { return m.key === key; });
+        }
+
+        // ---- unificar: dos tarjetas vecinas vistas como una sola --------
+        // "Como se veria si estas dos fueran UNA tarjeta": se cierra el
+        // hueco que las separa y se sacan las esquinas del lado que se
+        // tocan. NO se mueve un solo nodo — sacar un subarbol de Streamlit
+        // de su padre y meterlo en otro revienta a React en el rerun
+        // siguiente (guarda la referencia al padre VIEJO para su
+        // removeChild). Todo sale por `registro.cambios` de las DOS keys,
+        // asi que revertir, "Ver original" y "Copiar CSS" salen gratis.
+        //
+        // Lo que esto NO es: unificarlas de verdad (un solo st.container
+        // con las dos cosas adentro) es un cambio de Python en graficos/.
+        // Esto entrega el look y el CSS del pegado, que es la mitad
+        // visual; el panel y el bloque copiado lo dicen explicito.
+        var TOL_UNION = 6;     // px de desalineacion tolerada en el eje transversal
+        // px de hueco: mas separadas que esto ya no son vecinas. Medido en
+        // el drill de Proveedor: entre dos tarjetas de verdad hay 16px (el
+        // gap de st.columns, y el margin-top de _80_cards entre apiladas).
+        // Con 80 se colaban dos falsos vecinos que estan cerca pero no al
+        // lado — el item del rail a 51px de la tarjeta y la franja de
+        // arriba a 53px —, y la lista de "pegar con" salia con mas ruido
+        // que candidatas.
+        var HUECO_MAX = 40;
+        var PROPS_UNION = {
+            h: { primero: ['border-top-right-radius', 'border-bottom-right-radius'],
+                 segundo: ['border-top-left-radius', 'border-bottom-left-radius'],
+                 nombre: 'horizontal' },
+            v: { primero: ['border-bottom-left-radius', 'border-bottom-right-radius'],
+                 segundo: ['border-top-left-radius', 'border-top-right-radius'],
+                 nombre: 'vertical' }
+        };
+        var FLECHA_LADO = { izquierda: '\u25c0', derecha: '\u25b6',
+                            arriba: '\u25b2', abajo: '\u25bc' };
+
+        // Estricta a proposito, al reves que keyDeNodo() (que cae al
+        // testid/tag): sin key no hay selector que pegar en estilos/, asi
+        // que esa vecina directamente no se ofrece.
+        function keyPropiaDe(nodo) {
+            var cls = (nodo.className && nodo.className.toString
+                       ? nodo.className.toString() : '').split(' ');
+            for (var i = 0; i < cls.length; i++) {
+                if (cls[i].indexOf('st-key-') === 0) return cls[i].slice(7);
+            }
+            return null;
+        }
+
+        // "Pinta" = tiene fondo opaco, sombra o borde propio. Es lo que
+        // separa una TARJETA de un wrapper de layout con key, que miden lo
+        // mismo y son indistinguibles por geometria (medido en vivo:
+        // `docs_row` y `compras_prov_card_docs` dan los DOS 841x547).
+        // Importa porque sacarle una esquina o el hueco a una caja
+        // transparente no cambia un pixel en pantalla.
+        function pintaAlgo(n) {
+            var cs = win.getComputedStyle(n);
+            var bg = cs.backgroundColor || '';
+            var opaco = bg && bg !== 'transparent' && bg.indexOf('rgba(0, 0, 0, 0)') !== 0;
+            return (opaco || (cs.boxShadow && cs.boxShadow !== 'none')
+                    || parseFloat(cs.borderTopWidth) > 0) ? 1 : 0;
+        }
+
+        function vecinasUnibles(el) {
+            var ra = el.getBoundingClientRect();
+            if (!ra.width || !ra.height) return [];
+            var cands = [], todos = doc.querySelectorAll('div[class*="st-key-"]');
+            for (var i = 0; i < todos.length; i++) {
+                var n = todos[i];
+                if (n === el || n.contains(el) || el.contains(n)) continue;
+                var k = keyPropiaDe(n);
+                if (!k || esMock(k)) continue;
+                var r = n.getBoundingClientRect();
+                if (r.width < 40 || r.height < 40) continue;
+                var lado = null, eje = 'h', hueco = 0;
+                // Alineadas por el techo = misma fila (columnas hermanas);
+                // por el borde izquierdo = misma columna, una sobre otra.
+                // El horizontal se prueba PRIMERO: dos tarjetas de la misma
+                // fila pueden compartir tambien el `left` si la de al lado
+                // arranca en el mismo x por casualidad de un ancho raro.
+                if (Math.abs(r.top - ra.top) <= TOL_UNION) {
+                    if (r.left - ra.right >= -2 && r.left - ra.right <= HUECO_MAX) {
+                        lado = 'derecha'; hueco = r.left - ra.right;
+                    } else if (ra.left - r.right >= -2 && ra.left - r.right <= HUECO_MAX) {
+                        lado = 'izquierda'; hueco = ra.left - r.right;
+                    }
+                }
+                if (!lado && Math.abs(r.left - ra.left) <= TOL_UNION) {
+                    eje = 'v';
+                    if (r.top - ra.bottom >= -2 && r.top - ra.bottom <= HUECO_MAX) {
+                        lado = 'abajo'; hueco = r.top - ra.bottom;
+                    } else if (ra.top - r.bottom >= -2 && ra.top - r.bottom <= HUECO_MAX) {
+                        lado = 'arriba'; hueco = ra.top - r.bottom;
+                    }
+                }
+                if (!lado) continue;
+                cands.push({ key: k, lado: lado, eje: eje,
+                             hueco: Math.max(0, Math.round(hueco)),
+                             area: r.width * r.height, pinta: pintaAlgo(n),
+                             desnivel: Math.round(eje === 'h' ? (r.height - ra.height)
+                                                              : (r.width - ra.width)) });
+            }
+            // Una vecina trae ENCIMADAS todas sus cajas con key: la tarjeta,
+            // sus wrappers de layout y los widgets de adentro que arranquen
+            // en el mismo borde. Por cada lado se ofrece UNA: primero la que
+            // pinta (la tarjeta), y entre iguales la mas grande — la de
+            // afuera, con el fondo y las esquinas que hay que sacar. Con una
+            // de adentro, la costura quedaria a medio hacer.
+            var porLado = {};
+            cands.forEach(function(c) {
+                var m = porLado[c.lado];
+                if (!m || c.pinta > m.pinta || (c.pinta === m.pinta && c.area > m.area)) {
+                    porLado[c.lado] = c;
+                }
+            });
+            var out = [];
+            ['izquierda', 'derecha', 'arriba', 'abajo'].forEach(function(l) {
+                if (porLado[l]) out.push(porLado[l]);
+            });
+            return out;
+        }
+
+        function unionesDe(key) {
+            return win.__disenoState.uniones.filter(function(u) {
+                return u.a === key || u.b === key;
+            });
+        }
+
+        // `a` es SIEMPRE la primera en el orden visual (izquierda o arriba).
+        function aplicarUnion(u) {
+            var elA = doc.querySelector('.st-key-' + u.a);
+            var elB = doc.querySelector('.st-key-' + u.b);
+            if (!elA || !elB) return false;   // otro reporte: queda dormida
+            var mapa = PROPS_UNION[u.eje];
+            var regA = registroPara(u.a), regB = registroPara(u.b);
+            mapa.primero.forEach(function(p) { regA.cambios[p] = '0'; });
+            mapa.segundo.forEach(function(p) { regB.cambios[p] = '0'; });
+            // El hueco lo pone el `gap` del bloque de Streamlit, que NO
+            // tiene key: no hay selector estable que pegar en estilos/, asi
+            // que se cierra desde una de las dos tarjetas. Cual, depende del
+            // eje — y la diferencia se ve:
+            //
+            // AL LADO: crece la PRIMERA hacia la derecha. Correr la segunda
+            // hacia la izquierda tambien cierra la costura, pero le mete el
+            // borde derecho 16px adentro y la union queda mas angosta que la
+            // fila (medido: 349..1174 contra los 349..1190 de la tarjeta de
+            // abajo, un escaloncito justo donde uno esta mirando si alinea).
+            // El `width` va con calc porque la tarjeta tiene ancho definido
+            // (flex item de la columna): sin el, el margen negativo la
+            // corre en vez de estirarla.
+            //
+            // APILADAS: se corre la SEGUNDA hacia arriba, y ahi si es lo
+            // correcto — una tarjeta unica de verdad tambien subiria todo lo
+            // que viene despues.
+            if (u.hueco > 0) {
+                if (u.eje === 'h') {
+                    regA.cambios.width = 'calc(100% + ' + u.hueco + 'px)';
+                    // `max-width: none` no es decorativo (arquitectura.md
+                    // #47): los contenedores de Streamlit traen
+                    // max-width:100% y sin sacarlo el calc queda clampeado
+                    // al ancho del padre — medido, la tarjeta seguia en
+                    // 509.5px con el width nuevo puesto y con !important.
+                    regA.cambios['max-width'] = 'none';
+                    regA.cambios['margin-right'] = '-' + u.hueco + 'px';
+                } else {
+                    regB.cambios['margin-top'] = '-' + u.hueco + 'px';
+                }
+            }
+            // Apiladas, la sombra de la de ARRIBA cae justo sobre la
+            // costura (offset +1px hacia abajo) y se ve como una linea que
+            // parte la tarjeta al medio. Al lado no molesta: la sombra de
+            // estas tarjetas no se proyecta a los costados.
+            if (u.eje === 'v') regA.cambios['box-shadow'] = 'none';
+            aplicarEstado(elA, regA);
+            aplicarEstado(elB, regB);
+            return true;
+        }
+
+        // Espejo exacto de aplicarUnion(): que props escribio en cada key.
+        // Si una se agrega alla y no aca, "Separar" la deja pegada por esa
+        // sola propiedad y no hay forma de sacarla desde el panel.
+        function propsDeUnion(u, key) {
+            var mapa = PROPS_UNION[u.eje];
+            var esPrimera = (u.a === key);
+            var props = esPrimera ? mapa.primero.slice() : mapa.segundo.slice();
+            if (u.hueco > 0) {
+                if (u.eje === 'h' && esPrimera) { props.push('width', 'max-width', 'margin-right'); }
+                if (u.eje === 'v' && !esPrimera) { props.push('margin-top'); }
+            }
+            if (u.eje === 'v' && esPrimera) props.push('box-shadow');
+            return props;
+        }
+
+        function separarUnion(u) {
+            win.__disenoState.uniones = win.__disenoState.uniones.filter(function(x) {
+                return x !== u;
+            });
+            [u.a, u.b].forEach(function(k) {
+                var el = doc.querySelector('.st-key-' + k);
+                var reg = registroPara(k);
+                propsDeUnion(u, k).forEach(function(p) {
+                    delete reg.cambios[p];
+                    if (!el) return;
+                    el.style.removeProperty(p);
+                    // El tick reaplica por destinosDeEstilo(), asi que la
+                    // limpieza tiene que barrer los MISMOS nodos o la
+                    // propiedad sobrevive donde nadie la esta mirando.
+                    destinosDeEstilo(el).forEach(function(d) { d.style.removeProperty(p); });
+                });
+                if (el) aplicarEstado(el, reg);
+            });
+        }
+
+        function unir(keyPin, cand) {
+            var primeroEsPin = (cand.lado === 'derecha' || cand.lado === 'abajo');
+            var u = { a: primeroEsPin ? keyPin : cand.key,
+                      b: primeroEsPin ? cand.key : keyPin,
+                      eje: cand.eje, hueco: cand.hueco };
+            var ya = win.__disenoState.uniones.some(function(x) {
+                return x.a === u.a && x.b === u.b;
+            });
+            if (!ya) { win.__disenoState.uniones.push(u); aplicarUnion(u); }
+            panel.dataset.builtForKey = '';   // cambio la lista de vecinas
+            sync();
+        }
+
+        // La lista de "pegar con la vecina" se repinta SOLA cada ~1 segundo,
+        // aparte del resto del panel: sale de medir rects, y al fijar una
+        // tarjeta la de al lado puede no estar todavia donde va a quedar
+        // (la de documentos monta un iframe de AgGrid y se acomoda despues).
+        // Medido: fijando el ranking del drill de Proveedor, el "▼
+        // compras_prov_card_docs" aparecia o no segun cuando se pineaba, y
+        // el panel entero solo se reconstruye si cambia la key — la lista
+        // quedaba congelada en lo que hubiera en pantalla ese instante.
+        // Repintar SOLO esta caja evita el otro extremo: reconstruir el
+        // panel en cada tick le sacaria el foco a un slider a mitad de un
+        // arrastre. La firma corta el repintado cuando no cambio nada.
+        function pintarVecinas() {
+            var caja = panel.__cajaVecinas;
+            if (!caja || !caja.isConnected) return;
+            var key = panel.__vecinasDe;
+            // Se busca desde la caja de la KEY, no desde el elemento
+            // pineado: con sub-pin ese es un hijo (el titulo de la tarjeta)
+            // y sus vecinos son los otros hijos, no las tarjetas de al lado.
+            // Una union es entre keys — es lo unico que se puede escribir
+            // despues en estilos/.
+            var elUnion = doc.querySelector('.st-key-' + key);
+            var yaUnidas = {}, hayUnion = false;
+            unionesDe(key).forEach(function(u) {
+                yaUnidas[(u.a === key) ? u.b : u.a] = 1;
+                hayUnion = true;
+            });
+            var vecinas = elUnion ? vecinasUnibles(elUnion).filter(function(c) {
+                return !yaUnidas[c.key];
+            }) : [];
+            var firma = vecinas.map(function(c) {
+                return c.lado + ':' + c.key + ':' + c.hueco;
+            }).join('|') + (hayUnion ? '|u' : '');
+            if (firma === panel.__vecinasFirma) return;
+            panel.__vecinasFirma = firma;
+            caja.innerHTML = '';
+            if (!vecinas.length) {
+                if (hayUnion) return;
+                var sinVec = doc.createElement('div');
+                sinVec.style.cssText = 'font-size:10px;line-height:1.45;color:#8b8b95;margin-top:6px';
+                sinVec.textContent = 'Ninguna caja con key arranca en el mismo borde a menos de '
+                    + HUECO_MAX + 'px. Fijá la tarjeta entera (la que tiene el fondo),'
+                    + ' no un widget de adentro.';
+                caja.appendChild(sinVec);
+                return;
+            }
+            var wrapVec = doc.createElement('div');
+            wrapVec.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-top:6px';
+            vecinas.forEach(function(c) {
+                var b = doc.createElement('button');
+                b.textContent = FLECHA_LADO[c.lado] + ' ' + c.key;
+                b.title = 'Vecina de ' + c.lado + ' - hueco ' + c.hueco + 'px'
+                    + (Math.abs(c.desnivel) > 2
+                        ? (', y ' + Math.abs(c.desnivel) + 'px de desnivel: la costura va a quedar despareja')
+                        : '');
+                b.style.cssText = 'width:100%;text-align:left;background:#1c1c24;color:#e4e4e8;border:1px solid #34343f;border-radius:4px;padding:6px 7px;font:10px "Courier New",monospace;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+                b.addEventListener('click', function() {
+                    var ctx = elementoActivo();
+                    if (ctx) unir(ctx.key, c);
+                });
+                wrapVec.appendChild(b);
+            });
+            caja.appendChild(filaControl('Pegar con la vecina', wrapVec, spanValor('')));
+        }
+
+        // Idempotente y barata: es la que hace que la union sobreviva un
+        // rerun (Streamlit recrea los nodos y se lleva los inline con
+        // ellos) sin depender de cual de las dos tarjetas este pineada —
+        // el aplicarEstado() del tick solo toca la pineada.
+        function reaplicarUniones() {
+            var us = win.__disenoState.uniones;
+            for (var i = 0; i < us.length; i++) { aplicarUnion(us[i]); }
         }
 
         // ---- overlay (outline + manijas) y panel lateral ----
@@ -1618,9 +1918,16 @@ JS = """
             }
             if (!bloques.length) return notaFila || null;
 
+            // Las notas se emiten solo si esa redireccion LE PASO a algo que
+            // se esta copiando: `redirigido`/`hayTextoPropio` describen al
+            // elemento (tiene botones adentro, sus labels traen <p> propio),
+            // no al bloque. Sin el chequeo del grupo, un export de pura caja
+            // — el caso tipico de Unificar, que solo mueve esquinas y ancho —
+            // salia con un "texto redirigido al <p> del label" abajo que no
+            // aplicaba a ninguna de las lineas de arriba.
             var notas = [];
-            if (redirigido) notas.push('caja redirigida a los botones internos');
-            if (hayTextoPropio) notas.push('texto redirigido al <p> del label, que trae su propio font-size/weight');
+            if (redirigido && Object.keys(estBoton).length) notas.push('caja redirigida a los botones internos');
+            if (hayTextoPropio && Object.keys(estTexto).length) notas.push('texto redirigido al <p> del label, que trae su propio font-size/weight');
             var pie = notas.length
                 ? '\\n/* ' + notas.join(' — ') + ' — ver destinosDeEstilo()/extenderATexto() en _diseno_js.py */'
                 : '';
@@ -1628,6 +1935,30 @@ JS = """
             var encabezado = '/* copiado del modo diseño — ' + key + (sub ? ' .' + sub : '') + ' */';
             return encabezado + '\\n' + bloques.join('\\n\\n') + pie
                    + (notaFila ? '\\n\\n' + notaFila : '');
+        }
+
+        // La union se copia SIEMPRE de a dos bloques: pegar uno solo deja
+        // media costura (una esquina redondeada contra una recta, y el
+        // hueco a medio cerrar). El bloque de la pineada ya sale de
+        // construirBloqueCSS() como cualquier otro cambio — esto agrega el
+        // de la otra mitad, con la advertencia de que el CSS hace que se
+        // VEAN como una, no que lo sean.
+        function bloquesDeUnion(key) {
+            var us = unionesDe(key), out = [];
+            us.forEach(function(u) {
+                var otra = (u.a === key) ? u.b : u.a;
+                var elO = doc.querySelector('.st-key-' + otra);
+                if (!elO) return;
+                out.push('/* UNIFICAR - la otra mitad: «' + otra + '», pegada en '
+                    + PROPS_UNION[u.eje].nombre + ' a «' + key + '».\\n'
+                    + '   Los dos bloques van juntos: con uno solo queda media costura.\\n'
+                    + '   Y ojo con lo que hace: las deja VER como una sola tarjeta.\\n'
+                    + '   Unificarlas de verdad — un solo st.container con las dos\\n'
+                    + '   cosas adentro — es un cambio de Python en graficos/. */');
+                var b = construirBloqueCSS(otra, elO, registroPara(otra), '', null);
+                if (b) out.push(b);
+            });
+            return out.length ? out.join('\\n') : null;
         }
 
         // Duplica (a proposito, ver docstring de diseno.py) el fallback de
@@ -1830,6 +2161,13 @@ JS = """
                 var ctx = elementoActivo();
                 var bloque = ctx ? construirBloqueCSS(ctx.key, ctx.el, ctx.registro,
                                                       ctx.sub, ctx.subTexto) : null;
+                // Solo con el pin en la TARJETA: con sub-pin el export es
+                // el de un hijo (o el destino de un texto de Plotly/AgGrid)
+                // y la union no tiene nada que ver con eso.
+                if (ctx && !ctx.sub && !ctx.subTexto) {
+                    var mitadB = bloquesDeUnion(ctx.key);
+                    if (mitadB) bloque = (bloque ? bloque + '\\n\\n' : '') + mitadB;
+                }
                 if (!bloque) {
                     estadoCopiar.textContent = 'nada que copiar';
                     estadoCopiar.style.color = '#8b8b95';
@@ -2302,6 +2640,47 @@ JS = """
             });
             panel.appendChild(btnOriginal);
 
+            // ---- unificar: dos tarjetas vecinas como una sola ----
+            panel.appendChild(seccion('Unificar'));
+
+            var capUnir = doc.createElement('div');
+            capUnir.style.cssText = 'font-size:10px;line-height:1.45;color:#6f6f7a;margin:6px 0 2px';
+            capUnir.textContent = 'Las pega: cierra el hueco y saca las esquinas del lado que se tocan.'
+                + ' Es el look — unirlas de verdad (un solo st.container) es un cambio de Python.';
+            panel.appendChild(capUnir);
+
+            var unisDeKey = unionesDe(key);
+            unisDeKey.forEach(function(u) {
+                var otra = (u.a === key) ? u.b : u.a;
+                var filaU = doc.createElement('div');
+                filaU.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:6px';
+                var txtU = doc.createElement('div');
+                txtU.style.cssText = 'flex:1;min-width:0;font:10px/1.3 "Courier New",monospace;color:#9385ec;word-break:break-all';
+                txtU.textContent = (u.a === key ? '\u25b8 ' : '\u25c2 ') + otra;
+                txtU.title = 'Pegada en ' + PROPS_UNION[u.eje].nombre
+                    + ' (hueco cerrado: ' + u.hueco + 'px)';
+                var btnSep = doc.createElement('button');
+                btnSep.textContent = 'Separar';
+                btnSep.style.cssText = 'flex:0 0 auto;background:#1c1c24;color:#e4e4e8;border:1px solid #34343f;border-radius:4px;padding:5px 8px;font:11px sans-serif;cursor:pointer';
+                btnSep.addEventListener('click', function() {
+                    separarUnion(u);
+                    panel.dataset.builtForKey = '';
+                    sync();
+                });
+                filaU.appendChild(txtU);
+                filaU.appendChild(btnSep);
+                panel.appendChild(filaU);
+            });
+
+            // La lista de vecinas vive en su propia caja y se repinta sola
+            // (ver pintarVecinas): depende de rects, no de la key pineada.
+            var cajaVec = doc.createElement('div');
+            panel.appendChild(cajaVec);
+            panel.__cajaVecinas = cajaVec;
+            panel.__vecinasDe = key;
+            panel.__vecinasFirma = '';
+            pintarVecinas();
+
             // ---- insertar: elementos de mentira ----
             panel.appendChild(seccion('Insertar'));
 
@@ -2415,6 +2794,11 @@ JS = """
             // Antes de resolver el pin: un mock puede SER el pineado, y
             // Streamlit se lo lleva cuando re-renderiza su rama.
             reponerMocks();
+            // Despues de reponerMocks (que puede insertar nodos y correr
+            // los rects) y antes de resolver el pin: las dos mitades de una
+            // union se reaplican aunque ninguna este pineada — el
+            // aplicarEstado() del final del tick solo alcanza a la pineada.
+            reaplicarUniones();
             // Barato por el guard `__disenoEnganchado`, y hay que reintentar
             // en cada tick: Streamlit recrea el iframe de AgGrid en cada
             // rerun y el listener se va con el documento viejo.
@@ -2451,6 +2835,11 @@ JS = """
             aplicarEstado(res.el, registro);
             trackear(res.el);
             actualizarReadouts(res.el, registro);
+            // 1 de cada 7 ticks (~1 seg): la lista de vecinas se arma con
+            // rects y el layout se acomoda despues del pin — ver
+            // pintarVecinas(), que corta sola si no cambio nada.
+            win.__disenoState.tick = (win.__disenoState.tick || 0) + 1;
+            if (win.__disenoState.tick % 7 === 0) pintarVecinas();
         }
 
         // rerun-safety: el iframe de components.html se recrea en cada
