@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-200 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+201 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (69)
+**CSS y estilos** (70)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -89,6 +89,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#182** — El modo diseño ya llega a los textos de Plotly y de AgGrid — y para esos dos el "Copiar CSS"…
 - **#186** — Un st.container anidado NO es hijo directo del flex que lo contiene: Streamlit le mete un…
 - **#188** — "Solo me deja acortar" no era la herramienta: el elemento SÍ crece, lo recorta un ancestro —…
+- **#201** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
 
 **Layout y alturas** (19)
 
@@ -112,7 +113,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#187** — Meter None entre las opciones de un st.selectbox le agrega un botón ✕ "Clear value" que no…
 - **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
 
-**Plotly y figuras** (43)
+**Plotly y figuras** (44)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -157,6 +158,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#182** — El modo diseño ya llega a los textos de Plotly y de AgGrid — y para esos dos el "Copiar CSS"…
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
+- **#201** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
 
 **AgGrid y tablas** (33)
 
@@ -8635,13 +8637,76 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      demás están completos de los dos lados. Hermana de la regla que ya
      hacía lo mismo en Ventas › Año Pasado con el período EN CURSO.
 
+201. **Una barra pintada como FONDO de celda no se acota con un % del
+     ancho: se acota con un GUTTER EN PX del tamaño del texto más largo.
+     Y el ancho de esa columna no se pide con `flex`, se pide con el
+     ancho BASE.** Salió de reemplazar el gráfico «Top proveedores del
+     período» de Documentos SUNAT por una tabla-ranking (2026-08-24, a
+     pedido: "no me muestra mucha información"). La barra se copió del
+     ranking de Compras › Proveedor, tope incluido: 62% del ancho de la
+     celda, texto a la derecha, para que nunca se pisen.
+
+     Ahí funciona; acá no. Medido en el navegador: con la columna en
+     192px la barra más larga llegaba a **119px y el monto arrancaba en
+     105** — 14px de "S/ " en texto oscuro sobre morado. La diferencia no
+     es el CSS, es el TEXTO: aquella columna es más ancha y muestra el
+     monto redondeado (`Math.round`), ésta muestra los centavos porque es
+     plata que se concilia contra un papel. Un tope porcentual asume que
+     el texto crece con la celda, y no crece: el texto mide lo que mide.
+
+     La forma que sí aguanta es reservarle al número un ancho fijo y
+     darle a la barra el resto:
+
+         var util = Math.max(0, p.column.getActualWidth() - 110);
+         var w    = pct / 100 * util;   // en px, no en %
+
+     donde 110 sale de MEDIR el string más ancho que puede aparecer con
+     la fuente del grid (`canvas.measureText("S/ 1,234,567.89")` = 88px)
+     más el padding de la celda y un margen. Todas las filas se escalan
+     con el mismo `util`, así que las proporciones entre filas no se
+     tocan. Verificado después: la holgura mínima entre el fin de la
+     barra y el inicio del monto pasó de **−14px a +23px**.
+
+     Dos corolarios que no son obvios:
+
+     · **El `cellStyle` hay que re-evaluarlo cuando cambia el ancho.** AG
+       Grid deja el estilo en línea que calculó al montar, así que
+       después de un `sizeColumnsToFit` (o de que el usuario arrastre el
+       borde) la barra conserva el largo de un ancho que ya no existe. Va
+       un `refreshCells({force:true, columns:['Total']})` en
+       `onGridSizeChanged` y en `onColumnResized` (éste con `if(p.finished)`,
+       o se repinta en cada píxel del arrastre). No entra en bucle:
+       `refreshCells` no dispara ninguno de los dos eventos.
+
+     · **`sizeColumnsToFit` NO le da el sobrante a la columna `flex`.**
+       Reparte en proporción a los anchos base: medido, con `flex=1` en
+       Proveedor las cinco columnas crecieron por el mismo factor (1.44).
+       O sea que para que el nombre entre hay que subirle el ancho BASE,
+       no marcarlo flexible. También por medición: nombres de un rango
+       real, mediana 182px y el más largo 328; con la columna resuelta en
+       289 se cortaban 4 de 19, con base 320 (390 en pantalla) se cortan
+       **0 de 19**. Es lo que reemplazó al `_compras_truncar(i, 30)` del
+       gráfico, que cortaba a ciegas sin mirar el ancho real.
+
+     Y el motivo de fondo del cambio, que vale para cualquier "top N" en
+     barras: una barra horizontal muestra UN número por fila y gasta todo
+     el ancho en mostrarlo. La misma altura en tabla entra siete filas de
+     CUATRO datos, con scroll interno para las cuarenta que hay. El caso
+     que la barra escondía apareció en la primera pantalla: un banco con
+     el **8,5% de los documentos y el 5,5% del valor** — mucho papeleo,
+     poca plata. Por eso van las dos participaciones y no una: «% valor»
+     es cuánta plata se le va, «% docs» es cuánto trabajo administrativo
+     genera. La tabla NO se llevó el alto de la tarjeta: mismo techo
+     (`alturas.MINI`) que tenía la figura, medido después en 240px con la
+     tarjeta cerrando justo en el borde del viewport.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#201**.
+> próxima regla nueva es la **#202**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

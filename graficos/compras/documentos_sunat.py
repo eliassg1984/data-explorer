@@ -672,27 +672,215 @@ def _kpis(df, origen=None):
     )
 
 
-def _grafico(df, vista):
-    """Barras del período: por día de emisión o por proveedor."""
-    if vista == "Por proveedor":
-        g = (pd.to_numeric(df["total"], errors="coerce")
-             .groupby(df["proveedor"].astype(str)).sum()
-             .nlargest(10).sort_values())
-        if g.empty:
-            st.info("Sin datos para graficar.")
-            return
-        fig = go.Figure(go.Bar(
-            x=g.values, y=[_compras_truncar(i, 30) for i in g.index],
-            orientation="h", marker=dict(color=ACENTO, opacity=0.9),
-            hovertemplate="%{y}<br>S/ %{x:,.2f}<extra></extra>",
-        ))
-        _compras_layout(fig, alto=alturas.por_filas(len(g), px_fila=26,
-                                                    rol=alturas.MINI))
-        fig.update_layout(title="Top proveedores del período")
-        fig.update_yaxes(showticklabels=True, automargin=True)
-        st.plotly_chart(fig, use_container_width=True, key="sunat_g_prov")
+# Alto de una fila del ranking de proveedores. Mismo número que el ranking
+# de `proveedor.py`: es la misma lectura —un proveedor por fila, ordenado
+# por valor— y con filas más gordas entran tres proveedores donde antes se
+# veían diez barras.
+_ALTO_FILA_RANK = 28
+
+
+def _ranking_proveedores(df):
+    """Ranking de proveedores del período como TABLA, no como barras.
+
+    2026-08-24, a pedido ("no me muestra mucha información"): reemplaza al
+    `go.Bar` horizontal de «Top proveedores del período». Esa barra
+    mostraba UN dato (el monto) de DIEZ proveedores, con el nombre cortado
+    a 30 caracteres. Acá cada proveedor trae cuatro, el nombre se ellipsea
+    con el ancho real y el tooltip lo completa, y ya no son diez: entran
+    todos los del rango, y lo que no cabe scrollea DENTRO del frame, que
+    mide lo mismo que medía el gráfico.
+
+    Las dos participaciones no responden la misma pregunta y por eso van
+    las dos: «% valor» dice cuánta plata se le va a ese proveedor, «% docs»
+    cuánto papeleo genera. Un proveedor con el 2% del valor y el 25% de los
+    documentos es exactamente el caso que la barra de monto escondía.
+
+    Las dos son sobre lo que muestra ESTA tabla (el rango, ya filtrado por
+    situación), no sobre los KPIs de arriba, que se calculan sin ese
+    filtro. Por eso el subtítulo dice contra qué base están sacadas.
+
+    La barra de progreso es el FONDO de la celda de «Total» (un
+    `linear-gradient` cortado en el % contra el mayor del rango), la misma
+    receta que el ranking de `proveedor.py`: no hace falta `cellRenderer`
+    —que acá pediría la clase `init()/getGui()` de la regla #25— ni los
+    sparklines de AG Grid, que son Enterprise. Los colores salen de
+    `tema.py` y no de `var(--...)` a propósito: el grid vive en un iframe
+    propio y las variables CSS del documento padre no llegan.
+    """
+    val = pd.to_numeric(df.get("total"), errors="coerce").fillna(0.0)
+    # Se agrupa por RUC y no por razón social: el RUC es la identidad del
+    # proveedor (mismo criterio que `_fila_de`). SUNAT devuelve el nombre
+    # tal como está en su padrón y basta una tilde o un "S.A.C." abreviado
+    # distinto entre períodos para partir un proveedor en dos filas.
+    clave = (df["ruc_proveedor"].astype(str) if "ruc_proveedor" in df
+             else df["proveedor"].astype(str))
+    g = pd.DataFrame({
+        "ruc": clave.values,
+        "nombre": df["proveedor"].astype(str).values,
+        "valor": val.values,
+    })
+    # `size` y no `nunique(documento)`: cada fila del registro ES un
+    # comprobante —lo mismo que cuenta el KPI "docs" de arriba— y
+    # serie-número NO identifica uno (ver `_fila_de`: 1.422 colisiones
+    # medidas), así que deduplicar por ahí perdería documentos reales.
+    agg = (g.groupby("ruc", sort=False)
+             .agg(nombre=("nombre", "first"), valor=("valor", "sum"),
+                  docs=("valor", "size"))
+             .reset_index()
+             .sort_values("valor", ascending=False)
+             .reset_index(drop=True))
+    if agg.empty:
+        st.info("Sin datos para el ranking.")
         return
 
+    tot_val = float(agg["valor"].sum())
+    tot_docs = int(agg["docs"].sum())
+    # Las notas de crédito RESTAN (`sunat.py`), así que un proveedor puede
+    # cerrar el rango en negativo. El máximo se toma sólo si es positivo:
+    # dividir por un máximo negativo daría barras largas justo en las filas
+    # que menos valor tienen.
+    _max = float(agg["valor"].max())
+    _max = _max if _max > 0 else 1.0
+
+    st.markdown(
+        f'<div style="font-size:14px;font-weight:600;color:{TEXTO_PRINCIPAL};'
+        'margin:2px 0 0;">Proveedores del período</div>'
+        f'<div style="font-size:11.5px;color:{GRIS_TEXTO};margin:0 0 6px;">'
+        f'{len(agg):,} proveedores · {tot_docs:,} docs · '
+        f'S/ {tot_val:,.2f} — los % son sobre esta base</div>',
+        unsafe_allow_html=True)
+
+    tv = pd.DataFrame({
+        "Proveedor": agg["nombre"],
+        "Total": agg["valor"].astype(float),
+        "Docs": agg["docs"].astype(int),
+        "% docs": agg["docs"] / tot_docs * 100 if tot_docs else 0.0,
+        "% valor": agg["valor"] / tot_val * 100 if tot_val else 0.0,
+        # Ocultas: el % de LLENADO de la barra (contra el MAYOR, que no es
+        # el mismo número que "% valor", que va sobre el TOTAL) y el RUC,
+        # que sólo se usa en el tooltip del nombre.
+        "_barra": agg["valor"] / _max * 100,
+        "_ruc": agg["ruc"],
+    })
+
+    # El texto va a la DERECHA y la barra tiene prohibido llegar hasta él:
+    # si se pisan queda texto oscuro sobre fondo oscuro. `proveedor.py`
+    # resuelve eso con un tope del 62% del ancho, y acá NO alcanza —
+    # medido en el navegador: con la columna en 192px la barra más larga
+    # llegaba a 119px y el monto arrancaba en 105, o sea 14px de "S/ " en
+    # ilegible. Aquella columna es más ancha (`flex: 2`) y su monto va
+    # redondeado, sin centavos; ésta muestra los centavos porque es plata
+    # que se concilia contra un papel.
+    #
+    # Así que el tope no es un %, es un GUTTER FIJO en px: la barra ocupa
+    # el ancho de la celda menos lo que mide el monto más largo. 110px sale
+    # de medir el string más ancho que puede aparecer ("S/ 1,234,567.89" =
+    # 88px con la fuente del grid) más los 15px de padding y un margen. Se
+    # reparte igual para todas las filas, así que las proporciones entre
+    # filas se mantienen. La pista va TRANSPARENTE, no tintada: con fondo,
+    # la columna entera se lee como un bloque lavanda que compite con las
+    # barras (eso sí es lección tal cual de `proveedor.py`).
+    _js_barra = JsCode(
+        "function(p){"
+        " var ancho = (p.column && p.column.getActualWidth)"
+        "   ? p.column.getActualWidth() : 0;"
+        " var util = Math.max(0, ancho - 110);"
+        " var pct = Math.max(0, Math.min(100, p.data._barra||0));"
+        " var w = (util ? (pct / 100 * util) : (pct * 0.45)) + (util ? 'px' : '%');"
+        " return {'background': 'linear-gradient(90deg,"
+        f" {ACENTO} 0 ' + w + ', transparent ' + w + ' 100%)',"
+        " 'display':'flex','alignItems':'center',"
+        " 'justifyContent':'flex-end',"
+        f" 'color':'{TEXTO_PRINCIPAL}'"
+        "};"
+        "}")
+    _js_soles = JsCode(
+        "function(p){ return p.value==null ? '' :"
+        " 'S/ ' + Number(p.value).toLocaleString('es-PE',"
+        " {minimumFractionDigits:2, maximumFractionDigits:2}); }")
+    # Un decimal, no cero: con 60+ proveedores en el rango la mayoría queda
+    # por debajo del 1% y redondear al entero los deja a todos en "0%".
+    _js_pct = JsCode(
+        "function(p){ return p.value==null ? '' : p.value.toFixed(1) + '%'; }")
+
+    gb = GridOptionsBuilder.from_dataframe(tv)
+    gb.configure_default_column(resizable=True, sortable=True, filter=False,
+                                editable=False, suppressMovable=True)
+    gb.configure_column("_barra", hide=True)
+    gb.configure_column("_ruc", hide=True)
+    # El ancho del nombre se decide por MEDICIÓN, no a ojo, y no con `flex`:
+    # `sizeColumnsToFit` reparte el sobrante en proporción a los anchos
+    # base y NO le da nada extra a una columna por ser flexible (medido:
+    # con `flex=1` todas crecieron por el mismo factor 1.44). O sea que la
+    # palanca real es el ancho base. 320 sale de medir los nombres de un
+    # rango real con la fuente del grid: mediana 182px, el más largo 328,
+    # y con la columna en 289 se cortaban 4 de 19. Con 320 de base termina
+    # cerca de 400 en pantalla y no se corta prácticamente ninguno — y el
+    # que se corte lo completa el tooltip, que además agrega el RUC porque
+    # el nombre solo no identifica al emisor.
+    gb.configure_column(
+        "Proveedor", width=320, minWidth=190,
+        tooltipValueGetter=JsCode(
+            "function(p){ return p.value + ' · RUC ' + (p.data._ruc||''); }"))
+    # `minWidth` no es cosmético en ESTA columna: de su ancho sale el largo
+    # de la barra (ancho − gutter). Medido con la ventana angosta, con la
+    # columna en 169px la barra más larga quedaba en 59px; con el piso en
+    # 190 nunca baja de 80. Por debajo del piso el grid scrollea en
+    # horizontal, que es preferible a una barra que no se puede comparar.
+    gb.configure_column("Total", type=["numericColumn"], width=190,
+                        minWidth=190,
+                        cellStyle=_js_barra, valueFormatter=_js_soles,
+                        headerTooltip="Suma de los comprobantes del período. "
+                                      "La barra compara contra el mayor.")
+    gb.configure_column("Docs", type=["numericColumn"], width=80,
+                        headerTooltip="Comprobantes emitidos por ese "
+                                      "proveedor en el período.")
+    gb.configure_column("% docs", type=["numericColumn"], width=95,
+                        valueFormatter=_js_pct,
+                        headerTooltip="Participación por CANTIDAD de "
+                                      "documentos: cuánto del papeleo del "
+                                      "período es de este proveedor.")
+    gb.configure_column("% valor", type=["numericColumn"], width=95,
+                        valueFormatter=_js_pct,
+                        headerTooltip="Participación por VALOR comprado: "
+                                      "cuánto del gasto del período se le "
+                                      "va a este proveedor.")
+    # Sin selección: esta tabla informa, no filtra. La que responde al clic
+    # es la de documentos de abajo, que abre la ficha en el panel.
+    # El ancho de la celda entra en el cálculo de la barra, así que cada vez
+    # que cambia hay que RE-EVALUAR el `cellStyle`: AG Grid no lo hace solo
+    # al redimensionar, deja el estilo en línea que calculó al montar y la
+    # barra se queda con el largo de un ancho que ya no existe. No entra en
+    # bucle: `refreshCells` no dispara ninguno de los dos eventos.
+    gb.configure_grid_options(
+        rowHeight=_ALTO_FILA_RANK, headerHeight=32, suppressCellFocus=True,
+        onGridSizeChanged=JsCode(
+            "function(p){ p.api.sizeColumnsToFit();"
+            " p.api.refreshCells({force:true, columns:['Total']}); }"),
+        # `finished` filtra los eventos intermedios del arrastre: sin eso se
+        # repinta la columna en cada píxel que se mueve el mouse.
+        onColumnResized=JsCode(
+            "function(p){ if(p.finished){"
+            " p.api.refreshCells({force:true, columns:['Total']}); } }"),
+    )
+
+    AgGrid(
+        tv, gridOptions=gb.build(),
+        # Mismo techo (`MINI`) que tenía el gráfico al que reemplaza: la
+        # tarjeta comparte alto con la tabla de documentos de abajo y con la
+        # ficha, y esta vista ya se pasaba de pantalla (ver el docstring de
+        # `renderizar_documentos_sunat`). Lo que no entra en el frame
+        # scrollea dentro del grid.
+        height=alturas.por_filas(len(tv), px_fila=_ALTO_FILA_RANK, extra=45,
+                                 rol=alturas.MINI),
+        theme="material", custom_css=dict(_css_grid(13)),
+        allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
+        key="sunat_rank_prov",
+    )
+
+
+def _grafico_por_fecha(df):
+    """Barras del período por día de emisión."""
     fe = pd.to_datetime(df["fecha_emision"], errors="coerce")
     g = (pd.to_numeric(df["total"], errors="coerce")
          .groupby(fe.dt.date).sum().sort_index())
@@ -1278,7 +1466,14 @@ def renderizar_documentos_sunat(d, col_fecha):
             else:
                 with c_kpi:
                     _kpis(df, _origen)
-                _grafico(vis, vista)
+                # Dos vistas, dos widgets distintos: «Por fecha» sigue
+                # siendo una figura y «Por proveedor» es una tabla desde
+                # 2026-08-24. El if vive acá y no adentro de una funcion
+                # `_grafico(df, vista)` que ya no dibujaria un grafico.
+                if vista == "Por proveedor":
+                    _ranking_proveedores(vis)
+                else:
+                    _grafico_por_fecha(vis)
                 doc = _tabla(vis)
                 _exportable, _nombre_xls = vis, f"sunat_compras_{_sufijo}.xlsx"
 
