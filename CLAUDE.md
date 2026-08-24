@@ -189,6 +189,28 @@ resto de `graficos/compras/`.
   `date_input` de la franja se dibuja en los TRES modos: esconderlo
   borraría la clave del rango del reporte.
 
+## Antes de sumar una columna "comparable": mirá su GRANO
+
+`compras.parquet` trae `VALOR_ANO_ANTERIOR`, `CANTIDAD_ANO_ANTERIOR` y
+`PRECIO_UNIT_ANO_ANTERIOR`. **No son datos por fila**: son el total de ese
+producto en ese MES, repetido en cada fila del producto-mes. Un
+`groupby(...).sum()` los cuenta tantas veces como compras hubo — medido,
+**x4.9**. El gráfico sale lindo igual; sólo miente.
+
+La comprobación son diez segundos de DuckDB:
+
+```sql
+SELECT count(DISTINCT VALOR_ANO_ANTERIOR) FROM compras
+GROUP BY COD_PRODUCTO, date_trunc('month', FECHA_EMISION_DOC)
+```
+
+Si da 1, la columna es del grupo, no de la fila. `Vs año pasado` ya no las
+usa: calcula el año pasado desplazando su propia serie mensual 12 meses.
+Detalle en `arquitectura.md` reglas #198 a #200, que además cubren las otras
+dos trampas del mismo cambio — un ratio (precio unitario) **no** se re-pondera
+sobre el agregado, y una vista que COMPARA períodos no puede heredar el rango
+de la franja (le deja el otro lado de la comparación fuera del df).
+
 ## El eje temporal tiene TRES modos, y un solo dueño
 
 El calendario de la franja tiene tres modos: **Rango** (intervalo),

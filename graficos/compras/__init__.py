@@ -142,7 +142,6 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                                   "Unidad compra", "Unidad", "UM", "Und"])
     col_cant   = _resolver(df_f, ["Cantidad_compra", "Cantidad compra", "Cantidad"])
     col_valor  = _resolver(df_f, ["Valor_compra", "Valor compra", "Importe Total", "Valorizado"])
-    col_val_aa = _resolver(df_f, ["Valor_ano_anterior", "Valor año anterior"])
     col_punit  = _resolver(df_f, ["Precio_unit", "Precio unit", "Precio Unitario"])
     col_punit_ant = _resolver(df_f, ["Ultimo_precio_unit", "Ultimo precio unit",
                                      "Ultimo_anterior", "Ultimo anterior"])
@@ -308,14 +307,19 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             renderizar_documentos_sunat(d, col_fecha)
         return
 
-    # Vs año pasado: Precio, Cantidad o Valor (selector "Ver") — unifica los
-    # tres drills que antes vivían separados en el rail (Precios/Cantidad/
-    # Más). Valor es por Familia (col_fam/col_val_aa), sin selector de
-    # producto: era el drill aparte "Vs año anterior".
+    # Vs año pasado: serie mensual + puente precio/cantidad + tabla de
+    # detalle. Es el ÚNICO drill que recibe `d_full` además de `d` y no para
+    # un panel suelto como Proveedor, sino para toda la vista: su ventana de
+    # tiempo es propia (arranca en "Todo") y el año pasado lo calcula
+    # desplazando 12 meses su propio histórico, así que necesita el histórico
+    # entero aunque la franja esté en un rango corto. Ver el docstring del
+    # módulo, decisiones 1 y 2.
     if graf == "Vs año pasado":
         with st.container(key="compras_vap_drill_wrap"):
-            _compras_vs_ano_pasado_drill(d, col_prod, col_punit, col_cant,
-                                         col_fecha, col_valor, col_fam, col_val_aa)
+            _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha,
+                                         col_valor, col_fam=col_fam,
+                                         col_subfam=col_subfam, col_um=col_um,
+                                         d_full=d_full)
         return
 
     col_izq, col_der = st.columns([1.7, 1])

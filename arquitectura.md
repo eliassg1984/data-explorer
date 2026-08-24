@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-197 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+200 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (69)
 
@@ -255,7 +255,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#190** — Compras › Producto perdió sus dos botones "✕ Quitar foco" (2026-08-24, a pedido) — mismo fix…
 - **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
 
-**Datos, R2 y DuckDB** (21)
+**Datos, R2 y DuckDB** (24)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -278,6 +278,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#170** — Se invirtieron Reportes y Vistas: Reportes al rail vertical izquierdo, Vistas a la franja…
 - **#195** — Hay emisores que usan cbc:Description como un renglón de TICKET, no como una descripción:…
 - **#197** — Un techo de calendario sacado de "hasta dónde llegó el último sync" hace que HOY no se pueda…
+- **#198** — Una columna que se llama VALOR_ANO_ANTERIOR no es un dato por fila: es el total del…
+- **#199** — El puente precio/cantidad de un GRUPO se suma desde sus productos; calculado sobre el…
+- **#200** — Una vista comparativa no puede heredar el rango de la franja: el rango corriente le deja el…
 
 **SUNAT y SIRE** (12)
 
@@ -328,7 +331,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 - **#185** — Un contextmenu dentro de un iframe NO sube al documento padre: el clic derecho sobre la…
 
-**Decisiones de diseño y UX** (33)
+**Decisiones de diseño y UX** (34)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -363,6 +366,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#169** — El CSS que exporta el modo diseño es una FOTO DE PÍXELES, no la intención: pegarlo tal cual…
 - **#170** — Se invirtieron Reportes y Vistas: Reportes al rail vertical izquierdo, Vistas a la franja…
 - **#181** — Un bloqueo de interacción SIN acuse de recibo es indistinguible de una app rota — el que…
+- **#200** — Una vista comparativa no puede heredar el rango de la franja: el rango corriente le deja el…
 
 **Mantenimiento y trampas del lenguaje** (6)
 
@@ -8497,13 +8501,147 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      las ramas de hoy no cubre las que abra el próximo cambio:** los
      stubs se instalan por FUENTE, antes del primer caso, no por rama.
 
+
+
+198. **Una columna que se llama `VALOR_ANO_ANTERIOR` no es un dato por fila:
+     es el total del producto-mes REPETIDO en cada fila, y sumarla
+     multiplicaba el año pasado por 4.9.** Reportado 2026-08-24 así: "mi
+     reporte de compras vs año pasado, lo veo muy simple, creo que filtra
+     por el filtro de fecha". El pedido era de UX; abriendo el dato
+     apareció, debajo, un error de cifras que llevaba meses en pantalla.
+
+     Medido contra R2 antes de tocar nada, sobre `compras.parquet`
+     (50.974 filas, 2023-01 → 2026-08):
+
+     | comprobación | resultado |
+     |---|---|
+     | grupos producto+mes con `VALOR_ANO_ANTERIOR` constante | 4.269 de 4.269 |
+     | `VALOR_ANO_ANTERIOR` vs total real del mismo mes, un año antes | diferencia 0 en 8.204 pares |
+     | `sum()` de la columna en 2025 | S/ 11.98M |
+     | total real de 2024 | S/ 2.46M |
+
+     O sea: la columna es correcta y la lectura era la equivocada. Como el
+     grano del parquet es una COMPRA y la columna es un total MENSUAL, el
+     motor la repite en cada fila del producto-mes; un `groupby(...).sum()`
+     la cuenta tantas veces como compras hubo. El gráfico "Compra por
+     familia: este año vs año anterior" mostraba desde siempre un año
+     pasado casi cinco veces más grande que el real. **No se veía**: el
+     gráfico salía lindo, las barras grises eran más altas que las moradas
+     y eso se leía como "el año pasado gastábamos más".
+
+     `PRECIO_UNIT_ANO_ANTERIOR` tiene la misma forma y un problema propio:
+     es el promedio SIMPLE de los precios de ese producto-mes (verificado,
+     coincide al 100% con `avg(PRECIO_UNIT)`), no el ponderado. Con
+     promedios simples el puente precio/cantidad de más abajo no cierra.
+
+     **Cómo quedó: el año pasado ya no se lee de ninguna columna, se
+     calcula desplazando la propia serie mensual 12 meses**
+     (`_con_ano_pasado`). Reproduce la columna EXACTO donde la columna
+     existe (verificado: diferencia máxima 0 en 7.987 producto-mes) y
+     además cubre lo que la columna no puede: los ítems que se compraban el
+     año pasado y este año no tienen fila este año, así que su gasto
+     desaparecía del "año pasado". Son 410 productos y S/ 236.469 que antes
+     no se veían — el `merge` es OUTER por eso, y con techo en el último mes
+     real, porque el desplazamiento también inventa meses que todavía no
+     pasaron (medido: llegaba hasta 2027-08).
+
+     Corolario para el resto del proyecto: **antes de sumar una columna
+     "comparable" de un parquet, comprobar su GRANO** con un
+     `count(DISTINCT col)` por la llave que se sospecha. Es una consulta de
+     diez segundos y es la única forma de ver esto, porque el error no
+     rompe nada — solo miente.
+
+     Lo verifica `test_graficos.py` de una manera que no se puede saltar
+     por accidente: el df de prueba trae `VALOR_ANO_ANTERIOR` y
+     `CANTIDAD_ANO_ANTERIOR` ENVENENADAS con 999999. Si alguien vuelve a
+     leerlas, los asserts se caen con números absurdos en vez de pasar en
+     silencio.
+
+
+199. **El puente precio/cantidad de un GRUPO se suma desde sus productos;
+     calculado sobre el agregado cierra igual y no significa nada.**
+     Segunda mitad del mismo cambio del 2026-08-24. La descomposición
+
+         Δ valor = (p − p_aa)·q  +  (q − q_aa)·p_aa
+
+     es exacta con `p = valor/cantidad`, y por eso tienta aplicarla
+     directamente al total de una familia. El problema es el denominador:
+     la "cantidad" de una familia suma kilos con litros, con unidades y con
+     servicios, así que el `p` que sale de ahí no es el precio de nada.
+
+     Medido con el parquet real, familia GASTOS VENTAS: sobre el agregado
+     daba **efecto precio −540.105 y efecto cantidad +504.339** para
+     explicar un Δ de −35.766 — dos cifras quince veces más grandes que lo
+     que explicaban, que se cancelaban entre sí. Peor todavía en el TOTAL
+     de la vista, que es el número que lee el usuario: decía "precio
+     −674.834, cantidad −250.362" (o sea "bajó sobre todo por precio")
+     cuando la cuenta correcta es "precio **+**162.140, cantidad
+     −1.087.336" — compramos bastante menos y algo más caro. El signo del
+     titular estaba al revés.
+
+     La cuenta correcta se calcula producto por producto y se SUMA
+     (`_por_item`): cada sumando es un Δ real de un ítem con UNA unidad, y
+     la suma sigue cerrando porque Σ(ef_precio + ef_cant) = Σ(valor −
+     valor_aa). Lo único que se puede decir del "precio" de un grupo es
+     cuántos productos tiene detrás, y eso es lo que muestra el tooltip.
+
+     La forma general de la trampa, que no es de Compras: **un promedio
+     ponderado no se puede agregar re-ponderando el agregado.** Cada vez
+     que aparezca un ratio (precio unitario, ticket medio, margen %), la
+     agregación correcta es sobre el numerador y el denominador por
+     separado, o sobre el efecto ya calculado en el grano donde el
+     denominador es homogéneo.
+
+
+200. **Una vista comparativa no puede heredar el rango de la franja: el
+     rango corriente le deja el año pasado fuera del df, y con el default
+     del reporte la vista sale VACÍA.** Tercera pieza del mismo pedido del
+     2026-08-24 ("quizás no debería observar eso, sino por defecto
+     considerar todo").
+
+     Compras › Vs año pasado recibía `d` —el df ya filtrado por la franja—
+     y nada más. Con la franja en su default (el mes corriente) eso son 9
+     días de agosto: la serie mensual daba UN punto, y el "año pasado"
+     salía de columnas que ya vimos que no se podían sumar. La vista se
+     leía "simple" porque efectivamente no había casi nada que dibujar.
+
+     El arreglo tiene dos mitades y la segunda es la que no es obvia:
+
+     · La ventana pasa a ser un control PROPIO de la tarjeta
+       (`graficos/periodo.py`, el mismo que ya usaba la Evolución de
+       Proveedor) con default `"Todo"`. Se cambia el DEFAULT, no la
+       capacidad: la opción `HEREDA` ("Rango") sigue en la lista.
+     · **El cálculo sale SIEMPRE de `d_full`, en las cinco opciones,
+       incluida `HEREDA`.** Acá estaba la trampa: el año pasado se obtiene
+       desplazando la serie 12 meses, así que calcularlo sobre `d` deja al
+       desplazamiento sin fuente. Con la franja en el mes corriente,
+       "Rango" daba un solo mes, el piso comparable caía 12 meses DESPUÉS
+       del techo y la vista salía vacía siempre. La ventana elige qué meses
+       se MUESTRAN, nunca de dónde salen los números.
+
+     Es la misma distinción de `graficos/periodo.py` (un rango global
+     responde "quién pesa más acá", no "cómo viene esto"), llevada un paso
+     más lejos: cuando la vista COMPARA contra otro período, el rango
+     global no es una ventana más chica — es una ventana que se lleva
+     puesto el otro lado de la comparación.
+
+     Addendum del mismo día, sobre el ÚLTIMO mes: el parquet corta el día
+     que se generó, así que el mes en curso contra el mes entero del año
+     pasado da siempre una caída que no existe (medido: ago-26 hasta el 21
+     son S/ 71.250 contra S/ 335.867 del ago-25 completo, pero contra
+     S/ 241.340 si se comparan los mismos 21 días). El mes espejo se
+     recorta al mismo día (`_mensual(recorte=...)`), la barra parcial va
+     con trama y el caption lo dice. Es el ÚNICO mes que se recorta: los
+     demás están completos de los dos lados. Hermana de la regla que ya
+     hacía lo mismo en Ventas › Año Pasado con el período EN CURSO.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#198**.
+> próxima regla nueva es la **#201**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
