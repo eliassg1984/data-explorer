@@ -186,10 +186,18 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
         st.session_state[state_key] = sel
     # SIN wrapper interno propio (a diferencia del rail vertical, que abre
     # `graf_tipo_chips` adentro): los botones van DIRECTOS dentro de
-    # `nav_rail`, igual que dibujaba Reportes antes del 2026-08-22. Así el
-    # CSS de la franja (navegacion.py::_CSS_FRANJA, que ya sabía estilar
-    # `.st-key-nav_rail [data-testid="stVerticalBlock"]` como fila) se
-    # reusa sin tener que enseñarle a atravesar un nivel de anidado extra.
+    # `nav_rail`, igual que dibujaba Reportes antes del 2026-08-22.
+    #
+    # OJO con el corolario, que costó un bug (arquitectura.md regla #201):
+    # sacar el wrapper NO hace que el CSS viejo "se reuse solo". El
+    # contenedor de `st.container(key="nav_rail")` ES el stVerticalBlock que
+    # lleva la key, así que un selector DESCENDIENTE
+    # (`.st-key-nav_rail [data-testid="stVerticalBlock"]`) pasó de matchear
+    # el wrapper a no matchear nada — en silencio, porque el rail seguía
+    # viéndose como una fila gracias a las reglas del propio `.st-key-nav_rail`.
+    # Lo que se perdió fue el `gap:0`, y con él volvió el `gap:1rem` de
+    # Streamlit: 112px de más que sacaban "Tabla" de pantalla a 900px.
+    # Si agregás una regla para esta fila, colgala del RAIL, no de un hijo.
     st.markdown(_CSS_FRANJA_VISTAS, unsafe_allow_html=True)
     with st.container(key="nav_rail"):
         for _cat_nombre, items in categorias:
