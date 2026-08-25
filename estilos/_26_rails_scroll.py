@@ -145,10 +145,16 @@ CSS = f"""
     }}
     .st-key-nav_rail_lateral [data-testid="stButton"] button {{
         width: 100% !important;
+        /* min-height y no height: el texto tiene que poder centrarse
+           verticalmente adentro (align-items:center), no solo caber. Con
+           height a secas el label quedaba pegado arriba del hueco. */
+        min-height: 62px !important;              /* == navitem_ de Reportes, medido */
+        display: flex !important;
         justify-content: flex-start !important;
+        align-items: center !important;
         text-align: left !important;
         margin: 0 !important;
-        padding: 7px 14px !important;
+        padding: 0 14px !important;
         border: none !important;
         border-radius: 0 !important;
         background: transparent !important;
