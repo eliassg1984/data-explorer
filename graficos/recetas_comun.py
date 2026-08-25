@@ -4,15 +4,22 @@ Receta Venta.
 
 Los dos parquets son la MISMA forma de dato — un BOM (lista de materiales):
 cada fila es un ítem/insumo dentro de un contenedor (plato o receta base),
-con una cantidad y un costo. Los cinco gráficos (Sankey, Composición,
-Ranking, Ingredientes/Insumos clave, Panorama de compras) son literalmente
-el mismo cálculo sobre columnas distintas — este módulo tiene la ÚNICA copia
-de cada uno, parametrizada por nombre de columna y por las etiquetas de cada
-dominio ("Plato" vs "Receta base"). `graficos/recetaventa.py` y
+con una cantidad y un costo. Cuatro gráficos (Sankey, Ranking, Ingredientes/
+Insumos clave, Panorama de compras) son literalmente el mismo cálculo sobre
+columnas distintas — este módulo tiene la ÚNICA copia de cada uno,
+parametrizada por nombre de columna y por las etiquetas de cada dominio
+("Plato" vs "Receta base"). `graficos/recetaventa.py` y
 `graficos/recetabase.py` son capas finas: resuelven SUS columnas reales y
 llaman a lo de acá con un `key_prefix`/keys propias (evita choques de
 session_state — los dos dashboards conviven en la MISMA sesión de navegador
 desde que comparten ítem de nav, ver `_chip_fuente`).
+
+`_composicion_contenedor` (la dona de UN plato/receta) sigue acá pero DEJÓ
+de ser el quinto compartido el 2026-08-24: Receta Venta reemplazó su
+"Composición" por una tabla propia (`recetaventa.py::_tabla_composicion_
+venta`) que necesita columnas —Grupo/Subgrupo/P.VENTA SALON/CST SALON/
+%CST SALON— sin equivalente en recetabase.parquet. Receta Base es hoy su
+ÚNICO llamador.
 
 Confirmado que NO se cruzan entre sí (0% overlap `recetabase.COD RB` vs
 `recetaventa.COD INS`, ver memoria de proyecto

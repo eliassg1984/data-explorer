@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-203 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+204 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (72)
 
@@ -260,7 +260,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
 - **#203** — Un calendario de DOS meses no se puede pedir: st.date_input dibuja uno solo. Construirlo con…
 
-**Datos, R2 y DuckDB** (24)
+**Datos, R2 y DuckDB** (25)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -286,6 +286,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#198** — Una columna que se llama VALOR_ANO_ANTERIOR no es un dato por fila: es el total del…
 - **#199** — El puente precio/cantidad de un GRUPO se suma desde sus productos; calculado sobre el…
 - **#200** — Una vista comparativa no puede heredar el rango de la franja: el rango corriente le deja el…
+- **#204** — En recetaventa.parquet, tres trampas de columna que no tiran error — devuelven un número o…
 
 **SUNAT y SIRE** (12)
 
@@ -8974,13 +8975,81 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      revienta en runtime. Lo agarró **`ruff` (F509)**, no un test — buen
      recordatorio de por qué el `ruff check` va antes de cada push.
 
+204. **En `recetaventa.parquet`, tres trampas de columna que no tiran
+     error — devuelven un número o una etiqueta que PARECE correcta.**
+
+     Aparecieron construyendo la tabla "Composición" de Receta Venta
+     (`recetaventa.py::_tabla_composicion_venta`, 2026-08-24: reemplaza la
+     dona de un plato por una tabla de TODOS con Grupo/Subgrupo/Precio/
+     Costo/%Costo de Salón + clic → receta al lado). Confirmado contra R2
+     real con DuckDB directo, no contra el demo.
+
+     1. **`P.VENTA SALON` / `CST SALON` / `%CST SALON` son atributos del
+        PLATO, repetidos en cada fila-insumo — no del ítem.** Mismo
+        patrón que `VALOR_ANO_ANTERIOR` de `compras.parquet` (CLAUDE.md §
+        "Antes de sumar una columna comparable"). Verificado con DuckDB:
+        de los 850 platos del catálogo, CERO tienen más de un valor
+        distinto de esas tres columnas dentro de su propio `COD PLATO`.
+        Un `.groupby(...).sum()` los infla tantas veces como insumos
+        tenga el plato — la tabla se agrupa con `.first()`. También
+        confirmado que `CST SALON` == suma de `TOTAL` de los ítems de ese
+        plato (sin filtrar por `INS ACTIVO`): la receta que abre el clic
+        tiene que sumar EXACTO contra el Costo Salón de la fila, o la
+        tabla de al lado "no cuadra" y parece un bug aunque no lo sea.
+
+     2. **El insumo NO es `ITEM RV`.** Es el número de LÍNEA dentro de la
+        receta ("001", "002"…, solo 31 valores distintos en las 2.602
+        filas del parquet) — no una identidad de insumo. El mismo
+        `COD INS` aparece como "001" en un plato y "019"/"007"/"013" en
+        otros (verificado con Langostino grande, `COD INS` 0003547). El
+        texto descriptivo real es `INS RV`: 1.058 valores, uno por
+        `COD INS`, 0% de variación. `recetaventa.py` ya resolvía
+        `col_item` con candidatos que incluían `"ITEM RV"` pero nunca
+        `"INS RV"` (Sankey/Ranking/Ingredientes clave — sin tocar en
+        este cambio, queda como deuda: esas tres vistas etiquetan
+        insumos con el número de línea, no con su nombre). Probablemente
+        la razón de fondo por la que la dona vieja de "Composición"
+        mostraba números de línea en vez de nombres y "no mostraba
+        mucho" — el motivo del pedido que reemplazó esa vista. La tabla
+        nueva usa `INS RV`.
+
+     3. **`P.VENTA SALON` trae precios "centinela" que arruinan cualquier
+        ranking por `%CST SALON`, y no se ven a simple vista en una
+        muestra chica.** Descubierto EN VIVO recién al abrir la tabla en
+        el navegador (no con DuckDB solo): el plato #1 del ranking por
+        %Costo era "Zumo Limon" con Costo S/0.58 sobre un Precio de
+        `1e-12` — %Costo de **71.798.840.000%**. Verificado el patrón
+        completo: 15 de los 436 platos activos tienen `P.VENTA SALON` en
+        un cluster de valores redondos que ningún precio real usa
+        (`1e-12`, `1e-7`, `1e-4`, `1e-3`, y **ocho platos distintos en
+        exactamente `1.00`** — cortesías, mermas ("(WD)"), ítems de
+        exhibición ("(Ex)")) y CERO platos activos tienen un precio
+        entre 1 y 7 soles — hueco limpio, filtro en `Precio > 1`.
+
+        Trampa aparte, real y NO filtrada: bebidas con `%CST SALON` genuino
+        de 300–950% (Ron/Tequila/Vodka premium) porque `CST SALON` es el
+        costo de la BOTELLA entera y `P.VENTA SALON` el precio de LA COPA
+        — visualmente parecido al artefacto de arriba (número enorme) pero
+        un dato real, con precios nada redondos (S/32–50). Distinguir uno
+        de otro por el %Costo solo no alcanza; hizo falta mirar el precio.
+
+     Regla general: un nombre de columna que **suena** a lo que buscás
+     (`ITEM RV` para "ítem de la receta venta") no prueba que lo sea —
+     hacía falta abrir el parquet real y mirar cardinalidad, no leer el
+     nombre. `data.py::_datos_demo` para `recetaventa.parquet` se
+     actualizó con GRUPO/SUBGRUPO/P.VENTA SALON/CST SALON/%CST SALON/
+     INS RV realistas (constantes por plato, `CST SALON` cuadrando con
+     la suma de sus ítems) para que esta vista se pueda verificar en
+     local sin secrets de R2 — mismo motivo que ya dejó un comentario
+     largo en ese bloque en 2026-08-13.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#204**.
+> próxima regla nueva es la **#205**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

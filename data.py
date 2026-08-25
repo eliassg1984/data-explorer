@@ -612,17 +612,33 @@ def _datos_demo(archivo, filas=60):
         # verificar en local — ver memoria de proyecto
         # `esquema-real-compras-recetaventa`. El grano es el real: una fila
         # por ítem/insumo dentro de un plato.
+        #
+        # GRUPO/SUBGRUPO/P.VENTA SALON/CST SALON/%CST SALON/INS RV
+        # (sumados 2026-08-24 para la tabla "Composición" de
+        # recetaventa.py::_tabla_composicion_venta) son atributos del
+        # PLATO —no del ítem—, confirmados contra R2 real: un valor por
+        # COD PLATO, repetido en cada fila-ítem. Por eso se generan UNA
+        # vez por plato, DESPUÉS de armar sus ítems: CST SALON tiene que
+        # cuadrar con la suma de TOTAL, igual que en el parquet real (si
+        # no, la receta de la derecha de la tabla no sumaría lo mismo que
+        # el Costo Salón de la izquierda).
         _n_platos = 45
         _platos = [f"Plato demo {i:03d}" for i in range(_n_platos)]
         _insumos_pool = [f"Insumo demo {i:03d}" for i in range(35)]
+        _grupos_demo = {
+            "Alimentos": ["Fondos", "Entradas", "Postres"],
+            "Bebidas c/ Alcohol": ["Cocteles", "Piscos"],
+            "Bebidas Calientes": ["Infusiones"],
+        }
         filas = []
         for _i, _plato in enumerate(_platos):
             _n_ins = int(rng.integers(3, 9))
             _ins_plato = rng.choice(_insumos_pool, _n_ins, replace=False)
+            _items_plato = []
             for _ins in _ins_plato:
                 _cant = round(float(rng.uniform(0.05, 3.0)), 3)
                 _costo_unit = round(float(rng.uniform(0.5, 25.0)), 4)
-                filas.append({
+                _items_plato.append({
                     "COD PLATO": f"PL{_i:04d}",
                     "NOMB PLATO": _plato,
                     # Formato REAL confirmado: "ACTIV"/"INACTIV" (distinto
@@ -630,10 +646,27 @@ def _datos_demo(archivo, filas=60):
                     "ITEM VENTA ACTIVO": "ACTIV" if rng.random() < 0.75 else "INACTIV",
                     "COD INS": f"IN{_insumos_pool.index(_ins):04d}",
                     "ITEM RV": _ins,
+                    # Insumo REAL: el nombre descriptivo. En el parquet
+                    # real "ITEM RV" es el número de LÍNEA dentro de la
+                    # receta, no el insumo — ver docstring de
+                    # recetaventa.py::_tabla_composicion_venta.
+                    "INS RV": _ins,
                     "INS ACTIVO": "ACTIV" if rng.random() < 0.95 else "INACTIV",
                     "CANTIDAD": _cant,
                     "TOTAL": round(_cant * _costo_unit, 2),
                 })
+            _grupo = str(rng.choice(list(_grupos_demo.keys())))
+            _subgrupo = str(rng.choice(_grupos_demo[_grupo]))
+            _costo_plato = round(sum(f["TOTAL"] for f in _items_plato), 2)
+            _pct = round(float(rng.uniform(0.15, 0.45)), 4)
+            _precio_plato = round(_costo_plato / _pct, 2) if _pct else 0.0
+            for f in _items_plato:
+                f["GRUPO"] = _grupo
+                f["SUBGRUPO"] = _subgrupo
+                f["P.VENTA SALON"] = _precio_plato
+                f["CST SALON"] = _costo_plato
+                f["%CST SALON"] = _pct
+            filas.extend(_items_plato)
         return pd.DataFrame(filas)
 
     if archivo == "recetabase.parquet":
