@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-205 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+206 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (72)
 
@@ -318,7 +318,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (17)
+**Herramientas de desarrollo** (18)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -337,6 +337,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#183** — opacity: 0 NO deja de recibir clics, y pointer-events: none en el padre no alcanza si un hijo…
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 - **#185** — Un contextmenu dentro de un iframe NO sube al documento padre: el clic derecho sobre la…
+- **#206** — Un mousemove/mouseup de un iframe TAMPOCO sube al padre — el modo diseño se congelaba al…
 
 **Decisiones de diseño y UX** (35)
 
@@ -9125,6 +9126,66 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      la suma de sus ítems) para que esta vista se pueda verificar en
      local sin secrets de R2 — mismo motivo que ya dejó un comentario
      largo en ese bloque en 2026-08-13.
+
+206. **Un `mousemove`/`mouseup` de un iframe TAMPOCO sube al padre —
+     el modo diseño se congelaba al arrastrar sobre una tarjeta con
+     AgGrid, y el clic derecho DENTRO de la grilla fijaba pero nunca
+     copiaba.** Reportado 2026-08-24: "no me permite copiar el
+     tooltip, ni en diseño, arrastrar". Dos síntomas, una sola causa:
+     la regla #185 ya había medido que un iframe es un documento
+     aparte y sus eventos no cruzan al padre, pero ese fix solo
+     enganchó `contextmenu` — un evento discreto, fácil de reenviar
+     una vez. Nadie había mirado el arrastre, que depende de
+     `mousemove` CONTINUO.
+
+     · **Arrastrar:** las tarjetas con AgGrid (Ranking de proveedores,
+       Documentos...) tienen la grilla ocupando casi todo el cuerpo.
+       Medido en `compras_prov_card_ranking`: el asa "Mover" queda a
+       ~50px del borde superior de su propia tabla — cualquier "nudge"
+       hacia abajo cruza el cursor sobre el iframe a los pocos
+       píxeles, y ahí `doc.addEventListener('mousemove', onMove)` (en
+       el documento padre) deja de recibir nada. El arrastre se
+       congela, y como el `mouseup` tampoco llega, los listeners
+       quedan pegados y `body.style.userSelect` se queda en `'none'`
+       hasta recargar la página.
+
+     · **Copiar:** el camino que la regla #185 abrió para clic derecho
+       DENTRO de un iframe (`engancharIframes` → `saltarADiseno`)
+       llama directo a `__inspectorTogglePin`, no al
+       `__inspectorContextMenuHandler` del inspector — así que el
+       "clic derecho ADEMAS copia" que existe en cualquier otro punto
+       de la app nunca se ejecutaba ahí. El usuario veía el tooltip (el
+       pin sí funcionaba) pero ni "Copiado" ni el fallback de selección
+       aparecían nunca.
+
+     Fix, los dos en `inyecciones/_diseno_js.py`: (1) `iniciarArrastre`
+     ahora engancha `mousemove`/`mouseup` en el `contentDocument` de
+     cada iframe same-origin MIENTRAS dura el gesto — traduce
+     coordenadas sumando el offset del iframe y reenvía al mismo
+     `onMove`/`onUp` — y los desinstala en el propio `onUp`, sin
+     necesitar el poll de `sync()` porque un drag no sobrevive a un
+     rerun de Streamlit. (2) el listener de `engancharIframes` llama a
+     `win.__inspectorEjecutarCopia()` después de `saltarADiseno(key)`,
+     igual que hace el handler normal.
+
+     Verificado disparando los eventos DIRECTO en el `contentDocument`
+     del iframe (no en el padre), para no depender de un mouse real
+     cruzando la frontera: antes del fix el `translateX/Y` se congelaba
+     apenas llegaba un evento dentro del iframe y un mousemove
+     posterior en el padre no lo revivía; después, el estado sigue el
+     gesto completo y un mouseup dentro del iframe limpia todo
+     (`userSelect` vuelve a `''`, un mousemove posterior ya no mueve
+     nada). Para copiar, confirmado que `copiarTexto()` se dispara
+     desde el mismo camino: mismo mensaje de fallback "Automatico
+     bloqueado" que el camino normal bajo un evento sintético — señal
+     de que es la misma función, no una nueva.
+
+     **La lección:** medir un fix contra el síntoma que lo motivó no
+     prueba que cubra la CLASE de bug. La #185 diagnosticó bien "los
+     eventos de un iframe no suben al padre" pero solo lo resolvió
+     para el evento puntual que tenía enfrente; el mismo diagnóstico
+     aplicaba igual de fuerte a un gesto continuo, y quedó pendiente
+     hasta que otro reporte lo encontró desde el otro lado.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
