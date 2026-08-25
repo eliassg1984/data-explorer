@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-210 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+206 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (75)
+**CSS y estilos** (72)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -92,9 +92,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#201** — Sacarle el wrapper interno a un contenedor NO hace que el CSS viejo "se reuse solo":…
 - **#202** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
 - **#203** — Un calendario de DOS meses no se puede pedir: st.date_input dibuja uno solo. Construirlo con…
-- **#207** — Un módulo de estilos/ NUNCA lleva su propio <style>: se lleva puesto todo lo que viene después
-- **#208** — Una ScrollTimeline declarada con el CSS inicial queda inactiva para siempre
-- **#209** — Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no mover uno
 
 **Layout y alturas** (19)
 
@@ -201,7 +198,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#192** — El Panel A de Productos (Compras › Proveedor) pasó de st.dataframe a AgGrid por el mismo…
 - **#193** — flex en un columnDef de AgGrid no alcanza: st_aggrid le clava width: 200 a toda columna sin…
 
-**Streamlit** (62)
+**Streamlit** (60)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -263,8 +260,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
 - **#203** — Un calendario de DOS meses no se puede pedir: st.date_input dibuja uno solo. Construirlo con…
 - **#204** — st.iframe SÍ acepta una string de HTML — la migración desde components.html no necesita ni…
-- **#208** — Una ScrollTimeline declarada con el CSS inicial queda inactiva para siempre
-- **#210** — En una página APILADA el rango de fechas es del REPORTE, no de la vista: dos dueños de la…
 
 **Datos, R2 y DuckDB** (25)
 
@@ -309,7 +304,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#196** — Un return temprano que se lleva puesto el ÚNICO control capaz de arreglar el estado que lo…
 - **#197** — Un techo de calendario sacado de "hasta dónde llegó el último sync" hace que HOY no se pueda…
 
-**Fechas, rangos y cortes** (7)
+**Fechas, rangos y cortes** (6)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -317,7 +312,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#65** — Datos demo que no tienen la FORMA del dato real no verifican nada (2026-08-09)
 - **#179** — Un atajo de fecha (nuevo o viejo) no sobrevive cambiar de REPORTE y volver — mismo mecanismo…
 - **#196** — Un return temprano que se lleva puesto el ÚNICO control capaz de arreglar el estado que lo…
-- **#210** — En una página APILADA el rango de fechas es del REPORTE, no de la vista: dos dueños de la…
 
 **Asistente IA** (2)
 
@@ -345,7 +339,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#185** — Un contextmenu dentro de un iframe NO sube al documento padre: el clic derecho sobre la…
 - **#206** — Un mousemove/mouseup de un iframe TAMPOCO sube al padre — el modo diseño se congelaba al…
 
-**Decisiones de diseño y UX** (36)
+**Decisiones de diseño y UX** (35)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -382,7 +376,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#181** — Un bloqueo de interacción SIN acuse de recibo es indistinguible de una app rota — el que…
 - **#200** — Una vista comparativa no puede heredar el rango de la franja: el rango corriente le deja el…
 - **#201** — Sacarle el wrapper interno a un contenedor NO hace que el CSS viejo "se reuse solo":…
-- **#209** — Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no mover uno
 
 **Mantenimiento y trampas del lenguaje** (6)
 
@@ -8517,6 +8510,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      las ramas de hoy no cubre las que abra el próximo cambio:** los
      stubs se instalan por FUENTE, antes del primer caso, no por rama.
 
+
+
 198. **Una columna que se llama `VALOR_ANO_ANTERIOR` no es un dato por fila:
      es el total del producto-mes REPETIDO en cada fila, y sumarla
      multiplicaba el año pasado por 4.9.** Reportado 2026-08-24 así: "mi
@@ -9192,151 +9187,13 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      aplicaba igual de fuerte a un gesto continuo, y quedó pendiente
      hasta que otro reporte lo encontró desde el otro lado.
 
-207. **Un módulo de `estilos/` NUNCA lleva su propio `<style>`: se lleva
-     puesto todo lo que viene después.** `get_css()` concatena los módulos
-     y el `<style>` lo abre `_00_base` y lo cierra `_99_movil`; lo del
-     medio va pelado. Un `<style>` anidado dentro de otro es sintaxis
-     inválida: el parser aborta ahí y DESCARTA ese módulo y todos los
-     siguientes.
-
-     Pasó el 2026-08-24 estrenando `_26_rails_scroll.py`, que se escribió
-     con `<style>` propio copiando la forma de `navegacion.py` (donde sí
-     corresponde, porque ese CSS se inyecta suelto con su `st.markdown`).
-     Se perdieron en silencio `_30_filtros`, `_40_ajuste_franja`,
-     `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`,
-     `_85_asistente`, `_90_franja_inferior` y `_99_movil` — o sea los
-     estilos móviles ENTEROS.
-
-     **Por qué no se ve:** el texto del CSS sigue estando en el DOM, así
-     que buscar el selector en el `<style>` lo encuentra y uno concluye
-     que el problema es la cascada. Lo que hay que mirar es
-     `hoja.cssRules`: si tu regla no está AHÍ, no es que pierda, es que no
-     existe. La sonda que lo destapó fue contar las media-queries de
-     móvil que habían sobrevivido.
-
-208. **Una `ScrollTimeline` declarada con el CSS inicial queda inactiva
-     para siempre.** Las animaciones dirigidas por scroll
-     (`animation-timeline`, `scroll-timeline-name`, `timeline-scope`)
-     están soportadas —medido en Chrome 148— y son el camino natural acá,
-     porque `st.markdown` no ejecuta `<script>` (regla #4). Pero no
-     sirven: cuando el CSS de `inject_css` se aplica, `stMain` todavía no
-     scrollea, la timeline nace inactiva y NO se reactiva sola cuando el
-     contenido crece. `animation.timeline.currentTime` se queda en `null`
-     y el `progress` del efecto también.
-
-     Comprobado de las dos puntas el 2026-08-24: la misma timeline, con
-     el mismo nombre y el mismo `timeline-scope`, inyectada a mano DESPUÉS
-     de que la página asienta, funciona perfecto y sigue el scroll. Es
-     cuestión de CUÁNDO se crea, no de cómo se escribe.
-
-     **El disparador va por un iframe que sí ejecuta JS** (el mismo recurso
-     del inspector — ver #39): pone y saca una clase en el `<html>` del
-     documento padre y el CSS cuelga de esa clase. Al fusionarse con la
-     migración de la regla #204, pasa por
-     `inyecciones._iframe.inyectar_html` y no por `components.html`
-     directo — mismo mecanismo, primitivo nuevo.
-
-     Y adentro, **`IntersectionObserver` y no un listener de `scroll`**.
-     Dos razones. La de diseño: la condición que se quiere expresar es
-     "tal cosa está en pantalla", no "bajaste N píxeles" — un umbral en px
-     miente en cuanto el contenido de arriba cambia de alto, cosa que en
-     un dashboard pasa con cada rango de fechas. La técnica: el observer
-     se apoya en layout y no en eventos, así que ni depende de que el
-     scroll sea del usuario ni de que el navegador esté componiendo
-     frames.
-
-     Lo que SÍ hay que cuidar es el rerun: el observer se desconecta y se
-     vuelve a crear en cada ejecución, porque React reemplaza los nodos y
-     uno colgado del nodo viejo observa un elemento que ya no está en el
-     documento y no dispara nunca más.
-
-     Si algún día el motor lo arregla, volver a CSS puro es sacar el
-     gancho y colgar las mismas reglas de un `animation-range`.
-
-209. **Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no
-     mover uno.** La columna izquierda muestra Reportes arriba de todo y
-     Vistas al bajar. El impulso es mover la franja horizontal de vistas
-     hasta la columna con una animación; no se puede:
-     `navegacion.py::_CSS_FRANJA_VISTAS` fija su `top/left/width` con
-     `!important`, y **en la cascada el origen de ANIMACIÓN queda por
-     debajo de las declaraciones `!important` del autor**. La animación no
-     falla ruidosamente: se ignora.
-
-     La salida es una SEGUNDA copia del rail, vertical, y que el scroll
-     sólo decida cuál se ve. `_render_rail` ya tenía el `btn_prefix`
-     pensado para eso; el `on_click` es el mismo `_rail_set` sobre la
-     misma `state_key`, así que no hay estado que sincronizar. Lo único
-     que anima es la opacidad, que no la fija nadie con `!important`.
-
-     **Y el reposo va sin `!important` a propósito:** la copia lateral
-     nace en `opacity: 0` como declaración normal, así una animación
-     activa le gana y una inactiva la deja escondida. Sin eso, el día que
-     el disparador no arranca (ver #208) los dos rails se ven
-     superpuestos — peor que no tener la función.
-
-210. **En una página APILADA el rango de fechas es del REPORTE, no de la
-     vista: dos dueños de la misma clave revientan la app en cada carga.**
-
-     El 2026-08-24 se cruzaron dos cambios buenos por separado. Uno apiló
-     las seis vistas de Compras en una sola página que se lee bajando; el
-     otro le dio a la vista `Semanal` un calendario propio de dos meses
-     (`_calendario.py`, regla #203). Al fusionarlos, Compras dejó de
-     cargar:
-
-         StreamlitAPIException: st.session_state.rango_franja_Compras
-         cannot be modified after the widget with key rango_franja_Compras
-         is instantiated.
-
-     La secuencia, que es lo que hay que entender y no el mensaje:
-
-       1. `app.py` dibuja el `st.date_input` de la franja — eso INSTANCIA
-          la key `rango_franja_Compras` en esta corrida.
-       2. La pila sigue bajando y llega a `Semanal`, que ahora se dibuja
-          SIEMPRE (antes sólo si era la vista activa).
-       3. Su calendario escribe `st.session_state[k_rango] = ...` para
-          pinear el rango, porque sin `date_input` Streamlit lo descarta.
-       4. Streamlit prohíbe reescribir la key de un widget ya instanciado
-          en la misma corrida. Excepción.
-
-     **La causa raíz no es el calendario: es una invariante que se cayó
-     sin que nadie la nombrara.** Todo el diseño de "quién dibuja la
-     fecha" (`vista_quiere_fecha_propia`, `_VISTAS_CON_FECHA_PROPIA`)
-     descansaba en que sólo UNA vista se dibujara por corrida, así que
-     sólo una podía tocar la clave. Apilar las vistas la rompió para las
-     seis de una, en silencio: el código de la fecha no cambió ni una
-     línea y pasó a estar mal.
-
-     Se resolvió sacando el calendario y devolviéndole el rango a la
-     franja. **Documentos SUNAT sigue quedándose el suyo y no choca**
-     porque NO está en la pila: es un destino aparte, y ahí sí vale que
-     una vista sea dueña de la fecha. Si algún día entra a la pila, su
-     choque sería peor que el de Semanal — no reescribe la clave, dibuja
-     el MISMO `franja_fecha.render()` una segunda vez, o sea dos widgets
-     con la misma key.
-
-     **La salida de fondo, el día que se quiera:** que cada sección tenga
-     su PROPIA clave de rango y filtre `df_full` por su cuenta, en vez de
-     compartir una global. Eso es lo que además habilitaría el selector
-     por gráfico. Es un refactor de `franja_fecha`/`estado_rango`/
-     `cortes` (~3.100 líneas entre los tres) y de la zona con más bugs
-     históricos del proyecto (#62 a #65): sesión aparte, no de paso.
-
-     **Y el criterio de producto, que es el que evita volver acá:** lo que
-     hacen los dashboards maduros (Tableau, Power BI, Looker, Grafana,
-     Metabase) es UN rango global arriba y, por gráfico, granularidad y
-     comparación — no ventanas independientes. Grafana sí deja que un
-     panel tenga rango propio, y lo marca con un ícono de reloj: lo trata
-     como EXCEPCIÓN que hay que señalizar. El motivo es el mismo que acá:
-     apiladas, dos secciones del mismo dataset con períodos distintos y
-     sin aviso se contradicen a la vista.
-
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#211**.
+> próxima regla nueva es la **#206**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

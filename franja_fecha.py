@@ -64,6 +64,12 @@ def _fmt_rango_es(ini, fin):
     return (f"{ini.day} {_MESES_ES[ini.month - 1]} {ini.year} – "
             f"{fin.day} {_MESES_ES[fin.month - 1]} {fin.year}")
 
+# Alias publico de `_fmt_rango_es`. Lo consume
+# `graficos/compras/_calendario.py`, que muestra el mismo label sin ser el
+# pill: si el formato se toca, se toca en un solo lugar (ver el docstring
+# de la funcion, donde el ancho del pill depende de que sea corto).
+fmt_rango_es = _fmt_rango_es
+
 
 def publicar(**ctx):
     """`app.py` deja aca todo lo que el panel necesita para dibujarse."""
@@ -80,7 +86,12 @@ def contexto():
     de la tarjeta de Ranking) sin reimplementar `atajos_rango()`/
     `aplicar_atajo()` a mano ni duplicar el contexto. `None` si `app.py`
     todavía no publicó (no debería pasar dentro de un reporte real, pero
-    mejor `None` explícito que un KeyError críptico)."""
+    mejor `None` explícito que un KeyError críptico).
+
+    2026-08-24: segundo cliente, y con otro uso — la vista Semanal de
+    Compras se queda la fecha pero NO dibuja el pill (la reemplaza por el
+    calendario de dos meses de `graficos/compras/_calendario.py`), así que
+    necesita estos valores sin llamar a `render()`."""
     return st.session_state.get(_CLAVE_CTX)
 
 
