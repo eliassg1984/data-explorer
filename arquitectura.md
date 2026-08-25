@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-197 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+200 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (69)
+**CSS y estilos** (72)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -89,6 +89,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#182** — El modo diseño ya llega a los textos de Plotly y de AgGrid — y para esos dos el "Copiar CSS"…
 - **#186** — Un st.container anidado NO es hijo directo del flex que lo contiene: Streamlit le mete un…
 - **#188** — "Solo me deja acortar" no era la herramienta: el elemento SÍ crece, lo recorta un ancestro —…
+- **#198** — Un módulo de estilos/ NUNCA lleva su propio <style>: se lleva puesto todo lo que viene después
+- **#199** — Una ScrollTimeline declarada con el CSS inicial queda inactiva para siempre
+- **#200** — Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no mover uno
 
 **Layout y alturas** (19)
 
@@ -194,7 +197,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#192** — El Panel A de Productos (Compras › Proveedor) pasó de st.dataframe a AgGrid por el mismo…
 - **#193** — flex en un columnDef de AgGrid no alcanza: st_aggrid le clava width: 200 a toda columna sin…
 
-**Streamlit** (58)
+**Streamlit** (59)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -254,6 +257,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#187** — Meter None entre las opciones de un st.selectbox le agrega un botón ✕ "Clear value" que no…
 - **#190** — Compras › Producto perdió sus dos botones "✕ Quitar foco" (2026-08-24, a pedido) — mismo fix…
 - **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
+- **#199** — Una ScrollTimeline declarada con el CSS inicial queda inactiva para siempre
 
 **Datos, R2 y DuckDB** (21)
 
@@ -328,7 +332,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 - **#185** — Un contextmenu dentro de un iframe NO sube al documento padre: el clic derecho sobre la…
 
-**Decisiones de diseño y UX** (33)
+**Decisiones de diseño y UX** (34)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -363,6 +367,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#169** — El CSS que exporta el modo diseño es una FOTO DE PÍXELES, no la intención: pegarlo tal cual…
 - **#170** — Se invirtieron Reportes y Vistas: Reportes al rail vertical izquierdo, Vistas a la franja…
 - **#181** — Un bloqueo de interacción SIN acuse de recibo es indistinguible de una app rota — el que…
+- **#200** — Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no mover uno
 
 **Mantenimiento y trampas del lenguaje** (6)
 
@@ -8497,13 +8502,93 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      las ramas de hoy no cubre las que abra el próximo cambio:** los
      stubs se instalan por FUENTE, antes del primer caso, no por rama.
 
+198. **Un módulo de `estilos/` NUNCA lleva su propio `<style>`: se lleva
+     puesto todo lo que viene después.** `get_css()` concatena los módulos
+     y el `<style>` lo abre `_00_base` y lo cierra `_99_movil`; lo del
+     medio va pelado. Un `<style>` anidado dentro de otro es sintaxis
+     inválida: el parser aborta ahí y DESCARTA ese módulo y todos los
+     siguientes.
+
+     Pasó el 2026-08-24 estrenando `_26_rails_scroll.py`, que se escribió
+     con `<style>` propio copiando la forma de `navegacion.py` (donde sí
+     corresponde, porque ese CSS se inyecta suelto con su `st.markdown`).
+     Se perdieron en silencio `_30_filtros`, `_40_ajuste_franja`,
+     `_50_fecha`, `_60_calendario`, `_70_chrome`, `_80_cards`,
+     `_85_asistente`, `_90_franja_inferior` y `_99_movil` — o sea los
+     estilos móviles ENTEROS.
+
+     **Por qué no se ve:** el texto del CSS sigue estando en el DOM, así
+     que buscar el selector en el `<style>` lo encuentra y uno concluye
+     que el problema es la cascada. Lo que hay que mirar es
+     `hoja.cssRules`: si tu regla no está AHÍ, no es que pierda, es que no
+     existe. La sonda que lo destapó fue contar las media-queries de
+     móvil que habían sobrevivido.
+
+199. **Una `ScrollTimeline` declarada con el CSS inicial queda inactiva
+     para siempre.** Las animaciones dirigidas por scroll
+     (`animation-timeline`, `scroll-timeline-name`, `timeline-scope`)
+     están soportadas —medido en Chrome 148— y son el camino natural acá,
+     porque `st.markdown` no ejecuta `<script>` (regla #4). Pero no
+     sirven: cuando el CSS de `inject_css` se aplica, `stMain` todavía no
+     scrollea, la timeline nace inactiva y NO se reactiva sola cuando el
+     contenido crece. `animation.timeline.currentTime` se queda en `null`
+     y el `progress` del efecto también.
+
+     Comprobado de las dos puntas el 2026-08-24: la misma timeline, con
+     el mismo nombre y el mismo `timeline-scope`, inyectada a mano DESPUÉS
+     de que la página asienta, funciona perfecto y sigue el scroll. Es
+     cuestión de CUÁNDO se crea, no de cómo se escribe.
+
+     **El disparador va por `components.html`**, que sí ejecuta JS (es un
+     iframe de verdad, el mismo recurso del inspector — ver #39): pone y
+     saca una clase en el `<html>` del documento padre y el CSS cuelga de
+     esa clase.
+
+     Y adentro, **`IntersectionObserver` y no un listener de `scroll`**.
+     Dos razones. La de diseño: la condición que se quiere expresar es
+     "tal cosa está en pantalla", no "bajaste N píxeles" — un umbral en px
+     miente en cuanto el contenido de arriba cambia de alto, cosa que en
+     un dashboard pasa con cada rango de fechas. La técnica: el observer
+     se apoya en layout y no en eventos, así que ni depende de que el
+     scroll sea del usuario ni de que el navegador esté componiendo
+     frames.
+
+     Lo que SÍ hay que cuidar es el rerun: el observer se desconecta y se
+     vuelve a crear en cada ejecución, porque React reemplaza los nodos y
+     uno colgado del nodo viejo observa un elemento que ya no está en el
+     documento y no dispara nunca más.
+
+     Si algún día el motor lo arregla, volver a CSS puro es sacar el
+     gancho y colgar las mismas reglas de un `animation-range`.
+
+200. **Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no
+     mover uno.** La columna izquierda muestra Reportes arriba de todo y
+     Vistas al bajar. El impulso es mover la franja horizontal de vistas
+     hasta la columna con una animación; no se puede:
+     `navegacion.py::_CSS_FRANJA_VISTAS` fija su `top/left/width` con
+     `!important`, y **en la cascada el origen de ANIMACIÓN queda por
+     debajo de las declaraciones `!important` del autor**. La animación no
+     falla ruidosamente: se ignora.
+
+     La salida es una SEGUNDA copia del rail, vertical, y que el scroll
+     sólo decida cuál se ve. `_render_rail` ya tenía el `btn_prefix`
+     pensado para eso; el `on_click` es el mismo `_rail_set` sobre la
+     misma `state_key`, así que no hay estado que sincronizar. Lo único
+     que anima es la opacidad, que no la fija nadie con `!important`.
+
+     **Y el reposo va sin `!important` a propósito:** la copia lateral
+     nace en `opacity: 0` como declaración normal, así una animación
+     activa le gana y una inactiva la deja escondida. Sin eso, el día que
+     el disparador no arranca (ver #199) los dos rails se ven
+     superpuestos — peor que no tener la función.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#198**.
+> próxima regla nueva es la **#201**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

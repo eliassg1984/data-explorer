@@ -1387,13 +1387,22 @@ def _pruebas_presupuesto_vertical():
     # ── 1) Ningún alto literal suelto en graficos/ ──────────────────────
     # `_css_proveedor.py` queda fuera: es un blob de CSS, no altos de
     # figuras (ahí `height` es una propiedad, no un kwarg de Python).
+    #
+    # Mismo escape hatch que la guarda 2, y por el mismo motivo: hay altos
+    # que NO son el de una figura y por lo tanto no salen de `alturas.py`.
+    # Marcar la línea con `# alto-fijo-justificado: <por qué>`. Hoy lo usa
+    # el iframe de alto 0 del gancho de scroll (`base.py::_render_rail`):
+    # no dibuja nada, sólo corre el JS que intercambia los dos rails.
     raiz = pathlib.Path(__file__).parent / "graficos"
     culpables = []
     for py in sorted(raiz.rglob("*.py")):
         if py.name in ("alturas.py", "_css_proveedor.py"):
             continue
         for i, linea in enumerate(py.read_text(encoding="utf-8").split("\n"), 1):
-            if re.search(r"\b(alto|height)=\d", linea):
+            if linea.lstrip().startswith("#"):
+                continue
+            if re.search(r"\b(alto|height)=\d", linea) \
+                    and "alto-fijo-justificado" not in linea:
                 culpables.append(f"{py.relative_to(raiz.parent)}:{i}")
     check("ningún alto literal en graficos/ (usar alturas.py)",
           not culpables, ", ".join(culpables[:6]))
@@ -1512,11 +1521,19 @@ def _pruebas_grilla_horizontal():
       2. Que alguien redeclare la constante en otro módulo, que es cómo
          empezó este bug la primera vez.
 
-    PENDIENTE: la guarda cubre `proveedor.py`, que es donde se arregló. Los
-    otros drills de Compras siguen con literales y entre ellos hay cuatro ejes
-    distintos (1.6/1 en producto.py y documentos_sunat.py, 1.7/1 en
-    __init__.py, 1/1 en volatilidad.py), así que el esqueleto salta al navegar
-    por el rail. Al unificarlos, ampliar `_ARCHIVOS` a todo `graficos/compras`.
+    La guarda cubre `proveedor.py` (donde se arregló) y `producto.py`. El
+    segundo entró el 2026-08-24, al fusionarlos en una sola página continua:
+    ahí los dos drills dejaron de alternarse y pasaron a verse APILADOS, así
+    que sus filas ya no se comparan de memoria entre dos pantallas sino a
+    simple vista, una debajo de la otra. Los números de `producto.py` ya
+    coincidían con la constante (1.6/1, gap small) — lo que faltaba era que
+    no fueran una copia capaz de desincronizarse.
+
+    PENDIENTE: los drills que siguen fuera usan literales y entre ellos hay
+    ejes distintos (1.6/1 en documentos_sunat.py, 1.7/1 en __init__.py, 1/1
+    en volatilidad.py), así que el esqueleto todavía salta al navegar por el
+    rail. Al unificar más vistas, ampliar `_ARCHIVOS` a todo
+    `graficos/compras`.
     """
     import pathlib
     import re
@@ -1532,7 +1549,8 @@ def _pruebas_grilla_horizontal():
             print(f"FALLA grilla · {nombre}{': ' + detalle if detalle else ''}")
 
     raiz = pathlib.Path(__file__).parent
-    _ARCHIVOS = [raiz / "graficos" / "compras" / "proveedor.py"]
+    _ARCHIVOS = [raiz / "graficos" / "compras" / "proveedor.py",
+                 raiz / "graficos" / "compras" / "producto.py"]
 
     # ── 1) Ninguna fila partida con un literal ──────────────────────────
     culpables = []

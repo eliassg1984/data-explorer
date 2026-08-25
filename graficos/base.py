@@ -12,7 +12,10 @@ from contextlib import contextmanager
 
 import pandas as pd
 import plotly.express as px
+import json
+
 import streamlit as st
+import streamlit.components.v1 as components
 
 from navegacion import _CSS_FRANJA_VISTAS
 from utils import buscar_columna, _norm
@@ -131,7 +134,34 @@ def vista_activa(categorias, state_key):
     return _por_norm.get(_norm(st.query_params.get("vista", ""))) or _todos[0]
 
 
-def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
+def esqueleto_pila(nombre):
+    """HTML del hueco que ocupa una sección mientras se construye.
+
+    Lo consume una página APILADA (hoy Compras): se dibujan los seis huecos
+    de una, y después cada sección real reemplaza al suyo. Así la página
+    nace con su estructura y su altura en vez de crecer bajo el cursor, y
+    cada hueco dice qué vista va a ocupar — o sea que sirve de índice de lo
+    que viene mientras carga.
+
+    Vale la pena porque construir la pila cuesta ~45s en una máquina lenta
+    (cache de datos caliente; ~118s en frío). Streamlit ya manda cada
+    elemento apenas lo termina, así que la PRIMERA sección se puede leer
+    enseguida; lo que faltaba era que se notara que abajo viene más.
+
+    El aspecto (altura reservada, brillo, movimiento reducido) vive en
+    `estilos/_27_pila.py`. Acá sólo va la forma.
+    """
+    return (
+        '<div class="pila-hueco">'
+        f'<div class="pila-hueco-tit">{nombre}</div>'
+        '<div class="pila-hueco-barra"></div>'
+        '<div class="pila-hueco-caja"></div>'
+        '</div>'
+    )
+
+
+def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
+                 secciones=None):
     """Vistas del reporte activo — fila de TABS DE TEXTO en la franja
     superior. Selector de tipo de gráfico/pantalla dentro de un reporte.
 
@@ -154,12 +184,15 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
 
     Parámetros
       · categorias: `((nombre_categoria, ((id, label[, icono]), …)), …)`.
-        El nombre de categoría y el ícono (3er elemento opcional de la
-        tupla) NO se dibujan acá — se ignoran a propósito, ver arriba. Se
-        mantiene la MISMA forma de parámetro que antes del swap para no
-        tocar los 9 call sites; son los dashboards los que siguen agrupando
-        sus vistas por categoría en el código, aunque visualmente ya no se
-        note.
+        El nombre de categoría no se dibuja — se ignora a propósito, ver
+        arriba. Se mantiene la MISMA forma de parámetro que antes del swap
+        para no tocar los 9 call sites; son los dashboards los que siguen
+        agrupando sus vistas por categoría en el código, aunque visualmente
+        ya no se note.
+
+        El ícono (3er elemento opcional) lo dibuja SOLO la copia vertical
+        de la columna izquierda, que tiene alto para él; la franja
+        horizontal lo sigue ignorando por el mismo motivo de siempre.
       · state_key: clave de session_state donde se persiste la selección.
       · btn_prefix: prefijo de las keys de los botones (único por reporte si dos
         rails pudieran coexistir; hoy solo hay un reporte activo por vez).
@@ -201,6 +234,166 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
                     type=("primary" if oid == sel else "secondary"),
                     on_click=_rail_set, args=(state_key, oid),
                 )
+    # ── Copia VERTICAL del rail, para la columna izquierda ───────────────
+    # Solo se dibuja si el dashboard declara `secciones`, o sea si su página
+    # es una PILA que se lee bajando. Hoy la tiene Compras; los otros 8
+    # dashboards no pasan nada y no pagan nada: ni rail extra, ni iframe.
+    #
+    # `secciones` es `((clave_contenedor, id_vista), ...)` EN EL ORDEN de la
+    # página. El id de vista es el mismo que el del rail, así que el slug del
+    # botón se calcula acá y el dashboard no tiene que adivinarlo.
+    #
+    # Qué hace el rail acá: deja de ELEGIR contenido (está todo dibujado) y
+    # pasa a ser NAVEGACIÓN — marca en qué sección estás y te lleva a la que
+    # toques. Las dos mitades son de JS y ninguna dispara un rerun:
+    #
+    #   · el resaltado sale de una clase que pone el scrollspy, no de
+    #     `type="primary"`, porque seguir el scroll desde Python costaría un
+    #     rerun por cada pixel. Por eso los botones van todos `secondary`:
+    #     si además se pintara el elegido habría dos marcas discutiendo —
+    #     la de dónde estás y la del último clic;
+    #   · el clic scrollea y corta el evento antes de que Streamlit lo vea.
+    #     Sin eso el botón reconstruía la página entera (~45s) para dejarte
+    #     donde ya estabas: es lo que pasaba y se reportó como bug — bajabas
+    #     hasta Tabla, tocabas otra vista y no te movías de sitio.
+    #
+    # Por qué una segunda copia del rail y no mover la franja horizontal: su
+    # `top/left/width` están fijados con `!important` en
+    # `navegacion.py::_CSS_FRANJA_VISTAS`, y en la cascada el origen de
+    # ANIMACIÓN va por DEBAJO de las declaraciones `!important` del autor.
+    # Ver arquitectura.md regla #200.
+    if secciones:
+        with st.container(key="nav_rail_lateral"):
+            for _cat_nombre, items in categorias:
+                for item in items:
+                    oid, label = item[0], item[1]
+                    # El icono SÍ se dibuja acá (a diferencia de la franja
+                    # horizontal, que lo ignora por falta de alto): esta copia
+                    # es vertical y tiene sitio. Y hace falta — el rail que
+                    # reemplaza, el de Reportes, tiene iconos, y sin ellos el
+                    # intercambio se ve como un salto de formato.
+                    # 3er elemento opcional: hay rails con tuplas de 2.
+                    icono = item[2] if len(item) > 2 else None
+                    st.button(
+                        label,
+                        key=f"{btn_prefix}lat_{_slug_url(oid)}",
+                        type="secondary",
+                        on_click=_rail_set, args=(state_key, oid),
+                        **({"icon": icono} if icono else {}),
+                    )
+
+        # ── El scrollspy ─────────────────────────────────────────────────
+        # `IntersectionObserver` y no un umbral de scroll en px: la condición
+        # que se quiere expresar es "esta sección está en pantalla", y un
+        # umbral fijo miente en cuanto cambia el alto de lo de arriba (otro
+        # rango de fechas, un proveedor sin documentos). Además no hay que
+        # atarse al evento `scroll`, que no burbujea y obliga a escuchar en
+        # captura sobre un nodo que React reemplaza en cada rerun.
+        #
+        # Lo que el observer SÍ necesita es que el navegador renderice: sus
+        # callbacks se entregan en el paso de "update rendering", igual que
+        # `requestAnimationFrame`. En una pestaña que no compone frames no
+        # dispara — vale para automatizar pruebas, no para un usuario real.
+        #
+        # Gana la sección con MÁS PÍXELES visibles, no la de mayor
+        # `intersectionRatio`: el ratio es relativo al tamaño del propio
+        # elemento, así que una sección enorme a media pantalla puntúa bajo
+        # y una diminuta totalmente visible puntúa 1. Lo que se quiere
+        # marcar es lo que ocupa la vista, no lo que está completo en ella.
+        #
+        # Va en `components.html` y no en `st.markdown` porque markdown NO
+        # ejecuta `<script>` (regla #4); esto es un iframe de verdad, el
+        # mismo recurso del inspector.
+        #
+        # El observer se RECREA en cada ejecución (desconectando el anterior)
+        # a propósito: React reemplaza los nodos en cada rerun, y uno colgado
+        # del nodo viejo observa un elemento que ya no está en el documento y
+        # no vuelve a disparar nunca.
+        # `_slug_url` y NO `_slug`: el primero saca los acentos. `_slug`
+        # conserva la ñ ("vs_año_pasado") y Streamlit, al emitir la clase
+        # CSS de la key, la sanea a `st-key-graf_btn_lat_vs_a-o_pasado`.
+        # O sea que el selector armado con la key de Python NO matchea el
+        # DOM — y sólo en las vistas con acento, sólo en el resaltado.
+        # Medido en el navegador el 2026-08-24. Estas keys son nuevas, así
+        # que nada de `estilos/` depende de ellas y cambiarlas es seguro.
+        _mapa = [{"sec": _cl, "btn": f"{btn_prefix}lat_{_slug_url(_oid)}"}
+                 for _cl, _oid in secciones]
+        with st.container(key="rail_scroll_hook"):
+            components.html(
+                f"""<script>
+                (function () {{
+                  var w = window.parent, doc = w.document;
+                  var MAPA = {json.dumps(_mapa, ensure_ascii=False)};
+                  var raiz = doc.querySelector('[data-testid="stMain"]');
+                  if (w.__railObs) {{ try {{ w.__railObs.disconnect(); }} catch (e) {{}} }}
+                  if (!raiz) return;
+                  var nodos = [], visto = {{}};
+                  MAPA.forEach(function (m) {{
+                    var el = doc.querySelector('[class*="st-key-' + m.sec + '"]');
+                    if (el) {{ el.__slot = m; nodos.push(el); }}
+                  }});
+                  if (!nodos.length) return;
+                  function pintar() {{
+                    var mejor = null, mejorPx = 0;
+                    MAPA.forEach(function (m) {{
+                      var px = visto[m.sec] || 0;
+                      if (px > mejorPx) {{ mejorPx = px; mejor = m; }}
+                    }});
+                    if (!mejor) return;
+                    doc.documentElement.classList.toggle(
+                      'rails-scrolled', mejor.sec !== MAPA[0].sec);
+                    var previos = doc.querySelectorAll('.vista-en-pantalla');
+                    for (var i = 0; i < previos.length; i++) {{
+                      previos[i].classList.remove('vista-en-pantalla');
+                    }}
+                    var b = doc.querySelector('[class*="st-key-' + mejor.btn + '"] button');
+                    if (b) b.classList.add('vista-en-pantalla');
+                  }}
+                  w.__railObs = new IntersectionObserver(function (entradas) {{
+                    entradas.forEach(function (e) {{
+                      visto[e.target.__slot.sec] = e.isIntersecting
+                        ? e.intersectionRect.height : 0;
+                    }});
+                    pintar();
+                  }}, {{ root: raiz, threshold: [0, .05, .25, .5, .75, 1] }});
+                  nodos.forEach(function (n) {{ w.__railObs.observe(n); }});
+
+                  // El CLIC LLEVA a la seccion. Se intercepta en captura y se
+                  // corta ahi: React tiene su listener en la raiz del
+                  // documento, asi que detener la propagacion antes evita que
+                  // Streamlit vea el clic y dispare un rerun. Sin esto el
+                  // boton reconstruia la pagina entera (~45s) para dejarte
+                  // exactamente donde ya estabas.
+                  //
+                  // Solo se interceptan los botones de la PILA. Los que son
+                  // destino aparte (Personalizado, Documentos SUNAT) tienen
+                  // que seguir haciendo su rerun de siempre, asi que no se
+                  // les toca el clic.
+                  MAPA.forEach(function (m) {{
+                    var b = doc.querySelector('[class*="st-key-' + m.btn + '"] button');
+                    var s = doc.querySelector('[class*="st-key-' + m.sec + '"]');
+                    if (!b || !s || b.__railClic) return;
+                    b.__railClic = true;
+                    b.addEventListener('click', function (ev) {{
+                      ev.preventDefault();
+                      ev.stopPropagation();
+                      // `scrollIntoView` no sirve: el scroller es `stMain` y
+                      // ademas hay una franja fija arriba que taparia el
+                      // titulo. Se calcula el desplazamiento a mano y se le
+                      // descuenta el alto de esa franja.
+                      var franja = doc.querySelector('[class*="st-key-nav_rail"]');
+                      var techo = franja ? franja.getBoundingClientRect().height : 0;
+                      var y = s.getBoundingClientRect().top
+                            - raiz.getBoundingClientRect().top
+                            + raiz.scrollTop - techo - 8;
+                      raiz.scrollTo({{ top: Math.max(0, y), behavior: 'smooth' }});
+                    }}, true);
+                  }});
+                }})();
+                </script>""",
+                height=0,  # alto-fijo-justificado: iframe invisible, solo corre el JS
+            )
+
     _final = st.session_state.get(state_key, _todos[0])
     # Espejo hacia la URL. Escribir query_params NO dispara rerun, pero se
     # compara antes igual: reescribir en cada rerun es ruido inútil.
