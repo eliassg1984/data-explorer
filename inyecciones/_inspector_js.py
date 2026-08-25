@@ -1,6 +1,6 @@
 """inyecciones._inspector_js - el JS del inspector de elementos.
 
-Blob de ~1.380 lineas que estaba embebido como un unico components.html
+Blob de ~1.380 lineas que estaba embebido como un unico inyectar_html
 DENTRO de inject_element_inspector, seguido de una cadena de nueve
 .replace() encadenados en UNA sola linea. Se saco el 2026-08-08: la
 funcion era la mas grande del repo (1.415 lineas) y de eso, el 98% era
@@ -1320,7 +1320,7 @@ JS = """
 
         // Los listeners se registran en window.parent (el documento de la app)
         // pero las funciones que los implementan viven en el CONTEXTO del iframe
-        // que components.html() crea. En cada rerun de Streamlit, ese iframe se
+        // que inyectar_html() crea. En cada rerun de Streamlit, ese iframe se
         // destruye y se crea uno nuevo — los listeners viejos quedan colgados
         // apuntando a funciones muertas del iframe descartado, y el tooltip
         // deja de responder. Por eso guardamos las referencias en win y en cada
@@ -1372,7 +1372,7 @@ JS = """
         // Logica de copiado compartida por el boton "Copiar para IA", la tecla
         // C y el clic derecho. Se reasigna en win en cada rerun por el mismo
         // motivo que TogglePin/ContextMenuHandler: el realm del iframe de
-        // components.html que la definio pudo haber sido destruido por un
+        // inyectar_html que la definio pudo haber sido destruido por un
         // rerun anterior (ver comentario grande mas abajo).
         win.__inspectorEjecutarCopia = function() {
             var status = doc.getElementById('el-inspector-status');

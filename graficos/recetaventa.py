@@ -168,7 +168,7 @@ def _tabla_composicion_venta(df_f):
     # filtro %Costo se dispara a millones por ciento (S/0.58 de costo
     # sobre S/0.000000000001 de "precio") y esos platos degenerados
     # tapan el top entero del ranking — verificado en vivo, ver
-    # arquitectura.md regla #204. El corte en 1 es el que mide el hueco
+    # arquitectura.md regla #205. El corte en 1 es el que mide el hueco
     # real: 0 platos activos caen entre 1 y 7 soles.
     _n_sin_precio = int((g["Precio"] <= 1).sum())
     g = g[g["Precio"] > 1]
