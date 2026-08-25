@@ -23,7 +23,6 @@ Estructura:
         movimientos_comun.py → chip Requerimiento/Salidas + vista
                           "Comparativo" (Pedido vs Baja), compartidos entre
                           requerimientos.py y salidas.py.
-        constructor.py → constructor estilo Power BI (usado por Compras)
 
 Cómo agregar un dashboard nuevo (p.ej. "Mermas"):
     1. Crear graficos/mermas.py con `def renderizar_graficos_mermas(df, reporte, df_full=None): ...`

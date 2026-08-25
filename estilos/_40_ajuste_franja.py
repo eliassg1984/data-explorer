@@ -116,6 +116,19 @@ CSS = """    /* ================================================================
        se pliega. */
     :root:has(.st-key-compras_tabs_row) .st-key-fila_ajuste_top::before {
         left: var(--rail-der-res) !important;
+        /* Y el lado DERECHO cierra donde cierran las tarjetas (2026-08-25,
+           a pedido). Venía de `right: 0`, o sea que la banda blanca se
+           estiraba 90px más allá del contenido hasta el filo de la ventana
+           y la franja se leía más ancha que todo lo que hay debajo.
+
+           Los 90px son el margen real del contenido, medido: 80px es el
+           `padding-right` por DEFECTO del block-container de Streamlit y
+           10px lo que ese contenedor no llega a ocupar del viewport.
+           Verificado a 1280 y a 1500 de ancho — da 90 en los dos, o sea que
+           no depende del viewport y se puede anclar. Si algún día Streamlit
+           cambia ese padding, este número lo sigue: se mide con
+           `innerWidth - tarjeta.getBoundingClientRect().right`. */
+        right: 90px !important;
     }
 
     .st-key-fila_ajuste_top::before {
@@ -126,7 +139,12 @@ CSS = """    /* ================================================================
            sola al tope, que es donde tiene que estar (allá la navegación
            está abajo). */
         position: fixed !important;
-        top: var(--nav-top-alto) !important;
+        /* 2026-08-25: de `var(--nav-top-alto)` a 0. La franja paso a tener
+           DOS filas —titulo+filtros arriba, vistas abajo (`navegacion.py`)—
+           y esta banda solo cubria la de abajo: la de arriba quedaba sin
+           fondo y al scrollear se veia el contenido pasar POR DETRAS del
+           titulo y los chips. */
+        top: 0 !important;
         bottom: auto !important;
         /* 2026-08-09: de tarjeta colgante (left:170/right:163, alineada con
            la tarjeta del gráfico) a BARRA de borde a borde. left:90px = el
@@ -142,7 +160,10 @@ CSS = """    /* ================================================================
            propio position:fixed en _50_fecha.py, ajeno a este left. */
         left: 0 !important;
         right: 0 !important;
-        height: var(--cab-altura) !important;
+        /* Las dos filas: la de vistas (`--nav-top-alto`) mas la banda de
+           siempre (`--cab-altura`). Derivado, no un 90 suelto: si cualquiera
+           de las dos cambia de alto, la banda las sigue. */
+        height: calc(var(--nav-top-alto) + var(--cab-altura)) !important;
         border-radius: 0 !important;   /* toca los dos bordes: sin esquinas */
         /* 2026-08-15: de tinte lavanda a blanco --bg-card (mismo fondo que
            las tarjetas de gráfico), a pedido — el lavanda se leía como una
@@ -150,9 +171,21 @@ CSS = """    /* ================================================================
            familia que el resto de la UI. El blur sigue haciendo falta
            porque la barra es fixed y el contenido pasa POR DEBAJO al
            scrollear. */
-        background: color-mix(in srgb, var(--bg-card) 88%, transparent) !important;
-        backdrop-filter: blur(14px) saturate(1.6) !important;
-        -webkit-backdrop-filter: blur(14px) saturate(1.6) !important;
+        /* OPACA Y DEL COLOR DEL LIENZO (2026-08-25, a pedido).
+           Dos cambios en uno, y los dos importan:
+
+           · OPACA. Estuvo al 88% con `color-mix` — "cristal esmerilado" —,
+             y ese 12% dejaba ver la tabla y el grafico moviendose por
+             detras del titulo y los chips al scrollear.
+           · `--bg-primary` (el lienzo) y no `--bg-card` (blanco). Con
+             blanco la franja se leia como una TARJETA mas, del mismo color
+             que las de abajo; con el color del lienzo se lee como lo que
+             es: fondo, no contenido. */
+        background: var(--bg-primary) !important;
+        /* Sin `backdrop-filter`: con el fondo ya opaco no se ve nada a
+           traves, asi que el blur no aportaba nada y obligaba al navegador
+           a componer esa capa aparte en cada scroll. Estaba puesto cuando
+           la banda era translucida (ver arriba). */
         border: none !important;
         border-bottom: 2px solid var(--border-lavender) !important;
         z-index: 0 !important;
@@ -185,7 +218,20 @@ CSS = """    /* ================================================================
        fecha_ajuste_pill/chips_ajuste_tabla en _50_fecha.py. */
     @media (min-width: 901px) {
         .st-key-fila_ajuste_top::before {
-            height: 46px !important;
+            /* 46 era el alto de UNA fila. Desde que la franja tiene dos
+               (titulo+filtros arriba, vistas abajo) hay que sumar la de
+               vistas, o la de arriba queda sin fondo — que es como se
+               descubrio: el contenido se veia pasar por detras del titulo.
+               Este bloque pisaba al `calc()` de la regla base; se mantiene
+               porque su 46 es una medida propia (ver la formula de arriba),
+               no una copia. */
+            /* Hasta el BORDE INFERIOR de la franja de vistas, derivado de
+               su propio anclaje: ella vive en `--nav-top-alto + 8px` y mide
+               `--nav-top-alto` (`navegacion.py`), asi que su base es la
+               suma. Con `46 + --nav-top-alto` quedaba 2px corta y se colaba
+               una linea de contenido bajo las pestanas (medido). */
+            height: calc(var(--nav-top-alto) + 8px
+                         + var(--nav-top-alto)) !important;
         }
     }
     .st-key-fila_ajuste_top > * {
@@ -253,13 +299,56 @@ CSS = """    /* ================================================================
        reserva nada, así que TODOS los `left` de la franja bajaron 90px
        (aquí y en _50_fecha.py). El `top` se corre --nav-top-alto por la
        misma razón, pero al revés: lo que perdió en ancho lo ganó en alto. */
+    /* ── TITULO DE LA FRANJA: app + reporte ───────────────────────────
+       "Sapiens (Compras)". Lo dibuja `navegacion.py::inject_navegacion`,
+       que es quien sabe cual es el reporte activo.
+       Va en la esquina izquierda de la FILA 1, anclado a `--rail-der-res`
+       —la misma referencia que la franja de vistas y las tarjetas— asi que
+       arranca a plomo con ellas. `position: fixed` como el resto del cromo
+       de la franja: no participa del flujo (ver la regla del `gap` en
+       `_26_rails_scroll.py`). */
+    .franja-titulo-app {
+        position: fixed !important;
+        top: 7px !important;
+        left: var(--rail-der-res) !important;
+        z-index: 23 !important;
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+        color: var(--text-primary) !important;
+        line-height: 26px !important;   /* == alto de los chips, los alinea */
+        white-space: nowrap !important;
+        pointer-events: none !important;
+    }
+    /* El reporte, entre parentesis y mas apagado: el nombre de la app es lo
+       estable y el reporte lo que cambia, asi que no compiten. */
+    .franja-titulo-rep {
+        font-weight: 400 !important;
+        color: var(--text-secondary) !important;
+    }
+
     .st-key-chips_ajuste_tabla {
         position: fixed !important;
-        top: calc(var(--nav-top-alto) + 8px) !important;
-        left: 64px !important;
-        right: auto !important;
+        /* 2026-08-25, a pedido: los chips SUBEN a compartir banda con la
+           franja de vistas (`nav_rail`, 0..--nav-top-alto) en vez de tener
+           una segunda banda propia debajo. Una sola franja de contexto:
+           vistas a la izquierda, filtros a la derecha.
+
+           Los 7px centran un control de 26px en una franja de 40
+           ((40-26)/2). Y el lado cambia de `left` a `right`: a la izquierda
+           chocarian con el rail de la columna, que va de 19 a 299. El 90px
+           es el mismo margen derecho del contenido que usa la banda blanca
+           (ver el `right` de `fila_ajuste_top::before`), asi que los chips
+           cierran a plomo con el borde de las tarjetas. */
+        top: 7px !important;
+        left: auto !important;
+        /* 90 es el borde de las tarjetas; +181 le cede el sitio al chip
+           "Proveedores" del drill (`prov_pop_float`), que comparte esta fila
+           y se ancla al MISMO borde derecho. Sin esta cuenta se pisaban 24px
+           (medido 2026-08-25): Subfamilia terminaba en 1119 y el chip
+           arrancaba en 1095. Los 181 son su ancho (171) mas 10 de aire. */
+        right: calc(90px + 181px) !important;
         width: auto !important;
-        max-width: calc(100vw - 64px - 380px) !important;   /* deja aire para la fecha derecha */
+        max-width: calc(100vw - var(--rail-der-res) - 380px) !important;
         z-index: 23 !important;
         margin: 0 !important;
         padding: 0 !important;

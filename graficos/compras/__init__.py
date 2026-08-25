@@ -31,11 +31,11 @@ from tema import GRIS_BORDE
 from utils import _norm
 from graficos.base import (
     PALETA_CALLAI, _compras_layout, _compras_truncar, _render_rail,
-    _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
-    vista_activa,
+    _resolver, publicar_contexto_ia, seccion_perezosa,
+    renderizar_graficos_genericos, vista_activa,
 )
-from graficos.constructor import _constructor_grafico
 from graficos.compras._comun import (  # noqa: F401  (re-export)
+    COLUMNAS_DRILL, GAP_DRILL,
     _compras_mini_barras, _es_movil, _first_point, _periodo_serie,
 )
 from graficos.compras.proveedor import _compras_proveedor_drill
@@ -64,27 +64,52 @@ _COMPRAS_RAIL_CATEGORIAS = (
                    ("Volatilidad",      "Volatilidad",   ":material/candlestick_chart:"))),
     ("SUNAT",     (("Documentos SUNAT", "Documentos",    ":material/receipt_long:"),)),
     ("Más",       (("Semanal",          "Semanal",       ":material/calendar_view_week:"),
-                   ("Personalizado",    "Personalizado", ":material/tune:"),
                    ("Tabla",            "Tabla",         ":material/table_rows:"))),
 )
 
 # Vistas de Compras que se quedan el selector de fecha DENTRO de su tarjeta
-# en vez de dejarlo en la franja superior. Las dos por el mismo motivo —
-# ahi la fecha no es contexto global sino EL tema de la vista— pero lo
-# resuelven distinto, y la diferencia importa:
+# en vez de dejarlo en la franja superior. Hoy solo Documentos SUNAT: ahi la
+# fecha no es contexto global sino EL filtro de la tabla (es el rango que se
+# le consulta al SIRE), asi que vivia lejos de lo que filtra.
 #
-#   · Documentos SUNAT dibuja el MISMO pill, movido: llama a
-#     `franja_fecha.render()`. El `st.date_input` sigue existiendo.
-#   · Semanal (2026-08-24) lo REEMPLAZA por un calendario de dos meses
-#     (`_calendario.py`). Ahi el `date_input` deja de dibujarse, y por eso
-#     ese modulo tiene que pinear la clave del rango — ver su docstring.
-_VISTAS_CON_FECHA_PROPIA = {"Documentos SUNAT", "Semanal"}
+# `Semanal` estuvo aca un dia (2026-08-24) con un calendario propio de dos
+# meses, y se saco al apilar las vistas: con las seis dibujandose en la MISMA
+# corrida, dos duenos de la clave del rango no pueden convivir —
+# `st.session_state` no se puede reescribir despues de que el widget de esa
+# key ya se instancio— y Compras reventaba en cada carga. Ver regla #203.
+#
+# La leccion general, y el motivo de que la lista siga teniendo un solo
+# miembro: en una pagina APILADA el rango es del REPORTE, no de la vista.
+# Ver el analisis de la regla #210.
+_VISTAS_CON_FECHA_PROPIA = {"Documentos SUNAT"}
 
 # Subconjunto del anterior: las que ademas necesitan OTROS topes de
 # calendario que los del parquet de Compras. Se separa a proposito — atar
 # los bounds a `_VISTAS_CON_FECHA_PROPIA` haria que cualquier vista nueva
 # que se quede la fecha heredara los limites del SIRE sin pedirlos.
 _VISTAS_CON_BOUNDS_SUNAT = {"Documentos SUNAT"}
+
+# ORDEN DE LA PILA — y el apareo sección ↔ vista del rail.
+#
+# Los dos datos viven en la MISMA tupla a propósito. El scrollspy tiene que
+# saber qué botón encender cuando una sección entra en pantalla, y la
+# tentación es deducirlo del nombre (`compras_sec_<slug>` ↔ `graf_btn_lat_
+# <slug>`). No sirve: `_slug("Vs año pasado")` conserva la ñ y da
+# `vs_año_pasado`, así que el que escribe la clave de la sección a mano
+# escribe `vs_ano_pasado` y el apareo se rompe en silencio — sólo en esa
+# vista, sólo en el resaltado. Emparejando acá, el slug del botón lo calcula
+# quien lo dibuja y nadie tiene que adivinarlo.
+#
+# Fuera de la pila: `Documentos SUNAT`, que se lleva prestado el único
+# selector de fecha de la app.
+_PILA = (
+    ("compras_sec_proveedor",     "Proveedor"),
+    ("compras_sec_producto",      "Producto"),
+    ("compras_sec_vs_ano_pasado", "Vs año pasado"),
+    ("compras_sec_volatilidad",   "Volatilidad"),
+    ("compras_sec_semanal",       "Semanal"),
+    ("compras_sec_tabla",         "Tabla"),
+)
 
 
 def vista_quiere_fecha_propia():
@@ -239,12 +264,16 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     _valor = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
 
     opciones = ["Proveedor", "Producto", "Vs año pasado", "Volatilidad",
-                "Documentos SUNAT", "Semanal", "Personalizado", "Tabla"]
+                "Documentos SUNAT", "Semanal", "Tabla"]
 
     # Rail vertical fijo al borde DERECHO (componente compartido _render_rail):
     # selector de tipo de gráfico agrupado por categoría. El activo se marca
     # con type="primary"; la selección se persiste en compras_graf_tipo.
-    graf = _render_rail(_COMPRAS_RAIL_CATEGORIAS, "compras_graf_tipo")
+    # `secciones`: la pila de esta página. Con eso el rail vertical de la
+    # izquierda sabe qué botón encender según lo que haya en pantalla, y
+    # aparece a partir de la segunda sección. Ver `base.py::_render_rail`.
+    graf = _render_rail(_COMPRAS_RAIL_CATEGORIAS, "compras_graf_tipo",
+                        secciones=_PILA)
     if graf not in opciones:
         graf = opciones[0]
 
@@ -268,183 +297,214 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
 
     # Tabla: usa el mismo AgGrid de la vista Tabla, pero como una opción más
     # del selector. `d` ya viene filtrado por los chips Familia/Subfamilia.
-    if graf == "Tabla":
-        from tablas import renderizar_aggrid_compras as _render_tabla_compras
-        from estilos import TAM_FUENTE
-        _font_px = TAM_FUENTE.get(st.session_state.get("tabla_tam", "Mediano"), 14)
-        _render_tabla_compras(d, _font_px)
-        return
-
-    # Constructor: ancho completo, sin panel de mini-tops.
-    if graf == "Personalizado":
-        with st.container(border=True, key="ajuste_graf_card_izq_compras"):
-            _constructor_grafico(d, "compras")
-        return
-
-    # Producto: ancho completo (ranking de todos los productos + evolución
-    # del producto en foco + ranking por familia). Sin borde externo, igual
-    # que Proveedor: cada bloque interno lleva su propio borde.
-    if graf == "Producto":
-        with st.container(key="compras_prod_drill_wrap"):
-            _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant,
-                                    col_punit, col_um, col_fecha, col_prov)
-        return
-
-    # Proveedor: ancho completo (drill Proveedor→productos→proveedores del prod.).
-    # Sin borde externo: cada uno de los 4 bloques internos (gráfico, panel A,
-    # panel B, tabla AgGrid) lleva su propio borde para separación visual
-    # limpia sin cajas anidadas.
-    if graf == "Proveedor":
-        with st.container(key="compras_prov_drill_wrap"):
-            _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
-                                     col_punit, col_um, col_fecha, col_docu,
-                                     d_full=d_full)
-        return
-
-    # Volatilidad: ranking de insumos por variación de precio semanal +
-    # candlestick del insumo elegido + compras de la semana clickeada.
-    if graf == "Volatilidad":
-        with st.container(border=True, key="ajuste_graf_card_izq_compras"):
-            _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
-                                       col_valor, col_cant, col_um, col_moneda)
-        return
-
-    # Documentos SUNAT: los comprobantes que los proveedores emitieron hacia
-    # nuestro RUC, traídos del SIRE. `d`/`col_fecha` van reservados para el
-    # cruce contra el parquet de Compras (ver docstring de
-    # renderizar_documentos_sunat); hoy el dato mostrado sale entero de
-    # SUNAT. Import local a propósito: arrastra `sunat.py` y, con él,
-    # `requests` — no hay por qué pagarlo al importar Compras si nadie abre
-    # esta vista.
+    # ── Vistas que siguen siendo un DESTINO propio ───────────────────────
+    # Una excepción a la pila de abajo: Documentos SUNAT se lleva prestado
+    # el ÚNICO selector de fecha de la app (`franja_fecha.render()`, la
+    # misma función que llama `app.py`). Si estuviera siempre en pantalla,
+    # las demás vistas se quedarían sin control de fecha arriba. Entra a la
+    # pila cuando tenga rango propio — ver `vista_quiere_fecha_propia`.
     if graf == "Documentos SUNAT":
+        # Import local a propósito: arrastra `sunat.py` y, con él,
+        # `requests` — no hay por qué pagarlo al importar Compras si nadie
+        # abre esta vista.
         from graficos.compras.documentos_sunat import renderizar_documentos_sunat
         with st.container(key="compras_sunat_drill_wrap"):
             renderizar_documentos_sunat(d, col_fecha)
         return
 
-    # Vs año pasado: serie mensual + puente precio/cantidad + tabla de
-    # detalle. Es el ÚNICO drill que recibe `d_full` además de `d` y no para
-    # un panel suelto como Proveedor, sino para toda la vista: su ventana de
-    # tiempo es propia (arranca en "Todo") y el año pasado lo calcula
-    # desplazando 12 meses su propio histórico, así que necesita el histórico
-    # entero aunque la franja esté en un rango corto. Ver el docstring del
-    # módulo, decisiones 1 y 2.
-    if graf == "Vs año pasado":
-        with st.container(key="compras_vap_drill_wrap"):
-            _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha,
-                                         col_valor, col_fam=col_fam,
-                                         col_subfam=col_subfam, col_um=col_um,
+    # ══ LA PILA ══════════════════════════════════════════════════════════
+    # Las vistas de Compras no se reemplazan: se apilan y se leen bajando.
+    # El rail de la izquierda deja de ELEGIR contenido y pasa a MARCAR la
+    # sección que está en pantalla (scrollspy, ver `base.py::_render_rail`).
+    #
+    # Cada sección va envuelta en `compras_sec_<slug>`, y ese slug es el
+    # mismo que el de su botón del rail (`_slug` sobre el id de la vista):
+    # así el observador de JS puede aparear sección con botón sin una tabla
+    # de correspondencias que se desincronice.
+    #
+    # Sobre el costo: cada drill es un `@st.fragment`, así que construirlos
+    # todos se paga UNA vez al entrar — un clic dentro de Proveedor
+    # re-ejecuta su fragment y no toca a los demás.
+    #
+    # OJO con las keys de tarjeta: Volatilidad y Semanal usaban las dos
+    # `ajuste_graf_card_izq_compras`. No chocaban porque nunca coexistían;
+    # apiladas serían dos widgets con la misma key, que en Streamlit es una
+    # excepción. Cada una lleva ahora su sufijo, y el prefijo
+    # `ajuste_graf_card_` se conserva porque de él cuelga el CSS de tarjeta
+    # (el clamp de una pantalla en `estilos/_80_cards.py`).
+
+    # ── LA PILA, PEREZOSA ────────────────────────────────────────────────
+    # Cada sección se dibuja en su propio `@st.fragment` y arranca en
+    # ESQUELETO. El `IntersectionObserver` de `base.py::_render_rail` aprieta
+    # su botón invisible cuando te acercás, y sólo ese fragment se
+    # re-ejecuta — las otras cinco no se tocan.
+    #
+    # Por qué no se construyen todas de una, que era la versión anterior:
+    # saturaba el hilo principal del navegador (~10 Plotly + 2 AgGrid a la
+    # vez) y en Cloud salía "la página no responde". El servidor nunca fue el
+    # problema. Ver `base.py::seccion_perezosa` y arquitectura.md #211.
+    #
+    # Los `def` de acá abajo son closures sobre las columnas ya resueltas:
+    # el fragment necesita poder llamarlas MÁS TARDE, en su propio rerun,
+    # cuando el cuerpo del dispatcher ya terminó.
+
+    def _dib_proveedor():
+            # Drill Proveedor→productos→proveedores del prod. Sin borde externo:
+            # cada uno de sus 4 bloques internos lleva el suyo.
+            with st.container(key="compras_prov_drill_wrap"):
+                _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
+                                         col_punit, col_um, col_fecha, col_docu,
                                          d_full=d_full)
-        return
 
-    col_izq, col_der = st.columns([1.7, 1])
+    def _dib_producto():
+            with st.container(key="compras_prod_drill_wrap"):
+                _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant,
+                                        col_punit, col_um, col_fecha, col_prov)
 
-    with col_izq:
-        with st.container(border=True, key="ajuste_graf_card_izq_compras"):
-            if graf == "Semanal" and col_prod and col_fecha:
-                # Compra por SEMANA: barras apiladas (valor) por producto
-                # (top 8 + Otros); el hover muestra valor y cantidad.
-                #
-                # El selector de fecha vive ACA arriba, no en la franja
-                # (2026-08-24, a pedido): en esta vista el eje de tiempo es
-                # el tema del grafico, no contexto global. Va PLEGADO (una
-                # linea con el rango + popover con los dos meses): inline se
-                # comia media tarjeta. Y no es el pill
-                # movido como en Documentos SUNAT sino un calendario de DOS
-                # meses — `st.date_input` solo sabe dibujar uno. `app.py`
-                # deja de dibujar la fecha cuando esta vista esta activa
-                # (`_VISTAS_CON_FECHA_PROPIA`); el pin de la clave del
-                # rango lo hace `_calendario.render()`, y sin el se pierde
-                # el rango en silencio. Ver el docstring de ese modulo.
-                from graficos.compras._calendario import render as _cal_render
-                _cal_render()
-                _dias_ini = {"Lunes": 0, "Sábado": 5, "Domingo": 6}
-                _cd, _ = st.columns([1, 2.2])
-                with _cd:
-                    _dini = st.selectbox("La semana empieza:",
-                                         list(_dias_ini.keys()),
-                                         key="compras_sem_inicio")
-                _off = _dias_ini[_dini]
-                _fe = pd.to_datetime(d[col_fecha], errors="coerce")
-                _sem_ini = (_fe - pd.to_timedelta(
-                    (_fe.dt.weekday - _off) % 7, unit="D")).dt.date
-                _cnt = (pd.to_numeric(d[col_cant], errors="coerce").fillna(0)
-                        if col_cant else pd.Series(0, index=d.index))
-                top = _valor.groupby(d[col_prod].astype(str)).sum().nlargest(8).index
-                _pr = d[col_prod].astype(str).where(
-                    d[col_prod].astype(str).isin(top), "Otros")
-                dd = pd.DataFrame({"sem": _sem_ini, "prod": _pr,
-                                   "valor": _valor, "cant": _cnt}).dropna(subset=["sem"])
-                g = dd.groupby(["sem", "prod"], as_index=False)[["valor", "cant"]].sum()
-                g = g.sort_values("sem")
-                g["sem_lbl"] = pd.to_datetime(g["sem"]).dt.strftime("Sem %d/%m")
-                fig = go.Figure()
-                _prods = ([p_ for p_ in top if p_ in set(g["prod"])] +
-                          (["Otros"] if (g["prod"] == "Otros").any() else []))
-                for _i, _p in enumerate(_prods):
-                    gg = g[g["prod"] == _p]
-                    fig.add_bar(
-                        x=gg["sem_lbl"], y=gg["valor"],
-                        name=_compras_truncar(_p, 22),
-                        marker=dict(color=(GRIS_BORDE if _p == "Otros"
-                                    else PALETA_CALLAI[_i % len(PALETA_CALLAI)])),
-                        customdata=gg["cant"],
-                        hovertemplate=("%{fullData.name}<br>%{x}"
-                                       "<br>Valor: S/ %{y:,.2f}"
-                                       "<br>Cantidad: %{customdata:,.1f}"
-                                       "<extra></extra>"),
-                    )
-                _compras_layout(fig, alto=alturas.PROTAGONISTA)
-                fig.update_layout(
-                    title="Compra por semana — valor por producto (top 8 + Otros)",
-                    barmode="stack",
-                    legend=dict(orientation="h", y=-0.22, x=0,
-                                font=dict(size=10)),
-                )
-                fig.update_xaxes(type="category")
-                st.plotly_chart(fig, use_container_width=True, key="compras_g_semanal")
+    def _dib_vs_ano_pasado():
+            # Serie mensual + puente precio/cantidad + tabla de detalle. Es el
+            # ÚNICO drill que recibe `d_full` además de `d`: su ventana de tiempo
+            # es propia (arranca en "Todo") y el año pasado lo calcula
+            # desplazando 12 meses su propio histórico, así que necesita el
+            # histórico entero aunque la franja esté en un rango corto. Ver el
+            # docstring del módulo, decisiones 1 y 2.
+            with st.container(key="compras_vap_drill_wrap"):
+                _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha,
+                                             col_valor, col_fam=col_fam,
+                                             col_subfam=col_subfam, col_um=col_um,
+                                             d_full=d_full)
 
-            else:
-                st.info("No hay columnas suficientes para este gráfico.")
+    def _dib_volatilidad():
+            with st.container(border=True, key="ajuste_graf_card_izq_vol"):
+                _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
+                                           col_valor, col_cant, col_um, col_moneda)
 
-    with col_der:
-        with st.container(border=True, key="ajuste_graf_card_der_compras"):
-            tabs = st.tabs(["Prod. valor", "Proveedores", "Cantidad",
-                            "Frecuencia", "Alzas precio"])
-            with tabs[0]:
-                if col_prod:
-                    _compras_mini_barras(
-                        _valor.groupby(d[col_prod].astype(str)).sum().nlargest(10),
-                        "prod_valor")
-            with tabs[1]:
-                if col_prov:
-                    _compras_mini_barras(
-                        _valor.groupby(d[col_prov].astype(str)).sum().nlargest(10),
-                        "prov_valor")
-            with tabs[2]:
-                if col_prod and col_cant:
-                    _cnt = pd.to_numeric(d[col_cant], errors="coerce").fillna(0)
-                    _compras_mini_barras(
-                        _cnt.groupby(d[col_prod].astype(str)).sum().nlargest(10),
-                        "prod_cant", fmt="{:,.0f}")
-            with tabs[3]:
-                if col_prod:
-                    _compras_mini_barras(
-                        d[col_prod].astype(str).value_counts().head(10),
-                        "prod_freq", fmt="{:,.0f}")
-            with tabs[4]:
-                if col_prod and col_punit and col_punit_ant:
-                    _pu  = pd.to_numeric(d[col_punit], errors="coerce")
-                    _pa  = pd.to_numeric(d[col_punit_ant], errors="coerce")
-                    base = pd.DataFrame({"prod": d[col_prod].astype(str),
-                                         "pu": _pu, "pa": _pa}).dropna()
-                    base = base[base["pa"] > 0]
-                    if base.empty:
-                        st.info("Sin datos de precio anterior.")
+    def _dib_semanal():
+            # La fila parte con COLUMNAS_DRILL como el resto de la página. Antes
+            # era `[1.7, 1]`, uno de los cuatro ejes distintos que anotaba
+            # `test_graficos.py`: alternando por el rail se notaba poco, apilado
+            # el canal gris se corría a media página. Ver `_comun.py`.
+            col_izq, col_der = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
+
+            with col_izq:
+                with st.container(border=True, key="ajuste_graf_card_izq_sem"):
+                    if col_prod and col_fecha:
+                        # Compra por SEMANA: barras apiladas (valor) por producto
+                        # (top 8 + Otros); el hover muestra valor y cantidad.
+                        _dias_ini = {"Lunes": 0, "Sábado": 5, "Domingo": 6}
+                        _cd, _ = st.columns([1, 2.2])
+                        with _cd:
+                            _dini = st.selectbox("La semana empieza:",
+                                                 list(_dias_ini.keys()),
+                                                 key="compras_sem_inicio")
+                        _off = _dias_ini[_dini]
+                        _fe = pd.to_datetime(d[col_fecha], errors="coerce")
+                        _sem_ini = (_fe - pd.to_timedelta(
+                            (_fe.dt.weekday - _off) % 7, unit="D")).dt.date
+                        _cnt = (pd.to_numeric(d[col_cant], errors="coerce").fillna(0)
+                                if col_cant else pd.Series(0, index=d.index))
+                        top = _valor.groupby(d[col_prod].astype(str)).sum().nlargest(8).index
+                        _pr = d[col_prod].astype(str).where(
+                            d[col_prod].astype(str).isin(top), "Otros")
+                        dd = pd.DataFrame({"sem": _sem_ini, "prod": _pr,
+                                           "valor": _valor, "cant": _cnt}).dropna(subset=["sem"])
+                        g = dd.groupby(["sem", "prod"], as_index=False)[["valor", "cant"]].sum()
+                        g = g.sort_values("sem")
+                        g["sem_lbl"] = pd.to_datetime(g["sem"]).dt.strftime("Sem %d/%m")
+                        fig = go.Figure()
+                        _prods = ([p_ for p_ in top if p_ in set(g["prod"])] +
+                                  (["Otros"] if (g["prod"] == "Otros").any() else []))
+                        for _i, _p in enumerate(_prods):
+                            gg = g[g["prod"] == _p]
+                            fig.add_bar(
+                                x=gg["sem_lbl"], y=gg["valor"],
+                                name=_compras_truncar(_p, 22),
+                                marker=dict(color=(GRIS_BORDE if _p == "Otros"
+                                            else PALETA_CALLAI[_i % len(PALETA_CALLAI)])),
+                                customdata=gg["cant"],
+                                hovertemplate=("%{fullData.name}<br>%{x}"
+                                               "<br>Valor: S/ %{y:,.2f}"
+                                               "<br>Cantidad: %{customdata:,.1f}"
+                                               "<extra></extra>"),
+                            )
+                        _compras_layout(fig, alto=alturas.PROTAGONISTA)
+                        fig.update_layout(
+                            title="Compra por semana — valor por producto (top 8 + Otros)",
+                            barmode="stack",
+                            legend=dict(orientation="h", y=-0.22, x=0,
+                                        font=dict(size=10)),
+                        )
+                        fig.update_xaxes(type="category")
+                        st.plotly_chart(fig, use_container_width=True, key="compras_g_semanal")
+
                     else:
-                        g = base.groupby("prod")[["pu", "pa"]].mean()
-                        alza = ((g["pu"] - g["pa"]) / g["pa"] * 100)
-                        alza = alza[alza > 0].nlargest(10)
-                        _compras_mini_barras(alza, "alzas", fmt="+{:,.1f}%")
-                else:
-                    st.info("Sin columnas de precio anterior.")
+                        st.info("No hay columnas suficientes para este gráfico.")
+
+            with col_der:
+                with st.container(border=True, key="ajuste_graf_card_der_sem"):
+                    tabs = st.tabs(["Prod. valor", "Proveedores", "Cantidad",
+                                    "Frecuencia", "Alzas precio"])
+                    with tabs[0]:
+                        if col_prod:
+                            _compras_mini_barras(
+                                _valor.groupby(d[col_prod].astype(str)).sum().nlargest(10),
+                                "prod_valor")
+                    with tabs[1]:
+                        if col_prov:
+                            _compras_mini_barras(
+                                _valor.groupby(d[col_prov].astype(str)).sum().nlargest(10),
+                                "prov_valor")
+                    with tabs[2]:
+                        if col_prod and col_cant:
+                            _cnt = pd.to_numeric(d[col_cant], errors="coerce").fillna(0)
+                            _compras_mini_barras(
+                                _cnt.groupby(d[col_prod].astype(str)).sum().nlargest(10),
+                                "prod_cant", fmt="{:,.0f}")
+                    with tabs[3]:
+                        if col_prod:
+                            _compras_mini_barras(
+                                d[col_prod].astype(str).value_counts().head(10),
+                                "prod_freq", fmt="{:,.0f}")
+                    with tabs[4]:
+                        if col_prod and col_punit and col_punit_ant:
+                            _pu  = pd.to_numeric(d[col_punit], errors="coerce")
+                            _pa  = pd.to_numeric(d[col_punit_ant], errors="coerce")
+                            base = pd.DataFrame({"prod": d[col_prod].astype(str),
+                                                 "pu": _pu, "pa": _pa}).dropna()
+                            base = base[base["pa"] > 0]
+                            if base.empty:
+                                st.info("Sin datos de precio anterior.")
+                            else:
+                                g = base.groupby("prod")[["pu", "pa"]].mean()
+                                alza = ((g["pu"] - g["pa"]) / g["pa"] * 100)
+                                alza = alza[alza > 0].nlargest(10)
+                                _compras_mini_barras(alza, "alzas", fmt="+{:,.1f}%")
+                        else:
+                            st.info("Sin columnas de precio anterior.")
+
+    def _dib_tabla():
+            # Cierra la página con el detalle: el mismo AgGrid de la vista
+            # Tabla. `d` ya viene filtrado por los chips Familia/Subfamilia.
+            from tablas import renderizar_aggrid_compras as _render_tabla_compras
+            from estilos import TAM_FUENTE
+            _font_px = TAM_FUENTE.get(st.session_state.get("tabla_tam", "Mediano"), 14)
+            _render_tabla_compras(d, _font_px)
+
+    _DIBUJANTES = {
+        "compras_sec_proveedor":     _dib_proveedor,
+        "compras_sec_producto":      _dib_producto,
+        "compras_sec_vs_ano_pasado": _dib_vs_ano_pasado,
+        "compras_sec_volatilidad":   _dib_volatilidad,
+        "compras_sec_semanal":       _dib_semanal,
+        "compras_sec_tabla":         _dib_tabla,
+    }
+
+    # El contenedor con la key va AFUERA del fragment a propósito: es el que
+    # observan el scrollspy y la precarga, y tiene que sobrevivir a que el
+    # fragment de adentro se re-dibuje. Si llevara la key el fragment, cada
+    # activación reemplazaría el nodo observado y los dos observadores se
+    # quedarían mirando un elemento que ya no está en el documento.
+    for _i, (_clave, _vista) in enumerate(_PILA):
+        with st.container(key=_clave):
+            seccion_perezosa(_clave, _vista, _DIBUJANTES[_clave],
+                             activa_de_entrada=(_i == 0))

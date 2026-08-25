@@ -25,7 +25,9 @@ from st_aggrid import AgGrid, JsCode
 
 from tema import ACENTO, ERROR, EXITO, GRIS_TEXTO, TEXTO_PRINCIPAL
 from graficos.base import _compras_layout, _compras_truncar
-from graficos.compras._comun import _compras_mini_barras
+from graficos.compras._comun import (
+    COLUMNAS_DRILL, GAP_DRILL, _compras_mini_barras,
+)
 from graficos import alturas
 
 _ALTO_FILA = 28
@@ -101,7 +103,9 @@ _CSS_SELECTOR_TEXTO = f"""
    que reusar la clase sin redeclararla dejaría el título sin estilo en
    Producto. Nombre propio a propósito (evita cualquier acople). */
 .cp-prod-rank-tit {{
-    font-size: 11px;
+    /* 16px, en sync con `.cp-rank-tit` de _css_proveedor.py — el
+       comentario de arriba explica por que son dos declaraciones. */
+    font-size: 16px;
     font-weight: 600;
     color: var(--text-primary);
     padding-left: 2px;
@@ -292,7 +296,7 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
         if prod_focus not in set(ranking["producto"]):
             prod_focus = None
 
-        col_tabla, col_detalle = st.columns([1.6, 1], gap="small")
+        col_tabla, col_detalle = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
         with col_tabla:
             st.markdown('<div class="cp-prod-rank-tit">Ranking de productos</div>',
                        unsafe_allow_html=True)
@@ -482,7 +486,7 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
         if fam_focus not in set(fam_ranking["familia"]):
             fam_focus = None
 
-        col_famtabla, col_famdet = st.columns([1.6, 1], gap="small")
+        col_famtabla, col_famdet = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
         with col_famtabla:
             st.markdown('<div class="cp-prod-rank-tit">Compras por familia</div>',
                        unsafe_allow_html=True)

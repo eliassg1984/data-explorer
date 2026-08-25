@@ -21,7 +21,6 @@ from estado_rango import atajos_rango, aplicar_atajo
 from tema import ACENTO, GRIS_BORDE, TEXTO_PRINCIPAL
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, paso_etiquetas,
-    titulo_en_franja,
 )
 from graficos.compras._comun import COLUMNAS_DRILL, GAP_DRILL
 from graficos.compras._css_proveedor import CSS as CSS_PROVEEDOR
@@ -371,13 +370,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # pills se posicionan en absoluto arriba-derecha, superpuestas al gráfico.
     st.markdown(CSS_PROVEEDOR, unsafe_allow_html=True)
 
-    # Nombre de la vista PRIMERO en la FRANJA superior, pegado a la
-    # izquierda y antes del pill de fecha — igual que Compras > Familia.
-    # Mismo mecanismo que los otros titulos fantasma (arquitectura.md regla
-    # #120): vive fuera de la tarjeta y lo ancla el CSS con position:fixed,
-    # que es lo que corre al pill y a los chips (ver _css_proveedor.py).
-    titulo_en_franja(
-        st.container(key="compras_prov_titulo_franja").empty(), "Proveedor")
+    # El titulo fantasma "Proveedor" se retiro el 2026-08-25: decia el
+    # nombre de la VISTA, que ya lo dice la pestana activa de la franja, y
+    # desde que esa franja bajo a la fila 2 quedaban uno encima del otro
+    # ("PrProveedoroveedor"). La esquina que ocupaba la usa ahora el titulo
+    # de app + reporte que dibuja `navegacion.py`.
 
     # `_rank_tab_key` es ESTABLE (no depende del foco): el clic se procesa
     # arriba, antes de construir la tabla, así el rerun que abre el drill ya

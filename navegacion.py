@@ -163,6 +163,14 @@ def _formatear_kpis(info):
 # que traía cuando dibujaba Reportes: esa trampa la dispara `help=`, que
 # Reportes usaba y Vistas nunca usó. Reportes se llevó la defensa consigo a
 # estilos/_20_compras_rail.py (scopeada a `graf_tipo_chips`, su nuevo hogar).
+# Donde `inject_navegacion` deja la cabecera del reporte activo (nombre +
+# KPIs ya formateados). La lee el rail de vistas de `graficos/base.py`.
+# Nombre de la app, para el titulo de la franja. Vive aca porque aca se sabe
+# cual es el reporte activo, que es la otra mitad del titulo.
+APP_NOMBRE = "Sapiens"
+
+CLAVE_CABECERA = "_nav_cabecera"
+
 NAV_X0 = 64        # Ver comentario original más abajo, junto al CSS.
 NAV_MOVIL_ALTO = 60  # Debe coincidir con estilos/_00_base.py, ver ese archivo.
 
@@ -172,16 +180,38 @@ _CSS_FRANJA_VISTAS = f"""
    una línea inferior: es cromo, no una tarjeta, así que no lleva ni sombra
    fuerte ni redondeo. */
 .st-key-nav_rail {{
-    position:fixed !important; top:0 !important; left:0 !important; right:0 !important;
+    /* DOS FILAS, no una (2026-08-25, a pedido, con captura del modo diseno):
+           fila 1  ->  Familia / Subfamilia / chips del drill
+           fila 2  ->  Proveedor · Producto · Vs ano pasado · ...
+       Esta franja es la SEGUNDA, asi que baja `--nav-top-alto + 8px`: los
+       chips se quedan con la banda de arriba (`_50_fecha.py`,
+       `_40_ajuste_franja.py`).
+
+       Hubo un intento de meter las dos cosas en la MISMA linea y no entra:
+       los 7 botones de vista miden 634px y los chips 615, con 943
+       disponibles a 1356 de ancho — 306px de superposicion, medido.
+
+       Al entrar en la banda blanca pierde su fondo y su linea: esa banda ya
+       los pinta (`fila_ajuste_top::before`), y superponerlos daba dos bordes
+       a 8px de distancia. */
+    position:fixed !important;
+    top:calc(var(--nav-top-alto) + 8px) !important;
+    left:0 !important; right:0 !important;
     width:100vw !important;
     height:var(--nav-top-alto) !important;
     min-height:var(--nav-top-alto) !important;
-    background:#ffffff !important; z-index:999999 !important;
+    /* BLANCA, la suya (2026-08-25). Estuvo en `transparent` mientras la
+       banda de atras era blanca y la pintaba por ella; al pasar esa banda
+       al color del lienzo (`--bg-primary`, `_40_ajuste_franja.py`) esta
+       fila se volvio gris con ella, y no era el pedido: la fila de las
+       PESTANAS es blanca. Ahora cada una pone su color — el lienzo detras
+       del titulo y los filtros, blanco detras de las vistas. */
+    background:var(--bg-card) !important; z-index:999999 !important;
     border:none !important;
-    border-bottom:1px solid {GRIS_BORDE} !important;
     border-radius:0 !important;
     box-shadow:none !important;
-    /* NAV_X0 alinea el primer ítem con el borde izquierdo de la tarjeta. */
+    /* NAV_X0 es el sangrado de MÓVIL, donde esta barra se va al pie y ocupa
+       todo el ancho. En escritorio manda el bloque de abajo. */
     padding:0 18px 0 {NAV_X0}px !important;
     display:flex !important;
     flex-direction:row !important;
@@ -190,6 +220,42 @@ _CSS_FRANJA_VISTAS = f"""
     scrollbar-width:none !important;
 }}
 .st-key-nav_rail::-webkit-scrollbar {{ height:0 !important; }}
+
+/* EN ESCRITORIO LA FRANJA ARRANCA DONDE ARRANCAN LAS TARJETAS (2026-08-25,
+   a pedido). Antes empezaba pegada al borde izquierdo, o sea ENCIMA de la
+   columna del rail de reportes, y los nombres de las vistas quedaban sobre
+   una columna con la que no tienen nada que ver.
+
+   `--rail-der-res` y no un número: es el ancho que el contenido YA le
+   reserva a esa columna (`_00_base.py`, derivado de `--rail-der-w`), así
+   que los nombres caen exactamente sobre el borde izquierdo de las
+   tarjetas. Y como la variable sigue al rail, si el rail se pliega
+   (pestillo, `_25_rails_pestillo.py`) la franja se corre con él sola.
+
+   Sólo escritorio: en móvil esta barra es la nav inferior y ocupa el ancho
+   completo — ahí manda el padding de arriba. Mismo breakpoint que el resto
+   del proyecto. */
+@media screen and (min-width: 769px) {{
+    .st-key-nav_rail {{
+        /* La franja EMPIEZA Y TERMINA con las tarjetas (2026-08-25, a
+           pedido). Antes iba de borde a borde (`left:0; right:0;
+           width:100vw`) y su blanco se derramaba mas alla del contenido —
+           por la izquierda sobre la columna del rail, por la derecha hasta
+           el filo de la ventana.
+
+           Las dos anclas son las MISMAS que usan la banda de atras y las
+           tarjetas: `--rail-der-res` (lo que el contenido le reserva a la
+           columna) y los 90px del margen derecho. Asi las tres capas
+           comparten linea, que es la regla #137 del proyecto.
+
+           `left` reemplaza al `padding-left` que habia aca: con la caja ya
+           acotada, el padding sobraba y desplazaba los botones el doble. */
+        left: var(--rail-der-res) !important;
+        right: 90px !important;
+        width: auto !important;
+        padding-left: 0 !important;
+    }}
+}}
 
 /* LA FILA ES `.st-key-nav_rail` MISMO, no un hijo suyo.
    `st.container(key="nav_rail")` renderiza UN stVerticalBlock que ya lleva
@@ -617,6 +683,26 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
         if not (nombre == "Inspector" and not mostrar_inspector)
     }
 
+    # ── Cabecera del reporte activo, para quien la quiera repetir ────────
+    # La consume el rail VERTICAL de vistas (`graficos/base.py::_render_rail`)
+    # para encabezarse con "dónde estás" cuando reemplaza a esta lista al
+    # bajar: sin eso la columna cambia de contenido y se pierde el nombre del
+    # reporte, que es justo el contexto que el usuario venía leyendo.
+    #
+    # Va por `session_state` y no por un import: `base.py` no conoce
+    # `REPORTES` y no tiene por qué: acá ya está resuelto cuál es el activo
+    # y sus KPIs ya están formateados por `_formatear_kpis`. Duplicar esa
+    # lógica del otro lado era garantizar que se desincronicen.
+    _info_act = visibles.get(reporte_activo, {})
+    _par_act = _formatear_kpis(_info_act) if not _info_act.get("tool") else None
+    st.session_state[CLAVE_CABECERA] = {
+        "nombre": reporte_activo,
+        "icono": _info_act.get("icono"),
+        "primario": _par_act[0] if _par_act else None,
+        "secundario": _par_act[1] if _par_act else None,
+        "negativo": bool(_par_act[2]) if _par_act else False,
+    }
+
     # Si el reporte activo pertenece a un grupo (p.ej. Receta Base/Venta bajo
     # "Recetas"), recordar CUÁL de sus miembros fue el último visitado: es a
     # dónde navega el botón agrupado la próxima vez que se lo pulse desde
@@ -629,6 +715,22 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     # El rail VERTICAL sí compite por el ancho de la tarjeta (a diferencia de
     # la franja horizontal que ocupaba hasta hoy) — de ahí el pestillo, que
     # antes de este cambio era exclusivo del rail de Vistas.
+    # ── Titulo de la franja: app + reporte ───────────────────────────────
+    # "Sapiens (Compras)", al estilo de las fichas de MSN Dinero
+    # ("Ferreycorp SAA (FERREYC1)"): la entidad primero, su codigo entre
+    # parentesis. Ocupa la esquina izquierda de la FILA 1, donde antes vivia
+    # el titulo fantasma del drill (`compras_prov_titulo_franja`) — ese
+    # decia el nombre de la vista, que ya lo dice la pestana activa de la
+    # fila 2, y encima se le superponia.
+    #
+    # Se dibuja aca y no en cada dashboard porque es informacion del
+    # REPORTE, no de la vista: quien la sabe es esta funcion.
+    st.markdown(
+        f'<div class="franja-titulo-app">{APP_NOMBRE}'
+        f' <span class="franja-titulo-rep">({reporte_activo})</span></div>',
+        unsafe_allow_html=True,
+    )
+
     pestillos.marcar(pestillos.DER)
     _grupos_dibujados = set()
     with st.container(key="compras_tabs_row"):

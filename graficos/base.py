@@ -12,7 +12,13 @@ from contextlib import contextmanager
 
 import pandas as pd
 import plotly.express as px
+import html
+import json
+
 import streamlit as st
+
+import navegacion
+from inyecciones._iframe import inyectar_html
 
 from navegacion import _CSS_FRANJA_VISTAS
 from utils import buscar_columna, _norm
@@ -131,7 +137,88 @@ def vista_activa(categorias, state_key):
     return _por_norm.get(_norm(st.query_params.get("vista", ""))) or _todos[0]
 
 
-def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
+def _activar_seccion(clave):
+    """Callback del botón invisible que dispara el observador de JS."""
+    st.session_state[f"_pila_activa_{clave}"] = True
+
+
+@st.fragment
+def seccion_perezosa(clave, vista, dibujar, activa_de_entrada=False):
+    """Una sección de una página apilada: esqueleto hasta que te acercás.
+
+    ESTO ES LO QUE HACE VIABLE LA PILA. Dibujar las seis secciones de una
+    satura el hilo principal del navegador montando ~10 figuras Plotly y dos
+    AgGrid a la vez: en Streamlit Cloud el navegador llegó a mostrar "la
+    página no responde" (2026-08-25, revert 02b6b58). El servidor no era el
+    problema — Streamlit ya manda cada elemento apenas lo termina, así que el
+    contenido bajaba de arriba abajo. Lo que se saturaba era el CLIENTE.
+
+    La solución es la que usan los dashboards que hacen esto bien. Medido en
+    MSN Dinero el 2026-08-25, recién cargado y después de bajar:
+
+        secciones "Cargando…"      6  →  0
+        SVG en el DOM             42  → 113
+        alto de página        1.812px → 7.631px
+
+    O sea: no dibujan lo de abajo hasta que te acercás.
+
+    CÓMO SE HACE ACÁ, que es lo que no era obvio: `@st.fragment` tiene rerun
+    AISLADO — tocar un widget de adentro re-ejecuta ese fragment y nada más.
+    Eso es lo que vuelve barato activar una sección: no se reconstruyen las
+    otras cinco. (Se descartó este camino una vez razonando sobre reruns
+    completos, que sí serían cuadráticos; el error fue olvidar los fragments.)
+
+    El disparador es un botón invisible que el temporizador de
+    `_render_rail` APRIETA cuando la sección se acerca — 900px antes de que
+    asome, para que llegue dibujada y no se vea el esqueleto de paso.
+
+    `activa_de_entrada` la usa la primera sección: arrancar con todo en
+    esqueleto dejaría la página vacía al abrir.
+    """
+    k = f"_pila_activa_{clave}"
+    if activa_de_entrada:
+        st.session_state[k] = True
+
+    if not st.session_state.get(k, False):
+        st.markdown(esqueleto_pila(vista), unsafe_allow_html=True)
+        # `on_click` y no el valor de retorno: con el callback el estado ya
+        # está puesto cuando el fragment se re-ejecuta, así que la sección se
+        # dibuja en ESA pasada. Leyendo el return haría falta un rerun más.
+        st.button("cargar", key=f"pila_go_{clave}",
+                  on_click=_activar_seccion, args=(clave,))
+        return
+
+    dibujar()
+
+
+def esqueleto_pila(nombre):
+    """HTML del hueco que ocupa una sección mientras se construye.
+
+    Lo consume una página APILADA (hoy Compras): se dibujan los seis huecos
+    de una, y después cada sección real reemplaza al suyo. Así la página
+    nace con su estructura y su altura en vez de crecer bajo el cursor, y
+    cada hueco dice qué vista va a ocupar — o sea que sirve de índice de lo
+    que viene mientras carga.
+
+    Vale la pena porque construir la pila cuesta ~45s en una máquina lenta
+    (cache de datos caliente; ~118s en frío). Streamlit ya manda cada
+    elemento apenas lo termina, así que la PRIMERA sección se puede leer
+    enseguida; lo que faltaba era que se notara que abajo viene más.
+
+    El aspecto (altura reservada, brillo, movimiento reducido) vive en
+    `estilos/_27_pila.py`. Acá sólo va la forma.
+    """
+    return (
+        '<div class="pila-hueco">'
+        f'<div class="pila-hueco-tit">{nombre}</div>'
+        '<div class="pila-hueco-barra"></div>'
+        '<div class="pila-hueco-caja"></div>'
+        '</div>'
+    )
+
+
+def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
+                 secciones=None):
     """Vistas del reporte activo — fila de TABS DE TEXTO en la franja
     superior. Selector de tipo de gráfico/pantalla dentro de un reporte.
 
@@ -154,12 +241,15 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
 
     Parámetros
       · categorias: `((nombre_categoria, ((id, label[, icono]), …)), …)`.
-        El nombre de categoría y el ícono (3er elemento opcional de la
-        tupla) NO se dibujan acá — se ignoran a propósito, ver arriba. Se
-        mantiene la MISMA forma de parámetro que antes del swap para no
-        tocar los 9 call sites; son los dashboards los que siguen agrupando
-        sus vistas por categoría en el código, aunque visualmente ya no se
-        note.
+        El nombre de categoría no se dibuja — se ignora a propósito, ver
+        arriba. Se mantiene la MISMA forma de parámetro que antes del swap
+        para no tocar los 9 call sites; son los dashboards los que siguen
+        agrupando sus vistas por categoría en el código, aunque visualmente
+        ya no se note.
+
+        El ícono (3er elemento opcional) lo dibuja SOLO la copia vertical
+        de la columna izquierda, que tiene alto para él; la franja
+        horizontal lo sigue ignorando por el mismo motivo de siempre.
       · state_key: clave de session_state donde se persiste la selección.
       · btn_prefix: prefijo de las keys de los botones (único por reporte si dos
         rails pudieran coexistir; hoy solo hay un reporte activo por vez).
@@ -209,6 +299,193 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_"):
                     type=("primary" if oid == sel else "secondary"),
                     on_click=_rail_set, args=(state_key, oid),
                 )
+    # ── Copia VERTICAL del rail, para la columna izquierda ───────────────
+    # Solo se dibuja si el dashboard declara `secciones`, o sea si su página
+    # es una PILA que se lee bajando. Hoy la tiene Compras; los otros 8
+    # dashboards no pasan nada y no pagan nada: ni rail extra, ni iframe.
+    #
+    # `secciones` es `((clave_contenedor, id_vista), ...)` EN EL ORDEN de la
+    # página. El id de vista es el mismo que el del rail, así que el slug del
+    # botón se calcula acá y el dashboard no tiene que adivinarlo.
+    #
+    # Qué hace el rail acá: deja de ELEGIR contenido (está todo dibujado) y
+    # pasa a ser NAVEGACIÓN — marca en qué sección estás y te lleva a la que
+    # toques. Las dos mitades son de JS y ninguna dispara un rerun:
+    #
+    #   · el resaltado sale de una clase que pone el scrollspy, no de
+    #     `type="primary"`, porque seguir el scroll desde Python costaría un
+    #     rerun por cada pixel. Por eso los botones van todos `secondary`:
+    #     si además se pintara el elegido habría dos marcas discutiendo —
+    #     la de dónde estás y la del último clic;
+    #   · el clic scrollea y corta el evento antes de que Streamlit lo vea.
+    #     Sin eso el botón reconstruía la página entera (~45s) para dejarte
+    #     donde ya estabas: es lo que pasaba y se reportó como bug — bajabas
+    #     hasta Tabla, tocabas otra vista y no te movías de sitio.
+    #
+    # Por qué una segunda copia del rail y no mover la franja horizontal: su
+    # `top/left/width` están fijados con `!important` en
+    # `navegacion.py::_CSS_FRANJA_VISTAS`, y en la cascada el origen de
+    # ANIMACIÓN va por DEBAJO de las declaraciones `!important` del autor.
+    # Ver arquitectura.md regla #200.
+    if secciones:
+        with st.container(key="nav_rail_lateral"):
+            # ── Cabecera: DÓNDE ESTÁS ────────────────────────────────────
+            # Esta columna reemplaza a la lista de Reportes al bajar, y con
+            # ella se iba el nombre del reporte que estás leyendo. La
+            # cabecera lo devuelve, con sus mismos KPIs — el patrón de las
+            # fichas de MSN Dinero, que encabezan su rail con la entidad
+            # (nombre + cotización) y debajo listan sus secciones.
+            #
+            # `navegacion.py` ya la dejó calculada y formateada: acá sólo se
+            # pinta. Ver `CLAVE_CABECERA`.
+            _cab = st.session_state.get(navegacion.CLAVE_CABECERA)
+            if _cab and _cab.get("nombre"):
+                _kpi = ""
+                if _cab.get("primario"):
+                    _cls = ("rail-cab-kpi kpi-neg" if _cab.get("negativo")
+                            else "rail-cab-kpi")
+                    _kpi = f'<span class="{_cls}">{html.escape(_cab["primario"])}</span>'
+                    if _cab.get("secundario"):
+                        _kpi += ('<span class="rail-cab-kpi2">'
+                                 f'{html.escape(_cab["secundario"])}</span>')
+                st.markdown(
+                    '<div class="rail-cab">'
+                    f'<div class="rail-cab-nom">{html.escape(_cab["nombre"])}</div>'
+                    f'{_kpi}'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+
+            for _cat_nombre, items in categorias:
+                for item in items:
+                    oid, label = item[0], item[1]
+                    # El icono SÍ se dibuja acá (a diferencia de la franja
+                    # horizontal, que lo ignora por falta de alto): esta copia
+                    # es vertical y tiene sitio. Y hace falta — el rail que
+                    # reemplaza, el de Reportes, tiene iconos, y sin ellos el
+                    # intercambio se ve como un salto de formato.
+                    # 3er elemento opcional: hay rails con tuplas de 2.
+                    icono = item[2] if len(item) > 2 else None
+                    st.button(
+                        label,
+                        key=f"{btn_prefix}lat_{_slug_url(oid)}",
+                        type="secondary",
+                        on_click=_rail_set, args=(state_key, oid),
+                        **({"icon": icono} if icono else {}),
+                    )
+
+        # ── El rail: marcado + activación ────────────────────────────────
+        # Un temporizador que mide geometría, no observers. El porqué de cada
+        # decisión está en el propio JS de abajo; en resumen: los umbrales de
+        # `IntersectionObserver` no alcanzan para marcar secciones más altas
+        # que la pantalla, y las activaciones tienen que ir de a una o
+        # Streamlit pierde clics.
+        #
+        # Va en `inyectar_html` y no en `st.markdown` porque markdown NO
+        # ejecuta `<script>` (regla #4); ese primitivo mete un iframe de
+        # verdad y reemplaza a `components.html` (regla #204).
+        _mapa = [{"sec": _cl, "btn": f"{btn_prefix}lat_{_slug_url(_oid)}",
+                   "go": f"pila_go_{_cl}"}
+                 for _cl, _oid in secciones]
+        with st.container(key="rail_scroll_hook"):
+            inyectar_html(
+                f"""<script>
+                (function () {{
+                  var w = window.parent, doc = w.document;
+                  var MAPA = {json.dumps(_mapa, ensure_ascii=False)};
+                  var raiz = doc.querySelector('[data-testid="stMain"]');
+                  if (!raiz) return;
+
+                  // UN SOLO TEMPORIZADOR POR GEOMETRIA, no observers.
+                  //
+                  // Hace dos cosas: marcar en el rail la seccion que estas
+                  // mirando, y activar la siguiente antes de que llegues.
+                  // Las dos se resolvieron igual y por los mismos motivos:
+                  //
+                  //  · `IntersectionObserver` NO sirve para el marcado. Sus
+                  //    callbacks llegan al CRUZAR un umbral, y una seccion
+                  //    mas alta que la pantalla no vuelve a cruzar ninguno
+                  //    mientras la recorres: el dato queda viejo y el rail
+                  //    no cambia. Pasó exactamente eso (2026-08-25).
+                  //  · `getBoundingClientRect` es SINCRONO y siempre dice la
+                  //    verdad de ahora. Ademas no depende de que el
+                  //    navegador entregue callbacks de renderizado.
+                  //
+                  // La activacion va de a UNA y espera a que el servidor
+                  // este libre: clickear varias juntas hace que Streamlit
+                  // procese una y pierda las otras (medido: 3 clicks, una
+                  // sola seccion construida). Y la condicion de "ya esta" se
+                  // lee del DOM, asi que un clic perdido se reintenta solo.
+                  if (w.__railTimer) clearInterval(w.__railTimer);
+                  w.__railTimer = setInterval(function () {{
+                    var caja = raiz.getBoundingClientRect();
+
+                    // ── 1. Marcar la seccion con MAS pixeles a la vista ──
+                    var mejor = null, mejorPx = 0;
+                    MAPA.forEach(function (m) {{
+                      var s = doc.querySelector('[class*="st-key-' + m.sec + '"]');
+                      if (!s) return;
+                      var r = s.getBoundingClientRect();
+                      var vis = Math.min(r.bottom, caja.bottom)
+                              - Math.max(r.top, caja.top);
+                      if (vis > mejorPx) {{ mejorPx = vis; mejor = m; }}
+                    }});
+                    if (mejor) {{
+                      // El rail de la columna cambia de Reportes a Vistas en
+                      // cuanto dejas la primera seccion.
+                      doc.documentElement.classList.toggle(
+                        'rails-scrolled', mejor.sec !== MAPA[0].sec);
+                      var previos = doc.querySelectorAll('.vista-en-pantalla');
+                      for (var i = 0; i < previos.length; i++) {{
+                        previos[i].classList.remove('vista-en-pantalla');
+                      }}
+                      var b = doc.querySelector(
+                        '[class*="st-key-' + mejor.btn + '"] button');
+                      if (b) b.classList.add('vista-en-pantalla');
+                    }}
+
+                    // ── 2. Activar la proxima, de a una ─────────────────
+                    if (doc.querySelector('[data-testid="stStatusWidget"]')) return;
+                    for (var j = 0; j < MAPA.length; j++) {{
+                      var m2 = MAPA[j];
+                      var s2 = doc.querySelector('[class*="st-key-' + m2.sec + '"]');
+                      if (!s2 || !s2.querySelector('.pila-hueco')) continue;
+                      if (s2.getBoundingClientRect().top - caja.bottom > 900) continue;
+                      var g = doc.querySelector(
+                        '[class*="st-key-' + m2.go + '"] button');
+                      if (g) {{ g.click(); return; }}
+                    }}
+                  }}, 400);
+
+                  // El CLIC LLEVA a la seccion. Se intercepta en captura y se
+                  // corta ahi: React escucha en la raiz del documento, asi que
+                  // detener la propagacion antes evita que Streamlit vea el
+                  // clic y dispare un rerun. Sin esto el boton reconstruia la
+                  // pagina entera para dejarte donde ya estabas.
+                  //
+                  // Solo los botones de la PILA. Los que son destino aparte
+                  // (Documentos SUNAT) tienen que seguir
+                  // haciendo su navegacion normal.
+                  MAPA.forEach(function (m) {{
+                    var b = doc.querySelector('[class*="st-key-' + m.btn + '"] button');
+                    var s = doc.querySelector('[class*="st-key-' + m.sec + '"]');
+                    if (!b || !s || b.__railClic) return;
+                    b.__railClic = true;
+                    b.addEventListener('click', function (ev) {{
+                      ev.preventDefault();
+                      ev.stopPropagation();
+                      var franja = doc.querySelector('[class*="st-key-nav_rail"]');
+                      var techo = franja ? franja.getBoundingClientRect().height : 0;
+                      var y = s.getBoundingClientRect().top
+                            - raiz.getBoundingClientRect().top
+                            + raiz.scrollTop - techo - 8;
+                      raiz.scrollTo({{ top: Math.max(0, y), behavior: 'smooth' }});
+                    }}, true);
+                  }});
+                }})();
+                </script>""",
+            )
+
     _final = st.session_state.get(state_key, _todos[0])
     # Espejo hacia la URL. Escribir query_params NO dispara rerun, pero se
     # compara antes igual: reescribir en cada rerun es ruido inútil.
@@ -605,7 +882,7 @@ PALETA_CALLAI = PALETA_SERIES  # alias retrocompatible; fuente en tema.py
 
 # ===========================================================================
 # HELPERS DE LAYOUT COMPARTIDOS (nombre '_compras_*' es histórico; los usan
-# también ventas, inventario y constructor. Se mantienen los nombres para
+# también ventas e inventario. Se mantienen los nombres para
 # no romper contratos existentes.)
 # ===========================================================================
 
@@ -621,7 +898,7 @@ def _compras_layout(fig, alto=alturas.PROTAGONISTA):
     suelto» en el docstring de ese módulo.
 
     El nombre `_compras_*` es histórico (nació en Compras); hoy lo usan
-    también ventas, inventario, salidas, requerimientos y constructor.
+    también ventas, inventario, salidas y requerimientos.
 
     Con `alto=alturas.ELASTICO` la figura sale SIN `height`: el alto lo pone
     el CSS del contenedor y Plotly lo lee al montar. Requiere que el llamador

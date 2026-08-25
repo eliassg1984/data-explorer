@@ -87,7 +87,13 @@ CSS = """        <style>
         @media (min-width: 1230px) {
             .st-key-prov_pop_float {
                 position: fixed !important;
-                top: calc(var(--nav-top-alto) + 8px) !important;
+                /* FILA 1, con Familia/Subfamilia (2026-08-25, a pedido).
+                   Estaba en `calc(var(--nav-top-alto) + 8px)`, que era la
+                   banda de filtros hasta que la franja de VISTAS se mudo
+                   ahi (`navegacion.py`): desde entonces compartia renglon
+                   con las pestanas. Los 7px son los mismos que usan los
+                   chips (`_40_ajuste_franja.py`), no un numero suelto. */
+                top: 7px !important;
                 left: auto !important;
                 bottom: auto !important;
                 /* Era `calc(var(--rail-der-res) + 10px)`: se derivaba del
@@ -189,7 +195,8 @@ CSS = """        <style>
            ranking y tiene que quedar a su misma altura, sin la divisoria
            que ese helper dibuja. */
         .cp-evo-tit {
-            font-size: 11px;
+            /* Ver la nota de `.cp-rank-tit`: se mueven juntas. */
+            font-size: 16px;
             font-weight: 600;
             color: var(--text-primary);
             padding-left: 8px;
@@ -255,7 +262,14 @@ CSS = """        <style>
            que `.cp-evo-tit` de al lado (markdown, no `_card(titulo_arriba=)`
            — ese helper dibuja una divisoria que acá no hace falta). */
         .cp-rank-tit {
-            font-size: 11px;
+            /* 16px (2026-08-25, a pedido, probado antes en el modo
+               diseno). Las tres clases hermanas —`cp-rank-tit`,
+               `cp-evo-tit` y `cp-prod-rank-tit`— se mueven JUNTAS:
+               comparten lenguaje visual a proposito (ver sus
+               comentarios) y dos de ellas se leen lado a lado en la
+               misma fila, asi que una sola en 16 se veria como un
+               error. */
+            font-size: 16px;
             font-weight: 600;
             color: var(--text-primary);
             padding-left: 2px;
@@ -526,12 +540,39 @@ CSS = """        <style>
            lenguaje visual que win_nav (chips chicos, sombra leve, sin
            estado "activo" — el original de franja_fecha.py tampoco lo
            marca) para leerse como de la misma familia de controles. */
+        /* Los atajos van EN LA LINEA DEL TITULO, no debajo (2026-08-25, a
+           pedido). Se sacan del flujo y se anclan a la esquina superior
+           derecha de la tarjeta: asi comparten renglon con "Ranking de
+           proveedores" y, de paso, la tabla sube los ~36px que ocupaban.
+
+           `position: absolute` contra la tarjeta —que se vuelve `relative`
+           abajo— y NO un `margin-top` negativo: el alto del titulo acaba de
+           cambiar (11px -> 16px) y volveria a cambiar con cualquier ajuste
+           de tipografia, dejando el tiro desincronizado. Anclado a la
+           esquina no depende de cuanto mida el titulo.
+
+           Los 16/18px son el padding de la propia tarjeta
+           (`estilos/_80_cards.py`), asi que los atajos caen a ras del
+           contenido, alineados con el titulo de su izquierda. */
+        .st-key-compras_prov_card_ranking {
+            position: relative !important;
+        }
         .st-key-compras_prov_rank_atajos {
+            position: absolute !important;
+            top: 16px !important;
+            right: 18px !important;
+            /* `fit-content` o se estira: el stVerticalBlock de Streamlit
+               trae `width: 100%`, que en un elemento absoluto se resuelve
+               contra la tarjeta — 572px para tres botones chicos, y el
+               bloque terminaba invadiendo el sitio del titulo por la
+               izquierda (medido 2026-08-25). */
+            width: fit-content !important;
+            margin: 0 !important;
+            z-index: 2 !important;
             display: flex !important;
             flex-direction: row !important;
             flex-wrap: wrap !important;
             gap: 6px !important;
-            margin: 2px 0 10px !important;
         }
         .st-key-compras_prov_rank_atajos [data-testid="stElementContainer"] {
             width: auto !important;

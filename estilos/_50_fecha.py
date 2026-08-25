@@ -252,10 +252,30 @@ CSS = """    /* ================================================================
            2026-08-18: la cadena entera bajó 90px (391 -> 301) al retirarse
            el rail izquierdo. */
         .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
-            top: calc(var(--nav-top-alto) + 8px) !important;  /* como el pill */
-            /* pill (210) + 6 de aire, contado desde el mismo ancla. */
-            left: calc(var(--rail-der-res) + 216px) !important;
-            right: auto !important;
+            /* 2026-08-25, a pedido: los chips SUBEN a compartir banda con la
+               franja de vistas (`nav_rail`, 0..--nav-top-alto) en vez de
+               ocupar una segunda banda propia debajo. Una sola franja de
+               contexto: vistas a la izquierda, filtros a la derecha.
+
+               Los 7px centran un control de 26px en una franja de 40:
+               (40-26)/2. Y pasan de `left` a `right` porque a la izquierda
+               chocarian con el rail de la columna (19..299) y con los
+               propios botones de vista. El 90px es el mismo margen derecho
+               del contenido que ya usa la banda blanca, asi que cierran a
+               plomo con el borde de las tarjetas.
+
+               OJO: esta regla lleva la clase DOS veces a proposito (mas
+               especificidad) y `_50_fecha` va DESPUES de
+               `_40_ajuste_franja` en `_SECCIONES`, asi que es la que manda.
+               Cambiar solo la de alla no hace nada — pasó al intentarlo. */
+            top: 7px !important;
+            left: auto !important;
+            /* 90 es el borde de las tarjetas; +181 le cede el sitio al chip
+               del drill (`prov_pop_float`, "Proveedores 31"), que comparte
+               esta fila y se ancla al MISMO borde derecho. Sin la reserva se
+               pisaban 24px, medido: Subfamilia terminaba en 1119 y el chip
+               arrancaba en 1095. 181 = su ancho (171) + 10 de aire. */
+            right: calc(90px + 181px) !important;
             transform: none !important;
             /* Hasta el 2026-08-15 esta cuenta llevaba un sumando más, 255px,
                que le reservaban el sitio a `atajos_franja` — anclado a la

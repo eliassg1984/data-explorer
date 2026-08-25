@@ -205,7 +205,14 @@ CSS = """    <style>
         --rail-der-full: 280px;
         --rail-min: 24px;
         --rail-der-w: var(--rail-der-full);
-        --rail-der-res: calc(var(--rail-der-w) + 15px + 54px);
+        /* 2026-08-25: el canal entre el rail y las tarjetas baja de 54px
+           a 24px, a pedido ("pierdo mucho espacio"). Los sumandos dicen lo
+           que son: 19px es el `left` del rail (_20_compras_rail.py) y 24px
+           el canal visible. Antes eran 15+54 = 69, con el 15 sin
+           corresponderse ya con ese `left` — el rail terminaba en x=299 y
+           las tarjetas arrancaban en 349. Ahora arrancan en 323 y el
+           contenido gana 26px de ancho. */
+        --rail-der-res: calc(var(--rail-der-w) + 19px + 24px);
     }
 
     /* ============ HEADER NATIVO + ESPACIO SUPERIOR ============ */
