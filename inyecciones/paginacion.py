@@ -4,8 +4,8 @@ Reemplaza la paginacion nativa por una con numeros de pagina y salto directo.
 """
 
 import json
-import streamlit.components.v1 as components
 from inyecciones._fragmentos import _PGV2_CSS_IFRAME
+from inyecciones._iframe import inyectar_html
 
 
 def inject_pagination_v2():
@@ -18,7 +18,7 @@ def inject_pagination_v2():
         _PGV2_CSS_IFRAME con constantes de tema.py. Ver arquitectura.md §Fase 2.
     """
     pgv2_css_js = json.dumps(_PGV2_CSS_IFRAME)
-    components.html("""
+    inyectar_html("""
     <script>
     (function(){
       var win = window.parent, doc = win.document;

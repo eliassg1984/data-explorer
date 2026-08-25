@@ -19,7 +19,7 @@ Si `inspector.py` alguna vez renombra esas variables o cambia qué guarda
 El elemento pineado se re-resuelve por key en CADA ejecución del script
 (nunca se confía en la referencia DOM capturada al momento del pin): un
 rerun real preserva el nodo gracias a la reconciliación por key de
-Streamlit, pero el propio iframe de este `components.html` se destruye y
+Streamlit, pero el propio iframe de este `inyectar_html` se destruye y
 recrea igual que el de `inspector.py`, así que los listeners/loops sí deben
 reinstalarse cada vez (mismo patrón remove-old/add-new).
 
@@ -133,9 +133,8 @@ que después se reacomoda solo.
 
 import json
 
-import streamlit.components.v1 as components
-
 from inyecciones._diseno_js import JS
+from inyecciones._iframe import inyectar_html
 from tema import (
     ACENTO, ACENTO_FUERTE, ACENTO_TEXTO_OSCURO, LAVANDA_FONDO,
     EXITO, ADVERTENCIA, ERROR,
@@ -172,5 +171,4 @@ _PALETA = [
 def inject_diseno_visual():
     """Inyecta el modo de diseno visual. El JS vive en _diseno_js.py
     (794 lineas); aca solo queda la sustitucion de la paleta."""
-    components.html(JS.replace("__PALETA__", json.dumps(_PALETA)),
-                    height=0, scrolling=False)
+    inyectar_html(JS.replace("__PALETA__", json.dumps(_PALETA)), height=0)

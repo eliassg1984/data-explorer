@@ -69,11 +69,27 @@ _COMPRAS_RAIL_CATEGORIAS = (
                    ("Tabla",            "Tabla",         ":material/table_rows:"))),
 )
 
-# Vistas de Compras que dibujan el selector de fecha DENTRO de su tarjeta en
-# vez de dejarlo en la franja superior. Hoy solo Documentos SUNAT: ahi la
+# Vistas de Compras que se quedan el selector de fecha DENTRO de su tarjeta
+# en vez de dejarlo en la franja superior. Hoy solo Documentos SUNAT: ahi la
 # fecha no es contexto global sino EL filtro de la tabla (es el rango que se
 # le consulta al SIRE), asi que vivia lejos de lo que filtra.
+#
+# `Semanal` estuvo aca un dia (2026-08-24) con un calendario propio de dos
+# meses, y se saco al apilar las vistas: con las seis dibujandose en la MISMA
+# corrida, dos duenos de la clave del rango no pueden convivir —
+# `st.session_state` no se puede reescribir despues de que el widget de esa
+# key ya se instancio— y Compras reventaba en cada carga. Ver regla #203.
+#
+# La leccion general, y el motivo de que la lista siga teniendo un solo
+# miembro: en una pagina APILADA el rango es del REPORTE, no de la vista.
+# Ver el analisis de la regla #210.
 _VISTAS_CON_FECHA_PROPIA = {"Documentos SUNAT"}
+
+# Subconjunto del anterior: las que ademas necesitan OTROS topes de
+# calendario que los del parquet de Compras. Se separa a proposito — atar
+# los bounds a `_VISTAS_CON_FECHA_PROPIA` haria que cualquier vista nueva
+# que se quede la fecha heredara los limites del SIRE sin pedirlos.
+_VISTAS_CON_BOUNDS_SUNAT = {"Documentos SUNAT"}
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail.
 #
@@ -117,7 +133,8 @@ def bounds_fecha_de_la_vista():
     Gemela de `vista_quiere_fecha_propia` y con el mismo cliente: la
     consulta `app.py` antes de sembrar/recortar el rango. Devuelve None
     para el resto de las vistas — cada una se queda con los topes de su
-    propio dato.
+    propio dato, incluida la Semanal, que filtra el parquet de Compras
+    como todas las demas y por lo tanto NO quiere los topes del SIRE.
 
     Documentos SUNAT es la excepción porque no filtra el parquet de
     Compras: le pregunta al SIRE. Y los dos extremos salen de sitios
@@ -133,7 +150,8 @@ def bounds_fecha_de_la_vista():
         pedir en vivo los días que el parquet todavía no trajo. Ver
         `arquitectura.md` regla #197.
     """
-    if not vista_quiere_fecha_propia():
+    if vista_activa(_COMPRAS_RAIL_CATEGORIAS,
+                    "compras_graf_tipo") not in _VISTAS_CON_BOUNDS_SUNAT:
         return None
     import datetime
     import zoneinfo
@@ -165,7 +183,6 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                                   "Unidad compra", "Unidad", "UM", "Und"])
     col_cant   = _resolver(df_f, ["Cantidad_compra", "Cantidad compra", "Cantidad"])
     col_valor  = _resolver(df_f, ["Valor_compra", "Valor compra", "Importe Total", "Valorizado"])
-    col_val_aa = _resolver(df_f, ["Valor_ano_anterior", "Valor año anterior"])
     col_punit  = _resolver(df_f, ["Precio_unit", "Precio unit", "Precio Unitario"])
     col_punit_ant = _resolver(df_f, ["Ultimo_precio_unit", "Ultimo precio unit",
                                      "Ultimo_anterior", "Ultimo anterior"])
@@ -262,8 +279,9 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     if graf not in opciones:
         graf = opciones[0]
 
-    # ── Quien dibuja el pill de fecha: la franja o el drill ──────────────
-    # Hay UNA vista que se lo queda (Documentos SUNAT). El problema es de
+    # ── Quien dibuja el selector de fecha: la franja o el drill ─────────
+    # Hay DOS vistas que se lo quedan (Documentos SUNAT y Semanal, ver
+    # `_VISTAS_CON_FECHA_PROPIA`). El problema es de
     # ORDEN: la franja de `app.py` se dibuja mucho antes que este rail, y
     # ademas `_render_contenido` es un `@st.fragment`, asi que un clic aca
     # NO re-ejecuta `app.py`. En ese rerun parcial la franja sigue con la
@@ -366,9 +384,17 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                                     col_punit, col_um, col_fecha, col_prov)
 
     with _hueco["compras_sec_vs_ano_pasado"].container():
+        # Serie mensual + puente precio/cantidad + tabla de detalle. Es el
+        # ÚNICO drill que recibe `d_full` además de `d`: su ventana de tiempo
+        # es propia (arranca en "Todo") y el año pasado lo calcula
+        # desplazando 12 meses su propio histórico, así que necesita el
+        # histórico entero aunque la franja esté en un rango corto. Ver el
+        # docstring del módulo, decisiones 1 y 2.
         with st.container(key="compras_vap_drill_wrap"):
-            _compras_vs_ano_pasado_drill(d, col_prod, col_punit, col_cant,
-                                         col_fecha, col_valor, col_fam, col_val_aa)
+            _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha,
+                                         col_valor, col_fam=col_fam,
+                                         col_subfam=col_subfam, col_um=col_um,
+                                         d_full=d_full)
 
     with _hueco["compras_sec_volatilidad"].container():
         with st.container(border=True, key="ajuste_graf_card_izq_vol"):

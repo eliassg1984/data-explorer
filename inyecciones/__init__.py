@@ -3,6 +3,9 @@
 Era un inyecciones.py de 1.813 lineas; desde el refactor de 2026-08-01 es un
 paquete. La API publica no cambio: from inyecciones import inject_*.
 
+    _iframe.py      `inyectar_html`, el primitivo que usan TODAS: mete el
+                    <script> en un iframe con srcdoc. Antes era
+                    `components.html`, que Streamlit retiro (regla #204).
     _fragmentos.py  CSS/JS reutilizado por varias inyecciones
     grid.py         todo lo que toca el AgGrid (salud, altura, maximizar,
                     panel de columnas de Ajuste)
@@ -17,7 +20,8 @@ paquete. La API publica no cambio: from inyecciones import inject_*.
                     en espanol
 
 Ninguna funcion depende de otra: las unicas dependencias internas son hacia
-las constantes de _fragmentos.py. La excepcion es diseno.py, que LEE (nunca
+las constantes de _fragmentos.py y hacia `inyectar_html` de _iframe.py. La
+excepcion es diseno.py, que LEE (nunca
 llama) el estado que inspector.py expone en window.parent para el pin
 (__inspectorPinned/__inspectorUltimo) — inspector.py no sabe que diseno.py
 existe, el acoplamiento es unidireccional.
@@ -26,6 +30,10 @@ Regla viva (arquitectura.md #4): si dos inject_* comparten espacio o elemento,
 la interaccion se documenta en AMBAS.
 """
 
+# Reexportado para `perf.py`, que esta FUERA del paquete y tambien inyecta un
+# iframe (el panel de rendimiento del navegador). Sin esto tendria que
+# importar un modulo privado. Los modulos de adentro usan _iframe directo.
+from inyecciones._iframe import inyectar_html  # noqa: F401
 from inyecciones.grid import (inject_dynamic_grid_height, inject_filtros_grid, inject_fix_column_panel_ajuste, inject_grid_health_check, inject_maximize_aggrid)  # noqa: F401
 from inyecciones.paginacion import (inject_pagination_v2)  # noqa: F401
 from inyecciones.inspector import (inject_element_inspector)  # noqa: F401

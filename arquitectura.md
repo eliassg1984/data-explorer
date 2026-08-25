@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-200 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+210 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (72)
+**CSS y estilos** (75)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -89,9 +89,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#182** — El modo diseño ya llega a los textos de Plotly y de AgGrid — y para esos dos el "Copiar CSS"…
 - **#186** — Un st.container anidado NO es hijo directo del flex que lo contiene: Streamlit le mete un…
 - **#188** — "Solo me deja acortar" no era la herramienta: el elemento SÍ crece, lo recorta un ancestro —…
-- **#198** — Un módulo de estilos/ NUNCA lleva su propio <style>: se lleva puesto todo lo que viene después
-- **#199** — Una ScrollTimeline declarada con el CSS inicial queda inactiva para siempre
-- **#200** — Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no mover uno
+- **#201** — Sacarle el wrapper interno a un contenedor NO hace que el CSS viejo "se reuse solo":…
+- **#202** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
+- **#203** — Un calendario de DOS meses no se puede pedir: st.date_input dibuja uno solo. Construirlo con…
+- **#207** — Un módulo de estilos/ NUNCA lleva su propio <style>: se lleva puesto todo lo que viene después
+- **#208** — Una ScrollTimeline declarada con el CSS inicial queda inactiva para siempre
+- **#209** — Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no mover uno
 
 **Layout y alturas** (19)
 
@@ -115,7 +118,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#187** — Meter None entre las opciones de un st.selectbox le agrega un botón ✕ "Clear value" que no…
 - **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
 
-**Plotly y figuras** (43)
+**Plotly y figuras** (44)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -160,6 +163,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#182** — El modo diseño ya llega a los textos de Plotly y de AgGrid — y para esos dos el "Copiar CSS"…
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
+- **#202** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
 
 **AgGrid y tablas** (33)
 
@@ -197,7 +201,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#192** — El Panel A de Productos (Compras › Proveedor) pasó de st.dataframe a AgGrid por el mismo…
 - **#193** — flex en un columnDef de AgGrid no alcanza: st_aggrid le clava width: 200 a toda columna sin…
 
-**Streamlit** (59)
+**Streamlit** (62)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -257,9 +261,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#187** — Meter None entre las opciones de un st.selectbox le agrega un botón ✕ "Clear value" que no…
 - **#190** — Compras › Producto perdió sus dos botones "✕ Quitar foco" (2026-08-24, a pedido) — mismo fix…
 - **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
-- **#199** — Una ScrollTimeline declarada con el CSS inicial queda inactiva para siempre
+- **#203** — Un calendario de DOS meses no se puede pedir: st.date_input dibuja uno solo. Construirlo con…
+- **#204** — st.iframe SÍ acepta una string de HTML — la migración desde components.html no necesita ni…
+- **#208** — Una ScrollTimeline declarada con el CSS inicial queda inactiva para siempre
+- **#210** — En una página APILADA el rango de fechas es del REPORTE, no de la vista: dos dueños de la…
 
-**Datos, R2 y DuckDB** (21)
+**Datos, R2 y DuckDB** (25)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -282,6 +289,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#170** — Se invirtieron Reportes y Vistas: Reportes al rail vertical izquierdo, Vistas a la franja…
 - **#195** — Hay emisores que usan cbc:Description como un renglón de TICKET, no como una descripción:…
 - **#197** — Un techo de calendario sacado de "hasta dónde llegó el último sync" hace que HOY no se pueda…
+- **#198** — Una columna que se llama VALOR_ANO_ANTERIOR no es un dato por fila: es el total del…
+- **#199** — El puente precio/cantidad de un GRUPO se suma desde sus productos; calculado sobre el…
+- **#200** — Una vista comparativa no puede heredar el rango de la franja: el rango corriente le deja el…
+- **#205** — En recetaventa.parquet, tres trampas de columna que no tiran error — devuelven un número o…
 
 **SUNAT y SIRE** (12)
 
@@ -298,7 +309,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#196** — Un return temprano que se lleva puesto el ÚNICO control capaz de arreglar el estado que lo…
 - **#197** — Un techo de calendario sacado de "hasta dónde llegó el último sync" hace que HOY no se pueda…
 
-**Fechas, rangos y cortes** (6)
+**Fechas, rangos y cortes** (7)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -306,13 +317,14 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#65** — Datos demo que no tienen la FORMA del dato real no verifican nada (2026-08-09)
 - **#179** — Un atajo de fecha (nuevo o viejo) no sobrevive cambiar de REPORTE y volver — mismo mecanismo…
 - **#196** — Un return temprano que se lleva puesto el ÚNICO control capaz de arreglar el estado que lo…
+- **#210** — En una página APILADA el rango de fechas es del REPORTE, no de la vista: dos dueños de la…
 
 **Asistente IA** (2)
 
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (17)
+**Herramientas de desarrollo** (18)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -331,8 +343,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#183** — opacity: 0 NO deja de recibir clics, y pointer-events: none en el padre no alcanza si un hijo…
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 - **#185** — Un contextmenu dentro de un iframe NO sube al documento padre: el clic derecho sobre la…
+- **#206** — Un mousemove/mouseup de un iframe TAMPOCO sube al padre — el modo diseño se congelaba al…
 
-**Decisiones de diseño y UX** (34)
+**Decisiones de diseño y UX** (36)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -367,7 +380,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#169** — El CSS que exporta el modo diseño es una FOTO DE PÍXELES, no la intención: pegarlo tal cual…
 - **#170** — Se invirtieron Reportes y Vistas: Reportes al rail vertical izquierdo, Vistas a la franja…
 - **#181** — Un bloqueo de interacción SIN acuse de recibo es indistinguible de una app rota — el que…
-- **#200** — Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no mover uno
+- **#200** — Una vista comparativa no puede heredar el rango de la franja: el rango corriente le deja el…
+- **#201** — Sacarle el wrapper interno a un contenedor NO hace que el CSS viejo "se reuse solo":…
+- **#209** — Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no mover uno
 
 **Mantenimiento y trampas del lenguaje** (6)
 
@@ -8502,7 +8517,682 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      las ramas de hoy no cubre las que abra el próximo cambio:** los
      stubs se instalan por FUENTE, antes del primer caso, no por rama.
 
-198. **Un módulo de `estilos/` NUNCA lleva su propio `<style>`: se lleva
+198. **Una columna que se llama `VALOR_ANO_ANTERIOR` no es un dato por fila:
+     es el total del producto-mes REPETIDO en cada fila, y sumarla
+     multiplicaba el año pasado por 4.9.** Reportado 2026-08-24 así: "mi
+     reporte de compras vs año pasado, lo veo muy simple, creo que filtra
+     por el filtro de fecha". El pedido era de UX; abriendo el dato
+     apareció, debajo, un error de cifras que llevaba meses en pantalla.
+
+     Medido contra R2 antes de tocar nada, sobre `compras.parquet`
+     (50.974 filas, 2023-01 → 2026-08):
+
+     | comprobación | resultado |
+     |---|---|
+     | grupos producto+mes con `VALOR_ANO_ANTERIOR` constante | 4.269 de 4.269 |
+     | `VALOR_ANO_ANTERIOR` vs total real del mismo mes, un año antes | diferencia 0 en 8.204 pares |
+     | `sum()` de la columna en 2025 | S/ 11.98M |
+     | total real de 2024 | S/ 2.46M |
+
+     O sea: la columna es correcta y la lectura era la equivocada. Como el
+     grano del parquet es una COMPRA y la columna es un total MENSUAL, el
+     motor la repite en cada fila del producto-mes; un `groupby(...).sum()`
+     la cuenta tantas veces como compras hubo. El gráfico "Compra por
+     familia: este año vs año anterior" mostraba desde siempre un año
+     pasado casi cinco veces más grande que el real. **No se veía**: el
+     gráfico salía lindo, las barras grises eran más altas que las moradas
+     y eso se leía como "el año pasado gastábamos más".
+
+     `PRECIO_UNIT_ANO_ANTERIOR` tiene la misma forma y un problema propio:
+     es el promedio SIMPLE de los precios de ese producto-mes (verificado,
+     coincide al 100% con `avg(PRECIO_UNIT)`), no el ponderado. Con
+     promedios simples el puente precio/cantidad de más abajo no cierra.
+
+     **Cómo quedó: el año pasado ya no se lee de ninguna columna, se
+     calcula desplazando la propia serie mensual 12 meses**
+     (`_con_ano_pasado`). Reproduce la columna EXACTO donde la columna
+     existe (verificado: diferencia máxima 0 en 7.987 producto-mes) y
+     además cubre lo que la columna no puede: los ítems que se compraban el
+     año pasado y este año no tienen fila este año, así que su gasto
+     desaparecía del "año pasado". Son 410 productos y S/ 236.469 que antes
+     no se veían — el `merge` es OUTER por eso, y con techo en el último mes
+     real, porque el desplazamiento también inventa meses que todavía no
+     pasaron (medido: llegaba hasta 2027-08).
+
+     Corolario para el resto del proyecto: **antes de sumar una columna
+     "comparable" de un parquet, comprobar su GRANO** con un
+     `count(DISTINCT col)` por la llave que se sospecha. Es una consulta de
+     diez segundos y es la única forma de ver esto, porque el error no
+     rompe nada — solo miente.
+
+     Lo verifica `test_graficos.py` de una manera que no se puede saltar
+     por accidente: el df de prueba trae `VALOR_ANO_ANTERIOR` y
+     `CANTIDAD_ANO_ANTERIOR` ENVENENADAS con 999999. Si alguien vuelve a
+     leerlas, los asserts se caen con números absurdos en vez de pasar en
+     silencio.
+
+
+199. **El puente precio/cantidad de un GRUPO se suma desde sus productos;
+     calculado sobre el agregado cierra igual y no significa nada.**
+     Segunda mitad del mismo cambio del 2026-08-24. La descomposición
+
+         Δ valor = (p − p_aa)·q  +  (q − q_aa)·p_aa
+
+     es exacta con `p = valor/cantidad`, y por eso tienta aplicarla
+     directamente al total de una familia. El problema es el denominador:
+     la "cantidad" de una familia suma kilos con litros, con unidades y con
+     servicios, así que el `p` que sale de ahí no es el precio de nada.
+
+     Medido con el parquet real, familia GASTOS VENTAS: sobre el agregado
+     daba **efecto precio −540.105 y efecto cantidad +504.339** para
+     explicar un Δ de −35.766 — dos cifras quince veces más grandes que lo
+     que explicaban, que se cancelaban entre sí. Peor todavía en el TOTAL
+     de la vista, que es el número que lee el usuario: decía "precio
+     −674.834, cantidad −250.362" (o sea "bajó sobre todo por precio")
+     cuando la cuenta correcta es "precio **+**162.140, cantidad
+     −1.087.336" — compramos bastante menos y algo más caro. El signo del
+     titular estaba al revés.
+
+     La cuenta correcta se calcula producto por producto y se SUMA
+     (`_por_item`): cada sumando es un Δ real de un ítem con UNA unidad, y
+     la suma sigue cerrando porque Σ(ef_precio + ef_cant) = Σ(valor −
+     valor_aa). Lo único que se puede decir del "precio" de un grupo es
+     cuántos productos tiene detrás, y eso es lo que muestra el tooltip.
+
+     La forma general de la trampa, que no es de Compras: **un promedio
+     ponderado no se puede agregar re-ponderando el agregado.** Cada vez
+     que aparezca un ratio (precio unitario, ticket medio, margen %), la
+     agregación correcta es sobre el numerador y el denominador por
+     separado, o sobre el efecto ya calculado en el grano donde el
+     denominador es homogéneo.
+
+
+200. **Una vista comparativa no puede heredar el rango de la franja: el
+     rango corriente le deja el año pasado fuera del df, y con el default
+     del reporte la vista sale VACÍA.** Tercera pieza del mismo pedido del
+     2026-08-24 ("quizás no debería observar eso, sino por defecto
+     considerar todo").
+
+     Compras › Vs año pasado recibía `d` —el df ya filtrado por la franja—
+     y nada más. Con la franja en su default (el mes corriente) eso son 9
+     días de agosto: la serie mensual daba UN punto, y el "año pasado"
+     salía de columnas que ya vimos que no se podían sumar. La vista se
+     leía "simple" porque efectivamente no había casi nada que dibujar.
+
+     El arreglo tiene dos mitades y la segunda es la que no es obvia:
+
+     · La ventana pasa a ser un control PROPIO de la tarjeta
+       (`graficos/periodo.py`, el mismo que ya usaba la Evolución de
+       Proveedor) con default `"Todo"`. Se cambia el DEFAULT, no la
+       capacidad: la opción `HEREDA` ("Rango") sigue en la lista.
+     · **El cálculo sale SIEMPRE de `d_full`, en las cinco opciones,
+       incluida `HEREDA`.** Acá estaba la trampa: el año pasado se obtiene
+       desplazando la serie 12 meses, así que calcularlo sobre `d` deja al
+       desplazamiento sin fuente. Con la franja en el mes corriente,
+       "Rango" daba un solo mes, el piso comparable caía 12 meses DESPUÉS
+       del techo y la vista salía vacía siempre. La ventana elige qué meses
+       se MUESTRAN, nunca de dónde salen los números.
+
+     Es la misma distinción de `graficos/periodo.py` (un rango global
+     responde "quién pesa más acá", no "cómo viene esto"), llevada un paso
+     más lejos: cuando la vista COMPARA contra otro período, el rango
+     global no es una ventana más chica — es una ventana que se lleva
+     puesto el otro lado de la comparación.
+
+     Addendum del mismo día, sobre el ÚLTIMO mes: el parquet corta el día
+     que se generó, así que el mes en curso contra el mes entero del año
+     pasado da siempre una caída que no existe (medido: ago-26 hasta el 21
+     son S/ 71.250 contra S/ 335.867 del ago-25 completo, pero contra
+     S/ 241.340 si se comparan los mismos 21 días). El mes espejo se
+     recorta al mismo día (`_mensual(recorte=...)`), la barra parcial va
+     con trama y el caption lo dice. Es el ÚNICO mes que se recorta: los
+     demás están completos de los dos lados. Hermana de la regla que ya
+     hacía lo mismo en Ventas › Año Pasado con el período EN CURSO.
+
+201. **Sacarle el wrapper interno a un contenedor NO hace que el CSS viejo
+     "se reuse solo": convierte sus selectores DESCENDIENTES en selectores
+     muertos, y el que se muere en silencio es el que no deja huella
+     visible.** El rail horizontal de Vistas (`nav_rail`) desbordaba a 900px
+     — el último ítem ("Tabla") con el borde derecho en x=924, 24px fuera
+     de pantalla, en los 8 dashboards a la vez.
+
+     `st.container(key="nav_rail")` renderiza UN stVerticalBlock que YA
+     lleva la clase `st-key-nav_rail`. Cuando el rail abría un wrapper
+     adentro, `.st-key-nav_rail [data-testid="stVerticalBlock"]` matcheaba
+     ese wrapper. En la inversión Reportes↔Vistas del 2026-08-22
+     (`_render_rail` pasó a poner los botones DIRECTOS dentro del
+     contenedor, ver regla #170) el wrapper desapareció y el selector pasó
+     a matchear CERO elementos: el descendiente que buscaba era el
+     contenedor mismo.
+
+     Lo que hace la trampa cara es CUÁL de las declaraciones se nota:
+
+     · `display:flex`, `flex-direction:row`, `flex-wrap:nowrap` estaban
+       DUPLICADAS en `.st-key-nav_rail` (que sigue existiendo), así que el
+       rail se siguió viendo como una fila. Nada rojo, nada roto.
+     · `gap:0` estaba SOLO en la regla muerta. Sin ella volvió el
+       `gap:1rem` que Streamlit le pone de fábrica a todo stVerticalBlock.
+       Con 8 vistas son 7 huecos × 16px = **112px** de más. El contenido
+       pasó de 830px a 942px y se comió el margen que tenía a 900.
+
+     O sea: la regla murió entera, pero como el 80% de sus declaraciones
+     tenía respaldo, el síntoma no fue "el rail se desarmó" sino "el último
+     botón se sale un poco". Un default heredado que nadie escribió
+     ocupando el lugar de un `!important` que nadie borró.
+
+     El arreglo va sobre el elemento que EXISTE, listando los dos
+     selectores a propósito para que un wrapper futuro tampoco pueda
+     reintroducir el hueco:
+
+     ```css
+     .st-key-nav_rail,
+     .st-key-nav_rail [data-testid="stVerticalBlock"] { gap:0 !important; }
+     ```
+
+     Dos corolarios que cuestan si se pasan por alto:
+
+     · **No se hereda `min-width:max-content`.** En el wrapper servía; sobre
+       el rail sería un bug — lo estira hasta el ancho del contenido y
+       anula el `overflow-x:auto` que es la válvula del rail en viewports
+       angostos. Al mudar declaraciones de un descendiente al contenedor
+       hay que revisarlas UNA POR UNA: las que hablaban del contenido no
+       significan lo mismo dichas sobre la caja.
+     · El bloque `@media (max-width:768px)` tenía el MISMO selector muerto.
+       Borrarlo fue un no-op medido (el rail ya traía `gap:4px`,
+       `align-items:center` y `padding:0` sobre sí mismo). No se resucitó
+       su `padding:6px 150px 6px 10px`: reservaba 150px para un flotante
+       que hoy no está en esa esquina, llevaba muerto desde el 2026-08-22
+       sin que nadie lo extrañara, y devolverlo habría sido un hueco nuevo
+       de 150px disfrazado de arreglo. **Una declaración muerta no es una
+       declaración vigente: antes de resucitarla, medir si su motivo sigue
+       ahí.**
+
+     Cómo detectarlo sin adivinar — un selector muerto se prueba en una
+     línea, y conviene hacerlo cada vez que se saca o se agrega un nivel de
+     anidado:
+
+     ```js
+     document.querySelectorAll('.st-key-nav_rail [data-testid="stVerticalBlock"]').length  // 0 = muerto
+     ```
+
+     Lo que NO era el bug, y por qué importa: el rail ya scrolleaba
+     (`overflow-x:auto`), así que la tentación era sumar un criterio nuevo
+     (wrap, media query de padding). No hacía falta ninguno — el criterio
+     de este proyecto para un rail que no entra ya es el scroll horizontal,
+     el mismo del `compras_tabs_row` en `<=900px`. El desborde no venía de
+     que el diseño no alcanzara, venía de 112px que nadie pidió.
+
+     Pendiente medido en el mismo pase, que **no** es el mismo bug: Ventas
+     tiene 11 vistas y a 900px queda en 952px de contenido, o sea 52px
+     fuera, aun con el `gap:0` puesto (antes del arreglo eran 1112px). Ahí
+     el ancho falta de verdad y lo que corresponde es decidir la
+     afordancia del scroll —hoy la barra va oculta a propósito
+     (`scrollbar-width:none`)—, no volver a tocar el gap.
+
+202. **Una barra pintada como FONDO de celda no se acota con un % del
+     ancho: se acota con un GUTTER EN PX del tamaño del texto más largo.
+     Y el ancho de esa columna no se pide con `flex`, se pide con el
+     ancho BASE.** Salió de reemplazar el gráfico «Top proveedores del
+     período» de Documentos SUNAT por una tabla-ranking (2026-08-24, a
+     pedido: "no me muestra mucha información"). La barra se copió del
+     ranking de Compras › Proveedor, tope incluido: 62% del ancho de la
+     celda, texto a la derecha, para que nunca se pisen.
+
+     Ahí funciona; acá no. Medido en el navegador: con la columna en
+     192px la barra más larga llegaba a **119px y el monto arrancaba en
+     105** — 14px de "S/ " en texto oscuro sobre morado. La diferencia no
+     es el CSS, es el TEXTO: aquella columna es más ancha y muestra el
+     monto redondeado (`Math.round`), ésta muestra los centavos porque es
+     plata que se concilia contra un papel. Un tope porcentual asume que
+     el texto crece con la celda, y no crece: el texto mide lo que mide.
+
+     La forma que sí aguanta es reservarle al número un ancho fijo y
+     darle a la barra el resto:
+
+         var util = Math.max(0, p.column.getActualWidth() - 110);
+         var w    = pct / 100 * util;   // en px, no en %
+
+     donde 110 sale de MEDIR el string más ancho que puede aparecer con
+     la fuente del grid (`canvas.measureText("S/ 1,234,567.89")` = 88px)
+     más el padding de la celda y un margen. Todas las filas se escalan
+     con el mismo `util`, así que las proporciones entre filas no se
+     tocan. Verificado después: la holgura mínima entre el fin de la
+     barra y el inicio del monto pasó de **−14px a +23px**.
+
+     Dos corolarios que no son obvios:
+
+     · **El `cellStyle` hay que re-evaluarlo cuando cambia el ancho.** AG
+       Grid deja el estilo en línea que calculó al montar, así que
+       después de un `sizeColumnsToFit` (o de que el usuario arrastre el
+       borde) la barra conserva el largo de un ancho que ya no existe. Va
+       un `refreshCells({force:true, columns:['Total']})` en
+       `onGridSizeChanged` y en `onColumnResized` (éste con `if(p.finished)`,
+       o se repinta en cada píxel del arrastre). No entra en bucle:
+       `refreshCells` no dispara ninguno de los dos eventos.
+
+     · **`sizeColumnsToFit` NO le da el sobrante a la columna `flex`.**
+       Reparte en proporción a los anchos base: medido, con `flex=1` en
+       Proveedor las cinco columnas crecieron por el mismo factor (1.44).
+       O sea que para que el nombre entre hay que subirle el ancho BASE,
+       no marcarlo flexible. También por medición: nombres de un rango
+       real, mediana 182px y el más largo 328; con la columna resuelta en
+       289 se cortaban 4 de 19, con base 320 (390 en pantalla) se cortan
+       **0 de 19**. Es lo que reemplazó al `_compras_truncar(i, 30)` del
+       gráfico, que cortaba a ciegas sin mirar el ancho real.
+
+     Y el motivo de fondo del cambio, que vale para cualquier "top N" en
+     barras: una barra horizontal muestra UN número por fila y gasta todo
+     el ancho en mostrarlo. La misma altura en tabla entra siete filas de
+     CUATRO datos, con scroll interno para las cuarenta que hay. El caso
+     que la barra escondía apareció en la primera pantalla: un banco con
+     el **8,5% de los documentos y el 5,5% del valor** — mucho papeleo,
+     poca plata. Por eso van las dos participaciones y no una: «% valor»
+     es cuánta plata se le va, «% docs» es cuánto trabajo administrativo
+     genera. La tabla NO se llevó el alto de la tarjeta: mismo techo
+     (`alturas.MINI`) que tenía la figura, medido después en 240px con la
+     tarjeta cerrando justo en el borde del viewport.
+
+203. **Un calendario de DOS meses no se puede pedir: `st.date_input`
+     dibuja uno solo. Construirlo con `st.button` sí se puede, y lo
+     caro son tres cosas que no dan error.**
+
+     Pedido el 2026-08-24: en Compras › **Semanal** el selector de fecha baja de
+     la franja superior a la tarjeta, y muestra **dos meses** — desde/hasta a la
+     vista, como cualquier selector de rango de la web. Vive en
+     `graficos/compras/_calendario.py`.
+
+     **Por qué no alcanza con el widget nativo.** `st.date_input` en modo rango
+     dibuja **un solo mes**. No es un tema de CSS: medido en el bundle de
+     Streamlit 1.59.2 (`static/js/DateInput.CcrfZFeJ.js`), a BaseWeb le pasa
+     `value / minDate / maxDate / range / clearable` y **nunca `monthsShown`**,
+     que es el prop que controla cuántos meses renderiza. El segundo mes no
+     está oculto — no existe en el DOM.
+
+     **Se eligió botones y no una figura Plotly** porque el precedente ya estaba
+     corriendo: `graficos/ajuste/_heatmap.py` hace una grilla clickeable de
+     `st.button` en `st.columns` con CSS generado por key, sin tope de tamaño
+     (Familia × Área pasa de 100 celdas). 62 botones es menos que eso. Con
+     Plotly habría que fabricar a mano el hover, el foco de teclado y el cursor,
+     y la key tendría que cambiar en CADA clic para esquivar el toggle infinito
+     del `on_select`.
+
+     Las tres trampas, todas medidas, y ninguna tira una excepción:
+
+       1. **El estado del rango se pierde al entrar a la vista.** El
+          `st.date_input` de la franja deja de dibujarse, y Streamlit descarta
+          el estado de un widget que no se renderizó. Al PRIMER rerun después de
+          cruzar la frontera la clave desaparece y `asegurar_rango` la vuelve a
+          sembrar con el DEFAULT: el usuario abre la vista y su rango se
+          evaporó. El cull ocurre **una sola vez**; reescribir la clave con su
+          propio valor **desde el cuerpo del script** la convierte en clave
+          normal de `session_state` y a partir de ahí sobrevive sola (verificado
+          a tres reruns). Eso es `_pin_rango()`, y no es opcional.
+
+          Corolario para la próxima vista que se quede la fecha: hay **dos**
+          formas de hacerlo y `_VISTAS_CON_FECHA_PROPIA` no distingue. Documentos
+          SUNAT MUEVE la llamada (`franja_fecha.render()`, el widget sigue
+          existiendo) y no necesita pin; Semanal lo REEMPLAZA y sí. Ojo también
+          con `bounds_fecha_de_la_vista()`, que estaba escrita asumiendo que la
+          única vista con fecha propia era SUNAT: se le agregó
+          `_VISTAS_CON_BOUNDS_SUNAT` para que una vista nueva no herede los
+          límites del SIRE sin pedirlos.
+
+       2. **La regla por día tiene que ir scopeada BAJO el contenedor.** El
+          reset de la grilla (`.st-key-compras_sem_cal .stButton button`, dos
+          clases) le gana por especificidad a `.st-key-cal_d_YYYYMMDD button`
+          (una clase), y como las dos llevan `!important` venir después no
+          salva. Síntoma: la banda del rango no se pinta, TODAS las celdas
+          transparentes, cero mensajes.
+
+       3. **El nodo de la fuente es `stMarkdownContainer`, no `stMarkdown`.**
+          Apuntarle a `stMarkdown` no hace nada — ese div ya sale en DM Sans; el
+          cambio ocurre un nivel más adentro (medido recorriendo el DOM hacia
+          arriba desde una celda). Hace falta porque Streamlit no le pone
+          `font-family` propia a un `st.button` (los números heredan la del
+          proyecto) pero el markdown sí cae a su Source Sans: sin el override,
+          los encabezados Lu/Ma/Mi salen en otra tipografía que los números.
+          La causa de fondo es que `estilos/_00_base.py` declara la fuente
+          **sin `!important`**. Misma piedra que ya se había comido el heatmap.
+
+     Y dos medidas más que salieron de verlo corriendo, no de razonar:
+
+       · **La celda no puede tener ancho fijo en px.** Se arrancó con 42px (la
+         medida real de una celda de BaseWeb) y clipeaba: la tarjeta es la
+         columna izquierda de un `st.columns([1.7, 1])`, o sea ~230px por mes a
+         1280 de viewport contra los 7×42 = 294 que pide la fila — y con
+         `overflow-x: hidden` en la tarjeta, sábado y domingo se perdían sin
+         aviso. Un px fijo más chico sólo mueve el ancho de ventana en el que
+         vuelve a pasar. `flex: 1 1 0` + `min-width: 0` no clipea nunca. Pero
+         `width: 100%` en el botón **no alcanza solo**: se resuelve contra un
+         `.stButton` auto-width, o sea contra el ancho del TEXTO (medido: celdas
+         de 16px separadas por 17 de hueco). Hay que estirar también
+         `stElementContainer`, `stVerticalBlock` y `.stButton`.
+
+       · **El mes de referencia va a la DERECHA**, o sea se muestran
+         `[mes-1, mes]`. Con el parquet real, que termina el 9 de agosto,
+         anclarlo a la izquierda daba agosto + un septiembre entero
+         deshabilitado: la mitad del calendario muerta. Además es lo que hace
+         cualquier selector de rango — uno mira hacia atrás desde una fecha.
+
+     Y una corrección del mismo día, que vale para cualquier control que se
+     meta dentro de una tarjeta: **dibujado inline se comía media tarjeta**
+     apenas se entraba a la vista. Ahora va PLEGADO — el trigger es una
+     línea de 32px con el rango y los dos meses salen en un popover.
+     `st.popover` y no `st.expander`: el expander EMPUJA lo que tiene
+     debajo, y la tarjeta está clampeada a `--alto-util`, así que abrirlo
+     mandaba el gráfico fuera de vista. Tres consecuencias que conviene
+     saber antes de repetirlo:
+
+       · **El popover NO se cierra** cuando un widget de adentro dispara un
+         rerun — medido con el pill de la franja antes de escribir nada. Sin
+         eso, un protocolo de dos clics adentro de un popover sería
+         imposible.
+       · **El CSS se inyecta AFUERA del popover.** Su cuerpo vive en un
+         portal que sólo existe en el DOM mientras está abierto: un
+         `<style>` ahí adentro se lleva puesto el estilo del propio trigger
+         cada vez que se cierra. Un `<style>` suelto en el documento alcanza
+         igual al portal.
+       · **Al flotar, el ancho deja de depender de la columna.** Es lo que
+         devolvió la celda a ~40px: el panel se fija en 620px y ya no le
+         importa que la tarjeta mida 522.
+       · **El título del mes se dibujaba ENCIMA de la fila Lu/Ma/Mi…** Es la
+         regla #162 mordiendo en otro sitio: un `st.markdown` con HTML de
+         bloque sale con `margin-bottom: -16px`. Medido: el
+         `stElementContainer` del título colapsaba a 10px de alto mientras
+         el `<div>` de adentro seguía midiendo 26 — o sea 16px de texto
+         pisando el encabezado de días. Se arregla con `margin-bottom: 0`
+         sobre `stMarkdownContainer`, y hay que scopearlo al mes entero
+         porque las celdas VACÍAS del mes también son markdown.
+
+         Lo importante no es el fix sino cómo apareció: **medir cajas no
+         detecta solapes**. Ancho, gap y recorte daban todos correctos
+         porque el solape es vertical y entre dos elementos distintos; se
+         vio en una captura del usuario. Para esto están `rayos_x()` y
+         `auditarGraficos()`, y la comprobación barata es restar
+         `bottom` del de arriba menos `y` del de abajo.
+       · **Un `st.selectbox` DENTRO de un `st.popover` abre una lista
+         VACÍA.** Se intentó primero así el selector de mes/año y no
+         funciona: el desplegable es virtualizado y mide su alto al
+         montarse; adentro del popover mide 0, renderiza CERO filas y no
+         vuelve a medir. Medido: el listbox abre con el espaciador
+         correcto (1760px = 40 opciones) pero su HTML son 109 caracteres,
+         o sea ninguna opción; al forzar un `resize` aparecen 12 de golpe.
+         La salida es `st.button`, que es con lo que ya está hecha la
+         grilla. Revisado el resto del repo: no hay otro selectbox
+         anidado en un popover, pero conviene mirarlo antes de meter uno.
+
+         De paso: en Streamlit 1.59.2 el `st.selectbox` **ya no es
+         BaseWeb**, es react-aria (`data-rac`, `div[role="group"]` de
+         marco y un `input[role="combobox"]` que lleva el valor en su
+         atributo `value`, por eso `innerText` da vacío). Cualquier CSS
+         que le apunte a `[data-baseweb="select"]` no matchea nada.
+
+       · **Una guarda que corre en CADA render le gana al usuario.** El
+         ancla del calendario se "re-sembraba" cuando el inicio del rango
+         no estaba en los dos meses a la vista — pensado para un rango
+         cambiado desde afuera. Efecto real: elegir enero 2025 volvía solo
+         a julio 2026, y las flechas no podían alejarse más de un mes del
+         rango. La corrección es comparar contra el rango ANTERIOR
+         (`_K_VISTO`): re-sembrar sólo si cambió **y** quedó fuera de
+         vista. Regla general: una guarda que corrige estado tiene que
+         mirar si algo cambió, no correr incondicionalmente.
+       · **El padding por defecto del popover son 23px** y hay que apretarlo
+         a mano. En un panel que es casi todo grilla se lee como un marco
+         vacío: medido, 23 arriba + 36 de navegación + 16 de gap = 75px
+         antes del primer día. Con 12px de padding y 6 de gap el panel
+         pasó de 334px de alto a 302.
+
+     **La referencia, medida** (MSN Dinero, 2026-08-24, con el navegador
+     sobre la página real). Vale guardarla porque tres rondas de "hacelo
+     más chico" se hicieron a ojo, y los números dijeron que se había ido
+     demasiado lejos:
+
+       | | MSN | el nuestro |
+       |---|---|---|
+       | panel | 556 × 413 | 430 × 296 |
+       | celda | 32 × 36 | 29 × 26 |
+       | letra del día | 13.3px | 10.5px |
+       | encabezado Lu/Ma | 16px | 9.5px |
+       | título del mes | 16px | 11px |
+       | gap entre meses | 40px | 6px |
+       | padding | 8px | 8px |
+
+     Su estructura: cada mes con su propio label + campo (244×36, 14px), y
+     un pie de 540×32 con Aplicar (relleno) y Cancelar (outline), los dos
+     en pastilla de radio 20px. El día elegido va con radio 6px y peso 700.
+     Usa `react-calendar` (MIT) dentro de un `role="dialog"` modal.
+
+     Se replicó la FUNCIONALIDAD (campos escribibles + Cancelar/Aplicar
+     sobre un borrador) y **no** el tamaño, a pedido explícito. Los clics y
+     los campos escriben un borrador; el rango real se toca solo en
+     Aplicar, y mientras tanto el trigger lo marca con un punto sin
+     cambiar su texto — cambiarlo haría creer que ya se aplicó.
+
+     Limitación a saber antes de repetir el patrón: **Streamlit no puede
+     cerrar un `st.popover` desde Python**, así que Aplicar y Cancelar
+     hacen su trabajo pero el panel queda abierto. Un `st.dialog` sí se
+     cierra solo, a cambio de oscurecer la página.
+
+     Y los campos escribibles se hicieron con `st.text_input`, no con
+     `st.date_input`: lo único que hacía falta era teclear, y meter otro
+     datepicker adentro del panel habría anidado un popover en otro.
+
+     Detalle menor pero con costo real: el `width: 100%` del CSS vive dentro de
+     una cadena que cierra un operador `%`, así que va escapado (`100%%`) o
+     revienta en runtime. Lo agarró **`ruff` (F509)**, no un test — buen
+     recordatorio de por qué el `ruff check` va antes de cada push.
+
+204. **`st.iframe` SÍ acepta una string de HTML — la migración desde
+     `components.html` no necesita ni fichero temporal ni `data:` URL. Lo
+     único que cambia de verdad es que `height=0` pasó a ser ilegal.**
+
+     Streamlit 1.59.2 escupía en CADA render, y una vez por llamada:
+
+         Please replace `st.components.v1.html` with `st.iframe`.
+         `st.components.v1.html` will be removed after 2026-06-01.
+
+     Esa fecha ya pasó y `requirements.txt` pide `streamlit>=1.39,<2`, así que
+     Streamlit Cloud podía resolver en cualquier deploy una versión sin la
+     función. No era ruido en el log: eran los **12 puntos** donde la app mete
+     un `<script>`, o sea el inspector, el modo diseño, la barra de
+     herramientas, las cinco inyecciones del AgGrid, la paginación v2, el
+     overlay de errores, el fullscreen, el footer, el calendario en español y
+     el panel de rendimiento. Migrado el 2026-08-24 a
+     `inyecciones/_iframe.py::inyectar_html`, un único punto de paso.
+
+     **El susto era infundado, y conviene saber por qué.** La firma nueva es
+     `st.iframe(src: str | Path, ...)` y eso hace pensar que sólo toma URLs o
+     rutas — que habría que volcar el JS a un fichero y pasar su `Path`, o
+     armar una `data:` URL. No hace falta. Leyendo
+     `streamlit/elements/iframe.py`, la cascada de tipos es:
+
+         Path → URL absoluta → fichero existente → URL relativa (`/…`)
+         → **string de HTML**
+
+     y ese último caso hace `iframe_proto.srcdoc = src_str`: **el mismo campo
+     del mismo proto** que escribía `components.html`. Encima `_is_file()`
+     corta de entrada si la string trae `<` o pasa de `_MAX_PATH_LENGTH`, así
+     que un blob de JS no se confunde nunca con una ruta. Verificado con
+     `AppTest` comparando los dos caminos en el mismo script: `srcdoc`
+     idéntico byte a byte y `src` vacío en ambos.
+
+     Corolario que importa más que la migración: como el proto es el mismo, el
+     frontend no puede distinguirlos, así que **`window.parent` sigue
+     alcanzando el documento de la app igual que siempre** y la regla #39 —en
+     Cloud la app ya vive dentro de un iframe y éste agrega un segundo nivel—
+     no cambia ni para bien ni para mal. Las 12 inyecciones dependen de eso y
+     ninguna se tocó.
+
+     **Lo que sí rompe: `height=0`.** `st.iframe` valida el alto y
+     `validate_height` rechaza `height <= 0`:
+
+         StreamlitInvalidHeightError: Invalid height value: 0. Height must be
+         either a positive integer (pixels), 'stretch', or 'content'.
+
+     Once de las doce llamadas pasaban justamente `height=0`. `inyectar_html`
+     lo traduce al mínimo legal (1px) y **conserva el `0` en su firma**, que es
+     lo que documenta la intención en los call sites ("esta inyección no dibuja
+     nada"). Se ve idéntico porque **el `height=0` nunca fue lo que escondía
+     estos iframes**: los esconde el CSS, y con `!important`. Ver
+     `estilos/_00_base.py` (`[data-testid="stIFrame"] { height: 0 }`) y
+     `navegacion.py` (`display: none` en el `stElementContainer` que lo
+     envuelve, para matar el gap del bloque vertical). Medido en el navegador
+     tras migrar: los 11 iframes de inyección siguen midiendo 0px.
+
+     **Y `scrolling` desapareció**: `st.iframe` fija `scrolling = True` en el
+     proto y no lo expone. Da igual — un iframe de 0px con `overflow: hidden`
+     en el wrapper no puede mostrar una barra, y el único visible (`perf.py`,
+     `height=300`) ya lo pasaba en `True`.
+
+     **La compatibilidad hacia atrás no es opcional.** `st.iframe` llegó mucho
+     después de 1.39, que es el piso que declara `requirements.txt`; el shim
+     resuelve `hasattr(st, "iframe")` UNA vez al importar y cae a
+     `components.html` si no está. El import del módulo deprecado va **dentro**
+     de esa rama, para que una versión moderna no lo toque siquiera.
+
+     Dos cosas que este cambio dejó de regalo, por si se repiten:
+
+       · La cuenta de call sites del pedido decía cuatro (`diseno.py`,
+         `grid.py` ×2 y "el scrollspy del rail en `graficos/base.py`"). Eran
+         **doce**, y el del rail **no existe**: `_render_rail` es `st.markdown`
+         + `st.button` desde que el rail pasó de vertical a franja horizontal
+         (regla #170). Antes de migrar algo "en N sitios", `grep`.
+
+       · `graficos/compras/documentos_sunat.py` ya traía escrito que el PDF
+         embebido no se arreglaba "cambiando de `components.html` a
+         `st.iframe`". Sigue siendo cierto y ahora está comprobado: el
+         `sandbox` lo pone el frontend de Streamlit, no la función de Python
+         que emitió el iframe.
+
+205. **En `recetaventa.parquet`, tres trampas de columna que no tiran
+     error — devuelven un número o una etiqueta que PARECE correcta.**
+
+     Aparecieron construyendo la tabla "Composición" de Receta Venta
+     (`recetaventa.py::_tabla_composicion_venta`, 2026-08-24: reemplaza la
+     dona de un plato por una tabla de TODOS con Grupo/Subgrupo/Precio/
+     Costo/%Costo de Salón + clic → receta al lado). Confirmado contra R2
+     real con DuckDB directo, no contra el demo.
+
+     1. **`P.VENTA SALON` / `CST SALON` / `%CST SALON` son atributos del
+        PLATO, repetidos en cada fila-insumo — no del ítem.** Mismo
+        patrón que `VALOR_ANO_ANTERIOR` de `compras.parquet` (CLAUDE.md §
+        "Antes de sumar una columna comparable"). Verificado con DuckDB:
+        de los 850 platos del catálogo, CERO tienen más de un valor
+        distinto de esas tres columnas dentro de su propio `COD PLATO`.
+        Un `.groupby(...).sum()` los infla tantas veces como insumos
+        tenga el plato — la tabla se agrupa con `.first()`. También
+        confirmado que `CST SALON` == suma de `TOTAL` de los ítems de ese
+        plato (sin filtrar por `INS ACTIVO`): la receta que abre el clic
+        tiene que sumar EXACTO contra el Costo Salón de la fila, o la
+        tabla de al lado "no cuadra" y parece un bug aunque no lo sea.
+
+     2. **El insumo NO es `ITEM RV`.** Es el número de LÍNEA dentro de la
+        receta ("001", "002"…, solo 31 valores distintos en las 2.602
+        filas del parquet) — no una identidad de insumo. El mismo
+        `COD INS` aparece como "001" en un plato y "019"/"007"/"013" en
+        otros (verificado con Langostino grande, `COD INS` 0003547). El
+        texto descriptivo real es `INS RV`: 1.058 valores, uno por
+        `COD INS`, 0% de variación. `recetaventa.py` ya resolvía
+        `col_item` con candidatos que incluían `"ITEM RV"` pero nunca
+        `"INS RV"` (Sankey/Ranking/Ingredientes clave — sin tocar en
+        este cambio, queda como deuda: esas tres vistas etiquetan
+        insumos con el número de línea, no con su nombre). Probablemente
+        la razón de fondo por la que la dona vieja de "Composición"
+        mostraba números de línea en vez de nombres y "no mostraba
+        mucho" — el motivo del pedido que reemplazó esa vista. La tabla
+        nueva usa `INS RV`.
+
+     3. **`P.VENTA SALON` trae precios "centinela" que arruinan cualquier
+        ranking por `%CST SALON`, y no se ven a simple vista en una
+        muestra chica.** Descubierto EN VIVO recién al abrir la tabla en
+        el navegador (no con DuckDB solo): el plato #1 del ranking por
+        %Costo era "Zumo Limon" con Costo S/0.58 sobre un Precio de
+        `1e-12` — %Costo de **71.798.840.000%**. Verificado el patrón
+        completo: 15 de los 436 platos activos tienen `P.VENTA SALON` en
+        un cluster de valores redondos que ningún precio real usa
+        (`1e-12`, `1e-7`, `1e-4`, `1e-3`, y **ocho platos distintos en
+        exactamente `1.00`** — cortesías, mermas ("(WD)"), ítems de
+        exhibición ("(Ex)")) y CERO platos activos tienen un precio
+        entre 1 y 7 soles — hueco limpio, filtro en `Precio > 1`.
+
+        Trampa aparte, real y NO filtrada: bebidas con `%CST SALON` genuino
+        de 300–950% (Ron/Tequila/Vodka premium) porque `CST SALON` es el
+        costo de la BOTELLA entera y `P.VENTA SALON` el precio de LA COPA
+        — visualmente parecido al artefacto de arriba (número enorme) pero
+        un dato real, con precios nada redondos (S/32–50). Distinguir uno
+        de otro por el %Costo solo no alcanza; hizo falta mirar el precio.
+
+     Regla general: un nombre de columna que **suena** a lo que buscás
+     (`ITEM RV` para "ítem de la receta venta") no prueba que lo sea —
+     hacía falta abrir el parquet real y mirar cardinalidad, no leer el
+     nombre. `data.py::_datos_demo` para `recetaventa.parquet` se
+     actualizó con GRUPO/SUBGRUPO/P.VENTA SALON/CST SALON/%CST SALON/
+     INS RV realistas (constantes por plato, `CST SALON` cuadrando con
+     la suma de sus ítems) para que esta vista se pueda verificar en
+     local sin secrets de R2 — mismo motivo que ya dejó un comentario
+     largo en ese bloque en 2026-08-13.
+
+206. **Un `mousemove`/`mouseup` de un iframe TAMPOCO sube al padre —
+     el modo diseño se congelaba al arrastrar sobre una tarjeta con
+     AgGrid, y el clic derecho DENTRO de la grilla fijaba pero nunca
+     copiaba.** Reportado 2026-08-24: "no me permite copiar el
+     tooltip, ni en diseño, arrastrar". Dos síntomas, una sola causa:
+     la regla #185 ya había medido que un iframe es un documento
+     aparte y sus eventos no cruzan al padre, pero ese fix solo
+     enganchó `contextmenu` — un evento discreto, fácil de reenviar
+     una vez. Nadie había mirado el arrastre, que depende de
+     `mousemove` CONTINUO.
+
+     · **Arrastrar:** las tarjetas con AgGrid (Ranking de proveedores,
+       Documentos...) tienen la grilla ocupando casi todo el cuerpo.
+       Medido en `compras_prov_card_ranking`: el asa "Mover" queda a
+       ~50px del borde superior de su propia tabla — cualquier "nudge"
+       hacia abajo cruza el cursor sobre el iframe a los pocos
+       píxeles, y ahí `doc.addEventListener('mousemove', onMove)` (en
+       el documento padre) deja de recibir nada. El arrastre se
+       congela, y como el `mouseup` tampoco llega, los listeners
+       quedan pegados y `body.style.userSelect` se queda en `'none'`
+       hasta recargar la página.
+
+     · **Copiar:** el camino que la regla #185 abrió para clic derecho
+       DENTRO de un iframe (`engancharIframes` → `saltarADiseno`)
+       llama directo a `__inspectorTogglePin`, no al
+       `__inspectorContextMenuHandler` del inspector — así que el
+       "clic derecho ADEMAS copia" que existe en cualquier otro punto
+       de la app nunca se ejecutaba ahí. El usuario veía el tooltip (el
+       pin sí funcionaba) pero ni "Copiado" ni el fallback de selección
+       aparecían nunca.
+
+     Fix, los dos en `inyecciones/_diseno_js.py`: (1) `iniciarArrastre`
+     ahora engancha `mousemove`/`mouseup` en el `contentDocument` de
+     cada iframe same-origin MIENTRAS dura el gesto — traduce
+     coordenadas sumando el offset del iframe y reenvía al mismo
+     `onMove`/`onUp` — y los desinstala en el propio `onUp`, sin
+     necesitar el poll de `sync()` porque un drag no sobrevive a un
+     rerun de Streamlit. (2) el listener de `engancharIframes` llama a
+     `win.__inspectorEjecutarCopia()` después de `saltarADiseno(key)`,
+     igual que hace el handler normal.
+
+     Verificado disparando los eventos DIRECTO en el `contentDocument`
+     del iframe (no en el padre), para no depender de un mouse real
+     cruzando la frontera: antes del fix el `translateX/Y` se congelaba
+     apenas llegaba un evento dentro del iframe y un mousemove
+     posterior en el padre no lo revivía; después, el estado sigue el
+     gesto completo y un mouseup dentro del iframe limpia todo
+     (`userSelect` vuelve a `''`, un mousemove posterior ya no mueve
+     nada). Para copiar, confirmado que `copiarTexto()` se dispara
+     desde el mismo camino: mismo mensaje de fallback "Automatico
+     bloqueado" que el camino normal bajo un evento sintético — señal
+     de que es la misma función, no una nueva.
+
+     **La lección:** medir un fix contra el síntoma que lo motivó no
+     prueba que cubra la CLASE de bug. La #185 diagnosticó bien "los
+     eventos de un iframe no suben al padre" pero solo lo resolvió
+     para el evento puntual que tenía enfrente; el mismo diagnóstico
+     aplicaba igual de fuerte a un gesto continuo, y quedó pendiente
+     hasta que otro reporte lo encontró desde el otro lado.
+
+207. **Un módulo de `estilos/` NUNCA lleva su propio `<style>`: se lleva
      puesto todo lo que viene después.** `get_css()` concatena los módulos
      y el `<style>` lo abre `_00_base` y lo cierra `_99_movil`; lo del
      medio va pelado. Un `<style>` anidado dentro de otro es sintaxis
@@ -8524,7 +9214,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      existe. La sonda que lo destapó fue contar las media-queries de
      móvil que habían sobrevivido.
 
-199. **Una `ScrollTimeline` declarada con el CSS inicial queda inactiva
+208. **Una `ScrollTimeline` declarada con el CSS inicial queda inactiva
      para siempre.** Las animaciones dirigidas por scroll
      (`animation-timeline`, `scroll-timeline-name`, `timeline-scope`)
      están soportadas —medido en Chrome 148— y son el camino natural acá,
@@ -8539,10 +9229,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      de que la página asienta, funciona perfecto y sigue el scroll. Es
      cuestión de CUÁNDO se crea, no de cómo se escribe.
 
-     **El disparador va por `components.html`**, que sí ejecuta JS (es un
-     iframe de verdad, el mismo recurso del inspector — ver #39): pone y
-     saca una clase en el `<html>` del documento padre y el CSS cuelga de
-     esa clase.
+     **El disparador va por un iframe que sí ejecuta JS** (el mismo recurso
+     del inspector — ver #39): pone y saca una clase en el `<html>` del
+     documento padre y el CSS cuelga de esa clase. Al fusionarse con la
+     migración de la regla #204, pasa por
+     `inyecciones._iframe.inyectar_html` y no por `components.html`
+     directo — mismo mecanismo, primitivo nuevo.
 
      Y adentro, **`IntersectionObserver` y no un listener de `scroll`**.
      Dos razones. La de diseño: la condición que se quiere expresar es
@@ -8561,7 +9253,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Si algún día el motor lo arregla, volver a CSS puro es sacar el
      gancho y colgar las mismas reglas de un `animation-range`.
 
-200. **Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no
+209. **Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no
      mover uno.** La columna izquierda muestra Reportes arriba de todo y
      Vistas al bajar. El impulso es mover la franja horizontal de vistas
      hasta la columna con una animación; no se puede:
@@ -8579,8 +9271,64 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      **Y el reposo va sin `!important` a propósito:** la copia lateral
      nace en `opacity: 0` como declaración normal, así una animación
      activa le gana y una inactiva la deja escondida. Sin eso, el día que
-     el disparador no arranca (ver #199) los dos rails se ven
+     el disparador no arranca (ver #208) los dos rails se ven
      superpuestos — peor que no tener la función.
+
+210. **En una página APILADA el rango de fechas es del REPORTE, no de la
+     vista: dos dueños de la misma clave revientan la app en cada carga.**
+
+     El 2026-08-24 se cruzaron dos cambios buenos por separado. Uno apiló
+     las seis vistas de Compras en una sola página que se lee bajando; el
+     otro le dio a la vista `Semanal` un calendario propio de dos meses
+     (`_calendario.py`, regla #203). Al fusionarlos, Compras dejó de
+     cargar:
+
+         StreamlitAPIException: st.session_state.rango_franja_Compras
+         cannot be modified after the widget with key rango_franja_Compras
+         is instantiated.
+
+     La secuencia, que es lo que hay que entender y no el mensaje:
+
+       1. `app.py` dibuja el `st.date_input` de la franja — eso INSTANCIA
+          la key `rango_franja_Compras` en esta corrida.
+       2. La pila sigue bajando y llega a `Semanal`, que ahora se dibuja
+          SIEMPRE (antes sólo si era la vista activa).
+       3. Su calendario escribe `st.session_state[k_rango] = ...` para
+          pinear el rango, porque sin `date_input` Streamlit lo descarta.
+       4. Streamlit prohíbe reescribir la key de un widget ya instanciado
+          en la misma corrida. Excepción.
+
+     **La causa raíz no es el calendario: es una invariante que se cayó
+     sin que nadie la nombrara.** Todo el diseño de "quién dibuja la
+     fecha" (`vista_quiere_fecha_propia`, `_VISTAS_CON_FECHA_PROPIA`)
+     descansaba en que sólo UNA vista se dibujara por corrida, así que
+     sólo una podía tocar la clave. Apilar las vistas la rompió para las
+     seis de una, en silencio: el código de la fecha no cambió ni una
+     línea y pasó a estar mal.
+
+     Se resolvió sacando el calendario y devolviéndole el rango a la
+     franja. **Documentos SUNAT sigue quedándose el suyo y no choca**
+     porque NO está en la pila: es un destino aparte, y ahí sí vale que
+     una vista sea dueña de la fecha. Si algún día entra a la pila, su
+     choque sería peor que el de Semanal — no reescribe la clave, dibuja
+     el MISMO `franja_fecha.render()` una segunda vez, o sea dos widgets
+     con la misma key.
+
+     **La salida de fondo, el día que se quiera:** que cada sección tenga
+     su PROPIA clave de rango y filtre `df_full` por su cuenta, en vez de
+     compartir una global. Eso es lo que además habilitaría el selector
+     por gráfico. Es un refactor de `franja_fecha`/`estado_rango`/
+     `cortes` (~3.100 líneas entre los tres) y de la zona con más bugs
+     históricos del proyecto (#62 a #65): sesión aparte, no de paso.
+
+     **Y el criterio de producto, que es el que evita volver acá:** lo que
+     hacen los dashboards maduros (Tableau, Power BI, Looker, Grafana,
+     Metabase) es UN rango global arriba y, por gráfico, granularidad y
+     comparación — no ventanas independientes. Grafana sí deja que un
+     panel tenga rango propio, y lo marca con un ícono de reloj: lo trata
+     como EXCEPCIÓN que hay que señalizar. El motivo es el mismo que acá:
+     apiladas, dos secciones del mismo dataset con períodos distintos y
+     sin aviso se contradicen a la vista.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
@@ -8588,7 +9336,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#201**.
+> próxima regla nueva es la **#211**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

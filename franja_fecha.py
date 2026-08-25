@@ -64,6 +64,7 @@ def _fmt_rango_es(ini, fin):
     return (f"{ini.day} {_MESES_ES[ini.month - 1]} {ini.year} – "
             f"{fin.day} {_MESES_ES[fin.month - 1]} {fin.year}")
 
+
 def publicar(**ctx):
     """`app.py` deja aca todo lo que el panel necesita para dibujarse."""
     st.session_state[_CLAVE_CTX] = ctx

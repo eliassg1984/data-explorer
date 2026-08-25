@@ -27,7 +27,7 @@ cuatro veces desde que se escribio). Si se agrega un auditor nuevo, va a
 `_FUENTES` y a `MODOS`/`ACCIONES` en `_herramientas_js.py`.
 
 Se ejecutan inyectando un `<script>` en el documento del PADRE, no en el
-iframe de este `components.html`: estan escritos para la consola y usan
+iframe de este `inyectar_html`: estan escritos para la consola y usan
 `document`/`window` directo, asi que corriendolos aca mirarian el DOM del
 iframe (vacio). Con el `<script>` en el padre quedan definidos sobre la app
 real, y de paso siguen disponibles para llamarlos a mano desde la consola
@@ -56,9 +56,8 @@ colgada en pantalla despues de salir con el atajo.
 import json
 from pathlib import Path
 
-import streamlit.components.v1 as components
-
 from inyecciones._herramientas_js import JS
+from inyecciones._iframe import inyectar_html
 
 # nombre en el script  ->  fichero en herramientas/
 _FUENTES = {
@@ -93,4 +92,4 @@ def inject_herramientas():
     # tiene hoy, pero el escape va igual: el dia que alguien meta uno en un
     # comentario, el sintoma seria la barra entera rota sin causa visible.
     fuentes = json.dumps(_leer_fuentes()).replace("</", "<\\/")
-    components.html(JS.replace("__FUENTES__", fuentes), height=0, scrolling=False)
+    inyectar_html(JS.replace("__FUENTES__", fuentes), height=0)

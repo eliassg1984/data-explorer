@@ -43,7 +43,8 @@ from contextlib import contextmanager
 
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
+
+from inyecciones import inyectar_html
 
 
 STATE_KEY = "_perf_state"
@@ -432,7 +433,7 @@ class PerfTracker:
             </script>
             """
 
-            # Inyectamos vía components.html (crea un iframe real con srcdoc).
+            # Inyectamos vía inyectar_html (crea un iframe real con srcdoc).
             # A diferencia de st.markdown(unsafe_allow_html=True) -que inserta
             # el HTML por innerHTML y NUNCA ejecuta los <script> que trae
             # embebidos, por especificación del propio HTML/DOM-, un iframe
@@ -441,7 +442,7 @@ class PerfTracker:
             # esperando eventos para siempre, sin importar qué pasara en
             # AgGrid. El iframe resultante lo hace visible el CSS de
             # estilos.py vía la key "perf_browser_expander" del expander.
-            components.html(html_code, height=300, scrolling=True)
+            inyectar_html(html_code, height=300)
 
             st.caption(
                 "📡 Los eventos también se ven en la consola del navegador "

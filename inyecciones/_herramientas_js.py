@@ -25,7 +25,7 @@ JS = """
 
     // Los .js de herramientas/ estan escritos para la CONSOLA: usan
     // `document`/`window` directo. Ejecutarlos aca (dentro del iframe de
-    // components.html) los dejaria midiendo el DOM del iframe, que esta
+    // inyectar_html) los dejaria midiendo el DOM del iframe, que esta
     // vacio. Un <script> creado en el documento del PADRE corre en su
     // realm, asi que definen win.rayosX / win.auditar / win.auditarGraficos
     // sobre la app real. Es la misma razon por la que todo este script

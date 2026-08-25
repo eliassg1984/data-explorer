@@ -191,14 +191,25 @@ _CSS_FRANJA_VISTAS = f"""
 }}
 .st-key-nav_rail::-webkit-scrollbar {{ height:0 !important; }}
 
+/* LA FILA ES `.st-key-nav_rail` MISMO, no un hijo suyo.
+   `st.container(key="nav_rail")` renderiza UN stVerticalBlock que ya lleva
+   la key, y `_render_rail` mete los botones DIRECTOS adentro (sin wrapper
+   propio, ver su docstring). Hasta el 2026-08-24 estas declaraciones
+   colgaban de `.st-key-nav_rail [data-testid="stVerticalBlock"]`, un
+   DESCENDIENTE que no existe: el selector no matcheaba nada, el `gap:0` se
+   perdía y sobrevivía el `gap:1rem` propio de Streamlit. Con 8 vistas son
+   7 huecos = 112px de más, y el último ítem ("Tabla") se salía de un
+   viewport de 900px — medido, borde derecho en x=924. Se listan LOS DOS
+   selectores a propósito: si alguna vez vuelve a haber un wrapper interno,
+   tampoco puede reintroducir el hueco. Ver arquitectura.md regla #201.
+   Ojo con lo que NO se hereda de la regla vieja: `min-width:max-content`
+   servía para un wrapper y sobre el rail sería un bug — lo estiraría hasta
+   el ancho del contenido y anularía el `overflow-x:auto` que hace de
+   válvula en viewports angostos. */
+.st-key-nav_rail,
 .st-key-nav_rail [data-testid="stVerticalBlock"] {{
-    display:flex !important; flex-direction:row !important;
     flex-wrap:nowrap !important;
-    align-items:stretch !important; gap:0 !important;
-    width:100% !important; height:100% !important;
-    min-width:max-content !important;
-    padding:0 !important;
-    overflow:visible !important;
+    gap:0 !important; row-gap:0 !important; column-gap:0 !important;
 }}
 
 /* CONTENEDORES DE BOTONES: en fila miden su contenido y se estiran a lo
@@ -279,15 +290,16 @@ _CSS_FRANJA_VISTAS = f"""
         overflow-x:auto !important; overflow-y:hidden !important;
         -webkit-overflow-scrolling:touch !important;
     }}
-    .st-key-nav_rail [data-testid="stVerticalBlock"] {{
-        flex-direction:row !important;
-        gap:4px !important;
-        padding:6px 150px 6px 10px !important;
-        width:max-content !important;
-        min-width:100% !important;
-        height:100% !important;
-        align-items:center !important;
-    }}
+    /* El gemelo móvil de la regla muerta de arriba: mismo selector
+       descendiente inexistente, mismo efecto nulo. No se resucita ninguna
+       de sus declaraciones porque el rail YA las trae puestas sobre sí
+       mismo (flex-direction:row, gap:4px, align-items:center) y borrarlas
+       es un no-op medido. La única que pedía algo distinto era
+       `padding:6px 150px 6px 10px`: reservaba 150px a la derecha para un
+       flotante que hoy no está ahí (medido a 375px: no hay ningún `fixed`
+       en esa esquina). Llevaba muerta desde la inversión Reportes/Vistas
+       del 2026-08-22 sin que nadie la extrañara, así que se va con el resto
+       en vez de reaparecer de golpe como un hueco de 150px. */
     .st-key-nav_rail [data-testid="stElementContainer"],
     .st-key-nav_rail [data-testid="stButton"] {{
         width:calc(25vw - 8px) !important;

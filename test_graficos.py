@@ -257,6 +257,122 @@ def _pruebas_puras():
     check("_vol_fmt_rango cruza de mes",
           _vol._vol_fmt_rango_semana(pd.Timestamp("2026-06-29")), "29 Jun - 5 Jul")
 
+    # ── Vs año pasado (drill de Compras) ────────────────────────────────
+    # Lo que fijan estos asserts NO es aritmética de fechas: es que el año
+    # pasado se calcule del propio histórico y no de las columnas
+    # `*_ANO_ANTERIOR` del parquet. Ésas vienen REPETIDAS en cada fila del
+    # producto-mes (verificado contra R2: constantes en los 4.269 grupos),
+    # así que sumarlas multiplicaba el año pasado por x4.9. El bug no se ve:
+    # el gráfico sale lindo, sólo que con el año pasado inflado.
+    from graficos.compras import vs_ano_pasado as _vap
+
+    _dv = pd.DataFrame({
+        "prod":  ["A", "A", "A", "B", "A", "A", "B"],
+        "fam":   ["F1"] * 7,
+        "fecha": pd.to_datetime(["2025-03-05", "2025-03-20", "2025-08-10",
+                                 "2025-08-11", "2026-03-02", "2026-03-09",
+                                 "2026-08-25"]),
+        "valor": [100.0, 200.0, 50.0, 80.0, 600.0, 0.0, 90.0],
+        "cant":  [10.0, 20.0, 5.0, 8.0, 20.0, 0.0, 9.0],
+        # VENENO: si la vista vuelve a leer estas columnas, los asserts de
+        # abajo se caen con números absurdos en vez de pasar en silencio.
+        "VALOR_ANO_ANTERIOR": [999999.0] * 7,
+        "CANTIDAD_ANO_ANTERIOR": [999999.0] * 7,
+    })
+    _g1 = _vap._mensual(_dv, "prod", "fecha", "valor", "cant", col_grupo="fam")
+    check("_mensual agrupa por producto+mes", len(_g1), 5)
+    check("_mensual suma dentro del mes",
+          float(_g1[(_g1["prod"] == "A")
+                    & (_g1["mes"] == pd.Period("2025-03", "M"))]["valor"].iat[0]),
+          300.0)
+
+    # `recorte` corta UN mes y sólo ése (el espejo del mes parcial).
+    _g2 = _vap._mensual(_dv, "prod", "fecha", "valor", "cant",
+                        recorte=(pd.Period("2025-03", "M"), 10))
+    check("_mensual recorta el mes espejo al día pedido",
+          float(_g2[(_g2["prod"] == "A")
+                    & (_g2["mes"] == pd.Period("2025-03", "M"))]["valor"].iat[0]),
+          100.0)
+    check("_mensual no toca los otros meses",
+          float(_g2[(_g2["prod"] == "A")
+                    & (_g2["mes"] == pd.Period("2025-08", "M"))]["valor"].iat[0]),
+          50.0)
+
+    _gv = _vap._con_ano_pasado(_g1)
+    # PISO: 2025 no tiene contra qué compararse (el histórico arranca ahí).
+    check("_con_ano_pasado descarta los meses sin año pasado",
+          sorted({str(m) for m in _gv["mes"]}), ["2026-03", "2026-08"])
+    # El año pasado sale del propio histórico, NO de la columna envenenada.
+    check("el año pasado sale del histórico, no de *_ANO_ANTERIOR",
+          float(_gv[(_gv["prod"] == "A")
+                    & (_gv["mes"] == pd.Period("2026-03", "M"))]["valor_aa"].iat[0]),
+          300.0)
+    # BAJA: B se compraba en ago-25 y en ago-26 (el mes que existe) también,
+    # pero A NO se compró en ago-26 — tiene que aparecer igual, con valor 0.
+    _baja = _gv[(_gv["prod"] == "A") & (_gv["mes"] == pd.Period("2026-08", "M"))]
+    check("una baja aparece aunque no tenga fila este año", len(_baja), 1)
+    check("la baja trae el gasto del año pasado", float(_baja["valor_aa"].iat[0]), 50.0)
+    check("la baja hereda su grupo del producto", str(_baja["grupo"].iat[0]), "F1")
+    # TECHO: el desplazamiento de +12 no puede inventar meses que no pasaron.
+    check("_con_ano_pasado no inventa meses futuros",
+          max(str(m) for m in _gv["mes"]), "2026-08")
+
+    # El puente SIEMPRE cierra: los dos efectos suman la diferencia exacta.
+    _ep, _ec = _vap._puente(600.0, 20.0, 300.0, 30.0)
+    check("_puente cierra contra el Δ", round(_ep + _ec, 9), 300.0)
+    check("_puente aísla el efecto precio", round(_ep, 2), 400.0)
+    check("_puente aísla el efecto cantidad", round(_ec, 2), -100.0)
+    check("sin cantidad del año pasado, el efecto es todo cantidad",
+          _vap._puente(500.0, 5.0, 0.0, 0.0), (0.0, 500.0))
+    check("una baja también es efecto cantidad",
+          _vap._puente(0.0, 0.0, 250.0, 10.0), (0.0, -250.0))
+
+    # El puente de un GRUPO se suma desde los productos, nunca se calcula
+    # sobre el agregado: `Σvalor / Σcantidad` mezcla kilos con litros y con
+    # servicios. Medido con el parquet real: la familia GASTOS VENTAS daba
+    # ±540k para explicar un Δ de −36k.
+    _gg = pd.DataFrame({
+        "prod":     ["Kilos", "Litros"],
+        "grupo":    ["F1", "F1"],
+        "mes":      [pd.Period("2026-03", "M")] * 2,
+        # Mismo gasto los dos años, pero uno subió de precio y compró menos
+        # y el otro al revés — sobre el agregado los efectos se disparan.
+        "valor":    [1000.0, 1000.0],
+        "cant":     [50.0, 500.0],
+        "valor_aa": [1000.0, 1000.0],
+        "cant_aa":  [100.0, 250.0],
+    })
+    _porfam = _vap._por_item(_gg, "grupo")
+    check("el puente de un grupo cierra contra su Δ",
+          round(float(_porfam["ef_precio"].iat[0] + _porfam["ef_cant"].iat[0]), 6),
+          0.0)
+    # Producto a producto: "Kilos" pasó de S/10 a S/20 sobre 50 kg (+500 de
+    # precio, −500 de cantidad) y "Litros" de S/4 a S/2 sobre 500 L (−1000
+    # de precio, +1000 de cantidad). Sumados: −500 de precio, +500 de
+    # cantidad. Los dos movimientos existen y ninguno se cancela.
+    check("el efecto precio del grupo es la suma del de sus productos",
+          round(float(_porfam["ef_precio"].iat[0]), 2), -500.0)
+    check("el efecto cantidad del grupo también",
+          round(float(_porfam["ef_cant"].iat[0]), 2), 500.0)
+    check("el grupo cuenta sus productos",
+          int(_porfam["n_items"].iat[0]), 2)
+    # Sobre el agregado daría 0 y 0 (mismo gasto, misma "cantidad" 550 vs
+    # 350): la cuenta cierra igual pero esconde los dos movimientos.
+    # Sobre el AGREGADO (550 "unidades" contra 350, sumando kg con L) el
+    # efecto precio daría −857, no −500: un número que cierra igual pero que
+    # no es la suma de ningún movimiento real.
+    check("sobre el agregado los efectos NO son los mismos (por eso no se usa)",
+          round(_vap._puente(2000.0, 550.0, 2000.0, 350.0)[0], 2) != -500.0,
+          True)
+
+    check("_mes_parcial detecta el mes incompleto",
+          _vap._mes_parcial(pd.Series(pd.to_datetime(
+              ["2026-08-01", "2026-08-21"]))),
+          (pd.Period("2026-08", "M"), 21))
+    check("_mes_parcial no marca un mes cerrado",
+          _vap._mes_parcial(pd.Series(pd.to_datetime(
+              ["2026-07-01", "2026-07-31"]))), None)
+
     # ── Documentos SUNAT: cruce contra el parquet de Compras ────────────
     # Sin red ni Streamlit: son funciones puras sobre DataFrames armados a
     # mano, pensadas para reproducir el bug real que motivó acotar por
@@ -1678,6 +1794,33 @@ def main():
          lambda: _vh_fig._fig_mapa([None], [2026], "Año", "venta", [], [12]), ()),
     ]
 
+
+    # ── Vs año pasado (Compras): serie mensual y puente precio/cantidad ──
+    # El waterfall entra con un efecto de cada signo a propósito: es la
+    # combinación donde `increasing`/`decreasing` tienen que pintar los dos
+    # colores del semáforo invertido (subir un costo es malo).
+    from graficos.compras import vs_ano_pasado as _vap_fig
+    _g_vap = pd.DataFrame({
+        "prod": ["A", "B", "A", "B"],
+        "grupo": ["F1", "F2", "F1", "F2"],
+        "mes": [pd.Period("2026-07", "M"), pd.Period("2026-07", "M"),
+                pd.Period("2026-08", "M"), pd.Period("2026-08", "M")],
+        "valor": [100.0, 200.0, 150.0, 0.0],
+        "cant": [10.0, 20.0, 12.0, 0.0],
+        "valor_aa": [90.0, 180.0, 120.0, 60.0],
+        "cant_aa": [9.0, 18.0, 15.0, 6.0],
+    })
+    pruebas += [
+        ("compras vs año pasado · serie (Valor, mes parcial)",
+         lambda: _vap_fig._fig_serie(_g_vap, "Valor",
+                                     (pd.Period("2026-08", "M"), 21), "t"), ()),
+        ("compras vs año pasado · serie (Cantidad)",
+         lambda: _vap_fig._fig_serie(_g_vap, "Cantidad", None, "t"), ()),
+        ("compras vs año pasado · serie (Precio, ratio con cero)",
+         lambda: _vap_fig._fig_serie(_g_vap, "Precio", None, "t"), ()),
+        ("compras vs año pasado · puente precio/cantidad",
+         lambda: _vap_fig._fig_puente(250.0, 450.0, 60.0, -260.0), ()),
+    ]
 
     for nombre, fn, args in pruebas:
         try:

@@ -1,6 +1,6 @@
 """inyecciones._diseno_js - el JS del modo de diseno visual.
 
-Blob de 794 lineas que estaba embebido como un unico components.html
+Blob de 794 lineas que estaba embebido como un unico inyectar_html
 DENTRO de inject_diseno_visual. Se saco el 2026-08-08, mismo tratamiento
 que _inspector_js.py.
 
@@ -376,6 +376,14 @@ JS = """
                                 txt: (ns[idx].textContent || '').trim() }
                             : null;
                         saltarADiseno(key);
+                        // `saltarADiseno` solo pinea (llama a
+                        // __inspectorTogglePin directo, no pasa por el
+                        // contextmenu handler del inspector) — clic derecho
+                        // DENTRO de la grilla se quedaba sin el "ademas
+                        // copia" que el gesto tiene en cualquier otro lado
+                        // de la app. Mismo "un solo gesto" que arquitectura.md
+                        // #185 dejo pendiente.
+                        win.__inspectorEjecutarCopia && win.__inspectorEjecutarCopia();
                     }, true);
                 })(ifs[i], fdoc);
             }
@@ -1622,11 +1630,42 @@ JS = """
                 trackear(vivo.el);
                 actualizarReadouts(vivo.el, vivo.registro);
             }
+            // Las tarjetas con AgGrid (Ranking de proveedores, Documentos, ...)
+            // tienen la grilla ocupando la mayor parte del cuerpo: mover o
+            // agrandar la tarjeta cruza el cursor sobre ese iframe a los
+            // pocos pixeles. `mousemove`/`mouseup` de un iframe NO suben al
+            // documento padre (misma frontera que arquitectura.md #185, ahi
+            // para `contextmenu`) — sin este enganche el arrastre se
+            // congelaba apenas el cursor entraba a la tabla. Se instala y
+            // desinstala por gesto (no hace falta el poll de `sync()`: un
+            // drag no sobrevive a un rerun de Streamlit).
+            var ganchosIframe = [];
+            var ifsArrastre = doc.querySelectorAll('iframe');
+            for (var fi = 0; fi < ifsArrastre.length; fi++) {
+                var frameA = ifsArrastre[fi], fdocA = null;
+                try { fdocA = frameA.contentDocument; } catch (e) { continue; }
+                if (!fdocA) continue;
+                (function (frame, fdoc) {
+                    var reenviarMove = function (ev) {
+                        var rf = frame.getBoundingClientRect();
+                        onMove({ clientX: rf.left + ev.clientX, clientY: rf.top + ev.clientY });
+                    };
+                    var reenviarUp = function () { onUp(); };
+                    fdoc.addEventListener('mousemove', reenviarMove);
+                    fdoc.addEventListener('mouseup', reenviarUp);
+                    ganchosIframe.push({ fdoc: fdoc, move: reenviarMove, up: reenviarUp });
+                })(frameA, fdocA);
+            }
+
             function onUp() {
                 doc.body.style.userSelect = '';
                 doc.body.style.cursor = cursorPrevio;
                 doc.removeEventListener('mousemove', onMove);
                 doc.removeEventListener('mouseup', onUp);
+                for (var gi = 0; gi < ganchosIframe.length; gi++) {
+                    ganchosIframe[gi].fdoc.removeEventListener('mousemove', ganchosIframe[gi].move);
+                    ganchosIframe[gi].fdoc.removeEventListener('mouseup', ganchosIframe[gi].up);
+                }
             }
             doc.addEventListener('mousemove', onMove);
             doc.addEventListener('mouseup', onUp);
@@ -1963,7 +2002,7 @@ JS = """
 
         // Duplica (a proposito, ver docstring de diseno.py) el fallback de
         // copiarTexto() de _inspector_js.py: este script corre en OTRO
-        // iframe de components.html, sin acceso a esa funcion local.
+        // iframe de inyectar_html, sin acceso a esa funcion local.
         function copiarTextoDiseno(texto, cb) {
             var terminado = false;
             var marcar = function(ok) { if (!terminado) { terminado = true; cb(ok); } };
@@ -2150,7 +2189,7 @@ JS = """
             estadoCopiar.style.fontSize = '10px';
             // Fallback manual, oculto hasta que haga falta: si el automatico
             // falla (frecuente en Streamlit Cloud, el iframe anidado de
-            // components.html — arquitectura.md § Reglas #39) no hay nada
+            // inyectar_html — arquitectura.md § Reglas #39) no hay nada
             // mas en pantalla para seleccionar, a diferencia del inspector
             // que ya tiene su <pre> visible. Sin este textarea, "Ctrl+C"
             // seria un mensaje que miente.
@@ -2842,7 +2881,7 @@ JS = """
             if (win.__disenoState.tick % 7 === 0) pintarVecinas();
         }
 
-        // rerun-safety: el iframe de components.html se recrea en cada
+        // rerun-safety: el iframe de inyectar_html se recrea en cada
         // rerun (igual que el de inspector.py) — limpiar el interval y los
         // listeners viejos antes de instalar los nuevos, o se acumulan para
         // siempre (ver mismo patron en inspector.py). Las manijas y los

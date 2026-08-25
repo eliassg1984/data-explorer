@@ -180,6 +180,19 @@ una tarjeta que ya estaba llena, así que los píxeles que ocupan hay que
 restárselos a la figura, o la tarjeta crece y su eje X termina debajo del
 borde (el modo de fallo de `FRANJA_CONTROLES`)."""
 
+FRANJA_VEREDICTO = 47
+"""Alto de una línea de VEREDICTO —una cifra grande y un renglón chico de
+prosa— puesta encima de una figura, más el hueco que Streamlit deja entre
+bloques. MEDIDO en el navegador el 2026-08-24 en Compras › Vs año pasado:
+el bloque mide 31px y el gap 16.
+
+Existe por lo mismo que las FRANJA_* de arriba, pero con un matiz: acá los
+píxeles no se le restan a la figura para que la TARJETA no crezca, sino para
+que las DOS figuras de la fila terminen en la misma línea. Sin la resta, la
+de la derecha arranca 47px más abajo, termina 47px más abajo, y la fila deja
+de leerse como una grilla — el mismo defecto que `COLUMNAS_DRILL` arregla en
+el eje horizontal."""
+
 FRANJA_ATAJOS = 24
 """Alto de la fila de atajos de fecha (Esta semana/Este mes/Últimos 30
 días/Este año) agregada DENTRO de la tarjeta de Ranking de Compras ›
