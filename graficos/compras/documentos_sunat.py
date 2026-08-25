@@ -1014,7 +1014,9 @@ def _ficha_html(doc):
     el navegador: el frame carga con el alto correcto y `contentDocument`
     queda en `null` — o sea, un rectángulo en blanco y ningún error. No es
     algo que se arregle con CSS ni cambiando de `components.html` a
-    `st.iframe`.
+    `st.iframe`: la migración se hizo el 2026-08-24 (regla #204) y el
+    `sandbox` no se movió, porque lo pone el frontend de Streamlit y no
+    depende de qué función de Python emitió el iframe.
 
     Lo que se ve acá es HTML, y sale mejor que el PDF embebido: texto
     nítido en cualquier zoom, hereda la paleta de la app y funciona igual

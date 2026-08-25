@@ -5,7 +5,7 @@ Ajuste, footer de ultima actualizacion y traduccion del calendario.
 """
 
 import json
-import streamlit.components.v1 as components
+from inyecciones._iframe import inyectar_html
 
 
 def inject_error_overlay():
@@ -22,7 +22,7 @@ def inject_error_overlay():
     Otros scripts inyectados pueden reportar manualmente con:
         window.__logErr('mi mensaje')
     """
-    components.html("""
+    inyectar_html("""
     <script>
     (function(){
       var win = window.parent, doc = win.document;
@@ -92,7 +92,7 @@ def inject_fullscreen_app():
     inject_maximize_aggrid, pero sobre el documento padre completo en vez del
     iframe de la tabla: el botón vive en el padre y su onclick pide fullscreen
     del documentElement (la activación de usuario del clic es válida)."""
-    components.html("""
+    inyectar_html("""
     <script>
     (function(){
       var win = window.parent, doc = win.document;
@@ -149,7 +149,7 @@ def inject_footer_actualizacion(texto):
     texto ENTERRADO bajo la franja inferior (.stApp::after) por más
     z-index que tuviera; anclado directo al body escapa de todos ellos."""
     _t = json.dumps(str(texto))
-    components.html("""
+    inyectar_html("""
     <script>
     (function(){
         var doc = window.parent.document;
@@ -195,7 +195,7 @@ def inject_calendario_es():
     Verificado en la app publicada: meses, días (Lu Ma Mi Ju Vi Sá Do),
     desplegable de meses y "Elige un rango de fechas".
     """
-    components.html(r"""
+    inyectar_html(r"""
     <script>
     (function(){
         var doc = window.parent.document;

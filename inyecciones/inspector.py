@@ -9,8 +9,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-import streamlit.components.v1 as components
-
+from inyecciones._iframe import inyectar_html
 from inyecciones._inspector_js import JS
 
 _RAIZ = Path(__file__).resolve().parent.parent
@@ -340,7 +339,7 @@ def inject_element_inspector():
     _html = JS
     for _ph, _valor in _sustituciones.items():
         _html = _html.replace(_ph, _valor)
-    components.html(_html, height=0, scrolling=False)
+    inyectar_html(_html, height=0)
 
 
 def _placeholders_descuadrados() -> tuple[set, set]:

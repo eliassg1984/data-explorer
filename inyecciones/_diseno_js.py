@@ -1,6 +1,6 @@
 """inyecciones._diseno_js - el JS del modo de diseno visual.
 
-Blob de 794 lineas que estaba embebido como un unico components.html
+Blob de 794 lineas que estaba embebido como un unico inyectar_html
 DENTRO de inject_diseno_visual. Se saco el 2026-08-08, mismo tratamiento
 que _inspector_js.py.
 
@@ -1963,7 +1963,7 @@ JS = """
 
         // Duplica (a proposito, ver docstring de diseno.py) el fallback de
         // copiarTexto() de _inspector_js.py: este script corre en OTRO
-        // iframe de components.html, sin acceso a esa funcion local.
+        // iframe de inyectar_html, sin acceso a esa funcion local.
         function copiarTextoDiseno(texto, cb) {
             var terminado = false;
             var marcar = function(ok) { if (!terminado) { terminado = true; cb(ok); } };
@@ -2150,7 +2150,7 @@ JS = """
             estadoCopiar.style.fontSize = '10px';
             // Fallback manual, oculto hasta que haga falta: si el automatico
             // falla (frecuente en Streamlit Cloud, el iframe anidado de
-            // components.html — arquitectura.md § Reglas #39) no hay nada
+            // inyectar_html — arquitectura.md § Reglas #39) no hay nada
             // mas en pantalla para seleccionar, a diferencia del inspector
             // que ya tiene su <pre> visible. Sin este textarea, "Ctrl+C"
             // seria un mensaje que miente.
@@ -2842,7 +2842,7 @@ JS = """
             if (win.__disenoState.tick % 7 === 0) pintarVecinas();
         }
 
-        // rerun-safety: el iframe de components.html se recrea en cada
+        // rerun-safety: el iframe de inyectar_html se recrea en cada
         // rerun (igual que el de inspector.py) — limpiar el interval y los
         // listeners viejos antes de instalar los nuevos, o se acumulan para
         // siempre (ver mismo patron en inspector.py). Las manijas y los

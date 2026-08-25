@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-203 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+204 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (72)
 
@@ -198,7 +198,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#192** — El Panel A de Productos (Compras › Proveedor) pasó de st.dataframe a AgGrid por el mismo…
 - **#193** — flex en un columnDef de AgGrid no alcanza: st_aggrid le clava width: 200 a toda columna sin…
 
-**Streamlit** (59)
+**Streamlit** (60)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -259,6 +259,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#190** — Compras › Producto perdió sus dos botones "✕ Quitar foco" (2026-08-24, a pedido) — mismo fix…
 - **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
 - **#203** — Un calendario de DOS meses no se puede pedir: st.date_input dibuja uno solo. Construirlo con…
+- **#204** — st.iframe SÍ acepta una string de HTML — la migración desde components.html no necesita ni…
 
 **Datos, R2 y DuckDB** (24)
 
@@ -8974,13 +8975,95 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      revienta en runtime. Lo agarró **`ruff` (F509)**, no un test — buen
      recordatorio de por qué el `ruff check` va antes de cada push.
 
+204. **`st.iframe` SÍ acepta una string de HTML — la migración desde
+     `components.html` no necesita ni fichero temporal ni `data:` URL. Lo
+     único que cambia de verdad es que `height=0` pasó a ser ilegal.**
+
+     Streamlit 1.59.2 escupía en CADA render, y una vez por llamada:
+
+         Please replace `st.components.v1.html` with `st.iframe`.
+         `st.components.v1.html` will be removed after 2026-06-01.
+
+     Esa fecha ya pasó y `requirements.txt` pide `streamlit>=1.39,<2`, así que
+     Streamlit Cloud podía resolver en cualquier deploy una versión sin la
+     función. No era ruido en el log: eran los **12 puntos** donde la app mete
+     un `<script>`, o sea el inspector, el modo diseño, la barra de
+     herramientas, las cinco inyecciones del AgGrid, la paginación v2, el
+     overlay de errores, el fullscreen, el footer, el calendario en español y
+     el panel de rendimiento. Migrado el 2026-08-24 a
+     `inyecciones/_iframe.py::inyectar_html`, un único punto de paso.
+
+     **El susto era infundado, y conviene saber por qué.** La firma nueva es
+     `st.iframe(src: str | Path, ...)` y eso hace pensar que sólo toma URLs o
+     rutas — que habría que volcar el JS a un fichero y pasar su `Path`, o
+     armar una `data:` URL. No hace falta. Leyendo
+     `streamlit/elements/iframe.py`, la cascada de tipos es:
+
+         Path → URL absoluta → fichero existente → URL relativa (`/…`)
+         → **string de HTML**
+
+     y ese último caso hace `iframe_proto.srcdoc = src_str`: **el mismo campo
+     del mismo proto** que escribía `components.html`. Encima `_is_file()`
+     corta de entrada si la string trae `<` o pasa de `_MAX_PATH_LENGTH`, así
+     que un blob de JS no se confunde nunca con una ruta. Verificado con
+     `AppTest` comparando los dos caminos en el mismo script: `srcdoc`
+     idéntico byte a byte y `src` vacío en ambos.
+
+     Corolario que importa más que la migración: como el proto es el mismo, el
+     frontend no puede distinguirlos, así que **`window.parent` sigue
+     alcanzando el documento de la app igual que siempre** y la regla #39 —en
+     Cloud la app ya vive dentro de un iframe y éste agrega un segundo nivel—
+     no cambia ni para bien ni para mal. Las 12 inyecciones dependen de eso y
+     ninguna se tocó.
+
+     **Lo que sí rompe: `height=0`.** `st.iframe` valida el alto y
+     `validate_height` rechaza `height <= 0`:
+
+         StreamlitInvalidHeightError: Invalid height value: 0. Height must be
+         either a positive integer (pixels), 'stretch', or 'content'.
+
+     Once de las doce llamadas pasaban justamente `height=0`. `inyectar_html`
+     lo traduce al mínimo legal (1px) y **conserva el `0` en su firma**, que es
+     lo que documenta la intención en los call sites ("esta inyección no dibuja
+     nada"). Se ve idéntico porque **el `height=0` nunca fue lo que escondía
+     estos iframes**: los esconde el CSS, y con `!important`. Ver
+     `estilos/_00_base.py` (`[data-testid="stIFrame"] { height: 0 }`) y
+     `navegacion.py` (`display: none` en el `stElementContainer` que lo
+     envuelve, para matar el gap del bloque vertical). Medido en el navegador
+     tras migrar: los 11 iframes de inyección siguen midiendo 0px.
+
+     **Y `scrolling` desapareció**: `st.iframe` fija `scrolling = True` en el
+     proto y no lo expone. Da igual — un iframe de 0px con `overflow: hidden`
+     en el wrapper no puede mostrar una barra, y el único visible (`perf.py`,
+     `height=300`) ya lo pasaba en `True`.
+
+     **La compatibilidad hacia atrás no es opcional.** `st.iframe` llegó mucho
+     después de 1.39, que es el piso que declara `requirements.txt`; el shim
+     resuelve `hasattr(st, "iframe")` UNA vez al importar y cae a
+     `components.html` si no está. El import del módulo deprecado va **dentro**
+     de esa rama, para que una versión moderna no lo toque siquiera.
+
+     Dos cosas que este cambio dejó de regalo, por si se repiten:
+
+       · La cuenta de call sites del pedido decía cuatro (`diseno.py`,
+         `grid.py` ×2 y "el scrollspy del rail en `graficos/base.py`"). Eran
+         **doce**, y el del rail **no existe**: `_render_rail` es `st.markdown`
+         + `st.button` desde que el rail pasó de vertical a franja horizontal
+         (regla #170). Antes de migrar algo "en N sitios", `grep`.
+
+       · `graficos/compras/documentos_sunat.py` ya traía escrito que el PDF
+         embebido no se arreglaba "cambiando de `components.html` a
+         `st.iframe`". Sigue siendo cierto y ahora está comprobado: el
+         `sandbox` lo pone el frontend de Streamlit, no la función de Python
+         que emitió el iframe.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#204**.
+> próxima regla nueva es la **#205**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

@@ -8,8 +8,8 @@ el hover de AgGrid y la tabla parpadea o colapsa (arquitectura.md #4).
 """
 
 import json
-import streamlit.components.v1 as components
 from inyecciones._fragmentos import _FS_CSS_IFRAME, _JS_BUSCAR_IFRAME_FN, _PAG_CSS_BASE, _PAG_CSS_NATIVA
+from inyecciones._iframe import inyectar_html
 
 
 def inject_grid_health_check(usa_pagination_v2=False):
@@ -43,7 +43,7 @@ def inject_grid_health_check(usa_pagination_v2=False):
     """
     css = _PAG_CSS_BASE if usa_pagination_v2 else (_PAG_CSS_BASE + _PAG_CSS_NATIVA)
     pag_css_js = json.dumps(css)
-    components.html("""
+    inyectar_html("""
     <script>
     (function(){
       var win = window.parent, doc = win.document;
@@ -130,7 +130,7 @@ def inject_maximize_aggrid():
         estilos.py, así que sigue usando var(--x) sin cambios.
     """
     fs_css_js = json.dumps(_FS_CSS_IFRAME)
-    components.html("""
+    inyectar_html("""
     <script>
     (function(){
         var win = window.parent;
@@ -209,7 +209,7 @@ def inject_maximize_aggrid():
            cambia de columnas en caliente (Ajuste "Por fecha", cambiar de
            Corte/Semana/Mes) hace que AG Grid rehaga su sidebar interno y
            borre cualquier nodo insertado a mano que no sea suyo -- y este
-           components.html de contenido fijo no se vuelve a ejecutar en el
+           inyectar_html de contenido fijo no se vuelve a ejecutar en el
            siguiente rerun de Streamlit (mismo HTML, el iframe no se
            recarga), así que sin el observer el botón se pierde para
            siempre en vez de reaparecer solo. Verificado en vivo con
@@ -381,7 +381,7 @@ def inject_dynamic_grid_height(offset_px: int = 260, min_px: int = 320):
     # (p.ej. height:100%) choca con el formateo de Python.
     config_js = f"var OFFSET = {int(offset_px)}; var MINPX = {int(min_px)};"
 
-    components.html("""
+    inyectar_html("""
     <script>
     (function(){
         var win = window.parent;
@@ -488,7 +488,7 @@ def inject_fix_column_panel_ajuste():
     NOTA — colores: esta función NO inyecta CSS. No aplica la migración del
     punto 4.
     """
-    components.html("""
+    inyectar_html("""
     <script>
     (function(){
         var win = window.parent, doc = win.document;
@@ -587,7 +587,7 @@ def inject_filtros_grid(modelo, sello):
         "var MODELO = " + json.dumps(modelo or {}) + ";\n"
         "var SELLO  = " + json.dumps(str(sello)) + ";\n"
     )
-    components.html("""
+    inyectar_html("""
     <script>
     (function(){
         """ + cfg_js + """
