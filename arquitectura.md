@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-215 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+216 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (76)
+**CSS y estilos** (77)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -96,6 +96,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#208** — Una ScrollTimeline declarada con el CSS inicial queda inactiva para siempre
 - **#209** — Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no mover uno
 - **#213** — Un width: 100% que gana la cascada y no se ve suele estar clampeado por un max-width:…
+- **#216** — Retirar un toggle de colapso: si nada más puede fijar el estado "plegado", ese estado tiene…
 
 **Layout y alturas** (20)
 
@@ -353,7 +354,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#206** — Un mousemove/mouseup de un iframe TAMPOCO sube al padre — el modo diseño se congelaba al…
 - **#215** — Element.innerText no atraviesa el layout position: absolute de las celdas de AgGrid: da ""…
 
-**Decisiones de diseño y UX** (36)
+**Decisiones de diseño y UX** (37)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -391,6 +392,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#200** — Una vista comparativa no puede heredar el rango de la franja: el rango corriente le deja el…
 - **#201** — Sacarle el wrapper interno a un contenedor NO hace que el CSS viejo "se reuse solo":…
 - **#209** — Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no mover uno
+- **#216** — Retirar un toggle de colapso: si nada más puede fijar el estado "plegado", ese estado tiene…
 
 **Mantenimiento y trampas del lenguaje** (6)
 
@@ -9504,13 +9506,48 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      DOM, antes de sospechar un bug de renderizado, repetir la lectura con
      `textContent`.
 
+216. **Retirar un toggle de colapso: si nada más puede fijar el estado
+     "plegado", ese estado tiene que dejar de existir — no alcanza con
+     esconder el botón que lo dispara.**
+
+     2026-08-26, a pedido ("eliminemos esto y que las filas de los
+     reportes del rail suban"): se retiró `rail_pestillo`, el botón que
+     plegaba/desplegaba el rail vertical de Reportes (las reglas de
+     2026-08-15 a 2026-08-24 en esta misma bitácora documentan el diseño
+     original de `pestillos.py`/`_25_rails_pestillo.py` — quedan tal
+     cual, son historia real y siguen enseñando lo suyo aunque el código
+     ya no exista).
+
+     La tentación fácil era sacar solo el `st.button` y dejar el resto
+     intacto (el marcador `pestillos.marcar()`, la variable
+     `--rail-der-w` con sus dos estados). **Eso deja un bug latente**: si
+     una sesión ya tenía `_rail_der_plegado=True` en `session_state`
+     (alguien lo había plegado antes de este cambio), el rail nacería
+     plegado y SIN NINGÚN CONTROL para volver a abrirlo — el único botón
+     que escribía esa clave ya no existe.
+
+     La retirada completa fue: borrar `pestillos.py` y
+     `estilos/_25_rails_pestillo.py` enteros (no quedaba nada más para lo
+     que existieran — era ESE mecanismo, nada más), y fundir las dos
+     variables (`--rail-der-full` / `--rail-min`) en una sola
+     `--rail-der-w` de valor fijo en `_00_base.py`. Sin un tercer sitio
+     que la redefina, no hay estado "plegado" que declarar mal.
+
+     **La otra mitad, y la parte que no costó nada:** las filas de
+     Reportes subieron solas al sacar el pestillo. `compras_tabs_row` es
+     `flex-direction: column`, y el pestillo era su primer hijo — sacar
+     un ítem de un flex container no deja un hueco que rellenar a mano,
+     los hermanos siguientes simplemente ocupan el lugar. Ni una línea de
+     CSS para el "subir" que pedía el usuario; la única CSS que hizo
+     falta fue la de arriba, para el estado que YA no podía existir.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#216**.
+> próxima regla nueva es la **#217**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

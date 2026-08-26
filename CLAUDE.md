@@ -91,7 +91,7 @@ herramientas). Dos cosas que ya costaron bugs:
 pública no cambió: `from estilos import TAM_FUENTE, inject_css`.
 
 Cada sección tiene su módulo, con prefijo numérico que marca el orden:
-`_00_base` → `_20_compras_rail` → `_25_rails_pestillo` →
+`_00_base` → `_20_compras_rail` →
 `_26_rails_scroll` → `_27_pila` → `_30_filtros` →
 `_40_ajuste_franja` → `_50_fecha` → `_60_calendario` → `_70_chrome` →
 `_80_cards` → `_85_asistente` → `_90_franja_inferior` → `_99_movil`.

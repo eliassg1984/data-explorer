@@ -532,8 +532,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     # (primer intento) es hover-only — el usuario esperaba
                     # que abriera con CLIC, como un popover. `st.popover`
                     # con el label como shortcode de ícono (sin texto) es
-                    # el mismo patrón que ya usa `pestillos.py::pestillo`
-                    # para un botón de solo-ícono.
+                    # un botón de solo-ícono, sin nada más en el `with`.
                     #
                     # 2026-08-25, 4ta vuelta: el ícono se MUDA a la fila de
                     # atajos (más abajo, `compras_prov_rank_atajos`) — dos

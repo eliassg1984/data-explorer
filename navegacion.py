@@ -13,9 +13,18 @@ este repo con `--rail-der-*` desde el flip de 2026-08-18 (nombre histórico,
 comportamiento actual): `compras_tabs_row` sigue siendo LA KEY DEL RAIL
 VERTICAL (hoy dibuja Reportes, antes Vistas); `nav_rail` sigue siendo LA KEY
 DE LA FRANJA HORIZONTAL (hoy dibuja Vistas — ver `graficos/base.py::
-_render_rail` —, antes Reportes). Ningún CSS estructural de `_00_base.py`,
-`_25_rails_pestillo.py` ni `pestillos.py` se tocó: apuntan a la KEY del
-contenedor, no a su contenido.
+_render_rail` —, antes Reportes). Ningún CSS estructural de `_00_base.py`
+se tocó: apunta a la KEY del contenedor, no a su contenido.
+
+2026-08-26 — SE RETIRA EL PLEGADO DEL RAIL VERTICAL
+----------------------------------------------------
+A pedido ("eliminemos esto y que las filas de los reportes del rail
+suban"): se borran `pestillos.py` y `estilos/_25_rails_pestillo.py`
+enteros — no quedaba nada más para lo que existieran, era ese único
+mecanismo. `compras_tabs_row` ya no dibuja `rail_pestillo` al tope; las
+filas de Reportes (en `graf_tipo_chips`) suben a ocupar ese lugar solas,
+por ser el mismo `flex-direction: column`. `--rail-der-w` deja de tener un
+estado "plegado" que redefinir: vale 280px siempre (`_00_base.py`).
 
 Por qué NO alcanza con "mover el dibujo de sitio": `reporte`/`cfg`/`df_f` se
 calculan en app.py ANTES del `@st.fragment` que envuelve
@@ -50,7 +59,6 @@ import re
 import streamlit as st
 import datetime
 from zoneinfo import ZoneInfo
-import pestillos
 from data import (
     solicitar_refresco, secrets_disponibles, fecha_ultima_actualizacion,
     limpiar_cache, resumen_kpis,
@@ -650,19 +658,6 @@ def boton_refresco():
         st.error("⚠️ No se pudo enviar la solicitud de refresco.")
 
 
-@st.fragment
-def _pestillo_reportes():
-    """El pestillo AISLADO en su propio fragment. Necesario porque
-    `inject_navegacion()` corre ANTES del `@st.fragment` que envuelve
-    `_render_contenido()` (tiene que ser así — ver el docstring del módulo,
-    es lo que permite que un clic en un REPORTE dispare un rerun completo).
-    Sin este fragment propio, un clic acá TAMBIÉN dispararía ese rerun
-    completo — funciona, pero es más lento y parpadea más de lo que hacía
-    plegar el rail cuando vivía adentro de `_render_contenido` (hasta el
-    2026-08-22). Mismo patrón que ya usa `boton_refresco` arriba."""
-    pestillos.pestillo(pestillos.DER, "rail_pestillo")
-
-
 def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     """Dibuja Reportes en el RAIL VERTICAL (key `compras_tabs_row`).
 
@@ -722,9 +717,6 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     if _grupo_activo:
         st.session_state[f"_ultimo_{_grupo_activo}"] = reporte_activo
 
-    # El rail VERTICAL sí compite por el ancho de la tarjeta (a diferencia de
-    # la franja horizontal que ocupaba hasta hoy) — de ahí el pestillo, que
-    # antes de este cambio era exclusivo del rail de Vistas.
     # ── Titulo de la franja: app + reporte ───────────────────────────────
     # "Sapiens (Compras)", al estilo de las fichas de MSN Dinero
     # ("Ferreycorp SAA (FERREYC1)"): la entidad primero, su codigo entre
@@ -741,14 +733,8 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
         unsafe_allow_html=True,
     )
 
-    pestillos.marcar(pestillos.DER)
     _grupos_dibujados = set()
     with st.container(key="compras_tabs_row"):
-        # rail_pestillo FUERA de graf_tipo_chips a propósito: ese contenedor
-        # estila a TODOS sus botones como ítems de la lista de Reportes
-        # (regla #6 — acotar al widget, no al contenedor). El pestillo no es
-        # un reporte.
-        _pestillo_reportes()
         with st.container(key="graf_tipo_chips"):
             for nombre, info in visibles.items():
                 grupo = info.get("grupo_nav")

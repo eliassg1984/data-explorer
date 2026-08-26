@@ -148,10 +148,9 @@ CSS = """    <style>
            superior flotando sobre el vacío — es la regla #17, la parte más
            frágil de este CSS.
 
-           Ahora son variables y todo lo demás las deriva con calc(), que es
-           lo que hace posible plegarlo: plegar = REDEFINIR estos valores (lo
-           hace `_25_rails_pestillo.py` cuando encuentra el marcador que deja
-           Python al estar el pestillo echado). Nadie más los escribe.
+           Ahora son variables y todo lo demás las deriva con calc(), así
+           que un cambio de ancho lo siguen solos todos los anclajes que
+           dependen de él.
 
            2026-08-18: el rail IZQUIERDO (navegación) ya no existe —es la
            barra superior, --nav-top-alto— así que --rail-izq-w y
@@ -160,17 +159,25 @@ CSS = """    <style>
            recalcularon restando esos 90px (_40_ajuste_franja.py,
            _50_fecha.py) y la franja inferior arranca en 0.
 
+           2026-08-26: se retira el PLEGADO ("eliminemos esto y que las
+           filas de los reportes del rail suban"). Hasta acá --rail-der-w
+           tenía dos estados —desplegado (--rail-der-full) y plegado
+           (--rail-min)— que redefinía `estilos/_25_rails_pestillo.py`
+           (borrado con `pestillos.py`, que era el único módulo que los
+           escribía). Sin pestillo no hay un tercer estado que fijar: el
+           rail vale SIEMPRE su ancho desplegado, así que las dos variables
+           se funden en una sola.
+
              OJO con el nombre: desde 2026-08-18 el rail de vistas vive
              a la IZQUIERDA (ocupó el sitio que dejó el rail de
              navegación al pasar a franja superior). El `der` de estas
-             cuatro variables es histórico; se conservó para no repartir
-             un renombre por 4 ficheros y un test en el mismo commit que
-             mueve el layout. Lo que sí es cierto hoy: son el ancho y la
-             reserva del RAIL DE VISTAS, del lado que esté.
+             variables es histórico; se conservó para no repartir un
+             renombre por varios ficheros y un test en el mismo commit
+             que mueve el layout. Lo que sí es cierto hoy: son el ancho y
+             la reserva del RAIL DE VISTAS, del lado que esté.
 
-             --rail-der-w    ancho VIGENTE del rail de vistas
-             --rail-der-full ancho desplegado
-             --rail-min      ancho de la lengüeta cuando está plegado
+             --rail-der-w    ancho del rail de vistas. Fijo (2026-08-26):
+                             ya no hay un plegado que lo achique.
              --rail-der-res  lo que el CONTENIDO le reserva al rail derecho.
                              Derivado, no escrito: ancho + los 15px que lo
                              despegan del borde + 54px de aire hasta la
@@ -202,9 +209,7 @@ CSS = """    <style>
            cerca del original (270px) y el alto de fila sube por el
            padding vertical del botón (_20_compras_rail.py). El texto/
            ícono (2) se queda: ese sí era el pedido correcto. */
-        --rail-der-full: 280px;
-        --rail-min: 24px;
-        --rail-der-w: var(--rail-der-full);
+        --rail-der-w: 280px;
         /* 2026-08-25: el canal entre el rail y las tarjetas baja de 54px
            a 24px, a pedido ("pierdo mucho espacio"). Los sumandos dicen lo
            que son: 19px es el `left` del rail (_20_compras_rail.py) y 24px

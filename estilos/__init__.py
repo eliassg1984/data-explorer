@@ -7,8 +7,6 @@ Estilos globales de la app: CSS, tamaños de fuente e inyección del tema.
                         botones, expander, alertas, header nativo
     _20_compras_rail    rail vertical derecho (selector de gráfico) —
                         compartido por TODOS los reportes pese al nombre
-    _25_rails_pestillo  los dos rails plegables: lengüeta, plegado fijo y
-                        vistazo por hover (va DESPUÉS de _20 a propósito)
     _26_rails_scroll    la columna izquierda cambia de Reportes a Vistas
                         segun la seccion que este en pantalla
     _27_pila            esqueletos de carga de la pagina apilada
@@ -102,7 +100,6 @@ TAM_FUENTE = {
 
 from ._00_base import CSS as _CSS_BASE
 from ._20_compras_rail import CSS as _CSS_COMPRAS_RAIL
-from ._25_rails_pestillo import CSS as _CSS_RAILS_PESTILLO
 from ._26_rails_scroll import CSS as _CSS_RAILS_SCROLL
 from ._27_pila import CSS as _CSS_PILA
 from ._30_filtros import CSS as _CSS_FILTROS
@@ -120,7 +117,6 @@ from ._99_movil import CSS as _CSS_MOVIL
 _SECCIONES = (
     _CSS_BASE,
     _CSS_COMPRAS_RAIL,
-    _CSS_RAILS_PESTILLO,
     _CSS_RAILS_SCROLL,
     _CSS_PILA,
     _CSS_FILTROS,

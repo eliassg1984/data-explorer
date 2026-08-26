@@ -54,10 +54,12 @@ CSS = """    /* ================================================================
            histórico y renombrarlas toca ~15 sitios en 4 ficheros más un
            test. Se dejó anotado en _00_base.py en vez de hacerlo a medias. */
         left: 19px !important;             /* 15 + 4 del ajuste del 2026-08-22 (era el translate X) */
-        /* El ancho es VARIABLE desde el 2026-08-15 (pestillo, ver
-           _25_rails_pestillo.py). Hasta esa fecha había DOS `width` en este
-           mismo bloque, 84px unas líneas más abajo, que ganaba por ir
-           después — la variable estaba puesta y no hacía nada. */
+        /* El ancho es VARIABLE desde el 2026-08-15 (nació para el pestillo
+           que plegaba este rail; retirado 2026-08-26, ver _00_base.py — la
+           variable queda, ahora con un solo valor fijo). Hasta esa fecha
+           había DOS `width` en este mismo bloque, 84px unas líneas más
+           abajo, que ganaba por ir después — la variable estaba puesta y
+           no hacía nada. */
         width: var(--rail-der-w) !important;
         overflow-x: hidden !important;
         /* 2026-08-13: de "bottom:0 + height:calc(100vh-66px)" (fuerza el
@@ -362,8 +364,8 @@ CSS = """    /* ================================================================
        Vistas); hoy lo dibuja `navegacion.py::inject_navegacion` al pie del
        rail de Reportes, mismo criterio ("la acción vive al pie del rail
        VERTICAL, sea cual sea su contenido"). Fuera de `graf_tipo_chips` a
-       propósito, igual que el pestillo (regla #6 — ese contenedor estila
-       TODO lo que cuelga de él como ítem de lista; Refrescar no lo es). */
+       propósito (regla #6 — ese contenedor estila TODO lo que cuelga de
+       él como ítem de lista; Refrescar no lo es). */
     .st-key-rail_refresh {
         width: 100% !important;
         display: flex !important;
@@ -403,7 +405,7 @@ CSS = """    /* ================================================================
         white-space: normal !important;
     }
     /* El ícono va INLINE en el label (":material/refresh: Refrescar"), no
-       por `icon=` — mismo mecanismo que `pestillos.py::pestillo`. Streamlit
+       por `icon=` — el shortcode dentro del string. Streamlit
        lo renderiza como `span[role="img"]` dentro del `<p>`, NO como
        `[data-testid="stIconMaterial"]` (ese selector es el de los ítems del
        rail que sí usan `icon=`, ver `graf_tipo_chips` arriba). */

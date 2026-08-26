@@ -1716,10 +1716,13 @@ def _pruebas_presupuesto_vertical():
     # los chips y los atajos). Cambiar uno sin los otros dejaba la franja
     # superior flotando sobre el vacío — es la regla #17.
     #
-    # Ahora se declaran en _00_base.py y SOLO las redefine el pestillo
-    # (_25_rails_pestillo.py). Si aparecen en un tercer sitio, el plegado
-    # deja de funcionar en esa esquina y nadie se entera hasta verlo.
-    _duenos = {"_00_base.py", "_25_rails_pestillo.py"}
+    # Ahora se declaran en _00_base.py, dueño único. Hasta el 2026-08-26
+    # también las redefinía el pestillo (`_25_rails_pestillo.py`, borrado
+    # junto con `pestillos.py` a ese pedido — "eliminemos esto y que las
+    # filas de los reportes del rail suban": sin plegado no hay un tercer
+    # estado que fijar). Si `--rail-der-w`/`--rail-der-res` aparecen en un
+    # tercer sitio ahora, es doble declaración lisa y llana.
+    _duenos = {"_00_base.py"}
     intrusos = []
     for py in sorted(pathlib.Path(__file__).parent.rglob("*.py")):
         if py.name in _duenos or py.name == pathlib.Path(__file__).name:
@@ -1727,12 +1730,12 @@ def _pruebas_presupuesto_vertical():
         for i, linea in enumerate(py.read_text(encoding="utf-8").split("\n"), 1):
             if re.search(r"--rail-(izq|der)-w\s*:|--rail-der-res\s*:", linea):
                 intrusos.append(f"{py.name}:{i}")
-    check("los anchos de rail solo los declaran _00_base y el pestillo",
+    check("los anchos de rail solo los declara _00_base",
           not intrusos, ", ".join(intrusos[:6]))
 
-    # El ancho reservado a la derecha se DERIVA del ancho del rail; si
-    # alguien lo vuelve a fijar en px, plegar el rail derecho no ensancha
-    # la tarjeta (el rail se encoge y el hueco se queda igual de grande).
+    # El ancho reservado a la derecha se DERIVA del ancho del rail — mismo
+    # motivo que antes de que el rail dejara de plegarse: un valor fijo en
+    # otro sitio se desincroniza en cuanto --rail-der-w cambie.
     check("--rail-der-res se deriva de --rail-der-w, no es un px suelto",
           re.search(r"--rail-der-res:\s*calc\([^)]*--rail-der-w", css) is not None)
 

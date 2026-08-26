@@ -1341,9 +1341,10 @@ CSS = """        <style>
         /* 2026-08-23 (2), a pedido ("que sea como el segundo" — o sea con
            clic, como un popover, no el help= hover-only del primer
            intento): ícono de ayuda de Ranking de proveedores, discreto
-           hasta que se busca — mismo espíritu que .st-key-rail_pestillo
-           button (estilos/_25_rails_pestillo.py). Acotado a SU propia key
-           (CLAUDE.md: estilar el widget puntual, no el contenedor).
+           hasta que se busca — mismo espíritu que un botón-lengüeta:
+           opacidad baja en reposo, sube al pasar el cursor. Acotado a SU
+           propia key (CLAUDE.md: estilar el widget puntual, no el
+           contenedor).
 
            2026-08-25: el widget se MUDÓ de su propia columna
            (`st.columns([16, 1])`, pegada al borde derecho de la tarjeta
