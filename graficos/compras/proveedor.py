@@ -76,6 +76,20 @@ def _aplicar_atajo_rank_select(clave_widget, placeholder, opciones, ctx):
 
 
 @st.fragment
+def _prov_mayor(src, col_prov, col_valor):
+    """El proveedor de mayor valor comprado en `src`, o None.
+
+    Lo usa la tarjeta de Evolución para elegir a QUIÉN grafica cuando nadie
+    clickeó un proveedor todavía. Recibe el histórico (`d_full`) a
+    propósito — ver el comentario del llamador."""
+    if src is None or not col_prov or col_prov not in src.columns:
+        return None
+    _v = pd.to_numeric(src[col_valor], errors="coerce").fillna(0)
+    _g = _v.groupby(src[col_prov].astype(str)).sum()
+    _g = _g[(_g.index.notna()) & (_g.index != "nan") & (_g.index != "")]
+    return str(_g.idxmax()) if len(_g) else None
+
+
 def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                              col_punit, col_um, col_fecha, col_docu=None,
                              d_full=None):
@@ -600,19 +614,23 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     # `_ALTO_RANK`, más abajo). Lo que sigue condicionado
                     # es cada pieza DE ADENTRO, por su propio motivo.
                     with st.container(key="compras_prov_rank_atajos"):
-                        with st.popover(":material/info:",
-                                        key="compras_prov_rank_ayuda",
-                                        use_container_width=False):
-                            # 2026-08-23, 3ra vuelta: el texto original
-                            # decía "el rango se ajusta desde otra pestaña"
-                            # — cierto hasta hace un momento, falso ahora
-                            # que los atajos de al lado viven acá mismo.
-                            st.caption("Suma TODO el rango elegido (atajos "
-                                       "de al lado, o el calendario "
-                                       "completo desde otra pestaña). "
-                                       "Día/Semana/Mes/Año, en Evolución, "
-                                       "solo agrupa esa curva — no cambia "
-                                       "este total.")
+                        # RETIRADO 2026-08-26, a pedido: acá vivía un
+                        # popover ⓘ ("Suma TODO el rango elegido…"). Se va
+                        # entero, no se reescribe, por dos motivos:
+                        #
+                        #  · su texto ya era FALSO. Explicaba que
+                        #    Día/Semana/Mes/Año en Evolución "sólo agrupa
+                        #    esa curva" para tranquilizar sobre el total de
+                        #    esta tarjeta — pero Evolución dejó de heredar
+                        #    la fecha hace rato (tiene su `periodo.selector`
+                        #    propio) y hoy ni siquiera comparte sujeto con
+                        #    el ranking. El aviso describía un acople que
+                        #    ya no existe.
+                        #  · y era el TERCER ícono de ayuda que este rincón
+                        #    se comió en dos días (ver los dos `help=`
+                        #    retirados el 2026-08-25, commits a373af3 y
+                        #    c8c8e58). El rincón no da para más íconos: da
+                        #    para menos.
                         if _ctx_fecha:
                             # 2026-08-25, a pedido: la escala de tiempo
                             # de una tabla dinámica de Excel, en versión
@@ -920,6 +938,50 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     # el mayor es directamente el primero.
                     _prov_evo = prov_focus
                     if _prov_evo is None:
+                        # SIN FOCO, EL SUJETO SALE DEL HISTÓRICO, no del
+                        # ranking de al lado. A pedido, 2026-08-26: "el
+                        # selector de fecha del ranking no debe afectar el
+                        # gráfico de evolución".
+                        #
+                        # Su VENTANA ya era independiente (esta tarjeta
+                        # tiene su propio `periodo.selector`, default 12m,
+                        # que recorta sobre `d_full` salteándose el filtro
+                        # de fecha), y sin embargo la tarjeta SÍ cambiaba al
+                        # mover la fecha — medido: pasar de "1-24 ago" a
+                        # "3-9 ago" la llevaba de DOBLE G (S/ 13,363) a
+                        # LEON MEDRANO (S/ 10,362), con el eje de 12 meses
+                        # quieto. La ventana no era el problema: el SUJETO
+                        # sí, porque el fallback tomaba el primero de
+                        # `_rk_nombres`, que está ordenado sobre el df
+                        # filtrado por la franja.
+                        #
+                        # El mayor DE SU PROPIA VENTANA, no del histórico
+                        # entero: se probó con el histórico y el sujeto
+                        # salía con el gráfico vacío (VITTORY MEATS SAC,
+                        # S/ 0 — es el mayor de todos los tiempos pero no
+                        # compró nada en los últimos 12 meses). El sujeto y
+                        # la ventana tienen que salir de la MISMA fuente o
+                        # la tarjeta se contradice sola.
+                        #
+                        # La opción de período se lee de `session_state`
+                        # porque su widget se instancia más abajo (línea
+                        # ~1050); leerla antes es legal, escribirla no.
+                        # Mismo default que el selector, para que el primer
+                        # render coincida con lo que ese widget va a
+                        # elegir.
+                        _op_prev = st.session_state.get("cp_evo_periodo", "12m")
+                        _src_def = d_full
+                        if (_op_prev != periodo.HEREDA and d_full is not None
+                                and col_fecha):
+                            _src_def = periodo.recortar(d_full, col_fecha,
+                                                        _op_prev)
+                        _prov_evo = _prov_mayor(_src_def, col_prov, col_valor)
+                        # Con eso, la tarjeta sólo cambia de proveedor
+                        # cuando el usuario clickea uno — que es el drill, y
+                        # ese sí tiene que seguir mandando.
+                    if _prov_evo is None:
+                        # Sin histórico (el dispatcher puede no pasarlo),
+                        # se vuelve al comportamiento de antes.
                         _reales = [p for p in _rk_nombres if p != "Otros"]
                         _prov_evo = _reales[0] if _reales else None
                     if _prov_evo is None:

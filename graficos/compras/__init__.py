@@ -377,7 +377,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     def _dib_volatilidad():
             with st.container(border=True, key="ajuste_graf_card_izq_vol"):
                 _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
-                                           col_valor, col_cant, col_um, col_moneda)
+                                           col_valor, col_cant, col_um, col_moneda,
+                                           d_full=d_full)
 
     def _dib_semanal():
             # La fila parte con COLUMNAS_DRILL como el resto de la página. Antes

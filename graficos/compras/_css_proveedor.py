@@ -1493,40 +1493,5 @@ CSS = """        <style>
            rango se sigue pudiendo cambiar desde cualquier otra vista. */
         .st-key-fecha_ajuste_pill { display: none !important; }
 
-        /* 2026-08-23 (2), a pedido ("que sea como el segundo" — o sea con
-           clic, como un popover, no el help= hover-only del primer
-           intento): ícono de ayuda de Ranking de proveedores, discreto
-           hasta que se busca — mismo espíritu que un botón-lengüeta:
-           opacidad baja en reposo, sube al pasar el cursor. Acotado a SU
-           propia key (CLAUDE.md: estilar el widget puntual, no el
-           contenedor).
-
-           2026-08-25: el widget se MUDÓ de su propia columna
-           (`st.columns([16, 1])`, pegada al borde derecho de la tarjeta
-           y chocando ahí con la fila de atajos) a ser el primer hijo de
-           `compras_prov_rank_atajos` — ver el comentario largo en
-           proveedor.py. Esta regla sigue intacta porque acota por la
-           KEY del widget, no por su contenedor: no le importa en qué
-           `with` vive. */
-        .st-key-compras_prov_rank_ayuda button {
-            min-width: 0 !important;
-            min-height: 0 !important;
-            padding: 2px !important;
-            border: none !important;
-            background: transparent !important;
-            box-shadow: none !important;
-            color: var(--text-muted) !important;
-            /* Sin esto el line-height default (24px) infla el boton por
-               encima del icono de 16px y lo descentra ~5px contra el
-               titulo (medido en vivo). */
-            line-height: 1 !important;
-        }
-        .st-key-compras_prov_rank_ayuda button:hover {
-            background: var(--accent-tint) !important;
-            color: var(--accent-deep) !important;
-        }
-        .st-key-compras_prov_rank_ayuda [data-testid="stIconMaterial"] {
-            font-size: 16px !important;
-        }
         </style>
 """

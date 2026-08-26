@@ -24,6 +24,7 @@ import streamlit as st
 from tema import ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO
 from graficos.base import _card, _compras_layout, _compras_truncar, _slug
 from graficos.compras._comun import _first_point
+from graficos import periodo
 from graficos import alturas
 from tablas.compras_volatilidad import renderizar_ranking_volatilidad
 
@@ -149,7 +150,8 @@ def _vol_detalle_producto(d, prod, col_prod, col_punit, col_fecha, col_prov,
 
 @st.fragment
 def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
-                               col_valor, col_cant, col_um, col_moneda=None):
+                               col_valor, col_cant, col_um, col_moneda=None,
+                               d_full=None):
     """Ranking de insumos por volatilidad de precio → candlestick semanal
     del insumo elegido → compras de la semana clickeada.
 
@@ -163,6 +165,33 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 "para calcular volatilidad.")
         return
 
+    # ── VENTANA PROPIA DE ESTA TARJETA ───────────────────────────────────
+    # A pedido (2026-08-26): "la visualización de volatilidad debería por
+    # defecto mostrar la información del año, creo debería ponerle un
+    # selector de fechas".
+    #
+    # El motivo es estructural, no de gusto: este drill necesita AL MENOS 4
+    # semanas con compras para armar un candlestick, y el rango por defecto
+    # de la franja son ~3 semanas — o sea que la vista abría en el mensaje
+    # de "necesitás al menos 4 semanas" en vez de en un gráfico. Heredar un
+    # rango pensado para un ranking no le sirve a una vista que mide
+    # variación semana a semana.
+    #
+    # Se reusa `graficos/periodo.py`, el MISMO control que ya tiene la
+    # tarjeta de Evolución (Rango / 3m / 12m / 24m / Todo): recorta sobre
+    # `d_full` salteándose el filtro de fecha, salvo que se elija "Rango",
+    # que vuelve a heredar la franja. Default 12m = "el año".
+    #
+    # El tope de `MAX_SEMANAS` sigue mandando: la ventana ancha no dibuja un
+    # candlestick de un año, alimenta la elección de las 8 semanas más
+    # recientes CON DATOS. Más velas no es más historia útil, es un gráfico
+    # ilegible (ver `_vol_semanas_ventana`).
+    _c_per = st.columns([1, 2])[0]
+    with _c_per:
+        _op_vol = periodo.selector("compras_vol_periodo", widget="lista")
+    if _op_vol != periodo.HEREDA and d_full is not None:
+        d = periodo.recortar(d_full, col_fecha, _op_vol)
+
     dd = d.copy()
     if col_moneda and col_moneda in dd.columns:
         dd = dd[dd[col_moneda].astype(str).str.strip().isin(["01", "1"])]
@@ -174,8 +203,10 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
 
     semanas = _vol_semanas_ventana(dd[col_fecha])
     if not semanas:
-        st.info("Necesitás al menos 4 semanas de compras en el rango "
-                "seleccionado para armar un candlestick.")
+        st.info(f"Necesitás al menos 4 semanas de compras en "
+                f"{periodo.etiqueta(_op_vol) or 'el rango elegido'} para "
+                f"armar un candlestick. Probá una ventana más amplia con el "
+                f"selector de arriba.")
         return
     dd["_semana"] = (dd[col_fecha] - pd.to_timedelta(
         dd[col_fecha].dt.weekday, unit="D")).dt.normalize()
@@ -183,8 +214,9 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
 
     candidatos = _vol_candidatos(dd, col_prod, col_punit, col_fecha, col_valor, semanas)
     if not candidatos:
-        st.info("Ningún insumo tiene compras regulares (≥75% de las semanas) "
-                "y gasto relevante (≥ S/ 400) en este rango.")
+        st.info(f"Ningún insumo tiene compras regulares (≥75% de las "
+                f"semanas) y gasto relevante (≥ S/ 400) en "
+                f"{periodo.etiqueta(_op_vol) or 'el rango elegido'}.")
         return
 
     ranking = sorted(candidatos.items(), key=lambda kv: -kv[1]["volatilidad"])
