@@ -653,12 +653,22 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 _placeholder_rank = "Atajos"
                                 _op_rank = {_et: _rg
                                            for _ca, _et, _rg in _atajos_rank}
+                                # SIN `help=`: `label_visibility="collapsed"`
+                                # esconde el TEXTO de la etiqueta, pero no
+                                # el icono "?" del tooltip -- con `help=`
+                                # puesto quedaban DOS circulitos casi
+                                # iguales en la fila (el "?" de este
+                                # selectbox y el "ⓘ" del popover de ayuda
+                                # del ranking, `compras_prov_rank_ayuda`,
+                                # más arriba), y a este tamaño se leen como
+                                # el mismo icono duplicado. Ese popover ya
+                                # explica el rango; no hace falta un
+                                # segundo tooltip para el atajo.
                                 st.selectbox(
                                     "Atajo de rango",
                                     [_placeholder_rank] + list(_op_rank),
                                     index=0, key="cp_rank_atajo_sel",
                                     label_visibility="collapsed",
-                                    help="Atajos rápidos de rango.",
                                     on_change=_aplicar_atajo_rank_select,
                                     args=("cp_rank_atajo_sel",
                                           _placeholder_rank, _op_rank,
