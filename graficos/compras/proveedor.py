@@ -633,12 +633,18 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 if (isinstance(_rango_act, (tuple, list))
                                         and len(_rango_act) == 2
                                         and all(_rango_act)):
+                                    # SIN `help=` (sacado 2026-08-25, misma
+                                    # vuelta que el selectbox de más abajo):
+                                    # un tercer circulito "?" al lado del
+                                    # "ⓘ" del popover de ayuda -que YA
+                                    # explica que este rango es el que
+                                    # suma la tabla- se leía como icono
+                                    # duplicado. Confirmado con captura
+                                    # real del usuario.
                                     st.caption(
                                         franja_fecha.fmt_rango_es(
                                             *_rango_act),
-                                        width="content",
-                                        help="Rango de fechas que suma "
-                                             "esta tabla.")
+                                        width="content")
                                 # 2026-08-25, a pedido ("esto ocupa mucho
                                 # espacio... una lista desplegable
                                 # minimalista"): los cuatro atajos eran
