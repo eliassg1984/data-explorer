@@ -20,7 +20,7 @@ import streamlit as st
 from tema import ACENTO
 from graficos.base import (
     PALETA_CALLAI, _compras_layout, _compras_truncar, _render_rail,
-    _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
+    _resolver, publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos.compras import _periodo_serie
 from graficos.movimientos_comun import _chip_movimientos, _comparativo_pedido_baja
@@ -34,6 +34,19 @@ _REQ_RAIL_CATEGORIAS = (
                ("Top productos",     "Top productos"),
                ("Comparativo",       "Pedido vs Baja"))),
     ("Datos", (("Tabla", "Tabla"),)),
+)
+
+# ORDEN DE LA PILA — gemela de la de `graficos/salidas.py` (los dos reportes
+# comparten ítem de nav y la vista Comparativo, ver movimientos_comun.py).
+# Las 7 vistas comparten el mismo rango, así que va UNA sola pila.
+_PILA = (
+    ("req_sec_evolucion",   "Evolución"),
+    ("req_sec_subalmacen",  "Sub Almacén"),
+    ("req_sec_estado",      "Estado"),
+    ("req_sec_cruce",       "Cruce"),
+    ("req_sec_top",         "Top productos"),
+    ("req_sec_comparativo", "Comparativo"),
+    ("req_sec_tabla",       "Tabla"),
 )
 
 
@@ -124,21 +137,15 @@ def renderizar_graficos_requerimientos(df_f, nombre_reporte, df_full=None, tabla
         kpis[2].metric("💰 Valorizado total",
                        f"S/ {pd.to_numeric(d[col_val], errors='coerce').fillna(0).sum():,.2f}")
 
-    graf = _render_rail(_REQ_RAIL_CATEGORIAS, "req_graf_tipo",
-                        btn_prefix="req_rail_btn_")
+    # El rail ya no ELIGE: con `secciones` marca dónde estás y scrollea.
+    _render_rail(_REQ_RAIL_CATEGORIAS, "req_graf_tipo",
+                 btn_prefix="req_rail_btn_", secciones=_PILA)
 
-    if graf == "Tabla":
-        if tabla_cb is not None:
-            tabla_cb(d)
-        else:
-            st.info("La tabla no está disponible en este contexto.")
-        return
-
-    if graf == "Comparativo":
-        _comparativo_pedido_baja(key_prefix="req_cmp")
-        return
-
-    with st.container(border=True, key="ajuste_graf_card_izq_req"):
+    # La cadena `if graf == ...` de abajo NO se toca: pasa de vivir dentro
+    # de un `with st.container(...)` compartido por las cinco vistas de
+    # gráfico a ser el cuerpo de esta función, que cada sección llama con SU
+    # nombre de vista. Mismo movimiento que en `graficos/salidas.py`.
+    def _cuerpo_grafico(graf):
         if graf == "Evolución" and col_fecha:
             _fe = pd.to_datetime(d[col_fecha], errors="coerce")
             cg1, _sp = st.columns([1.4, 3.6])
@@ -247,3 +254,42 @@ def renderizar_graficos_requerimientos(df_f, nombre_reporte, df_full=None, tabla
 
         else:
             st.info("No hay columnas suficientes para este gráfico.")
+
+    def _seccion(slug, nombre):
+        """Envuelve una vista de gráfico en su propia tarjeta.
+
+        Conserva el prefijo `ajuste_graf_card_` (de ahí cuelga el CSS de
+        tarjeta) y suma el sufijo de la vista: antes las cinco compartían
+        `ajuste_graf_card_izq_req`, lo que funcionaba sólo porque nunca
+        coexistían."""
+        def _f():
+            with st.container(border=True,
+                              key=f"ajuste_graf_card_izq_req_{slug}"):
+                _cuerpo_grafico(nombre)
+        return _f
+
+    def _dib_comparativo():
+        with st.container(border=True, key="ajuste_graf_card_izq_req_comparativo"):
+            _comparativo_pedido_baja(key_prefix="req_cmp")
+
+    def _dib_tabla():
+        with st.container(border=True, key="ajuste_graf_card_izq_req_tabla"):
+            if tabla_cb is not None:
+                tabla_cb(d)
+            else:
+                st.info("La tabla no está disponible en este contexto.")
+
+    _DIBUJANTES = {
+        "req_sec_evolucion":   _seccion("evolucion", "Evolución"),
+        "req_sec_subalmacen":  _seccion("subalmacen", "Sub Almacén"),
+        "req_sec_estado":      _seccion("estado", "Estado"),
+        "req_sec_cruce":       _seccion("cruce", "Cruce"),
+        "req_sec_top":         _seccion("top", "Top productos"),
+        "req_sec_comparativo": _dib_comparativo,
+        "req_sec_tabla":       _dib_tabla,
+    }
+
+    for _i, (_clave, _vista) in enumerate(_PILA):
+        with st.container(key=_clave):
+            seccion_perezosa(_clave, _vista, _DIBUJANTES[_clave],
+                             activa_de_entrada=(_i == 0))

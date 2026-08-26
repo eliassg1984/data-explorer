@@ -18,7 +18,7 @@ import streamlit as st
 from tema import ACENTO
 from graficos.base import (
     PALETA_CALLAI, _compras_layout, _compras_truncar, _render_rail,
-    _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
+    _resolver, publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos.compras import _periodo_serie
 from graficos.movimientos_comun import _chip_movimientos, _comparativo_pedido_baja
@@ -36,6 +36,19 @@ _SALIDAS_RAIL_CATEGORIAS = (
                ("Top productos",     "Top productos"),
                ("Comparativo",       "Pedido vs Baja"))),
     ("Datos", (("Tabla", "Tabla"),)),
+)
+
+# ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA
+# tupla (el porqué está en `graficos/compras/__init__.py::_PILA`). Las 7
+# vistas comparten el mismo rango de fecha, así que va UNA sola pila.
+_PILA = (
+    ("sal_sec_evolucion",  "Evolución"),
+    ("sal_sec_subalmacen", "Subalmacén"),
+    ("sal_sec_tipo",       "Tipo descargo"),
+    ("sal_sec_cruce",      "Cruce"),
+    ("sal_sec_top",        "Top productos"),
+    ("sal_sec_comparativo", "Comparativo"),
+    ("sal_sec_tabla",      "Tabla"),
 )
 
 
@@ -131,21 +144,16 @@ def renderizar_graficos_salidas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         kpis[2].metric("💰 Valorizado total",
                        f"S/ {pd.to_numeric(d[col_val], errors='coerce').fillna(0).sum():,.2f}")
 
-    graf = _render_rail(_SALIDAS_RAIL_CATEGORIAS, "sal_graf_tipo",
-                        btn_prefix="sal_rail_btn_")
+    # El rail ya no ELIGE: con `secciones` marca dónde estás y scrollea.
+    _render_rail(_SALIDAS_RAIL_CATEGORIAS, "sal_graf_tipo",
+                 btn_prefix="sal_rail_btn_", secciones=_PILA)
 
-    if graf == "Tabla":
-        if tabla_cb is not None:
-            tabla_cb(d)
-        else:
-            st.info("La tabla no está disponible en este contexto.")
-        return
-
-    if graf == "Comparativo":
-        _comparativo_pedido_baja(key_prefix="sal_cmp")
-        return
-
-    with st.container(border=True, key="ajuste_graf_card_izq_sal"):
+    # La cadena `if graf == ...` de abajo NO se toca: pasa de vivir dentro de
+    # un `with st.container(...)` compartido por las cinco vistas de gráfico
+    # a ser el cuerpo de esta función, que cada sección llama con SU nombre
+    # de vista. Los cuerpos quedan idénticos —misma indentación, mismas
+    # keys de figura— y lo único que cambia es quién los envuelve.
+    def _cuerpo_grafico(graf):
         if graf == "Evolución" and col_fecha:
             _fe = pd.to_datetime(d[col_fecha], errors="coerce")
             cg1, _sp = st.columns([1.4, 3.6])
@@ -254,3 +262,46 @@ def renderizar_graficos_salidas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
 
         else:
             st.info("No hay columnas suficientes para este gráfico.")
+
+    def _seccion(slug, nombre):
+        """Envuelve una vista de gráfico en su propia tarjeta.
+
+        La key conserva el prefijo `ajuste_graf_card_` (de ahí cuelga el CSS
+        de tarjeta, `estilos/_80_cards.py`) y suma el sufijo de la vista:
+        antes las cinco compartían `ajuste_graf_card_izq_sal`, lo que
+        funcionaba porque nunca coexistían. Apiladas serían cinco widgets
+        con la misma key, que en Streamlit es una excepción."""
+        def _f():
+            with st.container(border=True,
+                              key=f"ajuste_graf_card_izq_sal_{slug}"):
+                _cuerpo_grafico(nombre)
+        return _f
+
+    def _dib_comparativo():
+        with st.container(border=True, key="ajuste_graf_card_izq_sal_comparativo"):
+            _comparativo_pedido_baja(key_prefix="sal_cmp")
+
+    def _dib_tabla():
+        with st.container(border=True, key="ajuste_graf_card_izq_sal_tabla"):
+            if tabla_cb is not None:
+                tabla_cb(d)
+            else:
+                st.info("La tabla no está disponible en este contexto.")
+
+    _DIBUJANTES = {
+        "sal_sec_evolucion":   _seccion("evolucion", "Evolución"),
+        "sal_sec_subalmacen":  _seccion("subalmacen", "Subalmacén"),
+        "sal_sec_tipo":        _seccion("tipo", "Tipo descargo"),
+        "sal_sec_cruce":       _seccion("cruce", "Cruce"),
+        "sal_sec_top":         _seccion("top", "Top productos"),
+        "sal_sec_comparativo": _dib_comparativo,
+        "sal_sec_tabla":       _dib_tabla,
+    }
+
+    # El contenedor con la key va AFUERA del fragment: es el que observan el
+    # scrollspy y la precarga (mismo bucle que Compras, Receta Base, Ajuste
+    # e Inventario).
+    for _i, (_clave, _vista) in enumerate(_PILA):
+        with st.container(key=_clave):
+            seccion_perezosa(_clave, _vista, _DIBUJANTES[_clave],
+                             activa_de_entrada=(_i == 0))
