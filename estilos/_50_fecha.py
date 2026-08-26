@@ -40,7 +40,7 @@ agregarlo (ver regla #21 en arquitectura.md).
 2026-08-09: los chips dejaron de ir CENTRADOS en el ancho util y pasaron a
 ir pegados a la derecha del pill de fecha (left fijo de 301px). Para que
 ese numero sea estable el pill tomo ANCHO FIJO (210px) y el label se
-abrevio en app.py::_fmt_rango_es. Son tres piezas de un mismo cambio — el
+abrevio en franja_fecha.py::fmt_rango_es. Son tres piezas de un mismo cambio — el
 left de los chips, el ancho del pill y el formato del label — y tocar una
 sola rompe la alineacion. Va junto con la barra tintada de
 _40_ajuste_franja.py (5ta vuelta) y el top:6px de los dos contenedores
@@ -177,7 +177,7 @@ CSS = """    /* ================================================================
            ancho del pill NO depende del texto. 210px = el peor caso del
            label abreviado ("30 sep 2025 – 31 dic 2026"); el ellipsis está
            por si algún día vuelve un formato más largo — ver
-           app.py::_fmt_rango_es, que documenta el acoplamiento del otro
+           franja_fecha.py::fmt_rango_es, que documenta el acoplamiento del otro
            lado. Con rangos cortos sobra ancho dentro del pill: se nota
            mucho menos desde que el fondo es blanco (ver abajo) que cuando
            era acento sólido.

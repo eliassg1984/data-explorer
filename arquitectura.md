@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-213 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+215 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (76)
 
@@ -97,7 +97,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#209** — Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no mover uno
 - **#213** — Un width: 100% que gana la cascada y no se ve suele estar clampeado por un max-width:…
 
-**Layout y alturas** (19)
+**Layout y alturas** (20)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -118,6 +118,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#178** — Mover un control de "flotando sobre el marco compartido" a "adentro de una tarjeta" no es un…
 - **#187** — Meter None entre las opciones de un st.selectbox le agrega un botón ✕ "Clear value" que no…
 - **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
+- **#214** — Un st.rerun con scope="app" sigue estando ADENTRO del fragment que lo llama: sumarle espacio…
 
 **Plotly y figuras** (44)
 
@@ -166,7 +167,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
 - **#202** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
 
-**AgGrid y tablas** (33)
+**AgGrid y tablas** (35)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -201,6 +202,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#191** — _ALTO_FRAME en Compras › Proveedor tenía TRES consumidores, no uno — achicar sus filas a…
 - **#192** — El Panel A de Productos (Compras › Proveedor) pasó de st.dataframe a AgGrid por el mismo…
 - **#193** — flex en un columnDef de AgGrid no alcanza: st_aggrid le clava width: 200 a toda columna sin…
+- **#214** — Un st.rerun con scope="app" sigue estando ADENTRO del fragment que lo llama: sumarle espacio…
+- **#215** — Element.innerText no atraviesa el layout position: absolute de las celdas de AgGrid: da ""…
 
 **Streamlit** (65)
 
@@ -328,7 +331,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (18)
+**Herramientas de desarrollo** (19)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -348,6 +351,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 - **#185** — Un contextmenu dentro de un iframe NO sube al documento padre: el clic derecho sobre la…
 - **#206** — Un mousemove/mouseup de un iframe TAMPOCO sube al padre — el modo diseño se congelaba al…
+- **#215** — Element.innerText no atraviesa el layout position: absolute de las celdas de AgGrid: da ""…
 
 **Decisiones de diseño y UX** (36)
 
@@ -9448,13 +9452,65 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      El auditor del proyecto ya lista los conflictos por propiedad; lo que
      no lista son las propiedades que uno no pensó en mirar.
 
+214. **Un `st.rerun` con `scope="app"` sigue estando ADENTRO del fragment
+     que lo llama: sumarle espacio a un widget PINEADO (AgGrid) hay que
+     restárselo de vuelta si otra fila también se resta espacio para hacer
+     lugar a algo dibujado AL LADO.**
+
+     La fila TOTAL del Ranking de Proveedores (`pinnedBottomRowData`,
+     2026-08-25) necesitaba +28px (su propio alto de fila) en el
+     presupuesto de `alturas.por_filas(...)` para no comerse una de las 8
+     filas de datos — eso solo. Pero el mismo presupuesto YA se recortaba
+     24px más abajo (`_ALTO_RANK = _ALTO_FRAME_RANK - FRANJA_ATAJOS`) para
+     hacerle lugar a la fila de atajos que se dibuja ARRIBA del grid, en
+     la misma tarjeta. Ese recorte corre SIEMPRE que hay atajos —o sea,
+     casi siempre— y ya se restaba antes de que existiera la fila total.
+
+     Sumar sólo los 28px de la fila nueva no alcanzaba: acababan
+     descontados por el recorte de los atajos, y las 8 filas de datos
+     seguían viéndose 7. Hubo que sumar los DOS: el alto de la fila nueva
+     Y el de la resta que ya corría, para que se cancelaran mutuamente.
+     Medido en el DOM (no a ojo): `.ag-body-viewport` con 224.5px exactos
+     = 8 × 28.
+
+     **El método que lo destrabó:** medir los tres altos fijos del grid
+     por separado (`.ag-header`, `.ag-floating-bottom`, `.ag-body-
+     viewport`) en vez de mirar sólo el `height=` total. Un presupuesto de
+     alto que "ya considera todo" puede estar considerando ya un recorte
+     de OTRO widget vecino, y ese recorte no se ve en el número final —
+     sólo en la resta que falta.
+
+215. **`Element.innerText` no atraviesa el layout `position: absolute` de
+     las celdas de AgGrid: da `""` aunque la celda tenga texto. Usar
+     `.textContent`.**
+
+     Verificando la fila TOTAL pineada del Ranking de Proveedores, un
+     primer chequeo con `fila.innerText` dio cadena vacía y por un momento
+     pareció que la fila no se había dibujado. Con `.textContent` sobre
+     las mismas celdas apareció el contenido completo
+     ("TOTAL | S/ 71,250 | 153 | 100%").
+
+     La causa: `innerText` sigue el RENDERIZADO visual (respeta
+     `display`/`visibility` y el orden de lectura en pantalla), y las
+     celdas de AgGrid son `position: absolute` posicionadas por
+     `transform`/`left` fuera del flujo normal — exactamente el patrón que
+     ya documenta `arquitectura.md` para otros casos de `position: fixed`/
+     `absolute` (regla #156, el inspector "Rayos X"). `textContent` no le
+     pregunta nada al layout: lee el DOM tal cual, así que no le importa
+     cómo (ni si) el navegador terminó de posicionar el elemento.
+
+     **Corolario para depurar cualquier iframe de AgGrid:** si una
+     verificación con `innerText` da vacío pero el elemento existe en el
+     DOM, antes de sospechar un bug de renderizado, repetir la lectura con
+     `textContent`.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#214**.
+> próxima regla nueva es la **#216**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

@@ -43,8 +43,14 @@ _MESES_ES = ["ene", "feb", "mar", "abr", "may", "jun",
              "jul", "ago", "sep", "oct", "nov", "dic"]
 
 
-def _fmt_rango_es(ini, fin):
-    """Label del pill de fecha de la franja. ABREVIADO a propósito.
+def fmt_rango_es(ini, fin):
+    """Label en español de un rango de fechas. ABREVIADO a propósito.
+
+    Nace como el label del pill de la franja (de ahí el acoplamiento de
+    ancho que explica el párrafo de abajo) y se PROMUEVE a público
+    2026-08-25 para que el detalle de fecha del popover de escala del
+    Ranking de Proveedores (`proveedor.py`) lo reuse en vez de reinventar
+    el mismo formato en dos lugares — mismo criterio que `contexto()`.
 
     Hasta 2026-08-09 devolvía el mes completo y el año en los dos extremos
     ("1 Agosto 2026 - 5 Agosto 2026", hasta 37 caracteres). El pill ahora
@@ -55,7 +61,9 @@ def _fmt_rango_es(ini, fin):
     ("30 sep 2025 – 31 dic 2026") entra en los 210px del pill; con el
     formato viejo no entraba y el texto se cortaba con ellipsis.
     Si se vuelve al formato largo hay que volver a centrar los chips o
-    ensanchar el pill — no es solo cosmético."""
+    ensanchar el pill — no es solo cosmético. Esa restricción es SOLO del
+    pill de la franja: un llamador nuevo (sin vecino anclado en px) puede
+    reusar la función sin heredar el problema."""
     if ini == fin:
         return f"{ini.day} {_MESES_ES[ini.month - 1]} {ini.year}"
     if ini.year == fin.year:
@@ -124,7 +132,7 @@ def render():
             _label_fecha = f"Corte {_label_fecha}"
     elif (isinstance(_rango_actual, (tuple, list))
             and len(_rango_actual) == 2 and all(_rango_actual)):
-        _label_fecha = _fmt_rango_es(_rango_actual[0], _rango_actual[1])
+        _label_fecha = fmt_rango_es(_rango_actual[0], _rango_actual[1])
     else:
         _label_fecha = "Seleccionar rango"
 

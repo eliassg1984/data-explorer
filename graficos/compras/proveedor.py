@@ -18,7 +18,8 @@ from st_aggrid import AgGrid, JsCode
 
 import franja_fecha
 from estado_rango import atajos_rango, aplicar_atajo
-from tema import ACENTO, GRIS_BORDE, TEXTO_PRINCIPAL
+from tema import (ACENTO, ACENTO_TEXTO_OSCURO, GRIS_BORDE, LAVANDA_CHIP,
+                  TEXTO_PRINCIPAL)
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar,
     paso_etiquetas, selector_escala,
@@ -333,8 +334,22 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # arriba). El `:has()` de _80_cards.py sigue igualando el alto de las
     # dos tarjetas de la fila aunque el ranking pida menos.
     _ALTO_FILA_RANK = 28
-    _ALTO_FRAME_RANK = alturas.por_filas(8, px_fila=_ALTO_FILA_RANK, extra=45,
-                                         minimo=0)
+    # 2026-08-25: `extra` suma DOS cosas nuevas por la fila TOTAL pineada
+    # (más abajo, `_rk_fila_total`) — medidas en el DOM, no a ojo:
+    #   · +_ALTO_FILA_RANK: `pinnedBottomRowData` reserva su espacio DENTRO
+    #     del `height=` del grid, así que sin este sumando la fila total le
+    #     comía 28px a las 8 de datos.
+    #   · +alturas.FRANJA_ATAJOS: unas líneas más abajo, `_ALTO_RANK` le
+    #     resta esa misma cantidad al grid para hacerle lugar a la fila de
+    #     atajos que se dibuja ARRIBA — y esa resta ya corría antes de que
+    #     existiera la fila total. Sin pre-compensarla acá, la resta se
+    #     comía las 8 filas de datos por partida doble.
+    # Verificado con las 3 filas fijas del grid (header 39px + fila
+    # TOTAL 28px + ~5.5px de chrome del tema): body-viewport queda en
+    # 224.5px, que es exactamente 8 × 28.
+    _ALTO_FRAME_RANK = alturas.por_filas(
+        8, px_fila=_ALTO_FILA_RANK,
+        extra=45 + _ALTO_FILA_RANK + alturas.FRANJA_ATAJOS, minimo=0)
     # La evolución comparte su columna con el selector de período Y con el
     # cromo de su propia tarjeta (2026-08-18: son dos bloques, no uno), así
     # que su figura mide eso menos que la tabla de al lado. La tabla no paga
@@ -564,6 +579,29 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                         selector_escala(
                                             "cp_rank_esc", _ctx_fecha,
                                             bandera="_cp_rank_atajo_pendiente")
+                                # 2026-08-25, a pedido: el detalle del rango
+                                # ACTIVO, al costado del ícono que lo abre —
+                                # sin esto había que abrir el popover para
+                                # saber qué fecha estaba mirando la tabla.
+                                # Se lee de la MISMA clave canónica que
+                                # escribe el atajo/riel (nunca un estado
+                                # propio: sería un tercer lugar diciendo la
+                                # fecha, y ese es justo el bug que evita
+                                # `estado_rango` — un solo dueño). Reusa
+                                # `franja_fecha.fmt_rango_es`, el mismo
+                                # formato de la píldora de la franja, en vez
+                                # de inventar uno nuevo acá.
+                                _rango_act = st.session_state.get(
+                                    _ctx_fecha["k_rango"])
+                                if (isinstance(_rango_act, (tuple, list))
+                                        and len(_rango_act) == 2
+                                        and all(_rango_act)):
+                                    st.caption(
+                                        franja_fecha.fmt_rango_es(
+                                            *_rango_act),
+                                        width="content",
+                                        help="Rango de fechas que suma "
+                                             "esta tabla.")
                                 for _ca, _et, _rg in _atajos_rank:
                                     st.button(
                                         _et, key=f"atajo_rank_{_ca}",
@@ -606,6 +644,35 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         # "%" (esa es sobre el total del rango).
                         "_barra": [v / _rk_max * 100 for v in _rk_valores],
                     })
+                    # Fila de TOTAL, a pedido (2026-08-25). Mismo mecanismo
+                    # que ya usa `tablas/ajuste_pivote.py`: un dict calculado
+                    # en PYTHON + `pinnedBottomRowData`, no el
+                    # `"grandTotalRow"` nativo — ese modo en este repo sólo
+                    # está probado junto a `pivotMode=True` (Requerimientos,
+                    # el pivote de documentos de acá abajo), y esta tabla no
+                    # es pivote: es plana, una fila por proveedor.
+                    #
+                    # Suma lo que la tabla MUESTRA (`_rk_valores`/`_rk_docs`/
+                    # `_rk_pct`), no `_tot_all` (el total de TODO el rango,
+                    # que usa el % de cada fila): si el usuario deselecciona
+                    # proveedores del multiselect de arriba y no incluye
+                    # "Otros", la tabla ya muestra menos del 100% a propósito
+                    # — el total tiene que sumar esas filas, no prometer un
+                    # número que no está en pantalla.
+                    #
+                    # "Docs" suma los nunique POR PROVEEDOR: puede sobrecontar
+                    # si un mismo documento trajera líneas de dos proveedores
+                    # distintos, algo que no ocurre en este dominio (un
+                    # documento de compra es de un proveedor). Sumar es
+                    # correcto en la práctica y evita un segundo cálculo
+                    # (`base["docu"].nunique()`) que exigiría re-filtrar por
+                    # los proveedores visibles para dar el mismo número.
+                    _rk_fila_total = {
+                        "Proveedor": "TOTAL",
+                        "Valor": round(sum(_rk_valores), 2),
+                        "Docs": int(sum(_rk_docs)),
+                        "%": round(sum(_rk_pct), 2),
+                    }
                     # Dos decisiones de legibilidad, las dos aprendidas
                     # mirando la primera versión (2026-08-19):
                     #
@@ -625,6 +692,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     #    que trae `type: numericColumn`.)
                     _js_barra = JsCode(
                         "function(p){"
+                        # La fila TOTAL no dibuja barra: no hay `_barra`
+                        # contra qué escalarla (sería 100% de sí misma,
+                        # una barra llena sin información) y el fondo lo
+                        # pone `getRowStyle` — un `background` acá se lo
+                        # comería, porque la celda pinta ENCIMA de la fila.
+                        " if (p.node.rowPinned) return {'display':'flex',"
+                        " 'alignItems':'center','justifyContent':'flex-end',"
+                        " 'fontWeight':'700'};"
                         " var w = Math.max(0, Math.min(100, p.data._barra||0))"
                         " * 0.62;"
                         " return {'background': 'linear-gradient(90deg,"
@@ -635,6 +710,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         f" 'color':'{TEXTO_PRINCIPAL}'"
                         "};"
                         "}")
+                    # Misma paleta que la fila TOTAL del pivote de documentos
+                    # de más abajo (`_documentos_proveedor.py`) — dos filas
+                    # de cierre del mismo drill, mismo idioma visual.
+                    _js_fila_total = JsCode(
+                        "function(p){ if(p.node.rowPinned){ return {"
+                        f"'fontWeight':'700','background':'{LAVANDA_CHIP}',"
+                        f"'color':'{ACENTO_TEXTO_OSCURO}',"
+                        f"'borderTop':'2px solid {ACENTO}'"
+                        "}; } }")
                     _js_soles = JsCode(
                         "function(p){ return p.value==null ? '' :"
                         " 'S/ ' + Math.round(p.value).toLocaleString('es-PE'); }")
@@ -647,8 +731,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     # seleccionada (pide Ctrl+clic, que nadie descubre).
                     # `setSelected(valor, true)` limpia las demás → sigue
                     # siendo selección única.
+                    # `rowPinned` afuera: sin este guard, clickear la fila
+                    # TOTAL la "selecciona" como si fuera un proveedor real
+                    # y el drill de abajo intentaría enfocar un proveedor
+                    # llamado "TOTAL" que no existe en los datos.
                     _js_toggle = JsCode(
-                        "function(e){ e.node.setSelected(!e.node.isSelected(),"
+                        "function(e){ if (e.node.rowPinned) return;"
+                        " e.node.setSelected(!e.node.isSelected(),"
                         " true); }")
                     _resp_rank = AgGrid(
                         _rk_df,
@@ -675,6 +764,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             "headerHeight": 38,
                             "suppressCellFocus": True,
                             "suppressMovableColumns": True,
+                            "pinnedBottomRowData": [_rk_fila_total],
+                            "getRowStyle": _js_fila_total,
                         },
                         allow_unsafe_jscode=True,
                         theme="streamlit",
