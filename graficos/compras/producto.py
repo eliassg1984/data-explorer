@@ -31,6 +31,7 @@ from st_aggrid import AgGrid, JsCode
 
 from tema import ACENTO, ERROR, EXITO, GRIS_TEXTO, TEXTO_PRINCIPAL
 from graficos.base import _compras_layout, _compras_truncar, _slug
+from graficos.ventas_comparativo import _fmt_soles_compacto
 from graficos.compras._comun import COLUMNAS_DRILL, GAP_DRILL
 from graficos import alturas, periodo
 
@@ -81,12 +82,11 @@ def _eje_x_kwargs(gran, agg):
 # [role="radio"], con `data-selected` SOLO en el activo.
 _CSS_SELECTOR_TEXTO = f"""
 <style>
-.st-key-compras_prod_gran [data-testid="stButtonGroup"],
-.st-key-compras_prod_modo [data-testid="stButtonGroup"] {{
+.st-key-compras_prod_gran [data-testid="stButtonGroup"] {{
     gap: 10px !important;
+    justify-content: flex-end !important;
 }}
-.st-key-compras_prod_gran [data-testid="stButtonGroup"] button[role="radio"],
-.st-key-compras_prod_modo [data-testid="stButtonGroup"] button[role="radio"] {{
+.st-key-compras_prod_gran [data-testid="stButtonGroup"] button[role="radio"] {{
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
@@ -96,10 +96,50 @@ _CSS_SELECTOR_TEXTO = f"""
     font-weight: 400 !important;
     color: {GRIS_TEXTO} !important;
 }}
-.st-key-compras_prod_gran [data-testid="stButtonGroup"] button[role="radio"][data-selected],
-.st-key-compras_prod_modo [data-testid="stButtonGroup"] button[role="radio"][data-selected] {{
+.st-key-compras_prod_gran [data-testid="stButtonGroup"] button[role="radio"][data-selected] {{
     color: {ACENTO} !important;
     font-weight: 600 !important;
+}}
+/* El selector de ventana (3m/12m/…), APLANADO A TEXTO para que haga
+   juego con la granularidad de al lado: los dos son texto suelto, no
+   una caja contra unas palabras. Misma receta que `cp_evo_ctrl` en
+   _css_proveedor.py — se conserva el chevron, que es la única señal de
+   que eso despliega. */
+.st-key-compras_prod_periodo_wrap [data-testid="stSelectbox"] div[role="group"] {{
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    min-height: 0 !important;
+    height: 22px !important;
+}}
+.st-key-compras_prod_periodo_wrap [data-testid="stSelectbox"] input {{
+    padding: 0 !important;
+    height: auto !important;
+    font-size: 12.5px !important;
+    font-weight: 400 !important;
+    color: {GRIS_TEXTO} !important;
+    cursor: pointer !important;
+}}
+.st-key-compras_prod_periodo_wrap [data-testid="stSelectbox"]:hover input {{
+    color: {ACENTO} !important;
+}}
+.st-key-compras_prod_periodo_wrap [data-testid="stSelectbox"] svg {{
+    width: 13px !important;
+    height: 13px !important;
+    fill: {ACENTO} !important;
+    color: {ACENTO} !important;
+}}
+.st-key-compras_prod_periodo_wrap [data-testid="stSelectbox"]
+    button[aria-haspopup] {{
+    width: 16px !important;
+    min-width: 0 !important;
+    height: 22px !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    flex: 0 0 auto !important;
 }}
 /* Título sobre cada tabla-ranking: mismo lenguaje visual que
    `.cp-rank-tit` de graficos/compras/_css_proveedor.py, pero declarado acá
@@ -449,15 +489,28 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
             # abajo — no se esconde la opción: que una granularidad
             # aparezca y desaparezca según el rango confunde más que
             # dibujar bien el caso degenerado.
-            # No es una fila de drill (COLUMNAS_DRILL no aplica): el
-            # selector ocupa el tercio izquierdo de la columna de detalle
-            # y deja respirar el resto. Mismo gesto y misma proporción
-            # que el de Volatilidad.
-            # columnas-internas: selector de ventana, dentro de la tarjeta.
-            _c_per = st.columns([1, 2])[0]
-            with _c_per:
-                _op_prod = periodo.selector("compras_prod_periodo",
-                                            widget="lista")
+            # ── UNA SOLA FILA DE CONTROLES: ventana + granularidad ──────
+            # 2026-08-26, a pedido. Antes eran TRES renglones apilados —
+            # ventana, granularidad y modo (Precio/Cantidad/Valor)— y el
+            # gráfico arrancaba recién debajo. El modo se va del todo (las
+            # tres métricas pasan a verse SIEMPRE, como etiqueta de cada
+            # barra) y los dos que quedan comparten renglón, alineados.
+            # Son ~40px que gana el gráfico.
+            # columnas-internas: ventana y granularidad, dentro de la
+            # tarjeta. No es una fila de drill: COLUMNAS_DRILL no aplica.
+            _c_win, _c_gran = st.columns([1, 1.35],
+                                         vertical_alignment="center")
+            with _c_win:
+                with st.container(key="compras_prod_periodo_wrap"):
+                    _op_prod = periodo.selector("compras_prod_periodo",
+                                                widget="lista")
+            with _c_gran:
+                with st.container(key="compras_prod_gran"):
+                    gran = st.pills("Agrupar por", ["Semana", "Mes", "Año"],
+                                    default="Mes",
+                                    key="compras_prod_gran_pills",
+                                    label_visibility="collapsed") or "Mes"
+
             _src_evo = dd
             if _op_prod != periodo.HEREDA and d_full is not None:
                 _rec = periodo.recortar(d_full, col_fecha, _op_prod)
@@ -469,140 +522,99 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
 
             g = _src_evo[_src_evo[col_prod].astype(str) == prod_foco]
             # Las cifras del encabezado salen de `g`, o sea de la MISMA
-            # ventana que los puntos. Antes salían de `ranking`, que se
-            # calcula sobre el rango de la franja: con ventana propia eso
-            # sería un número describiendo un período y unos puntos
-            # dibujando otro.
+            # ventana que las barras. Antes salían de `ranking`, que se
+            # calcula sobre el rango de la franja: con dos ventanas
+            # distintas sería un número describiendo un período y unas
+            # barras dibujando otro.
             fila = _prod_stats(g, col_fecha, col_punit, col_cant, col_valor,
                                col_um)
-
-            with st.container(key="compras_prod_gran"):
-                gran = st.pills("Agrupar por", ["Semana", "Mes", "Año"], default="Mes",
-                                key="compras_prod_gran_pills",
-                                label_visibility="collapsed") or "Mes"
-            with st.container(key="compras_prod_modo"):
-                modo = st.pills("Ver", ["Precio", "Cantidad", "Valor"], default="Precio",
-                                key="compras_prod_modo_pills",
-                                label_visibility="collapsed") or "Precio"
-
-            agg = _prod_serie_periodo(g, col_fecha, col_punit, col_cant, col_valor, gran)
-            fig = go.Figure()
+            agg = _prod_serie_periodo(g, col_fecha, col_punit, col_cant,
+                                      col_valor, gran)
             gw = gran.lower()
 
-            if modo == "Precio":
-                if agg.empty or fila is None:
-                    st.info("Sin compras con precio válido para este producto.")
-                else:
-                    # UN SOLO PERÍODO → EL PROMEDIO ES UN NIVEL, NO UNA
-                    # TENDENCIA, y se dibuja como tal.
-                    #
-                    # Con `mode="lines+markers"` y un punto, Plotly dibuja
-                    # sólo el marcador: la leyenda decía "Promedio año" y
-                    # el caption "LÍNEA = promedio", prometiendo una línea
-                    # que no existía. Peor en "Año", donde ese único punto
-                    # se ancla al 1-ene (la etiqueta del período) mientras
-                    # las compras son de agosto — se leía como que el
-                    # precio "venía" de enero.
-                    #
-                    # Una `hline` es lo que un promedio de un período
-                    # REALMENTE es: un nivel de referencia a lo ancho. No
-                    # tiene x, así que el problema del ancla desaparece
-                    # solo, y el gráfico pasa a leerse sin ayuda ("puntos =
-                    # cada compra, raya = su promedio").
-                    _un_periodo = len(agg) < 2
-                    if _un_periodo:
-                        fig.add_hline(
-                            y=float(agg["precio"].iloc[0]),
-                            line=dict(color=ACENTO, width=2.4),
-                            annotation_text=f"promedio {gw}",
-                            annotation_position="top left",
-                            annotation_font=dict(size=10, color=ACENTO))
-                    else:
-                        fig.add_scatter(
-                            x=agg.index, y=agg["precio"], mode="lines+markers",
-                            name=f"Promedio {gw}", line=dict(color=ACENTO, width=2.4),
-                            marker=dict(size=6),
-                            hovertemplate="%{x|%d/%m/%Y}: S/ %{y:,.2f}<extra>Promedio</extra>",
-                        )
-                    _real = g.dropna(subset=[col_punit])
-                    _real = _real[_real[col_punit] > 0].sort_values(col_fecha)
-                    _cd = (_real[col_prov].astype(str).values
-                           if col_prov and col_prov in _real.columns else None)
-                    fig.add_scatter(
-                        x=_real[col_fecha], y=_real[col_punit], mode="markers",
-                        name="Compra real",
-                        marker=dict(size=7, color="white",
-                                   line=dict(color=ACENTO, width=1.5)),
-                        customdata=_cd,
-                        hovertemplate=(
-                            "%{x|%d/%m/%Y}: S/ %{y:,.2f}"
-                            + ("<br>%{customdata}" if _cd is not None else "")
-                            + "<extra>Compra</extra>"),
-                    )
-                    # "+0.0% EN EL PERÍODO" NO ERA LO QUE PARECÍA. `var`
-                    # es primera COMPRA contra última, así que un producto
-                    # que arrancó y terminó en S/ 74.50 daba +0.0% aunque
-                    # los puntos fueran de 72 a 100 — se leía como "no pasó
-                    # nada" al lado de un gráfico que gritaba lo contrario.
-                    # Ahora el % se rotula por lo que ES ("1ª → última") y
-                    # al lado va el rango min-max, que es el dato que la
-                    # persona tiene delante de los ojos.
-                    var_pct = fila["var_pct"]
-                    color_var = (ERROR if var_pct and var_pct > 0.05
-                                else (EXITO if var_pct and var_pct < -0.05 else GRIS_TEXTO))
-                    _um = f"/{fila['um']}" if fila["um"] else ""
-                    _rango_txt = ""
-                    if fila["maximo"] > fila["minimo"]:
-                        _rango_txt = (f' · entre <b>S/ {fila["minimo"]:,.2f}</b>'
-                                      f' y <b>S/ {fila["maximo"]:,.2f}</b>')
-                    st.markdown(
-                        f'<div style="font-size:12px;color:{GRIS_TEXTO};margin:2px 0 6px;">'
-                        f'actual <b>S/ {fila["fin"]:,.2f}{_um}</b> · '
-                        f'<b style="color:{color_var};">'
-                        f'{"+" if (var_pct or 0) >= 0 else "−"}{abs(var_pct or 0):.1f}%'
-                        f'</b> 1ª → última{_rango_txt}</div>',
-                        unsafe_allow_html=True)
-                    _compras_layout(fig, alto=alturas.MINI)
-                    fig.update_layout(legend=dict(orientation="h", y=-0.25, x=0,
-                                                  font=dict(size=10)))
-                    fig.update_xaxes(**_eje_x_kwargs(gran, agg))
-                    st.plotly_chart(fig, use_container_width=True,
-                                    key=f"compras_g_prod_precio_{gran}")
-                    # El caption dice lo que el gráfico DIBUJA, que no es
-                    # lo mismo en los dos casos: con un solo período no hay
-                    # tendencia que leer, hay un nivel.
-                    st.caption(
-                        (f"Puntos = precio real de cada compra · la raya es "
-                         f"su promedio ({gw} único en la ventana elegida).")
-                        if _un_periodo else
-                        (f"Línea = promedio {gw} · puntos = precio real de "
-                         f"cada compra."))
+            if agg.empty or fila is None:
+                st.info("Sin compras con precio válido para este producto.")
             else:
-                col_serie = "cantidad" if modo == "Cantidad" else "valor"
-                total = float((fila or {}).get(
-                    "cantidad" if modo == "Cantidad" else "valor", 0.0))
-                if agg.empty or fila is None:
-                    st.info("Sin compras para este producto en el rango.")
+                var_pct = fila["var_pct"]
+                color_var = (ERROR if var_pct and var_pct > 0.05
+                            else (EXITO if var_pct and var_pct < -0.05 else GRIS_TEXTO))
+                _um = f"/{fila['um']}" if fila["um"] else ""
+                _rango_txt = ""
+                if fila["maximo"] > fila["minimo"]:
+                    _rango_txt = (f' · entre <b>S/ {fila["minimo"]:,.2f}</b>'
+                                  f' y <b>S/ {fila["maximo"]:,.2f}</b>')
+                st.markdown(
+                    f'<div style="font-size:12px;color:{GRIS_TEXTO};margin:0 0 2px;">'
+                    f'actual <b>S/ {fila["fin"]:,.2f}{_um}</b> · '
+                    f'<b style="color:{color_var};">'
+                    f'{"+" if (var_pct or 0) >= 0 else "−"}{abs(var_pct or 0):.1f}%'
+                    f'</b> 1ª → última{_rango_txt}</div>',
+                    unsafe_allow_html=True)
+
+                # ── BARRAS, con las dos cifras SIEMPRE a la vista ────────
+                # Antes había que elegir una de tres (Precio/Cantidad/
+                # Valor) con un selector, y las otras dos no existían. Ahora
+                # la barra ES el valor comprado del período y encima lleva,
+                # fijo, el precio promedio de ese período — que es la
+                # pregunta que traía a este panel ("¿a cuánto me salió, y
+                # cuánto compré?") respondida de una sola mirada.
+                #
+                # El valor va COMPACTO (`_fmt_soles_compacto`, nacido para
+                # este mismo problema en ventas_comparativo.py): "S/ 11k"
+                # entra en una barra angosta donde "S/ 11,268" se corta o
+                # se pisa con la vecina. El monto exacto sigue en el hover.
+                fig = go.Figure()
+                _precio = agg["precio"].tolist()
+                _valor = agg["valor"].tolist()
+                # LA ETIQUETA ROTA SI NO ENTRA, no se encoge. MEDIDO en
+                # vivo: el panel da 312px de ancho y la etiqueta de dos
+                # renglones ocupa 34-36px, así que entran hasta ~8 barras.
+                # Con 13 (la ventana de 12 meses por Mes) Plotly no la
+                # oculta ni la corta: la ESCALA hasta 13px de ancho por 8
+                # de alto — sigue en el DOM y ya no se lee. Es la trampa de
+                # la regla #91, y la razón de que este umbral esté acá y no
+                # a ojo.
+                #
+                # Rotada, la etiqueta necesita ~10px de ancho en vez de 36,
+                # así que entra siempre. Se paga leyéndola de costado, que
+                # es mejor que no leerla: el pedido fue "etiqueta SIEMPRE
+                # visible".
+                _muchas = len(agg) > 8
+                if _muchas:
+                    _etiquetas = [f"S/ {pr:,.2f} · {_fmt_soles_compacto(v)}"
+                                  for pr, v in zip(_precio, _valor)]
                 else:
-                    _pref = "" if modo == "Cantidad" else "S/ "
-                    _tpl = "%{y:,.0f}" if modo == "Cantidad" else "S/ %{y:,.2f}"
-                    fig.add_bar(x=agg.index, y=agg[col_serie], marker_color=ACENTO,
-                               hovertemplate="%{x|%d/%m/%Y}<br>" + _tpl + "<extra></extra>")
-                    _um = f" {fila['um']}" if (modo == "Cantidad" and fila["um"]) else ""
-                    _prom = total / len(agg) if len(agg) else 0.0
-                    st.markdown(
-                        f'<div style="font-size:12px;color:{GRIS_TEXTO};margin:2px 0 6px;">'
-                        f'total <b>{_pref}{total:,.0f}{_um}</b> · '
-                        f'promedio <b>{_pref}{_prom:,.0f}{_um}/{gw}</b></div>',
-                        unsafe_allow_html=True)
-                    _compras_layout(fig, alto=alturas.MINI)
-                    fig.update_layout(showlegend=False,
-                                      yaxis=dict(tickprefix=_pref, tickformat=",.0f"))
-                    fig.update_xaxes(**_eje_x_kwargs(gran, agg))
-                    st.plotly_chart(fig, use_container_width=True,
-                                    key=f"compras_g_prod_{modo}_{gran}")
-                    _etq = "cantidad comprada" if modo == "Cantidad" else "valor comprado"
-                    st.caption(f"Barras = {_etq} por {gw}.")
+                    _etiquetas = [f"S/ {pr:,.2f}<br>{_fmt_soles_compacto(v)}"
+                                  for pr, v in zip(_precio, _valor)]
+                fig.add_bar(
+                    x=agg.index, y=_valor, marker_color=ACENTO,
+                    text=_etiquetas, textposition="outside",
+                    textangle=-90 if _muchas else 0,
+                    textfont=dict(size=9, color=GRIS_TEXTO),
+                    cliponaxis=False, constraintext="none",
+                    customdata=_precio,
+                    hovertemplate=("%{x|%d/%m/%Y}<br>valor S/ %{y:,.2f}"
+                                   "<br>precio prom. S/ %{customdata:,.2f}"
+                                   "<extra></extra>"),
+                )
+                _compras_layout(fig, alto=alturas.MINI)
+                fig.update_layout(showlegend=False,
+                                  yaxis=dict(showticklabels=False),
+                                  bargap=0.35)
+                # Techo con aire para que la etiqueta de DOS renglones
+                # quepa encima de la barra más alta: `textposition=
+                # "outside"` no expande el rango solo, y sin esto la
+                # etiqueta del máximo se corta contra el borde.
+                # Rotada, la etiqueta ocupa ALTO en vez de ancho, así que
+                # el techo tiene que dar más aire.
+                if max(_valor) > 0:
+                    fig.update_yaxes(
+                        range=[0, max(_valor) * (1.75 if _muchas else 1.28)])
+                fig.update_xaxes(**_eje_x_kwargs(gran, agg))
+                st.plotly_chart(fig, use_container_width=True,
+                                key=f"compras_g_prod_{gran}")
+                st.caption(f"Barra = valor comprado por {gw} · encima, el "
+                           f"precio promedio de ese {gw}.")
 
     # ── Card 2: ranking por familia + mini ranking de sus productos ──────
     if not col_fam or col_fam not in dd.columns:
