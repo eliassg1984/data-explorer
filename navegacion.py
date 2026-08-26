@@ -208,6 +208,16 @@ _CSS_FRANJA_VISTAS = f"""
        del titulo y los filtros, blanco detras de las vistas. */
     background:var(--bg-card) !important; z-index:999999 !important;
     border:none !important;
+    /* Línea delgada SOLO abajo (2026-08-26, a pedido: "una idea visual de
+       separación"). Antes esta fila y lo que scrollea debajo compartían el
+       mismo blanco sin ningún borde entre las dos — el usuario tenía que
+       adivinar dónde terminaba el cromo fijo y empezaba el contenido. Va
+       encima del `border:none` de arriba (mismo shorthand, dos
+       declaraciones, gana la última) y no reemplaza ese `none`: así un
+       cambio futuro de los otros tres lados no reabre esta línea por
+       accidente. Mismo `--border` que usa el resto de la app para
+       divisorias finas (`_00_base.py`), no un gris propio. */
+    border-bottom:1px solid var(--border) !important;
     border-radius:0 !important;
     box-shadow:none !important;
     /* NAV_X0 es el sangrado de MÓVIL, donde esta barra se va al pie y ocupa
