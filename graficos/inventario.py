@@ -29,7 +29,7 @@ from tema import (
 )
 from graficos.base import (
     _compras_layout, _compras_truncar, _render_rail,
-    _resolver, _slug, publicar_contexto_ia, renderizar_graficos_genericos,
+    _resolver, _slug, publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos import alturas
 
@@ -40,6 +40,17 @@ _INVENTARIO_RAIL_CATEGORIAS = (
                ("Por familia",     "Por familia"),
                ("Buscar producto", "Buscar producto"))),
     ("Datos", (("Tabla", "Tabla"),)),
+)
+
+# ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA
+# tupla (el porqué, largo, está en `graficos/compras/__init__.py::_PILA`).
+# Las cuatro vistas de Inventario comparten el mismo rango de fecha, así
+# que a diferencia de Ajuste acá va UNA sola pila con todo adentro.
+_PILA = (
+    ("inv_sec_area",    "Por área"),
+    ("inv_sec_familia", "Por familia"),
+    ("inv_sec_buscar",  "Buscar producto"),
+    ("inv_sec_tabla",   "Tabla"),
 )
 
 
@@ -697,58 +708,93 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
     _cant = (pd.to_numeric(d[col_cant], errors="coerce").fillna(0)
              if col_cant else None)
 
-    graf = _render_rail(_INVENTARIO_RAIL_CATEGORIAS, "inv_graf_tipo",
-                        btn_prefix="inv_rail_btn_")
+    # El rail ya no ELIGE: con `secciones` marca dónde estás y scrollea.
+    _render_rail(_INVENTARIO_RAIL_CATEGORIAS, "inv_graf_tipo",
+                 btn_prefix="inv_rail_btn_", secciones=_PILA)
 
-    if graf == "Tabla":
-        if tabla_cb is not None:
-            tabla_cb(d)
-        else:
-            st.info("La tabla no está disponible en este contexto.")
-        return
+    # Las tres vistas de gráfico compartían UN layout de dos columnas con
+    # `if graf ==` salpicado adentro, y las mismas tres keys de tarjeta
+    # (`ajuste_graf_card_{izq,der,abajo}_inv`) para todas. Apiladas, eso
+    # serían varios widgets con la misma key — excepción de Streamlit. Cada
+    # sección pasa a ser AUTÓNOMA: arma su propio par de columnas y lleva su
+    # sufijo. Se conserva el prefijo `ajuste_graf_card_`, de donde cuelga el
+    # CSS de tarjeta (`estilos/_80_cards.py`).
+    def _seccion_grupo(slug, graf_nombre, col_grp, nombre_grp):
+        """Una de las dos vistas de ranking (Por área / Por familia).
 
-    col_izq, col_der = st.columns([1.7, 1])
-
-    col_grp, foco = None, None
-    with col_izq:
-        with st.container(border=True, key="ajuste_graf_card_izq_inv"):
-            st.metric("Valorizado total", f"S/ {_val.sum():,.0f}")
-
-            if graf in ("Por área", "Por familia") and (col_area or col_fam):
-                col_grp = col_area if graf == "Por área" else col_fam
-                nombre_grp = "área" if graf == "Por área" else "familia"
+        Las dos son el MISMO layout sobre otra columna de agrupación, que es
+        lo que antes resolvía el `col_area if graf == "Por área" else
+        col_fam` de adentro del bloque compartido."""
+        # columnas-internas: el ranking y su panel de apoyo, dentro de la
+        # sección. No es una fila de drill de Compras: COLUMNAS_DRILL no
+        # aplica. Proporción heredada tal cual del layout anterior.
+        col_izq, col_der = st.columns([1.7, 1])
+        foco = None
+        with col_izq:
+            with st.container(border=True,
+                              key=f"ajuste_graf_card_izq_inv_{slug}"):
+                st.metric("Valorizado total", f"S/ {_val.sum():,.0f}")
                 if not col_grp:
                     st.info(f"No se encontró la columna de {nombre_grp}.")
                 else:
                     st.markdown(f"**Valorizado por {nombre_grp}**")
-                    foco = _tabla_ranking(
-                        d, col_grp, col_val, nombre_grp,
-                        key=f"inv_rank_grid_{'area' if graf == 'Por área' else 'familia'}",
-                    )
+                    foco = _tabla_ranking(d, col_grp, col_val, nombre_grp,
+                                          key=f"inv_rank_grid_{slug}")
                     # El detalle NO se apila acá abajo: con foco activo se
-                    # dibuja lateral, en col_der (ver más abajo) — el Top
-                    # que vive ahí normalmente le cede el lugar y baja a su
-                    # propia franja debajo de las dos columnas.
-
-            elif graf == "Buscar producto":
-                _render_buscar_producto(d, col_prod, col_area, col_subfam,
-                                        col_val, col_cant, col_unidad)
-
-            else:
-                st.info("No hay columnas suficientes para este gráfico.")
-
-    with col_der:
-        with st.container(border=True, key="ajuste_graf_card_der_inv"):
-            if graf == "Buscar producto":
-                _panel_relacionados(d, col_prod, col_fam, col_subfam, col_val)
-            elif foco:
-                _grafico_detalle_foco(d, graf, col_grp, foco,
-                                      col_fam, col_subfam, col_val)
-            else:
-                _panel_top(d, None, col_grp, col_prod, col_area, col_val,
+                    # dibuja lateral, en col_der — el Top que vive ahí
+                    # normalmente le cede el lugar y baja a su propia
+                    # franja debajo de las dos columnas.
+        with col_der:
+            with st.container(border=True,
+                              key=f"ajuste_graf_card_der_inv_{slug}"):
+                if foco:
+                    _grafico_detalle_foco(d, graf_nombre, col_grp, foco,
+                                          col_fam, col_subfam, col_val)
+                else:
+                    _panel_top(d, None, col_grp, col_prod, col_area, col_val,
+                              col_punit, _cant)
+        if foco:
+            with st.container(border=True,
+                              key=f"ajuste_graf_card_abajo_inv_{slug}"):
+                _panel_top(d, foco, col_grp, col_prod, col_area, col_val,
                           col_punit, _cant)
 
-    if foco and graf in ("Por área", "Por familia"):
-        with st.container(border=True, key="ajuste_graf_card_abajo_inv"):
-            _panel_top(d, foco, col_grp, col_prod, col_area, col_val,
-                      col_punit, _cant)
+    def _dib_area():
+        _seccion_grupo("area", "Por área", col_area, "área")
+
+    def _dib_familia():
+        _seccion_grupo("familia", "Por familia", col_fam, "familia")
+
+    def _dib_buscar():
+        # columnas-internas: mismo par que las de ranking, para que las
+        # tres secciones partan la fila en el mismo sitio al bajar.
+        col_izq, col_der = st.columns([1.7, 1])
+        with col_izq:
+            with st.container(border=True, key="ajuste_graf_card_izq_inv_buscar"):
+                st.metric("Valorizado total", f"S/ {_val.sum():,.0f}")
+                _render_buscar_producto(d, col_prod, col_area, col_subfam,
+                                        col_val, col_cant, col_unidad)
+        with col_der:
+            with st.container(border=True, key="ajuste_graf_card_der_inv_buscar"):
+                _panel_relacionados(d, col_prod, col_fam, col_subfam, col_val)
+
+    def _dib_tabla():
+        with st.container(border=True, key="ajuste_graf_card_izq_inv_tabla"):
+            if tabla_cb is not None:
+                tabla_cb(d)
+            else:
+                st.info("La tabla no está disponible en este contexto.")
+
+    _DIBUJANTES = {
+        "inv_sec_area":    _dib_area,
+        "inv_sec_familia": _dib_familia,
+        "inv_sec_buscar":  _dib_buscar,
+        "inv_sec_tabla":   _dib_tabla,
+    }
+
+    # El contenedor con la key va AFUERA del fragment: es el que observan el
+    # scrollspy y la precarga (mismo bucle que Compras, Receta Base y Ajuste).
+    for _i, (_clave, _vista) in enumerate(_PILA):
+        with st.container(key=_clave):
+            seccion_perezosa(_clave, _vista, _DIBUJANTES[_clave],
+                             activa_de_entrada=(_i == 0))
