@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-221 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+222 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (77)
 
@@ -207,7 +207,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#215** — Element.innerText no atraviesa el layout position: absolute de las celdas de AgGrid: da ""…
 - **#221** — tablas/desktop.py declaraba los TRES hooks que _parchar_iconos necesitaba, así que la tabla…
 
-**Streamlit** (69)
+**Streamlit** (70)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -278,6 +278,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#218** — Puppetear los DOS tiradores de un st.slider de rango, uno después del otro, pierde el segundo…
 - **#219** — Un riel de fechas que abarca todo el histórico no sirve para elegir un día, y la escala fina…
 - **#220** — Convertir una página de "una vista por vez" en una PILA no es mover código: es descubrir qué…
+- **#222** — La ventana del riel se generalizó a Meses, y el intento de arreglar "otro bug" de paso…
 
 **Datos, R2 y DuckDB** (25)
 
@@ -9758,13 +9759,55 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      cada uno envejece en silencio. Si el recurso puede COMPARTIRSE
      (componer dos handlers) en vez de repartirse, compartir no tiene tope.
 
+222. **La ventana del riel se generalizó a Meses, y el intento de
+     arreglar "otro bug" de paso terminó revertido — vale por lo segundo.**
+     2026-08-26: "me gusta en la visualización de día, pero también en la
+     de mes, debe mostrar inicialmente sólo lo del año en curso". Es la
+     regla #219 un piso más arriba: Días mira un mes (`ventana_mes`), Meses
+     mira un año (`ventana_ano`), y las dos comparten cabecera ‹ › y
+     callback (`_VENTANA_DE_ESCALA`, `_nav_ventana`, `_ir_a_ventana`).
+     "Años" queda sin ventana a propósito: sus paradas son una por año
+     presente en la data, o sea que ya es el panorama completo.
+
+     Para Meses el truco es que `escala_desde_rango` recibe la VENTANA
+     como `bounds` en vez del histórico: así sus paradas son los meses de
+     ese año y el redondeo hacia afuera apoya en el borde lo que se sale —
+     exactamente lo que ya hacía contra el histórico, un nivel más abajo.
+
+     LO QUE VALE LA PENA RECORDAR ES EL FALSO POSITIVO. Probando, el
+     control de escala pareció desincronizarse: el `segmented_control`
+     marcaba "Años" y Python dibujaba el riel de Meses. Se escribió un
+     arreglo (sacar el `default=` variable del `segmented_control`, con la
+     teoría de que cambiaba la identidad del widget y Streamlit descartaba
+     el clic) y se le puso un comentario largo explicando el bug.
+
+     Era mentira, por dos motivos, y los dos se descubrieron sólo al
+     verificar del lado del SERVIDOR (corolario de la regla #217: no
+     confiar en el DOM):
+
+       · Un `print` en el cuerpo mostró **dos runs, los dos con
+         `widget='Días'`** después de un clic REAL en "Meses". El clic no
+         llegaba al servidor: el harness de prueba no puede accionar ese
+         control de forma fiable, ni con eventos sintéticos ni con clic
+         por coordenadas (la vista previa no compone frames, así que las
+         coordenadas no son de fiar).
+       · Y la teoría era falsa igual: en Streamlit, para un widget CON
+         `key`, la identidad la da la key — `default=` sólo aplica cuando
+         la clave no existe. El "arreglo" era neutro.
+
+     Se revirtió. Un comentario que afirma un bug que no se pudo
+     reproducir es peor que no tocar nada: esta bitácora está hecha de
+     bugs REALES, y una entrada inventada envenena la próxima búsqueda.
+     Antes de escribir el comentario, reproducir; y si el harness es el
+     sospechoso, probarlo en el servidor.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#222**.
+> próxima regla nueva es la **#223**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

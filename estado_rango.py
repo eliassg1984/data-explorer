@@ -347,6 +347,41 @@ def ventana_mes(ancla, bounds):
     return (ini, fin)
 
 
+def ventana_ano(ancla, bounds):
+    """La ventana VISIBLE del riel de Meses: el año de `ancla`, en `bounds`.
+
+    Gemela de `ventana_mes`, y por la segunda mitad del mismo pedido
+    (2026-08-26): "me gusta en la visualización de día, pero también en la
+    de mes, debe mostrar inicialmente solo lo del año en curso". El riel de
+    Meses abría con TODOS los meses del histórico —44 paradas de ene-23 a
+    ago-26 en 250px— y elegir marzo de 2025 era apuntar a una de esas 44.
+
+    La escala de Años se deja como está: sus paradas son una por año
+    presente en la data (cuatro, hoy), o sea que ya ES el panorama
+    completo. Acotarla no dejaría nada que ver.
+
+    GARANTIZA DOS MESES DISTINTOS, por el mismo motivo que su gemela
+    garantiza dos días: un `st.select_slider` con una sola parada no tiene
+    riel donde moverse. Pasa cuando el año del ancla se recorta a un solo
+    mes (la data arranca en diciembre, o termina en enero). Ahí se toma
+    prestado el mes vecino que `bounds` permita.
+    """
+    if not (bounds and all(bounds)) or bounds[0] >= bounds[1]:
+        return None
+    min_b, max_b = bounds
+    ancla = min(max(ancla, min_b), max_b)
+    ini = min(max(datetime.date(ancla.year, 1, 1), min_b), max_b)
+    fin = min(max(datetime.date(ancla.year, 12, 31), min_b), max_b)
+    if len(escala_periodos("Meses", (ini, fin))) < 2:
+        _prev = ini.replace(day=1) - datetime.timedelta(days=1)
+        if _prev >= min_b:
+            ini = max(min_b, _prev.replace(day=1))
+        else:
+            fin = min(max_b, _fin_de_mes(_fin_de_mes(fin)
+                                         + datetime.timedelta(days=1)))
+    return (ini, fin)
+
+
 def aplicar_atajo(clave, rango, reporte=None, usa_carga_rango=False):
     """Callback `on_click` que fija el rango desde un atajo.
 

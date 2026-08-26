@@ -243,15 +243,17 @@ un widget ajeno desde JS (un `st.text_input` no confirma con
 de rango no se pueden escribir uno-tras-otro)— están en `arquitectura.md`
 reglas #211 a #213 y #217 a #218.
 
-**En Días el riel abarca UN MES, no el histórico** (`estado_rango.
-ventana_mes`, 2026-08-26). Con ~970 días en 250px no se puede elegir una
-fecha, y la regla de referencia rotulaba años que no venían al caso. La
-cabecera `‹ AGO 2026 ›` dice cuál se ve y cambia de mes; la regla de abajo
-pasó a numerar días. Ir a otro mes SELECCIONA ese mes entero: el valor de
-un `st.slider` tiene que caer dentro de sus límites, así que una vista sin
-selección adentro no se puede representar. Y si el rango vigente se sale
-del mes visible, el caption lo canta — el riel lo dibuja apoyado en el
-borde, pero nunca lo reescribe solo. Ver regla #219.
+**El riel se abre por VENTANA, no sobre el histórico entero**
+(2026-08-26): en Días abarca un mes (`estado_rango.ventana_mes`) y en Meses
+un año (`ventana_ano`). Con ~970 días —o 44 meses— en 250px no se puede
+elegir una fecha. "Años" no lleva ventana: sus paradas ya son el panorama
+completo. La cabecera `‹ AGO 2026 ›` / `‹ 2026 ›` dice cuál se ve y la
+cambia; en Días la regla de abajo numera los días del mes. Ir a otra
+ventana la SELECCIONA entera: el valor de un slider tiene que caer dentro
+de sus límites, así que una vista sin selección adentro no se puede
+representar. Y si el rango vigente se sale de la ventana, el caption lo
+canta — el riel lo dibuja apoyado en el borde, pero nunca lo reescribe
+solo. Ver reglas #219 y #222.
 
 `aplicar_corte` escribe el corte **y** el rango — el rango lo leen el
 `date_input`, el label del pill y el loader de R2, que no saben qué es un
