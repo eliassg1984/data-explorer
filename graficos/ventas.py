@@ -13,7 +13,7 @@ from data import cargar as _cargar_reporte
 from tema import ACENTO, ERROR, EXITO, GRIS_BORDE, TEXTO_PRINCIPAL
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, _render_rail,
-    _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
+    _resolver, publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos.ventas_resumen import _ventas_resumen
 from graficos.ventas_comparativo import _ventas_comparativo
@@ -38,6 +38,28 @@ _VENTAS_RAIL_CATEGORIAS = (
                   ("Ranking & FoodCost",  "Ranking"),
                   ("Meseros",             "Meseros"))),
     ("Datos",    (("Tabla",  "Tabla"),)),
+)
+
+# ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA
+# tupla (el porqué está en `graficos/compras/__init__.py::_PILA`).
+#
+# Las 11 van en UNA sola pila: a diferencia de Ajuste, acá las categorías
+# del rail ("Resumen"/"Tiempo"/"Análisis") son sólo agrupación visual y no
+# separan la clave del rango — Ventas usa `carga_por_rango`, o sea UNA
+# clave por reporte, la misma que decide qué se baja de R2. El rail aplana
+# las categorías igual que siempre, así que la pila las lee seguidas.
+_PILA = (
+    ("vt_sec_resumen",    "Resumen ejecutivo"),
+    ("vt_sec_dia",        "Venta por día"),
+    ("vt_sec_hora",       "Mapa por hora"),
+    ("vt_sec_ano_pasado", "Comparativo vs Año Pasado"),
+    ("vt_sec_vs_compra",  "Venta vs Compra"),
+    ("vt_sec_semanal",    "Familia/Subfamilia semanal"),
+    ("vt_sec_historica",  "Histórica subfamilia"),
+    ("vt_sec_matriz",     "Matriz agrupada"),
+    ("vt_sec_ranking",    "Ranking & FoodCost"),
+    ("vt_sec_meseros",    "Meseros"),
+    ("vt_sec_tabla",      "Tabla"),
 )
 
 
@@ -1094,17 +1116,17 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
 
     _venta = pd.to_numeric(d[col_venta], errors="coerce").fillna(0)
 
-    graf = _render_rail(_VENTAS_RAIL_CATEGORIAS, "ventas_graf_tipo",
-                        btn_prefix="ventas_rail_btn_")
+    # El rail ya no ELIGE: con `secciones` marca dónde estás y scrollea.
+    _render_rail(_VENTAS_RAIL_CATEGORIAS, "ventas_graf_tipo",
+                 btn_prefix="ventas_rail_btn_", secciones=_PILA)
 
-    if graf == "Tabla":
-        if tabla_cb is not None:
-            tabla_cb(d)
-        else:
-            st.info("La tabla no está disponible en este contexto.")
-        return
-
-    with st.container(border=True, key="ajuste_graf_card_izq_ventas"):
+    # La cadena `if graf == ...` de abajo NO se toca: pasa de vivir dentro
+    # de un `with st.container(...)` compartido por las diez vistas de
+    # gráfico a ser el cuerpo de esta función, que cada sección llama con
+    # SU nombre de vista. Mismo movimiento que en salidas.py y
+    # requerimientos.py, y por el mismo motivo: en un if/elif de 200 líneas
+    # con diez cuerpos pesados, la migración segura es la que NO los toca.
+    def _cuerpo_grafico(graf):
 
         # ── 0) Resumen ejecutivo: KPIs + candlestick diario + ticket + top
         # platos (graficos/ventas_resumen.py). Vive DENTRO de esta misma
@@ -1320,3 +1342,49 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                                     col_corr, col_pax, col_fecha, col_venta)
         else:
             st.info("No hay columnas suficientes para este gráfico.")
+
+    def _seccion(slug, nombre):
+        """Envuelve una vista de gráfico en su propia tarjeta.
+
+        Conserva el prefijo `ajuste_graf_card_` (de ahí cuelga el CSS de
+        tarjeta, `estilos/_80_cards.py`) y suma el sufijo de la vista:
+        antes las diez compartían `ajuste_graf_card_izq_ventas`, lo que
+        funcionaba porque nunca coexistían. Apiladas serían diez widgets
+        con la misma key = excepción de Streamlit."""
+        def _f():
+            with st.container(border=True,
+                              key=f"ajuste_graf_card_izq_ventas_{slug}"):
+                _cuerpo_grafico(nombre)
+        return _f
+
+    def _dib_tabla():
+        with st.container(border=True, key="ajuste_graf_card_izq_ventas_tabla"):
+            if tabla_cb is not None:
+                tabla_cb(d)
+            else:
+                st.info("La tabla no está disponible en este contexto.")
+
+    _DIBUJANTES = {
+        "vt_sec_resumen":    _seccion("resumen", "Resumen ejecutivo"),
+        "vt_sec_dia":        _seccion("dia", "Venta por día"),
+        "vt_sec_hora":       _seccion("hora", "Mapa por hora"),
+        "vt_sec_ano_pasado": _seccion("ano_pasado", "Comparativo vs Año Pasado"),
+        "vt_sec_vs_compra":  _seccion("vs_compra", "Venta vs Compra"),
+        "vt_sec_semanal":    _seccion("semanal", "Familia/Subfamilia semanal"),
+        "vt_sec_historica":  _seccion("historica", "Histórica subfamilia"),
+        "vt_sec_matriz":     _seccion("matriz", "Matriz agrupada"),
+        "vt_sec_ranking":    _seccion("ranking", "Ranking & FoodCost"),
+        "vt_sec_meseros":    _seccion("meseros", "Meseros"),
+        "vt_sec_tabla":      _dib_tabla,
+    }
+
+    # El contenedor con la key va AFUERA del fragment: es el que observan el
+    # scrollspy y la precarga. Con once secciones —y las de Ventas son las
+    # más pesadas de la app— la carga perezosa de `seccion_perezosa` deja de
+    # ser una optimización y pasa a ser lo que hace la página viable: ver su
+    # docstring y arquitectura.md #211 (construir todo de una dejaba al
+    # navegador sin responder en Cloud).
+    for _i, (_clave, _vista) in enumerate(_PILA):
+        with st.container(key=_clave):
+            seccion_perezosa(_clave, _vista, _DIBUJANTES[_clave],
+                             activa_de_entrada=(_i == 0))

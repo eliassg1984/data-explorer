@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-219 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+221 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (77)
 
@@ -168,7 +168,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
 - **#202** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
 
-**AgGrid y tablas** (35)
+**AgGrid y tablas** (36)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -205,8 +205,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#193** — flex en un columnDef de AgGrid no alcanza: st_aggrid le clava width: 200 a toda columna sin…
 - **#214** — Un st.rerun con scope="app" sigue estando ADENTRO del fragment que lo llama: sumarle espacio…
 - **#215** — Element.innerText no atraviesa el layout position: absolute de las celdas de AgGrid: da ""…
+- **#221** — tablas/desktop.py declaraba los TRES hooks que _parchar_iconos necesitaba, así que la tabla…
 
-**Streamlit** (68)
+**Streamlit** (69)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -276,6 +277,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#217** — st.text_input (react-aria) no confirma su valor con input/ change ni con blur() programático…
 - **#218** — Puppetear los DOS tiradores de un st.slider de rango, uno después del otro, pierde el segundo…
 - **#219** — Un riel de fechas que abarca todo el histórico no sirve para elegir un día, y la escala fina…
+- **#220** — Convertir una página de "una vista por vez" en una PILA no es mover código: es descubrir qué…
 
 **Datos, R2 y DuckDB** (25)
 
@@ -358,7 +360,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#206** — Un mousemove/mouseup de un iframe TAMPOCO sube al padre — el modo diseño se congelaba al…
 - **#215** — Element.innerText no atraviesa el layout position: absolute de las celdas de AgGrid: da ""…
 
-**Decisiones de diseño y UX** (37)
+**Decisiones de diseño y UX** (38)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -397,6 +399,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#201** — Sacarle el wrapper interno a un contenedor NO hace que el CSS viejo "se reuse solo":…
 - **#209** — Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no mover uno
 - **#216** — Retirar un toggle de colapso: si nada más puede fijar el estado "plegado", ese estado tiene…
+- **#220** — Convertir una página de "una vista por vez" en una PILA no es mover código: es descubrir qué…
 
 **Mantenimiento y trampas del lenguaje** (6)
 
@@ -9667,13 +9670,101 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      `bounds`: cruzar de mes es trabajo de las flechas. Dejarlo pasar de
      largo haría que un tirón de 5px al borde saltara de mes sin avisar.
 
+220. **Convertir una página de "una vista por vez" en una PILA no es
+     mover código: es descubrir qué estaba sosteniendo el hecho de que las
+     vistas nunca coexistieran.** Migración de los 7 dashboards que
+     faltaban, 2026-08-26, a pedido ("que todos los reportes tengan la
+     misma didáctica que Compras"). La receta es corta —declarar `_PILA`,
+     pasarla a `_render_rail(secciones=)`, cambiar el `if graf == ...` por
+     un dict de closures + el bucle de `seccion_perezosa`— y aun así cada
+     reporte tenía algo escondido. Lo que apareció, por frecuencia:
+
+     · **KEYS COMPARTIDAS, en los SIETE.** Todas las vistas de un reporte
+       usaban UNA key de tarjeta (`ajuste_graf_card_izq_sal`,
+       `rv_graf_card`, `ajuste_graf_card_izq_ventas`…). Es correcto
+       mientras se dibuja una por vez y es una excepción de Streamlit
+       apenas coexisten. Cada sección lleva ahora su sufijo, conservando el
+       PREFIJO del que cuelga el CSS de tarjeta.
+
+     · **Parches que la pila deja sin objeto.** Dos patrones existían sólo
+       para que un widget no quedara huérfano al CAMBIAR de vista: el
+       `with c_x:` incondicional con el `if` adentro (para que Streamlit
+       "visitara" la posición y la limpiara) y el sub-container con key
+       variable por vista (para forzar un remount limpio). Con todas las
+       vistas siempre en la página, los dos se borran. Conviene borrarlos:
+       dejarlos es dejar código que dice que el bug sigue vivo.
+
+     · **Un `return` temprano que protegía a alguien sin decirlo.** En
+       Ajuste, "sin datos para los filtros" cortaba la página entera —
+       pero la Tabla se salvaba porque volvía ANTES, arriba de los chips.
+       Cortando en el sitio viejo se la habría llevado puesta. El aviso
+       pasó a dibujarlo cada sección.
+
+     · **Botones que "cambian de vista" desde adentro.** El "Abrir Sankey"
+       del Panorama de Recetas escribía el `state_key` del rail y
+       rerruneaba. Con la pila eso sólo enciende un botón. De ahí
+       `graficos.base.scroll_a_seccion()`.
+
+     LA EXCEPCIÓN QUE VALE LA PENA ENTENDER: **Ajuste no se puede apilar
+     entero.** Sus categorías de rail no son agrupación visual — cada una
+     recuerda su PROPIO rango de fecha (`clave_rango(categoria=...)`),
+     porque Cascada/Mapa/Distribución/Tabla se leen acotadas a un período y
+     Evolución/Comparativa/Por fecha necesitan varios meses o un año. Antes
+     compartían una clave y se pisaban; separarlas fue el arreglo. Apilar
+     las siete juntas sería volver a ESE bug, con la página mostrando dos
+     vistas que piden rangos distintos y una sola fecha activa para las
+     dos. Quedó con DOS pilas, una por categoría, y saltar de una a otra
+     sigue siendo navegación de verdad — que es lo correcto, porque cambia
+     el rango. Antes de apilar un reporte nuevo, la pregunta es: **¿estas
+     vistas comparten el rango de fecha?** Si no, no son una sola página.
+
+     Y LA TÉCNICA QUE HIZO LA DIFERENCIA en los tres reportes grandes
+     (Salidas, Requerimientos, Ventas: hasta 200 líneas de `if/elif` con
+     diez cuerpos pesados): la cadena vivía dentro de un `with
+     st.container(...)` a 4 espacios, o sea con sus ramas a 8. Se reemplazó
+     ESA ÚNICA LÍNEA por `def _cuerpo_grafico(graf):` —misma indentación
+     para el cuerpo, cero cambios adentro, mismas keys de figura— y cada
+     sección lo llama con su nombre de vista. En una migración así, la
+     versión segura es la que NO toca los cuerpos: todo lo que se re-indenta
+     a mano es una oportunidad de bug nuevo que ningún test agarra.
+
+     De paso salió un bug PREEXISTENTE que la pila volvió permanente, ver
+     regla #221.
+
+221. **`tablas/desktop.py` declaraba los TRES hooks que `_parchar_iconos`
+     necesitaba, así que la tabla genérica reventaba con `RuntimeError`.**
+     Encontrado 2026-08-26 al apilar Receta Base, y verificado que NO lo
+     causaba el apilado: se stasheó el cambio y se reprodujo en `main`.
+
+     `tablas/_config.py::_parchar_iconos` enganchaba el parche de iconos al
+     primer hook LIBRE de `_HOOKS_PARCHE` (`onGridReady`,
+     `onFirstDataRendered`, `onModelUpdated`) y tiraba `RuntimeError` si no
+     quedaba ninguno. Su comentario decía "desktop.py ocupa onGridReady Y
+     onFirstDataRendered" — cierto cuando se escribió. El tercero se sumó
+     después (3197cca) y nadie volvió acá, así que la vista Tabla de todo
+     reporte que use el renderizador GENÉRICO tiraba traceback.
+
+     Se veía sólo si entrabas a Tabla, y por eso convivió: con la pila esa
+     sección está siempre en la página y el traceback pasó a ser
+     permanente. El arreglo NO fue sumar un cuarto evento a la lista —eso
+     vuelve a depender de que alguno quede libre— sino ENVOLVER el primer
+     handler: cada mitad en su propio `try`, para que un handler que falle
+     no se lleve puesto al otro. `_codigo_de()` pela los centinelas
+     `::JSCODE::` de `st_aggrid` para poder componer.
+
+     La lección que no es sobre AG Grid: un recurso con **capacidad fija**
+     (tres hooks) repartido entre módulos que no se conocen entre sí se
+     agota sin que nadie lo note, y el comentario que documenta cuánto usa
+     cada uno envejece en silencio. Si el recurso puede COMPARTIRSE
+     (componer dos handlers) en vez de repartirse, compartir no tiene tope.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#220**.
+> próxima regla nueva es la **#222**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

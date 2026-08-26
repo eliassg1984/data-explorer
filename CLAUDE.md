@@ -292,6 +292,43 @@ corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
 (`_DASHBOARDS = {reporte: render_fn}`). **Agregar un dashboard = crear
 `graficos/<nombre>.py` + 1 línea en `_DASHBOARDS`.** No cadenas de if/elif.
 
+### Todos los dashboards son una PILA, no un selector
+
+Desde el 2026-08-26 los 8 dashboards se leen **bajando**: el rail de la
+izquierda no elige contenido, MARCA en cuál sección estás y scrollea al
+hacer clic. Dos piezas compartidas, las dos en `graficos/base.py`:
+
+- `_render_rail(..., secciones=_PILA)` — el rail lateral + el scrollspy.
+- `seccion_perezosa(clave, vista, dibujar, activa_de_entrada=)` — cada
+  sección arranca en esqueleto y se construye cuando te acercás. **No es
+  una optimización**: construir todas de una deja al navegador sin
+  responder en Cloud (regla #211).
+
+Migrar/crear un dashboard apilado son cuatro pasos: declarar `_PILA`
+(`(clave_seccion, id_vista)` en orden), pasarla al rail, cambiar la cadena
+`if graf == ...` por un dict de closures + el bucle de `seccion_perezosa`,
+y darle a **cada sección su propia key de tarjeta**. Ese último no es
+cosmético: las vistas solían compartir una key porque nunca coexistían, y
+apiladas eso es una excepción de Streamlit.
+
+Dos cosas que la pila cambia y conviene saber antes de tocar una vista:
+
+- **Un botón de adentro de la página ya no puede "cambiar de vista".**
+  Escribir el `state_key` del rail sólo enciende un botón. Para llevar al
+  usuario a otra sección hay `graficos.base.scroll_a_seccion()`.
+- **Los controles compartidos van ARRIBA de la pila**, no dentro de una
+  sección: adentro quedarían escondidos hasta que esa sección salga del
+  esqueleto. De paso desaparecen los dos parches que existían para que un
+  widget no quedara huérfano al cambiar de vista (el `with c_x:` con el
+  `if` adentro, y el sub-container con key por vista): con todas las vistas
+  siempre en la página, el problema no existe.
+
+**Excepción: Ajuste tiene DOS pilas, una por categoría del rail.** Sus
+categorías no son agrupación visual — cada una recuerda su propio rango de
+fecha (`estado_rango.clave_rango(categoria=...)`), porque Cascada quiere un
+mes y Evolución quiere un año. Se apila la categoría activa y la otra queda
+como destino aparte. Ver regla #220.
+
 ## Auditar el layout antes de proponer píxeles
 
 La app **sí corre en local** en modo demo (`data.py::_datos_demo` cuando no
