@@ -712,6 +712,34 @@ CSS = """        <style>
             margin-top: -4px !important;
             font-size: 11px !important;
         }
+        /* ── EL POPOVER DE LA ESCALA, COMPACTO ───────────────────────────
+           2026-08-26, tercera vuelta, a pedido ("lo veo muy largo
+           verticalmente... quizás apegar más los números a la línea").
+           MEDIDO antes de tocar nada: de los 249px que medía el popover,
+           88 eran aire — cuatro gaps de 16px del `stVerticalBlock` (el
+           default de Streamlit, pensado para una página, no para una caja
+           de 250px) más 12+12 de padding. Las cinco piezas de adentro
+           sumaban 135px reales.
+
+           Se acota con `:has()` al popover que CONTIENE el selector de
+           escala, misma técnica que los popovers de Familia/Subfamilia en
+           estilos/_40_ajuste_franja.py. Sin ese `:has()` esto apretaría
+           TODOS los popovers de la app, que es justo el error que
+           CLAUDE.md advierte de las reglas colgadas de un contenedor. */
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_rank_esc_gran"]) {
+            padding-top: 8px !important;
+            padding-bottom: 8px !important;
+        }
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_rank_esc_gran"])
+            [data-testid="stVerticalBlock"] {
+            gap: 4px !important;
+        }
+        /* El desplegable de atajos traía además su propio margen inferior,
+           que se sumaba al gap. */
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_rank_esc_gran"])
+            [class*="st-key-cp_rank_atajo_sel"] {
+            margin-bottom: 0 !important;
+        }
         /* ── CABECERA "‹ AGO 2026 ›" del riel de Días ────────────────────
            2026-08-26, segunda vuelta, a pedido y con la captura del
            selector de fecha de Excel al lado: el riel pasó a mostrar UN
@@ -731,12 +759,12 @@ CSS = """        <style>
             font-weight: 700;
             letter-spacing: 0.04em;
             color: var(--text-primary);
-            line-height: 26px;
+            line-height: 22px;
         }
         [class*="st-key-cp_rank_esc_mes_prev"] button,
         [class*="st-key-cp_rank_esc_mes_sig"] button {
-            min-height: 26px !important;
-            height: 26px !important;
+            min-height: 22px !important;
+            height: 22px !important;
             padding: 0 !important;
             line-height: 1 !important;
             font-size: 15px !important;
@@ -758,8 +786,20 @@ CSS = """        <style>
            —marcas de referencia bajo el riel— es lo mismo. */
         .cp-riel-regla {
             position: relative;
-            height: 14px;
-            margin: 2px 0 0;
+            height: 11px;
+            /* Margen NEGATIVO a propósito ("apegar más los números a la
+               línea", 2026-08-26). MEDIDO dentro de la caja de 40px del
+               `st.slider`: la línea va de 18 a 22, los tiradores de 14 a
+               26, y de 26 a 40 no hay NADA — son los 14px que ocupaba el
+               `stSliderTickBar`, que acá va oculto. Los -22px meten la
+               regla en ese hueco en vez de sumar una banda nueva abajo.
+               El número reparte un presupuesto FIJO: lo que se le saca de
+               arriba (holgura con el tirador) se le da abajo (holgura con
+               el caption, que no se mueve porque su contenedor mide 0).
+               Con -22 quedan ~4px de cada lado; con -20 el caption se
+               pegaba a 1px. Si algún día se deja de ocultar el tick bar,
+               este número miente. */
+            margin: -22px 0 0;
         }
         .cp-riel-regla span {
             position: absolute;
