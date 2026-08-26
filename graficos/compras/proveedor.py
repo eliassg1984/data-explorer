@@ -1704,9 +1704,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             '<div class="pb-cards">' + "".join(_cards) + '</div>',
                             unsafe_allow_html=True,
                         )
-                        if _min is not None:
-                            st.caption("Último precio = precio unitario de la compra "
-                                       "más reciente. Verde = menor precio.")
 
     # -- Visibilidad del detalle A/B = hay proveedor en foco. Sin pestillo: lo
     #    abre un clic en la fila del ranking, lo cierra el botón "✕ Quitar
