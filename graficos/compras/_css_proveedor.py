@@ -868,78 +868,73 @@ CSS = """        <style>
            `compras_prov_rank_atajos` a vivir DENTRO del panel de escala
            (`cp_rank_escala_panel`) — un solo popover para "elegí un
            atajo" y "afiná a mano", no dos triggers para el mismo dato.
-           El reset del botón-chevron de más abajo NACIÓ para ganarle a
-           `.st-key-compras_prov_rank_atajos button` (la píldora blanca
-           con sombra de la fila) — esa regla ya NO alcanza a este
-           selectbox (vive en el portal de `stPopoverBody`, fuera de esa
-           fila), pero se deja igual: es una base limpia y no depende de
-           qué otra cosa ande suelta por ese lado. */
-        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"] div[role="group"] {
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            min-height: 0 !important;
+           2026-08-26, 3ra vuelta ("«Atajos» no significa nada para el
+           usuario"): deja de ser un `st.selectbox` y pasa a ser
+           `st.pills` APLANADO A TEXTO, con los cuatro atajos a la vista
+           separados por "·". El desplegable gastaba 22px en una palabra
+           que no era ninguna de las opciones. Se eligió entre tres
+           mockups; ganó el de texto por ser el más liviano en ALTO, que
+           es el recurso escaso de este panel.
+
+           Vive en el portal de `stPopoverBody`, así que
+           `.st-key-compras_prov_rank_atajos button` (la píldora blanca de
+           la fila de afuera) no lo alcanza — igual se resetea todo a
+           mano, para no depender de qué ande suelto por ese lado. */
+        .st-key-cp_rank_atajo_sel [data-testid="stButtonGroup"] {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            gap: 0 !important;
+            row-gap: 2px !important;
+            width: 100% !important;
+            max-width: none !important;
         }
-        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"] input,
-        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"] div[role="group"],
-        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"] .react-aria-ComboBox {
-            height: 22px !important;
-            min-height: 0 !important;
-        }
-        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"] input {
-            padding: 0 !important;
-            height: auto !important;
-            font-size: 11px !important;
-            font-weight: 500 !important;
-            color: #5a5a6a !important;
-            cursor: pointer !important;
-            text-overflow: ellipsis !important;
-        }
-        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"]:hover input {
-            color: #4d3fb3 !important;
-        }
-        /* El chevron se CONSERVA (en acento): sin ninguna affordance, un
-           texto que despliega una lista no se distingue de una etiqueta
-           muerta — misma decisión que `cp_evo_ctrl` y Documentos SUNAT. */
-        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"] svg {
-            width: 13px !important;
-            height: 13px !important;
-            fill: #6c5ce7 !important;
-            color: #6c5ce7 !important;
-        }
-        /* Reset del boton-chevron: sin esto hereda la pildora blanca con
-           sombra de `.st-key-compras_prov_rank_atajos button`. */
-        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"]
-            button[aria-haspopup] {
-            width: 16px !important;
+        .st-key-cp_rank_atajo_sel [data-testid="stButtonGroup"] button {
             min-width: 0 !important;
-            height: 22px !important;
             min-height: 0 !important;
+            height: auto !important;
             padding: 0 !important;
             border: none !important;
             border-radius: 0 !important;
             background: transparent !important;
             box-shadow: none !important;
-            flex: 0 0 auto !important;
+            color: var(--accent-deep) !important;
+            font-size: 12px !important;
+            font-weight: 400 !important;
+            line-height: 1.5 !important;
         }
-        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"]
-            button[aria-haspopup]:hover {
+        /* El separador va en un `::after` y no como elemento propio: con
+           cuatro atajos serian tres nodos mas que Streamlit no sabe
+           dibujar entre las pastillas de un `stButtonGroup`. Y al colgar
+           del boton, si un atajo no aplica (los recorta `atajos_rango`
+           cuando su rango no toca los datos) su separador se va con el:
+           no queda un "·" huerfano al final. */
+        .st-key-cp_rank_atajo_sel
+            [data-testid="stButtonGroup"] button:not(:last-child)::after {
+            content: "·";
+            color: var(--text-muted);
+            padding: 0 7px;
+            font-weight: 400;
+        }
+        .st-key-cp_rank_atajo_sel
+            [data-testid="stButtonGroup"] button:hover {
+            text-decoration: underline !important;
+        }
+        /* Es un MENU DE ACCIONES: el callback devuelve la seleccion a
+           `None` en la misma corrida, asi que nada deberia quedar marcado.
+           Este reset cubre el parpadeo entre el clic y el rerun -- sin el,
+           el atajo apretado se pinta un instante como pastilla activa y el
+           texto salta. */
+        .st-key-cp_rank_atajo_sel
+            [data-testid="stButtonGroup"] button[aria-checked="true"],
+        .st-key-cp_rank_atajo_sel
+            [data-testid="stButtonGroup"] button[aria-pressed="true"] {
             background: transparent !important;
+            color: var(--accent-deep) !important;
         }
-        /* Ancho: 100% del PANEL (290px, `_css_proveedor.py` § escala), no
-           los 128px fijos de cuando vivía suelto en la fila angosta de
-           afuera — acá tiene todo el ancho del popover para sí, igual
-           que la granularidad y el riel de más abajo. Iguala el criterio
-           de `.st-key-cp_rank_esc_gran`: mismo `max-width: none` por el
-           mismo motivo (la clase de emotion del div interno trae
-           `max-width: fit-content` y clampea el 100% si no se anula). */
         .st-key-cp_rank_atajo_sel {
             width: 100% !important;
             max-width: none !important;
             margin-bottom: 8px !important;
-        }
-        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"] {
-            width: 100% !important;
         }
 
         /* Flechas: mas chicas en X, glifo mas grande. */

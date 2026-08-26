@@ -30,9 +30,26 @@ from graficos.compras._documentos_proveedor import tabla_documentos
 from graficos import alturas, periodo
 
 
+_ETIQ_CORTA_RANK = {"semana": "Semana", "mes": "Mes",
+                    "d30": "30 días", "anio": "Año"}
+"""Etiquetas CORTAS de los atajos del Ranking.
+
+Las largas ("Esta semana", "Últimos 30 días"…) son las que usa la píldora
+de la franja, donde hay ancho de sobra. Acá los cuatro van en UNA fila de
+texto dentro de un panel de 290px: con las largas suman ~250px de glifos
+más tres separadores y saltan de renglón. El contexto repone lo que se
+pierde al acortar — estás en un selector de fecha, y el rango resultante
+se ve en el trigger mismo, dos píxeles más arriba."""
+
+
 def _aplicar_atajo_rank_select(clave_widget, placeholder, opciones, ctx):
-    """`on_change` de la lista desplegable de atajos del Ranking: aplica Y
-    marca escalada.
+    """`on_change` de los atajos del Ranking: aplica Y marca escalada.
+
+    Sirve a las dos formas que tuvo este control, porque el contrato es el
+    mismo: leer la etiqueta elegida, buscar su rango en `opciones` y volver
+    al estado "nada elegido". `placeholder` es la cadena "Atajos" cuando
+    era un `st.selectbox` y `None` desde que son pastillas aplanadas a
+    texto (2026-08-26) — el guard `not _sel` cubre los dos.
 
     2026-08-25, a pedido ("esto ocupa mucho espacio... una lista
     desplegable minimalista"): los cuatro atajos eran botones-píldora en
@@ -75,7 +92,6 @@ def _aplicar_atajo_rank_select(clave_widget, placeholder, opciones, ctx):
     st.session_state[clave_widget] = placeholder
 
 
-@st.fragment
 def _prov_mayor(src, col_prov, col_valor):
     """El proveedor de mayor valor comprado en `src`, o None.
 
@@ -90,6 +106,7 @@ def _prov_mayor(src, col_prov, col_valor):
     return str(_g.idxmax()) if len(_g) else None
 
 
+@st.fragment
 def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                              col_punit, col_um, col_fecha, col_docu=None,
                              d_full=None):
@@ -722,21 +739,56 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                         # iguales se leen como ícono
                                         # duplicado; el ⓘ de al lado ya
                                         # explica el rango).
-                                        _placeholder_rank = "Atajos"
+                                        # 2026-08-26, a pedido: "«Atajos»
+                                        # no significa nada para el
+                                        # usuario, ¿puedo mostrar de
+                                        # alguna forma directamente lo que
+                                        # tiene adentro?". El desplegable
+                                        # gastaba 22px de alto en una
+                                        # palabra que no era ninguna de
+                                        # las opciones: había que abrirlo
+                                        # para descubrir que ofrecía
+                                        # cuatro rangos.
+                                        #
+                                        # Ahora los cuatro se leen de una,
+                                        # aplanados a texto separado por
+                                        # "·" (el CSS lo pone en un
+                                        # `::after`, así que no hay un
+                                        # elemento por separador). Se
+                                        # eligió entre tres mockups; el
+                                        # de texto ganó por ser el más
+                                        # liviano en alto, que es el
+                                        # recurso escaso de este panel.
+                                        #
+                                        # `st.pills` y no cuatro
+                                        # `st.button`: un solo widget, una
+                                        # sola key y un solo `on_change`
+                                        # — con botones sueltos habría que
+                                        # repetir el callback cuatro veces
+                                        # y la fila se partiría en
+                                        # columnas de ancho fijo, que es
+                                        # justo lo que hace que el texto
+                                        # deje de leerse como una frase.
+                                        #
+                                        # Es un MENÚ DE ACCIONES, no una
+                                        # selección: el callback lo vuelve
+                                        # a `None` en la misma corrida
+                                        # (ver su docstring), o el segundo
+                                        # clic sobre el mismo atajo no
+                                        # dispararía nada.
                                         _op_rank = {
-                                            _et: _rg for _ca, _et, _rg
-                                            in _atajos_rank}
-                                        st.selectbox(
+                                            _ETIQ_CORTA_RANK.get(_ca, _et): _rg
+                                            for _ca, _et, _rg in _atajos_rank}
+                                        st.pills(
                                             "Atajo de rango",
-                                            [_placeholder_rank]
-                                            + list(_op_rank),
-                                            index=0,
+                                            list(_op_rank),
+                                            selection_mode="single",
                                             key="cp_rank_atajo_sel",
                                             label_visibility="collapsed",
                                             on_change=(
                                                 _aplicar_atajo_rank_select),
                                             args=("cp_rank_atajo_sel",
-                                                  _placeholder_rank,
+                                                  None,
                                                   _op_rank, _ctx_fecha))
                                     # La bandera es la MISMA que usa el
                                     # desplegable de arriba: el filtro
