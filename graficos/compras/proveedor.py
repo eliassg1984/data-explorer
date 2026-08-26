@@ -30,23 +30,49 @@ from graficos.compras._documentos_proveedor import tabla_documentos
 from graficos import alturas, periodo
 
 
-def _aplicar_atajo_rank(clave, rango, reporte, usa_carga_rango):
-    """`on_click` de los atajos de fecha del Ranking: aplica Y marca escalada.
+def _aplicar_atajo_rank_select(clave_widget, placeholder, opciones, ctx):
+    """`on_change` de la lista desplegable de atajos del Ranking: aplica Y
+    marca escalada.
 
-    Delega la escritura en `aplicar_atajo` (el dueño único, `estado_rango`)
-    y deja una bandera para que el fragment pida un rerun COMPLETO — ver el
-    bloque que la consume al inicio de `_compras_proveedor_drill`.
+    2026-08-25, a pedido ("esto ocupa mucho espacio... una lista
+    desplegable minimalista"): los cuatro atajos eran botones-píldora en
+    fila (292px medidos) y pasan a UN `st.selectbox` aplanado a texto —
+    misma receta y mismas palabras del pedido ("lista desplegable, pero
+    minimalista") que ya resolvió `cp_evo_ctrl`/`gran_float` más abajo en
+    este mismo archivo, el 2026-08-23.
 
-    Por qué una bandera y no `st.rerun()` acá: esto corre como CALLBACK,
-    antes del rerun del fragment, y el rerun hay que pedirlo desde el
-    cuerpo. Y por qué no se escribe el rango desde el cuerpo en vez de por
-    callback: `clave` es la key del `date_input` de `franja_fecha.render()`,
+    `opciones` es `{etiqueta: (ini, fin)}`, armado en el cuerpo a partir
+    de `_atajos_rank` — la MISMA lista que antes dibujaba los botones, sin
+    reinventar de dónde salen los rangos. Delega la escritura en
+    `aplicar_atajo` (el dueño único, `estado_rango`) y deja la MISMA
+    bandera que usaban los botones, para que el fragment pida un rerun
+    COMPLETO — ver el bloque que la consume al inicio de
+    `_compras_proveedor_drill`. Por qué una bandera y no `st.rerun()` acá:
+    esto corre como CALLBACK, antes del rerun del fragment, y el rerun hay
+    que pedirlo desde el cuerpo.
+
+    Por qué no se escribe el rango desde el cuerpo en vez de por callback:
+    `ctx["k_rango"]` es la key del `date_input` de `franja_fecha.render()`,
     que `app.py` ya instanció en este mismo run — escribirla después del
     widget es `StreamlitAPIException`. El callback es el único momento en
     que la escritura es legal.
+
+    Es además un MENÚ DE ACCIONES, no una selección persistente: aplica el
+    atajo y VUELVE al placeholder en la misma corrida. Sin ese reset,
+    "Este mes" quedaría marcado para siempre — Streamlit sólo llama a
+    `on_change` cuando el valor CAMBIA, así que un segundo clic sobre la
+    misma opción no dispararía nada. Escribir la propia key del widget
+    desde su propio `on_change` es legal (corre ANTES del rerun, igual que
+    la escritura del rango): no es distinto de vaciar un `text_input`
+    después de un submit.
     """
-    aplicar_atajo(clave, rango, reporte, usa_carga_rango)
+    _sel = st.session_state.get(clave_widget)
+    if not _sel or _sel == placeholder or _sel not in opciones:
+        return
+    aplicar_atajo(ctx["k_rango"], opciones[_sel],
+                  ctx["reporte"], ctx["usa_carga_rango"])
     st.session_state["_cp_rank_atajo_pendiente"] = True
+    st.session_state[clave_widget] = placeholder
 
 
 @st.fragment
@@ -613,13 +639,30 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                         width="content",
                                         help="Rango de fechas que suma "
                                              "esta tabla.")
-                                for _ca, _et, _rg in _atajos_rank:
-                                    st.button(
-                                        _et, key=f"atajo_rank_{_ca}",
-                                        on_click=_aplicar_atajo_rank,
-                                        args=(_ctx_fecha["k_rango"], _rg,
-                                              _ctx_fecha["reporte"],
-                                              _ctx_fecha["usa_carga_rango"]))
+                                # 2026-08-25, a pedido ("esto ocupa mucho
+                                # espacio... una lista desplegable
+                                # minimalista"): los cuatro atajos eran
+                                # botones-píldora en fila (292px medidos);
+                                # pasan a UN `st.selectbox` aplanado a
+                                # texto — mismo patrón que ya resuelve
+                                # `cp_evo_ctrl`/`gran_float` más abajo en
+                                # este mismo archivo, a pedido idéntico
+                                # ("lista desplegable, pero minimalista")
+                                # el 2026-08-23. El CSS de aplanado vive en
+                                # `_css_proveedor.py`, junto a esa receta.
+                                _placeholder_rank = "Atajos"
+                                _op_rank = {_et: _rg
+                                           for _ca, _et, _rg in _atajos_rank}
+                                st.selectbox(
+                                    "Atajo de rango",
+                                    [_placeholder_rank] + list(_op_rank),
+                                    index=0, key="cp_rank_atajo_sel",
+                                    label_visibility="collapsed",
+                                    help="Atajos rápidos de rango.",
+                                    on_change=_aplicar_atajo_rank_select,
+                                    args=("cp_rank_atajo_sel",
+                                          _placeholder_rank, _op_rank,
+                                          _ctx_fecha))
                     # La fila de atajos (si se dibujó) le come FRANJA_ATAJOS
                     # al AgGrid de abajo — mismo motivo que FRANJA_CTRL_EVO
                     # en Evolución: nadie le hacía lugar

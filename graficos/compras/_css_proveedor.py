@@ -691,6 +691,82 @@ CSS = """        <style>
             font-size: 11px !important;
         }
 
+        /* ── Atajos del Ranking: de TRES píldoras a UN desplegable ──────────
+           2026-08-25, a pedido ("esto ocupa mucho espacio... una lista
+           desplegable minimalista"): mismas palabras y misma receta que ya
+           resolvió `cp_evo_ctrl`/`gran_float` más abajo (2026-08-23) —
+           `st.selectbox` aplanado a TEXTO, sin caja ni sombra, con el
+           chevron como única affordance de "esto despliega".
+
+           La regla genérica `.st-key-compras_prov_rank_atajos button` de
+           arriba (la píldora blanca con sombra) matchea TAMBIÉN al botón
+           interno del selectbox (su chevron es un `<button
+           aria-haspopup>`) — hay que resetearlo explícito o el
+           desplegable sale con caja de píldora alrededor del triangulito,
+           que es justo lo que este cambio quiere evitar. Gana por
+           especificidad (2 clases + atributo contra 1 clase + elemento),
+           no por orden — no importa dónde quede este bloque. */
+        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"] div[role="group"] {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            min-height: 0 !important;
+        }
+        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"] input,
+        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"] div[role="group"],
+        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"] .react-aria-ComboBox {
+            height: 22px !important;
+            min-height: 0 !important;
+        }
+        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"] input {
+            padding: 0 !important;
+            height: auto !important;
+            font-size: 11px !important;
+            font-weight: 500 !important;
+            color: #5a5a6a !important;
+            cursor: pointer !important;
+            text-overflow: ellipsis !important;
+        }
+        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"]:hover input {
+            color: #4d3fb3 !important;
+        }
+        /* El chevron se CONSERVA (en acento): sin ninguna affordance, un
+           texto que despliega una lista no se distingue de una etiqueta
+           muerta — misma decisión que `cp_evo_ctrl` y Documentos SUNAT. */
+        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"] svg {
+            width: 13px !important;
+            height: 13px !important;
+            fill: #6c5ce7 !important;
+            color: #6c5ce7 !important;
+        }
+        /* Reset del boton-chevron: sin esto hereda la pildora blanca con
+           sombra de `.st-key-compras_prov_rank_atajos button`. */
+        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"]
+            button[aria-haspopup] {
+            width: 16px !important;
+            min-width: 0 !important;
+            height: 22px !important;
+            min-height: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            flex: 0 0 auto !important;
+        }
+        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"]
+            button[aria-haspopup]:hover {
+            background: transparent !important;
+        }
+        /* Ancho explicito sobre la opcion mas larga ("Últimos 30 días" +
+           chevron): sin esto el input de react-aria pide 100% del
+           contenedor -fit-content de la fila entera- y el selectbox se
+           come todo el ancho libre en vez de medir su propio texto. */
+        .st-key-cp_rank_atajo_sel { width: 128px !important; }
+        .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"] {
+            width: 100% !important;
+        }
+
         /* Flechas: mas chicas en X, glifo mas grande. */
         .st-key-cp_win_prev button,
         .st-key-cp_win_next button {
