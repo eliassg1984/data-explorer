@@ -195,6 +195,39 @@ def seccion_perezosa(clave, vista, dibujar, activa_de_entrada=False):
     dibujar()
 
 
+def scroll_a_seccion(clave):
+    """Lleva la vista a la sección `clave` de una página APILADA.
+
+    Los botones del rail ya scrollean solos (el JS de `_render_rail`
+    intercepta el clic antes de que Streamlit lo vea), pero un botón
+    cualquiera de ADENTRO de la página no pasa por ahí — hoy el
+    "Abrir Sankey →" del Panorama de Recetas. Antes esos botones escribían
+    el `state_key` del rail y hacían `st.rerun()`, que con la pila ya no
+    lleva a ningún lado: el rail dejó de ELEGIR contenido y pasó a MARCAR
+    dónde estás, así que setear su clave sólo enciende un botón.
+
+    Se llama DESDE el `if st.button(...)`, o sea una sola vez, en el run
+    siguiente al clic. Reintenta como el resto del JS del proyecto: el
+    `<script>` vive en un iframe que carga en paralelo al resto de la
+    página (ver `_arrastrar_ventana_riel`). Y no importa que la sección
+    destino esté todavía en esqueleto: el contenedor con la key es el
+    mismo, así que el scroll llega igual y el `IntersectionObserver` del
+    rail se encarga de construirla al acercarse.
+    """
+    inyectar_html(f"""<script>
+    (function () {{
+      var w = window.parent, doc = w.document, intentos = 0;
+      function ir() {{
+        intentos++;
+        var el = doc.querySelector('[class*="st-key-{clave}"]');
+        if (!el) {{ if (intentos < 20) w.setTimeout(ir, 100); return; }}
+        el.scrollIntoView({{behavior: 'smooth', block: 'start'}});
+      }}
+      ir();
+    }})();
+    </script>""")
+
+
 def esqueleto_pila(nombre):
     """HTML del hueco que ocupa una sección mientras se construye.
 

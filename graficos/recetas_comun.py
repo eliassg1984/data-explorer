@@ -38,7 +38,7 @@ from tema import (
     ACENTO, BLANCO, GRIS_BORDE, GRIS_TEXTO_SUAVE, LAVANDA_FONDO, PALETA_SERIES,
     SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
 )
-from graficos.base import _card, _layout, _resolver
+from graficos.base import _card, _layout, _resolver, scroll_a_seccion
 from graficos import alturas
 
 # Familias de compras.parquet que SÍ son insumo/ingrediente — las únicas que
@@ -523,11 +523,24 @@ def _drill_insumo(resultado, es_soles, *, key_select, col_contenedor_out, etique
 
 
 def _drill_contenedor_jump(resultado, *, key_select, key_button, state_key_rail,
-                           state_key_sel, nombre_vista_sankey, etiqueta_selectbox):
-    """Selectbox de contenedor + botón que reusa la vista Sankey YA
-    EXISTENTE del rail: setea su session_state y hace rerun, en vez de
-    duplicar esa lógica acá (no hay click directo, ver docstring del
-    módulo)."""
+                           state_key_sel, nombre_vista_sankey, etiqueta_selectbox,
+                           clave_seccion_sankey=None):
+    """Selectbox de contenedor + botón que lleva a la vista Sankey YA
+    EXISTENTE, en vez de duplicar esa lógica acá (no hay click directo, ver
+    docstring del módulo).
+
+    DOS MODOS, según cómo esté armada la página que lo llama:
+
+      · Sin `clave_seccion_sankey` (página de UNA vista por vez): se escribe
+        el `state_key` del rail y se rerunea, que es como cambiar de vista.
+      · Con `clave_seccion_sankey` (página APILADA): el Sankey ya está en
+        pantalla más arriba, así que cambiar de vista no significa nada —
+        lo que corresponde es SCROLLEAR hasta él. Ver
+        `graficos.base.scroll_a_seccion`.
+
+    El parámetro es opcional a propósito: los dos reportes que comparten
+    este helper (Receta Base y Receta Venta) no se migran a la pila el
+    mismo día, y mientras tanto tienen que convivir los dos modos."""
     otros = resultado["etiqueta_otros_contenedor"]
     conts = sorted(n for n in resultado["links"]["contenedor_n"].unique() if n != otros)
     if not conts:
@@ -535,8 +548,11 @@ def _drill_contenedor_jump(resultado, *, key_select, key_button, state_key_rail,
     sel = st.selectbox(etiqueta_selectbox, conts, key=key_select)
     if st.button("Abrir Sankey →", key=key_button, use_container_width=True):
         st.session_state[state_key_sel] = sel
-        st.session_state[state_key_rail] = nombre_vista_sankey
-        st.rerun()
+        if clave_seccion_sankey:
+            scroll_a_seccion(clave_seccion_sankey)
+        else:
+            st.session_state[state_key_rail] = nombre_vista_sankey
+            st.rerun()
 
 
 def _panorama_compras(df_f, es_soles, *, key_prefix,
@@ -546,7 +562,7 @@ def _panorama_compras(df_f, es_soles, *, key_prefix,
                       etiqueta_otros_contenedor, titulo_card,
                       state_key_rail, nombre_vista_sankey,
                       col_contenedor_out, etiqueta_contenedor_plural,
-                      etiqueta_selectbox_jump):
+                      etiqueta_selectbox_jump, clave_seccion_sankey=None):
     """Punto de entrada de la vista 'Panorama de compras', compartido por
     Receta Base y Receta Venta."""
     c_topn, c_fecha = st.columns([1, 2])
@@ -597,6 +613,7 @@ def _panorama_compras(df_f, es_soles, *, key_prefix,
             state_key_sel=f"{key_prefix}_contenedor_sel",
             nombre_vista_sankey=nombre_vista_sankey,
             etiqueta_selectbox=etiqueta_selectbox_jump,
+            clave_seccion_sankey=clave_seccion_sankey,
         )
 
     detalle = resultado["sin_receta_detalle"]

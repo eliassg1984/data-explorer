@@ -30,7 +30,9 @@ Punto de entrada público: renderizar_graficos_recetabase().
 
 import streamlit as st
 
-from graficos.base import _render_rail, _resolver, renderizar_graficos_genericos
+from graficos.base import (
+    _render_rail, _resolver, renderizar_graficos_genericos, seccion_perezosa,
+)
 from graficos.recetas_comun import (
     _chip_fuente, _composicion_contenedor, _items_clave, _panorama_compras,
     _ranking_contenedores, _sankey_contenedor,
@@ -43,6 +45,24 @@ _RAIL_CATEGORIAS = (
                ("Insumos clave",             "Insumos"),
                ("Panorama de compras",       "Panorama"))),
     ("Datos", (("Tabla", "Tabla"),)),
+)
+
+# ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA
+# tupla. El motivo de que los dos datos vivan juntos está en el comentario
+# largo de `graficos/compras/__init__.py::_PILA`: el scrollspy necesita
+# saber qué botón encender por cada sección, y deducirlo del nombre se
+# rompe en silencio en cuanto una etiqueta trae una tilde o una ñ.
+#
+# Acá ninguna vista queda AFUERA de la pila (a diferencia de Compras, que
+# deja "Documentos SUNAT" como destino aparte porque se lleva prestado el
+# selector de fecha).
+_PILA = (
+    ("rb_sec_sankey",      "Sankey por receta"),
+    ("rb_sec_composicion", "Composición de la receta"),
+    ("rb_sec_ranking",     "Ranking de recetas"),
+    ("rb_sec_insumos",     "Insumos clave"),
+    ("rb_sec_panorama",    "Panorama de compras"),
+    ("rb_sec_tabla",       "Tabla"),
 )
 
 
@@ -62,6 +82,11 @@ def _panorama_compras_base(df_f, es_soles):
         col_contenedor_out="Receta base",
         etiqueta_contenedor_plural="recetas base activas",
         etiqueta_selectbox_jump="Ver el flujo completo de una receta",
+        # Página APILADA: el Sankey ya está en pantalla más arriba, así que
+        # "Abrir Sankey →" scrollea en vez de cambiar de vista. Ver
+        # `recetas_comun._drill_contenedor_jump`, que sostiene los dos modos
+        # mientras Receta Venta siga sin migrar.
+        clave_seccion_sankey="rb_sec_sankey",
     )
 
 
@@ -89,16 +114,16 @@ def renderizar_graficos_recetabase(df_f, nombre_reporte, df_full=None, tabla_cb=
         renderizar_graficos_genericos(df_f, nombre_reporte)
         return
 
-    graf = _render_rail(_RAIL_CATEGORIAS, "rb_graf_tipo", btn_prefix="rb_rail_btn_")
+    # El rail ya no ELIGE contenido: con `secciones` pasa a MARCAR en cuál
+    # estás y a scrollear al hacer clic (ver `base.py::_render_rail`). El
+    # valor que devuelve se ignora — la página dibuja las seis siempre.
+    _render_rail(_RAIL_CATEGORIAS, "rb_graf_tipo", btn_prefix="rb_rail_btn_",
+                 secciones=_PILA)
 
-    if graf == "Tabla":
-        if tabla_cb is not None:
-            tabla_cb(df_f)
-        else:
-            st.info("La tabla no está disponible en este contexto.")
-        return
-
-    # ── Métrica del ancho/valor: Costo o Cantidad ─────────────────────────
+    # ── Controles COMPARTIDOS por toda la página ──────────────────────────
+    # Van arriba de la pila, no adentro de una sección: la métrica manda
+    # sobre las cinco vistas y el selector de receta sobre dos. Meterlos en
+    # una sección los escondería hasta que esa sección salga del esqueleto.
     metricas = []
     if col_total:
         metricas.append("Costo (S/)")
@@ -112,45 +137,79 @@ def renderizar_graficos_recetabase(df_f, nombre_reporte, df_full=None, tabla_cb=
     es_soles = (metrica == "Costo (S/)")
     col_valor = col_total if es_soles else col_cant
 
-    # ── Selector de receta base (compartido por Sankey y Composición) ────
-    # Default: la de mayor costo, para que la primera vista sea rica.
+    # Default: la receta de mayor costo, para que la primera vista sea rica.
     recetas = sorted(df_f[col_rb].dropna().astype(str).unique().tolist())
     totales = df_f.groupby(col_rb)[col_valor].sum()
     receta_rica = str(totales.idxmax()) if not totales.empty else (recetas[0] if recetas else "")
     idx_def = recetas.index(receta_rica) if receta_rica in recetas else 0
 
-    # Mismo patrón que Receta Venta: `with c_rb:` se entra SIEMPRE (el if va
-    # adentro) para que Streamlit "visite" la posición en todos los runs y
-    # no deje un selectbox huérfano al cambiar de vista (arquitectura.md,
-    # nota de graficos/recetaventa.py).
-    contenedor = None
+    # Ya no hace falta el `with c_rb:` incondicional con el `if` adentro que
+    # tenía la versión de una-vista-por-vez (para que Streamlit "visitara"
+    # la posición en todos los runs y no dejara un selectbox huérfano): con
+    # la pila, Sankey y Composición están SIEMPRE en la página, así que el
+    # selector se dibuja siempre y el problema desaparece solo.
     with c_rb:
-        if graf in ("Sankey por receta", "Composición de la receta"):
-            contenedor = st.selectbox("Receta base", recetas, index=idx_def,
-                                      key="rb_contenedor_sel")
+        contenedor = st.selectbox("Receta base", recetas, index=idx_def,
+                                  key="rb_contenedor_sel")
 
-    with st.container(border=True, key="rb_graf_card"):
-        # Sub-container con key que VARÍA POR VISTA: fuerza un remount
-        # limpio en vez de acumular widgets de la vista anterior debajo de
-        # la nueva (mismo motivo que Receta Venta).
-        with st.container(key=f"rb_graf_body_{graf.lower().replace(' ', '_')}"):
-            if graf == "Sankey por receta":
-                _sankey_contenedor(df_f, col_rb, col_ins, col_valor, contenedor,
-                                   es_soles, card_key="rb_sankey")
-            elif graf == "Composición de la receta":
-                _composicion_contenedor(df_f, col_rb, col_ins, col_valor, contenedor,
-                                        es_soles, card_key="rb_dona")
-            elif graf == "Ranking de recetas":
-                _ranking_contenedores(df_f, col_rb, col_valor, es_soles,
-                                      key_topn="rb_ranking_topn",
-                                      card_key="rb_ranking",
-                                      titulo_card="Recetas base por costo total")
-            elif graf == "Insumos clave":
-                _items_clave(df_f, col_rb, col_ins, col_valor, es_soles,
-                            card_key="rb_insumos",
-                            titulo_card="Insumos de mayor costo total",
-                            etiqueta_item="Insumo",
-                            etiqueta_contenedor_plural="recetas base",
-                            expander_titulo="📋 Tabla: insumos por costo y n.º de recetas")
-            elif graf == "Panorama de compras":
-                _panorama_compras_base(df_f, es_soles)
+    # ── LA PILA, PEREZOSA ─────────────────────────────────────────────────
+    # Cada sección arranca en esqueleto y se construye cuando te acercás
+    # (`base.py::seccion_perezosa`). Cada una lleva además su PROPIA key de
+    # tarjeta: antes las seis compartían `rb_graf_card` porque nunca
+    # coexistían — apiladas, eso serían seis widgets con la misma key, que
+    # en Streamlit es una excepción. Es la trampa que ya documentó Compras
+    # al apilarse (Volatilidad y Semanal compartían la suya).
+    def _dib_sankey():
+        with st.container(border=True, key="rb_card_sankey"):
+            _sankey_contenedor(df_f, col_rb, col_ins, col_valor, contenedor,
+                               es_soles, card_key="rb_sankey")
+
+    def _dib_composicion():
+        with st.container(border=True, key="rb_card_composicion"):
+            _composicion_contenedor(df_f, col_rb, col_ins, col_valor, contenedor,
+                                    es_soles, card_key="rb_dona")
+
+    def _dib_ranking():
+        with st.container(border=True, key="rb_card_ranking"):
+            _ranking_contenedores(df_f, col_rb, col_valor, es_soles,
+                                  key_topn="rb_ranking_topn",
+                                  card_key="rb_ranking",
+                                  titulo_card="Recetas base por costo total")
+
+    def _dib_insumos():
+        with st.container(border=True, key="rb_card_insumos"):
+            _items_clave(df_f, col_rb, col_ins, col_valor, es_soles,
+                        card_key="rb_insumos",
+                        titulo_card="Insumos de mayor costo total",
+                        etiqueta_item="Insumo",
+                        etiqueta_contenedor_plural="recetas base",
+                        expander_titulo="📋 Tabla: insumos por costo y n.º de recetas")
+
+    def _dib_panorama():
+        with st.container(border=True, key="rb_card_panorama"):
+            _panorama_compras_base(df_f, es_soles)
+
+    def _dib_tabla():
+        with st.container(border=True, key="rb_card_tabla"):
+            if tabla_cb is not None:
+                tabla_cb(df_f)
+            else:
+                st.info("La tabla no está disponible en este contexto.")
+
+    _DIBUJANTES = {
+        "rb_sec_sankey":      _dib_sankey,
+        "rb_sec_composicion": _dib_composicion,
+        "rb_sec_ranking":     _dib_ranking,
+        "rb_sec_insumos":     _dib_insumos,
+        "rb_sec_panorama":    _dib_panorama,
+        "rb_sec_tabla":       _dib_tabla,
+    }
+
+    # El contenedor con la key va AFUERA del fragment a propósito: es el que
+    # observan el scrollspy y la precarga, y tiene que sobrevivir a que el
+    # fragment de adentro se re-dibuje (ver el mismo bucle en
+    # `graficos/compras/__init__.py`).
+    for _i, (_clave, _vista) in enumerate(_PILA):
+        with st.container(key=_clave):
+            seccion_perezosa(_clave, _vista, _DIBUJANTES[_clave],
+                             activa_de_entrada=(_i == 0))

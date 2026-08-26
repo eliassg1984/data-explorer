@@ -270,17 +270,49 @@ function(params) {
 _HOOKS_PARCHE = ("onGridReady", "onFirstDataRendered", "onModelUpdated")
 
 
+_MARCA_JSCODE = "::JSCODE::"
+
+
+def _codigo_de(js):
+    """El JS crudo de un `JsCode`, sin los centinelas de `st_aggrid`.
+
+    `JsCode("function(p){}")` guarda `"::JSCODE::function(p){}::JSCODE::"`:
+    los centinelas le avisan al front cuáles strings del JSON hay que
+    evaluar. Para COMPONER dos handlers hace falta el código pelado."""
+    bruto = getattr(js, "js_code", js)
+    if isinstance(bruto, str) and bruto.startswith(_MARCA_JSCODE):
+        return bruto[len(_MARCA_JSCODE):-len(_MARCA_JSCODE)]
+    return str(bruto)
+
+
 def _parchar_iconos(grid_options):
-    """Engancha el parche de iconos al primer hook libre de la grilla.
+    """Engancha el parche de iconos a la grilla, sí o sí.
 
     Se llama con el dict YA construido (`gb.build()`), no antes: así ve los
-    handlers que el renderizador realmente declaró."""
+    handlers que el renderizador realmente declaró.
+
+    Primero busca un hook LIBRE, que es el camino barato. Si no queda
+    ninguno, ENVUELVE el primero en vez de reventar — que es lo que hacía
+    hasta el 2026-08-26, con un `RuntimeError` que llegó a producción:
+    `tablas/desktop.py` (el renderizador genérico, el que usan los reportes
+    sin tabla propia) declara los TRES hooks de `_HOOKS_PARCHE`, así que su
+    tabla tiraba traceback en vez de dibujarse. El comentario de arriba
+    todavía decía "desktop.py ocupa onGridReady Y onFirstDataRendered": el
+    tercero se sumó después y nadie volvió acá.
+
+    Envolver es además más robusto que seguir agregando eventos a la lista:
+    no depende de que quede alguno sin usar. Cada mitad va en su propio
+    `try` para que un handler que falle no se lleve puesto al otro."""
     for hook in _HOOKS_PARCHE:
         if hook not in grid_options:
             grid_options[hook] = JsCode(_JS_ICONOS_MASK)
             return grid_options
-    raise RuntimeError(
-        "Ningún hook de _HOOKS_PARCHE quedó libre: el parche de iconos de "
-        "tablas/_config.py no tiene dónde engancharse. Sumá otro evento de "
-        "AG Grid a la lista, o llamá al parche desde el handler existente."
+
+    hook = _HOOKS_PARCHE[0]
+    grid_options[hook] = JsCode(
+        "function(params) {\n"
+        f"  try {{ ({_codigo_de(grid_options[hook])})(params); }} catch (e) {{}}\n"
+        f"  try {{ ({_JS_ICONOS_MASK})(params); }} catch (e) {{}}\n"
+        "}"
     )
+    return grid_options
