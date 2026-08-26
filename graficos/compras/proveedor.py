@@ -659,7 +659,42 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             # widgets nuevos dentro de una tarjeta, esta
                             # vez a favor). El PANEL no la hereda porque
                             # `stPopoverBody` es un portal.
-                            with st.popover(":material/date_range:",
+                            # EL TRIGGER ES LA FECHA MISMA, no un ícono al
+                            # lado (a pedido, 2026-08-26: "que el selector
+                            # no sea el ícono del calendario, sino el mismo
+                            # contenedor de la fecha, y que el ícono
+                            # desaparezca").
+                            #
+                            # Antes eran DOS elementos: un botón de puro
+                            # ícono `:material/date_range:` y, al lado, un
+                            # `st.caption` con el rango activo. O sea el
+                            # dato y su gesto separados — había que leer uno
+                            # y apretar el otro. Ahora el rango ES el botón:
+                            # una sola pieza, un solo gesto. Mismo criterio
+                            # con el que el 2026-08-25 se fusionaron el
+                            # desplegable de atajos y el riel adentro de
+                            # este panel ("ya no alcanza con que cada
+                            # control se vea chico, si siguen siendo dos").
+                            #
+                            # Se lee de la MISMA clave canónica que escribe
+                            # el atajo/riel (nunca un estado propio: sería
+                            # un tercer lugar diciendo la fecha, y ese es
+                            # justo el bug que evita `estado_rango`). Y con
+                            # `franja_fecha.fmt_rango_es`, el formato de la
+                            # píldora de la franja, en vez de inventar uno.
+                            _rango_act = st.session_state.get(
+                                _ctx_fecha["k_rango"])
+                            _lbl_rango = (
+                                franja_fecha.fmt_rango_es(*_rango_act)
+                                if (isinstance(_rango_act, (tuple, list))
+                                    and len(_rango_act) == 2
+                                    and all(_rango_act))
+                                # Sin rango todavía (media selección, o una
+                                # sesión recién abierta) el botón tiene que
+                                # existir igual: si el label quedara vacío
+                                # no habría nada que apretar para elegirlo.
+                                else "Elegir rango")
+                            with st.popover(_lbl_rango,
                                             key="cp_rank_escala",
                                             use_container_width=False):
                                 with st.container(key="cp_rank_escala_panel"):
@@ -712,34 +747,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                     selector_escala(
                                         "cp_rank_esc", _ctx_fecha,
                                         bandera="_cp_rank_atajo_pendiente")
-                            # 2026-08-25, a pedido: el detalle del rango
-                            # ACTIVO, al costado del ícono que lo abre —
-                            # sin esto había que abrir el popover para
-                            # saber qué fecha estaba mirando la tabla.
-                            # Se lee de la MISMA clave canónica que
-                            # escribe el atajo/riel (nunca un estado
-                            # propio: sería un tercer lugar diciendo la
-                            # fecha, y ese es justo el bug que evita
-                            # `estado_rango` — un solo dueño). Reusa
-                            # `franja_fecha.fmt_rango_es`, el mismo
-                            # formato de la píldora de la franja, en vez
-                            # de inventar uno nuevo acá.
-                            _rango_act = st.session_state.get(
-                                _ctx_fecha["k_rango"])
-                            if (isinstance(_rango_act, (tuple, list))
-                                    and len(_rango_act) == 2
-                                    and all(_rango_act)):
-                                # SIN `help=` (sacado 2026-08-25, misma
-                                # vuelta que el selectbox de arriba): un
-                                # tercer circulito "?" al lado del "ⓘ"
-                                # del popover de ayuda -que YA explica
-                                # que este rango es el que suma la
-                                # tabla- se leía como icono duplicado.
-                                # Confirmado con captura real del
-                                # usuario.
-                                st.caption(
-                                    franja_fecha.fmt_rango_es(*_rango_act),
-                                    width="content")
+                            # (Acá vivía el `st.caption` con el rango
+                            # activo, agregado el 2026-08-25 "al costado
+                            # del ícono que lo abre". Ya no hace falta:
+                            # el rango se dibuja EN el trigger, arriba.)
                     # La fila de atajos le come FRANJA_ATAJOS al AgGrid de
                     # abajo — mismo motivo que FRANJA_CTRL_EVO en
                     # Evolución: nadie le hacía lugar todavía. YA NO es

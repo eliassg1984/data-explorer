@@ -621,18 +621,28 @@ CSS = """        <style>
             background: #f0edfe !important;
             color: #4d3fb3 !important;
         }
-        /* El trigger de la escala de tiempo NO necesita reglas propias:
-           `.st-key-compras_prov_rank_atajos button` de arriba es un
-           selector descendiente y ya lo dejo como los otros atajos. Solo
-           se le saca el padding lateral, que sobra en un boton de puro
-           icono, y se centra el glifo. */
+        /* El trigger de la escala de tiempo: desde el 2026-08-26 su label
+           es EL RANGO ACTIVO ("1 ago - 24 ago 2026"), no un icono de
+           calendario -- ver el comentario largo en proveedor.py. Hereda la
+           pildora de `.st-key-compras_prov_rank_atajos button` (misma
+           altura, mismo borde, mismo hover que el resto de la fila) y solo
+           corrige lo que cambio al pasar de un glifo a texto:
+
+             - el `width: 24px` y el `justify-content: center` de la version
+               icono se VAN: con texto recortaban el label.
+             - la fecha se lee como DATO, no como accion, asi que va en el
+               gris del texto y no en el acento -- que es lo que ya hacia
+               el `st.caption` que este boton reemplazo. El hover (heredado)
+               es el que avisa que se puede apretar.
+             - un pelo mas grande que los 11px de la pildora base: es el
+               unico texto de la fila y ademas el dato que se viene a
+               leer. */
         .st-key-compras_prov_rank_atajos
             [data-testid="stPopover"]:has(.st-key-cp_rank_escala) button,
         .st-key-cp_rank_escala button {
-            padding: 0 !important;
-            width: 24px !important;
-            justify-content: center !important;
-            color: #6c5ce7 !important;
+            padding: 0 10px !important;
+            font-size: 12px !important;
+            white-space: nowrap !important;
         }
         /* El CHEVRON de Streamlit. En un trigger de puro icono son dos
            glifos apretados en 24px (medido: scrollWidth 30 sobre
