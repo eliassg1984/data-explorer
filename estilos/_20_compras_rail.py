@@ -45,7 +45,25 @@ CSS = """    /* ================================================================
            NO se copio tal cual: el rail ya es position:fixed, asi que un
            transform encima seria redundante Y capturaria a sus hijos fixed
            (regla #156). Se traduce al `top`/`left` que ya existen. */
-        top: calc(var(--nav-top-alto) - 2px) !important;
+        /* 2026-08-26: `- 2px` -> `0`, a pedido ("que este a esta altura, mas
+           arriba"), otra vez a partir de un arrastre en modo diseno
+           (transform medido: translate(6px,-40px), redondeado al 0 exacto —
+           el -2px de mas que daba el arrastre era overshoot del mouse, no un
+           valor buscado). Tercera vuelta de la misma direccion (74->8->-2,
+           ver arriba); esta vez llega al borde.
+           Medido ANTES de tocarlo: el rail mide 448px de contenido con
+           672px de max-height disponibles (sobran 224px) — subirlo no
+           gana lugar para mas items, es alineacion pura con el titulo de
+           la franja (`Sapiens (Compras)`, que vive en x>=323, fuera del
+           ancho de este rail que termina en x=299 — nunca se pisan). Y el
+           color de fondo del hueco que se recupera (`--bg-primary`
+           #f6f6f8) es casi identico al del rail (`--bg-card` #ffffff): no
+           hay salto de color que disimular.
+           `max-height` pierde el termino `- var(--nav-top-alto)`: ya no
+           hay top que "devolver" (el rail arranca en 0, no en
+           nav-top-alto), asi que el techo de seguridad pasa a medirse
+           desde el borde de arriba de la pantalla directo. */
+        top: 0 !important;
         /* 2026-08-18, a pedido: el rail pasa del borde DERECHO al IZQUIERDO.
            Es el sitio que dejó libre el rail de navegación al convertirse en
            la franja superior (--nav-top-alto) unos commits antes: la columna
@@ -72,7 +90,7 @@ CSS = """    /* ================================================================
            tantas vistas que no entran (activa el overflow-y:auto de abajo
            en vez de desbordar). */
         height: auto !important;
-        max-height: calc(100vh - var(--nav-top-alto) - 8px) !important;
+        max-height: calc(100vh - 8px) !important;
         z-index: 900 !important;
         overflow-y: auto !important;
         margin: 0 !important;

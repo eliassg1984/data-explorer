@@ -83,13 +83,21 @@ CSS = f"""
        `estilos/_20_compras_rail.py` le da a `.st-key-compras_tabs_row`,
        porque los dos ocupan EL MISMO hueco y el cambio tiene que verse
        como que la columna cambio de contenido, no como que se movio. Si
-       alla se corre el rail, aca hay que correrlo igual. */
+       alla se corre el rail, aca hay que correrlo igual.
+
+       2026-08-26: `top` a `0` y `max-height` sin el termino
+       `- var(--nav-top-alto)` — mismo cambio y mismo motivo que
+       `_20_compras_rail.py` (ver el comentario largo ahi). Se repite acá
+       en vez de derivarlo con una variable compartida porque las CUATRO
+       propiedades son literales duplicados a proposito desde que nacio
+       este rail (2026-08-24) — es el precio ya asumido de la geometria
+       acoplada, no algo nuevo de este cambio. */
     .st-key-nav_rail_lateral {{
         position: fixed !important;
-        top: calc(var(--nav-top-alto) - 2px) !important;
+        top: 0 !important;
         left: 19px !important;                        /* == _20_compras_rail.py */
         width: var(--rail-der-w) !important;          /* nombre historico: es el IZQUIERDO */
-        max-height: calc(100vh - var(--nav-top-alto) - 8px) !important;
+        max-height: calc(100vh - 8px) !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
         scrollbar-width: none !important;
