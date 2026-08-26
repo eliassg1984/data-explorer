@@ -173,6 +173,26 @@ CSS = f"""
         background: var(--accent-tint) !important;
         color: var(--accent) !important;
     }}
+    /* 2026-08-26, a pedido ("estar pegados a la izquierda, como el rail de
+       reportes"): Streamlit mete un `div` interno entre el `<button>` y el
+       `stMarkdownContainer` con `display:flex; justify-content:center` por
+       default -- el MISMO wrapper que ya documenta y aplana
+       `_20_compras_rail.py` para Reportes ("hay que aplanar TODOS los div
+       descendientes del botón"), pero acá nunca se había hecho porque este
+       rail nació sin ícono (sólo texto) y el centrado no se notaba con una
+       sola palabra corta.
+       Medido el bug real: con ícono + label, ese wrapper (250px) centraba
+       su contenido (96px) empujando el ícono a 91px del borde izquierdo del
+       botón — "Producto" arrancaba casi a mitad de fila en vez de pegado a
+       la izquierda. `display:block` deja que el contenido tome su propio
+       ancho en vez de estirarse a ocupar la fila entera para luego
+       centrarse en ella. */
+    .st-key-nav_rail_lateral [data-testid="stButton"] button > div,
+    .st-key-nav_rail_lateral [data-testid="stButton"] button [data-testid="stMarkdownContainer"] {{
+        display: block !important;
+        width: auto !important;
+        max-width: 100% !important;
+    }}
     /* El ITEM EN PANTALLA. La clase la pone el scrollspy de
        `base.py::_render_rail`, no `type="primary"`: lo que se marca es
        donde ESTAS, no el ultimo clic. Los botones se dibujan todos
@@ -266,14 +286,34 @@ CSS = f"""
         overflow: hidden !important;
         text-overflow: ellipsis !important;
     }}
+    /* ── HAIRLINE entre cada ítem ──────────────────────────────────────
+       2026-08-26, a pedido ("tambien debe tener lineas que lo separan...
+       como el rail de reportes"): mismo recurso que `.st-key-
+       graf_tipo_chips > div` en `_20_compras_rail.py` — un hairline por
+       ítem, apagado en el último. La diferencia de selector (`:has(...)`
+       en vez de `> div`) es porque acá los ítems NO están envueltos en un
+       `navitem_<slug>` propio (Reportes sí); el `stElementContainer` del
+       propio `st.button` hace de unidad. `:has([data-testid="stButton"])`
+       excluye a la cabecera (`.rail-cab`, un `st.markdown` sin botón) y al
+       separador de "destino aparte" de abajo (tampoco tiene botón), que
+       ya ponen su propia línea y no necesitan una segunda. */
+    .st-key-nav_rail_lateral [data-testid="stElementContainer"]:has([data-testid="stButton"]) {{
+        border-bottom: 1px solid var(--border) !important;
+    }}
+    .st-key-nav_rail_lateral [data-testid="stElementContainer"]:has([data-testid="stButton"]):last-child {{
+        border-bottom: none !important;
+    }}
     /* ── SEPARADOR: scroll-to vs destino aparte ───────────────────────
        2026-08-26, a pedido ("el reporte de documentos sunat no aparece
        al hacer scroll"): no era un bug, era que el rail no avisaba que
        Documentos SUNAT es un DESTINO APARTE (`base.py::_render_rail` lo
        dibuja cuando la membresía a `secciones` cambia de un ítem al
-       siguiente). Mismo recurso que el hairline de `.rail-cab` unas
-       reglas arriba — un `border-top` en un div vacío, no un `<hr>` que
-       después haya que espaciar. */
+       siguiente). Con el hairline de arriba ahora separando TODOS los
+       ítems por igual, este separador extra es lo único que sigue
+       marcando esa frontera como distinta — sin él, Documentos se leería
+       como un ítem más de la pila. Mismo recurso que `.rail-cab`: un
+       `border-top` en un div vacío, no un `<hr>` que después haya que
+       espaciar. */
     .st-key-nav_rail_lateral .nav-rail-lat-sep {{
         border-top: 1px solid var(--border) !important;
         margin: 6px 14px !important;

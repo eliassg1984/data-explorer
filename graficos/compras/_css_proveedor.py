@@ -401,47 +401,69 @@ CSS = """        <style>
             margin-left: 5px;
         }
 
-        /* Variante "outline en tinte" (violeta claro con borde y texto oscuros).
-           Contraste bajo: fondo casi blanco con leve tinte, borde tenue. */
+        /* 2026-08-26, a pedido ("hagamos el filtro de proveedores, similar
+           a los de familia y subfamilia, visualmente"): este chip nació con
+           su propia paleta hardcodeada (#F7F6FE/#534AB7/#E4E1F5) — una caja
+           coloreada con borde. Casi los calca `_40_ajuste_franja.py`, PERO
+           ese look de Familia/Subfamilia está MUERTO: `_50_fecha.py` carga
+           DESPUÉS (mismo criterio "gana la regla que aparece después" de
+           CLAUDE.md) y los aplana a texto plano y apagado, sin caja ni
+           borde. Medido en vivo antes de tocar nada (Familia: 22px de alto,
+           fondo transparente) — si hubiera calcado el `_40_ajuste_franja.py`
+           original, Proveedores hubiera quedado pareja a un look que
+           Familia/Subfamilia ya NO tienen. Los valores de abajo son los de
+           `_50_fecha.py`, que es lo que de verdad se ve en pantalla. */
         .st-key-prov_pop_float [data-testid="stPopover"] button {
             min-width: 0 !important;
             min-height: 0 !important;
-            padding: 2px 10px !important;    /* contenedor un poco más delgado */
-            font-size: 11px !important;      /* fuente igual que antes */
-            font-weight: 500 !important;
-            line-height: 1.35 !important;
-            border-radius: 4px !important;   /* cuadrado, no cápsula */
-            background: #F7F6FE !important;
-            color: #534AB7 !important;
-            border: 1px solid #E4E1F5 !important;
+            height: auto !important;
+            padding: 1px 8px 1px 0 !important;
+            font-size: 12px !important;
+            font-weight: 400 !important;
+            line-height: 1.2 !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            color: var(--text-secondary) !important;
+            border: none !important;
+            border-bottom: 2px solid transparent !important;
             box-shadow: none !important;
-            transition: background .12s, border-color .12s !important;
+            gap: 6px !important;
+            transition: background .12s !important;
         }
-        .st-key-prov_pop_float [data-testid="stPopover"] button:hover {
-            background: #DED9FA !important;
-            border-color: #7F77DD !important;
-        }
+        .st-key-prov_pop_float [data-testid="stPopover"] button:hover,
         .st-key-prov_pop_float [data-testid="stPopover"] button[aria-expanded="true"] {
-            background: #DED9FA !important;
-            border-color: #534AB7 !important;
+            background: var(--accent-tint) !important;
         }
-        /* Icono material (grupos) del popover: color acento */
+        /* SIN un estado "filtrado" propio (el subrayado de acento que
+           tendría Familia/Subfamilia vía `chipwrap_..._on`): ese mecanismo
+           depende de un wrapper que el código actual de esos dos chips no
+           arma —muerto, igual que su look de caja—, así que replicarlo acá
+           sería copiar un bug, no una convención viva. El BADGE (más abajo)
+           ya dice "N proveedores elegidos" con más precisión que un
+           subrayado. */
+        /* Icono material (grupos) del popover: mismo tamaño que Familia/
+           Subfamilia (15px) y color heredado del botón en vez de un lila
+           propio — ahí también los dos chips divergían. */
         .st-key-prov_pop_float [data-testid="stPopover"] button [data-testid="stIconMaterial"] {
-            color: #7F77DD !important;
-            font-size: 14px !important;
-            margin-right: 4px !important;
+            color: inherit !important;
+            font-size: 15px !important;
+            margin-right: 0 !important;      /* el gap:6px de arriba ya separa */
         }
         /* Badge con el numero de proveedores: se inyecta el valor via
-           ::after con content dinamico desde Python (ver _cp_badge_count) */
+           ::after con content dinamico desde Python (ver _cp_badge_count).
+           Mismos valores que el `:violet-badge` nativo de Familia/
+           Subfamilia (stBadge, _40_ajuste_franja.py) — antes tenía su
+           propia paleta y tamaño de fuente (11px/500), un punto más grande
+           y más flojo que el de al lado. */
         .st-key-prov_pop_float [data-testid="stPopover"] button
             [data-testid="stMarkdownContainer"] p::after {
             content: var(--cp-prov-count, "");
-            background: #534AB7;
-            color: #EEEDFE;
+            background: var(--accent);
+            color: #ffffff;
             border-radius: 3px;
-            padding: 1px 8px;
-            font-size: 11px;
-            font-weight: 500;
+            padding: 1px 6px;
+            font-size: 10px;
+            font-weight: 700;
             margin-left: 8px;
             line-height: 1.4;
         }

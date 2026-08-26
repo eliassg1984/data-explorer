@@ -312,7 +312,12 @@ CSS = """    /* ================================================================
         top: 7px !important;
         left: var(--rail-der-res) !important;
         z-index: 23 !important;
-        font-size: 1rem !important;
+        /* 2026-08-26, a pedido ("hazlo un poco mas grande"): 1rem -> 1.125rem
+           (16px -> 18px). Sin tocar `line-height` (26px, == alto de los
+           chips): a 18px sigue sobrando margen dentro de esa caja, así que
+           el título crece sin desalinearse verticalmente de los chips de al
+           lado. */
+        font-size: 1.125rem !important;
         font-weight: 600 !important;
         color: var(--text-primary) !important;
         line-height: 26px !important;   /* == alto de los chips, los alinea */
@@ -417,6 +422,31 @@ CSS = """    /* ================================================================
     .st-key-chips_ajuste_tabla [class*="st-key-chipwrap_"][class*="_on"] [data-testid="stPopover"] button:hover {
         background: var(--accent-deep) !important;
         border-color: var(--accent-deep) !important;
+    }
+    /* ── EL PANEL de Familia/Subfamilia: "se pisan entre sí" ──────────────
+       2026-08-26, a pedido. No eran los chips (esos ya miden 230px fijos,
+       sea cual sea el filtro aplicado) — era el PANEL abierto. `st.pills`
+       renderiza sus opciones en un `stButtonGroup` con `flex-wrap: nowrap`
+       por default; sin límite de ancho, un panel con 8 opciones (Familia)
+       se estira a 704px en UNA sola fila para que entren todas sin
+       envolver. Medido: ese panel (517-1221px) tapaba ENTERO al chip de
+       Subfamilia (755-985px), que queda debajo.
+       Fix: capar el panel a un ancho manejable y dejar que las opciones
+       ENVUELVAN en varias líneas — mismo patrón que ya usa el panel de
+       escala del Ranking de Proveedores (`cp_rank_escala_panel`,
+       `graficos/compras/_css_proveedor.py`), sólo que ahí el contenido ya
+       venía angosto y acá hay que forzarlo. `stPopoverBody` es un PORTAL
+       (fuera de `chips_ajuste_tabla`), así que se alcanza con `:has()`
+       sobre la key del `st.pills` de adentro, no colgando del contenedor. */
+    [data-testid="stPopoverBody"]:has(.st-key-compras_graf_filtro_fam),
+    [data-testid="stPopoverBody"]:has(.st-key-compras_graf_filtro_sub) {
+        width: 300px !important;
+        max-width: 300px !important;
+    }
+    .st-key-compras_graf_filtro_fam [data-testid="stButtonGroup"],
+    .st-key-compras_graf_filtro_sub [data-testid="stButtonGroup"] {
+        flex-wrap: wrap !important;
+        width: 100% !important;
     }
     /* Pantallas chicas: si no caben junto a las pestañas, bajan a su línea */
     @media (max-width: 900px) {
