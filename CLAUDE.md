@@ -244,11 +244,14 @@ de rango no se pueden escribir uno-tras-otro)— están en `arquitectura.md`
 reglas #211 a #213 y #217 a #218.
 
 **El riel se abre por VENTANA, no sobre el histórico entero**
-(2026-08-26): en Días abarca un mes (`estado_rango.ventana_mes`) y en Meses
-un año (`ventana_ano`). Con ~970 días —o 44 meses— en 250px no se puede
-elegir una fecha. "Años" no lleva ventana: sus paradas ya son el panorama
-completo. La cabecera `‹ AGO 2026 ›` / `‹ 2026 ›` dice cuál se ve y la
-cambia; en Días la regla de abajo numera los días del mes. Ir a otra
+(2026-08-26). Cada escala mira UN período de la escala de arriba: Días un
+mes (`estado_rango.ventana_mes`), Meses un año (`ventana_ano`), Años una
+década (`ventana_decada`). Con ~970 días —o 44 meses— en 250px no se puede
+elegir una fecha. La ventana se RECORTA a los datos, así que la cabecera
+dice "2023-2026" y no "2020-2029": mismo criterio que `escala_periodos` con
+el año del borde, no prometer períodos vacíos. La cabecera
+`‹ AGO 2026 ›` / `‹ 2026 ›` / `‹ 2023-2026 ›` dice cuál se ve y la cambia;
+en Días la regla de abajo numera los días del mes. Ir a otra
 ventana la SELECCIONA entera: el valor de un slider tiene que caer dentro
 de sus límites, así que una vista sin selección adentro no se puede
 representar. Y si el rango vigente se sale de la ventana, el caption lo

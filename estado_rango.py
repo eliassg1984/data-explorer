@@ -356,10 +356,6 @@ def ventana_ano(ancla, bounds):
     Meses abría con TODOS los meses del histórico —44 paradas de ene-23 a
     ago-26 en 250px— y elegir marzo de 2025 era apuntar a una de esas 44.
 
-    La escala de Años se deja como está: sus paradas son una por año
-    presente en la data (cuatro, hoy), o sea que ya ES el panorama
-    completo. Acotarla no dejaría nada que ver.
-
     GARANTIZA DOS MESES DISTINTOS, por el mismo motivo que su gemela
     garantiza dos días: un `st.select_slider` con una sola parada no tiene
     riel donde moverse. Pasa cuando el año del ancla se recorta a un solo
@@ -379,6 +375,39 @@ def ventana_ano(ancla, bounds):
         else:
             fin = min(max_b, _fin_de_mes(_fin_de_mes(fin)
                                          + datetime.timedelta(days=1)))
+    return (ini, fin)
+
+
+def ventana_decada(ancla, bounds):
+    """La ventana VISIBLE del riel de Años: la década de `ancla`, en `bounds`.
+
+    Tercera de la familia (`ventana_mes` → `ventana_ano` → ésta), a pedido
+    2026-08-26: "cuando es años, también debe seguir la lógica de mostrar
+    sólo años". Con el histórico de hoy —cuatro años— el riel se ve igual
+    que antes, porque la década recortada a los datos ES el histórico; lo
+    que cambia es que deja de crecer sin techo cuando la data crezca, y
+    que las tres escalas pasan a explicarse con la misma frase.
+
+    RECORTA A LOS DATOS, y por eso la cabecera dice "2023-2026" y no
+    "2020-2029": el mismo criterio que `escala_periodos` aplica al año del
+    borde — no prometer períodos que no tienen nada adentro.
+
+    GARANTIZA DOS AÑOS DISTINTOS *si `bounds` da para eso*. Si toda la data
+    vive en un solo año, la escala de Años tiene una sola parada la mires
+    como la mires: eso no lo arregla ninguna ventana, y ya era así antes.
+    """
+    if not (bounds and all(bounds)) or bounds[0] >= bounds[1]:
+        return None
+    min_b, max_b = bounds
+    ancla = min(max(ancla, min_b), max_b)
+    _d0 = ancla.year - ancla.year % 10
+    ini = min(max(datetime.date(_d0, 1, 1), min_b), max_b)
+    fin = min(max(datetime.date(_d0 + 9, 12, 31), min_b), max_b)
+    if len(escala_periodos("Años", (ini, fin))) < 2:
+        if datetime.date(ini.year - 1, 12, 31) >= min_b:
+            ini = max(min_b, datetime.date(ini.year - 1, 1, 1))
+        else:
+            fin = min(max_b, datetime.date(fin.year + 1, 12, 31))
     return (ini, fin)
 
 

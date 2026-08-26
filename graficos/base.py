@@ -30,7 +30,7 @@ from tema import (
 from cortes import MESES_ABR_ES
 from estado_rango import (ESCALAS, aplicar_atajo, escala_a_rango,
                           escala_desde_rango, escala_periodos, ventana_ano,
-                          ventana_mes)
+                          ventana_decada, ventana_mes)
 from graficos import alturas
 
 
@@ -288,20 +288,33 @@ def _aplicar_escala(k_riel, escala, ctx, bandera):
         st.session_state[bandera] = True
 
 
-# Qué VENTANA usa cada escala, y cómo se rotula su cabecera. Días mira un
-# mes, Meses mira un año. Años no lleva ventana: sus paradas son una por
-# año presente en la data (cuatro, hoy), o sea que ya es el panorama
-# completo — acotarlo no dejaría nada que ver.
-_VENTANA_DE_ESCALA = {"Días": ventana_mes, "Meses": ventana_ano}
+# Qué VENTANA usa cada escala. Cada una mira UN período de la escala de
+# arriba: Días mira un mes, Meses mira un año, Años mira una década. Las
+# tres se explican con la misma frase, que es justo lo que se pidió al
+# sumar la tercera (2026-08-26, "cuando es años, también debe seguir la
+# lógica de mostrar sólo años").
+_VENTANA_DE_ESCALA = {"Días": ventana_mes,
+                      "Meses": ventana_ano,
+                      "Años": ventana_decada}
 
 
 def _rotulo_ventana(escala, ventana):
     """Lo que dice la cabecera entre las flechas: el mes en Días, el año en
-    Meses. Mayúscula y espaciado copian la captura del selector de Excel
-    que motivó todo esto ("AGO 2026")."""
+    Meses, el tramo de años en Años. Mayúscula y espaciado copian la
+    captura del selector de Excel que motivó todo esto ("AGO 2026").
+
+    En Años se rotula el tramo REAL de la ventana ya recortada a los datos
+    ("2023-2026"), no la década nominal ("2020-2029"): mismo criterio que
+    `escala_periodos` con el año del borde — no prometer períodos que no
+    tienen nada adentro. Si la ventana cae entera en un año, se dice ese
+    año y listo, sin el guión."""
     if escala == "Días":
         return (f"{MESES_ABR_ES[ventana[0].month - 1].upper()} "
                 f"{ventana[0].year}")
+    if escala == "Años":
+        if ventana[0].year == ventana[1].year:
+            return str(ventana[0].year)
+        return f"{ventana[0].year}-{ventana[1].year}"
     return str(ventana[0].year)
 
 
@@ -659,27 +672,22 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
         # la diferencia para que el control no mienta.
         par = (min(max(par[0], ventana[0]), ventana[1]),
                min(max(par[1], ventana[0]), ventana[1]))
-    elif escala == "Meses":
-        # MISMA IDEA QUE DÍAS, un piso más arriba (a pedido, 2026-08-26:
-        # "también en la de mes, debe mostrar inicialmente sólo lo del año
-        # en curso"). El riel abría con los ~44 meses del histórico, de
-        # ene-23 a ago-26, en 250px.
+    else:
+        # MISMA IDEA QUE DÍAS, un piso más arriba cada vez: Meses mira un
+        # año, Años una década (`_VENTANA_DE_ESCALA`). El riel de Meses
+        # abría con los ~44 meses del histórico en 250px.
         _ancla = (max(rango) if rango and len(rango) == 2 and all(rango)
                   else bounds[1])
-        ventana = ventana_ano(_ancla, bounds)
-        if not ventana:
+        _fn_ventana = _VENTANA_DE_ESCALA.get(escala)
+        ventana = _fn_ventana(_ancla, bounds) if _fn_ventana else None
+        if _fn_ventana and not ventana:
             return escala
         # `escala_desde_rango` recibe la VENTANA como bounds, no el
-        # histórico: así sus paradas son los meses de ese año y el redondeo
+        # histórico: así sus paradas son las de ese período y el redondeo
         # hacia afuera apoya en el borde lo que se sale — que es justo lo
-        # que ya hacía contra el histórico, un nivel más abajo.
-        par = escala_desde_rango(escala, rango, ventana)
-        if not par:
-            return escala
-    else:
-        # "Años" NO lleva ventana: sus paradas son una por año presente en
-        # la data (cuatro, hoy), o sea que ya es el panorama completo.
-        par = escala_desde_rango(escala, rango, bounds)
+        # que ya hacía contra el histórico, un nivel más abajo. El `or
+        # bounds` cubre una escala futura que decida no llevar ventana.
+        par = escala_desde_rango(escala, rango, ventana or bounds)
         if not par:
             return escala
 
