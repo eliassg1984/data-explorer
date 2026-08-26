@@ -1054,6 +1054,24 @@ CSS = """        <style>
         .pb-cards {
             display: flex; flex-direction: column; gap: 6px;
             margin: 4px 0 8px;
+            /* 2026-08-25, a pedido: capado al mismo alto que la tabla de
+               Panel A (`--cp-prov-alto-paneles`, publicada por Python
+               desde `_ALTO_FRAME` — proveedor.py). Sin este techo, un
+               producto con muchos proveedores estira la lista mucho más
+               que el panel de al lado, y el `:has()` de _80_cards.py
+               ("dos tarjetas de la fila miden lo mismo") terminaba
+               estirando TAMBIÉN a Panel A para igualar ese exceso — un
+               gráfico chico con medio panel de aire abajo. Lo que no
+               entra scrollea DENTRO, mismo idioma que la tarjeta entera
+               (regla de "una tarjeta = una pantalla" más arriba). */
+            max-height: var(--cp-prov-alto-paneles);
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        .pb-cards::-webkit-scrollbar { width: 6px; }
+        .pb-cards::-webkit-scrollbar-thumb {
+            background: var(--scroll-thumb);
+            border-radius: 3px;
         }
         .pb-card {
             background: #fff; border: 0.5px solid #e6e6ea;

@@ -22,7 +22,7 @@ from tema import (ACENTO, ACENTO_TEXTO_OSCURO, GRIS_BORDE, LAVANDA_CHIP,
                   TEXTO_PRINCIPAL)
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar,
-    paso_etiquetas, selector_escala,
+    paso_etiquetas, publicar_var_px, selector_escala,
 )
 from graficos.compras._comun import COLUMNAS_DRILL, GAP_DRILL
 from graficos.compras._css_proveedor import CSS as CSS_PROVEEDOR
@@ -327,6 +327,17 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # abajo, `height=_ALTO_FRAME`) — ninguno de los dos pidió filas más
     # finas, y si se achica acá se achican los tres.
     _ALTO_FRAME = alturas.por_filas(8, px_fila=35, extra=45, minimo=0)
+    # Publicado como variable CSS para que Panel B (más abajo, la lista de
+    # tarjetas ".pb-cards") clampe su alto contra ESTE mismo número — a
+    # pedido (2026-08-25): sin tope, la lista crece con la cantidad de
+    # proveedores del producto y puede pasar los 600px mientras Panel A, al
+    # lado, mide un tercio de eso (`_ALTO_FRAME` fijo). El `:has()` de
+    # `_80_cards.py` ("dos tarjetas de la fila miden lo mismo") entonces
+    # estira Panel A para IGUALAR ese exceso — un gráfico chico con medio
+    # panel de aire abajo. Mismo criterio que el resto del proyecto: dos
+    # caras del mismo número (Python calcula, CSS resta/clampea), no un
+    # segundo alto adivinado a mano en la hoja de estilos.
+    publicar_var_px("cp-prov-alto-paneles", _ALTO_FRAME)
     # Filas del RANKING, más delgadas a pedido (2026-08-24) — mismo número
     # que graficos/compras/producto.py. Constante propia y no un ajuste de
     # `_ALTO_FRAME`: si la Evolución se achicara con él, perdería piso sin
