@@ -313,6 +313,40 @@ def escala_desde_rango(escala, rango, bounds):
             der[-1] if der else periodos[0])
 
 
+def ventana_mes(ancla, bounds):
+    """La ventana VISIBLE del riel de Días: el mes de `ancla`, en `bounds`.
+
+    Existe porque en escala de Días el riel NO puede abarcar el histórico
+    entero: ~970 días en 250px son 4 días por píxel y ahí no se elige una
+    fecha (el mismo motivo por el que `escala_periodos` no dibuja Días).
+    A pedido, 2026-08-26, con la captura del selector de fecha de Excel al
+    lado: su nivel "DÍAS" rotula UN mes arriba ("AGO 2026"), muestra sólo
+    los días de ese mes, y para ir a otro están las flechas.
+
+    Recorta a `bounds` por lo mismo que `escala_a_rango`: ofrecer el 25 al
+    31 de agosto cuando la data termina el 24 es dibujar vacío.
+
+    GARANTIZA DOS DÍAS DISTINTOS. Un `st.slider` con `min_value ==
+    max_value` no tiene riel donde moverse, y el caso pasa de verdad
+    cuando el mes del ancla se recorta a un solo día (la data arranca un
+    31, o termina un 1). Ahí se toma prestado el día vecino que `bounds`
+    permita; quien llama ya garantizó que `bounds` abarca dos días o más,
+    así que siempre hay uno de los dos lados libre.
+    """
+    if not (bounds and all(bounds)) or bounds[0] >= bounds[1]:
+        return None
+    min_b, max_b = bounds
+    ancla = min(max(ancla, min_b), max_b)
+    ini = min(max(ancla.replace(day=1), min_b), max_b)
+    fin = min(max(_fin_de_mes(ancla), min_b), max_b)
+    if ini >= fin:
+        if fin > min_b:
+            ini = fin - datetime.timedelta(days=1)
+        else:
+            fin = ini + datetime.timedelta(days=1)
+    return (ini, fin)
+
+
 def aplicar_atajo(clave, rango, reporte=None, usa_carga_rango=False):
     """Callback `on_click` que fija el rango desde un atajo.
 

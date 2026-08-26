@@ -712,7 +712,37 @@ CSS = """        <style>
             margin-top: -4px !important;
             font-size: 11px !important;
         }
-        /* ── REGLA DE AÑOS del riel de Días ──────────────────────────────
+        /* ── CABECERA "‹ AGO 2026 ›" del riel de Días ────────────────────
+           2026-08-26, segunda vuelta, a pedido y con la captura del
+           selector de fecha de Excel al lado: el riel pasó a mostrar UN
+           mes (graficos/base.py::_nav_mes) y necesita decir CUÁL, más las
+           dos flechas para cambiarlo. Rótulo centrado entre ellas, igual
+           que en la captura.
+
+           Las flechas se acotan por sus keys PROPIAS (`_mes_prev` /
+           `_mes_sig`) y no por el contenedor: el popover ya tiene reglas
+           colgadas de contenedores —el aviso de CLAUDE.md sobre widgets
+           que heredan estilo sin que el .py lo insinúe— y este par no
+           tiene por qué arrastrar al `segmented_control` de escala ni al
+           desplegable de atajos que viven en la misma caja. */
+        .cp-riel-mes {
+            text-align: center;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            color: var(--text-primary);
+            line-height: 26px;
+        }
+        [class*="st-key-cp_rank_esc_mes_prev"] button,
+        [class*="st-key-cp_rank_esc_mes_sig"] button {
+            min-height: 26px !important;
+            height: 26px !important;
+            padding: 0 !important;
+            line-height: 1 !important;
+            font-size: 15px !important;
+            border-radius: 7px !important;
+        }
+        /* ── REGLA DE DÍAS del riel de Días ──────────────────────────────
            2026-08-26, a pedido ("la línea no tiene ninguna indicación de
            qué día o mes estoy seleccionando"). Fila propia DEBAJO del
            riel (no overlay: ver el comentario largo en
@@ -720,7 +750,12 @@ CSS = """        <style>
            `st.slider`, así que el 0%-100% de acá coincide con el suyo.
            `position:relative` + hijos `position:absolute; left:X%` es la
            misma técnica que ya usa el riel de select_slider para sus
-           propias paradas (más abajo, la granularidad). */
+           propias paradas (más abajo, la granularidad).
+
+           Nació rotulando AÑOS (el riel abarcaba todo el histórico) y
+           pasó a rotular DÍAS DEL MES el mismo día, cuando el riel se
+           acotó a un mes. La clase no cambió de nombre: lo que hace
+           —marcas de referencia bajo el riel— es lo mismo. */
         .cp-riel-regla {
             position: relative;
             height: 14px;
@@ -741,13 +776,13 @@ CSS = """        <style>
         .cp-riel-regla span:last-child { transform: translateX(-100%); }
         /* 2026-08-26, a pedido ("no es necesario ver en la línea los días
            del 2023 2024 si mi selección es de días"): el `stSliderTickBar`
-           NATIVO de Streamlit (min/max absolutos, "01/01/23 — 24/08/26")
-           queda redundante apenas se agrega `.cp-riel-regla` arriba — el
-           "2023" del extremo izquierdo ya lo dice el propio ruler, y el
-           extremo derecho ya lo dicen las etiquetas de la selección
-           VIGENTE (más útiles: son la selección actual, no el límite de
-           todo el histórico). Acotado al prefijo `cp_rank_esc_dias_` para
-           no afectar Meses/Años, que no usan este riel. */
+           NATIVO de Streamlit queda redundante apenas se agrega
+           `.cp-riel-regla` arriba. Con la ventana de un mes ya no dice
+           "01/01/23 — 24/08/26" sino los bordes del mes, que es justo lo
+           que ya rotulan la cabecera `.cp-riel-mes` y las dos marcas
+           extremas de la regla — tres veces lo mismo en tres renglones
+           seguidos. Acotado al prefijo `cp_rank_esc_dias_` para no
+           afectar Meses/Años, que no usan este riel. */
         [class*="st-key-cp_rank_esc_dias_"] [data-testid="stSliderTickBar"] {
             display: none !important;
         }

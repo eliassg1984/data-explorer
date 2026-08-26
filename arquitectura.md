@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-218 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+219 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (77)
 
@@ -206,7 +206,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#214** — Un st.rerun con scope="app" sigue estando ADENTRO del fragment que lo llama: sumarle espacio…
 - **#215** — Element.innerText no atraviesa el layout position: absolute de las celdas de AgGrid: da ""…
 
-**Streamlit** (67)
+**Streamlit** (68)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -275,6 +275,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#213** — Un width: 100% que gana la cascada y no se ve suele estar clampeado por un max-width:…
 - **#217** — st.text_input (react-aria) no confirma su valor con input/ change ni con blur() programático…
 - **#218** — Puppetear los DOS tiradores de un st.slider de rango, uno después del otro, pierde el segundo…
+- **#219** — Un riel de fechas que abarca todo el histórico no sirve para elegir un día, y la escala fina…
 
 **Datos, R2 y DuckDB** (25)
 
@@ -319,7 +320,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#196** — Un return temprano que se lleva puesto el ÚNICO control capaz de arreglar el estado que lo…
 - **#197** — Un techo de calendario sacado de "hasta dónde llegó el último sync" hace que HOY no se pueda…
 
-**Fechas, rangos y cortes** (7)
+**Fechas, rangos y cortes** (8)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -328,6 +329,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#179** — Un atajo de fecha (nuevo o viejo) no sobrevive cambiar de REPORTE y volver — mismo mecanismo…
 - **#196** — Un return temprano que se lleva puesto el ÚNICO control capaz de arreglar el estado que lo…
 - **#210** — En una página APILADA el rango de fechas es del REPORTE, no de la vista: dos dueños de la…
+- **#219** — Un riel de fechas que abarca todo el histórico no sirve para elegir un día, y la escala fina…
 
 **Asistente IA** (2)
 
@@ -9616,13 +9618,62 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      ajeno en absoluto, o si un canal propio (un widget nuevo, sin las
      reglas de cruce del original) resuelve el problema de raíz.
 
+219. **Un riel de fechas que abarca todo el histórico no sirve para elegir
+     un día, y la escala fina necesita una VENTANA además de un valor.**
+     Reportado 2026-08-26 con la captura del selector de fecha de Excel al
+     lado: "cuando selecciono Días sólo necesitaría ver la línea del mes en
+     curso, no debo ver el año 2023". El riel de Días iba de `fecha_min` a
+     `fecha_max` —~970 días en 250px, 4 días por píxel— y la regla de
+     referencia que se le había puesto un rato antes rotulaba AÑOS, que en
+     escala de días no dicen nada.
+
+     El arreglo tiene una parte obvia y una que no lo es. La obvia:
+     `min_value`/`max_value` del slider pasan a ser el mes del ancla
+     (`estado_rango.ventana_mes`), la regla de abajo numera días, y una
+     cabecera `‹ AGO 2026 ›` dice qué mes se ve.
+
+     LA QUE NO ES OBVIA: **en Excel la vista y la selección son
+     independientes —la barra de scroll corre una sin tocar la otra— y en
+     Streamlit NO PUEDEN SERLO.** El valor de un `st.slider` tiene que caer
+     dentro de sus límites, así que "ver septiembre con agosto
+     seleccionado" no se puede representar. De ahí dos decisiones que
+     conviene no re-litigar:
+
+     · Las flechas SELECCIONAN el mes entero, no sólo lo miran. Es además
+       lo que ya hace la escala "Meses" con un clic, o sea que no inventa
+       un idioma nuevo.
+     · Cuando el rango vigente SE SALE del mes visible (venir de "Este año"
+       y cambiar a Días), el riel lo dibuja apoyado en el borde pero NO lo
+       reescribe —escribe sólo si el usuario mueve algo, misma doctrina que
+       el redondeo hacia afuera de `escala_desde_rango`— y el caption lo
+       canta: "236 días seleccionados · el riel muestra sólo ago 2026". Sin
+       esa línea el control mostraría "01/08 – 24/08" mientras la tabla
+       filtra doce meses, que es exactamente el desync que `estado_rango`
+       existe para evitar.
+
+     Dos detalles que muerden si se rehace esto:
+
+     · **La ventana entra en la key del riel.** Cambia `min_value`/
+       `max_value`, y un widget con la misma key y otros límites se queda
+       con el valor viejo que le manda el NAVEGADOR — la misma trampa de la
+       regla #212, con otra cara.
+     · **`ventana_mes` garantiza DOS días distintos.** Un slider con
+       `min_value == max_value` no tiene riel donde moverse, y el caso pasa
+       de verdad cuando el mes del ancla se recorta a un solo día (la data
+       arranca un 31, o termina un 1). Se toma prestado el día vecino que
+       `bounds` permita.
+
+     Y el arrastre de la regla #217/#218 ahora topa en la ventana, no en
+     `bounds`: cruzar de mes es trabajo de las flechas. Dejarlo pasar de
+     largo haría que un tirón de 5px al borde saltara de mes sin avisar.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#219**.
+> próxima regla nueva es la **#220**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

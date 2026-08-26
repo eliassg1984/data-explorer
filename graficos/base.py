@@ -29,7 +29,7 @@ from tema import (
 )
 from cortes import MESES_ABR_ES
 from estado_rango import (ESCALAS, aplicar_atajo, escala_a_rango,
-                          escala_desde_rango, escala_periodos)
+                          escala_desde_rango, escala_periodos, ventana_mes)
 from graficos import alturas
 
 
@@ -254,6 +254,61 @@ def _aplicar_escala(k_riel, escala, ctx, bandera):
         st.session_state[bandera] = True
 
 
+def _ir_a_mes(ancla, ctx, bandera):
+    """`on_click` de las flechas ‹ › del riel de Días: cambia el mes visible.
+
+    Escribe el MES ENTERO (recortado a los datos) en la clave canónica —
+    ver `_nav_mes` para por qué SELECCIONA y no sólo mira. Callback y no
+    cuerpo por el motivo de siempre: `ctx["k_rango"]` es la key de un
+    widget ya instanciado en este run (`_aplicar_escala` lo explica largo).
+    """
+    win = ventana_mes(ancla, (ctx["fecha_min"], ctx["fecha_max"]))
+    if not win:
+        return
+    aplicar_atajo(ctx["k_rango"], win, ctx["reporte"], ctx["usa_carga_rango"])
+    if bandera:
+        st.session_state[bandera] = True
+
+
+def _nav_mes(clave, ventana, bounds, ctx, bandera):
+    """Cabecera del riel de Días: ‹ AGO 2026 ›.
+
+    Copia el gesto de la captura del pedido (selector de fecha de Excel,
+    2026-08-26): el mes visible rotulado en el medio y una flecha a cada
+    lado para ir al anterior/siguiente. Las flechas se DESHABILITAN en los
+    bordes de `bounds` en vez de esconderse, así el ancho de la fila no
+    salta al llegar al extremo del histórico.
+
+    IR A OTRO MES SELECCIONA ESE MES ENTERO, no sólo corre la vista. En
+    Excel la barra de scroll separa las dos cosas; acá no puede: el valor
+    de un `st.slider` tiene que caer DENTRO de su `min_value`/`max_value`,
+    o sea que una vista sin selección adentro no se puede representar.
+    Seleccionar el mes entero es además exactamente lo que ya hace la
+    escala "Meses" con un clic — mismo idioma, no uno nuevo.
+
+    Sin `help=` a propósito: los glifos ya se explican solos, y este mismo
+    popover se comió DOS bugs de íconos de ayuda duplicados el 2026-08-25
+    (un `help=` del desplegable de atajos y otro del caption de fecha, cada
+    uno anclado a la misma esquina).
+    """
+    _prev = ventana[0] - datetime.timedelta(days=1)
+    _sig = ventana[1] + datetime.timedelta(days=1)
+    # columnas-internas: fila de tres piezas DENTRO del popover (flecha,
+    # rótulo, flecha). No es una fila de drill: COLUMNAS_DRILL no aplica.
+    c_izq, c_mes, c_der = st.columns([1, 5, 1], vertical_alignment="center")
+    with c_izq:
+        st.button("‹", key=f"{clave}_mes_prev", disabled=_prev < bounds[0],
+                  on_click=_ir_a_mes, args=(_prev, ctx, bandera))
+    with c_mes:
+        st.markdown(
+            f'<div class="cp-riel-mes">'
+            f'{MESES_ABR_ES[ventana[0].month - 1].upper()} '
+            f'{ventana[0].year}</div>', unsafe_allow_html=True)
+    with c_der:
+        st.button("›", key=f"{clave}_mes_sig", disabled=_sig > bounds[1],
+                  on_click=_ir_a_mes, args=(_sig, ctx, bandera))
+
+
 def _us_de(d):
     """Fecha -> microsegundos desde época UTC, EXACTAMENTE como codifica
     `st.slider` sus valores internos para un slider de fechas (verificado
@@ -315,8 +370,8 @@ def _aplicar_pan_riel(k_relevo, ctx, bandera):
         st.session_state[bandera] = True
 
 
-def _arrastrar_ventana_riel(k_riel, k_relevo, bounds):
-    """Arrastrar la VENTANA completa del riel de Días, sin cambiar su
+def _arrastrar_ventana_riel(k_riel, k_relevo, limites):
+    """Arrastrar la SELECCIÓN completa del riel de Días, sin cambiar su
     ancho — "como el slider de Excel" (a pedido, 2026-08-26).
 
     El `st.slider` nativo sólo deja mover un tirador por vez (cambia dónde
@@ -334,8 +389,15 @@ def _arrastrar_ventana_riel(k_riel, k_relevo, bounds):
     coordenadas). Mientras se arrastra, el feedback es puramente visual
     (mover el propio overlay); recién al SOLTAR se escribe UNA vez el
     widget de relevo (`_aplicar_pan_riel` — ver ahí por qué no son los
-    dos `<input>` nativos)."""
-    _bmin_us, _bmax_us = _us_de(bounds[0]), _us_de(bounds[1])
+    dos `<input>` nativos).
+
+    `limites` son los del RIEL, que desde el 2026-08-26 es la ventana de un
+    mes y ya no todo el histórico (ver `ventana_mes`). El arrastre topa ahí
+    a propósito: cruzar de mes es el trabajo de las flechas ‹ › de
+    `_nav_mes`, igual que en Excel, donde el gesto de arrastrar tampoco
+    saca la selección de la franja visible. Dejarlo pasar de largo haría
+    que un tirón de 5px al borde saltara de mes sin avisar."""
+    _bmin_us, _bmax_us = _us_de(limites[0]), _us_de(limites[1])
     inyectar_html(f"""<script>
     (function () {{
       var w = window.parent, doc = w.document;
@@ -516,11 +578,28 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
     st.session_state[k_eco] = escala
 
     rango = st.session_state.get(ctx["k_rango"])
+    ventana = None
     if escala == "Días":
+        # EL RIEL ABARCA UN MES, no el histórico entero (a pedido
+        # 2026-08-26, con la captura del selector de Excel: "cuando
+        # selecciono Días sólo necesitaría ver la línea del mes en curso,
+        # no debo ver el año 2023"). El ancla es el FIN del rango vigente
+        # —"el mes en curso"—; sin rango, el último día con datos.
+        _ancla = (max(rango) if rango and len(rango) == 2 and all(rango)
+                  else bounds[1])
+        ventana = ventana_mes(_ancla, bounds)
+        if not ventana:
+            return escala
         par = ((min(rango), max(rango))
-               if rango and len(rango) == 2 and all(rango) else bounds)
-        par = (min(max(par[0], bounds[0]), bounds[1]),
-               min(max(par[1], bounds[0]), bounds[1]))
+               if rango and len(rango) == 2 and all(rango) else ventana)
+        # Se recorta a la VENTANA, no a `bounds`. Un rango que se pasa del
+        # mes (venir de "últimos 12 meses" y cambiar a Días) se DIBUJA
+        # apoyado en el borde, pero no se reescribe: el riel sólo escribe
+        # cuando el usuario mueve algo, misma doctrina que el redondeo
+        # hacia afuera de `escala_desde_rango`. El caption de abajo canta
+        # la diferencia para que el control no mienta.
+        par = (min(max(par[0], ventana[0]), ventana[1]),
+               min(max(par[1], ventana[0]), ventana[1]))
     else:
         par = escala_desde_rango(escala, rango, bounds)
         if not par:
@@ -548,9 +627,16 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
     # la firma.
     k_riel = (f"{clave}_{_slug_url(escala)}"
               f"_{par[0]:%Y%m%d}_{par[1]:%Y%m%d}")
+    if escala == "Días":
+        # La VENTANA también entra en la firma: define `min_value`/
+        # `max_value`, y un widget con la misma key y otros límites se
+        # queda con el valor viejo que le manda el NAVEGADOR — el mismo
+        # fallo que explica el comentario de arriba, con otra cara.
+        k_riel += f"_v{ventana[0]:%Y%m%d}{ventana[1]:%Y%m%d}"
 
     if escala == "Días":
-        st.slider("Rango", min_value=bounds[0], max_value=bounds[1],
+        _nav_mes(clave, ventana, bounds, ctx, bandera)
+        st.slider("Rango", min_value=ventana[0], max_value=ventana[1],
                   value=par, key=k_riel, format="DD/MM/YY",
                   label_visibility="collapsed",
                   on_change=_aplicar_escala,
@@ -568,19 +654,25 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
         # posición `left%` que Streamlit le da a cada tirador coincide
         # exactamente con `(valor - min) / (max - min)` sin ningún inset por
         # el radio del círculo — así que la MISMA cuenta sirve acá.
-        _total_dias = (bounds[1] - bounds[0]).days
+        _total_dias = (ventana[1] - ventana[0]).days
         if _total_dias > 0:
-            # `escala_periodos` devuelve el 1-ene de cada año TOCADO por
-            # bounds, sin recortar — el primero puede caer ANTES de
-            # `bounds[0]` (si los datos no arrancan justo un 1-ene). Clampeado
-            # a [0, 100] para la posición nomás: la etiqueta sigue diciendo
-            # el año real, sólo se pinea al borde en vez de salirse del
-            # riel.
-            _marcas = escala_periodos("Años", bounds)
+            # Regla de DÍAS DEL MES. Hasta esta misma fecha era de AÑOS,
+            # porque el riel abarcaba todo el histórico; con la ventana de
+            # un mes, los años sobran y lo que falta es el número de día
+            # —que es justo lo que rotula Excel debajo de su franja—.
+            # Uno cada 5 más los dos bordes, y no los 31 como Excel, porque
+            # su franja es mucho más ancha: 31 etiquetas en ~250px son 8px
+            # por día y dos dígitos no entran. Las paradas de 5 que caen
+            # pegadas a un borde se saltean, o se pisan con él.
+            _marcas = sorted({ventana[0], ventana[1]} | {
+                _d for _d in escala_periodos("Días", ventana)
+                if _d.day % 5 == 0
+                and (_d - ventana[0]).days >= 2
+                and (ventana[1] - _d).days >= 2})
             _spans = "".join(
-                f'<span style="left:{max(0, min(100, (_a - bounds[0]).days / _total_dias * 100)):.2f}%">'
-                f'{_a.year}</span>'
-                for _a in _marcas)
+                f'<span style="left:{(_m - ventana[0]).days / _total_dias * 100:.2f}%">'
+                f'{_m.day}</span>'
+                for _m in _marcas)
             st.markdown(f'<div class="cp-riel-regla">{_spans}</div>',
                        unsafe_allow_html=True)
             # Relevo oculto para "arrastrar la línea entera" (a pedido,
@@ -591,7 +683,7 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
             st.text_input("pan", key=_k_relevo, label_visibility="collapsed",
                           on_change=_aplicar_pan_riel,
                           args=(_k_relevo, ctx, bandera))
-            _arrastrar_ventana_riel(k_riel, _k_relevo, bounds)
+            _arrastrar_ventana_riel(k_riel, _k_relevo, ventana)
     else:
         st.select_slider("Rango", options=escala_periodos(escala, bounds),
                          value=par, key=k_riel,
@@ -605,8 +697,18 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
     # si el rango alcanza para lo que uno quiere mirar.
     if rango and len(rango) == 2 and all(rango):
         _n = abs((max(rango) - min(rango)).days) + 1
-        st.caption(f"{_n} día{'s' if _n != 1 else ''} seleccionados"
-                   if _n != 1 else "1 día seleccionado")
+        _txt = (f"{_n} días seleccionados" if _n != 1
+                else "1 día seleccionado")
+        # Y si el rango vigente SE SALE del mes visible, decirlo. El riel
+        # lo dibuja apoyado en el borde (ver el recorte de `par` arriba);
+        # sin esta línea el control mostraría "1–24 ago" mientras la tabla
+        # filtra doce meses, que es exactamente la desincronización que
+        # `estado_rango` existe para evitar.
+        if ventana and (min(rango) < ventana[0] or max(rango) > ventana[1]):
+            _txt += (f" · el riel muestra sólo "
+                     f"{MESES_ABR_ES[ventana[0].month - 1]} "
+                     f"{ventana[0].year}")
+        st.caption(_txt)
     return escala
 
 

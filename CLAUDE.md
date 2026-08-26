@@ -234,7 +234,7 @@ filtro paralelo: `estado_rango.escala_periodos/escala_a_rango/
 escala_desde_rango` sólo TRADUCEN el gesto, y la escritura sigue pasando
 por `aplicar_atajo`. El widget reusable es
 `graficos.base.selector_escala()`, así que sumarlo a otra vista es una
-línea. En Días, además, se puede arrastrar la VENTANA entera (sin cambiar
+línea. En Días, además, se puede arrastrar la SELECCIÓN entera (sin cambiar
 su ancho) agarrando el tramo coloreado del medio — "como el slider de
 Excel". Sus trampas —el `rerun` que le borra el estado a los widgets del
 fragment, que borrar la clave no resetea un widget, y las dos de puppetear
@@ -242,6 +242,16 @@ un widget ajeno desde JS (un `st.text_input` no confirma con
 `input`/`change`, sólo con un Enter real; y los dos `<input>` de un slider
 de rango no se pueden escribir uno-tras-otro)— están en `arquitectura.md`
 reglas #211 a #213 y #217 a #218.
+
+**En Días el riel abarca UN MES, no el histórico** (`estado_rango.
+ventana_mes`, 2026-08-26). Con ~970 días en 250px no se puede elegir una
+fecha, y la regla de referencia rotulaba años que no venían al caso. La
+cabecera `‹ AGO 2026 ›` dice cuál se ve y cambia de mes; la regla de abajo
+pasó a numerar días. Ir a otro mes SELECCIONA ese mes entero: el valor de
+un `st.slider` tiene que caer dentro de sus límites, así que una vista sin
+selección adentro no se puede representar. Y si el rango vigente se sale
+del mes visible, el caption lo canta — el riel lo dibuja apoyado en el
+borde, pero nunca lo reescribe solo. Ver regla #219.
 
 `aplicar_corte` escribe el corte **y** el rango — el rango lo leen el
 `date_input`, el label del pill y el loader de R2, que no saben qué es un
