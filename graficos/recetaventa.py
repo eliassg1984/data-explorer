@@ -33,7 +33,10 @@ from st_aggrid import AgGrid, JsCode
 
 from tema import ADVERTENCIA, ERROR, EXITO, TEXTO_PRINCIPAL
 from graficos import alturas
-from graficos.base import _card, _render_rail, _resolver, renderizar_graficos_genericos
+from graficos.base import (
+    _card, _render_rail, _resolver, renderizar_graficos_genericos,
+    seccion_perezosa,
+)
 from graficos.recetas_comun import (
     _activo, _chip_fuente, _items_clave, _panorama_compras,
     _ranking_contenedores, _sankey_contenedor,
@@ -57,6 +60,19 @@ _RAIL_CATEGORIAS = (
     ("Datos", (("Tabla", "Tabla"),)),
 )
 
+# ORDEN DE LA PILA — gemela de la de `graficos/recetabase.py` (los dos
+# reportes comparten ítem de nav y casi todos los gráficos, ver
+# recetas_comun.py). El porqué de que sección y vista vivan en la MISMA
+# tupla está en `graficos/compras/__init__.py::_PILA`.
+_PILA = (
+    ("rv_sec_sankey",      "Sankey por plato"),
+    ("rv_sec_composicion", "Composición del plato"),
+    ("rv_sec_ranking",     "Ranking de platos"),
+    ("rv_sec_ingredientes", "Ingredientes clave"),
+    ("rv_sec_panorama",    "Panorama de compras"),
+    ("rv_sec_tabla",       "Tabla"),
+)
+
 
 def _panorama_compras_venta(df_f, es_soles):
     _panorama_compras(
@@ -74,6 +90,10 @@ def _panorama_compras_venta(df_f, es_soles):
         col_contenedor_out="Plato",
         etiqueta_contenedor_plural="platos activos",
         etiqueta_selectbox_jump="Ver el flujo completo de un plato",
+        # Página APILADA: el Sankey ya está más arriba, así que "Abrir
+        # Sankey →" scrollea en vez de cambiar de vista. Ver
+        # `recetas_comun._drill_contenedor_jump`.
+        clave_seccion_sankey="rv_sec_sankey",
     )
 
 
@@ -338,29 +358,23 @@ def renderizar_graficos_recetaventa(df_f, nombre_reporte, df_full=None, tabla_cb
         renderizar_graficos_genericos(df_f, nombre_reporte)
         return
 
-    graf = _render_rail(_RAIL_CATEGORIAS, "rv_graf_tipo", btn_prefix="rv_rail_btn_")
+    # El rail ya no ELIGE: con `secciones` marca dónde estás y scrollea.
+    _render_rail(_RAIL_CATEGORIAS, "rv_graf_tipo", btn_prefix="rv_rail_btn_",
+                 secciones=_PILA)
 
-    # El chip Base/Venta/Nueva NO se muestra en Composición: esa vista es
-    # una tabla propia de Receta Venta (Grupo/Subgrupo/Precio/Costo/%Costo
-    # de Salón no existen en Receta Base, ver docstring de
-    # `_tabla_composicion_venta`), así que navegar a Base desde ahí no
-    # lleva a nada equivalente — a pedido, 2026-08-24.
-    if graf != "Composición del plato":
-        _chip_fuente("Receta Venta")
+    # El chip Base/Venta/Nueva se dibuja SIEMPRE. Hasta el apilado se
+    # escondía en la vista "Composición del plato" (a pedido 2026-08-24:
+    # esa vista es una tabla propia de Receta Venta y navegar a Base desde
+    # ahí no lleva a nada equivalente). Con la pila el argumento se cae
+    # solo: Composición ya no es LA pantalla, es una sección más de una
+    # página que en conjunto ES Receta Venta, y el chip es un control de la
+    # página entera.
+    _chip_fuente("Receta Venta")
 
-    if graf == "Tabla":
-        if tabla_cb is not None:
-            # Sin chips propios (como Ajuste): pasa su df tal cual.
-            tabla_cb(df_f)
-        else:
-            st.info("La tabla no está disponible en este contexto.")
-        return
-
-    # ── Métrica del ancho/valor: Total (costo) o Cantidad ────────────────
-    # No aplica a Composición: esa vista no tiene un valor "medible" por
-    # Costo/Cantidad, son columnas fijas (Precio/Costo/%Costo de Salón) —
-    # blanco a propósito, mismo criterio ya probado en `c_plato` más abajo
-    # (entrar siempre al `with`, decidir adentro).
+    # ── Controles COMPARTIDOS por toda la página ─────────────────────────
+    # Van arriba de la pila: la métrica manda sobre cuatro secciones y el
+    # selector de plato sobre el Sankey. Meterlos adentro de una sección
+    # los escondería hasta que esa sección salga del esqueleto.
     metricas = []
     if col_total:
         metricas.append("Costo (S/)")
@@ -369,61 +383,80 @@ def renderizar_graficos_recetaventa(df_f, nombre_reporte, df_full=None, tabla_cb
 
     c_met, c_plato = st.columns([1, 2])
     with c_met:
-        if graf != "Composición del plato":
-            metrica = st.radio("Medir por", metricas, horizontal=True,
-                               key="rv_metrica")
-        else:
-            metrica = metricas[0] if metricas else None
+        metrica = st.radio("Medir por", metricas, horizontal=True,
+                           key="rv_metrica")
     es_soles = (metrica == "Costo (S/)")
     col_valor = col_total if es_soles else col_cant
 
-    # ── Selector de plato (compartido por Sankey y Composición) ──────────
     # Default: el plato de mayor costo, para que la primera vista sea rica.
     platos = sorted(df_f[col_plato].dropna().astype(str).unique().tolist())
     totales = df_f.groupby(col_plato)[col_valor].sum()
     plato_rico = str(totales.idxmax()) if not totales.empty else (platos[0] if platos else "")
     idx_def = platos.index(plato_rico) if plato_rico in platos else 0
 
-    # El selector de plato solo aparece para las vistas por plato — pero
-    # `with c_plato:` se entra SIEMPRE (el if va adentro, no afuera). Si el
-    # if envuelve el `with`, en los runs donde no aplica Streamlit nunca
-    # "visita" esa posición del árbol y no la limpia: el selectbox de la
-    # vista anterior queda pegado (visto en vivo 2026-08-09 cambiando de
-    # Sankey a Ranking — el combo "Plato" seguía ahí, funcional pero
-    # huérfano). Entrar siempre y decidir adentro fuerza a Streamlit a
-    # registrar la posición vacía y limpiarla.
-    # Composición ya no necesita elegir UN plato (muestra todos, con clic
-    # para el drill) — se saca de la condición, mismo mecanismo de arriba.
-    plato = None
+    # Ya no hace falta el `with c_plato:` incondicional con el `if` adentro
+    # (estaba para que Streamlit "visitara" la posición en todos los runs y
+    # no dejara el selectbox de la vista anterior pegado y huérfano, visto
+    # en vivo 2026-08-09 al pasar de Sankey a Ranking). Con la pila el
+    # Sankey está SIEMPRE en la página, así que el selector se dibuja
+    # siempre y el problema desaparece solo — igual que en Receta Base.
     with c_plato:
-        if graf == "Sankey por plato":
-            plato = st.selectbox("Plato", platos, index=idx_def, key="rv_plato_sel")
+        plato = st.selectbox("Plato", platos, index=idx_def, key="rv_plato_sel")
 
-    with st.container(border=True, key="rv_graf_card"):
-        # Mismo problema, mismo motivo: sub-container CON KEY QUE VARÍA POR
-        # VISTA (no un key fijo) para que cambiar de rail fuerce un remount
-        # limpio en vez de acumular widgets de la vista anterior debajo de
-        # la nueva (le pasó a _panorama_compras: sus selectbox de drill
-        # aparecían también en Ranking). Mismo espíritu que el contador de
-        # remount de arquitectura.md regla #9, aplicado al nombre del graf
-        # en vez de a un contador de aperturas.
-        with st.container(key=f"rv_graf_body_{graf.lower().replace(' ', '_')}"):
-            if graf == "Sankey por plato":
-                _sankey_contenedor(df_f, col_plato, col_item, col_valor, plato,
-                                   es_soles, card_key="rv_sankey")
-            elif graf == "Composición del plato":
-                _tabla_composicion_venta(df_f)
-            elif graf == "Ranking de platos":
-                _ranking_contenedores(df_f, col_plato, col_valor, es_soles,
-                                      key_topn="rv_ranking_topn",
-                                      card_key="rv_ranking",
-                                      titulo_card="Platos por costo total")
-            elif graf == "Ingredientes clave":
-                _items_clave(df_f, col_plato, col_item, col_valor, es_soles,
-                            card_key="rv_ingredientes",
-                            titulo_card="Ingredientes de mayor costo total",
-                            etiqueta_item="Ingrediente",
-                            etiqueta_contenedor_plural="platos",
-                            expander_titulo="📋 Tabla: ingredientes por costo y n.º de platos")
-            elif graf == "Panorama de compras":
-                _panorama_compras_venta(df_f, es_soles)
+    # ── LA PILA, PEREZOSA ────────────────────────────────────────────────
+    # Cada sección lleva su PROPIA key de tarjeta: las seis compartían
+    # `rv_graf_card` porque nunca coexistían. Y desaparece el sub-container
+    # `rv_graf_body_<vista>`, que existía para forzar un remount limpio al
+    # cambiar de rail (si no, los selectbox de drill del Panorama aparecían
+    # también en Ranking) — con una sección por vista, cada una tiene su
+    # propio sitio en el árbol y no hay nada que limpiar.
+    def _dib_sankey():
+        with st.container(border=True, key="rv_card_sankey"):
+            _sankey_contenedor(df_f, col_plato, col_item, col_valor, plato,
+                               es_soles, card_key="rv_sankey")
+
+    def _dib_composicion():
+        with st.container(border=True, key="rv_card_composicion"):
+            _tabla_composicion_venta(df_f)
+
+    def _dib_ranking():
+        with st.container(border=True, key="rv_card_ranking"):
+            _ranking_contenedores(df_f, col_plato, col_valor, es_soles,
+                                  key_topn="rv_ranking_topn",
+                                  card_key="rv_ranking",
+                                  titulo_card="Platos por costo total")
+
+    def _dib_ingredientes():
+        with st.container(border=True, key="rv_card_ingredientes"):
+            _items_clave(df_f, col_plato, col_item, col_valor, es_soles,
+                        card_key="rv_ingredientes",
+                        titulo_card="Ingredientes de mayor costo total",
+                        etiqueta_item="Ingrediente",
+                        etiqueta_contenedor_plural="platos",
+                        expander_titulo="📋 Tabla: ingredientes por costo y n.º de platos")
+
+    def _dib_panorama():
+        with st.container(border=True, key="rv_card_panorama"):
+            _panorama_compras_venta(df_f, es_soles)
+
+    def _dib_tabla():
+        with st.container(border=True, key="rv_card_tabla"):
+            if tabla_cb is not None:
+                # Sin chips propios (como Ajuste): pasa su df tal cual.
+                tabla_cb(df_f)
+            else:
+                st.info("La tabla no está disponible en este contexto.")
+
+    _DIBUJANTES = {
+        "rv_sec_sankey":       _dib_sankey,
+        "rv_sec_composicion":  _dib_composicion,
+        "rv_sec_ranking":      _dib_ranking,
+        "rv_sec_ingredientes": _dib_ingredientes,
+        "rv_sec_panorama":     _dib_panorama,
+        "rv_sec_tabla":        _dib_tabla,
+    }
+
+    for _i, (_clave, _vista) in enumerate(_PILA):
+        with st.container(key=_clave):
+            seccion_perezosa(_clave, _vista, _DIBUJANTES[_clave],
+                             activa_de_entrada=(_i == 0))
