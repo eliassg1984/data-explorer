@@ -698,14 +698,17 @@ CSS = """        <style>
            `st.selectbox` aplanado a TEXTO, sin caja ni sombra, con el
            chevron como única affordance de "esto despliega".
 
-           La regla genérica `.st-key-compras_prov_rank_atajos button` de
-           arriba (la píldora blanca con sombra) matchea TAMBIÉN al botón
-           interno del selectbox (su chevron es un `<button
-           aria-haspopup>`) — hay que resetearlo explícito o el
-           desplegable sale con caja de píldora alrededor del triangulito,
-           que es justo lo que este cambio quiere evitar. Gana por
-           especificidad (2 clases + atributo contra 1 clase + elemento),
-           no por orden — no importa dónde quede este bloque. */
+           2026-08-25, 2da vuelta ("podemos unificar estas dos?"): el
+           desplegable se MUDA de ser un tercer hijo de
+           `compras_prov_rank_atajos` a vivir DENTRO del panel de escala
+           (`cp_rank_escala_panel`) — un solo popover para "elegí un
+           atajo" y "afiná a mano", no dos triggers para el mismo dato.
+           El reset del botón-chevron de más abajo NACIÓ para ganarle a
+           `.st-key-compras_prov_rank_atajos button` (la píldora blanca
+           con sombra de la fila) — esa regla ya NO alcanza a este
+           selectbox (vive en el portal de `stPopoverBody`, fuera de esa
+           fila), pero se deja igual: es una base limpia y no depende de
+           qué otra cosa ande suelta por ese lado. */
         .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"] div[role="group"] {
             background: transparent !important;
             border: none !important;
@@ -758,11 +761,18 @@ CSS = """        <style>
             button[aria-haspopup]:hover {
             background: transparent !important;
         }
-        /* Ancho explicito sobre la opcion mas larga ("Últimos 30 días" +
-           chevron): sin esto el input de react-aria pide 100% del
-           contenedor -fit-content de la fila entera- y el selectbox se
-           come todo el ancho libre en vez de medir su propio texto. */
-        .st-key-cp_rank_atajo_sel { width: 128px !important; }
+        /* Ancho: 100% del PANEL (290px, `_css_proveedor.py` § escala), no
+           los 128px fijos de cuando vivía suelto en la fila angosta de
+           afuera — acá tiene todo el ancho del popover para sí, igual
+           que la granularidad y el riel de más abajo. Iguala el criterio
+           de `.st-key-cp_rank_esc_gran`: mismo `max-width: none` por el
+           mismo motivo (la clase de emotion del div interno trae
+           `max-width: fit-content` y clampea el 100% si no se anula). */
+        .st-key-cp_rank_atajo_sel {
+            width: 100% !important;
+            max-width: none !important;
+            margin-bottom: 8px !important;
+        }
         .st-key-cp_rank_atajo_sel [data-testid="stSelectbox"] {
             width: 100% !important;
         }

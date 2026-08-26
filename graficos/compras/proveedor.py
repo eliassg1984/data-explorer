@@ -622,6 +622,19 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             # título y los atajos hay ~149px; el trigger
                             # es un ícono suelto, que sí entra.
                             #
+                            # 2026-08-25, 2da vuelta ("podemos unificar
+                            # estas dos?"): el desplegable "Atajos" —hasta
+                            # acá un SEGUNDO trigger al lado de este
+                            # ícono— se MUDA adentro de este MISMO panel.
+                            # Eran dos puertas al mismo dato (la clave
+                            # canónica del rango): una pedía "quiero un
+                            # atajo relativo", la otra "quiero elegir a
+                            # mano" — no dos filtros distintos, la misma
+                            # decisión con dos gestos. Unificar el gesto
+                            # es la otra mitad de "minimalista": ya no
+                            # alcanza con que CADA control se vea chico,
+                            # si siguen siendo DOS controles.
+                            #
                             # No hace falta CSS para el trigger: la
                             # regla `.st-key-compras_prov_rank_atajos
                             # button` es un selector DESCENDIENTE y lo
@@ -633,8 +646,48 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                             key="cp_rank_escala",
                                             use_container_width=False):
                                 with st.container(key="cp_rank_escala_panel"):
-                                    # La bandera es la MISMA que usan
-                                    # los atajos de al lado: el filtro
+                                    if _atajos_rank:
+                                        # El desplegable va PRIMERO
+                                        # ("elegí rápido") y la escala
+                                        # DESPUÉS ("o afiná a mano") —
+                                        # mismo orden de lectura que el
+                                        # popover de la píldora de la
+                                        # franja (atajos arriba,
+                                        # calendario abajo). Reusa el
+                                        # aplanado-a-texto de
+                                        # `cp_evo_ctrl`/`gran_float`
+                                        # (2026-08-23, mismo pedido:
+                                        # "lista desplegable, pero
+                                        # minimalista"); acá va a lo
+                                        # ANCHO del panel (`width:100%`
+                                        # en `_css_proveedor.py`), no a
+                                        # los 128px que necesitaba en la
+                                        # fila angosta de afuera.
+                                        #
+                                        # SIN `help=`: ver la regla de
+                                        # este mismo archivo más abajo
+                                        # (dos circulitos "?" casi
+                                        # iguales se leen como ícono
+                                        # duplicado; el ⓘ de al lado ya
+                                        # explica el rango).
+                                        _placeholder_rank = "Atajos"
+                                        _op_rank = {
+                                            _et: _rg for _ca, _et, _rg
+                                            in _atajos_rank}
+                                        st.selectbox(
+                                            "Atajo de rango",
+                                            [_placeholder_rank]
+                                            + list(_op_rank),
+                                            index=0,
+                                            key="cp_rank_atajo_sel",
+                                            label_visibility="collapsed",
+                                            on_change=(
+                                                _aplicar_atajo_rank_select),
+                                            args=("cp_rank_atajo_sel",
+                                                  _placeholder_rank,
+                                                  _op_rank, _ctx_fecha))
+                                    # La bandera es la MISMA que usa el
+                                    # desplegable de arriba: el filtro
                                     # que lee el rango vive en app.py,
                                     # fuera de este fragment, y sin
                                     # escalar a rerun completo el riel
@@ -660,52 +713,16 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                     and len(_rango_act) == 2
                                     and all(_rango_act)):
                                 # SIN `help=` (sacado 2026-08-25, misma
-                                # vuelta que el selectbox de más abajo):
-                                # un tercer circulito "?" al lado del
-                                # "ⓘ" del popover de ayuda -que YA
-                                # explica que este rango es el que
-                                # suma la tabla- se leía como icono
-                                # duplicado. Confirmado con captura
-                                # real del usuario.
+                                # vuelta que el selectbox de arriba): un
+                                # tercer circulito "?" al lado del "ⓘ"
+                                # del popover de ayuda -que YA explica
+                                # que este rango es el que suma la
+                                # tabla- se leía como icono duplicado.
+                                # Confirmado con captura real del
+                                # usuario.
                                 st.caption(
                                     franja_fecha.fmt_rango_es(*_rango_act),
                                     width="content")
-                        if _atajos_rank:
-                            # 2026-08-25, a pedido ("esto ocupa mucho
-                            # espacio... una lista desplegable
-                            # minimalista"): los cuatro atajos eran
-                            # botones-píldora en fila (292px medidos);
-                            # pasan a UN `st.selectbox` aplanado a
-                            # texto — mismo patrón que ya resuelve
-                            # `cp_evo_ctrl`/`gran_float` más abajo en
-                            # este mismo archivo, a pedido idéntico
-                            # ("lista desplegable, pero minimalista")
-                            # el 2026-08-23. El CSS de aplanado vive en
-                            # `_css_proveedor.py`, junto a esa receta.
-                            _placeholder_rank = "Atajos"
-                            _op_rank = {_et: _rg
-                                       for _ca, _et, _rg in _atajos_rank}
-                            # SIN `help=`: `label_visibility="collapsed"`
-                            # esconde el TEXTO de la etiqueta, pero no
-                            # el icono "?" del tooltip -- con `help=`
-                            # puesto quedaban DOS circulitos casi
-                            # iguales en la fila (el "?" de este
-                            # selectbox y el "ⓘ" del popover de ayuda
-                            # del ranking, `compras_prov_rank_ayuda`,
-                            # ahora vecino en el mismo `with`), y a este
-                            # tamaño se leen como el mismo icono
-                            # duplicado. Ese popover ya explica el
-                            # rango; no hace falta un segundo tooltip
-                            # para el atajo.
-                            st.selectbox(
-                                "Atajo de rango",
-                                [_placeholder_rank] + list(_op_rank),
-                                index=0, key="cp_rank_atajo_sel",
-                                label_visibility="collapsed",
-                                on_change=_aplicar_atajo_rank_select,
-                                args=("cp_rank_atajo_sel",
-                                      _placeholder_rank, _op_rank,
-                                      _ctx_fecha))
                     # La fila de atajos le come FRANJA_ATAJOS al AgGrid de
                     # abajo — mismo motivo que FRANJA_CTRL_EVO en
                     # Evolución: nadie le hacía lugar todavía. YA NO es
