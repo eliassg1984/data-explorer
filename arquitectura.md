@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-210 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+213 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (75)
+**CSS y estilos** (76)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -95,6 +95,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#207** — Un módulo de estilos/ NUNCA lleva su propio <style>: se lleva puesto todo lo que viene después
 - **#208** — Una ScrollTimeline declarada con el CSS inicial queda inactiva para siempre
 - **#209** — Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no mover uno
+- **#213** — Un width: 100% que gana la cascada y no se ve suele estar clampeado por un max-width:…
 
 **Layout y alturas** (19)
 
@@ -201,7 +202,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#192** — El Panel A de Productos (Compras › Proveedor) pasó de st.dataframe a AgGrid por el mismo…
 - **#193** — flex en un columnDef de AgGrid no alcanza: st_aggrid le clava width: 200 a toda columna sin…
 
-**Streamlit** (62)
+**Streamlit** (65)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -265,6 +266,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#204** — st.iframe SÍ acepta una string de HTML — la migración desde components.html no necesita ni…
 - **#208** — Una ScrollTimeline declarada con el CSS inicial queda inactiva para siempre
 - **#210** — En una página APILADA el rango de fechas es del REPORTE, no de la vista: dos dueños de la…
+- **#211** — Un st.rerun(scope="app") al tope de un fragment le borra el estado a los widgets de ESE…
+- **#212** — Borrar la clave de session_state NO resetea un widget: el navegador sigue mandando el valor…
+- **#213** — Un width: 100% que gana la cascada y no se ve suele estar clampeado por un max-width:…
 
 **Datos, R2 y DuckDB** (25)
 
@@ -9330,13 +9334,127 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      apiladas, dos secciones del mismo dataset con períodos distintos y
      sin aviso se contradicen a la vista.
 
+211. **Un `st.rerun(scope="app")` al tope de un fragment le borra el
+     estado a los widgets de ESE fragment: aborta la corrida antes de
+     dibujarlos, y un widget que no se dibuja pierde su clave.**
+
+     Sale de la escala de tiempo del Ranking de Proveedores (2026-08-25).
+     El popover tiene un `st.segmented_control` de granularidad
+     (Días/Meses/Años) y un riel de rango. Se elegía "Meses", se movía un
+     tirador, y el control volvía solo a "Días" — con el DOM mostrando
+     "Meses" marcado mientras Python dibujaba el riel de `_dias`.
+
+     La cadena, que es lo que hay que ver y no el síntoma:
+
+       1. mover el tirador dispara el `on_change`, que escribe el rango
+          canónico y deja la bandera de escalada;
+       2. Streamlit re-corre el FRAGMENT (el widget vive adentro de uno);
+       3. el fragment aborta en su PRIMERA línea con
+          `st.rerun(scope="app")` — la escalada que necesita el filtro,
+          que vive fuera (regla #180);
+       4. en esa corrida ningún widget del popover llegó a dibujarse;
+       5. en el rerun completo el `segmented_control` nace de cero y toma
+          su `default`.
+
+     Es la regla vieja de "un widget que deja de renderizarse pierde su
+     estado" (la del `date_input` que se dibuja en los TRES modos de la
+     franja) en un caso que **no se ve venir**: acá nadie esconde el
+     widget — lo esconde un `rerun` que corta la corrida por la mitad. El
+     código del widget no tiene nada raro y es correcto en aislamiento.
+
+     **La solución es un espejo que NO sea clave de widget:**
+
+         k_eco = f"{clave}__gran_eco"
+         previo = st.session_state.get(k_eco, default)
+         escala = st.segmented_control(..., default=previo, key=...) or previo
+         st.session_state[k_eco] = escala
+
+     Una clave normal de `session_state` no la recolecta nadie. De yapa
+     arregla el des-seleccionar: `segmented_control` devuelve `None` al
+     clic en la opción activa, y antes eso caía al default en vez de
+     quedarse donde estaba.
+
+     **Cómo reconocerlo sin depurar:** el DOM y Python discrepan sobre qué
+     opción está elegida. Si el control dice A y el código dibuja B, el
+     estado se recolectó entre las dos corridas. Los `st.button` de al
+     lado conviven con esto sin síntoma porque no guardan nada — por eso
+     los cuatro atajos de fecha de esa misma fila nunca lo mostraron.
+
+212. **Borrar la clave de `session_state` NO resetea un widget: el
+     navegador sigue mandando el valor viejo. Para forzar el reset, tiene
+     que cambiar la KEY.**
+
+     Hermana de la #211 y del mismo día. El riel de rango tiene que
+     re-sembrarse cuando el rango cambia por AFUERA (la píldora de la
+     franja, un atajo). El camino obvio —y el que manda CLAUDE.md, "sin
+     key dinámica"— es key fija y `st.session_state.pop(k)` antes de
+     dibujar, para que el widget renazca con su `value=`.
+
+     **No funciona, y falla en silencio.** Borrar del lado del SERVIDOR no
+     le borra nada al navegador: en el mensaje siguiente vuelve a mandar
+     el valor de ese widget y Streamlit lo re-aplica encima del `value=`.
+     Medido: se apretaba "Este año", la píldora de la franja pasaba a
+     "1 ene – 21 ago" y el caption del propio popover a "233 días" —o sea,
+     la función YA estaba corriendo con el rango nuevo— y el riel seguía
+     marcando "jul 26 | ago 26".
+
+     La cura es que el widget sea OTRO widget, poniéndole el estado en la
+     key:
+
+         k_riel = f"{clave}_{escala}_{ini:%Y%m%d}_{fin:%Y%m%d}"
+
+     **Y no contradice la regla de CLAUDE.md, aunque lo parezca.** Lo que
+     esa regla prohíbe es que el widget sea el DUEÑO del dato y se
+     desincronice del display que lo acompaña. Acá el dueño es la clave
+     canónica del rango (`estado_rango`), siempre y sin excepción; el riel
+     es una VISTA que se recalcula de ella en cada render. La key dinámica
+     es lo que hace cumplir esa jerarquía, no lo que la rompe.
+
+     El criterio para distinguir los dos casos: **¿quién tiene la verdad
+     si el widget y el estado discrepan?** Si es el widget, key fija. Si
+     es el estado, key derivada del estado.
+
+213. **Un `width: 100%` que gana la cascada y no se ve suele estar
+     clampeado por un `max-width: fit-content` de Streamlit.**
+
+     El `st.segmented_control` del popover de la escala no llenaba su
+     panel: tres botones de 64px en un contenedor de 250. La regla propia
+     ganaba (verificado en el CSSOM, `!important` y todo) y el computado
+     igual decía `191px`. El culpable estaba en otra propiedad: la clase
+     de emotion del div interno trae `max-width: fit-content`, y un
+     `max-width` gana siempre sobre un `width` mayor. Hace falta el par:
+
+         width: 100% !important;
+         max-width: none !important;
+
+     Dos trampas más del mismo widget, medidas en el camino:
+
+       · el `ButtonGroup` nace **`display: block`**, así que el
+         `flex: 1 1 0` de los botones no hace nada hasta que se le pone
+         `display: flex` explícito;
+       · entre el `ButtonGroup` y los botones hay un **div sin `testid` ni
+         clase estable** que nace en `fit-content`. Ensanchar sólo el
+         ButtonGroup no alcanza: el `flex:1` de los botones se reparte el
+         ancho de ESE div. Se llega a él con `> div` — y tiene que ser
+         `> div` y no `> *`, porque el otro hijo es el `<label>` del
+         widget, que sigue en el DOM aunque esté
+         `label_visibility="collapsed"` y con `> *` se lleva la mitad del
+         ancho.
+
+     **Método, que vale más que el caso:** cuando una medida no obedece,
+     no repetir la propiedad con más `!important` — enumerar las reglas
+     que matchean el elemento y mirar las propiedades VECINAS
+     (`max-width`, `min-width`, `flex-basis`, el `display` del padre).
+     El auditor del proyecto ya lista los conflictos por propiedad; lo que
+     no lista son las propiedades que uno no pensó en mirar.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#211**.
+> próxima regla nueva es la **#214**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

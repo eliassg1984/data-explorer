@@ -196,6 +196,123 @@ def atajos_rango(hoy, bounds):
     return salida
 
 
+# ===========================================================================
+# ESCALA — el mismo rango, elegido como PERÍODOS en vez de como dos fechas
+# ===========================================================================
+# 2026-08-25, a pedido ("el selector de rango de una tabla dinámica de
+# Excel... en realidad me interesaba por los días"). La Escala de tiempo de
+# Excel es un riel de períodos con DOS tiradores y un selector de
+# granularidad arriba (AÑOS / TRIMESTRES / MESES / DÍAS). No es un
+# calendario: no dibuja la grilla del mes ni deja saltar a un día suelto, y
+# por eso es barato — es un slider sobre una lista.
+#
+# Estas tres funciones son la TRADUCCIÓN entre ese gesto y la clave canónica
+# del rango; ninguna escribe nada. La escritura sigue pasando por
+# `aplicar_atajo`, que es el dueño único (ver la "Regla de oro" del módulo).
+# Son puras y las fija `test_graficos.py`.
+#
+# Viven acá y no en `graficos/periodo.py` aunque el nombre tiente: `periodo`
+# es la ventana RELATIVA de una tarjeta ("últimos 12 meses", anclada al
+# último día con datos) y a propósito NO toca el estado global. Esto es lo
+# contrario — un rango absoluto que reemplaza al de la franja, igual que un
+# atajo. De ahí que quede al lado de `atajos_rango`.
+
+ESCALAS = ("Días", "Meses", "Años")
+
+
+def escala_periodos(escala, bounds):
+    """Los períodos de `escala` que cubren `bounds`, como fecha de ARRANQUE.
+
+    Devuelve `date`s y no etiquetas a propósito: el slider guarda lo que se
+    le pasa, y volver de "ago 26" a un mes real obligaría a parsear texto en
+    español. Cómo se lee se decide al DIBUJAR (`format_func`), que es el
+    único lugar donde importa.
+
+    Total sobre las tres escalas, pero en la app sólo la llaman "Meses" y
+    "Años" —36 y 3 elementos en un histórico típico—. "Días" serían ~970 y
+    un riel de 970 paradas en 250px da 4 días por píxel: ahí no se puede
+    elegir una fecha. Esa escala se dibuja con un `st.slider` de fechas, que
+    es continuo y afina con las flechas del teclado. Ver
+    `graficos/base.py::selector_escala`.
+    """
+    if not (bounds and all(bounds)):
+        return []
+    min_b, max_b = bounds
+    if min_b > max_b:
+        return []
+    if escala == "Años":
+        return [datetime.date(y, 1, 1)
+                for y in range(min_b.year, max_b.year + 1)]
+    if escala == "Meses":
+        salida, cur = [], min_b.replace(day=1)
+        while cur <= max_b:
+            salida.append(cur)
+            cur = _fin_de_mes(cur) + datetime.timedelta(days=1)
+        return salida
+    return [min_b + datetime.timedelta(days=i)
+            for i in range((max_b - min_b).days + 1)]
+
+
+def escala_a_rango(escala, desde, hasta, bounds=None):
+    """`(ini, fin)` real que cubre de `desde` a `hasta`, ambos INCLUSIVE.
+
+    Los dos argumentos son fechas de arranque de período (lo que devuelve
+    `escala_periodos`), así que el extremo derecho hay que EXPANDIRLO: en
+    escala de Meses, "hasta agosto" termina el 31 de agosto y no el 1.
+    Olvidarse de eso es el bug clásico de un filtro por mes — se pierden 30
+    días de datos y el total sale bajo sin que nada avise.
+
+    El recorte a `bounds` no es cosmético y espeja el de `atajos_rango`: en
+    escala de Años, "2026" pide hasta el 31-dic, pero los datos terminan el
+    25-ago. Sin recortar, el rango declara cuatro meses que no existen y el
+    eje de cualquier evolución dibuja el vacío.
+    """
+    if desde > hasta:
+        desde, hasta = hasta, desde
+    if escala == "Años":
+        ini = datetime.date(desde.year, 1, 1)
+        fin = datetime.date(hasta.year, 12, 31)
+    elif escala == "Meses":
+        ini = desde.replace(day=1)
+        fin = _fin_de_mes(hasta)
+    else:
+        ini, fin = desde, hasta
+    if bounds and all(bounds):
+        min_b, max_b = bounds
+        ini = min(max(ini, min_b), max_b)
+        fin = min(max(fin, min_b), max_b)
+    return (ini, fin)
+
+
+def escala_desde_rango(escala, rango, bounds):
+    """La vuelta de `escala_a_rango`: el par de períodos que muestra `rango`.
+
+    Sirve para SEMBRAR el riel en cada render desde la clave canónica. Sin
+    esto, cambiar la fecha por el calendario de la franja dejaría el riel
+    quieto en su último valor — dos controles del mismo dato diciendo cosas
+    distintas, que es exactamente la desincronización que este módulo existe
+    para evitar (ver la memoria `streamlit-widget-value-cacheado`).
+
+    Redondea hacia AFUERA, igual que Excel: en escala de Meses, del 5 al 23
+    de agosto se ve como "agosto" entero. Eso NO reescribe el rango —el
+    riel sólo escribe cuando el usuario mueve un tirador—, así que cambiar
+    de granularidad y volver recupera el rango exacto.
+    """
+    periodos = escala_periodos(escala, bounds)
+    if not periodos:
+        return None
+    if not (rango and len(rango) == 2 and all(rango)):
+        return (periodos[0], periodos[-1])
+    ini, fin = min(rango), max(rango)
+    # El período que CONTIENE cada extremo = el último arranque que no lo
+    # pasa. Con `bounds` recortando la lista, un extremo que cae fuera se
+    # apoya en el borde en vez de quedar sin período.
+    izq = [p for p in periodos if p <= ini]
+    der = [p for p in periodos if p <= fin]
+    return (izq[-1] if izq else periodos[0],
+            der[-1] if der else periodos[0])
+
+
 def aplicar_atajo(clave, rango, reporte=None, usa_carga_rango=False):
     """Callback `on_click` que fija el rango desde un atajo.
 

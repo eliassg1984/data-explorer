@@ -226,6 +226,18 @@ alterna. "Varios" nombra la unidad elegida; el verbo (suma) va en el
 caption de la lista, no en la pastilla. `_fusionar` une N cortes en un estado con la misma forma que uno,
 así el filtro `isin(dias)` no distingue el caso.
 
+Y desde el 2026-08-25 hay una tercera forma de tocar ese MISMO rango: la
+**escala de tiempo** estilo tabla dinámica de Excel — granularidad
+(Días/Meses/Años) + un riel de dos tiradores. Vive en el popover del ícono
+de calendario de la fila de atajos del Ranking de Proveedores. No es un
+filtro paralelo: `estado_rango.escala_periodos/escala_a_rango/
+escala_desde_rango` sólo TRADUCEN el gesto, y la escritura sigue pasando
+por `aplicar_atajo`. El widget reusable es
+`graficos.base.selector_escala()`, así que sumarlo a otra vista es una
+línea. Sus dos trampas —el `rerun` que le borra el estado a los widgets del
+fragment, y que borrar la clave no resetea un widget— están en
+`arquitectura.md` reglas #211 a #213.
+
 `aplicar_corte` escribe el corte **y** el rango — el rango lo leen el
 `date_input`, el label del pill y el loader de R2, que no saben qué es un
 corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.

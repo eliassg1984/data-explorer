@@ -20,7 +20,8 @@ import franja_fecha
 from estado_rango import atajos_rango, aplicar_atajo
 from tema import ACENTO, GRIS_BORDE, TEXTO_PRINCIPAL
 from graficos.base import (
-    PALETA_CALLAI, _card, _compras_layout, _compras_truncar, paso_etiquetas,
+    PALETA_CALLAI, _card, _compras_layout, _compras_truncar,
+    paso_etiquetas, selector_escala,
 )
 from graficos.compras._comun import COLUMNAS_DRILL, GAP_DRILL
 from graficos.compras._css_proveedor import CSS as CSS_PROVEEDOR
@@ -528,6 +529,41 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             if a[0] in _claves_rank]
                         if _atajos_rank:
                             with st.container(key="compras_prov_rank_atajos"):
+                                # 2026-08-25, a pedido: la escala de tiempo
+                                # de una tabla dinámica de Excel, en versión
+                                # minimalista. Va en un POPOVER y no en la
+                                # fila porque el riel pide 250px y entre el
+                                # título y los atajos hay ~149px; el trigger
+                                # es un ícono suelto, que sí entra.
+                                #
+                                # Va PRIMERO en el `with` a propósito: la
+                                # fila es `flex-direction: row` anclada a la
+                                # derecha (_css_proveedor.py), así que el
+                                # ícono queda a la IZQUIERDA de los cuatro
+                                # atajos — lo fino antes de lo grueso, como
+                                # el popover de la franja (atajos arriba,
+                                # calendario abajo).
+                                #
+                                # No hace falta CSS para el trigger: la
+                                # regla `.st-key-compras_prov_rank_atajos
+                                # button` es un selector DESCENDIENTE y lo
+                                # captura solo (el aviso de CLAUDE.md sobre
+                                # widgets nuevos dentro de una tarjeta, esta
+                                # vez a favor). El PANEL no la hereda porque
+                                # `stPopoverBody` es un portal.
+                                with st.popover(":material/date_range:",
+                                                key="cp_rank_escala",
+                                                use_container_width=False):
+                                    with st.container(key="cp_rank_escala_panel"):
+                                        # La bandera es la MISMA que usan
+                                        # los atajos de al lado: el filtro
+                                        # que lee el rango vive en app.py,
+                                        # fuera de este fragment, y sin
+                                        # escalar a rerun completo el riel
+                                        # se movería sin que cambie nada.
+                                        selector_escala(
+                                            "cp_rank_esc", _ctx_fecha,
+                                            bandera="_cp_rank_atajo_pendiente")
                                 for _ca, _et, _rg in _atajos_rank:
                                     st.button(
                                         _et, key=f"atajo_rank_{_ca}",

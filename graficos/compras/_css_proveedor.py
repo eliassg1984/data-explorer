@@ -599,6 +599,98 @@ CSS = """        <style>
             background: #f0edfe !important;
             color: #4d3fb3 !important;
         }
+        /* El trigger de la escala de tiempo NO necesita reglas propias:
+           `.st-key-compras_prov_rank_atajos button` de arriba es un
+           selector descendiente y ya lo dejo como los otros atajos. Solo
+           se le saca el padding lateral, que sobra en un boton de puro
+           icono, y se centra el glifo. */
+        .st-key-compras_prov_rank_atajos
+            [data-testid="stPopover"]:has(.st-key-cp_rank_escala) button,
+        .st-key-cp_rank_escala button {
+            padding: 0 !important;
+            width: 24px !important;
+            justify-content: center !important;
+            color: #6c5ce7 !important;
+        }
+        /* El CHEVRON de Streamlit. En un trigger de puro icono son dos
+           glifos apretados en 24px (medido: scrollWidth 30 sobre
+           clientWidth 22, o sea desbordaba), y el `date_range` ya dice
+           "esto abre algo".
+           Es el UNICO `stIconMaterial` del boton porque el icono de la
+           izquierda entra como LABEL en shortcode (`st.popover(
+           ":material/date_range:")`, el patron de `pestillos.py`), que
+           Streamlit renderiza por markdown. OJO: si alguien lo cambia al
+           parametro `icon=` —como hace la pildora de la franja— ese icono
+           TAMBIEN pasa a ser `stIconMaterial` y esta regla se lo lleva
+           puesto. Verificado en el DOM 2026-08-25. */
+        /* Se esconde el WRAPPER, no el glifo: apagar solo el span dejaba
+           su div padre ocupando 16px y el boton seguia desbordando
+           (scrollWidth 30 sobre clientWidth 22, medido). De ahi el
+           `:has()`. */
+        .st-key-cp_rank_escala button > div > div:has(
+            [data-testid="stIconMaterial"]) {
+            display: none !important;
+        }
+
+        /* El PANEL. `stPopoverBody` es un PORTAL: se dibuja al final del
+           body, fuera de la tarjeta —por eso escapa su `overflow: hidden
+           auto`— y por eso hay que alcanzarlo con `:has()` en vez de
+           colgarlo del contenedor. Mismo patron que el panel de fecha de
+           la franja (estilos/_50_fecha.py) y el del asistente. */
+        [data-testid="stPopoverBody"]:has(.st-key-cp_rank_escala_panel) {
+            /* 290px es el ancho MINIMO util del riel: con menos, las
+               etiquetas de las paradas de "Meses" (ene 24 ... ago 26) se
+               encabalgan y el slider deja de leerse. */
+            width: 290px !important;
+            min-width: 290px !important;
+            padding: 12px 14px !important;
+        }
+        /* La granularidad ocupa el ancho y reparte en tres. Sin esto el
+           segmented_control mide su contenido y queda un bloque chico
+           pegado a la izquierda, desalineado del riel de abajo (medido:
+           191px contra los 250px del slider).
+           Van DOS reglas y no una: el `stVerticalBlock` del panel nace con
+           `align-items: start`, asi que su hijo queda `flex: 0 1 auto` y
+           encogido — el `width:100%` del ButtonGroup se resolvia contra un
+           padre que ya media 191px. Se ensancha primero el contenedor del
+           widget (su ANCLA PROPIA, no el del panel: tocar el panel movería
+           tambien al slider y al caption). */
+        .st-key-cp_rank_esc_gran {
+            width: 100% !important;
+        }
+        /* `display: flex` explicito: el ButtonGroup nace BLOCK (medido), y
+           sobre un padre block el `flex: 1 1 0` de los botones no hace
+           nada — quedaban tres botones de 64px pegados a la izquierda de
+           un contenedor de 250.
+           El `> div` tampoco es paranoia: entre el ButtonGroup y los
+           botones hay un div SIN testid ni clase estable que nace en
+           `fit-content` (191px). Ensanchar solo el ButtonGroup no
+           alcanzaba porque el `flex:1` de los botones se repartia ese 191
+           y no el 250. Se descubrio midiendo `button.parentElement`, que
+           no aparece en ningun selector del proyecto.
+           Y es `> div` y NO `> *` porque el otro hijo del ButtonGroup es
+           el `<label>` del widget, que sigue en el DOM aunque este
+           `label_visibility="collapsed"`: con `> *` se llevaba la mitad
+           del ancho (125 y 125) y los botones quedaban en 42px. */
+        .st-key-cp_rank_esc_gran [data-testid="stButtonGroup"],
+        .st-key-cp_rank_esc_gran [data-testid="stButtonGroup"] > div {
+            display: flex !important;
+            width: 100% !important;
+            /* El `width` solo no alcanza: la clase de emotion del div
+               interno trae `max-width: fit-content`, que lo volvia a
+               clampear en 191px aunque el 100% ganara la cascada. Un
+               ancho que "gana" y no se ve es casi siempre esto. */
+            max-width: none !important;
+        }
+        .st-key-cp_rank_esc_gran [data-testid="stButtonGroup"] button {
+            flex: 1 1 0 !important;
+        }
+        /* El caption del total de dias: al ras del riel, no como parrafo. */
+        .st-key-cp_rank_escala_panel [data-testid="stCaptionContainer"] {
+            margin-top: -4px !important;
+            font-size: 11px !important;
+        }
+
         /* Flechas: mas chicas en X, glifo mas grande. */
         .st-key-cp_win_prev button,
         .st-key-cp_win_next button {

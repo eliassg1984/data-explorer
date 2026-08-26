@@ -26,6 +26,9 @@ from tema import (
     BLANCO, ESCALA_CONTINUA, GRIS_BORDE, SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
     PALETA_SERIES,
 )
+from cortes import MESES_ABR_ES
+from estado_rango import (ESCALAS, aplicar_atajo, escala_a_rango,
+                          escala_desde_rango, escala_periodos)
 from graficos import alturas
 
 
@@ -215,6 +218,163 @@ def esqueleto_pila(nombre):
         '<div class="pila-hueco-caja"></div>'
         '</div>'
     )
+
+
+def _fmt_periodo(escala, d):
+    """Etiqueta de una parada del riel. Corta: entran ~12 en 250px."""
+    if escala == "Años":
+        return str(d.year)
+    return f"{MESES_ABR_ES[d.month - 1]} {d.year % 100:02d}"
+
+
+def _aplicar_escala(k_riel, escala, ctx, bandera):
+    """`on_change` del riel: traduce el par de períodos y lo aplica.
+
+    Por qué CALLBACK y no cuerpo: `ctx["k_rango"]` es la key del
+    `st.date_input` que `app.py` ya instanció en este mismo run, y escribir
+    la clave de un widget ya instanciado es `StreamlitAPIException`. El
+    callback corre ANTES del rerun, que es el único momento en que la
+    escritura es legal. Mismo motivo (y mismo bug) que
+    `graficos/compras/proveedor.py::_aplicar_atajo_rank`; es literalmente lo
+    que rompió la vista Semanal en la fusión del 2026-08-24.
+
+    `bandera` la consume el fragment que dibuja el riel para escalar a
+    `st.rerun(scope="app")`: el filtro que lee el rango vive FUERA del
+    fragment, así que sin escalada el estado cambia y la pantalla no.
+    """
+    par = st.session_state.get(k_riel)
+    if not (par and len(par) == 2):
+        return
+    aplicar_atajo(ctx["k_rango"],
+                  escala_a_rango(escala, par[0], par[1],
+                                 (ctx["fecha_min"], ctx["fecha_max"])),
+                  ctx["reporte"], ctx["usa_carga_rango"])
+    if bandera:
+        st.session_state[bandera] = True
+
+
+def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
+                    default="Días"):
+    """Escala de tiempo estilo tabla dinámica: granularidad + riel de rango.
+
+    Escribe la MISMA clave canónica que la píldora de fecha de la franja
+    (`ctx["k_rango"]`, vía `aplicar_atajo`), así que no es un filtro paralelo
+    — es otra forma de tocar el de siempre. `ctx` es el dict de
+    `franja_fecha.contexto()`.
+
+    DOS WIDGETS SEGÚN LA ESCALA, y no es capricho:
+      · "Días" → `st.slider` de fechas. Continuo, y las flechas del teclado
+        mueven un día exacto. Un riel discreto de ~970 paradas en 250px da
+        4 días por píxel: se ve lindo y no se puede elegir una fecha.
+      · "Meses"/"Años" → `st.select_slider` sobre `escala_periodos()`. Son
+        pocas paradas y cada una tiene que caer donde empieza el período.
+
+    LA CLAVE ES POR ESCALA (`{clave}_dias`, `_meses`, `_anos`). Compartir
+    una sola reventaría: el valor guardado en Días es un `date` cualquiera y
+    en Meses tiene que ser un arranque de mes de `options`, y un
+    `select_slider` cuyo estado no está en `options` tira excepción. De yapa,
+    volver a una escala recupera lo que tenía. Los sufijos salen de
+    `_slug_url` (ASCII): "Días"/"Años" con tilde en una key emiten una clase
+    CSS distinta de la que uno escribe.
+
+    SIEMBRA: el par se recalcula del rango canónico en cada render, y el
+    rango va DENTRO de la key del riel. Así, cuando cambia por afuera (la
+    píldora de la franja, un atajo de al lado), el widget es otro y nace
+    con `value=` en su lugar. Ver el comentario largo más abajo: borrar la
+    clave de `session_state` —el camino obvio— no alcanza.
+    """
+    if not ctx:
+        return None
+    bounds = (ctx.get("fecha_min"), ctx.get("fecha_max"))
+    if not all(bounds) or bounds[0] >= bounds[1]:
+        return None
+
+    # LA GRANULARIDAD SE ESPEJA EN UNA CLAVE QUE NO ES DE WIDGET, y esto
+    # NO es paranoia — sin el espejo el control vuelve solo a "Días" cada
+    # vez que se mueve un tirador (medido 2026-08-25: el DOM mostraba
+    # "Meses" marcado y Python dibujaba el riel de `_dias`).
+    #
+    # La cadena: mover el tirador dispara el callback → Streamlit re-corre
+    # el FRAGMENT → el fragment aborta en su primera línea con
+    # `st.rerun(scope="app")` (la escalada que necesita el filtro, que vive
+    # fuera) → en ese run ningún widget del popover llegó a dibujarse → y
+    # un widget que no se dibuja pierde su estado. En el rerun completo el
+    # `segmented_control` nace de cero y toma `default`.
+    #
+    # Es la regla de CLAUDE.md ("un widget que deja de renderizarse pierde
+    # su estado") en un caso que no se ve venir: acá no se esconde nada, lo
+    # esconde un `rerun` que corta el run por la mitad. Los cuatro atajos
+    # de al lado convivían con esto sin síntoma porque un `st.button` no
+    # guarda nada.
+    #
+    # El espejo es una clave normal de session_state: nadie la recolecta.
+    # De yapa arregla el des-seleccionar (el `segmented_control` devuelve
+    # `None` y antes eso caía al default en vez de quedarse donde estaba).
+    k_eco = f"{clave}__gran_eco"
+    previo = st.session_state.get(k_eco, default)
+    if previo not in escalas:
+        previo = default
+    escala = st.segmented_control(
+        "Escala", list(escalas), default=previo,
+        key=f"{clave}_gran", label_visibility="collapsed") or previo
+    st.session_state[k_eco] = escala
+
+    rango = st.session_state.get(ctx["k_rango"])
+    if escala == "Días":
+        par = ((min(rango), max(rango))
+               if rango and len(rango) == 2 and all(rango) else bounds)
+        par = (min(max(par[0], bounds[0]), bounds[1]),
+               min(max(par[1], bounds[0]), bounds[1]))
+    else:
+        par = escala_desde_rango(escala, rango, bounds)
+        if not par:
+            return escala
+
+    # LA KEY CODIFICA EL RANGO, y esto merece explicación porque a primera
+    # vista contradice a CLAUDE.md ("sin key dinámica").
+    #
+    # El primer intento fue el que manda la regla: key fija, y borrar la
+    # clave de `session_state` cuando el rango cambiaba por afuera para que
+    # el widget renaciera con `value=`. NO FUNCIONA, y falla en silencio:
+    # borrar la clave del lado del servidor no le borra nada al NAVEGADOR,
+    # que sigue mandando el valor viejo de ese widget en el mensaje
+    # siguiente y Streamlit lo re-aplica. Medido 2026-08-25: se apretaba
+    # "Este año", la píldora de la franja pasaba a "1 ene – 21 ago" y el
+    # caption a "233 días" —o sea, ESTA función ya corría con el rango
+    # nuevo— y el riel seguía marcando "jul 26 | ago 26".
+    #
+    # Con el rango en la key, un cambio externo produce un widget DISTINTO
+    # y el navegador no tiene valor viejo que mandar. Y el espíritu de la
+    # regla se respeta igual: lo que prohíbe es que el widget sea el DUEÑO
+    # del dato y se desincronice del display. Acá el dueño es la clave
+    # canónica del rango, siempre; el riel es una VISTA que se recalcula de
+    # ella en cada render. Por eso también desapareció la firma: la key ES
+    # la firma.
+    k_riel = (f"{clave}_{_slug_url(escala)}"
+              f"_{par[0]:%Y%m%d}_{par[1]:%Y%m%d}")
+
+    if escala == "Días":
+        st.slider("Rango", min_value=bounds[0], max_value=bounds[1],
+                  value=par, key=k_riel, format="DD/MM/YY",
+                  label_visibility="collapsed",
+                  on_change=_aplicar_escala,
+                  args=(k_riel, escala, ctx, bandera))
+    else:
+        st.select_slider("Rango", options=escala_periodos(escala, bounds),
+                         value=par, key=k_riel,
+                         format_func=lambda d: _fmt_periodo(escala, d),
+                         label_visibility="collapsed",
+                         on_change=_aplicar_escala,
+                         args=(k_riel, escala, ctx, bandera))
+
+    # El slider ya dibuja sus dos extremos; repetir las fechas sería ruido.
+    # Lo que NO dice es cuánto abarca, que es el dato con el que se decide
+    # si el rango alcanza para lo que uno quiere mirar.
+    if rango and len(rango) == 2 and all(rango):
+        _n = abs((max(rango) - min(rango)).days) + 1
+        st.caption(f"{_n} día{'s' if _n != 1 else ''} seleccionados"
+                   if _n != 1 else "1 día seleccionado")
+    return escala
 
 
 def _render_rail(categorias, state_key, btn_prefix="graf_btn_",

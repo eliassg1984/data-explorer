@@ -1279,6 +1279,127 @@ def _pruebas_periodo_por_vista():
     return fallos
 
 
+def _pruebas_escala_tiempo():
+    """estado_rango.py — la escala de tiempo estilo tabla dinámica.
+
+    Tres asserts valen más que los otros y son la razón de esta tanda:
+
+    1. EL EXTREMO DERECHO SE EXPANDE. Las paradas del riel son fechas de
+       ARRANQUE de período, así que "hasta agosto" tiene que terminar el 31
+       y no el 1. Si se cuela el 1, el filtro pierde 30 días de datos y el
+       total sale bajo sin que nada avise — el bug clásico de un filtro por
+       mes, y el que este contrato existe para atrapar.
+
+    2. EL RECORTE A BOUNDS. En escala de Años, "2026" pide hasta el 31-dic,
+       pero los datos terminan en agosto. Sin recortar, el rango declara
+       cuatro meses que no existen y el eje de cualquier evolución dibuja el
+       vacío. Espeja lo que ya hace `atajos_rango`.
+
+    3. LA VUELTA ES ESTABLE. `escala_desde_rango` siembra el riel desde el
+       rango canónico en CADA render; si no fuera idempotente, un rango que
+       ya nació de la escala se ensancharía solo en cada rerun.
+    """
+    import datetime
+
+    from estado_rango import (ESCALAS, escala_a_rango, escala_desde_rango,
+                              escala_periodos)
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    escala · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA escala · {nombre}: got={got!r} exp={exp!r}")
+
+    # Bounds deliberadamente SUCIOS: no arrancan un día 1 ni terminan a fin
+    # de mes/año. Con bounds redondos los dos bugs de arriba pasan
+    # desapercibidos.
+    b = (datetime.date(2024, 3, 17), datetime.date(2026, 8, 25))
+    meses = escala_periodos("Meses", b)
+    anios = escala_periodos("Años", b)
+
+    check("las escalas son tres", ESCALAS, ("Días", "Meses", "Años"))
+
+    # ── Las paradas ────────────────────────────────────────────────────
+    check("meses: una parada por mes, mar-24 a ago-26", len(meses), 30)
+    check("meses: la parada es el día 1", meses[0], datetime.date(2024, 3, 1))
+    check("meses: cruza el fin de año sin saltearse enero",
+          meses[9], datetime.date(2024, 12, 1))
+    check("meses: la última es el mes del borde",
+          meses[-1], datetime.date(2026, 8, 1))
+    check("años: una parada por año presente",
+          anios, [datetime.date(y, 1, 1) for y in (2024, 2025, 2026)])
+    check("días: una parada por día, ambos bordes incluidos",
+          len(escala_periodos("Días", b)), 892)
+    check("bounds sin fecha no dan paradas",
+          escala_periodos("Meses", (None, None)), [])
+    check("bounds invertidos no dan paradas",
+          escala_periodos("Meses", (b[1], b[0])), [])
+
+    # ── (1) el extremo derecho se EXPANDE ──────────────────────────────
+    check("un mes suelto va del 1 a fin de mes",
+          escala_a_rango("Meses", datetime.date(2025, 4, 1),
+                         datetime.date(2025, 4, 1)),
+          (datetime.date(2025, 4, 1), datetime.date(2025, 4, 30)))
+    check("febrero bisiesto termina el 29",
+          escala_a_rango("Meses", datetime.date(2024, 2, 1),
+                         datetime.date(2024, 2, 1))[1],
+          datetime.date(2024, 2, 29))
+    check("diciembre no se pasa al año siguiente",
+          escala_a_rango("Meses", datetime.date(2025, 12, 1),
+                         datetime.date(2025, 12, 1))[1],
+          datetime.date(2025, 12, 31))
+    check("un año suelto va del 1-ene al 31-dic",
+          escala_a_rango("Años", datetime.date(2025, 1, 1),
+                         datetime.date(2025, 1, 1)),
+          (datetime.date(2025, 1, 1), datetime.date(2025, 12, 31)))
+    check("en días el extremo es el día mismo",
+          escala_a_rango("Días", datetime.date(2026, 8, 5),
+                         datetime.date(2026, 8, 23)),
+          (datetime.date(2026, 8, 5), datetime.date(2026, 8, 23)))
+    check("tiradores cruzados se enderezan",
+          escala_a_rango("Días", datetime.date(2026, 8, 23),
+                         datetime.date(2026, 8, 5)),
+          (datetime.date(2026, 8, 5), datetime.date(2026, 8, 23)))
+
+    # ── (2) el recorte a bounds ────────────────────────────────────────
+    check("el año del borde no promete meses sin datos",
+          escala_a_rango("Años", anios[-1], anios[-1], b),
+          (datetime.date(2026, 1, 1), datetime.date(2026, 8, 25)))
+    check("el primer año no arranca antes del primer dato",
+          escala_a_rango("Años", anios[0], anios[0], b),
+          (datetime.date(2024, 3, 17), datetime.date(2024, 12, 31)))
+    check("de punta a punta da exactamente los bounds",
+          escala_a_rango("Meses", meses[0], meses[-1], b), b)
+
+    # ── (3) la vuelta ──────────────────────────────────────────────────
+    r = (datetime.date(2026, 8, 5), datetime.date(2026, 8, 23))
+    check("un rango dentro de un mes cae en ese mes",
+          escala_desde_rango("Meses", r, b),
+          (datetime.date(2026, 8, 1), datetime.date(2026, 8, 1)))
+    check("un rango a caballo toma los dos meses",
+          escala_desde_rango("Meses",
+                             (datetime.date(2025, 6, 20),
+                              datetime.date(2025, 7, 3)), b),
+          (datetime.date(2025, 6, 1), datetime.date(2025, 7, 1)))
+    check("sin rango sembrado, el riel abre entero",
+          escala_desde_rango("Meses", None, b), (meses[0], meses[-1]))
+    check("un rango anterior a los datos se apoya en el borde",
+          escala_desde_rango("Meses", (datetime.date(2020, 1, 1),
+                                       datetime.date(2020, 2, 1)), b),
+          (meses[0], meses[0]))
+
+    ida = escala_a_rango("Meses", *escala_desde_rango("Meses", r, b), b)
+    vuelta = escala_a_rango("Meses", *escala_desde_rango("Meses", ida, b), b)
+    check("re-sembrar un rango que ya salió de la escala no lo mueve",
+          vuelta, ida)
+
+    return fallos
+
+
 def _pruebas_anomalias():
     """graficos/ajuste/_anomalias.py — "¿es raro PARA ESTE producto?".
 
@@ -1856,6 +1977,9 @@ def main():
     fallos += _pruebas_periodo_por_vista()
 
     # ── Deteccion de anomalias en Ajuste ────────────────────────────────
+    # ── Escala de tiempo estilo tabla dinamica (estado_rango.py) ────────
+    fallos += _pruebas_escala_tiempo()
+
     fallos += _pruebas_anomalias()
 
     # ── Contratos entre app.py y los dashboards (firma del dispatcher) ──
