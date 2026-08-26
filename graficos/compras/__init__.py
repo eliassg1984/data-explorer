@@ -359,7 +359,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     def _dib_producto():
             with st.container(key="compras_prod_drill_wrap"):
                 _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant,
-                                        col_punit, col_um, col_fecha, col_prov)
+                                        col_punit, col_um, col_fecha, col_prov,
+                                        d_full=d_full)
 
     def _dib_vs_ano_pasado():
             # Serie mensual + puente precio/cantidad + tabla de detalle. Es el
