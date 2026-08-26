@@ -258,6 +258,18 @@ CSS = f"""
         overflow: hidden !important;
         text-overflow: ellipsis !important;
     }}
+    /* ── SEPARADOR: scroll-to vs destino aparte ───────────────────────
+       2026-08-26, a pedido ("el reporte de documentos sunat no aparece
+       al hacer scroll"): no era un bug, era que el rail no avisaba que
+       Documentos SUNAT es un DESTINO APARTE (`base.py::_render_rail` lo
+       dibuja cuando la membresía a `secciones` cambia de un ítem al
+       siguiente). Mismo recurso que el hairline de `.rail-cab` unas
+       reglas arriba — un `border-top` en un div vacío, no un `<hr>` que
+       después haya que espaciar. */
+    .st-key-nav_rail_lateral .nav-rail-lat-sep {{
+        border-top: 1px solid var(--border) !important;
+        margin: 6px 14px !important;
+    }}
 }}
 
 /* ── LOS ENVOLTORIOS NO APORTAN GAP ───────────────────────────────────

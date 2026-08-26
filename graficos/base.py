@@ -516,9 +516,32 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                     unsafe_allow_html=True,
                 )
 
+            # 2026-08-26, a pedido ("el reporte de documentos sunat no
+            # aparece al hacer scroll"): no era un bug de clic —
+            # verificado en el navegador, clickear "Documentos" SÍ
+            # cambia de pantalla, correcto— sino de EXPECTATIVA. El
+            # rail lista sus 7 ítems seguidos, sin distinguir cuáles son
+            # scroll-to (los 6 de `_PILA`) de cuál es un DESTINO APARTE
+            # (Documentos SUNAT, ver el comentario de `_PILA` más
+            # arriba en graficos/compras/__init__.py): entre Volatilidad
+            # y Semanal, con la MISMA pinta, nada avisaba que ahí el
+            # scroll no lleva a ningún lado.
+            #
+            # La línea se dibuja en las dos transiciones (entra Y sale
+            # del grupo), no solo antes de Documentos: `secciones` es
+            # de UN dashboard, y un rail futuro con dos o más destinos
+            # aparte intercalados necesita marcar cada frontera, no una
+            # posición fija.
+            _ids_pila = {_oid for _, _oid in secciones}
+            _prev_en_pila = None
             for _cat_nombre, items in categorias:
                 for item in items:
                     oid, label = item[0], item[1]
+                    _en_pila = oid in _ids_pila
+                    if _prev_en_pila is not None and _en_pila != _prev_en_pila:
+                        st.markdown('<div class="nav-rail-lat-sep"></div>',
+                                   unsafe_allow_html=True)
+                    _prev_en_pila = _en_pila
                     # El icono SÍ se dibuja acá (a diferencia de la franja
                     # horizontal, que lo ignora por falta de alto): esta copia
                     # es vertical y tiene sitio. Y hace falta — el rail que
