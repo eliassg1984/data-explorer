@@ -1333,7 +1333,15 @@ CSS = """        <style>
            intento): ícono de ayuda de Ranking de proveedores, discreto
            hasta que se busca — mismo espíritu que .st-key-rail_pestillo
            button (estilos/_25_rails_pestillo.py). Acotado a SU propia key
-           (CLAUDE.md: estilar el widget puntual, no el contenedor). */
+           (CLAUDE.md: estilar el widget puntual, no el contenedor).
+
+           2026-08-25: el widget se MUDÓ de su propia columna
+           (`st.columns([16, 1])`, pegada al borde derecho de la tarjeta
+           y chocando ahí con la fila de atajos) a ser el primer hijo de
+           `compras_prov_rank_atajos` — ver el comentario largo en
+           proveedor.py. Esta regla sigue intacta porque acota por la
+           KEY del widget, no por su contenedor: no le importa en qué
+           `with` vive. */
         .st-key-compras_prov_rank_ayuda button {
             min-width: 0 !important;
             min-height: 0 !important;
@@ -1353,12 +1361,6 @@ CSS = """        <style>
         }
         .st-key-compras_prov_rank_ayuda [data-testid="stIconMaterial"] {
             font-size: 16px !important;
-        }
-        /* Fila título + ícono: st.columns por defecto alinea arriba, y el
-           botón (más alto que el texto de 16px del título) queda pegado
-           al techo de su columna en vez de centrado contra el texto. */
-        .st-key-compras_prov_card_ranking [data-testid="stHorizontalBlock"] {
-            align-items: center !important;
         }
         </style>
 """

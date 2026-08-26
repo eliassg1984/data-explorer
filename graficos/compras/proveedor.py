@@ -533,28 +533,41 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     # que abriera con CLIC, como un popover. `st.popover`
                     # con el label como shortcode de ícono (sin texto) es
                     # el mismo patrón que ya usa `pestillos.py::pestillo`
-                    # para un botón de solo-ícono; acá va en su propia
-                    # columna angosta para quedar pegado al título.
-                    # columnas-internas: título + ícono de ayuda dentro de
-                    # ESTA tarjeta, no el eje de la página (ese lo marca
-                    # COLUMNAS_DRILL más abajo).
-                    _c_rank_tit, _c_rank_ayuda = st.columns([16, 1], gap="small")
-                    with _c_rank_tit:
-                        st.markdown('<div class="cp-rank-tit">Ranking de '
-                                    'proveedores</div>', unsafe_allow_html=True)
-                    with _c_rank_ayuda:
-                        with st.popover(":material/info:",
-                                        key="compras_prov_rank_ayuda",
-                                        use_container_width=False):
-                            # 2026-08-23, 3ra vuelta: el texto original
-                            # decía "el rango se ajusta desde otra pestaña"
-                            # — cierto hasta hace un momento, falso ahora
-                            # que los atajos de abajo viven acá mismo.
-                            st.caption("Suma TODO el rango elegido (atajos "
-                                       "de abajo, o el calendario completo "
-                                       "desde otra pestaña). Día/Semana/"
-                                       "Mes/Año, en Evolución, solo agrupa "
-                                       "esa curva — no cambia este total.")
+                    # para un botón de solo-ícono.
+                    #
+                    # 2026-08-25, 4ta vuelta: el ícono se MUDA a la fila de
+                    # atajos (más abajo, `compras_prov_rank_atajos`) — dos
+                    # razones, verificadas en el DOM, no a ojo:
+                    #
+                    #   1. Colisión real. Vivía en su propia columna angosta
+                    #      (`st.columns([16, 1])`), pero ese "1" es una
+                    #      FRACCIÓN del ancho de la fila entera y por eso
+                    #      queda pegado al borde DERECHO de la tarjeta —no
+                    #      al título, como decía este comentario antes—. La
+                    #      fila de atajos (`position: absolute; right:
+                    #      18px`) ancla al MISMO borde. Con la escala de
+                    #      tiempo agregada ese mismo día, su desplegable
+                    #      terminaba justo debajo: medido, el chevron del
+                    #      selectbox (864-877px) se comía 8px del chevron de
+                    #      este popover (869-885px) — "veo doble pestillo
+                    #      hacia abajo" fue el reporte que lo destapó.
+                    #   2. Un solo flex row en vez de dos anclas
+                    #      independientes adivinando no pisarse. Correr la
+                    #      fila de atajos con un `right` a mano (a ojo,
+                    #      "+30px") hubiera sido FRÁGIL: el ancho de esa
+                    #      columna es PROPORCIONAL al ancho de la tarjeta,
+                    #      así que en una tarjeta más ancha el número
+                    #      cambia y el choque vuelve. En el MISMO
+                    #      contenedor flex, el `gap: 6px` que ya existe los
+                    #      separa siempre, sea cual sea el ancho.
+                    #
+                    # Va PRIMERO en esa fila (antes del ícono de escala) a
+                    # propósito: la fila crece hacia la IZQUIERDA desde su
+                    # ancla derecha, así que lo primero en el `with` termina
+                    # más cerca del título — "pegado", que era la intención
+                    # original y ahora sí se cumple.
+                    st.markdown('<div class="cp-rank-tit">Ranking de '
+                                'proveedores</div>', unsafe_allow_html=True)
                     # 2026-08-23, a pedido ("pensé que [Día/Semana/Mes/Año]
                     # debería funcionar como un selector de fecha... este
                     # mes, esta semana, este año, últimos 30 días"): eso
@@ -579,115 +592,128 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 (_ctx_fecha["fecha_min"],
                                  _ctx_fecha["fecha_max"]))
                             if a[0] in _claves_rank]
+                    # 2026-08-25: el contenedor ya NO depende de
+                    # `_atajos_rank` — el ícono de ayuda (mudado acá, ver
+                    # el comentario de más arriba) tiene que dibujarse
+                    # SIEMPRE, no sólo cuando hay atajos que intersecten
+                    # el rango de datos (`_atajos_rank` puede salir vacía;
+                    # es el mismo caso raro que documenta el comentario de
+                    # `_ALTO_RANK`, más abajo). Lo que sigue condicionado
+                    # es cada pieza DE ADENTRO, por su propio motivo.
+                    with st.container(key="compras_prov_rank_atajos"):
+                        with st.popover(":material/info:",
+                                        key="compras_prov_rank_ayuda",
+                                        use_container_width=False):
+                            # 2026-08-23, 3ra vuelta: el texto original
+                            # decía "el rango se ajusta desde otra pestaña"
+                            # — cierto hasta hace un momento, falso ahora
+                            # que los atajos de al lado viven acá mismo.
+                            st.caption("Suma TODO el rango elegido (atajos "
+                                       "de al lado, o el calendario "
+                                       "completo desde otra pestaña). "
+                                       "Día/Semana/Mes/Año, en Evolución, "
+                                       "solo agrupa esa curva — no cambia "
+                                       "este total.")
+                        if _ctx_fecha:
+                            # 2026-08-25, a pedido: la escala de tiempo
+                            # de una tabla dinámica de Excel, en versión
+                            # minimalista. Va en un POPOVER y no en la
+                            # fila porque el riel pide 250px y entre el
+                            # título y los atajos hay ~149px; el trigger
+                            # es un ícono suelto, que sí entra.
+                            #
+                            # No hace falta CSS para el trigger: la
+                            # regla `.st-key-compras_prov_rank_atajos
+                            # button` es un selector DESCENDIENTE y lo
+                            # captura solo (el aviso de CLAUDE.md sobre
+                            # widgets nuevos dentro de una tarjeta, esta
+                            # vez a favor). El PANEL no la hereda porque
+                            # `stPopoverBody` es un portal.
+                            with st.popover(":material/date_range:",
+                                            key="cp_rank_escala",
+                                            use_container_width=False):
+                                with st.container(key="cp_rank_escala_panel"):
+                                    # La bandera es la MISMA que usan
+                                    # los atajos de al lado: el filtro
+                                    # que lee el rango vive en app.py,
+                                    # fuera de este fragment, y sin
+                                    # escalar a rerun completo el riel
+                                    # se movería sin que cambie nada.
+                                    selector_escala(
+                                        "cp_rank_esc", _ctx_fecha,
+                                        bandera="_cp_rank_atajo_pendiente")
+                            # 2026-08-25, a pedido: el detalle del rango
+                            # ACTIVO, al costado del ícono que lo abre —
+                            # sin esto había que abrir el popover para
+                            # saber qué fecha estaba mirando la tabla.
+                            # Se lee de la MISMA clave canónica que
+                            # escribe el atajo/riel (nunca un estado
+                            # propio: sería un tercer lugar diciendo la
+                            # fecha, y ese es justo el bug que evita
+                            # `estado_rango` — un solo dueño). Reusa
+                            # `franja_fecha.fmt_rango_es`, el mismo
+                            # formato de la píldora de la franja, en vez
+                            # de inventar uno nuevo acá.
+                            _rango_act = st.session_state.get(
+                                _ctx_fecha["k_rango"])
+                            if (isinstance(_rango_act, (tuple, list))
+                                    and len(_rango_act) == 2
+                                    and all(_rango_act)):
+                                # SIN `help=` (sacado 2026-08-25, misma
+                                # vuelta que el selectbox de más abajo):
+                                # un tercer circulito "?" al lado del
+                                # "ⓘ" del popover de ayuda -que YA
+                                # explica que este rango es el que
+                                # suma la tabla- se leía como icono
+                                # duplicado. Confirmado con captura
+                                # real del usuario.
+                                st.caption(
+                                    franja_fecha.fmt_rango_es(*_rango_act),
+                                    width="content")
                         if _atajos_rank:
-                            with st.container(key="compras_prov_rank_atajos"):
-                                # 2026-08-25, a pedido: la escala de tiempo
-                                # de una tabla dinámica de Excel, en versión
-                                # minimalista. Va en un POPOVER y no en la
-                                # fila porque el riel pide 250px y entre el
-                                # título y los atajos hay ~149px; el trigger
-                                # es un ícono suelto, que sí entra.
-                                #
-                                # Va PRIMERO en el `with` a propósito: la
-                                # fila es `flex-direction: row` anclada a la
-                                # derecha (_css_proveedor.py), así que el
-                                # ícono queda a la IZQUIERDA de los cuatro
-                                # atajos — lo fino antes de lo grueso, como
-                                # el popover de la franja (atajos arriba,
-                                # calendario abajo).
-                                #
-                                # No hace falta CSS para el trigger: la
-                                # regla `.st-key-compras_prov_rank_atajos
-                                # button` es un selector DESCENDIENTE y lo
-                                # captura solo (el aviso de CLAUDE.md sobre
-                                # widgets nuevos dentro de una tarjeta, esta
-                                # vez a favor). El PANEL no la hereda porque
-                                # `stPopoverBody` es un portal.
-                                with st.popover(":material/date_range:",
-                                                key="cp_rank_escala",
-                                                use_container_width=False):
-                                    with st.container(key="cp_rank_escala_panel"):
-                                        # La bandera es la MISMA que usan
-                                        # los atajos de al lado: el filtro
-                                        # que lee el rango vive en app.py,
-                                        # fuera de este fragment, y sin
-                                        # escalar a rerun completo el riel
-                                        # se movería sin que cambie nada.
-                                        selector_escala(
-                                            "cp_rank_esc", _ctx_fecha,
-                                            bandera="_cp_rank_atajo_pendiente")
-                                # 2026-08-25, a pedido: el detalle del rango
-                                # ACTIVO, al costado del ícono que lo abre —
-                                # sin esto había que abrir el popover para
-                                # saber qué fecha estaba mirando la tabla.
-                                # Se lee de la MISMA clave canónica que
-                                # escribe el atajo/riel (nunca un estado
-                                # propio: sería un tercer lugar diciendo la
-                                # fecha, y ese es justo el bug que evita
-                                # `estado_rango` — un solo dueño). Reusa
-                                # `franja_fecha.fmt_rango_es`, el mismo
-                                # formato de la píldora de la franja, en vez
-                                # de inventar uno nuevo acá.
-                                _rango_act = st.session_state.get(
-                                    _ctx_fecha["k_rango"])
-                                if (isinstance(_rango_act, (tuple, list))
-                                        and len(_rango_act) == 2
-                                        and all(_rango_act)):
-                                    # SIN `help=` (sacado 2026-08-25, misma
-                                    # vuelta que el selectbox de más abajo):
-                                    # un tercer circulito "?" al lado del
-                                    # "ⓘ" del popover de ayuda -que YA
-                                    # explica que este rango es el que
-                                    # suma la tabla- se leía como icono
-                                    # duplicado. Confirmado con captura
-                                    # real del usuario.
-                                    st.caption(
-                                        franja_fecha.fmt_rango_es(
-                                            *_rango_act),
-                                        width="content")
-                                # 2026-08-25, a pedido ("esto ocupa mucho
-                                # espacio... una lista desplegable
-                                # minimalista"): los cuatro atajos eran
-                                # botones-píldora en fila (292px medidos);
-                                # pasan a UN `st.selectbox` aplanado a
-                                # texto — mismo patrón que ya resuelve
-                                # `cp_evo_ctrl`/`gran_float` más abajo en
-                                # este mismo archivo, a pedido idéntico
-                                # ("lista desplegable, pero minimalista")
-                                # el 2026-08-23. El CSS de aplanado vive en
-                                # `_css_proveedor.py`, junto a esa receta.
-                                _placeholder_rank = "Atajos"
-                                _op_rank = {_et: _rg
-                                           for _ca, _et, _rg in _atajos_rank}
-                                # SIN `help=`: `label_visibility="collapsed"`
-                                # esconde el TEXTO de la etiqueta, pero no
-                                # el icono "?" del tooltip -- con `help=`
-                                # puesto quedaban DOS circulitos casi
-                                # iguales en la fila (el "?" de este
-                                # selectbox y el "ⓘ" del popover de ayuda
-                                # del ranking, `compras_prov_rank_ayuda`,
-                                # más arriba), y a este tamaño se leen como
-                                # el mismo icono duplicado. Ese popover ya
-                                # explica el rango; no hace falta un
-                                # segundo tooltip para el atajo.
-                                st.selectbox(
-                                    "Atajo de rango",
-                                    [_placeholder_rank] + list(_op_rank),
-                                    index=0, key="cp_rank_atajo_sel",
-                                    label_visibility="collapsed",
-                                    on_change=_aplicar_atajo_rank_select,
-                                    args=("cp_rank_atajo_sel",
-                                          _placeholder_rank, _op_rank,
-                                          _ctx_fecha))
-                    # La fila de atajos (si se dibujó) le come FRANJA_ATAJOS
-                    # al AgGrid de abajo — mismo motivo que FRANJA_CTRL_EVO
-                    # en Evolución: nadie le hacía lugar
-                    # todavía. Condicional a que la fila exista de verdad
-                    # (`_atajos_rank` puede salir vacía si ningún atajo
-                    # intersecta el rango de datos): restar sin que la fila
-                    # se haya dibujado dejaría el grid más chico sin motivo.
-                    _ALTO_RANK = (_ALTO_FRAME_RANK - alturas.FRANJA_ATAJOS
-                                  if _atajos_rank else _ALTO_FRAME_RANK)
+                            # 2026-08-25, a pedido ("esto ocupa mucho
+                            # espacio... una lista desplegable
+                            # minimalista"): los cuatro atajos eran
+                            # botones-píldora en fila (292px medidos);
+                            # pasan a UN `st.selectbox` aplanado a
+                            # texto — mismo patrón que ya resuelve
+                            # `cp_evo_ctrl`/`gran_float` más abajo en
+                            # este mismo archivo, a pedido idéntico
+                            # ("lista desplegable, pero minimalista")
+                            # el 2026-08-23. El CSS de aplanado vive en
+                            # `_css_proveedor.py`, junto a esa receta.
+                            _placeholder_rank = "Atajos"
+                            _op_rank = {_et: _rg
+                                       for _ca, _et, _rg in _atajos_rank}
+                            # SIN `help=`: `label_visibility="collapsed"`
+                            # esconde el TEXTO de la etiqueta, pero no
+                            # el icono "?" del tooltip -- con `help=`
+                            # puesto quedaban DOS circulitos casi
+                            # iguales en la fila (el "?" de este
+                            # selectbox y el "ⓘ" del popover de ayuda
+                            # del ranking, `compras_prov_rank_ayuda`,
+                            # ahora vecino en el mismo `with`), y a este
+                            # tamaño se leen como el mismo icono
+                            # duplicado. Ese popover ya explica el
+                            # rango; no hace falta un segundo tooltip
+                            # para el atajo.
+                            st.selectbox(
+                                "Atajo de rango",
+                                [_placeholder_rank] + list(_op_rank),
+                                index=0, key="cp_rank_atajo_sel",
+                                label_visibility="collapsed",
+                                on_change=_aplicar_atajo_rank_select,
+                                args=("cp_rank_atajo_sel",
+                                      _placeholder_rank, _op_rank,
+                                      _ctx_fecha))
+                    # La fila de atajos le come FRANJA_ATAJOS al AgGrid de
+                    # abajo — mismo motivo que FRANJA_CTRL_EVO en
+                    # Evolución: nadie le hacía lugar todavía. YA NO es
+                    # condicional a `_atajos_rank` (2026-08-25): la fila
+                    # ahora SIEMPRE se dibuja, por el ícono de ayuda que se
+                    # mudó acá — el hueco tiene que reservarse siempre,
+                    # no sólo cuando además hay atajos relativos.
+                    _ALTO_RANK = _ALTO_FRAME_RANK - alturas.FRANJA_ATAJOS
                     # ── El ranking es un AgGrid, no un `st.dataframe` ──────
                     # 2026-08-19, a pedido: los checkbox de selección se van y
                     # el gesto pasa a ser "clic en la fila". No era posible con
