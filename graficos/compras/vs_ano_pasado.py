@@ -537,14 +537,20 @@ def _tabla_detalle(g, agrupar_por, col_um_valores, key_grid):
 
     return renderizar_detalle_vs_ano_pasado(
         tv, agrupar_por,
-        # ENMARCADA con el techo en `MARCO`: la tabla crece con los datos
-        # (1.578 productos en el parquet real), así que su alto lo pone el
-        # marco y lo que no entra scrollea DENTRO del grid. El techo es UNA
-        # pantalla y no `_TOPE_ENMARCADA` (900) porque esta tabla no está
-        # sola: va DEBAJO de la fila de gráficos, y 900px acá obligan a
-        # scrollear dos pantallas para llegar al final de una sola tabla.
+        # ENMARCADA: la tabla crece con los datos (1.578 productos en el
+        # parquet real), así que su alto lo pone el marco y lo que no entra
+        # scrollea DENTRO del grid.
+        #
+        # El techo era `MARCO` (553px, una pantalla completa) hasta
+        # 2026-08-26, a pedido ("Vs año pasado es muy largo... al igual que
+        # Detalle ítem por ítem"): esta tabla va DEBAJO de la fila de
+        # gráficos (que ya usa `APOYO`, 380px), así que MARCO + esa fila
+        # sumaban bien más de una pantalla de scroll para ver la vista
+        # completa. Baja a `APOYO` — el mismo rol que ya usan los gráficos
+        # de arriba, no un número inventado: la vista queda de DOS bloques
+        # de alto parecido en vez de uno chico y uno casi entero.
         altura=alturas.por_filas(len(tv), px_fila=30, extra=44,
-                                 minimo=200, rol=alturas.MARCO),
+                                 minimo=200, rol=alturas.APOYO),
         key=key_grid,
     )
 
