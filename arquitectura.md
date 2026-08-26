@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-216 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+218 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (77)
 
@@ -206,7 +206,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#214** — Un st.rerun con scope="app" sigue estando ADENTRO del fragment que lo llama: sumarle espacio…
 - **#215** — Element.innerText no atraviesa el layout position: absolute de las celdas de AgGrid: da ""…
 
-**Streamlit** (65)
+**Streamlit** (67)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -273,6 +273,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#211** — Un st.rerun(scope="app") al tope de un fragment le borra el estado a los widgets de ESE…
 - **#212** — Borrar la clave de session_state NO resetea un widget: el navegador sigue mandando el valor…
 - **#213** — Un width: 100% que gana la cascada y no se ve suele estar clampeado por un max-width:…
+- **#217** — st.text_input (react-aria) no confirma su valor con input/ change ni con blur() programático…
+- **#218** — Puppetear los DOS tiradores de un st.slider de rango, uno después del otro, pierde el segundo…
 
 **Datos, R2 y DuckDB** (25)
 
@@ -9541,13 +9543,86 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      CSS para el "subir" que pedía el usuario; la única CSS que hizo
      falta fue la de arriba, para el estado que YA no podía existir.
 
+217. **`st.text_input` (react-aria) no confirma su valor con `input`/
+     `change` ni con `blur()` programático — hace falta un Enter de
+     teclado de verdad.**
+
+     Nació al construir "arrastrar la línea entera" del riel de Días
+     (`graficos/base.py::_arrastrar_ventana_riel`, 2026-08-26): un
+     `st.text_input` invisible sirve de RELEVO entre un gesto de mouse en
+     JS y un `on_change` de Python. El patrón "setter nativo + dispatch
+     de evento" ya funcionaba en este mismo archivo para el `st.selectbox`
+     buscable (regla del mismo día) — se asumió que serviría igual acá.
+     No sirvió: `setter.call(input, valor); input.dispatchEvent(new
+     Event('input', {bubbles:true}))` deja el valor puesto en el DOM
+     —`input.value` lo confirma— pero el `on_change` de Streamlit nunca
+     corre. Ni agregar un `change` de más, ni un `input.blur()` después,
+     lo destraban.
+
+     Lo que sí funciona: un Enter de teclado real.
+
+         relevo.focus();
+         setter.call(relevo, valor);
+         relevo.dispatchEvent(new Event('input', {bubbles: true}));
+         relevo.dispatchEvent(new KeyboardEvent('keydown',
+           {key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true}));
+         relevo.dispatchEvent(new KeyboardEvent('keyup', {...}));
+
+     La hipótesis que mejor explica la diferencia con el `selectbox` que
+     sí funcionó: ahí el 'input' sólo FILTRABA la lista (un efecto
+     puramente client-side de la combobox), y el COMMIT real pasaba por
+     un Enter real de todos modos —no por el evento 'input'—. Acá se
+     esperaba que 'input'/'change' bastaran para un `text_input` y no es
+     así: el widget de react-aria sólo trata como "confirmación" un Enter
+     o un blur que SU PROPIO sistema de foco reconoce como legítimo — un
+     `.blur()` programático en un input oculto, fuera de pantalla, no
+     entra en esa categoría (medido: cero efecto, sin excepción ni rastro
+     en el servidor).
+
+     **Corolario:** antes de asumir que "setter + dispatchEvent" alcanza
+     para CUALQUIER widget porque ya funcionó para otro, verificar con el
+     log del servidor (un `print` en el `on_change`, temporal) que el
+     callback realmente corrió — el DOM mostrando el valor puesto NO es
+     evidencia de que Streamlit se enteró.
+
+218. **Puppetear los DOS tiradores de un `st.slider` de rango, uno
+     después del otro, pierde el segundo — hace falta un widget de
+     relevo, no escribir los `<input>` nativos directo.**
+
+     Mismo módulo, mismo día, un paso antes de la regla #217. Primer
+     intento para "arrastrar la ventana completa sin cambiar su ancho":
+     escribir el `<input>` de inicio, esperar, escribir el de fin.
+     `i2.min` está atado al valor VIGENTE de `i1` (así el navegador evita
+     que los dos tiradores se crucen) — parecía razonable esperar a que
+     React reaccionara antes de tocar el segundo.
+
+     No alcanzó. El primer `dispatchEvent` ya dispara el `on_change` de
+     Streamlit —que aplica el atajo y escala a `st.rerun(scope="app")`—
+     ANTES de que el segundo `fijar()` llegara a correr: el segundo
+     tirador terminaba escribiendo sobre un slider que Streamlit ya había
+     reemplazado por otro (nueva `key`, nuevo DOM, la clave del riel
+     codifica el rango — regla #212). Medido: arrastrar "01/08/26 –
+     24/08/26" 280 días atrás debía dar "25/10/25 – 17/11/25" (mismo
+     ancho) y daba "25/10/25 – 01/08/26" — el string se corrió, pero el
+     segundo valor quedó pegado al PRIMER valor viejo en vez de haberse
+     corrido igual.
+
+     La solución no fue afinar el orden o el retraso entre los dos
+     `dispatchEvent` — es estructural: un solo widget de relevo (ver
+     regla #217) no tiene un segundo límite dinámico que perseguir,
+     porque no hay un segundo tirador nativo al que puppetear. Cuando la
+     tentación es "sincronizar mejor dos escrituras a un widget ajeno",
+     la pregunta a hacerse primero es si hace falta ESCRIBIRLE al widget
+     ajeno en absoluto, o si un canal propio (un widget nuevo, sin las
+     reglas de cruce del original) resuelve el problema de raíz.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#217**.
+> próxima regla nueva es la **#219**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

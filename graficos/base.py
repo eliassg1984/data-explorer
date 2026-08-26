@@ -6,6 +6,7 @@ de columnas, formato de ejes/hover). NO contiene ningún dashboard concreto:
 cada dashboard (ajuste.py, compras.py, ...) importa lo que necesita de aquí.
 """
 
+import datetime
 import re
 import unicodedata
 from contextlib import contextmanager
@@ -253,6 +254,201 @@ def _aplicar_escala(k_riel, escala, ctx, bandera):
         st.session_state[bandera] = True
 
 
+def _us_de(d):
+    """Fecha -> microsegundos desde época UTC, EXACTAMENTE como codifica
+    `st.slider` sus valores internos para un slider de fechas (verificado
+    en el DOM: 2023-01-01 vale 1672531200000000). Hace falta para leer los
+    dos tiradores nativos desde JS en su propio idioma."""
+    return int(datetime.datetime(
+        d.year, d.month, d.day, tzinfo=datetime.timezone.utc
+    ).timestamp() * 1_000_000)
+
+
+def _fecha_de_us(us):
+    """Inversa de `_us_de`: microsegundos -> `date`. La usa el relevo
+    (`_aplicar_pan_riel`) para volver del número que manda el JS a algo
+    que `aplicar_atajo` entiende."""
+    return (datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
+            + datetime.timedelta(microseconds=us)).date()
+
+
+def _aplicar_pan_riel(k_relevo, ctx, bandera):
+    """`on_change` del relevo oculto que arma `_arrastrar_ventana_riel`.
+
+    Por qué un widget de RELEVO y no escribirle directo a los dos
+    `<input type="range">` del slider nativo: SE INTENTÓ (2026-08-26,
+    primera vuelta) y falla de una forma sutil. `i2.min` está atado al
+    valor VIGENTE de `i1` (así el navegador impide que los tiradores se
+    crucen), así que había que escribir uno, esperar a que Streamlit
+    reaccionara, y RECIÉN AHÍ escribir el otro. Medido: el primer
+    `dispatchEvent` ya alcanza a disparar el `on_change` de Streamlit
+    —que aplica el atajo y escala a `st.rerun(scope="app")`— ANTES de que
+    el segundo `fijar()` llegara a correr; el segundo tirador terminaba
+    escribiendo sobre un slider que Streamlit ya había reemplazado por
+    otro (nueva `key`, nuevo DOM), sin ningún efecto. Resultado real:
+    "01/08/26 – 24/08/26" arrastrado 280 días atrás terminaba en
+    "25/10/25 – 01/08/26" — el string SE CORRIÓ, pero el segundo valor
+    quedó pegado al primero viejo en vez de haberse corrido igual.
+
+    Un solo widget no tiene ese problema: no hay un segundo tirador con
+    un límite dinámico que perseguir. `k_relevo` es un `st.text_input`
+    invisible (mismo patrón que `pila_go_`, `estilos/_27_pila.py`) que
+    JS llena con `"us_inicio,us_fin"` y dispara UNA sola vez al soltar.
+
+    SEGUNDA TRAMPA, en el mismo día: escribir el valor y disparar
+    `input`/`change` no alcanza para que ESTE `on_change` corra —medido:
+    el DOM mostraba el string puesto, pero cero rastro en el servidor,
+    ni con un `blur()` después. `st.text_input` (react-aria) sólo
+    confirma con un Enter de teclado de verdad (`keydown`+`keyup` con
+    `key:'Enter'`) o perdiendo el foco de la forma que react-aria
+    reconoce — blur programático en un input oculto fuera de pantalla no
+    cuenta. El JS de `_arrastrar_ventana_riel` hace foco + valor + Enter,
+    en ese orden."""
+    raw = st.session_state.get(k_relevo, "")
+    try:
+        _us1, _us2 = (int(p) for p in raw.split(","))
+    except (ValueError, AttributeError):
+        return
+    aplicar_atajo(ctx["k_rango"], (_fecha_de_us(_us1), _fecha_de_us(_us2)),
+                  ctx["reporte"], ctx["usa_carga_rango"])
+    if bandera:
+        st.session_state[bandera] = True
+
+
+def _arrastrar_ventana_riel(k_riel, k_relevo, bounds):
+    """Arrastrar la VENTANA completa del riel de Días, sin cambiar su
+    ancho — "como el slider de Excel" (a pedido, 2026-08-26).
+
+    El `st.slider` nativo sólo deja mover un tirador por vez (cambia dónde
+    empieza O dónde termina la selección). Elegir una ventana angosta lejos
+    del extremo actual son dos arrastres: achicar un lado y después
+    caminar el otro. Esto agrega un TERCER gesto — agarrar el tramo
+    coloreado del medio y correrlo — sin tocar los dos tiradores nativos,
+    que siguen funcionando igual que siempre.
+
+    CÓMO: no se toca el DOM interno de Streamlit para los tiradores (los
+    nombres de clase son hashes de emotion, cambian entre builds). Se
+    agrega un `<div>` PROPIO, invisible, del ancho exacto de la selección
+    actual, como hijo del track (que ya es `position:relative`, así que un
+    hijo `position:absolute` cae en el lugar correcto sin cálculo propio de
+    coordenadas). Mientras se arrastra, el feedback es puramente visual
+    (mover el propio overlay); recién al SOLTAR se escribe UNA vez el
+    widget de relevo (`_aplicar_pan_riel` — ver ahí por qué no son los
+    dos `<input>` nativos)."""
+    _bmin_us, _bmax_us = _us_de(bounds[0]), _us_de(bounds[1])
+    inyectar_html(f"""<script>
+    (function () {{
+      var w = window.parent, doc = w.document;
+      var BMIN = {_bmin_us}, BMAX = {_bmax_us}, DIA = 86400000000;
+
+      // REINTENTAR hasta que el DOM exista, mismo motivo que el scrollspy
+      // de `_render_rail`: el `<script>` corre dentro de un IFRAME propio
+      // (regla del proyecto: `st.markdown` no ejecuta `<script>`), que
+      // carga en paralelo al resto de la página — no hay garantía de que
+      // el `st.text_input` de relevo (dibujado por Python JUSTO ANTES,
+      // pero montado por React en su propio tiempo) ya esté en el DOM
+      // cuando este script arranca. Medido: sin el reintento, el primer
+      // chequeo llegaba con el slider YA montado pero el relevo todavía
+      // no — un intento único se rendía para siempre en ESE render (el
+      // próximo intento sólo llega si el rango vuelve a cambiar, porque
+      // `k_riel` es la firma). 20 intentos de 100ms = 2s de margen.
+      var intentos = 0;
+      function intentar() {{
+        intentos++;
+        var raiz = doc.querySelector('[class*="st-key-{k_riel}"]');
+        var relevo = doc.querySelector(
+          '[class*="st-key-{k_relevo}"] input');
+        if (!raiz || !relevo) {{
+          if (intentos < 20) w.setTimeout(intentar, 100);
+          return;
+        }}
+        var inputs = raiz.querySelectorAll('input[type="range"]');
+        if (inputs.length !== 2) return;
+        var i1 = inputs[0], i2 = inputs[1];
+        var track = i1.closest('[data-orientation="horizontal"]');
+        if (!track || track.__panAdjunto) return;
+        track.__panAdjunto = true;
+        adjuntar(i1, i2, track, relevo);
+      }}
+      intentar();
+
+      function adjuntar(i1, i2, track, relevo) {{
+      var setterInput = w.Object.getOwnPropertyDescriptor(
+        w.HTMLInputElement.prototype, 'value').set;
+
+      function pct(us) {{ return (us - BMIN) / (BMAX - BMIN) * 100; }}
+
+      var v1_0 = parseFloat(i1.value), v2_0 = parseFloat(i2.value);
+      var overlay = doc.createElement('div');
+      overlay.style.cssText = 'position:absolute;top:0;bottom:0;'
+        + 'left:' + pct(v1_0) + '%;width:' + (pct(v2_0) - pct(v1_0))
+        + '%;cursor:grab;background:transparent;transition:background .12s;';
+      track.appendChild(overlay);
+      var arrastrando = false, x0 = 0, w0 = 0, nv1 = v1_0, nv2 = v2_0;
+
+      overlay.addEventListener('mouseenter', function () {{
+        if (!arrastrando) overlay.style.background = 'rgba(108,92,231,0.14)';
+      }});
+      overlay.addEventListener('mouseleave', function () {{
+        if (!arrastrando) overlay.style.background = 'transparent';
+      }});
+      overlay.addEventListener('pointerdown', function (ev) {{
+        arrastrando = true;
+        x0 = ev.clientX;
+        w0 = track.getBoundingClientRect().width;
+        nv1 = v1_0; nv2 = v2_0;
+        overlay.style.cursor = 'grabbing';
+        // `setPointerCapture` puede tirar `NotFoundError` si el navegador
+        // no reconoce un puntero activo con ese id (medido: pasa con
+        // eventos sintéticos al probar, pero es defensivo por las dudas
+        // real también) — sin el try/catch, la excepción corta acá el
+        // handler y `ev.preventDefault()` de abajo nunca corre.
+        try {{ overlay.setPointerCapture(ev.pointerId); }} catch (e) {{}}
+        ev.preventDefault();
+      }});
+      overlay.addEventListener('pointermove', function (ev) {{
+        if (!arrastrando || !w0) return;
+        var dUs = Math.round((ev.clientX - x0) / w0 * (BMAX - BMIN) / DIA)
+          * DIA;
+        var a = v1_0 + dUs, b = v2_0 + dUs;
+        if (a < BMIN) {{ dUs += (BMIN - a); a = BMIN; b = v2_0 + dUs; }}
+        if (b > BMAX) {{ dUs -= (b - BMAX); b = BMAX; a = v1_0 + dUs; }}
+        nv1 = a; nv2 = b;
+        overlay.style.left = pct(nv1) + '%';
+        overlay.style.width = (pct(nv2) - pct(nv1)) + '%';
+      }});
+      function soltar(ev) {{
+        if (!arrastrando) return;
+        arrastrando = false;
+        overlay.style.background = 'transparent';
+        if (nv1 === v1_0 && nv2 === v2_0) return;  // no se movio: nada que avisar
+        // UN SOLO widget se escribe (el relevo), no los dos <input> del
+        // slider nativo — ver el docstring de Python de esta función.
+        //
+        // 'input'/'change' NO ALCANZA para confirmar un `st.text_input`
+        // (medido: el valor queda puesto en el DOM, pero Streamlit nunca
+        // corre el `on_change` — cero rastro en el log del servidor). El
+        // widget de react-aria confirma con blur o con Enter; blur
+        // TAMPOCO alcanzó (probablemente porque este input está oculto
+        // fuera de pantalla, `focusout` en un elemento así no dispara la
+        // misma cadena que en uno visible). Un Enter de teclado de
+        // verdad —focus, valor, keydown+keyup— SÍ confirma: es el mismo
+        // camino que un usuario tecleando y presionando Enter.
+        relevo.focus();
+        setterInput.call(relevo, nv1 + ',' + nv2);
+        relevo.dispatchEvent(new Event('input', {{bubbles: true}}));
+        var opts = {{key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+                    bubbles: true, cancelable: true}};
+        relevo.dispatchEvent(new KeyboardEvent('keydown', opts));
+        relevo.dispatchEvent(new KeyboardEvent('keyup', opts));
+      }}
+      overlay.addEventListener('pointerup', soltar);
+      overlay.addEventListener('pointercancel', soltar);
+      }} // fin de adjuntar()
+    }})();
+    </script>""")
+
+
 def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
                     default="Días"):
     """Escala de tiempo estilo tabla dinámica: granularidad + riel de rango.
@@ -359,6 +555,43 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
                   label_visibility="collapsed",
                   on_change=_aplicar_escala,
                   args=(k_riel, escala, ctx, bandera))
+        # 2026-08-26, a pedido ("la línea no tiene ninguna indicación de
+        # qué día o mes estoy seleccionando"): el `st.slider` nativo sólo
+        # dibuja los DOS extremos del rango completo como referencia (medido
+        # en el DOM: `stSliderTickBar` trae nada más que min y max) — nada
+        # entre medio dice si el tirador está pasando por 2024 o por 2026.
+        # Se agrega una regla de años DEBAJO, no ENCIMA del riel: overlayarla
+        # sobre el track de Streamlit exigiría calzar a mano su alto interno
+        # (frágil — cambia con la versión de Streamlit); una fila propia,
+        # del mismo ancho, es la misma info sin tocar el DOM ajeno.
+        # El mapeo es 0%–100% lineal sobre `bounds`, verificado en vivo: la
+        # posición `left%` que Streamlit le da a cada tirador coincide
+        # exactamente con `(valor - min) / (max - min)` sin ningún inset por
+        # el radio del círculo — así que la MISMA cuenta sirve acá.
+        _total_dias = (bounds[1] - bounds[0]).days
+        if _total_dias > 0:
+            # `escala_periodos` devuelve el 1-ene de cada año TOCADO por
+            # bounds, sin recortar — el primero puede caer ANTES de
+            # `bounds[0]` (si los datos no arrancan justo un 1-ene). Clampeado
+            # a [0, 100] para la posición nomás: la etiqueta sigue diciendo
+            # el año real, sólo se pinea al borde en vez de salirse del
+            # riel.
+            _marcas = escala_periodos("Años", bounds)
+            _spans = "".join(
+                f'<span style="left:{max(0, min(100, (_a - bounds[0]).days / _total_dias * 100)):.2f}%">'
+                f'{_a.year}</span>'
+                for _a in _marcas)
+            st.markdown(f'<div class="cp-riel-regla">{_spans}</div>',
+                       unsafe_allow_html=True)
+            # Relevo oculto para "arrastrar la línea entera" (a pedido,
+            # "como el slider de Excel") — ver el docstring largo de
+            # `_aplicar_pan_riel` para por qué es un widget propio y no
+            # los dos `<input>` nativos del slider.
+            _k_relevo = f"{k_riel}_pan"
+            st.text_input("pan", key=_k_relevo, label_visibility="collapsed",
+                          on_change=_aplicar_pan_riel,
+                          args=(_k_relevo, ctx, bandera))
+            _arrastrar_ventana_riel(k_riel, _k_relevo, bounds)
     else:
         st.select_slider("Rango", options=escala_periodos(escala, bounds),
                          value=par, key=k_riel,

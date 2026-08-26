@@ -712,6 +712,64 @@ CSS = """        <style>
             margin-top: -4px !important;
             font-size: 11px !important;
         }
+        /* ── REGLA DE AÑOS del riel de Días ──────────────────────────────
+           2026-08-26, a pedido ("la línea no tiene ninguna indicación de
+           qué día o mes estoy seleccionando"). Fila propia DEBAJO del
+           riel (no overlay: ver el comentario largo en
+           graficos/base.py::selector_escala) — mismo ancho que el
+           `st.slider`, así que el 0%-100% de acá coincide con el suyo.
+           `position:relative` + hijos `position:absolute; left:X%` es la
+           misma técnica que ya usa el riel de select_slider para sus
+           propias paradas (más abajo, la granularidad). */
+        .cp-riel-regla {
+            position: relative;
+            height: 14px;
+            margin: 2px 0 0;
+        }
+        .cp-riel-regla span {
+            position: absolute;
+            top: 0;
+            transform: translateX(-50%);
+            font-size: 9px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        /* El primero y el último se pinean al borde sin centrarse: a mitad
+           de camino fuera del riel se leerían cortados contra el padding
+           del popover. */
+        .cp-riel-regla span:first-child { transform: translateX(0); }
+        .cp-riel-regla span:last-child { transform: translateX(-100%); }
+        /* 2026-08-26, a pedido ("no es necesario ver en la línea los días
+           del 2023 2024 si mi selección es de días"): el `stSliderTickBar`
+           NATIVO de Streamlit (min/max absolutos, "01/01/23 — 24/08/26")
+           queda redundante apenas se agrega `.cp-riel-regla` arriba — el
+           "2023" del extremo izquierdo ya lo dice el propio ruler, y el
+           extremo derecho ya lo dicen las etiquetas de la selección
+           VIGENTE (más útiles: son la selección actual, no el límite de
+           todo el histórico). Acotado al prefijo `cp_rank_esc_dias_` para
+           no afectar Meses/Años, que no usan este riel. */
+        [class*="st-key-cp_rank_esc_dias_"] [data-testid="stSliderTickBar"] {
+            display: none !important;
+        }
+
+        /* Relevo oculto del arrastre "como Excel" (graficos/base.py::
+           _aplicar_pan_riel). Mismo patrón que `.st-key-pila_go_*`
+           (estilos/_27_pila.py): invisible pero PRESENTE, nunca
+           `display:none` — un widget que no se dibuja no existe para
+           Streamlit. Acotado por PREFIJO (cp_rank_esc_) Y sufijo (_pan):
+           sin el prefijo, un `[class*="_pan"]` suelto también apaga
+           `cp_prov_prods_tab_{_pan_inst}` de esta misma vista y los
+           `{key_prefix}_pan_topn/_pan_rango` de recetas_comun.py — los
+           tres traen "_pan" de casualidad, sin relación con este. */
+        [class*="st-key-cp_rank_esc_"][class*="_pan"] {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            overflow: hidden !important;
+            opacity: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
 
         /* ── Atajos del Ranking: de TRES píldoras a UN desplegable ──────────
            2026-08-25, a pedido ("esto ocupa mucho espacio... una lista

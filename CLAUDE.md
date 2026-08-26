@@ -234,9 +234,14 @@ filtro paralelo: `estado_rango.escala_periodos/escala_a_rango/
 escala_desde_rango` sólo TRADUCEN el gesto, y la escritura sigue pasando
 por `aplicar_atajo`. El widget reusable es
 `graficos.base.selector_escala()`, así que sumarlo a otra vista es una
-línea. Sus dos trampas —el `rerun` que le borra el estado a los widgets del
-fragment, y que borrar la clave no resetea un widget— están en
-`arquitectura.md` reglas #211 a #213.
+línea. En Días, además, se puede arrastrar la VENTANA entera (sin cambiar
+su ancho) agarrando el tramo coloreado del medio — "como el slider de
+Excel". Sus trampas —el `rerun` que le borra el estado a los widgets del
+fragment, que borrar la clave no resetea un widget, y las dos de puppetear
+un widget ajeno desde JS (un `st.text_input` no confirma con
+`input`/`change`, sólo con un Enter real; y los dos `<input>` de un slider
+de rango no se pueden escribir uno-tras-otro)— están en `arquitectura.md`
+reglas #211 a #213 y #217 a #218.
 
 `aplicar_corte` escribe el corte **y** el rango — el rango lo leen el
 `date_input`, el label del pill y el loader de R2, que no saben qué es un
