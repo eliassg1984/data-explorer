@@ -579,7 +579,8 @@ CSS = """        <style>
         .st-key-compras_prov_card_ranking {
             position: relative !important;
         }
-        .st-key-compras_prov_rank_atajos {
+        .st-key-compras_prov_rank_atajos,
+        .st-key-cp_prod_fila {
             position: absolute !important;
             top: 16px !important;
             right: 18px !important;
@@ -596,13 +597,16 @@ CSS = """        <style>
             flex-wrap: wrap !important;
             gap: 6px !important;
         }
-        .st-key-compras_prov_rank_atajos [data-testid="stElementContainer"] {
+        .st-key-compras_prov_rank_atajos [data-testid="stElementContainer"],
+        .st-key-cp_prod_fila [data-testid="stElementContainer"] {
             width: auto !important;
         }
-        .st-key-compras_prov_rank_atajos [data-testid="stElementToolbar"] {
+        .st-key-compras_prov_rank_atajos [data-testid="stElementToolbar"],
+        .st-key-cp_prod_fila [data-testid="stElementToolbar"] {
             display: none;
         }
-        .st-key-compras_prov_rank_atajos button {
+        .st-key-compras_prov_rank_atajos button,
+        .st-key-cp_prod_fila button {
             min-width: 0 !important;
             height: 22px !important;
             min-height: 22px !important;
@@ -617,7 +621,8 @@ CSS = """        <style>
             box-shadow: 0 1px 2px rgba(15,15,30,0.06) !important;
             transition: background .12s, color .12s !important;
         }
-        .st-key-compras_prov_rank_atajos button:hover {
+        .st-key-compras_prov_rank_atajos button:hover,
+        .st-key-cp_prod_fila button:hover {
             background: #f0edfe !important;
             color: #4d3fb3 !important;
         }
@@ -639,7 +644,9 @@ CSS = """        <style>
                leer. */
         .st-key-compras_prov_rank_atajos
             [data-testid="stPopover"]:has(.st-key-cp_rank_escala) button,
-        .st-key-cp_rank_escala button {
+            [data-testid="stPopover"]:has(.st-key-cp_prod_escala) button,
+        .st-key-cp_rank_escala button,
+        .st-key-cp_prod_escala button {
             padding: 0 10px !important;
             font-size: 12px !important;
             white-space: nowrap !important;
@@ -669,7 +676,8 @@ CSS = """        <style>
            auto`— y por eso hay que alcanzarlo con `:has()` en vez de
            colgarlo del contenedor. Mismo patron que el panel de fecha de
            la franja (estilos/_50_fecha.py) y el del asistente. */
-        [data-testid="stPopoverBody"]:has(.st-key-cp_rank_escala_panel) {
+        [data-testid="stPopoverBody"]:has(.st-key-cp_rank_escala_panel),
+        [data-testid="stPopoverBody"]:has(.st-key-cp_prod_escala_panel) {
             /* 290px es el ancho MINIMO util del riel: con menos, las
                etiquetas de las paradas de "Meses" (ene 24 ... ago 26) se
                encabalgan y el slider deja de leerse. */
@@ -687,7 +695,8 @@ CSS = """        <style>
            padre que ya media 191px. Se ensancha primero el contenedor del
            widget (su ANCLA PROPIA, no el del panel: tocar el panel movería
            tambien al slider y al caption). */
-        .st-key-cp_rank_esc_gran {
+        .st-key-cp_rank_esc_gran,
+        .st-key-cp_prod_esc_gran {
             width: 100% !important;
         }
         /* `display: flex` explicito: el ButtonGroup nace BLOCK (medido), y
@@ -705,7 +714,9 @@ CSS = """        <style>
            `label_visibility="collapsed"`: con `> *` se llevaba la mitad
            del ancho (125 y 125) y los botones quedaban en 42px. */
         .st-key-cp_rank_esc_gran [data-testid="stButtonGroup"],
-        .st-key-cp_rank_esc_gran [data-testid="stButtonGroup"] > div {
+        .st-key-cp_prod_esc_gran [data-testid="stButtonGroup"],
+        .st-key-cp_rank_esc_gran [data-testid="stButtonGroup"] > div,
+        .st-key-cp_prod_esc_gran [data-testid="stButtonGroup"] > div {
             display: flex !important;
             width: 100% !important;
             /* El `width` solo no alcanza: la clase de emotion del div
@@ -714,11 +725,13 @@ CSS = """        <style>
                ancho que "gana" y no se ve es casi siempre esto. */
             max-width: none !important;
         }
-        .st-key-cp_rank_esc_gran [data-testid="stButtonGroup"] button {
+        .st-key-cp_rank_esc_gran [data-testid="stButtonGroup"] button,
+        .st-key-cp_prod_esc_gran [data-testid="stButtonGroup"] button {
             flex: 1 1 0 !important;
         }
         /* El caption del total de dias: al ras del riel, no como parrafo. */
-        .st-key-cp_rank_escala_panel [data-testid="stCaptionContainer"] {
+        .st-key-cp_rank_escala_panel [data-testid="stCaptionContainer"],
+        .st-key-cp_prod_escala_panel [data-testid="stCaptionContainer"] {
             margin-top: -4px !important;
             font-size: 11px !important;
         }
@@ -736,18 +749,31 @@ CSS = """        <style>
            estilos/_40_ajuste_franja.py. Sin ese `:has()` esto apretaría
            TODOS los popovers de la app, que es justo el error que
            CLAUDE.md advierte de las reglas colgadas de un contenedor. */
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_rank_esc_gran"]) {
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_rank_esc_gran"]),
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_esc_gran"]) {
             padding-top: 8px !important;
             padding-bottom: 8px !important;
         }
         [data-testid="stPopoverBody"]:has([class*="st-key-cp_rank_esc_gran"])
+            [data-testid="stVerticalBlock"],
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_esc_gran"])
             [data-testid="stVerticalBlock"] {
             gap: 4px !important;
         }
         /* El desplegable de atajos traía además su propio margen inferior,
-           que se sumaba al gap. */
+           que se sumaba al gap.
+
+           OJO con la coma: las dos mitades tienen que repetir el `:has()`
+           del popover ENTERAS. Escrito como
+           `…:has(A) [class*=B], [class*=C] {…}` la segunda mitad queda
+           SUELTA -- matchea ese widget en cualquier parte de la app, no
+           dentro de este popover. Es el error que CLAUDE.md advierte de
+           las reglas por familia, y lo cometió el script que duplicó estos
+           selectores para el prefijo `cp_prod` (2026-08-26). */
         [data-testid="stPopoverBody"]:has([class*="st-key-cp_rank_esc_gran"])
-            [class*="st-key-cp_rank_atajo_sel"] {
+            [class*="st-key-cp_rank_atajo_sel"],
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_esc_gran"])
+            [class*="st-key-cp_prod_atajo_sel"] {
             margin-bottom: 0 !important;
         }
         /* ── CABECERA "‹ AGO 2026 ›" del riel de Días ────────────────────
@@ -772,7 +798,9 @@ CSS = """        <style>
             line-height: 22px;
         }
         [class*="st-key-cp_rank_esc_mes_prev"] button,
-        [class*="st-key-cp_rank_esc_mes_sig"] button {
+        [class*="st-key-cp_prod_esc_mes_prev"] button,
+        [class*="st-key-cp_rank_esc_mes_sig"] button,
+        [class*="st-key-cp_prod_esc_mes_sig"] button {
             min-height: 22px !important;
             height: 22px !important;
             padding: 0 !important;
@@ -833,7 +861,8 @@ CSS = """        <style>
            extremas de la regla — tres veces lo mismo en tres renglones
            seguidos. Acotado al prefijo `cp_rank_esc_dias_` para no
            afectar Meses/Años, que no usan este riel. */
-        [class*="st-key-cp_rank_esc_dias_"] [data-testid="stSliderTickBar"] {
+        [class*="st-key-cp_rank_esc_dias_"] [data-testid="stSliderTickBar"],
+        [class*="st-key-cp_prod_esc_dias_"] [data-testid="stSliderTickBar"] {
             display: none !important;
         }
 
@@ -846,7 +875,8 @@ CSS = """        <style>
            `cp_prov_prods_tab_{_pan_inst}` de esta misma vista y los
            `{key_prefix}_pan_topn/_pan_rango` de recetas_comun.py — los
            tres traen "_pan" de casualidad, sin relación con este. */
-        [class*="st-key-cp_rank_esc_"][class*="_pan"] {
+        [class*="st-key-cp_rank_esc_"][class*="_pan"],
+        [class*="st-key-cp_prod_esc_"][class*="_pan"] {
             position: absolute !important;
             width: 1px !important;
             height: 1px !important;
@@ -880,7 +910,8 @@ CSS = """        <style>
            `.st-key-compras_prov_rank_atajos button` (la píldora blanca de
            la fila de afuera) no lo alcanza — igual se resetea todo a
            mano, para no depender de qué ande suelto por ese lado. */
-        .st-key-cp_rank_atajo_sel [data-testid="stButtonGroup"] {
+        .st-key-cp_rank_atajo_sel [data-testid="stButtonGroup"],
+        .st-key-cp_prod_atajo_sel [data-testid="stButtonGroup"] {
             display: flex !important;
             flex-wrap: wrap !important;
             gap: 0 !important;
@@ -888,7 +919,8 @@ CSS = """        <style>
             width: 100% !important;
             max-width: none !important;
         }
-        .st-key-cp_rank_atajo_sel [data-testid="stButtonGroup"] button {
+        .st-key-cp_rank_atajo_sel [data-testid="stButtonGroup"] button,
+        .st-key-cp_prod_atajo_sel [data-testid="stButtonGroup"] button {
             min-width: 0 !important;
             min-height: 0 !important;
             height: auto !important;
@@ -931,7 +963,8 @@ CSS = """        <style>
             background: transparent !important;
             color: var(--accent-deep) !important;
         }
-        .st-key-cp_rank_atajo_sel {
+        .st-key-cp_rank_atajo_sel,
+        .st-key-cp_prod_atajo_sel {
             width: 100% !important;
             max-width: none !important;
             margin-bottom: 8px !important;
@@ -1497,6 +1530,40 @@ CSS = """        <style>
            de renderizarse pierde su estado (CLAUDE.md § Streamlit). El
            rango se sigue pudiendo cambiar desde cualquier otra vista. */
         .st-key-fecha_ajuste_pill { display: none !important; }
+
+        /* ── El selector de fecha del Ranking de PRODUCTOS ───────────────
+           2026-08-26, a pedido ("el mismo selector de fecha que la tabla
+           de proveedores"). Comparte el componente
+           (`_comun.py::selector_fecha_tarjeta`) y casi todo el CSS, que se
+           lista arriba con su prefijo propio. Lo que NO puede compartir es
+           la POSICION, y el motivo se midio: la fila de Proveedor flota
+           con `position:absolute; top:16; right:18` sobre SU tarjeta, que
+           declara `position:relative`. La de Producto heredo ese absolute
+           sin tener ancestro posicionado propio, asi que se anclo al
+           ancestro posicionado mas cercano -- la tarjeta de PROVEEDOR, mas
+           arriba en la pila-- y aparecio 1124px por encima de donde
+           tenia que estar.
+
+           Se pudo arreglar de dos formas: darle `position:relative` a la
+           tarjeta de Producto, o sacarle el absolute a la fila. Va la
+           segunda: en Producto la esquina superior derecha ya la ocupa el
+           panel de detalle (nombre del producto + ventana + granularidad),
+           asi que flotar ahi seria chocar. En flujo, arriba del titulo,
+           no pelea con nada. */
+        .st-key-cp_prod_fila {
+            position: static !important;
+            width: fit-content !important;
+            margin: 0 0 4px !important;
+        }
+        /* El CHEVRON de Streamlit, mismo trato que en `cp_rank_escala`: se
+           esconde el WRAPPER y no el glifo (apagar solo el span deja su
+           div padre ocupando 16px y el boton sigue desbordando). Esta
+           regla no se pudo generar duplicando la de arriba porque su
+           selector se parte en varias lineas. */
+        .st-key-cp_prod_escala button > div > div:has(
+            [data-testid="stIconMaterial"]) {
+            display: none !important;
+        }
 
         </style>
 """

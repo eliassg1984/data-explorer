@@ -16,80 +16,18 @@ import streamlit as st
 
 from st_aggrid import AgGrid, JsCode
 
-import franja_fecha
-from estado_rango import atajos_rango, aplicar_atajo
 from tema import (ACENTO, ACENTO_TEXTO_OSCURO, GRIS_BORDE, LAVANDA_CHIP,
                   TEXTO_PRINCIPAL)
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar,
-    paso_etiquetas, publicar_var_px, selector_escala,
+    paso_etiquetas, publicar_var_px,
 )
-from graficos.compras._comun import COLUMNAS_DRILL, GAP_DRILL
+from graficos.compras._comun import (
+    COLUMNAS_DRILL, GAP_DRILL, selector_fecha_tarjeta,
+)
 from graficos.compras._css_proveedor import CSS as CSS_PROVEEDOR
 from graficos.compras._documentos_proveedor import tabla_documentos
 from graficos import alturas, periodo
-
-
-_ETIQ_CORTA_RANK = {"semana": "Semana", "mes": "Mes",
-                    "d30": "30 días", "anio": "Año"}
-"""Etiquetas CORTAS de los atajos del Ranking.
-
-Las largas ("Esta semana", "Últimos 30 días"…) son las que usa la píldora
-de la franja, donde hay ancho de sobra. Acá los cuatro van en UNA fila de
-texto dentro de un panel de 290px: con las largas suman ~250px de glifos
-más tres separadores y saltan de renglón. El contexto repone lo que se
-pierde al acortar — estás en un selector de fecha, y el rango resultante
-se ve en el trigger mismo, dos píxeles más arriba."""
-
-
-def _aplicar_atajo_rank_select(clave_widget, placeholder, opciones, ctx):
-    """`on_change` de los atajos del Ranking: aplica Y marca escalada.
-
-    Sirve a las dos formas que tuvo este control, porque el contrato es el
-    mismo: leer la etiqueta elegida, buscar su rango en `opciones` y volver
-    al estado "nada elegido". `placeholder` es la cadena "Atajos" cuando
-    era un `st.selectbox` y `None` desde que son pastillas aplanadas a
-    texto (2026-08-26) — el guard `not _sel` cubre los dos.
-
-    2026-08-25, a pedido ("esto ocupa mucho espacio... una lista
-    desplegable minimalista"): los cuatro atajos eran botones-píldora en
-    fila (292px medidos) y pasan a UN `st.selectbox` aplanado a texto —
-    misma receta y mismas palabras del pedido ("lista desplegable, pero
-    minimalista") que ya resolvió `cp_evo_ctrl`/`gran_float` más abajo en
-    este mismo archivo, el 2026-08-23.
-
-    `opciones` es `{etiqueta: (ini, fin)}`, armado en el cuerpo a partir
-    de `_atajos_rank` — la MISMA lista que antes dibujaba los botones, sin
-    reinventar de dónde salen los rangos. Delega la escritura en
-    `aplicar_atajo` (el dueño único, `estado_rango`) y deja la MISMA
-    bandera que usaban los botones, para que el fragment pida un rerun
-    COMPLETO — ver el bloque que la consume al inicio de
-    `_compras_proveedor_drill`. Por qué una bandera y no `st.rerun()` acá:
-    esto corre como CALLBACK, antes del rerun del fragment, y el rerun hay
-    que pedirlo desde el cuerpo.
-
-    Por qué no se escribe el rango desde el cuerpo en vez de por callback:
-    `ctx["k_rango"]` es la key del `date_input` de `franja_fecha.render()`,
-    que `app.py` ya instanció en este mismo run — escribirla después del
-    widget es `StreamlitAPIException`. El callback es el único momento en
-    que la escritura es legal.
-
-    Es además un MENÚ DE ACCIONES, no una selección persistente: aplica el
-    atajo y VUELVE al placeholder en la misma corrida. Sin ese reset,
-    "Este mes" quedaría marcado para siempre — Streamlit sólo llama a
-    `on_change` cuando el valor CAMBIA, así que un segundo clic sobre la
-    misma opción no dispararía nada. Escribir la propia key del widget
-    desde su propio `on_change` es legal (corre ANTES del rerun, igual que
-    la escritura del rango): no es distinto de vaciar un `text_input`
-    después de un submit.
-    """
-    _sel = st.session_state.get(clave_widget)
-    if not _sel or _sel == placeholder or _sel not in opciones:
-        return
-    aplicar_atajo(ctx["k_rango"], opciones[_sel],
-                  ctx["reporte"], ctx["usa_carga_rango"])
-    st.session_state["_cp_rank_atajo_pendiente"] = True
-    st.session_state[clave_widget] = placeholder
 
 
 def _prov_mayor(src, col_prov, col_valor):
@@ -598,211 +536,20 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     # original y ahora sí se cumple.
                     st.markdown('<div class="cp-rank-tit">Ranking de '
                                 'proveedores</div>', unsafe_allow_html=True)
-                    # 2026-08-23, a pedido ("pensé que [Día/Semana/Mes/Año]
-                    # debería funcionar como un selector de fecha... este
-                    # mes, esta semana, este año, últimos 30 días"): eso
-                    # YA existe — es `estado_rango.atajos_rango()`, el
-                    # mismo que arma la lista de "Atajos" del popover de
-                    # fecha que esta vista oculta (regla #177). En vez de
-                    # reinventar el filtro, se reusa: mismo `aplicar_atajo`,
-                    # misma clave canónica del rango
-                    # (`franja_fecha.contexto()["k_rango"]`) — un solo
-                    # dueño, dos lugares desde donde tocarlo.
-                    # Minimalista a pedido: de la lista completa (Todo +
-                    # semana/mes/d30/año + un chip por año) sólo se muestran
-                    # los 4 relativos que el usuario nombró; "Todo" y los
-                    # años sueltos se quedan en el popover original.
-                    _ctx_fecha = franja_fecha.contexto()
-                    _atajos_rank = []
-                    if _ctx_fecha:
-                        _claves_rank = ("semana", "mes", "d30", "anio")
-                        _atajos_rank = [
-                            a for a in atajos_rango(
-                                _ctx_fecha["hoy"],
-                                (_ctx_fecha["fecha_min"],
-                                 _ctx_fecha["fecha_max"]))
-                            if a[0] in _claves_rank]
-                    # 2026-08-25: el contenedor ya NO depende de
-                    # `_atajos_rank` — el ícono de ayuda (mudado acá, ver
-                    # el comentario de más arriba) tiene que dibujarse
-                    # SIEMPRE, no sólo cuando hay atajos que intersecten
-                    # el rango de datos (`_atajos_rank` puede salir vacía;
-                    # es el mismo caso raro que documenta el comentario de
-                    # `_ALTO_RANK`, más abajo). Lo que sigue condicionado
-                    # es cada pieza DE ADENTRO, por su propio motivo.
-                    with st.container(key="compras_prov_rank_atajos"):
-                        # RETIRADO 2026-08-26, a pedido: acá vivía un
-                        # popover ⓘ ("Suma TODO el rango elegido…"). Se va
-                        # entero, no se reescribe, por dos motivos:
-                        #
-                        #  · su texto ya era FALSO. Explicaba que
-                        #    Día/Semana/Mes/Año en Evolución "sólo agrupa
-                        #    esa curva" para tranquilizar sobre el total de
-                        #    esta tarjeta — pero Evolución dejó de heredar
-                        #    la fecha hace rato (tiene su `periodo.selector`
-                        #    propio) y hoy ni siquiera comparte sujeto con
-                        #    el ranking. El aviso describía un acople que
-                        #    ya no existe.
-                        #  · y era el TERCER ícono de ayuda que este rincón
-                        #    se comió en dos días (ver los dos `help=`
-                        #    retirados el 2026-08-25, commits a373af3 y
-                        #    c8c8e58). El rincón no da para más íconos: da
-                        #    para menos.
-                        if _ctx_fecha:
-                            # 2026-08-25, a pedido: la escala de tiempo
-                            # de una tabla dinámica de Excel, en versión
-                            # minimalista. Va en un POPOVER y no en la
-                            # fila porque el riel pide 250px y entre el
-                            # título y los atajos hay ~149px; el trigger
-                            # es un ícono suelto, que sí entra.
-                            #
-                            # 2026-08-25, 2da vuelta ("podemos unificar
-                            # estas dos?"): el desplegable "Atajos" —hasta
-                            # acá un SEGUNDO trigger al lado de este
-                            # ícono— se MUDA adentro de este MISMO panel.
-                            # Eran dos puertas al mismo dato (la clave
-                            # canónica del rango): una pedía "quiero un
-                            # atajo relativo", la otra "quiero elegir a
-                            # mano" — no dos filtros distintos, la misma
-                            # decisión con dos gestos. Unificar el gesto
-                            # es la otra mitad de "minimalista": ya no
-                            # alcanza con que CADA control se vea chico,
-                            # si siguen siendo DOS controles.
-                            #
-                            # No hace falta CSS para el trigger: la
-                            # regla `.st-key-compras_prov_rank_atajos
-                            # button` es un selector DESCENDIENTE y lo
-                            # captura solo (el aviso de CLAUDE.md sobre
-                            # widgets nuevos dentro de una tarjeta, esta
-                            # vez a favor). El PANEL no la hereda porque
-                            # `stPopoverBody` es un portal.
-                            # EL TRIGGER ES LA FECHA MISMA, no un ícono al
-                            # lado (a pedido, 2026-08-26: "que el selector
-                            # no sea el ícono del calendario, sino el mismo
-                            # contenedor de la fecha, y que el ícono
-                            # desaparezca").
-                            #
-                            # Antes eran DOS elementos: un botón de puro
-                            # ícono `:material/date_range:` y, al lado, un
-                            # `st.caption` con el rango activo. O sea el
-                            # dato y su gesto separados — había que leer uno
-                            # y apretar el otro. Ahora el rango ES el botón:
-                            # una sola pieza, un solo gesto. Mismo criterio
-                            # con el que el 2026-08-25 se fusionaron el
-                            # desplegable de atajos y el riel adentro de
-                            # este panel ("ya no alcanza con que cada
-                            # control se vea chico, si siguen siendo dos").
-                            #
-                            # Se lee de la MISMA clave canónica que escribe
-                            # el atajo/riel (nunca un estado propio: sería
-                            # un tercer lugar diciendo la fecha, y ese es
-                            # justo el bug que evita `estado_rango`). Y con
-                            # `franja_fecha.fmt_rango_es`, el formato de la
-                            # píldora de la franja, en vez de inventar uno.
-                            _rango_act = st.session_state.get(
-                                _ctx_fecha["k_rango"])
-                            _lbl_rango = (
-                                franja_fecha.fmt_rango_es(*_rango_act)
-                                if (isinstance(_rango_act, (tuple, list))
-                                    and len(_rango_act) == 2
-                                    and all(_rango_act))
-                                # Sin rango todavía (media selección, o una
-                                # sesión recién abierta) el botón tiene que
-                                # existir igual: si el label quedara vacío
-                                # no habría nada que apretar para elegirlo.
-                                else "Elegir rango")
-                            with st.popover(_lbl_rango,
-                                            key="cp_rank_escala",
-                                            use_container_width=False):
-                                with st.container(key="cp_rank_escala_panel"):
-                                    if _atajos_rank:
-                                        # El desplegable va PRIMERO
-                                        # ("elegí rápido") y la escala
-                                        # DESPUÉS ("o afiná a mano") —
-                                        # mismo orden de lectura que el
-                                        # popover de la píldora de la
-                                        # franja (atajos arriba,
-                                        # calendario abajo). Reusa el
-                                        # aplanado-a-texto de
-                                        # `cp_evo_ctrl`/`gran_float`
-                                        # (2026-08-23, mismo pedido:
-                                        # "lista desplegable, pero
-                                        # minimalista"); acá va a lo
-                                        # ANCHO del panel (`width:100%`
-                                        # en `_css_proveedor.py`), no a
-                                        # los 128px que necesitaba en la
-                                        # fila angosta de afuera.
-                                        #
-                                        # SIN `help=`: ver la regla de
-                                        # este mismo archivo más abajo
-                                        # (dos circulitos "?" casi
-                                        # iguales se leen como ícono
-                                        # duplicado; el ⓘ de al lado ya
-                                        # explica el rango).
-                                        # 2026-08-26, a pedido: "«Atajos»
-                                        # no significa nada para el
-                                        # usuario, ¿puedo mostrar de
-                                        # alguna forma directamente lo que
-                                        # tiene adentro?". El desplegable
-                                        # gastaba 22px de alto en una
-                                        # palabra que no era ninguna de
-                                        # las opciones: había que abrirlo
-                                        # para descubrir que ofrecía
-                                        # cuatro rangos.
-                                        #
-                                        # Ahora los cuatro se leen de una,
-                                        # aplanados a texto separado por
-                                        # "·" (el CSS lo pone en un
-                                        # `::after`, así que no hay un
-                                        # elemento por separador). Se
-                                        # eligió entre tres mockups; el
-                                        # de texto ganó por ser el más
-                                        # liviano en alto, que es el
-                                        # recurso escaso de este panel.
-                                        #
-                                        # `st.pills` y no cuatro
-                                        # `st.button`: un solo widget, una
-                                        # sola key y un solo `on_change`
-                                        # — con botones sueltos habría que
-                                        # repetir el callback cuatro veces
-                                        # y la fila se partiría en
-                                        # columnas de ancho fijo, que es
-                                        # justo lo que hace que el texto
-                                        # deje de leerse como una frase.
-                                        #
-                                        # Es un MENÚ DE ACCIONES, no una
-                                        # selección: el callback lo vuelve
-                                        # a `None` en la misma corrida
-                                        # (ver su docstring), o el segundo
-                                        # clic sobre el mismo atajo no
-                                        # dispararía nada.
-                                        _op_rank = {
-                                            _ETIQ_CORTA_RANK.get(_ca, _et): _rg
-                                            for _ca, _et, _rg in _atajos_rank}
-                                        st.pills(
-                                            "Atajo de rango",
-                                            list(_op_rank),
-                                            selection_mode="single",
-                                            key="cp_rank_atajo_sel",
-                                            label_visibility="collapsed",
-                                            on_change=(
-                                                _aplicar_atajo_rank_select),
-                                            args=("cp_rank_atajo_sel",
-                                                  None,
-                                                  _op_rank, _ctx_fecha))
-                                    # La bandera es la MISMA que usa el
-                                    # desplegable de arriba: el filtro
-                                    # que lee el rango vive en app.py,
-                                    # fuera de este fragment, y sin
-                                    # escalar a rerun completo el riel
-                                    # se movería sin que cambie nada.
-                                    selector_escala(
-                                        "cp_rank_esc", _ctx_fecha,
-                                        bandera="_cp_rank_atajo_pendiente")
-                            # (Acá vivía el `st.caption` con el rango
-                            # activo, agregado el 2026-08-25 "al costado
-                            # del ícono que lo abre". Ya no hace falta:
-                            # el rango se dibuja EN el trigger, arriba.)
+                    # 2026-08-23 → 08-26, cuatro vueltas de pedido: el
+                    # selector de fecha de esta tarjeta. Vive en
+                    # `_comun.py::selector_fecha_tarjeta` desde que se pidió
+                    # "el mismo selector" para el Ranking de Productos —
+                    # copiarlo hubiera sido duplicar ~190 líneas y, peor,
+                    # dos sitios donde arreglar el próximo detalle.
+                    #
+                    # No es un filtro paralelo: escribe la MISMA clave
+                    # canónica del rango que la píldora de la franja. La
+                    # bandera hace que el fragment escale a
+                    # `st.rerun(scope="app")`, porque el filtro que lee ese
+                    # rango vive en app.py, fuera de este fragment.
+                    _ctx_fecha = selector_fecha_tarjeta(
+                        "cp_rank", "_cp_rank_atajo_pendiente")
                     # La fila de atajos le come FRANJA_ATAJOS al AgGrid de
                     # abajo — mismo motivo que FRANJA_CTRL_EVO en
                     # Evolución: nadie le hacía lugar todavía. YA NO es

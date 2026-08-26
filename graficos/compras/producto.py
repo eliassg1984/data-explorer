@@ -32,7 +32,9 @@ from st_aggrid import AgGrid, JsCode
 from tema import ACENTO, ERROR, EXITO, GRIS_TEXTO, TEXTO_PRINCIPAL
 from graficos.base import _compras_layout, _compras_truncar, _slug
 from graficos.ventas_comparativo import _fmt_soles_compacto
-from graficos.compras._comun import COLUMNAS_DRILL, GAP_DRILL
+from graficos.compras._comun import (
+    COLUMNAS_DRILL, GAP_DRILL, selector_fecha_tarjeta,
+)
 from graficos import alturas, periodo
 
 _ALTO_FILA = 28
@@ -351,6 +353,14 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                 "para este gráfico.")
         return
 
+    # La bandera del selector de fecha de la tarjeta: el filtro que lee el
+    # rango vive en app.py, FUERA de este fragment, así que sin escalar a
+    # `st.rerun(scope="app")` el estado cambiaría y la pantalla no. Se
+    # consume al entrar, antes de dibujar nada. Mismo mecanismo que el
+    # Ranking de Proveedores.
+    if st.session_state.pop("_cp_prod_atajo_pendiente", False):
+        st.rerun(scope="app")
+
     dd = d.copy()
     dd[col_fecha] = pd.to_datetime(dd[col_fecha], errors="coerce")
     dd[col_punit] = pd.to_numeric(dd[col_punit], errors="coerce")
@@ -377,6 +387,18 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
 
         col_tabla, col_detalle = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
         with col_tabla:
+            # 2026-08-26, a pedido ("el mismo selector de fecha que la
+            # tabla de proveedores"): el MISMO componente, no una copia —
+            # vive en `_comun.py::selector_fecha_tarjeta`. Escribe la misma
+            # clave canónica del rango, así que mover la fecha acá mueve
+            # también el Ranking de Proveedores: son dos puertas al mismo
+            # dato, que es justo lo correcto (las dos tablas rankean sobre
+            # el mismo período).
+            #
+            # El `clave` distinto ("cp_prod") no es cosmético: desde que
+            # Compras se lee APILADA, las dos tarjetas están en la página a
+            # la vez, así que sus widgets no pueden compartir key.
+            selector_fecha_tarjeta("cp_prod", "_cp_prod_atajo_pendiente")
             st.markdown('<div class="cp-prod-rank-tit">Ranking de productos</div>',
                        unsafe_allow_html=True)
 

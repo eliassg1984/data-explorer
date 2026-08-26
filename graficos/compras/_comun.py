@@ -23,6 +23,9 @@ from graficos.base import _compras_truncar, _slug
 # sus dos consumidores.
 from graficos.base import _es_movil  # noqa: F401
 from graficos import alturas
+from graficos.base import selector_escala
+from estado_rango import aplicar_atajo, atajos_rango
+import franja_fecha
 
 
 # ===========================================================================
@@ -111,3 +114,110 @@ def _periodo_serie(fe, gran):
     if gran == "Año":
         return fe.dt.year.astype("Int64").astype(str)
     return fe.dt.to_period("M").astype(str)  # Mes
+
+
+# ===========================================================================
+# EL SELECTOR DE FECHA DE UNA TARJETA
+# ===========================================================================
+# Nació dentro del Ranking de Proveedores (2026-08-23 → 08-26, cuatro
+# vueltas de pedido) y se mudó acá el 2026-08-26, cuando se pidió "el mismo
+# selector" para el Ranking de Productos. Copiarlo hubiera sido duplicar
+# ~190 líneas y, peor, dos sitios donde arreglar el próximo detalle.
+#
+# NO ES UN FILTRO PARALELO: escribe la MISMA clave canónica del rango que
+# la píldora de la franja (`franja_fecha.contexto()["k_rango"]`, vía
+# `aplicar_atajo`). Dos tarjetas con este control son dos puertas al mismo
+# dato, no dos filtros — mover una mueve la otra, que es lo correcto:
+# ambas rankean sobre el mismo período.
+
+_ETIQ_CORTA_RANK = {"semana": "Semana", "mes": "Mes",
+                    "d30": "30 días", "anio": "Año"}
+"""Etiquetas CORTAS de los atajos.
+
+Las largas ("Esta semana", "Últimos 30 días"…) son las de la píldora de la
+franja, donde hay ancho de sobra. Acá los cuatro van en UNA fila de texto
+dentro de un panel de 290px: con las largas suman ~250px de glifos más tres
+separadores y saltan de renglón. El contexto repone lo que se pierde al
+acortar — estás en un selector de fecha, y el rango resultante se ve en el
+trigger mismo, dos píxeles más arriba."""
+
+
+def _aplicar_atajo_select(clave_widget, placeholder, opciones, ctx, bandera):
+    """`on_change` de los atajos: aplica el rango Y marca escalada.
+
+    Por qué CALLBACK y no cuerpo: `ctx["k_rango"]` es la key del
+    `st.date_input` que `app.py` ya instanció en este mismo run, y escribir
+    la clave de un widget ya instanciado es `StreamlitAPIException`. El
+    callback corre ANTES del rerun, que es el único momento legal.
+
+    `bandera` la consume el fragment que dibuja la tarjeta para escalar a
+    `st.rerun(scope="app")`: el filtro que lee el rango vive FUERA del
+    fragment, así que sin escalada el estado cambia y la pantalla no.
+
+    Es un MENÚ DE ACCIONES, no una selección persistente: vuelve al estado
+    "nada elegido" en la misma corrida. Sin ese reset, Streamlit sólo llama
+    a `on_change` cuando el valor CAMBIA, así que un segundo clic sobre el
+    mismo atajo no dispararía nada. Escribir la propia key del widget desde
+    su propio `on_change` es legal (corre antes del rerun).
+    """
+    _sel = st.session_state.get(clave_widget)
+    if not _sel or _sel == placeholder or _sel not in opciones:
+        return
+    aplicar_atajo(ctx["k_rango"], opciones[_sel],
+                  ctx["reporte"], ctx["usa_carga_rango"])
+    st.session_state[bandera] = True
+    st.session_state[clave_widget] = placeholder
+
+
+def selector_fecha_tarjeta(clave, bandera):
+    """Trigger + panel de fecha para una tarjeta de Compras.
+
+    El TRIGGER es el rango vigente escrito con todas las letras ("1 ago –
+    24 ago 2026"); apretarlo abre un panel con los cuatro atajos relativos
+    en texto y, debajo, la escala de tiempo (Días/Meses/Años + riel).
+
+    Devuelve el `ctx` de `franja_fecha` (o None si no hay), porque el
+    llamador suele necesitarlo para otra cosa.
+
+    `clave` es el prefijo de TODAS las keys que dibuja, así que dos
+    tarjetas en la misma página no chocan — y desde que Compras se lee
+    apilada, Proveedor y Producto coexisten de verdad. El CSS de cada
+    prefijo se lista explícito en `_css_proveedor.py` (nada de wildcards:
+    ver el aviso de CLAUDE.md sobre reglas por familia).
+    """
+    ctx = franja_fecha.contexto()
+    if not ctx:
+        return None
+    # De la lista completa (Todo + semana/mes/d30/año + un chip por año)
+    # sólo van los 4 relativos: "Todo" y los años sueltos se quedan en el
+    # popover de la franja, y acá el alto es el recurso escaso.
+    _claves = ("semana", "mes", "d30", "anio")
+    atajos = [a for a in atajos_rango(
+        ctx["hoy"], (ctx["fecha_min"], ctx["fecha_max"]))
+        if a[0] in _claves]
+
+    with st.container(key=f"{clave}_fila"):
+        # El TRIGGER ES LA FECHA MISMA. Antes eran dos elementos —un botón
+        # de puro ícono y, al lado, un caption con el rango— o sea el dato
+        # y su gesto separados. Sin rango todavía (media selección, o
+        # sesión recién abierta) cae a "Elegir rango": si el label quedara
+        # vacío no habría nada que apretar.
+        _rango = st.session_state.get(ctx["k_rango"])
+        _lbl = (franja_fecha.fmt_rango_es(*_rango)
+                if (isinstance(_rango, (tuple, list)) and len(_rango) == 2
+                    and all(_rango))
+                else "Elegir rango")
+        with st.popover(_lbl, key=f"{clave}_escala",
+                        use_container_width=False):
+            with st.container(key=f"{clave}_escala_panel"):
+                if atajos:
+                    _k_at = f"{clave}_atajo_sel"
+                    _ops = {_ETIQ_CORTA_RANK.get(_ca, _et): _rg
+                            for _ca, _et, _rg in atajos}
+                    st.pills("Atajo de rango", list(_ops),
+                             selection_mode="single", key=_k_at,
+                             label_visibility="collapsed",
+                             on_change=_aplicar_atajo_select,
+                             args=(_k_at, None, _ops, ctx, bandera))
+                selector_escala(f"{clave}_esc", ctx, bandera=bandera)
+    return ctx
