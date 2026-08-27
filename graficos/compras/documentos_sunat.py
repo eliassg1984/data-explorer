@@ -69,12 +69,16 @@ baja a S/6,9 y S/1.199 — esa medición es de ANTES de tener RUC, cuando la
 """
 
 import datetime
+import difflib
 import io
+import json
+import re
+import unicodedata
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
+from st_aggrid import AgGrid, DataReturnMode, GridOptionsBuilder, GridUpdateMode, JsCode
 
 import sunat
 from estado_rango import clave_rango
@@ -1094,9 +1098,548 @@ def _tabla_detalle(lineas):
     )
 
 
-def _mostrar_original(doc, pdf_bytes, xml_bytes):
-    """El comprobante del proveedor —PDF real, detalle de líneas, XML— EN
-    LA COLUMNA, no detrás de un botón.
+_COLS_LINEA_PARQUET = ["COD_PRODUCTO", "NOMBRE_PRODUCTO", "CANTIDAD_COMPRA",
+                       "UNIDAD_DE_INGRESO", "PRECIO_UNIT", "VALOR_COMPRA",
+                       "FECHA_EMISION_DOC"]
+
+
+def _lineas_parquet_del_documento(d, doc):
+    """Las filas de `compras.parquet` (una por línea de producto, SIN
+    agregar) que pertenecen a ESTE comprobante puntual — para la pestaña
+    «Detalle sistema».
+
+    Empareja por `documento` (mismo cálculo que `_llave_documento_parquet`)
+    + RUC, igual criterio que `cruzar_con_parquet`/`_fila_de`: `NUM_DOCUMENTO`
+    solo NO alcanza, es el correlativo de CADA proveedor y se repite entre
+    emisores distintos (regla #143 de `arquitectura.md`). Si con
+    documento+RUC todavía queda más de una fecha de emisión distinta (el
+    mismo par repetido en años distintos — el caso que mide el docstring
+    de `_parquet_agrupado_por_documento`), se acota a la fecha más cercana
+    a la del SIRE.
+    """
+    if d is None or "NUM_DOCUMENTO" not in d.columns:
+        return pd.DataFrame(columns=_COLS_LINEA_PARQUET)
+
+    documento = str(doc.get("documento") or "")
+    if not documento:
+        return pd.DataFrame(columns=_COLS_LINEA_PARQUET)
+
+    dd = d[d["NUM_DOCUMENTO"].notna()].copy()
+    dd["_documento"] = _llave_documento_parquet(dd["NUM_DOCUMENTO"])
+    dd = dd[dd["_documento"] == documento]
+    if COL_RUC_PARQUET in dd.columns:
+        ruc = str(doc.get("ruc_proveedor") or "").strip()
+        dd = dd[dd[COL_RUC_PARQUET].astype(str).str.strip() == ruc]
+    if dd.empty:
+        return pd.DataFrame(columns=_COLS_LINEA_PARQUET)
+
+    if "FECHA_EMISION_DOC" in dd.columns:
+        fechas = pd.to_datetime(dd["FECHA_EMISION_DOC"], errors="coerce")
+        if fechas.nunique() > 1:
+            objetivo = pd.Timestamp(doc.get("fecha_emision"))
+            mas_cercana = (fechas - objetivo).abs().idxmin()
+            dd = dd[fechas == fechas.loc[mas_cercana]]
+
+    cols = [c for c in _COLS_LINEA_PARQUET if c in dd.columns]
+    return dd[cols].reset_index(drop=True)
+
+
+def _asignar_greedy(candidatos, n_lineas):
+    """`candidatos` = lista de `(puntaje, i_linea, j_candidato)` → una
+    lista de tamaño `n_lineas` con, para cada línea, el `j` de mayor
+    puntaje que sigue libre, o `None`. Cada `j` se usa como mucho una vez.
+
+    Compartido por `_parear_lineas_sistema` y `_sugerir_desde_maestro`:
+    mismo problema (emparejar 1 a 1 por puntaje, greedy) contra dos
+    fuentes de candidatos distintas — no hace falta optimización
+    combinatoria para un puñado de líneas por comprobante, y greedy es
+    fácil de auditar a ojo.
+    """
+    asignado = [None] * n_lineas
+    usado = set()
+    for _sc, i, j in sorted(candidatos, key=lambda t: t[0], reverse=True):
+        if asignado[i] is not None or j in usado:
+            continue
+        asignado[i] = j
+        usado.add(j)
+    return asignado
+
+
+_PISO_SCORE_PAREO = 0.35
+"""Piso de similitud para sugerir un emparejamiento automático CONTRA
+`compras.parquet` (documento ya registrado). Medido contra un documento
+real sincronizado (F002-9092, AGRO ELDREDGE E.I.R.L.): una descripción
+idéntica normalizada da 1.0 de texto + 0.8 de bonus numérico (cantidad Y
+precio calzan) = 1.8. 0.35 deja pasar coincidencias razonables (por
+ejemplo solo texto, sin bonus numérico) sin forzar una línea que en
+realidad no tiene par en este documento."""
+
+
+def _parear_lineas_sistema(lineas_xml, filas_pq):
+    """Sugiere, para cada línea del XML, cuál fila de `filas_pq` (líneas
+    del sistema de ESTE documento, ya cargadas en `compras.parquet`) es su
+    equivalente — o `None` si ninguna parece razonable. Solo tiene sentido
+    para un documento YA REGISTRADO (`filas_pq` no vacío) — para uno
+    pendiente, ver `_sugerir_desde_maestro`.
+
+    Ninguna fuente comparte una clave: el código de línea del XML es del
+    PROVEEDOR, `COD_PRODUCTO` es el INTERNO. El puntaje combina similitud
+    de texto (`descripcion` vs `NOMBRE_PRODUCTO`, normalizado con
+    `utils._norm` — misma función que ya usa `cruzar_con_parquet` para el
+    fallback por nombre de proveedor) con cercanía de cantidad e importe.
+    Validado contra un documento real: "PALTA FUERTE" (XML) vs
+    "Palta Fuerte" (sistema), cantidad y precio unitario IDÉNTICOS — el
+    caso común, medido, es que quien carga la compra copia el número tal
+    cual del comprobante.
+
+    Devuelve una lista paralela a `lineas_xml` con la POSICIÓN (no el
+    índice de fila) de `filas_pq` que mejor calza, o `None` — ver
+    `_asignar_greedy`.
+    """
+    if filas_pq.empty or not lineas_xml:
+        return [None] * len(lineas_xml)
+
+    def _score(xml_l, pq_row):
+        s_txt = difflib.SequenceMatcher(
+            None, _norm(str(xml_l.get("descripcion") or "")),
+            _norm(str(pq_row["NOMBRE_PRODUCTO"] or ""))).ratio()
+        s_num = 0.0
+        try:
+            if (xml_l.get("importe") is not None
+                    and pd.notna(pq_row.get("VALOR_COMPRA"))
+                    and abs(float(xml_l["importe"])
+                            - float(pq_row["VALOR_COMPRA"])) <= 0.05):
+                s_num += 0.5
+        except (TypeError, ValueError):
+            pass
+        try:
+            if (xml_l.get("cantidad") is not None
+                    and pd.notna(pq_row.get("CANTIDAD_COMPRA"))
+                    and abs(float(xml_l["cantidad"])
+                            - float(pq_row["CANTIDAD_COMPRA"])) <= 0.01):
+                s_num += 0.3
+        except (TypeError, ValueError):
+            pass
+        return s_txt + s_num
+
+    candidatos = []
+    for i, xml_l in enumerate(lineas_xml):
+        for j in range(len(filas_pq)):
+            sc = _score(xml_l, filas_pq.iloc[j])
+            if sc > _PISO_SCORE_PAREO:
+                candidatos.append((sc, i, j))
+    return _asignar_greedy(candidatos, len(lineas_xml))
+
+
+def _tokens_busqueda(s):
+    """Palabras (alfanumérico, sin acentos, minúsculas) de un texto — para
+    indexar por token y ACOTAR candidatos antes de correr `difflib`.
+
+    `utils._norm` no sirve para esto a propósito: saca los ESPACIOS
+    (está pensada para comparar strings enteras por contención, no para
+    partir en palabras), así que tokenizar con ella da una sola palabra
+    gigante por texto."""
+    s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode()
+    return set(re.findall(r"[a-z0-9]+", s.lower()))
+
+
+_TOPE_CANDIDATOS_MAESTRO = 40
+"""Cuántos candidatos del maestro, como mucho, llegan a `difflib` por
+línea de XML en `_sugerir_desde_maestro`. Medido: puntuar una línea contra
+las 3.867 filas del maestro COMPLETO tarda ~0,13s (difflib no es gratis);
+una factura de 80 líneas —las hay reales, ver `compras.parquet`— tardaría
+más de 10s, inaceptable para una pestaña interactiva. Acotando por token
+compartido a 40 candidatos por línea, esas mismas 80 líneas bajan a
+~1s (medido)."""
+
+
+def _indice_tokens_maestro(nombres):
+    """token → {posiciones de `nombres` que lo contienen}. Se arma UNA vez
+    por render del maestro completo (no una vez por línea) — es lo que
+    hace viable acotar candidatos antes de correr `difflib`, ver
+    `_TOPE_CANDIDATOS_MAESTRO`."""
+    idx = {}
+    for pos, nom in enumerate(nombres):
+        for tok in _tokens_busqueda(nom):
+            idx.setdefault(tok, set()).add(pos)
+    return idx
+
+
+def _candidatos_por_token(descripcion, indice, tope=_TOPE_CANDIDATOS_MAESTRO):
+    """Posiciones candidatas para `descripcion`, ordenadas por CUÁNTOS
+    tokens comparte con cada una (no por similitud todavía — eso lo
+    termina de decidir `difflib` después, en `_sugerir_desde_maestro`).
+    Sin ningún token en común, lista vacía: no tiene sentido puntuar
+    contra el maestro entero cuando no comparte ni una palabra."""
+    conteo = {}
+    for tok in _tokens_busqueda(descripcion):
+        for pos in indice.get(tok, ()):
+            conteo[pos] = conteo.get(pos, 0) + 1
+    if not conteo:
+        return []
+    return [pos for pos, _ in
+           sorted(conteo.items(), key=lambda kv: kv[1], reverse=True)[:tope]]
+
+
+_PISO_SCORE_SUGERIDO = 0.5
+"""Piso de similitud para SUGERIR desde el maestro completo — documento
+TODAVÍA NO registrado, sin ninguna línea de `compras.parquet` con la que
+corroborar cantidad/precio. A diferencia de `_PISO_SCORE_PAREO`, acá el
+puntaje es SOLO texto (no hay bonus numérico posible), así que el piso es
+más alto: exigir más similitud de texto puro compensa no tener con qué
+corroborar."""
+
+
+def _sugerir_desde_maestro(lineas_xml, maestro):
+    """Como `_parear_lineas_sistema`, pero para un documento que TODAVÍA NO
+    tiene ninguna línea en `compras.parquet` (no está registrado) — a
+    pedido 2026-08-27, sugiere directo contra el maestro de artículos
+    completo (`_maestro_productos`) por similitud de texto sola, ya que no
+    hay ninguna compra registrada con la que corroborar cantidad o precio.
+
+    Prefiltra por tokens compartidos (`_candidatos_por_token`) antes de
+    correr `difflib` — puntuar cada línea contra las 3.867 filas del
+    maestro sin acotar es demasiado lento para una pestaña interactiva,
+    ver `_TOPE_CANDIDATOS_MAESTRO`.
+
+    Devuelve una lista paralela a `lineas_xml` con la POSICIÓN de
+    `maestro` que mejor calza, o `None` — ver `_asignar_greedy`.
+    """
+    if maestro.empty or not lineas_xml:
+        return [None] * len(lineas_xml)
+
+    nombres = maestro["NOMBRE PRODUCTO"].tolist()
+    indice = _indice_tokens_maestro(nombres)
+
+    candidatos = []
+    for i, xml_l in enumerate(lineas_xml):
+        desc = str(xml_l.get("descripcion") or "")
+        a = _norm(desc)
+        for pos in _candidatos_por_token(desc, indice):
+            sc = difflib.SequenceMatcher(None, a, _norm(str(nombres[pos]))).ratio()
+            if sc > _PISO_SCORE_SUGERIDO:
+                candidatos.append((sc, i, pos))
+    return _asignar_greedy(candidatos, len(lineas_xml))
+
+
+_COLS_MAESTRO = ["CODIGO PRODUCTO", "NOMBRE PRODUCTO", "UNIDAD KARDEX"]
+
+
+def _maestro_productos():
+    """Código, nombre y unidad de KARDEX de todo el catálogo de artículos —
+    a pedido 2026-08-27, no sale de `compras.parquet` (que solo tiene los
+    ~1.582 productos que alguna vez se compraron, y su unidad es la de la
+    compra puntual, no la de stock) sino de `inventariovalorizado.parquet`,
+    el maestro real: 3.867 productos, y CADA código tiene un único nombre y
+    unidad (0 conflictos, verificado con DuckDB contra R2 real).
+
+    Cacheado por `data.cargar` (`@st.cache_data(ttl=3600, persist="disk")`)
+    — no hace falta otra capa de caché acá encima.
+    """
+    import data
+
+    m = data.cargar("inventariovalorizado.parquet")
+    if m is None or not all(c in m.columns for c in _COLS_MAESTRO):
+        return pd.DataFrame(columns=_COLS_MAESTRO)
+    return (m[_COLS_MAESTRO].dropna(subset=["CODIGO PRODUCTO"])
+            .drop_duplicates().sort_values("NOMBRE PRODUCTO"))
+
+
+_JS_EDITOR_PRODUCTO = JsCode("""
+class ProductoEditor {
+    init(params) {
+        this.eGui = document.createElement('div');
+        this.eInput = document.createElement('input');
+        this.eInput.className = 'ag-input-field-input ag-text-field-input';
+        this.eInput.style.width = '100%';
+        this.eInput.style.height = '100%';
+        this.eInput.style.boxSizing = 'border-box';
+        this.eInput.setAttribute('list', 'sunat_maestro_datalist');
+        this.eInput.setAttribute('autocomplete', 'off');
+        this.eInput.value = params.value || '';
+        this.eGui.appendChild(this.eInput);
+    }
+    getGui() { return this.eGui; }
+    afterGuiAttached() { this.eInput.focus(); this.eInput.select(); }
+    getValue() { return this.eInput.value; }
+    isPopup() { return false; }
+    isCancelAfterEnd() {
+        // Rechaza cualquier texto que no matchee (sin distinguir mayúsculas)
+        // algún nombre del maestro -- lo arma `onGridReady`, ver
+        // `_detalle_sistema`. Si el set todavía no existe (carrera rara al
+        // montar), no bloquea: mejor dejar pasar que trabar la edición.
+        var set = window.__sunatMaestroSetLower;
+        if (!set) return false;
+        var v = (this.eInput.value || '').trim().toLowerCase();
+        return !set.has(v);
+    }
+}
+""")
+"""Cell EDITOR a mano para "Ítem (sistema)" -- un `<input list=…>` con
+autocompletado NATIVO del navegador, no `agRichSelectCellEditor` de AG
+Grid (ese es Enterprise, descartado en todo el proyecto — ver CLAUDE.md
+§ Restricciones de despliegue). Misma interfaz de Component que ya usan
+los cellRenderer de este proyecto (`init`/`getGui`, ver arquitectura.md
+regla #25), con los dos métodos propios de un EDITOR (`getValue`,
+`isCancelAfterEnd`)."""
+
+
+def _detalle_sistema(doc, lineas_xml, d):
+    """Pestaña «Detalle sistema»: cada línea del XML del proveedor, junto a
+    su equivalente en el sistema — código, nombre y unidad de KARDEX del
+    maestro de artículos (`_maestro_productos`) — editable EN LA PROPIA
+    CELDA, con buscador de sugerencias (a pedido 2026-08-27).
+
+    DOS FUENTES según si el documento YA ESTÁ REGISTRADO (tiene líneas en
+    `compras.parquet`, `_lineas_parquet_del_documento`) o todavía no
+    («Pendiente» en SUNAT, sin ninguna compra cargada):
+      · Registrado: el emparejamiento sale de cruzar contra ESAS líneas
+        (`_parear_lineas_sistema`) — es lo único que sabe qué se cargó de
+        verdad para este documento puntual. Origen "Automático".
+      · Sin registrar: no hay nada de `compras.parquet` con qué cruzar,
+        así que se SUGIERE directo contra el maestro completo por
+        similitud de nombre (`_sugerir_desde_maestro`). Origen
+        "Sugerido" — es una suposición sin ninguna compra real que la
+        respalde, por eso comparte el color ámbar de "revisar" con "Sin
+        coincidencia" en vez del neutro de "Automático".
+    En los dos casos, una vez que hay un CÓDIGO (automático, sugerido o
+    corregido a mano), el NOMBRE y la UNIDAD que se muestran salen
+    SIEMPRE del maestro — no de `compras.parquet`, cuya unidad es la de
+    esa compra puntual, no la de kardex.
+
+    EDITAR EN LA CELDA, no en un formulario aparte: "Ítem (sistema)" es
+    `editable=True` con el cell editor `_JS_EDITOR_PRODUCTO` (ver su
+    docstring sobre por qué no es `agRichSelectCellEditor`). Al confirmar
+    una celda, `update_mode=GridUpdateMode.VALUE_CHANGED` hace que
+    Streamlit rerunee con el valor nuevo en `resp.data` — se compara fila
+    a fila contra `tv` (lo que se mandó) por `_idx` para encontrar QUÉ
+    línea cambió, se resuelve el nombre tipeado a su código (puede haber
+    más de un código con el mismo nombre — 9 de 3.867 en el maestro real,
+    medido con DuckDB; se toma el primero) y se guarda con
+    `sunat.guardar_correccion_linea`. Si el nombre elegido es el MISMO
+    que ya sugería automático/sugerido, no se guarda una corrección
+    redundante — y si había una corrección vieja que ahora vuelve a
+    coincidir con lo automático, se borra (`quitar_correccion_linea`) en
+    vez de dejarla pisando algo que saldría igual sin ella.
+
+    Ni esto ni la comparación tocan `compras.parquet` ni el maestro — son
+    de solo lectura acá, los arma un ETL aparte; la corrección es una
+    anotación de la webapp sobre ESE documento puntual, no un cambio al
+    dato de origen.
+    """
+    filas_pq = _lineas_parquet_del_documento(d, doc)
+    correcciones = sunat.correcciones_lineas(doc)
+    maestro = _maestro_productos()
+
+    registrado = not filas_pq.empty
+    if registrado:
+        asignado = _parear_lineas_sistema(lineas_xml, filas_pq)
+        _origen_auto = "Automático"
+    else:
+        asignado = _sugerir_desde_maestro(lineas_xml, maestro)
+        _origen_auto = "Sugerido"
+
+    _lookup_cod = dict(zip(maestro["CODIGO PRODUCTO"].astype(str),
+                          zip(maestro["NOMBRE PRODUCTO"], maestro["UNIDAD KARDEX"])))
+    # nombre (recortado, en minúsculas) -> código: para resolver lo que se
+    # tipeó en la celda. Ambiguo (mismo nombre, más de un código) se queda
+    # con el primero -- 9 de 3.867 casos reales, medido con DuckDB.
+    _lookup_nombre = {}
+    for _cod, _nom in zip(maestro["CODIGO PRODUCTO"], maestro["NOMBRE PRODUCTO"]):
+        _lookup_nombre.setdefault(str(_nom).strip().lower(), str(_cod))
+
+    if registrado:
+        st.caption("Documento registrado: los ítems salen de cruzar "
+                   "contra lo que ya está cargado en `compras.parquet`.")
+    else:
+        st.info("Este documento todavía no está cargado en el sistema — "
+                "SUNAT lo ve, pero sigue «Pendiente». Los ítems de abajo "
+                "son SUGERENCIAS por nombre contra el maestro de "
+                "artículos, sin ninguna compra registrada que las "
+                "confirme.")
+
+    def _codigo_auto(i):
+        """El código que sugiere automático/sugerido para la línea `i`,
+        sin mirar correcciones -- lo que "editar y volver a lo mismo"
+        necesita comparar."""
+        if asignado[i] is None:
+            return None
+        if registrado:
+            return str(filas_pq.iloc[asignado[i]]["COD_PRODUCTO"])
+        return str(maestro.iloc[asignado[i]]["CODIGO PRODUCTO"])
+
+    filas_tabla = []
+    for i, xml_l in enumerate(lineas_xml):
+        correccion = correcciones.get(i)
+        cod_auto = _codigo_auto(i)
+        if correccion:
+            cod_sis = str(correccion.get("cod_producto", ""))
+            origen = "Corregido"
+            _respaldo = correccion.get("nombre_producto", "")
+        elif cod_auto is not None:
+            cod_sis = cod_auto
+            origen = _origen_auto
+            _respaldo = ""
+        else:
+            cod_sis, origen, _respaldo = "", "Sin coincidencia", ""
+        # Del maestro sale nombre Y unidad; si el código no está ahí (no
+        # debería pasar), al menos no se pierde el nombre que ya se tenía.
+        nom_sis, uni_sis = _lookup_cod.get(cod_sis, (_respaldo, ""))
+        filas_tabla.append({
+            "_idx": i,
+            "_cod_auto": cod_auto or "",
+            "Código prov.": xml_l.get("codigo", ""),
+            "Ítem (XML)": xml_l.get("descripcion", ""),
+            "Cant.": xml_l.get("cantidad"),
+            "Código sistema": cod_sis,
+            "Ítem (sistema)": nom_sis,
+            "Unidad kardex": uni_sis,
+            "Origen": origen,
+        })
+
+    tv = pd.DataFrame(filas_tabla)
+    _js_cant = JsCode(
+        "function(p){ return p.value==null ? '' : "
+        "Number(p.value).toLocaleString('es-PE',{maximumFractionDigits:2}); }")
+    gb = GridOptionsBuilder.from_dataframe(tv)
+    gb.configure_default_column(resizable=True, sortable=True, filter=False,
+                                editable=False, suppressMovable=True)
+    gb.configure_column("_idx", hide=True)
+    gb.configure_column("_cod_auto", hide=True)
+    gb.configure_column("Código prov.", width=95, minWidth=95)
+    gb.configure_column("Ítem (XML)", minWidth=150, flex=1)
+    gb.configure_column("Cant.", type=["numericColumn"], width=75,
+                        minWidth=75, valueFormatter=_js_cant)
+    gb.configure_column("Código sistema", width=105, minWidth=105)
+    # LA columna editable -- ver el docstring de la función y de
+    # `_JS_EDITOR_PRODUCTO`. El tinte lavanda es la misma señal visual de
+    # "interactivo" que usa el resto de la app (`_ficha_html`, la barra de
+    # TOTAL), acá marcando "esta celda se puede tocar".
+    gb.configure_column(
+        "Ítem (sistema)", minWidth=170, flex=1, editable=True,
+        cellEditor=_JS_EDITOR_PRODUCTO,
+        cellStyle=JsCode(
+            "function(p){ return {'background': '%s', 'cursor': 'text'}; }"
+            % LAVANDA_FONDO))
+    gb.configure_column("Unidad kardex", width=100, minWidth=100)
+    # Misma convención que "Estado" en `_tabla_cruce`: ámbar = revisar
+    # ("sin coincidencia" o "sugerido, sin confirmar todavía"). "Corregido"
+    # va con el acento de marca porque no es un problema, es una
+    # intervención humana que conviene notar.
+    gb.configure_column(
+        "Origen", width=128, minWidth=128,
+        cellStyle=JsCode(
+            "function(p){ var m={'Corregido':'%s','Sugerido':'%s',"
+            "'Sin coincidencia':'%s'}; var c=m[p.value];"
+            " return c ? {'color':c,'fontWeight':'600'} : {'color':'%s'}; }"
+            % (ACENTO_TEXTO, ADVERTENCIA_TEXTO, ADVERTENCIA_TEXTO, GRIS_TEXTO)))
+    # `onGridReady` arma UNA vez por sesión de navegador (guardia
+    # `window.__sunatMaestroSetLower`, sobrevive a cambiar de documento) el
+    # <datalist> que alimenta el autocompletado y el set de nombres válidos
+    # que usa `isCancelAfterEnd`. `singleClickEdit` + `stopEditingWhenCells
+    # LoseFocus`: un clic entra a editar y clickear afuera confirma, como
+    # una celda de Excel -- sin esto haría falta doble clic y Enter.
+    _opciones_json = json.dumps(
+        maestro["NOMBRE PRODUCTO"].astype(str).tolist(), ensure_ascii=False)
+    _js_on_ready = JsCode(
+        "function(params){"
+        " if (window.__sunatMaestroSetLower) return;"
+        " var opciones = %s;"
+        " window.__sunatMaestroSetLower = new Set(opciones.map("
+        "   function(o){ return o.trim().toLowerCase(); }));"
+        " var dl = document.getElementById('sunat_maestro_datalist');"
+        " if (!dl) {"
+        "   dl = document.createElement('datalist');"
+        "   dl.id = 'sunat_maestro_datalist';"
+        "   document.body.appendChild(dl);"
+        " }"
+        " opciones.forEach(function(o){"
+        "   var opt = document.createElement('option');"
+        "   opt.value = o;"
+        "   dl.appendChild(opt);"
+        " });"
+        "}" % _opciones_json)
+    gb.configure_grid_options(
+        rowHeight=30, headerHeight=32, singleClickEdit=True,
+        stopEditingWhenCellsLoseFocus=True, onGridReady=_js_on_ready,
+        onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"),
+        # Esta tabla vive en la columna angosta ("Original del proveedor",
+        # ~300-400px) con 8 columnas que no entran sin scroll horizontal
+        # -- eso es esperable (mismo criterio que `_tabla_cruce`). Lo que
+        # NO conviene es la virtualización de columnas por defecto: con el
+        # marco tan angosto, deja sin nodo DOM a "Ítem (sistema)" hasta
+        # que alguien scrollea hasta ahí, y esa es justo la columna
+        # editable. Ocho columnas es nada para el navegador — desactivar
+        # la virtualización cuesta cero acá y evita esa sorpresa.
+        suppressColumnVirtualisation=True,
+    )
+    # Key con el documento adentro: sin esto, AG Grid retiene estado del
+    # lado del cliente al cambiar de documento -- antes fue la fila
+    # seleccionada y reventó en vivo con menos líneas que el documento
+    # anterior (IndexError, ver arquitectura.md regla #224); con edición en
+    # celda el mismo riesgo aplica igual. Con la key distinta, AG Grid
+    # monta un componente nuevo por documento y arranca limpio.
+    _doc_id = str(doc.get("documento") or "")
+    resp = AgGrid(
+        tv, gridOptions=gb.build(),
+        height=alturas.por_filas(len(tv), px_fila=30, rol=alturas.MINI),
+        theme="material", custom_css=dict(_css_grid(12)),
+        allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
+        update_mode=GridUpdateMode.VALUE_CHANGED,
+        data_return_mode=DataReturnMode.AS_INPUT,
+        key=f"sunat_detalle_sistema_grid_{_doc_id}",
+    )
+    st.caption("Clic en «Ítem (sistema)» para corregirlo — el buscador "
+               "sugiere mientras escribís, contra el catálogo completo.")
+
+    # ¿Cambió algo? Comparar lo que volvió (`resp.data`) contra lo que se
+    # mandó (`tv`), fila a fila por `_idx` -- no por posición, para no
+    # depender de que el orden se mantenga igual.
+    devuelto = resp.data
+    if devuelto is None or len(devuelto) == 0:
+        return
+    for _, fila in devuelto.iterrows():
+        try:
+            i = int(fila["_idx"])
+        except (TypeError, ValueError):
+            continue
+        if i < 0 or i >= len(lineas_xml):
+            continue          # ver regla #224: fila de un documento viejo
+        nuevo_nombre = str(fila.get("Ítem (sistema)") or "").strip()
+        original = str(tv.loc[tv["_idx"] == i, "Ítem (sistema)"].iloc[0]).strip()
+        if nuevo_nombre == original:
+            continue
+
+        cod_nuevo = _lookup_nombre.get(nuevo_nombre.lower())
+        if cod_nuevo is None:
+            # El editor ya rechaza esto del lado del navegador
+            # (`isCancelAfterEnd`) -- si igual llega acá es que algo
+            # puenteó la UI. No se guarda cualquier cosa como si fuera un
+            # código real; se avisa y se vuelve al último valor válido.
+            st.warning(f"«{nuevo_nombre}» no es un producto del maestro — "
+                       "no se guardó. Elegí una sugerencia de la lista.")
+            st.rerun()
+            continue
+
+        cod_auto_linea = str(tv.loc[tv["_idx"] == i, "_cod_auto"].iloc[0])
+        if cod_nuevo == cod_auto_linea:
+            # Volvió a coincidir con lo automático/sugerido: si había una
+            # corrección vieja, ya no hace falta -- se saca en vez de
+            # dejarla pisando algo que saldría igual sin ella.
+            if i in correcciones:
+                sunat.quitar_correccion_linea(doc, i)
+                st.rerun()
+        else:
+            if sunat.guardar_correccion_linea(doc, i, cod_nuevo, nuevo_nombre):
+                st.rerun()
+            else:
+                st.error("No se pudo guardar. ¿Están las credenciales de "
+                         "R2 configuradas?")
+
+
+def _mostrar_original(doc, pdf_bytes, xml_bytes, d):
+    """El comprobante del proveedor —PDF real, detalle de líneas, XML,
+    detalle contra el sistema— EN LA COLUMNA, no detrás de un botón.
 
     Hasta 2026-08-27 esto vivía en un `st.dialog` que un botón «Ver el
     original» abría a demanda. A pedido pasó a mostrarse directo, al lado
@@ -1116,6 +1659,11 @@ def _mostrar_original(doc, pdf_bytes, xml_bytes):
     monta todos sus iframes así (ver `_ficha_html`). Renderizarlo del lado
     del servidor además funciona igual en el teléfono, donde un visor de
     PDF embebido es incómodo.
+
+    `d` es el parquet de Compras completo (lo trae `renderizar_documentos_
+    sunat`, que ya lo recibe para la vista "Cruce") — lo necesita la
+    pestaña «Detalle sistema» (`_detalle_sistema`) para buscar las líneas
+    de ESTE documento y el catálogo completo de productos.
     """
     lineas = sunat.lineas_xml(xml_bytes) if xml_bytes else []
     nombres = []
@@ -1125,6 +1673,11 @@ def _mostrar_original(doc, pdf_bytes, xml_bytes):
         nombres.append(f"📋 Detalle ({len(lineas)})")
     if xml_bytes:
         nombres.append("🧾 XML")
+    # Después de XML, a pedido 2026-08-27: no tiene sentido corregir el
+    # emparejamiento contra el sistema sin haber visto primero el detalle
+    # crudo del XML del que sale.
+    if lineas:
+        nombres.append("📑 Detalle sistema")
 
     if not nombres:
         st.info("No hay nada que mostrar todavía.")
@@ -1142,6 +1695,8 @@ def _mostrar_original(doc, pdf_bytes, xml_bytes):
                     st.image(png, use_container_width=True)
                     if len(paginas) > 1:
                         st.caption(f"Página {i} de {len(paginas)}")
+            elif nombre.startswith("📑"):
+                _detalle_sistema(doc, lineas, d)
             elif nombre.startswith("📋"):
                 _tabla_detalle(lineas)
             else:
@@ -1172,8 +1727,12 @@ def _mostrar_original(doc, pdf_bytes, xml_bytes):
                 key="sunat_original_dl_xml")
 
 
-def _panel_documento(doc):
+def _panel_documento(doc, d):
     """Panel derecho: ficha del SIRE y original del proveedor, LADO A LADO.
+
+    `d` es el parquet de Compras completo (recibido de
+    `renderizar_documentos_sunat`) — se necesita para armar la pestaña
+    «Detalle sistema» de `_mostrar_original`, ver su docstring.
 
     Hasta 2026-08-27 iban apiladas (ficha arriba, "Original del proveedor"
     abajo con un botón que abría un `st.dialog`) — a pedido pasaron a dos
@@ -1250,7 +1809,7 @@ def _panel_documento(doc):
             # Antes esto era un botón "Ver el original" que abría un
             # `st.dialog` — a pedido 2026-08-27 se muestra DIRECTO, sin
             # ese clic. Ver `_mostrar_original`.
-            _mostrar_original(doc, pdf_original, xml_original)
+            _mostrar_original(doc, pdf_original, xml_original, d)
             st.caption("PDF y XML tal como los emitió el proveedor.")
         elif sunat.solicitud_pendiente(doc):
             # La corrida nocturna va de lo más nuevo hacia atrás y tarda
@@ -1528,4 +2087,4 @@ def renderizar_documentos_sunat(d, col_fecha):
     # habia (38px) existia solo para alinear el tope de las dos columnas, y
     # apilado no hay nada que alinear.
     with st.container(border=True, key="sunat_card_doc"):
-        _panel_documento(doc)
+        _panel_documento(doc, d)

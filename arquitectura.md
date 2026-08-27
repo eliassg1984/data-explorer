@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-223 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+224 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (77)
 
@@ -168,7 +168,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
 - **#202** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
 
-**AgGrid y tablas** (36)
+**AgGrid y tablas** (37)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -206,6 +206,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#214** — Un st.rerun con scope="app" sigue estando ADENTRO del fragment que lo llama: sumarle espacio…
 - **#215** — Element.innerText no atraviesa el layout position: absolute de las celdas de AgGrid: da ""…
 - **#221** — tablas/desktop.py declaraba los TRES hooks que _parchar_iconos necesitaba, así que la tabla…
+- **#224** — Una key ESTÁTICA de AG Grid retiene estado del lado del cliente al cambiar de documento — y…
 
 **Streamlit** (70)
 
@@ -280,7 +281,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#220** — Convertir una página de "una vista por vez" en una PILA no es mover código: es descubrir qué…
 - **#222** — La ventana del riel se generalizó a Meses, y el intento de arreglar "otro bug" de paso…
 
-**Datos, R2 y DuckDB** (25)
+**Datos, R2 y DuckDB** (26)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -307,6 +308,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#199** — El puente precio/cantidad de un GRUPO se suma desde sus productos; calculado sobre el…
 - **#200** — Una vista comparativa no puede heredar el rango de la franja: el rango corriente le deja el…
 - **#205** — En recetaventa.parquet, tres trampas de columna que no tiran error — devuelven un número o…
+- **#224** — Una key ESTÁTICA de AG Grid retiene estado del lado del cliente al cambiar de documento — y…
 
 **SUNAT y SIRE** (13)
 
@@ -9846,13 +9848,103 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      `sunat_original_dl_pdf`/`sunat_original_dl_xml` — el nombre "visor"
      describía el diálogo que ya no existe.
 
+224. **Una key ESTÁTICA de AG Grid retiene estado del lado del cliente al
+     cambiar de documento — y si ese estado se usa como índice
+     POSICIONAL en una lista de Python, revienta con datos reales que
+     nunca aparecieron probando a mano** (2026-08-27, pestaña nueva
+     «Detalle sistema» de Documentos SUNAT,
+     `graficos/compras/documentos_sunat.py::_detalle_sistema`).
+
+     La primera versión de la pestaña dejaba elegir una fila de la tabla
+     (línea del XML) y abría un formulario de corrección debajo, leyendo
+     el `_idx` (posición 0-based dentro de `lineas_xml`) de la fila
+     seleccionada — `xml_l = lineas_xml[idx]`. Reventó en el servidor
+     local con `IndexError: list index out of range`, dos veces seguidas,
+     mirando la app real: se selecciona una fila en un documento con
+     varias líneas, se cambia a OTRO documento con MENOS líneas, y AG
+     Grid (`st_aggrid`, un componente que vive en su propio iframe) se
+     acuerda de la fila que tenía seleccionada — es estado del lado del
+     NAVEGADOR, no de Streamlit, y sobrevive a un rerun mientras la
+     `key=` del componente no cambie. `resp.selected_rows` seguía
+     devolviendo esa fila vieja con un `_idx` que ya no calzaba con el
+     `lineas_xml` del documento nuevo.
+
+     Fix con dos capas, no una: (1) la `key` de la grilla pasó a incluir
+     el documento (`f"sunat_detalle_sistema_grid_{doc.get('documento')}"`)
+     — al cambiar de documento, AG Grid monta un componente NUEVO y
+     arranca sin nada seleccionado, en vez de arrastrar el anterior; (2)
+     igual se agregó un chequeo de rango (`if idx < 0 or idx >=
+     len(lineas_xml): return`) antes de indexar, porque la key sola no
+     cubre todos los casos (una pestaña vieja abierta en otra parte del
+     navegador, por ejemplo). Cuando la pestaña se rediseñó para editar
+     EN LA CELDA en vez de un formulario aparte, el mismo par de
+     defensas se mantuvo sobre el `_idx` que vuelve en `resp.data` —
+     mismo riesgo, mismo fix.
+
+     **Contexto del resto de la pestaña, para quien la retoque:**
+       · El código/nombre "del sistema" que se compara NO sale de
+         `compras.parquet` para el nombre — compras.parquet solo tiene
+         los ~1.582 productos que alguna vez se compraron, y su unidad
+         es la de esa compra puntual, no la de stock. El maestro real
+         (`_maestro_productos`) es `inventariovalorizado.parquet`: 3.867
+         productos, con `CODIGO PRODUCTO`/`NOMBRE PRODUCTO`/`UNIDAD
+         KARDEX` (0 conflictos código↔nombre, verificado con DuckDB
+         contra R2 real; sí hay 9 nombres que repiten código en el otro
+         sentido — nombre→2 códigos distintos — y ahí se toma el primero).
+       · Documento YA REGISTRADO (tiene filas en `compras.parquet`,
+         `_lineas_parquet_del_documento`) vs SIN REGISTRAR: son dos
+         algoritmos de sugerencia distintos, a pedido explícito.
+         Registrado cruza contra esas líneas puntuales
+         (`_parear_lineas_sistema`, texto + bonus por cantidad/precio
+         calzando — validado contra un documento real, "Palta Fuerte"
+         idéntico en las dos fuentes). Sin registrar no tiene con qué
+         corroborar, así que sugiere por texto SOLO contra el maestro
+         completo (`_sugerir_desde_maestro`) — de ahí que su Origen
+         ("Sugerido") comparta el ámbar de "revisar" con "Sin
+         coincidencia" en vez del neutro de "Automático".
+       · Puntuar una línea de XML contra el maestro completo con
+         `difflib` sin acotar es demasiado lento para una pestaña
+         interactiva: medido, ~0,13s por línea × 3.867 candidatos, y una
+         factura de 80 líneas (las hay reales, ver `compras.parquet`)
+         se iba a más de 10s. `_candidatos_por_token` prefiltra por
+         palabras compartidas (índice invertido armado UNA vez con
+         `_indice_tokens_maestro`) antes de correr `difflib`, acotado a
+         40 candidatos por línea — la misma factura de 80 líneas baja a
+         ~1s. Ojo: `utils._norm` NO sirve para tokenizar (saca los
+         ESPACIOS a propósito, para comparar strings enteras por
+         contención) — tokenizar con ella da una palabra gigante por
+         texto; hace falta un normalizador propio (`_tokens_busqueda`)
+         que SÍ separa por palabra.
+       · La edición en la celda usa un `<input list=…>` con
+         `<datalist>` — autocompletado NATIVO del navegador, NO
+         `agRichSelectCellEditor` de AG Grid. Ese es Enterprise, y
+         Enterprise está descartado en todo el proyecto (CLAUDE.md §
+         Restricciones de despliegue) — aunque el bundle de `st_aggrid`
+         trae las funciones Enterprise en modo trial/con marca de agua
+         (se ve el aviso en la consola del navegador en cualquier
+         página con una grilla), usarlas ahí sería depender de algo que
+         el proyecto ya decidió no usar. El cell editor
+         (`_JS_EDITOR_PRODUCTO`) es la misma interfaz de Component que
+         ya usan los cellRenderer de este archivo (`init`/`getGui`, ver
+         regla #25), con los dos métodos propios de un editor
+         (`getValue`, `isCancelAfterEnd` — este último rechaza
+         cualquier texto que no matchee, sin distinguir mayúsculas,
+         algún nombre real del maestro).
+       · La corrección se guarda en R2 con el mismo patrón que
+         `sunat.solicitar_original` (señal JSON, `put_object` +
+         `get_object`, caché corto para que el guardado se vea al
+         toque) — ver la sección "CORRECCIONES MANUALES DE LÍNEA" de
+         `sunat.py`. No toca `compras.parquet` ni el maestro, los arma
+         un ETL aparte: es una anotación de la webapp sobre ESE
+         documento puntual.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#224**.
+> próxima regla nueva es la **#225**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

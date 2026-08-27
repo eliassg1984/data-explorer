@@ -1213,6 +1213,126 @@ def solicitar_original(doc):
 
 
 # ===========================================================================
+# CORRECCIONES MANUALES DE LÍNEA («Detalle sistema», 2026-08-27)
+# ===========================================================================
+# El detalle del XML (`lineas_xml`) trae el código de línea que usa el
+# PROVEEDOR; `compras.parquet` trae `COD_PRODUCTO`, el código INTERNO. No
+# hay ninguna columna que una uno con otro — el emparejamiento que arma
+# `graficos/compras/documentos_sunat.py::_parear_lineas_sistema` es una
+# SUGERENCIA por texto/cantidad/precio, no una certeza, y a veces se
+# equivoca o no encuentra nada. Esto guarda la corrección manual.
+#
+# Mismo patrón que la sección de arriba (señal en R2, `put_object` +
+# `get_object`, cache corto para que el guardado se vea al toque): una
+# corrección es una anotación de LA WEBAPP sobre un documento puntual,
+# nunca un cambio a `compras.parquet` — ese parquet lo arma un ETL aparte
+# y acá es de solo lectura.
+
+PREFIJO_CORRECCIONES = "_correcciones_sunat"
+
+
+def clave_correcciones(doc):
+    """Key en R2 de las correcciones de línea de un comprobante.
+
+    Determinista, igual que `clave_solicitud`: dos correcciones sobre el
+    mismo comprobante pisan el mismo archivo en vez de acumular uno por
+    intento."""
+    ruc = str(doc.get("ruc_proveedor") or "").strip()
+    serie = str(doc.get("serie") or "").strip()
+    numero = str(doc.get("numero") or "").strip()
+    return f"{PREFIJO_CORRECCIONES}/{ruc}_{serie}-{numero}.json"
+
+
+@st.cache_data(ttl=15, show_spinner=False)
+def correcciones_lineas(doc):
+    """`{índice_línea_xml: {"cod_producto", "nombre_producto", "corregido_en"}}`
+    de las correcciones guardadas para este comprobante, o `{}` si no hay
+    ninguna (estado normal: la mayoría de los documentos no tiene
+    correcciones). TTL corto (15 seg), igual que `_hay_senal`: esto puede
+    cambiar mientras el usuario mira la pantalla, justo después de guardar
+    una corrección."""
+    import json
+
+    import data
+
+    if not data.secrets_disponibles():
+        return {}
+    try:
+        crudo = data.get_s3_cliente().get_object(
+            Bucket=st.secrets["R2_BUCKET"], Key=clave_correcciones(doc))["Body"].read()
+        bruto = json.loads(crudo)
+        return {int(k): v for k, v in bruto.items()}
+    except Exception:
+        return {}
+
+
+def guardar_correccion_linea(doc, indice_linea, cod_producto, nombre_producto):
+    """Guarda en R2 la corrección manual de UNA línea del XML de este
+    comprobante (pisa la corrección previa de esa línea, si había).
+
+    Devuelve True si quedó guardada. No lanza: un R2 caído durante el
+    guardado es un estado a mostrar en pantalla, no un traceback.
+    """
+    import json
+    from datetime import datetime, timezone
+
+    import data
+
+    if not data.secrets_disponibles():
+        return False
+    actuales = dict(correcciones_lineas(doc))
+    actuales[int(indice_linea)] = {
+        "cod_producto": str(cod_producto),
+        "nombre_producto": str(nombre_producto),
+        "corregido_en": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        data.get_s3_cliente().put_object(
+            Bucket=st.secrets["R2_BUCKET"], Key=clave_correcciones(doc),
+            Body=json.dumps(actuales, ensure_ascii=False).encode("utf-8"),
+            ContentType="application/json")
+    except Exception:
+        return False
+    # Sin esto la UI seguiría mostrando el emparejamiento viejo durante los
+    # 15 seg del TTL, como si la corrección no se hubiera guardado.
+    correcciones_lineas.clear(doc)
+    return True
+
+
+def quitar_correccion_linea(doc, indice_linea):
+    """Saca la corrección manual de UNA línea (esa línea vuelve a mostrar
+    el emparejamiento automático). No es un error si esa línea no tenía
+    corrección guardada — simplemente no cambia nada.
+    """
+    import json
+
+    import data
+
+    if not data.secrets_disponibles():
+        return False
+    actuales = dict(correcciones_lineas(doc))
+    if int(indice_linea) not in actuales:
+        return True
+    del actuales[int(indice_linea)]
+    try:
+        s3 = data.get_s3_cliente()
+        if actuales:
+            s3.put_object(
+                Bucket=st.secrets["R2_BUCKET"], Key=clave_correcciones(doc),
+                Body=json.dumps(actuales, ensure_ascii=False).encode("utf-8"),
+                ContentType="application/json")
+        else:
+            # No queda ninguna corrección: borrar el archivo entero es lo
+            # mismo que "nunca hubo nada", y no deja un {} suelto en R2.
+            s3.delete_object(Bucket=st.secrets["R2_BUCKET"],
+                             Key=clave_correcciones(doc))
+    except Exception:
+        return False
+    correcciones_lineas.clear(doc)
+    return True
+
+
+# ===========================================================================
 # LA FICHA DEL COMPROBANTE
 # ===========================================================================
 # Dos representaciones del MISMO comprobante:
