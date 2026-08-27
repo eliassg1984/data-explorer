@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-222 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+223 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (77)
 
@@ -308,7 +308,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#200** — Una vista comparativa no puede heredar el rango de la franja: el rango corriente le deja el…
 - **#205** — En recetaventa.parquet, tres trampas de columna que no tiran error — devuelven un número o…
 
-**SUNAT y SIRE** (12)
+**SUNAT y SIRE** (13)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -322,6 +322,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#195** — Hay emisores que usan cbc:Description como un renglón de TICKET, no como una descripción:…
 - **#196** — Un return temprano que se lleva puesto el ÚNICO control capaz de arreglar el estado que lo…
 - **#197** — Un techo de calendario sacado de "hasta dónde llegó el último sync" hace que HOY no se pueda…
+- **#223** — El panel derecho de Documentos SUNAT (ficha + original) pasó de apilado con el original…
 
 **Fechas, rangos y cortes** (8)
 
@@ -9801,13 +9802,57 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Antes de escribir el comentario, reproducir; y si el harness es el
      sospechoso, probarlo en el servidor.
 
+223. **El panel derecho de Documentos SUNAT (ficha + original) pasó de
+     apilado con el original detrás de un botón a dos columnas con el
+     original YA VISIBLE** (2026-08-27, a pedido:
+     `graficos/compras/documentos_sunat.py::_panel_documento`).
+
+     Hasta acá, "Original del proveedor" vivía debajo de la ficha del
+     SIRE y mostraba un botón «🔍 Ver el original» que abría un
+     `st.dialog` — dos clics para ver el PDF real (elegir el documento en
+     la tabla, después abrir el diálogo). Ahora la ficha y el original
+     van en dos `st.columns(2)`, y si el documento ya está sincronizado
+     (`sunat.originales`) el PDF se renderiza directo, sin diálogo — es
+     `_mostrar_original`, la misma función que antes vivía decorada con
+     `@st.dialog("Original del proveedor", width="large")`, con el
+     decorador sacado y llamada inline.
+
+     **Por qué el split NO usa `COLUMNAS_DRILL`** (CLAUDE.md § Grilla):
+     esa constante es la proporción con la que se parte una FILA del
+     drill, y ésta sigue sin partirse — `sunat_card_izq` (la tabla seguía
+     a lo ancho completo desde el 2026-08-21, ver la regla de ese cambio
+     más arriba en este mismo archivo y el docstring de
+     `renderizar_documentos_sunat`: partirla en columnas apretaba
+     `fit_columns_on_grid_load` hasta dejar "Fecha" en 36px). El split
+     nuevo es OTRA cosa — dos paneles DENTRO de `sunat_card_doc`, la
+     tarjeta de abajo — así que es un `st.columns(2)` literal marcado
+     `# columnas-internas:`, el mismo escape hatch que ya usa la botonera
+     de refrescar/exportar un poco más arriba en el mismo archivo.
+
+     **Costo a tener presente:** `sunat.paginas_pdf` (PDF → PNG por
+     página) antes corría sólo si alguien clickeaba «Ver el original»;
+     ahora corre en cuanto se elige, en la tabla, un documento con
+     original ya sincronizado. Lo mitiga su propia caché
+     (`@st.cache_data(ttl=1800, max_entries=20)`, en `sunat.py`): la
+     primera vista de un documento paga el render, las siguientes no. No
+     hace falta lógica de alto nueva para la columna: `sunat_card_doc`
+     ya clampeaba con `max-height: var(--alto-util)` y scroll interno
+     (`estilos/_80_cards.py`), así que un PDF de varias páginas
+     simplemente scrollea dentro de su columna, igual que antes scrolleaba
+     dentro del diálogo.
+
+     Efecto lateral menor: los `key` de los botones de descarga del
+     original pasaron de `sunat_visor_dl_pdf`/`sunat_visor_dl_xml` a
+     `sunat_original_dl_pdf`/`sunat_original_dl_xml` — el nombre "visor"
+     describía el diálogo que ya no existe.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#223**.
+> próxima regla nueva es la **#224**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

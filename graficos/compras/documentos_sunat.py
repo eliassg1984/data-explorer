@@ -1094,9 +1094,22 @@ def _tabla_detalle(lineas):
     )
 
 
-@st.dialog("Original del proveedor", width="large")
-def _visor_original(doc, pdf_bytes, xml_bytes):
-    """Ventana con el comprobante en pantalla y sus descargas.
+def _mostrar_original(doc, pdf_bytes, xml_bytes):
+    """El comprobante del proveedor —PDF real, detalle de líneas, XML— EN
+    LA COLUMNA, no detrás de un botón.
+
+    Hasta 2026-08-27 esto vivía en un `st.dialog` que un botón «Ver el
+    original» abría a demanda. A pedido pasó a mostrarse directo, al lado
+    de la ficha del SIRE (`_panel_documento`): es lo primero que alguien
+    quiere ver de un documento ya sincronizado, no una acción secundaria
+    escondida detrás de un clic.
+
+    Costo de ese cambio, para quien lo vuelva a tocar: `sunat.paginas_pdf`
+    (que renderiza cada página a PNG) ahora corre en CUANTO se elige un
+    documento con original sincronizado, no solo cuando alguien pedía
+    verlo. Lo mitiga su propia caché (`@st.cache_data(ttl=1800,
+    max_entries=20)`, ver `sunat.py`) — la primera vista de un documento
+    paga el render, las siguientes no.
 
     EL PDF SE MUESTRA COMO IMAGEN, no embebido: Chrome no renderiza un
     `data:application/pdf` dentro de un iframe con `sandbox` y Streamlit
@@ -1104,12 +1117,6 @@ def _visor_original(doc, pdf_bytes, xml_bytes):
     del servidor además funciona igual en el teléfono, donde un visor de
     PDF embebido es incómodo.
     """
-    st.markdown(
-        f'<div style="font-size:13px;color:{GRIS_TEXTO};margin:-8px 0 10px;">'
-        f'<b style="color:{TEXTO_PRINCIPAL};">{doc.get("documento", "")}</b>'
-        f' · {_compras_truncar(str(doc.get("proveedor", "")), 52)}</div>',
-        unsafe_allow_html=True)
-
     lineas = sunat.lineas_xml(xml_bytes) if xml_bytes else []
     nombres = []
     if pdf_bytes:
@@ -1148,25 +1155,43 @@ def _visor_original(doc, pdf_bytes, xml_bytes):
                 st.code(txt, language="xml")
 
     st.divider()
-    c1, c2 = st.columns(2)
+    c1, c2 = st.columns(2)  # columnas-internas: 2 botones de descarga
     with c1:
         if pdf_bytes:
             st.download_button(
                 "⬇ Descargar PDF", data=pdf_bytes,
                 file_name=f"{doc.get('documento', 'comprobante')}.pdf",
                 mime="application/pdf", use_container_width=True,
-                key="sunat_visor_dl_pdf")
+                key="sunat_original_dl_pdf")
     with c2:
         if xml_bytes:
             st.download_button(
                 "⬇ Descargar XML", data=xml_bytes,
                 file_name=f"{doc.get('documento', 'comprobante')}.xml",
                 mime="application/xml", use_container_width=True,
-                key="sunat_visor_dl_xml")
+                key="sunat_original_dl_xml")
 
 
 def _panel_documento(doc):
-    """Panel derecho: ficha del comprobante + visor PDF + descargas."""
+    """Panel derecho: ficha del SIRE y original del proveedor, LADO A LADO.
+
+    Hasta 2026-08-27 iban apiladas (ficha arriba, "Original del proveedor"
+    abajo con un botón que abría un `st.dialog`) — a pedido pasaron a dos
+    columnas, con el original YA VISIBLE cuando está sincronizado (ver
+    `_mostrar_original`), sin el clic de más. La cabecera (tipo/documento/
+    proveedor) sigue siendo UNA sola, arriba de las dos columnas: identifica
+    el documento elegido para ambos paneles, no es parte de ninguno.
+
+    El split es un `st.columns(2)` con `# columnas-internas`, NO
+    `COLUMNAS_DRILL` (CLAUDE.md): esa constante es la proporción con la
+    que se parte una FILA del drill —acá la fila (`sunat_card_izq`, la
+    tabla) sigue a lo ancho completo, como quedó el 2026-08-21 después de
+    medir que achicarla apretaba `fit_columns_on_grid_load` hasta dejar
+    columnas ilegibles (ver el docstring de `renderizar_documentos_sunat`).
+    Esta subdivisión es OTRA cosa: dos paneles DENTRO de la tarjeta de
+    abajo, como la botonera de `_c_ref`/`_c_xls` más arriba en este mismo
+    archivo.
+    """
     if doc is None:
         st.markdown(
             f'<div style="padding:28px 16px;text-align:center;color:{GRIS_TEXTO};'
@@ -1189,80 +1214,83 @@ def _panel_documento(doc):
         unsafe_allow_html=True,
     )
 
-    _ficha_html(doc)
+    col_ficha, col_original = st.columns(2)  # columnas-internas: ficha SIRE y original del proveedor, lado a lado
 
-    try:
-        pdf_bytes = sunat.ficha_pdf(doc)
-    except Exception as e:
-        st.error(f"No se pudo generar el PDF: {e}")
-        return
+    with col_ficha:
+        _ficha_html(doc)
 
-    st.download_button(
-        "⬇️  Descargar PDF", data=pdf_bytes,
-        file_name=f"{doc.get('documento', 'comprobante')}.pdf",
-        mime="application/pdf", use_container_width=True, key="sunat_dl_pdf")
-    st.caption("Ficha con los datos del SIRE. No es el PDF que emitió el "
-               "proveedor.")
+        try:
+            pdf_bytes = sunat.ficha_pdf(doc)
+        except Exception as e:
+            st.error(f"No se pudo generar el PDF: {e}")
+            pdf_bytes = None
 
-    # El original vive en R2 solo si `sunat_originales_sync.py` ya pasó por
-    # este documento — ver el docstring del módulo. Ninguno de los dos
-    # `None` es un error: es el estado normal antes del primer sync.
-    pdf_original, xml_original = sunat.originales(doc)
+        if pdf_bytes:
+            st.download_button(
+                "⬇️  Descargar PDF", data=pdf_bytes,
+                file_name=f"{doc.get('documento', 'comprobante')}.pdf",
+                mime="application/pdf", use_container_width=True,
+                key="sunat_dl_pdf")
+        st.caption("Ficha con los datos del SIRE. No es el PDF que emitió "
+                   "el proveedor.")
 
-    st.markdown(
-        f'<div style="font-size:10px;font-weight:700;color:{ACENTO};'
-        f'text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;'
-        f'padding-bottom:3px;border-bottom:1px solid {GRIS_BORDE};">'
-        f'Original del proveedor</div>', unsafe_allow_html=True)
+    with col_original:
+        st.markdown(
+            f'<div style="font-size:10px;font-weight:700;color:{ACENTO};'
+            f'text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px;'
+            f'padding-bottom:3px;border-bottom:1px solid {GRIS_BORDE};">'
+            f'Original del proveedor</div>', unsafe_allow_html=True)
 
-    if pdf_original or xml_original:
-        # UN solo botón que ABRE, en vez de dos que descargan a ciegas:
-        # bajar el archivo y buscarlo en la carpeta de descargas para
-        # recién ahí ver qué era es un rodeo. Las descargas siguen
-        # existiendo, adentro del visor.
-        if st.button("🔍 Ver el original", use_container_width=True,
-                     key="sunat_ver_original",
-                     help="Abre el comprobante en pantalla: el PDF, el "
-                          "detalle de líneas del XML, y las descargas."):
-            _visor_original(doc, pdf_original, xml_original)
-        st.caption("PDF y XML tal como los emitió el proveedor.")
-        return
+        # El original vive en R2 solo si `sunat_originales_sync.py` ya pasó
+        # por este documento — ver el docstring del módulo. Ninguno de los
+        # dos `None` es un error: es el estado normal antes del primer sync.
+        pdf_original, xml_original = sunat.originales(doc)
 
-    # Todavía no está en R2. La corrida nocturna va de lo más nuevo hacia
-    # atrás y tarda semanas en llegar a lo viejo (ver regla #142), así que
-    # acá se ofrece pedirlo puntualmente. La webapp NO abre ningún
-    # navegador: deja una señal en R2 y la CPU local hace el trabajo —
-    # mismo mecanismo que el refresco de parquets (regla #144).
-    if sunat.solicitud_pendiente(doc):
-        st.info("⏳ Pedido. La máquina local lo está trayendo de SUNAT — "
-                "suele tardar menos de un minuto. Volvé a entrar al "
-                "documento en un rato.", icon=None)
-        return
-
-    # Un intento anterior que falló: sin esto el usuario ve el mismo botón
-    # de siempre y no tiene forma de saber que ya se intentó y no se pudo.
-    fallo = sunat.fallo_solicitud(doc)
-    if fallo:
-        st.warning(f"No se pudo traer: {fallo.get('motivo', 'error desconocido')}",
-                   icon="⚠️")
-        st.caption(f"Último intento: {fallo.get('cuando', '—')}")
-        etiqueta = "↻ Intentar de nuevo"
-    else:
-        etiqueta = "⬇ Traer el original de SUNAT"
-
-    if st.button(etiqueta, use_container_width=True,
-                 key="sunat_pedir_original",
-                 help="Le pide a la máquina local que baje el PDF y el XML "
-                      "que emitió el proveedor. Tarda menos de un minuto; "
-                      "después queda guardado para siempre."):
-        if sunat.solicitar_original(doc):
-            st.rerun()
+        if pdf_original or xml_original:
+            # Antes esto era un botón "Ver el original" que abría un
+            # `st.dialog` — a pedido 2026-08-27 se muestra DIRECTO, sin
+            # ese clic. Ver `_mostrar_original`.
+            _mostrar_original(doc, pdf_original, xml_original)
+            st.caption("PDF y XML tal como los emitió el proveedor.")
+        elif sunat.solicitud_pendiente(doc):
+            # La corrida nocturna va de lo más nuevo hacia atrás y tarda
+            # semanas en llegar a lo viejo (ver regla #142), así que acá se
+            # ofrece pedirlo puntualmente. La webapp NO abre ningún
+            # navegador: deja una señal en R2 y la CPU local hace el
+            # trabajo — mismo mecanismo que el refresco de parquets
+            # (regla #144).
+            st.info("⏳ Pedido. La máquina local lo está trayendo de SUNAT — "
+                    "suele tardar menos de un minuto. Volvé a entrar al "
+                    "documento en un rato.", icon=None)
         else:
-            st.error("No se pudo dejar el pedido. ¿Están las credenciales "
-                     "de R2 configuradas?")
-    if not fallo:
-        st.caption("Todavía no sincronizado. Arriba está la ficha con los "
-                   "datos del registro, que siempre está disponible.")
+            # Un intento anterior que falló: sin esto el usuario ve el
+            # mismo botón de siempre y no tiene forma de saber que ya se
+            # intentó y no se pudo.
+            fallo = sunat.fallo_solicitud(doc)
+            if fallo:
+                st.warning(f"No se pudo traer: "
+                           f"{fallo.get('motivo', 'error desconocido')}",
+                           icon="⚠️")
+                st.caption(f"Último intento: {fallo.get('cuando', '—')}")
+                etiqueta = "↻ Intentar de nuevo"
+            else:
+                etiqueta = "⬇ Traer el original de SUNAT"
+
+            if st.button(etiqueta, use_container_width=True,
+                         key="sunat_pedir_original",
+                         help="Le pide a la máquina local que baje el PDF y "
+                              "el XML que emitió el proveedor. Tarda menos "
+                              "de un minuto; después queda guardado para "
+                              "siempre."):
+                if sunat.solicitar_original(doc):
+                    st.rerun()
+                else:
+                    st.error("No se pudo dejar el pedido. ¿Están las "
+                             "credenciales de R2 configuradas?")
+            if not fallo:
+                st.caption("Todavía no sincronizado. Al lado está la ficha "
+                           "con los datos del registro, que siempre está "
+                           "disponible.")
 
 
 def _excel_bytes(df, hoja="Datos"):
