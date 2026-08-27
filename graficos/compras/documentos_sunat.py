@@ -1105,8 +1105,8 @@ _COLS_LINEA_PARQUET = ["COD_PRODUCTO", "NOMBRE_PRODUCTO", "CANTIDAD_COMPRA",
 
 def _lineas_parquet_del_documento(d, doc):
     """Las filas de `compras.parquet` (una por línea de producto, SIN
-    agregar) que pertenecen a ESTE comprobante puntual — para la pestaña
-    «Detalle sistema».
+    agregar) que pertenecen a ESTE comprobante puntual — para la tarjeta
+    «Conversor SUNAT-Sistema».
 
     Empareja por `documento` (mismo cálculo que `_llave_documento_parquet`)
     + RUC, igual criterio que `cruzar_con_parquet`/`_fila_de`: `NUM_DOCUMENTO`
@@ -1385,10 +1385,13 @@ regla #25), con los dos métodos propios de un EDITOR (`getValue`,
 
 
 def _detalle_sistema(doc, lineas_xml, d):
-    """Pestaña «Detalle sistema»: cada línea del XML del proveedor, junto a
+    """El cuerpo de la tarjeta «Conversor SUNAT-Sistema»
+    (`_card_conversor_sistema`): cada línea del XML del proveedor, junto a
     su equivalente en el sistema — código, nombre y unidad de KARDEX del
     maestro de artículos (`_maestro_productos`) — editable EN LA PROPIA
-    CELDA, con buscador de sugerencias (a pedido 2026-08-27).
+    CELDA, con buscador de sugerencias (a pedido 2026-08-27; hasta esa
+    fecha vivía como cuarta pestaña de "Original del proveedor", ver el
+    docstring de `_card_conversor_sistema`).
 
     DOS FUENTES según si el documento YA ESTÁ REGISTRADO (tiene líneas en
     `compras.parquet`, `_lineas_parquet_del_documento`) o todavía no
@@ -1637,9 +1640,9 @@ def _detalle_sistema(doc, lineas_xml, d):
                          "R2 configuradas?")
 
 
-def _mostrar_original(doc, pdf_bytes, xml_bytes, d):
-    """El comprobante del proveedor —PDF real, detalle de líneas, XML,
-    detalle contra el sistema— EN LA COLUMNA, no detrás de un botón.
+def _mostrar_original(doc, pdf_bytes, xml_bytes):
+    """El comprobante del proveedor —PDF real, detalle de líneas, XML— EN
+    LA COLUMNA, no detrás de un botón.
 
     Hasta 2026-08-27 esto vivía en un `st.dialog` que un botón «Ver el
     original» abría a demanda. A pedido pasó a mostrarse directo, al lado
@@ -1660,10 +1663,12 @@ def _mostrar_original(doc, pdf_bytes, xml_bytes, d):
     del servidor además funciona igual en el teléfono, donde un visor de
     PDF embebido es incómodo.
 
-    `d` es el parquet de Compras completo (lo trae `renderizar_documentos_
-    sunat`, que ya lo recibe para la vista "Cruce") — lo necesita la
-    pestaña «Detalle sistema» (`_detalle_sistema`) para buscar las líneas
-    de ESTE documento y el catálogo completo de productos.
+    Hasta 2026-08-27 esto también tenía una cuarta pestaña, «Detalle
+    sistema» (cruzar el XML contra `compras.parquet`/el maestro y
+    corregir a mano) — pasó a ser SU PROPIA TARJETA
+    (`_card_conversor_sistema`, "Conversor SUNAT-Sistema"), a pedido: no
+    es "ver el original", es otra tarea (comparar y corregir), así que
+    no tiene por qué vivir escondida como una pestaña más acá adentro.
     """
     lineas = sunat.lineas_xml(xml_bytes) if xml_bytes else []
     nombres = []
@@ -1673,11 +1678,6 @@ def _mostrar_original(doc, pdf_bytes, xml_bytes, d):
         nombres.append(f"📋 Detalle ({len(lineas)})")
     if xml_bytes:
         nombres.append("🧾 XML")
-    # Después de XML, a pedido 2026-08-27: no tiene sentido corregir el
-    # emparejamiento contra el sistema sin haber visto primero el detalle
-    # crudo del XML del que sale.
-    if lineas:
-        nombres.append("📑 Detalle sistema")
 
     if not nombres:
         st.info("No hay nada que mostrar todavía.")
@@ -1695,8 +1695,6 @@ def _mostrar_original(doc, pdf_bytes, xml_bytes, d):
                     st.image(png, use_container_width=True)
                     if len(paginas) > 1:
                         st.caption(f"Página {i} de {len(paginas)}")
-            elif nombre.startswith("📑"):
-                _detalle_sistema(doc, lineas, d)
             elif nombre.startswith("📋"):
                 _tabla_detalle(lineas)
             else:
@@ -1727,12 +1725,8 @@ def _mostrar_original(doc, pdf_bytes, xml_bytes, d):
                 key="sunat_original_dl_xml")
 
 
-def _panel_documento(doc, d):
+def _panel_documento(doc):
     """Panel derecho: ficha del SIRE y original del proveedor, LADO A LADO.
-
-    `d` es el parquet de Compras completo (recibido de
-    `renderizar_documentos_sunat`) — se necesita para armar la pestaña
-    «Detalle sistema» de `_mostrar_original`, ver su docstring.
 
     Hasta 2026-08-27 iban apiladas (ficha arriba, "Original del proveedor"
     abajo con un botón que abría un `st.dialog`) — a pedido pasaron a dos
@@ -1809,7 +1803,7 @@ def _panel_documento(doc, d):
             # Antes esto era un botón "Ver el original" que abría un
             # `st.dialog` — a pedido 2026-08-27 se muestra DIRECTO, sin
             # ese clic. Ver `_mostrar_original`.
-            _mostrar_original(doc, pdf_original, xml_original, d)
+            _mostrar_original(doc, pdf_original, xml_original)
             st.caption("PDF y XML tal como los emitió el proveedor.")
         elif sunat.solicitud_pendiente(doc):
             # La corrida nocturna va de lo más nuevo hacia atrás y tarda
@@ -1850,6 +1844,55 @@ def _panel_documento(doc, d):
                 st.caption("Todavía no sincronizado. Al lado está la ficha "
                            "con los datos del registro, que siempre está "
                            "disponible.")
+
+
+def _card_conversor_sistema(doc, d):
+    """Tarjeta «Conversor SUNAT-Sistema»: comparar cada línea del XML
+    contra el sistema y corregir a mano lo que no calza.
+
+    Hasta 2026-08-27 esto era la cuarta pestaña de "Original del
+    proveedor" (`_mostrar_original`) — pasó a ser SU PROPIA TARJETA, a
+    pedido: no es "ver el original" (esa sigue siendo la tarea de la
+    tarjeta de arriba), es otra cosa — comparar y corregir —, así que le
+    toca su propio lugar en la pila en vez de esconderse como una
+    pestaña más. El contenido en sí (`_detalle_sistema`, con sus
+    docstrings sobre maestro/emparejamiento/edición en celda) no cambió
+    en nada — sólo dónde vive.
+
+    `d` es el parquet de Compras completo (recibido de
+    `renderizar_documentos_sunat`, que ya lo recibe para la vista
+    "Cruce") — lo necesita `_detalle_sistema` para buscar las líneas de
+    ESTE documento y armar el catálogo completo de productos.
+    """
+    st.markdown(
+        f'<div style="font-size:10px;font-weight:700;color:{ACENTO};'
+        f'text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px;'
+        f'padding-bottom:3px;border-bottom:1px solid {GRIS_BORDE};">'
+        f'Conversor SUNAT-Sistema</div>', unsafe_allow_html=True)
+
+    if doc is None:
+        st.markdown(
+            f'<div style="padding:20px 16px;text-align:center;color:{GRIS_TEXTO};'
+            f'font-size:13px;line-height:1.6;">'
+            f'Elegí un documento de la tabla de arriba para comparar sus '
+            f'líneas contra el sistema.</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    # Mismo dato que ya trae "Original del proveedor" (`sunat.originales`,
+    # cacheado 1h — pedirlo de nuevo acá no repite la lectura de R2), pero
+    # esta tarjeta solo necesita el XML: no muestra el PDF ni ofrece
+    # descargas, eso ya lo hace la tarjeta de arriba.
+    _, xml_original = sunat.originales(doc)
+    lineas = sunat.lineas_xml(xml_original) if xml_original else []
+    if not lineas:
+        st.info("Todavía no hay XML original sincronizado para este "
+                "documento — sin XML no hay líneas que comparar. Se pide "
+                "desde «Original del proveedor», arriba.")
+        return
+
+    _detalle_sistema(doc, lineas, d)
 
 
 def _excel_bytes(df, hoja="Datos"):
@@ -2005,11 +2048,12 @@ def renderizar_documentos_sunat(d, col_fecha):
         # El cuerpo va en una funcion anidada por una razon concreta: sus
         # cuatro salidas tempranas (sin rango, SUNAT caido, sin
         # comprobantes, sin comprobantes de esa situacion) eran `return`
-        # del render ENTERO, asi que cualquiera de ellas se llevaba puesta
-        # tambien la tarjeta de la ficha de abajo -- la pantalla perdia una
-        # caja y el resto saltaba. Ahora cada salida devuelve `None` y las
-        # dos tarjetas se dibujan siempre. Es la regla #115 aplicada a este
-        # drill: dibujar las tarjetas siempre y decidir el CONTENIDO adentro.
+        # del render ENTERO, asi que cualquiera de ellas se llevaba puestas
+        # tambien las tarjetas de abajo -- la pantalla perdia cajas y el
+        # resto saltaba. Ahora cada salida devuelve `None` y las tres
+        # tarjetas (tabla, ficha/original, conversor) se dibujan siempre.
+        # Es la regla #115 aplicada a este drill: dibujar las tarjetas
+        # siempre y decidir el CONTENIDO adentro.
         def _cuerpo():
             """La tabla y su dato. Devuelve el documento elegido, o None."""
             if f_ini is None:
@@ -2087,4 +2131,14 @@ def renderizar_documentos_sunat(d, col_fecha):
     # habia (38px) existia solo para alinear el tope de las dos columnas, y
     # apilado no hay nada que alinear.
     with st.container(border=True, key="sunat_card_doc"):
-        _panel_documento(doc, d)
+        _panel_documento(doc)
+
+    # Tercera tarjeta, separada de la ficha/original: comparar y corregir
+    # contra el sistema es OTRA tarea (a pedido 2026-08-27, ver
+    # `_card_conversor_sistema`) — antes vivía como cuarta pestaña de
+    # "Original del proveedor". La key empieza con "sunat_card_" a
+    # propósito: es el prefijo que ya estiliza `estilos/_80_cards.py`
+    # (alto clampeado a `--alto-util`, scroll interno) para las otras dos
+    # tarjetas de este drill — nada nuevo que declarar ahí.
+    with st.container(border=True, key="sunat_card_conversor"):
+        _card_conversor_sistema(doc, d)

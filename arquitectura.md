@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-224 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+225 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (77)
 
@@ -281,7 +281,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#220** — Convertir una página de "una vista por vez" en una PILA no es mover código: es descubrir qué…
 - **#222** — La ventana del riel se generalizó a Meses, y el intento de arreglar "otro bug" de paso…
 
-**Datos, R2 y DuckDB** (26)
+**Datos, R2 y DuckDB** (27)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -309,8 +309,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#200** — Una vista comparativa no puede heredar el rango de la franja: el rango corriente le deja el…
 - **#205** — En recetaventa.parquet, tres trampas de columna que no tiran error — devuelven un número o…
 - **#224** — Una key ESTÁTICA de AG Grid retiene estado del lado del cliente al cambiar de documento — y…
+- **#225** — «Detalle sistema» dejó de ser la cuarta pestaña de "Original del proveedor" y pasó a su…
 
-**SUNAT y SIRE** (13)
+**SUNAT y SIRE** (14)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -325,6 +326,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#196** — Un return temprano que se lleva puesto el ÚNICO control capaz de arreglar el estado que lo…
 - **#197** — Un techo de calendario sacado de "hasta dónde llegó el último sync" hace que HOY no se pueda…
 - **#223** — El panel derecho de Documentos SUNAT (ficha + original) pasó de apilado con el original…
+- **#225** — «Detalle sistema» dejó de ser la cuarta pestaña de "Original del proveedor" y pasó a su…
 
 **Fechas, rangos y cortes** (8)
 
@@ -9938,13 +9940,46 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
          un ETL aparte: es una anotación de la webapp sobre ESE
          documento puntual.
 
+225. **«Detalle sistema» dejó de ser la cuarta pestaña de "Original del
+     proveedor" y pasó a su propia tarjeta, «Conversor SUNAT-Sistema»**
+     (2026-08-27, a pedido — mismo día que la regla #224, que sigue
+     siendo la referencia para el diseño de adentro: maestro vs.
+     `compras.parquet`, los dos algoritmos de sugerencia, el prefiltro
+     por token, y por qué el editor de celda es un `<datalist>` casero y
+     no `agRichSelectCellEditor`. Nada de eso cambió — sólo dónde vive).
+
+     El motivo del pedido: comparar-y-corregir contra el sistema no es
+     la misma tarea que "ver el original del proveedor", así que no
+     tenía por qué esconderse como una pestaña más al lado de PDF/XML.
+     `graficos/compras/documentos_sunat.py::renderizar_documentos_sunat`
+     pasó de dos tarjetas a tres — tabla, ficha+original,
+     conversor —, cada una su propio `st.container(border=True,
+     key="sunat_card_...")`; la tercera hereda gratis el clamp de alto y
+     el scroll interno de `estilos/_80_cards.py` porque esa regla
+     matchea por PREFIJO de key (`st-key-sunat_card_`), no por key
+     exacta — no hizo falta tocar CSS.
+
+     El cambio de código fue sobre todo sacar un parámetro: `d` (el
+     parquet de Compras) ya NO pasa por `_panel_documento` ni
+     `_mostrar_original` — esos volvieron a su firma de antes de la
+     regla #224 (`_panel_documento(doc)`, `_mostrar_original(doc,
+     pdf_bytes, xml_bytes)`, sin `d`) — y en cambio lo recibe directo la
+     función nueva, `_card_conversor_sistema(doc, d)`, que llama a
+     `sunat.originales(doc)` una SEGUNDA vez para sacar sólo el XML (la
+     primera la hace "Original del proveedor" más arriba, para el PDF).
+     No es una llamada extra a R2 de verdad: `sunat.originales` está
+     cacheada 1h (`_bytes_original`), así que la segunda es un hit de
+     caché. `_detalle_sistema` —el cuerpo de la tarjeta, con toda la
+     lógica de emparejamiento/edición— no se tocó: sigue siendo la misma
+     función, ahora llamada desde un lugar distinto.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#225**.
+> próxima regla nueva es la **#226**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
