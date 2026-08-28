@@ -25,7 +25,9 @@ from graficos.base import (
 from graficos.compras._comun import (
     COLUMNAS_DRILL, GAP_DRILL, selector_fecha_tarjeta,
 )
-from graficos.compras._css_proveedor import CSS as CSS_PROVEEDOR
+from graficos.compras._css_proveedor import (
+    CSS as CSS_PROVEEDOR, CSS_RANKING_GRID,
+)
 from graficos.compras._documentos_proveedor import tabla_documentos
 from graficos import alturas, periodo
 
@@ -333,29 +335,44 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # caras del mismo número (Python calcula, CSS resta/clampea), no un
     # segundo alto adivinado a mano en la hoja de estilos.
     publicar_var_px("cp-prov-alto-paneles", _ALTO_FRAME)
-    # Filas del RANKING, más delgadas a pedido (2026-08-24) — mismo número
-    # que graficos/compras/producto.py. Constante propia y no un ajuste de
-    # `_ALTO_FRAME`: si la Evolución se achicara con él, perdería piso sin
-    # que nadie se lo pidiera (la comparten `_ALTO_EVO` y el Panel A de
-    # arriba). El `:has()` de _80_cards.py sigue igualando el alto de las
-    # dos tarjetas de la fila aunque el ranking pida menos.
-    _ALTO_FILA_RANK = 28
-    # 2026-08-25: `extra` suma DOS cosas nuevas por la fila TOTAL pineada
-    # (más abajo, `_rk_fila_total`) — medidas en el DOM, no a ojo:
-    #   · +_ALTO_FILA_RANK: `pinnedBottomRowData` reserva su espacio DENTRO
-    #     del `height=` del grid, así que sin este sumando la fila total le
-    #     comía 28px a las 8 de datos.
+    # Filas del RANKING, más delgadas a pedido — 28px el 2026-08-24, 24px el
+    # 2026-08-28 ("las filas un poco más delgadas", junto con el blanco y el
+    # cuerpo más chico de `CSS_RANKING_GRID`). Constante propia y no un
+    # ajuste de `_ALTO_FRAME`: si la Evolución se achicara con él, perdería
+    # piso sin que nadie se lo pidiera (la comparten `_ALTO_EVO` y el Panel A
+    # de arriba). El `:has()` de _80_cards.py sigue igualando el alto de las
+    # dos tarjetas de la fila aunque el ranking pida menos — y hoy pide
+    # menos: las dos miden lo que manda Evolución.
+    #
+    # OJO — hasta el 2026-08-28 esto era "el mismo número que
+    # graficos/compras/producto.py::_ALTO_FILA" (28). Ya NO: el pedido fue
+    # sobre ESTA tabla. Los dos rankings viven apilados en la misma página,
+    # así que si algún día se unifican, es 24 + `CSS_RANKING_GRID` lo que
+    # tiene que viajar para allá, no 28 lo que vuelve para acá.
+    _ALTO_FILA_RANK = 24
+    # La cabecera acompaña: 38px sobre filas de 24 queda cabezona (era el
+    # doble de una fila). Vive en una constante porque el `extra` de abajo
+    # la necesita — son el mismo número contado dos veces.
+    _ALTO_HEADER_RANK = 32
+    # `extra` es TODO lo que el grid mide y no son las 8 filas de datos:
+    #   · el alto fijo del propio grid: la cabecera + su borde inferior de
+    #     1px + ~5.5px de chrome del tema. Medido en el DOM, no a ojo.
+    #   · +_ALTO_FILA_RANK: `pinnedBottomRowData` (la fila TOTAL, más abajo)
+    #     reserva su espacio DENTRO del `height=` del grid, así que sin este
+    #     sumando la fila total le comería una fila a las 8 de datos.
     #   · +alturas.FRANJA_ATAJOS: unas líneas más abajo, `_ALTO_RANK` le
     #     resta esa misma cantidad al grid para hacerle lugar a la fila de
     #     atajos que se dibuja ARRIBA — y esa resta ya corría antes de que
     #     existiera la fila total. Sin pre-compensarla acá, la resta se
-    #     comía las 8 filas de datos por partida doble.
-    # Verificado con las 3 filas fijas del grid (header 39px + fila
-    # TOTAL 28px + ~5.5px de chrome del tema): body-viewport queda en
-    # 224.5px, que es exactamente 8 × 28.
+    #     comería las 8 filas de datos por partida doble.
+    # Verificado midiendo el grid entero: root 297 = cabecera 39 +
+    # body-viewport 225 + fila TOTAL 28 + 5 de chrome, con los números
+    # viejos. Con los nuevos: 33 + 192 + 24 + 5 = 254.
+    _CROMO_GRID_RANK = _ALTO_HEADER_RANK + 7
     _ALTO_FRAME_RANK = alturas.por_filas(
         8, px_fila=_ALTO_FILA_RANK,
-        extra=45 + _ALTO_FILA_RANK + alturas.FRANJA_ATAJOS, minimo=0)
+        extra=_CROMO_GRID_RANK + _ALTO_FILA_RANK + alturas.FRANJA_ATAJOS,
+        minimo=0)
     # La evolución comparte su columna con el selector de período Y con el
     # cromo de su propia tarjeta (2026-08-18: son dos bloques, no uno), así
     # que su figura mide eso menos que la tabla de al lado. La tabla no paga
@@ -701,7 +718,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                              "enableClickSelection": False},
                             "onRowClicked": _js_toggle,
                             "rowHeight": _ALTO_FILA_RANK,
-                            "headerHeight": 38,
+                            "headerHeight": _ALTO_HEADER_RANK,
                             "suppressCellFocus": True,
                             "suppressMovableColumns": True,
                             "pinnedBottomRowData": [_rk_fila_total],
@@ -709,6 +726,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         },
                         allow_unsafe_jscode=True,
                         theme="streamlit",
+                        # Filas blancas, cuerpo más chico y minúsculas — el
+                        # único camino es `custom_css=`: el grid es un iframe
+                        # y el `<style>` del padre (`CSS_PROVEEDOR`) no entra.
+                        custom_css=CSS_RANKING_GRID,
                         height=_ALTO_RANK,
                         update_on=["selectionChanged"],
                         key=_rank_tab_key,

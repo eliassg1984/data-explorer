@@ -39,13 +39,20 @@ from graficos import alturas, periodo
 
 _ALTO_FILA = 28
 """Filas "algo delgadas" a pedido (2026-08-24) para los dos rankings de este
-drill — el mismo número que usa el `rowHeight` de AgGrid en Proveedor/
-Inventario (antes era el `row_height=` de `st.dataframe`; con el pase a
-AgGrid del mismo día, la constante es `rowHeight` en `gridOptions`). Con un
-alto de fila explícito, `_ALTO_FRAME` tiene que usar el mismo número: si no,
-el frame se calcula para un alto y las filas reales dibujan otro, dejando
-aire de sobra abajo (o de más, si `_ALTO_FRAME` quedara más chico que 8
-filas reales)."""
+drill — el mismo número que usa el `rowHeight` de AgGrid en Inventario
+(antes era el `row_height=` de `st.dataframe`; con el pase a AgGrid del
+mismo día, la constante es `rowHeight` en `gridOptions`).
+
+Ya NO es el mismo que el del ranking de Proveedor: el 2026-08-28 aquel bajó
+a 24px y se puso todo blanco, en cuerpo 11 y minúsculas, a pedido y sólo
+sobre esa tabla (`proveedor.py::_ALTO_FILA_RANK` + `CSS_RANKING_GRID`). Los
+dos rankings se ven APILADOS en la misma página, así que si alguna vez se
+unifican, lo que viaja es aquello para acá.
+
+Con un alto de fila explícito, `_ALTO_FRAME` tiene que usar el mismo número:
+si no, el frame se calcula para un alto y las filas reales dibujan otro,
+dejando aire de sobra abajo (o de más, si `_ALTO_FRAME` quedara más chico
+que 8 filas reales)."""
 
 _ALTO_FRAME = alturas.por_filas(8, px_fila=_ALTO_FILA, extra=45, minimo=0)
 

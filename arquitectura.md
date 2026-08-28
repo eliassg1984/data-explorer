@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-236 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+237 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (79)
+**CSS y estilos** (80)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -99,8 +99,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#216** — Retirar un toggle de colapso: si nada más puede fijar el estado "plegado", ese estado tiene…
 - **#231** — Dos tablas que tienen que alinearse fila contra fila no pueden calcular su alto por separado
 - **#234** — Elegir un prefijo de key que NO choque con otra familia no alcanza: hay que mirar también las…
+- **#237** — Hay DOS familias de AgGrid en el repo y no se estilan igual: la de theme="material" se toca…
 
-**Layout y alturas** (21)
+**Layout y alturas** (20)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -122,7 +123,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#187** — Meter None entre las opciones de un st.selectbox le agrega un botón ✕ "Clear value" que no…
 - **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
 - **#214** — Un st.rerun con scope="app" sigue estando ADENTRO del fragment que lo llama: sumarle espacio…
-- **#235** — _css_grid es de UNA tabla suelta sobre el gris de la app; si la tabla ya vive adentro de una…
 
 **Plotly y figuras** (44)
 
@@ -171,7 +171,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
 - **#202** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
 
-**AgGrid y tablas** (41)
+**AgGrid y tablas** (42)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -214,8 +214,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#227** — server_sync_strategy="client_wins" (el default de st_aggrid) hace que el navegador IGNORE los…
 - **#228** — isCancelAfterEnd devolviendo true deja el editor MONTADO: la celda queda con…
 - **#229** — cellValueChanged de AG Grid se despacha ASINCRÓNICO: leer los datos justo después de…
+- **#237** — Hay DOS familias de AgGrid en el repo y no se estilan igual: la de theme="material" se toca…
 
-**Streamlit** (71)
+**Streamlit** (72)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -288,6 +289,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#220** — Convertir una página de "una vista por vez" en una PILA no es mover código: es descubrir qué…
 - **#222** — La ventana del riel se generalizó a Meses, y el intento de arreglar "otro bug" de paso…
 - **#230** — Un @st.fragment alrededor de la tarjeta que se edita: una corrección deja de re-correr el…
+- **#235** — _css_grid es de UNA tabla suelta sobre el gris de la app; si la tabla ya vive adentro de una…
 
 **Datos, R2 y DuckDB** (29)
 
@@ -10471,6 +10473,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
          de una tarjeta ya blanca, el rayado compite con el fondo, y las
          filas las separa igual la línea de `.ag-row`.
 
+     **Este interruptor NO llega a las grillas de `graficos/`:** esas van
+     con `theme="streamlit"` y sin `custom_css`, o sea que ni siquiera
+     pasan por `_css_grid`. Para apagarles el rayado se toca la variable
+     del tema — ver regla #237, que también explica por qué ahí no hace
+     falta un solo `!important`.
+
      **Trampa que trae `cebra=False` y hay que resolver en el mismo
      cambio:** `_css_grid` NO estila `.ag-row-selected`. Con el rayado
      puesto eso no se nota; con las filas todas iguales, una tabla de
@@ -10536,13 +10544,100 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      viejo (`?vista=sankey_por_receta`) abre el dashboard en Ranking en
      vez de romperse.
 
+237. **Hay DOS familias de AgGrid en el repo y no se estilan igual: la
+     de `theme="material"` se toca con `_css_grid`, la de
+     `theme="streamlit"` con las VARIABLES del tema por `custom_css=`.**
+
+     La regla #235 le puso a `tablas/_css.py::_css_grid` un `cebra=False`.
+     Eso NO alcanza para las grillas de los dashboards: las nueve tablas
+     de `tablas/` (más Inventario y Documentos SUNAT) van con
+     `theme="material"` + `custom_css=_css_grid(...)`, pero las de
+     `graficos/` — el ranking de Proveedor, los dos de Producto, Ventas,
+     Receta Venta — van con `theme="streamlit"` **y nada de CSS**. Ahí no
+     hay interruptor que apagar; el rayado lo pone el tema.
+
+     Pedido del 2026-08-28 sobre `compras_prov_rank_grid`: filas todas
+     blancas, cuerpo más chico, minúsculas y filas más finas. Las cuatro
+     cosas, y dónde vive cada palanca:
+
+     | Lo pedido | La palanca | Dónde |
+     |---|---|---|
+     | filas todas blancas | `--ag-odd-row-background-color` (+ `--ag-header-background-color`) | `custom_css=` |
+     | letra más chica | `--ag-data-font-size` / `--ag-header-font-size` | `custom_css=` |
+     | minúsculas | `text-transform` sobre `.ag-cell[col-id="…"]` y `.ag-header-cell-text` | `custom_css=` |
+     | filas más finas | `rowHeight` / `headerHeight` | **`gridOptions`, o sea PYTHON** |
+
+     La última fila es la trampa de reparto: `--ag-row-height` existe, pero
+     `rowHeight` de `gridOptions` le gana (AG Grid escribe el alto inline en
+     cada fila). Y como el alto del grid se calcula en Python
+     (`alturas.por_filas`), cambiarlo obliga a mover el `extra` de esa
+     cuenta — que cuenta la cabecera. Por eso el header dejó de ser un
+     `38` literal y pasó a `_ALTO_HEADER_RANK`: el `extra` lo necesita, es
+     el mismo número contado dos veces.
+
+     **Por qué NINGUNA de esas reglas necesita `!important`, que es lo
+     primero que uno escribe:** el tema declara sus variables dentro de
+     `:where(.ag-theme-params-1)`, y `:where()` tiene especificidad **cero**
+     por definición. Cualquier selector propio le gana. Se ve mirando la
+     hoja del iframe:
+
+     ```js
+     for (const sh of doc.styleSheets) for (const r of sh.cssRules)
+       if (r.style && r.style.getPropertyValue('--ag-odd-row-background-color'))
+         console.log(r.selectorText);   // :where(.ag-theme-params-1)
+     ```
+
+     De paso, tocar la VARIABLE en vez de la regla es lo que hace que el
+     cambio no se pelee con el tema: `--ag-header-background-color` mueve la
+     cabecera entera, mientras que ir por `.ag-header { background }` deja
+     `.ag-header-cell` con el suyo.
+
+     **`custom_css` entra al iframe; el `<style>` del padre, no.**
+     `st_aggrid` arma con ese dict un `selector { prop: valor; }` y lo
+     appendea al `<head>` **del iframe** (está en el bundle del frontend).
+     Es la misma frontera que ya obliga a que los colores de la barra de
+     "Valor" salgan de `tema.py` y no de `var(--acento)`: `CSS_PROVEEDOR`,
+     que es un `st.markdown` del documento padre, no llega. Por eso el
+     dict nuevo vive al lado de aquel (`_css_proveedor.py`) pero como
+     export aparte y con el aviso de que no son la misma clase de cosa.
+
+     **Antes de apagar el zebra, mirá la fila SELECCIONADA — la trampa de
+     la #235.** Ahí el rayado era lo único que insinuaba el estado y al
+     sacarlo la tabla quedó muda. Acá se comprobó primero, y por eso no
+     hizo falta agregar nada: `theme="streamlit"` SÍ trae
+     `.ag-row-selected::before` con `--ag-selected-row-background-color`
+     (el acento al 12%), que sobre blanco se lee igual de bien. La fila
+     TOTAL pineada tampoco se toca: su color lo pone `getRowStyle` inline,
+     que gana sobre cualquier variable.
+
+     **Y las minúsculas son `text-transform`, no `.lower()`.** El dato
+     sigue en MAYÚSCULAS en el parquet ("DOBLE G REPRESENTACIONES
+     S.A.C."), que es como viene del ERP: el foco del drill, el popover de
+     proveedores y el `dict(zip(...))` que le da color a la Evolución
+     comparan ese string tal cual. Bajarlo en Python habría roto los tres
+     en silencio. Se aplica SÓLO a la columna de nombres y a los títulos:
+     los montos llevan "S/" adelante y "s/ 13,363" se lee mal.
+
+     **Medido antes y después** (viewport 1358, datos reales): el grid pasó
+     de 297px a 255px — cabecera 39→33, ocho filas 224→192, fila TOTAL
+     28→24, ~5 de chrome — y las dos tarjetas de la fila bajaron juntas de
+     422 a 383, porque el `:has()` de `_80_cards.py` las iguala y acá el
+     que mandaba era el ranking. Sin aire huérfano al pie.
+
+     **Lo que quedó AFUERA a propósito:** el pedido era sobre esa tabla.
+     Los dos rankings de `producto.py` siguen en 28px, cuerpo 12 y
+     mayúsculas, y se ven apilados debajo en la misma página — la
+     divergencia está anotada en el docstring de `producto.py::_ALTO_FILA`,
+     que hasta ese día prometía "el mismo número que Proveedor". Si alguna
+     vez se unifican, lo que viaja es `CSS_RANKING_GRID` para allá.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#237**.
+> próxima regla nueva es la **#238**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

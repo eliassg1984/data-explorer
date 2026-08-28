@@ -9,7 +9,16 @@ estan scopeadas a las keys de este drill y solo tienen sentido cuando el
 drill se dibuja. `estilos/` se inyecta en TODAS las paginas via
 inject_css(); moverlo ahi lo aplicaria siempre, que es un cambio de
 comportamiento, no una reorganizacion. El drill lo inyecta cuando toca.
+
+DOS exports, y NO son la misma clase de cosa:
+  · `CSS` — el `<style>` del documento PADRE, el de siempre.
+  · `CSS_RANKING_GRID` — un dict para el `custom_css=` de `AgGrid(...)`,
+    que es la ÚNICA vía de estilar el grid: vive en un iframe propio y
+    nada del padre lo alcanza (lo mismo que ya obliga a que los colores
+    de la barra de "Valor" salgan de `tema.py` y no de `var(--acento)`).
 """
+
+from tema import BLANCO
 
 CSS = """        <style>
         .st-key-compras_prov_marco { position: relative; }
@@ -1567,3 +1576,45 @@ CSS = """        <style>
 
         </style>
 """
+
+
+# ── El AgGrid del ranking de proveedores ────────────────────────────
+# Se estila por las VARIABLES del tema (`--ag-*`) y no por selectores
+# propios, por una razon medida y no por gusto: `theme="streamlit"` declara
+# las suyas dentro de un `:where(.ag-theme-params-1)`, y `:where()` tiene
+# especificidad CERO. O sea que cualquier regla nuestra le gana sin un solo
+# `!important`, y de paso se mueve la misma palanca que usa el tema en vez
+# de pelearle sus reglas una por una.
+CSS_RANKING_GRID = {
+    ".ag-root-wrapper": {
+        # Todo blanco, a pedido (2026-08-28). El rayado del tema es
+        # sutilisimo — un #fbfbfb al 50% de alpha — y aun asi se lee como
+        # bandas adentro de una tarjeta que ya es blanca. Lo que separa las
+        # filas sigue siendo la linea de `.ag-row`, que no depende del
+        # rayado. La cabecera va al mismo blanco por lo mismo: su borde
+        # inferior de 1px alcanza para que siga leyendose como cabecera.
+        #
+        # La trampa de la regla #235 (apagar el zebra deja una tabla de
+        # SELECCION sin rastro de que se clickeo) NO aplica aca, y se
+        # verifico antes de tocar nada: este tema si estila la fila
+        # elegida — `.ag-row-selected::before` la pinta con el acento al
+        # 12%, que se ve igual de bien sobre blanco.
+        "--ag-odd-row-background-color": BLANCO,
+        "--ag-header-background-color": BLANCO,
+        # Un punto menos que el default del tema (12px).
+        "--ag-data-font-size": "11px",
+        "--ag-header-font-size": "11px",
+    },
+    # Minusculas SOLO en los nombres y en los titulos de columna: los montos
+    # llevan el prefijo "S/" y en minuscula ("s/ 13,363") se leen mal.
+    #
+    # El DATO no se toca: esto es `text-transform`, puro render. En el
+    # parquet los proveedores siguen en mayusculas ("DOBLE G
+    # REPRESENTACIONES S.A.C."), que es como vienen del ERP y como los
+    # busca el resto de la app — el popover de proveedores, el foco del
+    # drill y el `dict(zip(...))` que le da color a la Evolucion comparan
+    # ese string tal cual.
+    '.ag-cell[col-id="Proveedor"], .ag-header-cell-text': {
+        "text-transform": "lowercase",
+    },
+}
