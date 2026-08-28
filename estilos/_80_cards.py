@@ -102,6 +102,37 @@ CSS = """    /* ================================================================
         box-shadow: none !important;
     }
 
+    /* ─────────────────────────────────────────────────────────────── */
+    /* LAS DOS MITADES DEL CONVERSOR SUNAT-SISTEMA                      */
+    /*                                                                  */
+    /* Key `sunat_conv_` a propósito, NO `sunat_card_`: aquélla es la   */
+    /* familia que el bloque de arriba clampea a `--alto-util` con      */
+    /* scroll propio, y estas dos viven DENTRO de una de ellas          */
+    /* (`sunat_card_conversor`). Con el prefijo de la familia grande    */
+    /* heredarían un segundo scroll anidado adentro del de la tarjeta   */
+    /* que las contiene. Es la regla de CLAUDE.md ("antes de agregar    */
+    /* un widget dentro de una tarjeta: grep estilos/") leída al revés: */
+    /* elegir el prefijo que NO matchea.                                */
+    /*                                                                  */
+    /* Se ven como dos paneles hermanos y no como dos tarjetas sueltas: */
+    /* el borde es el mismo gris de la app y el fondo, un gris apenas   */
+    /* por debajo del blanco de la tarjeta madre — lo justo para que el */
+    /* ojo agrupe cada tabla con su cabecera y lea las dos como los dos */
+    /* lados de una comparación. Ver `_detalle_sistema` en             */
+    /* graficos/compras/documentos_sunat.py.                            */
+    /* ─────────────────────────────────────────────────────────────── */
+    div[class*="st-key-sunat_conv_"] {
+        border: 1px solid var(--border) !important;
+        border-radius: 12px !important;
+        padding: 10px 12px 4px !important;
+        background: var(--bg-card-tenue);
+    }
+    /* Streamlit pinta SU borde en el hijo directo cuando border=True;
+       con el de arriba puesto, serían dos líneas a 1px de distancia. */
+    div[class*="st-key-sunat_conv_"] > div {
+        border: none !important;
+    }
+
     /* =================================================================== */
     /* ENCUADRE: UNA TARJETA = UNA PANTALLA (desktop)                        */
     /*                                                                       */

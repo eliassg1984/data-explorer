@@ -290,6 +290,23 @@ corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
   de este proyecto (34.3.1). Si un cellRenderer necesita el valor de OTRA
   columna, resolverlo con `valueGetter` + `aggFunc` propio en vez de leer
   una columna vecina en tiempo de render.
+- **Nunca metas DATOS adentro de un `JsCode`: van por
+  `gridOptions.context`.** `JsCode.__init__` corre un regex de
+  backtracking catastrófico sobre el código —y después descarta el
+  resultado—, así que el coste es CUADRÁTICO en el largo del texto:
+  medido, 16.000 caracteres tardan 1,3s y el catálogo de 3.867 productos
+  (110.082 caracteres) daba **~64 segundos por render**. Se veía como un
+  cuelgue sin traza. `test_graficos.py::_pruebas_jscode_barato` monta
+  guardia. Detalle y la tabla de mediciones en `arquitectura.md` regla
+  #226; ojo también con la FORMA del contexto, que no es libre.
+- **Una grilla donde el SERVIDOR resuelve el dato necesita
+  `server_sync_strategy="server_wins"`.** El default (`client_wins`)
+  hace que el navegador ignore los datos del servidor después de la
+  primera edición: la corrección se guarda pero la pantalla no se
+  entera. Regla #227.
+- **Un cell editor propio rechaza devolviendo lo de antes desde
+  `getValue()`, no con `isCancelAfterEnd`.** Cancelar deja el editor
+  montado y la celda se ve VACÍA. Regla #228.
 
 ## Dashboards de gráficos
 

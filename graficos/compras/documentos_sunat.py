@@ -71,14 +71,13 @@ baja a S/6,9 y S/1.199 — esa medición es de ANTES de tener RUC, cuando la
 import datetime
 import difflib
 import io
-import json
 import re
 import unicodedata
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from st_aggrid import AgGrid, DataReturnMode, GridOptionsBuilder, GridUpdateMode, JsCode
+from st_aggrid import AgGrid, DataReturnMode, GridOptionsBuilder, JsCode
 
 import sunat
 from estado_rango import clave_rango
@@ -1290,41 +1289,65 @@ más alto: exigir más similitud de texto puro compensa no tener con qué
 corroborar."""
 
 
-def _sugerir_desde_maestro(lineas_xml, maestro):
+def _sugerir_desde_maestro(lineas_xml):
     """Como `_parear_lineas_sistema`, pero para un documento que TODAVÍA NO
     tiene ninguna línea en `compras.parquet` (no está registrado) — a
     pedido 2026-08-27, sugiere directo contra el maestro de artículos
     completo (`_maestro_productos`) por similitud de texto sola, ya que no
     hay ninguna compra registrada con la que corroborar cantidad o precio.
 
-    Prefiltra por tokens compartidos (`_candidatos_por_token`) antes de
-    correr `difflib` — puntuar cada línea contra las 3.867 filas del
-    maestro sin acotar es demasiado lento para una pestaña interactiva,
-    ver `_TOPE_CANDIDATOS_MAESTRO`.
-
-    Devuelve una lista paralela a `lineas_xml` con la POSICIÓN de
-    `maestro` que mejor calza, o `None` — ver `_asignar_greedy`.
+    Devuelve una lista paralela a `lineas_xml` con el CÓDIGO del maestro
+    que mejor calza, o `None`. Código y no POSICIÓN a propósito: el
+    resultado se cachea (`_sugerencias_maestro`) y una posición sólo
+    significa algo mientras el maestro conserve el mismo orden — si el ETL
+    republica el parquet en medio del TTL, una posición cacheada apunta a
+    otro producto y nadie se entera. Un código apunta a lo mismo siempre.
     """
-    if maestro.empty or not lineas_xml:
-        return [None] * len(lineas_xml)
+    descripciones = tuple(str(l.get("descripcion") or "") for l in lineas_xml)
+    if not descripciones:
+        return []
+    return list(_sugerencias_maestro(descripciones))
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _sugerencias_maestro(descripciones):
+    """La parte CARA de `_sugerir_desde_maestro`, cacheada por el conjunto
+    de descripciones del XML.
+
+    Existe por la lentitud que reportó el usuario el 2026-08-27 al corregir
+    ítems: cada corrección re-corre el render, y esto es lo más caro que
+    hay adentro — `_TOPE_CANDIDATOS_MAESTRO` documenta ~1s para una factura
+    de 80 líneas, y se pagaba ENTERO en cada tecla confirmada, para
+    recalcular exactamente lo mismo (el XML no cambia: lo que cambia es la
+    corrección que se le aplica encima, y eso pasa después).
+
+    El TTL acompaña al de `data.cargar` (1h), que es de donde sale el
+    maestro: no tiene sentido cachear sugerencias más tiempo que el
+    catálogo contra el que se calcularon.
+    """
+    maestro = _maestro_productos()
+    if maestro.empty:
+        return [None] * len(descripciones)
 
     nombres = maestro["NOMBRE PRODUCTO"].tolist()
-    indice = _indice_tokens_maestro(nombres)
+    codigos = maestro["CODIGO PRODUCTO"].astype(str).tolist()
+    indice = _indice_tokens_maestro_cache()
 
     candidatos = []
-    for i, xml_l in enumerate(lineas_xml):
-        desc = str(xml_l.get("descripcion") or "")
+    for i, desc in enumerate(descripciones):
         a = _norm(desc)
         for pos in _candidatos_por_token(desc, indice):
             sc = difflib.SequenceMatcher(None, a, _norm(str(nombres[pos]))).ratio()
             if sc > _PISO_SCORE_SUGERIDO:
                 candidatos.append((sc, i, pos))
-    return _asignar_greedy(candidatos, len(lineas_xml))
+    return [None if pos is None else codigos[pos]
+            for pos in _asignar_greedy(candidatos, len(descripciones))]
 
 
 _COLS_MAESTRO = ["CODIGO PRODUCTO", "NOMBRE PRODUCTO", "UNIDAD KARDEX"]
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
 def _maestro_productos():
     """Código, nombre y unidad de KARDEX de todo el catálogo de artículos —
     a pedido 2026-08-27, no sale de `compras.parquet` (que solo tiene los
@@ -1333,8 +1356,11 @@ def _maestro_productos():
     el maestro real: 3.867 productos, y CADA código tiene un único nombre y
     unidad (0 conflictos, verificado con DuckDB contra R2 real).
 
-    Cacheado por `data.cargar` (`@st.cache_data(ttl=3600, persist="disk")`)
-    — no hace falta otra capa de caché acá encima.
+    Cacheado ACÁ además de en `data.cargar`: aquél evita releer R2, pero el
+    `dropna` + `drop_duplicates` + `sort_values` sobre las 15.357 filas
+    crudas se pagaba igual en cada rerun (~20ms medidos). Con la edición en
+    celda eso es una vez por tecla confirmada. Mismo TTL de 1h que
+    `data.cargar`, para que las dos capas caduquen juntas.
     """
     import data
 
@@ -1342,12 +1368,77 @@ def _maestro_productos():
     if m is None or not all(c in m.columns for c in _COLS_MAESTRO):
         return pd.DataFrame(columns=_COLS_MAESTRO)
     return (m[_COLS_MAESTRO].dropna(subset=["CODIGO PRODUCTO"])
-            .drop_duplicates().sort_values("NOMBRE PRODUCTO"))
+            .drop_duplicates().sort_values("NOMBRE PRODUCTO")
+            .reset_index(drop=True))
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _indice_tokens_maestro_cache():
+    """`_indice_tokens_maestro` sobre el maestro completo, cacheado — se
+    arma una vez por hora y no una vez por rerun (~37ms medidos sobre las
+    3.867 filas reales). Ver `_sugerencias_maestro`."""
+    return _indice_tokens_maestro(_maestro_productos()["NOMBRE PRODUCTO"].tolist())
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _lookups_maestro():
+    """Los tres diccionarios que el conversor consulta por fila, armados de
+    una sola pasada y cacheados con el maestro:
+
+      · `por_codigo`: código → (nombre, unidad kardex). Lo que se MUESTRA
+        una vez que hay un código, venga de donde venga.
+      · `por_nombre`: nombre recortado en minúsculas → código. Para
+        resolver lo que se tipeó en la celda. Ambiguo (mismo nombre, más
+        de un código) se queda con el primero — 9 de 3.867 casos reales,
+        medido con DuckDB.
+      · `contexto`: el MISMO catálogo con la forma que espera el
+        navegador, para viajar en `gridOptions.context` — `nombres` (para
+        el `<datalist>` del autocompletado) y `porNombre`, que mapea el
+        nombre en minúsculas a `[código, unidad, nombre]` (rellenar las
+        columnas de al lado al elegir y resolver el "prefijo único" del
+        editor; ver `_JS_MAESTRO_AL_NAVEGADOR`).
+
+    POR QUÉ `context` Y NO UN JSON ADENTRO DEL JsCode, que es como estaba
+    hasta el 2026-08-27: `JsCode.__init__` (st_aggrid 1.2.1) corre sobre el
+    código un regex de "sacar los espacios que están fuera de un string"
+    cuyo lookahead cuenta comillas de a pares hasta el final del texto —y
+    por lo tanto retrocede de forma CATASTRÓFICA—, y encima descarta el
+    resultado dos líneas más abajo (lo pisa un `re.sub` trivial).
+    Medido con el catálogo real: 4.000 caracteres tardan 0,10s; 8.000,
+    0,34s; 16.000, 1,35s — cuadrático limpio, que para los 110.082
+    caracteres del catálogo da **~64 segundos por render**. Ése era el
+    "se cuelga y se pone lento" que se reportó ese día: no era el
+    emparejamiento ni R2, era una llamada a `JsCode` con un JSON grande
+    adentro. `gridOptions.context` es dato plano, se serializa con
+    `json.dumps` y no toca ese regex — el JsCode queda de 15 líneas.
+
+    La FORMA del contexto tampoco es libre: `walk_gridOptions` (el
+    recorrido de st_aggrid que busca JsCode) hace `go[k]` sobre los
+    elementos de una lista, así que una lista DE LISTAS revienta con
+    `TypeError`. Lista plana de strings y dict de listas sí pasan.
+    """
+    maestro = _maestro_productos()
+    por_codigo, por_nombre = {}, {}
+    nombres, por_nombre_js = [], {}
+    for cod, nom, uni in zip(maestro["CODIGO PRODUCTO"].astype(str),
+                             maestro["NOMBRE PRODUCTO"].astype(str),
+                             maestro["UNIDAD KARDEX"].astype(str)):
+        por_codigo[cod] = (nom, uni)
+        por_nombre.setdefault(nom.strip().lower(), cod)
+        nombres.append(nom)
+        # [código, unidad, nombre-con-mayúsculas]: los dos primeros los
+        # usa `_JS_RELLENAR_VECINAS`; el tercero, el "prefijo único" de
+        # `_JS_EDITOR_PRODUCTO`, que necesita devolver el nombre tal como
+        # se escribe y no la clave en minúsculas con la que se buscó.
+        por_nombre_js.setdefault(nom.strip().lower(), [cod, uni, nom])
+    return por_codigo, por_nombre, {"nombres": nombres,
+                                    "porNombre": por_nombre_js}
 
 
 _JS_EDITOR_PRODUCTO = JsCode("""
 class ProductoEditor {
     init(params) {
+        this.valorOriginal = params.value || '';
         this.eGui = document.createElement('div');
         this.eInput = document.createElement('input');
         this.eInput.className = 'ag-input-field-input ag-text-field-input';
@@ -1356,22 +1447,33 @@ class ProductoEditor {
         this.eInput.style.boxSizing = 'border-box';
         this.eInput.setAttribute('list', 'sunat_maestro_datalist');
         this.eInput.setAttribute('autocomplete', 'off');
-        this.eInput.value = params.value || '';
+        this.eInput.value = this.valorOriginal;
         this.eGui.appendChild(this.eInput);
     }
     getGui() { return this.eGui; }
     afterGuiAttached() { this.eInput.focus(); this.eInput.select(); }
-    getValue() { return this.eInput.value; }
     isPopup() { return false; }
-    isCancelAfterEnd() {
-        // Rechaza cualquier texto que no matchee (sin distinguir mayúsculas)
-        // algún nombre del maestro -- lo arma `onGridReady`, ver
-        // `_detalle_sistema`. Si el set todavía no existe (carrera rara al
-        // montar), no bloquea: mejor dejar pasar que trabar la edición.
-        var set = window.__sunatMaestroSetLower;
-        if (!set) return false;
-        var v = (this.eInput.value || '').trim().toLowerCase();
-        return !set.has(v);
+    getValue() {
+        var v = (this.eInput.value || '').trim();
+        // Vaciar la celda SI vale: es el gesto de "volver a lo automatico"
+        // (el servidor lo lee como `quitar_correccion_linea`).
+        if (!v) return '';
+        var mapa = window.__sunatMaestroPorNombre;
+        if (!mapa) return v;                 // carrera rara al montar
+        if (mapa[v.toLowerCase()]) return v;
+        // Prefijo unico: escribir "tomahawk" y que quede
+        // "Tomahawk de cerdo x Kg". Solo si NO hay ambiguedad.
+        var pre = v.toLowerCase(), unico = null;
+        for (var k in mapa) {
+            if (k.indexOf(pre) === 0) {
+                if (unico !== null) { unico = null; break; }
+                unico = k;
+            }
+        }
+        if (unico) return mapa[unico][2];
+        // Nada del maestro: se vuelve al valor previo. Devolver el mismo
+        // valor (y no rechazar) es a proposito -- ver el docstring.
+        return this.valorOriginal;
     }
 }
 """)
@@ -1380,18 +1482,304 @@ autocompletado NATIVO del navegador, no `agRichSelectCellEditor` de AG
 Grid (ese es Enterprise, descartado en todo el proyecto — ver CLAUDE.md
 § Restricciones de despliegue). Misma interfaz de Component que ya usan
 los cellRenderer de este proyecto (`init`/`getGui`, ver arquitectura.md
-regla #25), con los dos métodos propios de un EDITOR (`getValue`,
-`isCancelAfterEnd`)."""
+regla #25), más `getValue`, propio de un EDITOR.
+
+LA VALIDACIÓN VIVE EN `getValue`, NO EN `isCancelAfterEnd`, y eso no es
+estilo: con `isCancelAfterEnd` devolviendo `true` —como estaba hasta el
+2026-08-27— AG Grid 34.3.1 da por terminada la edición
+(`getEditingCells()` devuelve 0) pero **deja el editor montado en el
+DOM**: la celda queda con la clase `ag-cell-inline-editing` y un
+`<input>` vacío encima, o sea SE VE VACÍA para siempre, aunque el dato
+de abajo esté intacto (verificado en el navegador). Devolviendo el valor
+previo desde `getValue` el camino de cancelación no se usa nunca: AG
+Grid cierra el editor normal, compara viejo contra nuevo, ve que no
+cambió y ni siquiera dispara `cellValueChanged` — no hay viaje al
+servidor para un texto que no era un producto.
+
+De paso, "prefijo único" hace que escribir `tomahawk` y salir de la
+celda deje `Tomahawk de cerdo x Kg`: el `<datalist>` ya sugiere mientras
+se tipea, pero nada obliga a elegir de la lista, y sin esto había que
+escribir el nombre entero. Sólo cuando UN nombre del catálogo empieza
+así — con dos candidatos no adivina, revierte."""
 
 
+_JS_CANTIDAD_PARSER = JsCode("""
+function(p) {
+    var crudo = String(p.newValue == null ? '' : p.newValue).trim()
+                    .replace(',', '.');
+    if (crudo === '') return p.oldValue;
+    var n = parseFloat(crudo);
+    return (isNaN(n) || n < 0) ? p.oldValue : n;
+}
+""")
+"""`valueParser` de la columna "Cant." editable: la celda devuelve TEXTO y
+la comparación del lado del servidor es numérica. Acepta coma decimal
+(es lo que tipea alguien acá) y rechaza basura volviendo al valor previo
+en vez de mandar un `NaN` que después haya que filtrar."""
+
+
+_JS_MAESTRO_AL_NAVEGADOR = JsCode("""
+function(params) {
+ if (window.__sunatMaestroSetLower) return;
+ var ctx = params.context || {};
+ var nombres = ctx.nombres || [];
+ if (!nombres.length) return;
+ var dl = document.getElementById('sunat_maestro_datalist');
+ if (!dl) {
+   dl = document.createElement('datalist');
+   dl.id = 'sunat_maestro_datalist';
+   document.body.appendChild(dl);
+ }
+ nombres.forEach(function(nom) {
+   var opt = document.createElement('option');
+   opt.value = nom;
+   dl.appendChild(opt);
+ });
+ window.__sunatMaestroPorNombre = ctx.porNombre || {};
+ window.__sunatMaestroSetLower = new Set(nombres.map(function(nom) {
+   return String(nom).trim().toLowerCase();
+ }));
+}
+""")
+"""`onGridReady` de la tabla del sistema: arma UNA vez por iframe (guardia
+`window.__sunatMaestroSetLower`) las tres cosas que necesita la edición en
+celda — el `<datalist>` que alimenta el autocompletado, el set de nombres
+válidos que consulta `isCancelAfterEnd`, y el mapa nombre → (código,
+unidad) que usa `_JS_RELLENAR_VECINAS`.
+
+El catálogo NO viaja adentro de este código: llega por
+`gridOptions.context` (`_lookups_maestro`, que explica por qué — un JSON
+grande dentro de un `JsCode` cuesta ~64 segundos de regex por render).
+La guardia sale recién al final, con las tres cosas ya armadas: si sale
+antes y algo falla en el medio, `isCancelAfterEnd` rechaza todo lo que se
+tipee contra un set vacío y la columna queda inutilizable.
+
+`document` acá es el del IFRAME del componente, no el de la app: cada
+AgGrid vive en el suyo, por eso el datalist se crea adentro y no con un
+`st.markdown` (que además no ejecutaría el script — ver CLAUDE.md)."""
+
+
+_JS_RELLENAR_VECINAS = JsCode("""
+function(e) {
+    if (e.colDef.field !== 'Ítem (sistema)') return;
+    var m = window.__sunatMaestroPorNombre;
+    if (!m) return;
+    var t = m[String(e.newValue || '').trim().toLowerCase()];
+    if (!t) return;
+    // Se muta `e.data` y se repinta, en vez de `node.setDataValue`: aquel
+    // dispara otro `cellValueChanged` por celda, y con
+    // `update_on=["cellValueChanged"]` cada uno seria otro viaje al
+    // servidor para escribir algo que el servidor ya resolvio solo.
+    e.data['Código'] = t[0];
+    e.data['Und. kardex'] = t[1];
+    e.api.refreshCells({rowNodes: [e.node],
+                        columns: ['Código', 'Und. kardex'], force: true});
+}
+""")
+"""Al elegir un ítem del sistema, el CÓDIGO y la UNIDAD KARDEX de al lado
+se llenan en el acto, sin esperar el viaje al servidor (pedido
+2026-08-27: "cuando elija el nombre del ítem sistema, también se agregue
+el código sistema y unidad kardex").
+
+Es sólo el adelanto visual: la fuente de verdad sigue siendo el servidor,
+que resuelve el código con `_lookups_maestro` y lo persiste. Por eso no
+importa en qué orden corra esto respecto del handler de st_aggrid — el
+servidor no lee estas dos columnas del payload, las recalcula."""
+
+
+_ALTO_FILA_CONVERSOR = 30
+_ALTO_CABECERA_CONVERSOR = 32
+"""Alto de fila y de cabecera de las DOS tablas del conversor. Son una
+constante compartida y no dos literales porque de ellos depende que las
+filas de la izquierda caigan a la MISMA altura que las de la derecha —
+que es todo el punto de la vista partida en dos (pedido 2026-08-27: "dos
+tarjetas separadas, pero alineadas una con la otra, para que se vea la
+idea de comparación"). Si una tabla dibuja filas de 30px y la otra de 34,
+la comparación deja de leerse a la tercera fila."""
+
+
+def _alto_conversor(n_filas):
+    """El alto que comparten las dos tablas del conversor. Una función y no
+    dos llamadas sueltas a `alturas.por_filas`, por lo mismo que
+    `_ALTO_FILA_CONVERSOR`: dos tablas que tienen que alinearse no pueden
+    calcular su alto por separado."""
+    return alturas.por_filas(n_filas, px_fila=_ALTO_FILA_CONVERSOR,
+                             rol=alturas.MINI)
+
+
+def _titulo_panel(texto, detalle):
+    """La cabecera de cada mitad del conversor: de qué fuente es la tabla
+    de abajo. Las dos mitades la dibujan IGUAL (mismo markup, mismo alto)
+    porque de eso depende que las dos tablas arranquen en la misma `y` —
+    ver `_ALTO_FILA_CONVERSOR`."""
+    st.markdown(
+        f'<div style="display:flex;align-items:baseline;gap:6px;'
+        f'margin:0 0 6px;padding-bottom:4px;'
+        f'border-bottom:1px solid {GRIS_BORDE};">'
+        f'<span style="font-size:10px;font-weight:700;color:{ACENTO};'
+        f'text-transform:uppercase;letter-spacing:.05em;">{texto}</span>'
+        f'<span style="font-size:10px;color:{GRIS_TEXTO};">{detalle}</span>'
+        f'</div>', unsafe_allow_html=True)
+
+
+_JS_FORMATO_CANT = JsCode(
+    "function(p){ return p.value==null ? '' : "
+    "Number(p.value).toLocaleString('es-PE',{maximumFractionDigits:3}); }")
+"""Formato de las columnas de cantidad de las DOS tablas. Compartido a
+propósito: si un lado redondeara a 2 decimales y el otro a 3, dos números
+iguales se verían distintos justo en la vista que existe para
+compararlos."""
+
+
+def _grid_lado_sunat(tv, doc_id):
+    """La tabla IZQUIERDA: el comprobante tal como lo emitió el proveedor.
+    De sólo lectura y sin `update_on` — no tiene por qué provocar ni un
+    viaje al servidor mientras se corrige la de al lado."""
+    gb = GridOptionsBuilder.from_dataframe(tv)
+    gb.configure_default_column(resizable=True, sortable=False, filter=False,
+                                editable=False, suppressMovable=True)
+    gb.configure_column("Código prov.", width=110, minWidth=90)
+    gb.configure_column("Ítem (XML)", minWidth=160, flex=1)
+    gb.configure_column("Cant.", type=["numericColumn"], width=80,
+                        minWidth=70, valueFormatter=_JS_FORMATO_CANT)
+    gb.configure_column("Und.", width=70, minWidth=60)
+    gb.configure_grid_options(
+        rowHeight=_ALTO_FILA_CONVERSOR, headerHeight=_ALTO_CABECERA_CONVERSOR,
+        onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"),
+        suppressColumnVirtualisation=True,
+    )
+    AgGrid(
+        tv, gridOptions=gb.build(), height=_alto_conversor(len(tv)),
+        theme="material", custom_css=dict(_css_grid(12)),
+        allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
+        update_on=[], data_return_mode=DataReturnMode.AS_INPUT,
+        key=f"sunat_conv_sunat_{doc_id}",
+    )
+
+
+def _grid_lado_sistema(tv, doc_id):
+    """La tabla DERECHA: con qué se va a cargar el documento al sistema.
+    Dos columnas editables —el ítem y la cantidad— y todo lo demás
+    derivado. Devuelve la respuesta de AgGrid para que el llamador vea qué
+    cambió; ver `_detalle_sistema`."""
+    gb = GridOptionsBuilder.from_dataframe(tv)
+    gb.configure_default_column(resizable=True, sortable=False, filter=False,
+                                editable=False, suppressMovable=True)
+    for oculta in ("_idx", "_cod_auto", "_cant_xml"):
+        gb.configure_column(oculta, hide=True)
+    gb.configure_column("Código", width=100, minWidth=85)
+    # LAS DOS columnas editables -- ver el docstring de `_detalle_sistema`.
+    # El tinte lavanda es la misma señal visual de "interactivo" que usa el
+    # resto de la app (`_ficha_html`, la barra de TOTAL), acá marcando
+    # "esta celda se puede tocar".
+    gb.configure_column(
+        "Ítem (sistema)", minWidth=170, flex=1, editable=True,
+        cellEditor=_JS_EDITOR_PRODUCTO,
+        cellStyle=JsCode(
+            "function(p){ return {'background': '%s', 'cursor': 'text'}; }"
+            % LAVANDA_FONDO))
+    gb.configure_column("Und. kardex", width=95, minWidth=80)
+    # La cantidad arranca igual a la del comprobante y se puede pisar. Se
+    # marca con el acento cuando difiere: es la unica senal de que ese
+    # numero ya no es el que dice SUNAT.
+    gb.configure_column(
+        "Cant.", type=["numericColumn"], width=85, minWidth=75, editable=True,
+        valueFormatter=_JS_FORMATO_CANT, valueParser=_JS_CANTIDAD_PARSER,
+        cellStyle=JsCode(
+            "function(p){ var base = {'background': '%s', 'cursor': 'text'};"
+            " if (p.data && p.value != null && p.data._cant_xml != null"
+            "     && Math.abs(p.value - p.data._cant_xml) > 1e-6) {"
+            "   base.color = '%s'; base.fontWeight = '600'; }"
+            " return base; }" % (LAVANDA_FONDO, ACENTO_TEXTO)))
+    # Misma convención que "Estado" en `_tabla_cruce`: ámbar = revisar
+    # ("sin coincidencia" o "sugerido, sin confirmar todavía"). "Corregido"
+    # va con el acento de marca porque no es un problema, es una
+    # intervención humana que conviene notar.
+    gb.configure_column(
+        "Origen", width=120, minWidth=105,
+        cellStyle=JsCode(
+            "function(p){ var m={'Corregido':'%s','Sugerido':'%s',"
+            "'Sin coincidencia':'%s'}; var c=m[p.value];"
+            " return c ? {'color':c,'fontWeight':'600'} : {'color':'%s'}; }"
+            % (ACENTO_TEXTO, ADVERTENCIA_TEXTO, ADVERTENCIA_TEXTO, GRIS_TEXTO)))
+    # `singleClickEdit` + `stopEditingWhenCellsLoseFocus`: un clic entra a
+    # editar y clickear afuera confirma, como una celda de Excel -- sin
+    # esto haría falta doble clic y Enter.
+    gb.configure_grid_options(
+        rowHeight=_ALTO_FILA_CONVERSOR, headerHeight=_ALTO_CABECERA_CONVERSOR,
+        singleClickEdit=True, stopEditingWhenCellsLoseFocus=True,
+        context=_lookups_maestro()[2],
+        onGridReady=_JS_MAESTRO_AL_NAVEGADOR,
+        onCellValueChanged=_JS_RELLENAR_VECINAS,
+        onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"),
+        # Esta tabla vive en media tarjeta, con más columnas de las que
+        # entran sin scroll horizontal -- eso es esperable (mismo criterio
+        # que `_tabla_cruce`). Lo que NO conviene es la virtualización de
+        # columnas por defecto: con el marco angosto, deja sin nodo DOM a
+        # "Ítem (sistema)" hasta que alguien scrollea hasta ahí, y esa es
+        # justo la columna editable. Ocho columnas es nada para el
+        # navegador — desactivarla cuesta cero acá y evita esa sorpresa.
+        suppressColumnVirtualisation=True,
+    )
+    # Key con el documento adentro: sin esto, AG Grid retiene estado del
+    # lado del cliente al cambiar de documento -- antes fue la fila
+    # seleccionada y reventó en vivo con menos líneas que el documento
+    # anterior (IndexError, ver arquitectura.md regla #224); con edición en
+    # celda el mismo riesgo aplica igual. Con la key distinta, AG Grid
+    # monta un componente nuevo por documento y arranca limpio.
+    return AgGrid(
+        tv, gridOptions=gb.build(), height=_alto_conversor(len(tv)),
+        theme="material", custom_css=dict(_css_grid(12)),
+        allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
+        update_on=["cellValueChanged"],
+        data_return_mode=DataReturnMode.AS_INPUT,
+        # `server_wins` y no el `client_wins` por defecto: sin esto, "after
+        # first edit, grid ignores server data updates" (docstring de
+        # st_aggrid). Era el bug reportado el 2026-08-27 con captura --
+        # se elegía el ítem y "Código"/"Und. kardex"/"Origen" se quedaban
+        # vacíos y en "Sin coincidencia" para siempre, porque el navegador
+        # descartaba en silencio la fila ya resuelta que mandaba el
+        # servidor. Acá el servidor ES la fuente de verdad: guarda la
+        # corrección en R2 y recién entonces redibuja.
+        server_sync_strategy="server_wins",
+        key=f"sunat_conv_sistema_{doc_id}",
+    )
+
+
+def _num(v):
+    """`v` como float, o None si no se puede. Los valores que vuelven de
+    AgGrid pueden ser texto, número o NaN según por dónde pasaron."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return None if pd.isna(f) else f
+
+
+def _misma_cantidad(a, b):
+    """Dos cantidades son "la misma" hasta el sexto decimal. Comparar
+    floats por `==` acá haría que un ida y vuelta por JSON marcara como
+    cambio algo que el usuario no tocó."""
+    if a is None or b is None:
+        return a is None and b is None
+    return abs(a - b) <= 1e-6
+
+
+@st.fragment
 def _detalle_sistema(doc, lineas_xml, d):
     """El cuerpo de la tarjeta «Conversor SUNAT-Sistema»
-    (`_card_conversor_sistema`): cada línea del XML del proveedor, junto a
-    su equivalente en el sistema — código, nombre y unidad de KARDEX del
-    maestro de artículos (`_maestro_productos`) — editable EN LA PROPIA
-    CELDA, con buscador de sugerencias (a pedido 2026-08-27; hasta esa
-    fecha vivía como cuarta pestaña de "Original del proveedor", ver el
-    docstring de `_card_conversor_sistema`).
+    (`_card_conversor_sistema`): a la IZQUIERDA el comprobante del
+    proveedor, a la DERECHA con qué se va a cargar al sistema — código,
+    nombre y unidad de KARDEX del maestro de artículos
+    (`_maestro_productos`) más la cantidad, editables EN LA PROPIA CELDA.
+
+    DOS TABLAS, FILA CONTRA FILA (pedido 2026-08-27). Hasta esa mañana era
+    una sola tabla de 8 columnas: se leía como una planilla, no como una
+    comparación. Ahora cada lado es su propia tarjeta y la fila `i` de una
+    cae a la misma altura que la fila `i` de la otra — eso NO es
+    automático, sale de que las dos compartan alto de fila, de cabecera y
+    de tabla (`_ALTO_FILA_CONVERSOR`, `_alto_conversor`) y de que las dos
+    cabeceras se dibujen con el mismo markup (`_titulo_panel`).
 
     DOS FUENTES según si el documento YA ESTÁ REGISTRADO (tiene líneas en
     `compras.parquet`, `_lineas_parquet_del_documento`) o todavía no
@@ -1410,20 +1798,33 @@ def _detalle_sistema(doc, lineas_xml, d):
     SIEMPRE del maestro — no de `compras.parquet`, cuya unidad es la de
     esa compra puntual, no la de kardex.
 
-    EDITAR EN LA CELDA, no en un formulario aparte: "Ítem (sistema)" es
-    `editable=True` con el cell editor `_JS_EDITOR_PRODUCTO` (ver su
-    docstring sobre por qué no es `agRichSelectCellEditor`). Al confirmar
-    una celda, `update_mode=GridUpdateMode.VALUE_CHANGED` hace que
+    DOS COSAS EDITABLES, y las dos se guardan igual (una anotación en R2
+    sobre ESTE documento, ver `sunat.correcciones_lineas`):
+      · «Ítem (sistema)» — con el cell editor `_JS_EDITOR_PRODUCTO` (ver
+        su docstring sobre por qué no es `agRichSelectCellEditor`).
+        Vaciar la celda vuelve la línea a lo automático.
+      · «Cant.» — arranca igual a la del comprobante y se puede pisar
+        (pedido 2026-08-27). Volver al número del XML borra la anotación
+        en vez de guardar el mismo valor.
+    Al confirmar una celda, `update_on=["cellValueChanged"]` hace que
     Streamlit rerunee con el valor nuevo en `resp.data` — se compara fila
     a fila contra `tv` (lo que se mandó) por `_idx` para encontrar QUÉ
-    línea cambió, se resuelve el nombre tipeado a su código (puede haber
-    más de un código con el mismo nombre — 9 de 3.867 en el maestro real,
-    medido con DuckDB; se toma el primero) y se guarda con
-    `sunat.guardar_correccion_linea`. Si el nombre elegido es el MISMO
-    que ya sugería automático/sugerido, no se guarda una corrección
-    redundante — y si había una corrección vieja que ahora vuelve a
-    coincidir con lo automático, se borra (`quitar_correccion_linea`) en
-    vez de dejarla pisando algo que saldría igual sin ella.
+    cambió, y se guarda. Si lo elegido es lo MISMO que ya salía solo, no
+    se guarda una corrección redundante — y si había una vieja que ahora
+    vuelve a coincidir, se borra en vez de dejarla pisando algo que
+    saldría igual sin ella.
+
+    ES UN FRAGMENT, y eso es lo que arregla la lentitud que se reportó el
+    2026-08-27 ("cuando corrijo o agrego un ítem se cuelga y se pone
+    lento"). Cada celda confirmada disparaba DOS reruns de la app entera
+    —uno del widget, otro del `st.rerun()` de después de guardar—, y la
+    app entera acá incluye la consulta al SIRE, el render del PDF a PNG y
+    todas las secciones de la pila que el usuario ya hubiera visitado.
+    Adentro de un fragment, una corrección re-corre esto y nada más; el
+    `st.rerun(scope="fragment")` del final tampoco escala. Ver
+    `arquitectura.md` regla #211 para el reverso de esto (un
+    `rerun(scope="app")` al TOPE de un fragment sí le borra el estado a
+    sus widgets — acá va al final, con las dos tablas ya dibujadas).
 
     Ni esto ni la comparación tocan `compras.parquet` ni el maestro — son
     de solo lectura acá, los arma un ETL aparte; la corrección es una
@@ -1432,24 +1833,18 @@ def _detalle_sistema(doc, lineas_xml, d):
     """
     filas_pq = _lineas_parquet_del_documento(d, doc)
     correcciones = sunat.correcciones_lineas(doc)
-    maestro = _maestro_productos()
+    por_codigo, por_nombre, _ = _lookups_maestro()
 
     registrado = not filas_pq.empty
     if registrado:
         asignado = _parear_lineas_sistema(lineas_xml, filas_pq)
+        codigos_auto = [None if j is None
+                        else str(filas_pq.iloc[j]["COD_PRODUCTO"])
+                        for j in asignado]
         _origen_auto = "Automático"
     else:
-        asignado = _sugerir_desde_maestro(lineas_xml, maestro)
+        codigos_auto = _sugerir_desde_maestro(lineas_xml)
         _origen_auto = "Sugerido"
-
-    _lookup_cod = dict(zip(maestro["CODIGO PRODUCTO"].astype(str),
-                          zip(maestro["NOMBRE PRODUCTO"], maestro["UNIDAD KARDEX"])))
-    # nombre (recortado, en minúsculas) -> código: para resolver lo que se
-    # tipeó en la celda. Ambiguo (mismo nombre, más de un código) se queda
-    # con el primero -- 9 de 3.867 casos reales, medido con DuckDB.
-    _lookup_nombre = {}
-    for _cod, _nom in zip(maestro["CODIGO PRODUCTO"], maestro["NOMBRE PRODUCTO"]):
-        _lookup_nombre.setdefault(str(_nom).strip().lower(), str(_cod))
 
     if registrado:
         st.caption("Documento registrado: los ítems salen de cruzar "
@@ -1461,146 +1856,72 @@ def _detalle_sistema(doc, lineas_xml, d):
                 "artículos, sin ninguna compra registrada que las "
                 "confirme.")
 
-    def _codigo_auto(i):
-        """El código que sugiere automático/sugerido para la línea `i`,
-        sin mirar correcciones -- lo que "editar y volver a lo mismo"
-        necesita comparar."""
-        if asignado[i] is None:
-            return None
-        if registrado:
-            return str(filas_pq.iloc[asignado[i]]["COD_PRODUCTO"])
-        return str(maestro.iloc[asignado[i]]["CODIGO PRODUCTO"])
-
-    filas_tabla = []
+    filas_sunat, filas_sistema = [], []
     for i, xml_l in enumerate(lineas_xml):
-        correccion = correcciones.get(i)
-        cod_auto = _codigo_auto(i)
-        if correccion:
-            cod_sis = str(correccion.get("cod_producto", ""))
+        correccion = correcciones.get(i) or {}
+        cod_auto = codigos_auto[i] if i < len(codigos_auto) else None
+        if correccion.get("cod_producto"):
+            cod_sis = str(correccion["cod_producto"])
             origen = "Corregido"
             _respaldo = correccion.get("nombre_producto", "")
         elif cod_auto is not None:
-            cod_sis = cod_auto
-            origen = _origen_auto
-            _respaldo = ""
+            cod_sis, origen, _respaldo = cod_auto, _origen_auto, ""
         else:
             cod_sis, origen, _respaldo = "", "Sin coincidencia", ""
         # Del maestro sale nombre Y unidad; si el código no está ahí (no
         # debería pasar), al menos no se pierde el nombre que ya se tenía.
-        nom_sis, uni_sis = _lookup_cod.get(cod_sis, (_respaldo, ""))
-        filas_tabla.append({
-            "_idx": i,
-            "_cod_auto": cod_auto or "",
+        nom_sis, uni_sis = por_codigo.get(cod_sis, (_respaldo, ""))
+
+        cant_xml = _num(xml_l.get("cantidad"))
+        cant_cor = _num(correccion.get("cantidad"))
+        filas_sunat.append({
             "Código prov.": xml_l.get("codigo", ""),
             "Ítem (XML)": xml_l.get("descripcion", ""),
-            "Cant.": xml_l.get("cantidad"),
-            "Código sistema": cod_sis,
+            "Cant.": cant_xml,
+            "Und.": xml_l.get("unidad", ""),
+        })
+        filas_sistema.append({
+            "_idx": i,
+            "_cod_auto": cod_auto or "",
+            "_cant_xml": cant_xml,
+            "Código": cod_sis,
             "Ítem (sistema)": nom_sis,
-            "Unidad kardex": uni_sis,
+            "Und. kardex": uni_sis,
+            "Cant.": cant_xml if cant_cor is None else cant_cor,
             "Origen": origen,
         })
 
-    tv = pd.DataFrame(filas_tabla)
-    _js_cant = JsCode(
-        "function(p){ return p.value==null ? '' : "
-        "Number(p.value).toLocaleString('es-PE',{maximumFractionDigits:2}); }")
-    gb = GridOptionsBuilder.from_dataframe(tv)
-    gb.configure_default_column(resizable=True, sortable=True, filter=False,
-                                editable=False, suppressMovable=True)
-    gb.configure_column("_idx", hide=True)
-    gb.configure_column("_cod_auto", hide=True)
-    gb.configure_column("Código prov.", width=95, minWidth=95)
-    gb.configure_column("Ítem (XML)", minWidth=150, flex=1)
-    gb.configure_column("Cant.", type=["numericColumn"], width=75,
-                        minWidth=75, valueFormatter=_js_cant)
-    gb.configure_column("Código sistema", width=105, minWidth=105)
-    # LA columna editable -- ver el docstring de la función y de
-    # `_JS_EDITOR_PRODUCTO`. El tinte lavanda es la misma señal visual de
-    # "interactivo" que usa el resto de la app (`_ficha_html`, la barra de
-    # TOTAL), acá marcando "esta celda se puede tocar".
-    gb.configure_column(
-        "Ítem (sistema)", minWidth=170, flex=1, editable=True,
-        cellEditor=_JS_EDITOR_PRODUCTO,
-        cellStyle=JsCode(
-            "function(p){ return {'background': '%s', 'cursor': 'text'}; }"
-            % LAVANDA_FONDO))
-    gb.configure_column("Unidad kardex", width=100, minWidth=100)
-    # Misma convención que "Estado" en `_tabla_cruce`: ámbar = revisar
-    # ("sin coincidencia" o "sugerido, sin confirmar todavía"). "Corregido"
-    # va con el acento de marca porque no es un problema, es una
-    # intervención humana que conviene notar.
-    gb.configure_column(
-        "Origen", width=128, minWidth=128,
-        cellStyle=JsCode(
-            "function(p){ var m={'Corregido':'%s','Sugerido':'%s',"
-            "'Sin coincidencia':'%s'}; var c=m[p.value];"
-            " return c ? {'color':c,'fontWeight':'600'} : {'color':'%s'}; }"
-            % (ACENTO_TEXTO, ADVERTENCIA_TEXTO, ADVERTENCIA_TEXTO, GRIS_TEXTO)))
-    # `onGridReady` arma UNA vez por sesión de navegador (guardia
-    # `window.__sunatMaestroSetLower`, sobrevive a cambiar de documento) el
-    # <datalist> que alimenta el autocompletado y el set de nombres válidos
-    # que usa `isCancelAfterEnd`. `singleClickEdit` + `stopEditingWhenCells
-    # LoseFocus`: un clic entra a editar y clickear afuera confirma, como
-    # una celda de Excel -- sin esto haría falta doble clic y Enter.
-    _opciones_json = json.dumps(
-        maestro["NOMBRE PRODUCTO"].astype(str).tolist(), ensure_ascii=False)
-    _js_on_ready = JsCode(
-        "function(params){"
-        " if (window.__sunatMaestroSetLower) return;"
-        " var opciones = %s;"
-        " window.__sunatMaestroSetLower = new Set(opciones.map("
-        "   function(o){ return o.trim().toLowerCase(); }));"
-        " var dl = document.getElementById('sunat_maestro_datalist');"
-        " if (!dl) {"
-        "   dl = document.createElement('datalist');"
-        "   dl.id = 'sunat_maestro_datalist';"
-        "   document.body.appendChild(dl);"
-        " }"
-        " opciones.forEach(function(o){"
-        "   var opt = document.createElement('option');"
-        "   opt.value = o;"
-        "   dl.appendChild(opt);"
-        " });"
-        "}" % _opciones_json)
-    gb.configure_grid_options(
-        rowHeight=30, headerHeight=32, singleClickEdit=True,
-        stopEditingWhenCellsLoseFocus=True, onGridReady=_js_on_ready,
-        onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"),
-        # Esta tabla vive en la columna angosta ("Original del proveedor",
-        # ~300-400px) con 8 columnas que no entran sin scroll horizontal
-        # -- eso es esperable (mismo criterio que `_tabla_cruce`). Lo que
-        # NO conviene es la virtualización de columnas por defecto: con el
-        # marco tan angosto, deja sin nodo DOM a "Ítem (sistema)" hasta
-        # que alguien scrollea hasta ahí, y esa es justo la columna
-        # editable. Ocho columnas es nada para el navegador — desactivar
-        # la virtualización cuesta cero acá y evita esa sorpresa.
-        suppressColumnVirtualisation=True,
-    )
-    # Key con el documento adentro: sin esto, AG Grid retiene estado del
-    # lado del cliente al cambiar de documento -- antes fue la fila
-    # seleccionada y reventó en vivo con menos líneas que el documento
-    # anterior (IndexError, ver arquitectura.md regla #224); con edición en
-    # celda el mismo riesgo aplica igual. Con la key distinta, AG Grid
-    # monta un componente nuevo por documento y arranca limpio.
+    tv_sunat = pd.DataFrame(filas_sunat)
+    tv = pd.DataFrame(filas_sistema)
     _doc_id = str(doc.get("documento") or "")
-    resp = AgGrid(
-        tv, gridOptions=gb.build(),
-        height=alturas.por_filas(len(tv), px_fila=30, rol=alturas.MINI),
-        theme="material", custom_css=dict(_css_grid(12)),
-        allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
-        update_mode=GridUpdateMode.VALUE_CHANGED,
-        data_return_mode=DataReturnMode.AS_INPUT,
-        key=f"sunat_detalle_sistema_grid_{_doc_id}",
-    )
+
+    # columnas-internas: las dos mitades de la comparación, mitad y mitad
+    # a propósito -- ninguna de las dos fuentes manda sobre la otra.
+    c_izq, c_der = st.columns(2, gap="small")
+    with c_izq:
+        with st.container(border=True, key="sunat_conv_izq"):
+            _titulo_panel("Comprobante SUNAT", "lo que emitió el proveedor")
+            _grid_lado_sunat(tv_sunat, _doc_id)
+    with c_der:
+        with st.container(border=True, key="sunat_conv_der"):
+            _titulo_panel("Sistema", "con qué se carga")
+            resp = _grid_lado_sistema(tv, _doc_id)
+
     st.caption("Clic en «Ítem (sistema)» para corregirlo — el buscador "
-               "sugiere mientras escribís, contra el catálogo completo.")
+               "sugiere mientras escribís, contra el catálogo completo. "
+               "«Cant.» arranca con la del comprobante y también se edita; "
+               "vaciar el ítem vuelve la línea a lo automático.")
 
     # ¿Cambió algo? Comparar lo que volvió (`resp.data`) contra lo que se
     # mandó (`tv`), fila a fila por `_idx` -- no por posición, para no
-    # depender de que el orden se mantenga igual.
+    # depender de que el orden se mantenga igual. Se juntan TODAS las
+    # escrituras y recién al final se rerunea una sola vez: con dos
+    # columnas editables, rerunear adentro del bucle dejaría el segundo
+    # cambio sin guardar.
     devuelto = resp.data
     if devuelto is None or len(devuelto) == 0:
         return
+    guardado, fallo = False, False
     for _, fila in devuelto.iterrows():
         try:
             i = int(fila["_idx"])
@@ -1608,36 +1929,51 @@ def _detalle_sistema(doc, lineas_xml, d):
             continue
         if i < 0 or i >= len(lineas_xml):
             continue          # ver regla #224: fila de un documento viejo
+        anterior = tv.loc[tv["_idx"] == i]
+        if anterior.empty:
+            continue
+        anterior = anterior.iloc[0]
+
+        # ── el ítem del sistema ────────────────────────────────────────
         nuevo_nombre = str(fila.get("Ítem (sistema)") or "").strip()
-        original = str(tv.loc[tv["_idx"] == i, "Ítem (sistema)"].iloc[0]).strip()
-        if nuevo_nombre == original:
-            continue
-
-        cod_nuevo = _lookup_nombre.get(nuevo_nombre.lower())
-        if cod_nuevo is None:
-            # El editor ya rechaza esto del lado del navegador
-            # (`isCancelAfterEnd`) -- si igual llega acá es que algo
-            # puenteó la UI. No se guarda cualquier cosa como si fuera un
-            # código real; se avisa y se vuelve al último valor válido.
-            st.warning(f"«{nuevo_nombre}» no es un producto del maestro — "
-                       "no se guardó. Elegí una sugerencia de la lista.")
-            st.rerun()
-            continue
-
-        cod_auto_linea = str(tv.loc[tv["_idx"] == i, "_cod_auto"].iloc[0])
-        if cod_nuevo == cod_auto_linea:
-            # Volvió a coincidir con lo automático/sugerido: si había una
-            # corrección vieja, ya no hace falta -- se saca en vez de
-            # dejarla pisando algo que saldría igual sin ella.
-            if i in correcciones:
-                sunat.quitar_correccion_linea(doc, i)
-                st.rerun()
-        else:
-            if sunat.guardar_correccion_linea(doc, i, cod_nuevo, nuevo_nombre):
-                st.rerun()
+        if nuevo_nombre != str(anterior["Ítem (sistema)"]).strip():
+            cod_nuevo = por_nombre.get(nuevo_nombre.lower())
+            if not nuevo_nombre or cod_nuevo == str(anterior["_cod_auto"]):
+                # Vaciar la celda, o volver a lo que ya sugería solo: la
+                # corrección guardada (si había) deja de hacer falta.
+                if (correcciones.get(i) or {}).get("cod_producto"):
+                    guardado |= sunat.quitar_correccion_linea(doc, i)
+            elif cod_nuevo is None:
+                # El editor ya rechaza esto del lado del navegador
+                # (`isCancelAfterEnd`) -- si igual llega acá es que algo
+                # puenteó la UI. No se guarda cualquier cosa como si fuera
+                # un código real; se avisa y se vuelve al último válido.
+                st.warning(f"«{nuevo_nombre}» no es un producto del maestro "
+                           "— no se guardó. Elegí una sugerencia de la lista.")
+                guardado = True
+            elif sunat.guardar_correccion_linea(doc, i, cod_nuevo, nuevo_nombre):
+                guardado = True
             else:
-                st.error("No se pudo guardar. ¿Están las credenciales de "
-                         "R2 configuradas?")
+                fallo = True
+
+        # ── la cantidad ────────────────────────────────────────────────
+        nueva_cant = _num(fila.get("Cant."))
+        if nueva_cant is not None and not _misma_cantidad(
+                nueva_cant, _num(anterior["Cant."])):
+            if _misma_cantidad(nueva_cant, _num(anterior["_cant_xml"])):
+                guardado |= sunat.quitar_cantidad_linea(doc, i)
+            elif sunat.guardar_cantidad_linea(doc, i, nueva_cant):
+                guardado = True
+            else:
+                fallo = True
+
+    if fallo:
+        st.error("No se pudo guardar. ¿Están las credenciales de R2 "
+                 "configuradas?")
+    elif guardado:
+        # `scope="fragment"`: redibuja las dos tablas con la corrección ya
+        # aplicada sin re-correr la app entera. Ver el docstring.
+        st.rerun(scope="fragment")
 
 
 def _mostrar_original(doc, pdf_bytes, xml_bytes):

@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-225 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+232 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (77)
+**CSS y estilos** (78)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -97,6 +97,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#209** — Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no mover uno
 - **#213** — Un width: 100% que gana la cascada y no se ve suele estar clampeado por un max-width:…
 - **#216** — Retirar un toggle de colapso: si nada más puede fijar el estado "plegado", ese estado tiene…
+- **#231** — Dos tablas que tienen que alinearse fila contra fila no pueden calcular su alto por separado
 
 **Layout y alturas** (20)
 
@@ -168,7 +169,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
 - **#202** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
 
-**AgGrid y tablas** (37)
+**AgGrid y tablas** (41)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -207,8 +208,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#215** — Element.innerText no atraviesa el layout position: absolute de las celdas de AgGrid: da ""…
 - **#221** — tablas/desktop.py declaraba los TRES hooks que _parchar_iconos necesitaba, así que la tabla…
 - **#224** — Una key ESTÁTICA de AG Grid retiene estado del lado del cliente al cambiar de documento — y…
+- **#226** — Un JsCode de st_aggrid con un JSON grande adentro cuesta SEGUNDOS por render: su __init__…
+- **#227** — server_sync_strategy="client_wins" (el default de st_aggrid) hace que el navegador IGNORE los…
+- **#228** — isCancelAfterEnd devolviendo true deja el editor MONTADO: la celda queda con…
+- **#229** — cellValueChanged de AG Grid se despacha ASINCRÓNICO: leer los datos justo después de…
 
-**Streamlit** (70)
+**Streamlit** (71)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -280,8 +285,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#219** — Un riel de fechas que abarca todo el histórico no sirve para elegir un día, y la escala fina…
 - **#220** — Convertir una página de "una vista por vez" en una PILA no es mover código: es descubrir qué…
 - **#222** — La ventana del riel se generalizó a Meses, y el intento de arreglar "otro bug" de paso…
+- **#230** — Un @st.fragment alrededor de la tarjeta que se edita: una corrección deja de re-correr el…
 
-**Datos, R2 y DuckDB** (27)
+**Datos, R2 y DuckDB** (29)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -310,8 +316,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#205** — En recetaventa.parquet, tres trampas de columna que no tiran error — devuelven un número o…
 - **#224** — Una key ESTÁTICA de AG Grid retiene estado del lado del cliente al cambiar de documento — y…
 - **#225** — «Detalle sistema» dejó de ser la cuarta pestaña de "Original del proveedor" y pasó a su…
+- **#230** — Un @st.fragment alrededor de la tarjeta que se edita: una corrección deja de re-correr el…
+- **#232** — Una anotación por línea que puede tener DOS correcciones independientes se guarda con claves…
 
-**SUNAT y SIRE** (14)
+**SUNAT y SIRE** (16)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -327,6 +335,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#197** — Un techo de calendario sacado de "hasta dónde llegó el último sync" hace que HOY no se pueda…
 - **#223** — El panel derecho de Documentos SUNAT (ficha + original) pasó de apilado con el original…
 - **#225** — «Detalle sistema» dejó de ser la cuarta pestaña de "Original del proveedor" y pasó a su…
+- **#231** — Dos tablas que tienen que alinearse fila contra fila no pueden calcular su alto por separado
+- **#232** — Una anotación por línea que puede tener DOS correcciones independientes se guarda con claves…
 
 **Fechas, rangos y cortes** (8)
 
@@ -366,7 +376,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#206** — Un mousemove/mouseup de un iframe TAMPOCO sube al padre — el modo diseño se congelaba al…
 - **#215** — Element.innerText no atraviesa el layout position: absolute de las celdas de AgGrid: da ""…
 
-**Decisiones de diseño y UX** (38)
+**Decisiones de diseño y UX** (39)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -406,6 +416,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#209** — Para intercambiar dos elementos de sitio hay que DIBUJAR dos, no mover uno
 - **#216** — Retirar un toggle de colapso: si nada más puede fijar el estado "plegado", ese estado tiene…
 - **#220** — Convertir una página de "una vista por vez" en una PILA no es mover código: es descubrir qué…
+- **#227** — server_sync_strategy="client_wins" (el default de st_aggrid) hace que el navegador IGNORE los…
 
 **Mantenimiento y trampas del lenguaje** (6)
 
@@ -9973,13 +9984,267 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      lógica de emparejamiento/edición— no se tocó: sigue siendo la misma
      función, ahora llamada desde un lugar distinto.
 
+226. **Un `JsCode` de st_aggrid con un JSON grande adentro cuesta
+     SEGUNDOS por render: su `__init__` corre un regex de backtracking
+     catastrófico sobre el código, y el resultado ni siquiera se usa.**
+
+     La regla más cara del conversor y la que explica un reporte de
+     usuario que parecía imposible de ubicar: "cuando corrijo o agrego
+     un ítem, se cuelga y se pone lento" (2026-08-27). No era R2, no era
+     el emparejamiento por `difflib`, no era el parquet. Era **una
+     línea**:
+
+         onGridReady=JsCode(_JS_MAESTRO_AL_NAVEGADOR % catalogo_json)
+
+     `JsCode.__init__` (st_aggrid 1.2.1, `shared.py`) hace, antes de
+     guardar nada:
+
+         match_js_spaces = r"\s+(?=(?:[^\'\"]*[\'\"][^\'\"]*[\'\"])*[^\'\"]*$)"
+         one_line_jscode = re.sub(match_js_spaces, " ", js_code, ...)
+
+     Ese lookahead cuenta comillas de a pares hasta el final del texto:
+     sobre una cadena llena de comillas retrocede de forma catastrófica.
+     Y dos líneas más abajo el resultado se **pisa** con un `re.sub`
+     trivial — o sea que todo ese tiempo se quema para nada.
+
+     Medido en esta máquina con el catálogo real (`ver el bloque de
+     `_lookups_maestro``):
+
+     | caracteres | `JsCode(...)` |
+     |-----------:|--------------:|
+     |      2.000 |        0,028s |
+     |      4.000 |        0,098s |
+     |      8.000 |        0,339s |
+     |     16.000 |        1,349s |
+     |  **110.082** (el catálogo entero) | **~64s extrapolado** |
+
+     Cuadrático limpio (duplicar el texto cuadruplica el tiempo). Y se
+     pagaba ENTERO en cada render de la tarjeta: al elegir un documento y
+     al confirmar cada celda. Con `st.rerun()` de app completa después de
+     guardar, dos veces por corrección.
+
+     **Cómo reconocerlo:** el síntoma es un `running` que no termina, sin
+     nada en los logs, con el spinner de "componente tardando en cargar"
+     de Streamlit en la grilla de al lado. Y lo peor: en el código no hay
+     nada raro que mirar. Un `print` antes y después de la llamada a
+     `AgGrid` lo ubica en un minuto — fue así como apareció.
+
+     **La cura es `gridOptions.context`**: dato plano, se serializa con
+     `json.dumps` como cualquier otra opción y no toca ese regex. El JS
+     lo lee con `params.context` y queda de 15 líneas. Los datos van por
+     `context`; `JsCode` es para CÓDIGO, y el código no crece con los
+     datos.
+
+     Dos detalles que hacen falta para que funcione:
+
+       · **La FORMA del contexto no es libre.** `walk_gridOptions` (el
+         recorrido de st_aggrid que busca los `JsCode`) hace `go[k]` sobre
+         los ELEMENTOS de una lista, así que una lista **de listas**
+         revienta con `TypeError: list indices must be integers`. Lista
+         plana de strings sí pasa, y dict-de-listas también (recursa un
+         nivel y se detiene en los strings). Por eso el catálogo viaja
+         como `{"nombres": [str, …], "porNombre": {str: [str, str, str]}}`
+         y no como `[[nombre, código, unidad], …]`.
+       · El `onGridReady` guarda lo que arma en `window.__*` con una
+         guardia, para no reconstruir el `<datalist>` de 3.867 opciones en
+         cada rerun. Ese `window` es el del **iframe** del componente, no
+         el de la app: cada AgGrid tiene el suyo, y cambiar de documento
+         (que cambia la `key`) monta un iframe nuevo y vuelve a armarlo.
+
+     `test_graficos.py::_pruebas_jscode_barato` monta guardia: tope de
+     8.000 caracteres para cualquier `JsCode` del fuente (el más largo
+     del proyecto son 2.691 de componente escrito a mano, ~0,04s) más dos
+     chequeos puntuales de que el conversor siga usando `context=`. No
+     hay detector genérico de interpolación a propósito: casi todos los
+     `JsCode` del proyecto se arman con f-string o `%` para meterles un
+     color de `tema.py`, y marcarlos a todos sería ruido que haría que
+     nadie mire la salida — mismo criterio que `ruff.toml`.
+
+227. **`server_sync_strategy="client_wins"` (el default de st_aggrid)
+     hace que el navegador IGNORE los datos del servidor después de la
+     primera edición: la celda que el servidor resolvió nunca se pinta.**
+
+     El otro bug del mismo reporte del 2026-08-27, y el que se veía en la
+     captura: se elegía un ítem en «Ítem (sistema)» y las columnas de al
+     lado —«Código sistema», «Unidad kardex», «Origen»— se quedaban
+     vacías y en "Sin coincidencia" para siempre. Parecía que el guardado
+     fallaba. **No fallaba**: los JSON en R2 tenían la corrección
+     perfectamente guardada (verificado leyendo
+     `_correcciones_sunat/20109072177_F402-334108.json`, que traía las
+     tres líneas corregidas). Lo que no llegaba a la pantalla era la
+     RESPUESTA.
+
+     Está en el docstring de `AgGrid`, y es fácil de no leer:
+
+     > `'client_wins'` (default): After first edit, grid ignores server
+     > data updates and maintains local edits.
+
+     Ese default es correcto para una grilla que edita en el cliente y
+     manda al final. **No** para una donde el servidor resuelve el dato
+     (acá: del nombre tipeado salen el código y la unidad de kardex, que
+     el navegador no tiene por qué saber). Ahí va
+     `server_sync_strategy="server_wins"`, y la app se hace cargo de lo
+     que el docstring pide a cambio: guardar la edición ANTES de
+     redibujar, que es lo que ya hacía.
+
+     **Cómo reconocerlo:** el dato persiste (se ve al recargar o al
+     cambiar de documento y volver) pero la pantalla no se actualiza tras
+     editar. Si recargar arregla lo que un rerun no arregla, el problema
+     es de sincronización cliente-servidor, no de guardado.
+
+228. **`isCancelAfterEnd` devolviendo `true` deja el editor MONTADO: la
+     celda queda con `ag-cell-inline-editing` y un `<input>` vacío
+     encima, o sea SE VE VACÍA, aunque el dato de abajo esté intacto.**
+
+     Tercera del mismo día, encontrada al probar el conversor en el
+     navegador. El editor de «Ítem (sistema)» rechazaba con
+     `isCancelAfterEnd` cualquier texto que no fuera un producto del
+     maestro. Verificado en vivo con AG Grid 34.3.1: tras el rechazo,
+     `api.getEditingCells()` devuelve 0 —AG Grid da la edición por
+     terminada— pero el DOM de la celda sigue siendo
+     `<div><input …></div>` y el `<input>` está vacío. `refreshCells({
+     force: true })` no lo arregla. La celda queda en blanco hasta el
+     próximo render del servidor.
+
+     **La validación va en `getValue()`, no en `isCancelAfterEnd`:**
+     devolver el valor previo cuando el texto no es válido. Así el camino
+     de cancelación no se usa nunca — AG Grid cierra el editor por el
+     camino normal, compara viejo contra nuevo, ve que no cambió y ni
+     siquiera dispara `cellValueChanged`. De yapa, un texto inválido deja
+     de costar un viaje al servidor.
+
+     Regla general para los editores a mano de este proyecto (hermana de
+     la #25, que es la de los *renderers*): **un editor rechaza
+     devolviendo lo de antes, no cancelando.**
+
+229. **`cellValueChanged` de AG Grid se despacha ASINCRÓNICO: leer los
+     datos justo después de `stopEditing()` devuelve el valor viejo.**
+
+     Nota de medición, no de bug — pero costó media hora de creer que el
+     `onCellValueChanged` que rellena «Código» y «Und. kardex» al elegir
+     un ítem no se estaba ejecutando. Se ejecutaba: leyendo con
+     `forEachNode` en el mismo tick, las vecinas seguían con el valor
+     viejo; a los 80ms ya estaban las dos rellenas.
+
+     Vale para cualquier verificación en el navegador de este proyecto:
+     **para comprobar el efecto de un handler de AG Grid hay que esperar
+     un tick.** Un `setTimeout(…, 60)` alcanza.
+
+     De paso, el número que importa para el usuario: con el
+     `onCellValueChanged` del cliente, el código y la unidad aparecen a
+     los **80ms**; la confirmación del servidor —con la escritura a R2 y
+     el rerun del fragment— llega a los **~3s** (medido en el ThinkPad,
+     que además es servidor de SQL). Sin el handler del cliente serían
+     los 3s pelados.
+
+230. **Un `@st.fragment` alrededor de la tarjeta que se edita: una
+     corrección deja de re-correr el reporte entero.**
+
+     La otra mitad de la cura de la lentitud del conversor (la primera es
+     la #226). Antes, cada celda confirmada disparaba DOS reruns de app
+     completa: el del widget y el del `st.rerun()` de después de guardar.
+     Y "app completa" en este drill incluye la consulta al SIRE, el
+     render del PDF a PNG, y **todas** las secciones de la pila que el
+     usuario ya hubiera visitado (la pila las mantiene activas, ver la
+     regla #211).
+
+     Con `_detalle_sistema` decorada `@st.fragment` y el `st.rerun()`
+     final cambiado a `st.rerun(scope="fragment")`, una corrección
+     re-corre las dos tablas y nada más. Medido por etapa, dentro del
+     fragment, en el ThinkPad:
+
+     | etapa | ms |
+     |---|---:|
+     | filtrar el parquet al documento | 17–38 |
+     | `correcciones_lineas` (GET a R2) | 328–641 |
+     | `_lookups_maestro` (cacheado) | 7–121 |
+     | pareo + armar las dos tablas | 42–98 |
+     | dibujar la grilla del sistema | 73–150 |
+     | detectar cambios + escribir a R2 | 852 |
+
+     El `rerun` del fragment va al FINAL, con las dos tablas ya
+     dibujadas — al tope habría sido la regla #211 otra vez (un `rerun`
+     que aborta la corrida antes de dibujar los widgets les borra el
+     estado). Lo que queda dominando es la latencia de R2, no la CPU: el
+     GET se paga dos veces por corrección porque el guardado invalida su
+     caché de 15s. Si alguna vez molesta, ahí está el próximo recorte.
+
+231. **Dos tablas que tienen que alinearse fila contra fila no pueden
+     calcular su alto por separado.**
+
+     El «Conversor SUNAT-Sistema» pasó de una tabla de 8 columnas a dos
+     tarjetas lado a lado (2026-08-27, a pedido: "dos cuadros o tarjetas
+     separadas, pero alineadas una con la otra, para que se vea la idea
+     de comparación"). Que la fila `i` de la izquierda caiga a la misma
+     `y` que la `i` de la derecha no sale solo: depende de tres cosas que
+     tienen que ser LA MISMA, y por eso viven en una constante y una
+     función compartidas (`_ALTO_FILA_CONVERSOR`,
+     `_ALTO_CABECERA_CONVERSOR`, `_alto_conversor`) y no en literales de
+     cada lado:
+
+       1. el alto de fila (`rowHeight`),
+       2. el alto de cabecera (`headerHeight`),
+       3. el alto de la tabla (`alturas.por_filas` con los mismos
+          argumentos).
+
+     Y una cuarta que no es de la grilla: las dos cabeceras de las
+     tarjetas se dibujan con la MISMA función (`_titulo_panel`), porque
+     si una mide 2px más que la otra, las tablas arrancan desfasadas y
+     ninguna de las tres de arriba lo salva. Verificado en el navegador:
+     las seis filas del documento de prueba caen en y=34/64/94/124/154/184
+     en los dos lados, y las dos tarjetas miden 584x305 idénticas.
+
+     Es la misma familia que las reglas de color (#1), alto (#101) y
+     grilla (#145): **el eje compartido sale de un solo lugar.**
+
+     Detalle aparte, y es la regla #7 leída al revés: las dos tarjetas
+     internas se llaman `sunat_conv_izq`/`sunat_conv_der` y NO
+     `sunat_card_…` **a propósito**. `estilos/_80_cards.py` clampea
+     `div[class*="st-key-sunat_card_"]` a `--alto-util` con scroll
+     propio, y estas dos viven DENTRO de una de ellas
+     (`sunat_card_conversor`): con el prefijo de la familia grande
+     heredarían un segundo scroll anidado adentro del de su madre. Antes
+     de agregar un widget dentro de una tarjeta hay que grepear
+     `estilos/` — a veces para copiar el prefijo, y a veces, como acá,
+     para elegir el que NO matchea.
+
+232. **Una anotación por línea que puede tener DOS correcciones
+     independientes se guarda con claves opcionales, no con un registro
+     completo.**
+
+     El conversor guardaba, por línea del XML, el producto del sistema
+     elegido a mano. El 2026-08-27 se sumó la CANTIDAD, editable y con la
+     del comprobante como valor de arranque — el caso real es un
+     proveedor que factura cuatro líneas del mismo producto (cuatro
+     piezas pesadas una por una) y el sistema carga una sola con el
+     total.
+
+     Son dos correcciones independientes sobre la misma línea, así que el
+     registro de `sunat.correcciones_lineas` pasó a tener claves
+     OPCIONALES, donde ausente significa "usar lo automático":
+     `cod_producto`+`nombre_producto` para el producto, `cantidad` para
+     la cantidad. Tres invariantes, y las tres se rompen solas si alguien
+     escribe el registro entero de nuevo en vez de mergear:
+
+       · guardar el producto **conserva** la cantidad corregida, y al
+         revés (por eso los cuatro `guardar_*`/`quitar_*` leen, mutan y
+         llaman a un único `_escribir_correcciones`);
+       · volver al valor automático BORRA la clave en vez de guardar un
+         valor igual al que saldría solo — si no, la fila queda marcada
+         "Corregido" para siempre por una corrección que no corrige nada;
+       · un registro sin ninguna de las dos no existe: el que quita la
+         última borra el registro, y si era el último, el archivo de R2.
+
+     El formato viejo (sólo producto) se lee sin migración: son las
+     mismas claves. Verificado con los tres JSON que ya había en R2.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#226**.
+> próxima regla nueva es la **#233**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

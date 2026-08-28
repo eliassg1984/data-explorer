@@ -1742,6 +1742,92 @@ def _pruebas_presupuesto_vertical():
     return fallos
 
 
+def _pruebas_jscode_barato():
+    """Que nadie vuelva a meter un payload de DATOS dentro de un `JsCode`.
+
+    Sale de un cuelgue medido el 2026-08-27 en el «Conversor
+    SUNAT-Sistema»: bajaba el catálogo de 3.867 productos al navegador
+    interpolándolo en el `onGridReady`, o sea 110.082 caracteres pasando
+    por `JsCode(...)`. `JsCode.__init__` (st_aggrid 1.2.1) corre sobre el
+    código un regex cuyo lookahead cuenta comillas de a pares hasta el
+    final del texto —y por lo tanto retrocede de forma catastrófica—, y
+    encima descarta el resultado dos líneas más abajo. Medido: 4.000
+    caracteres 0,10s; 8.000, 0,34s; 16.000, 1,35s. Cuadrático limpio, así
+    que los 110.082 reales daban **~64 segundos por render**, en cada
+    selección de documento y en cada celda corregida. El usuario lo
+    reportó como "se cuelga y se pone lento" y no había nada raro que ver
+    en el código: la llamada es una línea. La cura fue
+    `gridOptions.context`, que es dato plano y no pasa por ese regex.
+
+    DOS GUARDAS, y ninguna es un detector genérico de interpolación: casi
+    todos los `JsCode` del proyecto se arman con f-string o `%` para
+    meterles un color de `tema.py`, y marcarlos a todos sería ruido que
+    haría que nadie mire la salida (mismo criterio que `ruff.toml`, que
+    corre sólo `F`). Lo que se persigue es el TAMAÑO, que es lo que
+    dispara el regex, y el sitio puntual donde ya pasó:
+
+      1. Ningún `JsCode(...)` con más de `TOPE` caracteres en el fuente —
+         cubre el caso de pegar una tabla como literal. El tope está
+         holgado a propósito: el JsCode más largo del proyecto son 2.691
+         caracteres de componente escrito a mano (`tablas/desktop.py`) y
+         eso cuesta ~0,04s, que no molesta a nadie.
+      2. Que el conversor siga bajando su catálogo por `context=` y que
+         su `onGridReady` siga siendo una CONSTANTE, no una plantilla que
+         alguien vuelva a rellenar con `%`.
+    """
+    import pathlib
+    import re
+
+    fallos = 0
+
+    def check(nombre, ok, detalle=""):
+        nonlocal fallos
+        if ok:
+            print(f"OK    jscode · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA jscode · {nombre}{': ' + detalle if detalle else ''}")
+
+    raiz = pathlib.Path(__file__).parent
+    TOPE = 8000
+
+    # ── 1) Ningún JsCode gigante en el fuente ───────────────────────────
+    largos = []
+    for py in sorted(raiz.rglob("*.py")):
+        # Los worktrees de `.claude/` son copias viejas del repo: medirlas
+        # reporta bugs ya arreglados en sitios que nadie va a editar.
+        if any(parte.startswith(".") for parte in py.parts):
+            continue
+        try:
+            texto = py.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for m in re.finditer(r"JsCode\(", texto):
+            # El argumento: del paréntesis de apertura al que lo cierra.
+            i, nivel = m.end(), 1
+            while i < len(texto) and nivel:
+                nivel += (texto[i] == "(") - (texto[i] == ")")
+                i += 1
+            if i - m.end() - 1 > TOPE:
+                linea = texto[:m.start()].count("\n") + 1
+                largos.append(f"{py.relative_to(raiz)}:{linea} "
+                              f"({i - m.end() - 1} chars)")
+    check(f"ningún JsCode con más de {TOPE} caracteres de código",
+          not largos, ", ".join(largos[:5]))
+
+    # ── 2) El conversor baja su catálogo por `context`, no por JsCode ───
+    conv = (raiz / "graficos" / "compras" / "documentos_sunat.py").read_text(
+        encoding="utf-8")
+    check("el catálogo del conversor viaja en gridOptions.context",
+          "context=_lookups_maestro()" in conv,
+          "no aparece `context=_lookups_maestro()`")
+    check("el onGridReady del conversor es una constante, no una plantilla",
+          "_JS_MAESTRO_AL_NAVEGADOR = JsCode(" in conv
+          and not re.search(r"_JS_MAESTRO_AL_NAVEGADOR\s*%", conv),
+          "volvió a rellenarse con `%`")
+    return fallos
+
+
 def _pruebas_grilla_horizontal():
     """El contrato de la GRILLA (graficos/compras/_comun.py).
 
@@ -1993,6 +2079,9 @@ def main():
 
     # ── Grilla horizontal: que todas las filas partan en el mismo sitio ──
     fallos += _pruebas_grilla_horizontal()
+
+    # ── JsCode: que nadie vuelva a meterle un payload de datos adentro ──
+    fallos += _pruebas_jscode_barato()
 
     print()
     if fallos:

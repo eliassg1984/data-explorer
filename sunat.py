@@ -1245,12 +1245,26 @@ def clave_correcciones(doc):
 
 @st.cache_data(ttl=15, show_spinner=False)
 def correcciones_lineas(doc):
-    """`{índice_línea_xml: {"cod_producto", "nombre_producto", "corregido_en"}}`
-    de las correcciones guardadas para este comprobante, o `{}` si no hay
-    ninguna (estado normal: la mayoría de los documentos no tiene
-    correcciones). TTL corto (15 seg), igual que `_hay_senal`: esto puede
-    cambiar mientras el usuario mira la pantalla, justo después de guardar
-    una corrección."""
+    """`{índice_línea_xml: registro}` de las correcciones guardadas para
+    este comprobante, o `{}` si no hay ninguna (estado normal: la mayoría
+    de los documentos no tiene correcciones).
+
+    El registro trae SÓLO lo que se corrigió — las claves son opcionales y
+    ausente significa "usar lo automático":
+
+      · `cod_producto` + `nombre_producto` — el producto del sistema
+        elegido a mano (`guardar_correccion_linea`). Ausentes: vale el
+        emparejamiento automático contra `compras.parquet`/el maestro.
+      · `cantidad` — la cantidad con la que se va a cargar la línea
+        (`guardar_cantidad_linea`, 2026-08-27). Ausente: vale la del XML.
+      · `corregido_en` — cuándo se tocó por última vez.
+
+    Un registro sin ninguna de las dos correcciones no existe: el que
+    quita la última borra el registro (y el archivo, si era el último).
+
+    TTL corto (15 seg), igual que `_hay_senal`: esto puede cambiar
+    mientras el usuario mira la pantalla, justo después de guardar una
+    corrección."""
     import json
 
     import data
@@ -1266,43 +1280,16 @@ def correcciones_lineas(doc):
         return {}
 
 
-def guardar_correccion_linea(doc, indice_linea, cod_producto, nombre_producto):
-    """Guarda en R2 la corrección manual de UNA línea del XML de este
-    comprobante (pisa la corrección previa de esa línea, si había).
+def _escribir_correcciones(doc, actuales):
+    """Persiste el dict ENTERO de correcciones de este comprobante en R2
+    (o borra el archivo si no quedó ninguna). Devuelve True si quedó
+    guardado. No lanza: un R2 caído durante el guardado es un estado a
+    mostrar en pantalla, no un traceback.
 
-    Devuelve True si quedó guardada. No lanza: un R2 caído durante el
-    guardado es un estado a mostrar en pantalla, no un traceback.
-    """
-    import json
-    from datetime import datetime, timezone
-
-    import data
-
-    if not data.secrets_disponibles():
-        return False
-    actuales = dict(correcciones_lineas(doc))
-    actuales[int(indice_linea)] = {
-        "cod_producto": str(cod_producto),
-        "nombre_producto": str(nombre_producto),
-        "corregido_en": datetime.now(timezone.utc).isoformat(),
-    }
-    try:
-        data.get_s3_cliente().put_object(
-            Bucket=st.secrets["R2_BUCKET"], Key=clave_correcciones(doc),
-            Body=json.dumps(actuales, ensure_ascii=False).encode("utf-8"),
-            ContentType="application/json")
-    except Exception:
-        return False
-    # Sin esto la UI seguiría mostrando el emparejamiento viejo durante los
-    # 15 seg del TTL, como si la corrección no se hubiera guardado.
-    correcciones_lineas.clear(doc)
-    return True
-
-
-def quitar_correccion_linea(doc, indice_linea):
-    """Saca la corrección manual de UNA línea (esa línea vuelve a mostrar
-    el emparejamiento automático). No es un error si esa línea no tenía
-    corrección guardada — simplemente no cambia nada.
+    Es la única escritura de la familia: los cuatro `guardar_*`/`quitar_*`
+    de abajo leen, mutan y llaman acá. Antes cada uno tenía su propio
+    `put_object` + `clear`, y con la cantidad editable (2026-08-27) eso
+    eran cuatro copias del mismo bloque.
     """
     import json
 
@@ -1310,10 +1297,6 @@ def quitar_correccion_linea(doc, indice_linea):
 
     if not data.secrets_disponibles():
         return False
-    actuales = dict(correcciones_lineas(doc))
-    if int(indice_linea) not in actuales:
-        return True
-    del actuales[int(indice_linea)]
     try:
         s3 = data.get_s3_cliente()
         if actuales:
@@ -1328,8 +1311,94 @@ def quitar_correccion_linea(doc, indice_linea):
                              Key=clave_correcciones(doc))
     except Exception:
         return False
+    # Sin esto la UI seguiría mostrando el emparejamiento viejo durante los
+    # 15 seg del TTL, como si la corrección no se hubiera guardado.
     correcciones_lineas.clear(doc)
     return True
+
+
+def _sellar(registro):
+    """Le pone la hora al registro de una línea y lo devuelve."""
+    from datetime import datetime, timezone
+
+    registro["corregido_en"] = datetime.now(timezone.utc).isoformat()
+    return registro
+
+
+def guardar_correccion_linea(doc, indice_linea, cod_producto, nombre_producto):
+    """Guarda en R2 el PRODUCTO que corresponde a UNA línea del XML de este
+    comprobante (pisa el producto corregido previo de esa línea, si había).
+
+    MERGE, no reemplazo: si esa línea ya tenía una `cantidad` corregida
+    (`guardar_cantidad_linea`), se conserva. Son dos correcciones
+    independientes sobre la misma línea — cambiar el producto no tiene por
+    qué borrar la cantidad que alguien ya ajustó a mano.
+    """
+    actuales = dict(correcciones_lineas(doc))
+    registro = dict(actuales.get(int(indice_linea)) or {})
+    registro["cod_producto"] = str(cod_producto)
+    registro["nombre_producto"] = str(nombre_producto)
+    actuales[int(indice_linea)] = _sellar(registro)
+    return _escribir_correcciones(doc, actuales)
+
+
+def quitar_correccion_linea(doc, indice_linea):
+    """Saca el PRODUCTO corregido de UNA línea (esa línea vuelve a mostrar
+    el emparejamiento automático). No es un error si esa línea no tenía
+    corrección guardada — simplemente no cambia nada.
+
+    Saca sólo las claves del producto: si quedaba una `cantidad`
+    corregida, sobrevive (ver `guardar_correccion_linea`). El registro
+    entero se borra recién cuando no queda ninguna de las dos.
+    """
+    actuales = dict(correcciones_lineas(doc))
+    registro = dict(actuales.get(int(indice_linea)) or {})
+    if not registro.get("cod_producto"):
+        return True
+    registro.pop("cod_producto", None)
+    registro.pop("nombre_producto", None)
+    if registro.get("cantidad") is None:
+        actuales.pop(int(indice_linea), None)
+    else:
+        actuales[int(indice_linea)] = _sellar(registro)
+    return _escribir_correcciones(doc, actuales)
+
+
+def guardar_cantidad_linea(doc, indice_linea, cantidad):
+    """Guarda la CANTIDAD con la que se va a cargar UNA línea al sistema.
+
+    Agregado 2026-08-27 a pedido: la cantidad del conversor arranca igual
+    a la del comprobante SUNAT, pero se puede editar — el caso real es un
+    proveedor que factura 4 líneas del mismo producto (4 piezas pesadas
+    una por una) y el sistema carga una sola con el total. Guardarla acá
+    NO toca el XML ni `compras.parquet`: es una anotación de la webapp
+    sobre ESE documento, igual que el producto corregido.
+
+    Sólo se llama cuando la cantidad DIFIERE de la del XML; volver al
+    valor del comprobante es `quitar_cantidad_linea`, no guardar el mismo
+    número otra vez.
+    """
+    actuales = dict(correcciones_lineas(doc))
+    registro = dict(actuales.get(int(indice_linea)) or {})
+    registro["cantidad"] = float(cantidad)
+    actuales[int(indice_linea)] = _sellar(registro)
+    return _escribir_correcciones(doc, actuales)
+
+
+def quitar_cantidad_linea(doc, indice_linea):
+    """Saca la cantidad corregida de UNA línea (vuelve a la del XML).
+    Gemela de `quitar_correccion_linea`: si quedaba un producto corregido,
+    sobrevive."""
+    actuales = dict(correcciones_lineas(doc))
+    registro = dict(actuales.get(int(indice_linea)) or {})
+    if registro.get("cantidad") is None:
+        return True
+    registro.pop("cantidad", None)
+    if not registro.get("cod_producto"):
+        actuales.pop(int(indice_linea), None)
+    else:
+        actuales[int(indice_linea)] = _sellar(registro)
+    return _escribir_correcciones(doc, actuales)
 
 
 # ===========================================================================
