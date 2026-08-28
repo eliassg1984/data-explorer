@@ -84,7 +84,7 @@ from estado_rango import clave_rango
 import franja_fecha
 from tema import (
     ACENTO, ACENTO_TEXTO, ADVERTENCIA_TEXTO, ERROR, GRIS_BORDE, GRIS_TEXTO,
-    LAVANDA_FONDO, TEXTO_PRINCIPAL,
+    LAVANDA_CABECERA_GRUPO, LAVANDA_FONDO, TEXTO_PRINCIPAL,
 )
 from graficos.base import _compras_layout, _compras_truncar
 from graficos import alturas
@@ -1079,7 +1079,22 @@ def _tabla(df):
     resp = AgGrid(
         tv, gridOptions=gb.build(),
         height=alturas.por_filas(len(tv), px_fila=30, rol=alturas.APOYO),
-        theme="material", custom_css=dict(_css_grid(13)),
+        # `cebra=False`: filas de un blanco uniforme, a pedido 2026-08-28.
+        # Las separa la línea de `.ag-row`, que no depende del rayado.
+        #
+        # Y con las filas todas iguales hay que marcar la SELECCIONADA, que
+        # `_css_grid` no estila: esta tabla es la que ELIGE el documento
+        # —de ella cuelgan la ficha, el original y el conversor de abajo— y
+        # sin marca el usuario pierde de vista sobre cuál está parado.
+        # Verificado en el navegador: antes tampoco estaba marcada, pero el
+        # rayado disimulaba el problema. Mismo color y misma receta que el
+        # ranking de `graficos/inventario.py`.
+        theme="material",
+        custom_css={**_css_grid(13, cebra=False),
+                    ".ag-row-selected": {
+                        "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
+                        "font-weight": "600 !important",
+                    }},
         allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
         key="sunat_docs_grid",
     )

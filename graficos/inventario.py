@@ -173,10 +173,12 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key):
         },
         allow_unsafe_jscode=True,
         theme="material",
-        # `_css_grid` no estila la fila SELECCIONADA (ninguna de las tablas
-        # que lo comparten tiene selección de fila), y acá esa fila ES el
+        # `_css_grid` no estila la fila SELECCIONADA, y acá esa fila ES el
         # foco del drill: sin marcarla, el usuario no ve sobre qué categoría
-        # está mirando el panel de la derecha.
+        # está mirando el panel de la derecha. La tabla de Documentos SUNAT
+        # copia esta receta desde el 2026-08-28 (hasta ese día el comentario
+        # decía que ninguna otra tabla tenía selección de fila — la tenía,
+        # sin marcar, y el rayado de filas disimulaba el problema).
         custom_css={**_css_grid(12),
                     ".ag-row-selected": {
                         "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",

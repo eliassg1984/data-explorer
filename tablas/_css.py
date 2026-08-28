@@ -14,9 +14,18 @@ from tema import (
 )
 
 
-def _css_grid(font_px):
+def _css_grid(font_px, cebra=True):
     """CSS del propio grid: guías de tab, root-wrapper, cabecera, filas,
-    celda, fila fijada, paginación y barra de estado."""
+    celda, fila fijada, paginación y barra de estado.
+
+    `cebra=False` deja las filas de un blanco uniforme (a pedido
+    2026-08-28 para la tabla de Documentos SUNAT). Lo que separa las
+    filas sigue siendo la línea de `.ag-row`, que no depende del
+    rayado — el zebra es redundante con ella y en una tabla dentro de
+    una tarjeta blanca compite con el fondo en vez de acompañarlo.
+    Sigue en `True` por defecto: las otras ocho tablas del proyecto no
+    se tocan.
+    """
     return {
         ".ag-tab-guard-top, .ag-tab-guard-bottom": {
             "caret-color": "transparent !important",
@@ -54,7 +63,7 @@ def _css_grid(font_px):
             "color": f"{TEXTO_PRINCIPAL}",
         },
         ".ag-row-even": {"background-color": f"{BLANCO}"},
-        ".ag-row-odd": {"background-color": f"{GRIS_FONDO}"},
+        ".ag-row-odd": {"background-color": f"{GRIS_FONDO if cebra else BLANCO}"},
         ".ag-row-hover": {"background-color": f"{LAVANDA_FONDO} !important"},
         ".ag-cell": {"color": f"{EXIT_HOVER}", "font-size": f"{font_px}px"},
         ".ag-row-pinned": {
