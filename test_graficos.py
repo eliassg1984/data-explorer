@@ -74,6 +74,93 @@ def _df_recetas():
     })
 
 
+def _fuentes_py(raiz):
+    """Los `.py` PROPIOS del repo colgando de `raiz`, como `(ruta, texto)`.
+
+    Dueño único del recorrido del fuente: cinco barridos repartidos en tres
+    guardas rastrean el árbol buscando literales prohibidos, y las dos
+    trampas de abajo se pagan una vez acá en vez de cinco veces sueltas.
+
+    **Trampa 1 — los worktrees.** `Path(__file__).parent.rglob("*.py")`
+    barre también `.claude/worktrees/`: copias del repo clavadas en un
+    commit viejo. El 2026-08-28 eso hacía FALLAR la guarda de los anchos
+    de rail citando `_25_rails_pestillo.py:38` — un fichero que `main`
+    había BORRADO dos días antes (regla #216) y que sólo sobrevivía en un
+    worktree en detached HEAD. Se diagnostica pésimo: la ruta del reporte
+    era sólo el nombre del fichero, así que parecía un fichero del repo, y
+    encima salía DUPLICADA (un renglón por worktree vivo).
+
+    **Trampa 2 — mirar los componentes RELATIVOS, no los absolutos.** Es
+    la que se llevó puesto al filtro original (`_pruebas_jscode_barato`,
+    2026-08-27, `any(p.startswith(".") for p in py.parts)`): este mismo
+    repo se clona a `…/.claude/worktrees/<nombre>/` para trabajar, así que
+    al correr el test DESDE un worktree la ruta absoluta de todo fichero
+    lleva un `.claude` adentro y el filtro descarta los 92. La guarda pasa
+    en verde sin haber leído NADA — el modo de fallo peor, porque no
+    avisa. `_pruebas_recorrido_fuentes` monta guardia sobre esto.
+    """
+    import pathlib
+
+    raiz = pathlib.Path(raiz)
+    for py in sorted(raiz.rglob("*.py")):
+        if any(parte.startswith(".") for parte in py.relative_to(raiz).parts):
+            continue
+        try:
+            yield py, py.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+
+
+def _pruebas_recorrido_fuentes():
+    """Que el recorrido de `_fuentes_py` siga VIENDO el repo.
+
+    Guarda de la guarda, y no es paranoia: el filtro anterior (mirar los
+    componentes de la ruta ABSOLUTA) dejaba el barrido en CERO ficheros al
+    correr el test desde un worktree de `.claude/`, que es justamente
+    desde donde lo corre una sesión de IA. Todas las guardas que rastrean
+    el fuente pasaban en verde sin abrir un solo fichero.
+
+    Un recorrido vacío no puede fallar nunca; por eso hace falta afirmar
+    en positivo que encuentra lo que tiene que encontrar.
+    """
+    import pathlib
+
+    fallos = 0
+
+    def check(nombre, ok, detalle=""):
+        nonlocal fallos
+        if ok:
+            print(f"OK    recorrido · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA recorrido · {nombre}{': ' + detalle if detalle else ''}")
+
+    raiz = pathlib.Path(__file__).parent
+    vistos = {py.relative_to(raiz).as_posix() for py, _ in _fuentes_py(raiz)}
+
+    # Tres ficheros de tres niveles distintos: raíz, paquete y subpaquete.
+    # Si alguno se renombra, esta prueba se actualiza — es el precio de
+    # afirmar en positivo, y es más barato que un barrido mudo.
+    esperados = {"app.py", "estilos/_00_base.py",
+                 "graficos/compras/_comun.py"}
+    check("el barrido del repo ve sus propios ficheros",
+          esperados <= vistos,
+          f"no encontró {sorted(esperados - vistos)}")
+
+    # El corte de verdad: las copias de `.claude/worktrees/` quedan fuera.
+    colados = sorted(r for r in vistos if r.startswith("."))
+    check("el barrido no entra en directorios con punto (.claude/…)",
+          not colados, ", ".join(colados[:4]))
+
+    # Y que el barrido de un SUBdirectorio siga siendo no vacío: los
+    # `raiz` de las guardas no son todos la raíz del repo.
+    n_graficos = sum(1 for _ in _fuentes_py(raiz / "graficos"))
+    check("el barrido de un subdirectorio no viene vacío",
+          n_graficos > 10, f"sólo {n_graficos} ficheros en graficos/")
+
+    return fallos
+
+
 def _pruebas_puras():
     """Asserts de VALOR sobre las funciones puras (transforman datos, sin
     Streamlit). Son las que un refactor de mover-código puede romper en
@@ -1686,10 +1773,10 @@ def _pruebas_presupuesto_vertical():
     # no dibuja nada, sólo corre el JS que intercambia los dos rails.
     raiz = pathlib.Path(__file__).parent / "graficos"
     culpables = []
-    for py in sorted(raiz.rglob("*.py")):
+    for py, texto in _fuentes_py(raiz):
         if py.name in ("alturas.py", "_css_proveedor.py"):
             continue
-        for i, linea in enumerate(py.read_text(encoding="utf-8").split("\n"), 1):
+        for i, linea in enumerate(texto.split("\n"), 1):
             if linea.lstrip().startswith("#"):
                 continue
             if re.search(r"\b(alto|height)=\d", linea) \
@@ -1715,8 +1802,8 @@ def _pruebas_presupuesto_vertical():
     # NO sale de restarle nada a la pantalla): marcar la línea con
     # `# alto-fijo-justificado: <por qué>`.
     culpables_cont = []
-    for py in sorted(raiz.rglob("*.py")):
-        for i, linea in enumerate(py.read_text(encoding="utf-8").split("\n"), 1):
+    for py, texto in _fuentes_py(raiz):
+        for i, linea in enumerate(texto.split("\n"), 1):
             # Los COMENTARIOS quedan fuera: media docena de ellos explican
             # justamente esta regla citando la llamada prohibida, y una guarda
             # que se dispara con su propia documentación es una guarda que
@@ -1776,14 +1863,22 @@ def _pruebas_presupuesto_vertical():
     # filas de los reportes del rail suban": sin plegado no hay un tercer
     # estado que fijar). Si `--rail-der-w`/`--rail-der-res` aparecen en un
     # tercer sitio ahora, es doble declaración lisa y llana.
+    #
+    # El barrido va por `_fuentes_py`, que deja fuera `.claude/worktrees/`:
+    # esta guarda fallaba citando el `_25_rails_pestillo.py` de un worktree
+    # viejo, o sea un fichero que este repo ya no tiene. Y la ruta se
+    # reporta RELATIVA al repo, no `py.name` a secas — con el nombre pelado
+    # el intruso de un worktree se lee igual que uno de casa, que fue
+    # exactamente lo que costó el diagnóstico.
     _duenos = {"_00_base.py"}
+    raiz_repo = pathlib.Path(__file__).parent
     intrusos = []
-    for py in sorted(pathlib.Path(__file__).parent.rglob("*.py")):
+    for py, texto in _fuentes_py(raiz_repo):
         if py.name in _duenos or py.name == pathlib.Path(__file__).name:
             continue
-        for i, linea in enumerate(py.read_text(encoding="utf-8").split("\n"), 1):
+        for i, linea in enumerate(texto.split("\n"), 1):
             if re.search(r"--rail-(izq|der)-w\s*:|--rail-der-res\s*:", linea):
-                intrusos.append(f"{py.name}:{i}")
+                intrusos.append(f"{py.relative_to(raiz_repo).as_posix()}:{i}")
     check("los anchos de rail solo los declara _00_base",
           not intrusos, ", ".join(intrusos[:6]))
 
@@ -1847,15 +1942,12 @@ def _pruebas_jscode_barato():
 
     # ── 1) Ningún JsCode gigante en el fuente ───────────────────────────
     largos = []
-    for py in sorted(raiz.rglob("*.py")):
-        # Los worktrees de `.claude/` son copias viejas del repo: medirlas
-        # reporta bugs ya arreglados en sitios que nadie va a editar.
-        if any(parte.startswith(".") for parte in py.parts):
-            continue
-        try:
-            texto = py.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
+    # Los worktrees de `.claude/` son copias viejas del repo: medirlas
+    # reporta bugs ya arreglados en sitios que nadie va a editar. El filtro
+    # vive en `_fuentes_py` — acá estaba escrito a mano y comparaba los
+    # componentes de la ruta ABSOLUTA, con lo que al correr el test desde un
+    # worktree descartaba el repo entero y la guarda medía cero ficheros.
+    for py, texto in _fuentes_py(raiz):
         for m in re.finditer(r"JsCode\(", texto):
             # El argumento: del paréntesis de apertura al que lo cierra.
             i, nivel = m.end(), 1
@@ -1962,12 +2054,12 @@ def _pruebas_grilla_horizontal():
 
     # ── 3) La constante tiene UN dueño ──────────────────────────────────
     intrusos = []
-    for py in sorted(raiz.rglob("*.py")):
+    for py, texto in _fuentes_py(raiz):
         if py.name in ("_comun.py", pathlib.Path(__file__).name):
             continue
-        for i, linea in enumerate(py.read_text(encoding="utf-8").split("\n"), 1):
+        for i, linea in enumerate(texto.split("\n"), 1):
             if re.match(r"\s*(COLUMNAS_DRILL|GAP_DRILL)\s*=", linea):
-                intrusos.append(f"{py.relative_to(raiz)}:{i}")
+                intrusos.append(f"{py.relative_to(raiz).as_posix()}:{i}")
     check("COLUMNAS_DRILL/GAP_DRILL solo los declara compras/_comun.py",
           not intrusos, ", ".join(intrusos[:6]))
 
@@ -2136,6 +2228,9 @@ def main():
 
     # ── JsCode: que nadie vuelva a meterle un payload de datos adentro ──
     fallos += _pruebas_jscode_barato()
+
+    # ── El barrido del fuente que usan las tres guardas de arriba ───────
+    fallos += _pruebas_recorrido_fuentes()
 
     print()
     if fallos:

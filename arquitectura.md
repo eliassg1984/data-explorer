@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-232 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+233 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (78)
 
@@ -418,7 +418,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#220** — Convertir una página de "una vista por vez" en una PILA no es mover código: es descubrir qué…
 - **#227** — server_sync_strategy="client_wins" (el default de st_aggrid) hace que el navegador IGNORE los…
 
-**Mantenimiento y trampas del lenguaje** (6)
+**Mantenimiento y trampas del lenguaje** (7)
 
 - **#21** — Columnas reales de salidas.parquet confirmadas 2026-08-04
 - **#43** — st.plotly_chart(..., selection_mode="points") NO agrega las herramientas de caja/lazo al…
@@ -426,6 +426,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#54** — Un callback inyectado necesita UNA firma, no una por llamador
 - **#56** — Al sacar un blob de JS/CSS embebido a su módulo: NO lo pases a raw string, y verifica el…
 - **#132** — El rail de navegación dejó de ser una columna izquierda de 90px y pasó a ser una franja…
+- **#233** — Una guarda que rastrea el fuente tiene que excluir .claude/worktrees/ — y el filtro mira los…
 
 <!-- INDICE:FIN -->
 
@@ -10312,13 +10313,67 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      El formato viejo (sólo producto) se lee sin migración: son las
      mismas claves. Verificado con los tres JSON que ya había en R2.
 
+233. **Una guarda que rastrea el fuente tiene que excluir
+     `.claude/worktrees/` — y el filtro mira los componentes RELATIVOS a la
+     raíz, nunca los de la ruta absoluta.**
+
+     Dos caras del mismo bug, y la segunda es mucho peor que la primera
+     porque no avisa.
+
+     **Cara 1 — el barrido entra en los worktrees.** Las guardas de
+     `test_graficos.py` que buscan literales prohibidos (`--rail-der-w`
+     declarada dos veces, un `alto=430` suelto, un `JsCode` gigante)
+     recorren `Path(__file__).parent.rglob("*.py")`. Eso incluye
+     `.claude/worktrees/<tarea>/`, que son COPIAS del repo clavadas en un
+     commit viejo. El 2026-08-28 la guarda de los anchos de rail fallaba
+     citando `_25_rails_pestillo.py:38` — un fichero que `main` había
+     BORRADO dos días antes (regla #216) y que sólo sobrevivía en un
+     worktree en detached HEAD. Se pierde el tiempo en dos sitios: el
+     hallazgo es un bug ya arreglado, y encima sale DUPLICADO, un renglón
+     por worktree vivo. Peor todavía si el reporte usa `py.name` en vez de
+     la ruta relativa, como hacía ésta: con el nombre pelado el intruso de
+     un worktree se lee igual que uno de casa.
+
+     **Cara 2 — el filtro se come el repo entero.** El arreglo evidente
+     (`any(parte.startswith(".") for parte in py.parts)`, que es como
+     nació en `_pruebas_jscode_barato` el 2026-08-27) mira los componentes
+     de la ruta ABSOLUTA. Pero este mismo repo se clona a
+     `…/.claude/worktrees/<nombre>/` para trabajar, así que **al correr el
+     test DESDE un worktree la ruta absoluta de todo fichero lleva un
+     `.claude` adentro**: medido, sobrevivían 0 de 92 ficheros en
+     `test_graficos.py` y 0 de 99 en `test_docs.py` (que tenía el mismo
+     fallo con su propio `_omitir & set(f.parts)`). La guarda pasa en
+     verde sin haber abierto un solo fichero. Y una sesión de IA corre los
+     tests justamente desde un worktree, o sea que el modo de fallo era el
+     habitual, no el raro.
+
+     Lo correcto es `py.relative_to(raiz).parts`: así el punto significa
+     "un directorio oculto DENTRO del repo", que es lo que se quería decir.
+
+     **La lección general, que vale para cualquier guarda:** una guarda que
+     busca algo prohibido sólo puede FALLAR; nunca puede probar que miró.
+     Un barrido vacío es indistinguible de un repo limpio. Por eso al lado
+     de cada una va una afirmación EN POSITIVO —
+     `test_graficos.py::_pruebas_recorrido_fuentes` (que el barrido ve
+     `app.py`, `estilos/_00_base.py` y `graficos/compras/_comun.py`, que no
+     se cuela nada de un directorio con punto, y que un subdirectorio
+     tampoco viene vacío) y el `el barrido leyó N ficheros` de
+     `test_docs.py`. Mismo criterio que la guarda #2 de la grilla
+     horizontal, que cuenta las llamadas a `COLUMNAS_DRILL` en positivo
+     para que borrarlas no deje la guarda #1 en verde.
+
+     El recorrido tiene ahora un dueño único, `test_graficos.py::
+     _fuentes_py(raiz)`, que devuelve `(ruta, texto)` ya filtrado y con el
+     `try/except` de lectura adentro. Los cinco barridos del fichero pasan
+     por ahí.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#233**.
+> próxima regla nueva es la **#234**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

@@ -76,19 +76,34 @@ print("\n── referencias cruzadas (#NNN) ──")
 # `.claude` incluye los worktrees de las tareas en curso, que son COPIAS del
 # repo: sin excluirlos, cada hallazgo se reporta dos veces y con una ruta que
 # no es la que hay que editar.
+#
+# Los componentes se miran RELATIVOS a RAIZ, nunca los de la ruta absoluta:
+# este mismo repo se clona a `…/.claude/worktrees/<nombre>/` para trabajar, y
+# ahí la ruta absoluta de TODO fichero lleva un `.claude` adentro. Con
+# `set(f.parts)` el filtro descartaba los 99 candidatos y el barrido pasaba en
+# verde sin abrir ninguno (medido el 2026-08-28; ver arquitectura.md #233).
 _omitir = {".git", ".claude", "__pycache__", ".venv", "venv", "node_modules"}
-_rotas = {}
+_rotas, _mirados = {}, 0
 for f in RAIZ.rglob("*"):
-    if f.suffix not in (".py", ".md", ".js") or _omitir & set(f.parts):
+    if f.suffix not in (".py", ".md", ".js"):
+        continue
+    if _omitir & set(f.relative_to(RAIZ).parts):
         continue
     try:
         texto = f.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         continue
+    _mirados += 1
     for m in re.finditer(r"(?:reglas?\s*#|arquitectura\.md\s*#|#)(\d{1,3})\b", texto):
         n = int(m.group(1))
         if 1 <= n <= max(_conjunto) and n not in _conjunto:
             _rotas.setdefault(n, set()).add(f.relative_to(RAIZ).as_posix())
+
+# En positivo, y antes del veredicto: un barrido de CERO ficheros no puede
+# encontrar referencias rotas, así que sin esta línea el fallo se disfraza
+# de éxito. Es la mitad del bug de arriba que no avisa.
+ok(_mirados > 20, f"el barrido leyó {_mirados} ficheros del repo",
+   "0 o casi 0: el filtro de directorios se está comiendo el repo entero")
 
 ok(not _rotas, "ninguna referencia apunta a una regla inexistente",
    "; ".join(f"#{n} en {', '.join(sorted(v)[:3])}" for n, v in sorted(_rotas.items())))
