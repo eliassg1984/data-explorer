@@ -10208,6 +10208,34 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      `estilos/` — a veces para copiar el prefijo, y a veces, como acá,
      para elegir el que NO matchea.
 
+     **Corrección del mismo día:** las dos mitades nacieron con fondo
+     `--bg-card-tenue`, que es un alias de `--bg-primary` — o sea el
+     MISMO `#f6f6f8` del lienzo de la app. Como la tarjeta madre todavía
+     era transparente (el marco por defecto de `st.container(border=
+     True)`), eso dejaba dos cajas grises sobre gris. Al pasar las tres
+     tarjetas del drill al blanco de Compras (ver el párrafo de abajo),
+     las dos mitades pasaron a `--bg-card` también: lo único que las
+     separa ahora es su línea de 1px, y alcanza. Sin sombra a propósito
+     — una sombra adentro de la sombra de la madre ensucia el borde.
+
+     **Y el drill entero pasó al blanco del resto de Compras** (a pedido,
+     mismo día): `sunat_card_*` era la última familia de tarjetas del
+     reporte que se quedaba con el marco por defecto de Streamlit —fondo
+     transparente y línea `rgba(49,51,63,.2)` de radio 8, medido—, así
+     que el reporte cambiaba de idioma visual justo al llegar a
+     Documentos. Ahora comparte declaraciones exactas con
+     `compras_prov_card_` y `compras_prod_card_` (blanco, sin borde,
+     radio 20, `padding: 16px 18px`, sombra tenue), verificado en el
+     navegador con un elemento sonda de cada familia.
+
+     Lo que hace que ese cambio NO obligue a retocar ningún alto: el
+     cromo vertical es el mismo antes y después. Eran 15px de padding +
+     1px de borde = 16 por lado; ahora son 16 de padding + 0 de borde.
+     Por eso `--alto-util` sigue clampeando igual (medido: las dos
+     primeras tarjetas siguen en 576px exactos con scroll interno) y las
+     filas de las dos mitades siguen alineadas en
+     y=34/64/94/124/154/184.
+
 232. **Una anotación por línea que puede tener DOS correcciones
      independientes se guarda con claves opcionales, no con un registro
      completo.**

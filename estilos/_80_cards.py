@@ -114,18 +114,22 @@ CSS = """    /* ================================================================
     /* un widget dentro de una tarjeta: grep estilos/") leída al revés: */
     /* elegir el prefijo que NO matchea.                                */
     /*                                                                  */
-    /* Se ven como dos paneles hermanos y no como dos tarjetas sueltas: */
-    /* el borde es el mismo gris de la app y el fondo, un gris apenas   */
-    /* por debajo del blanco de la tarjeta madre — lo justo para que el */
-    /* ojo agrupe cada tabla con su cabecera y lea las dos como los dos */
-    /* lados de una comparación. Ver `_detalle_sistema` en             */
-    /* graficos/compras/documentos_sunat.py.                            */
+    /* BLANCAS, como su tarjeta madre y como todo Compras (a pedido     */
+    /* 2026-08-27). Nacieron con el gris `--bg-card-tenue`, que es el   */
+    /* MISMO `#f6f6f8` del lienzo de la app: con la madre todavía       */
+    /* transparente, eso dejaba dos cajas grises sobre gris. Ahora la   */
+    /* madre es blanca y estas dos también; lo único que las separa es  */
+    /* la línea de 1px, que alcanza para que el ojo agrupe cada tabla   */
+    /* con su cabecera y lea las dos como los dos lados de una          */
+    /* comparación. Sin sombra a propósito: anidar sombras dentro de la */
+    /* sombra de la tarjeta madre ensucia el borde. Ver                 */
+    /* `_detalle_sistema` en graficos/compras/documentos_sunat.py.      */
     /* ─────────────────────────────────────────────────────────────── */
     div[class*="st-key-sunat_conv_"] {
         border: 1px solid var(--border) !important;
         border-radius: 12px !important;
         padding: 10px 12px 4px !important;
-        background: var(--bg-card-tenue);
+        background: var(--bg-card);
     }
     /* Streamlit pinta SU borde en el hijo directo cuando border=True;
        con el de arriba puesto, serían dos líneas a 1px de distancia. */
@@ -267,6 +271,37 @@ CSS = """    /* ================================================================
     }
     div[class*="st-key-compras_prod_card_"] + div[class*="st-key-compras_prod_card_"] {
         margin-top: 16px;
+    }
+
+    /* =================================================================== */
+    /* TARJETAS DEL DRILL DE DOCUMENTOS SUNAT (Compras)                      */
+    /*                                                                       */
+    /* Misma convención y los MISMOS valores que los dos bloques de arriba   */
+    /* (Proveedor y Producto): 3 bloques apilados —tabla, ficha+original,    */
+    /* conversor— separados por el gris del app, cada uno blanco con su      */
+    /* sombra tenue. A pedido 2026-08-27: hasta ese día estas tres eran las  */
+    /* únicas tarjetas de Compras que se quedaban con el marco POR DEFECTO   */
+    /* de `st.container(border=True)` — fondo transparente y una línea gris  */
+    /* de Streamlit (medido: `rgba(49,51,63,.2)`, radio 8px, sin sombra) —,  */
+    /* así que el reporte cambiaba de idioma visual al llegar a Documentos.  */
+    /*                                                                       */
+    /* El cromo vertical NO cambia y por eso no hay que retocar ningún alto: */
+    /* antes eran 15px de padding + 1px de borde = 16 por lado; ahora son    */
+    /* 16 de padding + 0 de borde. Mismo total.                              */
+    /*                                                                       */
+    /* No tocar sin revisar `renderizar_documentos_sunat` en                 */
+    /* graficos/compras/documentos_sunat.py                                  */
+    /* =================================================================== */
+    div[class*="st-key-sunat_card_"] {
+        background: var(--bg-card) !important;
+        border: none !important;
+        border-radius: 20px !important;
+        padding: 16px 18px;
+        box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
+    }
+    /* Anula el borde interno que Streamlit pinta cuando border=True. */
+    div[class*="st-key-sunat_card_"] > div {
+        border: none !important;
     }
 
     /* =================================================================== */
