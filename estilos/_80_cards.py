@@ -122,10 +122,27 @@ CSS = """    /* ================================================================
     /* la línea de 1px, que alcanza para que el ojo agrupe cada tabla   */
     /* con su cabecera y lea las dos como los dos lados de una          */
     /* comparación. Sin sombra a propósito: anidar sombras dentro de la */
-    /* sombra de la tarjeta madre ensucia el borde. Ver                 */
-    /* `_detalle_sistema` en graficos/compras/documentos_sunat.py.      */
+    /* sombra de la tarjeta madre ensucia el borde.                     */
+    /*                                                                  */
+    /* Y ESTE es el único marco que llevan las mitades: las tablas de   */
+    /* adentro se dibujan con `_css_grid(..., marco=False)`, sin borde  */
+    /* ni radio ni sombra propios. Si las dos cosas se marcan, quedan   */
+    /* dos líneas de 1px con el mismo radio a diez píxeles una de otra. */
+    /* Ver `_detalle_sistema` en graficos/compras/documentos_sunat.py.  */
     /* ─────────────────────────────────────────────────────────────── */
-    div[class*="st-key-sunat_conv_"] {
+    /* `_izq`/`_der` COMPLETOS en el selector, no la familia `sunat_conv_`  */
+    /* a secas. Las dos tablas de adentro tienen key                        */
+    /* `sunat_conv_sunat_<doc>` y `sunat_conv_sistema_<doc>`, que CONTIENEN */
+    /* la subcadena `st-key-sunat_conv_`: con el wildcard corto, este       */
+    /* bloque le pegaba también a ellas y cada tabla nacía con su propia    */
+    /* caja blanca redondeada de 10/12/4 de padding. Es la trampa que       */
+    /* documenta CLAUDE.md («el CSS matchea por PREFIJO de key, no por      */
+    /* widget») mordiendo desde adentro de la propia familia. Reportado el  */
+    /* 2026-08-28 como "tarjetas dentro de tarjeta, dentro de tarjetas" y   */
+    /* confirmado con el inspector, que lista esta regla entre las que      */
+    /* matchean el AgGrid.                                                  */
+    div[class*="st-key-sunat_conv_izq"],
+    div[class*="st-key-sunat_conv_der"] {
         border: 1px solid var(--border) !important;
         border-radius: 12px !important;
         padding: 10px 12px 4px !important;
@@ -133,7 +150,8 @@ CSS = """    /* ================================================================
     }
     /* Streamlit pinta SU borde en el hijo directo cuando border=True;
        con el de arriba puesto, serían dos líneas a 1px de distancia. */
-    div[class*="st-key-sunat_conv_"] > div {
+    div[class*="st-key-sunat_conv_izq"] > div,
+    div[class*="st-key-sunat_conv_der"] > div {
         border: none !important;
     }
 

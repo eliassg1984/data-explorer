@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-233 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+235 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (78)
+**CSS y estilos** (79)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -98,8 +98,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#213** — Un width: 100% que gana la cascada y no se ve suele estar clampeado por un max-width:…
 - **#216** — Retirar un toggle de colapso: si nada más puede fijar el estado "plegado", ese estado tiene…
 - **#231** — Dos tablas que tienen que alinearse fila contra fila no pueden calcular su alto por separado
+- **#234** — Elegir un prefijo de key que NO choque con otra familia no alcanza: hay que mirar también las…
 
-**Layout y alturas** (20)
+**Layout y alturas** (21)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -121,6 +122,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#187** — Meter None entre las opciones de un st.selectbox le agrega un botón ✕ "Clear value" que no…
 - **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
 - **#214** — Un st.rerun con scope="app" sigue estando ADENTRO del fragment que lo llama: sumarle espacio…
+- **#235** — _css_grid es de UNA tabla suelta sobre el gris de la app; si la tabla ya vive adentro de una…
 
 **Plotly y figuras** (44)
 
@@ -319,7 +321,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#230** — Un @st.fragment alrededor de la tarjeta que se edita: una corrección deja de re-correr el…
 - **#232** — Una anotación por línea que puede tener DOS correcciones independientes se guarda con claves…
 
-**SUNAT y SIRE** (16)
+**SUNAT y SIRE** (18)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -337,6 +339,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#225** — «Detalle sistema» dejó de ser la cuarta pestaña de "Original del proveedor" y pasó a su…
 - **#231** — Dos tablas que tienen que alinearse fila contra fila no pueden calcular su alto por separado
 - **#232** — Una anotación por línea que puede tener DOS correcciones independientes se guarda con claves…
+- **#234** — Elegir un prefijo de key que NO choque con otra familia no alcanza: hay que mirar también las…
+- **#235** — _css_grid es de UNA tabla suelta sobre el gris de la app; si la tabla ya vive adentro de una…
 
 **Fechas, rangos y cortes** (8)
 
@@ -10253,7 +10257,16 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      heredarían un segundo scroll anidado adentro del de su madre. Antes
      de agregar un widget dentro de una tarjeta hay que grepear
      `estilos/` — a veces para copiar el prefijo, y a veces, como acá,
-     para elegir el que NO matchea.
+     para elegir el que NO matchea. **Elegirlo bien no alcanzó:** ese
+     mismo prefijo terminó capturando a las dos tablas de adentro, que se
+     llaman `sunat_conv_sunat_…`/`sunat_conv_sistema_…`. Ver la regla
+     #234, que es la continuación de este párrafo y la corrige.
+
+     Y el marco: cada mitad lleva UNA línea de 1px, la suya. Las tablas
+     de adentro se dibujan con `_css_grid(..., marco=False)` — sin
+     borde, radio ni sombra propios (regla #235). Con las dos cosas
+     marcadas quedaban dos líneas del mismo radio a trece píxeles una de
+     otra.
 
      **Corrección del mismo día:** las dos mitades nacieron con fondo
      `--bg-card-tenue`, que es un alias de `--bg-primary` — o sea el
@@ -10367,13 +10380,116 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      `try/except` de lectura adentro. Los cinco barridos del fichero pasan
      por ahí.
 
+234. **Elegir un prefijo de key que NO choque con otra familia no
+     alcanza: hay que mirar también las keys que van a nacer DEBAJO. Una
+     familia se muerde a sí misma cuando el hijo lleva el prefijo del
+     padre.**
+
+     La cara que faltaba de la regla #7, y me la comí escribiendo la #231
+     el mismo día. Ahí elegí `sunat_conv_izq`/`sunat_conv_der` para las
+     dos mitades del conversor justamente para NO caer en la familia
+     `sunat_card_`, y quedé conforme. Lo que no miré es que las dos
+     tablas de adentro se llaman `sunat_conv_sunat_<doc>` y
+     `sunat_conv_sistema_<doc>` — o sea que **contienen la subcadena
+     `st-key-sunat_conv_`** y por lo tanto matchean el selector que
+     escribí para sus padres:
+
+         div[class*="st-key-sunat_conv_"] { border: 1px solid …;
+                                            border-radius: 12px;
+                                            padding: 10px 12px 4px }
+
+     Resultado: cada AgGrid nacía envuelto en su propia caja blanca
+     redondeada con 10/12/4 de padding, que nadie pidió y que no se ve en
+     ningún `.py`. El usuario lo reportó el 2026-08-28 —"mis tablas se
+     ven como si estuviesen encerradas en tarjetas dentro de tarjeta,
+     dentro de tarjetas"— y tenía razón al pie de la letra: contados en
+     el navegador eran **tres marcos anidados** sobre la tabla
+     (`.ag-root-wrapper` con borde+radio+sombra, la mitad
+     `sunat_conv_izq` con borde+radio, y la tarjeta `sunat_card_conversor`
+     con radio+sombra), más la caja fantasma de la propia regla.
+
+     **Lo que lo hizo invisible al escribirlo:** la caja fantasma NO tenía
+     borde. La regla hermana
+     `div[class*="st-key-sunat_conv_"] > div { border: none }`
+     —puesta para matar el borde que Streamlit pinta con
+     `border=True`— también le pegaba, así que el widget quedaba con
+     fondo blanco, radio y padding pero SIN la línea que lo habría
+     delatado. Se veía como "la tabla está muy adentro", no como "hay una
+     caja de más".
+
+     **Cómo se encuentra:** el inspector (`?debug=1`) lo canta en la
+     línea "Reglas de estilos/ que matchean este elemento" — la regla del
+     padre aparecía listada sobre el AgGrid. Es literalmente para lo que
+     existe esa línea (regla #90). Ante un "se ve encajonado", pasar el
+     cursor por la tabla y leer qué la estila, antes que tocar píxeles.
+
+     **La cura son dos cosas, y hacen falta las dos:**
+
+       1. Acotar el selector a las keys completas —
+          `div[class*="st-key-sunat_conv_izq"], div[class*="st-key-sunat_conv_der"]` —
+          en vez del prefijo de familia. Mata la caja fantasma.
+       2. Sacarle el marco a la tabla que YA vive dentro de una caja:
+          `_css_grid(..., marco=False)` le quita al `.ag-root-wrapper` su
+          borde, su radio y su sombra (ver la regla #235). Sin esto
+          quedan dos líneas de 1px con el mismo radio a trece píxeles una
+          de otra, que es el "tarjeta dentro de tarjeta" de verdad.
+
+     Medido después: de 3 marcos a 2 (la mitad y la tarjeta), la caja
+     fantasma en `padding: 0 / radio 0 / fondo transparente`, las dos
+     mitades siguen midiendo 448x291 iguales y las filas siguen alineadas
+     en y=33/63/93/123/153/183.
+
+     **Regla práctica al nombrar:** si un contenedor se llama `X_izq`, no
+     nombres a sus hijos `X_algo` — o el CSS del contenedor los va a
+     capturar. O el selector va con la key COMPLETA desde el principio.
+
+235. **`_css_grid` es de UNA tabla suelta sobre el gris de la app; si la
+     tabla ya vive adentro de una caja, hay que apagarle el marco.**
+
+     `tablas/_css.py::_css_grid` le da al `.ag-root-wrapper` fondo
+     blanco, borde de 1px, radio 12 y sombra — el vestuario de una tabla
+     que se apoya sola sobre el lienzo, que es como viven las nueve
+     tablas que lo comparten. Metida adentro de una tarjeta, ese mismo
+     vestuario es un marco de más.
+
+     Desde el 2026-08-28 tiene dos interruptores, los dos en `True` por
+     defecto para no mover a las otras ocho:
+
+       · `marco=False` — sin borde, sin radio, sin sombra. Lo que **no**
+         se toca es `overflow: hidden` (las filas se saldrían por abajo)
+         ni `width: 100%`.
+       · `cebra=False` — filas de un blanco uniforme, sin el alternado
+         blanco/gris. Pedido para la tabla de Documentos SUNAT: adentro
+         de una tarjeta ya blanca, el rayado compite con el fondo, y las
+         filas las separa igual la línea de `.ag-row`.
+
+     **Trampa que trae `cebra=False` y hay que resolver en el mismo
+     cambio:** `_css_grid` NO estila `.ag-row-selected`. Con el rayado
+     puesto eso no se nota; con las filas todas iguales, una tabla de
+     SELECCIÓN queda sin ningún rastro de qué se clickeó. Le pasaba a
+     `sunat_docs_grid`, que es de la que cuelgan la ficha, el original y
+     el conversor — y no estaba marcada ni antes, sólo que el zebra lo
+     disimulaba. La receta ya existía en `graficos/inventario.py`: fondo
+     `LAVANDA_CABECERA_GRUPO` y peso 600, mergeado sobre `_css_grid`.
+     Sobrevive al hover, que también lleva `!important`, porque va
+     DESPUÉS en el dict.
+
+     **Y una trampa de MEDICIÓN, no de código:** el iframe de un
+     componente de Streamlit guarda su ancho en un atributo, y
+     redimensionar la ventana sin recargar lo deja viejo. Midiendo así,
+     la tabla parecía sobresalir 90px de su tarjeta; recargando, el
+     iframe mide 422 contra los 422 de su contenedor y termina 13px
+     ADENTRO del borde. Es la misma trampa que ya documenta CLAUDE.md
+     para `auditar_graficos.js` ("recargar después de cambiar el tamaño
+     de la ventana"), y vale para cualquier medición de anchos de AgGrid.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#234**.
+> próxima regla nueva es la **#236**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

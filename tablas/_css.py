@@ -14,17 +14,27 @@ from tema import (
 )
 
 
-def _css_grid(font_px, cebra=True):
+def _css_grid(font_px, cebra=True, marco=True):
     """CSS del propio grid: guías de tab, root-wrapper, cabecera, filas,
     celda, fila fijada, paginación y barra de estado.
+
+    Dos interruptores, los dos en `True` por defecto para no mover a las
+    otras ocho tablas que comparten esta función:
 
     `cebra=False` deja las filas de un blanco uniforme (a pedido
     2026-08-28 para la tabla de Documentos SUNAT). Lo que separa las
     filas sigue siendo la línea de `.ag-row`, que no depende del
     rayado — el zebra es redundante con ella y en una tabla dentro de
     una tarjeta blanca compite con el fondo en vez de acompañarlo.
-    Sigue en `True` por defecto: las otras ocho tablas del proyecto no
-    se tocan.
+
+    `marco=False` le saca al `.ag-root-wrapper` su borde, su radio y su
+    sombra. Es para la tabla que YA vive dentro de una caja propia: si
+    no, se ven dos marcos de 1px con el mismo radio a diez píxeles uno
+    del otro. Medido en el conversor de Documentos SUNAT el 2026-08-28
+    —el usuario lo reportó como "tarjetas dentro de tarjeta, dentro de
+    tarjetas"— y eran exactamente tres marcos anidados. Lo que NO se
+    toca es `overflow: hidden`, que sigue haciendo falta para que las
+    filas no se salgan por abajo.
     """
     return {
         ".ag-tab-guard-top, .ag-tab-guard-bottom": {
@@ -35,10 +45,11 @@ def _css_grid(font_px, cebra=True):
         },
         ".ag-root-wrapper": {
             "background-color": f"{BLANCO}",
-            "border": f"1px solid {GRIS_BORDE}",
-            "border-radius": "12px !important",
+            "border": (f"1px solid {GRIS_BORDE}" if marco else "none"),
+            "border-radius": ("12px !important" if marco else "0 !important"),
             "overflow": "hidden !important",
-            "box-shadow": "0 1px 3px rgba(16,16,20,0.05)",
+            "box-shadow": ("0 1px 3px rgba(16,16,20,0.05)" if marco
+                           else "none"),
             "width": "100% !important",
         },
         ".ag-header": {

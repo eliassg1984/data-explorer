@@ -1748,7 +1748,11 @@ def _grid_lado_sunat(tv, doc_id):
     )
     AgGrid(
         tv, gridOptions=gb.build(), height=_alto_conversor(len(tv)),
-        theme="material", custom_css=dict(_css_grid(12)),
+        # `marco=False`: la tabla NO lleva borde/radio/sombra propios — ya
+        # los pone la mitad que la contiene (`sunat_conv_izq`/`_der` en
+        # estilos/_80_cards.py). Con los dos marcos se veían dos líneas de
+        # 1px con el mismo radio a diez píxeles una de otra.
+        theme="material", custom_css=dict(_css_grid(12, marco=False)),
         allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
         update_on=[], data_return_mode=DataReturnMode.AS_INPUT,
         key=f"sunat_conv_sunat_{doc_id}",
@@ -1827,7 +1831,11 @@ def _grid_lado_sistema(tv, doc_id):
     # monta un componente nuevo por documento y arranca limpio.
     return AgGrid(
         tv, gridOptions=gb.build(), height=_alto_conversor(len(tv)),
-        theme="material", custom_css=dict(_css_grid(12)),
+        # `marco=False`: la tabla NO lleva borde/radio/sombra propios — ya
+        # los pone la mitad que la contiene (`sunat_conv_izq`/`_der` en
+        # estilos/_80_cards.py). Con los dos marcos se veían dos líneas de
+        # 1px con el mismo radio a diez píxeles una de otra.
+        theme="material", custom_css=dict(_css_grid(12, marco=False)),
         allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
         update_on=["cellValueChanged"],
         data_return_mode=DataReturnMode.AS_INPUT,
