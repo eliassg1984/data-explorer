@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-235 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+236 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (79)
 
@@ -380,7 +380,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#206** — Un mousemove/mouseup de un iframe TAMPOCO sube al padre — el modo diseño se congelaba al…
 - **#215** — Element.innerText no atraviesa el layout position: absolute de las celdas de AgGrid: da ""…
 
-**Decisiones de diseño y UX** (39)
+**Decisiones de diseño y UX** (40)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -421,6 +421,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#216** — Retirar un toggle de colapso: si nada más puede fijar el estado "plegado", ese estado tiene…
 - **#220** — Convertir una página de "una vista por vez" en una PILA no es mover código: es descubrir qué…
 - **#227** — server_sync_strategy="client_wins" (el default de st_aggrid) hace que el navegador IGNORE los…
+- **#236** — Sacar una vista de una página APILADA no es borrar su sección: hay que ir a buscar lo que la…
 
 **Mantenimiento y trampas del lenguaje** (7)
 
@@ -3869,6 +3870,13 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
     último sub-reporte visitado, el chip cambia de Receta Venta a Receta
     Base con re-render completo (rail con vocabulario propio: "Insumos"
     en vez de "Ingredientes", "RECETA BASE" en vez de "PLATO").
+
+    **La paridad duró hasta el 2026-08-28, y se rompió a pedido:** Receta
+    Base ya no tiene Sankey ni Composición (regla #236) — se quedó con
+    Ranking, Insumos clave, Panorama y Tabla. Lo de arriba sigue siendo
+    cierto de lo que importa: `recetas_comun.py` tiene UNA sola copia de
+    cada gráfico. Lo que cambió es quién la llama, que era justamente el
+    punto de haberlos sacado ahí.
 
 98. **Unificación Requerimientos + Salidas bajo un solo ítem de nav
     "Movimientos" (2026-08-13), y por qué NO es una repetición mecánica de
@@ -10483,13 +10491,58 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      para `auditar_graficos.js` ("recargar después de cambiar el tamaño
      de la ventana"), y vale para cualquier medición de anchos de AgGrid.
 
+236. **Sacar una vista de una página APILADA no es borrar su sección:
+     hay que ir a buscar lo que la ALIMENTABA y lo que APUNTABA a ella.**
+
+     Pedido del 2026-08-28: que Receta Base no muestre más Sankey ni
+     Composición. La parte obvia son tres líneas — sacar la vista de
+     `_RAIL_CATEGORIAS`, de `_PILA` y de `_DIBUJANTES`. Lo que no se ve
+     desde el diff de esas tres líneas es que las vistas eran el ÚNICO
+     consumidor de otras tres cosas, cada una en otro sitio:
+
+     | Lo que queda huérfano | Dónde vivía | Cómo se veía si se dejaba |
+     |---|---|---|
+     | El selectbox "Receta base" (`rb_contenedor_sel`) | arriba de la pila, como control COMPARTIDO | un control que se puede tocar y no cambia nada de la pantalla |
+     | El botón "Abrir Sankey →" del Panorama | `recetas_comun._drill_contenedor_jump` | un `scroll_a_seccion("rb_sec_sankey")` a una sección que ya no existe: el JS reintenta 20 veces y no pasa nada |
+     | `_composicion_contenedor` (la dona) | `recetas_comun.py`, compartida | ~40 líneas sin un solo import, como `legacy.py` / `constructor.py` / `evolucion.py` en su momento |
+
+     Ninguna de las tres da error: las dos primeras quedan de adorno y la
+     tercera de lastre. Es la misma forma que la regla #216 (retirar el
+     toggle de colapso deja un estado que ya nadie puede fijar): al sacar
+     algo, la pregunta no es "¿sigue arrancando?" sino **"¿qué existía
+     SÓLO por esto?"** — hacia arriba, lo que le daba de comer; hacia
+     abajo, lo que la nombraba.
+
+     Encontrarlas son dos greps, no una relectura del módulo: uno por las
+     keys de la sección (`rb_sec_`, `rb_card_sankey`, `rb_contenedor_sel`)
+     y otro por el nombre de la función compartida
+     (`_composicion_contenedor`), que es el que dice si la ÚNICA copia se
+     quedó sin llamadores. `ruff` no ayuda acá: una función de módulo que
+     nadie llama no es un F401.
+
+     **Lo que NO se hace: apagar el salto desde adentro del helper
+     compartido.** El "Abrir Sankey →" no se anuló con un `try` ni
+     mandándolo a otra sección. `_panorama_compras` recibe los cuatro
+     parámetros del salto (`state_key_rail`, `nombre_vista_sankey`,
+     `etiqueta_selectbox_jump`, `clave_seccion_sankey`) como un GRUPO
+     opcional: el llamador que no pasa ninguno está declarando que su
+     dashboard no tiene Sankey, y el helper se saltea ese drill. De paso
+     el pie del Panorama pasa de dos columnas a un solo drill a lo ancho
+     — sin ese `else`, media fila vacía al lado del de insumo — y Receta
+     Venta, que sí lo conserva, no se entera del cambio.
+
+     Y el rail no necesita nada: `base.py::vista_activa` cae al primer
+     ítem cuando el `?vista=` de la URL no matchea, así que un deep-link
+     viejo (`?vista=sankey_por_receta`) abre el dashboard en Ranking en
+     vez de romperse.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#236**.
+> próxima regla nueva es la **#237**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

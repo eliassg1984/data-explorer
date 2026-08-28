@@ -8,11 +8,19 @@ subpreparación: salsas, masas, mise en place — no un plato vendido):
 
 Mismo esqueleto de BOM que Receta Venta (plato→insumos), por eso este
 módulo es una capa FINA sobre `graficos.recetas_comun`: resuelve las
-columnas reales de recetabase.parquet y llama a los 5 gráficos compartidos
-(Sankey, Composición, Ranking, Insumos clave, Panorama de compras). Receta
-Base y Receta Venta comparten ítem de nav ("Recetas") y un chip Base/Venta
-arriba del rail — ver `_chip_fuente` en recetas_comun.py y
-`arquitectura.md` § Unificación Recetas.
+columnas reales de recetabase.parquet y llama a los gráficos compartidos
+(Ranking, Insumos clave, Panorama de compras). Receta Base y Receta Venta
+comparten ítem de nav ("Recetas") y un chip Base/Venta arriba del rail —
+ver `_chip_fuente` en recetas_comun.py y `arquitectura.md` § Unificación
+Recetas.
+
+Sankey y Composición se dieron de baja acá el 2026-08-28, a pedido. Eran
+las DOS vistas de una receta elegida a mano, así que con ellas se fueron
+las dos cosas que existían sólo para alimentarlas: el selectbox "Receta
+base" y el botón "Abrir Sankey →" del Panorama, que se quedaba sin destino.
+Receta Venta las conserva — su "Composición" ya era otra cosa (una tabla de
+TODOS los platos, `recetaventa.py::_tabla_composicion_venta`). Ver
+`arquitectura.md` regla #236.
 
 Confirmado que Receta Base NO se cruza con Receta Venta (0% overlap
 `COD RB` vs `COD INS`, memoria de proyecto
@@ -34,16 +42,13 @@ from graficos.base import (
     _render_rail, _resolver, renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos.recetas_comun import (
-    _chip_fuente, _composicion_contenedor, _items_clave, _panorama_compras,
-    _ranking_contenedores, _sankey_contenedor,
+    _chip_fuente, _items_clave, _panorama_compras, _ranking_contenedores,
 )
 
 _RAIL_CATEGORIAS = (
-    ("Vista", (("Sankey por receta",         "Sankey"),
-               ("Composición de la receta",  "Composición"),
-               ("Ranking de recetas",        "Ranking"),
-               ("Insumos clave",             "Insumos"),
-               ("Panorama de compras",       "Panorama"))),
+    ("Vista", (("Ranking de recetas",  "Ranking"),
+               ("Insumos clave",       "Insumos"),
+               ("Panorama de compras", "Panorama"))),
     ("Datos", (("Tabla", "Tabla"),)),
 )
 
@@ -57,8 +62,6 @@ _RAIL_CATEGORIAS = (
 # deja "Documentos SUNAT" como destino aparte porque se lleva prestado el
 # selector de fecha).
 _PILA = (
-    ("rb_sec_sankey",      "Sankey por receta"),
-    ("rb_sec_composicion", "Composición de la receta"),
     ("rb_sec_ranking",     "Ranking de recetas"),
     ("rb_sec_insumos",     "Insumos clave"),
     ("rb_sec_panorama",    "Panorama de compras"),
@@ -77,16 +80,11 @@ def _panorama_compras_base(df_f, es_soles):
         col_activo_item_cand=["INS ACTIVO", "Ins Activo"],
         etiqueta_otros_contenedor="Otras recetas",
         titulo_card="Productos comprados → recetas base que los usan",
-        state_key_rail="rb_graf_tipo",
-        nombre_vista_sankey="Sankey por receta",
         col_contenedor_out="Receta base",
         etiqueta_contenedor_plural="recetas base activas",
-        etiqueta_selectbox_jump="Ver el flujo completo de una receta",
-        # Página APILADA: el Sankey ya está en pantalla más arriba, así que
-        # "Abrir Sankey →" scrollea en vez de cambiar de vista. Ver
-        # `recetas_comun._drill_contenedor_jump`, que sostiene los dos modos
-        # mientras Receta Venta siga sin migrar.
-        clave_seccion_sankey="rb_sec_sankey",
+        # Sin `nombre_vista_sankey`/`clave_seccion_sankey`: este dashboard ya
+        # no tiene Sankey, así que `_panorama_compras` se saltea el drill que
+        # existía SÓLO para saltar hasta él y deja el de insumo a lo ancho.
     )
 
 
@@ -116,59 +114,37 @@ def renderizar_graficos_recetabase(df_f, nombre_reporte, df_full=None, tabla_cb=
 
     # El rail ya no ELIGE contenido: con `secciones` pasa a MARCAR en cuál
     # estás y a scrollear al hacer clic (ver `base.py::_render_rail`). El
-    # valor que devuelve se ignora — la página dibuja las seis siempre.
+    # valor que devuelve se ignora — la página dibuja las cuatro siempre.
     _render_rail(_RAIL_CATEGORIAS, "rb_graf_tipo", btn_prefix="rb_rail_btn_",
                  secciones=_PILA)
 
-    # ── Controles COMPARTIDOS por toda la página ──────────────────────────
-    # Van arriba de la pila, no adentro de una sección: la métrica manda
-    # sobre las cinco vistas y el selector de receta sobre dos. Meterlos en
-    # una sección los escondería hasta que esa sección salga del esqueleto.
+    # ── Control COMPARTIDO por toda la página ─────────────────────────────
+    # Va arriba de la pila, no adentro de una sección: la métrica manda
+    # sobre las tres vistas de gráfico. Meterlo en una sección lo escondería
+    # hasta que esa sección salga del esqueleto.
+    #
+    # Al lado vivía el selectbox "Receta base" (`rb_contenedor_sel`), que se
+    # fue con Sankey y Composición: eran sus únicos lectores. Las tres
+    # vistas que quedan miran TODAS las recetas a la vez, así que elegir una
+    # acá no cambiaba nada de lo que hay abajo.
     metricas = []
     if col_total:
         metricas.append("Costo (S/)")
     if col_cant:
         metricas.append("Cantidad")
 
-    c_met, c_rb = st.columns([1, 2])
-    with c_met:
-        metrica = st.radio("Medir por", metricas, horizontal=True,
-                           key="rb_metrica")
+    metrica = st.radio("Medir por", metricas, horizontal=True,
+                       key="rb_metrica")
     es_soles = (metrica == "Costo (S/)")
     col_valor = col_total if es_soles else col_cant
-
-    # Default: la receta de mayor costo, para que la primera vista sea rica.
-    recetas = sorted(df_f[col_rb].dropna().astype(str).unique().tolist())
-    totales = df_f.groupby(col_rb)[col_valor].sum()
-    receta_rica = str(totales.idxmax()) if not totales.empty else (recetas[0] if recetas else "")
-    idx_def = recetas.index(receta_rica) if receta_rica in recetas else 0
-
-    # Ya no hace falta el `with c_rb:` incondicional con el `if` adentro que
-    # tenía la versión de una-vista-por-vez (para que Streamlit "visitara"
-    # la posición en todos los runs y no dejara un selectbox huérfano): con
-    # la pila, Sankey y Composición están SIEMPRE en la página, así que el
-    # selector se dibuja siempre y el problema desaparece solo.
-    with c_rb:
-        contenedor = st.selectbox("Receta base", recetas, index=idx_def,
-                                  key="rb_contenedor_sel")
 
     # ── LA PILA, PEREZOSA ─────────────────────────────────────────────────
     # Cada sección arranca en esqueleto y se construye cuando te acercás
     # (`base.py::seccion_perezosa`). Cada una lleva además su PROPIA key de
-    # tarjeta: antes las seis compartían `rb_graf_card` porque nunca
-    # coexistían — apiladas, eso serían seis widgets con la misma key, que
-    # en Streamlit es una excepción. Es la trampa que ya documentó Compras
-    # al apilarse (Volatilidad y Semanal compartían la suya).
-    def _dib_sankey():
-        with st.container(border=True, key="rb_card_sankey"):
-            _sankey_contenedor(df_f, col_rb, col_ins, col_valor, contenedor,
-                               es_soles, card_key="rb_sankey")
-
-    def _dib_composicion():
-        with st.container(border=True, key="rb_card_composicion"):
-            _composicion_contenedor(df_f, col_rb, col_ins, col_valor, contenedor,
-                                    es_soles, card_key="rb_dona")
-
+    # tarjeta: antes TODAS compartían `rb_graf_card` porque nunca
+    # coexistían — apiladas, eso serían N widgets con la misma key, que en
+    # Streamlit es una excepción. Es la trampa que ya documentó Compras al
+    # apilarse (Volatilidad y Semanal compartían la suya).
     def _dib_ranking():
         with st.container(border=True, key="rb_card_ranking"):
             _ranking_contenedores(df_f, col_rb, col_valor, es_soles,
@@ -197,8 +173,6 @@ def renderizar_graficos_recetabase(df_f, nombre_reporte, df_full=None, tabla_cb=
                 st.info("La tabla no está disponible en este contexto.")
 
     _DIBUJANTES = {
-        "rb_sec_sankey":      _dib_sankey,
-        "rb_sec_composicion": _dib_composicion,
         "rb_sec_ranking":     _dib_ranking,
         "rb_sec_insumos":     _dib_insumos,
         "rb_sec_panorama":    _dib_panorama,

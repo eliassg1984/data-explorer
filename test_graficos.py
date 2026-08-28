@@ -2107,9 +2107,6 @@ def main():
         ("recetas_comun · sankey contenedor", lambda: _rc._sankey_contenedor(
             df_rec, "CONTENEDOR", "ITEM", "VALOR", "A", True,
             card_key="test_sankey"), ()),
-        ("recetas_comun · composicion contenedor", lambda: _rc._composicion_contenedor(
-            df_rec, "CONTENEDOR", "ITEM", "VALOR", "C", True,
-            card_key="test_dona"), ()),
         ("recetas_comun · ranking contenedores", lambda: _rc._ranking_contenedores(
             df_rec, "CONTENEDOR", "VALOR", True,
             key_topn="test_topn", card_key="test_ranking",

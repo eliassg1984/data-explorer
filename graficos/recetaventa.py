@@ -6,7 +6,7 @@ Cada fila de recetaventa.parquet es un ÍTEM de un plato:
     (plato)      (insumo)  (cant.)    (costo del insumo en el plato)
 
 Este módulo es la capa FINA de Receta Venta: resuelve las columnas reales
-del parquet y llama a 4 de los 5 gráficos compartidos de
+del parquet y llama a los 4 gráficos compartidos de
 `graficos.recetas_comun` (Sankey, Ranking, Ingredientes clave, Panorama de
 compras) — cada uno vive ahí UNA sola vez, junto con la versión de
 `recetabase.py` (el mismo tipo de dato: un BOM plato→insumos vs. receta
@@ -15,13 +15,17 @@ de nav ("Recetas") y un chip Base/Venta arriba del rail — ver
 `_chip_fuente` en recetas_comun.py y `arquitectura.md` § Unificación
 Recetas.
 
-El quinto ("Composición") DEJÓ de ser compartido el 2026-08-24: acá es
+"Composición" DEJÓ de ser compartida el 2026-08-24: acá es
 `_tabla_composicion_venta`, una tabla propia (no una dona de un plato) con
 columnas — Grupo/Subgrupo/P.VENTA SALON/CST SALON/%CST SALON — que no
-existen en recetabase.parquet. Receta Base conserva la dona compartida
-(`_composicion_contenedor`). El chip Base/Venta/Nueva no se muestra en
+existen en recetabase.parquet. El chip Base/Venta/Nueva no se muestra en
 esta vista (no hay a qué "Base" equivalente navegar). Ver docstring de la
 función.
+
+Y desde el 2026-08-28, Sankey y Composición son SOLO de Receta Venta:
+Receta Base se quedó con Ranking, Insumos clave, Panorama y Tabla (regla
+#236). O sea que este dashboard es hoy el único llamador del Sankey
+compartido — no borrarlo de `recetas_comun.py` pensando que sobra.
 
 Punto de entrada público: renderizar_graficos_recetaventa().
 """
