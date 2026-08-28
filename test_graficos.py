@@ -548,6 +548,60 @@ def _pruebas_puras():
           _cruce.loc[_cruce["estado"] == "Coincide",
                      "documento_sistema"].iloc[0], "")
 
+    # ── IGV como TERCERA cifra comparable (2026-08-27) ──────────────────
+    # E003-2 es el caso que motivo el cambio: proveedor con TASA REDUCIDA
+    # (10.5%, medido en facturas reales de TACUAREMBO S.A.C.). Cargado con
+    # el 18% por defecto, la base y el total pueden seguir calzando porque
+    # el error se compensa entre si -- y el documento pasaba como
+    # "Coincide" con el IGV mal. Comparar las tres cifras lo destapa.
+    _sire3 = pd.DataFrame({
+        "documento": ["E003-1", "E003-2", "E003-3"],
+        "proveedor": ["TASA NORMAL SAC", "TASA REDUCIDA SAC", "SIN IGV EN PQ SAC"],
+        "ruc_proveedor": ["20111111111", "20222222222", "20333333333"],
+        "fecha_emision": pd.to_datetime(["2026-08-10"] * 3),
+        "base_imponible": [100.0, 200.0, 100.0],
+        "no_gravado": [0.0, 0.0, 0.0],
+        "igv": [18.0, 21.0, 18.0],          # 21.00 = 200 al 10.5%
+        "total": [118.0, 221.0, 118.0],
+        "situacion": ["Registrado"] * 3,
+    })
+    _g3 = pd.DataFrame({
+        "documento": ["E003-1", "E003-2"],
+        "ruc_pq": ["20111111111", "20222222222"],
+        "proveedor_pq": ["TASA NORMAL SAC", "TASA REDUCIDA SAC"],
+        "base_pq": [100.0, 200.0],
+        "igv_pq": [18.0, 36.0],             # 36.00 = el 18% por defecto
+        "total_pq": [118.0, 221.0],         # el total igual calza
+        "fecha_pq": pd.to_datetime(["2026-08-10"] * 2),
+    })
+    _cruce3 = _ds.cruzar_con_parquet(_sire3, _g3)
+
+    def _f3(doc):
+        return _cruce3[(_cruce3["documento"] == doc)
+                       & (_cruce3["estado"] != "Solo sistema")].iloc[0]
+
+    check("cruce IGV · E003-1: las tres cifras calzan -> Coincide",
+          _f3("E003-1")["estado"], "Coincide")
+    check("cruce IGV · E003-2: base y total calzan pero el IGV no -> Diferencia",
+          _f3("E003-2")["estado"], "Diferencia")
+    check("cruce IGV · E003-2: dif_igv expone los 15 soles",
+          _f3("E003-2")["dif_igv"], -15.0)
+    check("cruce IGV · E003-2: base y total NO acusan nada",
+          (_f3("E003-2")["dif_base"], _f3("E003-2")["dif_total"]), (0.0, 0.0))
+    check("cruce IGV · el igv del SIRE viaja aunque no haya par",
+          _f3("E003-3")["igv_sunat"], 18.0)
+    # NaN y no None: pandas promueve el None a NaN al armar la columna,
+    # porque las otras filas traen float. Mismo comportamiento que ya
+    # tienen `base_sistema` y `total_sistema` en un "Solo SUNAT".
+    check("cruce IGV · un 'Solo SUNAT' no inventa igv de sistema",
+          bool(pd.isna(_f3("E003-3")["igv_sistema"])), True)
+    # Parquet viejo, sin la columna: el IGV sale del veredicto en vez de
+    # marcar todo como "Diferencia" por un dato que no tenemos.
+    check("cruce IGV · sin columna igv_pq, el IGV no ensucia el veredicto",
+          _fila("E001-1")["estado"], "Coincide")
+    check("cruce IGV · sin columna igv_pq, dif_igv queda en None",
+          _fila("E001-1")["dif_igv"], None)
+
     # Media seleccion del calendario = UN DIA, no "no hay rango". Reportado
     # 2026-08-24: elegir un solo dia (hoy/ayer) dejaba la vista con un
     # mensaje pidiendo elegir fecha... y sin el pill de fecha en pantalla,

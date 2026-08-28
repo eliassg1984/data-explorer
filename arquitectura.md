@@ -6620,6 +6620,52 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      las no pineadas justo después de las pineadas, así que igual queda
      pegada a su pareja.
 
+     **Addendum 6 (2026-08-27): el IGV entra como TERCERA cifra
+     comparable, y no es redundante con base y total.** Hasta acá el
+     cruce comparaba dos números. Parece suficiente: si
+     `TOTAL NETO + TOTAL IGV == TOTAL DOCUMENTO`, cuadrar base y total
+     debería implicar que el IGV también cuadra. **No es cierto**, porque
+     esa identidad se cumple dentro de CADA fuente por separado: un
+     documento puede tener el neto y el total correctos y el IGV mal, con
+     el error compensándose entre los dos.
+
+     El caso real: proveedores con **tasa reducida**. `TACUAREMBO S.A.C.`
+     (RUC 20605991298) factura al **10,5%**, no al 18% — verificado en el
+     XML `F051-00007653` (`cbc:Percent` = 10.5 en las cuatro líneas). El
+     Almacén tiene una segunda ranura de impuesto configurada como
+     "IGV 10%" justamente para eso, y sus documentos anteriores del mismo
+     proveedor están cargados ahí… pero con el **10%** del parámetro, no
+     con el 10,5% que declara el comprobante. El registro `202608-0011`
+     guardó `nImpuesto2 = 11,00` sobre 110,00: 55 céntimos menos de los
+     que el proveedor cobró. Con dos cifras eso pasaba como "Coincide".
+
+     Implementación: `COL_IGV_PARQUET = "TOTAL IGV"` (columna que ya
+     existía desde la tanda del 2026-08-20, sin usarse), `igv_pq` en
+     `_parquet_agrupado_por_documento`, y `dif_igv` sumado al veredicto de
+     `cruzar_con_parquet`. Del lado SIRE no hubo nada que componer:
+     `sunat._normalizar_registro` ya entrega `igv` sumando IGV + IPM de
+     gravado y no gravado.
+
+     Dos decisiones que valen más que el código:
+
+     1. **Sin proxy cuando falta la columna.** La tentación es
+        reconstruir `igv_pq = total_pq - base_pq` para un parquet viejo.
+        Sería inútil y dañino: `dif_igv` daría `dif_total - dif_base` por
+        definición —cero información nueva— y ensuciaría de "Diferencia"
+        filas por un dato que no tenemos. Cuando `igv_pq` viene NaN, el
+        IGV **sale del veredicto**. Un dato ausente no puede condenar una
+        fila.
+     2. **Solo se pinta en ámbar "IGV sistema"**, no las seis celdas de
+        plata. Mismo criterio que "Fecha sistema" (y que el punto 3 de
+        arriba sobre los nombres): si base y total ya discrepan, la
+        columna Estado lo dice y pintar todo enseña a ignorar el color.
+        El IGV se pinta porque es el que se equivoca **en silencio**.
+
+     La tabla pasó de 13 a 15 columnas y de 4 montos a 6. El IGV va **en
+     el medio**, entre base y total: es el orden en que se leen las tres
+     cifras en cualquier comprobante, y deja los pares comparables uno
+     debajo del otro al escanear.
+
 
 160. **El registro del SIRE pasó de consulta EN VIVO a parquet en R2, y
      eso cambia lo que se le puede pedir a la vista** (2026-08-20;

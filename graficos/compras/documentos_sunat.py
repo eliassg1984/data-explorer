@@ -170,6 +170,26 @@ Antes de que existiera, `base_pq` salía de sumar `VALOR_COMPRA` por línea
 `COL_TOTAL_PARQUET`): una reconstrucción que depende de que ninguna línea
 falte, no el campo real."""
 
+COL_IGV_PARQUET = "TOTAL IGV"
+"""Nombre real de la columna de IGV del documento en `compras.parquet`
+(misma tanda 2026-08-20 que `TOTAL NETO` y `TOTAL DOCUMENTO`). Campo de
+CABECERA, se agrega con `"first"` igual que sus dos hermanas.
+
+Se compara desde 2026-08-27 y NO es redundante con base y total, aunque
+`TOTAL NETO + TOTAL IGV == TOTAL DOCUMENTO`: esa identidad se cumple
+dentro de CADA fuente por separado, así que base y total pueden cuadrar
+los dos contra SUNAT y aun así el IGV estar mal repartido. El caso real
+que lo motivó son los proveedores con TASA REDUCIDA (10.5% en vez de
+18%): si el documento se carga con la tasa por defecto, el IGV sale
+distinto del que declara el comprobante mientras el neto y el total
+siguen calzando, porque el error se compensa entre sí.
+
+Si la columna no está (parquet viejo), `igv_pq` queda en NaN y el IGV
+sale de la comparación — NO se reconstruye como `total - base`. Esa
+reconstrucción daría `dif_igv = dif_total - dif_base` por definición, o
+sea cero información nueva y filas marcadas "Diferencia" por un dato que
+en realidad no tenemos."""
+
 
 def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin):
     """Compras del parquet agrupadas a una fila por (documento, RUC),
@@ -198,8 +218,8 @@ def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin):
     clave, quedan separadas y es `cruzar_con_parquet` quien decide cuál
     corresponde — nunca la agregación.
     """
-    columnas = ["documento", "ruc_pq", "proveedor_pq", "base_pq", "total_pq",
-                "fecha_pq", "num_doc_pq"]
+    columnas = ["documento", "ruc_pq", "proveedor_pq", "base_pq", "igv_pq",
+                "total_pq", "fecha_pq", "num_doc_pq"]
     if (not col_fecha or col_fecha not in d.columns or fecha_ini is None
             or fecha_fin is None or "NUM_DOCUMENTO" not in d.columns):
         return pd.DataFrame(columns=columnas)
@@ -227,8 +247,14 @@ def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin):
     col_total, agg_total = ((COL_TOTAL_PARQUET, "first")
                             if COL_TOTAL_PARQUET in dd.columns
                             else ("VALOR_BRUTO_COMPRA_MN", "sum"))
+    # Sin proxy: si la columna no está, el IGV queda en NaN y sale de la
+    # comparación. Ver el docstring de COL_IGV_PARQUET sobre por qué NO se
+    # reconstruye como `total - base`.
+    dd["_igv"] = (pd.to_numeric(dd[COL_IGV_PARQUET], errors="coerce")
+                  if COL_IGV_PARQUET in dd.columns else float("nan"))
     g = (dd.groupby(["documento", "ruc_pq", "NOMBRE_PROVEEDOR"], as_index=False)
            .agg(base_pq=(col_base, agg_base),
+                igv_pq=("_igv", "first"),
                 total_pq=(col_total, agg_total),
                 fecha_pq=("_fecha", "first"),
                 # El numero CRUDO del sistema (`F0FA28002305799`), que es
@@ -270,9 +296,18 @@ def cruzar_con_parquet(df_sire, g_parquet):
     no, mientras que SUNAT separa "base gravada" de "no gravado" en dos
     campos. Sumarlos es lo que hace comparable a `base_pq` (ver
     `arquitectura.md` regla #143, addendum 4).
+
+    Desde 2026-08-27 la comparación son TRES cifras, no dos: base, **IGV**
+    y total. El IGV entra porque base y total pueden cuadrar los dos y aun
+    así el impuesto estar mal — pasa con los proveedores de tasa reducida
+    (10.5%), donde cargar el documento con el 18% por defecto compensa el
+    error entre neto y total y lo deja invisible. Cuando `igv_pq` viene
+    NaN (parquet sin la columna) el IGV NO participa del veredicto: un
+    dato ausente no puede volver "Diferencia" a una fila. Ver
+    `COL_IGV_PARQUET`.
     """
-    cols_pq = ["documento", "ruc_pq", "proveedor_pq", "base_pq", "total_pq",
-               "fecha_pq"]
+    cols_pq = ["documento", "ruc_pq", "proveedor_pq", "base_pq", "igv_pq",
+               "total_pq", "fecha_pq"]
     if g_parquet is None or g_parquet.empty:
         g_parquet = pd.DataFrame(columns=cols_pq)
     if df_sire is None:
@@ -315,6 +350,9 @@ def cruzar_con_parquet(df_sire, g_parquet):
         # TOTAL NETO real, como "Diferencia" pese a no haber ninguna.
         # Ver `arquitectura.md` regla #143, addendum 4.
         base_sunat = float(r.get("base_imponible") or 0) + float(r.get("no_gravado") or 0)
+        # `igv` del SIRE ya viene sumado (IGV + IPM, gravado y no gravado)
+        # por `sunat._normalizar_registro`; no hay nada que componer acá.
+        igv_sunat = float(r.get("igv") or 0)
         total_sunat = float(r.get("total") or 0)
         if elegido is not None:
             # La tripleta (documento, ruc, proveedor) es la clave REAL de
@@ -330,9 +368,19 @@ def cruzar_con_parquet(df_sire, g_parquet):
             base_sist, total_sist = float(elegido["base_pq"]), float(elegido["total_pq"])
             dif_base = round(base_sunat - base_sist, 2)
             dif_total = round(total_sunat - total_sist, 2)
+            # `.get()` y no `[...]`: hay llamadores (los tests) que arman
+            # `g_parquet` a mano sin esta columna — mismo criterio que
+            # `num_doc_pq`. Y `pd.isna` cubre los dos casos de ausencia:
+            # la columna que no vino y el parquet viejo sin `TOTAL IGV`.
+            _igv_crudo = elegido.get("igv_pq")
+            _hay_igv = _igv_crudo is not None and not pd.isna(_igv_crudo)
+            igv_sist = float(_igv_crudo) if _hay_igv else None
+            dif_igv = round(igv_sunat - igv_sist, 2) if _hay_igv else None
             estado = ("Coincide"
                       if abs(dif_base) <= _TOLERANCIA_CENTAVOS
                       and abs(dif_total) <= _TOLERANCIA_CENTAVOS
+                      and (dif_igv is None
+                           or abs(dif_igv) <= _TOLERANCIA_CENTAVOS)
                       else "Diferencia")
             prov_sistema, ruc_sistema = elegido["proveedor_pq"], elegido["ruc_pq"]
             # `.get()` y no `[...]`: `cruzar_con_parquet` es publica y se
@@ -346,6 +394,7 @@ def cruzar_con_parquet(df_sire, g_parquet):
             fecha_sist = elegido.get("fecha_pq")
         else:
             base_sist = total_sist = dif_base = dif_total = None
+            igv_sist = dif_igv = None
             estado, prov_sistema, ruc_sistema = "Solo SUNAT", "", ""
             fecha_sist = None
             doc_sistema = ""
@@ -359,6 +408,8 @@ def cruzar_con_parquet(df_sire, g_parquet):
             "situacion": r.get("situacion"),
             "base_sunat": base_sunat, "base_sistema": base_sist,
             "dif_base": dif_base,
+            "igv_sunat": igv_sunat, "igv_sistema": igv_sist,
+            "dif_igv": dif_igv,
             "total_sunat": total_sunat, "total_sistema": total_sist,
             "dif_total": dif_total, "estado": estado,
         })
@@ -376,6 +427,11 @@ def cruzar_con_parquet(df_sire, g_parquet):
             "ruc_proveedor": "", "ruc_sistema": cand["ruc_pq"], "situacion": "",
             "base_sunat": None, "base_sistema": float(cand["base_pq"]),
             "dif_base": None,
+            "igv_sunat": None,
+            "igv_sistema": (float(cand["igv_pq"])
+                            if cand.get("igv_pq") is not None
+                            and not pd.isna(cand.get("igv_pq")) else None),
+            "dif_igv": None,
             "total_sunat": None, "total_sistema": float(cand["total_pq"]),
             "dif_total": None, "estado": "Solo sistema",
         })
@@ -444,7 +500,7 @@ def _tabla_cruce(df_cruce, df_sire):
     documento del SIRE que le corresponda — no es una carencia del panel,
     es que ese comprobante no tiene contraparte ahí.
 
-    Sin `fit_columns_on_grid_load`: son 13 columnas y 4 de plata — forzar
+    Sin `fit_columns_on_grid_load`: son 15 columnas y 6 de plata — forzar
     el ancho del contenedor las dejaría ilegibles. Scrollea horizontal,
     mismo criterio que la tabla pivote de Proveedor.
     """
@@ -482,6 +538,19 @@ def _tabla_cruce(df_cruce, df_sire):
         "Proveedor sistema": df_cruce["proveedor_sistema"].fillna(""),
         "Base SUNAT": pd.to_numeric(df_cruce["base_sunat"], errors="coerce"),
         "Base sistema": pd.to_numeric(df_cruce["base_sistema"], errors="coerce"),
+        # El IGV va EN EL MEDIO, entre base y total, y no al final: es el
+        # orden en que se leen las tres cifras en cualquier comprobante, y
+        # deja los dos pares comparables uno debajo del otro al escanear.
+        # `.get()` con relleno: `cruzar_con_parquet` es publica y los tests
+        # arman df sin estas columnas.
+        "IGV SUNAT": pd.to_numeric(
+            df_cruce.get("igv_sunat", pd.Series(index=df_cruce.index,
+                                                dtype="float64")),
+            errors="coerce"),
+        "IGV sistema": pd.to_numeric(
+            df_cruce.get("igv_sistema", pd.Series(index=df_cruce.index,
+                                                  dtype="float64")),
+            errors="coerce"),
         "Total SUNAT": pd.to_numeric(df_cruce["total_sunat"], errors="coerce"),
         "Total sistema": pd.to_numeric(df_cruce["total_sistema"], errors="coerce"),
         "Estado": df_cruce["estado"],
@@ -528,9 +597,23 @@ def _tabla_cruce(df_cruce, df_sire):
     gb.configure_column("RUC sistema", width=105, minWidth=105)
     gb.configure_column("Proveedor SUNAT", minWidth=180)
     gb.configure_column("Proveedor sistema", minWidth=180)
-    for col in ("Base SUNAT", "Base sistema", "Total SUNAT", "Total sistema"):
+    for col in ("Base SUNAT", "Base sistema", "IGV SUNAT", "IGV sistema",
+                "Total SUNAT", "Total sistema"):
         gb.configure_column(col, type=["numericColumn"], width=115,
                             minWidth=115, valueFormatter=_fmt_soles)
+    # Mismo criterio que `_style_fecha`: ambar en la celda del SISTEMA
+    # cuando hay las dos y difieren. Se pinta solo el IGV porque es el que
+    # se puede equivocar en silencio -- si base y total ya discrepan, la
+    # columna Estado lo dice y pintar las seis celdas seria ruido.
+    gb.configure_column(
+        "IGV sistema", type=["numericColumn"], width=115, minWidth=115,
+        valueFormatter=_fmt_soles,
+        cellStyle=JsCode(
+            "function(p){ var o=p.data['IGV SUNAT']; "
+            "if(p.value!=null && o!=null && Math.abs(p.value-o) > %s) "
+            "return {'color':'%s','fontWeight':'600'}; "
+            "return {'color':'%s'}; }"
+            % (_TOLERANCIA_CENTAVOS, ADVERTENCIA_TEXTO, GRIS_TEXTO)))
     # Igual convención que "Pendiente" en _tabla: ámbar = revisar, rojo =
     # más urgente todavía (plata cargada sin comprobante electrónico que
     # la respalde). "Coincide" no se destaca — lo normal no compite por
