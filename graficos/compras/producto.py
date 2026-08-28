@@ -44,7 +44,7 @@ drill — el mismo número que usa el `rowHeight` de AgGrid en Inventario
 mismo día, la constante es `rowHeight` en `gridOptions`).
 
 Ya NO es el mismo que el del ranking de Proveedor: el 2026-08-28 aquel bajó
-a 24px y se puso todo blanco, en cuerpo 11 y minúsculas, a pedido y sólo
+a 24px y se puso todo blanco, en cuerpo 11.5 y minúsculas, a pedido y sólo
 sobre esa tabla (`proveedor.py::_ALTO_FILA_RANK` + `CSS_RANKING_GRID`). Los
 dos rankings se ven APILADOS en la misma página, así que si alguna vez se
 unifican, lo que viaja es aquello para acá.

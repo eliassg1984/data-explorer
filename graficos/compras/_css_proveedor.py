@@ -1601,9 +1601,13 @@ CSS_RANKING_GRID = {
         # 12%, que se ve igual de bien sobre blanco.
         "--ag-odd-row-background-color": BLANCO,
         "--ag-header-background-color": BLANCO,
-        # Un punto menos que el default del tema (12px).
-        "--ag-data-font-size": "11px",
-        "--ag-header-font-size": "11px",
+        # Medio punto menos que el default del tema (12px). El fraccionario
+        # es a pedido (2026-08-28) despues de ver los 11px en pantalla: 11
+        # queda algo chico y 12 es el original. No hay que redondearlo --
+        # esto termina en un `font-size` y el navegador resuelve tipografia
+        # en subpixel, asi que 11.5px se dibuja distinto de los dos enteros.
+        "--ag-data-font-size": "11.5px",
+        "--ag-header-font-size": "11.5px",
     },
 }
 # OJO, para el que venga a bajar estos nombres a minuscula por CSS: ya se
