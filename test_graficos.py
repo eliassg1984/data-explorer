@@ -277,6 +277,52 @@ def _pruebas_puras():
     check("abrev ignora razón social",
           _ep.abrev_nombre("Alimentos del Sur S.A.C.", 3), "AS")
 
+    # nombre_propio — el ranking de Proveedor MUESTRA esto y guarda el
+    # original en `_prov_raw` (proveedor.py). Los casos salen de contar los
+    # 767 proveedores reales de compras.parquet, no de inventarlos: si
+    # alguien "simplifica" el orden de los cuatro `elif`, acá se cae.
+    check("propio caso base",
+          _ep.nombre_propio("DOBLE G REPRESENTACIONES S.A.C."),
+          "Doble G Representaciones S.A.C.")
+    # Sigla SIN puntos: 46 SAC + 18 EIRL + 12 SA en los datos reales.
+    check("propio sigla sin puntos",
+          _ep.nombre_propio("ESTABLECIMIENTOS INCA SAC"),
+          "Establecimientos Inca SAC")
+    # Preposición en minúscula, artículo NO: en castellano el artículo que
+    # forma parte del nombre lleva mayúscula.
+    check("propio preposición en minúscula",
+          _ep.nombre_propio("LUZ DEL SUR S.A.A."), "Luz del Sur S.A.A.")
+    check("propio artículo en mayúscula",
+          _ep.nombre_propio("AGRICOLA LA CHACRA S.A.C."),
+          "Agricola La Chacra S.A.C.")
+    check("propio conjunción en minúscula",
+          _ep.nombre_propio("PACIFICO COMPAÑIA DE SEGUROS Y REASEGUROS"),
+          "Pacifico Compañia de Seguros y Reaseguros")
+    # Una palabra menor NO se baja si abre el nombre.
+    check("propio menor primera queda en mayúscula",
+          _ep.nombre_propio("EL ESTUDIANTE S.A."), "El Estudiante S.A.")
+    # Sigla PARTIDA en letras sueltas — existe: "LINDAS TELAS S A".
+    check("propio letras sueltas intactas",
+          _ep.nombre_propio("LINDAS TELAS S A"), "Lindas Telas S A")
+    # Persona: sin siglas ni menores, todo capitalizado.
+    check("propio persona",
+          _ep.nombre_propio("HOYOS OLEA LUCY JACQUELINE"),
+          "Hoyos Olea Lucy Jacqueline")
+    # "Otros" (el bucket del ranking) y "TOTAL" pasan por la misma función
+    # sin romperse: el primero sale igual, el segundo se capitaliza.
+    check("propio bucket Otros", _ep.nombre_propio("Otros"), "Otros")
+    check("propio vacío", _ep.nombre_propio(""), "")
+    # Separador que NO es espacio. Los dos salieron de correr la función
+    # sobre los 767 nombres reales: sin capitalizar por RACHAS daban "E&r"
+    # y "(peru)" — en el segundo, el primer caracter es "(" y ponerlo en
+    # mayúscula no hace nada mientras el resto se va a minúscula.
+    check("propio & sin espacios",
+          _ep.nombre_propio("E&R INNOVACIONES GLASS S.A.C."),
+          "E&R Innovaciones Glass S.A.C.")
+    check("propio paréntesis y guión",
+          _ep.nombre_propio("TTG-THE GLOBAL GROUP (PERU)"),
+          "Ttg-The Global Group (Peru)")
+
     # etiqueta_serie — barra en 0 no lleva etiqueta; la 1ª no tiene variación
     _et = _ep.etiqueta_serie([0, 100, 150], "del Mes")
     check("etiqueta barra en 0", _et[0], "")

@@ -10564,7 +10564,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      |---|---|---|
      | filas todas blancas | `--ag-odd-row-background-color` (+ `--ag-header-background-color`) | `custom_css=` |
      | letra más chica | `--ag-data-font-size` / `--ag-header-font-size` | `custom_css=` |
-     | minúsculas | `text-transform` sobre `.ag-cell[col-id="…"]` y `.ag-header-cell-text` | `custom_css=` |
+     | minúsculas | → **no se puede por CSS**, ver abajo | **PYTHON** |
      | filas más finas | `rowHeight` / `headerHeight` | **`gridOptions`, o sea PYTHON** |
 
      La última fila es la trampa de reparto: `--ag-row-height` existe, pero
@@ -10610,13 +10610,60 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      TOTAL pineada tampoco se toca: su color lo pone `getRowStyle` inline,
      que gana sobre cualquier variable.
 
-     **Y las minúsculas son `text-transform`, no `.lower()`.** El dato
-     sigue en MAYÚSCULAS en el parquet ("DOBLE G REPRESENTACIONES
-     S.A.C."), que es como viene del ERP: el foco del drill, el popover de
-     proveedores y el `dict(zip(...))` que le da color a la Evolución
-     comparan ese string tal cual. Bajarlo en Python habría roto los tres
-     en silencio. Se aplica SÓLO a la columna de nombres y a los títulos:
-     los montos llevan "S/" adelante y "s/ 13,363" se lee mal.
+     **"Minúscula pero como NOMBRE PROPIO" no lo puede hacer CSS — y el
+     primer intento fue por CSS.** `text-transform: lowercase` da "doble g
+     representaciones s.a.c."; `capitalize` NO baja el resto de la palabra,
+     así que sobre un texto que YA viene en mayúsculas no hace nada; y las
+     dos juntas tampoco, porque sobre un mismo texto se aplica una sola
+     declaración — encadenarlas pediría un elemento por palabra. Es
+     Python: `_etiquetas_proveedor.nombre_propio`, pura y con asserts de
+     valor en `test_graficos.py`.
+
+     **Pero entonces la columna visible deja de servir para identificar la
+     fila.** El nombre del proveedor es la CLAVE con la que compara todo lo
+     demás del drill: el foco del ranking, el popover de proveedores y el
+     `dict(zip(...))` que le da color a la serie de Evolución. Un `.lower()`
+     sobre el dato habría roto los tres en silencio. La salida es la que ya
+     usaba `_barra`: una columna OCULTA con el original (`_prov_raw`), y la
+     selección leyendo esa en vez de la visible. Una línea:
+
+     ```python
+     _clicked = str(_fila["_prov_raw"])   # no _fila["Proveedor"]
+     ```
+
+     **Las reglas de casing salieron de CONTAR, no de imaginar.** Los 767
+     proveedores de `compras.parquet`, 99.9% en mayúsculas: formas
+     jurídicas con punto (S.A.C. ×222, E.I.R.L. ×79, S.A. ×32, S.R.L. ×14)
+     que se reconocen por el punto, sin punto (SAC ×46, EIRL ×18, SA ×12)
+     que necesitan lista, y conectores (de ×34, y ×26, del ×18). Dos cosas
+     que sólo aparecen mirando los datos:
+
+     - **El artículo NO va en minúscula, la preposición sí.** Es la regla
+       del castellano y además la que se lee bien acá: "Agricola La
+       Chacra", pero "Luz del Sur" y "Seguros y Reaseguros".
+     - **El separador no siempre es un espacio.** Capitalizar "el primer
+       carácter del token" da "E&r" y —peor— "(peru)": ahí el primero es
+       "(", ponerlo en mayúscula no hace nada y el resto se va abajo. Hay
+       que capitalizar cada RACHA de letras (`[^\W\d_]+`). Los dos casos
+       existen en el parquet; se encontraron corriendo la función sobre los
+       767, no leyendo el código.
+
+     Lo que la función NO hace, y se decidió no intentar: reconocer un
+     acrónimo sin puntos que no esté en la lista. "PCF PERU" sale "Pcf
+     Peru". Distinguirlo de un apellido corto pide un diccionario.
+
+     **Y una vez que la tabla deja de gritar, lo de al lado desentona.** El
+     título de la tarjeta de Evolución y el del Panel A nombran al proveedor
+     EN FOCO — o sea, al que se acaba de clickear en esa tabla. Dejarlos en
+     mayúsculas hacía que el clic se leyera como si hubiera enfocado otra
+     cosa. Los dos pasan por `nombre_propio` ANTES de `_compras_truncar`,
+     para que los puntos suspensivos caigan sobre el texto que se ve. El
+     popover de proveedores y el Panel B quedaron afuera: no son la mitad
+     de la misma fila.
+
+     Los montos tampoco se tocan (llevan "S/" adelante, "s/ 13,363" se lee
+     mal) y los títulos de columna se quedan como vienen ("Proveedor",
+     "Valor"): el pedido era sobre los NOMBRES.
 
      **Medido antes y después** (viewport 1358, datos reales): el grid pasó
      de 297px a 255px — cabecera 39→33, ocho filas 224→192, fila TOTAL

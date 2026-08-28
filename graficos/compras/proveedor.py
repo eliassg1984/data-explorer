@@ -29,6 +29,7 @@ from graficos.compras._css_proveedor import (
     CSS as CSS_PROVEEDOR, CSS_RANKING_GRID,
 )
 from graficos.compras._documentos_proveedor import tabla_documentos
+from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos import alturas, periodo
 
 
@@ -592,7 +593,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     # propio y las variables CSS del documento padre no llegan.
                     _rk_max = float(max(_rk_valores)) if _rk_valores else 1.0
                     _rk_df = pd.DataFrame({
-                        "Proveedor": _rk_nombres,
+                        # Lo que se VE es el nombre en capitalización de
+                        # nombre propio (a pedido, 2026-08-28): el ERP los
+                        # manda gritados y ocho filas de mayúsculas se leen
+                        # como un bloque. Ver `nombre_propio`, que explica
+                        # por qué esto NO se puede hacer con CSS.
+                        "Proveedor": [nombre_propio(n) for n in _rk_nombres],
                         "Valor": _rk_valores,
                         "Docs": _rk_docs,
                         "%": _rk_pct,
@@ -600,6 +606,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         # el mayor), que no es el mismo número que la columna
                         # "%" (esa es sobre el total del rango).
                         "_barra": [v / _rk_max * 100 for v in _rk_valores],
+                        # Columna oculta: el nombre COMO VIENE del parquet.
+                        # El de arriba ya no sirve para identificar la fila
+                        # — es texto para leer. Éste es la clave contra la
+                        # que compara todo lo demás del drill (el foco, el
+                        # popover, el color de la serie de Evolución), y es
+                        # el que lee la selección unas líneas más abajo.
+                        "_prov_raw": _rk_nombres,
                     })
                     # Fila de TOTAL, a pedido (2026-08-25). Mismo mecanismo
                     # que ya usa `tablas/ajuste_pivote.py`: un dict calculado
@@ -712,6 +725,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                  "type": "numericColumn",
                                  "valueFormatter": _js_pct},
                                 {"field": "_barra", "hide": True},
+                                {"field": "_prov_raw", "hide": True},
                             ],
                             "rowSelection": {"mode": "singleRow",
                                              "checkboxes": False,
@@ -741,11 +755,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     # usuario reclickeó la fila (el toggle de arriba) y se
                     # quita el foco. "Otros" no es un proveedor real —agrupa a
                     # los que quedaron fuera— así que no abre drill.
+                    # `_prov_raw` y no `Proveedor`: la columna visible pasa
+                    # por `nombre_propio()` y ya no matchea contra los datos.
                     _sel_rank = getattr(_resp_rank, "selected_rows", None)
                     if _sel_rank is not None and len(_sel_rank):
                         _fila = (_sel_rank.iloc[0] if hasattr(_sel_rank, "iloc")
                                  else _sel_rank[0])
-                        _clicked = str(_fila["Proveedor"])
+                        _clicked = str(_fila["_prov_raw"])
                     else:
                         _clicked = None
                     if _clicked == "Otros":
@@ -1152,7 +1168,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             if x)
                         _ph_tit_evo.markdown(
                             f'<div class="cp-evo-tit">Evolución · '
-                            f'{_compras_truncar(_prov_evo, 22)}'
+                            # `nombre_propio` ANTES de truncar, para que los
+                            # puntos suspensivos caigan sobre el texto que se
+                            # ve. Va también acá y no sólo en el ranking: son
+                            # las dos mitades de la misma fila, y con una
+                            # gritando y la otra no el clic se lee como si
+                            # hubiera enfocado otra cosa.
+                            f'{_compras_truncar(nombre_propio(_prov_evo), 22)}'
                             + (f'<span> · {_suf_evo}</span>' if _suf_evo else '')
                             + '</div>',
                             unsafe_allow_html=True)
@@ -1283,7 +1305,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             with st.container(border=True, key="compras_prov_card_prods"):
                 _ta = ("Selecciona un proveedor arriba para ver sus productos"
                        if prov_focus is None
-                       else f"Productos · {_compras_truncar(prov_focus, 24)}")
+                       # Mismo criterio que el título de Evolución: el nombre
+                       # del proveedor EN FOCO se muestra como nombre propio.
+                       else f"Productos · "
+                            f"{_compras_truncar(nombre_propio(prov_focus), 24)}")
                 with _card("prov_prods", _ta, titulo_arriba=True):
                     # Controles flotantes en la cabecera (Opción 1). Dos flotantes
                     # absolutos apilados a la derecha: un texto chico con la

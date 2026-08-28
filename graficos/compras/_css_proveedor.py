@@ -1605,16 +1605,11 @@ CSS_RANKING_GRID = {
         "--ag-data-font-size": "11px",
         "--ag-header-font-size": "11px",
     },
-    # Minusculas SOLO en los nombres y en los titulos de columna: los montos
-    # llevan el prefijo "S/" y en minuscula ("s/ 13,363") se leen mal.
-    #
-    # El DATO no se toca: esto es `text-transform`, puro render. En el
-    # parquet los proveedores siguen en mayusculas ("DOBLE G
-    # REPRESENTACIONES S.A.C."), que es como vienen del ERP y como los
-    # busca el resto de la app — el popover de proveedores, el foco del
-    # drill y el `dict(zip(...))` que le da color a la Evolucion comparan
-    # ese string tal cual.
-    '.ag-cell[col-id="Proveedor"], .ag-header-cell-text': {
-        "text-transform": "lowercase",
-    },
 }
+# OJO, para el que venga a bajar estos nombres a minuscula por CSS: ya se
+# intento y no se puede. Aca vivio un `text-transform: lowercase` sobre la
+# columna de nombres, y duro horas: el pedido no era "minuscula" sino
+# "minuscula pero como NOMBRE PROPIO", y eso CSS no lo hace sobre un texto
+# que ya viene en mayusculas -- `capitalize` no baja el resto de la palabra,
+# y dos `text-transform` no se encadenan sobre el mismo texto. Lo resuelve
+# `_etiquetas_proveedor.nombre_propio`, que ademas es pura y testeable.
