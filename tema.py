@@ -122,6 +122,14 @@ ERROR_FONDO = "#fee2e2"
 ERROR_BORDE = "#fca5a5"
 """Rojo medio: borde de alerta de error."""
 
+ERROR_TEXTO = "#991b1b"
+"""Rojo oscuro: TEXTO sobre fondo de error. Gemelo de `ADVERTENCIA_TEXTO`
+para el rojo, y del `--danger-text` que ya existía en
+`estilos/_00_base.py` sin par en Python — este constante lo completa
+(regla #1: las dos caras de la paleta se mantienen juntas). Lo estrenó el
+chip «NC» de la tabla de Documentos SUNAT, que vive dentro del iframe de
+AgGrid y por eso necesita el valor desde Python, no `var(--danger-text)`."""
+
 # ═══════════════════════════════════════════════════════════════════════════
 # PALETA PASTEL — cascada de Ajuste de inventario (por familia)
 # Variante suave de ERROR/EXITO/CELDA_ALERTA_* de arriba, EXCLUSIVA de

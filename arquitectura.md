@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-237 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+243 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (80)
 
@@ -101,7 +101,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#234** — Elegir un prefijo de key que NO choque con otra familia no alcanza: hay que mirar también las…
 - **#237** — Hay DOS familias de AgGrid en el repo y no se estilan igual: la de theme="material" se toca…
 
-**Layout y alturas** (20)
+**Layout y alturas** (21)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -123,8 +123,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#187** — Meter None entre las opciones de un st.selectbox le agrega un botón ✕ "Clear value" que no…
 - **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
 - **#214** — Un st.rerun con scope="app" sigue estando ADENTRO del fragment que lo llama: sumarle espacio…
+- **#243** — Al partir en dos una fila de un drill hay que sumar su familia de key al PISO de…
 
-**Plotly y figuras** (44)
+**Plotly y figuras** (45)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -170,6 +171,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#184** — El sub-pin del modo diseño solo se soltaba al cambiar de KEY, así que señalar otra cosa…
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
 - **#202** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
+- **#241** — Un panel de detalle y un gráfico del PERÍODO no pueden convivir: el gráfico tiene que hablar…
 
 **AgGrid y tablas** (42)
 
@@ -323,7 +325,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#230** — Un @st.fragment alrededor de la tarjeta que se edita: una corrección deja de re-correr el…
 - **#232** — Una anotación por línea que puede tener DOS correcciones independientes se guarda con claves…
 
-**SUNAT y SIRE** (18)
+**SUNAT y SIRE** (22)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -343,6 +345,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#232** — Una anotación por línea que puede tener DOS correcciones independientes se guarda con claves…
 - **#234** — Elegir un prefijo de key que NO choque con otra familia no alcanza: hay que mirar también las…
 - **#235** — _css_grid es de UNA tabla suelta sobre el gris de la app; si la tabla ya vive adentro de una…
+- **#238** — Una columna «X del sistema» al lado de cada «X de SUNAT» duplica el ancho para servir al 11 %…
+- **#239** — Una columna donde el 97,6 % de las filas repiten la misma palabra no es una columna: es un…
+- **#242** — Una tarjeta que no tiene nada que hacer no se dibuja vacía: no se dibuja
+- **#243** — Al partir en dos una fila de un drill hay que sumar su familia de key al PISO de…
 
 **Fechas, rangos y cortes** (8)
 
@@ -382,7 +388,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#206** — Un mousemove/mouseup de un iframe TAMPOCO sube al padre — el modo diseño se congelaba al…
 - **#215** — Element.innerText no atraviesa el layout position: absolute de las celdas de AgGrid: da ""…
 
-**Decisiones de diseño y UX** (40)
+**Decisiones de diseño y UX** (41)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -424,6 +430,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#220** — Convertir una página de "una vista por vez" en una PILA no es mover código: es descubrir qué…
 - **#227** — server_sync_strategy="client_wins" (el default de st_aggrid) hace que el navegador IGNORE los…
 - **#236** — Sacar una vista de una página APILADA no es borrar su sección: hay que ir a buscar lo que la…
+- **#241** — Un panel de detalle y un gráfico del PERÍODO no pueden convivir: el gráfico tiene que hablar…
 
 **Mantenimiento y trampas del lenguaje** (7)
 
@@ -434,6 +441,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#56** — Al sacar un blob de JS/CSS embebido a su módulo: NO lo pases a raw string, y verifica el…
 - **#132** — El rail de navegación dejó de ser una columna izquierda de 90px y pasó a ser una franja…
 - **#233** — Una guarda que rastrea el fuente tiene que excluir .claude/worktrees/ — y el filtro mira los…
+
+**Sin tema asignado** (1)
+
+- **#240** — _soles() escribía «S/ » sin mirar la moneda, y 641 comprobantes del registro están en dólares
 
 <!-- INDICE:FIN -->
 
@@ -10678,13 +10689,205 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      que hasta ese día prometía "el mismo número que Proveedor". Si alguna
      vez se unifican, lo que viaja es `CSS_RANKING_GRID` para allá.
 
+238. **Una columna «X del sistema» al lado de cada «X de SUNAT» duplica el
+     ancho para servir al 11 % de las filas. La diferencia va DENTRO de la
+     celda, y la comparación deja de ser una vista aparte.**
+
+     El rediseño de «Documentos SUNAT» del 2026-08-28, y el número que lo
+     decidió. La tabla del cruce tenía 15 columnas —siete pares
+     SUNAT/sistema más el estado— con **1848 px de ancho mínimo** contra
+     los ~1010 útiles de una laptop de 1358: 838 px detrás del scroll
+     horizontal, el 45 % de la tabla. Y de esos 1848, **880 px (48 %) eran
+     las columnas del sistema**, que dicen algo en 35 de 326 filas:
+
+     | estado | filas | qué dice la columna del sistema |
+     |---|---:|---|
+     | Coincide | 169 | repite el número de al lado |
+     | Solo SUNAT | 122 | está vacía |
+     | Diferencia | 16 | **el dato que importa** |
+     | Solo sistema | 19 | **el único dato que hay** |
+
+     La cura: UNA columna por concepto, con el valor del sistema en una
+     segunda línea ámbar que aparece sólo cuando difiere
+     (`_JS_IMPORTE`). Ocho columnas, 868 px de mínimo. Y como la
+     diferencia ya viaja en la celda, **«Cruce» dejó de ser una vista**:
+     `_tabla` y `_tabla_cruce` se fundieron en `_tabla_documentos` y el
+     cruce se calcula siempre (390 ms por rango, medidos, cacheables).
+
+     Dos detalles que hacen que funcione:
+
+       · **La segunda línea usa la MISMA tolerancia que decide el estado**
+         (`_TOLERANCIA_CENTAVOS`, interpolada dentro del JS). Con dos
+         números distintos habría filas marcadas «Coincide» con la
+         segunda línea encendida — el usuario vería la app
+         contradiciéndose.
+       · **Sólo las filas con segunda línea miden 44 px**
+         (`getRowHeight`); las otras siguen en 30. Uniformar a 44 gastaría
+         14 px × 291 filas.
+
+     La regla general, que es lo que conviene recordar: **antes de agregar
+     una columna, contar en cuántas filas dice algo.** Una que repite el
+     valor de al lado o viene vacía en 9 de cada 10 filas no es
+     información, es ancho.
+
+239. **Una columna donde el 97,6 % de las filas repiten la misma palabra
+     no es una columna: es un chip para la excepción.**
+
+     Corolario del mismo día, y me hizo cambiar de opinión a mitad del
+     diseño. Había puesto «Tipo de comprobante» como columna de 94 px
+     porque la tabla no lo mostraba y hay 10 notas de crédito con importe
+     NEGATIVO que se leían como facturas. Al medir el registro COMPLETO
+     —16.678 comprobantes, no un rango— apareció esto:
+
+         Factura                              16,276   97.6 %
+         Nota de Crédito                         294
+         Documentos emitidos por Adquiriente      77
+         Documentos emitidos por TC Propias       30
+         Nota de Débito                            1
+
+     Una columna así gasta 94 px para escribir «Factura» 16.276 veces —y
+     encima «Documentos emitidos por Adquiriente» no entra sin cortarse—.
+     Marcando sólo lo que NO es la norma (`_JS_DOCUMENTO`: chips `NC`,
+     `ND`, `ADQ`, `TC`, `USD`, `ANULADO` colgados del número de
+     documento), esos 94 px se los queda el nombre del proveedor: medido
+     después, `MAPFRE PERU COMPAÑIA DE SEGUROS Y REASEGUROS` (44
+     caracteres) entra COMPLETO donde antes se cortaba.
+
+     El mismo criterio dejó fuera otras cuatro candidatas, todas medidas:
+
+       · **Fecha de vencimiento** — de 307, **140 vacías** y **89 iguales
+         a la emisión**; sólo 78 traen plazo real, y hay basura (un
+         vencimiento 36 días ANTES de la emisión).
+       · **Período tributario** — 307 de 307 iguales dentro de un mes.
+       · **Estado del comprobante** — «Activo» en los 16.678. Cero
+         anulados en toda la historia; va como chip por si aparece.
+       · **No gravado** — la columna «Base» ya lo suma a propósito, para
+         que una compra exonerada no parezca descuadre.
+
+     Las cuatro viven en la ficha, que es donde se mira UN documento y el
+     ancho no es escaso. **Para ordenar o filtrar por algo que es chip,
+     la columna sigue existiendo oculta** (`_tipo` con `hide=True`): un
+     chip se ve pero no se ordena.
+
+240. **`_soles()` escribía «S/ » sin mirar la moneda, y 641 comprobantes
+     del registro están en dólares.**
+
+     Encontrado al revisar qué muestra la ficha, no buscándolo. La ficha
+     de la factura F163-2309 de MAPFRE decía:
+
+         Moneda                 USD
+         Base imponible         S/ 10,733.31
+
+     Se contradecía sola, tres renglones abajo, y **el PDF descargable
+     salía igual** porque `ficha_pdf` usa la misma `campos_ficha`. Los
+     10.733,31 son dólares: a un TC de 3,402 son S/ 36.514,72. El total
+     del documento, S/ 12.665,31 según la app, son en realidad
+     **S/ 43.087,38** — un error de treinta mil soles en una sola fila.
+
+     No era un caso de borde: **641 de 16.678 (3,8 %)** del registro son
+     en moneda extranjera. `_soles` pasó a `_importe` (símbolo según
+     `codMoneda`, con `simbolo_moneda`) y la ficha ganó dos filas: la
+     moneda con su tipo de cambio (`USD · TC 3.402`) y el total
+     convertido. En la tabla, la conversión es la segunda línea del Total
+     — en GRIS, no en ámbar: no es un problema a revisar, es una lectura.
+
+     **Lo que hay que recordar:** un formateo de moneda que no recibe la
+     moneda no es un formateo, es una suposición. Y si el mismo dato
+     alimenta una pantalla y un PDF, el error se lleva los dos.
+
+241. **Un panel de detalle y un gráfico del PERÍODO no pueden convivir:
+     el gráfico tiene que hablar del documento elegido.**
+
+     El gráfico del drill vivía arriba de la tabla, mostraba el período y
+     no cambiaba nunca — el usuario lo describió como «una imagen
+     inicial». Al bajarlo al costado de la ficha (a pedido, para que la
+     fila 2 sea `ficha | gráfico`), un gráfico del rango entero quedaba
+     fuera de contexto al lado de un panel que habla de UN comprobante.
+
+     Ahora el panel tiene tres modos y el que abre es **«Este
+     proveedor»**: las compras mensuales del proveedor de la fila
+     elegida, sobre el registro COMPLETO y no sobre el rango de la
+     pantalla — es lo que le da sentido. Medido con datos reales al
+     diseñarlo: COMPANIA FOOD RETAIL pasó de S/ 203 en enero a S/ 5.953
+     en agosto, **casi ×30 en ocho meses**, y eso no estaba en ninguna
+     pantalla del drill.
+
+     Los otros dos modos son «Por fecha» y «Por proveedor», que hasta ese
+     día eran opciones de un `selectbox` llamado «Ver» que vivía arriba
+     de la tabla junto a «Cruce». **El selector bajó con el gráfico**, y
+     eso resuelve una confusión real: el usuario preguntó en qué se
+     diferenciaban «Por fecha» y «Por proveedor», y la respuesta era
+     incómoda — en NADA salvo en ese widget: mismas filas, mismos KPIs,
+     misma tabla, mismo Excel. Sólo cambiaban el resumen de arriba. Con
+     el selector pegado a lo único que controla, la pregunta no vuelve a
+     surgir.
+
+     Dos cosas que costaron un rerun cada una:
+
+       · El primer modo `return`ea. Sin eso, la tira de KPIs del
+         proveedor quedaba dibujada debajo del gráfico del período.
+       · «Por fecha» rotulaba el eje en INGLÉS («Aug 2»): Plotly usa su
+         locale por defecto y el `hovertemplate` ya venía en formato
+         local, así que el eje se había quedado atrás sin que se notara.
+         Se notó al quedar los dos gráficos como modos del mismo panel,
+         uno al lado del otro, uno en español y el otro no. Vale para
+         cualquier eje de fechas del proyecto: `tickformat` explícito.
+         La lista de meses en español es `cortes.MESES_ABR_ES` — una
+         sola en todo el repo.
+
+242. **Una tarjeta que no tiene nada que hacer no se dibuja vacía: no se
+     dibuja.**
+
+     El conversor SUNAT-Sistema mapea las líneas del XML contra el
+     maestro para poder CARGAR un documento. Si ya está cargado no hay
+     nada que convertir, y sin embargo la tarjeta estaba siempre ahí,
+     tercera y a lo ancho, en una vista que el usuario ya había reportado
+     como demasiado larga.
+
+     Desde el 2026-08-28 sólo aparece cuando el estado del cruce es
+     «Solo SUNAT» (`_necesita_conversor`). Medido sobre las 326 filas del
+     rango, cruzando además contra qué originales hay sincronizados:
+
+     | | filas | |
+     |---|---:|---|
+     | aparece y tiene líneas que mapear | 97 | «Solo SUNAT» **con** XML |
+     | aparece pidiendo el original | 25 | «Solo SUNAT» **sin** XML |
+     | no aparece | 204 | 169+16 ya cargados, 19 sin comprobante SUNAT |
+
+     O sea que **en 2 de cada 3 documentos la pantalla ahora termina en
+     la ficha**. Los 25 sin XML son el motivo de que sean TRES estados y
+     no dos: mirando sólo «no está cargado», la tarjeta aparecería vacía
+     en 25 casos.
+
+     «Diferencia» queda afuera a propósito aunque el documento tenga algo
+     raro: ahí ya está cargado y la pregunta es dónde está el descuadre —
+     la responde el cotejo de la ficha, no un mapeo de líneas contra el
+     maestro.
+
+243. **Al partir en dos una fila de un drill hay que sumar su familia de
+     key al PISO de `_80_cards.py`, no sólo al techo.**
+
+     La regla #145 dejó escrito que `sunat_card_` compartía el techo
+     (`max-height: var(--alto-util)`) pero que su piso «no estaba medido
+     todavía». Se midió el 2026-08-28, en cuanto Documentos SUNAT ganó su
+     primera fila de dos columnas: la ficha llegaba a su techo de 576 px
+     y el gráfico de al lado se quedaba en **407** — 169 px de escalón,
+     exactamente el síntoma que la regla describía.
+
+     La cura es sumar la familia al selector con `:has()` que le da
+     `flex: 1 1 auto` al contenedor de elemento que Streamlit mete entre
+     la columna y la tarjeta. Verificado después: las dos miden 576.
+
+     **Antes de dar por terminada una fila de dos columnas, medir los dos
+     altos.** El techo se hereda por prefijo de key; el piso no.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#238**.
+> próxima regla nueva es la **#244**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

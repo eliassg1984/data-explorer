@@ -227,12 +227,17 @@ CSS = """    /* ================================================================
         /* que se puede seleccionar por su hijo. Un navegador sin `:has()`  */
         /* ignora la regla y vuelve al escalón — degrada, no rompe.         */
         /*                                                                  */
-        /* Scopeado a `compras_prov_card_` a propósito: `ajuste_graf_card_` */
-        /* y `sunat_card_` comparten el techo de arriba pero su piso no     */
-        /* está medido todavía. Al medirlos, sumarlos acá.                  */
+        /* `sunat_card_` se sumó el 2026-08-28, al ganar Documentos SUNAT  */
+        /* su primera fila de dos columnas (ficha | gráfico). Medido ahí   */
+        /* mismo: la ficha llegaba a su techo de 576px y el gráfico se     */
+        /* quedaba en 407 — 169px de escalón, exactamente el síntoma que   */
+        /* describe el bloque de arriba. `ajuste_graf_card_` sigue afuera: */
+        /* sus tarjetas no comparten fila, así que no hay nada que igualar.*/
         /* ─────────────────────────────────────────────────────────────── */
         .stColumn > .stVerticalBlock
-        > div:has(> div[class*="st-key-compras_prov_card_"]) {
+        > div:has(> div[class*="st-key-compras_prov_card_"]),
+        .stColumn > .stVerticalBlock
+        > div:has(> div[class*="st-key-sunat_card_"]) {
             flex: 1 1 auto;
         }
     }

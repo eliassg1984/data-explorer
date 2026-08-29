@@ -71,6 +71,7 @@ baja a S/6,9 y S/1.199 — esa medición es de ANTES de tener RUC, cuando la
 import datetime
 import difflib
 import io
+import json
 import re
 import unicodedata
 
@@ -80,13 +81,16 @@ import streamlit as st
 from st_aggrid import AgGrid, DataReturnMode, GridOptionsBuilder, JsCode
 
 import sunat
+from cortes import MESES_ABR_ES
 from estado_rango import clave_rango
 import franja_fecha
 from tema import (
-    ACENTO, ACENTO_TEXTO, ADVERTENCIA_TEXTO, ERROR, GRIS_BORDE, GRIS_TEXTO,
-    LAVANDA_CABECERA_GRUPO, LAVANDA_FONDO, TEXTO_PRINCIPAL,
+    ACENTO, ACENTO_TEXTO, ADVERTENCIA_TEXTO, ERROR, ERROR_FONDO, ERROR_TEXTO,
+    GRIS_BORDE, GRIS_FONDO, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
+    LAVANDA_CABECERA_GRUPO, LAVANDA_FOCO, LAVANDA_FONDO, TEXTO_PRINCIPAL,
 )
 from graficos.base import _compras_layout, _compras_truncar
+from graficos.compras._comun import COLUMNAS_DRILL, GAP_DRILL
 from graficos import alturas
 from tablas._css import _css_grid
 from utils import _norm
@@ -99,6 +103,21 @@ from utils import _norm
 # sistema. Son dos fuentes independientes del mismo hecho, y donde
 # discrepan hay algo que revisar — una compra sin registrar, un monto que
 # no cuadra, o una carga que no tiene comprobante electrónico detrás.
+
+_COL_ESTADO = "Está vs Sistema"
+"""Cabecera de la columna que dice si el documento está bien cargado.
+
+Se llamaba «Estado» hasta el 2026-08-28 y se renombró a pedido, por dos
+motivos que apuntan al mismo lado: «Estado» no decía estado DE QUÉ, y el
+registro de SUNAT ya trae un campo `estado` propio (Activo / Anulado) —
+dos cosas distintas con el mismo nombre en la misma pantalla. Liberado el
+nombre, aquél puede aparecer cuando haga falta (hoy es «Activo» en los
+16.678 comprobantes del registro, así que sale como chip y no como
+columna).
+
+Constante y no literal porque la usan la construcción de la tabla, la
+configuración de su columna y la lectura de la fila seleccionada."""
+
 
 _TOLERANCIA_CENTAVOS = 0.05
 """Diferencia de monto por debajo de la cual se considera "Coincide", no
@@ -412,6 +431,13 @@ def cruzar_con_parquet(df_sire, g_parquet):
             "dif_igv": dif_igv,
             "total_sunat": total_sunat, "total_sistema": total_sist,
             "dif_total": dif_total, "estado": estado,
+            # `car` es el identificador de la anotacion en SUNAT y la
+            # UNICA clave sin colisiones (`_fila_de`: `documento` deja
+            # 1.422, `ruc+documento` deja 3, `car` deja cero). Viaja para
+            # que la tabla unificada pueda traer de `df_sire` los campos
+            # que el cruce no lleva -- tipo, moneda, tipo de cambio y
+            # detraccion -- sin volver a adivinar por documento.
+            "car": str(r.get("car") or ""),
         })
 
     # Lo que quedó en el parquet sin usarse en NINGÚN match: son compras
@@ -434,6 +460,10 @@ def cruzar_con_parquet(df_sire, g_parquet):
             "dif_igv": None,
             "total_sunat": None, "total_sistema": float(cand["total_pq"]),
             "dif_total": None, "estado": "Solo sistema",
+            # Una fila que solo existe en el sistema no tiene anotacion en
+            # SUNAT, asi que no tiene `car`. La columna existe igual para
+            # que el df tenga una sola forma.
+            "car": "",
         })
 
     out = pd.DataFrame(filas)
@@ -444,13 +474,20 @@ def cruzar_con_parquet(df_sire, g_parquet):
     return out.sort_values("fecha_emision").reset_index(drop=True)
 
 
-def _kpis_cruce(df):
+def _kpis_cruce(df, origen=None):
     """Resumen de UNA línea del cruce: cuántos documentos coinciden,
     difieren, o faltan de un lado u otro. Mismo criterio compacto que
     `_kpis` — ver su docstring sobre por qué no son `st.metric`.
+
+    `origen` desde el 2026-08-28: al fundirse las dos tablas, ésta es la
+    única tira de KPIs que queda, así que tiene que llevar también el
+    sello de dónde salió el dato (parquet o API) que antes mostraba
+    `_kpis`. Sin eso, el usuario perdía la única señal de que está viendo
+    una copia y no lo que SUNAT dice ahora mismo.
     """
     if df is None or df.empty:
-        st.markdown('<div style="height:38px;"></div>', unsafe_allow_html=True)
+        st.markdown('<div style="min-height:38px;"></div>',
+                    unsafe_allow_html=True)
         return
     conteos = df["estado"].value_counts()
 
@@ -460,7 +497,19 @@ def _kpis_cruce(df):
                 f'<b style="color:{c};font-weight:600;">{valor}</b>'
                 f'<span style="color:{GRIS_TEXTO};"> {etiqueta}</span></span>')
 
-    partes = [dato(f'{int(conteos.get("Coincide", 0)):,}', "coinciden")]
+    # El VOLUMEN del rango va primero -- lo mostraba `_kpis`, que murió al
+    # fundirse las dos tablas (2026-08-28) y se llevaba puestos el total y
+    # el IGV del período. Se suma el lado SUNAT, que es el original; las
+    # filas «Solo sistema» no tienen y quedan fuera de esta suma, que es
+    # lo correcto: no son comprobantes del SIRE.
+    _tot = float(pd.to_numeric(df.get("total_sunat"), errors="coerce").sum())
+    _igv = float(pd.to_numeric(df.get("igv_sunat"), errors="coerce").sum())
+    partes = [
+        dato(f"{len(df):,}", "docs"),
+        dato(f"S/ {_tot:,.2f}", "total"),
+        dato(f"S/ {_igv:,.2f}", "IGV"),
+        dato(f'{int(conteos.get("Coincide", 0)):,}', "coinciden"),
+    ]
 
     n_dif = int(conteos.get("Diferencia", 0))
     if n_dif:
@@ -480,182 +529,366 @@ def _kpis_cruce(df):
         partes.append(dato(f"{n_ssi:,}", f"solo en el sistema (S/ {mto:,.2f})",
                            ERROR))
 
+    if origen:
+        partes.append(_sello_origen(origen))
+
     st.markdown(
-        '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;'
-        'justify-content:flex-end;font-size:12.5px;height:38px;">'
+        '<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;'
+        'justify-content:flex-end;font-size:12.5px;min-height:38px;">'
         + f'<span style="color:{GRIS_BORDE};">·</span>'.join(partes)
         + '</div>',
         unsafe_allow_html=True,
     )
 
 
-def _tabla_cruce(df_cruce, df_sire):
-    """AgGrid de la comparación SIRE vs sistema. Devuelve la fila COMPLETA
-    del SIRE (de `df_sire`, no de `df_cruce`) que corresponde a la
-    seleccionada — `df_cruce` solo trae las columnas de la comparación
-    (fecha/documento/montos/estado), y el panel derecho necesita el
-    registro entero (tipo, CAR, moneda) para armar la ficha.
+_TOL_JS = str(_TOLERANCIA_CENTAVOS)
 
-    Un "Solo sistema" seleccionado devuelve `None` a propósito: no hay
-    documento del SIRE que le corresponda — no es una carencia del panel,
-    es que ese comprobante no tiene contraparte ahí.
+_JS_IMPORTE = JsCode("""
+class ImporteCelda {
+    init(p) {
+        var d = p.data || {};
+        var sim = d._sim || 'S/';
+        this.eGui = document.createElement('div');
+        this.eGui.style.lineHeight = '1.18';
+        this.eGui.style.textAlign = 'right';
+        var a = document.createElement('div');
+        a.textContent = this.fmt(p.value, sim);
+        if (p.value != null && !isNaN(p.value) && p.value < 0) {
+            a.style.color = '__ERROR__';
+        }
+        this.eGui.appendChild(a);
 
-    Sin `fit_columns_on_grid_load`: son 15 columnas y 6 de plata — forzar
-    el ancho del contenedor las dejaría ilegibles. Scrollea horizontal,
-    mismo criterio que la tabla pivote de Proveedor.
+        // Segunda linea, y SOLO una de las dos: o lo que dice el sistema
+        // (cuando difiere), o la conversion a soles (cuando el
+        // comprobante no esta en soles). Nunca las dos -- son dos
+        // lecturas distintas y encimarlas convierte la celda en un
+        // parrafo. Ver el docstring de `_tabla_documentos`.
+        var sis = p.campoSis ? d[p.campoSis] : null;
+        var texto = null, color = null;
+        if (sis != null && sis !== '' && !isNaN(sis)
+            && p.value != null && !isNaN(p.value)
+            && Math.abs(Number(sis) - Number(p.value)) > __TOL__) {
+            texto = 'sist. ' + this.num(sis);
+            color = '__AMBAR__';
+        } else if (p.campoConv && d[p.campoConv]) {
+            texto = '\\u2248 ' + d[p.campoConv];
+            color = '__GRIS__';
+        }
+        if (texto) {
+            var b = document.createElement('div');
+            b.textContent = texto;
+            b.style.fontSize = '10.5px';
+            b.style.color = color;
+            b.style.fontWeight = (color === '__AMBAR__') ? '600' : '400';
+            this.eGui.appendChild(b);
+        }
+    }
+    num(v) {
+        return Number(v).toLocaleString('es-PE',
+            {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+    fmt(v, sim) {
+        if (v == null || isNaN(v)) return '\\u2014';
+        return (v < 0 ? '-' : '') + sim + ' ' + this.num(Math.abs(v));
+    }
+    getGui() { return this.eGui; }
+}
+""".replace("__TOL__", _TOL_JS)
+   .replace("__AMBAR__", ADVERTENCIA_TEXTO)
+   .replace("__GRIS__", GRIS_TEXTO_SUAVE)
+   .replace("__ERROR__", ERROR_TEXTO))
+"""La celda de un importe de la tabla unificada: el número de SUNAT arriba
+y, cuando hace falta, UNA segunda línea debajo.
+
+Es el corazón de la vista: reemplaza a las siete columnas «… sistema» que
+la tabla tenía duplicadas. Sólo aparece la segunda línea en las filas donde
+dice algo — 35 de 326 en el rango medido —, así que 9 de cada 10 filas se
+leen como una tabla normal de una línea.
+
+`cellRenderer` a mano y no `valueFormatter` porque hacen falta DOS nodos:
+un formatter devuelve texto plano y el salto de línea no se renderiza. Ver
+`arquitectura.md` regla #25 sobre por qué es una `class` con
+`init`/`getGui` y no una función que devuelva HTML.
+
+La tolerancia con la que decide si "difiere" es la MISMA
+`_TOLERANCIA_CENTAVOS` con la que `cruzar_con_parquet` decide el estado —
+interpolada acá adentro, no reescrita. Si fueran dos números distintos,
+habría filas marcadas "Coincide" con la segunda línea encendida."""
+
+
+_COLOR_CHIP = {
+    # Rojo lo que RESTA o invalida; lavanda lo que sólo es distinto;
+    # gris los tipos raros. Los tres pares salen de `tema.py` — ningún
+    # `#hex` suelto (regla #1). Van como valores y no como `var(--...)`
+    # porque el grid vive en un iframe propio y las variables CSS del
+    # documento padre no llegan.
+    "NC": [ERROR_FONDO, ERROR_TEXTO],
+    "ND": [ERROR_FONDO, ERROR_TEXTO],
+    "ANULADO": [ERROR_FONDO, ERROR_TEXTO],
+    "USD": [LAVANDA_FONDO, ACENTO_TEXTO],
+    "EUR": [LAVANDA_FONDO, ACENTO_TEXTO],
+    "ADQ": [GRIS_FONDO, GRIS_TEXTO],
+    "TC": [GRIS_FONDO, GRIS_TEXTO],
+}
+"""Chip → (fondo, texto)."""
+
+
+
+_JS_DOCUMENTO = JsCode("""
+class DocumentoCelda {
+    init(p) {
+        var d = p.data || {};
+        this.eGui = document.createElement('div');
+        var t = document.createElement('span');
+        t.textContent = p.value == null ? '' : p.value;
+        this.eGui.appendChild(t);
+        var chips = String(d._chips || '').split('|');
+        for (var i = 0; i < chips.length; i++) {
+            if (!chips[i]) continue;
+            var c = document.createElement('span');
+            c.textContent = chips[i];
+            c.style.fontSize = '9.5px';
+            c.style.fontWeight = '600';
+            c.style.letterSpacing = '.04em';
+            c.style.padding = '1px 5px';
+            c.style.borderRadius = '4px';
+            c.style.marginLeft = '5px';
+            c.style.verticalAlign = '1px';
+            var col = __COLORES__[chips[i]] || ['#eeeef2', '#52525c'];
+            c.style.background = col[0];
+            c.style.color = col[1];
+            this.eGui.appendChild(c);
+        }
+    }
+    getGui() { return this.eGui; }
+}
+""".replace("__COLORES__", json.dumps(_COLOR_CHIP)))
+"""El número de documento con sus CHIPS: marcan lo que NO es la norma.
+
+Nació de medir el registro completo el 2026-08-28: 16.276 de 16.678
+comprobantes (97,6 %) son «Factura» y 16.037 son en soles. Una columna
+«Tipo» donde casi todas las filas repiten la misma palabra gasta 94 px
+para no decir nada — y encima «Documentos emitidos por Adquiriente» no
+entra sin cortarse. Marcando sólo la excepción, esos 94 px se los queda el
+nombre del proveedor, que hoy se corta en todas las filas.
+
+Los chips que puede emitir `_chips_de`: `NC`/`ND` (notas), `ADQ`/`TC`
+(los dos tipos raros), `USD`/`EUR` (moneda) y `ANULADO` (estado del
+comprobante en SUNAT — cero casos en toda la historia medida, pero es
+justo el que no se puede pasar por alto si aparece)."""
+
+
+_CHIPS_POR_TIPO = {
+    "Nota de Crédito": "NC",
+    "Nota de Débito": "ND",
+    "Documentos emitidos por Adquiriente": "ADQ",
+    "Documentos emitidos por TC Propias": "TC",
+}
+"""Tipo de comprobante → chip. «Factura» NO está a propósito: es el 97,6 %
+del registro y marcarla sería marcar todo. Un tipo que no esté acá tampoco
+emite chip; el dato completo vive en la ficha."""
+
+
+def _chips_de(fila):
+    """Los chips de una fila, separados por `|` (lo que espera
+    `_JS_DOCUMENTO`). Vacío para una factura en soles y activa, que es el
+    caso normal."""
+    chips = []
+    t = _CHIPS_POR_TIPO.get(str(fila.get("tipo_nombre") or "").strip())
+    if t:
+        chips.append(t)
+    mon = str(fila.get("moneda") or "").strip().upper()
+    if mon and mon != "PEN":
+        chips.append(mon)
+    if str(fila.get("estado_cpe") or "").strip().lower() not in ("", "activo"):
+        chips.append("ANULADO")
+    return "|".join(chips)
+
+
+def _tabla_documentos(df_cruce, df_sire):
+    """LA tabla del drill: los comprobantes de SUNAT y, en la misma celda,
+    lo que dice el sistema cuando no coincide. Devuelve la fila COMPLETA
+    del SIRE elegida, o `None`.
+
+    Reemplaza a las DOS tablas que había hasta el 2026-08-28 —`_tabla`
+    (sólo SUNAT) y `_tabla_cruce` (las dos fuentes en 15 columnas)—, a
+    pedido: si la diferencia vive dentro de la celda, «Cruce» deja de ser
+    una vista aparte y pasa a ser una columna.
+
+    LO QUE SE GANA, medido: la tabla de cruce tenía 1848 px de ancho
+    mínimo contra los ~1010 útiles de una laptop de 1358 — 838 px detrás
+    del scroll horizontal, el 45 %. Y ese ancho servía al 11 % de las
+    filas: de 326, sólo 35 (16 «Diferencia» + 19 «Solo sistema») usaban
+    las columnas del sistema; en las 169 «Coincide» repetían el número de
+    al lado y en las 122 «Solo SUNAT» estaban vacías. Ahora son ocho
+    columnas y 868 px de mínimo.
+
+    LAS OCHO, y por qué no son más:
+      · Fecha, Documento, Proveedor — la identidad.
+      · Base, IGV, Total — el dinero, con la segunda línea de
+        `_JS_IMPORTE` cuando el sistema dice otra cosa.
+      · D — la detracción, que SUNAT ya marca y no se mostraba en ningún
+        lado (1.145 de 16.678 en el registro completo).
+      · «Está vs Sistema» — el estado del cruce.
+    Lo demás se midió y se dejó afuera: «Tipo» es 97,6 % «Factura» (va
+    como chip, ver `_JS_DOCUMENTO`), «Fecha de vencimiento» viene vacía o
+    igual a la emisión en 229 de 307 filas, «Período tributario» es
+    constante dentro de un mes y «Estado del comprobante» es «Activo» en
+    los 16.678 del registro. Todos viven en la ficha, que es donde se mira
+    UN documento.
+
+    RUC y «Documento sistema» también se fueron a la ficha. El primero
+    vuelve como segunda línea del proveedor si los dos lados no coinciden
+    —el caso que esa columna existía para cazar—; el segundo nunca fue
+    comparable (es el mismo número en otra notación, `F0FA28002334492`
+    contra `FA28-2334492`) y es un dato para copiar, no para escanear.
+
+    `df_sire` entra porque el cruce no trae todos los campos de SUNAT: el
+    tipo, la moneda, el tipo de cambio y la detracción se traen de ahí por
+    `car`, que es la única clave sin colisiones (ver `_fila_de`).
     """
-    def _f(s):
-        """dd/mm/yyyy, y "" cuando no hay fecha — un NaT crudo en la grilla
-        sale como "NaT" y el usuario lo lee como un dato."""
-        return pd.to_datetime(s, errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
+    if df_cruce is None or df_cruce.empty:
+        st.info("No hay comprobantes que mostrar en el rango.")
+        return None
 
-    tv = pd.DataFrame({
-        # Las dos fechas, para poder compararlas (a pedido 2026-08-21). El
-        # `fecha_emision` de antes mostraba la del SIRE en las filas
-        # emparejadas y la del parquet en las "Solo sistema" — o sea una
-        # sola columna que cambiaba de fuente segun la fila, imposible de
-        # comparar contra nada.
-        "Fecha SUNAT": _f(df_cruce["fecha_sunat"]),
-        "Fecha sistema": _f(df_cruce["fecha_sistema"]),
-        # Las dos formas del MISMO numero, a pedido 2026-08-24. Un
-        # "Documento sistema" con la llave normalizada (`FA28-2305799`)
-        # SERIA una copia byte a byte de la columna de al lado -- por eso
-        # esta columna muestra el numero CRUDO del ERP
-        # (`F0FA28002305799`, con su prefijo de tipo y sus ceros), que es
-        # lo que hay que tipear para ir a buscar el documento al sistema y
-        # NO se ve en ningun otro lado de la app.
-        "Documento SUNAT": df_cruce["documento"],
-        "Documento sistema": df_cruce.get(
-            "documento_sistema", pd.Series("", index=df_cruce.index)).fillna(""),
-        "RUC SUNAT": df_cruce["ruc_proveedor"].fillna(""),
-        "RUC sistema": df_cruce["ruc_sistema"].fillna(""),
-        # "Proveedor SUNAT" se habia retirado (con los dos RUC al lado, el
-        # nombre del SIRE parecia la tercera forma de decir lo mismo) y
-        # volvio a pedido 2026-08-24: el RUC es un numero que nadie
-        # reconoce de memoria, y ver los dos NOMBRES al lado es lo que
-        # caza un proveedor cargado con otra razon social.
-        "Proveedor SUNAT": df_cruce["proveedor"].fillna(""),
-        "Proveedor sistema": df_cruce["proveedor_sistema"].fillna(""),
-        "Base SUNAT": pd.to_numeric(df_cruce["base_sunat"], errors="coerce"),
-        "Base sistema": pd.to_numeric(df_cruce["base_sistema"], errors="coerce"),
-        # El IGV va EN EL MEDIO, entre base y total, y no al final: es el
-        # orden en que se leen las tres cifras en cualquier comprobante, y
-        # deja los dos pares comparables uno debajo del otro al escanear.
-        # `.get()` con relleno: `cruzar_con_parquet` es publica y los tests
-        # arman df sin estas columnas.
-        "IGV SUNAT": pd.to_numeric(
-            df_cruce.get("igv_sunat", pd.Series(index=df_cruce.index,
-                                                dtype="float64")),
-            errors="coerce"),
-        "IGV sistema": pd.to_numeric(
-            df_cruce.get("igv_sistema", pd.Series(index=df_cruce.index,
-                                                  dtype="float64")),
-            errors="coerce"),
-        "Total SUNAT": pd.to_numeric(df_cruce["total_sunat"], errors="coerce"),
-        "Total sistema": pd.to_numeric(df_cruce["total_sistema"], errors="coerce"),
-        "Estado": df_cruce["estado"],
-    })
+    # Los campos que el cruce no lleva, por `car`. `.get` con relleno: los
+    # tests arman df sin estas columnas y `cruzar_con_parquet` es publica.
+    _cols = ("tipo_nombre", "moneda", "tipo_cambio", "detraccion", "estado")
+    extra = {}
+    if df_sire is not None and "car" in df_sire.columns:
+        for _, r in df_sire.iterrows():
+            extra[str(r.get("car") or "")] = {c: r.get(c) for c in _cols}
 
-    _fmt_soles = JsCode(
-        "function(p){ if(p.value==null||isNaN(p.value)) return '—'; "
-        "return 'S/ ' + Number(p.value).toLocaleString('es-PE',"
-        "{minimumFractionDigits:2, maximumFractionDigits:2}); }")
+    filas = []
+    for _, r in df_cruce.iterrows():
+        car = str(r.get("car") or "")
+        ex = extra.get(car, {})
+        mon = str(ex.get("moneda") or "PEN").strip().upper() or "PEN"
+        tc = ex.get("tipo_cambio") or 1.0
+        total_sunat = _num(r.get("total_sunat"))
+        # La conversion a soles solo se calcula si hace falta: es la
+        # segunda linea del Total en las 641 filas en moneda extranjera
+        # del registro, y no tiene sentido en las otras 16.037.
+        conv = ""
+        if mon != "PEN" and total_sunat is not None:
+            try:
+                conv = f"S/ {total_sunat * float(tc):,.2f}"
+            except (TypeError, ValueError):
+                conv = ""
+        _chips = _chips_de({"tipo_nombre": ex.get("tipo_nombre"),
+                            "moneda": mon, "estado_cpe": ex.get("estado")})
+        base_s, igv_s, tot_s = (_num(r.get("base_sistema")),
+                                _num(r.get("igv_sistema")),
+                                _num(r.get("total_sistema")))
+        base_u, igv_u = _num(r.get("base_sunat")), _num(r.get("igv_sunat"))
+        # Si la fila va a necesitar DOS lineas en alguna celda, la fila
+        # entera mide 44 en vez de 30 (`getRowHeight`). Se decide aca y no
+        # en JS para no repetir la comparacion en tres renderers.
+        dos = bool(conv) or any(
+            a is not None and b is not None
+            and abs(a - b) > _TOLERANCIA_CENTAVOS
+            for a, b in ((base_u, base_s), (igv_u, igv_s), (total_sunat, tot_s)))
+
+        filas.append({
+            "_car": car,
+            "_chips": _chips,
+            "_sim": sunat.simbolo_moneda(mon),
+            "_tipo": str(ex.get("tipo_nombre") or ""),
+            "_base_sis": base_s, "_igv_sis": igv_s, "_total_sis": tot_s,
+            "_conv": conv,
+            "_dos": dos,
+            "Fecha": r.get("fecha_emision"),
+            "Documento": str(r.get("documento") or ""),
+            "Proveedor": str(r.get("proveedor") or "")
+                         or str(r.get("proveedor_sistema") or ""),
+            "Base": base_u if base_u is not None else base_s,
+            "IGV": igv_u if igv_u is not None else igv_s,
+            "Total": total_sunat if total_sunat is not None else tot_s,
+            "D": "D" if str(ex.get("detraccion") or "").strip().upper() == "D"
+                 else "",
+            _COL_ESTADO: str(r.get("estado") or ""),
+        })
+
+    tv = pd.DataFrame(filas)
+    tv["Fecha"] = pd.to_datetime(tv["Fecha"], errors="coerce").dt.strftime(
+        "%d/%m/%Y").fillna("")
 
     gb = GridOptionsBuilder.from_dataframe(tv)
     gb.configure_default_column(resizable=True, sortable=True, filter=False,
                                 editable=False, suppressMovable=True)
-    # `minWidth` = `width` en cada columna, y no es redundante: es lo que
-    # hace SEGURO al `sizeColumnsToFit()` de `onGridSizeChanged` (más abajo).
-    # `sizeColumnsToFit` respeta los mínimos — si no entran, deja cada
-    # columna en su mínimo y scrollea, en vez de aplastarlas. Así el mismo
-    # handler sirve para los dos estados: angosto (columnas en su mínimo,
-    # scroll horizontal, que es el comportamiento de siempre) y en pantalla
-    # completa (se reparten el ancho de sobra). Sin los mínimos, el fit
-    # rompería justo lo que el docstring de arriba pide evitar.
-    # Misma convencion de color que los montos: ambar = revisar. Se pinta
-    # la fecha del SISTEMA porque es la corregible — la del SIRE es la que
-    # SUNAT ya tiene registrada. Solo marca cuando HAY las dos y difieren:
-    # un "Solo SUNAT" no tiene fecha de sistema y no es una discrepancia de
-    # fecha, es una ausencia, y eso ya lo dice la columna Estado.
-    _style_fecha = JsCode(
-        "function(p){ var o=p.data['Fecha SUNAT']; "
-        "if(p.value && o && p.value !== o) "
-        "return {'color':'%s','fontWeight':'600'}; "
-        "return {'color':'%s'}; }" % (ADVERTENCIA_TEXTO, GRIS_TEXTO))
-    gb.configure_column("Fecha SUNAT", width=105, minWidth=105, pinned="left")
-    gb.configure_column("Fecha sistema", width=110, minWidth=110,
-                        pinned="left", cellStyle=_style_fecha)
-    gb.configure_column("Documento SUNAT", width=115, minWidth=115,
-                        pinned="left")
-    # Sin pinear: cuatro columnas fijas a la izquierda se comen 450px y en
-    # una laptop no queda ancho para los montos, que son el punto de la
-    # vista. Igual queda pegada a "Documento SUNAT" -- AG Grid dibuja las
-    # no pineadas justo despues de las pineadas, en orden.
-    gb.configure_column("Documento sistema", width=140, minWidth=140,
-                        cellStyle={"color": GRIS_TEXTO})
-    gb.configure_column("RUC SUNAT", width=105, minWidth=105)
-    gb.configure_column("RUC sistema", width=105, minWidth=105)
-    gb.configure_column("Proveedor SUNAT", minWidth=180)
-    gb.configure_column("Proveedor sistema", minWidth=180)
-    for col in ("Base SUNAT", "Base sistema", "IGV SUNAT", "IGV sistema",
-                "Total SUNAT", "Total sistema"):
-        gb.configure_column(col, type=["numericColumn"], width=115,
-                            minWidth=115, valueFormatter=_fmt_soles)
-    # Mismo criterio que `_style_fecha`: ambar en la celda del SISTEMA
-    # cuando hay las dos y difieren. Se pinta solo el IGV porque es el que
-    # se puede equivocar en silencio -- si base y total ya discrepan, la
-    # columna Estado lo dice y pintar las seis celdas seria ruido.
+    for oculta in ("_car", "_chips", "_sim", "_base_sis", "_igv_sis",
+                   "_total_sis", "_conv", "_dos"):
+        gb.configure_column(oculta, hide=True)
+    # `_tipo` va oculta pero NO muerta: con el tipo fuera de las columnas
+    # visibles (es un chip), ésta es la que permite ordenar y filtrar por
+    # tipo sin gastar 94 px de ancho.
+    gb.configure_column("_tipo", hide=True, headerName="Tipo")
+    gb.configure_column("Fecha", width=96, minWidth=96)
+    gb.configure_column("Documento", width=140, minWidth=126,
+                        cellRenderer=_JS_DOCUMENTO)
+    gb.configure_column("Proveedor", minWidth=170, flex=1,
+                        tooltipField="Proveedor")
+    gb.configure_column("Base", type=["numericColumn"], width=100, minWidth=100,
+                        cellRenderer=_JS_IMPORTE,
+                        cellRendererParams={"campoSis": "_base_sis"})
+    gb.configure_column("IGV", type=["numericColumn"], width=90, minWidth=90,
+                        cellRenderer=_JS_IMPORTE,
+                        cellRendererParams={"campoSis": "_igv_sis"})
+    gb.configure_column("Total", type=["numericColumn"], width=112,
+                        minWidth=112, cellRenderer=_JS_IMPORTE,
+                        cellRendererParams={"campoSis": "_total_sis",
+                                            "campoConv": "_conv"})
     gb.configure_column(
-        "IGV sistema", type=["numericColumn"], width=115, minWidth=115,
-        valueFormatter=_fmt_soles,
+        "D", width=34, minWidth=34,
+        headerTooltip="Detracción: SUNAT la marca en el registro. "
+                      "Condiciona cuándo se puede usar el crédito fiscal.",
         cellStyle=JsCode(
-            "function(p){ var o=p.data['IGV SUNAT']; "
-            "if(p.value!=null && o!=null && Math.abs(p.value-o) > %s) "
-            "return {'color':'%s','fontWeight':'600'}; "
-            "return {'color':'%s'}; }"
-            % (_TOLERANCIA_CENTAVOS, ADVERTENCIA_TEXTO, GRIS_TEXTO)))
-    # Igual convención que "Pendiente" en _tabla: ámbar = revisar, rojo =
-    # más urgente todavía (plata cargada sin comprobante electrónico que
-    # la respalde). "Coincide" no se destaca — lo normal no compite por
-    # atención.
+            "function(p){ return p.value ? {'color':'%s','fontWeight':'700',"
+            "'textAlign':'center'} : {}; }" % ADVERTENCIA_TEXTO))
+    # Misma convención de color que tenía «Estado»: ámbar = revisar, rojo =
+    # plata cargada sin comprobante electrónico que la respalde.
+    # «Coincide» no se destaca — lo normal no compite por atención.
     gb.configure_column(
-        "Estado", width=118, minWidth=118, pinned="right",
+        _COL_ESTADO, width=126, minWidth=126,
         cellStyle=JsCode(
             "function(p){ var m={'Diferencia':'%s','Solo SUNAT':'%s',"
             "'Solo sistema':'%s'}; var c=m[p.value]; "
             "return c ? {'color':c,'fontWeight':'600'} : {'color':'%s'}; }"
             % (ADVERTENCIA_TEXTO, ADVERTENCIA_TEXTO, ERROR, GRIS_TEXTO)))
     gb.configure_selection(selection_mode="single", use_checkbox=False)
-    # Re-reparte las columnas cada vez que el grid cambia de TAMANIO. Con la
-    # tabla ya apilada a todo el ancho, los dos casos que quedan son plegar
-    # el rail de vistas y redimensionar la ventana: sin esto las columnas se
-    # quedan con el ancho que midieron al montar y sobra hueco a la derecha.
-    # `fit_columns_on_grid_load` solo actua una vez, al cargar.
-    # Es seguro aunque el ancho sea chico porque cada columna declara
-    # `minWidth` (ver arriba): `sizeColumnsToFit` los respeta y scrollea en
-    # vez de aplastar. Es la receta de la documentacion de AG Grid, y no
-    # entra en bucle: el evento no se re-dispara por el propio ajuste.
     gb.configure_grid_options(
-        rowHeight=30, headerHeight=32,
+        headerHeight=32,
+        # Sólo las filas con segunda línea miden 44; las demás siguen en
+        # 30. Uniformar a 44 gastaría 14 px por fila en las 291 que no la
+        # tienen — en una tabla de 326, media pantalla.
+        getRowHeight=JsCode(
+            "function(p){ return (p.data && p.data._dos) ? 44 : 30; }"),
         onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"),
     )
 
     resp = AgGrid(
         tv, gridOptions=gb.build(),
-        height=alturas.por_filas(len(tv), px_fila=30, rol=alturas.APOYO),
-        theme="material", custom_css=dict(_css_grid(13)),
-        allow_unsafe_jscode=True, fit_columns_on_grid_load=False,
-        key="sunat_cruce_grid",
+        height=alturas.por_filas(len(tv), px_fila=32, rol=alturas.APOYO),
+        theme="material",
+        custom_css={**_css_grid(13, cebra=False),
+                    # Con las filas de un blanco uniforme hay que marcar la
+                    # SELECCIONADA: de esta tabla cuelga todo lo de abajo.
+                    # Ver `arquitectura.md` regla #235.
+                    ".ag-row-selected": {
+                        "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
+                        "font-weight": "600 !important",
+                    }},
+        allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
+        key="sunat_docs_grid",
     )
     sel = resp.selected_rows
     if sel is None or (hasattr(sel, "empty") and sel.empty) or len(sel) == 0:
         return None
     fila = sel.iloc[0] if hasattr(sel, "iloc") else sel[0]
-    if fila["Estado"] == "Solo sistema":
+    if fila[_COL_ESTADO] == "Solo sistema":
+        # No hay documento del SIRE que le corresponda: no es una carencia
+        # del panel, es que ese comprobante no tiene contraparte ahí.
         return None
-    # Mismo criterio que `_tabla`: por RUC + documento, nunca por documento
-    # solo — 1.422 comprobantes comparten serie-número con otro proveedor.
-    # Ver `_fila_de`.
     return _fila_de(df_sire, fila)
 
 
@@ -704,58 +937,6 @@ def _sello_origen(origen):
     return (f'<span style="white-space:nowrap;color:{color};" '
             f'title="Última sincronización del registro: '
             f'{pd.Timestamp(fecha):%d/%m/%Y %H:%M} UTC">{cuando}</span>')
-
-
-def _kpis(df, origen=None):
-    """Tira compacta de totales del rango, para la fila de controles.
-
-    NO son `st.metric`: cuatro métricas nativas ocupan 91px de alto y en
-    la columna de ~430px que le toca acá (al lado de período/vista/⟳)
-    truncaban los importes con "…" (medido: "S/ 60,79…"). Un total
-    truncado es peor que no mostrarlo. Con una sola línea de texto, además,
-    entra en la misma fila que los controles y no le suma alto a la
-    tarjeta — ver el docstring de `renderizar_documentos_sunat` sobre por
-    qué eso importa acá más que en otras vistas.
-    """
-    total = float(pd.to_numeric(df.get("total"), errors="coerce").sum())
-    igv = float(pd.to_numeric(df.get("igv"), errors="coerce").sum())
-    provs = df["ruc_proveedor"].nunique() if "ruc_proveedor" in df else 0
-
-    def dato(valor, etiqueta):
-        return (f'<span style="white-space:nowrap;">'
-                f'<b style="color:{TEXTO_PRINCIPAL};font-weight:600;">{valor}</b>'
-                f'<span style="color:{GRIS_TEXTO};"> {etiqueta}</span></span>')
-
-    partes = [
-        dato(f"{len(df):,}", "docs"),
-        dato(f"S/ {total:,.2f}", "total"),
-        dato(f"S/ {igv:,.2f}", "IGV"),
-        dato(f"{provs:,}", "proveedores"),
-    ]
-    # Los pendientes solo se nombran si los hay: un "0 pendientes" fijo
-    # gasta ancho en la fila de controles y no dice nada. Van en ámbar
-    # porque son plata — crédito fiscal que todavía no se tomó.
-    n_pend = int((df.get("situacion") == "Pendiente").sum()) if "situacion" in df else 0
-    if n_pend:
-        mto_pend = float(pd.to_numeric(
-            df.loc[df["situacion"] == "Pendiente", "total"], errors="coerce").sum())
-        partes.append(
-            f'<span style="white-space:nowrap;color:{ADVERTENCIA_TEXTO};" '
-            f'title="Comprobantes que SUNAT ve pero que aún no están '
-            f'anotados en un registro presentado">'
-            f'<b style="font-weight:600;">{n_pend:,}</b> pendientes '
-            f'(S/ {mto_pend:,.2f})</span>')
-
-    if origen:
-        partes.append(_sello_origen(origen))
-
-    st.markdown(
-        '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;'
-        'justify-content:flex-end;font-size:12.5px;height:38px;">'
-        + f'<span style="color:{GRIS_BORDE};">·</span>'.join(partes)
-        + '</div>',
-        unsafe_allow_html=True,
-    )
 
 
 # Alto de una fila del ranking de proveedores. Mismo número que el ranking
@@ -978,7 +1159,14 @@ def _grafico_por_fecha(df):
         hovertemplate="%{x|%d/%m/%Y}<br>S/ %{y:,.2f}<extra></extra>",
     ))
     _compras_layout(fig, alto=alturas.MINI)
+    # `tickformat` explícito: sin él Plotly rotula el eje con los meses en
+    # INGLÉS ("Aug 2"), porque toma su locale por defecto. El
+    # `hovertemplate` de arriba ya venía en formato local; el eje se había
+    # quedado atrás y se notó el 2026-08-28, al quedar este gráfico y el
+    # del proveedor —que sí rotula en español— como dos modos del mismo
+    # panel, uno al lado del otro.
     fig.update_layout(title="Comprobantes por fecha de emisión")
+    fig.update_xaxes(tickformat="%d/%m")
     st.plotly_chart(fig, use_container_width=True, key="sunat_g_dia")
 
 
@@ -1013,97 +1201,6 @@ def _fila_de(df, fila_vista):
     coincidencias = df[(df["documento"].astype(str) == doc)
                        & (df["ruc_proveedor"].astype(str) == ruc)]
     return coincidencias.iloc[0] if not coincidencias.empty else None
-
-
-def _tabla(df):
-    """AgGrid de una fila por documento. Devuelve la fila clickeada o None.
-
-    Selección sin checkbox (`use_checkbox=False`): un clic en cualquier
-    parte de la fila abre el documento en el panel derecho. Mismo criterio
-    que el ranking de Volatilidad — ver su docstring.
-    """
-    tv = pd.DataFrame({
-        "Fecha": pd.to_datetime(df["fecha_emision"], errors="coerce")
-                   .dt.strftime("%d/%m/%Y"),
-        "Tipo": df.get("tipo_nombre", ""),
-        "Documento": df.get("documento", ""),
-        "Proveedor": df.get("proveedor", ""),
-        "RUC": df.get("ruc_proveedor", ""),
-        "Total": pd.to_numeric(df.get("total"), errors="coerce"),
-        "Situación": df.get("situacion", ""),
-        # Oculta, sólo para identificar la fila clickeada. Ver `_car_de`.
-        "_car": df.get("car", ""),
-    })
-
-    gb = GridOptionsBuilder.from_dataframe(tv)
-    gb.configure_default_column(resizable=True, sortable=True, filter=False,
-                                editable=False, suppressMovable=True)
-    gb.configure_column("_car", hide=True)
-    gb.configure_column("Fecha", width=95)
-    gb.configure_column("Tipo", width=110)
-    gb.configure_column("Documento", width=125)
-    # `flex=1` en la única columna de largo variable: absorbe todo el ancho
-    # que sobra después de las de tamaño fijo, en vez de dejar un hueco
-    # muerto a la derecha de "Situación".
-    gb.configure_column("Proveedor", minWidth=190, flex=1,
-                        tooltipField="Proveedor")
-    gb.configure_column("RUC", width=115)
-    gb.configure_column("Total", type=["numericColumn"], width=115,
-                        valueFormatter="'S/ ' + "
-                        "Number(value).toLocaleString('es-PE',"
-                        "{minimumFractionDigits:2, maximumFractionDigits:2})")
-    # «Pendiente» en ámbar: no es un error, es una compra que SUNAT ve y
-    # todavía no está anotada — o sea, crédito fiscal sin tomar. Merece
-    # saltar a la vista sin gritar como un rojo de error.
-    gb.configure_column(
-        "Situación", width=105,
-        cellStyle=JsCode(
-            "function(p){ return p.value === 'Pendiente' "
-            "? {'color':'%s','fontWeight':'600'} : {'color':'%s'}; }"
-            % (ADVERTENCIA_TEXTO, GRIS_TEXTO)))
-    gb.configure_selection(selection_mode="single", use_checkbox=False)
-    # Re-reparte las columnas cada vez que el grid cambia de TAMANIO. Con la
-    # tabla ya apilada a todo el ancho, los dos casos que quedan son plegar
-    # el rail de vistas y redimensionar la ventana: sin esto las columnas se
-    # quedan con el ancho que midieron al montar y sobra hueco a la derecha.
-    # `fit_columns_on_grid_load` solo actua una vez, al cargar.
-    # Es seguro aunque el ancho sea chico porque cada columna declara
-    # `minWidth` (ver arriba): `sizeColumnsToFit` los respeta y scrollea en
-    # vez de aplastar. Es la receta de la documentacion de AG Grid, y no
-    # entra en bucle: el evento no se re-dispara por el propio ajuste.
-    gb.configure_grid_options(
-        rowHeight=30, headerHeight=32,
-        onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"),
-    )
-
-    resp = AgGrid(
-        tv, gridOptions=gb.build(),
-        height=alturas.por_filas(len(tv), px_fila=30, rol=alturas.APOYO),
-        # `cebra=False`: filas de un blanco uniforme, a pedido 2026-08-28.
-        # Las separa la línea de `.ag-row`, que no depende del rayado.
-        #
-        # Y con las filas todas iguales hay que marcar la SELECCIONADA, que
-        # `_css_grid` no estila: esta tabla es la que ELIGE el documento
-        # —de ella cuelgan la ficha, el original y el conversor de abajo— y
-        # sin marca el usuario pierde de vista sobre cuál está parado.
-        # Verificado en el navegador: antes tampoco estaba marcada, pero el
-        # rayado disimulaba el problema. Mismo color y misma receta que el
-        # ranking de `graficos/inventario.py`.
-        theme="material",
-        custom_css={**_css_grid(13, cebra=False),
-                    ".ag-row-selected": {
-                        "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
-                        "font-weight": "600 !important",
-                    }},
-        allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
-        key="sunat_docs_grid",
-    )
-    sel = resp.selected_rows
-    if sel is None or (hasattr(sel, "empty") and sel.empty) or len(sel) == 0:
-        return None
-    # Se devuelve el registro COMPLETO del df, no la fila de la vista: la
-    # ficha PDF necesita campos que la tabla no muestra (base, moneda).
-    return _fila_de(df, sel.iloc[0] if hasattr(sel, "iloc") else sel[0])
 
 
 def _ficha_html(doc):
@@ -2082,110 +2179,357 @@ def _detalle_sistema(doc, lineas_xml, d):
         st.rerun(scope="fragment")
 
 
-def _mostrar_original(doc, pdf_bytes, xml_bytes):
-    """El comprobante del proveedor —PDF real, detalle de líneas, XML— EN
-    LA COLUMNA, no detrás de un botón.
+def _fmt_imp(valor, moneda="PEN"):
+    """Un importe con el símbolo de SU moneda, o `—`. Gemelo en Python del
+    formateo que `_JS_IMPORTE` hace en la grilla: los dos tienen que
+    escribir igual el mismo número, o la ficha y la tabla se contradicen."""
+    v = _num(valor)
+    if v is None:
+        return "—"
+    return f"{sunat.simbolo_moneda(moneda)} {v:,.2f}"
 
-    Hasta 2026-08-27 esto vivía en un `st.dialog` que un botón «Ver el
-    original» abría a demanda. A pedido pasó a mostrarse directo, al lado
-    de la ficha del SIRE (`_panel_documento`): es lo primero que alguien
-    quiere ver de un documento ya sincronizado, no una acción secundaria
-    escondida detrás de un clic.
 
-    Costo de ese cambio, para quien lo vuelva a tocar: `sunat.paginas_pdf`
-    (que renderiza cada página a PNG) ahora corre en CUANTO se elige un
-    documento con original sincronizado, no solo cuando alguien pedía
-    verlo. Lo mitiga su propia caché (`@st.cache_data(ttl=1800,
-    max_entries=20)`, ver `sunat.py`) — la primera vista de un documento
-    paga el render, las siguientes no.
+def _fila_cruce_de(df_cruce, doc):
+    """La fila del cruce que corresponde a `doc`, o `None`.
 
-    EL PDF SE MUESTRA COMO IMAGEN, no embebido: Chrome no renderiza un
-    `data:application/pdf` dentro de un iframe con `sandbox` y Streamlit
-    monta todos sus iframes así (ver `_ficha_html`). Renderizarlo del lado
-    del servidor además funciona igual en el teléfono, donde un visor de
-    PDF embebido es incómodo.
-
-    Hasta 2026-08-27 esto también tenía una cuarta pestaña, «Detalle
-    sistema» (cruzar el XML contra `compras.parquet`/el maestro y
-    corregir a mano) — pasó a ser SU PROPIA TARJETA
-    (`_card_conversor_sistema`, "Conversor SUNAT-Sistema"), a pedido: no
-    es "ver el original", es otra tarea (comparar y corregir), así que
-    no tiene por qué vivir escondida como una pestaña más acá adentro.
+    Por `car`, que es la única clave sin colisiones — `documento` deja
+    1.422 y `ruc+documento` deja 3 (ver `_fila_de`). El cruce lo lleva
+    desde el 2026-08-28 justamente para esto.
     """
-    lineas = sunat.lineas_xml(xml_bytes) if xml_bytes else []
-    nombres = []
-    if pdf_bytes:
-        nombres.append("📄 Comprobante")
-    if lineas:
-        nombres.append(f"📋 Detalle ({len(lineas)})")
-    if xml_bytes:
-        nombres.append("🧾 XML")
+    if doc is None or df_cruce is None or df_cruce.empty:
+        return None
+    if "car" not in df_cruce.columns:
+        return None
+    car = str(doc.get("car") or "")
+    if not car:
+        return None
+    coincidencias = df_cruce[df_cruce["car"].astype(str) == car]
+    return None if coincidencias.empty else coincidencias.iloc[0]
 
-    if not nombres:
-        st.info("No hay nada que mostrar todavía.")
+
+def _cotejo(doc, fila):
+    """La pestaña «Cotejo»: el documento del SIRE campo por campo, con lo
+    que dice el sistema al lado y la diferencia en soles.
+
+    Es la ficha de siempre (`sunat.campos_ficha` sigue siendo la fuente del
+    PDF descargable) con una columna más. Acá caben los dos lados sin
+    apuro porque es UN documento y no 326 — por eso la tabla de arriba
+    puede permitirse mostrar sólo lo que difiere y mandar el resto acá.
+
+    TRES CLASES DE FILA, y la diferencia importa:
+      · comparables (base, IGV, total) — las tres tienen Δ.
+      · de identidad que el sistema también guarda (RUC, número en el ERP,
+        fecha) — se muestran los dos lados pero sin Δ: no son números.
+      · sólo de SUNAT (tipo, período, vencimiento, moneda, detracción,
+        base gravada, no gravado) — el sistema no las tiene y por eso su
+        celda va vacía, no en cero. Un cero ahí se leería como un dato.
+
+    «Base gravada» y «No gravado» van SEPARADAS y sin Δ, y además está
+    «Base» que es la suma: sólo la gravada genera crédito fiscal, pero es
+    la suma la que `cruzar_con_parquet` compara contra el sistema (para
+    que una compra exonerada no parezca un descuadre — ver su docstring).
+    Mostrar sólo la suma escondería el dato contable; mostrar sólo el
+    desglose no cuadraría con la tabla.
+    """
+    mon = str(doc.get("moneda") or "PEN")
+    tiene = fila is not None
+
+    def _sis(clave):
+        return None if not tiene else _num(fila.get(clave))
+
+    def _fecha(v):
+        f = pd.to_datetime(v, errors="coerce")
+        return "—" if pd.isna(f) else f"{f:%d/%m/%Y}"
+
+    # (etiqueta, valor SUNAT, valor sistema o None, diferencia o None)
+    filas = [
+        ("RUC", str(doc.get("ruc_proveedor") or "—"),
+         (str(fila.get("ruc_sistema") or "") or None) if tiene else None, None),
+        ("Documento en el ERP", str(doc.get("documento") or "—"),
+         (str(fila.get("documento_sistema") or "") or None) if tiene else None,
+         None),
+        ("Fecha de emisión", _fecha(doc.get("fecha_emision")),
+         (_fecha(fila.get("fecha_sistema"))
+          if tiene and not pd.isna(pd.to_datetime(fila.get("fecha_sistema"),
+                                                  errors="coerce")) else None),
+         None),
+        ("Tipo de comprobante", str(doc.get("tipo_nombre") or "—"), None, None),
+        ("Período tributario", str(doc.get("periodo") or "—"), None, None),
+        ("Estado en SUNAT", str(doc.get("estado") or "—"), None, None),
+        ("Moneda", sunat._moneda_con_tc(doc), None, None),
+        ("Vencimiento", _fecha(doc.get("fecha_vencimiento")), None, None),
+        ("Detracción",
+         "Sí" if str(doc.get("detraccion") or "").strip().upper() == "D"
+         else "No", None, None),
+        ("Base gravada", _fmt_imp(doc.get("base_imponible"), mon), None, None),
+        ("No gravado", _fmt_imp(doc.get("no_gravado"), mon), None, None),
+    ]
+
+    for etiqueta, campo_u, campo_s in (
+            ("Base (grav. + no grav.)", "base_sunat", "base_sistema"),
+            ("IGV", "igv_sunat", "igv_sistema"),
+            ("Total", "total_sunat", "total_sistema")):
+        u, s = (_num(fila.get(campo_u)) if tiene else _num(doc.get(
+            {"base_sunat": "base_imponible", "igv_sunat": "igv",
+             "total_sunat": "total"}[campo_u])), _sis(campo_s))
+        dif = None if (u is None or s is None) else round(s - u, 2)
+        filas.append((etiqueta, _fmt_imp(u, mon),
+                      None if s is None else _fmt_imp(s, mon), dif))
+
+    _celdas = []
+    for etiqueta, val_u, val_s, dif in filas:
+        marcada = dif is not None and abs(dif) > _TOLERANCIA_CENTAVOS
+        color = ADVERTENCIA_TEXTO if marcada else TEXTO_PRINCIPAL
+        peso = "600" if marcada else "400"
+        _d = "—" if dif is None else (
+            "=" if abs(dif) <= _TOLERANCIA_CENTAVOS else f"{dif:+,.2f}")
+        _celdas.append(
+            f'<div style="color:{GRIS_TEXTO};">{etiqueta}</div>'
+            f'<div style="color:{TEXTO_PRINCIPAL};text-align:right;">{val_u}</div>'
+            f'<div style="color:{color};font-weight:{peso};text-align:right;">'
+            f'{val_s if val_s is not None else ""}</div>'
+            f'<div style="color:{color};font-weight:{peso};text-align:right;">'
+            f'{_d}</div>')
+
+    st.markdown(
+        f'<div style="display:grid;grid-template-columns:1fr auto auto 62px;'
+        f'gap:3px 12px;font-size:12.5px;font-variant-numeric:tabular-nums;">'
+        f'<div style="color:{ACENTO_TEXTO};font-size:10px;font-weight:600;'
+        f'text-transform:uppercase;letter-spacing:.04em;"></div>'
+        f'<div style="color:{ACENTO_TEXTO};font-size:10px;font-weight:600;'
+        f'text-align:right;text-transform:uppercase;letter-spacing:.04em;">SUNAT</div>'
+        f'<div style="color:{ACENTO_TEXTO};font-size:10px;font-weight:600;'
+        f'text-align:right;text-transform:uppercase;letter-spacing:.04em;">Sistema</div>'
+        f'<div style="color:{ACENTO_TEXTO};font-size:10px;font-weight:600;'
+        f'text-align:right;">&Delta;</div>'
+        + "".join(_celdas) + '</div>',
+        unsafe_allow_html=True)
+
+    if not tiene:
+        st.caption("Este comprobante no tiene contraparte en el sistema, "
+                   "así que la columna del medio va vacía.")
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _serie_proveedor(ruc, meses=12):
+    """Total comprado a un proveedor, mes a mes, sobre el registro COMPLETO
+    —no sobre el rango de la pantalla—: es lo que le da sentido al gráfico
+    al lado de la ficha, que habla de un documento y no de un período.
+
+    Devuelve `(etiquetas, valores, docs)` ya recortado a los últimos
+    `meses` con movimiento. Cacheado una hora, igual que el registro del
+    que sale.
+    """
+    d = sunat._registro_de_parquet()
+    if d is None or getattr(d, "empty", True) or not ruc:
+        return [], [], []
+    p = d[d["ruc_proveedor"].astype(str) == str(ruc)]
+    if p.empty:
+        return [], [], []
+    mes = pd.to_datetime(p["fecha_emision"], errors="coerce").dt.to_period("M")
+    g = (pd.DataFrame({"mes": mes,
+                       "total": pd.to_numeric(p["total"], errors="coerce")})
+         .dropna(subset=["mes"])
+         .groupby("mes")
+         .agg(total=("total", "sum"), docs=("total", "size"))
+         .sort_index().tail(meses))
+    # `%b` sale en INGLÉS ("Sep 25"): `strftime` usa el locale del proceso
+    # y en Streamlit Cloud es el C. `MESES_ABR_ES` es la tupla que ya usan
+    # `franja_fecha` y `cortes` — una sola lista de meses en el proyecto.
+    return ([f"{MESES_ABR_ES[m.month - 1]} {m.year % 100:02d}"
+             for m in g.index.to_timestamp()],
+            [float(v) for v in g["total"]], [int(v) for v in g["docs"]])
+
+
+def _grafico_proveedor(doc):
+    """Barras del proveedor del documento elegido, mes a mes.
+
+    El tercer modo del panel de la derecha, y el que lo justifica: a pedido
+    2026-08-28 el gráfico bajó de arriba de la tabla —donde mostraba el
+    período y no cambiaba nunca, o sea decorado— al costado de la ficha,
+    que es el panel de UN documento. Ahí un gráfico del período entero
+    queda fuera de contexto; éste habla del proveedor de la fila elegida.
+
+    Medido con datos reales al diseñarlo: COMPANIA FOOD RETAIL pasó de
+    S/ 203 en enero a S/ 5.953 en agosto — casi ×30 en ocho meses. Eso no
+    estaba en ninguna pantalla de este drill y aparece solo con mirar uno
+    de sus comprobantes.
+    """
+    if doc is None:
+        st.caption("Elegí un documento de la tabla para ver a su proveedor.")
+        return
+    ruc = str(doc.get("ruc_proveedor") or "")
+    etiquetas, valores, docs = _serie_proveedor(ruc)
+    if not valores:
+        st.caption("Sin historial para este proveedor.")
         return
 
-    for nombre, tab in zip(nombres, st.tabs(nombres)):
-        with tab:
-            if nombre.startswith("📄"):
-                with st.spinner("Preparando el comprobante…"):
-                    paginas = sunat.paginas_pdf(pdf_bytes)
-                if not paginas:
-                    st.warning("No se pudo mostrar el PDF en pantalla. "
-                               "Se puede descargar igual, abajo.")
-                for i, png in enumerate(paginas, 1):
-                    st.image(png, use_container_width=True)
-                    if len(paginas) > 1:
-                        st.caption(f"Página {i} de {len(paginas)}")
-            elif nombre.startswith("📋"):
-                _tabla_detalle(lineas)
-            else:
-                # Recortado: un XML de 30 KB dentro de un `st.code` cuelga
-                # el navegador al resaltar la sintaxis.
-                txt = xml_bytes.decode("utf-8", errors="replace")
-                if len(txt) > 20000:
-                    st.caption(f"Mostrando los primeros 20.000 de "
-                               f"{len(txt):,} caracteres. Descargalo para verlo entero.")
-                    txt = txt[:20000]
-                st.code(txt, language="xml")
+    # La última barra es el mes del documento elegido: se pinta con el
+    # acento y las demás en lavanda claro, para que el mes del que se está
+    # mirando un comprobante se ubique sin leer el eje.
+    colores = [LAVANDA_FOCO] * len(valores)
+    colores[-1] = ACENTO
+    fig = go.Figure(go.Bar(
+        x=etiquetas, y=valores, marker=dict(color=colores),
+        hovertemplate="%{x}<br>S/ %{y:,.2f}<extra></extra>"))
+    _compras_layout(fig, alto=alturas.MINI)
+    fig.update_layout(
+        title=_compras_truncar(str(doc.get("proveedor") or ruc), 34),
+        margin=dict(t=44, b=28, l=8, r=8))
+    st.plotly_chart(fig, use_container_width=True,
+                    key=f"sunat_g_prov_{ruc or 'none'}")
 
-    st.divider()
-    c1, c2 = st.columns(2)  # columnas-internas: 2 botones de descarga
-    with c1:
-        if pdf_bytes:
-            st.download_button(
-                "⬇ Descargar PDF", data=pdf_bytes,
-                file_name=f"{doc.get('documento', 'comprobante')}.pdf",
-                mime="application/pdf", use_container_width=True,
-                key="sunat_original_dl_pdf")
-    with c2:
-        if xml_bytes:
-            st.download_button(
-                "⬇ Descargar XML", data=xml_bytes,
-                file_name=f"{doc.get('documento', 'comprobante')}.xml",
-                mime="application/xml", use_container_width=True,
-                key="sunat_original_dl_xml")
+    ultimo, previo = valores[-1], (valores[-2] if len(valores) > 1 else None)
+    partes = [f"<b>S/ {ultimo:,.2f}</b> {etiquetas[-1]}",
+              f"<b>{docs[-1]}</b> docs"]
+    if previo:
+        partes.append(f"<b>{(ultimo / previo - 1) * 100:+.0f}%</b> vs el mes previo")
+    st.markdown(
+        f'<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;'
+        f'color:{GRIS_TEXTO};">' + " · ".join(partes) + '</div>',
+        unsafe_allow_html=True)
 
 
-def _panel_documento(doc):
-    """Panel derecho: ficha del SIRE y original del proveedor, LADO A LADO.
+_MODOS_GRAFICO = ("Este proveedor", "Por fecha", "Por proveedor")
 
-    Hasta 2026-08-27 iban apiladas (ficha arriba, "Original del proveedor"
-    abajo con un botón que abría un `st.dialog`) — a pedido pasaron a dos
-    columnas, con el original YA VISIBLE cuando está sincronizado (ver
-    `_mostrar_original`), sin el clic de más. La cabecera (tipo/documento/
-    proveedor) sigue siendo UNA sola, arriba de las dos columnas: identifica
-    el documento elegido para ambos paneles, no es parte de ninguno.
 
-    El split es un `st.columns(2)` con `# columnas-internas`, NO
-    `COLUMNAS_DRILL` (CLAUDE.md): esa constante es la proporción con la
-    que se parte una FILA del drill —acá la fila (`sunat_card_izq`, la
-    tabla) sigue a lo ancho completo, como quedó el 2026-08-21 después de
-    medir que achicarla apretaba `fit_columns_on_grid_load` hasta dejar
-    columnas ilegibles (ver el docstring de `renderizar_documentos_sunat`).
-    Esta subdivisión es OTRA cosa: dos paneles DENTRO de la tarjeta de
-    abajo, como la botonera de `_c_ref`/`_c_xls` más arriba en este mismo
-    archivo.
+def _panel_grafico(vis, doc):
+    """El panel de la derecha de la fila de la ficha: tres modos.
+
+    «Por fecha» y «Por proveedor» son los dos resúmenes que hasta el
+    2026-08-28 vivían ARRIBA de la tabla, elegidos con un `selectbox`
+    llamado «Ver» que también ofrecía «Cruce». Al fundirse las dos tablas,
+    «Cruce» dejó de ser una vista; y al bajar el gráfico acá, el selector
+    bajó con él — queda pegado a lo único que controlaba, que era la
+    confusión que el usuario reportó al preguntar en qué se diferenciaban
+    las dos primeras opciones (la respuesta era: sólo en este widget).
+
+    El estado va en un espejo de `session_state` que NO es la clave del
+    widget: un `st.rerun()` en medio de la corrida se lleva puesto el
+    estado de un `segmented_control` que todavía no se dibujó. Es la
+    regla #211, aplicada preventivamente.
+    """
+    k_eco = "sunat_graf_modo__eco"
+    previo = st.session_state.get(k_eco, _MODOS_GRAFICO[0])
+    modo = st.segmented_control(
+        "Ver", _MODOS_GRAFICO, default=previo, key="sunat_graf_modo",
+        label_visibility="collapsed") or previo
+    st.session_state[k_eco] = modo
+
+    if modo == "Este proveedor":
+        _grafico_proveedor(doc)
+        return
+    # Los otros dos resumen el RANGO, así que sin df no tienen nada que
+    # dibujar. `vis` llega en `None` por cualquiera de las salidas
+    # tempranas de `_cuerpo` (sin rango, SUNAT caído, sin comprobantes):
+    # es la regla #115 — la tarjeta se dibuja igual y decide adentro.
+    if vis is None or getattr(vis, "empty", True):
+        st.caption("Sin comprobantes en el rango para resumir.")
+        return
+    if modo == "Por proveedor":
+        _ranking_proveedores(vis)
+    else:
+        _grafico_por_fecha(vis)
+
+
+def _necesita_conversor(doc, fila_cruce):
+    """¿Se dibuja la tarjeta del conversor?
+
+    Sólo cuando el documento NO está cargado en el sistema (a pedido
+    2026-08-28): el conversor existe para mapear las líneas del XML contra
+    el maestro y así poder cargarlo. Si ya está cargado no hay nada que
+    convertir, y la tarjeta ocupaba pantalla para no decir nada.
+
+    Medido sobre las 326 filas del rango: se dibuja en 122 («Solo SUNAT»)
+    y desaparece en 204 — 169 «Coincide» y 16 «Diferencia» que ya están
+    cargados, más 19 «Solo sistema» que ni siquiera tienen comprobante en
+    SUNAT. O sea que en 2 de cada 3 documentos la pantalla ahora termina
+    en la ficha, que era el pedido de fondo: la vista era demasiado larga.
+
+    «Diferencia» queda AFUERA a propósito aunque el documento tenga algo
+    raro: ahí el documento ya está cargado y la pregunta es dónde está el
+    descuadre, que la responde el cotejo de la ficha — no un mapeo de
+    líneas contra el maestro.
+    """
+    if doc is None:
+        return False
+    if fila_cruce is None:
+        # Sin fila de cruce no se puede afirmar que esté cargado; se
+        # dibuja, que es el comportamiento que había antes de esta regla.
+        return True
+    return str(fila_cruce.get("estado") or "") == "Solo SUNAT"
+
+
+def _pedir_original(doc):
+    """El flujo de "todavía no está sincronizado el original": avisar en
+    qué estado está el pedido y, si no hay ninguno, ofrecer hacerlo.
+
+    Se extrajo de `_mostrar_original` el 2026-08-28, cuando el original
+    dejó de ser un panel propio y pasó a ser pestañas de la ficha: el
+    pedido no es una pestaña —no hay nada que ver— sino lo que se muestra
+    EN LUGAR de ellas.
+    """
+    if sunat.solicitud_pendiente(doc):
+        # La corrida nocturna va de lo más nuevo hacia atrás y tarda
+        # semanas en llegar a lo viejo (ver regla #142), así que acá se
+        # ofrece pedirlo puntualmente. La webapp NO abre ningún navegador:
+        # deja una señal en R2 y la CPU local hace el trabajo — mismo
+        # mecanismo que el refresco de parquets (regla #144).
+        st.info("⏳ Pedido. La máquina local lo está trayendo de SUNAT — "
+                "suele tardar menos de un minuto. Volvé a entrar al "
+                "documento en un rato.", icon=None)
+        return
+
+    # Un intento anterior que falló: sin esto el usuario ve el mismo botón
+    # de siempre y no tiene forma de saber que ya se intentó y no se pudo.
+    fallo = sunat.fallo_solicitud(doc)
+    if fallo:
+        st.warning(f"No se pudo traer: {fallo.get('motivo', 'error desconocido')}",
+                   icon="⚠️")
+        st.caption(f"Último intento: {fallo.get('cuando', '—')}")
+        etiqueta = "↻ Intentar de nuevo"
+    else:
+        etiqueta = "⬇ Traer el original de SUNAT"
+
+    if st.button(etiqueta, use_container_width=True,
+                 key="sunat_pedir_original",
+                 help="Le pide a la máquina local que baje el PDF y el XML "
+                      "que emitió el proveedor. Tarda menos de un minuto; "
+                      "después queda guardado para siempre."):
+        if sunat.solicitar_original(doc):
+            st.rerun()
+        else:
+            st.error("No se pudo dejar el pedido. ¿Están las credenciales "
+                     "de R2 configuradas?")
+    if not fallo:
+        st.caption("Todavía no sincronizado. El cotejo de al lado sale del "
+                   "registro del SIRE y está disponible igual.")
+
+
+def _panel_documento(doc, fila_cruce=None):
+    """La ficha del documento elegido, en PESTAÑAS.
+
+    Reorganizada el 2026-08-28 a pedido. Hasta entonces eran dos columnas
+    —ficha del SIRE a la izquierda, «Original del proveedor» a la derecha,
+    con sus propias tres pestañas adentro—. Ahora el costado se lo lleva el
+    gráfico (`_panel_grafico`), así que el original deja de ser un panel y
+    sus pestañas suben un nivel, junto al cotejo:
+
+      · **Cotejo** — el documento campo por campo contra el sistema, con
+        Δ (`_cotejo`). Es la que abre, porque responde la pregunta con la
+        que se entra: ¿está bien cargado?
+      · **Comprobante** — el PDF del proveedor, renderizado.
+      · **Detalle (n)** — las líneas del XML, COMPLETAS: código, ítem,
+        cantidad, unidad, precio unitario e importe. A pedido no se
+        recorta aunque el conversor muestre parte de lo mismo — son dos
+        preguntas distintas (qué emitió el proveedor / contra qué se va a
+        cargar), y desde el mismo día el conversor ya no está siempre en
+        pantalla.
+      · **XML** — el archivo crudo.
+
+    Las tres últimas sólo existen si el original ya está sincronizado; si
+    no, en su lugar va `_pedir_original`. El cotejo está SIEMPRE: sale del
+    registro del SIRE, que no depende de ningún sync.
     """
     if doc is None:
         st.markdown(
@@ -2209,83 +2553,94 @@ def _panel_documento(doc):
         unsafe_allow_html=True,
     )
 
-    col_ficha, col_original = st.columns(2)  # columnas-internas: ficha SIRE y original del proveedor, lado a lado
+    # El original vive en R2 solo si `sunat_originales_sync.py` ya pasó por
+    # este documento — ver el docstring del módulo. Ninguno de los dos
+    # `None` es un error: es el estado normal antes del primer sync.
+    pdf_original, xml_original = sunat.originales(doc)
+    lineas = sunat.lineas_xml(xml_original) if xml_original else []
 
-    with col_ficha:
-        _ficha_html(doc)
+    nombres = ["🔍 Cotejo"]
+    if pdf_original:
+        nombres.append("📄 Comprobante")
+    if lineas:
+        nombres.append(f"📋 Detalle ({len(lineas)})")
+    if xml_original:
+        nombres.append("🧾 XML")
+    if not (pdf_original or xml_original):
+        nombres.append("⬇ Original")
 
-        try:
-            pdf_bytes = sunat.ficha_pdf(doc)
-        except Exception as e:
-            st.error(f"No se pudo generar el PDF: {e}")
-            pdf_bytes = None
+    for nombre, tab in zip(nombres, st.tabs(nombres)):
+        with tab:
+            if nombre.startswith("🔍"):
+                _cotejo(doc, fila_cruce)
+                _descargas_ficha(doc, pdf_original, xml_original)
+            elif nombre.startswith("📄"):
+                # EL PDF SE MUESTRA COMO IMAGEN, no embebido: Chrome no
+                # renderiza un `data:application/pdf` dentro de un iframe
+                # con `sandbox` y Streamlit monta todos sus iframes así.
+                # Renderizarlo del lado del servidor además funciona igual
+                # en el teléfono, donde un visor embebido es incómodo.
+                with st.spinner("Preparando el comprobante…"):
+                    paginas = sunat.paginas_pdf(pdf_original)
+                if not paginas:
+                    st.warning("No se pudo mostrar el PDF en pantalla. "
+                               "Se puede descargar igual.")
+                for i, png in enumerate(paginas, 1):
+                    st.image(png, use_container_width=True)
+                    if len(paginas) > 1:
+                        st.caption(f"Página {i} de {len(paginas)}")
+            elif nombre.startswith("📋"):
+                _tabla_detalle(lineas)
+            elif nombre.startswith("🧾"):
+                st.code(xml_original.decode("utf-8", errors="replace"),
+                        language="xml")
+            else:
+                _pedir_original(doc)
 
-        if pdf_bytes:
+
+def _descargas_ficha(doc, pdf_original, xml_original):
+    """Los tres archivos que el usuario se puede llevar, al pie del cotejo.
+
+    La ficha PDF la RENDERIZA la app con los datos del registro
+    (`sunat.ficha_pdf`); el PDF y el XML son los que emitió el proveedor.
+    No es lo mismo y confundirlos tiene consecuencias contables, por eso
+    el caption lo dice en pantalla y no en un comentario. Ver
+    `arquitectura.md` regla #142.
+    """
+    try:
+        ficha = sunat.ficha_pdf(doc)
+    except Exception as e:
+        st.error(f"No se pudo generar el PDF: {e}")
+        ficha = None
+
+    columnas = st.columns(3)  # columnas-internas: 3 botones de descarga
+    with columnas[0]:
+        if ficha:
             st.download_button(
-                "⬇️  Descargar PDF", data=pdf_bytes,
+                "⬇ Ficha", data=ficha,
+                file_name=f"{doc.get('documento', 'comprobante')}_ficha.pdf",
+                mime="application/pdf", use_container_width=True,
+                key="sunat_dl_ficha")
+    with columnas[1]:
+        if pdf_original:
+            st.download_button(
+                "⬇ PDF", data=pdf_original,
                 file_name=f"{doc.get('documento', 'comprobante')}.pdf",
                 mime="application/pdf", use_container_width=True,
                 key="sunat_dl_pdf")
-        st.caption("Ficha con los datos del SIRE. No es el PDF que emitió "
-                   "el proveedor.")
+    with columnas[2]:
+        if xml_original:
+            st.download_button(
+                "⬇ XML", data=xml_original,
+                file_name=f"{doc.get('documento', 'comprobante')}.xml",
+                mime="application/xml", use_container_width=True,
+                key="sunat_dl_xml")
 
-    with col_original:
-        st.markdown(
-            f'<div style="font-size:10px;font-weight:700;color:{ACENTO};'
-            f'text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px;'
-            f'padding-bottom:3px;border-bottom:1px solid {GRIS_BORDE};">'
-            f'Original del proveedor</div>', unsafe_allow_html=True)
-
-        # El original vive en R2 solo si `sunat_originales_sync.py` ya pasó
-        # por este documento — ver el docstring del módulo. Ninguno de los
-        # dos `None` es un error: es el estado normal antes del primer sync.
-        pdf_original, xml_original = sunat.originales(doc)
-
-        if pdf_original or xml_original:
-            # Antes esto era un botón "Ver el original" que abría un
-            # `st.dialog` — a pedido 2026-08-27 se muestra DIRECTO, sin
-            # ese clic. Ver `_mostrar_original`.
-            _mostrar_original(doc, pdf_original, xml_original)
-            st.caption("PDF y XML tal como los emitió el proveedor.")
-        elif sunat.solicitud_pendiente(doc):
-            # La corrida nocturna va de lo más nuevo hacia atrás y tarda
-            # semanas en llegar a lo viejo (ver regla #142), así que acá se
-            # ofrece pedirlo puntualmente. La webapp NO abre ningún
-            # navegador: deja una señal en R2 y la CPU local hace el
-            # trabajo — mismo mecanismo que el refresco de parquets
-            # (regla #144).
-            st.info("⏳ Pedido. La máquina local lo está trayendo de SUNAT — "
-                    "suele tardar menos de un minuto. Volvé a entrar al "
-                    "documento en un rato.", icon=None)
-        else:
-            # Un intento anterior que falló: sin esto el usuario ve el
-            # mismo botón de siempre y no tiene forma de saber que ya se
-            # intentó y no se pudo.
-            fallo = sunat.fallo_solicitud(doc)
-            if fallo:
-                st.warning(f"No se pudo traer: "
-                           f"{fallo.get('motivo', 'error desconocido')}",
-                           icon="⚠️")
-                st.caption(f"Último intento: {fallo.get('cuando', '—')}")
-                etiqueta = "↻ Intentar de nuevo"
-            else:
-                etiqueta = "⬇ Traer el original de SUNAT"
-
-            if st.button(etiqueta, use_container_width=True,
-                         key="sunat_pedir_original",
-                         help="Le pide a la máquina local que baje el PDF y "
-                              "el XML que emitió el proveedor. Tarda menos "
-                              "de un minuto; después queda guardado para "
-                              "siempre."):
-                if sunat.solicitar_original(doc):
-                    st.rerun()
-                else:
-                    st.error("No se pudo dejar el pedido. ¿Están las "
-                             "credenciales de R2 configuradas?")
-            if not fallo:
-                st.caption("Todavía no sincronizado. Al lado está la ficha "
-                           "con los datos del registro, que siempre está "
-                           "disponible.")
+    st.caption("«Ficha» la arma esta app con los datos del SIRE. «PDF» y "
+               "«XML» son los que emitió el proveedor."
+               if pdf_original or xml_original else
+               "«Ficha» la arma esta app con los datos del SIRE. No es el "
+               "PDF que emitió el proveedor.")
 
 
 def _card_conversor_sistema(doc, d):
@@ -2385,90 +2740,101 @@ def _dia_o_rango(rango):
     return ini, fin
 
 
+_MES_SUNAT = {
+    "Todos": None,
+    "Mes presentado": "Registrado",
+    "Mes abierto": "Pendiente",
+}
+"""Las tres opciones del filtro, y a qué `situacion` del registro
+corresponde cada una.
+
+Se llamaba «Situación» con valores «Todos / Registrados / Pendientes»
+hasta el 2026-08-28 y se renombró a pedido, porque los nombres viejos se
+leían justo al revés de lo que significan: **es el estado del PERÍODO
+tributario, no del documento**. «Pendiente» quiere decir que el mes sigue
+abierto en SUNAT (`codEstado` "03"), no que falte cargar el comprobante en
+el sistema — eso lo dice la otra columna, «Está vs Sistema», que es un eje
+independiente. Medido en el rango de prueba: los 307 comprobantes están
+«Pendiente» (el mes 202608 sigue abierto) y de ésos 169 YA están
+perfectamente cargados. Mismo estado en SUNAT, situación opuesta en la
+contabilidad."""
+
+
 def renderizar_documentos_sunat(d, col_fecha):
     """Punto de entrada del drill. Lo llama `graficos/compras/__init__.py`.
 
-    `d` y `col_fecha` (el parquet de Compras y su columna de fecha) SOLO
-    se usan para la vista "Cruce" (`cruzar_con_parquet`) — el resto de la
-    vista sigue saliendo entero de SUNAT. Ver `arquitectura.md` regla #143.
+    TRES TARJETAS, y la tercera es condicional (2026-08-28):
 
-    LOS CONTROLES VIVEN DENTRO DE LA TARJETA IZQUIERDA, no en una franja
-    aparte arriba de las dos columnas — mismo criterio que el selector "La
-    semana empieza" del drill Semanal (`compras/__init__.py`). No es gusto:
-    esta app no tiene scroll de PÁGINA (el main lo recorta), así que
-    cualquier bloque que viva AFUERA de las tarjetas empuja a ambas hacia
-    abajo sin que `--alto-util` se entere — el clamp de cada tarjeta se
-    sigue calculando como si arrancara donde arranca cualquier otra vista.
-    Medido en el navegador antes de corregirlo: con período/vista/KPIs en
-    una franja externa, la tarjeta arrancaba en y=266 (contra ~165 de
-    Proveedor) y su borde inferior quedaba en 990 con un viewport de
-    900 — 90px inalcanzables, sin error ni aviso.
+      1. **La tabla** a lo ancho — controles, KPIs del cruce y los
+         comprobantes. Una sola tabla desde que `_tabla` y `_tabla_cruce`
+         se fundieron en `_tabla_documentos`.
+      2. **Ficha | gráfico**, partidos con `COLUMNAS_DRILL`. La ficha es
+         el documento elegido en pestañas (`_panel_documento`); el
+         gráfico bajó de arriba de la tabla —donde no cambiaba nunca— y
+         ahora habla del proveedor de la fila elegida (`_panel_grafico`).
+      3. **El conversor**, sólo si el documento no está cargado en el
+         sistema (`_necesita_conversor`). En 2 de cada 3 documentos la
+         pantalla termina en la 2.
+
+    `d` y `col_fecha` (el parquet de Compras y su columna de fecha) ya no
+    son opcionales: el cruce dejó de ser una vista elegible y se calcula
+    SIEMPRE, porque su resultado es una columna de la tabla. Cuesta
+    ~390 ms por rango en la máquina de desarrollo, y se paga una vez
+    porque `_parquet_agrupado_por_documento` y el propio registro están
+    cacheados.
+
+    LOS CONTROLES VIVEN DENTRO DE LA TARJETA, no en una franja aparte
+    arriba — mismo criterio que el selector "La semana empieza" del drill
+    Semanal. No es gusto: esta app no tiene scroll de PÁGINA (el main lo
+    recorta), así que cualquier bloque que viva AFUERA de las tarjetas
+    empuja a todas hacia abajo sin que `--alto-util` se entere. Medido
+    antes de corregirlo: con período/vista/KPIs en una franja externa, la
+    tarjeta arrancaba en y=266 (contra ~165 de Proveedor) y su borde
+    inferior quedaba en 990 con un viewport de 900.
     """
     f_ini, f_fin = _rango_vigente()
 
-    # 2026-08-21, a pedido: de DOS COLUMNAS a apilado. La tabla vivia en
-    # `st.columns([1.6, 1])`, o sea ~474px utiles: medido,
-    # `fit_columns_on_grid_load` aplastaba Fecha a 36px y Situacion a 43.
-    # Se probo antes resolverlo con el ⛶ de pantalla completa y se descarto
-    # a pedido — tapaba el resto de la vista. Ahora la tabla toma el ancho
-    # entero del canvas y la ficha del documento pasa DEBAJO, tambien a lo
-    # ancho (ver `_ficha_html`, que reparte los grupos en columnas para no
-    # quedar como una lista larguisima de dos palabras por fila).
+    # Lo que `_cuerpo` deja para las tarjetas de abajo. Se inicializa acá
+    # porque las salidas tempranas de `_cuerpo` (sin rango, SUNAT caído,
+    # sin comprobantes) devuelven `None` sin tocarlo: la regla #115 —
+    # dibujar las tarjetas SIEMPRE y decidir el contenido adentro.
+    estado = {"doc": None, "vis": None, "cruce": None}
+
     with st.container(border=True, key="sunat_card_izq"):
-        # 2026-08-21, a pedido: los dos selectores APILADOS y sin caja, y
-        # las acciones en iconos. Antes iban lado a lado y cada uno con su
-        # marco de 40px de alto (borde 1px + fondo blanco sobre el
-        # `div[role="group"]` de react-aria, medido). Ahora se leen como dos
-        # lineas de texto con su chevron — el CSS vive en
-        # `estilos/_30_filtros.py`, scopeado a `sunat_card_izq`.
         c_sel, c_act, c_kpi = st.columns([1.5, 0.8, 4.1])
         with c_sel:
-            # El pill de fecha, DENTRO de la tarjeta (a pedido 2026-08-21).
-            # Aca la fecha no es contexto global: es EL filtro de la tabla —
-            # el rango que se le consulta al SIRE— asi que vivia lejos de lo
-            # que filtra. NO es una copia del de la franja: es la MISMA
-            # llamada, movida. `app.py` lo publica y deja de dibujarlo
-            # cuando esta vista esta activa (`vista_quiere_fecha_propia`),
-            # porque el widget no se puede duplicar: su key es la clave
-            # canonica del rango. Ver el docstring de `franja_fecha`.
+            # El pill de fecha, DENTRO de la tarjeta. Acá la fecha no es
+            # contexto global: es EL filtro de la tabla — el rango que se
+            # le consulta al SIRE. NO es una copia del de la franja: es la
+            # MISMA llamada, movida. `app.py` lo publica y deja de
+            # dibujarlo cuando esta vista está activa
+            # (`vista_quiere_fecha_propia`), porque el widget no se puede
+            # duplicar: su key es la clave canónica del rango.
             franja_fecha.render()
-            # 2026-08-21, a pedido: de radio horizontal a selectbox. Con
-            # `horizontal=True` en una columna de 166px las 3 opciones
-            # NO entraban en una fila y Streamlit las apilaba en 3 líneas
-            # (medido: 99px de alto, contra ~40 de un selectbox) — el
-            # widget se veía roto, no compacto. El selectbox es la misma
-            # idea que un `st.radio` (una sola elección entre pocas) pero
-            # SIEMPRE en una línea: muestra el valor elegido + una
-            # flecha, y la lista aparece recién al abrir. Mismos values,
-            # misma key: session_state no pierde la selección previa.
-            vista = st.selectbox(
-                "Ver", ["Por fecha", "Por proveedor", "Cruce"],
-                key="sunat_vista",
+            # El selector «Ver» que había acá bajó al panel del gráfico
+            # (`_panel_grafico`), que es lo único que controlaba.
+            mes_sunat = st.selectbox(
+                "Mes en SUNAT", list(_MES_SUNAT), key="sunat_mes_sunat",
                 label_visibility="collapsed",
-                help="«Cruce» compara cada comprobante del SIRE contra "
-                     "el registro interno de compras (parquet): mismo "
-                     "documento, ¿coinciden los montos?")
-            situacion = st.selectbox(
-                "Situación", ["Todos", "Registrados", "Pendientes"],
-                key="sunat_situacion",
-                label_visibility="collapsed",
-                help="«Pendiente» = SUNAT ve la compra pero todavía no "
-                     "está anotada en un registro presentado. Es crédito "
-                     "fiscal sin tomar.",
+                help="El estado del PERÍODO tributario en SUNAT, no del "
+                     "documento. «Mes abierto» = SUNAT ya ve la compra "
+                     "pero el registro de ese mes todavía no se presentó: "
+                     "es crédito fiscal sin tomar. Si está cargado o no en "
+                     "tu sistema lo dice «Está vs Sistema».",
             )
         with c_act:
             _c_ref, _c_xls = st.columns(2)  # columnas-internas: 2 iconos de accion
         with _c_ref:
             _ayuda = "Volver a consultar a SUNAT"
             if not sunat.secrets_disponibles():
-                _ayuda += (". Sin credenciales configuradas: se "
-                           "muestran datos de ejemplo (agregá "
-                           "SUNAT_RUC, SUNAT_USUARIO_SOL, "
-                           "SUNAT_CLAVE_SOL, SUNAT_CLIENT_ID y "
-                           "SUNAT_CLIENT_SECRET a los secrets).")
-            # Limpia TODAS las cachés de la cadena: la del parquet, la
-            # del rango y la de cada período. La del rango sola
-            # devolvería lo mismo, porque se apoya en las otras.
+                _ayuda += (". Sin credenciales configuradas: se muestran "
+                           "datos de ejemplo (agregá SUNAT_RUC, "
+                           "SUNAT_USUARIO_SOL, SUNAT_CLAVE_SOL, "
+                           "SUNAT_CLIENT_ID y SUNAT_CLIENT_SECRET a los "
+                           "secrets).")
+            # Limpia TODAS las cachés de la cadena: la del parquet, la del
+            # rango y la de cada período. La del rango sola devolvería lo
+            # mismo, porque se apoya en las otras.
             if st.button("⟳", key="sunat_actualizar", help=_ayuda,
                          use_container_width=True):
                 sunat._registro_de_parquet.clear()
@@ -2479,29 +2845,20 @@ def renderizar_documentos_sunat(d, col_fecha):
                 sunat._bytes_original.clear()
                 st.rerun()
         with _c_xls:
-            # El boton de exportar vive ARRIBA (a pedido) pero los datos que
-            # exporta se calculan MAS ABAJO — depende de la vista y del
-            # filtro de situacion. `st.empty()` reserva el sitio ahora y se
-            # rellena cuando el df existe: es la unica forma de tener un
-            # control arriba que dependa de algo de abajo sin partir el
-            # flujo en dos reruns.
+            # El botón de exportar vive ARRIBA (a pedido) pero los datos
+            # que exporta se calculan MÁS ABAJO. `st.empty()` reserva el
+            # sitio ahora y se rellena cuando el df existe: es la única
+            # forma de tener un control arriba que dependa de algo de
+            # abajo sin partir el flujo en dos reruns.
             _slot_excel = st.empty()
 
-        # El cuerpo va en una funcion anidada por una razon concreta: sus
-        # cuatro salidas tempranas (sin rango, SUNAT caido, sin
-        # comprobantes, sin comprobantes de esa situacion) eran `return`
-        # del render ENTERO, asi que cualquiera de ellas se llevaba puestas
-        # tambien las tarjetas de abajo -- la pantalla perdia cajas y el
-        # resto saltaba. Ahora cada salida devuelve `None` y las tres
-        # tarjetas (tabla, ficha/original, conversor) se dibujan siempre.
-        # Es la regla #115 aplicada a este drill: dibujar las tarjetas
-        # siempre y decidir el CONTENIDO adentro.
         def _cuerpo():
-            """La tabla y su dato. Devuelve el documento elegido, o None."""
+            """La tabla y su dato. Deja en `estado` lo que necesitan las
+            tarjetas de abajo y devuelve el documento elegido."""
             if f_ini is None:
-                # Practicamente inalcanzable (`app.py::asegurar_rango`
+                # Prácticamente inalcanzable (`app.py::asegurar_rango`
                 # siembra un default), pero si pasara, el pill de fecha ya
-                # esta dibujado JUSTO ARRIBA de este mensaje.
+                # está dibujado JUSTO ARRIBA de este mensaje.
                 st.info("Elegí una fecha en el calendario de acá arriba.")
                 return None
 
@@ -2517,70 +2874,60 @@ def renderizar_documentos_sunat(d, col_fecha):
                         "en el rango elegido.")
                 return None
 
-            # El filtro de situación se aplica ANTES de decidir qué mostrar
-            # arriba (KPIs normales o KPIs del cruce): en «Cruce», filtrar a
-            # Pendientes primero y cruzar después responde una pregunta
-            # real — "de lo que aún no presenté, ¿qué ya tengo cargado en
-            # el sistema?" — que se pierde si se cruza sobre el rango
-            # completo sin filtrar.
-            vis = df if situacion == "Todos" else df[
-                df["situacion"] == situacion[:-1]]   # "Registrados"→"Registrado"
+            # El filtro del período se aplica ANTES de cruzar: filtrar a
+            # "mes abierto" primero y cruzar después responde una pregunta
+            # real — "de lo que aún no presenté, ¿qué ya tengo cargado?" —
+            # que se pierde cruzando el rango completo sin filtrar.
+            _sit = _MES_SUNAT.get(mes_sunat)
+            vis = df if _sit is None else df[df["situacion"] == _sit]
             if vis.empty:
-                st.info(f"No hay comprobantes «{situacion.lower()}» en el rango.")
+                st.info(f"No hay comprobantes de «{mes_sunat.lower()}» en el "
+                        "rango.")
                 return None
 
+            g_pq = _parquet_agrupado_por_documento(d, col_fecha, f_ini, f_fin)
+            df_cruce = cruzar_con_parquet(vis, g_pq)
+            estado["vis"], estado["cruce"] = vis, df_cruce
+
+            with c_kpi:
+                _kpis_cruce(df_cruce, _origen)
+            doc = _tabla_documentos(df_cruce, vis)
+
+            # Se rellena el hueco reservado ARRIBA. Se exporta el CRUCE,
+            # que es lo que la tabla muestra — sin `car`, que es una clave
+            # interna y en una planilla es ruido.
             _sufijo = f"{pd.Timestamp(f_ini):%Y%m%d}_{pd.Timestamp(f_fin):%Y%m%d}"
-
-            if vista == "Cruce":
-                g_pq = _parquet_agrupado_por_documento(d, col_fecha, f_ini, f_fin)
-                df_cruce = cruzar_con_parquet(vis, g_pq)
-                with c_kpi:
-                    _kpis_cruce(df_cruce)
-                doc = _tabla_cruce(df_cruce, vis)
-                _exportable, _nombre_xls = df_cruce, f"sunat_cruce_{_sufijo}.xlsx"
-            else:
-                with c_kpi:
-                    _kpis(df, _origen)
-                # Dos vistas, dos widgets distintos: «Por fecha» sigue
-                # siendo una figura y «Por proveedor» es una tabla desde
-                # 2026-08-24. El if vive acá y no adentro de una funcion
-                # `_grafico(df, vista)` que ya no dibujaria un grafico.
-                if vista == "Por proveedor":
-                    _ranking_proveedores(vis)
-                else:
-                    _grafico_por_fecha(vis)
-                doc = _tabla(vis)
-                _exportable, _nombre_xls = vis, f"sunat_compras_{_sufijo}.xlsx"
-
-            # Se rellena el hueco reservado ARRIBA, junto al boton de refrescar.
-            # Exporta lo que la tabla esta mostrando: el cruce si la vista es
-            # «Cruce», el registro filtrado por situacion si no.
             with _slot_excel:
                 st.download_button(
-                    "⬇", data=_excel_bytes(_exportable),
-                    file_name=_nombre_xls,
+                    "⬇", data=_excel_bytes(df_cruce.drop(columns=["car"],
+                                                         errors="ignore")),
+                    file_name=f"sunat_documentos_{_sufijo}.xlsx",
                     mime=("application/vnd.openxmlformats-officedocument"
                           ".spreadsheetml.sheet"),
                     key="sunat_dl_xlsx", use_container_width=True,
                     help="Exportar a Excel lo que muestra la tabla",
                 )
-
             return doc
 
-        doc = _cuerpo()
+        estado["doc"] = _cuerpo()
 
-    # La ficha va DEBAJO de la tabla, no al costado. Sin espaciador: el que
-    # habia (38px) existia solo para alinear el tope de las dos columnas, y
-    # apilado no hay nada que alinear.
-    with st.container(border=True, key="sunat_card_doc"):
-        _panel_documento(doc)
+    doc = estado["doc"]
+    fila_cruce = _fila_cruce_de(estado["cruce"], doc)
 
-    # Tercera tarjeta, separada de la ficha/original: comparar y corregir
-    # contra el sistema es OTRA tarea (a pedido 2026-08-27, ver
-    # `_card_conversor_sistema`) — antes vivía como cuarta pestaña de
-    # "Original del proveedor". La key empieza con "sunat_card_" a
-    # propósito: es el prefijo que ya estiliza `estilos/_80_cards.py`
-    # (alto clampeado a `--alto-util`, scroll interno) para las otras dos
-    # tarjetas de este drill — nada nuevo que declarar ahí.
-    with st.container(border=True, key="sunat_card_conversor"):
-        _card_conversor_sistema(doc, d)
+    # Segunda fila: la ficha y, al costado, el gráfico. `COLUMNAS_DRILL`
+    # y no un literal — es la proporción con la que parten sus filas los
+    # otros drills de Compras, y de eso depende que el eje vertical de la
+    # página caiga siempre en el mismo sitio (CLAUDE.md § Grilla).
+    c_ficha, c_graf = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
+    with c_ficha:
+        with st.container(border=True, key="sunat_card_doc"):
+            _panel_documento(doc, fila_cruce)
+    with c_graf:
+        with st.container(border=True, key="sunat_card_graf"):
+            _panel_grafico(estado["vis"], doc)
+
+    # Tercera tarjeta, CONDICIONAL: el conversor sirve para cargar lo que
+    # no está cargado, así que sólo aparece ahí. Ver `_necesita_conversor`.
+    if _necesita_conversor(doc, fila_cruce):
+        with st.container(border=True, key="sunat_card_conversor"):
+            _card_conversor_sistema(doc, d)

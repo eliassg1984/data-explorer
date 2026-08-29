@@ -290,6 +290,35 @@ corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
   de este proyecto (34.3.1). Si un cellRenderer necesita el valor de OTRA
   columna, resolverlo con `valueGetter` + `aggFunc` propio en vez de leer
   una columna vecina en tiempo de render.
+
+## Antes de agregar una columna: contá en cuántas filas dice algo
+
+Tres mediciones del mismo día (2026-08-28) sobre «Documentos SUNAT», que
+tenía 1848px de ancho mínimo contra los ~1010 de una laptop:
+
+- Una columna **«X del sistema»** al lado de cada **«X de SUNAT»** repetía
+  el valor o venía vacía en 291 de 326 filas. La diferencia va DENTRO de
+  la celda, en una segunda línea que aparece sólo cuando difiere — con la
+  MISMA tolerancia que decide el estado, o la app se contradice sola.
+  Regla #238.
+- Una columna donde el **97,6%** de las filas repite la misma palabra
+  («Factura») es un **chip para la excepción**, no una columna. Regla
+  #239. Para ordenar o filtrar por algo que es chip, la columna sigue
+  existiendo **oculta**: un chip se ve pero no se ordena.
+- Y al revés: **«Fecha de vencimiento» viene vacía o igual a la emisión en
+  229 de 307 filas**. Lo que se mira de a un documento va a la ficha, no a
+  la tabla.
+
+Corolario de formato: **un formateo de moneda que no recibe la moneda es
+una suposición.** `_soles()` escribía «S/ » fijo y 641 comprobantes del
+registro están en dólares — la ficha decía `Moneda: USD` y abajo
+`S/ 10,733.31`, y el PDF descargable salía igual. Regla #240.
+
+## Ejes de fecha: `tickformat` explícito
+
+Plotly rotula en INGLÉS («Aug 2») si no se le dice otra cosa: usa su
+locale por defecto, no el del `hovertemplate`. La lista de meses en
+español es `cortes.MESES_ABR_ES` — una sola en todo el repo. Regla #241.
 - **Nunca metas DATOS adentro de un `JsCode`: van por
   `gridOptions.context`.** `JsCode.__init__` corre un regex de
   backtracking catastrófico sobre el código —y después descarta el

@@ -1443,12 +1443,49 @@ def _val(comprobante, clave, defecto="—"):
     return s if s else defecto
 
 
-def _soles(comprobante, clave):
+SIMBOLO_MONEDA = {"PEN": "S/", "USD": "$", "EUR": "\u20ac"}
+"""Símbolo con el que se escribe un importe según su `codMoneda`. Fuera de
+la tabla, cualquier código desconocido se escribe tal cual (`"CAD 12.00"`),
+que es feo pero no MIENTE — que es lo que hacía la versión anterior."""
+
+
+def simbolo_moneda(codigo):
+    """`"PEN"` → `"S/"`. Un código que no esté en la tabla vuelve tal cual."""
+    cod = str(codigo or "PEN").strip().upper()
+    return SIMBOLO_MONEDA.get(cod, cod)
+
+
+def _importe(comprobante, clave):
+    """El importe de `clave` con el símbolo de SU moneda.
+
+    Hasta el 2026-08-28 esto se llamaba `_soles` y escribía `"S/ "` fijo,
+    mirara lo que mirara. Con 641 comprobantes en dólares en el registro
+    (de 16.678) eso no era un detalle: la ficha de la factura F163-2309 de
+    MAPFRE decía `Moneda: USD` y tres renglones más abajo
+    `Base imponible: S/ 10,733.31` — se contradecía sola, y el PDF
+    descargable salía igual porque usa esta misma función a través de
+    `campos_ficha`. Los 10.733,31 son DÓLARES; a un TC de 3,402 son
+    S/ 36.514,72, o sea que el número que se leía estaba errado por 26 mil
+    soles.
+    """
     v = comprobante.get(clave)
     try:
-        return f"S/ {float(v):,.2f}"
+        return f"{simbolo_moneda(comprobante.get('moneda'))} {float(v):,.2f}"
     except (TypeError, ValueError):
         return "—"
+
+
+def _convertido_a_soles(comprobante, clave):
+    """El mismo importe convertido a soles con el tipo de cambio del propio
+    comprobante, o `None` si ya está en soles (y entonces no hay nada que
+    convertir ni que mostrar)."""
+    if str(comprobante.get("moneda") or "PEN").strip().upper() == "PEN":
+        return None
+    try:
+        tc = float(comprobante.get("tipo_cambio") or 1.0)
+        return f"S/ {float(comprobante.get(clave)) * tc:,.2f}"
+    except (TypeError, ValueError):
+        return None
 
 
 def campos_ficha(comprobante):
@@ -1470,15 +1507,44 @@ def campos_ficha(comprobante):
             ("Fecha de emisión", _val(comprobante, "fecha_emision")),
             ("Fecha de vencimiento", _val(comprobante, "fecha_vencimiento")),
             ("Período tributario", _val(comprobante, "periodo")),
-            ("Moneda", _val(comprobante, "moneda")),
+            ("Moneda", _moneda_con_tc(comprobante)),
             ("Estado", _val(comprobante, "estado")),
+            ("Detracción", "Sí" if str(
+                comprobante.get("detraccion") or "").strip().upper() == "D"
+                else "No"),
         )),
-        ("Importes", (
-            ("Base imponible", _soles(comprobante, "base_imponible")),
-            ("IGV / IPM", _soles(comprobante, "igv")),
-            ("No gravado", _soles(comprobante, "no_gravado")),
-        )),
+        ("Importes", _importes_ficha(comprobante)),
     )
+
+
+def _moneda_con_tc(comprobante):
+    """`"PEN"`, o `"USD · TC 3.402"` cuando no es la moneda local: el tipo
+    de cambio sólo dice algo cuando hay algo que convertir."""
+    cod = str(comprobante.get("moneda") or "").strip().upper()
+    if not cod:
+        return "—"
+    if cod == "PEN":
+        return cod
+    try:
+        return f"{cod} · TC {float(comprobante.get('tipo_cambio') or 1.0):.3f}"
+    except (TypeError, ValueError):
+        return cod
+
+
+def _importes_ficha(comprobante):
+    """Los importes de la ficha, cada uno con el símbolo de su moneda — y,
+    sólo si el comprobante NO está en soles, el total convertido. Ver
+    `_importe`, que es donde estaba el error que esto arregla."""
+    filas = [
+        ("Base imponible", _importe(comprobante, "base_imponible")),
+        ("IGV / IPM", _importe(comprobante, "igv")),
+        ("No gravado", _importe(comprobante, "no_gravado")),
+        ("Total", _importe(comprobante, "total")),
+    ]
+    convertido = _convertido_a_soles(comprobante, "total")
+    if convertido:
+        filas.append(("Total en soles", convertido))
+    return tuple(filas)
 
 
 PIE_FICHA = ("Ficha generada desde el Registro de Compras Electrónico (SIRE) "
@@ -1553,7 +1619,7 @@ def ficha_pdf(comprobante):
                                    color="#f0edfe"))
         ax.text(0.10, y - 0.018, "TOTAL", color="#4938b8", fontsize=12,
                 weight="bold", va="center")
-        ax.text(0.90, y - 0.018, _soles(comprobante, "total"),
+        ax.text(0.90, y - 0.018, _importe(comprobante, "total"),
                 color="#4938b8", fontsize=15, weight="bold", va="center",
                 ha="right")
 
