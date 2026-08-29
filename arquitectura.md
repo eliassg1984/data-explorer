@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-250 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+252 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (81)
 
@@ -331,7 +331,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#230** — Un @st.fragment alrededor de la tarjeta que se edita: una corrección deja de re-correr el…
 - **#232** — Una anotación por línea que puede tener DOS correcciones independientes se guarda con claves…
 
-**SUNAT y SIRE** (26)
+**SUNAT y SIRE** (28)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -359,6 +359,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#246** — Una tabla de líneas no es un comprobante hasta que tiene el pie: el pie es donde el documento…
 - **#247** — Un XML de nota de crédito trae los importes en POSITIVO y el registro los guarda en NEGATIVO.…
 - **#249** — En una homologación, el INVARIANTE es el importe de la línea — no la cantidad ni el precio
+- **#251** — Dos paneles que tienen que verse iguales se dibujan con la MISMA función, no con dos copias…
+- **#252** — El total del lado que se va a exportar se SUMA de sus líneas, no se copia del original —…
 
 **Fechas, rangos y cortes** (8)
 
@@ -11088,13 +11090,65 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      por eso conviene que sean la MISMA cuenta, y el comentario del JS
      apunta a la función Python que la define.
 
+251. **Dos paneles que tienen que verse iguales se dibujan con la MISMA
+     función, no con dos copias que hoy coinciden.**
+
+     La cabecera del conversor (RUC, proveedor, fecha, moneda) se pidió
+     "en cada tarjeta" el 2026-08-29, y las dos mitades la dibujan con
+     `_cabecera_conversor`. Escribirla dos veces habría funcionado el
+     primer día y se habría desincronizado en el primer retoque — y el
+     precio de que se desincronice acá no es estético: cualquier
+     diferencia de alto entre las dos cabeceras corre las filas de las dos
+     tablas, que es la condición que este panel no puede romper (reglas
+     #231 y #244).
+
+     El mismo criterio partió el pie en `_renglon_total` +
+     `_bloque_totales`, compartidos por `_pie_comprobante` y
+     `_pie_sistema`: los dos pies dicen cosas distintas, pero se ven
+     iguales porque la maqueta es una sola.
+
+     **Y el corolario de layout:** en cuanto los dos lados pudieron crecer
+     distinto, hizo falta el piso. Con contenido simétrico las mitades
+     medían igual sin ayuda; el día que una llevó un aviso de descuadre y
+     la otra no, quedaron en 388 y 349. La familia `sunat_conv_` se sumó
+     al `:has()` de `_80_cards.py` que le da `flex: 1 1 auto` al
+     contenedor de elemento (regla #243). Verificado después: 388 y 388.
+
+252. **El total del lado que se va a exportar se SUMA de sus líneas, no se
+     copia del original — aunque por construcción tenga que dar lo mismo.**
+
+     El pie de la mitad del sistema (`_pie_sistema`) podría copiar los
+     totales del comprobante: el importe de cada línea es el invariante de
+     la homologación (regla #249), así que la suma no puede cambiar. Se
+     calcula igual, y el día que se escribió ya encontró para qué.
+
+     En `F163-2309` (MAPFRE) el XML sincronizado no corresponde al
+     registro (regla #246): sus líneas suman 3.155,00 y el SIRE declara
+     10.733,31. El pie del sistema muestra entonces
+     `TOTAL a cargar $ 5,087.00` contra los `$ 12,665.31` del comprobante,
+     y lo dice: «No cuadra con el comprobante. Revisá antes de exportar».
+     Copiando los totales, ese documento se habría exportado al almacén
+     con una cabecera de 12.665,31 y líneas por 3.155 — un XML que cuadra
+     en la pantalla y revienta en el ERP.
+
+     La regla general: **el resumen de lo que vas a exportar se calcula
+     sobre lo que vas a exportar.** Un total copiado de otra fuente sólo
+     prueba que sabés copiar.
+
+     La composición sale del documento y no de las líneas —IGV y el
+     reparto gravado / no gravado—: la homologación cambia el grano de las
+     líneas, no la naturaleza tributaria de la compra. Verificado sobre
+     los **16.689** comprobantes del registro que `total == base + no
+     gravado + IGV` en TODOS, sin ISC ni ICBPER de por medio, así que
+     `suma de líneas + IGV` reconstruye el total sin términos escondidos.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#251**.
+> próxima regla nueva es la **#253**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

@@ -1849,6 +1849,111 @@ iguales se verían distintos justo en la vista que existe para
 compararlos."""
 
 
+def _cabecera_conversor(doc):
+    """Los datos del documento arriba de CADA mitad del conversor: RUC,
+    proveedor, fecha de emisión y moneda.
+
+    Se dibuja dos veces con la MISMA función, y eso no es redundancia: es
+    lo que garantiza que las dos cabeceras midan igual y las dos tablas
+    arranquen a la misma altura. Una cabecera copiada a mano en cada lado
+    se desincroniza en cuanto alguien toque una — es la lección de la
+    regla #244, donde 22px de diferencia entre dos encabezados corrieron
+    catorce filas.
+
+    Van los mismos datos en las dos porque es EL MISMO documento: la
+    tarjeta de la derecha no es otro comprobante, es éste dicho en el
+    idioma del almacén. Y son justo los campos que la exportación a XML va
+    a necesitar en su cabecera — emisor, fecha y moneda—, así que tenerlos
+    a la vista mientras se homologa es ver lo que se va a exportar.
+    """
+    if doc is None:
+        return
+    ruc = str(doc.get("ruc_proveedor") or "—")
+    prov = _compras_truncar(str(doc.get("proveedor") or ""), 34)
+    fecha = pd.to_datetime(doc.get("fecha_emision"), errors="coerce")
+    fecha = "—" if pd.isna(fecha) else f"{fecha:%d/%m/%Y}"
+    st.markdown(
+        f'<div style="display:flex;flex-direction:column;gap:1px;'
+        f'padding:6px 9px;margin-bottom:8px;border-radius:8px;'
+        f'background:{GRIS_FONDO};line-height:1.35;">'
+        f'<div style="font-size:11.5px;color:{TEXTO_PRINCIPAL};'
+        f'font-weight:600;white-space:nowrap;overflow:hidden;'
+        f'text-overflow:ellipsis;">{prov}</div>'
+        f'<div style="font-size:10.5px;color:{GRIS_TEXTO};'
+        f'font-variant-numeric:tabular-nums;">'
+        f'RUC {ruc} · {fecha} · {sunat._moneda_con_tc(doc)}</div>'
+        f'</div>', unsafe_allow_html=True)
+
+
+def _renglon_total(etiqueta, valor, sim, fuerte=False):
+    """Un renglón del pie de totales. Compartido por las dos mitades para
+    que los dos pies se vean iguales — mismo argumento que
+    `_cabecera_conversor`."""
+    peso = "700" if fuerte else "400"
+    color = TEXTO_PRINCIPAL if fuerte else GRIS_TEXTO
+    tam = "13px" if fuerte else "11.5px"
+    borde = f"border-top:1px solid {GRIS_BORDE};padding-top:4px;" if fuerte else ""
+    return (f'<div style="display:flex;justify-content:space-between;'
+            f'gap:16px;{borde}">'
+            f'<span style="color:{color};font-size:{tam};'
+            f'font-weight:{peso};">{etiqueta}</span>'
+            f'<span style="color:{TEXTO_PRINCIPAL};font-size:{tam};'
+            f'font-weight:{peso};font-variant-numeric:tabular-nums;">'
+            f'{sim} {valor:,.2f}</span></div>')
+
+
+def _bloque_totales(renglones):
+    """El pie, alineado a la derecha y con el mismo ancho en las dos
+    mitades."""
+    st.markdown(
+        '<div style="display:flex;flex-direction:column;gap:2px;'
+        'margin:8px 0 0 auto;max-width:230px;">' + "".join(renglones)
+        + '</div>', unsafe_allow_html=True)
+
+
+def _pie_sistema(doc, filas_sistema):
+    """El pie de la mitad DERECHA: los totales con los que el documento
+    entraría al sistema de almacén.
+
+    No copia los del comprobante: los SUMA de las líneas homologadas. Por
+    construcción tienen que dar lo mismo —el importe de cada línea es el
+    invariante de la homologación (regla #249)— y justamente por eso vale
+    la pena calcularlo: si alguna vez no diera, sería porque una línea
+    perdió su importe, y eso hay que verlo ANTES de exportar el XML, no
+    después de importarlo al almacén.
+
+    El IGV y la composición gravado/no gravado salen del documento: la
+    homologación cambia el grano de las líneas, no la naturaleza
+    tributaria de la compra. Verificado sobre los 16.689 comprobantes del
+    registro: `total == base + no gravado + IGV` en TODOS, sin ISC ni
+    ICBPER de por medio, así que sumar líneas + IGV reconstruye el total
+    sin términos escondidos.
+    """
+    if doc is None:
+        return
+    mon = str(doc.get("moneda") or "PEN")
+    sim = sunat.simbolo_moneda(mon)
+    resta = any(k in str(doc.get("tipo_nombre") or "").lower()
+                for k in ("crédito", "credito", "débito", "debito"))
+    _s = abs if resta else (lambda v: v)
+
+    suma = sum(v for v in (_num(f.get("Importe")) for f in filas_sistema)
+               if v is not None)
+    igv = _s(_num(doc.get("igv")) or 0.0)
+    total = suma + igv
+
+    _bloque_totales([
+        _renglon_total("Suma de líneas", suma, sim),
+        _renglon_total("IGV", igv, sim),
+        _renglon_total("TOTAL a cargar", total, sim, fuerte=True),
+    ])
+
+    declarado = _num(doc.get("total"))
+    if declarado is not None and abs(total - _s(declarado)) > _TOLERANCIA_CENTAVOS:
+        st.caption(f"⚠ No cuadra con el comprobante, que declara "
+                   f"{sim} {_s(declarado):,.2f}. Revisá antes de exportar.")
+
+
 def _pie_comprobante(doc, lineas):
     """El pie del comprobante: los subtotales que componen el total, como
     los imprime cualquier factura.
@@ -1900,25 +2005,7 @@ def _pie_comprobante(doc, lineas):
     if total is not None:
         filas.append(("TOTAL", total, True))
 
-    def _linea(etiqueta, valor, fuerte):
-        peso = "700" if fuerte else "400"
-        color = TEXTO_PRINCIPAL if fuerte else GRIS_TEXTO
-        tam = "13px" if fuerte else "11.5px"
-        borde = (f"border-top:1px solid {GRIS_BORDE};padding-top:4px;"
-                 if fuerte else "")
-        return (f'<div style="display:flex;justify-content:space-between;'
-                f'gap:16px;{borde}">'
-                f'<span style="color:{color};font-size:{tam};'
-                f'font-weight:{peso};">{etiqueta}</span>'
-                f'<span style="color:{TEXTO_PRINCIPAL};font-size:{tam};'
-                f'font-weight:{peso};font-variant-numeric:tabular-nums;">'
-                f'{sim} {valor:,.2f}</span></div>')
-
-    st.markdown(
-        '<div style="display:flex;flex-direction:column;gap:2px;'
-        'margin:8px 0 0 auto;max-width:230px;">'
-        + "".join(_linea(e, v, f) for e, v, f in filas) + '</div>',
-        unsafe_allow_html=True)
+    _bloque_totales([_renglon_total(e, v, sim, f) for e, v, f in filas])
 
     if resta:
         st.markdown(
@@ -2380,12 +2467,15 @@ def _detalle_sistema(doc, lineas_xml, d):
     with c_izq:
         with st.container(border=True, key="sunat_conv_izq"):
             _titulo_panel("Comprobante SUNAT", "lo que emitió el proveedor")
+            _cabecera_conversor(doc)
             _grid_lado_sunat(tv_sunat, _doc_id)
             _pie_comprobante(doc, lineas_xml)
     with c_der:
         with st.container(border=True, key="sunat_conv_der"):
             _titulo_panel("Sistema", "con qué se carga")
+            _cabecera_conversor(doc)
             resp = _grid_lado_sistema(tv, _doc_id)
+            _pie_sistema(doc, filas_sistema)
 
     st.caption("Clic en «Ítem (sistema)» para corregirlo — el buscador "
                "sugiere mientras escribís, contra el catálogo completo. "

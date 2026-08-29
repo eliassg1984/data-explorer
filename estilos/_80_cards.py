@@ -237,7 +237,15 @@ CSS = """    /* ================================================================
         .stColumn > .stVerticalBlock
         > div:has(> div[class*="st-key-compras_prov_card_"]),
         .stColumn > .stVerticalBlock
-        > div:has(> div[class*="st-key-sunat_card_"]) {
+        > div:has(> div[class*="st-key-sunat_card_"]),
+        /* Las dos mitades del conversor entraron acá el 2026-08-29, al   */
+        /* ganar cada una un pie de totales de largo distinto: la de      */
+        /* SUNAT medía 388px y la del sistema 349 en el documento de      */
+        /* MAPFRE, porque una llevaba un aviso de descuadre y la otra no. */
+        /* Mientras los dos lados tuvieron contenido simétrico el piso no */
+        /* hizo falta; en cuanto uno pudo crecer solo, sí.                */
+        .stColumn > .stVerticalBlock
+        > div:has(> div[class*="st-key-sunat_conv_"]) {
             flex: 1 1 auto;
         }
     }
