@@ -1828,18 +1828,168 @@ iguales se verían distintos justo en la vista que existe para
 compararlos."""
 
 
+def _pie_comprobante(doc, lineas):
+    """El pie del comprobante: los subtotales que componen el total, como
+    los imprime cualquier factura.
+
+    A pedido 2026-08-28, junto con las columnas de precio e importe: la
+    mitad izquierda del conversor tenía que poder leerse como el
+    documento, y un documento no termina en su última línea — termina en
+    sus impuestos.
+
+    LAS CIFRAS SALEN DEL REGISTRO, NO DE SUMAR LAS LÍNEAS. Son el dato que
+    SUNAT tiene anotado, que es contra lo que se compara el sistema; las
+    líneas vienen del XML, que es otra fuente. Verificado sobre los
+    documentos reales del rango que las dos cuadran (`suma de importes ==
+    base gravada + no gravado`, exacto en los ocho que se probaron,
+    incluidos los cuatro que son 100 % no gravado). Pero **cuadrar no está
+    garantizado**: un XML que llegue incompleto daría una suma menor sin
+    ningún error visible, así que si difieren más que la tolerancia se
+    avisa en vez de elegir en silencio cuál de las dos mostrar.
+
+    Las filas en cero no se dibujan, salvo el IGV: un «IGV 0.00» explícito
+    es información en una compra exonerada —dice que no hay crédito fiscal
+    que tomar— mientras que un «No gravado 0.00» sólo gasta un renglón.
+    Medido: 111 de 307 comprobantes del rango tienen no gravado ≠ 0, o sea
+    que la fila aparece en un tercio de los casos y en los otros dos
+    tercios estorbaría.
+    """
+    mon = str(doc.get("moneda") or "PEN")
+    sim = sunat.simbolo_moneda(mon)
+    # Una NOTA se imprime en positivo y el registro la guarda en negativo,
+    # porque RESTA del período (ver `sunat.py`). Acá manda el papel: este
+    # panel dice ser «el original del proveedor», y en el original de una
+    # nota de crédito de S/ 2.203 dice 2.203, no -2.203. El signo se
+    # explica con una línea de texto, que es más claro que un menos.
+    resta = any(k in str(doc.get("tipo_nombre") or "").lower()
+                for k in ("crédito", "credito", "débito", "debito"))
+    _s = (lambda v: abs(v)) if resta else (lambda v: v)
+    grav = _s(_num(doc.get("base_imponible")) or 0.0)
+    ngrav = _s(_num(doc.get("no_gravado")) or 0.0)
+    igv = _s(_num(doc.get("igv")) or 0.0)
+    total = _num(doc.get("total"))
+    total = None if total is None else _s(total)
+
+    filas = []
+    if grav:
+        filas.append(("Gravado", grav, False))
+    if ngrav:
+        filas.append(("No gravado", ngrav, False))
+    filas.append(("IGV", igv, False))
+    if total is not None:
+        filas.append(("TOTAL", total, True))
+
+    def _linea(etiqueta, valor, fuerte):
+        peso = "700" if fuerte else "400"
+        color = TEXTO_PRINCIPAL if fuerte else GRIS_TEXTO
+        tam = "13px" if fuerte else "11.5px"
+        borde = (f"border-top:1px solid {GRIS_BORDE};padding-top:4px;"
+                 if fuerte else "")
+        return (f'<div style="display:flex;justify-content:space-between;'
+                f'gap:16px;{borde}">'
+                f'<span style="color:{color};font-size:{tam};'
+                f'font-weight:{peso};">{etiqueta}</span>'
+                f'<span style="color:{TEXTO_PRINCIPAL};font-size:{tam};'
+                f'font-weight:{peso};font-variant-numeric:tabular-nums;">'
+                f'{sim} {valor:,.2f}</span></div>')
+
+    st.markdown(
+        '<div style="display:flex;flex-direction:column;gap:2px;'
+        'margin:8px 0 0 auto;max-width:230px;">'
+        + "".join(_linea(e, v, f) for e, v, f in filas) + '</div>',
+        unsafe_allow_html=True)
+
+    if resta:
+        st.markdown(
+            f'<div style="text-align:right;font-size:10.5px;'
+            f'color:{ADVERTENCIA_TEXTO};">'
+            f'{doc.get("tipo_nombre", "Nota")}: RESTA del total del período'
+            f'</div>', unsafe_allow_html=True)
+
+    # La conversión, sólo si el comprobante no está en soles: 641 de los
+    # 16.678 del registro lo están, y sin esto el pie diría "$ 12,665.31"
+    # sin ninguna pista de cuánto es eso en la contabilidad.
+    en_soles = sunat._convertido_a_soles(doc, "total")
+    if en_soles:
+        st.markdown(
+            f'<div style="text-align:right;font-size:10.5px;'
+            f'color:{GRIS_TEXTO_SUAVE};">≈ {en_soles} '
+            f'· TC {float(doc.get("tipo_cambio") or 1.0):.3f}</div>',
+            unsafe_allow_html=True)
+
+    # La red de seguridad: si el XML no suma lo que el registro declara,
+    # decirlo. No se corrige nada — son dos fuentes y la del registro es
+    # la que manda para el cruce.
+    # Se comparan MAGNITUDES: en una nota, el XML viene positivo y el
+    # registro negativo, y compararlos con signo hacía saltar el aviso en
+    # las 294 notas de crédito del registro — un aviso que grita en un
+    # caso normal se deja de leer. Medido sobre 37 documentos con XML: sin
+    # `abs`, 3 no cuadraban y una era esto; con `abs`, quedan las 2 reales.
+    suma = sum(v for v in (_num(x.get("importe")) for x in lineas)
+               if v is not None)
+    if abs(abs(suma) - abs(grav + ngrav)) > _TOLERANCIA_CENTAVOS:
+        st.caption(f"⚠ Las líneas del XML suman {sim} {suma:,.2f} y el "
+                   f"registro declara {sim} {grav + ngrav:,.2f}. Se muestra "
+                   "lo del registro, que es contra lo que se compara el "
+                   "sistema.")
+
+
+_JS_IMPORTE_XML = JsCode(
+    "function(p){ return p.value==null || isNaN(p.value) ? '' : "
+    "Number(p.value).toLocaleString('es-PE',"
+    "{minimumFractionDigits:2, maximumFractionDigits:2}); }")
+"""Precio e importe del comprobante: dos decimales y SIN símbolo de
+moneda. El símbolo lo pone una sola vez el pie (`_pie_comprobante`), que
+es donde el documento declara en qué moneda está — repetirlo en cada
+celda de una tabla de once líneas es ruido, y es como se imprime
+cualquier factura."""
+
+
 def _grid_lado_sunat(tv, doc_id):
-    """La tabla IZQUIERDA: el comprobante tal como lo emitió el proveedor.
+    """La tabla IZQUIERDA: el comprobante tal como lo emitió el proveedor,
+    leído COMO UN DOCUMENTO y no como un listado de nombres.
+
+    Desde el 2026-08-28 trae las cinco columnas que tiene una factura
+    impresa —código del proveedor, ítem, cantidad con su unidad, precio
+    unitario e importe— y debajo el pie con los subtotales
+    (`_pie_comprobante`). A pedido: el usuario quería poder mirar esta
+    mitad y reconocer el papel, no sólo los ítems a mapear.
+
+    Dos compresiones para que las cinco entren sin scroll horizontal en
+    media tarjeta (~435px útiles a 1360 de ancho): la unidad viaja dentro
+    de la cantidad («0.73 kg», que es como se imprime) y el símbolo de
+    moneda no se repite por celda, lo declara el pie una sola vez.
+    Medido en el navegador a 1360 de ancho: la mitad da 422px útiles y
+    las cinco columnas suman 406 de mínimo (66+118+74+72+76), así que
+    entran y `flex` en «Ítem» absorbe lo que sobra. El primer intento
+    sumaba 452 y scrolleaba — un documento que hay que arrastrar para
+    leerle el importe no es un documento.
+
     De sólo lectura y sin `update_on` — no tiene por qué provocar ni un
-    viaje al servidor mientras se corrige la de al lado."""
+    viaje al servidor mientras se corrige la de al lado.
+    """
     gb = GridOptionsBuilder.from_dataframe(tv)
     gb.configure_default_column(resizable=True, sortable=False, filter=False,
                                 editable=False, suppressMovable=True)
-    gb.configure_column("Código prov.", width=110, minWidth=90)
-    gb.configure_column("Ítem (XML)", minWidth=160, flex=1)
-    gb.configure_column("Cant.", type=["numericColumn"], width=80,
-                        minWidth=70, valueFormatter=_JS_FORMATO_CANT)
-    gb.configure_column("Und.", width=70, minWidth=60)
+    # Angosta y con tooltip: es un código de 14 dígitos que nadie lee
+    # entero, sirve para RECONOCER que dos líneas son el mismo producto
+    # (las cuatro de «FG LOMO FINO» del documento de prueba comparten
+    # `00000000652940`). Recortado cumple esa función y deja el ancho para
+    # las tres columnas de plata.
+    gb.configure_column("Código prov.", width=78, minWidth=66,
+                        tooltipField="Código prov.",
+                        cellStyle={"color": GRIS_TEXTO_SUAVE})
+    gb.configure_column("Ítem (XML)", minWidth=118, flex=1,
+                        tooltipField="Ítem (XML)")
+    # `Cant.` ya viene armada como texto ("0.73 kg"), así que NO lleva
+    # `numericColumn` ni formatter: alinearla a la derecha como número
+    # dejaría la unidad pegada al borde.
+    gb.configure_column("Cant.", width=80, minWidth=74,
+                        cellStyle={"text-align": "right"})
+    gb.configure_column("P. unit.", type=["numericColumn"], width=78,
+                        minWidth=72, valueFormatter=_JS_IMPORTE_XML)
+    gb.configure_column("Importe", type=["numericColumn"], width=84,
+                        minWidth=76, valueFormatter=_JS_IMPORTE_XML)
     gb.configure_grid_options(
         rowHeight=_ALTO_FILA_CONVERSOR, headerHeight=_ALTO_CABECERA_CONVERSOR,
         onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"),
@@ -2079,11 +2229,18 @@ def _detalle_sistema(doc, lineas_xml, d):
 
         cant_xml = _num(xml_l.get("cantidad"))
         cant_cor = _num(correccion.get("cantidad"))
+        # La UNIDAD viaja pegada a la cantidad ("0.73 kg") y no en columna
+        # propia: es como se lee en cualquier comprobante, y libera los
+        # ~48px que necesitan «P. unit.» e «Importe» para entrar sin
+        # scroll horizontal en la mitad de la tarjeta.
+        _u = str(xml_l.get("unidad") or "").strip()
         filas_sunat.append({
             "Código prov.": xml_l.get("codigo", ""),
             "Ítem (XML)": xml_l.get("descripcion", ""),
-            "Cant.": cant_xml,
-            "Und.": xml_l.get("unidad", ""),
+            "Cant.": (f"{cant_xml:,.3f}".rstrip("0").rstrip(".")
+                      + (f" {_u}" if _u else "")) if cant_xml is not None else "",
+            "P. unit.": _num(xml_l.get("precio_unitario")),
+            "Importe": _num(xml_l.get("importe")),
         })
         filas_sistema.append({
             "_idx": i,
@@ -2107,6 +2264,7 @@ def _detalle_sistema(doc, lineas_xml, d):
         with st.container(border=True, key="sunat_conv_izq"):
             _titulo_panel("Comprobante SUNAT", "lo que emitió el proveedor")
             _grid_lado_sunat(tv_sunat, _doc_id)
+            _pie_comprobante(doc, lineas_xml)
     with c_der:
         with st.container(border=True, key="sunat_conv_der"):
             _titulo_panel("Sistema", "con qué se carga")

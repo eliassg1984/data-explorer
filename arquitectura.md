@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-245 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+248 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (81)
 
@@ -102,7 +102,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#237** — Hay DOS familias de AgGrid en el repo y no se estilan igual: la de theme="material" se toca…
 - **#245** — Una fila que COMPARA se parte por la mitad, no con COLUMNAS_DRILL
 
-**Layout y alturas** (23)
+**Layout y alturas** (24)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -127,6 +127,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#243** — Al partir en dos una fila de un drill hay que sumar su familia de key al PISO de…
 - **#244** — Dos tarjetas que comparan se alinean por TRES cosas, y las tres hay que medirlas: el alto de…
 - **#245** — Una fila que COMPARA se parte por la mitad, no con COLUMNAS_DRILL
+- **#248** — En media tarjeta, cada columna nueva hay que pagarla con otra: la unidad se muda adentro de…
 
 **Plotly y figuras** (45)
 
@@ -176,7 +177,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#202** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
 - **#241** — Un panel de detalle y un gráfico del PERÍODO no pueden convivir: el gráfico tiene que hablar…
 
-**AgGrid y tablas** (42)
+**AgGrid y tablas** (43)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -220,6 +221,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#228** — isCancelAfterEnd devolviendo true deja el editor MONTADO: la celda queda con…
 - **#229** — cellValueChanged de AG Grid se despacha ASINCRÓNICO: leer los datos justo después de…
 - **#237** — Hay DOS familias de AgGrid en el repo y no se estilan igual: la de theme="material" se toca…
+- **#248** — En media tarjeta, cada columna nueva hay que pagarla con otra: la unidad se muda adentro de…
 
 **Streamlit** (72)
 
@@ -328,7 +330,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#230** — Un @st.fragment alrededor de la tarjeta que se edita: una corrección deja de re-correr el…
 - **#232** — Una anotación por línea que puede tener DOS correcciones independientes se guarda con claves…
 
-**SUNAT y SIRE** (23)
+**SUNAT y SIRE** (25)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -353,6 +355,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#242** — Una tarjeta que no tiene nada que hacer no se dibuja vacía: no se dibuja
 - **#243** — Al partir en dos una fila de un drill hay que sumar su familia de key al PISO de…
 - **#244** — Dos tarjetas que comparan se alinean por TRES cosas, y las tres hay que medirlas: el alto de…
+- **#246** — Una tabla de líneas no es un comprobante hasta que tiene el pie: el pie es donde el documento…
+- **#247** — Un XML de nota de crédito trae los importes en POSITIVO y el registro los guarda en NEGATIVO.…
 
 **Fechas, rangos y cortes** (8)
 
@@ -10950,13 +10954,80 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      dos columnas (regla #243). Elegir bien el prefijo de la key es la
      mitad del trabajo de estilo.
 
+246. **Una tabla de líneas no es un comprobante hasta que tiene el pie: el
+     pie es donde el documento se puede CONTRADECIR, y ahí aparecieron
+     originales que no corresponden.**
+
+     La mitad izquierda del conversor mostraba código, ítem, cantidad y
+     unidad — un listado de qué mapear. A pedido del 2026-08-28 pasó a
+     leerse como el papel: se sumaron precio unitario e importe, y debajo
+     el pie con gravado / no gravado / IGV / TOTAL (`_pie_comprobante`).
+
+     **El pie no suma las líneas: muestra lo que declara el registro.** Son
+     dos fuentes distintas —el XML que bajó `sunat_originales_sync.py` y
+     la anotación del SIRE— y la del registro es contra la que se compara
+     el sistema. Cuadran casi siempre, y por eso el aviso de cuando no
+     cuadran es lo valioso: **saltó el mismo día en dos documentos
+     reales**. El XML guardado para `F163-2309` (MAPFRE) es un comprobante
+     de US$ 3.722,90 con una línea de 3.155, mientras el SIRE declara una
+     base de 10.733,31 — o sea que el conversor venía mostrando las líneas
+     de un documento bajo la cabecera de otro, y nadie podía verlo porque
+     los importes no estaban en pantalla. Idem `F163-2308` (80,00 contra
+     272,16). Medido: 2 de 37 documentos con XML.
+
+     El aviso NO corrige: dice cuánto suma cada lado y sigue mostrando el
+     del registro. Corregir en silencio habría escondido justamente el
+     hallazgo.
+
+247. **Un XML de nota de crédito trae los importes en POSITIVO y el
+     registro los guarda en NEGATIVO. Comparar con signo hace que la
+     alarma suene en un caso perfectamente normal.**
+
+     La primera versión del chequeo de arriba comparaba `suma` contra
+     `base + no gravado` con signo, y de los 3 descuadres de la muestra
+     uno era `E001-64`: el XML sumaba 1.867,22 y el registro decía
+     −1.867,22. No es un error — es la convención: la nota se imprime en
+     positivo y `sunat.py` la guarda negativa porque RESTA del período.
+     Con signo, el aviso habría aparecido en las **294 notas de crédito**
+     del registro, y un aviso que grita en el caso normal se deja de leer.
+     Se comparan magnitudes (`abs`), y quedan los 2 descuadres reales.
+
+     Lo mismo decide qué signo se DIBUJA: el pie muestra los importes en
+     positivo, como el papel, porque ese panel dice ser «el original del
+     proveedor» — y agrega un renglón «Nota de Crédito: RESTA del total
+     del período». El signo se explica con palabras, que es más claro que
+     un menos delante de un número.
+
+248. **En media tarjeta, cada columna nueva hay que pagarla con otra: la
+     unidad se muda adentro de la cantidad.**
+
+     Las cinco columnas del comprobante (código, ítem, cantidad, precio,
+     importe) no entran en los 422px que mide media tarjeta del conversor
+     a 1360 de ancho: el primer intento sumaba 452 de mínimo y scrolleaba
+     — y un documento que hay que arrastrar para leerle el importe no es
+     un documento. Dos compresiones, las dos copiadas de cómo se imprime
+     una factura de verdad:
+
+       · **La unidad viaja dentro de la cantidad** («0.73 kg»), no en
+         columna propia: ahorra ~48px y es como se lee en el papel. La
+         celda deja de ser `numericColumn` —alinearla como número dejaría
+         la unidad pegada al borde— y se alinea a la derecha a mano.
+       · **El símbolo de moneda no se repite por celda.** Lo declara el
+         pie una sola vez, que es donde el documento dice en qué moneda
+         está.
+
+     Quedan 406 de mínimo en 422 útiles, verificado en el navegador
+     (`scrollWidth` del contenedor contra `clientWidth` del viewport), y
+     las filas siguen alineadas con la tabla del sistema de al lado — que
+     es la condición que no se puede romper (regla #231).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#246**.
+> próxima regla nueva es la **#249**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
