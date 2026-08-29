@@ -1758,30 +1758,51 @@ AgGrid vive en el suyo, por eso el datalist se crea adentro y no con un
 
 _JS_RELLENAR_VECINAS = JsCode("""
 function(e) {
-    if (e.colDef.field !== 'Ítem (sistema)') return;
-    var m = window.__sunatMaestroPorNombre;
-    if (!m) return;
-    var t = m[String(e.newValue || '').trim().toLowerCase()];
-    if (!t) return;
+    var campo = e.colDef.field;
     // Se muta `e.data` y se repinta, en vez de `node.setDataValue`: aquel
     // dispara otro `cellValueChanged` por celda, y con
     // `update_on=["cellValueChanged"]` cada uno seria otro viaje al
-    // servidor para escribir algo que el servidor ya resolvio solo.
-    e.data['Código'] = t[0];
-    e.data['Und. kardex'] = t[1];
-    e.api.refreshCells({rowNodes: [e.node],
-                        columns: ['Código', 'Und. kardex'], force: true});
+    // servidor para escribir algo que el servidor ya resuelve solo.
+    var tocadas = [];
+
+    if (campo === 'Ítem (sistema)') {
+        var m = window.__sunatMaestroPorNombre;
+        if (!m) return;
+        var t = m[String(e.newValue || '').trim().toLowerCase()];
+        if (!t) return;
+        e.data['_cod_sis'] = t[0];
+        e.data['Und.'] = t[1];
+        tocadas.push('Und.');
+    } else if (campo === 'Cant.') {
+        // El precio unitario se DERIVA del importe, que es el invariante
+        // de la homologacion: si el usuario carga 12 unidades donde el
+        // proveedor factura 1 caja, cambia el unitario y la linea sigue
+        // costando lo mismo. Ver `_precio_derivado`, que hace la misma
+        // cuenta en el servidor.
+        var imp = e.data['Importe'], c = Number(e.newValue);
+        e.data['P. unit.'] = (imp == null || isNaN(imp) || !c || isNaN(c))
+            ? null : Math.round((imp / c) * 10000) / 10000;
+        tocadas.push('P. unit.');
+    } else {
+        return;
+    }
+    e.api.refreshCells({rowNodes: [e.node], columns: tocadas, force: true});
 }
 """)
-"""Al elegir un ítem del sistema, el CÓDIGO y la UNIDAD KARDEX de al lado
-se llenan en el acto, sin esperar el viaje al servidor (pedido
-2026-08-27: "cuando elija el nombre del ítem sistema, también se agregue
-el código sistema y unidad kardex").
+"""Lo que se rellena SOLO en el navegador, sin esperar el viaje al
+servidor: la unidad de kardex al elegir un ítem, y el precio unitario al
+cambiar la cantidad.
 
-Es sólo el adelanto visual: la fuente de verdad sigue siendo el servidor,
-que resuelve el código con `_lookups_maestro` y lo persiste. Por eso no
-importa en qué orden corra esto respecto del handler de st_aggrid — el
-servidor no lee estas dos columnas del payload, las recalcula."""
+Es sólo el adelanto visual — la fuente de verdad sigue siendo el
+servidor, que recalcula las dos cosas con `_lookups_maestro` y
+`_precio_derivado` y las persiste. Por eso no importa en qué orden corra
+esto respecto del handler de st_aggrid: el servidor no lee estas columnas
+del payload. Sin el adelanto, la celda de al lado se queda con el valor
+viejo los ~3 segundos que tarda la ida y vuelta, y parece que la edición
+no hizo nada.
+
+`refreshCells` sólo sobre las columnas tocadas: repintar la fila entera
+haría parpadear la celda que el usuario acaba de editar."""
 
 
 _ALTO_FILA_CONVERSOR = 30
@@ -2008,33 +2029,116 @@ def _grid_lado_sunat(tv, doc_id):
     )
 
 
+_JS_PRECIO_DERIVADO = JsCode(
+    "function(p){ return p.value==null || isNaN(p.value) ? '—' : "
+    "Number(p.value).toLocaleString('es-PE',"
+    "{minimumFractionDigits:2, maximumFractionDigits:4}); }")
+"""El precio derivado se muestra con 2 a 4 decimales: los dos primeros
+siempre, y los otros dos sólo si hacen falta. Un unitario de caja partida
+(126.27 ÷ 12 = 10.5225) necesita los cuatro para que al re-multiplicar
+vuelva a dar el importe; uno normal (63.47) no, y mostrarle dos ceros
+sería ruido. La raya cuando no hay cantidad con la que dividir —ver
+`_precio_derivado`— dice que falta un dato, no que el precio sea cero."""
+
+
+def _precio_derivado(importe, cantidad):
+    """El precio unitario con el que la línea entra al almacén.
+
+    NO se copia el del comprobante: se DERIVA, porque la cantidad puede
+    cambiar en la homologación y el importe no. El proveedor factura una
+    caja de 12 a S/ 126.27; el almacén la ingresa como 12 unidades, y
+    entonces el unitario es 10.5225 — pero la línea sigue costando
+    S/ 126.27 y los impuestos del documento no se mueven.
+
+    Cuatro decimales y no dos: con dos, 126.27/12 = 10.52 y al
+    re-multiplicar da 126.24, o sea que el documento dejaría de cuadrar
+    por tres centavos. Es la misma precisión con la que vienen los
+    unitarios del XML (verificado: `126.2712`, `5.0847`, `19.9153`).
+
+    `None` si no se puede dividir — una cantidad en cero es un dato que
+    hay que corregir, no un precio infinito.
+    """
+    if importe is None or cantidad is None:
+        return None
+    try:
+        return None if abs(cantidad) < 1e-9 else round(importe / cantidad, 4)
+    except (TypeError, ZeroDivisionError):
+        return None
+
+
 def _grid_lado_sistema(tv, doc_id):
-    """La tabla DERECHA: con qué se va a cargar el documento al sistema.
-    Dos columnas editables —el ítem y la cantidad— y todo lo demás
-    derivado. Devuelve la respuesta de AgGrid para que el llamador vea qué
-    cambió; ver `_detalle_sistema`."""
+    """La tabla DERECHA: el documento HOMOLOGADO, o sea con qué se va a
+    cargar al sistema de almacén.
+
+    Es la misma factura de la izquierda dicha en el idioma del ERP, y por
+    eso tiene las mismas columnas de plata: ítem, unidad, cantidad,
+    precio unitario e importe. Lo que cambia es de dónde sale cada una:
+
+      · **Ítem** — EDITABLE, contra el maestro de artículos
+        (`_JS_EDITOR_PRODUCTO`). Es el único campo que el usuario elige.
+      · **Und.** — la trae el producto elegido: es su unidad de KARDEX,
+        no la del comprobante. No se edita — cambiarla a mano sería
+        decirle al almacén que un kilo es una unidad.
+      · **Cant.** — EDITABLE. Arranca igual a la del comprobante y se
+        pisa cuando el grano no coincide: el proveedor factura 1 caja de
+        12 y el almacén ingresa 12 unidades.
+      · **P. unit.** — NO se edita: se DERIVA (`_precio_derivado`). Si la
+        cantidad pasa de 1 a 12, el unitario pasa de 126.27 a 10.5225.
+      · **Importe** — el INVARIANTE. Se copia del comprobante y no se
+        toca, y por eso tampoco se mueven los impuestos ni el total del
+        documento. Es la regla que hace que la homologación sea segura:
+        se puede cambiar el grano sin cambiar la plata.
+
+    El ORIGEN del emparejamiento dejó de ser columna (2026-08-28): son
+    120px en una mitad de 422 que ahora lleva también precio e importe, y
+    de un vistazo lo único que hace falta ver es SI hay que revisar la
+    fila — eso lo dice el ámbar del ítem. El detalle y el código del
+    sistema van al tooltip.
+
+    Devuelve la respuesta de AgGrid para que el llamador vea qué cambió;
+    ver `_detalle_sistema`.
+    """
     gb = GridOptionsBuilder.from_dataframe(tv)
     gb.configure_default_column(resizable=True, sortable=False, filter=False,
                                 editable=False, suppressMovable=True)
-    for oculta in ("_idx", "_cod_auto", "_cant_xml"):
+    for oculta in ("_idx", "_cod_auto", "_cant_xml", "_cod_sis", "_origen"):
         gb.configure_column(oculta, hide=True)
-    gb.configure_column("Código", width=100, minWidth=85)
     # LAS DOS columnas editables -- ver el docstring de `_detalle_sistema`.
     # El tinte lavanda es la misma señal visual de "interactivo" que usa el
     # resto de la app (`_ficha_html`, la barra de TOTAL), acá marcando
     # "esta celda se puede tocar".
+    # El ORIGEN del emparejamiento ya no es columna: es el color del ítem
+    # y su tooltip. Costaba 120px en una mitad de 422 que ahora tiene que
+    # llevar también precio e importe, y lo único que hace falta ver de un
+    # vistazo es SI hay que revisar esa fila — ámbar cuando sí. El detalle
+    # («Sugerido», «Corregido»…) y el código del sistema van al tooltip,
+    # que es donde se mira de a una fila.
     gb.configure_column(
-        "Ítem (sistema)", minWidth=170, flex=1, editable=True,
+        "Ítem (sistema)", minWidth=110, flex=1, editable=True,
         cellEditor=_JS_EDITOR_PRODUCTO,
+        tooltipValueGetter=JsCode(
+            "function(p){ var d=p.data||{}; return (d._origen||'') + "
+            "(d._cod_sis ? '  ·  cód. ' + d._cod_sis : ''); }"),
         cellStyle=JsCode(
-            "function(p){ return {'background': '%s', 'cursor': 'text'}; }"
-            % LAVANDA_FONDO))
-    gb.configure_column("Und. kardex", width=95, minWidth=80)
+            "function(p){ var base={'background':'%s','cursor':'text'};"
+            " var o=(p.data||{})._origen;"
+            " if (o==='Sugerido' || o==='Sin coincidencia') {"
+            "   base.color='%s'; base.fontWeight='600'; }"
+            " else if (o==='Corregido') { base.color='%s'; }"
+            " return base; }"
+            % (LAVANDA_FONDO, ADVERTENCIA_TEXTO, ACENTO_TEXTO)))
+    # La unidad la manda el MAESTRO, no el comprobante: es la de kardex
+    # del producto elegido, así que cambia sola al cambiar el ítem y no
+    # se edita a mano.
+    gb.configure_column("Und.", width=62, minWidth=56,
+                        headerTooltip="Unidad de kardex del sistema. La trae "
+                                      "el producto elegido; no se edita.",
+                        cellStyle={"color": GRIS_TEXTO})
     # La cantidad arranca igual a la del comprobante y se puede pisar. Se
     # marca con el acento cuando difiere: es la unica senal de que ese
     # numero ya no es el que dice SUNAT.
     gb.configure_column(
-        "Cant.", type=["numericColumn"], width=85, minWidth=75, editable=True,
+        "Cant.", type=["numericColumn"], width=72, minWidth=66, editable=True,
         valueFormatter=_JS_FORMATO_CANT, valueParser=_JS_CANTIDAD_PARSER,
         cellStyle=JsCode(
             "function(p){ var base = {'background': '%s', 'cursor': 'text'};"
@@ -2042,17 +2146,21 @@ def _grid_lado_sistema(tv, doc_id):
             "     && Math.abs(p.value - p.data._cant_xml) > 1e-6) {"
             "   base.color = '%s'; base.fontWeight = '600'; }"
             " return base; }" % (LAVANDA_FONDO, ACENTO_TEXTO)))
-    # Misma convención que "Estado" en `_tabla_cruce`: ámbar = revisar
-    # ("sin coincidencia" o "sugerido, sin confirmar todavía"). "Corregido"
-    # va con el acento de marca porque no es un problema, es una
-    # intervención humana que conviene notar.
+    # Precio DERIVADO: no se edita, se calcula (`_precio_derivado`). Va en
+    # gris para que se lea como lo que es — un resultado, no un campo.
     gb.configure_column(
-        "Origen", width=120, minWidth=105,
-        cellStyle=JsCode(
-            "function(p){ var m={'Corregido':'%s','Sugerido':'%s',"
-            "'Sin coincidencia':'%s'}; var c=m[p.value];"
-            " return c ? {'color':c,'fontWeight':'600'} : {'color':'%s'}; }"
-            % (ACENTO_TEXTO, ADVERTENCIA_TEXTO, ADVERTENCIA_TEXTO, GRIS_TEXTO)))
+        "P. unit.", type=["numericColumn"], width=76, minWidth=70,
+        headerTooltip="Se calcula solo: importe ÷ cantidad. Al cambiar la "
+                      "cantidad, cambia el unitario y el importe queda igual.",
+        valueFormatter=_JS_PRECIO_DERIVADO,
+        cellStyle={"color": GRIS_TEXTO})
+    # El IMPORTE es el invariante: se copia del comprobante y no se toca.
+    # Por eso NO lleva el tinte lavanda de "editable" ni marca de cambio.
+    gb.configure_column(
+        "Importe", type=["numericColumn"], width=82, minWidth=76,
+        headerTooltip="Lo que costó la línea según el comprobante. No "
+                      "cambia con la homologación — tampoco los impuestos.",
+        valueFormatter=_JS_IMPORTE_XML)
     # `singleClickEdit` + `stopEditingWhenCellsLoseFocus`: un clic entra a
     # editar y clickear afuera confirma, como una celda de Excel -- sin
     # esto haría falta doble clic y Enter.
@@ -2242,15 +2350,24 @@ def _detalle_sistema(doc, lineas_xml, d):
             "P. unit.": _num(xml_l.get("precio_unitario")),
             "Importe": _num(xml_l.get("importe")),
         })
+        # EL IMPORTE DE LA LÍNEA ES EL INVARIANTE de la homologación: el
+        # proveedor factura 1 caja de 12 y el almacén la ingresa como 12
+        # unidades, así que cambian la cantidad y el precio unitario —
+        # pero lo que se pagó por esa línea, y por lo tanto los impuestos
+        # y el total del documento, no. Ver `_grid_lado_sistema`.
+        _imp = _num(xml_l.get("importe"))
+        _cant_sis = cant_xml if cant_cor is None else cant_cor
         filas_sistema.append({
             "_idx": i,
             "_cod_auto": cod_auto or "",
             "_cant_xml": cant_xml,
-            "Código": cod_sis,
+            "_cod_sis": cod_sis,
+            "_origen": origen,
             "Ítem (sistema)": nom_sis,
-            "Und. kardex": uni_sis,
-            "Cant.": cant_xml if cant_cor is None else cant_cor,
-            "Origen": origen,
+            "Und.": uni_sis,
+            "Cant.": _cant_sis,
+            "P. unit.": _precio_derivado(_imp, _cant_sis),
+            "Importe": _imp,
         })
 
     tv_sunat = pd.DataFrame(filas_sunat)

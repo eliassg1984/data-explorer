@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-248 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+250 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (81)
 
@@ -177,7 +177,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#202** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
 - **#241** — Un panel de detalle y un gráfico del PERÍODO no pueden convivir: el gráfico tiene que hablar…
 
-**AgGrid y tablas** (43)
+**AgGrid y tablas** (44)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -222,6 +222,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#229** — cellValueChanged de AG Grid se despacha ASINCRÓNICO: leer los datos justo después de…
 - **#237** — Hay DOS familias de AgGrid en el repo y no se estilan igual: la de theme="material" se toca…
 - **#248** — En media tarjeta, cada columna nueva hay que pagarla con otra: la unidad se muda adentro de…
+- **#250** — Un valor derivado también se adelanta en el navegador: si sólo lo recalcula el servidor, la…
 
 **Streamlit** (72)
 
@@ -330,7 +331,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#230** — Un @st.fragment alrededor de la tarjeta que se edita: una corrección deja de re-correr el…
 - **#232** — Una anotación por línea que puede tener DOS correcciones independientes se guarda con claves…
 
-**SUNAT y SIRE** (25)
+**SUNAT y SIRE** (26)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -357,6 +358,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#244** — Dos tarjetas que comparan se alinean por TRES cosas, y las tres hay que medirlas: el alto de…
 - **#246** — Una tabla de líneas no es un comprobante hasta que tiene el pie: el pie es donde el documento…
 - **#247** — Un XML de nota de crédito trae los importes en POSITIVO y el registro los guarda en NEGATIVO.…
+- **#249** — En una homologación, el INVARIANTE es el importe de la línea — no la cantidad ni el precio
 
 **Fechas, rangos y cortes** (8)
 
@@ -396,7 +398,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#206** — Un mousemove/mouseup de un iframe TAMPOCO sube al padre — el modo diseño se congelaba al…
 - **#215** — Element.innerText no atraviesa el layout position: absolute de las celdas de AgGrid: da ""…
 
-**Decisiones de diseño y UX** (41)
+**Decisiones de diseño y UX** (42)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -439,6 +441,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#227** — server_sync_strategy="client_wins" (el default de st_aggrid) hace que el navegador IGNORE los…
 - **#236** — Sacar una vista de una página APILADA no es borrar su sección: hay que ir a buscar lo que la…
 - **#241** — Un panel de detalle y un gráfico del PERÍODO no pueden convivir: el gráfico tiene que hablar…
+- **#249** — En una homologación, el INVARIANTE es el importe de la línea — no la cantidad ni el precio
 
 **Mantenimiento y trampas del lenguaje** (7)
 
@@ -11021,13 +11024,77 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      las filas siguen alineadas con la tabla del sistema de al lado — que
      es la condición que no se puede romper (regla #231).
 
+249. **En una homologación, el INVARIANTE es el importe de la línea — no
+     la cantidad ni el precio.**
+
+     El conversor no compara dos fuentes: TRADUCE una. El proveedor
+     factura como vende y el almacén ingresa como guarda, y esos dos
+     granos no tienen por qué coincidir: una caja de 12 en la factura son
+     12 unidades en el kardex. Al cambiar el grano cambian la cantidad y
+     el precio unitario, pero **lo que se pagó por esa línea no**, y por
+     lo tanto tampoco los impuestos ni el total del documento.
+
+     De ahí la forma de la tabla del sistema (2026-08-28, a pedido):
+
+       · **Ítem** — editable, contra el maestro. Es lo único que el
+         usuario elige.
+       · **Und.** — la trae el producto elegido; es su unidad de KARDEX,
+         no la del comprobante. NO se edita: cambiarla a mano sería
+         decirle al almacén que un kilo es una unidad.
+       · **Cant.** — editable. Es el grano.
+       · **P. unit.** — NO se edita: se DERIVA, `importe ÷ cantidad`.
+       · **Importe** — se copia del comprobante y no se toca.
+
+     **Cuatro decimales en el precio derivado, no dos.** Con dos,
+     126.27 ÷ 12 = 10.52 y al re-multiplicar da 126.24: el documento
+     dejaría de cuadrar por tres centavos, en silencio, en cada línea de
+     caja partida. Con cuatro, 10.5225 × 12 = 126.27 exacto. Es la misma
+     precisión con la que el XML trae los unitarios (verificado:
+     `126.2712`, `5.0847`, `19.9153`; y `cantidad × unitario == importe`
+     en las 28 líneas de F001-5810).
+
+     Verificado en el navegador de punta a punta: cantidad 1 → 12, precio
+     126.27 → 10.5225, importe 126.27 sin moverse, y el pie del
+     comprobante intacto en 1.847,19 / 289,00 / 332,51 / 2.468,70.
+
+     **Cantidad cero devuelve `None`, no infinito**: es un dato que hay
+     que corregir, y una raya lo dice mejor que un número inventado.
+
+250. **Un valor derivado también se adelanta en el navegador: si sólo lo
+     recalcula el servidor, la celda de al lado miente durante tres
+     segundos.**
+
+     Al editar la cantidad, el precio unitario lo recalcula el servidor
+     —`_precio_derivado`, que es la fuente de verdad—, pero el viaje tarda
+     ~3s (regla #230). En ese lapso la fila muestra la cantidad NUEVA con
+     el precio VIEJO, o sea una línea que no cuadra: el usuario ve
+     12 × 126.27 y piensa que rompió algo.
+
+     `_JS_RELLENAR_VECINAS` hace la misma cuenta en el cliente y repinta
+     sólo esa celda. Ya lo hacía para la unidad de kardex al elegir un
+     ítem; ahora atiende las dos columnas y decide por `e.colDef.field`.
+     Dos detalles que valen para cualquier handler así:
+
+       · Se muta `e.data` y se llama a `refreshCells`, NO
+         `node.setDataValue` — aquél dispara otro `cellValueChanged` y,
+         con `update_on=["cellValueChanged"]`, cada uno sería otro viaje
+         al servidor para escribir algo que el servidor ya resuelve solo.
+       · `refreshCells` sólo sobre las columnas TOCADAS: repintar la fila
+         entera hace parpadear la celda que el usuario acaba de editar.
+
+     Y el adelanto puede ser aproximado sin riesgo, porque el servidor no
+     lee esas columnas del payload: las recalcula. Si las dos cuentas
+     alguna vez difirieran, gana la del servidor en el rerun siguiente —
+     por eso conviene que sean la MISMA cuenta, y el comentario del JS
+     apunta a la función Python que la define.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#249**.
+> próxima regla nueva es la **#251**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
