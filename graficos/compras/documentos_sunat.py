@@ -90,7 +90,9 @@ from tema import (
     LAVANDA_CABECERA_GRUPO, LAVANDA_FOCO, LAVANDA_FONDO, TEXTO_PRINCIPAL,
 )
 from graficos.base import _compras_layout, _compras_truncar
-from graficos.compras._comun import COLUMNAS_DRILL, GAP_DRILL
+from graficos.compras._comun import (
+    COLUMNAS_COTEJO, GAP_DRILL,
+)
 from graficos import alturas
 from tablas._css import _css_grid
 from utils import _norm
@@ -2207,57 +2209,54 @@ def _fila_cruce_de(df_cruce, doc):
     return None if coincidencias.empty else coincidencias.iloc[0]
 
 
-def _cotejo(doc, fila):
-    """La pestaña «Cotejo»: el documento del SIRE campo por campo, con lo
-    que dice el sistema al lado y la diferencia en soles.
+def _filas_cotejo(doc, fila):
+    """Las filas del cotejo, en orden: `(etiqueta, valor SUNAT, valor
+    sistema o None, diferencia o None)`.
 
-    Es la ficha de siempre (`sunat.campos_ficha` sigue siendo la fuente del
-    PDF descargable) con una columna más. Acá caben los dos lados sin
-    apuro porque es UN documento y no 326 — por eso la tabla de arriba
-    puede permitirse mostrar sólo lo que difiere y mandar el resto acá.
+    FUENTE ÚNICA de las dos tarjetas que comparan el documento
+    (`_card_sunat` y `_card_sistema`). Que las dos recorran ESTA lista es
+    lo que las mantiene alineadas fila a fila — la misma razón por la que
+    `_ALTO_FILA_CONVERSOR` es una constante compartida y no dos literales:
+    dos paneles que se leen uno contra otro no pueden decidir su contenido
+    por separado.
 
     TRES CLASES DE FILA, y la diferencia importa:
-      · comparables (base, IGV, total) — las tres tienen Δ.
+      · comparables (base, IGV, total) — las tres traen Δ. «Base total»
+        es gravada + no gravada, que es lo que compara
+        `cruzar_con_parquet`; el desglose son las dos filas de arriba.
       · de identidad que el sistema también guarda (RUC, número en el ERP,
-        fecha) — se muestran los dos lados pero sin Δ: no son números.
-      · sólo de SUNAT (tipo, período, vencimiento, moneda, detracción,
-        base gravada, no gravado) — el sistema no las tiene y por eso su
-        celda va vacía, no en cero. Un cero ahí se leería como un dato.
+        fecha) — los dos lados, sin Δ: no son números.
+      · sólo de SUNAT (tipo, período, estado, moneda, vencimiento,
+        detracción, base gravada, no gravado) — el sistema no las tiene y
+        su celda va con una raya, no en cero. Un cero ahí se leería como
+        un dato. Que sean OCHO de catorce no es ruido: es la medida de
+        cuánto menos guarda el ERP que el registro de SUNAT.
 
-    «Base gravada» y «No gravado» van SEPARADAS y sin Δ, y además está
+    «Base gravada» y «No gravado» van separadas y sin Δ, y además está
     «Base» que es la suma: sólo la gravada genera crédito fiscal, pero es
     la suma la que `cruzar_con_parquet` compara contra el sistema (para
-    que una compra exonerada no parezca un descuadre — ver su docstring).
-    Mostrar sólo la suma escondería el dato contable; mostrar sólo el
-    desglose no cuadraría con la tabla.
+    que una compra exonerada no parezca descuadre — ver su docstring).
     """
     mon = str(doc.get("moneda") or "PEN")
     tiene = fila is not None
 
-    def _sis(clave):
-        return None if not tiene else _num(fila.get(clave))
-
     def _fecha(v):
         f = pd.to_datetime(v, errors="coerce")
-        return "—" if pd.isna(f) else f"{f:%d/%m/%Y}"
+        return None if pd.isna(f) else f"{f:%d/%m/%Y}"
 
-    # (etiqueta, valor SUNAT, valor sistema o None, diferencia o None)
     filas = [
         ("RUC", str(doc.get("ruc_proveedor") or "—"),
          (str(fila.get("ruc_sistema") or "") or None) if tiene else None, None),
         ("Documento en el ERP", str(doc.get("documento") or "—"),
          (str(fila.get("documento_sistema") or "") or None) if tiene else None,
          None),
-        ("Fecha de emisión", _fecha(doc.get("fecha_emision")),
-         (_fecha(fila.get("fecha_sistema"))
-          if tiene and not pd.isna(pd.to_datetime(fila.get("fecha_sistema"),
-                                                  errors="coerce")) else None),
-         None),
+        ("Fecha de emisión", _fecha(doc.get("fecha_emision")) or "—",
+         _fecha(fila.get("fecha_sistema")) if tiene else None, None),
         ("Tipo de comprobante", str(doc.get("tipo_nombre") or "—"), None, None),
         ("Período tributario", str(doc.get("periodo") or "—"), None, None),
         ("Estado en SUNAT", str(doc.get("estado") or "—"), None, None),
         ("Moneda", sunat._moneda_con_tc(doc), None, None),
-        ("Vencimiento", _fecha(doc.get("fecha_vencimiento")), None, None),
+        ("Vencimiento", _fecha(doc.get("fecha_vencimiento")) or "—", None, None),
         ("Detracción",
          "Sí" if str(doc.get("detraccion") or "").strip().upper() == "D"
          else "No", None, None),
@@ -2265,49 +2264,245 @@ def _cotejo(doc, fila):
         ("No gravado", _fmt_imp(doc.get("no_gravado"), mon), None, None),
     ]
 
+    # Los tres comparables. El valor de SUNAT sale del CRUCE cuando hay
+    # fila (`base_sunat` es base+no gravado, no `base_imponible`) y del
+    # propio comprobante cuando no la hay.
+    _desde_doc = {"base_sunat": "base_imponible", "igv_sunat": "igv",
+                  "total_sunat": "total"}
     for etiqueta, campo_u, campo_s in (
-            ("Base (grav. + no grav.)", "base_sunat", "base_sistema"),
+            ("Base total", "base_sunat", "base_sistema"),
             ("IGV", "igv_sunat", "igv_sistema"),
             ("Total", "total_sunat", "total_sistema")):
-        u, s = (_num(fila.get(campo_u)) if tiene else _num(doc.get(
-            {"base_sunat": "base_imponible", "igv_sunat": "igv",
-             "total_sunat": "total"}[campo_u])), _sis(campo_s))
+        u = (_num(fila.get(campo_u)) if tiene
+             else _num(doc.get(_desde_doc[campo_u])))
+        s = _num(fila.get(campo_s)) if tiene else None
         dif = None if (u is None or s is None) else round(s - u, 2)
         filas.append((etiqueta, _fmt_imp(u, mon),
                       None if s is None else _fmt_imp(s, mon), dif))
+    return filas
 
-    _celdas = []
+
+_TIRON_MARKDOWN = 16
+"""Los píxeles que `stMarkdownContainer` se come con su
+`margin-bottom: -16px` (regla #162). Los suma `_card_sistema` al alto de
+su pastilla para que las dos grillas del cotejo arranquen a la misma
+altura."""
+
+
+_ALTO_TABS = 40
+"""Alto de la barra de `st.tabs`, medido en el navegador. Lo necesita la
+tarjeta del sistema para reservar el mismo sitio con su pastilla de
+estado: es lo único que separa el tope de las dos grillas, y de eso
+depende que las filas se lean una contra otra. Si Streamlit cambia el alto
+de sus tabs, esto se nota como un desfase parejo en las catorce filas —
+`herramientas/auditar_layout.js` lo mide en diez segundos."""
+
+
+_ANCHO_ETIQUETA_COTEJO = 132
+"""Ancho de la columna de etiquetas del cotejo, en píxeles. Es fijo y
+compartido por las dos tarjetas a propósito: ver `_grilla_campos`."""
+
+
+_ALTO_FILA_COTEJO = 24
+"""Alto de una fila del cotejo, en píxeles, y la razón por la que es una
+constante: las DOS tarjetas la usan como `line-height`, y de eso depende
+que la fila «Total» de la izquierda caiga a la misma altura que la de la
+derecha. Misma familia que `_ALTO_FILA_CONVERSOR` — dos paneles que se
+comparan a simple vista no pueden medir distinto."""
+
+
+def _grilla_campos(filas, lado):
+    """Pinta las filas del cotejo en una de las dos tarjetas.
+
+    `lado` es `"sunat"` o `"sistema"`, y es lo único que cambia: la
+    etiqueta se repite en las DOS a propósito. Podría ir sólo en la
+    izquierda y ahorrar ancho —las filas están alineadas—, pero en móvil
+    las columnas se apilan y la tarjeta de la derecha quedaría como una
+    lista de números sin nombre. Una tarjeta tiene que poder leerse sola.
+    """
+    celdas = []
     for etiqueta, val_u, val_s, dif in filas:
         marcada = dif is not None and abs(dif) > _TOLERANCIA_CENTAVOS
+        if lado == "sunat":
+            celdas.append(
+                f'<div style="color:{GRIS_TEXTO};">{etiqueta}</div>'
+                f'<div style="color:{TEXTO_PRINCIPAL};text-align:right;">'
+                f'{val_u}</div>')
+            continue
         color = ADVERTENCIA_TEXTO if marcada else TEXTO_PRINCIPAL
         peso = "600" if marcada else "400"
-        _d = "—" if dif is None else (
+        # Una raya y no vacío: "el sistema no guarda este campo" es un
+        # dato, y una celda en blanco se lee como "no lo cargaron".
+        valor = val_s if val_s is not None else "—"
+        _d = "" if dif is None else (
             "=" if abs(dif) <= _TOLERANCIA_CENTAVOS else f"{dif:+,.2f}")
-        _celdas.append(
+        celdas.append(
             f'<div style="color:{GRIS_TEXTO};">{etiqueta}</div>'
-            f'<div style="color:{TEXTO_PRINCIPAL};text-align:right;">{val_u}</div>'
             f'<div style="color:{color};font-weight:{peso};text-align:right;">'
-            f'{val_s if val_s is not None else ""}</div>'
-            f'<div style="color:{color};font-weight:{peso};text-align:right;">'
-            f'{_d}</div>')
+            f'{valor}</div>'
+            f'<div style="color:{color};font-weight:{peso};text-align:right;'
+            f'font-size:11px;">{_d}</div>')
 
+    # La columna de etiquetas mide lo mismo en las dos, y por eso es fija
+    # y no `1fr`: la del sistema tiene una columna más (Δ), así que con
+    # `1fr` le quedaba 80px menos y una etiqueta larga envolvía a dos
+    # líneas SÓLO de ese lado. Medido: «Base (grav. + no grav.)» ocupaba
+    # 48px contra 24, y las dos últimas filas quedaban corridas 8px.
+    _e = f"{_ANCHO_ETIQUETA_COTEJO}px"
+    cols = f"{_e} auto" if lado == "sunat" else f"{_e} auto 58px"
     st.markdown(
-        f'<div style="display:grid;grid-template-columns:1fr auto auto 62px;'
-        f'gap:3px 12px;font-size:12.5px;font-variant-numeric:tabular-nums;">'
-        f'<div style="color:{ACENTO_TEXTO};font-size:10px;font-weight:600;'
-        f'text-transform:uppercase;letter-spacing:.04em;"></div>'
-        f'<div style="color:{ACENTO_TEXTO};font-size:10px;font-weight:600;'
-        f'text-align:right;text-transform:uppercase;letter-spacing:.04em;">SUNAT</div>'
-        f'<div style="color:{ACENTO_TEXTO};font-size:10px;font-weight:600;'
-        f'text-align:right;text-transform:uppercase;letter-spacing:.04em;">Sistema</div>'
-        f'<div style="color:{ACENTO_TEXTO};font-size:10px;font-weight:600;'
-        f'text-align:right;">&Delta;</div>'
-        + "".join(_celdas) + '</div>',
+        f'<div style="display:grid;grid-template-columns:{cols};'
+        f'gap:0 12px;font-size:12.5px;font-variant-numeric:tabular-nums;'
+        f'line-height:{_ALTO_FILA_COTEJO}px;">' + "".join(celdas) + '</div>',
         unsafe_allow_html=True)
 
-    if not tiene:
-        st.caption("Este comprobante no tiene contraparte en el sistema, "
-                   "así que la columna del medio va vacía.")
+
+def _card_sunat(doc, fila):
+    """Tarjeta IZQUIERDA: el comprobante tal como lo tiene SUNAT.
+
+    Lleva las pestañas porque los tres artefactos que cuelgan de ellas
+    —el PDF, el detalle de líneas y el XML— son del lado del proveedor:
+    no hay nada equivalente del lado del sistema.
+
+      · **Datos** — los campos del SIRE, en el mismo orden que la tarjeta
+        de al lado (`_filas_cotejo`).
+      · **Comprobante** — el PDF, renderizado.
+      · **Detalle (n)** — las líneas del XML, completas.
+      · **XML** — el archivo crudo.
+
+    Las tres últimas sólo existen si el original ya está sincronizado; si
+    no, en su lugar va `_pedir_original`. «Datos» está SIEMPRE: sale del
+    registro del SIRE, que no depende de ningún sync.
+    """
+    _titulo_panel("Comprobante SUNAT", "el original del proveedor")
+
+    pdf_original, xml_original = sunat.originales(doc)
+    lineas = sunat.lineas_xml(xml_original) if xml_original else []
+
+    nombres = ["Datos"]
+    if pdf_original:
+        nombres.append("📄 Comprobante")
+    if lineas:
+        nombres.append(f"📋 Detalle ({len(lineas)})")
+    if xml_original:
+        nombres.append("🧾 XML")
+    if not (pdf_original or xml_original):
+        nombres.append("⬇ Original")
+
+    for nombre, tab in zip(nombres, st.tabs(nombres)):
+        with tab:
+            if nombre == "Datos":
+                _grilla_campos(_filas_cotejo(doc, fila), "sunat")
+                _descargas_ficha(doc, pdf_original, xml_original)
+            elif nombre.startswith("📄"):
+                # EL PDF SE MUESTRA COMO IMAGEN, no embebido: Chrome no
+                # renderiza un `data:application/pdf` dentro de un iframe
+                # con `sandbox` y Streamlit monta todos sus iframes así.
+                # Renderizarlo del lado del servidor además funciona igual
+                # en el teléfono, donde un visor embebido es incómodo.
+                with st.spinner("Preparando el comprobante…"):
+                    paginas = sunat.paginas_pdf(pdf_original)
+                if not paginas:
+                    st.warning("No se pudo mostrar el PDF en pantalla. "
+                               "Se puede descargar igual.")
+                for i, png in enumerate(paginas, 1):
+                    st.image(png, use_container_width=True)
+                    if len(paginas) > 1:
+                        st.caption(f"Página {i} de {len(paginas)}")
+            elif nombre.startswith("📋"):
+                _tabla_detalle(lineas)
+            elif nombre.startswith("🧾"):
+                st.code(xml_original.decode("utf-8", errors="replace"),
+                        language="xml")
+            else:
+                _pedir_original(doc)
+
+
+_COLOR_ESTADO_CRUCE = {
+    "Coincide": GRIS_TEXTO,
+    "Diferencia": ADVERTENCIA_TEXTO,
+    "Solo SUNAT": ADVERTENCIA_TEXTO,
+    "Solo sistema": ERROR,
+}
+"""Color de la pastilla de estado de `_card_sistema`. Misma convención que
+la columna «Está vs Sistema» de la tabla: ámbar = revisar, rojo = plata
+cargada sin comprobante que la respalde, gris = lo normal, que no compite
+por atención."""
+
+
+def _card_sistema(doc, fila):
+    """Tarjeta DERECHA: lo que el sistema tiene cargado de ese documento.
+
+    Recorre las MISMAS filas que la de la izquierda (`_filas_cotejo`), en
+    el mismo orden y con el mismo alto de línea, así se leen una contra
+    otra sin tener que buscar. Suma una columna Δ, que responde la
+    pregunta real —«¿cuánto?»— en vez de dejar los dos números para que
+    los reste el usuario.
+
+    La pastilla de estado ocupa el sitio que en la tarjeta de al lado
+    ocupan las pestañas. No es un relleno: es el veredicto del cruce, y
+    ponerlo acá arriba es lo que hace que las catorce filas de abajo
+    arranquen a la misma altura en las dos tarjetas.
+    """
+    _titulo_panel("Sistema", "lo que está cargado")
+
+    estado = str(fila.get("estado") or "") if fila is not None else "Solo SUNAT"
+    color = _COLOR_ESTADO_CRUCE.get(estado, GRIS_TEXTO)
+    # `height` y no `min-height`, y con ESE número: es el alto exacto de la
+    # barra de pestañas de la tarjeta de al lado (40px, medido en el
+    # navegador) MÁS los 16 que le resta el `margin-bottom: -16px` que
+    # Streamlit le pone al `stMarkdownContainer` (regla #162). Ese tirón
+    # vive en el contenedor PADRE, así que un `margin-bottom:0` inline no
+    # lo alcanza — se comprobó: la propiedad quedaba en 0 en el div y el
+    # desfase seguía. Compensarlo en el alto es local y no depende de
+    # acertarle a un selector.
+    # Sin esto, las dos grillas arrancaban con 22px de
+    # desfase — casi una fila entera de 24px — y las catorce filas se
+    # leían corridas una respecto de la otra, que es justo lo que dos
+    # tarjetas que comparan no pueden hacer.
+    st.markdown(
+        f'<div style="display:flex;align-items:center;'
+        f'height:{_ALTO_TABS + _TIRON_MARKDOWN}px;">'
+        f'<span style="background:{LAVANDA_FONDO};color:{color};'
+        f'font-size:11px;font-weight:600;padding:3px 10px;border-radius:7px;">'
+        f'{estado or "—"}</span></div>', unsafe_allow_html=True)
+
+    _grilla_campos(_filas_cotejo(doc, fila), "sistema")
+
+    if fila is None or estado == "Solo SUNAT":
+        st.caption("SUNAT lo tiene, tu sistema todavía no. El conversor de "
+                   "abajo mapea sus líneas contra el maestro.")
+
+
+def _panel_documento_vacio():
+    """El estado de "todavía no elegiste nada", para las dos tarjetas."""
+    st.markdown(
+        f'<div style="padding:28px 16px;text-align:center;color:{GRIS_TEXTO};'
+        f'font-size:13px;line-height:1.6;">'
+        f'<div style="font-size:30px;margin-bottom:6px;">📄</div>'
+        f'Elegí un documento de la tabla<br>para verlo acá.</div>',
+        unsafe_allow_html=True)
+
+
+def _cabecera_documento(doc):
+    """La identificación del documento elegido, ARRIBA de las dos tarjetas.
+
+    Va una sola vez y no dentro de cada una: identifica al documento para
+    las DOS, igual que la cabecera única que tenía el panel cuando era una
+    sola tarjeta con dos columnas.
+    """
+    st.markdown(
+        f'<div style="background:{LAVANDA_FONDO};border-radius:10px;'
+        f'padding:9px 14px;margin-bottom:10px;display:flex;'
+        f'align-items:baseline;gap:10px;flex-wrap:wrap;">'
+        f'<span style="font-size:16px;font-weight:600;color:{TEXTO_PRINCIPAL};">'
+        f'{doc.get("documento", "")}</span>'
+        f'<span style="font-size:11px;color:{GRIS_TEXTO};'
+        f'text-transform:uppercase;letter-spacing:.04em;">'
+        f'{doc.get("tipo_nombre", "Comprobante")}</span>'
+        f'<span style="font-size:12px;color:{GRIS_TEXTO};">'
+        f'{_compras_truncar(str(doc.get("proveedor", "")), 52)}</span></div>',
+        unsafe_allow_html=True)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -2504,98 +2699,6 @@ def _pedir_original(doc):
     if not fallo:
         st.caption("Todavía no sincronizado. El cotejo de al lado sale del "
                    "registro del SIRE y está disponible igual.")
-
-
-def _panel_documento(doc, fila_cruce=None):
-    """La ficha del documento elegido, en PESTAÑAS.
-
-    Reorganizada el 2026-08-28 a pedido. Hasta entonces eran dos columnas
-    —ficha del SIRE a la izquierda, «Original del proveedor» a la derecha,
-    con sus propias tres pestañas adentro—. Ahora el costado se lo lleva el
-    gráfico (`_panel_grafico`), así que el original deja de ser un panel y
-    sus pestañas suben un nivel, junto al cotejo:
-
-      · **Cotejo** — el documento campo por campo contra el sistema, con
-        Δ (`_cotejo`). Es la que abre, porque responde la pregunta con la
-        que se entra: ¿está bien cargado?
-      · **Comprobante** — el PDF del proveedor, renderizado.
-      · **Detalle (n)** — las líneas del XML, COMPLETAS: código, ítem,
-        cantidad, unidad, precio unitario e importe. A pedido no se
-        recorta aunque el conversor muestre parte de lo mismo — son dos
-        preguntas distintas (qué emitió el proveedor / contra qué se va a
-        cargar), y desde el mismo día el conversor ya no está siempre en
-        pantalla.
-      · **XML** — el archivo crudo.
-
-    Las tres últimas sólo existen si el original ya está sincronizado; si
-    no, en su lugar va `_pedir_original`. El cotejo está SIEMPRE: sale del
-    registro del SIRE, que no depende de ningún sync.
-    """
-    if doc is None:
-        st.markdown(
-            f'<div style="padding:28px 16px;text-align:center;color:{GRIS_TEXTO};'
-            f'font-size:13px;line-height:1.6;">'
-            f'<div style="font-size:30px;margin-bottom:6px;">📄</div>'
-            f'Elegí un documento de la tabla<br>para verlo acá.</div>',
-            unsafe_allow_html=True,
-        )
-        return
-
-    st.markdown(
-        f'<div style="background:{LAVANDA_FONDO};border-radius:8px;'
-        f'padding:10px 14px;margin-bottom:10px;">'
-        f'<div style="font-size:11px;color:{GRIS_TEXTO};text-transform:uppercase;'
-        f'letter-spacing:.04em;">{doc.get("tipo_nombre", "Comprobante")}</div>'
-        f'<div style="font-size:17px;font-weight:600;color:{TEXTO_PRINCIPAL};">'
-        f'{doc.get("documento", "")}</div>'
-        f'<div style="font-size:12px;color:{GRIS_TEXTO};margin-top:2px;">'
-        f'{_compras_truncar(str(doc.get("proveedor", "")), 44)}</div></div>',
-        unsafe_allow_html=True,
-    )
-
-    # El original vive en R2 solo si `sunat_originales_sync.py` ya pasó por
-    # este documento — ver el docstring del módulo. Ninguno de los dos
-    # `None` es un error: es el estado normal antes del primer sync.
-    pdf_original, xml_original = sunat.originales(doc)
-    lineas = sunat.lineas_xml(xml_original) if xml_original else []
-
-    nombres = ["🔍 Cotejo"]
-    if pdf_original:
-        nombres.append("📄 Comprobante")
-    if lineas:
-        nombres.append(f"📋 Detalle ({len(lineas)})")
-    if xml_original:
-        nombres.append("🧾 XML")
-    if not (pdf_original or xml_original):
-        nombres.append("⬇ Original")
-
-    for nombre, tab in zip(nombres, st.tabs(nombres)):
-        with tab:
-            if nombre.startswith("🔍"):
-                _cotejo(doc, fila_cruce)
-                _descargas_ficha(doc, pdf_original, xml_original)
-            elif nombre.startswith("📄"):
-                # EL PDF SE MUESTRA COMO IMAGEN, no embebido: Chrome no
-                # renderiza un `data:application/pdf` dentro de un iframe
-                # con `sandbox` y Streamlit monta todos sus iframes así.
-                # Renderizarlo del lado del servidor además funciona igual
-                # en el teléfono, donde un visor embebido es incómodo.
-                with st.spinner("Preparando el comprobante…"):
-                    paginas = sunat.paginas_pdf(pdf_original)
-                if not paginas:
-                    st.warning("No se pudo mostrar el PDF en pantalla. "
-                               "Se puede descargar igual.")
-                for i, png in enumerate(paginas, 1):
-                    st.image(png, use_container_width=True)
-                    if len(paginas) > 1:
-                        st.caption(f"Página {i} de {len(paginas)}")
-            elif nombre.startswith("📋"):
-                _tabla_detalle(lineas)
-            elif nombre.startswith("🧾"):
-                st.code(xml_original.decode("utf-8", errors="replace"),
-                        language="xml")
-            else:
-                _pedir_original(doc)
 
 
 def _descargas_ficha(doc, pdf_original, xml_original):
@@ -2914,17 +3017,35 @@ def renderizar_documentos_sunat(d, col_fecha):
     doc = estado["doc"]
     fila_cruce = _fila_cruce_de(estado["cruce"], doc)
 
-    # Segunda fila: la ficha y, al costado, el gráfico. `COLUMNAS_DRILL`
-    # y no un literal — es la proporción con la que parten sus filas los
-    # otros drills de Compras, y de eso depende que el eje vertical de la
-    # página caiga siempre en el mismo sitio (CLAUDE.md § Grilla).
-    c_ficha, c_graf = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
-    with c_ficha:
+    # Segunda fila: el documento elegido en DOS tarjetas hermanas, SUNAT
+    # contra sistema (a pedido 2026-08-28 — antes era una sola tarjeta con
+    # cuatro columnas: campo | SUNAT | sistema | Δ). Se parte con
+    # `COLUMNAS_COTEJO` (1/1) y no con `COLUMNAS_DRILL` (1.6/1): acá los
+    # dos lados son pares y cualquier asimetría se leería como que uno
+    # importa más. Además así el eje cae en el mismo sitio que la fila del
+    # conversor, que también parte por la mitad.
+    if doc is None:
         with st.container(border=True, key="sunat_card_doc"):
-            _panel_documento(doc, fila_cruce)
-    with c_graf:
-        with st.container(border=True, key="sunat_card_graf"):
-            _panel_grafico(estado["vis"], doc)
+            _panel_documento_vacio()
+    else:
+        # La identificación del documento va UNA vez, arriba de las dos:
+        # es de las dos, no de ninguna. Son ~50px, el mismo sitio que
+        # ocupaba dentro de la tarjeta única.
+        _cabecera_documento(doc)
+        c_sunat, c_sistema = st.columns(COLUMNAS_COTEJO, gap=GAP_DRILL)
+        with c_sunat:
+            with st.container(border=True, key="sunat_card_doc"):
+                _card_sunat(doc, fila_cruce)
+        with c_sistema:
+            with st.container(border=True, key="sunat_card_sis"):
+                _card_sistema(doc, fila_cruce)
+
+    # El gráfico BAJA a lo ancho (a pedido, mismo día): al costado de la
+    # ficha ya no hay sitio, porque ese costado se lo lleva la tarjeta del
+    # sistema. Sigue siendo el panel de tres modos, sólo que ahora ocupa
+    # la fila entera.
+    with st.container(border=True, key="sunat_card_graf"):
+        _panel_grafico(estado["vis"], doc)
 
     # Tercera tarjeta, CONDICIONAL: el conversor sirve para cargar lo que
     # no está cargado, así que sólo aparece ahí. Ver `_necesita_conversor`.

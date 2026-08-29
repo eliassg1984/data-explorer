@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-243 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+245 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (80)
+**CSS y estilos** (81)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -100,8 +100,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#231** — Dos tablas que tienen que alinearse fila contra fila no pueden calcular su alto por separado
 - **#234** — Elegir un prefijo de key que NO choque con otra familia no alcanza: hay que mirar también las…
 - **#237** — Hay DOS familias de AgGrid en el repo y no se estilan igual: la de theme="material" se toca…
+- **#245** — Una fila que COMPARA se parte por la mitad, no con COLUMNAS_DRILL
 
-**Layout y alturas** (21)
+**Layout y alturas** (23)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -124,6 +125,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#194** — "Unificar dos tarjetas" en el modo diseño es CSS de las dos mitades, no mover nodos: sacar un…
 - **#214** — Un st.rerun con scope="app" sigue estando ADENTRO del fragment que lo llama: sumarle espacio…
 - **#243** — Al partir en dos una fila de un drill hay que sumar su familia de key al PISO de…
+- **#244** — Dos tarjetas que comparan se alinean por TRES cosas, y las tres hay que medirlas: el alto de…
+- **#245** — Una fila que COMPARA se parte por la mitad, no con COLUMNAS_DRILL
 
 **Plotly y figuras** (45)
 
@@ -325,7 +328,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#230** — Un @st.fragment alrededor de la tarjeta que se edita: una corrección deja de re-correr el…
 - **#232** — Una anotación por línea que puede tener DOS correcciones independientes se guarda con claves…
 
-**SUNAT y SIRE** (22)
+**SUNAT y SIRE** (23)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -349,6 +352,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#239** — Una columna donde el 97,6 % de las filas repiten la misma palabra no es una columna: es un…
 - **#242** — Una tarjeta que no tiene nada que hacer no se dibuja vacía: no se dibuja
 - **#243** — Al partir en dos una fila de un drill hay que sumar su familia de key al PISO de…
+- **#244** — Dos tarjetas que comparan se alinean por TRES cosas, y las tres hay que medirlas: el alto de…
 
 **Fechas, rangos y cortes** (8)
 
@@ -10881,13 +10885,78 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      **Antes de dar por terminada una fila de dos columnas, medir los dos
      altos.** El techo se hereda por prefijo de key; el piso no.
 
+244. **Dos tarjetas que comparan se alinean por TRES cosas, y las tres hay
+     que medirlas: el alto de fila, el ancho de la columna de etiquetas y
+     lo que cada una tiene ENCIMA de su primera fila.**
+
+     La ficha de «Documentos SUNAT» pasó el 2026-08-28 de una tarjeta con
+     cuatro columnas (campo | SUNAT | sistema | Δ) a DOS tarjetas
+     hermanas, a pedido. Que se lean una contra otra depende de que la
+     fila «Total» de la izquierda caiga exactamente a la altura de la
+     «Total» de la derecha, y eso NO sale solo. Se rompió tres veces
+     seguidas, cada una por un motivo distinto, y cada una se vio como
+     "las filas están corridas":
+
+       1. **Lo que hay encima.** La tarjeta de SUNAT lleva una barra de
+          `st.tabs` (40px medidos) y la del sistema una pastilla de
+          estado. Con la pastilla en su alto natural (18px), las grillas
+          arrancaban con **22px** de diferencia — casi una fila entera de
+          24. La pastilla reserva ahora el alto de la barra de pestañas.
+       2. **El ancho de la columna de etiquetas.** Con `1fr`, la tarjeta
+          del sistema —que tiene una columna más (Δ)— le dejaba 80px
+          menos a las etiquetas, y «Base (grav. + no grav.)» envolvía a
+          dos líneas SÓLO de ese lado: esa fila medía 48px contra 24 y
+          todo lo de abajo quedaba corrido 8px. Ahora la columna es fija
+          y compartida (`_ANCHO_ETIQUETA_COTEJO`), y la etiqueta se
+          acortó a «Base total».
+       3. **El tirón de `stMarkdownContainer`.** Quedaban 16px, que son
+          exactamente el `margin-bottom: -16px` de la regla #162. Vive en
+          el contenedor PADRE que Streamlit envuelve alrededor del
+          markdown, así que un `margin-bottom: 0` inline en el propio div
+          **no lo alcanza** — se comprobó: la propiedad quedaba en 0 y el
+          desfase seguía. Se compensa sumándolo al alto
+          (`_TIRON_MARKDOWN`), que es local y no depende de acertarle a un
+          selector.
+
+     **Cómo verificarlo, que es lo que importa:** no mirar la pantalla —
+     comparar la `y` de cada etiqueta en las dos grillas. Un desfase
+     PAREJO en todas las filas es (1) o (3); una fila que se despega y
+     arrastra a las de abajo es (2). Verificado al terminar: las catorce
+     filas con la misma `y`, desfase 0, tarjetas de 466x552 iguales.
+
+245. **Una fila que COMPARA se parte por la mitad, no con
+     `COLUMNAS_DRILL`.**
+
+     `COLUMNAS_DRILL` es 1.6/1 porque su izquierda lleva una tabla con
+     nombres largos y su derecha un panel de apoyo: hay jerarquía. En una
+     comparación no la hay, y cualquier asimetría se lee como que un lado
+     importa más. De ahí `COLUMNAS_COTEJO = [1, 1]`, que además hace que
+     el eje vertical caiga en el mismo sitio que la fila del conversor de
+     ese mismo drill, que también parte por la mitad — que es exactamente
+     el bug que hizo nacer la regla #145, sólo que al revés: ahí el
+     problema era usar dos proporciones distintas, acá es usar la
+     equivocada.
+
+     Corolario del mismo cambio: **al mover el gráfico de al lado de la
+     ficha a una fila propia** (a pedido, para dejarle el costado a la
+     tarjeta del sistema), pasa a ancho completo y deja de competir por
+     espacio con el detalle del documento. Los tres modos —«Este
+     proveedor», «Por fecha», «Por proveedor»— no cambian.
+
+     Y una nota de mantenimiento que vale para toda esta familia: la
+     tarjeta nueva se llamó `sunat_card_sis`, con el prefijo
+     `sunat_card_`, y por eso heredó **sin CSS nuevo** el blanco, el
+     radio, la sombra, el clamp a `--alto-util` y el piso de la fila de
+     dos columnas (regla #243). Elegir bien el prefijo de la key es la
+     mitad del trabajo de estilo.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#244**.
+> próxima regla nueva es la **#246**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

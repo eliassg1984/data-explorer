@@ -55,6 +55,24 @@ largos (proveedores, productos) y la derecha un panel de apoyo. La grilla de
 (`@container (max-width: 380px)` en `_css_proveedor.py`), así que angostarla
 es seguro."""
 
+COLUMNAS_COTEJO = [1, 1]
+"""Proporción de una fila que COMPARA dos fuentes, no que parte una tabla
+de su panel de apoyo.
+
+`COLUMNAS_DRILL` es 1.6/1 porque su izquierda lleva siempre una tabla con
+nombres largos y su derecha un panel que la acompaña — hay una jerarquía.
+En una comparación no la hay: los dos lados son pares y cualquier
+asimetría se lee como que uno importa más. Se estrenó el 2026-08-28 en
+«Documentos SUNAT», cuando la ficha del comprobante pasó de ser una
+tarjeta con cuatro columnas (campo | SUNAT | sistema | Δ) a DOS tarjetas
+hermanas, a pedido.
+
+Existe como constante y no como `st.columns(2)` suelto por lo mismo que
+`COLUMNAS_DRILL`: el conversor de ese mismo drill parte sus dos mitades
+por la mitad, y si una fila comparara 1.6/1 y la otra 1/1, el eje
+vertical de la página se correría a media pantalla — que es exactamente
+el bug que hizo nacer la regla #145."""
+
 GAP_DRILL = "small"
 """Gap entre las columnas de un drill. Va con `COLUMNAS_DRILL`: si las dos
 filas parten en el mismo sitio pero con gaps distintos, el canal gris cambia
