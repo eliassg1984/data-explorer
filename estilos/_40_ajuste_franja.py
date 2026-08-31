@@ -480,11 +480,23 @@ CSS = """    /* ================================================================
     /*                                                                       */
     /* El pill de FECHA se queda: SUNAT sí lo usa — es el rango que consulta */
     /* al SIRE (`comprobantes_rango`), y sin él la vista no tiene qué pedir. */
+    /* Pero el pill que usa NO es el de la franja compartida: `app.py` ya    */
+    /* apaga `franja_fecha.render()` para esta vista (no se puede duplicar  */
+    /* la key `fecha_ajuste_pill`) y SUNAT dibuja el SUYO propio, dentro de  */
+    /* `st-key-sunat_card_izq` — confirmado en el DOM (2026-08-31): el pill  */
+    /* real de esta vista NO es descendiente de `fila_ajuste_top`. Con eso,  */
+    /* `fila_ajuste_top` queda sin un solo widget acá (mismo caso que Receta */
+    /* Base/Venta, más abajo — "no queda nada adentro, solo la banda        */
+    /* decorativa") y se esconde entero, franja incluida.                   */
     /* Marker: `compras_sunat_drill_wrap`, el contenedor que sólo existe     */
     /* cuando ese drill está en pantalla. Va desde `:root` porque los chips  */
     /* son `position: fixed` y viven fuera del wrapper.                      */
     /* =================================================================== */
     :root:has(.st-key-compras_sunat_drill_wrap) .st-key-chips_ajuste_tabla {
+        display: none !important;
+    }
+    [data-testid="stAppViewContainer"]:has(.st-key-compras_sunat_drill_wrap)
+        .st-key-fila_ajuste_top {
         display: none !important;
     }
 """
