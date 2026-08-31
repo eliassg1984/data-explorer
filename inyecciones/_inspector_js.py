@@ -1698,11 +1698,15 @@ JS = """
                 }
                 if (e.altKey && (e.key === 'i' || e.key === 'I')) {
                     var url = new URL(win.location.href);
-                    if (url.searchParams.get('debug') === '1') {
+                    var _prenderDebug = url.searchParams.get('debug') !== '1';
+                    if (!_prenderDebug) {
                         url.searchParams.delete('debug');
                     } else {
                         url.searchParams.set('debug', '1');
                     }
+                    // Apagado/prendido a proposito: que el blindaje de
+                    // _herramientas_js.py (si ya corrio) no lo pise.
+                    if (win.__toolFlagsVivos) win.__toolFlagsVivos.debug = _prenderDebug;
                     win.history.replaceState({}, '', url.toString());
                     var badge = doc.getElementById('el-inspector-badge');
                     if (badge) badge.style.display = inspectorActivo() ? 'flex' : 'none';

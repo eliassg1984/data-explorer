@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-259 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+260 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (83)
 
@@ -227,7 +227,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#248** — En media tarjeta, cada columna nueva hay que pagarla con otra: la unidad se muda adentro de…
 - **#250** — Un valor derivado también se adelanta en el navegador: si sólo lo recalcula el servidor, la…
 
-**Streamlit** (73)
+**Streamlit** (74)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -302,6 +302,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#230** — Un @st.fragment alrededor de la tarjeta que se edita: una corrección deja de re-correr el…
 - **#235** — _css_grid es de UNA tabla suelta sobre el gris de la app; si la tabla ya vive adentro de una…
 - **#256** — El panel de diseño es fixed a la derecha y tapa 230px de la app — justo la orilla donde caen…
+- **#260** — Un mock insertado en modo diseño aparece un instante y desaparece solo: Streamlit le borra…
 
 **Datos, R2 y DuckDB** (30)
 
@@ -383,7 +384,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (22)
+**Herramientas de desarrollo** (23)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -407,6 +408,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#254** — Hay DOS contornos violetas y vienen de sitios distintos: el overlay del modo diseño (un <div>…
 - **#256** — El panel de diseño es fixed a la derecha y tapa 230px de la app — justo la orilla donde caen…
 - **#257** — Mover un elemento una vez y no poder moverlo de nuevo: la perilla viaja con el elemento y…
+- **#260** — Un mock insertado en modo diseño aparece un instante y desaparece solo: Streamlit le borra…
 
 **Decisiones de diseño y UX** (44)
 
@@ -11478,13 +11480,71 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      marca con el contorno naranja, que se apaga solo ~1.4s después sin
      dejar rastro (`outline-color` vuelve a `rgba(0,0,0,0)`).
 
+260. **Un mock insertado en modo diseño aparece un instante y desaparece
+     solo: Streamlit le borra `debug`/`diseno` de la URL en el próximo
+     rerun que toque `st.query_params`.**
+
+     Pedido 2026-08-31, en vivo, con captura desde el deploy: una "Barra"
+     recién insertada (regla #259) se veía un momento y se esfumaba, con
+     un área gris vacía donde debía estar. No era un solape de CSS ni un
+     contenedor con `overflow` recortando — se descartó midiendo con
+     `herramientas/rayos_x.js` y viendo que no había NADA pintado ahí, ni
+     escapado ni en flujo.
+
+     La causa real: `st.query_params` no es un diccionario que Streamlit
+     "completa" — es la fuente de verdad completa de la query string desde
+     el lado Python. Cuando algo escribe una clave (`app.py` con
+     `st.query_params["reporte"] = ...`, o el mirror de "vista" en
+     `_render_rail`, `graficos/base.py:1099-1100`), el frontend de
+     Streamlit resincroniza la URL del navegador **entera** contra su
+     propia copia de query params — que nunca oyó hablar de `debug=1` ni
+     `diseno=1`, porque esos los agrega el propio JS inyectado con
+     `history.replaceState` **por fuera** de esa copia (mismo patrón en
+     `_herramientas_js.py::fijar()` y el Alt+I de `_inspector_js.py`).
+     Repro mínima, confirmada en consola:
+
+     ```javascript
+     window.history.replaceState({}, '', '/?reporte=Compras&vista=producto');
+     // -> la URL pierde debug/diseno aunque estaban ahí un segundo antes
+     ```
+
+     El golpe real: `sync()` (`_diseno_js.py`, el poll de 150ms) abre con
+     `if (!disenoActivo()) { ...; return; }` — sin `debug=1&diseno=1` en
+     la URL deja de llamar `reponerMocks()`. La Barra sigue viva en
+     `win.__disenoState.mocks`, pero el PRÓXIMO rerun que reemplace su
+     nodo del DOM (cualquier rerun de Streamlit lo hace de forma rutinaria)
+     ya no tiene quién la reponga: por eso "aparece un instante" — el
+     tiempo hasta el primer rerun que toque `query_params` — "y
+     desaparece" sola.
+
+     Arreglo en `_herramientas_js.py` (el único script que corre siempre,
+     con o sin `?debug=1`, y por eso el lugar natural para un blindaje
+     compartido): al cargar, `win.__toolFlagsVivos` graba qué flags
+     (`debug`, `diseno`, `rayosx`, `diagnostico`) traía la URL de
+     **arranque** — la única que Python todavía no tocó. Un monkey-patch
+     de `history.pushState`/`replaceState`, instalado una sola vez
+     (guardado en `win`, mismo idioma que el de `_inspector_js.py` #10),
+     reinyecta cualquier flag marcado `true` en ese mapa que falte en la
+     URL que se está por escribir — sea quien sea quien la escriba. Los
+     dos apagados deliberados que existen (`fijar()` acá, Alt+I en
+     `_inspector_js.py`) actualizan `__toolFlagsVivos[param]` ANTES de
+     llamar a `replaceState`, así el blindaje no pisa un apagado a
+     propósito — verificado con un Alt+I simulado: `debug` se apaga y se
+     queda apagado.
+
+     Verificado en vivo: se pinchó la tarjeta de ranking, se insertaron
+     dos Barras, y se forzó un rerun real (botón "Refrescar" — limpia
+     cache, `del st.query_params["refresh"]`, `st.rerun()`, el mismo
+     patrón exacto que rompía el caso). Tras el rerun la URL seguía con
+     `debug=1&diseno=1` y las dos Barras seguían en el DOM.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#260**.
+> próxima regla nueva es la **#261**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

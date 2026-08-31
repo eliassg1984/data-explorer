@@ -17,6 +17,56 @@ JS = """
     var doc = win && win.document;
     if (!win || !doc || !doc.body) return;
 
+    // ── Blindaje de los flags de herramientas contra el propio Streamlit ──
+    // `st.query_params` (que usa app.py para "reporte" y _render_rail para
+    // "vista") no AGREGA una clave a la URL: cuando Python escribe una, el
+    // frontend de Streamlit resincroniza la URL entera desde SU copia de
+    // query params, que no sabe nada de debug/diseno/rayosx/diagnostico
+    // porque esos los agregamos nosotros con searchParams.set() por fuera
+    // de esa copia. Resultado: la barra (y el modo diseno) se apagan solos
+    // en el proximo rerun que toque query_params — el mirror de "vista"
+    // corre en casi cualquier click del rail. Sintoma reportado: una Barra
+    // insertada en modo diseno aparece un instante y desaparece; no es un
+    // solape de CSS, es que `disenoActivo()` deja de ver `diseno=1` y
+    // `sync()` deja de reponer los mocks (arquitectura.md regla #260).
+    //
+    // Blindaje: se recuerda que flags estaban prendidos con la URL de
+    // ARRANQUE (la unica que Python todavia no toco) y cualquier
+    // pushState/replaceState de ahi en mas — sea de Streamlit o nuestro —
+    // los reinyecta si faltan. Los apagados deliberados (fijar() aca,
+    // Alt+I en _inspector_js.py) actualizan este mapa ANTES de reescribir
+    // la URL, asi que un apagado a proposito sigue apagando.
+    var FLAGS_HERRAMIENTA = ['debug', 'diseno', 'rayosx', 'diagnostico'];
+    if (!win.__toolFlagsVivos) {
+        win.__toolFlagsVivos = {};
+        var _urlInicial = new URL(win.location.href);
+        FLAGS_HERRAMIENTA.forEach(function (p) {
+            win.__toolFlagsVivos[p] = _urlInicial.searchParams.get(p) === '1';
+        });
+    }
+    if (!win.__toolFlagsPatched) {
+        win.__toolFlagsPatched = true;
+        ['pushState', 'replaceState'].forEach(function (metodo) {
+            var original = win.history[metodo].bind(win.history);
+            win.history[metodo] = function (state, title, url) {
+                if (url) {
+                    try {
+                        var u = new URL(url, win.location.href);
+                        var cambio = false;
+                        FLAGS_HERRAMIENTA.forEach(function (p) {
+                            if (win.__toolFlagsVivos[p] && u.searchParams.get(p) !== '1') {
+                                u.searchParams.set(p, '1');
+                                cambio = true;
+                            }
+                        });
+                        if (cambio) url = u.pathname + u.search + u.hash;
+                    } catch (err) { /* URL invalida: dejarla pasar tal cual */ }
+                }
+                return original(state, title, url);
+            };
+        });
+    }
+
     // ── Fuentes de los auditores, embebidas por herramientas.py ───────────
     // Son los MISMOS ficheros de herramientas/*.js que se pegan en la
     // consola: una sola fuente, dos formas de correrlos (ver el docstring
@@ -57,6 +107,9 @@ JS = """
         var url = new URL(win.location.href);
         if (valor) url.searchParams.set(param, '1');
         else url.searchParams.delete(param);
+        // Antes de reescribir: si es un apagado a proposito, que el
+        // blindaje de arriba no lo vuelva a prender.
+        if (win.__toolFlagsVivos) win.__toolFlagsVivos[param] = !!valor;
         win.history.replaceState({}, '', url.toString());
     }
 
