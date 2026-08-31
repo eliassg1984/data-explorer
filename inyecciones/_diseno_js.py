@@ -168,7 +168,20 @@ JS = """
         // algún día se agrega un tipo de mock que sí la comparta.
         var SIN_COPIAS = ':not([data-diseno-mock])';
         function porKeyReal(key) {
-            return doc.querySelector('.st-key-' + key + SIN_COPIAS);
+            var real = doc.querySelector('.st-key-' + key + SIN_COPIAS);
+            if (real) return real;
+            // Sin real: puede ser la key de un mock pineado SOBRE SI MISMO
+            // (clic derecho directo en la Barra/Linea/Espacio/Texto recien
+            // insertados). Sin este fallback, elementoPineado() devolvia
+            // el:null (el filtro de arriba excluye a los mocks tambien de
+            // si mismos) y el panel caia a "perdido": la Barra se veia
+            // pero no se podia seleccionar ni arrastrar. El SIN_COPIAS de
+            // arriba sigue protegiendo a los widgets REALES — siempre
+            // matchean primero, sin importar en que orden del DOM esten
+            // contra un mock con la misma key — asi que este fallback solo
+            // se alcanza cuando NINGUN nodo sin data-diseno-mock tiene esa
+            // key, o sea nunca para un widget real.
+            return doc.querySelector('.st-key-' + key);
         }
 
         // Hijos del widget pineado que tienen clase propia pero NO key: los

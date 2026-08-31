@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-262 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+263 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (84)
 
@@ -132,7 +132,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#245** — Una fila que COMPARA se parte por la mitad, no con COLUMNAS_DRILL
 - **#248** — En media tarjeta, cada columna nueva hay que pagarla con otra: la unidad se muda adentro de…
 
-**Plotly y figuras** (46)
+**Plotly y figuras** (47)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -180,6 +180,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#202** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
 - **#241** — Un panel de detalle y un gráfico del PERÍODO no pueden convivir: el gráfico tiene que hablar…
 - **#259** — Insertar texto/línea/barra/espacio no lo ubica: hace falta scroll + un flash de color, o es…
+- **#263** — porKeyReal() no podía resolver un mock pineado SOBRE SÍ MISMO: el filtro…
 
 **AgGrid y tablas** (44)
 
@@ -228,7 +229,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#248** — En media tarjeta, cada columna nueva hay que pagarla con otra: la unidad se muda adentro de…
 - **#250** — Un valor derivado también se adelanta en el navegador: si sólo lo recalcula el servidor, la…
 
-**Streamlit** (75)
+**Streamlit** (76)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -305,6 +306,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#256** — El panel de diseño es fixed a la derecha y tapa 230px de la app — justo la orilla donde caen…
 - **#260** — Un mock insertado en modo diseño aparece un instante y desaparece solo: Streamlit le borra…
 - **#262** — Linea/Barra/Espacio insertados sobre un stVerticalBlock nacen con width:0 — Streamlit pone…
+- **#263** — porKeyReal() no podía resolver un mock pineado SOBRE SÍ MISMO: el filtro…
 
 **Datos, R2 y DuckDB** (30)
 
@@ -11623,13 +11625,52 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      mock puede caer en cualquiera de los dos contextos y no hay forma de
      saber cuál de antemano.
 
+263. **`porKeyReal()` no podía resolver un mock pineado SOBRE SÍ MISMO: el
+     filtro `:not([data-diseno-mock])` de la #258 lo excluía también a
+     él, no sólo a las copias.**
+
+     Reportado 2026-08-31, justo después de arreglar la #262 ("ya me
+     aparece la barra pero no le permite seleccionarla ni arrastrarla…
+     no me permite diseñarla"). Con la Barra visible por primera vez, fue
+     la primera vez que alguien intentó clic-derecho DIRECTO sobre ella —
+     antes, con `width:0`, no había nada ahí para apuntarle.
+
+     `elementoPineado()` resuelve cualquier key pineada con
+     `porKeyReal(key)`, y esa función excluye a propósito los nodos con
+     `data-diseno-mock` (regla #258: evitar que un clon con la MISMA key
+     que un widget real le robara el pin). El problema: para la key de un
+     mock **el único nodo que existe con esa clase es el mock mismo**, y
+     ese nodo SIEMPRE lleva `data-diseno-mock` — el filtro no tenía a
+     quién más encontrar, así que devolvía `null` sea cual sea el mock.
+     `elementoPineado()` entonces devolvía `{ ..., el: null }`, y `sync()`
+     trataba eso exactamente igual que "el widget real que tenía esta key
+     desapareció" — `panelPerdido()`, sin overlay, sin manijas, sin
+     controles. El síntoma no distinguía "no está" de "no se puede
+     resolver": los dos se ven igual.
+
+     Arreglo: `porKeyReal()` intenta primero el selector excluyente de
+     siempre (protege a los widgets reales sin importar en qué orden del
+     DOM esté un mock con la misma key — ese caso no existe hoy, pero la
+     razón de ser del filtro sigue vigente); si eso no encuentra nada,
+     cae a un selector SIN excluir mocks. Como un widget real con esa key
+     siempre matchea en el primer intento, el fallback sólo se alcanza
+     cuando NINGÚN nodo sin `data-diseno-mock` tiene esa key — o sea,
+     nunca para un widget real, siempre para un mock pineado sobre sí
+     mismo.
+
+     Verificado en vivo: pineado directo sobre una Barra ya insertada
+     (`diseno_barra_1`) — antes `el: null` y panel "perdido"; después
+     `overlay.style.display = "block"` con el rect exacto de la barra y
+     el panel completo (posición, radio de borde, padding, margen,
+     sombra) en vez del mensaje de elemento no encontrado.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#263**.
+> próxima regla nueva es la **#264**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
