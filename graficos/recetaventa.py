@@ -61,13 +61,14 @@ Punto de entrada público: renderizar_graficos_recetaventa().
 """
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 from st_aggrid import AgGrid, JsCode
 
 from tema import (
-    ACENTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA, ERROR, EXITO, LAVANDA_CHIP,
-    TEXTO_PRINCIPAL,
+    ACENTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA, BLANCO, ERROR, EXITO,
+    LAVANDA_CHIP, PALETA_SERIES, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
 from graficos.base import (
@@ -75,7 +76,7 @@ from graficos.base import (
     seccion_perezosa,
 )
 from graficos.recetas_comun import (
-    _activo, _chip_fuente, _items_clave, _panorama_compras,
+    _activo, _chip_fuente, _hex_a_rgba, _items_clave, _panorama_compras,
 )
 
 # Umbral de %Costo salón para el semáforo de la barra de progreso de
@@ -170,10 +171,114 @@ def _panorama_compras_venta(df_f, es_soles):
 # ventas.parquet, y por qué eso no la invalida; y por qué 1.18 sigue
 # siendo la cuenta correcta para un precio de LISTA aunque el ratio real
 # de una venta ya cerrada, con descuentos adentro, dé otra cosa).
+#
+# Y el 2026-08-31, a pedido, el panel de receta baja de un costado a
+# ABAJO de la tabla, y a SU costado aparece un mini panel con dos
+# pestañas — `_dib_torta_costo_utilidad` (donut Costo/Utilidad del plato
+# en foco) y `_dib_sankey_insumo_costo` (Sankey plato→insumo, mismo
+# cálculo que tenía `_sankey_contenedor` antes de borrarse de
+# recetas_comun.py el 2026-08-30, ver el docstring del módulo, pero a
+# tamaño MINI y sólo del plato en foco, no una vista propia).
+
+
+def _dib_torta_costo_utilidad(fila_foco, foco):
+    """Mini donut Costo/Utilidad del plato en foco: Costo Salón vs.
+    (P. Neto Salón − Costo Salón). Si el costo supera al precio neto —pasa
+    de verdad: arquitectura.md regla #205 mide bebidas premium con %Costo
+    de 300–950%, porque Costo Salón es la BOTELLA entera y P.Venta Salón
+    la COPA— la Utilidad da negativa y un donut no puede dibujar eso (una
+    porción no puede ser "menos que nada"): se avisa el monto en vez de
+    forzar un gráfico que mentiría."""
+    if not len(fila_foco):
+        st.info("Sin datos para este plato.")
+        return
+    costo = float(fila_foco["Costo"].iloc[0])
+    neto = float(fila_foco["PrecioNeto"].iloc[0])
+    pct = float(fila_foco["Pct"].iloc[0])
+    utilidad = neto - costo
+    if costo <= 0 and utilidad <= 0:
+        st.info("Sin costo ni precio para graficar.")
+        return
+    if utilidad < 0:
+        st.warning(
+            f"Se vende a pérdida: el costo (S/ {costo:,.2f}) supera el "
+            f"precio neto (S/ {neto:,.2f}) en S/ {abs(utilidad):,.2f}."
+        )
+    # `sort=False`: mantiene el orden Costo/Utilidad de `labels` —
+    # Plotly, por defecto, reordena las porciones por valor descendente,
+    # lo que dejaría el color de cada una saltando de plato en plato.
+    fig = go.Figure(go.Pie(
+        labels=["Costo", "Utilidad"],
+        values=[costo, max(utilidad, 0.0)],
+        hole=0.55, sort=False,
+        marker=dict(colors=[ACENTO, EXITO]),
+        textinfo="label+percent",
+        hovertemplate="%{label}: S/ %{value:,.2f}<extra></extra>",
+    ))
+    fig.add_annotation(
+        text=f"{pct:.0f}%<br>costo", showarrow=False,
+        font=dict(size=13, color=TEXTO_PRINCIPAL, family="DM Sans, sans-serif"),
+    )
+    fig.update_layout(
+        height=alturas.MINI,
+        margin=dict(l=10, r=10, t=10, b=10),
+        showlegend=False,
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=11),
+    )
+    st.plotly_chart(fig, use_container_width=True, key=f"rv_comp_torta_{foco}")
+
+
+def _dib_sankey_insumo_costo(r, nombre_foco, foco):
+    """Mini Sankey plato→insumo del plato en foco, ancho del flujo
+    proporcional al costo del insumo — mismo cálculo que tenía
+    `_sankey_contenedor` (recetas_comun.py, borrada el 2026-08-30 al
+    quedarse sin llamadores), reescrito acá a tamaño MINI: ya no es una
+    vista propia, es una pestaña de este panel."""
+    if r is None:
+        st.info("No se reconoció la columna de insumo o de costo para "
+               "graficar.")
+        return
+    r_pos = r[r["Costo"] > 0]
+    if r_pos.empty:
+        st.info("Este plato no tiene insumos con costo positivo para graficar.")
+        return
+    insumos = r_pos["Insumo"].tolist()
+    valores = [float(v) for v in r_pos["Costo"].tolist()]
+    labels = [nombre_foco or "Plato"] + insumos
+    node_colors = [ACENTO] + [PALETA_SERIES[i % len(PALETA_SERIES)]
+                              for i in range(len(insumos))]
+    link_colors = [_hex_a_rgba(PALETA_SERIES[i % len(PALETA_SERIES)], 0.45)
+                   for i in range(len(insumos))]
+    fig = go.Figure(go.Sankey(
+        arrangement="snap",
+        node=dict(
+            label=labels, color=node_colors, pad=12, thickness=12,
+            line=dict(color=BLANCO, width=0.5),
+            hovertemplate="%{label}<extra></extra>",
+        ),
+        link=dict(
+            source=[0] * len(insumos),
+            target=list(range(1, len(insumos) + 1)),
+            value=valores, color=link_colors,
+            hovertemplate="%{target.label}<br>S/ %{value:,.2f}<extra></extra>",
+        ),
+    ))
+    fig.update_layout(
+        height=alturas.MINI,
+        margin=dict(l=6, r=6, t=6, b=6),
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=10),
+    )
+    st.plotly_chart(fig, use_container_width=True, key=f"rv_comp_sankey_{foco}")
+
+
 def _tabla_composicion_venta(df_f):
     """Vista 'Composición': ranking de platos activos (AgGrid, barra de
-    %Costo salón coloreada por umbral) + la receta del plato en foco en
-    una tabla al lado, actualizada al hacer clic en una fila."""
+    %Costo salón coloreada por umbral) a lo ancho, y ABAJO la receta del
+    plato en foco (tabla) + un mini panel con dos pestañas (torta Costo/
+    Utilidad, Sankey Insumo/Costo) — los tres actualizados al hacer clic
+    en una fila."""
     col_cod_plato = _resolver(df_f, ["COD PLATO", "Cod Plato"])
     col_plato = _resolver(df_f, ["NOMB PLATO", "Nombre Plato", "PLATO", "Plato"])
     col_grupo = _resolver(df_f, ["GRUPO", "Grupo"])
@@ -308,88 +413,86 @@ def _tabla_composicion_venta(df_f):
     _ALTO_FILA = 28
     _ALTO_FRAME = alturas.por_filas(8, px_fila=_ALTO_FILA, extra=45, minimo=0)
 
-    # [5, 2] y no [2, 1]: con 6 columnas fijas (nunca `flex`, ver más abajo)
-    # la tabla necesita todo el ancho que se le pueda dar — medido en el
-    # navegador a 1280px con [2, 1]: el iframe de AgGrid quedaba en 498px
-    # contra 820px de columnas, y %Costo (la columna que importa) caía
-    # fuera de vista sin scrollear. Con [5, 2] sube a ~537px.
-    c_tabla, c_receta = st.columns([5, 2], gap="medium")
-    with c_tabla:
-        with _card("rv_comp_tabla",
-                   "Platos activos · % de costo sobre venta en Salón"):
-            # Ancho FIJO en todas las columnas, ninguna con `flex`: probado en
-            # graficos/compras/producto.py (arquitectura.md regla #192) que
-            # `st_aggrid` le clava `width: 200` a toda columna sin `width`
-            # propio, y como AG Grid prioriza el `width` explícito para el
-            # tamaño inicial, un `flex` mezclado con eso nunca reparte nada.
-            #
-            # %Costo va justo después de Plato, NO al final (pedido "Grupo,
-            # Subgrupo, Plato, Precio, Costo, %Costo"): medido en el
-            # navegador a 1280px, ese orden dejaba %Costo —la columna con
-            # la barra, la razón de ser de esta vista— 75px afuera del
-            # viewport visible del iframe (610px de columnas contra 537px
-            # de ancho real), oculta sin scrollear. Grupo+Subgrupo+Plato+
-            # %Costo suman 430px: entran holgados. Precio/Costo (detalle
-            # de apoyo) son los que quedan a un scroll de distancia.
-            #
-            # Precio Neto, Actualizado y Última Venta se sumaron el
-            # 2026-08-30, a pedido — las dos últimas OPCIONALES, y Última
-            # Venta la ÚLTIMA columna a propósito (pedido explícito). Ver
-            # arquitectura.md regla #253 para el porqué de cada fuente.
-            _campos = ["Grupo", "Subgrupo", "Plato", "Pct", "Precio", "PrecioNeto", "Costo"]
-            _columnas = [
-                {"field": "Grupo", "width": 90, "tooltipField": "Grupo"},
-                {"field": "Subgrupo", "width": 100,
-                 "tooltipField": "Subgrupo"},
-                {"field": "Plato", "width": 160, "tooltipField": "Plato"},
-                {"field": "Pct", "headerName": "% Costo",
-                 "width": 80, "type": "numericColumn",
-                 "cellStyle": _js_barra_pct,
-                 "valueFormatter": _js_pct},
-                {"field": "Precio", "headerName": "P. Venta Salón",
-                 "width": 90, "type": "numericColumn",
-                 "valueFormatter": _js_soles},
-                {"field": "PrecioNeto", "headerName": "P. Neto Salón",
-                 "width": 90, "type": "numericColumn",
-                 "valueFormatter": _js_soles},
-                {"field": "Costo", "headerName": "Costo Salón",
-                 "width": 90, "type": "numericColumn",
-                 "valueFormatter": _js_soles},
-            ]
-            if col_fech_modif:
-                _campos.append("FechaModif")
-                _columnas.append({"field": "FechaModif",
-                                  "headerName": "Actualizado", "width": 90})
-            if col_ult_venta:
-                _campos.append("UltimaVenta")
-                _columnas.append({"field": "UltimaVenta",
-                                  "headerName": "Última Venta", "width": 100})
-            _campos.append("_cod")
-            _columnas.append({"field": "_cod", "hide": True})
+    # La tabla va a lo ANCHO ahora (2026-08-31, a pedido: "que la receta se
+    # muestre abajo" — antes compartía fila con el panel de receta en 5:2).
+    # Sin nada al lado, ya no hace falta ese reparto: %Costo entra holgado
+    # y el resto de las columnas dejan de necesitar scroll en la mayoría
+    # de las pantallas.
+    with _card("rv_comp_tabla",
+               "Platos activos · % de costo sobre venta en Salón"):
+        # Ancho FIJO en todas las columnas, ninguna con `flex`: probado en
+        # graficos/compras/producto.py (arquitectura.md regla #192) que
+        # `st_aggrid` le clava `width: 200` a toda columna sin `width`
+        # propio, y como AG Grid prioriza el `width` explícito para el
+        # tamaño inicial, un `flex` mezclado con eso nunca reparte nada.
+        #
+        # %Costo va justo después de Plato, NO al final (pedido "Grupo,
+        # Subgrupo, Plato, Precio, Costo, %Costo"): medido en el
+        # navegador a 1280px con la tabla a 5/7 del ancho, ese orden
+        # dejaba %Costo —la columna con la barra, la razón de ser de
+        # esta vista— fuera del viewport visible sin scrollear.
+        # Grupo+Subgrupo+Plato+%Costo entran holgados; Precio/Costo
+        # (detalle de apoyo) son los que pueden quedar a un scroll de
+        # distancia en una pantalla angosta.
+        #
+        # Precio Neto, Actualizado y Última Venta se sumaron el
+        # 2026-08-30, a pedido — las dos últimas OPCIONALES, y Última
+        # Venta la ÚLTIMA columna a propósito (pedido explícito). Ver
+        # arquitectura.md regla #253 para el porqué de cada fuente.
+        _campos = ["Grupo", "Subgrupo", "Plato", "Pct", "Precio", "PrecioNeto", "Costo"]
+        _columnas = [
+            {"field": "Grupo", "width": 90, "tooltipField": "Grupo"},
+            {"field": "Subgrupo", "width": 100,
+             "tooltipField": "Subgrupo"},
+            {"field": "Plato", "width": 160, "tooltipField": "Plato"},
+            {"field": "Pct", "headerName": "% Costo",
+             "width": 80, "type": "numericColumn",
+             "cellStyle": _js_barra_pct,
+             "valueFormatter": _js_pct},
+            {"field": "Precio", "headerName": "P. Venta Salón",
+             "width": 90, "type": "numericColumn",
+             "valueFormatter": _js_soles},
+            {"field": "PrecioNeto", "headerName": "P. Neto Salón",
+             "width": 90, "type": "numericColumn",
+             "valueFormatter": _js_soles},
+            {"field": "Costo", "headerName": "Costo Salón",
+             "width": 90, "type": "numericColumn",
+             "valueFormatter": _js_soles},
+        ]
+        if col_fech_modif:
+            _campos.append("FechaModif")
+            _columnas.append({"field": "FechaModif",
+                              "headerName": "Actualizado", "width": 90})
+        if col_ult_venta:
+            _campos.append("UltimaVenta")
+            _columnas.append({"field": "UltimaVenta",
+                              "headerName": "Última Venta", "width": 100})
+        _campos.append("_cod")
+        _columnas.append({"field": "_cod", "hide": True})
 
-            resp = AgGrid(
-                g[_campos],
-                gridOptions={
-                    "columnDefs": _columnas,
-                    "defaultColDef": {"sortable": True, "resizable": True},
-                    "rowSelection": {"mode": "singleRow", "checkboxes": False,
-                                     "enableClickSelection": False},
-                    "onRowClicked": _js_toggle,
-                    "rowHeight": _ALTO_FILA,
-                    "headerHeight": 34,
-                    "suppressCellFocus": True,
-                    "suppressMovableColumns": True,
-                },
-                allow_unsafe_jscode=True,
-                theme="streamlit",
-                height=_ALTO_FRAME,
-                update_on=["selectionChanged"],
-                key="rv_comp_grid",
-            )
-            _pie = "Clic en una fila para ver su receta →"
-            if _n_sin_precio:
-                _pie += f" · {_n_sin_precio} sin precio de Salón configurado, no se muestran"
-            st.caption(_pie)
+        resp = AgGrid(
+            g[_campos],
+            gridOptions={
+                "columnDefs": _columnas,
+                "defaultColDef": {"sortable": True, "resizable": True},
+                "rowSelection": {"mode": "singleRow", "checkboxes": False,
+                                 "enableClickSelection": False},
+                "onRowClicked": _js_toggle,
+                "rowHeight": _ALTO_FILA,
+                "headerHeight": 34,
+                "suppressCellFocus": True,
+                "suppressMovableColumns": True,
+            },
+            allow_unsafe_jscode=True,
+            theme="streamlit",
+            height=_ALTO_FRAME,
+            update_on=["selectionChanged"],
+            key="rv_comp_grid",
+        )
+        _pie = "Clic en una fila para ver su receta →"
+        if _n_sin_precio:
+            _pie += f" · {_n_sin_precio} sin precio de Salón configurado, no se muestran"
+        st.caption(_pie)
 
     sel = getattr(resp, "selected_rows", None)
     if sel is not None and len(sel):
@@ -399,28 +502,42 @@ def _tabla_composicion_venta(df_f):
         clicked = None
     # Sin clic (o reclic que deselecciona, ver `_js_toggle`): cae al primer
     # plato de la tabla, que por el sort de arriba es el de %Costo más
-    # alto — el panel de la derecha nunca arranca vacío.
+    # alto — el panel de abajo nunca arranca vacío.
     foco = clicked if clicked else str(g["_cod"].iloc[0])
     fila_foco = g[g["_cod"] == foco]
     nombre_foco = str(fila_foco["Plato"].iloc[0]) if len(fila_foco) else ""
 
+    # ── Receta del plato en foco + mini panel (torta/Sankey) ─────────────
+    # ABAJO de la tabla, a pedido (2026-08-31) — antes vivía a un costado.
+    # `r` (Insumo/Cantidad/Costo/%) se arma UNA vez acá, no dentro de cada
+    # `with`: la tabla de la izquierda y las dos pestañas de la derecha
+    # muestran la MISMA receta, así que las tres leen el mismo cálculo en
+    # vez de repetirlo (y arriesgar que diverjan).
+    r = None
+    if col_ins and col_total:
+        items = df_f[df_f[col_cod_plato].astype(str) == foco]
+        r = pd.DataFrame({
+            "Insumo": items[col_ins].astype(str),
+            "Cantidad": (pd.to_numeric(items[col_cant], errors="coerce")
+                        if col_cant else None),
+            "Costo": pd.to_numeric(items[col_total], errors="coerce").fillna(0.0),
+        })
+        r = r.sort_values("Costo", ascending=False).reset_index(drop=True)
+        tot_r = r["Costo"].sum() or 1.0
+        r["%"] = r["Costo"] / tot_r * 100
+
+    # [3, 2]: la tabla de receta necesita más ancho que la torta/Sankey
+    # (nombres de insumo largos en la primera columna); el mini panel no
+    # gana nada con más ancho, un donut/Sankey de 2 niveles no crece en
+    # utilidad por estirarse.
+    c_receta, c_mini = st.columns([3, 2], gap="medium")
     with c_receta:
         with _card("rv_comp_receta",
                    f"Receta · {nombre_foco}" if nombre_foco else "Receta"):
-            if not (col_ins and col_total):
+            if r is None:
                 st.info("No se reconoció la columna de insumo (INS RV) o "
                        "de costo (TOTAL) para mostrar la receta.")
             else:
-                items = df_f[df_f[col_cod_plato].astype(str) == foco]
-                r = pd.DataFrame({
-                    "Insumo": items[col_ins].astype(str),
-                    "Cantidad": (pd.to_numeric(items[col_cant], errors="coerce")
-                                if col_cant else None),
-                    "Costo": pd.to_numeric(items[col_total], errors="coerce").fillna(0.0),
-                })
-                r = r.sort_values("Costo", ascending=False).reset_index(drop=True)
-                tot_r = r["Costo"].sum() or 1.0
-                r["%"] = r["Costo"] / tot_r * 100
                 st.dataframe(
                     r, hide_index=True, use_container_width=True,
                     height=alturas.MINI,
@@ -431,6 +548,14 @@ def _tabla_composicion_venta(df_f):
                             format="%.1f%%", min_value=0, max_value=100),
                     },
                 )
+
+    with c_mini:
+        with _card("rv_comp_mini"):
+            tab_torta, tab_sankey = st.tabs(["Costo / Utilidad", "Sankey"])
+            with tab_torta:
+                _dib_torta_costo_utilidad(fila_foco, foco)
+            with tab_sankey:
+                _dib_sankey_insumo_costo(r, nombre_foco, foco)
 
 
 # ─── Costeo Receta Venta: ranking de platos por costo, en tabla ────────────
