@@ -48,6 +48,15 @@ recetas_comun.py). El Panorama de compras conserva su PROPIO Sankey
 (Producto→Plato, `_fig_panorama_sankey`): es un gráfico distinto, con otro
 propósito, no tocado por este cambio.
 
+Y una tercera vez el mismo 2026-08-30: el radio "Medir por" (Costo/
+Cantidad, `rv_metrica`) se saca a pedido — "por defecto siempre debe ser
+por costo". `es_soles` queda fijo (con el mismo fallback a Cantidad de
+siempre si no hubiera columna de costo), sin widget que lo cambie. Afecta
+a los tres lectores de `es_soles`: Costeo Receta Venta, Ingredientes clave
+y Panorama de compras pasan a mostrarse siempre en soles. Receta Base
+conserva su propio radio (`rb_metrica`) — este dashboard es el único que
+pidió sacarlo.
+
 Punto de entrada público: renderizar_graficos_recetaventa().
 """
 
@@ -535,20 +544,13 @@ def renderizar_graficos_recetaventa(df_f, nombre_reporte, df_full=None, tabla_cb
     # página entera.
     _chip_fuente("Receta Venta")
 
-    # ── Controles COMPARTIDOS por toda la página ─────────────────────────
-    # Va arriba de la pila: la métrica manda sobre las demás secciones.
-    # Meterlo adentro de una sección lo escondería hasta que esa sección
-    # salga del esqueleto. El selector "Plato" que vivía acá al lado se fue
-    # con el Sankey (2026-08-30): era su único lector.
-    metricas = []
-    if col_total:
-        metricas.append("Costo (S/)")
-    if col_cant:
-        metricas.append("Cantidad")
-
-    metrica = st.radio("Medir por", metricas, horizontal=True,
-                       key="rv_metrica")
-    es_soles = (metrica == "Costo (S/)")
+    # Medir por: SIEMPRE costo (a pedido, 2026-08-30) — se saca el radio
+    # Costo/Cantidad ("rv_metrica") que vivía acá arriba de la pila. Ya no
+    # hay para elegir: `es_soles` queda fijo, con el mismo fallback a
+    # Cantidad de siempre si no hubiera columna de costo (Total/TOTAL/...).
+    # El selector "Plato" que vivía al lado del radio se había ido antes,
+    # con el Sankey — este dashboard ya no tiene controles compartidos.
+    es_soles = bool(col_total)
     col_valor = col_total if es_soles else col_cant
 
     # ── LA PILA, PEREZOSA ────────────────────────────────────────────────
