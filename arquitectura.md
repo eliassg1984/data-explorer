@@ -11392,6 +11392,31 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      interacción. Y "Dentro" se degrada a "Después": un clon del padre
      colgando adentro del padre no significa nada.
 
+     **Enmienda 2026-08-31, bug real reportado en vivo** ("hice una copia,
+     la puedo mover sin problema, pero el original ahora no puedo ni
+     seleccionarlo"): "el panel lo dice cuando se pinea una copia" de
+     arriba asumía que pinear la copia era alcanzable — y con
+     `pointer-events:none` sobre TODA ella, no lo es: un clic (derecho o
+     no) sobre esos píxeles nunca la toca, siempre atraviesa al elemento
+     de abajo. El aviso, entonces, nunca se llegaba a ver en el uso real.
+
+     Lo que pasó de verdad, reproducido con eventos reales (no adivinado):
+     `agregarMock()` inserta el clon pero NO mueve el pin — la key fijada
+     sigue siendo la del original. Arrastrar la perilla "Mover" después de
+     "+ Copia" resuelve por `elementoPineado()` → `porKeyReal(key)`, que
+     **siempre** devuelve el original (es el resolvedor que esta regla
+     acaba de instaurar, funcionando exactamente como se diseñó). El
+     usuario, creyendo que reposiciona el clon nuevo, en realidad mueve el
+     ORIGINAL — y como el clon se queda quieto en el sitio de siempre
+     (además de ser HTML muerto e invisible al clic), el original
+     "desaparece" de donde se lo busca. La lógica de resolución no tenía
+     ningún bug: el bug era que nada avisaba esto ANTES del gesto.
+
+     Arreglo: un aviso fijo en la sección "Insertar", debajo del botón
+     "+ Copia" —no condicionado a lograr pinear el clon, que es
+     precisamente lo que no se puede— explicando que "Copia" queda fija y
+     que cualquier arrastre posterior sigue tocando el original.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:

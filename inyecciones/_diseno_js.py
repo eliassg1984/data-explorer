@@ -2919,6 +2919,20 @@ JS = """
             });
             panel.appendChild(filaControl('Agregar', addWrap, spanValor('')));
 
+            // Aviso de "Copia", puesto a pedido (2026-08-31): el pin NO
+            // salta al clon al crearlo (`agregarMock` no toca
+            // `__inspectorPinned`), y el clon es HTML muerto con
+            // `pointer-events:none` — no se puede seleccionar haciendo
+            // clic en él. Sin este aviso, arrastrar "Mover" después de
+            // "+ Copia" mueve el ORIGINAL creyendo que se mueve el clon,
+            // y como el clon se queda quieto en el lugar de siempre, el
+            // original "desaparece" de donde se lo busca — reportado tal
+            // cual, confirmado reproduciendo el gesto con eventos reales.
+            var avisoCopia = doc.createElement('div');
+            avisoCopia.style.cssText = 'font:11px/1.4 -apple-system,sans-serif;color:#9385ec;background:#1c1c24;border:1px solid #34343f;border-radius:4px;padding:6px 7px;margin-top:6px';
+            avisoCopia.textContent = '"Copia" queda fija: no se puede seleccionar ni mover — es solo para ver el espaciado. Arrastrar/editar después de crearla sigue tocando el ORIGINAL (el pin no salta al clon).';
+            panel.appendChild(avisoCopia);
+
             // Quitar: el que esta fijado (si es un mock) y el resto. Ambos
             // fuerzan la reconstruccion del panel porque cambia el conteo,
             // y la key fijada no cambia -> sync() sola no lo redibujaria.
