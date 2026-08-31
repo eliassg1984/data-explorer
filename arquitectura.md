@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-256 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+257 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (82)
 
@@ -381,7 +381,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (21)
+**Herramientas de desarrollo** (22)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -404,6 +404,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#215** — Element.innerText no atraviesa el layout position: absolute de las celdas de AgGrid: da ""…
 - **#254** — Hay DOS contornos violetas y vienen de sitios distintos: el overlay del modo diseño (un <div>…
 - **#256** — El panel de diseño es fixed a la derecha y tapa 230px de la app — justo la orilla donde caen…
+- **#257** — Mover un elemento una vez y no poder moverlo de nuevo: la perilla viaja con el elemento y…
 
 **Decisiones de diseño y UX** (42)
 
@@ -11316,13 +11317,49 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      - Con el panel COLAPSADO la reserva se apaga sola: la pill no tapa
        nada y dejaría una franja muerta a la derecha.
 
+257. **Mover un elemento una vez y no poder moverlo de nuevo: la
+     perilla viaja con el elemento y termina DEBAJO del tooltip fijado del
+     inspector, que estaba un escalón más arriba en `z-index`.**
+
+     Reportado 2026-08-31: "cuando muevo algo y luego deseo volver a
+     moverlo no me deja". Reproducido en local y medido — el diagnóstico
+     no salía de leer el código, que se ve correcto de punta a punta:
+
+     ```
+     perilla centro (434,195) → elementFromPoint = "el-inspector-tip"
+     tooltip: 480x432 en (344,123), z-index 2147483647, pointer-events auto
+     overlay: z-index 2147483600          ← 47 menos, pierde siempre
+     ```
+
+     Las tres condiciones tienen que darse juntas, y por eso el primer
+     arrastre siempre funciona y el segundo no:
+
+     - el tooltip del inspector nace con `pointer-events:none`, pero al
+       FIJAR pasa a `auto` (necesita sus botones y sus migas) — y fijar es
+       justo lo que habilita el modo diseño;
+     - mide 480x432 y se queda quieto donde estaba el cursor al fijar;
+     - la perilla `+` nace FUERA de él (esquina sup-izq del elemento) pero
+       viaja con el elemento: al primer nudge se mete debajo.
+
+     Desde ahí el `+` se sigue viendo y no responde: no hay error, no hay
+     nada en consola, y el gesto simplemente no existe. El arreglo es un
+     orden explícito — overlay `2147483647`, tooltip `2147483646` — y no
+     dejarlo librado al orden del DOM, que ambos scripts reescriben en
+     cada rerun.
+
+     Y la lección de método, porque acá se perdió tiempo: **con eventos
+     sintéticos el bug NO aparece.** `dispatchEvent` sobre la perilla se
+     salta el hit-testing, así que los dos arrastres pasaban perfecto en
+     la prueba y fallaban con el mouse. Un bug de "no me deja hacer clic"
+     hay que probarlo con `elementFromPoint`, no despachando eventos.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#257**.
+> próxima regla nueva es la **#258**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

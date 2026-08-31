@@ -909,7 +909,11 @@ JS = """
             overlay.id = 'el-diseno-overlay';
             overlay.style.cssText = [
                 'position:fixed',
-                'z-index:2147483600',
+                // El MAXIMO, y un escalon por encima del tooltip del
+                // inspector (2147483646): las manijas tienen que poder
+                // agarrarse aunque el elemento se haya movido hasta debajo
+                // del tooltip fijado. Regla #257.
+                'z-index:2147483647',
                 'pointer-events:none',
                 'border:2px solid #6c5ce7',
                 'border-radius:4px',

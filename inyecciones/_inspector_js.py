@@ -907,7 +907,13 @@ JS = """
                 // Trade-off: se pierde scroll con la rueda dentro del tooltip,
                 // pero el bloque completo ya se copia con la tecla C.
                 'pointer-events:none',
-                'z-index:2147483647',
+                // Un escalon POR DEBAJO del overlay del modo diseno
+                // (2147483647). Al FIJAR, este tooltip pasa a
+                // pointer-events:auto (para sus botones y migas) y mide
+                // 480x432: si ademas gana en z-index, se traga los clics de
+                // la perilla "Mover", que viaja con el elemento y termina
+                // cayendo debajo suyo. Ver regla #257.
+                'z-index:2147483646',
                 // #101014: fondo casi negro del INSPECTOR (herramienta interna
                 // de depuracion). Excepcion intencional.
                 'background:#101014',
