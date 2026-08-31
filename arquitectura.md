@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-252 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+253 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (81)
 
@@ -299,7 +299,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#230** — Un @st.fragment alrededor de la tarjeta que se edita: una corrección deja de re-correr el…
 - **#235** — _css_grid es de UNA tabla suelta sobre el gris de la app; si la tabla ya vive adentro de una…
 
-**Datos, R2 y DuckDB** (29)
+**Datos, R2 y DuckDB** (30)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -330,6 +330,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#225** — «Detalle sistema» dejó de ser la cuarta pestaña de "Original del proveedor" y pasó a su…
 - **#230** — Un @st.fragment alrededor de la tarjeta que se edita: una corrección deja de re-correr el…
 - **#232** — Una anotación por línea que puede tener DOS correcciones independientes se guarda con claves…
+- **#253** — recetaventa.parquet ya trae ULTIMA VENT y FECH MODIF nativas — no hace falta cruzar contra…
 
 **SUNAT y SIRE** (28)
 
@@ -11142,13 +11143,62 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      gravado + IGV` en TODOS, sin ISC ni ICBPER de por medio, así que
      `suma de líneas + IGV` reconstruye el total sin términos escondidos.
 
+253. **`recetaventa.parquet` ya trae `ULTIMA VENT` y `FECH MODIF` nativas
+     — no hace falta cruzar contra `ventas.parquet` para "última venta", y
+     `ULTIMA VENT` no coincide al minuto con el registro real.**
+
+     Pedido 2026-08-30 sobre la tabla "Costeo Receta Venta": agregar
+     Precio Neto Salón y que la última columna sea la fecha de la última
+     venta (más tarde, en el mismo pedido, también "fecha de última
+     actualización"). Antes de tocar código se listaron las 53 columnas
+     reales del parquet con `DESCRIBE SELECT * FROM read_parquet(...)`
+     —ninguna documentación previa las tenía todas, sólo el subconjunto
+     que ya usaba algún dashboard— y aparecieron dos que nadie había
+     cableado todavía: `ULTIMA VENT` (TIMESTAMP_NS) y `FECH MODIF`
+     (TIMESTAMP_NS). Las dos son atributos CONSTANTES del plato (mismo
+     patrón-trampa que `P.VENTA SALON`/`CST SALON`, regla #205: se
+     agrupan con `.first()`, nunca se suman) — verificado con
+     `count(DISTINCT ...)` por `COD PLATO` dando 1 en el 100% de los 850
+     platos, para las dos columnas.
+
+     La tentación era reconstruir "última venta" cruzando contra
+     `ventas.parquet` (`COD ITEM VENTA DDOCUMENTO` ↔ `COD PLATO`, la
+     misma clave que ya usa la memoria de proyecto
+     `esquema-real-compras-recetaventa`) con un `MAX("FEC REG DOCUMENTO")
+     GROUP BY`. Se probó el cruce ANTES de descartarlo: sobre 415 platos
+     activos con venta real, sólo 1 coincide exacto con `ULTIMA VENT`; los
+     otros 414 difieren — siempre `ULTIMA VENT` ANTES que el registro real
+     de `ventas.parquet`, por minutos hasta un par de horas, nunca por
+     días. No es un dato roto: es un timestamp distinto (probablemente
+     "pedido abierto" contra "documento registrado" en el sistema de
+     origen), y ese sistema de origen ya lo mantiene — recalcularlo acá
+     sería una SEGUNDA verdad, más cara (`ventas.parquet` son 226K+ filas
+     cargadas completas, contra un `.first()` gratis sobre lo que ya está
+     en memoria) y no más correcta. Se usa `ULTIMA VENT` tal cual viene.
+
+     Aparte, para "Precio Neto Salón": el proyecto ya tiene una constante
+     para esto (`formulario_receta.py::_IGV = 1.18`, IGV Perú 18%,
+     `precio_neto = precio_venta / 1.18`) y ahí se hizo lo mismo sobre
+     `P.VENTA SALON`. Verificado ANTES de asumir que 1.18 seguía
+     sirviendo: el ratio real `PRECIO VENTA ITEM DDOCUMENTO` /
+     `PRECIO NETO ITEM DDOCUMENTO` de `ventas.parquet` —o sea, sobre
+     ventas YA CERRADAS, con descuentos y recargo reales adentro— da
+     **1.25 en promedio, entre 1.00 y 1.31**, NO un 1.18 limpio. Eso NO
+     invalida la constante: `P.VENTA SALON` es un precio de LISTA/catálogo
+     (sin descuento, sin recargo, sin las promos que sí mueven el ratio de
+     una venta cerrada), así que 18% IGV liso es la cuenta correcta para
+     ESE campo — el ratio movido de `ventas.parquet` mide otra cosa
+     (efecto de descuentos sobre una venta real), no un IGV distinto. Que
+     el número por defecto "suene bien" no prueba que sea el mismo cálculo
+     que hace falta — hay que mirar sobre QUÉ campo se está aplicando.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#253**.
+> próxima regla nueva es la **#254**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
