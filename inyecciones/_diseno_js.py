@@ -153,13 +153,28 @@ JS = """
             return !/^st[A-Z]/.test(c);                 // stMarkdown, stVerticalBlock, ...
         }
 
+        // ── Resolver una key al elemento REAL, nunca a una copia ─────────
+        // Una copia (regla #258) conserva las clases `st-key-*` del original
+        // —es lo que la hace verse igual, porque el CSS del proyecto matchea
+        // por esas clases— asi que a partir de ahi hay DOS nodos con la
+        // misma key y `querySelector` devuelve el primero del DOM. Insertar
+        // la copia "Antes" bastaba para que el pin, el contorno y el ancla
+        // de los mocks pasaran a apuntar al clon en vez de al widget que se
+        // esta editando. Todos los nodos de una copia (la raiz y su
+        // descendencia) llevan `data-diseno-mock`, asi que un solo `:not()`
+        // los saca a todos.
+        var SIN_COPIAS = ':not([data-diseno-mock])';
+        function porKeyReal(key) {
+            return doc.querySelector('.st-key-' + key + SIN_COPIAS);
+        }
+
         // Hijos del widget pineado que tienen clase propia pero NO key: los
         // unicos que el modo diseno no podia tocar. Se excluye lo que viva
         // dentro de OTRO `st-key-` mas adentro (eso es otro widget: se pinea
         // por su key, no bajando desde aca) y lo que sea SVG (un Plotly sin
         // key propia inunda la lista con `main-svg`/`trace`/`point`).
         function hijosConClasePropia(key) {
-            var base = doc.querySelector('.st-key-' + key);
+            var base = porKeyReal(key);
             if (!base) return [];
             var out = [], vistas = {};
             var cand = base.querySelectorAll('[class]');
@@ -204,7 +219,7 @@ JS = """
         // Por eso se direccionan por (tipo, indice, texto) y no por clase.
         // Ver arquitectura.md #182.
         function nodosDeTexto(key, tipo) {
-            var base = doc.querySelector('.st-key-' + key);
+            var base = porKeyReal(key);
             if (!base) return [];
             var out = [], i;
             if (tipo === 'svgtext') {
@@ -261,7 +276,7 @@ JS = """
             if (!win.__inspectorPinned || !win.__inspectorUltimo) return null;
             var key = win.__inspectorUltimo.key;
             if (!key) return null;
-            var base = doc.querySelector('.st-key-' + key);
+            var base = porKeyReal(key);
             var sub = win.__disenoState.sub;
             // El sub muere con su key: si el pin salto a otro widget, lo que
             // haya guardado ya no aplica (y su clase podria existir alla
@@ -306,7 +321,7 @@ JS = """
         // Devuelve null si apunto al contenedor pelado (ahi el pin es la
         // tarjeta, como siempre).
         function subDesdeNodo(key, nodo) {
-            var base = doc.querySelector('.st-key-' + key);
+            var base = porKeyReal(key);
             if (!base || !nodo || nodo === base) return null;
             var tipos = ['svgtext', 'agtext'], t, i;
             for (t = 0; t < tipos.length; t++) {
@@ -461,7 +476,7 @@ JS = """
         }
 
         function saltarADiseno(key) {
-            var el = doc.querySelector('.st-key-' + key);
+            var el = porKeyReal(key);
             if (!el || !win.__inspectorMouseMoveHandler) return;
             // Saltar de contenedor suelta el sub-pin. Tambien es el camino de
             // VUELTA: con un sub activo la fila de su propia key deja de ser
@@ -498,9 +513,39 @@ JS = """
         }
 
         var TIPOS_MOCK = [['texto', 'Texto'], ['linea', 'Línea'],
-                          ['barra', 'Barra'], ['espacio', 'Espacio']];
+                          ['barra', 'Barra'], ['espacio', 'Espacio'],
+                          ['copia', 'Copia']];
 
-        function nodoMock(m) {
+        // Marca la copia ENTERA (raiz + descendencia) para que porKeyReal()
+        // la ignore: las keys de los hijos tambien se duplican al clonar una
+        // tarjeta, no solo la de la raiz. Y borra los `id`, que en HTML son
+        // unicos — un id repetido rompe getElementById para el original.
+        function marcarCopia(raiz) {
+            raiz.removeAttribute('id');
+            var todos = raiz.querySelectorAll('*');
+            for (var i = 0; i < todos.length; i++) {
+                todos[i].removeAttribute('id');
+                todos[i].setAttribute('data-diseno-mock', 'hijo');
+            }
+        }
+
+        function nodoMock(m, origen) {
+            if (m.tipo === 'copia') {
+                if (!origen) return null;
+                // Clon PROFUNDO y con las clases intactas: el CSS del
+                // proyecto matchea por `.st-key-*`, asi que quitarlas
+                // dejaria una copia sin estilo — un esqueleto, no una
+                // maqueta. Ver regla #258 para el trade-off.
+                var cp = origen.cloneNode(true);
+                marcarCopia(cp);
+                cp.className = (cp.className || '') + ' st-key-' + m.key;
+                cp.setAttribute('data-diseno-mock', m.tipo);
+                // Muerto a proposito: es HTML copiado, sin sesion de
+                // Streamlit detras. Dejarlo clickeable invitaria a probar
+                // botones que no hacen nada.
+                cp.style.pointerEvents = 'none';
+                return cp;
+            }
             var el = doc.createElement('div');
             el.className = 'st-key-' + m.key;
             el.setAttribute('data-diseno-mock', m.tipo);
@@ -528,7 +573,7 @@ JS = """
         }
 
         function anclaEfectiva(m) {
-            var ancla = doc.querySelector('.st-key-' + m.anclaKey);
+            var ancla = porKeyReal(m.anclaKey);
             // Con sub-pin el ancla es el HIJO, no la tarjeta: insertar "antes"
             // de un titulo y "antes" de la tarjeta que lo contiene son dos
             // lugares distintos, y el pin ya dice cual de los dos se eligio.
@@ -552,7 +597,18 @@ JS = """
         function insertarMock(m) {
             var ancla = anclaEfectiva(m);
             if (!ancla) return false;
-            var el = nodoMock(m);
+            // El origen de una copia es el ancla REAL, no la encadenada:
+            // anclaEfectiva() puede devolver un mock anterior cuando varios
+            // se insertan "despues" del mismo sitio, y clonar una copia de
+            // una copia multiplicaria el error.
+            var origen = null;
+            if (m.tipo === 'copia') {
+                origen = porKeyReal(m.anclaKey);
+                if (origen && m.anclaSub) origen = origen.querySelector('.' + m.anclaSub);
+                if (!origen) return false;
+            }
+            var el = nodoMock(m, origen);
+            if (!el) return false;
             if (m.posicion === 'antes') ancla.parentNode.insertBefore(el, ancla);
             else if (m.posicion === 'dentro') ancla.appendChild(el);
             else ancla.parentNode.insertBefore(el, ancla.nextSibling);
@@ -585,7 +641,11 @@ JS = """
                 tipo: tipo,
                 anclaKey: res.key,
                 anclaSub: res.sub,
-                posicion: win.__disenoState.mockPos,
+                // "Dentro" de si mismo no significa nada para una copia
+                // (deja un clon del padre colgando adentro del padre): se
+                // degrada a "Despues", que es lo que se pide al duplicar.
+                posicion: (tipo === 'copia' && win.__disenoState.mockPos === 'dentro')
+                    ? 'despues' : win.__disenoState.mockPos,
                 texto: 'Texto de prueba'
             };
             win.__disenoState.mocks.push(m);
@@ -605,6 +665,14 @@ JS = """
 
         function esMock(key) {
             return win.__disenoState.mocks.some(function(m) { return m.key === key; });
+        }
+
+        function esCopia(key) {
+            var ms = win.__disenoState.mocks;
+            for (var i = 0; i < ms.length; i++) {
+                if (ms[i].key === key) return ms[i].tipo === 'copia';
+            }
+            return false;
         }
 
         // ---- unificar: dos tarjetas vecinas vistas como una sola --------
@@ -733,8 +801,8 @@ JS = """
 
         // `a` es SIEMPRE la primera en el orden visual (izquierda o arriba).
         function aplicarUnion(u) {
-            var elA = doc.querySelector('.st-key-' + u.a);
-            var elB = doc.querySelector('.st-key-' + u.b);
+            var elA = porKeyReal(u.a);
+            var elB = porKeyReal(u.b);
             if (!elA || !elB) return false;   // otro reporte: queda dormida
             var mapa = PROPS_UNION[u.eje];
             var regA = registroPara(u.a), regB = registroPara(u.b);
@@ -801,7 +869,7 @@ JS = """
                 return x !== u;
             });
             [u.a, u.b].forEach(function(k) {
-                var el = doc.querySelector('.st-key-' + k);
+                var el = porKeyReal(k);
                 var reg = registroPara(k);
                 propsDeUnion(u, k).forEach(function(p) {
                     delete reg.cambios[p];
@@ -849,7 +917,7 @@ JS = """
             // y sus vecinos son los otros hijos, no las tarjetas de al lado.
             // Una union es entre keys — es lo unico que se puede escribir
             // despues en estilos/.
-            var elUnion = doc.querySelector('.st-key-' + key);
+            var elUnion = porKeyReal(key);
             var yaUnidas = {}, hayUnion = false;
             unionesDe(key).forEach(function(u) {
                 yaUnidas[(u.a === key) ? u.b : u.a] = 1;
@@ -2017,7 +2085,7 @@ JS = """
             var us = unionesDe(key), out = [];
             us.forEach(function(u) {
                 var otra = (u.a === key) ? u.b : u.a;
-                var elO = doc.querySelector('.st-key-' + otra);
+                var elO = porKeyReal(otra);
                 if (!elO) return;
                 out.push('/* UNIFICAR - la otra mitad: «' + otra + '», pegada en '
                     + PROPS_UNION[u.eje].nombre + ' a «' + key + '».\\n'
@@ -2394,7 +2462,9 @@ JS = """
             if (esMock(key)) {
                 var avisoMock = doc.createElement('div');
                 avisoMock.style.cssText = 'font:11px/1.4 -apple-system,sans-serif;color:#e4e4e8;background:#1c1c24;border:1px dashed #6c5ce7;border-radius:4px;padding:6px 7px;margin-bottom:10px';
-                avisoMock.textContent = 'Insertado por el modo diseño: no existe en el código ni en estilos/. Se va al recargar.';
+                avisoMock.textContent = esCopia(key)
+                    ? 'Copia del modo diseño: sirve para juzgar espaciado y densidad, pero es HTML muerto — los widgets de adentro (selectbox, tabla) no responden. Se va al recargar.'
+                    : 'Insertado por el modo diseño: no existe en el código ni en estilos/. Se va al recargar.';
                 panel.appendChild(avisoMock);
             }
 

@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-257 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+258 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (82)
+**CSS y estilos** (83)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -102,6 +102,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#237** — Hay DOS familias de AgGrid en el repo y no se estilan igual: la de theme="material" se toca…
 - **#245** — Una fila que COMPARA se parte por la mitad, no con COLUMNAS_DRILL
 - **#255** — La perilla "Mover" es HIJA del overlay: ocultar el contorno la apaga también. Y "Tipo de…
+- **#258** — Duplicar un elemento en el modo diseño: la copia CONSERVA las clases st-key-*, y por eso hay…
 
 **Layout y alturas** (24)
 
@@ -11353,13 +11354,51 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      la prueba y fallaban con el mouse. Un bug de "no me deja hacer clic"
      hay que probarlo con `elementFromPoint`, no despachando eventos.
 
+258. **Duplicar un elemento en el modo diseño: la copia CONSERVA las
+     clases `st-key-*`, y por eso hay que enseñarle al resto del código a
+     ignorarla.**
+
+     Pedido 2026-08-31 ("¿puedo copiar y pegar, o sea duplicar algo?").
+     "Insertar" ya existía —texto, línea, barra, espacio— pero eso son
+     elementos de mentira, no una copia de lo que ya está.
+
+     El trade-off está en las clases, y no tiene una salida limpia:
+
+     - **Conservándolas**, la copia hereda todo el CSS del proyecto
+       (`.st-key-sunat_card_izq [data-testid="stSelectbox"] ...` y sus
+       hermanas, `estilos/_30_filtros.py`) y se ve idéntica — que es la
+       única razón para duplicar algo.
+     - **Quitándolas**, la copia sale sin fondo, sin radio y sin padding:
+       un esqueleto que no responde la pregunta que se estaba haciendo.
+
+     Se eligió conservarlas, y el precio es que a partir de ahí hay DOS (o
+     más) nodos con la misma key. `doc.querySelector('.st-key-' + key)`
+     devuelve **el primero del DOM**, así que insertar una copia "Antes"
+     alcanzaba para que el pin, el contorno y el ancla de los mocks
+     pasaran a apuntar al clon en vez de al widget que se está editando.
+     La salida es un resolvedor único, `porKeyReal()`, con
+     `:not([data-diseno-mock])` — y para que ese único `:not()` alcance,
+     la marca va en la copia ENTERA, raíz y descendencia: al clonar una
+     tarjeta se duplican también las keys de sus hijos, no sólo la de
+     arriba. Verificado en vivo con 3 nodos de la misma key, el primero
+     del DOM siendo una copia: el contorno siguió sobre el original.
+
+     Dos detalles que no son opcionales: **los `id` se borran** en el clon
+     (un id repetido rompe `getElementById` para el original) y la copia va
+     con `pointer-events:none`, porque es HTML muerto — sin sesión de
+     Streamlit detrás, sus botones y su tabla no responden, y dejarla
+     clickeable invita a probarlos. El panel lo dice cuando se pinea una
+     copia. Sirve para juzgar espaciado, alineación y densidad; no la
+     interacción. Y "Dentro" se degrada a "Después": un clon del padre
+     colgando adentro del padre no significa nada.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#258**.
+> próxima regla nueva es la **#259**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
