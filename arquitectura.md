@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-263 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+264 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (84)
+**CSS y estilos** (85)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -104,6 +104,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#255** — La perilla "Mover" es HIJA del overlay: ocultar el contorno la apaga también. Y "Tipo de…
 - **#258** — Duplicar un elemento en el modo diseño: la copia CONSERVA las clases st-key-*, y por eso hay…
 - **#262** — Linea/Barra/Espacio insertados sobre un stVerticalBlock nacen con width:0 — Streamlit pone…
+- **#264** — Un mock arrastrado con "Mover" podía terminar pintado DEBAJO de un hermano posterior — no…
 
 **Layout y alturas** (24)
 
@@ -388,7 +389,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (24)
+**Herramientas de desarrollo** (25)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -414,6 +415,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#257** — Mover un elemento una vez y no poder moverlo de nuevo: la perilla viaja con el elemento y…
 - **#260** — Un mock insertado en modo diseño aparece un instante y desaparece solo: Streamlit le borra…
 - **#261** — Amplía la #254: con algo pineado, el outline de Inspector se suprime SOLO, en vez de exigir…
+- **#264** — Un mock arrastrado con "Mover" podía terminar pintado DEBAJO de un hermano posterior — no…
 
 **Decisiones de diseño y UX** (44)
 
@@ -11664,13 +11666,51 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      el panel completo (posición, radio de borde, padding, margen,
      sombra) en vez del mensaje de elemento no encontrado.
 
+264. **Un mock arrastrado con "Mover" podía terminar pintado DEBAJO de un
+     hermano posterior — no existe "traer al frente"/"enviar atrás", es
+     que nada lo mantenía arriba.**
+
+     Pregunta 2026-08-31, justo después de la #263 ("ya pude arrastrar,
+     pero... la barra que creé aparece como detrás de algo — ¿hay algo
+     como Traer al frente o atrás?"). No hay ningún control de capas en
+     esta herramienta; el efecto es un side-effect de cómo funciona
+     "Mover".
+
+     El handle "+" del overlay (`el-diseno-mover`) reposiciona con
+     `elemento.style.transform = 'translate(Xpx,Ypx)'` — eso cambia lo
+     que se VE, no el lugar del mock en el DOM. El orden de pintado
+     (quién tapa a quién cuando dos cajas se superponen) lo decide el
+     orden del documento más el `z-index`, no la posición visual: un
+     mock arrastrado hacia abajo hasta solapar la tarjeta que viene
+     DESPUÉS en el código queda pintado DEBAJO de ella, porque el
+     `<div>` de `nodoMock()` no tenía `z-index` propio.
+
+     Y ni siquiera hubiera alcanzado con agregarlo a secas: `z-index` no
+     hace NADA en un elemento `position:static` (el default de cualquier
+     `<div>`) — hace falta `position:relative` primero (no lo saca del
+     flujo, a diferencia de `absolute`/`fixed`) para que el `z-index`
+     empiece a aplicar.
+
+     Arreglo: `ENCIMA_MOCK = 'position:relative;z-index:1;'`, sumado al
+     `cssText` de los cuatro tipos (incluido Texto, que también se
+     arrastra). El valor es chico a propósito: sólo necesita ganarle a
+     hermanos con `z-index:auto` (el default de cualquier cosa que no lo
+     declare), no competir con el overlay del propio modo diseño
+     (`2147483647`) ni con las franjas fijas.
+
+     Verificado en vivo: Barra insertada después de `nav_rail`, arrastrada
+     hacia abajo hasta solapar visualmente la tabla de "Ranking de
+     proveedores" — capturada pintándose POR ENCIMA de las filas de la
+     tabla, con `getComputedStyle` confirmando `position: relative` y
+     `z-index: 1` en el elemento.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#264**.
+> próxima regla nueva es la **#265**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

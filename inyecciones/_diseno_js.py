@@ -546,6 +546,24 @@ JS = """
         // Texto no lo necesita: tiene contenido propio, se mide solo.
         var ANCHO_MOCK = 'width:100%;align-self:stretch;box-sizing:border-box;';
 
+        // "Mover" (el "+" del overlay) reposiciona con `transform:
+        // translate()` — CAMBIA lo que se VE, no el lugar del mock en el
+        // DOM. El orden de pintado (quién tapa a quién cuando dos cajas se
+        // superponen) lo decide el orden del DOM, no la posición visual:
+        // sin esto, arrastrar un mock encima de CUALQUIER hermano que
+        // venga DESPUES en el código (la tarjeta de mas abajo, por
+        // ejemplo) lo dejaba pintado DEBAJO de esa tarjeta — no hay ningun
+        // "traer al frente/enviar atras" en esta herramienta, es
+        // simplemente que nada lo mantenia arriba. Reportado 2026-08-31:
+        // "la barra que cree aparece como detras de algo".
+        // `z-index` no hace NADA en un elemento `position:static` (el
+        // default) — hace falta `position:relative` (no saca al mock del
+        // flujo, a diferencia de `absolute`/`fixed`) para que el z-index
+        // aplique. Chico a proposito: solo tiene que ganarle a hermanos
+        // con z-index:auto (el default), no competir con el overlay
+        // (2147483647) ni con las franjas fijas.
+        var ENCIMA_MOCK = 'position:relative;z-index:1;';
+
         function nodoMock(m) {
             var el = doc.createElement('div');
             el.className = 'st-key-' + m.key;
@@ -557,18 +575,18 @@ JS = """
                 // Se escribe en el lugar. El atajo "C" del inspector ya
                 // ignora isContentEditable, asi que tipear una c aca no
                 // dispara "copiar para IA" (ver _inspector_js.py).
-                el.style.cssText = 'font:600 14px/1.4 -apple-system,"Segoe UI",sans-serif;padding:4px 2px;outline:0;cursor:text;color:'
+                el.style.cssText = ENCIMA_MOCK + 'font:600 14px/1.4 -apple-system,"Segoe UI",sans-serif;padding:4px 2px;outline:0;cursor:text;color:'
                     + colorPaleta('Texto principal');
                 el.addEventListener('input', function() { m.texto = el.textContent; });
             } else if (m.tipo === 'linea') {
-                el.style.cssText = ANCHO_MOCK + 'height:1px;margin:8px 0;opacity:.35;background:' + colorPaleta('Gris texto');
+                el.style.cssText = ANCHO_MOCK + ENCIMA_MOCK + 'height:1px;margin:8px 0;opacity:.35;background:' + colorPaleta('Gris texto');
             } else if (m.tipo === 'barra') {
-                el.style.cssText = ANCHO_MOCK + 'height:34px;margin:6px 0;border-radius:8px;background:' + colorPaleta('Acento');
+                el.style.cssText = ANCHO_MOCK + ENCIMA_MOCK + 'height:34px;margin:6px 0;border-radius:8px;background:' + colorPaleta('Acento');
             } else {
                 // Aire: no pinta nada, pero hay que PODER verlo y agarrarlo
                 // mientras se disena -> outline, que no ocupa layout (un
                 // border si, y falsearia el alto que se esta probando).
-                el.style.cssText = ANCHO_MOCK + 'height:16px;opacity:.5;outline-offset:-1px;outline:1px dashed ' + colorPaleta('Gris texto');
+                el.style.cssText = ANCHO_MOCK + ENCIMA_MOCK + 'height:16px;opacity:.5;outline-offset:-1px;outline:1px dashed ' + colorPaleta('Gris texto');
             }
             return el;
         }
