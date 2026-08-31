@@ -2132,14 +2132,11 @@ JS = """
                 win.__disenoContornoOculto = !win.__disenoContornoOculto;
                 btnContorno.textContent = win.__disenoContornoOculto ? '□' : '▣';
                 overlay.style.display = win.__disenoContornoOculto ? 'none' : 'block';
-                // Son DOS contornos violetas de fuentes distintas: este overlay
-                // (div aparte, 4px afuera) y el `outline` INLINE que el
-                // inspector le pone al elemento resaltado. Apagar solo el
-                // primero dejaba el segundo encima del borde que se estaba
-                // editando — se veia como "el boton no hace nada". Regla #254.
-                if (win.__inspectorSetResaltadoOculto) {
-                    win.__inspectorSetResaltadoOculto(win.__disenoContornoOculto);
-                }
+                // Ya NO toca el outline de Inspector: sync() lo suprime solo
+                // en cuanto hay algo pineado (mismo elemento, misma info que
+                // este overlay — regla #254 y #260), sin importar si este
+                // boton esta en ▣ o en □. Este boton solo tapa/destapa EL
+                // OVERLAY PROPIO, para juzgar el look final sin ninguna marca.
             });
 
             // Empujar/soltar el lienzo. Va al lado del de contorno: los dos
@@ -2967,6 +2964,9 @@ JS = """
                 // apagado (para eso se puso ahi), asi que hay que apagarla a
                 // mano o el lienzo queda encogido sin panel que lo explique.
                 aplicarReserva(false);
+                // Sin diseno activo, Inspector vuelve a comportarse solo:
+                // su outline no tiene por que quedar suprimido.
+                if (win.__inspectorSetResaltadoOculto) win.__inspectorSetResaltadoOculto(false);
                 return;
             }
             // Antes de resolver el pin: un mock puede SER el pineado, y
@@ -3009,8 +3009,19 @@ JS = """
 
             if (!res || !res.el) {
                 overlay.style.display = 'none';
+                // Nada pineado en diseno: el outline de Inspector (si hay
+                // hover suelto) vuelve a verse normal.
+                if (win.__inspectorSetResaltadoOculto) win.__inspectorSetResaltadoOculto(false);
                 return;
             }
+            // Con algo pineado, el overlay propio (con las manijas) ya
+            // marca la seleccion — el outline INLINE de Inspector sobre el
+            // mismo elemento es la misma info dos veces (regla #254, y el
+            // caso de "Lienzo" donde se leian como dos recuadros en vez de
+            // uno). Se suprime automaticamente en vez de exigir el clic en
+            // ▣/□: ese boton ahora solo tapa/destapa el overlay PROPIO, no
+            // pelea con este auto-apagado.
+            if (win.__inspectorSetResaltadoOculto) win.__inspectorSetResaltadoOculto(true);
             // Por `id`, no por key: la tarjeta y cada uno de sus hijos
             // pineables llevan su propio registro de cambios.
             var registro = registroPara(res.id);

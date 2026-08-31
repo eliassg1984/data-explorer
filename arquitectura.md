@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-260 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+261 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (83)
 
@@ -384,7 +384,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (23)
+**Herramientas de desarrollo** (24)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -409,6 +409,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#256** — El panel de diseño es fixed a la derecha y tapa 230px de la app — justo la orilla donde caen…
 - **#257** — Mover un elemento una vez y no poder moverlo de nuevo: la perilla viaja con el elemento y…
 - **#260** — Un mock insertado en modo diseño aparece un instante y desaparece solo: Streamlit le borra…
+- **#261** — Amplía la #254: con algo pineado, el outline de Inspector se suprime SOLO, en vez de exigir…
 
 **Decisiones de diseño y UX** (44)
 
@@ -11538,13 +11539,56 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      patrón exacto que rompía el caso). Tras el rerun la URL seguía con
      `debug=1&diseno=1` y las dos Barras seguían en el DOM.
 
+261. **Amplía la #254: con algo pineado, el outline de Inspector se
+     suprime SOLO, en vez de exigir el clic manual en ▣/□.**
+
+     Pregunta 2026-08-31, en vivo, después de #254: "¿eso debería verse
+     como dos recuadros?" — sobre el caso de pinear el Lienzo (regla
+     #167), donde el desfase entre los dos contornos (el overlay propio,
+     4px afuera, y el `outline` de Inspector, `outline-offset:2px`) se
+     nota más que en una tarjeta chica, porque el borde del viewport le da
+     al ojo una referencia dura contra la cual separarlos.
+
+     La #254 ya diagnosticaba que son dos capas de fuentes distintas, pero
+     dejaba resuelto solo el síntoma ("el botón ▣/□ apagaba una y no la
+     otra"), no la redundancia de fondo: mientras algo está pineado en
+     diseño, el overlay propio (con las manijas de mover/redimensionar) YA
+     marca la selección — el outline de Inspector sobre el MISMO elemento
+     no aporta nada que el overlay no diga, solo repite la marca con un
+     desfase de pocos píxeles.
+
+     Arreglo en `sync()` (`_diseno_js.py`, el poll de 150ms que ya es la
+     única fuente de verdad para reponer mocks y reaplicar uniones): en
+     cuanto `elementoPineado()` resuelve un elemento, llama
+     `win.__inspectorSetResaltadoOculto(true)` — el mismo hook que #254
+     dejó expuesto para el botón manual, ahora invocado automáticamente.
+     Al soltar el pin (o al salir de diseño con `disenoActivo()` en
+     falso) se llama con `false`, así Inspector usado SOLO (sin diseño, o
+     con diseño activo pero nada pineado) sigue mostrando su outline en
+     vivo al hacer hover, sin ningún cambio de comportamiento.
+
+     El botón ▣/□ cambia de rol: ya no pelea por apagar el outline de
+     Inspector (ahora gestionado solo) — pasa a tapar/destapar
+     ÚNICAMENTE el overlay propio, para el caso de querer juzgar el look
+     final sin ninguna marca de herramienta encima. Con el botón en ▣
+     (normal) sólo se ve un recuadro, el del overlay; en □ no se ve
+     ninguno.
+
+     Verificado en vivo sobre el Lienzo pineado:
+
+     ```
+     ▣ (default) → outline inline de Inspector: ""  · overlay: display:block
+     □ (clic)    → outline inline de Inspector: ""  · overlay: display:none
+     Soltar      → __inspectorResaltadoOculto vuelve a false, hover normal
+     ```
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#261**.
+> próxima regla nueva es la **#262**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
