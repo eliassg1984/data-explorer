@@ -518,6 +518,21 @@ JS = """
         var TIPOS_MOCK = [['texto', 'Texto'], ['linea', 'Línea'],
                           ['barra', 'Barra'], ['espacio', 'Espacio']];
 
+        // Linea/Barra/Espacio son <div> vacios que dependen de `width:auto`
+        // para ocupar la fila — funciona en flujo normal, pero como HIJO de
+        // un stVerticalBlock (flex-direction:column) Streamlit pone
+        // align-items:flex-start, no :stretch. Un flex item sin ancho
+        // propio se mide por su CONTENIDO en el eje cruzado, y un div vacio
+        // no tiene contenido: ancho computado 0px. Con altura si (34px la
+        // Barra) el resultado es una tira invisible — solo se veia el
+        // flash naranja de #259 abrazando esa caja de 0px de ancho, y al
+        // apagarse (1.4s) no quedaba nada que ver. Reportado 2026-08-31
+        // pineando `nav_rail` como ancla (un stVerticalBlock de verdad).
+        // `width:100%` cubre el flujo normal; `align-self:stretch` cubre
+        // el caso flex (gana sobre el align-items heredado del padre).
+        // Texto no lo necesita: tiene contenido propio, se mide solo.
+        var ANCHO_MOCK = 'width:100%;align-self:stretch;box-sizing:border-box;';
+
         function nodoMock(m) {
             var el = doc.createElement('div');
             el.className = 'st-key-' + m.key;
@@ -533,14 +548,14 @@ JS = """
                     + colorPaleta('Texto principal');
                 el.addEventListener('input', function() { m.texto = el.textContent; });
             } else if (m.tipo === 'linea') {
-                el.style.cssText = 'height:1px;margin:8px 0;opacity:.35;background:' + colorPaleta('Gris texto');
+                el.style.cssText = ANCHO_MOCK + 'height:1px;margin:8px 0;opacity:.35;background:' + colorPaleta('Gris texto');
             } else if (m.tipo === 'barra') {
-                el.style.cssText = 'height:34px;margin:6px 0;border-radius:8px;background:' + colorPaleta('Acento');
+                el.style.cssText = ANCHO_MOCK + 'height:34px;margin:6px 0;border-radius:8px;background:' + colorPaleta('Acento');
             } else {
                 // Aire: no pinta nada, pero hay que PODER verlo y agarrarlo
                 // mientras se disena -> outline, que no ocupa layout (un
                 // border si, y falsearia el alto que se esta probando).
-                el.style.cssText = 'height:16px;opacity:.5;outline-offset:-1px;outline:1px dashed ' + colorPaleta('Gris texto');
+                el.style.cssText = ANCHO_MOCK + 'height:16px;opacity:.5;outline-offset:-1px;outline:1px dashed ' + colorPaleta('Gris texto');
             }
             return el;
         }

@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-261 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+262 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (83)
+**CSS y estilos** (84)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -103,6 +103,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#245** — Una fila que COMPARA se parte por la mitad, no con COLUMNAS_DRILL
 - **#255** — La perilla "Mover" es HIJA del overlay: ocultar el contorno la apaga también. Y "Tipo de…
 - **#258** — Duplicar un elemento en el modo diseño: la copia CONSERVA las clases st-key-*, y por eso hay…
+- **#262** — Linea/Barra/Espacio insertados sobre un stVerticalBlock nacen con width:0 — Streamlit pone…
 
 **Layout y alturas** (24)
 
@@ -227,7 +228,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#248** — En media tarjeta, cada columna nueva hay que pagarla con otra: la unidad se muda adentro de…
 - **#250** — Un valor derivado también se adelanta en el navegador: si sólo lo recalcula el servidor, la…
 
-**Streamlit** (74)
+**Streamlit** (75)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -303,6 +304,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#235** — _css_grid es de UNA tabla suelta sobre el gris de la app; si la tabla ya vive adentro de una…
 - **#256** — El panel de diseño es fixed a la derecha y tapa 230px de la app — justo la orilla donde caen…
 - **#260** — Un mock insertado en modo diseño aparece un instante y desaparece solo: Streamlit le borra…
+- **#262** — Linea/Barra/Espacio insertados sobre un stVerticalBlock nacen con width:0 — Streamlit pone…
 
 **Datos, R2 y DuckDB** (30)
 
@@ -11582,13 +11584,52 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Soltar      → __inspectorResaltadoOculto vuelve a false, hover normal
      ```
 
+262. **Linea/Barra/Espacio insertados sobre un `stVerticalBlock` nacen con
+     `width:0` — Streamlit pone `align-items:flex-start` en sus columnas
+     flex, no `:stretch`.**
+
+     Reportado 2026-08-31, en vivo, con captura: "cuando agrego una barra,
+     solo aparece esto de acá y de ahí desaparece" — una tira naranja
+     vertical finita donde debía haber una barra violeta ancha. No era el
+     bug de la #260 (URL perdiendo `debug`/`diseno`): la barra nunca tuvo
+     ancho, así que lo único visible desde el principio era el FLASH de
+     #259 abrazando una caja de 34px de alto y **0px de ancho** — al
+     apagarse el flash (1.4s) no quedaba nada que ver.
+
+     La causa, medida con `getBoundingClientRect()`: `nodoMock()` crea un
+     `<div>` sin `width` propio, confiando en que `width:auto` de un
+     bloque llena el contenedor — cierto en flujo normal, falso como HIJO
+     de un `stVerticalBlock`. Streamlit pone `display:flex;
+     flex-direction:column` en esos contenedores pero **`align-items:
+     flex-start`**, no `:stretch` — cada widget REAL de Streamlit trae su
+     propio `width:100%` por su lado (vía las clases `st-emotion-cache-*`
+     que Streamlit le agrega), así que nunca se notó. Un `<div>` inyectado
+     a mano no tiene esa clase: sin `align-items:stretch` del padre, un
+     flex item se mide por su CONTENIDO en el eje cruzado, y un `<div>`
+     vacío no tiene contenido — ancho computado `0px`. Reproducido pineando
+     `nav_rail` (que SÍ es un `stVerticalBlock`) e insertando "Después":
+
+     ```
+     antes:   rect.width = 0    (getComputedStyle: width:0px)
+     después: rect.width = 867  (igual al ancho de la fila del ancla)
+     ```
+
+     Arreglo: `ANCHO_MOCK = 'width:100%;align-self:stretch;
+     box-sizing:border-box;'`, antepuesto al `cssText` de linea/barra/
+     espacio (no a texto, que se mide por su propio contenido y no
+     necesita forzar nada). `width:100%` cubre el flujo normal;
+     `align-self:stretch` gana sobre el `align-items:flex-start` heredado
+     cuando el padre SÍ es flex — las dos juntas porque el ancla de un
+     mock puede caer en cualquiera de los dos contextos y no hay forma de
+     saber cuál de antemano.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#262**.
+> próxima regla nueva es la **#263**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
