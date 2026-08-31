@@ -407,7 +407,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#256** — El panel de diseño es fixed a la derecha y tapa 230px de la app — justo la orilla donde caen…
 - **#257** — Mover un elemento una vez y no poder moverlo de nuevo: la perilla viaja con el elemento y…
 
-**Decisiones de diseño y UX** (42)
+**Decisiones de diseño y UX** (43)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -451,6 +451,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#236** — Sacar una vista de una página APILADA no es borrar su sección: hay que ir a buscar lo que la…
 - **#241** — Un panel de detalle y un gráfico del PERÍODO no pueden convivir: el gráfico tiene que hablar…
 - **#249** — En una homologación, el INVARIANTE es el importe de la línea — no la cantidad ni el precio
+- **#258** — Duplicar un elemento en el modo diseño: la copia CONSERVA las clases st-key-*, y por eso hay…
 
 **Mantenimiento y trampas del lenguaje** (7)
 
@@ -11416,6 +11417,30 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      "+ Copia" —no condicionado a lograr pinear el clon, que es
      precisamente lo que no se puede— explicando que "Copia" queda fija y
      que cualquier arrastre posterior sigue tocando el original.
+
+     **Segunda enmienda, mismo día**: el aviso no alcanzó — a pedido, se
+     borra "Copia" entera en vez de explicarla mejor. La razón que lo
+     decidió: para un elemento `position: fixed` (rail, franjas, chips —
+     casi todo lo que vive arriba de la app), el clon HEREDA esa misma
+     propiedad, y un `fixed` ignora el orden del DOM — "Antes"/"Después"
+     no reparte nada, original y clon terminan en las MISMAS coordenadas
+     de pantalla, superpuestos al píxel (medido con `nav_rail`: mismo
+     `getBoundingClientRect()` exacto). Sin superposición visible no hay
+     "cómo se vería con dos", que es la única razón de ser de la
+     herramienta — así que sobre ese universo de elementos "Copia" no
+     tenía trabajo que hacer ni arreglada.
+
+     Se borró `marcarCopia()`, la rama `if (m.tipo === 'copia')` de
+     `nodoMock()`, `esCopia()` y la entrada en `TIPOS_MOCK` — pero **no**
+     el resolvedor `porKeyReal()`/`SIN_COPIAS`: lo siguen usando los
+     otros cuatro tipos de mock (texto/línea/barra/espacio), y aunque hoy
+     ninguno comparte key con un widget real, sacarlos con el mismo
+     `:not([data-diseno-mock])` no cuesta nada y deja la puerta cerrada
+     si algún día vuelve a hacer falta. "Insertar" (texto/línea/barra/
+     espacio) sigue entero — es la mitad de la herramienta que sí
+     funciona sobre cualquier tipo de elemento, fixed o no, porque no
+     depende de heredar la posición de nada: nace como una caja nueva en
+     el lugar que el "Dónde" pida.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

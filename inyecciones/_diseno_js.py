@@ -153,16 +153,19 @@ JS = """
             return !/^st[A-Z]/.test(c);                 // stMarkdown, stVerticalBlock, ...
         }
 
-        // ── Resolver una key al elemento REAL, nunca a una copia ─────────
-        // Una copia (regla #258) conserva las clases `st-key-*` del original
-        // —es lo que la hace verse igual, porque el CSS del proyecto matchea
-        // por esas clases— asi que a partir de ahi hay DOS nodos con la
-        // misma key y `querySelector` devuelve el primero del DOM. Insertar
-        // la copia "Antes" bastaba para que el pin, el contorno y el ancla
-        // de los mocks pasaran a apuntar al clon en vez de al widget que se
-        // esta editando. Todos los nodos de una copia (la raiz y su
-        // descendencia) llevan `data-diseno-mock`, asi que un solo `:not()`
-        // los saca a todos.
+        // ── Resolver una key al elemento REAL, nunca a un mock ────────────
+        // El motivo original (regla #258) era "Copia": conservaba las clases
+        // `st-key-*` del original para verse igual, y eso dejaba DOS nodos
+        // con la misma key —`querySelector` devuelve el primero del DOM—,
+        // así que el pin y el contorno podían terminar apuntando al clon en
+        // vez de al widget real. "Copia" se borró el 2026-08-31 (no aportaba
+        // nada sobre elementos `position:fixed`, y el clon quieto encima del
+        // original confundía más de lo que ayudaba — ver la enmienda de la
+        // regla #258), pero el filtro se queda: los otros mocks (texto/
+        // línea/barra/espacio) también llevan `data-diseno-mock`, y aunque
+        // hoy nunca comparten key con un widget real, sacarlos a todos con
+        // un solo `:not()` no cuesta nada y evita que el mismo bug vuelva si
+        // algún día se agrega un tipo de mock que sí la comparta.
         var SIN_COPIAS = ':not([data-diseno-mock])';
         function porKeyReal(key) {
             return doc.querySelector('.st-key-' + key + SIN_COPIAS);
@@ -513,39 +516,9 @@ JS = """
         }
 
         var TIPOS_MOCK = [['texto', 'Texto'], ['linea', 'Línea'],
-                          ['barra', 'Barra'], ['espacio', 'Espacio'],
-                          ['copia', 'Copia']];
+                          ['barra', 'Barra'], ['espacio', 'Espacio']];
 
-        // Marca la copia ENTERA (raiz + descendencia) para que porKeyReal()
-        // la ignore: las keys de los hijos tambien se duplican al clonar una
-        // tarjeta, no solo la de la raiz. Y borra los `id`, que en HTML son
-        // unicos — un id repetido rompe getElementById para el original.
-        function marcarCopia(raiz) {
-            raiz.removeAttribute('id');
-            var todos = raiz.querySelectorAll('*');
-            for (var i = 0; i < todos.length; i++) {
-                todos[i].removeAttribute('id');
-                todos[i].setAttribute('data-diseno-mock', 'hijo');
-            }
-        }
-
-        function nodoMock(m, origen) {
-            if (m.tipo === 'copia') {
-                if (!origen) return null;
-                // Clon PROFUNDO y con las clases intactas: el CSS del
-                // proyecto matchea por `.st-key-*`, asi que quitarlas
-                // dejaria una copia sin estilo — un esqueleto, no una
-                // maqueta. Ver regla #258 para el trade-off.
-                var cp = origen.cloneNode(true);
-                marcarCopia(cp);
-                cp.className = (cp.className || '') + ' st-key-' + m.key;
-                cp.setAttribute('data-diseno-mock', m.tipo);
-                // Muerto a proposito: es HTML copiado, sin sesion de
-                // Streamlit detras. Dejarlo clickeable invitaria a probar
-                // botones que no hacen nada.
-                cp.style.pointerEvents = 'none';
-                return cp;
-            }
+        function nodoMock(m) {
             var el = doc.createElement('div');
             el.className = 'st-key-' + m.key;
             el.setAttribute('data-diseno-mock', m.tipo);
@@ -597,17 +570,7 @@ JS = """
         function insertarMock(m) {
             var ancla = anclaEfectiva(m);
             if (!ancla) return false;
-            // El origen de una copia es el ancla REAL, no la encadenada:
-            // anclaEfectiva() puede devolver un mock anterior cuando varios
-            // se insertan "despues" del mismo sitio, y clonar una copia de
-            // una copia multiplicaria el error.
-            var origen = null;
-            if (m.tipo === 'copia') {
-                origen = porKeyReal(m.anclaKey);
-                if (origen && m.anclaSub) origen = origen.querySelector('.' + m.anclaSub);
-                if (!origen) return false;
-            }
-            var el = nodoMock(m, origen);
+            var el = nodoMock(m);
             if (!el) return false;
             if (m.posicion === 'antes') ancla.parentNode.insertBefore(el, ancla);
             else if (m.posicion === 'dentro') ancla.appendChild(el);
@@ -641,11 +604,7 @@ JS = """
                 tipo: tipo,
                 anclaKey: res.key,
                 anclaSub: res.sub,
-                // "Dentro" de si mismo no significa nada para una copia
-                // (deja un clon del padre colgando adentro del padre): se
-                // degrada a "Despues", que es lo que se pide al duplicar.
-                posicion: (tipo === 'copia' && win.__disenoState.mockPos === 'dentro')
-                    ? 'despues' : win.__disenoState.mockPos,
+                posicion: win.__disenoState.mockPos,
                 texto: 'Texto de prueba'
             };
             win.__disenoState.mocks.push(m);
@@ -665,14 +624,6 @@ JS = """
 
         function esMock(key) {
             return win.__disenoState.mocks.some(function(m) { return m.key === key; });
-        }
-
-        function esCopia(key) {
-            var ms = win.__disenoState.mocks;
-            for (var i = 0; i < ms.length; i++) {
-                if (ms[i].key === key) return ms[i].tipo === 'copia';
-            }
-            return false;
         }
 
         // ---- unificar: dos tarjetas vecinas vistas como una sola --------
@@ -2462,9 +2413,7 @@ JS = """
             if (esMock(key)) {
                 var avisoMock = doc.createElement('div');
                 avisoMock.style.cssText = 'font:11px/1.4 -apple-system,sans-serif;color:#e4e4e8;background:#1c1c24;border:1px dashed #6c5ce7;border-radius:4px;padding:6px 7px;margin-bottom:10px';
-                avisoMock.textContent = esCopia(key)
-                    ? 'Copia del modo diseño: sirve para juzgar espaciado y densidad, pero es HTML muerto — los widgets de adentro (selectbox, tabla) no responden. Se va al recargar.'
-                    : 'Insertado por el modo diseño: no existe en el código ni en estilos/. Se va al recargar.';
+                avisoMock.textContent = 'Insertado por el modo diseño: no existe en el código ni en estilos/. Se va al recargar.';
                 panel.appendChild(avisoMock);
             }
 
@@ -2918,20 +2867,6 @@ JS = """
                 addWrap.appendChild(b);
             });
             panel.appendChild(filaControl('Agregar', addWrap, spanValor('')));
-
-            // Aviso de "Copia", puesto a pedido (2026-08-31): el pin NO
-            // salta al clon al crearlo (`agregarMock` no toca
-            // `__inspectorPinned`), y el clon es HTML muerto con
-            // `pointer-events:none` — no se puede seleccionar haciendo
-            // clic en él. Sin este aviso, arrastrar "Mover" después de
-            // "+ Copia" mueve el ORIGINAL creyendo que se mueve el clon,
-            // y como el clon se queda quieto en el lugar de siempre, el
-            // original "desaparece" de donde se lo busca — reportado tal
-            // cual, confirmado reproduciendo el gesto con eventos reales.
-            var avisoCopia = doc.createElement('div');
-            avisoCopia.style.cssText = 'font:11px/1.4 -apple-system,sans-serif;color:#9385ec;background:#1c1c24;border:1px solid #34343f;border-radius:4px;padding:6px 7px;margin-top:6px';
-            avisoCopia.textContent = '"Copia" queda fija: no se puede seleccionar ni mover — es solo para ver el espaciado. Arrastrar/editar después de crearla sigue tocando el ORIGINAL (el pin no salta al clon).';
-            panel.appendChild(avisoCopia);
 
             // Quitar: el que esta fijado (si es un mock) y el resto. Ambos
             // fuerzan la reconstruccion del panel porque cambia el conteo,
