@@ -158,6 +158,18 @@ def _panorama_compras_venta(df_f, es_soles):
 # del alcance de este cambio, no tocado acá. "Costeo Receta Venta" (antes
 # "Ranking") ya usa INS RV y no ITEM RV desde que se armó como tabla — ver
 # `_tabla_costeo_venta`, más abajo.
+#
+# Y el 2026-08-30 se sumaron tres columnas más a pedido: P. Neto Salón
+# (= P.VENTA SALON / 1.18, IGV 18% — mismo criterio que
+# `formulario_receta.py::_IGV`, ver el comentario de `_IGV` más abajo),
+# Actualizado y Última Venta (ésta, la última columna de la tabla, a
+# pedido explícito) — las dos de columnas NATIVAS del parquet (`FECH
+# MODIF` / `ULTIMA VENT`), NO de cruzar contra ventas.parquet. Ver
+# arquitectura.md regla #253 para el detalle de cada verificación
+# (`ULTIMA VENT` no coincide al minuto con el registro real de
+# ventas.parquet, y por qué eso no la invalida; y por qué 1.18 sigue
+# siendo la cuenta correcta para un precio de LISTA aunque el ratio real
+# de una venta ya cerrada, con descuentos adentro, dé otra cosa).
 def _tabla_composicion_venta(df_f):
     """Vista 'Composición': ranking de platos activos (AgGrid, barra de
     %Costo salón coloreada por umbral) + la receta del plato en foco en
@@ -175,6 +187,12 @@ def _tabla_composicion_venta(df_f):
     col_ins = _resolver(df_f, ["INS RV", "Ins Rv"])
     col_cant = _resolver(df_f, ["CANTIDAD", "Cantidad"])
     col_total = _resolver(df_f, ["TOTAL", "Total"])
+    # Opcionales (a diferencia de las de arriba, que son obligatorias — ver
+    # `faltan` más abajo): si no están, la tabla se queda sin esa columna
+    # en vez de romperse. Ver arquitectura.md regla #253 para el porqué de
+    # cada fuente — ninguna de las dos sale de cruzar contra ventas.parquet.
+    col_ult_venta = _resolver(df_f, ["ULTIMA VENT", "Ultima Vent", "Ultima Venta"])
+    col_fech_modif = _resolver(df_f, ["FECH MODIF", "Fech Modif", "Fecha Modif"])
 
     faltan = [n for n, c in (
         ("Plato", col_plato), ("Grupo", col_grupo), ("Subgrupo", col_subgrupo),
@@ -197,14 +215,19 @@ def _tabla_composicion_venta(df_f):
         st.info("Sin platos activos para mostrar.")
         return
 
-    g = d.groupby(col_cod_plato, as_index=False).agg(
-        Grupo=(col_grupo, "first"),
-        Subgrupo=(col_subgrupo, "first"),
-        Plato=(col_plato, "first"),
-        Precio=(col_precio, "first"),
-        Costo=(col_costo, "first"),
-        Pct=(col_pct, "first"),
-    )
+    agg = {
+        "Grupo": (col_grupo, "first"),
+        "Subgrupo": (col_subgrupo, "first"),
+        "Plato": (col_plato, "first"),
+        "Precio": (col_precio, "first"),
+        "Costo": (col_costo, "first"),
+        "Pct": (col_pct, "first"),
+    }
+    if col_ult_venta:
+        agg["UltimaVenta"] = (col_ult_venta, "first")
+    if col_fech_modif:
+        agg["FechaModif"] = (col_fech_modif, "first")
+    g = d.groupby(col_cod_plato, as_index=False).agg(**agg)
     g["Grupo"] = g["Grupo"].fillna("").astype(str)
     g["Subgrupo"] = g["Subgrupo"].fillna("").astype(str)
     g["Plato"] = g["Plato"].astype(str)
@@ -212,6 +235,32 @@ def _tabla_composicion_venta(df_f):
     g["Costo"] = pd.to_numeric(g["Costo"], errors="coerce").fillna(0.0)
     g["Pct"] = pd.to_numeric(g["Pct"], errors="coerce").fillna(0.0) * 100
     g["_cod"] = g[col_cod_plato].astype(str)
+    # IGV Perú, 18% — misma constante que `formulario_receta.py::_IGV`, NO
+    # importada desde ahí a propósito: dashboard y herramienta son dos
+    # módulos separados que coinciden en la referencia de negocio, no en
+    # código que debieran compartir (mismo criterio que `_UMBRAL_COSTO_OK`/
+    # `_UMBRAL_COSTO_WARN` de `recetaventa.py::_tabla_costeo_venta`). Se
+    # calcula ACÁ, antes del filtro de precios centinela de más abajo, así
+    # que un P.VENTA SALON centinela (~0) da un Precio Neto ~0 y no una
+    # división que reviente — el filtro de abajo igual lo saca de la tabla.
+    _IGV = 1.18
+    g["PrecioNeto"] = g["Precio"] / _IGV
+    # Fechas nativas del parquet, formateadas a texto DD/MM/AAAA (mismo
+    # patrón que `graficos/compras/documentos_sunat.py`, columna "Fecha").
+    if col_ult_venta:
+        _uv = pd.to_datetime(g["UltimaVenta"], errors="coerce")
+        # Centinela de "nunca se vendió": 1900-01-01 (el mínimo de un
+        # SMALLDATETIME de SQL Server, el sistema de origen) en vez de
+        # NULL — verificado contra R2 real: 75 de 850 platos, activos e
+        # inactivos, con ESE valor exacto y ninguno con otra fecha antes
+        # de 2021. Mismo patrón-trampa que el precio centinela de
+        # P.VENTA SALON (arriba): mostrarlo tal cual diría que el plato
+        # se vendió en 1900, así que se blanquea en vez de mostrarse.
+        _uv = _uv.where(_uv >= pd.Timestamp("2000-01-01"))
+        g["UltimaVenta"] = _uv.dt.strftime("%d/%m/%Y").fillna("")
+    if col_fech_modif:
+        g["FechaModif"] = pd.to_datetime(
+            g["FechaModif"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
 
     # P.VENTA SALON trae un cluster de precios centinela (1e-12…1.00,
     # verificado contra R2 real: 15 de 436 platos activos, TODOS con un
@@ -268,7 +317,7 @@ def _tabla_composicion_venta(df_f):
     with c_tabla:
         with _card("rv_comp_tabla",
                    "Platos activos · % de costo sobre venta en Salón"):
-            # Ancho FIJO en las 6 columnas, ninguna con `flex`: probado en
+            # Ancho FIJO en todas las columnas, ninguna con `flex`: probado en
             # graficos/compras/producto.py (arquitectura.md regla #192) que
             # `st_aggrid` le clava `width: 200` a toda columna sin `width`
             # propio, y como AG Grid prioriza el `width` explícito para el
@@ -282,26 +331,46 @@ def _tabla_composicion_venta(df_f):
             # de ancho real), oculta sin scrollear. Grupo+Subgrupo+Plato+
             # %Costo suman 430px: entran holgados. Precio/Costo (detalle
             # de apoyo) son los que quedan a un scroll de distancia.
+            #
+            # Precio Neto, Actualizado y Última Venta se sumaron el
+            # 2026-08-30, a pedido — las dos últimas OPCIONALES, y Última
+            # Venta la ÚLTIMA columna a propósito (pedido explícito). Ver
+            # arquitectura.md regla #253 para el porqué de cada fuente.
+            _campos = ["Grupo", "Subgrupo", "Plato", "Pct", "Precio", "PrecioNeto", "Costo"]
+            _columnas = [
+                {"field": "Grupo", "width": 90, "tooltipField": "Grupo"},
+                {"field": "Subgrupo", "width": 100,
+                 "tooltipField": "Subgrupo"},
+                {"field": "Plato", "width": 160, "tooltipField": "Plato"},
+                {"field": "Pct", "headerName": "% Costo",
+                 "width": 80, "type": "numericColumn",
+                 "cellStyle": _js_barra_pct,
+                 "valueFormatter": _js_pct},
+                {"field": "Precio", "headerName": "P. Venta Salón",
+                 "width": 90, "type": "numericColumn",
+                 "valueFormatter": _js_soles},
+                {"field": "PrecioNeto", "headerName": "P. Neto Salón",
+                 "width": 90, "type": "numericColumn",
+                 "valueFormatter": _js_soles},
+                {"field": "Costo", "headerName": "Costo Salón",
+                 "width": 90, "type": "numericColumn",
+                 "valueFormatter": _js_soles},
+            ]
+            if col_fech_modif:
+                _campos.append("FechaModif")
+                _columnas.append({"field": "FechaModif",
+                                  "headerName": "Actualizado", "width": 90})
+            if col_ult_venta:
+                _campos.append("UltimaVenta")
+                _columnas.append({"field": "UltimaVenta",
+                                  "headerName": "Última Venta", "width": 100})
+            _campos.append("_cod")
+            _columnas.append({"field": "_cod", "hide": True})
+
             resp = AgGrid(
-                g[["Grupo", "Subgrupo", "Plato", "Pct", "Precio", "Costo", "_cod"]],
+                g[_campos],
                 gridOptions={
-                    "columnDefs": [
-                        {"field": "Grupo", "width": 90, "tooltipField": "Grupo"},
-                        {"field": "Subgrupo", "width": 100,
-                         "tooltipField": "Subgrupo"},
-                        {"field": "Plato", "width": 160, "tooltipField": "Plato"},
-                        {"field": "Pct", "headerName": "% Costo",
-                         "width": 80, "type": "numericColumn",
-                         "cellStyle": _js_barra_pct,
-                         "valueFormatter": _js_pct},
-                        {"field": "Precio", "headerName": "P. Venta Salón",
-                         "width": 90, "type": "numericColumn",
-                         "valueFormatter": _js_soles},
-                        {"field": "Costo", "headerName": "Costo Salón",
-                         "width": 90, "type": "numericColumn",
-                         "valueFormatter": _js_soles},
-                        {"field": "_cod", "hide": True},
-                    ],
+                    "columnDefs": _columnas,
                     "defaultColDef": {"sortable": True, "resizable": True},
                     "rowSelection": {"mode": "singleRow", "checkboxes": False,
                                      "enableClickSelection": False},
@@ -381,47 +450,25 @@ def _tabla_composicion_venta(df_f):
 # (`_ranking_contenedores`) — mismo criterio que `_tabla_composicion_venta`,
 # arriba.
 #
-# Ancho de columnas: FIJO en las siete, ninguna con `flex` — arquitectura.md
+# Ancho de columnas: FIJO en las cuatro, ninguna con `flex` — arquitectura.md
 # regla #193 (`st_aggrid` inyecta `width: 200` a toda columna sin uno
 # propio, y ese ancho explícito le gana al `flex` en el render inicial; el
 # Ranking de Proveedores "funciona" con flex sólo porque nunca cruzó el
 # umbral de columnas — la regla #193 lo llama "el bug dormido").
-#
-# Precio Neto Salón, Actualizado y Última Venta se sumaron el 2026-08-30, a
-# pedido — ver arquitectura.md regla #253 para el porqué de cada fuente:
-#   · Precio Neto Salón = P.VENTA SALON / 1.18 (IGV 18%, mismo criterio que
-#     `formulario_receta.py::_IGV` — no se importa desde ahí, ver el
-#     comentario de `_IGV` más abajo).
-#   · Actualizado / Última Venta salen de columnas NATIVAS del parquet
-#     (`FECH MODIF` / `ULTIMA VENT`) — NO de cruzar contra ventas.parquet.
-#     `ULTIMA VENT` no coincide al minuto con el registro real de
-#     ventas.parquet (regla #253), pero es la fuente que ya mantiene el
-#     sistema de origen; recalcularla acá sería una segunda verdad.
 def _tabla_costeo_venta(df_f, col_plato, col_valor, es_soles):
     """Vista 'Costeo Receta Venta': ranking de platos por costo (o
     cantidad) total, en una tabla AgGrid — mismo lenguaje visual que el
     Ranking de Proveedores de Compras."""
     # INS RV, no ITEM RV, para el conteo de insumos: ITEM RV es el número
     # de LÍNEA dentro de la receta, no una identidad de insumo — ver
-    # arquitectura.md regla #205 (punto 2). Todas las columnas de acá para
-    # abajo son OPCIONALES: si no están (p.ej. un export viejo), la tabla
-    # se queda sin esa columna en vez de romperse, mismo criterio
-    # defensivo que el resto del dashboard.
+    # arquitectura.md regla #205 (punto 2). Columna opcional: si no está
+    # (p.ej. un export viejo), la tabla se queda sin "Ítems" en vez de
+    # romperse, mismo criterio defensivo que el resto del dashboard.
     col_ins = _resolver(df_f, ["INS RV", "Ins Rv"])
-    col_precio = _resolver(df_f, ["P.VENTA SALON", "P VENTA SALON",
-                                  "Precio Venta Salon", "PVENTA SALON"])
-    col_ult_venta = _resolver(df_f, ["ULTIMA VENT", "Ultima Vent", "Ultima Venta"])
-    col_fech_modif = _resolver(df_f, ["FECH MODIF", "Fech Modif", "Fecha Modif"])
 
     agg = {"Plato": (col_plato, "first"), "Valor": (col_valor, "sum")}
     if col_ins:
         agg["Items"] = (col_ins, "nunique")
-    if col_precio:
-        agg["PrecioSalon"] = (col_precio, "first")
-    if col_ult_venta:
-        agg["UltimaVenta"] = (col_ult_venta, "first")
-    if col_fech_modif:
-        agg["FechaModif"] = (col_fech_modif, "first")
     g = df_f.groupby(col_plato, as_index=False).agg(**agg)
     g["Plato"] = g["Plato"].astype(str)
     g = g.sort_values("Valor", ascending=False).reset_index(drop=True)
@@ -433,26 +480,6 @@ def _tabla_costeo_venta(df_f, col_plato, col_valor, es_soles):
     g["Pct"] = g["Valor"] / total_valor * 100
     g_max = float(g["Valor"].max()) or 1.0
     g["_barra"] = g["Valor"] / g_max * 100
-
-    # IGV Perú, 18% — misma constante que `formulario_receta.py::_IGV`, NO
-    # importada desde ahí a propósito: dashboard y herramienta son dos
-    # módulos separados que coinciden en la referencia de negocio, no en
-    # código que debieran compartir (mismo criterio que `_UMBRAL_COSTO_OK`/
-    # `_UMBRAL_COSTO_WARN`, arriba de este archivo).
-    _IGV = 1.18
-    if col_precio:
-        g["PrecioSalon"] = pd.to_numeric(g["PrecioSalon"], errors="coerce").fillna(0.0)
-        g["PrecioNeto"] = g["PrecioSalon"] / _IGV
-    # Fechas nativas del parquet, formateadas a texto DD/MM/AAAA (mismo
-    # patrón que `graficos/compras/documentos_sunat.py`, columna "Fecha"):
-    # más simple que ordenar por fecha real y ya es lo que usa el resto del
-    # proyecto para una columna de fecha en AgGrid.
-    if col_ult_venta:
-        g["UltimaVenta"] = pd.to_datetime(
-            g["UltimaVenta"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
-    if col_fech_modif:
-        g["FechaModif"] = pd.to_datetime(
-            g["FechaModif"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
 
     etiqueta_valor = "Costo (S/)" if es_soles else "Cantidad"
 
@@ -483,12 +510,6 @@ def _tabla_costeo_venta(df_f, col_plato, col_valor, es_soles):
             " Math.round(p.value).toLocaleString('es-PE'); }")
     _js_pct = JsCode(
         "function(p){ return p.value==null ? '' : Math.round(p.value) + '%'; }")
-    # Precio: SÍ con decimales (a diferencia de Costo/Cantidad arriba) —
-    # mismo criterio que la columna "P. Venta Salón" de Composición: un
-    # precio de menú redondeado a soles enteros se lee raro (S/46 en vez de
-    # S/45.90).
-    _js_precio = JsCode(
-        "function(p){ return p.value==null ? '' : 'S/ ' + p.value.toFixed(2); }")
     # Misma paleta que la fila TOTAL del Ranking de Proveedores.
     _js_fila_total = JsCode(
         "function(p){ if(p.node.rowPinned){ return {"
@@ -515,36 +536,19 @@ def _tabla_costeo_venta(df_f, col_plato, col_valor, es_soles):
         10, px_fila=_ALTO_FILA, extra=34 + 8 + _ALTO_FILA, minimo=0)
 
     columnas = [
-        {"field": "Plato", "width": 380, "tooltipField": "Plato"},
-        {"field": "Valor", "headerName": etiqueta_valor, "width": 140,
+        {"field": "Plato", "width": 420, "tooltipField": "Plato"},
+        {"field": "Valor", "headerName": etiqueta_valor, "width": 160,
          "type": "numericColumn", "sort": "desc",
          "cellStyle": _js_barra, "valueFormatter": _js_valor_fmt},
     ]
     campos = ["Plato", "Valor"]
-    if col_precio:
-        columnas.append({"field": "PrecioNeto", "headerName": "Precio Neto Salón",
-                         "width": 140, "type": "numericColumn",
-                         "valueFormatter": _js_precio})
-        campos.append("PrecioNeto")
     if col_ins:
-        columnas.append({"field": "Items", "headerName": "Ítems", "width": 80,
+        columnas.append({"field": "Items", "headerName": "Ítems", "width": 90,
                          "type": "numericColumn"})
         campos.append("Items")
-    columnas.append({"field": "Pct", "headerName": "%", "width": 70,
+    columnas.append({"field": "Pct", "headerName": "%", "width": 80,
                      "type": "numericColumn", "valueFormatter": _js_pct})
     campos.append("Pct")
-    # Actualizado y Última Venta van AL FINAL a propósito (a pedido): son
-    # metadata de contexto, no parte del ranking — el orden natural de
-    # lectura (plato → cuánto cuesta → cuánto vale → cuántos insumos → qué
-    # peso tiene) termina antes de llegar acá.
-    if col_fech_modif:
-        columnas.append({"field": "FechaModif", "headerName": "Actualizado",
-                         "width": 100})
-        campos.append("FechaModif")
-    if col_ult_venta:
-        columnas.append({"field": "UltimaVenta", "headerName": "Última Venta",
-                         "width": 110})
-        campos.append("UltimaVenta")
     columnas.append({"field": "_barra", "hide": True})
     campos.append("_barra")
 

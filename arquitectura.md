@@ -11147,10 +11147,16 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      — no hace falta cruzar contra `ventas.parquet` para "última venta", y
      `ULTIMA VENT` no coincide al minuto con el registro real.**
 
-     Pedido 2026-08-30 sobre la tabla "Costeo Receta Venta": agregar
-     Precio Neto Salón y que la última columna sea la fecha de la última
-     venta (más tarde, en el mismo pedido, también "fecha de última
-     actualización"). Antes de tocar código se listaron las 53 columnas
+     Pedido 2026-08-30 sobre la tabla "Composición" de Receta Venta:
+     agregar Precio Neto Salón y que la última columna sea la fecha de la
+     última venta (más tarde, en el mismo pedido, también "fecha de
+     última actualización"). Primer intento puesto en la tabla
+     equivocada ("Costeo Receta Venta") — corregido apenas el usuario
+     aclaró "era en este cuadro" señalando el título real de la tarjeta
+     ("Platos activos · % de costo sobre venta en Salón"); la lección de
+     este párrafo (esquema real, `ULTIMA VENT` vs. cruce, ratio de IGV)
+     no cambió de tabla, sólo el destino de las columnas. Antes de tocar
+     código se listaron las 53 columnas
      reales del parquet con `DESCRIBE SELECT * FROM read_parquet(...)`
      —ninguna documentación previa las tenía todas, sólo el subconjunto
      que ya usaba algún dashboard— y aparecieron dos que nadie había
@@ -11175,6 +11181,19 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      sería una SEGUNDA verdad, más cara (`ventas.parquet` son 226K+ filas
      cargadas completas, contra un `.first()` gratis sobre lo que ya está
      en memoria) y no más correcta. Se usa `ULTIMA VENT` tal cual viene.
+
+     Tercera trampa, encontrada recién viendo la tabla en el navegador (no
+     con DuckDB solo — mismo modo de aparición que el precio centinela de
+     la regla #205): 75 de los 850 platos (activos E inactivos) traen
+     `ULTIMA VENT` en **exactamente `1900-01-01`**, el mínimo de un
+     `SMALLDATETIME` de SQL Server — el sistema de origen lo usa como
+     sustituto de NULL en vez de dejar el campo vacío. Confirmado que no
+     es un caso aislado: ninguna otra fecha cae antes de 2021, así que el
+     corte en 2000 no arriesga descartar una venta real. Mostrarlo tal
+     cual diría que el plato se vendió en 1900; se blanquea (`.where(fecha
+     >= 2000-01-01)` antes de formatear) en vez de mostrarse — mismo
+     criterio que el filtro `Precio > 1` de la regla #205, aplicado a una
+     fecha en vez de a un precio.
 
      Aparte, para "Precio Neto Salón": el proyecto ya tiene una constante
      para esto (`formulario_receta.py::_IGV = 1.18`, IGV Perú 18%,
