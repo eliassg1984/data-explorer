@@ -559,10 +559,19 @@ JS = """
         // `z-index` no hace NADA en un elemento `position:static` (el
         // default) — hace falta `position:relative` (no saca al mock del
         // flujo, a diferencia de `absolute`/`fixed`) para que el z-index
-        // aplique. Chico a proposito: solo tiene que ganarle a hermanos
-        // con z-index:auto (el default), no competir con el overlay
-        // (2147483647) ni con las franjas fijas.
-        var ENCIMA_MOCK = 'position:relative;z-index:1;';
+        // aplique.
+        //
+        // Amplia el mismo dia: 1 le ganaba a un hermano normal
+        // (z-index:auto) pero NO a `nav_rail` — es `position:fixed` con
+        // `z-index:999999 !important` (navegacion.py, la franja de
+        // pestañas) — asi que arrastrar el mock hacia el titulo/franja
+        // superior lo volvia a dejar tapado, esta vez por CROMO fijo de
+        // la propia app, no por un hermano normal. 1000000000 gana a
+        // cualquier cromo de la app (nada pasa de 999999 hoy) y se queda
+        // comodo por debajo del techo real, 2147483647, que usan el
+        // overlay del propio modo diseño y el pie de "Ultima
+        // actualizacion" — asi el mock nunca tapa al PANEL de edicion.
+        var ENCIMA_MOCK = 'position:relative;z-index:1000000000;';
 
         function nodoMock(m) {
             var el = doc.createElement('div');

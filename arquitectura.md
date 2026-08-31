@@ -11704,6 +11704,27 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      tabla, con `getComputedStyle` confirmando `position: relative` y
      `z-index: 1` en el elemento.
 
+     **Enmienda 2026-08-31, mismo día:** "no competir con... las franjas
+     fijas" de arriba era la parte que faltaba probar. Pintada de blanco,
+     la misma Barra arrastrada hacia ARRIBA — al título "Sapiens
+     (Compras)" y la fila de pestañas — volvía a quedar tapada, esta vez
+     por CROMO de la propia app, no por un hermano normal.
+     `.st-key-nav_rail` (`navegacion.py`) es `position:fixed !important`
+     con `z-index:999999 !important` — la franja de pestañas está
+     literalmente fuera del flujo, flotando con una prioridad muy por
+     encima del `1` que se le dio al mock. `1` sólo le ganaba a un hermano
+     con `z-index:auto` (el caso de la #264 original); nunca iba a
+     alcanzarle contra cromo fijo con número propio.
+
+     Subida a `1000000000`: por encima de cualquier cromo de la app (nada
+     pasa hoy de 999999) y cómoda por debajo del techo real —
+     `2147483647`, que usan el overlay del propio modo diseño y el pie de
+     "Última actualización" — así el mock nunca tapa al PANEL de edición
+     mientras lo estás editando. Verificado en vivo: la misma Barra,
+     arrastrada sobre la franja de pestañas fija, pasó de quedar tapada a
+     pintarse por encima, con `z-index` computado `1000000000` contra los
+     `999999` de `nav_rail`.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
