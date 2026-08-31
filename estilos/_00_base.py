@@ -9,7 +9,7 @@ CSS = """    <style>
 
     /* ============ PALETA DE COLORES — TEMA CALLAI (Lavender Indigo) ============ */
     :root {
-        --bg-primary: #f6f6f8;      /* lienzo general */
+        --bg-primary: #faf9fb;      /* lienzo general (casi blanco, tinte lavanda) */
         --bg-secondary: #ffffff;
         --bg-sidebar: #ffffff;      /* sidebar blanco estilo CallAI */
         --bg-card: #ffffff;

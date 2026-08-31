@@ -45,8 +45,14 @@ LAVANDA_CABECERA_GRUPO = "#e7e3fb"
 # GRISES (estructura y texto)
 # ═══════════════════════════════════════════════════════════════════════════
 
-GRIS_FONDO = "#f6f6f8"
-"""Fondo de pastillas/chips en reposo (paneles Columnas, Filtros, Pivote)."""
+GRIS_FONDO = "#faf9fb"
+"""Fondo de pastillas/chips en reposo (paneles Columnas, Filtros, Pivote).
+
+Es el espejo Python de `--bg-primary` (el lienzo general) de
+`estilos/_00_base.py`: el mismo tono en reposo que la página. Si cambia uno,
+cambia el otro — regla #1, y el flujo del modo diseño de la regla #167
+termina justo acá. 2026-08-31: #f6f6f8 (gris neutro) -> #faf9fb (casi blanco,
+con un tinte lavanda), a pedido, para que el lienzo acompañe al acento."""
 
 GRIS_BORDE = "#e6e6eb"
 """Borde estándar de pastillas, botones y separadores."""

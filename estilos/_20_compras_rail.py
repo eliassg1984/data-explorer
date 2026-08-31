@@ -57,7 +57,7 @@ CSS = """    /* ================================================================
            la franja (`Sapiens (Compras)`, que vive en x>=323, fuera del
            ancho de este rail que termina en x=299 — nunca se pisan). Y el
            color de fondo del hueco que se recupera (`--bg-primary`
-           #f6f6f8) es casi identico al del rail (`--bg-card` #ffffff): no
+           #faf9fb) es casi identico al del rail (`--bg-card` #ffffff): no
            hay salto de color que disimular.
            `max-height` pierde el termino `- var(--nav-top-alto)`: ya no
            hay top que "devolver" (el rail arranca en 0, no en

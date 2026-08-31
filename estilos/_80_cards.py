@@ -116,7 +116,7 @@ CSS = """    /* ================================================================
     /*                                                                  */
     /* BLANCAS, como su tarjeta madre y como todo Compras (a pedido     */
     /* 2026-08-27). Nacieron con el gris `--bg-card-tenue`, que es el   */
-    /* MISMO `#f6f6f8` del lienzo de la app: con la madre todavía       */
+    /* MISMO `#faf9fb` del lienzo de la app: con la madre todavía       */
     /* transparente, eso dejaba dos cajas grises sobre gris. Ahora la   */
     /* madre es blanca y estas dos también; lo único que las separa es  */
     /* la línea de 1px, que alcanza para que el ojo agrupe cada tabla   */
@@ -543,7 +543,7 @@ CSS = """    /* ================================================================
            el aire que corresponde. */
         gap: 0 !important;
         /* Gris translúcido — 2da vuelta (2026-08-14): la 1ra usaba
-           --bg-primary (#f6f6f8, "lienzo general") al 92%, y el usuario
+           --bg-primary (#faf9fb, "lienzo general") al 92%, y el usuario
            reportó "no lo veo que tenga nada de transparencia" incluso
            DESPUÉS del fallback rgba. Es el MISMO bug que ya está
            documentado en _40_ajuste_franja.py: un tinte casi-blanco al
