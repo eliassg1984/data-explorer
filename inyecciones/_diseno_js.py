@@ -78,6 +78,16 @@ JS = """
         if (win.__disenoState.panelColapsado === undefined) {
             win.__disenoState.panelColapsado = false;
         }
+        // Empujar el lienzo (regla #256): el panel es `fixed` a la derecha,
+        // asi que TAPA los ~230px de esa orilla — justo donde caen la
+        // columna derecha de las tarjetas y el borde de las tablas. Off por
+        // defecto a proposito: encoger el lienzo cambia el ancho util y
+        // puede disparar las @media de _99_movil, o sea que lo que se ve
+        // deja de ser fiel. Es el usuario el que elige "no me tapes" sobre
+        // "mostrame el ancho real".
+        if (win.__disenoState.empujarLienzo === undefined) {
+            win.__disenoState.empujarLienzo = false;
+        }
         if (!win.__disenoState.mocks) { win.__disenoState.mocks = []; }
         if (win.__disenoState.mockN === undefined) { win.__disenoState.mockN = 0; }
         if (!win.__disenoState.mockPos) { win.__disenoState.mockPos = 'despues'; }
@@ -907,6 +917,23 @@ JS = """
                 'display:none'
             ].join(';');
             doc.body.appendChild(overlay);
+        }
+
+        // La reserva se hace con una <style> propia y no tocando
+        // .stApp.style: Streamlit recrea/reescribe sus nodos en cada rerun y
+        // se llevaria el inline puesto a mano. Una regla en el <head>
+        // sobrevive y se apaga cambiando una sola variable.
+        var ANCHO_PANEL = 230;
+        function aplicarReserva(activa) {
+            var st = doc.getElementById('el-diseno-reserva');
+            if (!st) {
+                st = doc.createElement('style');
+                st.id = 'el-diseno-reserva';
+                doc.head.appendChild(st);
+            }
+            st.textContent = activa
+                ? ('.stApp { width: calc(100% - ' + ANCHO_PANEL + 'px) !important; }')
+                : '';
         }
 
         var PANEL_CSS_EXPANDIDO = [
@@ -2074,7 +2101,24 @@ JS = """
                 }
             });
 
+            // Empujar/soltar el lienzo. Va al lado del de contorno: los dos
+            // responden a "no me deja ver", uno por encima del elemento y
+            // el otro por el costado.
+            var btnEmpujar = doc.createElement('button');
+            btnEmpujar.title = 'Encoger la app para que el panel no la tape'
+                + ' (ojo: cambia el ancho util y puede disparar las @media de movil)';
+            btnEmpujar.textContent = win.__disenoState.empujarLienzo ? '⇥' : '⇤';
+            btnEmpujar.style.cssText = 'background:' + (win.__disenoState.empujarLienzo ? '#3C3489' : '#2A2A35')
+                + ';color:#fff;border:0;border-radius:4px;padding:4px 7px;font:600 11px sans-serif;cursor:pointer;flex:0 0 auto';
+            btnEmpujar.addEventListener('click', function() {
+                win.__disenoState.empujarLienzo = !win.__disenoState.empujarLienzo;
+                btnEmpujar.textContent = win.__disenoState.empujarLienzo ? '⇥' : '⇤';
+                btnEmpujar.style.background = win.__disenoState.empujarLienzo ? '#3C3489' : '#2A2A35';
+                aplicarReserva(win.__disenoState.empujarLienzo);
+            });
+
             header.appendChild(headerKey);
+            header.appendChild(btnEmpujar);
             header.appendChild(btnContorno);
             header.appendChild(botonColapsar());
             header.appendChild(btnSoltar);
@@ -2877,6 +2921,11 @@ JS = """
             if (!disenoActivo()) {
                 overlay.style.display = 'none';
                 panel.style.display = 'none';
+                // Salir del modo diseno tiene que devolver la app a su ancho:
+                // la <style> de la reserva vive en el <head> y sobrevive al
+                // apagado (para eso se puso ahi), asi que hay que apagarla a
+                // mano o el lienzo queda encogido sin panel que lo explique.
+                aplicarReserva(false);
                 return;
             }
             // Antes de resolver el pin: un mock puede SER el pineado, y
@@ -2899,6 +2948,10 @@ JS = """
             // Panel: colapsado se ve igual (una pill chica) haya o no algo
             // pineado. El overlay/manijas del elemento pineado (mas abajo)
             // son independientes de esto — colapsar el panel no las apaga.
+            // Colapsado el panel es una pill chica que no tapa nada: la
+            // reserva sobraria y dejaria una franja muerta a la derecha.
+            aplicarReserva(win.__disenoState.empujarLienzo
+                && !win.__disenoState.panelColapsado);
             if (win.__disenoState.panelColapsado) {
                 pintarPill();
             } else if (!res) {

@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-255 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+256 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (82)
 
@@ -225,7 +225,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#248** — En media tarjeta, cada columna nueva hay que pagarla con otra: la unidad se muda adentro de…
 - **#250** — Un valor derivado también se adelanta en el navegador: si sólo lo recalcula el servidor, la…
 
-**Streamlit** (72)
+**Streamlit** (73)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -299,6 +299,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#222** — La ventana del riel se generalizó a Meses, y el intento de arreglar "otro bug" de paso…
 - **#230** — Un @st.fragment alrededor de la tarjeta que se edita: una corrección deja de re-correr el…
 - **#235** — _css_grid es de UNA tabla suelta sobre el gris de la app; si la tabla ya vive adentro de una…
+- **#256** — El panel de diseño es fixed a la derecha y tapa 230px de la app — justo la orilla donde caen…
 
 **Datos, R2 y DuckDB** (30)
 
@@ -380,7 +381,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (20)
+**Herramientas de desarrollo** (21)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -402,6 +403,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#206** — Un mousemove/mouseup de un iframe TAMPOCO sube al padre — el modo diseño se congelaba al…
 - **#215** — Element.innerText no atraviesa el layout position: absolute de las celdas de AgGrid: da ""…
 - **#254** — Hay DOS contornos violetas y vienen de sitios distintos: el overlay del modo diseño (un <div>…
+- **#256** — El panel de diseño es fixed a la derecha y tapa 230px de la app — justo la orilla donde caen…
 
 **Decisiones de diseño y UX** (42)
 
@@ -11284,13 +11286,43 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      — la misma trampa que ya tenían `font-size`/`font-weight` (regla
      #154).
 
+256. **El panel de diseño es `fixed` a la derecha y tapa 230px de la
+     app — justo la orilla donde caen la columna derecha y el borde de las
+     tablas. Se agregó "empujar el lienzo", y va APAGADO por defecto.**
+
+     Pedido 2026-08-31: "¿hay forma de que la barra de diseño no me
+     tape?". Colapsar el panel (el `–`) ya existía, pero apaga los
+     controles junto con el estorbo: no sirve mientras se está editando.
+
+     El botón `⇤`/`⇥` del header inyecta
+     `.stApp { width: calc(100% - 230px) }`, o sea encoge la app en vez de
+     superponerse — el mismo gesto que un DevTools acoplado.
+
+     **Por qué off por defecto**, aunque "no tapar" suene siempre mejor:
+     encoger el lienzo cambia el ancho útil, y este proyecto tiene
+     `@media` de verdad en `estilos/_99_movil.py`. Empujando, lo que se ve
+     puede ser el layout de OTRO breakpoint — o sea que la herramienta
+     para juzgar cómo se ve la app estaría mostrando una app distinta. Es
+     una elección del usuario entre "no me tapes" y "mostrame el ancho
+     real", no un default que se pueda decidir por él.
+
+     Dos detalles de implementación que no son libres:
+
+     - La reserva va en una `<style>` propia del `<head>`, no en
+       `.stApp.style`: Streamlit reescribe sus nodos en cada rerun y se
+       llevaría un inline puesto a mano. Corolario: como sobrevive al
+       apagado, hay que limpiarla explícitamente al salir del modo diseño
+       — si no, el lienzo queda encogido sin panel que lo explique.
+     - Con el panel COLAPSADO la reserva se apaga sola: la pill no tapa
+       nada y dejaría una franja muerta a la derecha.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#256**.
+> próxima regla nueva es la **#257**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
