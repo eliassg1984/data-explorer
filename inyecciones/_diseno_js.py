@@ -1156,7 +1156,7 @@ JS = """
         // background/box-shadow NO estan en esta lista a proposito: esas
         // son "chrome" del boton, ponerlas tambien en el <p> duplicaria
         // bordes/relleno visualmente (dos rectangulos anidados).
-        var PROPS_TEXTO = { 'font-size': 1, 'font-weight': 1, 'text-align': 1, 'text-decoration': 1, 'letter-spacing': 1, color: 1 };
+        var PROPS_TEXTO = { 'font-size': 1, 'font-weight': 1, 'font-family': 1, 'text-align': 1, 'text-decoration': 1, 'letter-spacing': 1, color: 1 };
 
         // Muchos widgets (st.button entre ellos) envuelven su label en
         // `[data-testid="stMarkdownContainer"] p`, y ESTE proyecto le fija
@@ -2543,6 +2543,47 @@ JS = """
 
             // ---- tipografía ----
             panel.appendChild(seccion('Tipografía'));
+
+            // Familia tipografica. La lista NO es libre: son las pilas que el
+            // proyecto ya usa mas las webfont-safe que existen en cualquier
+            // maquina. Un <select> con 200 fuentes del sistema mentiria — lo
+            // que se elija tiene que poder pegarse en estilos/ y verse igual
+            // en la laptop del usuario final, que no es esta. Ver regla #255.
+            var FUENTES = [
+                ['', '(la que hereda)'],
+                ['-apple-system, "Segoe UI", sans-serif', 'Sistema (la de la app)'],
+                ['"Segoe UI", Roboto, sans-serif', 'Segoe UI'],
+                ['Georgia, "Times New Roman", serif', 'Georgia (serif)'],
+                ['"Courier New", monospace', 'Courier (mono)'],
+                ['Arial, Helvetica, sans-serif', 'Arial'],
+                ['Verdana, Geneva, sans-serif', 'Verdana'],
+                ['Impact, "Arial Black", sans-serif', 'Impact (titular)']
+            ];
+            var selFuente = doc.createElement('select');
+            selFuente.style.cssText = 'width:100%;background:#1c1c24;color:#e4e4e8;'
+                + 'border:1px solid #34343f;border-radius:4px;padding:5px 6px;'
+                + 'font:11px sans-serif;cursor:pointer';
+            var fuenteActual = registro.cambios['font-family'] || '';
+            FUENTES.forEach(function(par) {
+                var o = doc.createElement('option');
+                o.value = par[0];
+                o.textContent = par[1];
+                // Previsualiza en su propia fuente: elegir "Georgia" de una
+                // lista escrita toda en sans-serif es elegir a ciegas.
+                if (par[0]) o.style.fontFamily = par[0];
+                if (par[0] === fuenteActual) o.selected = true;
+                selFuente.appendChild(o);
+            });
+            selFuente.addEventListener('change', function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                establecerCambioEstilo(ctx.el, ctx.registro, 'font-family',
+                    selFuente.value || null);
+            });
+            panel.appendChild(filaControl('Tipo de letra', selFuente, spanValor(''), function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                establecerCambioEstilo(ctx.el, ctx.registro, 'font-family', null);
+                rehacerPanel();
+            }));
 
             var fsVal = registro.cambios['font-size']
                 ? numDe(registro.cambios['font-size'], 14)

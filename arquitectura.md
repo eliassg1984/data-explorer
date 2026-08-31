@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-254 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+255 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (81)
+**CSS y estilos** (82)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -101,6 +101,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#234** — Elegir un prefijo de key que NO choque con otra familia no alcanza: hay que mirar también las…
 - **#237** — Hay DOS familias de AgGrid en el repo y no se estilan igual: la de theme="material" se toca…
 - **#245** — Una fila que COMPARA se parte por la mitad, no con COLUMNAS_DRILL
+- **#255** — La perilla "Mover" es HIJA del overlay: ocultar el contorno la apaga también. Y "Tipo de…
 
 **Layout y alturas** (24)
 
@@ -11251,13 +11252,45 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      elemento.** Ese es el test de dos segundos que separa "me lo pinté
      yo con el panel" de "lo pinta la herramienta".
 
+255. **La perilla "Mover" es HIJA del overlay: ocultar el contorno la
+     apaga también. Y "Tipo de letra" no existía — la sección Tipografía
+     tenía tamaño, peso, alineación y subrayado, pero no la familia.**
+
+     Dos preguntas del 2026-08-31 sobre el mismo panel, con la misma raíz:
+     lo que el panel OFRECE y lo que el overlay MUESTRA son dos cosas, y el
+     usuario las lee como una sola.
+
+     **Mover.** No se arrastra la tarjeta: el overlay tiene
+     `pointer-events:none` a propósito (regla #173, para poder ver y medir
+     lo de abajo), así que el único agarre es la perilla violeta `+` de la
+     esquina superior izquierda (`#el-diseno-mover`). Esa perilla se
+     `appendChild`ea al overlay — cuando el botón ▣/□ pone
+     `overlay.style.display = 'none'`, la perilla se va con él y no queda
+     nada que agarrar. El síntoma es "no me deja mover lo que seleccioné"
+     y no hay ningún error: es un gesto sin blanco. Segunda causa del
+     mismo síntoma, distinta: si la key pineada no existe en el render
+     actual (se cambió de reporte con el pin puesto), `elementoActivo()`
+     devuelve null y TODOS los controles del panel dejan de hacer efecto,
+     no sólo el mover.
+
+     **Tipo de letra.** Se agregó un `<select>` con lista CERRADA: las
+     pilas que el proyecto ya usa más las seguras de sistema. Un selector
+     libre de fuentes instaladas mentiría — lo que se elija se pega en
+     `estilos/` y tiene que verse igual en la máquina del usuario final,
+     que no es ésta. Cada `<option>` se previsualiza en su propia fuente
+     (elegir "Georgia" de una lista escrita toda en sans-serif es elegir a
+     ciegas). Y `font-family` entra en `PROPS_TEXTO`, o si no cae en el
+     contenedor y no en el `<p>` del label, que trae su propia tipografía
+     — la misma trampa que ya tenían `font-size`/`font-weight` (regla
+     #154).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#255**.
+> próxima regla nueva es la **#256**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
