@@ -2150,9 +2150,6 @@ def main():
         "valor":        [100.0, 40.0, 15.0, 60.0],
     })
     pruebas += [
-        ("recetas_comun · sankey contenedor", lambda: _rc._sankey_contenedor(
-            df_rec, "CONTENEDOR", "ITEM", "VALOR", "A", True,
-            card_key="test_sankey"), ()),
         ("recetas_comun · ranking contenedores", lambda: _rc._ranking_contenedores(
             df_rec, "CONTENEDOR", "VALOR", True,
             key_topn="test_topn", card_key="test_ranking",

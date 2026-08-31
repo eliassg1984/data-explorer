@@ -6,14 +6,13 @@ Cada fila de recetaventa.parquet es un ÍTEM de un plato:
     (plato)      (insumo)  (cant.)    (costo del insumo en el plato)
 
 Este módulo es la capa FINA de Receta Venta: resuelve las columnas reales
-del parquet y llama a los 4 gráficos compartidos de
-`graficos.recetas_comun` (Sankey, Ranking, Ingredientes clave, Panorama de
-compras) — cada uno vive ahí UNA sola vez, junto con la versión de
-`recetabase.py` (el mismo tipo de dato: un BOM plato→insumos vs. receta
-base→insumos). Desde 2026-08-13 Receta Base y Receta Venta comparten ítem
-de nav ("Recetas") y un chip Base/Venta arriba del rail — ver
-`_chip_fuente` en recetas_comun.py y `arquitectura.md` § Unificación
-Recetas.
+del parquet y llama a los gráficos compartidos de `graficos.recetas_comun`
+(Ingredientes clave, Panorama de compras) — cada uno vive ahí UNA sola vez,
+junto con la versión de `recetabase.py` (el mismo tipo de dato: un BOM
+plato→insumos vs. receta base→insumos). Desde 2026-08-13 Receta Base y
+Receta Venta comparten ítem de nav ("Recetas") y un chip Base/Venta arriba
+del rail — ver `_chip_fuente` en recetas_comun.py y `arquitectura.md` §
+Unificación Recetas.
 
 "Composición" DEJÓ de ser compartida el 2026-08-24: acá es
 `_tabla_composicion_venta`, una tabla propia (no una dona de un plato) con
@@ -22,10 +21,9 @@ existen en recetabase.parquet. El chip Base/Venta/Nueva no se muestra en
 esta vista (no hay a qué "Base" equivalente navegar). Ver docstring de la
 función.
 
-Y desde el 2026-08-28, Sankey y Composición son SOLO de Receta Venta:
-Receta Base se quedó con Ranking, Insumos clave, Panorama y Tabla (regla
-#236). O sea que este dashboard es hoy el único llamador del Sankey
-compartido — no borrarlo de `recetas_comun.py` pensando que sobra.
+Y desde el 2026-08-28, Composición pasó a ser SOLO de Receta Venta:
+Receta Base se quedó con Ranking (hoy Costeo, ver más abajo), Insumos
+clave, Panorama y Tabla (regla #236).
 
 Y desde el 2026-08-30, "Ranking de platos" se renombra a "Costeo Receta
 Venta" y deja el gráfico de barras horizontal por una tabla AgGrid propia
@@ -38,6 +36,17 @@ costo/cantidad por plato, sin filtrar por activo). Sigue sin ser un quinto
 compartido en `recetas_comun.py`: sólo Receta Venta pidió el cambio, así
 que Receta Base se queda con el gráfico (`_ranking_contenedores`), que
 conserva el nombre "Ranking".
+
+Y el mismo 2026-08-30, más tarde, el Sankey se da de baja de Receta Venta
+a pedido — con él se van el selector "Plato" (existía sólo para
+alimentarlo, nada más lo usaba) y el drill "Abrir Sankey →" del Panorama
+de compras (era sólo un atajo hacia esta vista). `_sankey_contenedor` se
+BORRA de `recetas_comun.py`: Receta Base ya no lo llamaba desde el #236,
+así que este dashboard era su último llamador — mismo criterio que se
+aplicó con `_composicion_contenedor` esa vez (ver el docstring de
+recetas_comun.py). El Panorama de compras conserva su PROPIO Sankey
+(Producto→Plato, `_fig_panorama_sankey`): es un gráfico distinto, con otro
+propósito, no tocado por este cambio.
 
 Punto de entrada público: renderizar_graficos_recetaventa().
 """
@@ -57,7 +66,7 @@ from graficos.base import (
     seccion_perezosa,
 )
 from graficos.recetas_comun import (
-    _activo, _chip_fuente, _items_clave, _panorama_compras, _sankey_contenedor,
+    _activo, _chip_fuente, _items_clave, _panorama_compras,
 )
 
 # Umbral de %Costo salón para el semáforo de la barra de progreso de
@@ -70,8 +79,7 @@ _UMBRAL_COSTO_OK = 30
 _UMBRAL_COSTO_WARN = 35
 
 _RAIL_CATEGORIAS = (
-    ("Vista", (("Sankey por plato",        "Sankey"),
-               ("Composición del plato",   "Composición"),
+    ("Vista", (("Composición del plato",   "Composición"),
                ("Costeo Receta Venta",     "Costeo Receta Venta"),
                ("Ingredientes clave",      "Ingredientes"),
                ("Panorama de compras",     "Panorama"))),
@@ -83,7 +91,6 @@ _RAIL_CATEGORIAS = (
 # recetas_comun.py). El porqué de que sección y vista vivan en la MISMA
 # tupla está en `graficos/compras/__init__.py::_PILA`.
 _PILA = (
-    ("rv_sec_sankey",      "Sankey por plato"),
     ("rv_sec_composicion", "Composición del plato"),
     ("rv_sec_costeo",      "Costeo Receta Venta"),
     ("rv_sec_ingredientes", "Ingredientes clave"),
@@ -103,15 +110,12 @@ def _panorama_compras_venta(df_f, es_soles):
         col_activo_item_cand=["INS ACTIVO", "Ins Activo"],
         etiqueta_otros_contenedor="Otros platos",
         titulo_card="Productos comprados → platos que los usan",
-        state_key_rail="rv_graf_tipo",
-        nombre_vista_sankey="Sankey por plato",
         col_contenedor_out="Plato",
         etiqueta_contenedor_plural="platos activos",
-        etiqueta_selectbox_jump="Ver el flujo completo de un plato",
-        # Página APILADA: el Sankey ya está más arriba, así que "Abrir
-        # Sankey →" scrollea en vez de cambiar de vista. Ver
-        # `recetas_comun._drill_contenedor_jump`.
-        clave_seccion_sankey="rv_sec_sankey",
+        # Sin `nombre_vista_sankey`/`clave_seccion_sankey`: este dashboard ya
+        # no tiene Sankey (dado de baja el 2026-08-30), así que
+        # `_panorama_compras` deja el drill de insumo a lo ancho — mismo
+        # criterio que `_panorama_compras_base`.
     )
 
 
@@ -140,10 +144,11 @@ def _panorama_compras_venta(df_f, es_soles):
 # ITEM RV es el número de LÍNEA dentro de la receta (001, 002…), no una
 # identidad de insumo — el mismo COD INS aparece como "001" en un plato y
 # "019" en otro. INS RV es el texto descriptivo, estable 1:1 contra
-# COD INS (0 variación en 1.058 códigos). Los otros 4 gráficos de este
-# dashboard (Sankey/Ranking/Ingredientes clave, vía recetas_comun.py)
-# todavía agrupan por ITEM RV — bug preexistente, fuera del alcance de
-# este cambio, no tocado acá.
+# COD INS (0 variación en 1.058 códigos). "Ingredientes clave" (vía
+# recetas_comun.py) todavía agrupa por ITEM RV — bug preexistente, fuera
+# del alcance de este cambio, no tocado acá. "Costeo Receta Venta" (antes
+# "Ranking") ya usa INS RV y no ITEM RV desde que se armó como tabla — ver
+# `_tabla_costeo_venta`, más abajo.
 def _tabla_composicion_venta(df_f):
     """Vista 'Composición': ranking de platos activos (AgGrid, barra de
     %Costo salón coloreada por umbral) + la receta del plato en foco en
@@ -531,36 +536,20 @@ def renderizar_graficos_recetaventa(df_f, nombre_reporte, df_full=None, tabla_cb
     _chip_fuente("Receta Venta")
 
     # ── Controles COMPARTIDOS por toda la página ─────────────────────────
-    # Van arriba de la pila: la métrica manda sobre cuatro secciones y el
-    # selector de plato sobre el Sankey. Meterlos adentro de una sección
-    # los escondería hasta que esa sección salga del esqueleto.
+    # Va arriba de la pila: la métrica manda sobre las demás secciones.
+    # Meterlo adentro de una sección lo escondería hasta que esa sección
+    # salga del esqueleto. El selector "Plato" que vivía acá al lado se fue
+    # con el Sankey (2026-08-30): era su único lector.
     metricas = []
     if col_total:
         metricas.append("Costo (S/)")
     if col_cant:
         metricas.append("Cantidad")
 
-    c_met, c_plato = st.columns([1, 2])
-    with c_met:
-        metrica = st.radio("Medir por", metricas, horizontal=True,
-                           key="rv_metrica")
+    metrica = st.radio("Medir por", metricas, horizontal=True,
+                       key="rv_metrica")
     es_soles = (metrica == "Costo (S/)")
     col_valor = col_total if es_soles else col_cant
-
-    # Default: el plato de mayor costo, para que la primera vista sea rica.
-    platos = sorted(df_f[col_plato].dropna().astype(str).unique().tolist())
-    totales = df_f.groupby(col_plato)[col_valor].sum()
-    plato_rico = str(totales.idxmax()) if not totales.empty else (platos[0] if platos else "")
-    idx_def = platos.index(plato_rico) if plato_rico in platos else 0
-
-    # Ya no hace falta el `with c_plato:` incondicional con el `if` adentro
-    # (estaba para que Streamlit "visitara" la posición en todos los runs y
-    # no dejara el selectbox de la vista anterior pegado y huérfano, visto
-    # en vivo 2026-08-09 al pasar de Sankey a Ranking). Con la pila el
-    # Sankey está SIEMPRE en la página, así que el selector se dibuja
-    # siempre y el problema desaparece solo — igual que en Receta Base.
-    with c_plato:
-        plato = st.selectbox("Plato", platos, index=idx_def, key="rv_plato_sel")
 
     # ── LA PILA, PEREZOSA ────────────────────────────────────────────────
     # Cada sección lleva su PROPIA key de tarjeta: las seis compartían
@@ -569,11 +558,6 @@ def renderizar_graficos_recetaventa(df_f, nombre_reporte, df_full=None, tabla_cb
     # cambiar de rail (si no, los selectbox de drill del Panorama aparecían
     # también en Ranking) — con una sección por vista, cada una tiene su
     # propio sitio en el árbol y no hay nada que limpiar.
-    def _dib_sankey():
-        with st.container(border=True, key="rv_card_sankey"):
-            _sankey_contenedor(df_f, col_plato, col_item, col_valor, plato,
-                               es_soles, card_key="rv_sankey")
-
     def _dib_composicion():
         with st.container(border=True, key="rv_card_composicion"):
             _tabla_composicion_venta(df_f)
@@ -604,7 +588,6 @@ def renderizar_graficos_recetaventa(df_f, nombre_reporte, df_full=None, tabla_cb
                 st.info("La tabla no está disponible en este contexto.")
 
     _DIBUJANTES = {
-        "rv_sec_sankey":       _dib_sankey,
         "rv_sec_composicion":  _dib_composicion,
         "rv_sec_costeo":       _dib_costeo,
         "rv_sec_ingredientes": _dib_ingredientes,

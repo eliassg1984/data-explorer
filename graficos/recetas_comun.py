@@ -4,8 +4,8 @@ Receta Venta.
 
 Los dos parquets son la MISMA forma de dato — un BOM (lista de materiales):
 cada fila es un ítem/insumo dentro de un contenedor (plato o receta base),
-con una cantidad y un costo. Cuatro gráficos (Sankey, Ranking, Ingredientes/
-Insumos clave, Panorama de compras) son literalmente el mismo cálculo sobre
+con una cantidad y un costo. Tres gráficos (Ranking, Ingredientes/Insumos
+clave, Panorama de compras) son literalmente el mismo cálculo sobre
 columnas distintas — este módulo tiene la ÚNICA copia de cada uno,
 parametrizada por nombre de columna y por las etiquetas de cada dominio
 ("Plato" vs "Receta base"). `graficos/recetaventa.py` y
@@ -14,14 +14,23 @@ llaman a lo de acá con un `key_prefix`/keys propias (evita choques de
 session_state — los dos dashboards conviven en la MISMA sesión de navegador
 desde que comparten ítem de nav, ver `_chip_fuente`).
 
-`_composicion_contenedor` (la dona de UN plato/receta) vivió acá hasta el
-2026-08-28. Dejó de ser el quinto compartido el 2026-08-24, cuando Receta
-Venta reemplazó su "Composición" por una tabla propia
-(`recetaventa.py::_tabla_composicion_venta`) que necesita columnas
-—Grupo/Subgrupo/P.VENTA SALON/CST SALON/%CST SALON— sin equivalente en
-recetabase.parquet; y se borró al sacarle a Receta Base sus vistas de UNA
-receta elegida a mano, que la dejaron sin un solo llamador. El Sankey SÍ
-sigue compartido: Receta Venta lo conserva. Ver `arquitectura.md` #236.
+Dos gráficos QUEDARON en el camino, los dos por el mismo motivo — se
+borran cuando pierden su ÚLTIMO llamador, no antes:
+
+  · `_composicion_contenedor` (la dona de UN plato/receta) vivió acá hasta
+    el 2026-08-28. Dejó de ser compartida el 2026-08-24, cuando Receta
+    Venta reemplazó su "Composición" por una tabla propia
+    (`recetaventa.py::_tabla_composicion_venta`) que necesita columnas
+    —Grupo/Subgrupo/P.VENTA SALON/CST SALON/%CST SALON— sin equivalente en
+    recetabase.parquet; y se borró al sacarle a Receta Base sus vistas de
+    UNA receta elegida a mano, que la dejaron sin un solo llamador. Ver
+    `arquitectura.md` #236.
+  · `_sankey_contenedor` corrió la MISMA suerte el 2026-08-30: Receta
+    Base ya no lo llamaba desde el #236, así que Receta Venta —que dio de
+    baja esa vista a pedido ese mismo día— era su último llamador. Con
+    él se fue `_drill_contenedor_jump` (el botón "Abrir Sankey →" del
+    Panorama de compras), que sólo existía para saltar hasta ahí y quedó
+    sin destino. Ver el docstring de `recetaventa.py`.
 
 Confirmado que NO se cruzan entre sí (0% overlap `recetabase.COD RB` vs
 `recetaventa.COD INS`, ver memoria de proyecto
@@ -40,7 +49,7 @@ from tema import (
     ACENTO, BLANCO, GRIS_BORDE, GRIS_TEXTO_SUAVE, LAVANDA_FONDO, PALETA_SERIES,
     SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
 )
-from graficos.base import _card, _layout, _resolver, scroll_a_seccion
+from graficos.base import _card, _layout, _resolver
 from graficos import alturas
 
 # Familias de compras.parquet que SÍ son insumo/ingrediente — las únicas que
@@ -134,63 +143,7 @@ def _chip_fuente(reporte_activo):
         st.rerun()
 
 
-# ─── 1. Sankey por contenedor ───────────────────────────────────────────────
-def _sankey_contenedor(d, col_contenedor, col_item, col_valor, contenedor,
-                       es_soles, *, card_key):
-    """Diagrama Sankey de UN contenedor (plato o receta base): nodo
-    contenedor → un nodo por ítem, con el ancho del flujo proporcional al
-    costo (o cantidad) del ítem."""
-    sub = d[d[col_contenedor].astype(str) == str(contenedor)]
-    g = sub.groupby(col_item, as_index=False)[col_valor].sum()
-    g = g[g[col_valor] > 0].sort_values(col_valor, ascending=False)
-    if g.empty:
-        st.info("Este ítem no tiene componentes con valor positivo para graficar.")
-        return
-
-    items = g[col_item].astype(str).tolist()
-    valores = [float(v) for v in g[col_valor].tolist()]
-    total = sum(valores) or 1.0
-    pref, num = _fmt_valor(es_soles)
-
-    labels = [str(contenedor)] + items
-    node_colors = [ACENTO] + [PALETA_SERIES[i % len(PALETA_SERIES)]
-                              for i in range(len(items))]
-    link_colors = [_hex_a_rgba(PALETA_SERIES[i % len(PALETA_SERIES)], 0.45)
-                   for i in range(len(items))]
-    pct = [v / total * 100 for v in valores]
-
-    fig = go.Figure(go.Sankey(
-        arrangement="snap",
-        node=dict(
-            label=labels, color=node_colors, pad=16, thickness=18,
-            line=dict(color=BLANCO, width=0.5),
-            hovertemplate="%{label}<extra></extra>",
-        ),
-        link=dict(
-            source=[0] * len(items),
-            target=list(range(1, len(items) + 1)),
-            value=valores, color=link_colors, customdata=pct,
-            hovertemplate=(
-                "%{target.label}<br>"
-                f"{pref}%{{value:{num}}}"
-                "<br>%{customdata:.1f}% del total<extra></extra>"
-            ),
-        ),
-    ))
-    alto = min(720, max(360, len(items) * 24 + 150))
-    fig.update_layout(
-        height=alto,
-        margin=dict(l=10, r=10, t=20, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=12),
-    )
-
-    st.caption(f"**{contenedor}** · {len(items)} ítems · costo total {pref}{total:,.2f}")
-    with _card(card_key, "Flujo de costo"):
-        st.plotly_chart(fig, use_container_width=True)
-
-
-# ─── 2. Ranking de contenedores por costo ───────────────────────────────────
+# ─── 1. Ranking de contenedores por costo ───────────────────────────────────
 def _ranking_contenedores(d, col_contenedor, col_valor, es_soles, *,
                           key_topn, card_key, titulo_card):
     """Barras horizontales: los contenedores que más cuestan (suma de sus
@@ -225,7 +178,7 @@ def _ranking_contenedores(d, col_contenedor, col_valor, es_soles, *,
         st.plotly_chart(fig, use_container_width=True)
 
 
-# ─── 3. Ítems clave (transversales) ─────────────────────────────────────────
+# ─── 2. Ítems clave (transversales) ─────────────────────────────────────────
 def _items_clave(d, col_contenedor, col_item, col_valor, es_soles, *,
                  card_key, titulo_card, etiqueta_item, etiqueta_contenedor_plural,
                  expander_titulo):
@@ -271,7 +224,7 @@ def _items_clave(d, col_contenedor, col_item, col_valor, es_soles, *,
         st.dataframe(tabla, hide_index=True, use_container_width=True)
 
 
-# ─── 4. Panorama de compras (Producto comprado → contenedor) ───────────────
+# ─── 3. Panorama de compras (Producto comprado → contenedor) ───────────────
 # Cruza compras.parquet (lo que se COMPRÓ a proveedores) con el parquet de
 # receta activo (lo que la receta dice que se USA). Precedente de carga
 # cruzada: graficos/ventas.py::_compra_por_dia ya llama
@@ -482,59 +435,21 @@ def _drill_insumo(resultado, es_soles, *, key_select, col_contenedor_out, etique
                  height=alturas.MINI)
 
 
-def _drill_contenedor_jump(resultado, *, key_select, key_button, state_key_rail,
-                           state_key_sel, nombre_vista_sankey, etiqueta_selectbox,
-                           clave_seccion_sankey=None):
-    """Selectbox de contenedor + botón que lleva a la vista Sankey YA
-    EXISTENTE, en vez de duplicar esa lógica acá (no hay click directo, ver
-    docstring del módulo).
-
-    Este drill NO se dibuja solo: existe Únicamente para llevar al Sankey,
-    así que la página que no lo tiene ni siquiera lo llama — el `if` está
-    en `_panorama_compras`, que además reparte el ancho según sean uno o
-    dos drills.
-
-    DOS MODOS, según cómo esté armada la página que lo llama:
-
-      · Sin `clave_seccion_sankey` (página de UNA vista por vez): se escribe
-        el `state_key` del rail y se rerunea, que es como cambiar de vista.
-      · Con `clave_seccion_sankey` (página APILADA): el Sankey ya está en
-        pantalla más arriba, así que cambiar de vista no significa nada —
-        lo que corresponde es SCROLLEAR hasta él. Ver
-        `graficos.base.scroll_a_seccion`.
-
-    El parámetro es opcional a propósito: los dos reportes que comparten
-    este helper (Receta Base y Receta Venta) no se migran a la pila el
-    mismo día, y mientras tanto tienen que convivir los dos modos."""
-    otros = resultado["etiqueta_otros_contenedor"]
-    conts = sorted(n for n in resultado["links"]["contenedor_n"].unique() if n != otros)
-    if not conts:
-        return
-    sel = st.selectbox(etiqueta_selectbox, conts, key=key_select)
-    if st.button("Abrir Sankey →", key=key_button, use_container_width=True):
-        st.session_state[state_key_sel] = sel
-        if clave_seccion_sankey:
-            scroll_a_seccion(clave_seccion_sankey)
-        else:
-            st.session_state[state_key_rail] = nombre_vista_sankey
-            st.rerun()
-
-
 def _panorama_compras(df_f, es_soles, *, key_prefix,
                       col_cod_ins_cand, col_contenedor_cand,
                       col_valor_cand, col_cant_cand,
                       col_activo_contenedor_cand, col_activo_item_cand,
                       etiqueta_otros_contenedor, titulo_card,
-                      col_contenedor_out, etiqueta_contenedor_plural,
-                      state_key_rail=None, nombre_vista_sankey=None,
-                      etiqueta_selectbox_jump=None, clave_seccion_sankey=None):
+                      col_contenedor_out, etiqueta_contenedor_plural):
     """Punto de entrada de la vista 'Panorama de compras', compartido por
     Receta Base y Receta Venta.
 
-    Los cuatro parámetros del final son los del salto al Sankey y van
-    juntos: el llamador que no pasa ninguno declara con eso que su
-    dashboard NO tiene Sankey (Receta Base desde el 2026-08-28) y se queda
-    sin ese drill — no con un botón que no lleva a ninguna parte."""
+    Hasta el 2026-08-30 tomaba cuatro parámetros más (`state_key_rail`,
+    `nombre_vista_sankey`, `etiqueta_selectbox_jump`, `clave_seccion_
+    sankey`) para un segundo drill — "Abrir Sankey →" — que saltaba a la
+    vista Sankey de UN contenedor. Se borraron junto con
+    `_drill_contenedor_jump` cuando Receta Venta, su último llamador, dio
+    de baja esa vista: ver el docstring del módulo."""
     c_topn, c_fecha = st.columns([1, 2])
     with c_topn:
         top_n = st.selectbox("Top N", [8, 10, 15, 20], index=1, key=f"{key_prefix}_pan_topn")
@@ -570,32 +485,12 @@ def _panorama_compras(df_f, es_soles, *, key_prefix,
     with _card(f"{key_prefix}_panorama", titulo_card):
         st.plotly_chart(fig, use_container_width=True, key=f"{key_prefix}_panorama_sankey_{top_n}")
 
-    # Dos drills al pie, o uno solo a lo ancho. El de la derecha no es
-    # información: es un ATAJO al Sankey, así que en el dashboard que no
-    # tiene Sankey no se dibuja (y sin el `else` quedaría media fila vacía
-    # al lado del de insumo).
-    hay_sankey = bool(clave_seccion_sankey or nombre_vista_sankey)
-    if hay_sankey:
-        # columnas-internas: los dos drills del pie de ESTA tarjeta.
-        col_a, col_b = st.columns(2)
-    else:
-        col_a, col_b = st.container(), None
-
-    with col_a:
-        _drill_insumo(resultado, es_soles, key_select=f"{key_prefix}_pan_insumo_sel",
-                     col_contenedor_out=col_contenedor_out,
-                     etiqueta_plural=etiqueta_contenedor_plural)
-    if col_b is not None:
-        with col_b:
-            _drill_contenedor_jump(
-                resultado, key_select=f"{key_prefix}_pan_cont_sel",
-                key_button=f"{key_prefix}_pan_cont_ir",
-                state_key_rail=state_key_rail,
-                state_key_sel=f"{key_prefix}_contenedor_sel",
-                nombre_vista_sankey=nombre_vista_sankey,
-                etiqueta_selectbox=etiqueta_selectbox_jump,
-                clave_seccion_sankey=clave_seccion_sankey,
-            )
+    # Un solo drill, a lo ancho. Hasta el 2026-08-30 había un segundo
+    # ("Abrir Sankey →") que saltaba a la vista Sankey de un contenedor —
+    # se borró con ella, ver el docstring de la función.
+    _drill_insumo(resultado, es_soles, key_select=f"{key_prefix}_pan_insumo_sel",
+                 col_contenedor_out=col_contenedor_out,
+                 etiqueta_plural=etiqueta_contenedor_plural)
 
     detalle = resultado["sin_receta_detalle"]
     with st.expander(f"📋 Sin vincular todavía — {len(detalle)} productos"):
