@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-253 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+254 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (81)
 
@@ -379,7 +379,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (19)
+**Herramientas de desarrollo** (20)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -400,6 +400,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#185** — Un contextmenu dentro de un iframe NO sube al documento padre: el clic derecho sobre la…
 - **#206** — Un mousemove/mouseup de un iframe TAMPOCO sube al padre — el modo diseño se congelaba al…
 - **#215** — Element.innerText no atraviesa el layout position: absolute de las celdas de AgGrid: da ""…
+- **#254** — Hay DOS contornos violetas y vienen de sitios distintos: el overlay del modo diseño (un <div>…
 
 **Decisiones de diseño y UX** (42)
 
@@ -11211,13 +11212,52 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      el número por defecto "suene bien" no prueba que sea el mismo cálculo
      que hace falta — hay que mirar sobre QUÉ campo se está aplicando.
 
+254. **Hay DOS contornos violetas y vienen de sitios distintos: el
+     overlay del modo diseño (un `<div>` aparte) y el `outline` INLINE que
+     el inspector escribe sobre el elemento resaltado. El botón ▣/□ sólo
+     apagaba el primero.**
+
+     Reportado 2026-08-31: "puedo cambiar los colores del borde, pero al
+     seleccionar se torna de este color y no me permite ver ninguna
+     edición que hago". El botón ▣/□ del panel (regla #166) estaba en modo
+     oculto y el violeta seguía ahí.
+
+     No era el "Borde completo" del panel, que es lo primero que uno
+     supone: al SOLTAR el pin el violeta desaparecía, y un borde propio
+     no se va al despinear. Lo pintaba
+     `_inspector_js.py::resaltarEl()`, que hace
+     `el.style.outline = '2px solid var(--accent)'` **sobre el elemento
+     mismo**, no en una capa aparte. Tres cosas lo vuelven exactamente el
+     peor tapado posible para editar un borde:
+
+     - un `outline` **no ocupa layout** y se pinta POR ENCIMA del `border`
+       propio, así que no corre nada de sitio pero sí lo esconde;
+     - mide los mismos **2px** y sale de `var(--accent)`, o sea el mismo
+       violeta que el overlay de diseño — indistinguibles a ojo;
+     - con el pin puesto queda **permanente** (`resaltarEl` sólo se limpia
+       al despinear o al pasar a otro elemento).
+
+     Arreglo: `resaltarEl()` respeta `win.__inspectorResaltadoOculto`, el
+     inspector expone `win.__inspectorSetResaltadoOculto(oculto)` (que no
+     borra `elActual`, para poder volver a mostrarlo sin re-fijar), y el
+     ▣/□ de diseño llama a las dos cosas en el mismo clic. La lección
+     general: **un botón "ocultar la ayuda visual" tiene que apagar TODAS
+     las capas de ayuda visual**, y dos herramientas que se usan juntas
+     (`?debug=1&diseno=1` monta inspector Y diseño) no pueden tener cada
+     una su interruptor privado para lo mismo.
+
+     Corolario de diagnóstico, porque acá me equivoqué primero: **un
+     adorno que desaparece al soltar el pin es UI, no un estilo del
+     elemento.** Ese es el test de dos segundos que separa "me lo pinté
+     yo con el panel" de "lo pinta la herramienta".
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#254**.
+> próxima regla nueva es la **#255**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

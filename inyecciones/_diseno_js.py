@@ -2064,6 +2064,14 @@ JS = """
                 win.__disenoContornoOculto = !win.__disenoContornoOculto;
                 btnContorno.textContent = win.__disenoContornoOculto ? '□' : '▣';
                 overlay.style.display = win.__disenoContornoOculto ? 'none' : 'block';
+                // Son DOS contornos violetas de fuentes distintas: este overlay
+                // (div aparte, 4px afuera) y el `outline` INLINE que el
+                // inspector le pone al elemento resaltado. Apagar solo el
+                // primero dejaba el segundo encima del borde que se estaba
+                // editando — se veia como "el boton no hace nada". Regla #254.
+                if (win.__inspectorSetResaltadoOculto) {
+                    win.__inspectorSetResaltadoOculto(win.__disenoContornoOculto);
+                }
             });
 
             header.appendChild(headerKey);

@@ -1309,14 +1309,38 @@ JS = """
         }
 
         var elActual = null;
+        // El resaltado es un `outline` INLINE sobre el elemento mismo (no un
+        // overlay aparte como el del modo diseno). Por eso el boton ▣/□
+        // de diseno, que solo apagaba su propio overlay, dejaba igual este
+        // violeta encima: con el pin puesto quedaba permanente y tapaba
+        // cualquier borde/color que se estuviera editando — un outline no
+        // ocupa layout y se pinta POR ENCIMA del border propio, del mismo
+        // ancho y (por --accent) del mismo tono. Ver regla #254.
         function resaltarEl(el, etiqueta) {
             if (elActual) { elActual.style.outline = ''; elActual.style.outlineOffset = ''; }
             if (el && etiqueta) {
-                el.style.outline = '2px solid var(--accent)';
-                el.style.outlineOffset = '2px';
                 elActual = el;
+                if (!win.__inspectorResaltadoOculto) {
+                    el.style.outline = '2px solid var(--accent)';
+                    el.style.outlineOffset = '2px';
+                }
             } else { elActual = null; }
         }
+
+        // La usa el boton ▣/□ del panel de diseno para apagar los DOS
+        // contornos de un gesto. No borra elActual: volver a mostrarlo no
+        // necesita re-hover ni re-fijar.
+        win.__inspectorSetResaltadoOculto = function(oculto) {
+            win.__inspectorResaltadoOculto = !!oculto;
+            if (!elActual) return;
+            if (oculto) {
+                elActual.style.outline = '';
+                elActual.style.outlineOffset = '';
+            } else {
+                elActual.style.outline = '2px solid var(--accent)';
+                elActual.style.outlineOffset = '2px';
+            }
+        };
 
         // Los listeners se registran en window.parent (el documento de la app)
         // pero las funciones que los implementan viven en el CONTEXTO del iframe
