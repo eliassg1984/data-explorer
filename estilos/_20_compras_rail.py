@@ -63,7 +63,24 @@ CSS = """    /* ================================================================
            hay top que "devolver" (el rail arranca en 0, no en
            nav-top-alto), asi que el techo de seguridad pasa a medirse
            desde el borde de arriba de la pantalla directo. */
-        top: 0 !important;
+        /* 2026-08-31: `0` -> `47px`, a pedido, otra vez desde un arrastre en
+           modo diseno (`transform: translate(1px,47px)`). Como las dos veces
+           anteriores, el transform NO se copia tal cual: el rail ya es
+           position:fixed —un transform encima seria redundante Y capturaria
+           a sus hijos fixed (regla #156)—, asi que se traduce al `top` que
+           ya existe. El 1px de X se descarta por overshoot del mouse, mismo
+           criterio que el -2px del 2026-08-26; `left` no se toca.
+           Cuarta vuelta de la serie (74 -> 8 -> -2 -> 0 -> 47): esta vez el
+           rail BAJA y vuelve a arrancar por debajo de la franja superior.
+           Arrastra dos numeros con el:
+           · `max-height` recupera el termino del top. Con `100vh - 8px`
+             medido desde y=47 el rail podia pasarse 47px del borde de
+             abajo; el techo se mide otra vez desde donde arranca.
+           · el gemelo `nav_rail_lateral` de _26_rails_scroll.py, que ocupa
+             ESTE MISMO hueco cuando se scrollea. Si solo se mueve uno, el
+             cruce se ve como que la columna salta 47px en vez de cambiar de
+             contenido. */
+        top: 47px !important;
         /* 2026-08-18, a pedido: el rail pasa del borde DERECHO al IZQUIERDO.
            Es el sitio que dejó libre el rail de navegación al convertirse en
            la franja superior (--nav-top-alto) unos commits antes: la columna
@@ -90,14 +107,17 @@ CSS = """    /* ================================================================
            tantas vistas que no entran (activa el overflow-y:auto de abajo
            en vez de desbordar). */
         height: auto !important;
-        max-height: calc(100vh - 8px) !important;
+        max-height: calc(100vh - 47px - 8px) !important;
         z-index: 900 !important;
         overflow-y: auto !important;
         margin: 0 !important;
         padding: 8px 0 16px 0 !important;
         background: var(--bg-card) !important;
         border: 1px solid var(--border) !important;
-        border-radius: 12px !important;    /* mismas esquinas que la tarjeta */
+        /* 2026-08-31: 12px -> 0, en el mismo pedido que el `top`. Deja de
+           copiar las esquinas de la tarjeta a proposito. Va tambien en el
+           gemelo de _26_rails_scroll.py por el mismo motivo que el top. */
+        border-radius: 0 !important;
         box-shadow: none !important;       /* sin sombra: integrada al borde */
         scrollbar-width: none !important;
     }

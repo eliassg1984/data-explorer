@@ -91,13 +91,17 @@ CSS = f"""
        en vez de derivarlo con una variable compartida porque las CUATRO
        propiedades son literales duplicados a proposito desde que nacio
        este rail (2026-08-24) — es el precio ya asumido de la geometria
-       acoplada, no algo nuevo de este cambio. */
+       acoplada, no algo nuevo de este cambio.
+
+       2026-08-31: `top` a `47px`, `max-height` recupera ese termino y
+       `border-radius` a 0 — la cuarta vuelta de la serie, explicada
+       entera en `_20_compras_rail.py`. */
     .st-key-nav_rail_lateral {{
         position: fixed !important;
-        top: 0 !important;
+        top: 47px !important;                         /* == _20_compras_rail.py */
         left: 19px !important;                        /* == _20_compras_rail.py */
         width: var(--rail-der-w) !important;          /* nombre historico: es el IZQUIERDO */
-        max-height: calc(100vh - 8px) !important;
+        max-height: calc(100vh - 47px - 8px) !important;   /* == _20_compras_rail.py */
         overflow-y: auto !important;
         overflow-x: hidden !important;
         scrollbar-width: none !important;
@@ -106,7 +110,7 @@ CSS = f"""
         padding: 8px 0 16px 0 !important;
         background: var(--bg-card) !important;
         border: 1px solid var(--border) !important;
-        border-radius: 12px !important;
+        border-radius: 0 !important;                  /* == _20_compras_rail.py */
         box-shadow: none !important;
         display: flex !important;
         flex-direction: column !important;
