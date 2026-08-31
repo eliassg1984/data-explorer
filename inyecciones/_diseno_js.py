@@ -609,6 +609,24 @@ JS = """
             };
             win.__disenoState.mocks.push(m);
             insertarMock(m);
+            // Ubicarlo: reportado en vivo (2026-08-31, "agregué una barra
+            // después, pero cómo sé dónde está?") — un "Espacio" es
+            // literalmente invisible salvo por su contorno punteado, y una
+            // "Barra"/"Línea" ancladas a algo que ya estaba fuera de la
+            // pantalla (o "Antes" de un elemento largo) no se distinguen
+            // del resto del layout a simple vista. Scroll + un flash en
+            // Advertencia (no Acento: ese es el color de la propia Barra y
+            // del contorno de selección — usarlo se confundiría con ambos).
+            var nuevo = doc.querySelector('.st-key-' + m.key);
+            if (nuevo) {
+                nuevo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                nuevo.style.setProperty('outline', '3px solid ' + colorPaleta('Advertencia'), 'important');
+                nuevo.style.setProperty('outline-offset', '2px', 'important');
+                setTimeout(function() {
+                    nuevo.style.setProperty('transition', 'outline-color .6s', 'important');
+                    nuevo.style.setProperty('outline-color', 'transparent', 'important');
+                }, 1400);
+            }
             panel.dataset.builtForKey = '';   // cambio el contador de la lista
             sync();
         }

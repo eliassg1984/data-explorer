@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-258 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+259 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (83)
 
@@ -131,7 +131,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#245** — Una fila que COMPARA se parte por la mitad, no con COLUMNAS_DRILL
 - **#248** — En media tarjeta, cada columna nueva hay que pagarla con otra: la unidad se muda adentro de…
 
-**Plotly y figuras** (45)
+**Plotly y figuras** (46)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -178,6 +178,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#189** — El ranking de Inventario pasó de barra Plotly a tabla AgGrid, y con eso se cayeron solas las…
 - **#202** — Una barra pintada como FONDO de celda no se acota con un % del ancho: se acota con un GUTTER…
 - **#241** — Un panel de detalle y un gráfico del PERÍODO no pueden convivir: el gráfico tiene que hablar…
+- **#259** — Insertar texto/línea/barra/espacio no lo ubica: hace falta scroll + un flash de color, o es…
 
 **AgGrid y tablas** (44)
 
@@ -407,7 +408,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#256** — El panel de diseño es fixed a la derecha y tapa 230px de la app — justo la orilla donde caen…
 - **#257** — Mover un elemento una vez y no poder moverlo de nuevo: la perilla viaja con el elemento y…
 
-**Decisiones de diseño y UX** (43)
+**Decisiones de diseño y UX** (44)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -452,6 +453,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#241** — Un panel de detalle y un gráfico del PERÍODO no pueden convivir: el gráfico tiene que hablar…
 - **#249** — En una homologación, el INVARIANTE es el importe de la línea — no la cantidad ni el precio
 - **#258** — Duplicar un elemento en el modo diseño: la copia CONSERVA las clases st-key-*, y por eso hay…
+- **#259** — Insertar texto/línea/barra/espacio no lo ubica: hace falta scroll + un flash de color, o es…
 
 **Mantenimiento y trampas del lenguaje** (7)
 
@@ -11442,13 +11444,47 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      depende de heredar la posición de nada: nace como una caja nueva en
      el lugar que el "Dónde" pida.
 
+259. **Insertar texto/línea/barra/espacio no lo ubica: hace falta scroll +
+     un flash de color, o es indistinguible del resto del layout.**
+
+     Pedido 2026-08-31, en vivo, justo después de sacar "Copia" (regla
+     #258): "agregué una barra después usando la herramienta, pero cómo
+     sé dónde está? no se puede identificar" — con captura mostrando el
+     contorno de selección sobre la tarjeta ancla, y ni rastro de la
+     barra nueva en la parte visible de la pantalla.
+
+     El motivo es doble:
+
+     - Si el ancla está fuera de la ventana (o la posición es "Antes" de
+       algo que arrancaba más arriba), la nueva caja nace fuera del
+       viewport y nada la trae a pantalla.
+     - Aun estando a la vista, un "Espacio" es literalmente invisible
+       salvo por un contorno punteado tenue, y una "Barra" nueva puede
+       leerse como parte del layout de siempre si nadie la señala.
+
+     Arreglo en `agregarMock()`: apenas se inserta, `scrollIntoView({
+     behavior:'smooth', block:'center' })` + un `outline` de 3px que
+     aparece de golpe y se desvanece con una `transition` a los 1400ms.
+     El color es **Advertencia** (naranja), no Acento — Acento es el
+     color de la propia "Barra" y del contorno de selección; usarlo ahí
+     se hubiera confundido con alguno de los dos. Sin transición en el
+     `outline` INICIAL a propósito: tiene que aparecer de golpe para que
+     el ojo lo enganche; la transición se agrega recién al momento de
+     sacarlo, así el fade-out es suave pero el flash de entrada no se
+     diluye.
+
+     Verificado en vivo con datos reales: "+ Barra" sobre una tarjeta
+     scrolleada fuera de vista trae la página hasta la barra nueva y la
+     marca con el contorno naranja, que se apaga solo ~1.4s después sin
+     dejar rastro (`outline-color` vuelve a `rgba(0,0,0,0)`).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#259**.
+> próxima regla nueva es la **#260**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
