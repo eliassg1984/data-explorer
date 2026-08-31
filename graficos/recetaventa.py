@@ -27,6 +27,18 @@ Receta Base se quedó con Ranking, Insumos clave, Panorama y Tabla (regla
 #236). O sea que este dashboard es hoy el único llamador del Sankey
 compartido — no borrarlo de `recetas_comun.py` pensando que sobra.
 
+Y desde el 2026-08-30, "Ranking de platos" se renombra a "Costeo Receta
+Venta" y deja el gráfico de barras horizontal por una tabla AgGrid propia
+(`_tabla_costeo_venta`, más abajo) — a pedido: "en lugar de un gráfico,
+una tabla tipo ranking, ordenada por costo, algo así como el que tengo
+para compras". Mismo lenguaje visual que el Ranking de Proveedores de
+Compras (barra como fondo de celda vía `linear-gradient`, fila TOTAL
+fijada abajo) y misma agregación que el gráfico que reemplaza (suma de
+costo/cantidad por plato, sin filtrar por activo). Sigue sin ser un quinto
+compartido en `recetas_comun.py`: sólo Receta Venta pidió el cambio, así
+que Receta Base se queda con el gráfico (`_ranking_contenedores`), que
+conserva el nombre "Ranking".
+
 Punto de entrada público: renderizar_graficos_recetaventa().
 """
 
@@ -35,15 +47,17 @@ import streamlit as st
 
 from st_aggrid import AgGrid, JsCode
 
-from tema import ADVERTENCIA, ERROR, EXITO, TEXTO_PRINCIPAL
+from tema import (
+    ACENTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA, ERROR, EXITO, LAVANDA_CHIP,
+    TEXTO_PRINCIPAL,
+)
 from graficos import alturas
 from graficos.base import (
     _card, _render_rail, _resolver, renderizar_graficos_genericos,
     seccion_perezosa,
 )
 from graficos.recetas_comun import (
-    _activo, _chip_fuente, _items_clave, _panorama_compras,
-    _ranking_contenedores, _sankey_contenedor,
+    _activo, _chip_fuente, _items_clave, _panorama_compras, _sankey_contenedor,
 )
 
 # Umbral de %Costo salón para el semáforo de la barra de progreso de
@@ -58,7 +72,7 @@ _UMBRAL_COSTO_WARN = 35
 _RAIL_CATEGORIAS = (
     ("Vista", (("Sankey por plato",        "Sankey"),
                ("Composición del plato",   "Composición"),
-               ("Ranking de platos",       "Ranking"),
+               ("Costeo Receta Venta",     "Costeo Receta Venta"),
                ("Ingredientes clave",      "Ingredientes"),
                ("Panorama de compras",     "Panorama"))),
     ("Datos", (("Tabla", "Tabla"),)),
@@ -71,7 +85,7 @@ _RAIL_CATEGORIAS = (
 _PILA = (
     ("rv_sec_sankey",      "Sankey por plato"),
     ("rv_sec_composicion", "Composición del plato"),
-    ("rv_sec_ranking",     "Ranking de platos"),
+    ("rv_sec_costeo",      "Costeo Receta Venta"),
     ("rv_sec_ingredientes", "Ingredientes clave"),
     ("rv_sec_panorama",    "Panorama de compras"),
     ("rv_sec_tabla",       "Tabla"),
@@ -336,6 +350,147 @@ def _tabla_composicion_venta(df_f):
                 )
 
 
+# ─── Costeo Receta Venta: ranking de platos por costo, en tabla ────────────
+# Reemplaza el gráfico de barras horizontales que tenía esta vista hasta el
+# 2026-08-30 (a pedido: "en lugar de un gráfico, una tabla tipo ranking,
+# ordenada por costo, algo así como el que tengo para compras" — ver
+# graficos/compras/proveedor.py, Ranking de Proveedores, mismo lenguaje
+# visual: barra como FONDO de celda vía `linear-gradient`, fila TOTAL
+# fijada abajo). Misma agregación que el gráfico que reemplazaba — suma de
+# `col_valor` por plato, SIN filtrar por activo (ese filtro tampoco lo
+# tenía `_ranking_contenedores`) — así que los números no cambian, sólo
+# cómo se dibujan.
+#
+# NO vive en recetas_comun.py como los otros 3 gráficos compartidos
+# (Sankey/Ingredientes clave/Panorama): sólo Receta Venta pidió el cambio,
+# y Receta Base se queda con el gráfico de barras compartido
+# (`_ranking_contenedores`) — mismo criterio que `_tabla_composicion_venta`,
+# arriba.
+#
+# Ancho de columnas: FIJO en las cuatro, ninguna con `flex` — arquitectura.md
+# regla #193 (`st_aggrid` inyecta `width: 200` a toda columna sin uno
+# propio, y ese ancho explícito le gana al `flex` en el render inicial; el
+# Ranking de Proveedores "funciona" con flex sólo porque nunca cruzó el
+# umbral de columnas — la regla #193 lo llama "el bug dormido").
+def _tabla_costeo_venta(df_f, col_plato, col_valor, es_soles):
+    """Vista 'Costeo Receta Venta': ranking de platos por costo (o
+    cantidad) total, en una tabla AgGrid — mismo lenguaje visual que el
+    Ranking de Proveedores de Compras."""
+    # INS RV, no ITEM RV, para el conteo de insumos: ITEM RV es el número
+    # de LÍNEA dentro de la receta, no una identidad de insumo — ver
+    # arquitectura.md regla #205 (punto 2). Columna opcional: si no está
+    # (p.ej. un export viejo), la tabla se queda sin "Ítems" en vez de
+    # romperse, mismo criterio defensivo que el resto del dashboard.
+    col_ins = _resolver(df_f, ["INS RV", "Ins Rv"])
+
+    agg = {"Plato": (col_plato, "first"), "Valor": (col_valor, "sum")}
+    if col_ins:
+        agg["Items"] = (col_ins, "nunique")
+    g = df_f.groupby(col_plato, as_index=False).agg(**agg)
+    g["Plato"] = g["Plato"].astype(str)
+    g = g.sort_values("Valor", ascending=False).reset_index(drop=True)
+    if g.empty:
+        st.info("Sin datos para el ranking.")
+        return
+
+    total_valor = float(g["Valor"].sum()) or 1.0
+    g["Pct"] = g["Valor"] / total_valor * 100
+    g_max = float(g["Valor"].max()) or 1.0
+    g["_barra"] = g["Valor"] / g_max * 100
+
+    etiqueta_valor = "Costo (S/)" if es_soles else "Cantidad"
+
+    # La barra es el FONDO de la celda (mismo `linear-gradient` que el
+    # Ranking de Proveedores/Productos de Compras, arquitectura.md regla
+    # #136), escalada contra el MAYOR valor visible y topada al 62% del
+    # ancho para que el texto —alineado a la derecha— nunca caiga encima.
+    _js_barra = JsCode(
+        "function(p){"
+        " if (p.node.rowPinned) return {'display':'flex','alignItems':'center',"
+        " 'justifyContent':'flex-end','fontWeight':'700'};"
+        " var w = Math.max(0, Math.min(100, p.data._barra||0)) * 0.62;"
+        " return {'background': 'linear-gradient(90deg,"
+        f" {ACENTO} 0 ' + w + '%, transparent ' + w + '% 100%)',"
+        " 'display':'flex','alignItems':'center','justifyContent':'flex-end',"
+        f" 'color':'{TEXTO_PRINCIPAL}'"
+        "};"
+        "}")
+    # Números redondos (sin decimales): mismo formato que ya mostraban las
+    # barras del gráfico que esto reemplaza (`text=f"{pref}{v:,.0f}"`).
+    if es_soles:
+        _js_valor_fmt = JsCode(
+            "function(p){ return p.value==null ? '' :"
+            " 'S/ ' + Math.round(p.value).toLocaleString('es-PE'); }")
+    else:
+        _js_valor_fmt = JsCode(
+            "function(p){ return p.value==null ? '' :"
+            " Math.round(p.value).toLocaleString('es-PE'); }")
+    _js_pct = JsCode(
+        "function(p){ return p.value==null ? '' : Math.round(p.value) + '%'; }")
+    # Misma paleta que la fila TOTAL del Ranking de Proveedores.
+    _js_fila_total = JsCode(
+        "function(p){ if(p.node.rowPinned){ return {"
+        f"'fontWeight':'700','background':'{LAVANDA_CHIP}',"
+        f"'color':'{ACENTO_TEXTO_OSCURO}',"
+        f"'borderTop':'2px solid {ACENTO}'"
+        "}; } }")
+
+    # Sin filtro de platos en esta vista (a diferencia del Ranking de
+    # Proveedores, que sí puede excluir algunos): la tabla siempre muestra
+    # TODOS, así que el TOTAL es exacto (100.0%) y no la suma de redondeos
+    # por fila.
+    _fila_total = {"Plato": "TOTAL", "Valor": round(total_valor, 2), "Pct": 100.0}
+    if col_ins:
+        _fila_total["Items"] = int(g["Items"].sum())
+
+    _ALTO_FILA = 28
+    # 10 filas visibles + la fila TOTAL fijada + cabecera(34) + chrome del
+    # tema (~8px). El resto de los platos scrollea DENTRO del grid — a
+    # diferencia del gráfico que esto reemplaza, ya no hace falta un
+    # selector "Mostrar N": acá el scroll hace ese trabajo (mismo criterio
+    # que el Ranking de Proveedores de Compras).
+    _ALTO_FRAME = alturas.por_filas(
+        10, px_fila=_ALTO_FILA, extra=34 + 8 + _ALTO_FILA, minimo=0)
+
+    columnas = [
+        {"field": "Plato", "width": 420, "tooltipField": "Plato"},
+        {"field": "Valor", "headerName": etiqueta_valor, "width": 160,
+         "type": "numericColumn", "sort": "desc",
+         "cellStyle": _js_barra, "valueFormatter": _js_valor_fmt},
+    ]
+    campos = ["Plato", "Valor"]
+    if col_ins:
+        columnas.append({"field": "Items", "headerName": "Ítems", "width": 90,
+                         "type": "numericColumn"})
+        campos.append("Items")
+    columnas.append({"field": "Pct", "headerName": "%", "width": 80,
+                     "type": "numericColumn", "valueFormatter": _js_pct})
+    campos.append("Pct")
+    columnas.append({"field": "_barra", "hide": True})
+    campos.append("_barra")
+
+    with _card("rv_costeo",
+               f"Platos por {'costo' if es_soles else 'cantidad'} total"):
+        AgGrid(
+            g[campos],
+            gridOptions={
+                "columnDefs": columnas,
+                "defaultColDef": {"sortable": True, "resizable": True},
+                "suppressCellFocus": True,
+                "suppressMovableColumns": True,
+                "rowHeight": _ALTO_FILA,
+                "headerHeight": 34,
+                "pinnedBottomRowData": [_fila_total],
+                "getRowStyle": _js_fila_total,
+            },
+            allow_unsafe_jscode=True,
+            theme="streamlit",
+            height=_ALTO_FRAME,
+            key="rv_costeo_grid",
+        )
+        st.caption(f"{len(g)} platos · ordenado por {etiqueta_valor.lower()}")
+
+
 # ─── Punto de entrada público ───────────────────────────────────────────────
 def renderizar_graficos_recetaventa(df_f, nombre_reporte, df_full=None, tabla_cb=None):
     """Dashboard de Receta Venta. df_full se ignora (catálogo sin fecha).
@@ -423,12 +578,9 @@ def renderizar_graficos_recetaventa(df_f, nombre_reporte, df_full=None, tabla_cb
         with st.container(border=True, key="rv_card_composicion"):
             _tabla_composicion_venta(df_f)
 
-    def _dib_ranking():
-        with st.container(border=True, key="rv_card_ranking"):
-            _ranking_contenedores(df_f, col_plato, col_valor, es_soles,
-                                  key_topn="rv_ranking_topn",
-                                  card_key="rv_ranking",
-                                  titulo_card="Platos por costo total")
+    def _dib_costeo():
+        with st.container(border=True, key="rv_card_costeo"):
+            _tabla_costeo_venta(df_f, col_plato, col_valor, es_soles)
 
     def _dib_ingredientes():
         with st.container(border=True, key="rv_card_ingredientes"):
@@ -454,7 +606,7 @@ def renderizar_graficos_recetaventa(df_f, nombre_reporte, df_full=None, tabla_cb
     _DIBUJANTES = {
         "rv_sec_sankey":       _dib_sankey,
         "rv_sec_composicion":  _dib_composicion,
-        "rv_sec_ranking":      _dib_ranking,
+        "rv_sec_costeo":       _dib_costeo,
         "rv_sec_ingredientes": _dib_ingredientes,
         "rv_sec_panorama":     _dib_panorama,
         "rv_sec_tabla":        _dib_tabla,
