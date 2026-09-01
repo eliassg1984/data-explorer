@@ -149,6 +149,23 @@ CSS = """    /* ================================================================
         display: flex !important;
         flex-direction: row !important;
         align-items: center !important;
+        /* CENTRADA (2026-08-31, a pedido). Nació en `flex-start` —el default
+           del flex, que nunca se escribió— y arrancaba en x=16, o sea encima
+           de la columna del rail y fuera de plomo con todo lo de abajo.
+           Centrada no se alinea con nada, que es lo correcto para cromo de
+           la aplicación: no pertenece a ninguna de las dos columnas.
+
+           Las DOS declaraciones a propósito, y en este orden. `safe center`
+           es lo que se quiere: centra mientras entre, y cuando el contenido
+           desborda se comporta como `start`. Sin el `safe`, un flex centrado
+           que desborda se sale por LOS DOS lados y el scroll no alcanza el
+           de la izquierda — los primeros reportes quedarían inaccesibles en
+           un viewport angosto, que es justo el caso para el que existe el
+           `overflow-x: auto` de acá abajo. El navegador que no entienda
+           `safe center` descarta esa línea y se queda con el `center` de
+           arriba, que es el comportamiento viejo y no rompe nada. */
+        justify-content: center !important;
+        justify-content: safe center !important;
         gap: 2px !important;
         margin: 0 !important;
         padding: 0 16px !important;
