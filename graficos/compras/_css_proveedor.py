@@ -526,6 +526,21 @@ CSS = """        <style>
             font-size: 12px !important;
             line-height: 1.25 !important;
         }
+        /* Hover de FILA. Va junto con el `width="stretch"` del checkbox
+           (proveedor.py): sin el uno, el otro no se nota — el realce
+           marcaría 110px de los 226, que es peor que no marcar nada. */
+        .st-key-cp_prov_lista [data-testid="stCheckbox"] label {
+            padding: 1px 4px !important;
+            border-radius: 4px !important;
+            /* El `width="stretch"` de Python estira el CONTENEDOR del
+               widget (210px, medido) pero el `<label>` de adentro sigue
+               midiendo su texto (118px) — o sea el realce marcaría media
+               fila. El blanco es la fila entera o no es un blanco. */
+            width: 100% !important;
+        }
+        .st-key-cp_prov_lista [data-testid="stCheckbox"] label:hover {
+            background: var(--accent-tint) !important;
+        }
         /* El toggle "Nombres en barras" es la ÚNICA opción de dibujo entre
            puros filtros: la raya que la separaba era un `st.divider()` de
            49px. Un `border-top` cuesta 1px y el aire que se le dé. */

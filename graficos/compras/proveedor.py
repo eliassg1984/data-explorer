@@ -492,16 +492,34 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 #    `st.container(height=N)` reserva N aunque haya dos
                 #    filas: con el rango corto habría dejado 150px de caja
                 #    vacía, que es el mismo pecado que se está corrigiendo.
-                #    26 = alto real de una fila de checkbox comprimida
-                #    (24 del widget + 2 de gap), medido; 7 filas es lo que
-                #    se lee sin que la caja domine la pantalla.
+                #    Y NO son N filas iguales: los proveedores son razones
+                #    sociales completas y ENVUELVEN. Medido clonando filas
+                #    con nombres reales en los 200px de texto útil que deja
+                #    el panel de 250: 1 línea = 24px, 2 = 30, 3 = 45 (o sea
+                #    ~15 por línea + 9 de caja del checkbox). Con la cuenta
+                #    plana de 26 por fila, siete nombres largos se salían de
+                #    su propia caja.
+                #    190 es el techo: por encima, el panel vuelve a comerse
+                #    media pantalla, que es lo que se está corrigiendo.
                 #    `border=False` explícito: Streamlit dibuja borde solo
                 #    con que haya `height` fijo.
-                _alto_lista = min(max(len(_vistos), 1), 7) * 26 + 4
-                with st.container(height=_alto_lista, border=False,  # alto-fijo-justificado: filas x px de la lista, no una resta contra la pantalla
+                _CHARS_LINEA = 30      # a 12px en 200px de ancho útil, medido
+                # 15 por línea de texto + 13 de caja y gap: con 11 la caja
+                # quedaba 3px corta y aparecía una barra de scroll para dos
+                # nombres que ya entraban (medido: 52 de caja, 55 de alto).
+                _alto_lista = min(190, sum(
+                    (-(-len(str(_p)) // _CHARS_LINEA) or 1) * 15 + 13
+                    for _p in _vistos) or 28)
+                with st.container(height=_alto_lista, border=False,  # alto-fijo-justificado: líneas x px de la lista, no una resta contra la pantalla
                                   key="cp_prov_lista"):
                     for _p in _vistos:
-                        st.checkbox(_p, key="cp_prov_cb::" + str(_p))
+                        # `width="stretch"`: el default de `st.checkbox` es
+                        # `content`, o sea la fila (y con ella el área
+                        # clicable y el hover) medía lo que el nombre —110px
+                        # de los 226 disponibles, medido—. En una lista, la
+                        # fila entera tiene que ser el blanco.
+                        st.checkbox(_p, key="cp_prov_cb::" + str(_p),
+                                    width="stretch")
                 # 3) El `st.divider()` se va: separar dos cosas no vale 49px.
                 #    La raya la pone un `border-top` en el toggle (CSS), que
                 #    cuesta 1px y el aire que se le quiera dar.

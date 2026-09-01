@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-270 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+271 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (87)
+**CSS y estilos** (88)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -107,6 +107,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#264** — Un mock arrastrado con "Mover" podía terminar pintado DEBAJO de un hermano posterior — no…
 - **#266** — La franja de REPORTES no duplica al rail: es lo que queda cuando el rail se va. Y su alto lo…
 - **#270** — El z-index de un hijo no vale nada fuera del contexto de apilamiento de su padre — y levantar…
+- **#271** — Un panel de popover que "se ve muy grande" casi nunca es su contenido: son los defaults de…
 
 **Layout y alturas** (24)
 
@@ -233,7 +234,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#248** — En media tarjeta, cada columna nueva hay que pagarla con otra: la unidad se muda adentro de…
 - **#250** — Un valor derivado también se adelanta en el navegador: si sólo lo recalcula el servidor, la…
 
-**Streamlit** (76)
+**Streamlit** (77)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -311,6 +312,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#260** — Un mock insertado en modo diseño aparece un instante y desaparece solo: Streamlit le borra…
 - **#262** — Linea/Barra/Espacio insertados sobre un stVerticalBlock nacen con width:0 — Streamlit pone…
 - **#263** — porKeyReal() no podía resolver un mock pineado SOBRE SÍ MISMO: el filtro…
+- **#271** — Un panel de popover que "se ve muy grande" casi nunca es su contenido: son los defaults de…
 
 **Datos, R2 y DuckDB** (30)
 
@@ -12034,13 +12036,89 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        `position: fixed|sticky`, `isolation: isolate`). El culpable estaba
        a dos niveles.
 
+
+271. **Un panel de popover que "se ve muy grande" casi nunca es su
+     contenido: son los defaults de página de Streamlit aplicados a una
+     caja. Medir el reparto ANTES de tocar.**
+
+     2026-09-01, a pedido sobre el selector de proveedores del drill
+     ("es muy grande, sobre todo el extenderse"). Medido en vivo con el
+     rango que traía sólo DOS proveedores: **430 × 344px**. De esos 344,
+     **175 eran aire** y sólo 169 contenido:
+
+     | pieza | px | qué es |
+     |---|---|---|
+     | padding del `stPopoverBody` | 46 | 23px por lado, el default |
+     | gaps del `stVerticalBlock` | 80 | cinco de 16px |
+     | `st.divider()` | 49 | 1px de línea + 24 de margen a cada lado |
+     | fila de atajos | 55 | 5 botones de página |
+     | buscador | 40 | alto de campo de formulario |
+     | 2 checkboxes | 48 | |
+     | toggle | 24 | |
+
+     El 16px de gap y el 23 de padding son razonables para una PÁGINA;
+     dentro de una caja de 250px son el 40% del alto. Y el ancho tenía
+     un culpable propio: los cinco atajos iban en `st.columns(5)` con
+     `use_container_width=True`, y ese reparto es por FRACCIÓN — cada
+     botón reclamaba un quinto entero, imponiendo un piso de 382px de
+     contenido. Con la lista completa (~20 proveedores) el panel llegaba
+     al techo de 651px: el 70% del viewport.
+
+     Quedó en **250 × 186** (un tercio del área) con cuatro cambios, y
+     ninguno toca la lógica del filtro:
+
+     - **Ancho y padding del panel, y gap del bloque**, scopeados con
+       `:has()` sobre una key de adentro (`cp_prov_lista`). `stPopoverBody`
+       es un PORTAL al final del `body`: no se lo alcanza colgando del
+       contenedor. Mismo patrón que `cp_rank_escala_panel` (regla #216) y
+       que Familia/Subfamilia en `estilos/_40_ajuste_franja.py`. **Sin ese
+       `:has()` esto apretaría todos los popovers de la app** — el aviso de
+       CLAUDE.md sobre reglas colgadas de un contenedor. Verificado después
+       del cambio: el panel de la escala sigue en 290 × 170.
+     - **Los atajos dejan `st.columns(5)` por `st.container(horizontal=True)`
+       con botones `type="tertiary"`**: miden su texto, no un quinto del
+       panel. 209px en un renglón de 22, contra 382 × 55.
+     - **La lista scrollea DENTRO** (`st.container(height=…, border=False)`)
+       en vez de estirar el panel. `border=False` explícito: Streamlit lo
+       dibuja solo en cuanto hay `height` fijo.
+     - **El `st.divider()` se va.** Separar dos cosas no vale 49px: la raya
+       la pone un `border-top` en el toggle.
+
+     **Dos trampas del alto de la lista, las dos medidas y las dos
+     contraintuitivas:**
+
+     1. **Las filas NO son todas iguales.** Los proveedores son razones
+        sociales completas y ENVUELVEN. Clonando filas con nombres reales
+        en los 200px de texto útil: 1 línea = 24px, 2 = 30, 3 = 45 — o sea
+        ~15 por línea más 9 de caja del checkbox, no un 26 plano. Con la
+        cuenta plana, siete nombres largos se salían de su propia caja. La
+        fórmula cuenta LÍNEAS (`ceil(len(nombre) / 30)` a 12px) y se
+        clampea en 190.
+     2. **`st.container(height=N)` reserva N aunque haya dos filas.** Por
+        eso el alto se calcula, no se fija: un 190 constante habría dejado
+        150px de caja vacía en el rango corto, que es el mismo pecado que
+        se estaba corrigiendo.
+
+     Y una tercera, del ancho: **`st.checkbox` nace `width="content"`**, así
+     que la fila —y con ella el área clicable y el hover— medía lo que el
+     nombre: 110px de los 226 disponibles. `width="stretch"` estira el
+     CONTENEDOR del widget pero **el `<label>` de adentro sigue midiendo su
+     texto** (210 contra 118, medido): hacen falta las dos mitades,
+     `width="stretch"` en Python y `label { width: 100% }` en CSS, o el
+     realce marca media fila. En una lista, el blanco es la fila entera.
+
+     Corolario para el próximo popover: el `st.container(height=N)` de la
+     lista lleva `# alto-fijo-justificado:` porque es filas × px, no una
+     resta contra la pantalla — el caso legítimo del escape hatch de
+     `test_graficos.py` (regla #101).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#271**.
+> próxima regla nueva es la **#272**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
