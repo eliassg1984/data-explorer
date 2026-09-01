@@ -299,38 +299,6 @@ CSS = """    /* ================================================================
        reserva nada, así que TODOS los `left` de la franja bajaron 90px
        (aquí y en _50_fecha.py). El `top` se corre --nav-top-alto por la
        misma razón, pero al revés: lo que perdió en ancho lo ganó en alto. */
-    /* ── TITULO DE LA FRANJA: app + reporte ───────────────────────────
-       "Sapiens (Compras)". Lo dibuja `navegacion.py::inject_navegacion`,
-       que es quien sabe cual es el reporte activo.
-       Va en la esquina izquierda de la FILA 1, anclado a `--rail-der-res`
-       —la misma referencia que la franja de vistas y las tarjetas— asi que
-       arranca a plomo con ellas. `position: fixed` como el resto del cromo
-       de la franja: no participa del flujo (ver la regla del `gap` en
-       `_26_rails_scroll.py`). */
-    .franja-titulo-app {
-        position: fixed !important;
-        top: 7px !important;
-        left: var(--rail-der-res) !important;
-        z-index: 23 !important;
-        /* 2026-08-26, a pedido ("hazlo un poco mas grande"): 1rem -> 1.125rem
-           (16px -> 18px). Sin tocar `line-height` (26px, == alto de los
-           chips): a 18px sigue sobrando margen dentro de esa caja, así que
-           el título crece sin desalinearse verticalmente de los chips de al
-           lado. */
-        font-size: 1.125rem !important;
-        font-weight: 600 !important;
-        color: var(--text-primary) !important;
-        line-height: 26px !important;   /* == alto de los chips, los alinea */
-        white-space: nowrap !important;
-        pointer-events: none !important;
-    }
-    /* El reporte, entre parentesis y mas apagado: el nombre de la app es lo
-       estable y el reporte lo que cambia, asi que no compiten. */
-    .franja-titulo-rep {
-        font-weight: 400 !important;
-        color: var(--text-secondary) !important;
-    }
-
     .st-key-chips_ajuste_tabla {
         position: fixed !important;
         /* 2026-08-25, a pedido: los chips SUBEN a compartir banda con la

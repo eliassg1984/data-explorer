@@ -173,10 +173,6 @@ def _formatear_kpis(info):
 # estilos/_20_compras_rail.py (scopeada a `graf_tipo_chips`, su nuevo hogar).
 # Donde `inject_navegacion` deja la cabecera del reporte activo (nombre +
 # KPIs ya formateados). La lee el rail de vistas de `graficos/base.py`.
-# Nombre de la app, para el titulo de la franja. Vive aca porque aca se sabe
-# cual es el reporte activo, que es la otra mitad del titulo.
-APP_NOMBRE = "Sapiens"
-
 CLAVE_CABECERA = "_nav_cabecera"
 
 NAV_X0 = 64        # Ver comentario original más abajo, junto al CSS.
@@ -717,21 +713,12 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     if _grupo_activo:
         st.session_state[f"_ultimo_{_grupo_activo}"] = reporte_activo
 
-    # ── Titulo de la franja: app + reporte ───────────────────────────────
-    # "Sapiens (Compras)", al estilo de las fichas de MSN Dinero
-    # ("Ferreycorp SAA (FERREYC1)"): la entidad primero, su codigo entre
-    # parentesis. Ocupa la esquina izquierda de la FILA 1, donde antes vivia
-    # el titulo fantasma del drill (`compras_prov_titulo_franja`) — ese
-    # decia el nombre de la vista, que ya lo dice la pestana activa de la
-    # fila 2, y encima se le superponia.
-    #
-    # Se dibuja aca y no en cada dashboard porque es informacion del
-    # REPORTE, no de la vista: quien la sabe es esta funcion.
-    st.markdown(
-        f'<div class="franja-titulo-app">{APP_NOMBRE}'
-        f' <span class="franja-titulo-rep">({reporte_activo})</span></div>',
-        unsafe_allow_html=True,
-    )
+    # 2026-08-31: aca vivia el titulo de la franja, "Sapiens (Compras)".
+    # Se retiro a pedido. No se pierde el dato: que reporte esta activo lo
+    # dicen ya el item encendido del rail y su rotulo, y la fila 1 queda
+    # libre para el compartimento de filtros. Su CSS (`.franja-titulo-app` /
+    # `.franja-titulo-rep`) salio de `estilos/_40_ajuste_franja.py` en el
+    # mismo commit, y `APP_NOMBRE` con el: no lo consumia nadie mas.
 
     # ── Rótulo de la columna ─────────────────────────────────────────────
     # "Reportes", FUERA de la tarjeta, en el hueco que el rail dejó libre
