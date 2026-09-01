@@ -245,8 +245,29 @@ CSS = """    /* ================================================================
     .st-key-nav_franja_kpis .franja-kpis {
         display: flex !important;
         align-items: center !important;
+        /* CENTRADO ACA, no en el contenedor keyed. El `justify-content` de
+           `.st-key-nav_franja_kpis` centra a sus HIJOS DIRECTOS, y el hijo
+           directo es el `stElementContainer` que mete Streamlit, que viene
+           al 100% de ancho: centrar una caja que ya ocupa todo el ancho no
+           mueve nada, y el texto quedaba pegado a la izquierda (reportado
+           con captura). El centrado tiene que vivir en el flex que
+           realmente contiene los spans — este.
+           Es el mismo error que el `align-items` de la cabecera del rail
+           (flex en columna) unas lineas mas arriba: el `justify-content`
+           correcto no es el del contenedor mas vistoso, es el del padre
+           inmediato de lo que se quiere mover. */
+        justify-content: center !important;
+        width: 100% !important;
         gap: 12px !important;
         white-space: nowrap !important;
+    }
+    /* Y la cadena de wrappers de Streamlit tiene que dejarlo llegar al
+       ancho completo, o el `width:100%` de arriba mide el de un padre
+       encogido. */
+    .st-key-nav_franja_kpis [data-testid="stElementContainer"],
+    .st-key-nav_franja_kpis [data-testid="stMarkdown"],
+    .st-key-nav_franja_kpis [data-testid="stMarkdown"] > div {
+        width: 100% !important;
     }
     /* El NOMBRE del reporte manda: es lo que la franja viene a decir. */
     .st-key-nav_franja_kpis .franjakpi-nom {
