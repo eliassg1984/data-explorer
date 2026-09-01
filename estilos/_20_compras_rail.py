@@ -155,8 +155,23 @@ CSS = """    /* ================================================================
         z-index: 1000001 !important;   /* sobre el compartimento (1000000) */
         display: flex !important;
         flex-direction: row !important;
-        align-items: center !important;
-        /* CENTRADA (2026-08-31, a pedido). Nació en `flex-start` —el default
+        /* AL TOPE, no centrados (2026-09-01, a pedido, desde un arrastre de
+           `translate(-73px,-8px)` en modo diseno sobre uno de los botones —
+           el -73 horizontal se descarto: a esa distancia se monta sobre su
+           vecino, medido).
+
+           Se expresa como alineacion y padding, NO como el `transform` que
+           emitio la herramienta: un transform sobre los botones crea un
+           contexto de apilamiento propio y ya nos costo dos reglas (#156 y
+           #270). Ademas el transform enganaba — pinta el boton corrido pero
+           no lo saca del recorte del `overflow-y: hidden` de esta franja, y
+           al recargar sin el hack los 4px de arriba se cortaban.
+
+           El `1px` es lo que queda de aire arriba: el boton mide 30 y la
+           franja 48, asi que centrado caeria en y=9 y con esto cae en y=1 —
+           los 8px que se pidieron. El aire sobrante queda abajo. */
+        align-items: flex-start !important;
+        /* CENTRADA en horizontal (2026-08-31, a pedido). Nació en `flex-start` —el default
            del flex, que nunca se escribió— y arrancaba en x=16, o sea encima
            de la columna del rail y fuera de plomo con todo lo de abajo.
            Centrada no se alinea con nada, que es lo correcto para cromo de
@@ -188,7 +203,7 @@ CSS = """    /* ================================================================
            sobra: el grupo pasa de 492 a 562 en un viewport de 1280. */
         gap: 14px !important;
         margin: 0 !important;
-        padding: 0 16px !important;
+        padding: 1px 16px 0 16px !important;   /* el 1px sube los botones al tope */
         background: var(--bg-card) !important;
         border-bottom: 1px solid var(--border) !important;
         /* Válvula para viewports angostos, igual que la franja de vistas:

@@ -11809,14 +11809,17 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      `_on_nav_click` y `reporte_activo`, asi que el `type="primary"` cae en
      el mismo reporte en las dos. Medido tras un clic en la franja: el
      reporte cambia y el item del rail se enciende solo. La franja va sin
-     KPIs y sin agrupar — en 38px no entran, y el rail ya los da.
+     KPIs y sin agrupar — en su alto no entran, y el rail ya los da.
 
      **El costo, que es el que hay que tener presente antes de tocarle el
-     alto:** 38px de cromo nuevo arriba, y el cromo de arriba se paga del
+     alto:** la franja es cromo nuevo arriba, y el cromo de arriba se paga del
      presupuesto vertical, que en un laptop de 768px ya estaba ajustado
      (ver el bloque de `--alto-util` en `_00_base.py`).
 
-     Por eso el alto es la variable `--franja-rep-alto` y no un 38 suelto.
+     Por eso el alto es la variable `--franja-rep-alto` y no un literal
+     suelto — y menos mal: el 2026-09-01 pasó de 38 a 48px a pedido, y las
+     ocho anclas de abajo se movieron solas. Lo único que hubo que tocar a
+     mano fueron las dos caras del presupuesto.
      La suman, todos anclados al borde superior de la ventana:
 
        · la banda de fondo de la franja de filtros (`_40_ajuste_franja.py`);
@@ -11830,8 +11833,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        · los dos rotulos de la columna (regla #265).
 
      **Y las dos caras del presupuesto, que NO son variables.**
-     `--cab-offset-contenido` (80 -> 118) y `_CAB_OFFSET` en
-     `graficos/alturas.py` (80 -> 118) se cambian a mano, los dos, y
+     `--cab-offset-contenido` (80 -> 118 -> 128) y `_CAB_OFFSET` en
+     `graficos/alturas.py` (los mismos números) se cambian a mano, los dos, y
      `test_graficos.py` falla si se desincronizan. El de CSS va LITERAL a
      proposito: ese test lo lee con un regex de `\d+px` y un
      `calc(80px + var(--franja-rep-alto))` lo dejaria ciego. Es la misma

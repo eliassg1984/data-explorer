@@ -96,8 +96,9 @@ CSS = """    <style>
            de arriba: test_graficos.py lee esta variable con un regex de
            `\d+px` para cotejarla contra graficos/alturas.py, y un calc() lo
            dejaria ciego. Si se cambia el alto de la franja, este numero y el
-           `_CAB_OFFSET` de alturas.py se cambian a mano, los dos. */
-        --cab-offset-contenido: 118px;
+           `_CAB_OFFSET` de alturas.py se cambian a mano, los dos.
+           2026-09-01: 118 -> 128, los 10px que crecio la franja. */
+        --cab-offset-contenido: 128px;
 
         /* ==================================================================
            PRESUPUESTO VERTICAL — cuánto mide "una pantalla" de contenido
@@ -149,8 +150,13 @@ CSS = """    <style>
            es una variable y no un 38 suelto: son ocho `top` en cinco
            ficheros los que la suman. En movil vale 0 (`_99_movil.py`), igual
            que --nav-top-alto: alla la navegacion es la barra de abajo.
-           38px ~= 1cm a 96dpi, que fue el pedido literal. */
-        --franja-rep-alto: 38px;
+           Nacio en 38px (~1cm a 96dpi, el pedido literal). 2026-09-01:
+           38 -> 48, a pedido y desde un arrastre del modo diseno. Los 10px
+           de mas no son estetica: los pide el corrimiento de los botones
+           que va en el mismo commit — con 38 se salian 4px por arriba y la
+           franja los recortaba (`overflow-y: hidden`). Medido: pasaban de
+           y=4..34 a y=-4..26. */
+        --franja-rep-alto: 48px;
         /* Alto de la CABECERA del rail ("Reportes" / "Vistas"). Era el
            literal 33 —la resta entre los dos `top` que había antes— repetido
            en tres sitios: su propia `height` y el `top` y el `max-height` de
