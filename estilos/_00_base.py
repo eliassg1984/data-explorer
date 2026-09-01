@@ -151,6 +151,12 @@ CSS = """    <style>
            que --nav-top-alto: alla la navegacion es la barra de abajo.
            38px ~= 1cm a 96dpi, que fue el pedido literal. */
         --franja-rep-alto: 38px;
+        /* Alto de la CABECERA del rail ("Reportes" / "Vistas"). Era el
+           literal 33 —la resta entre los dos `top` que había antes— repetido
+           en tres sitios: su propia `height` y el `top` y el `max-height` de
+           los dos railes, que ahora cuelgan de ella. Como variable, mover la
+           cabecera es una línea. */
+        --rail-cab-alto: 33px;
 
         /* Barra inferior de navegación en móvil (bottom nav).
            Debe coincidir con NAV_MOVIL_ALTO en navegacion.py (60px). */

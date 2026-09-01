@@ -199,7 +199,12 @@ _CSS_FRANJA_VISTAS = f"""
        los pinta (`fila_ajuste_top::before`), y superponerlos daba dos bordes
        a 8px de distancia. */
     position:fixed !important;
-    top:calc(var(--nav-top-alto) + 8px + var(--franja-rep-alto)) !important;
+    /* 2026-08-31, a pedido: sube a tocar la franja de REPORTES. Antes
+       vivía en `--nav-top-alto + 8px + --franja-rep-alto` (y=86), dejando
+       48px de banda vacía entre las dos — el hueco donde vivían el título y
+       los chips hasta que los dos se fueron el mismo día. Ahora las franjas
+       se apilan sin nada en medio. */
+    top:var(--franja-rep-alto) !important;
     left:0 !important; right:0 !important;
     width:100vw !important;
     height:var(--nav-top-alto) !important;
@@ -230,6 +235,13 @@ _CSS_FRANJA_VISTAS = f"""
     display:flex !important;
     flex-direction:row !important;
     align-items:center !important;
+    /* CENTRADA, como la franja de reportes de arriba (2026-08-31, a pedido).
+       `safe center` por el mismo motivo que allá: un flex centrado que
+       desborda se sale por los dos lados y el scroll no alcanza el de la
+       izquierda, que es justo lo que el `overflow-x` de acá abajo viene a
+       resolver. Ver el comentario largo en `estilos/_20_compras_rail.py`. */
+    justify-content:center !important;
+    justify-content:safe center !important;
     overflow-x:auto !important; overflow-y:hidden !important;
     scrollbar-width:none !important;
 }}
@@ -264,10 +276,15 @@ _CSS_FRANJA_VISTAS = f"""
 
            `left` reemplaza al `padding-left` que habia aca: con la caja ya
            acotada, el padding sobraba y desplazaba los botones el doble. */
-        left: var(--rail-der-res) !important;
-        right: 90px !important;
-        width: auto !important;
-        padding-left: 0 !important;
+        /* 2026-08-31, a pedido: DE BORDE A BORDE otra vez. Estas tres
+           líneas la acotaban a las tarjetas (`--rail-der-res` .. 90px) para
+           que las tres capas compartieran línea izquierda — regla #137.
+           Ahora la franja es cromo de la APLICACIÓN, apilada bajo la de
+           reportes, y la columna del rail cuelga por DEBAJO de las dos en
+           vez de convivir al lado: ya no hay una línea que compartir.
+           Queda sólo el padding simétrico, que con el contenido centrado
+           es un margen de seguridad, no una alineación. */
+        padding: 0 18px !important;
     }}
 }}
 

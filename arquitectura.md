@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-269 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+270 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (86)
+**CSS y estilos** (87)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -106,6 +106,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#262** — Linea/Barra/Espacio insertados sobre un stVerticalBlock nacen con width:0 — Streamlit pone…
 - **#264** — Un mock arrastrado con "Mover" podía terminar pintado DEBAJO de un hermano posterior — no…
 - **#266** — La franja de REPORTES no duplica al rail: es lo que queda cuando el rail se va. Y su alto lo…
+- **#270** — El z-index de un hijo no vale nada fuera del contexto de apilamiento de su padre — y levantar…
 
 **Layout y alturas** (24)
 
@@ -11980,13 +11981,63 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      línea adentro. Por eso el test usa `chr(10)` y `chr(92)` en vez de
      escribirlos — está anotado ahí mismo para el que venga a tocarlo.
 
+270. **El `z-index` de un hijo no vale nada fuera del contexto de apilamiento
+     de su padre — y levantar ese contexto le regala los CLICS.**
+
+     2026-08-31, arreglando el pill de fecha después de que la franja de
+     vistas subiera a tocar la de reportes (ver el commit de esa mudanza).
+     La franja pasó a ser OPACA y de borde a borde con `z-index: 999999`
+     (`navegacion.py`), y el pill vive dentro de su fila. Quedaba pintado
+     DETRÁS: invisible.
+
+     El arreglo obvio no funcionó. Se le subió el `z-index` de 23 a
+     1000000 y siguió tapado — verificado con `elementFromPoint` sobre su
+     centro, que devolvía el `nav_rail`. El motivo: el pill vive dentro de
+     `.st-key-fila_ajuste_top`, que es `position: sticky` con
+     `z-index: 20`, **y eso crea un contexto de apilamiento**. Todo lo de
+     adentro queda topado en 20, por alto que sea su número propio. Hay que
+     levantar el CONTEXTO, no al hijo.
+
+     **Y ahí aparece la segunda mitad, que es la que muerde.** Con el
+     contenedor en 1000000 el pintado se arregló y se rompieron los clics:
+     su caja mide `323..1190 x 48..166` (medido en Ajuste) y tapa la fila
+     de vistas entera. Los siete botones dejaron de responder — verificados
+     uno por uno con `elementFromPoint`, los siete devolvían
+     `fila_ajuste_top`. Un contenedor transparente que no dibuja nada sigue
+     recibiendo eventos.
+
+     El par completo, entonces, son TRES declaraciones y ninguna sobra:
+
+     ```css
+     .st-key-fila_ajuste_top   { z-index: 1000000; pointer-events: none; }
+     .st-key-fila_ajuste_top > * { pointer-events: auto; }
+     ```
+
+     El `> *` devuelve los eventos a los widgets propios del contenedor, que
+     sí tienen que responder. Sin él se arreglan las vistas y se rompe el
+     pill, que es de donde salió todo.
+
+     Va scopeado a `@media (min-width: 901px)`: abajo de eso las franjas no
+     se apilan así y la banda del contenedor todavía pinta.
+
+     **Cómo se detecta esto sin adivinar.** `getComputedStyle(el).zIndex`
+     dice 1000000 y no miente — pero no dice nada del contexto. Las dos
+     sondas que sí sirven:
+
+     - `document.elementFromPoint(cx, cy)` sobre el centro del elemento: si
+       devuelve otra cosa, está tapado, y encima dice POR QUÉ;
+     - subir por `parentElement` buscando quién crea contexto
+       (`z-index !== auto`, `transform`, `filter`, `opacity < 1`,
+       `position: fixed|sticky`, `isolation: isolate`). El culpable estaba
+       a dos niveles.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#270**.
+> próxima regla nueva es la **#271**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

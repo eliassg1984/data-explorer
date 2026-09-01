@@ -80,7 +80,13 @@ CSS = """    /* ================================================================
              ESTE MISMO hueco cuando se scrollea. Si solo se mueve uno, el
              cruce se ve como que la columna salta 47px en vez de cambiar de
              contenido. */
-        top: calc(47px + var(--franja-rep-alto)) !important;
+        /* 2026-08-31: cuelga de la CABECERA, que a su vez cuelga de la
+           franja de vistas. Los tres sumandos son las tres cosas que hay
+           encima, en orden — no un 111 suelto. Quinta vuelta de este `top`
+           (74 -> 8 -> -2 -> 0 -> 47 -> acá) y la primera en la que el
+           número sale entero de otras medidas en vez de medirse a ojo. */
+        top: calc(var(--franja-rep-alto) + var(--nav-top-alto)
+                  + var(--rail-cab-alto)) !important;
         /* 2026-08-18, a pedido: el rail pasa del borde DERECHO al IZQUIERDO.
            Es el sitio que dejó libre el rail de navegación al convertirse en
            la franja superior (--nav-top-alto) unos commits antes: la columna
@@ -107,7 +113,8 @@ CSS = """    /* ================================================================
            tantas vistas que no entran (activa el overflow-y:auto de abajo
            en vez de desbordar). */
         height: auto !important;
-        max-height: calc(100vh - 47px - var(--franja-rep-alto) - 8px) !important;
+        max-height: calc(100vh - var(--franja-rep-alto) - var(--nav-top-alto)
+                               - var(--rail-cab-alto) - 8px) !important;
         z-index: 900 !important;
         overflow-y: auto !important;
         margin: 0 !important;
@@ -269,7 +276,12 @@ CSS = """    /* ================================================================
     .st-key-rail_rotulo_rep,
     .st-key-rail_rotulo_vis {
         position: fixed !important;
-        top: calc(14px + var(--franja-rep-alto)) !important;
+        /* 2026-08-31, a pedido ("debe chocar con la franja de vistas").
+           Antes flotaba 14px por debajo de la franja de reportes; ahora
+           arranca exactamente donde termina la de VISTAS, que es la ultima
+           del cromo superior. Las dos franjas y la cabecera quedan apiladas
+           sin hueco: 0..38, 38..78, 78..111. */
+        top: calc(var(--franja-rep-alto) + var(--nav-top-alto)) !important;
         left: 19px !important;              /* == el rail */
         width: var(--rail-der-w) !important;
         /* ── CABECERA DEL RAIL (2026-08-31, a pedido) ───────────────────
@@ -280,20 +292,20 @@ CSS = """    /* ================================================================
            entre la cabecera y los ítems, igual que el hairline que separa
            un ítem del siguiente.
 
-           `33px` es la distancia exacta entre los dos `top` que ya existían
-           (47 del rail menos 14 de la cabecera). Va como `calc()` con esos
-           dos sumandos a la vista y no como un 33 pelado: si alguno de los
-           dos se mueve —y el del rail ya va por su cuarta vuelta— la resta
-           canta de dónde salía el número.
+           El alto es `--rail-cab-alto` (_00_base.py). Nació como el
+           literal 33 —la resta entre los dos `top` que había entonces— y
+           pasó a variable cuando los dos railes empezaron a colgar de él:
+           su `top` y su `max-height` lo suman, así que mover la cabecera
+           era cambiar el mismo número en tres sitios.
 
            `border-bottom: none` es lo que evita la línea doble: la
            cabecera termina donde el rail empieza, así que sin esto habría
            2px de borde pegados en la costura. El rail pone el suyo.
 
-           `box-sizing: border-box` porque los 33px son la caja ENTERA: con
-           `content-box` los dos bordes de 1px la estirarían a 35 y la
+           `box-sizing: border-box` porque el alto es la caja ENTERA: con
+           `content-box` los dos bordes de 1px lo estirarían 2px más y la
            cabecera se montaría sobre el primer ítem. */
-        height: calc(47px - 14px) !important;
+        height: var(--rail-cab-alto) !important;
         box-sizing: border-box !important;
         display: flex !important;
         /* LAS DOS, y no sólo `align-items`. El contenedor de Streamlit es un

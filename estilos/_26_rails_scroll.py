@@ -143,10 +143,12 @@ CSS = f"""
        entera en `_20_compras_rail.py`. */
     .st-key-nav_rail_lateral {{
         position: fixed !important;
-        top: calc(47px + var(--franja-rep-alto)) !important;            /* == _20_compras_rail.py */
+        top: calc(var(--franja-rep-alto) + var(--nav-top-alto)
+                  + var(--rail-cab-alto)) !important;   /* == _20_compras_rail.py */
         left: 19px !important;                        /* == _20_compras_rail.py */
         width: var(--rail-der-w) !important;          /* nombre historico: es el IZQUIERDO */
-        max-height: calc(100vh - 47px - var(--franja-rep-alto) - 8px) !important;  /* == _20_compras_rail.py */
+        max-height: calc(100vh - var(--franja-rep-alto) - var(--nav-top-alto)
+                               - var(--rail-cab-alto) - 8px) !important;  /* == _20_compras_rail.py */
         overflow-y: auto !important;
         overflow-x: hidden !important;
         scrollbar-width: none !important;

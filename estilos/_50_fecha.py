@@ -73,7 +73,10 @@ CSS = """    /* ================================================================
    izquierdo reservaba y que ya no existe. */
 .st-key-fecha_ajuste_pill {
     position: fixed !important;
-    top: calc(var(--nav-top-alto) + 8px + var(--franja-rep-alto)) !important;
+    /* La fila 1 dejo de existir: su banda la ocupa ahora la franja de
+       vistas, que subio a tocar la de reportes. Los 5px centran un control
+       de 30px en los 40 de esa franja. */
+    top: calc(var(--franja-rep-alto) + 5px) !important;
     left: auto !important;
     /* 2026-08-18: era `calc(var(--rail-der-res) - 15px)`, que alineaba
        con el borde de la tarjeta cuando el rail comía 153px por la
@@ -81,7 +84,13 @@ CSS = """    /* ================================================================
        padding base del contenedor (80) menos los mismos 15. */
     right: 65px !important;                              /* borde de la tarjeta */
     width: fit-content !important;
-    z-index: 23 !important;
+    /* 2026-08-31: 23 -> 1000000. La franja de vistas se volvio OPACA y de
+       borde a borde (`navegacion.py`, z-index 999999) y este control vive
+       adentro de su fila: con 23 quedaba pintado DETRAS, invisible.
+       Verificado con `elementFromPoint` sobre su centro, que devolvia el
+       nav_rail. Mismo nivel que el compartimento de filtros, su vecino de
+       fila, que ya tenia el problema resuelto asi. */
+    z-index: 1000000 !important;
     margin: 0 !important;
 }
 
@@ -159,7 +168,10 @@ CSS = """    /* ================================================================
                eso se resta: sin restarlo salen 4px abajo contra 6 arriba y
                el control se ve apretado contra la línea inferior — fue
                justo el bug de la pasada anterior. Ver _40_ajuste_franja.py. */
-            top: calc(var(--nav-top-alto) + 8px + var(--franja-rep-alto)) !important;
+            /* La fila 1 dejo de existir: su banda la ocupa ahora la
+               franja de vistas, que subio a tocar la de reportes. Los 5px
+               centran un control de 30px en los 40 de esa franja. */
+            top: calc(var(--franja-rep-alto) + 5px) !important;
             /* 2026-08-19: era `left: 85px`, un numero heredado de cuando el
                rail vivia a la IZQUIERDA y el contenido empezaba en otro
                lado. Ahora arranca donde arranca el contenido -- la misma
@@ -169,7 +181,16 @@ CSS = """    /* ================================================================
                sobre el mismo borde). Al derivarlo de la variable, plegar el
                rail mueve las dos cosas juntas. Toda la cadena de la franja
                (chips, titulos de vista) cuelga de este mismo ancla. */
-            left: var(--rail-der-res) !important;
+            /* 2026-08-31: `--rail-der-res` (323) -> 19px. Ese ancla venia
+               de cuando la franja arrancaba en el borde de las tarjetas y el
+               pill abria la fila. Hoy la franja va de borde a borde y sus
+               VISTAS estan centradas (324..956 medido en 1280), asi que el
+               pill en 323 les caia justo encima — verificado en Ajuste: se
+               montaba sobre Cascada, Mapa de calor y Distribucion.
+               Los 19px son el ancla de la columna del rail, la otra cosa
+               que arranca ahi. El hueco libre a la izquierda del grupo
+               centrado son 324px y el pill mide 210: entra con aire. */
+            left: 19px !important;
             right: auto !important;
         }
         /* ANCHO FIJO, no fit-content. Los chips se anclan a la derecha del
@@ -277,10 +298,15 @@ CSS = """    /* ================================================================
 
                `z-index` un punto sobre la franja (999999, `navegacion.py`):
                comparten superficie y este va encima. */
-            top: calc(var(--nav-top-alto) + 8px + var(--franja-rep-alto)) !important;
+            /* Sigue a su franja, que subió a tocar la de reportes. */
+            top: var(--franja-rep-alto) !important;
             height: var(--nav-top-alto) !important;
             left: auto !important;
-            right: 90px !important;      /* == el borde derecho de la franja */
+            /* 90 -> 0: la franja pasó a ir de borde a borde, así que su
+               borde derecho es el de la ventana. El compartimento sigue
+               cerrando donde cierra ella, que es lo que lo hace leerse
+               como su última zona y no como algo apoyado encima. */
+            right: 0 !important;
             transform: none !important;
             /* 40% del ancho: con 4 filtros (Ajuste, Ventas) la etiqueta no
                crece —siempre dice "Filtros"— asi que el tope es un seguro,
@@ -438,11 +464,18 @@ CSS = """    /* ================================================================
         .st-key-fecha_corte_nav {
             display: block !important;
             position: fixed !important;
-            top: calc(var(--nav-top-alto) + 8px + var(--franja-rep-alto)) !important;
-            right: 65px !important;   /* borde de la tarjeta, ver el pill */
+            /* La fila 1 dejo de existir: su banda la ocupa ahora la
+               franja de vistas, que subio a tocar la de reportes. Los 5px
+               centran un control de 30px en los 40 de esa franja. */
+            top: calc(var(--franja-rep-alto) + 5px) !important;
+            /* 65 -> 130: con la franja de borde a borde, el `right:65`
+               lo metia debajo del compartimento de Filtros (1168..1280).
+               Con 130 cae en 974..1150, entre el grupo centrado de vistas
+               (termina en 956) y ese compartimento. */
+            right: 130px !important;
             left: auto !important;
             width: 176px !important;
-            z-index: 23 !important;
+            z-index: 1000000 !important;   /* sobre la franja, ver el pill */
             margin: 0 !important;
         }
         .st-key-fecha_corte_nav [data-testid="stHorizontalBlock"] {
@@ -522,10 +555,13 @@ CSS = """    /* ================================================================
     /* =================================================================== */
     .st-key-ventas_comp_titulo_franja {
         position: fixed !important;
-        top: calc(var(--nav-top-alto) + 8px + var(--franja-rep-alto)) !important;
+        /* La fila 1 dejo de existir: su banda la ocupa ahora la franja de
+       vistas, que subio a tocar la de reportes. Los 5px centran un control
+       de 30px en los 40 de esa franja. */
+        top: calc(var(--franja-rep-alto) + 5px) !important;
         left: var(--rail-der-res) !important;   /* ancla comun, ver el pill */
         width: 260px !important;
-        z-index: 22 !important;
+        z-index: 1000000 !important;   /* sobre la franja, ver el pill */
         margin: 0 !important;
         display: none !important;   /* oculto por defecto; ver abajo */
     }

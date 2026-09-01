@@ -231,8 +231,48 @@ CSS = """    /* ================================================================
                `--nav-top-alto` (`navegacion.py`), asi que su base es la
                suma. Con `46 + --nav-top-alto` quedaba 2px corta y se colaba
                una linea de contenido bajo las pestanas (medido). */
-            height: calc(var(--nav-top-alto) + 8px
+            /* 2026-08-31: la franja de vistas se mudó a
+               `var(--franja-rep-alto)`, así que su base —y el fondo que la
+               respalda— es ahora esa suma. Misma derivación que antes, otro
+               anclaje. Sin esto la banda seguía llegando a y=126 y su borde
+               lavanda de 2px quedaba flotando 46px por debajo de la franja,
+               solo, sin nada que separar (medido). */
+            height: calc(var(--franja-rep-alto)
                          + var(--nav-top-alto)) !important;
+            /* Y DEJA DE PINTAR (2026-08-31). Su fondo y su borde existían
+               para respaldar las filas de la cabecera; hoy esas filas son
+               dos franjas opacas y de borde a borde que se pintan solas.
+               Con el `z-index` de su contenedor subido acá abajo, un fondo
+               acá taparía a la franja de vistas — que es justo lo que la
+               banda venía a respaldar. La caja se deja (algo la mide); lo
+               que se apaga es la tinta. */
+            background: transparent !important;
+            border-bottom: none !important;
+        }
+        /* EL CONTENEDOR SUBE POR ENCIMA DE LAS FRANJAS.
+           Es `position: sticky` con `z-index: 20`, y eso CREA UN CONTEXTO
+           DE APILAMIENTO: todo lo que vive adentro queda topado en 20, por
+           alto que sea su propio z-index. El pill de fecha se puso en
+           1000000 para pasarle a la franja de vistas (999999) y seguía
+           invisible — verificado con `elementFromPoint`, que devolvía el
+           `nav_rail`. El z-index de un hijo no vale nada fuera del contexto
+           de su padre; hay que levantar el contexto entero.
+           Va acá y no en la regla base porque abajo de 901px las franjas no
+           se apilan así y la banda todavía pinta. */
+        .st-key-fila_ajuste_top {
+            z-index: 1000000 !important;
+            /* Y TRANSPARENTE AL PUNTERO. Subirlo por encima de las franjas
+               resolvió el pintado pero le regaló los CLICS: su caja mide
+               323..1190 x 48..166 (medido en Ajuste) y tapa la fila de
+               vistas entera — los siete botones dejaron de responder,
+               verificado uno por uno con `elementFromPoint`. El contenedor
+               no dibuja nada propio (su banda quedó transparente acá
+               arriba), así que no necesita recibir eventos; los hijos se
+               los devuelven. */
+            pointer-events: none !important;
+        }
+        .st-key-fila_ajuste_top > * {
+            pointer-events: auto !important;
         }
     }
     .st-key-fila_ajuste_top > * {
@@ -306,10 +346,11 @@ CSS = """    /* ================================================================
        aquella —no contradiciendola— para que leer una sola no engane. */
     .st-key-chips_ajuste_tabla {
         position: fixed !important;
-        top: calc(var(--nav-top-alto) + 8px + var(--franja-rep-alto)) !important;
+        /* Sigue a su franja, que subió a tocar la de reportes. */
+        top: var(--franja-rep-alto) !important;
         height: var(--nav-top-alto) !important;
         left: auto !important;
-        right: 90px !important;
+        right: 0 !important;   /* == el borde de la franja, hoy el de la ventana */
         width: auto !important;
         z-index: 1000000 !important;
         margin: 0 !important;
