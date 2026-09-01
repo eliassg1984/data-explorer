@@ -140,14 +140,11 @@ CSS = """        <style>
             .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill {
                 left: calc(var(--rail-der-res) + 112px) !important;
             }
-            /* Los chips arrancan despues del pill corrido: 197 + 210 + 6.
-               Da el MISMO 413 que antes (el titulo solo cambio de lugar
-               dentro de la fila, no agrego ancho). */
-            .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
-                left: calc(var(--rail-der-res) + 328px) !important;
-                max-width: calc(100vw - (var(--rail-der-res) + 328px)
-                                - 58px) !important;
-            }
+            /* 2026-08-31: aca los chips recibian un `left` para arrancar
+               despues del pill corrido. El compartimento de filtros se ancla
+               por la DERECHA (`_50_fecha.py`), asi que un `left` lo movia al
+               medio de la franja. El pill de fecha si se sigue corriendo:
+               ese vive a la izquierda y el titulo le come el sitio. */
         }
         /* ── CUADRO DE CONTROL DE PROVEEDORES (reemplaza la leyenda) ──────
            2026-08-16, 3ra vuelta: dejo de FLOTAR sobre el plot y paso a ser

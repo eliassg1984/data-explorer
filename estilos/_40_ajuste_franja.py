@@ -299,32 +299,25 @@ CSS = """    /* ================================================================
        reserva nada, así que TODOS los `left` de la franja bajaron 90px
        (aquí y en _50_fecha.py). El `top` se corre --nav-top-alto por la
        misma razón, pero al revés: lo que perdió en ancho lo ganó en alto. */
+    /* El COMPARTIMENTO de filtros. La geometria de verdad vive en
+       `_50_fecha.py`, que repite el selector con la clase duplicada y va
+       despues en `_SECCIONES`: es la que gana. Esta se deja alineada con
+       aquella —no contradiciendola— para que leer una sola no engane. */
     .st-key-chips_ajuste_tabla {
         position: fixed !important;
-        /* 2026-08-25, a pedido: los chips SUBEN a compartir banda con la
-           franja de vistas (`nav_rail`, 0..--nav-top-alto) en vez de tener
-           una segunda banda propia debajo. Una sola franja de contexto:
-           vistas a la izquierda, filtros a la derecha.
-
-           Los 7px centran un control de 26px en una franja de 40
-           ((40-26)/2). Y el lado cambia de `left` a `right`: a la izquierda
-           chocarian con el rail de la columna, que va de 19 a 299. El 90px
-           es el mismo margen derecho del contenido que usa la banda blanca
-           (ver el `right` de `fila_ajuste_top::before`), asi que los chips
-           cierran a plomo con el borde de las tarjetas. */
-        top: 7px !important;
+        top: calc(var(--nav-top-alto) + 8px) !important;
+        height: var(--nav-top-alto) !important;
         left: auto !important;
-        /* 90 es el borde de las tarjetas; +181 le cede el sitio al chip
-           "Proveedores" del drill (`prov_pop_float`), que comparte esta fila
-           y se ancla al MISMO borde derecho. Sin esta cuenta se pisaban 24px
-           (medido 2026-08-25): Subfamilia terminaba en 1119 y el chip
-           arrancaba en 1095. Los 181 son su ancho (171) mas 10 de aire. */
-        right: calc(90px + 181px) !important;
+        right: 90px !important;
         width: auto !important;
-        max-width: calc(100vw - var(--rail-der-res) - 380px) !important;
-        z-index: 23 !important;
+        z-index: 1000000 !important;
         margin: 0 !important;
-        padding: 0 !important;
+        padding: 0 16px !important;
+        display: flex !important;
+        align-items: center !important;
+        border-left: 1px solid var(--border) !important;
+        background: var(--bg-card) !important;
+        border-radius: 0 10px 10px 0 !important;
     }
     .st-key-chips_ajuste_tabla [data-testid="stHorizontalBlock"] {
         gap: 8px !important;
@@ -379,6 +372,40 @@ CSS = """    /* ================================================================
     .st-key-chips_ajuste_tabla [data-testid="stPopover"] button:hover {
         background: var(--accent-light) !important;
         border-color: var(--accent) !important;
+    }
+
+    /* ── PANEL DEL COMPARTIMENTO (2026-08-31) ──────────────────────────
+       Los N filtros dejaron de ser N popovers en fila y viven adentro de
+       UNO solo, apilados. Streamlit no anida popovers, asi que cada uno es
+       una seccion plana: rotulo + pills (`graficos/base.py::filtro_pills`).
+
+       El panel se renderiza en un PORTAL, fuera del contenedor keyed, asi
+       que no se lo puede alcanzar por `.st-key-chips_ajuste_tabla`. Se
+       scopea por lo unico que solo este panel tiene adentro: el rotulo.
+       Mismo recurso que usa el panel de fecha con `:has(.st-key-fecha_panel)`
+       unas lineas mas abajo en `_50_fecha.py`.
+
+       El techo de 60vh no es decorativo: Ajuste y Ventas tienen CUATRO
+       filtros y el de Familia puede traer decenas de pills — sin el, el
+       panel se sale de la pantalla por abajo y las ultimas secciones quedan
+       inalcanzables. */
+    [data-testid="stPopoverBody"]:has(.filtro-rotulo) {
+        min-width: 420px !important;
+        max-height: 60vh !important;
+        overflow-y: auto !important;
+    }
+    .filtro-rotulo {
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.08em !important;
+        text-transform: uppercase !important;
+        color: var(--text-muted) !important;
+        margin: 14px 0 2px 0 !important;
+    }
+    /* El primero no lleva el aire de separacion: no separa de nada. */
+    [data-testid="stPopoverBody"] [data-testid="stVerticalBlock"]
+        > [data-testid="stElementContainer"]:first-child .filtro-rotulo {
+        margin-top: 0 !important;
     }
     /* Estado ACTIVO (hay un filtro aplicado): fondo lleno en vez del tono
        tenue de reposo, para diferenciarlo a simple vista. */

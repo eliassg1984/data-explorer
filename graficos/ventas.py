@@ -12,6 +12,7 @@ from plotly.subplots import make_subplots
 from data import cargar as _cargar_reporte
 from tema import ACENTO, ERROR, EXITO, GRIS_BORDE, TEXTO_PRINCIPAL
 from graficos.base import (
+    compartimento_filtros, contar_filtros, filtro_pills,
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, _render_rail,
     _resolver, publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
 )
@@ -1041,52 +1042,30 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         renderizar_graficos_genericos(df_f, nombre_reporte)
         return
 
-    # ── Filtros como chips popover en la franja ─────────────────────────
+    # ── Filtros: el compartimento único de la franja ────────────────────
     # Aplican a TODOS los gráficos de Ventas (venta por día, semanal, matriz).
     # Canal Venta y Servicio solo aparecen si su columna existe en el parquet
     # (Servicio no siempre está — se salta silenciosamente).
-    def _filtro_popover(col_col, key, label):
-        if not col_col or col_col not in df_f.columns:
-            return []
-        opts = sorted(df_f[col_col].dropna().astype(str).unique().tolist())
-        if not opts:
-            return []
-        _n = len(st.session_state.get(key) or [])
-        _lbl = f":material/filter_alt: {label} :violet-badge[{_n}]" if _n else f":material/filter_alt: {label}"
-        # El wrapper `chipwrap_<key>_on|off` es lo que el CSS necesita para
-        # marcar un filtro ACTIVO (estilos/_50_fecha.py). Ventas dibuja sus
-        # chips acá y no por `app.py::_chip_categorico`, así que sin esta
-        # línea sus cuatro filtros se veían iguales estuvieran filtrando o no
-        # — el único indicio era el badge con el número.
-        with st.container(key=f"chipwrap_{key}_{'on' if _n else 'off'}"):
-            with st.popover(_lbl, use_container_width=True):
-                return st.pills(label, opts, selection_mode="multi",
-                                key=key, label_visibility="collapsed") or []
-
-    fam_sel, sub_sel, canal_sel, serv_sel = [], [], [], []
-    with st.container(key="chips_ajuste_tabla"):
-        _cols = st.columns([1, 1, 1, 1, 2])
-        with _cols[0]:
-            fam_sel = _filtro_popover(col_fam, "ventas_graf_filtro_fam", "Grupo")
-        with _cols[1]:
-            # Sub Grupo depende del filtro de Grupo (cascada)
-            if col_sub and col_sub in df_f.columns:
-                _dd = df_f
-                if fam_sel and col_fam:
-                    _dd = _dd[_dd[col_fam].astype(str).isin(fam_sel)]
-                subs = sorted(_dd[col_sub].dropna().astype(str).unique().tolist())
-                if subs:
-                    _n = len(st.session_state.get("ventas_graf_filtro_sub") or [])
-                    _lbl = f":material/account_tree: Sub Grupo :violet-badge[{_n}]" if _n else ":material/account_tree: Sub Grupo"
-                    with st.popover(_lbl, use_container_width=True):
-                        sub_sel = st.pills(
-                            "Sub Grupo", subs, selection_mode="multi",
-                            key="ventas_graf_filtro_sub",
-                            label_visibility="collapsed") or []
-        with _cols[2]:
-            canal_sel = _filtro_popover(col_canal, "ventas_graf_filtro_canal", "Canal Venta")
-        with _cols[3]:
-            serv_sel = _filtro_popover(col_serv, "ventas_graf_filtro_serv", "Servicio")
+    # Los CUATRO en el compartimento único de la franja. Hasta el 2026-08-31
+    # eran cuatro popovers en fila y un `_filtro_popover` local que existía
+    # sólo para no repetirlos — ese helper es hoy `base.filtro_pills`, que
+    # además dejó de necesitar el wrapper `chipwrap_<key>_on|off`: el estado
+    # activo lo marca ahora el compartimento entero, no cada filtro.
+    with compartimento_filtros(contar_filtros(
+            "ventas_graf_filtro_fam", "ventas_graf_filtro_sub",
+            "ventas_graf_filtro_canal", "ventas_graf_filtro_serv")):
+        _, fam_sel = filtro_pills(df_f, col_fam,
+                                  "ventas_graf_filtro_fam", "Grupo")
+        # CASCADA: Sub Grupo sólo ofrece los que quedan bajo el Grupo elegido.
+        _dd = df_f
+        if fam_sel and col_fam:
+            _dd = _dd[_dd[col_fam].astype(str).isin(fam_sel)]
+        _, sub_sel = filtro_pills(_dd, col_sub,
+                                  "ventas_graf_filtro_sub", "Sub Grupo")
+        _, canal_sel = filtro_pills(df_f, col_canal,
+                                    "ventas_graf_filtro_canal", "Canal Venta")
+        _, serv_sel = filtro_pills(df_f, col_serv,
+                                   "ventas_graf_filtro_serv", "Servicio")
 
     def _aplicar_chips(df):
         """Aplica los chips de la franja a CUALQUIER df de ventas, no solo al

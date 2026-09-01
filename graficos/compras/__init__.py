@@ -30,6 +30,7 @@ import streamlit as st
 from tema import GRIS_BORDE
 from utils import _norm
 from graficos.base import (
+    compartimento_filtros, contar_filtros, filtro_pills,
     PALETA_CALLAI, _compras_layout, _compras_truncar, _render_rail,
     _resolver, publicar_contexto_ia, seccion_perezosa,
     renderizar_graficos_genericos, vista_activa,
@@ -206,37 +207,21 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         renderizar_graficos_genericos(df_f, nombre_reporte)
         return
 
-    # ── Filtros Familia / Subfamilia como chips en la FRANJA blanca ──────
+    # ── Filtros Familia / Subfamilia: compartimento único de la franja ───
     fam_sel, sub_sel = [], []
-    with st.container(key="chips_ajuste_tabla"):
-        c1, c2, _ = st.columns([1, 1, 4])
-        with c1:
-            if col_fam and col_fam in df_f.columns:
-                fams = sorted(df_f[col_fam].dropna().astype(str).unique().tolist())
-                if fams:
-                    _n = len(st.session_state.get("compras_graf_filtro_fam") or [])
-                    _lbl = f"Familia :violet-badge[{_n}]" if _n else "Familia"
-                    with st.popover(_lbl, use_container_width=True):
-                        fam_sel = st.pills(
-                            "Familia", fams, selection_mode="multi",
-                            key="compras_graf_filtro_fam",
-                            label_visibility="collapsed",
-                        ) or []
-        with c2:
-            if col_subfam and col_subfam in df_f.columns:
-                _d_sub = df_f
-                if fam_sel and col_fam:
-                    _d_sub = _d_sub[_d_sub[col_fam].astype(str).isin(fam_sel)]
-                subs = sorted(_d_sub[col_subfam].dropna().astype(str).unique().tolist())
-                if subs:
-                    _n = len(st.session_state.get("compras_graf_filtro_sub") or [])
-                    _lbl = f"Subfamilia :violet-badge[{_n}]" if _n else "Subfamilia"
-                    with st.popover(_lbl, use_container_width=True):
-                        sub_sel = st.pills(
-                            "Subfamilia", subs, selection_mode="multi",
-                            key="compras_graf_filtro_sub",
-                            label_visibility="collapsed",
-                        ) or []
+    with compartimento_filtros(contar_filtros("compras_graf_filtro_fam",
+                                              "compras_graf_filtro_sub")):
+        _, fam_sel = filtro_pills(df_f, col_fam,
+                                  "compras_graf_filtro_fam", "Familia")
+        # CASCADA: Subfamilia sólo ofrece las que quedan bajo la Familia
+        # elegida. Por eso el df recortado va aparte y no se reusa el que
+        # devuelve el filtro de arriba — ése ya viene filtrado, pero el
+        # recorte tiene que hacerse con la selección de ESTE rerun.
+        _d_sub = df_f
+        if fam_sel and col_fam:
+            _d_sub = _d_sub[_d_sub[col_fam].astype(str).isin(fam_sel)]
+        _, sub_sel = filtro_pills(_d_sub, col_subfam,
+                                  "compras_graf_filtro_sub", "Subfamilia")
 
     d = df_f
     if fam_sel and col_fam:

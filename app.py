@@ -24,7 +24,8 @@ from graficos.compras import bounds_fecha_de_la_vista, vista_quiere_fecha_propia
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_diseno_visual, inject_herramientas, inject_footer_actualizacion, inject_calendario_es, inject_fullscreen_app
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil
 from graficos import renderizar_graficos_reporte, tiene_dashboard
-from graficos.base import _render_rail
+from graficos.base import (_render_rail, compartimento_filtros,
+                           contar_filtros, filtro_pills)
 from graficos.ajuste import categoria_rango_ajuste
 from asistente import inject_asistente
 from navegacion import inject_navegacion
@@ -773,26 +774,11 @@ def _render_requerimientos(df_data, col_fecha_ref, cols_mostrar, font_px, cfg):
 # ===========================================================================
 # CHIPS DE FILTRO EXTERNOS — Tabla de Ajuste de Inventario
 # ===========================================================================
-def _chip_categorico(df_in, col, key, etiqueta):
-    """Chip-popover multiselección para una columna categórica.
-    Devuelve (df_filtrado, seleccion)."""
-    if not col or col not in df_in.columns:
-        return df_in, []
-    valores = sorted(df_in[col].dropna().astype(str).unique().tolist())
-    if not valores:
-        return df_in, []
-    _n = len(st.session_state.get(key) or [])
-    _lbl = f":material/filter_alt: {etiqueta} :violet-badge[{_n}]" if _n else f":material/filter_alt: {etiqueta}"
-    _estado = "on" if _n else "off"
-    with st.container(key=f"chipwrap_{key}_{_estado}"):
-        with st.popover(_lbl, use_container_width=True):
-            sel = st.pills(
-                etiqueta, valores, selection_mode="multi",
-                key=key, label_visibility="collapsed",
-            ) or []
-    if sel:
-        df_in = df_in[df_in[col].astype(str).isin(sel)]
-    return df_in, sel
+# 2026-08-31: `_chip_categorico` vivia aca — un popover por columna. Los
+# filtros pasaron a un compartimento unico y adentro no puede haber popovers
+# (Streamlit no los anida), asi que su reemplazo es `base.filtro_pills`, que
+# ademas lo comparten los seis dashboards. Ver el comentario largo en
+# `graficos/base.py`.
 
 
 def _chip_numerico(df_in, col, key, etiqueta, opciones=None):
@@ -809,15 +795,15 @@ def _chip_numerico(df_in, col, key, etiqueta, opciones=None):
         return df_in, None
     if opciones is None:
         opciones = ["Todos", "Faltantes", "Sobrantes", "Top 10", "Top 20"]
-    _prev = st.session_state.get(key) or "Todos"
-    _lbl = f":material/filter_alt: {etiqueta}" if _prev == "Todos" else f":material/filter_alt: {etiqueta} · {_prev}"
-    _estado = "off" if _prev == "Todos" else "on"
-    with st.container(key=f"chipwrap_{key}_{_estado}"):
-        with st.popover(_lbl, use_container_width=True):
-            sel = st.pills(
-                etiqueta, opciones, default="Todos",
-                key=key, label_visibility="collapsed",
-            ) or "Todos"
+    # PLANO, como `base.filtro_pills`: vive dentro del popover unico de
+    # "Filtros" y Streamlit no anida popovers. El rotulo lo dibuja este
+    # markdown porque `st.pills` con label visible mete su propio espaciado.
+    st.markdown(f'<div class="filtro-rotulo">{etiqueta}</div>',
+                unsafe_allow_html=True)
+    sel = st.pills(
+        etiqueta, opciones, default="Todos",
+        key=key, label_visibility="collapsed",
+    ) or "Todos"
     serie = pd.to_numeric(df_in[col], errors="coerce")
     if sel == "Con ajuste":
         return df_in[serie.fillna(0) != 0], {"tipo": "num", "op": "ne", "valor": 0}
@@ -852,35 +838,32 @@ def _filtros_chips_ajuste_tabla(df_in):
     col_ajval = buscar_columna(df_in, "Ajuste Valorizado", "AJUSTE VALORIZADO")
 
     modelo = {}
-    with st.container(key="chips_ajuste_tabla"):
-        c1, c2, c3, c4 = st.columns([1, 1, 1, 1.2])
-        with c1:
-            df_in, _sel = _chip_categorico(df_in, col_area,
-                                           "ajuste_tabla_filtro_area", "Área")
-            if _sel:
-                modelo[col_area] = {"tipo": "set",
-                                    "valores": [str(v) for v in _sel]}
-        with c2:
-            df_in, _sel = _chip_categorico(df_in, col_fam,
-                                           "ajuste_tabla_filtro_familia", "Familia")
-            if _sel:
-                modelo[col_fam] = {"tipo": "set",
-                                   "valores": [str(v) for v in _sel]}
-        with c3:
-            df_in, _cond = _chip_numerico(
-                df_in, col_aj,
-                "ajuste_tabla_filtro_ajuste", "Ajuste",
-                opciones=["Todos", "Con ajuste", "Faltantes",
-                          "Sobrantes", "Top 10", "Top 20"],
-            )
-            if _cond:
-                modelo[col_aj] = _cond
-        with c4:
-            df_in, _cond = _chip_numerico(df_in, col_ajval,
-                                          "ajuste_tabla_filtro_ajusteval",
-                                          "Ajuste Valor.")
-            if _cond:
-                modelo[col_ajval] = _cond
+    with compartimento_filtros(contar_filtros(
+            "ajuste_tabla_filtro_area", "ajuste_tabla_filtro_familia",
+            "ajuste_tabla_filtro_ajuste", "ajuste_tabla_filtro_ajusteval")):
+        df_in, _sel = filtro_pills(df_in, col_area,
+                                   "ajuste_tabla_filtro_area", "Área")
+        if _sel:
+            modelo[col_area] = {"tipo": "set",
+                                "valores": [str(v) for v in _sel]}
+        df_in, _sel = filtro_pills(df_in, col_fam,
+                                   "ajuste_tabla_filtro_familia", "Familia")
+        if _sel:
+            modelo[col_fam] = {"tipo": "set",
+                               "valores": [str(v) for v in _sel]}
+        df_in, _cond = _chip_numerico(
+            df_in, col_aj,
+            "ajuste_tabla_filtro_ajuste", "Ajuste",
+            opciones=["Todos", "Con ajuste", "Faltantes",
+                      "Sobrantes", "Top 10", "Top 20"],
+        )
+        if _cond:
+            modelo[col_aj] = _cond
+        df_in, _cond = _chip_numerico(df_in, col_ajval,
+                                      "ajuste_tabla_filtro_ajusteval",
+                                      "Ajuste Valor.")
+        if _cond:
+            modelo[col_ajval] = _cond
     return df_in, modelo
 
 
@@ -896,13 +879,10 @@ def _filtros_chips_franja(df_in):
         return _filtros_chips_ajuste_tabla(df_in)
     if not cat_cols:
         return df_in, {}
-    with st.container(key="chips_ajuste_tabla"):
-        _cols = st.columns([1] * len(cat_cols))
-        for _cc, _col in zip(_cols, cat_cols):
-            with _cc:
-                df_in, _ = _chip_categorico(
-                    df_in, _col,
-                    f"chip_franja_{reporte.replace(' ', '_')}_{_col}", _col)
+    _claves = [f"chip_franja_{reporte.replace(' ', '_')}_{c}" for c in cat_cols]
+    with compartimento_filtros(contar_filtros(*_claves)):
+        for _clave, _col in zip(_claves, cat_cols):
+            df_in, _ = filtro_pills(df_in, _col, _clave, _col)
     return df_in, {}
 
 

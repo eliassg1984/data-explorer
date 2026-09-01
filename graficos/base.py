@@ -116,6 +116,93 @@ def publicar_contexto_ia(reporte, df, filtros=None):
     }
 
 
+# ===========================================================================
+# COMPARTIMENTO DE FILTROS — un solo control en la franja de vistas
+# ===========================================================================
+# Hasta el 2026-08-31 cada reporte dibujaba su propia FILA de chips dentro de
+# `chips_ajuste_tabla`: un `st.popover` por columna filtrable, uno al lado del
+# otro. Eran SIETE copias del mismo bloque (`app.py` x2 — tabla y Ajuste — mas
+# los seis dashboards) y la fila crecia con cada filtro nuevo: Ajuste y Ventas
+# ya iban por cuatro.
+#
+# Ahora es UN popover, a la derecha de la franja de vistas y separado de las
+# pestanas por un filete: un compartimento de esa misma superficie, no una
+# capsula apoyada encima. La geometria vive en `estilos/_50_fecha.py` (la
+# regla con la clase duplicada, que es la que gana).
+#
+# LA RESTRICCION QUE MANDA EL DISENO: Streamlit no anida popovers. Los filtros
+# de adentro dejan de ser popovers y pasan a ser secciones planas — rotulo +
+# pills, via `filtro_pills()`. No es una concesion: es justo lo que se pidio,
+# una sola lista desplegable en vez de tres que se abren por su cuenta.
+
+def contar_filtros(*claves, neutro="Todos"):
+    """Cuantos de esos filtros tienen algo puesto, leido de `session_state`.
+
+    Va ANTES de dibujar el compartimento porque su etiqueta lleva la cuenta y
+    Streamlit la fija al construir el widget. Es el mismo patron que ya usaba
+    cada chip por separado (`len(st.session_state.get(k) or [])`), sumado.
+
+    Distingue las dos formas que hay en el repo sin pedir un parametro por
+    sitio: una LISTA cuenta si no esta vacia (multiseleccion), y un STRING
+    cuenta si no es el valor neutro (los chips de opcion unica de Ajuste, que
+    en reposo dicen "Todos").
+    """
+    n = 0
+    for clave in claves:
+        valor = st.session_state.get(clave)
+        if isinstance(valor, str):
+            n += 1 if valor != neutro else 0
+        elif valor:
+            n += 1
+    return n
+
+
+@contextmanager
+def compartimento_filtros(n_activos=0, etiqueta="Filtros"):
+    """El compartimento de filtros de la franja: UN popover a su derecha.
+
+    `n_activos` sale de `contar_filtros()` y se pinta como badge — es lo unico
+    que tiene que gritar, porque con el panel cerrado no se ve que hay puesto.
+
+    El wrapper `chipwrap_filtros_on|off` no es decorativo: es el mismo
+    contrato de key que ya usaban los chips sueltos, asi que el estado activo
+    (subrayado de acento, `estilos/_50_fecha.py`) se hereda sin escribir una
+    regla nueva.
+    """
+    _lbl = (f":material/filter_alt: {etiqueta} :violet-badge[{n_activos}]"
+            if n_activos else f":material/filter_alt: {etiqueta}")
+    with st.container(key="chips_ajuste_tabla"):
+        with st.container(key=f"chipwrap_filtros_{'on' if n_activos else 'off'}"):
+            with st.popover(_lbl, use_container_width=True):
+                yield
+
+
+def filtro_pills(df, col, clave, etiqueta, valores=None):
+    """Un filtro categorico PLANO, para adentro de `compartimento_filtros()`.
+
+    Devuelve `(df_filtrado, seleccion)`, el mismo contrato que tenian los
+    chips-popover que reemplaza. Sin popover propio: rotulo + pills, porque
+    Streamlit no anida popovers (ver el comentario de arriba).
+
+    `valores` permite pasar una lista ya calculada — lo necesitan las cascadas
+    (Subfamilia depende de Familia), donde las opciones no salen del df que se
+    esta filtrando sino de uno ya recortado por el filtro de arriba.
+    """
+    if not col or col not in df.columns:
+        return df, []
+    if valores is None:
+        valores = sorted(df[col].dropna().astype(str).unique().tolist())
+    if not valores:
+        return df, []
+    st.markdown(f'<div class="filtro-rotulo">{html.escape(etiqueta)}</div>',
+                unsafe_allow_html=True)
+    sel = st.pills(etiqueta, valores, selection_mode="multi",
+                   key=clave, label_visibility="collapsed") or []
+    if sel:
+        df = df[df[col].astype(str).isin(sel)]
+    return df, sel
+
+
 def vista_activa(categorias, state_key):
     """Que item del rail esta activo, SIN dibujarlo.
 

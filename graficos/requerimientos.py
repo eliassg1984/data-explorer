@@ -19,6 +19,7 @@ import streamlit as st
 
 from tema import ACENTO
 from graficos.base import (
+    compartimento_filtros, contar_filtros, filtro_pills,
     PALETA_CALLAI, _compras_layout, _compras_truncar, _render_rail,
     _resolver, publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
 )
@@ -77,34 +78,12 @@ def renderizar_graficos_requerimientos(df_f, nombre_reporte, df_full=None, tabla
     # ── Filtros Sub Almacén / Familia como chips en la franja ─────────────
     sub_sel, fam_sel = [], []
     metrica = "Valorizado" if col_val else "Cantidad"
-    with st.container(key="chips_ajuste_tabla"):
-        c1, c2, _ = st.columns([1, 1, 4])
-        with c1:
-            if col_sub:
-                subs = sorted(df_f[col_sub].dropna().astype(str).unique().tolist())
-                if subs:
-                    _n = len(st.session_state.get("req_graf_filtro_sub") or [])
-                    _lbl = (f":material/filter_alt: Sub Almacén :violet-badge[{_n}]"
-                            if _n else ":material/filter_alt: Sub Almacén")
-                    with st.popover(_lbl, use_container_width=True):
-                        sub_sel = st.pills(
-                            "Sub Almacén", subs, selection_mode="multi",
-                            key="req_graf_filtro_sub",
-                            label_visibility="collapsed",
-                        ) or []
-        with c2:
-            if col_fam:
-                fams = sorted(df_f[col_fam].dropna().astype(str).unique().tolist())
-                if fams:
-                    _n = len(st.session_state.get("req_graf_filtro_fam") or [])
-                    _lbl = (f":material/category: Familia :violet-badge[{_n}]"
-                            if _n else ":material/category: Familia")
-                    with st.popover(_lbl, use_container_width=True):
-                        fam_sel = st.pills(
-                            "Familia", fams, selection_mode="multi",
-                            key="req_graf_filtro_fam",
-                            label_visibility="collapsed",
-                        ) or []
+    with compartimento_filtros(contar_filtros("req_graf_filtro_sub",
+                                              "req_graf_filtro_fam")):
+        _, sub_sel = filtro_pills(df_f, col_sub,
+                                  "req_graf_filtro_sub", "Sub Almacén")
+        _, fam_sel = filtro_pills(df_f, col_fam,
+                                  "req_graf_filtro_fam", "Familia")
 
     d = df_f
     if sub_sel and col_sub:

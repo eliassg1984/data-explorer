@@ -143,6 +143,17 @@ CSS = """    /* ================================================================
         .st-key-chips_ajuste_tabla {
             margin: 2px 0 0 0 !important;
             z-index: auto !important;
+            /* 2026-08-31: el filete, el fondo y el radio son del
+               COMPARTIMENTO de la franja de escritorio — dividen la franja
+               en dos zonas. Acá el control vuelve al flujo del documento y
+               no divide nada: sin esto se veía como una media tarjeta
+               blanca suelta arriba del contenido. Misma idea que el
+               `position: static` que ya recibe. */
+            border-left: none !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            height: auto !important;
+            padding: 0 !important;
         }
 
         /* Avisos: sobre la barra inferior de navegación */

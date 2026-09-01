@@ -42,6 +42,7 @@ from tema import (
     AJUSTE_SOB_FONDO, AJUSTE_SOB_BORDE,
 )
 from graficos.base import (
+    compartimento_filtros, contar_filtros, filtro_pills,
     _card, _es_movil, _layout, _render_rail, _resolver, _slug, _wrap_cat,
     publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
 )
@@ -175,38 +176,12 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     ambito = "actual"
 
     area_sel, fam_sel = [], []
-    with st.container(key="chips_ajuste_tabla"):
-        col_ff_area, col_ff_fam, _ = st.columns([1, 1, 4])
-        with col_ff_area:
-            if col_area and col_area in df_f.columns:
-                areas = sorted(df_f[col_area].dropna()
-                               .astype(str).unique().tolist())
-                if areas:
-                    _n_area = len(st.session_state.get("ajuste_graf_filtro_area") or [])
-                    _lbl_area = f":material/filter_alt: Área :violet-badge[{_n_area}]" if _n_area else ":material/filter_alt: Área"
-                    with st.popover(_lbl_area, use_container_width=True):
-                        area_sel = st.pills(
-                            "Área",
-                            areas,
-                            selection_mode="multi",
-                            key="ajuste_graf_filtro_area",
-                            label_visibility="collapsed",
-                        ) or []
-        with col_ff_fam:
-            if col_familia and col_familia in df_f.columns:
-                familias = sorted(df_f[col_familia].dropna()
-                                  .astype(str).unique().tolist())
-                if familias:
-                    _n_fam = len(st.session_state.get("ajuste_graf_filtro_familia") or [])
-                    _lbl_fam = f":material/category: Familia :violet-badge[{_n_fam}]" if _n_fam else ":material/category: Familia"
-                    with st.popover(_lbl_fam, use_container_width=True):
-                        fam_sel = st.pills(
-                            "Familia",
-                            familias,
-                            selection_mode="multi",
-                            key="ajuste_graf_filtro_familia",
-                            label_visibility="collapsed",
-                        ) or []
+    with compartimento_filtros(contar_filtros("ajuste_graf_filtro_area",
+                                              "ajuste_graf_filtro_familia")):
+        _, area_sel = filtro_pills(df_f, col_area,
+                                   "ajuste_graf_filtro_area", "Área")
+        _, fam_sel = filtro_pills(df_f, col_familia,
+                                  "ajuste_graf_filtro_familia", "Familia")
 
     if ambito == "Histórico":
         base = df_full if df_full is not None else df_f

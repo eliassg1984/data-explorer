@@ -252,40 +252,47 @@ CSS = """    /* ================================================================
            2026-08-18: la cadena entera bajó 90px (391 -> 301) al retirarse
            el rail izquierdo. */
         .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
-            /* 2026-08-25, a pedido: los chips SUBEN a compartir banda con la
-               franja de vistas (`nav_rail`, 0..--nav-top-alto) en vez de
-               ocupar una segunda banda propia debajo. Una sola franja de
-               contexto: vistas a la izquierda, filtros a la derecha.
-
-               Los 7px centran un control de 26px en una franja de 40:
-               (40-26)/2. Y pasan de `left` a `right` porque a la izquierda
-               chocarian con el rail de la columna (19..299) y con los
-               propios botones de vista. El 90px es el mismo margen derecho
-               del contenido que ya usa la banda blanca, asi que cierran a
-               plomo con el borde de las tarjetas.
-
-               OJO: esta regla lleva la clase DOS veces a proposito (mas
+            /* OJO: esta regla lleva la clase DOS veces a proposito (mas
                especificidad) y `_50_fecha` va DESPUES de
-               `_40_ajuste_franja` en `_SECCIONES`, asi que es la que manda.
+               `_40_ajuste_franja` en `_SECCIONES`, asi que es LA QUE MANDA.
                Cambiar solo la de alla no hace nada — pasó al intentarlo. */
-            top: 7px !important;
+            /* ── COMPARTIMENTO DE LA FRANJA (2026-08-31, a pedido) ─────
+               Era una FILA de N chips flotando en la banda de arriba. Hoy es
+               UN control —`graficos/base.py::compartimento_filtros`— pegado
+               al extremo derecho de la franja de vistas (`nav_rail`), del
+               que es una zona mas, no una capsula apoyada encima.
+
+               Las tres anclas salen de la propia franja, no de literales:
+               su `top`, su `height` y su `right`. Si la franja se mueve, el
+               compartimento la sigue solo.
+
+               El FILETE de la izquierda es todo el gesto: es lo que hace que
+               se lea como otro compartimento y no como una pestana mas. Sin
+               el, un control con la misma tipografia que las vistas al final
+               de su misma fila se lee como la octava vista.
+
+               Y el radio: solo las esquinas DERECHAS, que son las de la
+               franja. Las izquierdas tocan a las pestanas y ahi no hay
+               borde que doblar.
+
+               `z-index` un punto sobre la franja (999999, `navegacion.py`):
+               comparten superficie y este va encima. */
+            top: calc(var(--nav-top-alto) + 8px) !important;
+            height: var(--nav-top-alto) !important;
             left: auto !important;
-            /* 90 es el borde de las tarjetas; +181 le cede el sitio al chip
-               del drill (`prov_pop_float`, "Proveedores 31"), que comparte
-               esta fila y se ancla al MISMO borde derecho. Sin la reserva se
-               pisaban 24px, medido: Subfamilia terminaba en 1119 y el chip
-               arrancaba en 1095. 181 = su ancho (171) + 10 de aire. */
-            right: calc(90px + 181px) !important;
+            right: 90px !important;      /* == el borde derecho de la franja */
             transform: none !important;
-            /* Hasta el 2026-08-15 esta cuenta llevaba un sumando más, 255px,
-               que le reservaban el sitio a `atajos_franja` — anclado a la
-               derecha en esta misma línea y, como los chips, position:fixed,
-               así que ninguno empujaba al otro y sin la reserva se
-               solapaban entre 901 y 1200px. Los atajos se fueron (están en
-               el popover del calendario), así que los chips se quedan con
-               ese ancho. */
-            max-width: calc(100vw - (var(--rail-der-res) + 216px)
-                            - 58px) !important;
+            /* 40% del ancho: con 4 filtros (Ajuste, Ventas) la etiqueta no
+               crece —siempre dice "Filtros"— asi que el tope es un seguro,
+               no una medida. */
+            max-width: 40vw !important;
+            z-index: 1000000 !important;
+            display: flex !important;
+            align-items: center !important;
+            padding: 0 16px !important;
+            border-left: 1px solid var(--border) !important;
+            background: var(--bg-card) !important;
+            border-radius: 0 10px 10px 0 !important;
         }
         .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
             [data-testid="stPopover"] button {
@@ -297,21 +304,11 @@ CSS = """    /* ================================================================
             [data-testid="stPopover"] button:hover {
             background: var(--accent-tint) !important;
         }
-        /* Addendum de los reportes con EXACTAMENTE 2 chips de filtro
-           (Compras, Inventario Valorizado, Salidas): ancho uniforme parejo
-           al de la fecha. El resto deja que cada chip mida su contenido
-           (pueden ser más de 2 — ej. Ajuste con 4, Ventas con 4). */
-        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_compras)
-            .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
-            [data-testid="stPopover"] button,
-        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_inventario_valorizado)
-            .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
-            [data-testid="stPopover"] button,
-        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_salidas)
-            .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
-            [data-testid="stPopover"] button {
-            min-width: 230px !important;
-        }
+        /* 2026-08-31: aca vivia un addendum que le daba 230px de ancho
+           uniforme a los chips de Compras / Inventario Valorizado / Salidas,
+           los tres reportes que tenian EXACTAMENTE dos. Existia para que dos
+           capsulas en fila no midieran distinto. Ya no hay fila: hay un solo
+           control que mide su etiqueta, siempre la misma palabra. */
 
         /* ============================================================== */
         /* FRANJA PLANA (2026-08-14) — barra de herramientas, no cápsulas  */
@@ -552,12 +549,10 @@ CSS = """    /* ================================================================
             .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill {
             left: calc(var(--rail-der-res) + 276px) !important;   /* titulo (260) + 16 */
         }
-        [data-testid="stAppViewContainer"]:has([class*="st-key-chartcard_ventas_comparativo_"])
-            .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla {
-            left: calc(var(--rail-der-res) + 492px) !important;   /* pill (210) + 6 */
-            max-width: calc(100vw - (var(--rail-der-res) + 492px)
-                            - 58px) !important;
-        }
+        /* 2026-08-31: el titulo fantasma seguia corriendo los chips con un
+           `left` — y el compartimento se ancla por la DERECHA, asi que ese
+           left lo mandaba al medio de la franja. El titulo sigue corriendo
+           al pill de fecha, que si vive a la izquierda. */
     }
 
     /* 2026-08-23 — "PÁGINA BLANCA, TARJETAS TENUES" (3ra a 6ta vuelta,

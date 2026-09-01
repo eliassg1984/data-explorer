@@ -28,6 +28,7 @@ from tema import (
     ACENTO, AJUSTE_NEG, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, TEXTO_PRINCIPAL,
 )
 from graficos.base import (
+    compartimento_filtros, contar_filtros, filtro_pills,
     _compras_layout, _compras_truncar, _render_rail,
     _resolver, _slug, publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
 )
@@ -665,32 +666,12 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
 
     # ── Filtros Área / Familia como chips en la FRANJA blanca ────────────
     area_sel, fam_sel = [], []
-    with st.container(key="chips_ajuste_tabla"):
-        c1, c2, _ = st.columns([1, 1, 4])
-        with c1:
-            if col_area:
-                areas = sorted(df_f[col_area].dropna().astype(str).unique().tolist())
-                if areas:
-                    _n = len(st.session_state.get("inv_graf_filtro_area") or [])
-                    _lbl = f":material/filter_alt: Área :violet-badge[{_n}]" if _n else ":material/filter_alt: Área"
-                    with st.popover(_lbl, use_container_width=True):
-                        area_sel = st.pills(
-                            "Área", areas, selection_mode="multi",
-                            key="inv_graf_filtro_area",
-                            label_visibility="collapsed",
-                        ) or []
-        with c2:
-            if col_fam:
-                fams = sorted(df_f[col_fam].dropna().astype(str).unique().tolist())
-                if fams:
-                    _n = len(st.session_state.get("inv_graf_filtro_fam") or [])
-                    _lbl = f":material/category: Familia :violet-badge[{_n}]" if _n else ":material/category: Familia"
-                    with st.popover(_lbl, use_container_width=True):
-                        fam_sel = st.pills(
-                            "Familia", fams, selection_mode="multi",
-                            key="inv_graf_filtro_fam",
-                            label_visibility="collapsed",
-                        ) or []
+    with compartimento_filtros(contar_filtros("inv_graf_filtro_area",
+                                              "inv_graf_filtro_fam")):
+        _, area_sel = filtro_pills(df_f, col_area,
+                                   "inv_graf_filtro_area", "Área")
+        _, fam_sel = filtro_pills(df_f, col_fam,
+                                  "inv_graf_filtro_fam", "Familia")
 
     d = df_f
     if area_sel and col_area:
