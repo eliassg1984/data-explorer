@@ -89,6 +89,55 @@ def _on_nav_click(nombre):
     st.session_state["_nav_reporte"] = nombre
 
 
+def _fmt_kpi(etiqueta, agregacion, v):
+    """Un valor de KPI a texto. Los montos (`sum`) van en notacion corta
+    (`S/ 71.3k`); los conteos, con separador de miles y su sufijo
+    (`153 docs`). Vivia dentro de `_formatear_kpis`; salio a nivel de modulo
+    cuando la franja superior necesito formatear los suyos con el MISMO
+    criterio — dos formateos distintos para el mismo numero es como se
+    empiezan a contradecir dos superficies."""
+    if agregacion == "sum":
+        return fmt_k(v)
+    suf = _SUFIJO_KPI.get(etiqueta, "")
+    return f"{v:,.0f}{(' ' + suf) if suf else ''}"
+
+
+def _kpis_franja(info):
+    """Los KPIs de la FRANJA superior, como lista de (etiqueta, texto, negativo).
+
+    Distinto de `_formatear_kpis`, que colapsa todo en dos strings porque el
+    rail tiene un renglon grande y uno chico: la franja es ancha y dibuja
+    cada KPI con su rotulo, asi que necesita los pares sueltos.
+
+    Usa `kpis_franja` si el reporte lo declara y si no cae en los mismos
+    `kpis` del rail — asi ningun reporte se queda sin franja por no haber
+    declarado una lista propia, y el que quiera mostrar mas (Compras pide
+    cuatro) lo hace sin tocar lo que ve el rail.
+
+    Devuelve None con el mismo criterio que `_formatear_kpis`: sin `kpis`,
+    sin secrets, o si la consulta no trajo nada."""
+    kpis = info.get("kpis_franja") or info.get("kpis")
+    if not kpis:
+        return None
+    valores = resumen_kpis(info["archivo"], kpis,
+                           info.get("kpi_fecha"), info.get("kpi_dedup"))
+    if not valores:
+        return None
+    # NULL se lee como CERO, y sólo acá. `SUM` sobre cero filas devuelve
+    # NULL en SQL, y con los valorizados por familia eso pasa seguido: un mes
+    # sin compras de vino deja ese KPI en NULL, no en 0. El rail los SALTEA
+    # (`_formatear_kpis`) porque ahí un hueco no se nota — tiene dos
+    # renglones y muestra lo que haya. La franja declara CUATRO columnas
+    # fijas: si tres desaparecen, no se lee "no hubo", se lee "se rompió".
+    # La consulta ya se sabe buena en este punto (`valores` vacío se devolvió
+    # como None más arriba), así que un NULL acá significa "ninguna fila
+    # cumplió el filtro", que es exactamente cero.
+    pares = [(kpi[0], _fmt_kpi(kpi[0], kpi[2], valores.get(kpi[0]) or 0),
+              (valores.get(kpi[0]) or 0) < 0)
+             for kpi in kpis]
+    return pares or None
+
+
 def _formatear_kpis(info):
     """(primario, secundario) para el ítem del rail — estilo lista de
     cotizaciones (referencia: el panel "Vistos recientemente" de MSN Money,
@@ -132,17 +181,11 @@ def _formatear_kpis(info):
     if not valores:
         return None
 
-    def _fmt(etiqueta, agregacion, v):
-        if agregacion == "sum":
-            return fmt_k(v)
-        suf = _SUFIJO_KPI.get(etiqueta, "")
-        return f"{v:,.0f}{(' ' + suf) if suf else ''}"
-
-    items = [(et, ag, valores[et])
-             for et, _col, ag in kpis if valores.get(et) is not None]
+    items = [(kpi[0], kpi[2], valores[kpi[0]])
+             for kpi in kpis if valores.get(kpi[0]) is not None]
     if not items:
         return None
-    partes = [_fmt(et, ag, v) for et, ag, v in items]
+    partes = [_fmt_kpi(et, ag, v) for et, ag, v in items]
     if "Venta" in valores and "Pax" in valores and valores["Pax"]:
         partes.append(f"S/ {valores['Venta'] / valores['Pax']:.1f}")
     primario, resto = partes[0], partes[1:]
@@ -805,17 +848,22 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     # Sin KPIs (`_par_act` es None para las herramientas) no se dibuja nada:
     # la franja se queda con las vistas y el cruce no ocurre. Mejor eso que
     # una franja vacía donde antes había navegación.
-    if _par_act:
-        _clase_kpi = "franjakpi-val kpi-neg" if _par_act[2] else "franjakpi-val"
-        _sec = (f'<span class="franjakpi-sec">{html.escape(_par_act[1])}</span>'
-                if _par_act[1] else "")
+    _kpis_arriba = _kpis_franja(_info_act) if not _info_act.get("tool") else None
+    if _kpis_arriba:
+        _piezas = "".join(
+            '<span class="franjakpi-par">'
+            f'<i class="franjakpi-rot">{html.escape(_et)}</i>'
+            f'<b class="franjakpi-val{" kpi-neg" if _neg else ""}">'
+            f'{html.escape(_txt)}</b>'
+            '</span>'
+            for _et, _txt, _neg in _kpis_arriba
+        )
         with st.container(key="nav_franja_kpis"):
             st.markdown(
                 '<div class="franja-kpis">'
                 f'<span class="franjakpi-nom">{html.escape(reporte_activo)}</span>'
                 '<span class="franjakpi-sep"></span>'
-                f'<span class="{_clase_kpi}">{html.escape(_par_act[0])}</span>'
-                f'{_sec}'
+                f'{_piezas}'
                 '</div>',
                 unsafe_allow_html=True,
             )

@@ -54,6 +54,32 @@ REPORTES = {
         "icono": ":material/shopping_cart:",
         "kpis": (("Valorizado", "VALOR_COMPRA", "sum"),
                  ("Documentos", "NUM_DOCUMENTO", "count_distinct")),
+        # KPIs propios de la FRANJA superior (2026-09-01, a pedido:
+        # "Documentos, Valorizado Alimentos, Bebidas y Vino").
+        #
+        # Lista APARTE de `kpis` y no un reemplazo: el rail muestra un
+        # numero grande y uno chico en 280px, y cuatro no le entran. La
+        # franja es ancha y horizontal, asi que puede con los cuatro. Cada
+        # superficie declara lo que puede mostrar.
+        #
+        # Los tres valorizados son el MISMO SUM de VALOR_COMPRA acotado por
+        # FAMILIA (4o elemento de la tupla, ver `_resumen_kpis_cacheable`).
+        # Las familias son las reales del parquet, verificadas 2026-09-01
+        # contra R2 — son ocho y estas cuatro son las que se pidieron:
+        #   ALIMENTOS  S/5.6M   COSTOS PRODUCCION      S/3.5M
+        #   VINOS Y ESPUMANTES  S/447k
+        #   BEBIDAS CON ALCOHOL S/236k + BEBIDAS SIN ALCOHOL S/135k
+        # "Bebidas" suma las DOS familias de bebidas; "Vino" va aparte
+        # porque VINOS Y ESPUMANTES es su propia familia y se pidio suelto.
+        "kpis_franja": (
+            ("Documentos", "NUM_DOCUMENTO", "count_distinct"),
+            ("Alimentos", "VALOR_COMPRA", "sum",
+             ("FAMILIA", ("ALIMENTOS",))),
+            ("Bebidas", "VALOR_COMPRA", "sum",
+             ("FAMILIA", ("BEBIDAS CON ALCOHOL", "BEBIDAS SIN ALCOHOL"))),
+            ("Vino", "VALOR_COMPRA", "sum",
+             ("FAMILIA", ("VINOS Y ESPUMANTES",))),
+        ),
         "kpi_fecha": "FECHA_EMISION_DOC",
     },
     # Requerimientos y Salidas comparten UN ítem de nav ("Movimientos", ver
@@ -909,22 +935,41 @@ def _resumen_kpis_cacheable(archivo, kpis, col_fecha, col_dedup):
         # repite por línea, no por registro real). count_distinct no tiene
         # sentido bajo dedup (ya es 1 fila por grupo) y no se usa hoy.
         selects = ", ".join(
-            f'{("MAX" if agg == "sum_dedup" else agg.upper())}("{col}") AS k{i}'
-            for i, (_et, col, agg) in enumerate(kpis)
+            f'{("MAX" if kpi[2] == "sum_dedup" else kpi[2].upper())}("{kpi[1]}") AS k{i}'
+            for i, kpi in enumerate(kpis)
         )
         sql = (f'SELECT {", ".join(f"SUM(k{i}) AS k{i}" for i in range(len(kpis)))} '
                f'FROM (SELECT {selects} FROM read_parquet(\'{url}\') {where} '
                f'GROUP BY "{col_dedup}")')
     else:
         partes = []
-        for i, (_et, col, agg) in enumerate(kpis):
+        for i, kpi in enumerate(kpis):
+            _et, col, agg = kpi[0], kpi[1], kpi[2]
             fn = _AGREGACIONES_KPI[agg]
             cierre = ")" if agg == "count_distinct" else ""
-            partes.append(f'{fn}("{col}"){cierre} AS k{i}')
+            # 4o elemento OPCIONAL: (columna, valores) para acotar ESTE KPI a
+            # un subconjunto de filas — "Valorizado de Alimentos" es el mismo
+            # SUM de siempre, sobre las filas cuya FAMILIA es 'ALIMENTOS'.
+            # Se resuelve con `FILTER (WHERE ...)`, que DuckDB soporta: un
+            # solo barrido del parquet devuelve los cuatro numeros, en vez de
+            # una consulta por familia.
+            #
+            # Los valores salen de REPORTES (config nuestra, no del usuario),
+            # pero se escapan igual: una comilla en un nombre de familia
+            # rompe el SQL y no se descubre hasta que aparezca una.
+            filtro = kpi[3] if len(kpi) > 3 else None
+            if filtro:
+                col_f, vals = filtro
+                lista = ", ".join("'" + str(v).replace("'", "''") + "'"
+                                  for v in vals)
+                partes.append(f'{fn}("{col}"){cierre} '
+                              f'FILTER (WHERE "{col_f}" IN ({lista})) AS k{i}')
+            else:
+                partes.append(f'{fn}("{col}"){cierre} AS k{i}')
         sql = f'SELECT {", ".join(partes)} FROM read_parquet(\'{url}\') {where}'
 
     fila = con.execute(sql).fetchone()
-    return {etiqueta: fila[i] for i, (etiqueta, _col, _agg) in enumerate(kpis)}
+    return {kpi[0]: fila[i] for i, kpi in enumerate(kpis)}
 
 
 def resumen_kpis(archivo, kpis, col_fecha=None, col_dedup=None):

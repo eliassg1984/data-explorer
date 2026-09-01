@@ -283,24 +283,38 @@ CSS = """    /* ================================================================
         height: 18px !important;
         background: var(--border) !important;
     }
-    /* El KPI principal, en acento. Los negativos en rojo: misma pareja de
-       tokens que usan los valores del rail (`navegacion.py::_CSS_KPIS`), no
-       colores propios. */
+    /* CADA KPI, con su rotulo encima. Dos renglones y no una linea
+       `Etiqueta: valor`: con cuatro KPIs esa forma se lee como una frase
+       larga y hay que ir contando los dos puntos para saber que numero es
+       cual. Apilados, el ojo barre los valores en una sola pasada y baja al
+       rotulo solo cuando necesita confirmar. Es el mismo criterio que usan
+       las tarjetas de KPI del resto de la app. */
+    .st-key-nav_franja_kpis .franjakpi-par {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        line-height: 1.05 !important;
+        gap: 1px !important;
+    }
+    .st-key-nav_franja_kpis .franjakpi-rot {
+        font-style: normal !important;
+        font-size: 9px !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.07em !important;
+        text-transform: uppercase !important;
+        color: var(--text-muted) !important;
+    }
+    /* El valor, en acento. Los negativos en rojo: misma pareja de tokens que
+       usan los valores del rail (`navegacion.py::_CSS_KPIS`), no colores
+       propios. */
     .st-key-nav_franja_kpis .franjakpi-val {
-        font-size: 15px !important;
+        font-size: 14px !important;
         font-weight: 700 !important;
         color: var(--accent-deep) !important;
-        line-height: 1.35 !important;
+        line-height: 1.2 !important;
     }
     .st-key-nav_franja_kpis .franjakpi-val.kpi-neg {
         color: var(--danger-text) !important;
-    }
-    /* El secundario es contexto, no titular: chico y apagado. */
-    .st-key-nav_franja_kpis .franjakpi-sec {
-        font-size: 12px !important;
-        font-weight: 500 !important;
-        color: var(--text-secondary) !important;
-        line-height: 1.35 !important;
     }
     /* Los contenedores de elemento de Streamlit miden su contenido: sin
        esto cada botón se estira al ancho de la franja y salen apilados. */
