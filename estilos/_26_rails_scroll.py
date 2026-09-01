@@ -84,7 +84,8 @@ CSS = f"""
     .st-key-compras_tabs_row *,
     .st-key-nav_rail_lateral *,
     .st-key-rail_rotulo_rep *,
-    .st-key-rail_rotulo_vis * {{
+    .st-key-rail_rotulo_vis *,
+    .st-key-nav_franja_kpis * {{
         visibility: inherit;
     }}
 
@@ -105,6 +106,48 @@ CSS = f"""
         pointer-events: none;
         transition: opacity {_TRANS} linear,
                     visibility 0s linear {_TRANS};  /* se esconde al final del fundido */
+    }}
+
+    /* ── LA FRANJA DE ARRIBA TAMBIÉN CRUZA (2026-09-01, a pedido) ─────
+       "Que al bajar la franja de vistas se vaya y en su lugar aparezca
+       otra con el nombre del reporte y sus KPIs". Es el TERCER par que
+       cuelga de este mismo gancho, después de los dos railes y sus dos
+       rótulos: no hay mecanismo nuevo.
+
+       Se van los BOTONES, no la franja: su fondo y su línea inferior se
+       quedan, porque la franja no desaparece — cambia de contenido. Si se
+       fuera entera, durante los 160ms del fundido se vería el contenido
+       de la página pasar por detrás del hueco.
+
+       `visibility` además del `opacity`, igual que los railes: los siete
+       botones de vista seguían siendo tabbables y encontrables con Ctrl+F
+       estando invisibles (ver el bloque de accesibilidad de más arriba). */
+    .st-key-nav_rail [data-testid="stButton"] {{
+        transition: opacity {_TRANS} linear,
+                    visibility 0s linear 0s;
+    }}
+    :root.rails-scrolled .st-key-nav_rail [data-testid="stButton"] {{
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity {_TRANS} linear,
+                    visibility 0s linear {_TRANS};
+    }}
+    /* Y la de KPIs entra. Reposo OCULTO y sin `!important`, por el mismo
+       motivo que el rail lateral (ver "DEGRADACION SEGURA"): si el gancho
+       no llega a montarse, el peor caso es que no pase nada — no una
+       franja de KPIs tapando a las vistas de forma permanente. */
+    .st-key-nav_franja_kpis {{
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity {_TRANS} linear,
+                    visibility 0s linear {_TRANS};
+    }}
+    :root.rails-scrolled .st-key-nav_franja_kpis {{
+        opacity: 1;
+        visibility: visible;
+        transition: opacity {_TRANS} linear,
+                    visibility 0s linear 0s;
     }}
 
     /* Y su RÓTULO con él: la tarjeta cambia de contenido, así que el

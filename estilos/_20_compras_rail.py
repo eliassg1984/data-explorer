@@ -198,6 +198,89 @@ CSS = """    /* ================================================================
         scrollbar-width: none !important;
     }
     .st-key-nav_franja_rep::-webkit-scrollbar { height: 0 !important; }
+
+    /* =================================================================== */
+    /* FRANJA DE KPIs — ocupa el sitio de las vistas al scrollear (2026-09-01) */
+    /* Lo dibuja `navegacion.py::inject_navegacion`; el cruce con las vistas */
+    /* vive en `_26_rails_scroll.py`, colgado del mismo `rails-scrolled`     */
+    /* que cruza la columna izquierda. Acá sólo la geometría y el aspecto.   */
+    /*                                                                       */
+    /* MISMA CAJA que la franja de vistas —`top`, `height` y el borde de     */
+    /* abajo— porque es literalmente su reemplazo: si midieran distinto, el  */
+    /* cruce se veria como que la franja cambia de tamaño en vez de cambiar  */
+    /* de contenido. Cuarto par de literales acoplados a esa franja.         */
+    /*                                                                       */
+    /* `right: 0` y NO un hueco reservado para el compartimento de Filtros:  */
+    /* los dos van en z-index 1000000 y `chips_ajuste_tabla` se dibuja       */
+    /* DESPUES en el DOM (lo monta el dashboard, esta franja la monta la     */
+    /* navegacion), asi que con z-index empatado gana el orden y Filtros     */
+    /* pinta encima. Reservarle ancho habria sido un literal medido a mano   */
+    /* que ademas cambia con la palabra del boton.                           */
+    /* =================================================================== */
+    .st-key-nav_franja_kpis {
+        position: fixed !important;
+        top: var(--franja-rep-alto) !important;
+        left: 0 !important;
+        right: 0 !important;
+        height: var(--nav-top-alto) !important;
+        min-height: var(--nav-top-alto) !important;
+        z-index: 1000000 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        margin: 0 !important;
+        padding: 0 18px !important;
+        background: var(--bg-card) !important;
+        border-bottom: 1px solid var(--border) !important;
+        /* Es un rotulo, no un control: no recibe clics, y asi tampoco tapa
+           a los botones de vista que hay debajo mientras se cruza. */
+        pointer-events: none !important;
+    }
+    /* El `margin-bottom: -16px` de la regla #162 otra vez: colapsa la caja
+       del markdown y el flex termina centrando 3px en vez del texto. Mismo
+       arreglo que en la cabecera del rail, unas lineas mas arriba. */
+    .st-key-nav_franja_kpis [data-testid="stMarkdown"] div {
+        margin-bottom: 0 !important;
+    }
+    .st-key-nav_franja_kpis .franja-kpis {
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+        white-space: nowrap !important;
+    }
+    /* El NOMBRE del reporte manda: es lo que la franja viene a decir. */
+    .st-key-nav_franja_kpis .franjakpi-nom {
+        font-size: 16px !important;
+        font-weight: 700 !important;
+        color: var(--text-primary) !important;
+        line-height: 1.35 !important;
+    }
+    /* Filete vertical, el mismo recurso que separa el compartimento de
+       Filtros del resto de su franja: dice "hasta aca el titulo". */
+    .st-key-nav_franja_kpis .franjakpi-sep {
+        width: 1px !important;
+        height: 18px !important;
+        background: var(--border) !important;
+    }
+    /* El KPI principal, en acento. Los negativos en rojo: misma pareja de
+       tokens que usan los valores del rail (`navegacion.py::_CSS_KPIS`), no
+       colores propios. */
+    .st-key-nav_franja_kpis .franjakpi-val {
+        font-size: 15px !important;
+        font-weight: 700 !important;
+        color: var(--accent-deep) !important;
+        line-height: 1.35 !important;
+    }
+    .st-key-nav_franja_kpis .franjakpi-val.kpi-neg {
+        color: var(--danger-text) !important;
+    }
+    /* El secundario es contexto, no titular: chico y apagado. */
+    .st-key-nav_franja_kpis .franjakpi-sec {
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        color: var(--text-secondary) !important;
+        line-height: 1.35 !important;
+    }
     /* Los contenedores de elemento de Streamlit miden su contenido: sin
        esto cada botón se estira al ancho de la franja y salen apilados. */
     .st-key-nav_franja_rep [data-testid="stElementContainer"],

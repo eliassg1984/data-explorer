@@ -55,6 +55,7 @@ cambiar de reporte es fiable en cada pulsación (no se cuelga ni "deja de
 hacer caso"). app.py lee la selección desde st.session_state["_nav_reporte"].
 """
 
+import html
 import re
 import streamlit as st
 import datetime
@@ -786,6 +787,37 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
                 info.get("label_corto") or nombre, key=f"franjarep_{_slug(nombre)}",
                 type="primary" if nombre == reporte_activo else "secondary",
                 on_click=_on_nav_click, args=(nombre,),
+            )
+
+    # ── FRANJA DE KPIs (2026-09-01, a pedido) ────────────────────────────
+    # Ocupa la MISMA franja que las vistas y se cruza con ellas: arriba se
+    # ven las vistas, al bajar se van y en su lugar aparece el reporte con
+    # sus números. Es el mismo gancho `rails-scrolled` que ya cruza la
+    # columna izquierda de Reportes a Vistas — no hay mecanismo nuevo, sólo
+    # un tercer par que se cruza con él (`estilos/_26_rails_scroll.py`).
+    #
+    # Los números son los MISMOS que el rail muestra por reporte: salen del
+    # `_par_act` que ya se calculó acá arriba para `CLAVE_CABECERA`. No se
+    # recalculan — duplicar esa lógica era garantizar que se desincronicen,
+    # que es el mismo motivo por el que la cabecera del rail lateral la
+    # recibe hecha en vez de armarla.
+    #
+    # Sin KPIs (`_par_act` es None para las herramientas) no se dibuja nada:
+    # la franja se queda con las vistas y el cruce no ocurre. Mejor eso que
+    # una franja vacía donde antes había navegación.
+    if _par_act:
+        _clase_kpi = "franjakpi-val kpi-neg" if _par_act[2] else "franjakpi-val"
+        _sec = (f'<span class="franjakpi-sec">{html.escape(_par_act[1])}</span>'
+                if _par_act[1] else "")
+        with st.container(key="nav_franja_kpis"):
+            st.markdown(
+                '<div class="franja-kpis">'
+                f'<span class="franjakpi-nom">{html.escape(reporte_activo)}</span>'
+                '<span class="franjakpi-sep"></span>'
+                f'<span class="{_clase_kpi}">{html.escape(_par_act[0])}</span>'
+                f'{_sec}'
+                '</div>',
+                unsafe_allow_html=True,
             )
 
     _grupos_dibujados = set()
