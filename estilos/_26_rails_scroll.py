@@ -63,6 +63,31 @@ _TRANS = "160ms"
 CSS = f"""
 @media screen and (min-width: 769px) {{
 
+    /* ── LOS HIJOS SIGUEN AL RAIL ─────────────────────────────────────
+       `visibility` se hereda, pero Streamlit la RE-DECLARA: el wrapper que
+       mete adentro de cada `stMarkdown` trae un `visibility: visible` propio
+       (medido 2026-09-01; la unica clase que lo lleva es un hash de emotion
+       — `.st-emotion-cache-6c7yup` ese dia — asi que no se lo puede nombrar,
+       cambia entre versiones de Streamlit). Resultado: con el rail lateral
+       en `visibility: hidden`, su CABECERA se seguia leyendo — `innerText`
+       devolvia "Compras / S/ 71.3k / 153 docs" y Ctrl+F la encontraba.
+
+       `inherit` y no `hidden`: asi los hijos siguen SIEMPRE al rail, en los
+       dos estados, y no hay que gatillar esta regla con `.rails-scrolled`
+       ni repetirla por cada clase interna que aparezca. Y sigue respetando
+       la degradacion segura de mas abajo: si algun dia una animacion vuelve
+       a poner el rail visible, los hijos heredan eso.
+
+       Descendiente amplio A PROPOSITO (el caso que CLAUDE.md pide evitar,
+       al reves): lo que se quiere justamente es que capture a los widgets
+       que se agreguen despues. */
+    .st-key-compras_tabs_row *,
+    .st-key-nav_rail_lateral *,
+    .st-key-rail_rotulo_rep *,
+    .st-key-rail_rotulo_vis * {{
+        visibility: inherit;
+    }}
+
     /* ── El gancho ────────────────────────────────────────────────────
        `graficos/base.py::_render_rail` monta un `components.html` que
        pone/saca la clase `rails-scrolled` en el <html> del documento
@@ -71,11 +96,15 @@ CSS = f"""
 
     /* El rail de REPORTES se va. */
     .st-key-compras_tabs_row {{
-        transition: opacity {_TRANS} linear;
+        transition: opacity {_TRANS} linear,
+                    visibility 0s linear 0s;   /* vuelve visible YA */
     }}
     :root.rails-scrolled .st-key-compras_tabs_row {{
         opacity: 0;
+        visibility: hidden;                    /* ver OCULTO DE VERDAD */
         pointer-events: none;
+        transition: opacity {_TRANS} linear,
+                    visibility 0s linear {_TRANS};  /* se esconde al final del fundido */
     }}
 
     /* Y su RÓTULO con él: la tarjeta cambia de contenido, así que el
@@ -84,10 +113,14 @@ CSS = f"""
        el cruce — que es cuando se lo mira. Geometría de los dos en
        `estilos/_20_compras_rail.py`. */
     .st-key-rail_rotulo_rep {{
-        transition: opacity {_TRANS} linear;
+        transition: opacity {_TRANS} linear,
+                    visibility 0s linear 0s;
     }}
     :root.rails-scrolled .st-key-rail_rotulo_rep {{
         opacity: 0;
+        visibility: hidden;                    /* ver OCULTO DE VERDAD */
+        transition: opacity {_TRANS} linear,
+                    visibility 0s linear {_TRANS};
     }}
 
     /* ── El rail de VISTAS entra ──────────────────────────────────────
@@ -140,15 +173,44 @@ CSS = f"""
            inactividad dejaba el rail lateral a opacidad 1 ENCIMA del de
            Reportes: los dos visibles, superpuestos. Con esto, el peor caso
            es que la funcion no ocurra y la pantalla se vea como siempre. */
+        /* ── OCULTO DE VERDAD ─────────────────────────────────────────
+           `opacity: 0` no saca del arbol de accesibilidad NI del orden de
+           tabulacion. Medido el 2026-08-31 (1280x800, Compras): con el rail
+           en reposo sus 7 `<button>` seguian con `tabIndex >= 0` y sin
+           `disabled`, o sea TABBABLES, y su `innerText` seguia ahi — asi que
+           tabulando el foco caia en siete botones invisibles que ademas
+           tienen `pointer-events: none`, y Ctrl+F encontraba texto que no
+           se ve. Lo mismo del otro lado: el rail de Reportes al bajar.
+
+           `visibility: hidden` si saca de las dos cosas, y a diferencia de
+           `display: none` NO borra la caja — el rail es `position: fixed` y
+           el scrollspy le lee `getBoundingClientRect()`, que con
+           `visibility` sigue diciendo la verdad.
+
+           El truco de las dos transiciones es lo que salva el fundido:
+           `visibility` no interpola (es discreta), asi que se conmuta con
+           `0s` y un `transition-delay`. Al SALIR el delay es el largo del
+           fundido, para que se esconda recien cuando ya no se ve; al ENTRAR
+           es `0s`, para que aparezca antes de empezar a subir la opacidad.
+           Sin el delay de entrada —o sea heredando el de esta regla— el rail
+           se quedaria invisible los 160ms del fundido y despues apareceria
+           de golpe.
+
+           Sigue todo SIN `!important`, por el motivo de arriba. */
         opacity: 0;
+        visibility: hidden;
         pointer-events: none;
-        transition: opacity {_TRANS} linear;
+        transition: opacity {_TRANS} linear,
+                    visibility 0s linear {_TRANS};
     }}
     .st-key-nav_rail_lateral::-webkit-scrollbar {{ display: none !important; }}
 
     :root.rails-scrolled .st-key-nav_rail_lateral {{
         opacity: 1;
+        visibility: visible;
         pointer-events: auto;
+        transition: opacity {_TRANS} linear,
+                    visibility 0s linear 0s;
     }}
 
     /* Reposo OCULTO y sin `!important`, por el mismo motivo que el rail que
@@ -157,10 +219,15 @@ CSS = f"""
        superpuestos. */
     .st-key-rail_rotulo_vis {{
         opacity: 0;
-        transition: opacity {_TRANS} linear;
+        visibility: hidden;                    /* ver OCULTO DE VERDAD */
+        transition: opacity {_TRANS} linear,
+                    visibility 0s linear {_TRANS};
     }}
     :root.rails-scrolled .st-key-rail_rotulo_vis {{
         opacity: 1;
+        visibility: visible;
+        transition: opacity {_TRANS} linear,
+                    visibility 0s linear 0s;
     }}
 
     /* ── Los items del lateral ────────────────────────────────────────

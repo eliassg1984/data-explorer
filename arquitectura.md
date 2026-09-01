@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-266 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+267 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (86)
 
@@ -418,7 +418,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#261** — Amplía la #254: con algo pineado, el outline de Inspector se suprime SOLO, en vez de exigir…
 - **#264** — Un mock arrastrado con "Mover" podía terminar pintado DEBAJO de un hermano posterior — no…
 
-**Decisiones de diseño y UX** (46)
+**Decisiones de diseño y UX** (47)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -466,6 +466,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#259** — Insertar texto/línea/barra/espacio no lo ubica: hace falta scroll + un flash de color, o es…
 - **#265** — El rail tiene RÓTULO, y son DOS que se cruzan — y para verificar ese cruce la captura manda:…
 - **#266** — La franja de REPORTES no duplica al rail: es lo que queda cuando el rail se va. Y su alto lo…
+- **#267** — opacity: 0 esconde a los ojos, no al TECLADO: el rail apagado seguia teniendo 7 botones…
 
 **Mantenimiento y trampas del lenguaje** (7)
 
@@ -11838,13 +11839,87 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      viven en la barra INFERIOR, que no se va nunca al scrollear — asi que
      alla si seria la duplicacion que en escritorio no es.
 
+267. **`opacity: 0` esconde a los ojos, no al TECLADO: el rail apagado
+     seguia teniendo 7 botones tabbables y texto que Ctrl+F encontraba.**
+
+     2026-09-01. La columna izquierda cruza de Reportes a Vistas con el
+     gancho `rails-scrolled` (reglas #265 y #266,
+     `estilos/_26_rails_scroll.py`), y el que esta en reposo se apagaba con
+     `opacity: 0` + `pointer-events: none`. Medido en local (1280x800,
+     Compras) con el rail de Vistas en reposo:
+
+     - `aria-hidden` null, `inert` false;
+     - sus 7 `<button>` con `tabIndex >= 0` y sin `disabled`, y los 7
+       ACEPTABAN el foco (probado con `.focus()` + `document.activeElement`,
+       que es la sonda honesta — filtrar por `getClientRects().length` NO
+       sirve: un elemento `visibility:hidden` sigue teniendo cajas);
+     - `innerText` con 211 caracteres, o sea Ctrl+F encontrando texto
+       invisible.
+
+     Tabulando, el foco caia en siete botones que no se ven y que ademas
+     tienen `pointer-events: none`: desaparecia. Y lo mismo del otro lado
+     con el rail de Reportes una vez scrolleado, porque el apagado era
+     simetrico.
+
+     **La cura es `visibility: hidden`, que si saca del arbol de
+     accesibilidad y del orden de tabulacion**, y a diferencia de
+     `display: none` NO borra la caja — importa, porque estos railes son
+     `position: fixed` y el scrollspy de `graficos/base.py::_render_rail`
+     les lee `getBoundingClientRect()`.
+
+     **Tres cosas que hay que hacer bien o el fundido se rompe:**
+
+     1. **`visibility` no interpola** (es discreta), asi que se conmuta con
+        `transition: visibility 0s linear <delay>`. Al SALIR el delay es el
+        largo del fundido (se esconde recien cuando ya no se ve); al ENTRAR
+        es `0s`. Si la regla de entrada hereda el delay de salida, el rail
+        se queda invisible los 160ms del fundido y despues aparece de
+        golpe: hay que declarar el `transition` en LAS DOS reglas.
+     2. **Sigue todo sin `!important`**, por la "degradacion segura" que ya
+        documenta ese fichero: una animacion le gana a una declaracion
+        normal, y el reposo tiene que poder perder.
+     3. **Streamlit RE-DECLARA `visibility: visible`** en el wrapper que
+        mete adentro de cada `stMarkdown`, asi que la herencia no alcanza:
+        con el rail en `hidden`, su CABECERA se seguia leyendo —
+        `innerText` devolvia "Compras / S/ 71.3k / 153 docs". La unica clase
+        que lo lleva es un hash de emotion (`.st-emotion-cache-6c7yup` ese
+        dia), o sea que no se la puede nombrar. Se arregla con un
+        descendiente AMPLIO: `.st-key-<rail> * { visibility: inherit; }`.
+        `inherit` y no `hidden` para que los hijos sigan al rail en los DOS
+        estados y la degradacion segura del punto 2 siga valiendo. Es el
+        caso que CLAUDE.md pide evitar (una regla colgada del contenedor que
+        captura widgets futuros) usado A PROPOSITO: eso es exactamente lo
+        que se quiere aca.
+
+     Verificado en los dos estados, y son simetricos — nunca hay 14
+     tabbables:
+
+     | | reposo | `rails-scrolled` |
+     |---|---|---|
+     | rail Vistas | 0 enfocables, `innerText` vacio | 7 enfocables, con texto |
+     | rail Reportes | 7 enfocables, con texto | 0 enfocables, `innerText` vacio |
+     | rotulo Reportes | visible | oculto, vacio |
+     | rotulo Vistas | oculto, vacio | visible |
+
+     **Y de paso, el porque de la trampa de medicion de la regla #265.**
+     Aquello anoto que `getComputedStyle` devolvia el valor de REPOSO mucho
+     despues de los 160ms de la transicion. El motivo: **con el panel del
+     navegador OCULTO las transiciones no avanzan**. La pagina no recibe
+     frames, `el.getAnimations()` las lista `running` con el valor
+     congelado, y `getComputedStyle` lee eso. En cuanto se pone la pestana
+     al frente (o se le pide una captura, que fuerza el pintado) los valores
+     saltan solos al destino. La conclusion de la #265 —"para lo que
+     dependa de `rails-scrolled`, mirar la pantalla"— vale igual, pero
+     ahora se puede medir: hay que FRONTEAR la pestana primero, y volver a
+     medir despues de cada captura.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#267**.
+> próxima regla nueva es la **#268**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
