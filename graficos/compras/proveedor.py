@@ -522,7 +522,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     # un botón de solo-ícono, sin nada más en el `with`.
                     #
                     # 2026-08-25, 4ta vuelta: el ícono se MUDA a la fila de
-                    # atajos (más abajo, `compras_prov_rank_atajos`) — dos
+                    # atajos (más abajo, `cp_rank_fila`) — dos
                     # razones, verificadas en el DOM, no a ojo:
                     #
                     #   1. Colisión real. Vivía en su propia columna angosta
@@ -552,8 +552,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     # ancla derecha, así que lo primero en el `with` termina
                     # más cerca del título — "pegado", que era la intención
                     # original y ahora sí se cumple.
-                    st.markdown('<div class="cp-rank-tit">Ranking de '
-                                'proveedores</div>', unsafe_allow_html=True)
+                    # El título ya NO se dibuja acá: se lo pasa al
+                    # selector, que lo mete dentro de su propia fila para
+                    # que compartan renglón (2026-09-01, a pedido, desde un
+                    # arrastre del modo diseño que lo subía al costado del
+                    # título). Antes eran dos renglones: título de ancho
+                    # completo arriba, control debajo. Medido: la grilla
+                    # sube de y=315 a y=285, o sea 30px que gana la tabla.
                     # 2026-08-23 → 08-26, cuatro vueltas de pedido: el
                     # selector de fecha de esta tarjeta. Vive en
                     # `_comun.py::selector_fecha_tarjeta` desde que se pidió
@@ -567,7 +572,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     # `st.rerun(scope="app")`, porque el filtro que lee ese
                     # rango vive en app.py, fuera de este fragment.
                     _ctx_fecha = selector_fecha_tarjeta(
-                        "cp_rank", "_cp_rank_atajo_pendiente")
+                        "cp_rank", "_cp_rank_atajo_pendiente",
+                        titulo_html='<div class="cp-rank-tit">Ranking de '
+                                    'proveedores</div>')
                     # La fila de atajos le come FRANJA_ATAJOS al AgGrid de
                     # abajo — mismo motivo que FRANJA_CTRL_EVO en
                     # Evolución: nadie le hacía lugar todavía. YA NO es

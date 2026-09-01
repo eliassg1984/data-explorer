@@ -187,7 +187,7 @@ def _aplicar_atajo_select(clave_widget, placeholder, opciones, ctx, bandera):
     st.session_state[clave_widget] = placeholder
 
 
-def selector_fecha_tarjeta(clave, bandera):
+def selector_fecha_tarjeta(clave, bandera, titulo_html=None):
     """Trigger + panel de fecha para una tarjeta de Compras.
 
     El TRIGGER es el rango vigente escrito con todas las letras ("1 ago –
@@ -215,6 +215,18 @@ def selector_fecha_tarjeta(clave, bandera):
         if a[0] in _claves]
 
     with st.container(key=f"{clave}_fila"):
+        # `titulo_html` OPCIONAL: el título de la tarjeta, para que comparta
+        # fila con el control en vez de gastar un renglón propio (2026-09-01,
+        # a pedido). Entra como HTML ya armado y no como texto porque cada
+        # tarjeta tiene su clase de título propia —`cp-rank-tit` vive en
+        # `_css_proveedor.py` y `cp-prod-rank-tit` en `producto.py`, a
+        # propósito, ver el comentario de esa segunda— y este helper no
+        # tiene por qué saber cuál le toca.
+        #
+        # Va PRIMERO: la fila es un flex `row` con `space-between`, así que
+        # el orden del `with` es el orden en pantalla.
+        if titulo_html:
+            st.markdown(titulo_html, unsafe_allow_html=True)
         # El TRIGGER ES LA FECHA MISMA. Antes eran dos elementos —un botón
         # de puro ícono y, al lado, un caption con el rango— o sea el dato
         # y su gesto separados. Sin rango todavía (media selección, o

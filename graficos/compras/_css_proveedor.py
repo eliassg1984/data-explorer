@@ -548,7 +548,44 @@ CSS = """        <style>
         .st-key-compras_prov_card_ranking {
             position: relative !important;
         }
-        .st-key-compras_prov_rank_atajos,
+        /* ── LA FILA DEL RANKING DE PROVEEDORES: titulo + control ───────
+           2026-09-01, a pedido. Antes el titulo ocupaba un renglon entero
+           de ancho completo y el control flotaba absoluto sobre su esquina
+           — dos cajas encimadas donde solo el pintado las separaba, que es
+           lo que se descubrio midiendo: la caja del titulo media 490px
+           para 165 de texto, y el control le caia adentro.
+           Ahora `selector_fecha_tarjeta` recibe el titulo y lo mete DENTRO
+           de esta fila, que pasa a estar EN EL FLUJO y a repartir: el
+           titulo se queda con lo que sobra y el control conserva lo suyo.
+           Medido: la grilla sube de y=315 a y=285. */
+        .st-key-cp_rank_fila {
+            position: static !important;
+            width: 100% !important;
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 10px !important;
+            margin: 0 0 4px !important;
+        }
+        /* El TITULO cede, el control no. El `min-width: 0` no es
+           decorativo: sin el, un flex item nunca se encoge por debajo de
+           su contenido, asi que un nombre largo empujaria al control fuera
+           de la tarjeta en vez de truncar. */
+        .st-key-cp_rank_fila > [data-testid="stElementContainer"]:first-child {
+            flex: 1 1 auto !important;
+            min-width: 0 !important;
+            width: auto !important;
+        }
+        .st-key-cp_rank_fila .cp-rank-tit {
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+            margin: 0 !important;
+        }
+        .st-key-cp_rank_fila .st-key-cp_rank_escala {
+            flex: 0 0 auto !important;
+        }
         .st-key-cp_prod_fila {
             position: absolute !important;
             top: 16px !important;
@@ -566,15 +603,15 @@ CSS = """        <style>
             flex-wrap: wrap !important;
             gap: 6px !important;
         }
-        .st-key-compras_prov_rank_atajos [data-testid="stElementContainer"],
+        .st-key-cp_rank_fila [data-testid="stElementContainer"],
         .st-key-cp_prod_fila [data-testid="stElementContainer"] {
             width: auto !important;
         }
-        .st-key-compras_prov_rank_atajos [data-testid="stElementToolbar"],
+        .st-key-cp_rank_fila [data-testid="stElementToolbar"],
         .st-key-cp_prod_fila [data-testid="stElementToolbar"] {
             display: none;
         }
-        .st-key-compras_prov_rank_atajos button,
+        .st-key-cp_rank_fila button,
         .st-key-cp_prod_fila button {
             min-width: 0 !important;
             height: 22px !important;
@@ -590,7 +627,7 @@ CSS = """        <style>
             box-shadow: 0 1px 2px rgba(15,15,30,0.06) !important;
             transition: background .12s, color .12s !important;
         }
-        .st-key-compras_prov_rank_atajos button:hover,
+        .st-key-cp_rank_fila button:hover,
         .st-key-cp_prod_fila button:hover {
             background: #f0edfe !important;
             color: #4d3fb3 !important;
@@ -598,7 +635,7 @@ CSS = """        <style>
         /* El trigger de la escala de tiempo: desde el 2026-08-26 su label
            es EL RANGO ACTIVO ("1 ago - 24 ago 2026"), no un icono de
            calendario -- ver el comentario largo en proveedor.py. Hereda la
-           pildora de `.st-key-compras_prov_rank_atajos button` (misma
+           pildora de `.st-key-cp_rank_fila button` (misma
            altura, mismo borde, mismo hover que el resto de la fila) y solo
            corrige lo que cambio al pasar de un glifo a texto:
 
@@ -611,7 +648,7 @@ CSS = """        <style>
              - un pelo mas grande que los 11px de la pildora base: es el
                unico texto de la fila y ademas el dato que se viene a
                leer. */
-        .st-key-compras_prov_rank_atajos
+        .st-key-cp_rank_fila
             [data-testid="stPopover"]:has(.st-key-cp_rank_escala) button,
             [data-testid="stPopover"]:has(.st-key-cp_prod_escala) button,
         .st-key-cp_rank_escala button,
@@ -864,7 +901,7 @@ CSS = """        <style>
 
            2026-08-25, 2da vuelta ("podemos unificar estas dos?"): el
            desplegable se MUDA de ser un tercer hijo de
-           `compras_prov_rank_atajos` a vivir DENTRO del panel de escala
+           `cp_rank_fila` a vivir DENTRO del panel de escala
            (`cp_rank_escala_panel`) — un solo popover para "elegí un
            atajo" y "afiná a mano", no dos triggers para el mismo dato.
            2026-08-26, 3ra vuelta ("«Atajos» no significa nada para el
@@ -876,7 +913,7 @@ CSS = """        <style>
            es el recurso escaso de este panel.
 
            Vive en el portal de `stPopoverBody`, así que
-           `.st-key-compras_prov_rank_atajos button` (la píldora blanca de
+           `.st-key-cp_rank_fila button` (la píldora blanca de
            la fila de afuera) no lo alcanza — igual se resetea todo a
            mano, para no depender de qué ande suelto por ese lado. */
         .st-key-cp_rank_atajo_sel [data-testid="stButtonGroup"],
