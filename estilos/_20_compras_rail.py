@@ -269,19 +269,60 @@ CSS = """    /* ================================================================
     .st-key-rail_rotulo_rep,
     .st-key-rail_rotulo_vis {
         position: fixed !important;
-        /* 14px: el rótulo ocupa y=14..33 y deja 14px de aire hasta el borde
-           del rail (y=47), el mismo respiro que tiene por arriba. */
         top: calc(14px + var(--franja-rep-alto)) !important;
         left: 19px !important;              /* == el rail */
         width: var(--rail-der-w) !important;
+        /* ── CABECERA DEL RAIL (2026-08-31, a pedido) ───────────────────
+           Hasta hoy era texto suelto sobre el lienzo, flotando 14px por
+           encima del rail. Ahora es su CABECERA: misma superficie, mismo
+           ancho, mismas esquinas (rectas, como el rail desde que perdió el
+           radio) y PEGADA — el borde de arriba del rail hace de divisoria
+           entre la cabecera y los ítems, igual que el hairline que separa
+           un ítem del siguiente.
+
+           `33px` es la distancia exacta entre los dos `top` que ya existían
+           (47 del rail menos 14 de la cabecera). Va como `calc()` con esos
+           dos sumandos a la vista y no como un 33 pelado: si alguno de los
+           dos se mueve —y el del rail ya va por su cuarta vuelta— la resta
+           canta de dónde salía el número.
+
+           `border-bottom: none` es lo que evita la línea doble: la
+           cabecera termina donde el rail empieza, así que sin esto habría
+           2px de borde pegados en la costura. El rail pone el suyo.
+
+           `box-sizing: border-box` porque los 33px son la caja ENTERA: con
+           `content-box` los dos bordes de 1px la estirarían a 35 y la
+           cabecera se montaría sobre el primer ítem. */
+        height: calc(47px - 14px) !important;
+        box-sizing: border-box !important;
+        display: flex !important;
+        /* LAS DOS, y no sólo `align-items`. El contenedor de Streamlit es un
+           flex en COLUMNA, así que `align-items` gobierna el eje HORIZONTAL
+           y el que centra en vertical es `justify-content`. Medido con sólo
+           `align-items: center`: el texto quedaba en y=53 dentro de una
+           cabecera de 52..85, o sea pegado arriba. */
+        align-items: flex-start !important;
+        justify-content: center !important;
         margin: 0 !important;
-        /* 4px de sangría: alinea con el borde interno de la tarjeta (x=20
-           medido, el rail no tiene padding horizontal), no con el texto de
-           los ítems (x=56, que arranca después del icono). Encabeza la
-           COLUMNA, no la lista. */
-        padding: 0 4px !important;
+        /* 14px de sangría: el mismo que usa `.rail-cab` —la otra cabecera
+           de esta columna, la del rail de Vistas (_26_rails_scroll.py)—
+           para que las dos arranquen en la misma vertical. */
+        padding: 0 14px !important;
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border) !important;
+        border-bottom: none !important;
+        border-radius: 0 !important;
         z-index: 902 !important;            /* 1 sobre el rail de Vistas (901) */
         pointer-events: none !important;    /* es un rótulo, no un control */
+    }
+    /* El `st.markdown` con HTML de BLOQUE trae el `margin-bottom: -16px` de
+       la regla #162: su caja se colapsa a 3px (19 de texto menos 16) y lo que
+       el flex centraba era esa caja de 3, no el texto. Se anula acá y no en
+       la regla general de #162 porque allá el -16 sirve — es el que junta un
+       markdown con lo que le sigue; en una cabecera de altura fija, sobra. */
+    .st-key-rail_rotulo_rep [data-testid="stMarkdown"] div,
+    .st-key-rail_rotulo_vis [data-testid="stMarkdown"] div {
+        margin-bottom: 0 !important;
     }
     .st-key-rail_rotulo_rep .rail-rotulo,
     .st-key-rail_rotulo_vis .rail-rotulo {
