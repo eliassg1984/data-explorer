@@ -175,8 +175,11 @@ CSS = """    /* ================================================================
        como la misma marca. */
     .st-key-nav_franja_rep [data-testid="stButton"] button {
         min-height: 0 !important;
-        height: 26px !important;
-        padding: 0 11px !important;
+        /* 26 -> 30px (2026-08-31, a pedido: texto mas grande). Sigue
+           entrando holgado en los 38 de la franja: quedan 4px de aire
+           arriba y abajo. */
+        height: 30px !important;
+        padding: 0 12px !important;
         border: none !important;
         border-radius: 7px !important;
         background: transparent !important;
@@ -184,10 +187,22 @@ CSS = """    /* ================================================================
         white-space: nowrap !important;
     }
     .st-key-nav_franja_rep [data-testid="stButton"] button p {
-        font-size: 13.5px !important;
+        /* 13.5 -> 15px, a pedido ("un poco mas grandes"). */
+        font-size: 15px !important;
         font-weight: 500 !important;
         color: var(--text-secondary) !important;
-        line-height: 1 !important;
+        /* 1 -> 1.35, y ESTE es el arreglo del "no se ve centrado" (a pedido,
+           2026-08-31). Con `line-height: 1` la caja de linea mide exactamente
+           el cuerpo de la fuente y NO incluye el interlineado: medido, el
+           texto quedaba en y=12..26 de una franja de 38 — centrado al pixel,
+           y aun asi se leia alto, porque la masa de las mayusculas y la
+           altura-x viven en la mitad SUPERIOR de esa caja y el hueco de los
+           descendentes no existe para compensar abajo.
+           Con 1.35 la caja incluye el interlineado repartido arriba y abajo,
+           asi que el centro de la caja y el centro optico del texto
+           coinciden. La leccion es general: para centrar texto verticalmente
+           no alcanza con que la CAJA este centrada. */
+        line-height: 1.35 !important;
     }
     .st-key-nav_franja_rep [data-testid="stButton"] button:hover {
         background: var(--bg-hover) !important;
