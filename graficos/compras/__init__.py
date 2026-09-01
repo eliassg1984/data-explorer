@@ -81,63 +81,150 @@ def _inic(nombre, n=5):
     return str(nombre).strip().split()[0][:n].upper() if str(nombre).strip() else ""
 
 
-def _kpis_vistas(d, col_valor, col_prov, col_fam, col_prod, col_punit,
+def _delta(hoy, ant):
+    """`(flecha, texto, color)` de una variacion, o None si no hay con que
+    comparar. La convencion de color es la MISMA que usa el drill Vs año
+    pasado (`vs_ano_pasado.py`, `ERROR if delta > 0 else EXITO`): en Compras
+    GASTAR MAS es rojo. No se reinventa aca para que dos sitios de la misma
+    pantalla no digan lo contrario del mismo signo."""
+    if not ant or ant <= 0 or hoy is None:
+        return None
+    var = (hoy - ant) / ant * 100
+    if abs(var) < 0.5:                     # ruido: ni flecha
+        return None
+    return ("▲" if var > 0 else "▼", f"{abs(var):.0f}%",
+            "red" if var > 0 else "green")
+
+
+def _kpis_vistas(d, d_full, col_valor, col_prov, col_fam, col_prod, col_punit,
                  col_docu, col_fecha):
-    """`{id_vista: texto}` para `_render_rail(kpis=...)`. Ver el comentario
-    de arriba."""
+    """`{id_vista: texto}` para `_render_rail(kpis=...)`.
+
+    `d_full` es el mismo df SIN el filtro de fecha: de ahi sale el PERIODO
+    ANTERIOR con el que se comparan los KPIs. Sin el no habria flecha — `d`
+    es exactamente el rango vigente y no tiene con que compararse.
+    """
     kpis = {}
     if d is None or getattr(d, "empty", True) or not col_valor:
         return kpis
     val = pd.to_numeric(d[col_valor], errors="coerce")
 
+    # ── El periodo ANTERIOR: mismo largo, pegado por atras ───────────────
+    # Se deriva del propio `d` y no del contexto de la franja: asi la
+    # comparacion sigue al rango que el usuario tenga puesto, venga de la
+    # franja o de una tarjeta, sin que este helper sepa cual es cual.
+    prev = None
+    if col_fecha and col_fecha in d.columns and d_full is not None:
+        _f = pd.to_datetime(d[col_fecha], errors="coerce").dropna()
+        if len(_f):
+            _ini, _fin = _f.min(), _f.max()
+            _largo = _fin - _ini
+            _ff = pd.to_datetime(d_full[col_fecha], errors="coerce")
+            prev = d_full[(_ff >= _ini - _largo - pd.Timedelta(days=1))
+                          & (_ff < _ini)]
+            if prev.empty:
+                prev = None
+
+    def _suma(df_, col, clave):
+        """Lo que sumo UN grupo puntual en ese df."""
+        if df_ is None or col is None or col not in df_.columns:
+            return None
+        v = pd.to_numeric(df_[col_valor], errors="coerce")
+        m = df_[col].astype(str) == clave
+        return float(v[m].sum()) if m.any() else 0.0
+
     def _top(col):
-        """(etiqueta, valor) del grupo que más suma, o None."""
         if not col or col not in d.columns:
             return None
         s = val.groupby(d[col].astype(str)).sum().dropna()
         s = s[s > 0]
         return (s.idxmax(), float(s.max())) if len(s) else None
 
+    def _texto(valor, delta):
+        """`:blue[valor] :red[▲12%]` — dos colores a proposito: el dato en
+        azul, que lo separa del lavanda del nombre de la vista (fue el
+        pedido), y la variacion en verde/rojo por signo."""
+        _t = f":blue[{valor}]"
+        if delta:
+            _t += f" :{delta[2]}[{delta[0]}{delta[1]}]"
+        return _t
+
+    # PROVEEDOR: el que mas compro, contra lo que ESE MISMO compro antes.
     _t = _top(col_prov)
     if _t:
-        kpis["Proveedor"] = f"{_inic(_t[0])} {fmt_k(_t[1])}"
+        kpis["Proveedor"] = _texto(
+            f"{_inic(_t[0])} {fmt_k(_t[1])}",
+            _delta(_t[1], _suma(prev, col_prov, _t[0])))
+
+    # PRODUCTO: la familia que mas compro, contra esa misma familia antes.
     _t = _top(col_fam)
     if _t:
-        kpis["Producto"] = f"{str(_t[0])[:3].upper()} {fmt_k(_t[1])}"
+        kpis["Producto"] = _texto(
+            f"{str(_t[0])[:3].upper()} {fmt_k(_t[1])}",
+            _delta(_t[1], _suma(prev, col_fam, _t[0])))
 
-    # VOLATILIDAD: el precio unitario más disperso. Coeficiente de variación
-    # (desvío / media) y no el desvío pelado: un producto caro tiene desvíos
-    # grandes por escala, no por volatilidad. Piso de 5 compras porque con
-    # dos el CV es ruido.
+    # VOLATILIDAD: QUE producto y cuanto (2026-09-01, a pedido: antes iba
+    # solo el numero y no se sabia de que producto hablaba). Coeficiente de
+    # variacion (desvio / media) y no el desvio pelado: un producto caro
+    # tiene desvios grandes por escala, no por volatilidad. Piso de 5
+    # compras porque con dos el CV es ruido.
     if col_punit and col_punit in d.columns and col_prod and col_prod in d.columns:
         pu = pd.to_numeric(d[col_punit], errors="coerce")
         g = pu.groupby(d[col_prod].astype(str))
         cv = (g.std() / g.mean().replace(0, pd.NA)).dropna()
         cv = cv[g.count() >= 5]
         if len(cv):
-            kpis["Volatilidad"] = f"±{cv.max() * 100:.0f}%"
+            _p = cv.idxmax()
+            kpis["Volatilidad"] = _texto(
+                f"{_compras_truncar(str(_p), 14)} ±{cv[_p] * 100:.0f}%", None)
 
+    # DOCUMENTOS: cuantos en el SISTEMA y cuantos en SUNAT (2026-09-01, a
+    # pedido). El del sistema sale de aca, que es barato. El de SUNAT no:
+    # exige la consulta al SIRE, que hace la propia vista con su rango. Se
+    # lo pide prestado por `session_state` —lo publica `documentos_sunat.py`
+    # cuando dibuja— asi que aparece recien cuando esa vista se abrio una
+    # vez. Preferible eso a disparar una consulta externa para decorar un
+    # rotulo de navegacion.
     if col_docu and col_docu in d.columns:
-        kpis["Documentos SUNAT"] = f"{d[col_docu].nunique():,}".replace(",", ".")
+        _n_sis = int(d[col_docu].nunique())
+        _cruce = st.session_state.get("_cp_docs_cruce") or {}
+        _txt = f"sis {_n_sis:,}".replace(",", ".")
+        if _cruce.get("sunat") is not None:
+            _txt += f" · sun {_cruce['sunat']:,}".replace(",", ".")
+        _prev_docs = (int(prev[col_docu].nunique())
+                      if prev is not None and col_docu in prev.columns else None)
+        kpis["Documentos SUNAT"] = _texto(_txt, _delta(_n_sis, _prev_docs))
 
-    # SEMANAL: la mejor semana del rango.
+    # SEMANAL: la mejor semana del rango, contra la mejor de antes.
     if col_fecha and col_fecha in d.columns:
         f = pd.to_datetime(d[col_fecha], errors="coerce")
         s = val.groupby(f.dt.to_period("W")).sum().dropna()
         if len(s):
-            kpis["Semanal"] = fmt_k(float(s.max()))
+            _ant = None
+            if prev is not None:
+                _fp = pd.to_datetime(prev[col_fecha], errors="coerce")
+                _vp = pd.to_numeric(prev[col_valor], errors="coerce")
+                _sp = _vp.groupby(_fp.dt.to_period("W")).sum().dropna()
+                _ant = float(_sp.max()) if len(_sp) else None
+            kpis["Semanal"] = _texto(fmt_k(float(s.max())),
+                                     _delta(float(s.max()), _ant))
 
-    # VS AÑO PASADO: la familia que más varió. El año pasado NO sale de este
-    # df —está filtrado por el rango de la franja, que es justo lo que esa
-    # vista compara— así que se usa la columna `VALOR_ANO_ANTERIOR` del
-    # parquet. Y se usa con el cuidado que pide CLAUDE.md: NO es un dato por
-    # fila, es el total del producto en ese MES repetido en cada fila, así
-    # que sumarla derecho la infla (medido en su día: x4.9). Se deduplica por
+    # VS AÑO PASADO: la familia que mas vario. El año pasado NO sale de este
+    # df —esta filtrado por el rango vigente, que es justo lo que esa vista
+    # compara— asi que se usa la columna `VALOR_ANO_ANTERIOR` del parquet. Y
+    # se usa con el cuidado que pide CLAUDE.md: NO es un dato por fila, es el
+    # total del producto en ese MES repetido en cada fila, asi que sumarla
+    # derecho la infla (medido en su dia: x4.9). Se deduplica por
     # producto-mes con un `max` antes de sumar.
+    #
+    # Aca la flecha va DENTRO del KPI y no como delta aparte: el dato ya ES
+    # una variacion, y una flecha sobre una variacion se leeria como la
+    # variacion de la variacion.
     _col_ant = _resolver(d, ["Valor_ano_anterior", "Valor año anterior",
                              "VALOR_ANO_ANTERIOR"])
     if (_col_ant and col_fam and col_fecha and col_prod
-            and all(c in d.columns for c in (_col_ant, col_fam, col_fecha, col_prod))):
+            and all(c in d.columns
+                    for c in (_col_ant, col_fam, col_fecha, col_prod))):
         _f = pd.to_datetime(d[col_fecha], errors="coerce")
         _base = pd.DataFrame({
             "fam": d[col_fam].astype(str),
@@ -147,16 +234,19 @@ def _kpis_vistas(d, col_valor, col_prov, col_fam, col_prod, col_punit,
             "ant": pd.to_numeric(d[_col_ant], errors="coerce"),
         }).dropna(subset=["mes"])
         if len(_base):
-            _ant = (_base.groupby(["fam", "prod", "mes"])["ant"].max()
-                    .groupby("fam").sum())
-            _hoy = _base.groupby("fam")["hoy"].sum()
-            _cmp = pd.concat([_hoy, _ant], axis=1).dropna()
+            _sant = (_base.groupby(["fam", "prod", "mes"])["ant"].max()
+                     .groupby("fam").sum())
+            _shoy = _base.groupby("fam")["hoy"].sum()
+            _cmp = pd.concat([_shoy, _sant], axis=1).dropna()
             _cmp = _cmp[_cmp["ant"] > 0]
             if len(_cmp):
                 _var = (_cmp["hoy"] - _cmp["ant"]) / _cmp["ant"] * 100
-                _f_top = _var.abs().idxmax()
-                kpis["Vs año pasado"] = (f"{str(_f_top)[:3].upper()} "
-                                         f"{_var[_f_top]:+.0f}%")
+                _ft = _var.abs().idxmax()
+                _sube = _var[_ft] > 0
+                kpis["Vs año pasado"] = (
+                    f":blue[{str(_ft)[:3].upper()}] "
+                    f":{'red' if _sube else 'green'}"
+                    f"[{'▲' if _sube else '▼'}{abs(_var[_ft]):.0f}%]")
     return kpis
 
 _COMPRAS_RAIL_CATEGORIAS = (
@@ -360,9 +450,9 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # aparece a partir de la segunda sección. Ver `base.py::_render_rail`.
     graf = _render_rail(_COMPRAS_RAIL_CATEGORIAS, "compras_graf_tipo",
                         secciones=_PILA,
-                        kpis=_kpis_vistas(d, col_valor, col_prov, col_fam,
-                                          col_prod, col_punit, col_docu,
-                                          col_fecha))
+                        kpis=_kpis_vistas(d, d_full, col_valor, col_prov,
+                                          col_fam, col_prod, col_punit,
+                                          col_docu, col_fecha))
     if graf not in opciones:
         graf = opciones[0]
 

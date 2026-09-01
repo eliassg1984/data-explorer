@@ -436,6 +436,108 @@ CSS = """        <style>
             margin-left: 8px;
             line-height: 1.4;
         }
+
+        /* ── EL PANEL DE PROVEEDORES, COMPACTO ───────────────────────────
+           2026-09-01, a pedido ("muy grande, sobre todo el extenderse").
+           MEDIDO antes de tocar nada, con un rango que traía DOS
+           proveedores: 430x344px. De esos 344, sólo 169 eran contenido:
+             46  padding del panel (23px por lado)
+             80  cinco gaps de 16px del `stVerticalBlock` — el default de
+                 Streamlit, calibrado para una PÁGINA, no para una caja
+             49  un `st.divider()`: 1px de línea con 24 de margen a cada lado
+           Y el ancho: los cinco botones de atajo iban en `st.columns(5)`
+           con `use_container_width`, o sea cada uno reclamaba un quinto
+           ENTERO del panel — 382px de contenido, 430 con el padding.
+           Con la lista completa (~20 proveedores) el alto llegaba al techo
+           de 651px, el 70% de la pantalla.
+
+           Se acota con `:has()` sobre la key de la LISTA, no colgando del
+           contenedor: `stPopoverBody` es un portal al final del body
+           (fuera de `prov_pop_float`), el mismo motivo por el que el panel
+           de la escala y los de Familia/Subfamilia se alcanzan así. Sin
+           ese `:has()` esto apretaría TODOS los popovers de la app —el
+           error contra el que avisa CLAUDE.md—, incluido el de la escala,
+           que ya trae su propio bloque compacto más abajo. */
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prov_lista"]) {
+            width: 250px !important;
+            min-width: 250px !important;
+            max-width: 250px !important;
+            padding: 10px 12px !important;
+        }
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prov_lista"])
+            [data-testid="stVerticalBlock"] {
+            gap: 7px !important;
+        }
+        /* Atajos: `type="tertiary"` ya les saca el marco; acá se les saca
+           el tamaño de botón de página (40px de alto, 0.25rem/0.75rem de
+           padding). Quedan como una línea de enlaces de 11px.
+           Se estilan por su ANCLA PROPIA (la fila `cp_prov_atajos`) y no
+           por el panel: en el panel también hay checkboxes y un toggle,
+           que no tienen por qué heredar esto. */
+        .st-key-cp_prov_atajos { gap: 2px !important; }
+        .st-key-cp_prov_atajos button {
+            min-height: 0 !important;
+            height: auto !important;
+            padding: 2px 6px !important;
+            font-size: 11px !important;
+            font-weight: 500 !important;
+            line-height: 1.3 !important;
+            border-radius: 4px !important;
+            color: var(--text-secondary) !important;
+        }
+        .st-key-cp_prov_atajos button:hover {
+            background: var(--accent-tint) !important;
+            color: var(--accent-deep) !important;
+        }
+        /* Buscador: alto de campo de caja, no de formulario. Van DOS
+           reglas: apretar el `input` lo baja a 24px pero su
+           `stTextInputRootElement` sigue midiendo 40 (medido) — el marco
+           es el que trae el alto, no el campo, y sin la segunda regla el
+           buscador quedaba de lejos la pieza más alta del panel. */
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prov_lista"])
+            [data-testid="stTextInput"] input {
+            padding: 3px 8px !important;
+            font-size: 12px !important;
+            line-height: 1.3 !important;
+        }
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prov_lista"])
+            [data-testid="stTextInputRootElement"] {
+            min-height: 0 !important;
+            height: 28px !important;
+        }
+        /* La LISTA. El alto lo pone Python (dinámico, ver proveedor.py);
+           acá va sólo lo que no depende del contenido. El `padding-right`
+           deja sitio a la barra de scroll para que no tape el último
+           carácter del nombre más largo. */
+        .st-key-cp_prov_lista {
+            padding-right: 4px !important;
+            gap: 2px !important;
+        }
+        /* Filas de 22px en vez de 24+16 de gap. El nombre del proveedor es
+           LARGO (razones sociales completas): con 226px de ancho útil hay
+           que dejarlo envolver o se corta, así que el `white-space` queda
+           en normal y lo que se aprieta es el interlineado. */
+        .st-key-cp_prov_lista [data-testid="stCheckbox"] label {
+            gap: 6px !important;
+            align-items: flex-start !important;
+        }
+        .st-key-cp_prov_lista [data-testid="stCheckbox"] label > div:last-child,
+        .st-key-cp_prov_lista [data-testid="stCheckbox"] label p {
+            font-size: 12px !important;
+            line-height: 1.25 !important;
+        }
+        /* El toggle "Nombres en barras" es la ÚNICA opción de dibujo entre
+           puros filtros: la raya que la separaba era un `st.divider()` de
+           49px. Un `border-top` cuesta 1px y el aire que se le dé. */
+        .st-key-cp_prov_show_names {
+            border-top: 1px solid var(--border) !important;
+            padding-top: 7px !important;
+            margin-top: 1px !important;
+        }
+        .st-key-cp_prov_show_names label p {
+            font-size: 11px !important;
+            color: var(--text-secondary) !important;
+        }
         .st-key-gran_float [data-testid="stElementToolbar"] { display: none; }
         /* Ocultar la barra de herramientas del propio gráfico (fullscreen).
            Sin `> div >`: el chart vive dentro de cp_chart_wrap (un nivel más

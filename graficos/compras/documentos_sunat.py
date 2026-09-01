@@ -513,6 +513,22 @@ def _kpis_cruce(df, origen=None):
         dato(f'{int(conteos.get("Coincide", 0)):,}', "coinciden"),
     ]
 
+    # Los conteos, prestados al KPI de la franja de vistas (2026-09-01, a
+    # pedido: "cuantos estan en SUNAT y cuantos en sistema"). Se PUBLICAN
+    # en vez de recalcularse alla porque el lado SUNAT sale de la consulta
+    # al SIRE que se acaba de hacer aca — el rail no puede dispararla sola
+    # para decorar un rotulo. Mismo patron que `CLAVE_CABECERA` de
+    # navegacion.py: quien tiene el dato lo deja, quien lo pinta lo lee.
+    #
+    # Llega un rerun tarde (el rail se dibuja antes que esta vista), asi
+    # que hasta que Documentos se abra una vez el KPI muestra solo el lado
+    # del sistema. Es la degradacion correcta: un numero cierto y otro que
+    # todavia no se sabe, en vez de bloquear la franja esperando a SUNAT.
+    st.session_state["_cp_docs_cruce"] = {
+        "sunat": int(len(df) - conteos.get("Solo sistema", 0)),
+        "sistema": int(len(df) - conteos.get("Solo SUNAT", 0)),
+    }
+
     n_dif = int(conteos.get("Diferencia", 0))
     if n_dif:
         mto = float(df.loc[df["estado"] == "Diferencia", "dif_total"].abs().sum())

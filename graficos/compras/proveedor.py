@@ -446,28 +446,65 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 unsafe_allow_html=True,
             )
             with st.popover("Proveedores", icon=":material/groups:"):
+                # ── Panel COMPACTO (2026-09-01, a pedido: "muy grande,
+                # sobre todo al extenderse"). Medido ANTES de tocar nada,
+                # con el rango que sólo tenía DOS proveedores: 430x344px,
+                # de los cuales 175 eran aire —46 de padding (23 por lado),
+                # 80 de gaps (el `stVerticalBlock` de Streamlit trae 16px,
+                # pensado para una página, no para una caja), y 49 de un
+                # `st.divider()` que es una línea de 1px con 24 de margen
+                # a cada lado—. Las piezas útiles sumaban 169.
+                # Con la lista completa (~20 proveedores) el panel se comía
+                # 651px de alto, el 70% del viewport.
+                #
+                # Tres cambios de MARCADO acá; el resto es CSS scopeado
+                # (`_css_proveedor.py`, bloque "PANEL DE PROVEEDORES
+                # COMPACTO"), alcanzado con `:has()` porque `stPopoverBody`
+                # es un portal fuera de este contenedor.
+                #
+                # 1) Los atajos dejan de ser 5 botones "de página" en
+                #    `st.columns(5)`. Ese reparto es por FRACCIÓN, así que
+                #    los botones al 100% de su quinto imponían un piso de
+                #    382px de ancho y 55 de alto. Una fila horizontal los
+                #    deja medir su texto: ~180px en un renglón de 22.
                 # columnas-internas: botonera del popover, no el eje de la vista.
-                _bt = st.columns(5)
-                _bt[0].button("Top 3", key="cp_topn3", use_container_width=True,
+                with st.container(horizontal=True, gap="small",
+                                  key="cp_prov_atajos"):
+                    st.button("Top 3", key="cp_topn3", type="tertiary",
                               on_click=_cp_set_topn, args=(3,))
-                _bt[1].button("Top 5", key="cp_topn5", use_container_width=True,
+                    st.button("5", key="cp_topn5", type="tertiary",
                               on_click=_cp_set_topn, args=(5,))
-                _bt[2].button("Top 10", key="cp_topn10", use_container_width=True,
+                    st.button("10", key="cp_topn10", type="tertiary",
                               on_click=_cp_set_topn, args=(10,))
-                _bt[3].button("Todos", key="cp_topnall", use_container_width=True,
+                    st.button("Todos", key="cp_topnall", type="tertiary",
                               on_click=_cp_set_topn, args=(len(_real_provs),))
-                _bt[4].button("Limpiar", key="cp_topnclr", use_container_width=True,
+                    st.button("Ninguno", key="cp_topnclr", type="tertiary",
                               on_click=_cp_set_topn, args=(0,))
                 _q = st.text_input("Buscar", key="cp_prov_q",
-                                   placeholder="Buscar proveedor por nombre...",
+                                   placeholder="Buscar proveedor...",
                                    label_visibility="collapsed").strip().lower()
                 _vistos = [p for p in _todos_provs_temp
                            if not _q or _q in str(p).lower()]
                 if not _vistos:
                     st.caption("Sin coincidencias.")
-                for _p in _vistos:
-                    st.checkbox(_p, key="cp_prov_cb::" + str(_p))
-                st.divider()
+                # 2) La lista scrollea DENTRO en vez de estirar el panel.
+                #    El alto es dinámico —no un 190 fijo— porque
+                #    `st.container(height=N)` reserva N aunque haya dos
+                #    filas: con el rango corto habría dejado 150px de caja
+                #    vacía, que es el mismo pecado que se está corrigiendo.
+                #    26 = alto real de una fila de checkbox comprimida
+                #    (24 del widget + 2 de gap), medido; 7 filas es lo que
+                #    se lee sin que la caja domine la pantalla.
+                #    `border=False` explícito: Streamlit dibuja borde solo
+                #    con que haya `height` fijo.
+                _alto_lista = min(max(len(_vistos), 1), 7) * 26 + 4
+                with st.container(height=_alto_lista, border=False,  # alto-fijo-justificado: filas x px de la lista, no una resta contra la pantalla
+                                  key="cp_prov_lista"):
+                    for _p in _vistos:
+                        st.checkbox(_p, key="cp_prov_cb::" + str(_p))
+                # 3) El `st.divider()` se va: separar dos cosas no vale 49px.
+                #    La raya la pone un `border-top` en el toggle (CSS), que
+                #    cuesta 1px y el aire que se le quiera dar.
                 st.toggle("Nombres en barras", key="cp_prov_show_names",
                           help="Muestra el nombre del proveedor "
                           "sobre cada barra. Se abrevia segun el ancho "
