@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-267 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+269 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (86)
 
@@ -134,7 +134,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#245** — Una fila que COMPARA se parte por la mitad, no con COLUMNAS_DRILL
 - **#248** — En media tarjeta, cada columna nueva hay que pagarla con otra: la unidad se muda adentro de…
 
-**Plotly y figuras** (47)
+**Plotly y figuras** (48)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -183,6 +183,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#241** — Un panel de detalle y un gráfico del PERÍODO no pueden convivir: el gráfico tiene que hablar…
 - **#259** — Insertar texto/línea/barra/espacio no lo ubica: hace falta scroll + un flash de color, o es…
 - **#263** — porKeyReal() no podía resolver un mock pineado SOBRE SÍ MISMO: el filtro…
+- **#269** — El JS que vive dentro de un string de Python necesita el escape de salto de línea con DOS…
 
 **AgGrid y tablas** (44)
 
@@ -390,7 +391,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (25)
+**Herramientas de desarrollo** (26)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -417,6 +418,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#260** — Un mock insertado en modo diseño aparece un instante y desaparece solo: Streamlit le borra…
 - **#261** — Amplía la #254: con algo pineado, el outline de Inspector se suprime SOLO, en vez de exigir…
 - **#264** — Un mock arrastrado con "Mover" podía terminar pintado DEBAJO de un hermano posterior — no…
+- **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 
 **Decisiones de diseño y UX** (47)
 
@@ -468,7 +470,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#266** — La franja de REPORTES no duplica al rail: es lo que queda cuando el rail se va. Y su alto lo…
 - **#267** — opacity: 0 esconde a los ojos, no al TECLADO: el rail apagado seguia teniendo 7 botones…
 
-**Mantenimiento y trampas del lenguaje** (7)
+**Mantenimiento y trampas del lenguaje** (8)
 
 - **#21** — Columnas reales de salidas.parquet confirmadas 2026-08-04
 - **#43** — st.plotly_chart(..., selection_mode="points") NO agrega las herramientas de caja/lazo al…
@@ -477,6 +479,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#56** — Al sacar un blob de JS/CSS embebido a su módulo: NO lo pases a raw string, y verifica el…
 - **#132** — El rail de navegación dejó de ser una columna izquierda de 90px y pasó a ser una franja…
 - **#233** — Una guarda que rastrea el fuente tiene que excluir .claude/worktrees/ — y el filtro mira los…
+- **#269** — El JS que vive dentro de un string de Python necesita el escape de salto de línea con DOS…
 
 **Sin tema asignado** (1)
 
@@ -11913,13 +11916,77 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      ahora se puede medir: hay que FRONTEAR la pestana primero, y volver a
      medir despues de cada captura.
 
+268. **Selección múltiple en el modo diseño: el pin sigue siendo UNO,
+     el grupo es una capa aparte — y el delta se le suma al estado de cada
+     miembro, no se mueve una caja y se reparte.**
+
+     Pedido 2026-08-31: "¿puedo seleccionar varios contenedores y
+     arrastrarlos en conjunto? creo que solo puedo hacerlos uno por uno".
+     Era correcto: el pin del inspector es único por diseño y todo el modo
+     diseño colgaba de él.
+
+     No se tocó el pin. El grupo (`__disenoState.grupo`) guarda IDS —nunca
+     nodos, misma razón que los mocks y el sub-pin: un rerun los recrea— y
+     se alimenta con un botón `⊞` que suma el pineado del momento. A
+     partir de DOS miembros el contorno pasa a ser el bounding box del
+     conjunto y el panel se reemplaza por el del grupo. Con uno solo no se
+     activa: el pin normal ya hace todo y un bbox de un elemento es la
+     misma caja con otro nombre.
+
+     Lo que hace que el gesto sea correcto: cada miembro conserva **su
+     propio `transformState`** y todos reciben el **mismo delta**, sumado
+     sobre el valor con el que arrancó el gesto. Mover el bbox y repartir
+     la diferencia hubiera perdido el desplazamiento previo de cada uno —
+     verificado con tres arrastres encadenados sobre dos elementos:
+     (70,45) → (40,65) → (50,50), idéntico en los dos y acumulativo.
+
+     Dos límites deliberados, y conviene saberlos antes de "completarlos":
+
+     - **Las manijas de resize se ocultan en grupo.** Estirar un bounding
+       box no tiene una traducción única: ¿crece cada miembro, o sólo el
+       hueco entre ellos? Mover sí la tiene, y era lo que se pidió.
+     - **Los controles de estilo siguen siendo de a uno.** El panel lee UN
+       registro para pintar el valor inicial de cada control; con N
+       elementos que arrancan de valores distintos, un slider tendría que
+       mostrar algo que no es cierto para ninguno. Un control que miente
+       es peor que un control que no está.
+
+269. **El JS que vive dentro de un string de Python necesita el escape de
+     salto de línea con DOS barras, y no hay nada que lo vigile — salvo el
+     test que ahora sí existe.**
+
+     Escribirlo con una sola barra hace que Python lo convierta en un
+     salto REAL al importar el módulo. JS no admite saltos dentro de
+     comillas simples ni dobles, así que el string queda abierto y el
+     navegador muere con `Invalid or unexpected token`. El 2026-08-31 eso
+     dejó **el modo diseño entero sin montarse** mientras se le agregaba
+     la selección múltiple.
+
+     Por qué duele más de lo que parece: **nada lo ve**. `ruff` valida
+     Python y el string es Python válido; los tests de figuras no cargan
+     el JS; y en pantalla el síntoma es una herramienta que simplemente no
+     aparece, sin traza útil ni error en el servidor. Se encontró leyendo
+     la consola del navegador a mano.
+
+     La guarda es `test_graficos.py::_pruebas_js_inyectado_sano`: importa
+     los módulos (o sea ve el JS **ya interpolado**, que es lo que llega
+     al navegador) y busca strings abiertos por un salto sin escapar. No
+     es un parser de JS a propósito — cubre exactamente la clase de error
+     que produce el escapado de dos niveles. Se verificó que falla
+     reintroduciendo el bug, no sólo que pasa.
+
+     Detalle con gracia propia: el primer intento de escribir ESE test se
+     rompió por el mismo motivo, porque llevaba literales de salto de
+     línea adentro. Por eso el test usa `chr(10)` y `chr(92)` en vez de
+     escribirlos — está anotado ahí mismo para el que venga a tocarlo.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#268**.
+> próxima regla nueva es la **#270**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

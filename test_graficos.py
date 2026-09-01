@@ -1937,6 +1937,91 @@ def _pruebas_presupuesto_vertical():
     return fallos
 
 
+def _pruebas_js_inyectado_sano():
+    """Que el JS que vive dentro de un string de Python siga siendo JS.
+
+    Sale de un bug del 2026-08-31: al sumar la selección múltiple al modo
+    diseño se escribió el escape de salto de línea con UNA barra dentro de
+    `_diseno_js.py`. Python lo convierte en un salto REAL al importar el
+    módulo, y JS —que no admite saltos dentro de comillas simples ni
+    dobles— muere con "Invalid or unexpected token". El modo diseño entero
+    dejó de montarse.
+
+    Lo peligroso es que NADA lo ve: `ruff` valida Python y el string es
+    Python válido; los tests de figuras no cargan el JS; y en el navegador
+    el síntoma es una herramienta que simplemente no aparece, sin traza
+    útil. Se descubrió mirando la consola a mano.
+
+    Esta guarda importa el módulo (o sea, ve el JS ya interpolado, que es
+    lo que llega al navegador) y busca strings abiertos por un salto sin
+    escapar. No es un parser de JS: cubre exactamente la clase de error que
+    produce el escapado de dos niveles.
+
+    Ojo al tocarla: acá NO se escriben literales de salto de línea, se usa
+    `chr(10)`. Escribirlos fue lo que rompió el intento anterior de este
+    mismo test — el bug que vigila se lo llevó puesto mientras nacía.
+    """
+    fallos = 0
+    BARRA = chr(92)
+    SALTO = chr(10)
+
+    def strings_rotos(js):
+        malos, i, n, linea = [], 0, len(js), 1
+        while i < n:
+            c = js[i]
+            if c == SALTO:
+                linea += 1
+                i += 1
+                continue
+            if c == "/" and i + 1 < n and js[i + 1] == "/":
+                while i < n and js[i] != SALTO:
+                    i += 1
+                continue
+            if c == "/" and i + 1 < n and js[i + 1] == "*":
+                i += 2
+                while i + 1 < n and not (js[i] == "*" and js[i + 1] == "/"):
+                    if js[i] == SALTO:
+                        linea += 1
+                    i += 1
+                i += 2
+                continue
+            if c in ('"', "'"):
+                comienzo, j = linea, i + 1
+                while j < n:
+                    if js[j] == BARRA:
+                        j += 2
+                        continue
+                    if js[j] == c:
+                        break
+                    if js[j] == SALTO:
+                        malos.append((comienzo, js[i:i + 50]))
+                        break
+                    j += 1
+                i = j + 1
+                continue
+            i += 1
+        return malos
+
+    import importlib
+
+    for modulo in ("inyecciones._diseno_js", "inyecciones._inspector_js"):
+        mod = importlib.import_module(modulo)
+        rotos = []
+        for nombre, val in vars(mod).items():
+            if not isinstance(val, str) or len(val) < 2000:
+                continue
+            rotos += [(nombre, ln, frag) for ln, frag in strings_rotos(val)]
+        if rotos:
+            fallos += 1
+            print(f"FALLA js · {modulo}: {len(rotos)} string(s) sin cerrar")
+            for nombre, ln, frag in rotos[:5]:
+                print(f"        {nombre} línea ~{ln}: {frag!r}")
+        else:
+            print(f"OK    js · {modulo} sin strings rotos")
+
+    return fallos
+
+
 def _pruebas_jscode_barato():
     """Que nadie vuelva a meter un payload de DATOS dentro de un `JsCode`.
 
@@ -2268,6 +2353,9 @@ def main():
 
     # ── JsCode: que nadie vuelva a meterle un payload de datos adentro ──
     fallos += _pruebas_jscode_barato()
+
+    # ── El JS inyectado: que el escapado de dos niveles no lo rompa ─────
+    fallos += _pruebas_js_inyectado_sano()
 
     # ── El barrido del fuente que usan las tres guardas de arriba ───────
     fallos += _pruebas_recorrido_fuentes()

@@ -88,6 +88,12 @@ JS = """
         if (win.__disenoState.empujarLienzo === undefined) {
             win.__disenoState.empujarLienzo = false;
         }
+        // Seleccion multiple (regla #259): ids de elementos que se mueven
+        // JUNTOS. El pin del inspector es y sigue siendo UNO — esto es una
+        // capa aparte del modo diseno, no un segundo pin: se suma el
+        // pineado del momento con un boton, y a partir de dos miembros el
+        // contorno pasa a ser el bounding box del conjunto.
+        if (!win.__disenoState.grupo) { win.__disenoState.grupo = []; }
         if (!win.__disenoState.mocks) { win.__disenoState.mocks = []; }
         if (win.__disenoState.mockN === undefined) { win.__disenoState.mockN = 0; }
         if (!win.__disenoState.mockPos) { win.__disenoState.mockPos = 'despues'; }
@@ -323,6 +329,48 @@ JS = """
             return (r && r.el) ? { el: r.el, key: r.key, sub: r.sub, id: r.id,
                                    subTexto: r.subTexto,
                                    registro: registroPara(r.id) } : null;
+        }
+
+        // ── Grupo: resolucion y geometria ────────────────────────────────
+        // Se guardan IDS, nunca nodos: un rerun de Streamlit los recrea
+        // (misma razon que los mocks y el sub-pin). Un id que ya no
+        // resuelve se ignora en silencio en vez de vaciar la seleccion —
+        // volver de otro reporte no tiene por que perderla.
+        function elPorId(id) {
+            var sep = id.indexOf(' .');
+            if (sep === -1) return porKeyReal(id);
+            var base = porKeyReal(id.slice(0, sep));
+            return base ? base.querySelector('.' + id.slice(sep + 2)) : null;
+        }
+
+        function grupoMiembros() {
+            var out = [];
+            var ids = win.__disenoState.grupo;
+            for (var i = 0; i < ids.length; i++) {
+                var el = elPorId(ids[i]);
+                if (el) out.push({ id: ids[i], el: el, registro: registroPara(ids[i]) });
+            }
+            return out;
+        }
+
+        // Dos es el minimo con sentido: con uno solo el pin normal ya hace
+        // todo, y cambiar el contorno por un bbox de un elemento seria la
+        // misma caja con otro nombre.
+        function grupoActivo() {
+            return grupoMiembros().length >= 2;
+        }
+
+        function bboxGrupo(miembros) {
+            var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+            for (var i = 0; i < miembros.length; i++) {
+                var r = miembros[i].el.getBoundingClientRect();
+                if (r.left < x1) x1 = r.left;
+                if (r.top < y1) y1 = r.top;
+                if (r.right > x2) x2 = r.right;
+                if (r.bottom > y2) y2 = r.bottom;
+            }
+            return { left: x1, top: y1, width: x2 - x1, height: y2 - y1,
+                     right: x2, bottom: y2 };
         }
 
         function bajarASub(clase) {
@@ -1140,7 +1188,20 @@ JS = """
         var SEPARACION_CONTORNO = 4;
 
         function trackear(el) {
-            var r = el.getBoundingClientRect();
+            trackearRect(el.getBoundingClientRect());
+        }
+
+        // Separado de trackear() porque el grupo no tiene UN elemento que
+        // medir: su contorno es el bounding box de todos los miembros.
+        function trackearRect(r) {
+            // En grupo se esconden las manijas de resize: estirar un bounding
+            // box no tiene una traduccion unica (¿crece cada miembro, o solo
+            // el hueco entre ellos?). Mover si la tiene, y es lo que se pidio.
+            var enGrupo = grupoActivo();
+            ['el-diseno-rh-e', 'el-diseno-rh-s', 'el-diseno-rh-se'].forEach(function(id) {
+                var h = doc.getElementById(id);
+                if (h) h.style.display = enGrupo ? 'none' : 'block';
+            });
             var s = SEPARACION_CONTORNO;
             overlay.style.display = win.__disenoContornoOculto ? 'none' : 'block';
             var ox = Math.round(r.left - s), oy = Math.round(r.top - s);
@@ -1694,7 +1755,73 @@ JS = """
         }
 
         // ---- arrastre: resize (bordes/esquina) y mover (nudge) ----
+        // Arrastre del GRUPO: cada miembro conserva su propio
+        // transformState (son elementos distintos, con su propio registro y
+        // su propio "Ver original"), y todos reciben el MISMO delta. Sumar
+        // el delta a cada estado —en vez de mover el bbox y repartir— es lo
+        // que hace que el gesto sea acumulativo igual que el de uno solo.
+        function iniciarArrastreGrupo(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var miembros = grupoMiembros();
+            if (miembros.length < 2) return;
+            var inicio = miembros.map(function(m) {
+                m.registro.transicionNeutralizada = true;
+                neutralizarTransicion(m.el);
+                return { id: m.id,
+                         tx: m.registro.transformState.translateX,
+                         ty: m.registro.transformState.translateY };
+            });
+            var startX = e.clientX, startY = e.clientY;
+            doc.body.style.userSelect = 'none';
+
+            function onMove(ev) {
+                var dx = ev.clientX - startX, dy = ev.clientY - startY;
+                var vivos = grupoMiembros();
+                for (var i = 0; i < vivos.length; i++) {
+                    for (var j = 0; j < inicio.length; j++) {
+                        if (inicio[j].id !== vivos[i].id) continue;
+                        vivos[i].registro.transformState.translateX = Math.round(inicio[j].tx + dx);
+                        vivos[i].registro.transformState.translateY = Math.round(inicio[j].ty + dy);
+                        aplicarTransform(vivos[i].el, vivos[i].registro);
+                    }
+                }
+                if (vivos.length) trackearRect(bboxGrupo(vivos));
+            }
+            function onUp() {
+                doc.body.style.userSelect = '';
+                doc.removeEventListener('mousemove', onMove);
+                doc.removeEventListener('mouseup', onUp);
+                for (var gi = 0; gi < ganchos.length; gi++) {
+                    ganchos[gi].fdoc.removeEventListener('mousemove', ganchos[gi].move);
+                    ganchos[gi].fdoc.removeEventListener('mouseup', ganchos[gi].up);
+                }
+            }
+            // Mismo enganche a los iframes que el arrastre de uno solo: sin
+            // esto el gesto se congela apenas el cursor entra a una tabla.
+            var ganchos = [];
+            var ifs = doc.querySelectorAll('iframe');
+            for (var fi = 0; fi < ifs.length; fi++) {
+                var fdoc = null;
+                try { fdoc = ifs[fi].contentDocument; } catch (err) { continue; }
+                if (!fdoc) continue;
+                (function (frame, fd) {
+                    var mover = function (ev) {
+                        var rf = frame.getBoundingClientRect();
+                        onMove({ clientX: rf.left + ev.clientX, clientY: rf.top + ev.clientY });
+                    };
+                    var soltar = function () { onUp(); };
+                    fd.addEventListener('mousemove', mover);
+                    fd.addEventListener('mouseup', soltar);
+                    ganchos.push({ fdoc: fd, move: mover, up: soltar });
+                })(ifs[fi], fdoc);
+            }
+            doc.addEventListener('mousemove', onMove);
+            doc.addEventListener('mouseup', onUp);
+        }
+
         function iniciarArrastre(e, modo) {
+            if (modo === 'move' && grupoActivo()) return iniciarArrastreGrupo(e);
             e.preventDefault();
             e.stopPropagation();
             var ctx = elementoActivo();
@@ -2154,6 +2281,116 @@ JS = """
         // `res` es el objeto de elementoPineado() entero (key + sub + el),
         // no la key suelta: el arbol necesita saber si el actual es el
         // contenedor o un hijo suyo, y "Copiar CSS" necesita el sub.
+        // Panel del GRUPO. Deliberadamente corto: mover en conjunto, ver
+        // quien esta adentro y sacar el CSS. Los controles de estilo siguen
+        // siendo de a uno — aplicar "color de fondo" a N elementos que
+        // arrancan de valores distintos no tiene un valor inicial que
+        // mostrar en el control, y un slider que miente es peor que no
+        // estar. Ver regla #259.
+        function construirPanelGrupo(miembros) {
+            panel.style.cssText = PANEL_CSS_EXPANDIDO;
+            panel.style.display = 'block';
+            panel.onclick = null;
+            panel.innerHTML = '';
+
+            var header = doc.createElement('div');
+            header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #2a2a35';
+            var titulo = doc.createElement('div');
+            titulo.style.cssText = 'font-size:11px;color:#9385ec;font-family:"Courier New",monospace;flex:1;min-width:0';
+            titulo.textContent = miembros.length + ' seleccionados';
+            var btnVaciar = doc.createElement('button');
+            btnVaciar.textContent = 'Vaciar';
+            btnVaciar.style.cssText = 'background:#2A2A35;color:#fff;border:0;border-radius:4px;padding:4px 8px;font:600 11px sans-serif;cursor:pointer;flex:0 0 auto';
+            btnVaciar.addEventListener('click', function() {
+                win.__disenoState.grupo = [];
+                panel.dataset.builtForKey = '';
+                sync();
+            });
+            header.appendChild(titulo);
+            header.appendChild(botonColapsar());
+            header.appendChild(btnVaciar);
+            panel.appendChild(header);
+
+            var ayuda = doc.createElement('div');
+            ayuda.style.cssText = 'font:11px/1.4 -apple-system,sans-serif;color:#e4e4e8;background:#1c1c24;border:1px dashed #6c5ce7;border-radius:4px;padding:6px 7px;margin-bottom:10px';
+            ayuda.textContent = 'Arrastrá la perilla + para moverlos juntos. El contorno es la caja que los envuelve. Para estilos, soltá la selección y editá de a uno.';
+            panel.appendChild(ayuda);
+
+            var lista = doc.createElement('div');
+            lista.style.cssText = 'margin-bottom:10px;padding:8px 9px;background:#1c1c24;border:1px solid #2a2a35;border-radius:6px';
+            miembros.forEach(function(m) {
+                var fila = doc.createElement('div');
+                fila.style.cssText = 'display:flex;align-items:center;gap:6px;margin:3px 0';
+                var nom = doc.createElement('span');
+                nom.style.cssText = 'flex:1;min-width:0;font:11px "Courier New",monospace;color:#e4e4e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+                var t = m.registro.transformState;
+                nom.textContent = m.id + '  (' + t.translateX + ',' + t.translateY + ')';
+                var btnFuera = doc.createElement('button');
+                btnFuera.textContent = '×';
+                btnFuera.title = 'Sacar de la selección';
+                btnFuera.style.cssText = 'background:transparent;color:#6f6f7a;border:0;padding:0 3px;font-size:13px;line-height:1;cursor:pointer;flex:0 0 auto';
+                btnFuera.addEventListener('click', function() {
+                    win.__disenoState.grupo = win.__disenoState.grupo.filter(function(x) { return x !== m.id; });
+                    panel.dataset.builtForKey = '';
+                    sync();
+                });
+                fila.appendChild(nom);
+                fila.appendChild(btnFuera);
+                lista.appendChild(fila);
+            });
+            panel.appendChild(lista);
+
+            var btnCSS = doc.createElement('button');
+            btnCSS.textContent = '📋 Copiar CSS de los ' + miembros.length;
+            btnCSS.style.cssText = 'width:100%;background:#3C3489;color:#fff;border:0;border-radius:4px;padding:7px;font:600 11px sans-serif;cursor:pointer';
+            var estadoCSS = spanValor('');
+            estadoCSS.style.cssText += ';font-size:10px;display:block;margin-top:5px';
+            // Mismo fallback manual que el "Copiar CSS" de a uno: en Cloud
+            // el copiado automatico falla seguido (iframe anidado, regla #39)
+            // y sin esto el mensaje mentiria.
+            var taCSS = doc.createElement('textarea');
+            taCSS.readOnly = true;
+            taCSS.style.cssText = 'display:none;width:100%;height:90px;margin-top:6px;background:#1c1c24;color:#e4e4e8;border:1px solid #34343f;border-radius:4px;padding:6px;font:10px/1.4 "Courier New",monospace;box-sizing:border-box';
+            btnCSS.addEventListener('click', function() {
+                var partes = [];
+                miembros.forEach(function(m) {
+                    var props = [];
+                    Object.keys(m.registro.cambios).forEach(function(p) {
+                        props.push('    ' + p + ': ' + m.registro.cambios[p] + ';');
+                    });
+                    var t = m.registro.transformState;
+                    if (t.translateX || t.translateY) {
+                        // El nudge es una MEDIDA, no la solucion: el valor
+                        // real casi siempre termina siendo un margin o un
+                        // gap del contenedor. Se emite comentado por eso.
+                        props.push('    /* movido ' + t.translateX + ',' + t.translateY
+                                   + 'px — traducilo a margin/gap, no pegues el transform */');
+                    }
+                    if (!props.length) return;
+                    partes.push('.st-key-' + m.id + ' {\\n' + props.join('\\n') + '\\n}');
+                });
+                if (!partes.length) {
+                    estadoCSS.textContent = 'nada que copiar';
+                    estadoCSS.style.color = '#8b8b95';
+                    taCSS.style.display = 'none';
+                    return;
+                }
+                var bloque = partes.join('\\n\\n');
+                copiarTextoDiseno(bloque, function(ok) {
+                    estadoCSS.textContent = ok ? 'copiado ✓' : 'automático bloqueado: seleccionado abajo';
+                    estadoCSS.style.color = ok ? '#74ab7e' : '#f0997b';
+                    if (ok) { taCSS.style.display = 'none'; return; }
+                    taCSS.value = bloque;
+                    taCSS.style.display = 'block';
+                    taCSS.focus();
+                    taCSS.select();
+                });
+            });
+            panel.appendChild(btnCSS);
+            panel.appendChild(estadoCSS);
+            panel.appendChild(taCSS);
+        }
+
         function construirControles(res, registro) {
             var key = res.key;
             var elemento = res.el;
@@ -2210,7 +2447,25 @@ JS = """
                 aplicarReserva(win.__disenoState.empujarLienzo);
             });
 
+            // Sumar el pineado a la seleccion multiple. Es un boton y no un
+            // ctrl+clic porque el clic derecho ya esta tomado (fija Y copia,
+            // regla #39) y un modificador encima de eso no se descubre solo.
+            var btnSumar = doc.createElement('button');
+            btnSumar.textContent = '⊞';
+            btnSumar.title = 'Sumar este elemento a la selección múltiple (para moverlos juntos)';
+            btnSumar.style.cssText = 'background:#2A2A35;color:#fff;border:0;border-radius:4px;padding:4px 7px;font:600 11px sans-serif;cursor:pointer;flex:0 0 auto';
+            btnSumar.addEventListener('click', function() {
+                var r = elementoPineado();
+                if (!r || !r.el) return;
+                if (win.__disenoState.grupo.indexOf(r.id) === -1) {
+                    win.__disenoState.grupo.push(r.id);
+                }
+                panel.dataset.builtForKey = '';
+                sync();
+            });
+
             header.appendChild(headerKey);
+            header.appendChild(btnSumar);
             header.appendChild(btnEmpujar);
             header.appendChild(btnContorno);
             header.appendChild(botonColapsar());
@@ -3048,6 +3303,20 @@ JS = """
             // reserva sobraria y dejaria una franja muerta a la derecha.
             aplicarReserva(win.__disenoState.empujarLienzo
                 && !win.__disenoState.panelColapsado);
+            // El grupo gana sobre el pin: mientras hay dos o mas elegidos,
+            // el contorno y el panel son los del conjunto. Soltarlo (Vaciar,
+            // o sacar miembros hasta quedar en uno) devuelve todo al pin
+            // normal sin tocar nada mas.
+            var miembrosG = grupoMiembros();
+            if (!win.__disenoState.panelColapsado && miembrosG.length >= 2) {
+                construirPanelGrupo(miembrosG);
+                panel.dataset.builtForKey = 'grupo:' + miembrosG.length;
+                for (var gm = 0; gm < miembrosG.length; gm++) {
+                    aplicarEstado(miembrosG[gm].el, miembrosG[gm].registro);
+                }
+                trackearRect(bboxGrupo(miembrosG));
+                return;
+            }
             if (win.__disenoState.panelColapsado) {
                 pintarPill();
             } else if (!res) {
