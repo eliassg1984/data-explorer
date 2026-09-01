@@ -188,20 +188,24 @@ CSS = """    /* ================================================================
            arriba, que es el comportamiento viejo y no rompe nada. */
         justify-content: center !important;
         justify-content: safe center !important;
-        /* 2 -> 14px (2026-08-31, a pedido: "no tan juntos"). Los 2px eran,
-           en los hechos, cero: lo unico que separaba un nombre del siguiente
-           era el `padding: 0 12px` de los botones, o sea 26px de texto a
-           texto. Ahora son 38, que es el rango normal de una barra de
-           navegacion superior.
+        /* 2 -> 14 -> 28px, en dos pedidos del mismo tenor ("no tan juntos",
+           "los veo muy junto"). Los 2px originales eran, en los hechos,
+           cero: lo unico que separaba un nombre del siguiente era el
+           `padding: 0 12px` de los botones, o sea 26px de texto a texto.
+           Con 28 son 52, el rango normal de una barra de navegacion
+           superior. Medido a 1280: el grupo pasa de 577 a 647px y quedan
+           317 de aire a cada lado, asi que sigue leyendose como un grupo
+           centrado y no como seis elementos sueltos — con 34 ya empezaba a
+           deshacerse.
 
            El gap y el padding hacen cosas distintas y por eso se sube el
            GAP: el padding es la caja del hover y del activo (el relleno
            lavanda), y agrandarlo hubiera inflado esas pastillas en vez de
            separarlas. Con el gap, las pastillas miden lo mismo y se alejan.
 
-           Cuesta 70px de ancho (5 huecos x 14), que salen del aire que
-           sobra: el grupo pasa de 492 a 562 en un viewport de 1280. */
-        gap: 14px !important;
+           Cuesta ancho, que sale del aire que sobra: son 5 huecos, asi
+           que cada pixel de gap son 5 de grupo. */
+        gap: 28px !important;
         margin: 0 !important;
         padding: 1px 16px 0 16px !important;   /* el 1px sube los botones al tope */
         background: var(--bg-card) !important;
