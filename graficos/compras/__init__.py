@@ -28,7 +28,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from tema import GRIS_BORDE
-from utils import _norm
+from utils import _norm, fmt_k
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
     PALETA_CALLAI, _compras_layout, _compras_truncar, _render_rail,
@@ -58,6 +58,107 @@ from graficos import alturas
 # validados contra `streamlit.string_util.validate_material_icon`: si uno no
 # existe, Streamlit tira StreamlitAPIException al dibujar el rail, o sea la
 # pantalla entera. Ver arquitectura.md regla #147.
+
+# ── KPI POR VISTA, para la franja superior ────────────────────────────────
+# 2026-09-01, a pedido: cada vista lleva en línea el dato que la resume, y
+# Tabla no ("todos, pero a Tabla no").
+#
+# Salen del df POST-CHIPS que ya tiene la vista, no de una consulta nueva:
+# son seis `groupby` sobre datos en memoria. Si el usuario filtra por
+# familia, el KPI sigue al filtro — que es lo que uno espera de un número
+# que vive al lado del nombre de la vista.
+#
+# Cada uno es defensivo por separado: si falta su columna o no hay filas, esa
+# vista se queda sin KPI y las demás no se enteran. Un KPI es decoración
+# informativa; ninguno vale romper la navegación.
+
+def _inic(nombre, n=5):
+    """Las iniciales de un nombre largo de proveedor, para que entre en la
+    franja. `VIBEJ COLIBRI SAC` -> `VIBEJ`. Se corta la PRIMERA palabra en
+    vez de armar una sigla con las iniciales de todas: medido sobre los
+    proveedores reales, la sigla ("VCS", "DGR") es irreconocible y la primera
+    palabra casi siempre alcanza para identificarlos."""
+    return str(nombre).strip().split()[0][:n].upper() if str(nombre).strip() else ""
+
+
+def _kpis_vistas(d, col_valor, col_prov, col_fam, col_prod, col_punit,
+                 col_docu, col_fecha):
+    """`{id_vista: texto}` para `_render_rail(kpis=...)`. Ver el comentario
+    de arriba."""
+    kpis = {}
+    if d is None or getattr(d, "empty", True) or not col_valor:
+        return kpis
+    val = pd.to_numeric(d[col_valor], errors="coerce")
+
+    def _top(col):
+        """(etiqueta, valor) del grupo que más suma, o None."""
+        if not col or col not in d.columns:
+            return None
+        s = val.groupby(d[col].astype(str)).sum().dropna()
+        s = s[s > 0]
+        return (s.idxmax(), float(s.max())) if len(s) else None
+
+    _t = _top(col_prov)
+    if _t:
+        kpis["Proveedor"] = f"{_inic(_t[0])} {fmt_k(_t[1])}"
+    _t = _top(col_fam)
+    if _t:
+        kpis["Producto"] = f"{str(_t[0])[:3].upper()} {fmt_k(_t[1])}"
+
+    # VOLATILIDAD: el precio unitario más disperso. Coeficiente de variación
+    # (desvío / media) y no el desvío pelado: un producto caro tiene desvíos
+    # grandes por escala, no por volatilidad. Piso de 5 compras porque con
+    # dos el CV es ruido.
+    if col_punit and col_punit in d.columns and col_prod and col_prod in d.columns:
+        pu = pd.to_numeric(d[col_punit], errors="coerce")
+        g = pu.groupby(d[col_prod].astype(str))
+        cv = (g.std() / g.mean().replace(0, pd.NA)).dropna()
+        cv = cv[g.count() >= 5]
+        if len(cv):
+            kpis["Volatilidad"] = f"±{cv.max() * 100:.0f}%"
+
+    if col_docu and col_docu in d.columns:
+        kpis["Documentos SUNAT"] = f"{d[col_docu].nunique():,}".replace(",", ".")
+
+    # SEMANAL: la mejor semana del rango.
+    if col_fecha and col_fecha in d.columns:
+        f = pd.to_datetime(d[col_fecha], errors="coerce")
+        s = val.groupby(f.dt.to_period("W")).sum().dropna()
+        if len(s):
+            kpis["Semanal"] = fmt_k(float(s.max()))
+
+    # VS AÑO PASADO: la familia que más varió. El año pasado NO sale de este
+    # df —está filtrado por el rango de la franja, que es justo lo que esa
+    # vista compara— así que se usa la columna `VALOR_ANO_ANTERIOR` del
+    # parquet. Y se usa con el cuidado que pide CLAUDE.md: NO es un dato por
+    # fila, es el total del producto en ese MES repetido en cada fila, así
+    # que sumarla derecho la infla (medido en su día: x4.9). Se deduplica por
+    # producto-mes con un `max` antes de sumar.
+    _col_ant = _resolver(d, ["Valor_ano_anterior", "Valor año anterior",
+                             "VALOR_ANO_ANTERIOR"])
+    if (_col_ant and col_fam and col_fecha and col_prod
+            and all(c in d.columns for c in (_col_ant, col_fam, col_fecha, col_prod))):
+        _f = pd.to_datetime(d[col_fecha], errors="coerce")
+        _base = pd.DataFrame({
+            "fam": d[col_fam].astype(str),
+            "prod": d[col_prod].astype(str),
+            "mes": _f.dt.to_period("M"),
+            "hoy": val,
+            "ant": pd.to_numeric(d[_col_ant], errors="coerce"),
+        }).dropna(subset=["mes"])
+        if len(_base):
+            _ant = (_base.groupby(["fam", "prod", "mes"])["ant"].max()
+                    .groupby("fam").sum())
+            _hoy = _base.groupby("fam")["hoy"].sum()
+            _cmp = pd.concat([_hoy, _ant], axis=1).dropna()
+            _cmp = _cmp[_cmp["ant"] > 0]
+            if len(_cmp):
+                _var = (_cmp["hoy"] - _cmp["ant"]) / _cmp["ant"] * 100
+                _f_top = _var.abs().idxmax()
+                kpis["Vs año pasado"] = (f"{str(_f_top)[:3].upper()} "
+                                         f"{_var[_f_top]:+.0f}%")
+    return kpis
+
 _COMPRAS_RAIL_CATEGORIAS = (
     ("Dimensión", (("Proveedor",        "Proveedor",     ":material/local_shipping:"),
                    ("Producto",         "Producto",      ":material/inventory_2:"))),
@@ -258,7 +359,10 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # izquierda sabe qué botón encender según lo que haya en pantalla, y
     # aparece a partir de la segunda sección. Ver `base.py::_render_rail`.
     graf = _render_rail(_COMPRAS_RAIL_CATEGORIAS, "compras_graf_tipo",
-                        secciones=_PILA)
+                        secciones=_PILA,
+                        kpis=_kpis_vistas(d, col_valor, col_prov, col_fam,
+                                          col_prod, col_punit, col_docu,
+                                          col_fecha))
     if graf not in opciones:
         graf = opciones[0]
 

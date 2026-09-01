@@ -387,6 +387,22 @@ _CSS_FRANJA_VISTAS = f"""
     flex-shrink:0 !important;
     white-space:nowrap !important;
 }}
+/* EL KPI EN LINEA de cada vista (2026-09-01, a pedido). Lo mete
+   `graficos/base.py::_render_rail` dentro del label como `:violet[...]`,
+   que Streamlit renderiza en un `<span>` con su color de tema; acá se le
+   baja el cuerpo y se le pone el aire, para que se lea como DATO al lado
+   del nombre y no como parte del nombre.
+
+   Se alcanza por el color que pone Streamlit y no por una clase propia
+   porque el label de un `st.button` no admite HTML: markdown es lo unico
+   que hay. Si algun dia el tema cambia ese color, este selector deja de
+   matchear — es el precio de pintar dentro de un label. */
+.st-key-nav_rail [data-testid="stButton"] button p span {{
+    font-size:11px !important;
+    font-weight:700 !important;
+    margin-left:2px !important;
+    opacity:.85 !important;
+}}
 .st-key-nav_rail [data-testid="stButton"] button:hover {{
     background:var(--accent-tint) !important; color:var(--accent) !important;
 }}

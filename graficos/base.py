@@ -889,7 +889,7 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
 
 
 def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
-                 secciones=None):
+                 secciones=None, kpis=None):
     """Vistas del reporte activo — fila de TABS DE TEXTO en la franja
     superior. Selector de tipo de gráfico/pantalla dentro de un reporte.
 
@@ -964,8 +964,21 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
         for _cat_nombre, items in categorias:
             for item in items:
                 oid, label = item[0], item[1]
+                # KPI EN LINEA, opcional y por vista (2026-09-01, a pedido).
+                # Va DENTRO del label y no como un elemento aparte porque
+                # `st.button` no admite hijos: el label es lo unico que se
+                # puede pintar. Streamlit lo interpreta como markdown, asi
+                # que `:violet[...]` alcanza para el color sin CSS — y el
+                # espacio doble antes es lo que el CSS usa para separarlo.
+                #
+                # El dashboard lo pasa ya FORMATEADO: acá no hay df ni forma
+                # de saber que significa cada vista. Una vista sin entrada
+                # en el dict queda como estaba, que es el caso de Tabla (a
+                # pedido: "todos, pero a Tabla no") y el de los 8 dashboards
+                # que no pasan nada.
+                _kpi = (kpis or {}).get(oid)
                 st.button(
-                    label,
+                    f"{label}  :violet[{_kpi}]" if _kpi else label,
                     key=f"{btn_prefix}{_slug(oid)}",
                     type=("primary" if oid == sel else "secondary"),
                     on_click=_rail_set, args=(state_key, oid),
