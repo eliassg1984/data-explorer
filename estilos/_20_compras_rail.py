@@ -123,6 +123,50 @@ CSS = """    /* ================================================================
     }
     .st-key-compras_tabs_row::-webkit-scrollbar { display: none !important; }
 
+    /* ── RÓTULO DE LA COLUMNA (2026-08-31) ─────────────────────────────
+       "Reportes" / "Vistas" en el hueco de 47px que el rail dejó libre
+       arriba al bajar (ver el `top`). Va FUERA de la tarjeta, sobre el
+       lienzo, como el "Vistos recientemente" que encabeza la lista de MSN
+       Dinero — el mismo modelo del que salió esta columna entera.
+
+       Los DOS rótulos comparten geometría porque los dos railes comparten
+       hueco: `rail_rotulo_rep` lo dibuja navegacion.py y `rail_rotulo_vis`
+       graficos/base.py, y el cruce entre ambos vive en _26_rails_scroll.py
+       con el mismo `rails-scrolled` que cruza a los railes. Tercer par de
+       literales acoplados a los del rail (top/left/width): el precio ya
+       asumido de esta geometría, igual que el rail lateral.
+
+       `position:fixed` va sobre el CONTENEDOR y no sobre el <div> de
+       adentro: así sale del flujo el bloque entero y no queda el hueco de
+       un flex item vacío en el main. Mismo recurso que el rail. */
+    .st-key-rail_rotulo_rep,
+    .st-key-rail_rotulo_vis {
+        position: fixed !important;
+        /* 14px: el rótulo ocupa y=14..33 y deja 14px de aire hasta el borde
+           del rail (y=47), el mismo respiro que tiene por arriba. */
+        top: 14px !important;
+        left: 19px !important;              /* == el rail */
+        width: var(--rail-der-w) !important;
+        margin: 0 !important;
+        /* 4px de sangría: alinea con el borde interno de la tarjeta (x=20
+           medido, el rail no tiene padding horizontal), no con el texto de
+           los ítems (x=56, que arranca después del icono). Encabeza la
+           COLUMNA, no la lista. */
+        padding: 0 4px !important;
+        z-index: 902 !important;            /* 1 sobre el rail de Vistas (901) */
+        pointer-events: none !important;    /* es un rótulo, no un control */
+    }
+    .st-key-rail_rotulo_rep .rail-rotulo,
+    .st-key-rail_rotulo_vis .rail-rotulo {
+        /* Un punto por debajo del ítem del rail (1rem) y con más peso: es
+           una etiqueta de la columna, no el primero de sus renglones.
+           Mismo criterio que `.rail-cab-nom` en _26_rails_scroll.py. */
+        font-size: .9rem !important;
+        font-weight: 600 !important;
+        color: var(--text-primary) !important;
+        line-height: 1.35 !important;
+    }
+
     /* Reserva el ancho de la franja solo en Compras (no toca otros reportes):
        el :has() detecta el rail dentro del contenedor principal. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row),
@@ -503,6 +547,14 @@ CSS = """    /* ================================================================
         /* Las categorías y separadores verticales no aplican en horizontal. */
         .st-key-compras_tabs_row .rail-cat-badge,
         .st-key-compras_tabs_row .rail-sep {
+            display: none !important;
+        }
+        /* El rótulo encabeza una COLUMNA; acá el rail es una tira
+           horizontal en el flujo del documento y no hay columna que
+           encabezar — y su `position:fixed` lo dejaría flotando sobre el
+           contenido. Mismo criterio que las dos reglas de acá arriba. */
+        .st-key-rail_rotulo_rep,
+        .st-key-rail_rotulo_vis {
             display: none !important;
         }
         /* Los valores de KPI (navegacion.py, 2026-08-22 — reescrito en su

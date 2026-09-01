@@ -912,6 +912,14 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
     # ANIMACIÓN va por DEBAJO de las declaraciones `!important` del autor.
     # Ver arquitectura.md regla #200.
     if secciones:
+        # El gemelo del rótulo de Reportes (`navegacion.py`): esta columna
+        # reemplaza a aquella al bajar, así que el rótulo también se cambia.
+        # Sin esto la tarjeta cambia de contenido bajo un rótulo que sigue
+        # diciendo "Reportes", que es justo lo que el rótulo viene a evitar.
+        with st.container(key="rail_rotulo_vis"):
+            st.markdown('<div class="rail-rotulo">Vistas</div>',
+                        unsafe_allow_html=True)
+
         with st.container(key="nav_rail_lateral"):
             # ── Cabecera: DÓNDE ESTÁS ────────────────────────────────────
             # Esta columna reemplaza a la lista de Reportes al bajar, y con

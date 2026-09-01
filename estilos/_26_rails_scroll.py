@@ -78,6 +78,18 @@ CSS = f"""
         pointer-events: none;
     }}
 
+    /* Y su RÓTULO con él: la tarjeta cambia de contenido, así que el
+       "Reportes" de arriba tiene que cambiar a "Vistas" en el mismo gesto.
+       Si sólo cruzaran los railes, el rótulo mentiría justo mientras dura
+       el cruce — que es cuando se lo mira. Geometría de los dos en
+       `estilos/_20_compras_rail.py`. */
+    .st-key-rail_rotulo_rep {{
+        transition: opacity {_TRANS} linear;
+    }}
+    :root.rails-scrolled .st-key-rail_rotulo_rep {{
+        opacity: 0;
+    }}
+
     /* ── El rail de VISTAS entra ──────────────────────────────────────
        GEOMETRIA ACOPLADA: estos cuatro valores son los mismos que
        `estilos/_20_compras_rail.py` le da a `.st-key-compras_tabs_row`,
@@ -137,6 +149,18 @@ CSS = f"""
     :root.rails-scrolled .st-key-nav_rail_lateral {{
         opacity: 1;
         pointer-events: auto;
+    }}
+
+    /* Reposo OCULTO y sin `!important`, por el mismo motivo que el rail que
+       encabeza (ver "DEGRADACION SEGURA" acá arriba): si el gancho no llega
+       a montarse, el peor caso es que no pase nada — no dos rótulos
+       superpuestos. */
+    .st-key-rail_rotulo_vis {{
+        opacity: 0;
+        transition: opacity {_TRANS} linear;
+    }}
+    :root.rails-scrolled .st-key-rail_rotulo_vis {{
+        opacity: 1;
     }}
 
     /* ── Los items del lateral ────────────────────────────────────────

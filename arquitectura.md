@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-264 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+265 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (85)
 
@@ -417,7 +417,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#261** — Amplía la #254: con algo pineado, el outline de Inspector se suprime SOLO, en vez de exigir…
 - **#264** — Un mock arrastrado con "Mover" podía terminar pintado DEBAJO de un hermano posterior — no…
 
-**Decisiones de diseño y UX** (44)
+**Decisiones de diseño y UX** (45)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -463,6 +463,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#249** — En una homologación, el INVARIANTE es el importe de la línea — no la cantidad ni el precio
 - **#258** — Duplicar un elemento en el modo diseño: la copia CONSERVA las clases st-key-*, y por eso hay…
 - **#259** — Insertar texto/línea/barra/espacio no lo ubica: hace falta scroll + un flash de color, o es…
+- **#265** — El rail tiene RÓTULO, y son DOS que se cruzan — y para verificar ese cruce la captura manda:…
 
 **Mantenimiento y trampas del lenguaje** (7)
 
@@ -11725,13 +11726,69 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      pintarse por encima, con `z-index` computado `1000000000` contra los
      `999999` de `nav_rail`.
 
+265. **El rail tiene RÓTULO, y son DOS que se cruzan — y para verificar
+     ese cruce la captura manda: `getComputedStyle` y el CSSOM no lo
+     ven.**
+
+     2026-08-31, a pedido y con la referencia a la vista: el
+     "Vistos recientemente ⌄" que encabeza la lista de MSN Dinero, el
+     mismo modelo del que salió esta columna entera. El rótulo dice qué
+     es la lista sin gastar una fila de adentro, y vive FUERA de la
+     tarjeta, en el hueco de 47px que el rail dejó libre arriba al bajar
+     (ver el `top` de `_20_compras_rail.py`, cuarta vuelta de esa serie).
+
+     Son DOS porque son dos railes: `rail_rotulo_rep` ("Reportes",
+     `navegacion.py`) y `rail_rotulo_vis` ("Vistas",
+     `graficos/base.py::_render_rail`). Ocupan el MISMO sitio y se cruzan
+     con el mismo gancho `rails-scrolled` que cruza a los railes
+     (`estilos/_26_rails_scroll.py`). Si sólo cruzaran los railes, el
+     rótulo mentiría justo mientras dura el cruce — que es cuando se lo
+     mira. Con eso son ya TRES pares de literales acoplados a la
+     geometría del rail (`top`/`left`/`width`), el precio ya asumido de
+     esta columna; ver la nota de geometría acoplada en
+     `_26_rails_scroll.py`.
+
+     Dos detalles que no son gratis:
+
+     - **El `position:fixed` va sobre el CONTENEDOR**
+       (`.st-key-rail_rotulo_*`), no sobre el `<div>` de adentro: así
+       sale del flujo el bloque entero y no queda el hueco de un flex
+       item vacío en el main. Mismo recurso que el rail. Medido después:
+       la primera tarjeta sigue arrancando en x=323, sin corrimiento.
+     - **En móvil se ocultan.** El rótulo encabeza una COLUMNA; bajo
+       900px el rail es una tira horizontal en el flujo y no hay columna
+       que encabezar — y su `fixed` lo dejaría flotando sobre el
+       contenido. Mismo criterio que `.rail-cat-badge` y `.rail-sep`,
+       que ya se ocultan ahí.
+
+     **Y la trampa de verificación, que costó media docena de sondas.**
+     Con `rails-scrolled` puesto en el `<html>` y el cruce YA ocurrido en
+     pantalla:
+
+     - `getComputedStyle(rail).opacity` seguía devolviendo el valor de
+       REPOSO (1 el de Reportes, 0 el de Vistas) 1,5s después — o sea
+       mucho más que los 160ms de la transición. Es la misma mentira de
+       `getComputedStyle` con propiedades animadas que ya muerde al medir
+       `letter-spacing` y posiciones.
+     - `document.styleSheets` era peor: recorriendo las 1.671 reglas
+       parseadas de TODAS las hojas no aparecía ni una con
+       `rails-scrolled` o `rail_rotulo` en su `selectorText`, aunque el
+       texto SÍ está en el `<style>` y aunque las reglas se están
+       aplicando (el rótulo mide fixed en top:14/left:19/width:280).
+
+     Las dos sondas juntas daban el diagnóstico exacto al revés: "el
+     cruce no funciona". Una captura lo desmintió en un intento — se ve
+     el rail cambiado Y el rótulo diciendo "Vistas". Para cualquier cosa
+     que dependa de `rails-scrolled`, mirar la pantalla; las sondas de
+     estilo no son testigo acá.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#265**.
+> próxima regla nueva es la **#266**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

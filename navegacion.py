@@ -733,6 +733,20 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
         unsafe_allow_html=True,
     )
 
+    # ── Rótulo de la columna ─────────────────────────────────────────────
+    # "Reportes", FUERA de la tarjeta, en el hueco que el rail dejó libre
+    # arriba al bajar a top:47px. Es el "Vistos recientemente" que encabeza
+    # la lista de MSN Dinero — el mismo modelo del que salió esta columna
+    # entera: dice qué es la lista sin gastar una fila de adentro.
+    #
+    # Su gemelo ("Vistas") lo dibuja `graficos/base.py::_render_rail` para el
+    # otro rail, y los dos se cruzan con el mismo `rails-scrolled` que cruza
+    # a los railes. Geometría en `estilos/_20_compras_rail.py`, cruce en
+    # `estilos/_26_rails_scroll.py`.
+    with st.container(key="rail_rotulo_rep"):
+        st.markdown('<div class="rail-rotulo">Reportes</div>',
+                    unsafe_allow_html=True)
+
     _grupos_dibujados = set()
     with st.container(key="compras_tabs_row"):
         with st.container(key="graf_tipo_chips"):
