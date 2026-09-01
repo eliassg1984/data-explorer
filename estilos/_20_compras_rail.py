@@ -166,7 +166,20 @@ CSS = """    /* ================================================================
            arriba, que es el comportamiento viejo y no rompe nada. */
         justify-content: center !important;
         justify-content: safe center !important;
-        gap: 2px !important;
+        /* 2 -> 14px (2026-08-31, a pedido: "no tan juntos"). Los 2px eran,
+           en los hechos, cero: lo unico que separaba un nombre del siguiente
+           era el `padding: 0 12px` de los botones, o sea 26px de texto a
+           texto. Ahora son 38, que es el rango normal de una barra de
+           navegacion superior.
+
+           El gap y el padding hacen cosas distintas y por eso se sube el
+           GAP: el padding es la caja del hover y del activo (el relleno
+           lavanda), y agrandarlo hubiera inflado esas pastillas en vez de
+           separarlas. Con el gap, las pastillas miden lo mismo y se alejan.
+
+           Cuesta 70px de ancho (5 huecos x 14), que salen del aire que
+           sobra: el grupo pasa de 492 a 562 en un viewport de 1280. */
+        gap: 14px !important;
         margin: 0 !important;
         padding: 0 16px !important;
         background: var(--bg-card) !important;
@@ -204,8 +217,13 @@ CSS = """    /* ================================================================
         white-space: nowrap !important;
     }
     .st-key-nav_franja_rep [data-testid="stButton"] button p {
-        /* 13.5 -> 15px, a pedido ("un poco mas grandes"). */
-        font-size: 15px !important;
+        /* 13.5 -> 15 -> 16px, en dos pedidos seguidos del mismo dia
+           ("un poco mas grandes", las dos veces). 16px es el cuerpo base de
+           la app (`html` de Streamlit), asi que la franja dejo de ser texto
+           chico y pasa a leerse como navegacion de primer nivel — que es lo
+           que es. La caja de linea queda en 21.6px (16 x 1.35) dentro de un
+           boton de 30, con 4px de aire arriba y abajo. */
+        font-size: 16px !important;
         font-weight: 500 !important;
         color: var(--text-secondary) !important;
         /* 1 -> 1.35, y ESTE es el arreglo del "no se ve centrado" (a pedido,
