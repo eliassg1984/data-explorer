@@ -21,6 +21,9 @@ CSS = """    /* ================================================================
            que repetir su override acá. */
         :root {
             --nav-top-alto: 0px;
+            /* La franja de reportes es de escritorio: aca los reportes
+               viven en la barra inferior. Ver _00_base.py. */
+            --franja-rep-alto: 0px;
         }
 
         /* COLAPSAR el hueco fantasma de la franja: en móvil TODO su
@@ -138,6 +141,15 @@ CSS = """    /* ================================================================
             min-width: 0 !important;
             max-width: 100% !important;
         }
+
+        /* La franja de REPORTES no existe en móvil: allá los reportes
+           viven en la barra inferior (`navegacion.py::nav_movil`), y una
+           segunda lista de los mismos nombres arriba sería la duplicación
+           que en escritorio justamente NO es (allá el rail se va al
+           scrollear; la barra inferior de móvil no se va nunca).
+           `--franja-rep-alto` ya vale 0 acá, así que nada quedó corrido:
+           esto sólo saca la franja de la pantalla. */
+        .st-key-nav_franja_rep { display: none !important; }
 
         /* Chips pegados a la franja (el margen de 6px es para tablet) */
         .st-key-chips_ajuste_tabla {

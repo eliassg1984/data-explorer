@@ -71,7 +71,8 @@ CSS = """    <style>
         /* 30px hasta el 2026-08-18. La franja ya no arranca en el borde de
            la ventana: encima de ella vive la barra de navegación superior,
            así que su anclaje se corre --nav-top-alto (30 + 40 = 70). */
-        --cab-nivel1-top: 70px;
+        /* 2026-08-31: 70 -> 108, los 38px de la franja de reportes. */
+        --cab-nivel1-top: 108px;
         --cab-nivel2-top: 52px;   /* legacy: ya no hay nivel 2 en la banda */
         /* 58px hasta el 2026-08-14. Medido en el navegador: la franja ocupa
            de y=8 a y=37 (29px reales de controles) y la tarjeta arrancaba en
@@ -88,7 +89,15 @@ CSS = """    <style>
            calc(var(--nav-top-alto) + 40px) a propósito: test_graficos.py lee
            esta variable con un regex de `\\d+px` para cotejar el cromo de CSS
            contra el de graficos/alturas.py, y un calc() lo dejaría ciego. */
-        --cab-offset-contenido: 80px;
+        /* 2026-08-31: 80 -> 118. La franja de reportes (--franja-rep-alto,
+           38px) se suma al cromo de arriba, asi que el contenido arranca 38px
+           mas abajo y el presupuesto vertical baja otro tanto. Va LITERAL y
+           no `calc(80px + var(--franja-rep-alto))` por lo que dice el parrafo
+           de arriba: test_graficos.py lee esta variable con un regex de
+           `\d+px` para cotejarla contra graficos/alturas.py, y un calc() lo
+           dejaria ciego. Si se cambia el alto de la franja, este numero y el
+           `_CAB_OFFSET` de alturas.py se cambian a mano, los dos. */
+        --cab-offset-contenido: 118px;
 
         /* ==================================================================
            PRESUPUESTO VERTICAL — cuánto mide "una pantalla" de contenido
@@ -134,6 +143,14 @@ CSS = """    <style>
            todos esos calc() vuelven solos a los valores de siempre.
            ================================================================== */
         --nav-top-alto: 40px;
+        /* LA FRANJA DE REPORTES (2026-08-31, a pedido). Va arriba de todo,
+           por encima de las dos bandas que ya existian, y desplaza a TODO el
+           cromo fijo que se ancla al borde superior de la ventana. Por eso
+           es una variable y no un 38 suelto: son ocho `top` en cinco
+           ficheros los que la suman. En movil vale 0 (`_99_movil.py`), igual
+           que --nav-top-alto: alla la navegacion es la barra de abajo.
+           38px ~= 1cm a 96dpi, que fue el pedido literal. */
+        --franja-rep-alto: 38px;
 
         /* Barra inferior de navegación en móvil (bottom nav).
            Debe coincidir con NAV_MOVIL_ALTO en navegacion.py (60px). */

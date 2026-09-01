@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-265 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+266 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (85)
+**CSS y estilos** (86)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -105,6 +105,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#258** — Duplicar un elemento en el modo diseño: la copia CONSERVA las clases st-key-*, y por eso hay…
 - **#262** — Linea/Barra/Espacio insertados sobre un stVerticalBlock nacen con width:0 — Streamlit pone…
 - **#264** — Un mock arrastrado con "Mover" podía terminar pintado DEBAJO de un hermano posterior — no…
+- **#266** — La franja de REPORTES no duplica al rail: es lo que queda cuando el rail se va. Y su alto lo…
 
 **Layout y alturas** (24)
 
@@ -417,7 +418,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#261** — Amplía la #254: con algo pineado, el outline de Inspector se suprime SOLO, en vez de exigir…
 - **#264** — Un mock arrastrado con "Mover" podía terminar pintado DEBAJO de un hermano posterior — no…
 
-**Decisiones de diseño y UX** (45)
+**Decisiones de diseño y UX** (46)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -464,6 +465,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#258** — Duplicar un elemento en el modo diseño: la copia CONSERVA las clases st-key-*, y por eso hay…
 - **#259** — Insertar texto/línea/barra/espacio no lo ubica: hace falta scroll + un flash de color, o es…
 - **#265** — El rail tiene RÓTULO, y son DOS que se cruzan — y para verificar ese cruce la captura manda:…
+- **#266** — La franja de REPORTES no duplica al rail: es lo que queda cuando el rail se va. Y su alto lo…
 
 **Mantenimiento y trampas del lenguaje** (7)
 
@@ -11782,13 +11784,67 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      que dependa de `rails-scrolled`, mirar la pantalla; las sondas de
      estilo no son testigo acá.
 
+266. **La franja de REPORTES no duplica al rail: es lo que queda cuando el
+     rail se va. Y su alto lo suman OCHO `top` en cinco ficheros, mas las
+     dos caras del presupuesto vertical.**
+
+     2026-08-31, a pedido y con mockup aprobado: una franja blanca de ~1cm
+     arriba de todo con los nombres de los reportes. La pregunta que abrio
+     el mockup fue si el rail izquierdo conservaba su lista o pasaba a ser
+     solo Vistas — porque a primera vista los nombres quedan dos veces.
+
+     **Conviven, y no es duplicacion.** El rail se VA al scrollear: su
+     columna cruza a Vistas (regla #265 y `_26_rails_scroll.py`), y a partir
+     de ahi no queda en pantalla ningun modo de cambiar de reporte. La
+     franja es lo que sobrevive a ese cruce. Verificado con el gancho
+     puesto: `rails-scrolled` activo, la franja sigue en `top:0` con
+     `opacity:1` mientras el rail ya cruzo.
+
+     Son dos vistas del MISMO estado, no dos navegaciones: comparten
+     `_on_nav_click` y `reporte_activo`, asi que el `type="primary"` cae en
+     el mismo reporte en las dos. Medido tras un clic en la franja: el
+     reporte cambia y el item del rail se enciende solo. La franja va sin
+     KPIs y sin agrupar — en 38px no entran, y el rail ya los da.
+
+     **El costo, que es el que hay que tener presente antes de tocarle el
+     alto:** 38px de cromo nuevo arriba, y el cromo de arriba se paga del
+     presupuesto vertical, que en un laptop de 768px ya estaba ajustado
+     (ver el bloque de `--alto-util` en `_00_base.py`).
+
+     Por eso el alto es la variable `--franja-rep-alto` y no un 38 suelto.
+     La suman, todos anclados al borde superior de la ventana:
+
+       · la banda de fondo de la franja de filtros (`_40_ajuste_franja.py`);
+       · la franja de VISTAS (`navegacion.py::_CSS_FRANJA_VISTAS`);
+       · el compartimento de filtros, en sus DOS reglas (`_40` y `_50_fecha`,
+         que es la que gana — ver el aviso de la clase duplicada);
+       · el pill de fecha (dos reglas), el stepper de corte y el titulo de
+         Ventas comparativo (`_50_fecha.py`);
+       · el rail de Reportes y su gemelo el rail de Vistas — cada uno con su
+         `top` Y su `max-height`, que pierde otro tanto de alto;
+       · los dos rotulos de la columna (regla #265).
+
+     **Y las dos caras del presupuesto, que NO son variables.**
+     `--cab-offset-contenido` (80 -> 118) y `_CAB_OFFSET` en
+     `graficos/alturas.py` (80 -> 118) se cambian a mano, los dos, y
+     `test_graficos.py` falla si se desincronizan. El de CSS va LITERAL a
+     proposito: ese test lo lee con un regex de `\d+px` y un
+     `calc(80px + var(--franja-rep-alto))` lo dejaria ciego. Es la misma
+     trampa que ya documenta el comentario de esa variable, ahora con un
+     sumando mas que la hace mas facil de olvidar.
+
+     En movil la variable vale 0 (`_99_movil.py`, igual que
+     `--nav-top-alto`) y la franja va `display:none`: alla los reportes
+     viven en la barra INFERIOR, que no se va nunca al scrollear — asi que
+     alla si seria la duplicacion que en escritorio no es.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#266**.
+> próxima regla nueva es la **#267**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

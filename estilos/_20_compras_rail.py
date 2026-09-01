@@ -80,7 +80,7 @@ CSS = """    /* ================================================================
              ESTE MISMO hueco cuando se scrollea. Si solo se mueve uno, el
              cruce se ve como que la columna salta 47px en vez de cambiar de
              contenido. */
-        top: 47px !important;
+        top: calc(47px + var(--franja-rep-alto)) !important;
         /* 2026-08-18, a pedido: el rail pasa del borde DERECHO al IZQUIERDO.
            Es el sitio que dejó libre el rail de navegación al convertirse en
            la franja superior (--nav-top-alto) unos commits antes: la columna
@@ -107,7 +107,7 @@ CSS = """    /* ================================================================
            tantas vistas que no entran (activa el overflow-y:auto de abajo
            en vez de desbordar). */
         height: auto !important;
-        max-height: calc(100vh - 47px - 8px) !important;
+        max-height: calc(100vh - 47px - var(--franja-rep-alto) - 8px) !important;
         z-index: 900 !important;
         overflow-y: auto !important;
         margin: 0 !important;
@@ -122,6 +122,83 @@ CSS = """    /* ================================================================
         scrollbar-width: none !important;
     }
     .st-key-compras_tabs_row::-webkit-scrollbar { display: none !important; }
+
+    /* =================================================================== */
+    /* FRANJA DE REPORTES — arriba de todo (2026-08-31)                     */
+    /* Blanca, ~1cm de alto, con los nombres de los reportes. Lo dibuja      */
+    /* `navegacion.py::inject_navegacion`.                                   */
+    /*                                                                       */
+    /* De borde a borde y NO acotada a las tarjetas como la franja de vistas */
+    /* (`--rail-der-res` .. 90px): esta es cromo de la APLICACIÓN, el nivel   */
+    /* de arriba de todo, y la columna del rail está por debajo de ella, no  */
+    /* al lado. La de vistas se alinea con el contenido porque habla del     */
+    /* contenido; ésta habla de en qué reporte estás.                        */
+    /*                                                                       */
+    /* Su alto es `--franja-rep-alto` (_00_base.py) y NO un literal: los     */
+    /* ocho `top` del cromo que empuja hacia abajo suman esa misma variable. */
+    /* Cambiar el alto acá sin cambiarla deja todo lo de abajo pisándola.    */
+    /* =================================================================== */
+    .st-key-nav_franja_rep {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        height: var(--franja-rep-alto) !important;
+        min-height: var(--franja-rep-alto) !important;
+        z-index: 1000001 !important;   /* sobre el compartimento (1000000) */
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 2px !important;
+        margin: 0 !important;
+        padding: 0 16px !important;
+        background: var(--bg-card) !important;
+        border-bottom: 1px solid var(--border) !important;
+        /* Válvula para viewports angostos, igual que la franja de vistas:
+           antes de apilar o recortar nombres, que scrollee. */
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        scrollbar-width: none !important;
+    }
+    .st-key-nav_franja_rep::-webkit-scrollbar { height: 0 !important; }
+    /* Los contenedores de elemento de Streamlit miden su contenido: sin
+       esto cada botón se estira al ancho de la franja y salen apilados. */
+    .st-key-nav_franja_rep [data-testid="stElementContainer"],
+    .st-key-nav_franja_rep [data-testid="stButton"] {
+        width: auto !important;
+        flex: 0 0 auto !important;
+        margin: 0 !important;
+    }
+    /* Planos: son texto en una barra, no botones con caja. El activo se
+       marca con el relleno lavanda, mismo par de tokens que usa el ítem
+       encendido del rail — así las dos vistas del mismo estado se leen
+       como la misma marca. */
+    .st-key-nav_franja_rep [data-testid="stButton"] button {
+        min-height: 0 !important;
+        height: 26px !important;
+        padding: 0 11px !important;
+        border: none !important;
+        border-radius: 7px !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        white-space: nowrap !important;
+    }
+    .st-key-nav_franja_rep [data-testid="stButton"] button p {
+        font-size: 13.5px !important;
+        font-weight: 500 !important;
+        color: var(--text-secondary) !important;
+        line-height: 1 !important;
+    }
+    .st-key-nav_franja_rep [data-testid="stButton"] button:hover {
+        background: var(--bg-hover) !important;
+    }
+    .st-key-nav_franja_rep [data-testid="stButton"] button[kind="primary"] {
+        background: var(--accent-tint) !important;
+    }
+    .st-key-nav_franja_rep [data-testid="stButton"] button[kind="primary"] p {
+        color: var(--accent-deep) !important;
+        font-weight: 600 !important;
+    }
 
     /* ── RÓTULO DE LA COLUMNA (2026-08-31) ─────────────────────────────
        "Reportes" / "Vistas" en el hueco de 47px que el rail dejó libre
@@ -144,7 +221,7 @@ CSS = """    /* ================================================================
         position: fixed !important;
         /* 14px: el rótulo ocupa y=14..33 y deja 14px de aire hasta el borde
            del rail (y=47), el mismo respiro que tiene por arriba. */
-        top: 14px !important;
+        top: calc(14px + var(--franja-rep-alto)) !important;
         left: 19px !important;              /* == el rail */
         width: var(--rail-der-w) !important;
         margin: 0 !important;

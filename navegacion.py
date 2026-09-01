@@ -199,7 +199,7 @@ _CSS_FRANJA_VISTAS = f"""
        los pinta (`fila_ajuste_top::before`), y superponerlos daba dos bordes
        a 8px de distancia. */
     position:fixed !important;
-    top:calc(var(--nav-top-alto) + 8px) !important;
+    top:calc(var(--nav-top-alto) + 8px + var(--franja-rep-alto)) !important;
     left:0 !important; right:0 !important;
     width:100vw !important;
     height:var(--nav-top-alto) !important;
@@ -733,6 +733,43 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     with st.container(key="rail_rotulo_rep"):
         st.markdown('<div class="rail-rotulo">Reportes</div>',
                     unsafe_allow_html=True)
+
+    # ── FRANJA DE REPORTES (2026-08-31, a pedido) ────────────────────────
+    # Arriba de todo, blanca, ~1cm de alto, con los nombres de los reportes.
+    #
+    # NO es una duplicación del rail, aunque diga lo mismo: el rail se VA al
+    # scrollear —su columna cruza a Vistas (`estilos/_26_rails_scroll.py`)—
+    # y a partir de ahí no queda en pantalla ningún modo de cambiar de
+    # reporte. Esta franja es lo que sobrevive a ese cruce. Por eso conviven,
+    # que fue la decisión tomada al ver el mockup.
+    #
+    # Los mismos `_on_nav_click` y `reporte_activo` que el rail: dos vistas
+    # del mismo estado, no dos navegaciones. Sin KPIs y sin agrupar — en 38px
+    # no entran, y el rail ya los da.
+    with st.container(key="nav_franja_rep"):
+        _grupos_franja = set()
+        for nombre, info in visibles.items():
+            grupo = info.get("grupo_nav")
+            if grupo:
+                if grupo in _grupos_franja:
+                    continue
+                _grupos_franja.add(grupo)
+                _miembros = [n for n, i in visibles.items()
+                             if i.get("grupo_nav") == grupo]
+                _destino = st.session_state.get(f"_ultimo_{grupo}", _miembros[0])
+                if _destino not in _miembros:
+                    _destino = _miembros[0]
+                st.button(
+                    grupo, key=f"franjarep_{_slug(grupo)}",
+                    type="primary" if reporte_activo in _miembros else "secondary",
+                    on_click=_on_nav_click, args=(_destino,),
+                )
+                continue
+            st.button(
+                info.get("label_corto") or nombre, key=f"franjarep_{_slug(nombre)}",
+                type="primary" if nombre == reporte_activo else "secondary",
+                on_click=_on_nav_click, args=(nombre,),
+            )
 
     _grupos_dibujados = set()
     with st.container(key="compras_tabs_row"):

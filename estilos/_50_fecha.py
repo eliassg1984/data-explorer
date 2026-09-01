@@ -73,7 +73,7 @@ CSS = """    /* ================================================================
    izquierdo reservaba y que ya no existe. */
 .st-key-fecha_ajuste_pill {
     position: fixed !important;
-    top: calc(var(--nav-top-alto) + 8px) !important;
+    top: calc(var(--nav-top-alto) + 8px + var(--franja-rep-alto)) !important;
     left: auto !important;
     /* 2026-08-18: era `calc(var(--rail-der-res) - 15px)`, que alineaba
        con el borde de la tarjeta cuando el rail comía 153px por la
@@ -159,7 +159,7 @@ CSS = """    /* ================================================================
                eso se resta: sin restarlo salen 4px abajo contra 6 arriba y
                el control se ve apretado contra la línea inferior — fue
                justo el bug de la pasada anterior. Ver _40_ajuste_franja.py. */
-            top: calc(var(--nav-top-alto) + 8px) !important;
+            top: calc(var(--nav-top-alto) + 8px + var(--franja-rep-alto)) !important;
             /* 2026-08-19: era `left: 85px`, un numero heredado de cuando el
                rail vivia a la IZQUIERDA y el contenido empezaba en otro
                lado. Ahora arranca donde arranca el contenido -- la misma
@@ -277,7 +277,7 @@ CSS = """    /* ================================================================
 
                `z-index` un punto sobre la franja (999999, `navegacion.py`):
                comparten superficie y este va encima. */
-            top: calc(var(--nav-top-alto) + 8px) !important;
+            top: calc(var(--nav-top-alto) + 8px + var(--franja-rep-alto)) !important;
             height: var(--nav-top-alto) !important;
             left: auto !important;
             right: 90px !important;      /* == el borde derecho de la franja */
@@ -438,7 +438,7 @@ CSS = """    /* ================================================================
         .st-key-fecha_corte_nav {
             display: block !important;
             position: fixed !important;
-            top: calc(var(--nav-top-alto) + 8px) !important;
+            top: calc(var(--nav-top-alto) + 8px + var(--franja-rep-alto)) !important;
             right: 65px !important;   /* borde de la tarjeta, ver el pill */
             left: auto !important;
             width: 176px !important;
@@ -522,7 +522,7 @@ CSS = """    /* ================================================================
     /* =================================================================== */
     .st-key-ventas_comp_titulo_franja {
         position: fixed !important;
-        top: calc(var(--nav-top-alto) + 8px) !important;
+        top: calc(var(--nav-top-alto) + 8px + var(--franja-rep-alto)) !important;
         left: var(--rail-der-res) !important;   /* ancla comun, ver el pill */
         width: 260px !important;
         z-index: 22 !important;

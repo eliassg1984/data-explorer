@@ -144,7 +144,8 @@ CSS = """    /* ================================================================
            y esta banda solo cubria la de abajo: la de arriba quedaba sin
            fondo y al scrollear se veia el contenido pasar POR DETRAS del
            titulo y los chips. */
-        top: 0 !important;
+        /* 2026-08-31: 0 -> la franja de reportes, que va por encima. */
+        top: var(--franja-rep-alto) !important;
         bottom: auto !important;
         /* 2026-08-09: de tarjeta colgante (left:170/right:163, alineada con
            la tarjeta del gráfico) a BARRA de borde a borde. left:90px = el
@@ -305,7 +306,7 @@ CSS = """    /* ================================================================
        aquella —no contradiciendola— para que leer una sola no engane. */
     .st-key-chips_ajuste_tabla {
         position: fixed !important;
-        top: calc(var(--nav-top-alto) + 8px) !important;
+        top: calc(var(--nav-top-alto) + 8px + var(--franja-rep-alto)) !important;
         height: var(--nav-top-alto) !important;
         left: auto !important;
         right: 90px !important;
