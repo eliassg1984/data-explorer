@@ -249,35 +249,19 @@ CSS = """    /* ================================================================
             flex: 1 1 auto;
         }
 
-        /* ─────────────────────────────────────────────────────────────── */
-        /* LA EXCEPCIÓN: EL RANKING DE PROVEEDORES MIDE LO SUYO             */
-        /*                                                                  */
-        /* 2026-09-01, a pedido, con el bloque copiado del modo diseño      */
-        /* (`flex: none; height: 306px`). El piso de arriba lo estiraba a   */
-        /* los 383px de la Evolución de al lado y esos px extra son BLANCO: */
-        /* su contenido es una tabla con tope propio (8 filas, ver          */
-        /* `_FILAS_RANK` en graficos/compras/proveedor.py) y scroll interno,*/
-        /* así que no tiene con qué llenarlos. Medido: tabla + fila del     */
-        /* título terminan en y=297 y la tarjeta seguía hasta 487.          */
-        /*                                                                  */
-        /* Por qué la excepción es ÉSTA y no la regla de arriba: el piso    */
-        /* nació (regla #145) por Panel A/Panel B, donde el lado derecho es */
-        /* una LISTA elástica que crece con los datos — ahí el escalón      */
-        /* cambia en cada clic y hay que igualar. Una tabla acotada no      */
-        /* tiene ese problema: mide siempre lo mismo para los mismos datos. */
-        /*                                                                  */
-        /* Va `0 1 auto` (medir el contenido) y NO el `height: 306px` del   */
-        /* bloque copiado: 306 es el alto de SIETE filas. Con las 8 del     */
-        /* tope el contenido pide 325 y la tarjeta le saldría una barra de  */
-        /* scroll propia encima de la del grid; con 2 proveedores volvería  */
-        /* el blanco que este cambio saca. `max-height`/`max-width` tampoco */
-        /* se copian: el modo diseño los suelta para poder arrastrar, pero  */
-        /* `max-height: var(--alto-util)` es el clamp de una pantalla.      */
-        /* ─────────────────────────────────────────────────────────────── */
-        .stColumn > .stVerticalBlock
-        > div:has(> div[class*="st-key-compras_prov_card_ranking"]) {
-            flex: 0 1 auto;
-        }
+        /* Acá vivió, durante un rato del 2026-09-01, una EXCEPCIÓN para    */
+        /* `compras_prov_card_ranking` (`flex: 0 1 auto`): el piso lo       */
+        /* estiraba a los 383px de la Evolución de al lado y esos px eran   */
+        /* blanco, porque su tabla tiene tope propio y no tiene con qué     */
+        /* llenarlos. Se fue el mismo día, al pedirse que las dos tarjetas  */
+        /* midieran igual: el arreglo correcto no era eximir al Ranking     */
+        /* sino que la Evolución dejara de pedir un alto que no sale de los */
+        /* datos. Hoy su figura se calcula RESTÁNDOLE su cromo al alto de   */
+        /* la tarjeta del Ranking (`_ALTO_EVO` en                           */
+        /* graficos/compras/proveedor.py), así que las dos nacen iguales y  */
+        /* este piso no tiene nada que estirar — queda de red para el       */
+        /* único caso en que difieren, el piso de la figura con 4           */
+        /* proveedores o menos. Ver regla #276.                             */
     }
 
     /* =================================================================== */

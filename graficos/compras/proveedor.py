@@ -320,10 +320,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # px_fila=35/extra=45 son los mismos que ya usa la tabla de Panel A
     # (más abajo) para su `st.dataframe` — el alto de una FILA de tabla, no
     # el de una barra de gráfico (26px, lo que usaba el ranking viejo).
-    # SIN TOCAR a propósito: además de la Evolución de al lado (`_ALTO_EVO`,
-    # abajo), este mismo número fija el frame del Panel A de productos (más
-    # abajo, `height=_ALTO_FRAME`) — ninguno de los dos pidió filas más
-    # finas, y si se achica acá se achican los tres.
+    # SIN TOCAR a propósito: este mismo número fija el frame del Panel A de
+    # productos (más abajo, `height=_ALTO_FRAME`) y el clamp de la lista del
+    # Panel B (la var CSS de la línea siguiente) — no pidieron filas más
+    # finas, y si se achica acá se achican los dos.
+    # 2026-09-01: `_ALTO_EVO` YA NO cuelga de acá. La figura de Evolución se
+    # mide contra la tarjeta del Ranking, que es la que ahora manda el alto
+    # de esa fila; ver `_ALTO_EVO` más abajo.
     _ALTO_FRAME = alturas.por_filas(8, px_fila=35, extra=45, minimo=0)
     # Publicado como variable CSS para que Panel B (más abajo, la lista de
     # tarjetas ".pb-cards") clampe su alto contra ESTE mismo número — a
@@ -392,11 +395,19 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         _FILAS_RANK, px_fila=_ALTO_FILA_RANK,
         extra=_CROMO_GRID_RANK + _ALTO_FILA_RANK + alturas.FRANJA_ATAJOS,
         minimo=0)
+    # La fila de atajos le come FRANJA_ATAJOS al AgGrid: se dibuja ARRIBA,
+    # dentro de la misma tarjeta, y hasta que existió nadie le hacía lugar.
+    # Se resuelve ACÁ y no junto al grid (que es donde vivía) porque desde
+    # el 2026-09-01 este número es también el que dimensiona la figura de
+    # Evolución — ver `_ALTO_EVO`, unas líneas más abajo.
+    _ALTO_RANK = _ALTO_FRAME_RANK - alturas.FRANJA_ATAJOS
+    # ── HISTORIA (hasta el 2026-09-01) ────────────────────────────────
     # La evolución comparte su columna con el selector de período Y con el
     # cromo de su propia tarjeta (2026-08-18: son dos bloques, no uno), así
     # que su figura mide eso menos que la tabla de al lado. La tabla no paga
-    # el cromo: su columna tenía 119px de aire medidos, la evolución es la que
-    # manda el alto de la fila.
+    # el cromo: su columna tenía 119px de aire medidos, y hasta esta fecha
+    # la evolución era la que MANDABA el alto de la fila — hoy es al revés,
+    # ver el bloque de abajo.
     # 2026-08-23: se le suman dos filas más — `gran_float` y
     # `win_nav` se mudaron DENTRO de esta tarjeta (antes flotaban afuera, sin
     # costarle alto a nadie). Sin restarlas, la tarjeta de Evolución crecía
@@ -410,9 +421,52 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # constantes que hubo (FRANJA_PILLS, FRANJA_GRAN, FRANJA_WIN_NAV) queda
     # una, `FRANJA_CTRL_EVO`, y los ~66px de las dos filas que desaparecieron
     # volvieron a la figura.
-    _ALTO_EVO = max(alturas.MINI,
-                    _ALTO_FRAME - alturas.FRANJA_CTRL_EVO
-                    - alturas.CROMO_TARJETA)
+    #
+    # 2026-09-01, a pedido ("la tarjeta del gráfico de evolución que está al
+    # costado, también que sea del mismo tamaño"). La figura DEJA de medirse
+    # contra `_ALTO_FRAME` (8 filas de 35px, un número que no mira los datos)
+    # y pasa a medirse contra la tarjeta DE AL LADO: el Ranking, que desde
+    # que mide sus propias filas (`_FILAS_RANK`) es quien manda el alto de la
+    # fila. Sin esto la Evolución seguía pidiendo 383px mientras el Ranking
+    # pedía 313 con 7 proveedores, y la fila salía en escalón.
+    #
+    # Las dos constantes son el CROMO de cada tarjeta: todo lo que mide y no
+    # es la figura ni el grid. MEDIDAS en el navegador el 2026-09-01, no
+    # deducidas — el título de la Evolución ocupa 12px de flujo y 28 de caja
+    # (el `margin-bottom: -16px` de `st.markdown` con HTML de bloque, regla
+    # #162), que es justo la clase de detalle que una cuenta de servilleta
+    # no acierta:
+    #   Ranking:   padding 32 + fila del título 26 + gap 16 + 8 del wrapper
+    #              del componente = 82
+    #   Evolución: padding 32 + título 28 + controles 30 + gap 16 = 106
+    # Con eso, `tarjeta_ranking = 82 + _ALTO_RANK` y
+    # `tarjeta_evo = 106 + _ALTO_EVO`: igualarlas es la resta de abajo, y el
+    # `:has()` de _80_cards.py ya no tiene nada que estirar.
+    _CROMO_CARD_RANK = 82
+    _CROMO_CARD_EVO = 106
+    # Piso de la figura, y NO es `alturas.MINI` (240) ni un número elegido a
+    # ojo: es el alto de la PILA DE KPIs que comparte fila con ella (Total
+    # compra / % del total / Cantidad / Documentos, más su caption). MEDIDO
+    # en el navegador el 2026-09-01: 200px, y es estable porque son cuatro
+    # celdas fijas.
+    #
+    # Por qué ése y no otro: la figura y los KPIs son las dos columnas de un
+    # `stHorizontalBlock`, así que la fila mide `max(figura, KPIs)`. Bajar la
+    # figura de 200 NO achica la tarjeta —la sostienen los KPIs— y sólo
+    # abre blanco al lado de ellos. Con `alturas.MINI` (240) pasaría lo
+    # contrario: la tarjeta pediría 346 contra los 313-337 que pide el
+    # Ranking con los 7-8 proveedores del caso real, y el piso de
+    # _80_cards.py volvería a estirar al Ranking, devolviéndole el blanco
+    # que se le acaba de sacar.
+    #
+    # Consecuencia práctica, con el tope de 8 filas del ranking: de 7
+    # proveedores para arriba las dos tarjetas miden EXACTAMENTE lo mismo;
+    # de 6 para abajo la fila se apoya en los KPIs (tarjeta de 306px) y el
+    # Ranking se estira hasta ahí. Para bajar de 306 habría que achicar la
+    # pila de KPIs, que es otro pedido.
+    _MIN_EVO = 200
+    _ALTO_EVO = max(_MIN_EVO,
+                    _ALTO_RANK + _CROMO_CARD_RANK - _CROMO_CARD_EVO)
     # Ancho de la figura de evolución, MEDIDO en el navegador (viewport 1912,
     # rails desplegados). No sale de una cuenta porque su columna cuelga de
     # dos repartos anidados —COLUMNAS_DRILL y el [2.6, 1] de acá abajo— sobre
@@ -669,14 +723,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         titulo_html='<div class="cp-rank-tit">Ranking de '
                                     'proveedores</div>',
                         extra=_pop_proveedores)
-                    # La fila de atajos le come FRANJA_ATAJOS al AgGrid de
-                    # abajo — mismo motivo que FRANJA_CTRL_EVO en
-                    # Evolución: nadie le hacía lugar todavía. YA NO es
-                    # condicional a `_atajos_rank` (2026-08-25): la fila
-                    # ahora SIEMPRE se dibuja, por el ícono de ayuda que se
-                    # mudó acá — el hueco tiene que reservarse siempre,
-                    # no sólo cuando además hay atajos relativos.
-                    _ALTO_RANK = _ALTO_FRAME_RANK - alturas.FRANJA_ATAJOS
+                    # `_ALTO_RANK` (la resta de FRANJA_ATAJOS) se calcula
+                    # arriba, con `_ALTO_FRAME_RANK`: la figura de Evolución
+                    # lo necesita antes de llegar acá. La fila de atajos
+                    # SIEMPRE se dibuja desde el 2026-08-25 (por el ícono de
+                    # ayuda que se mudó a ella), así que el hueco se reserva
+                    # siempre, no sólo cuando además hay atajos relativos.
                     # ── El ranking es un AgGrid, no un `st.dataframe` ──────
                     # 2026-08-19, a pedido: los checkbox de selección se van y
                     # el gesto pasa a ser "clic en la fila". No era posible con

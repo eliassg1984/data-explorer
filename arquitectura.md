@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-275 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+276 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (90)
 
@@ -111,7 +111,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#272** — Un control que flota sobre una tarjeta quiere, casi siempre, ser un ítem más de la fila del…
 - **#273** — Un bloque de alto CERO sigue cobrando su gap: cinco piezas de cromo fijo metían 80px de gris…
 
-**Layout y alturas** (26)
+**Layout y alturas** (27)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -139,8 +139,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#248** — En media tarjeta, cada columna nueva hay que pagarla con otra: la unidad se muda adentro de…
 - **#274** — Un grid con presupuesto FIJO de filas miente cuando hay menos datos: el hueco queda ENTRE la…
 - **#275** — "Las dos tarjetas de la fila miden lo mismo" (#145) vale cuando el lado corto PUEDE crecer.…
+- **#276** — Cuando dos tarjetas de una fila no miden igual, la pregunta no es a cuál eximir del piso sino…
 
-**Plotly y figuras** (48)
+**Plotly y figuras** (49)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -190,6 +191,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#259** — Insertar texto/línea/barra/espacio no lo ubica: hace falta scroll + un flash de color, o es…
 - **#263** — porKeyReal() no podía resolver un mock pineado SOBRE SÍ MISMO: el filtro…
 - **#269** — El JS que vive dentro de un string de Python necesita el escape de salto de línea con DOS…
+- **#276** — Cuando dos tarjetas de una fila no miden igual, la pregunta no es a cuál eximir del piso sino…
 
 **AgGrid y tablas** (45)
 
@@ -12305,13 +12307,70 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      no un parche listo. Los px que trae son los del caso que estaba
      abierto.
 
+     **ACTUALIZACIÓN, el mismo día: la excepción duró un commit.** Ver
+     regla #276 — el diagnóstico ("el piso estira al Ranking") estaba bien
+     y el arreglo estaba en el lado equivocado de la fila.
+
+
+276. **Cuando dos tarjetas de una fila no miden igual, la pregunta no es a
+     cuál eximir del piso sino CUÁL DE LAS DOS pide un alto que no sale de
+     los datos. Eximir es tratar el síntoma; el escalón se va solo cuando
+     las dos cuelgan del mismo número.**
+
+     2026-09-01, tercera vuelta del mismo pedido ("la tarjeta del gráfico de
+     evolución que está al costado, también que sea del mismo tamaño"). La
+     vuelta anterior (regla #275) había eximido al Ranking del piso de #145
+     para que midiera su contenido. Correcto como diagnóstico, incompleto
+     como arreglo: dejaba a la Evolución pidiendo 383px porque su figura
+     salía de `_ALTO_FRAME` — **ocho filas de 35px, un número que no mira
+     los datos**. El escalón no era del Ranking por medir poco; era de la
+     Evolución por pedir de más.
+
+     El arreglo invierte la dependencia: la figura de Evolución se calcula
+     restándole su propio cromo al alto de la tarjeta DE AL LADO.
+
+         tarjeta_ranking = 82  + _ALTO_RANK
+         tarjeta_evo     = 106 + _ALTO_EVO
+         _ALTO_EVO       = _ALTO_RANK + 82 - 106
+
+     Los dos cromos van MEDIDOS y con su desglose, no deducidos: el título
+     de la Evolución ocupa 12px de flujo y 28 de caja (el
+     `margin-bottom: -16px` de `st.markdown` con HTML de bloque, regla
+     #162), que es justo lo que una cuenta de servilleta erra. Con eso las
+     dos tarjetas **nacen iguales** y el piso de #145 vuelve a su sitio sin
+     excepciones: no tiene nada que estirar.
+
+     **El piso de la figura no es un número de diseño: es la columna de al
+     lado.** La figura comparte un `stHorizontalBlock` con la pila de KPIs
+     (Total compra / % del total / Cantidad / Documentos), así que la fila
+     mide `max(figura, KPIs)` — 200px medidos, estables porque son cuatro
+     celdas fijas. Bajar la figura de 200 **no achica la tarjeta**: sólo
+     abre blanco al lado de los KPIs. Y subir el piso a `alturas.MINI`
+     (240) hace lo contrario — la tarjeta pediría 346 contra los 313-337
+     del Ranking real, y el piso de #145 volvería a estirar al Ranking.
+     El primer intento fue `_MIN_EVO = 160`, elegido por legibilidad del
+     trazo; medido en vivo, dejaba la figura 40px más corta que los KPIs
+     sin ganar un solo píxel de tarjeta. **Un piso que no cambia el alto de
+     nada no es un piso, es un hueco.**
+
+     Verificado en vivo, viewport 1366x700: con 25 proveedores las dos
+     tarjetas miden 337 clavado, el grid termina a 24px del borde (16 de
+     padding + 8 del wrapper del componente) y la figura a 16 (el padding).
+     Con 2, las dos miden 306 — la fila se apoya en los KPIs y el Ranking
+     se estira hasta ahí.
+
+     Corolario de método: **antes de eximir una tarjeta de una regla de
+     fila, mirá de dónde saca su alto la OTRA.** Si sale de una constante
+     que no depende de los datos, ahí está el bug; la excepción sólo lo
+     esconde y deja dos reglas donde había una.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#276**.
+> próxima regla nueva es la **#277**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
