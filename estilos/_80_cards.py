@@ -184,6 +184,7 @@ CSS = """    /* ================================================================
     @media screen and (min-width: 769px) {
         div[class*="st-key-ajuste_graf_card_"],
         div[class*="st-key-compras_prov_card_"],
+        div[class*="st-key-compras_prod_card_"],
         div[class*="st-key-sunat_card_"] {
             max-height: var(--alto-util);
             overflow-y: auto;
@@ -245,7 +246,17 @@ CSS = """    /* ================================================================
         /* Mientras los dos lados tuvieron contenido simétrico el piso no */
         /* hizo falta; en cuanto uno pudo crecer solo, sí.                */
         .stColumn > .stVerticalBlock
-        > div:has(> div[class*="st-key-sunat_conv_"]) {
+        > div:has(> div[class*="st-key-sunat_conv_"]),
+        /* `compras_prod_card_` entró el 2026-09-02, cuando el Ranking de   */
+        /* Productos partió su tarjeta única en dos (tabla | gráfico) y     */
+        /* pasó a tener, por primera vez, una FILA de dos tarjetas. Sin el  */
+        /* piso, el gráfico y la tabla cierran en alturas distintas y el    */
+        /* borde inferior de la fila sale en escalón — el mismo síntoma que */
+        /* originó esta regla. La familia `_familia` de más abajo no entra  */
+        /* en juego: es una tarjeta de ancho completo, no vive en una       */
+        /* `.stColumn`, así que el selector no la alcanza.                  */
+        .stColumn > .stVerticalBlock
+        > div:has(> div[class*="st-key-compras_prod_card_"]) {
             flex: 1 1 auto;
         }
 

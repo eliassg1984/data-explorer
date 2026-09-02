@@ -33,7 +33,7 @@ from tema import ACENTO, ERROR, EXITO, GRIS_TEXTO, TEXTO_PRINCIPAL
 from graficos.base import _compras_layout, _compras_truncar, _slug
 from graficos.ventas_comparativo import _fmt_soles_compacto
 from graficos.compras._comun import (
-    COLUMNAS_DRILL, GAP_DRILL, selector_fecha_tarjeta,
+    COLUMNAS_DRILL, GAP_DRILL, filtro_proveedores, selector_fecha_tarjeta,
 )
 from graficos import alturas, periodo
 
@@ -380,6 +380,36 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
 
     st.markdown(_CSS_SELECTOR_TEXTO, unsafe_allow_html=True)
 
+    # ── Filtro de proveedores ────────────────────────────────────────────
+    # 2026-09-02, a pedido ("añadamos el de proveedor"). El MISMO componente
+    # que el Ranking de Proveedores, no una copia: vive en
+    # `_comun.py::filtro_proveedores` desde este mismo pedido — ver el
+    # comentario de allá sobre por qué devuelve la selección y el dibujo por
+    # separado.
+    #
+    # Lo que filtra acá NO es lo mismo que allá, y conviene tenerlo claro:
+    # en Proveedor la selección elige QUÉ FILAS del ranking se ven; acá
+    # recorta el universo de compras sobre el que se rankean los PRODUCTOS
+    # ("los productos que le compro a estos proveedores"). Por eso se aplica
+    # sobre `dd`, antes de `_prod_ranking`, y no sobre el resultado.
+    #
+    # `clave` propio ("cp_prod_prov") porque Compras se lee APILADA: los dos
+    # popovers están en la página a la vez y sus widgets no pueden compartir
+    # key. El CSS de cada prefijo se lista explícito en `_css_proveedor.py`.
+    _provs_prod = []
+    if col_prov and col_prov in dd.columns:
+        _provs_prod = (dd.groupby(col_prov)[col_valor].sum()
+                         .sort_values(ascending=False).index.tolist())
+    _pop_prov_prod = None
+    if _provs_prod:
+        _sel_prov_prod, _pop_prov_prod = filtro_proveedores(
+            "cp_prod_prov", _provs_prod)
+        # `set` porque la lista puede tener ~cientos y esto corre por fila.
+        dd = dd[dd[col_prov].astype(str).isin({str(x) for x in _sel_prov_prod})]
+        if dd.empty:
+            st.info("Ningún proveedor seleccionado tiene compras en el rango.")
+            return
+
     ranking = _prod_ranking(dd, col_prod, col_fecha, col_valor, col_cant,
                             col_punit, col_um)
     if ranking.empty:
@@ -387,263 +417,289 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
         return
 
     # ── Card 1: ranking de productos + evolución del producto en foco ────
-    with st.container(border=True, key="compras_prod_card_ranking"):
+    # 2026-09-02, a pedido ("al gráfico que está al costado de ranking de
+    # producto, colocarlo en su propia tarjeta"). Este contenedor DEJA de
+    # ser una tarjeta y queda como MARCO, exactamente el mismo movimiento
+    # que hizo el drill de Proveedor el 2026-08-18: antes era el bloque
+    # blanco que envolvía tabla + gráfico, ahora cada columna tiene el suyo
+    # y el gris de la app los separa.
+    #
+    # El cambio de NOMBRE no es cosmético: la key vieja empezaba con
+    # `compras_prod_card_`, que es un wildcard por FAMILIA en
+    # estilos/_80_cards.py. Mientras la llevara seguiría pintándose de
+    # blanco con padding y sombra ENCIMA de las dos tarjetas nuevas — un
+    # bloque blanco dentro de otro. Sacarlo de la familia es lo que lo
+    # vuelve invisible, sin pelearle a la regla con overrides.
+    with st.container(key="compras_prod_marco"):
         prod_focus = st.session_state.get("compras_prod_focus")
         if prod_focus not in set(ranking["producto"]):
             prod_focus = None
 
         col_tabla, col_detalle = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
         with col_tabla:
-            # 2026-08-26, a pedido ("el mismo selector de fecha que la
-            # tabla de proveedores"): el MISMO componente, no una copia —
-            # vive en `_comun.py::selector_fecha_tarjeta`. Escribe la misma
-            # clave canónica del rango, así que mover la fecha acá mueve
-            # también el Ranking de Proveedores: son dos puertas al mismo
-            # dato, que es justo lo correcto (las dos tablas rankean sobre
-            # el mismo período).
-            #
-            # El `clave` distinto ("cp_prod") no es cosmético: desde que
-            # Compras se lee APILADA, las dos tarjetas están en la página a
-            # la vez, así que sus widgets no pueden compartir key.
-            selector_fecha_tarjeta("cp_prod", "_cp_prod_atajo_pendiente")
-            st.markdown('<div class="cp-prod-rank-tit">Ranking de productos</div>',
-                       unsafe_allow_html=True)
+            with st.container(border=True, key="compras_prod_card_ranking"):
+                # 2026-08-26, a pedido ("el mismo selector de fecha que la
+                # tabla de proveedores"): el MISMO componente, no una copia —
+                # vive en `_comun.py::selector_fecha_tarjeta`. Escribe la misma
+                # clave canónica del rango, así que mover la fecha acá mueve
+                # también el Ranking de Proveedores: son dos puertas al mismo
+                # dato, que es justo lo correcto (las dos tablas rankean sobre
+                # el mismo período).
+                #
+                # El `clave` distinto ("cp_prod") no es cosmético: desde que
+                # Compras se lee APILADA, las dos tarjetas están en la página a
+                # la vez, así que sus widgets no pueden compartir key.
+                # 2026-09-02, a pedido ("alineemos el toggle de fecha...
+                # para que quede alineado con el título, así como está en
+                # Ranking de Proveedores"). El título entra por `titulo_html`
+                # y comparte el flex row con los controles, en vez de gastar
+                # un renglón propio de ancho completo con el control flotando
+                # `position: absolute` sobre su esquina. Es el mismo cambio
+                # que se le hizo a la tarjeta de Proveedores el 2026-09-01;
+                # el CSS de esta fila pasó a compartir el bloque de aquélla
+                # en `_css_proveedor.py`.
+                selector_fecha_tarjeta(
+                    "cp_prod", "_cp_prod_atajo_pendiente",
+                    titulo_html='<div class="cp-prod-rank-tit">'
+                                'Ranking de productos</div>',
+                    extra=_pop_prov_prod)
 
-            # SIN el punto en "Cant": AG Grid resuelve `field` con notación
-            # de PATH ("a.b" -> row.a.b), así que un campo "Cant." se parte
-            # en ["Cant", ""] y la celda sale vacía en silencio, sin ningún
-            # error (arquitectura.md regla #192). El punto vuelve como
-            # `headerName` en el columnDef, así que el rótulo no cambia.
-            disp = ranking.rename(columns={
-                "producto": "Producto", "valor": "Valor", "pct": "%",
-                "cantidad": "Cant", "um": "UM", "inicio": "Inicio",
-                "fin": "Fin", "var_pct": "Var",
-            })
-            _val_max_prod = float(ranking["valor"].max()) if len(ranking) else 1.0
-            disp["_barra"] = disp["Valor"] / _val_max_prod * 100
-            _resp_prod = AgGrid(
-                disp[["Producto", "Valor", "%", "Cant", "UM", "Inicio",
-                     "Fin", "Var", "_barra"]],
-                gridOptions={
-                    # Ocho columnas visibles, y NINGUNA lleva `flex`: se
-                    # probó (Producto/Valor con flex:2/1.3 + minWidth) y
-                    # `st_aggrid` le clava `width: 200` a cada columna que
-                    # no trae un `width` propio — verificado con
-                    # `api.getColumnDefs()`, que devolvía flex Y width:200
-                    # JUNTOS en el mismo colDef resuelto. AG Grid prioriza
-                    # el `width` explícito para el tamaño inicial, así que
-                    # el flex nunca llegaba a repartir nada: a 1280px
-                    # Producto+Valor se comían 400px fijos y "Var" quedaba
-                    # fuera del viewport, con una scrollbar de 1px. Ancho
-                    # fijo en las OCHO columnas —mismo criterio que ya
-                    # usaban las seis angostas— saca el problema de raíz.
-                    "columnDefs": [
-                        {"field": "Producto", "width": 150,
-                         "tooltipField": "Producto"},
-                        {"field": "Valor", "width": 96,
-                         "type": "numericColumn",
-                         "cellStyle": _js_barra_prod,
-                         "valueFormatter": _js_soles0_prod},
-                        {"field": "%", "width": 52,
-                         "type": "numericColumn",
-                         "valueFormatter": _js_pct_prod},
-                        {"field": "Cant", "headerName": "Cant.",
-                         "width": 60, "type": "numericColumn",
-                         "valueFormatter": _js_num0_prod},
-                        {"field": "UM", "width": 56},
-                        {"field": "Inicio", "width": 72,
-                         "type": "numericColumn",
-                         "valueFormatter": _js_soles2_prod},
-                        {"field": "Fin", "width": 72,
-                         "type": "numericColumn",
-                         "valueFormatter": _js_soles2_prod},
-                        {"field": "Var", "width": 60,
-                         "type": "numericColumn",
-                         "valueFormatter": _js_pct_signed_prod},
-                        {"field": "_barra", "hide": True},
-                    ],
-                    "rowSelection": {"mode": "singleRow",
-                                     "checkboxes": False,
-                                     "enableClickSelection": False},
-                    "onRowClicked": _js_toggle_prod,
-                    "rowHeight": _ALTO_FILA,
-                    "headerHeight": 38,
-                    "suppressCellFocus": True,
-                    "suppressMovableColumns": True,
-                },
-                allow_unsafe_jscode=True,
-                theme="streamlit",
-                height=_ALTO_FRAME,
-                update_on=["selectionChanged"],
-                key="compras_prod_rank_tab",
-            )
-            # AgGrid devuelve la selección VIGENTE en cada corrida (no un
-            # evento) — comparar contra `prod_focus` alcanza, sin dedup.
-            # Selección vacía (reclic en la fila ya elegida, el toggle de
-            # `_js_toggle_prod`) TAMBIÉN limpia el foco.
-            _sel_prod = getattr(_resp_prod, "selected_rows", None)
-            if _sel_prod is not None and len(_sel_prod):
-                _fila_sel = (_sel_prod.iloc[0] if hasattr(_sel_prod, "iloc")
-                            else _sel_prod[0])
-                _clicked = str(_fila_sel["Producto"])
-            else:
-                _clicked = None
-            if _clicked != prod_focus:
-                prod_focus = _clicked
-                st.session_state["compras_prod_focus"] = prod_focus
-            st.caption("UM = unidad de kardex · Inicio/Fin = primera y última "
-                      "compra real del período · % es sobre el total del rango.")
+                # SIN el punto en "Cant": AG Grid resuelve `field` con notación
+                # de PATH ("a.b" -> row.a.b), así que un campo "Cant." se parte
+                # en ["Cant", ""] y la celda sale vacía en silencio, sin ningún
+                # error (arquitectura.md regla #192). El punto vuelve como
+                # `headerName` en el columnDef, así que el rótulo no cambia.
+                disp = ranking.rename(columns={
+                    "producto": "Producto", "valor": "Valor", "pct": "%",
+                    "cantidad": "Cant", "um": "UM", "inicio": "Inicio",
+                    "fin": "Fin", "var_pct": "Var",
+                })
+                _val_max_prod = float(ranking["valor"].max()) if len(ranking) else 1.0
+                disp["_barra"] = disp["Valor"] / _val_max_prod * 100
+                _resp_prod = AgGrid(
+                    disp[["Producto", "Valor", "%", "Cant", "UM", "Inicio",
+                         "Fin", "Var", "_barra"]],
+                    gridOptions={
+                        # Ocho columnas visibles, y NINGUNA lleva `flex`: se
+                        # probó (Producto/Valor con flex:2/1.3 + minWidth) y
+                        # `st_aggrid` le clava `width: 200` a cada columna que
+                        # no trae un `width` propio — verificado con
+                        # `api.getColumnDefs()`, que devolvía flex Y width:200
+                        # JUNTOS en el mismo colDef resuelto. AG Grid prioriza
+                        # el `width` explícito para el tamaño inicial, así que
+                        # el flex nunca llegaba a repartir nada: a 1280px
+                        # Producto+Valor se comían 400px fijos y "Var" quedaba
+                        # fuera del viewport, con una scrollbar de 1px. Ancho
+                        # fijo en las OCHO columnas —mismo criterio que ya
+                        # usaban las seis angostas— saca el problema de raíz.
+                        "columnDefs": [
+                            {"field": "Producto", "width": 150,
+                             "tooltipField": "Producto"},
+                            {"field": "Valor", "width": 96,
+                             "type": "numericColumn",
+                             "cellStyle": _js_barra_prod,
+                             "valueFormatter": _js_soles0_prod},
+                            {"field": "%", "width": 52,
+                             "type": "numericColumn",
+                             "valueFormatter": _js_pct_prod},
+                            {"field": "Cant", "headerName": "Cant.",
+                             "width": 60, "type": "numericColumn",
+                             "valueFormatter": _js_num0_prod},
+                            {"field": "UM", "width": 56},
+                            {"field": "Inicio", "width": 72,
+                             "type": "numericColumn",
+                             "valueFormatter": _js_soles2_prod},
+                            {"field": "Fin", "width": 72,
+                             "type": "numericColumn",
+                             "valueFormatter": _js_soles2_prod},
+                            {"field": "Var", "width": 60,
+                             "type": "numericColumn",
+                             "valueFormatter": _js_pct_signed_prod},
+                            {"field": "_barra", "hide": True},
+                        ],
+                        "rowSelection": {"mode": "singleRow",
+                                         "checkboxes": False,
+                                         "enableClickSelection": False},
+                        "onRowClicked": _js_toggle_prod,
+                        "rowHeight": _ALTO_FILA,
+                        "headerHeight": 38,
+                        "suppressCellFocus": True,
+                        "suppressMovableColumns": True,
+                    },
+                    allow_unsafe_jscode=True,
+                    theme="streamlit",
+                    height=_ALTO_FRAME,
+                    update_on=["selectionChanged"],
+                    key="compras_prod_rank_tab",
+                )
+                # AgGrid devuelve la selección VIGENTE en cada corrida (no un
+                # evento) — comparar contra `prod_focus` alcanza, sin dedup.
+                # Selección vacía (reclic en la fila ya elegida, el toggle de
+                # `_js_toggle_prod`) TAMBIÉN limpia el foco.
+                _sel_prod = getattr(_resp_prod, "selected_rows", None)
+                if _sel_prod is not None and len(_sel_prod):
+                    _fila_sel = (_sel_prod.iloc[0] if hasattr(_sel_prod, "iloc")
+                                else _sel_prod[0])
+                    _clicked = str(_fila_sel["Producto"])
+                else:
+                    _clicked = None
+                if _clicked != prod_focus:
+                    prod_focus = _clicked
+                    st.session_state["compras_prod_focus"] = prod_focus
+                st.caption("UM = unidad de kardex · Inicio/Fin = primera y última "
+                          "compra real del período · % es sobre el total del rango.")
 
         with col_detalle:
-            prod_foco = prod_focus if prod_focus is not None else ranking.iloc[0]["producto"]
+            with st.container(border=True, key="compras_prod_card_evo"):
+                prod_foco = prod_focus if prod_focus is not None else ranking.iloc[0]["producto"]
 
-            st.markdown(f'<div style="font-size:13.5px;font-weight:700;">'
-                       f'{_compras_truncar(prod_foco, 40)}</div>',
-                       unsafe_allow_html=True)
+                st.markdown(f'<div style="font-size:13.5px;font-weight:700;">'
+                           f'{_compras_truncar(prod_foco, 40)}</div>',
+                           unsafe_allow_html=True)
 
-            # ── VENTANA PROPIA DE ESTA TARJETA ───────────────────────────
-            # 2026-08-26, a pedido ("creo que no es entendible para el
-            # usuario"), y es la CAUSA de que no lo fuera: el eje salía del
-            # rango de la franja —~24 días por defecto— así que pedirle
-            # "agrupá por Mes" o "por Año" a 24 días sólo podía dar UN
-            # grupo. Medido: con el default, la traza "Promedio mes" tenía
-            # 1 punto y el eje un solo tick ("Aug 2026"); en Año, 1 punto
-            # anclado al 1-ene mientras las compras eran de agosto, y las
-            # 11 compras reales apiladas en 18px de los ~300 del gráfico.
-            #
-            # Con ventana propia (mismo `periodo.selector` que Evolución en
-            # proveedor.py y que Volatilidad) "Mes" da 12 puntos y la línea
-            # existe de verdad. El caso de UN período sigue siendo posible
-            # (elegir "Año" sobre 12 meses) y se dibuja distinto, más
-            # abajo — no se esconde la opción: que una granularidad
-            # aparezca y desaparezca según el rango confunde más que
-            # dibujar bien el caso degenerado.
-            # ── UNA SOLA FILA DE CONTROLES: ventana + granularidad ──────
-            # 2026-08-26, a pedido. Antes eran TRES renglones apilados —
-            # ventana, granularidad y modo (Precio/Cantidad/Valor)— y el
-            # gráfico arrancaba recién debajo. El modo se va del todo (las
-            # tres métricas pasan a verse SIEMPRE, como etiqueta de cada
-            # barra) y los dos que quedan comparten renglón, alineados.
-            # Son ~40px que gana el gráfico.
-            # columnas-internas: ventana y granularidad, dentro de la
-            # tarjeta. No es una fila de drill: COLUMNAS_DRILL no aplica.
-            _c_win, _c_gran = st.columns([1, 1.35],
-                                         vertical_alignment="center")
-            with _c_win:
-                with st.container(key="compras_prod_periodo_wrap"):
-                    _op_prod = periodo.selector("compras_prod_periodo",
-                                                widget="lista")
-            with _c_gran:
-                with st.container(key="compras_prod_gran"):
-                    gran = st.pills("Agrupar por", ["Semana", "Mes", "Año"],
-                                    default="Mes",
-                                    key="compras_prod_gran_pills",
-                                    label_visibility="collapsed") or "Mes"
-
-            _src_evo = dd
-            if _op_prod != periodo.HEREDA and d_full is not None:
-                _rec = periodo.recortar(d_full, col_fecha, _op_prod)
-                _rec = _rec.copy()
-                _rec[col_fecha] = pd.to_datetime(_rec[col_fecha], errors="coerce")
-                _rec[col_punit] = pd.to_numeric(_rec[col_punit], errors="coerce")
-                _rec[col_valor] = pd.to_numeric(_rec[col_valor], errors="coerce").fillna(0)
-                _src_evo = _rec.dropna(subset=[col_fecha, col_prod])
-
-            g = _src_evo[_src_evo[col_prod].astype(str) == prod_foco]
-            # Las cifras del encabezado salen de `g`, o sea de la MISMA
-            # ventana que las barras. Antes salían de `ranking`, que se
-            # calcula sobre el rango de la franja: con dos ventanas
-            # distintas sería un número describiendo un período y unas
-            # barras dibujando otro.
-            fila = _prod_stats(g, col_fecha, col_punit, col_cant, col_valor,
-                               col_um)
-            agg = _prod_serie_periodo(g, col_fecha, col_punit, col_cant,
-                                      col_valor, gran)
-            gw = gran.lower()
-
-            if agg.empty or fila is None:
-                st.info("Sin compras con precio válido para este producto.")
-            else:
-                var_pct = fila["var_pct"]
-                color_var = (ERROR if var_pct and var_pct > 0.05
-                            else (EXITO if var_pct and var_pct < -0.05 else GRIS_TEXTO))
-                _um = f"/{fila['um']}" if fila["um"] else ""
-                _rango_txt = ""
-                if fila["maximo"] > fila["minimo"]:
-                    _rango_txt = (f' · entre <b>S/ {fila["minimo"]:,.2f}</b>'
-                                  f' y <b>S/ {fila["maximo"]:,.2f}</b>')
-                st.markdown(
-                    f'<div style="font-size:12px;color:{GRIS_TEXTO};margin:0 0 2px;">'
-                    f'actual <b>S/ {fila["fin"]:,.2f}{_um}</b> · '
-                    f'<b style="color:{color_var};">'
-                    f'{"+" if (var_pct or 0) >= 0 else "−"}{abs(var_pct or 0):.1f}%'
-                    f'</b> 1ª → última{_rango_txt}</div>',
-                    unsafe_allow_html=True)
-
-                # ── BARRAS, con las dos cifras SIEMPRE a la vista ────────
-                # Antes había que elegir una de tres (Precio/Cantidad/
-                # Valor) con un selector, y las otras dos no existían. Ahora
-                # la barra ES el valor comprado del período y encima lleva,
-                # fijo, el precio promedio de ese período — que es la
-                # pregunta que traía a este panel ("¿a cuánto me salió, y
-                # cuánto compré?") respondida de una sola mirada.
+                # ── VENTANA PROPIA DE ESTA TARJETA ───────────────────────────
+                # 2026-08-26, a pedido ("creo que no es entendible para el
+                # usuario"), y es la CAUSA de que no lo fuera: el eje salía del
+                # rango de la franja —~24 días por defecto— así que pedirle
+                # "agrupá por Mes" o "por Año" a 24 días sólo podía dar UN
+                # grupo. Medido: con el default, la traza "Promedio mes" tenía
+                # 1 punto y el eje un solo tick ("Aug 2026"); en Año, 1 punto
+                # anclado al 1-ene mientras las compras eran de agosto, y las
+                # 11 compras reales apiladas en 18px de los ~300 del gráfico.
                 #
-                # El valor va COMPACTO (`_fmt_soles_compacto`, nacido para
-                # este mismo problema en ventas_comparativo.py): "S/ 11k"
-                # entra en una barra angosta donde "S/ 11,268" se corta o
-                # se pisa con la vecina. El monto exacto sigue en el hover.
-                fig = go.Figure()
-                _precio = agg["precio"].tolist()
-                _valor = agg["valor"].tolist()
-                # LA ETIQUETA ROTA SI NO ENTRA, no se encoge. MEDIDO en
-                # vivo: el panel da 312px de ancho y la etiqueta de dos
-                # renglones ocupa 34-36px, así que entran hasta ~8 barras.
-                # Con 13 (la ventana de 12 meses por Mes) Plotly no la
-                # oculta ni la corta: la ESCALA hasta 13px de ancho por 8
-                # de alto — sigue en el DOM y ya no se lee. Es la trampa de
-                # la regla #91, y la razón de que este umbral esté acá y no
-                # a ojo.
-                #
-                # Rotada, la etiqueta necesita ~10px de ancho en vez de 36,
-                # así que entra siempre. Se paga leyéndola de costado, que
-                # es mejor que no leerla: el pedido fue "etiqueta SIEMPRE
-                # visible".
-                _muchas = len(agg) > 8
-                if _muchas:
-                    _etiquetas = [f"S/ {pr:,.2f} · {_fmt_soles_compacto(v)}"
-                                  for pr, v in zip(_precio, _valor)]
+                # Con ventana propia (mismo `periodo.selector` que Evolución en
+                # proveedor.py y que Volatilidad) "Mes" da 12 puntos y la línea
+                # existe de verdad. El caso de UN período sigue siendo posible
+                # (elegir "Año" sobre 12 meses) y se dibuja distinto, más
+                # abajo — no se esconde la opción: que una granularidad
+                # aparezca y desaparezca según el rango confunde más que
+                # dibujar bien el caso degenerado.
+                # ── UNA SOLA FILA DE CONTROLES: ventana + granularidad ──────
+                # 2026-08-26, a pedido. Antes eran TRES renglones apilados —
+                # ventana, granularidad y modo (Precio/Cantidad/Valor)— y el
+                # gráfico arrancaba recién debajo. El modo se va del todo (las
+                # tres métricas pasan a verse SIEMPRE, como etiqueta de cada
+                # barra) y los dos que quedan comparten renglón, alineados.
+                # Son ~40px que gana el gráfico.
+                # columnas-internas: ventana y granularidad, dentro de la
+                # tarjeta. No es una fila de drill: COLUMNAS_DRILL no aplica.
+                _c_win, _c_gran = st.columns([1, 1.35],
+                                             vertical_alignment="center")
+                with _c_win:
+                    with st.container(key="compras_prod_periodo_wrap"):
+                        _op_prod = periodo.selector("compras_prod_periodo",
+                                                    widget="lista")
+                with _c_gran:
+                    with st.container(key="compras_prod_gran"):
+                        gran = st.pills("Agrupar por", ["Semana", "Mes", "Año"],
+                                        default="Mes",
+                                        key="compras_prod_gran_pills",
+                                        label_visibility="collapsed") or "Mes"
+
+                _src_evo = dd
+                if _op_prod != periodo.HEREDA and d_full is not None:
+                    _rec = periodo.recortar(d_full, col_fecha, _op_prod)
+                    _rec = _rec.copy()
+                    _rec[col_fecha] = pd.to_datetime(_rec[col_fecha], errors="coerce")
+                    _rec[col_punit] = pd.to_numeric(_rec[col_punit], errors="coerce")
+                    _rec[col_valor] = pd.to_numeric(_rec[col_valor], errors="coerce").fillna(0)
+                    _src_evo = _rec.dropna(subset=[col_fecha, col_prod])
+
+                g = _src_evo[_src_evo[col_prod].astype(str) == prod_foco]
+                # Las cifras del encabezado salen de `g`, o sea de la MISMA
+                # ventana que las barras. Antes salían de `ranking`, que se
+                # calcula sobre el rango de la franja: con dos ventanas
+                # distintas sería un número describiendo un período y unas
+                # barras dibujando otro.
+                fila = _prod_stats(g, col_fecha, col_punit, col_cant, col_valor,
+                                   col_um)
+                agg = _prod_serie_periodo(g, col_fecha, col_punit, col_cant,
+                                          col_valor, gran)
+                gw = gran.lower()
+
+                if agg.empty or fila is None:
+                    st.info("Sin compras con precio válido para este producto.")
                 else:
-                    _etiquetas = [f"S/ {pr:,.2f}<br>{_fmt_soles_compacto(v)}"
-                                  for pr, v in zip(_precio, _valor)]
-                fig.add_bar(
-                    x=agg.index, y=_valor, marker_color=ACENTO,
-                    text=_etiquetas, textposition="outside",
-                    textangle=-90 if _muchas else 0,
-                    textfont=dict(size=9, color=GRIS_TEXTO),
-                    cliponaxis=False, constraintext="none",
-                    customdata=_precio,
-                    hovertemplate=("%{x|%d/%m/%Y}<br>valor S/ %{y:,.2f}"
-                                   "<br>precio prom. S/ %{customdata:,.2f}"
-                                   "<extra></extra>"),
-                )
-                _compras_layout(fig, alto=alturas.MINI)
-                fig.update_layout(showlegend=False,
-                                  yaxis=dict(showticklabels=False),
-                                  bargap=0.35)
-                # Techo con aire para que la etiqueta de DOS renglones
-                # quepa encima de la barra más alta: `textposition=
-                # "outside"` no expande el rango solo, y sin esto la
-                # etiqueta del máximo se corta contra el borde.
-                # Rotada, la etiqueta ocupa ALTO en vez de ancho, así que
-                # el techo tiene que dar más aire.
-                if max(_valor) > 0:
-                    fig.update_yaxes(
-                        range=[0, max(_valor) * (1.75 if _muchas else 1.28)])
-                fig.update_xaxes(**_eje_x_kwargs(gran, agg))
-                st.plotly_chart(fig, use_container_width=True,
-                                key=f"compras_g_prod_{gran}")
-                st.caption(f"Barra = valor comprado por {gw} · encima, el "
-                           f"precio promedio de ese {gw}.")
+                    var_pct = fila["var_pct"]
+                    color_var = (ERROR if var_pct and var_pct > 0.05
+                                else (EXITO if var_pct and var_pct < -0.05 else GRIS_TEXTO))
+                    _um = f"/{fila['um']}" if fila["um"] else ""
+                    _rango_txt = ""
+                    if fila["maximo"] > fila["minimo"]:
+                        _rango_txt = (f' · entre <b>S/ {fila["minimo"]:,.2f}</b>'
+                                      f' y <b>S/ {fila["maximo"]:,.2f}</b>')
+                    st.markdown(
+                        f'<div style="font-size:12px;color:{GRIS_TEXTO};margin:0 0 2px;">'
+                        f'actual <b>S/ {fila["fin"]:,.2f}{_um}</b> · '
+                        f'<b style="color:{color_var};">'
+                        f'{"+" if (var_pct or 0) >= 0 else "−"}{abs(var_pct or 0):.1f}%'
+                        f'</b> 1ª → última{_rango_txt}</div>',
+                        unsafe_allow_html=True)
+
+                    # ── BARRAS, con las dos cifras SIEMPRE a la vista ────────
+                    # Antes había que elegir una de tres (Precio/Cantidad/
+                    # Valor) con un selector, y las otras dos no existían. Ahora
+                    # la barra ES el valor comprado del período y encima lleva,
+                    # fijo, el precio promedio de ese período — que es la
+                    # pregunta que traía a este panel ("¿a cuánto me salió, y
+                    # cuánto compré?") respondida de una sola mirada.
+                    #
+                    # El valor va COMPACTO (`_fmt_soles_compacto`, nacido para
+                    # este mismo problema en ventas_comparativo.py): "S/ 11k"
+                    # entra en una barra angosta donde "S/ 11,268" se corta o
+                    # se pisa con la vecina. El monto exacto sigue en el hover.
+                    fig = go.Figure()
+                    _precio = agg["precio"].tolist()
+                    _valor = agg["valor"].tolist()
+                    # LA ETIQUETA ROTA SI NO ENTRA, no se encoge. MEDIDO en
+                    # vivo: el panel da 312px de ancho y la etiqueta de dos
+                    # renglones ocupa 34-36px, así que entran hasta ~8 barras.
+                    # Con 13 (la ventana de 12 meses por Mes) Plotly no la
+                    # oculta ni la corta: la ESCALA hasta 13px de ancho por 8
+                    # de alto — sigue en el DOM y ya no se lee. Es la trampa de
+                    # la regla #91, y la razón de que este umbral esté acá y no
+                    # a ojo.
+                    #
+                    # Rotada, la etiqueta necesita ~10px de ancho en vez de 36,
+                    # así que entra siempre. Se paga leyéndola de costado, que
+                    # es mejor que no leerla: el pedido fue "etiqueta SIEMPRE
+                    # visible".
+                    _muchas = len(agg) > 8
+                    if _muchas:
+                        _etiquetas = [f"S/ {pr:,.2f} · {_fmt_soles_compacto(v)}"
+                                      for pr, v in zip(_precio, _valor)]
+                    else:
+                        _etiquetas = [f"S/ {pr:,.2f}<br>{_fmt_soles_compacto(v)}"
+                                      for pr, v in zip(_precio, _valor)]
+                    fig.add_bar(
+                        x=agg.index, y=_valor, marker_color=ACENTO,
+                        text=_etiquetas, textposition="outside",
+                        textangle=-90 if _muchas else 0,
+                        textfont=dict(size=9, color=GRIS_TEXTO),
+                        cliponaxis=False, constraintext="none",
+                        customdata=_precio,
+                        hovertemplate=("%{x|%d/%m/%Y}<br>valor S/ %{y:,.2f}"
+                                       "<br>precio prom. S/ %{customdata:,.2f}"
+                                       "<extra></extra>"),
+                    )
+                    _compras_layout(fig, alto=alturas.MINI)
+                    fig.update_layout(showlegend=False,
+                                      yaxis=dict(showticklabels=False),
+                                      bargap=0.35)
+                    # Techo con aire para que la etiqueta de DOS renglones
+                    # quepa encima de la barra más alta: `textposition=
+                    # "outside"` no expande el rango solo, y sin esto la
+                    # etiqueta del máximo se corta contra el borde.
+                    # Rotada, la etiqueta ocupa ALTO en vez de ancho, así que
+                    # el techo tiene que dar más aire.
+                    if max(_valor) > 0:
+                        fig.update_yaxes(
+                            range=[0, max(_valor) * (1.75 if _muchas else 1.28)])
+                    fig.update_xaxes(**_eje_x_kwargs(gran, agg))
+                    st.plotly_chart(fig, use_container_width=True,
+                                    key=f"compras_g_prod_{gran}")
+                    st.caption(f"Barra = valor comprado por {gw} · encima, el "
+                               f"precio promedio de ese {gw}.")
 
     # ── Card 2: ranking por familia + mini ranking de sus productos ──────
     if not col_fam or col_fam not in dd.columns:

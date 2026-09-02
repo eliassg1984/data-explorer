@@ -265,3 +265,116 @@ def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None):
                              args=(_k_at, None, _ops, ctx, bandera))
                 selector_escala(f"{clave}_esc", ctx, bandera=bandera)
     return ctx
+
+
+def filtro_proveedores(clave, provs_ordenados, pie=None):
+    """Filtro de proveedores para una tarjeta de Compras.
+
+    Devuelve `(seleccion, dibujar)`:
+
+    · `seleccion` es la lista de proveedores marcados (o TODOS los reales si
+      el usuario destildó hasta el último — el default y el fallback tienen
+      que decir lo mismo, o "limpiar" cambiaría el default).
+    · `dibujar` es un CALLABLE para el hook `extra=` de
+      `selector_fecha_tarjeta`, que lo mete en la fila del título.
+
+    Los dos por separado a propósito: la selección se LEE temprano, para
+    armar la figura y el ranking, y el popover se DIBUJA tarde, dentro de la
+    tarjeta. Es el patrón de UN rerun que ya usaba cuando flotaba, y no
+    cambia por mudarse de sitio.
+
+    Nació el 2026-09-02 extrayendo el popover que vivía inline en
+    `proveedor.py`, al pedirse el mismo control para el Ranking de Productos
+    ("añadamos el de proveedor"). Copiarlo hubiera sido duplicar ~100 líneas
+    y, peor, dos sitios donde arreglar el próximo detalle — el mismo
+    argumento que ya había traído acá a `selector_fecha_tarjeta`.
+
+    `clave` es el prefijo de TODAS las keys, así que las dos vistas
+    coexisten en la página apilada sin chocar. El CSS de cada prefijo se
+    lista EXPLÍCITO en `_css_proveedor.py`: nada de wildcards por familia
+    (ver el aviso de CLAUDE.md).
+
+    `pie` es un callable opcional que se dibuja al final del panel; hoy lo
+    usa Proveedor para su toggle "Nombres en barras", que es de esa vista y
+    no del filtro.
+    """
+    reales = [p for p in provs_ordenados if p != "Otros"]
+    # Por defecto se muestran TODOS los del rango, no los N más grandes: la
+    # lista sale de un `d` ya filtrado por fecha, así que "todos" significa
+    # "todos los que compraron en el período" y cambia sólo con la fecha.
+    # "Otros" arranca DESTILDADO: no es un proveedor, agrupa a los que
+    # quedaron fuera del top, y encenderlo por defecto metería una fila
+    # que no se puede enfocar.
+    for _p in provs_ordenados:
+        _k = f"{clave}_cb::{_p}"
+        if _k not in st.session_state:
+            st.session_state[_k] = (_p in reales)
+
+    def _set_topn(_n):
+        """Marca sólo los primeros _n proveedores (por valor). _n=0 → limpiar."""
+        for _pp in provs_ordenados:
+            st.session_state[f"{clave}_cb::{_pp}"] = (_pp in reales[:_n])
+
+    seleccion = [p for p in provs_ordenados
+                 if st.session_state.get(f"{clave}_cb::{p}")] or reales
+
+    def dibujar():
+        with st.container(key=f"{clave}_pop_float"):
+            _sel_now = [p for p in provs_ordenados
+                        if st.session_state.get(f"{clave}_cb::{p}")]
+            # El número va como badge por CSS var (un `::after` lo pinta).
+            # Sin cuenta → badge vacío. La var vive scopeada al contenedor.
+            st.markdown(
+                f"<style>.st-key-{clave}_pop_float "
+                f"{{ --cp-prov-count: '{len(_sel_now)}'; }}</style>",
+                unsafe_allow_html=True,
+            )
+            with st.popover("Proveedores", icon=":material/groups:"):
+                # Panel COMPACTO. El detalle de por qué cada pieza es como
+                # es —los 175px de aire que se midieron antes de tocarlo, el
+                # `st.columns(5)` que imponía 382px de ancho, el
+                # `st.divider()` de 49— está en arquitectura.md regla #272.
+                # columnas-internas: botonera del popover, no el eje de la vista.
+                with st.container(horizontal=True, gap="small",
+                                  key=f"{clave}_atajos"):
+                    st.button("Top 3", key=f"{clave}_topn3", type="tertiary",
+                              on_click=_set_topn, args=(3,))
+                    st.button("5", key=f"{clave}_topn5", type="tertiary",
+                              on_click=_set_topn, args=(5,))
+                    st.button("10", key=f"{clave}_topn10", type="tertiary",
+                              on_click=_set_topn, args=(10,))
+                    st.button("Todos", key=f"{clave}_topnall", type="tertiary",
+                              on_click=_set_topn, args=(len(reales),))
+                    st.button("Ninguno", key=f"{clave}_topnclr", type="tertiary",
+                              on_click=_set_topn, args=(0,))
+                _q = st.text_input("Buscar", key=f"{clave}_q",
+                                   placeholder="Buscar proveedor...",
+                                   label_visibility="collapsed").strip().lower()
+                _vistos = [p for p in provs_ordenados
+                           if not _q or _q in str(p).lower()]
+                if not _vistos:
+                    st.caption("Sin coincidencias.")
+                # La lista scrollea DENTRO en vez de estirar el panel, y su
+                # alto es dinámico: `st.container(height=N)` reserva N aunque
+                # haya dos filas. NO son N filas iguales — los proveedores
+                # son razones sociales completas y ENVUELVEN. Medido clonando
+                # filas reales en los 200px de texto útil del panel: 1 línea =
+                # 24px, 2 = 30, 3 = 45 (~15 por línea + 9 de caja). 190 es el
+                # techo: por encima el panel vuelve a comerse media pantalla.
+                _CHARS_LINEA = 30      # a 12px en 200px de ancho útil, medido
+                _alto_lista = min(190, sum(
+                    (-(-len(str(_p)) // _CHARS_LINEA) or 1) * 15 + 13
+                    for _p in _vistos) or 28)
+                with st.container(height=_alto_lista, border=False,  # alto-fijo-justificado: líneas x px de la lista, no una resta contra la pantalla
+                                  key=f"{clave}_lista"):
+                    for _p in _vistos:
+                        # `width="stretch"`: el default de `st.checkbox` es
+                        # `content`, o sea la fila —y con ella el área
+                        # clicable— medía lo que el nombre. En una lista, la
+                        # fila entera tiene que ser el blanco.
+                        st.checkbox(_p, key=f"{clave}_cb::{_p}",
+                                    width="stretch")
+                if pie is not None:
+                    pie()
+
+    return seleccion, dibujar

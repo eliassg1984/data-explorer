@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-278 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+279 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (90)
+**CSS y estilos** (91)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -110,6 +110,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#271** — Un panel de popover que "se ve muy grande" casi nunca es su contenido: son los defaults de…
 - **#272** — Un control que flota sobre una tarjeta quiere, casi siempre, ser un ítem más de la fila del…
 - **#273** — Un bloque de alto CERO sigue cobrando su gap: cinco piezas de cromo fijo metían 80px de gris…
+- **#279** — Un control que se pide "igual al de aquella vista" se EXTRAE, no se copia — y lo que hay que…
 
 **Layout y alturas** (29)
 
@@ -12462,13 +12463,68 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      tarjetas del par en 200px; 2 productos → 98 y 172. Antes: grid fijo de
      325 con 269px de viewport para 105 de filas.
 
+
+279. **Un control que se pide "igual al de aquella vista" se EXTRAE, no se
+     copia — y lo que hay que parametrizar no es el look, es el PREFIJO DE
+     KEY. En una página apilada, dos instancias del mismo control no pueden
+     compartir ninguna.**
+
+     2026-09-02, a pedido sobre el Ranking de Productos: alinear su selector
+     de fecha con el título "así como está en Ranking de Proveedores",
+     agregarle el filtro de proveedores, y sacar el gráfico de al lado a su
+     propia tarjeta. Tres pedidos, y los tres se resolvieron **moviendo
+     código existente en vez de escribir código nuevo**:
+
+     · El título entró por `titulo_html=` de `selector_fecha_tarjeta`, el
+       hook que ya existía (regla #272).
+     · El popover de proveedores —~110 líneas que vivían inline en
+       `proveedor.py`— se fue a `_comun.py::filtro_proveedores`.
+     · La tarjeta única se partió en dos, exactamente el movimiento que
+       había hecho Proveedor el 2026-08-18: el contenedor de afuera deja de
+       llamarse `compras_prod_card_*` y pasa a `compras_prod_marco`. **El
+       renombre ES el arreglo**: mientras llevara el prefijo de la familia
+       seguiría pintándose de blanco ENCIMA de las dos tarjetas nuevas.
+
+     **Lo que cuesta de verdad al extraer un control con CSS propio.** El
+     helper deriva sus keys de `clave`, así que Proveedor conserva
+     `cp_prov_lista` / `cp_prov_atajos` y Producto estrena
+     `cp_prod_prov_lista` / `cp_prod_prov_atajos`. Y ahí aparece el trabajo
+     invisible: `[class*="st-key-cp_prov_lista"]` **no** matchea
+     `st-key-cp_prod_prov_lista` (no es substring), así que las 12 reglas
+     del panel hubo que duplicarlas selector por selector. Se hizo con un
+     script sobre el fichero, y el script se equivocó en las CINCO reglas de
+     selector MULTILÍNEA: al agrupar sólo miraba la línea que trae el token,
+     así que el gemelo salía sin su primera línea
+     (`.st-key-cp_rank_fila
+ > …:has(> .st-key-…)`). Revisadas y arregladas
+     a mano. Moraleja: automatizar la duplicación de selectores CSS está
+     bien, pero hay que **verificar rule por rule que el gemelo tenga tantas
+     líneas como el original**.
+
+     **La trampa de orden que dejó la mudanza.** `cp_prod_fila` tenía, más
+     abajo en el mismo fichero, un bloque viejo con `width: fit-content`
+     (del día en que se le sacó el `position: absolute`, 2026-08-26). Al
+     entrar la fila al bloque compartido con `cp_rank_fila` —que declara
+     `width: 100%`— ese resto llegaba DESPUÉS y ganaba: la fila medía lo que
+     su contenido y el `space-between` no tenía hueco que repartir, o sea el
+     rango quedaba pegado al título en vez de al borde derecho. Al unificar
+     dos bloques, revisar qué más declara el fichero sobre el que se fue.
+
+     **Y una diferencia de semántica que conviene no aplanar.** El mismo
+     control filtra cosas distintas en cada vista: en Proveedor la selección
+     elige QUÉ FILAS del ranking se ven; en Producto recorta el universo de
+     compras sobre el que se rankean los PRODUCTOS ("los productos que le
+     compro a estos proveedores"), así que se aplica sobre el df ANTES de
+     construir el ranking. El widget es compartido; dónde se aplica su
+     salida, no.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#279**.
+> próxima regla nueva es la **#280**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

@@ -82,7 +82,7 @@ CSS = """        <style>
            "al mismo nivel que el widget de fecha": mismo look sin una sola
            regla propia.
 
-           Se conserva la key `prov_pop_float` aunque ya no flote: es el
+           Se conserva la key `cp_prov_pop_float` aunque ya no flote: es el
            ancla del badge que inyecta Python. Mismo criterio que
            `gran_float`. */
         /* Van DOS selectores y el de arriba es el que importa. `st.popover`
@@ -95,8 +95,11 @@ CSS = """        <style>
            quedaba en 105px sin crecer pese a su `flex-grow: 1`. Estilar
            sólo la key de adentro no lo arregla: el que reparte es el padre. */
         .st-key-cp_rank_fila
-            > [data-testid="stLayoutWrapper"]:has(> .st-key-prov_pop_float),
-        .st-key-prov_pop_float {
+            > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_prov_pop_float),
+        .st-key-cp_prov_pop_float,
+        .st-key-cp_prod_fila
+            > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_prod_prov_pop_float),
+        .st-key-cp_prod_prov_pop_float {
             flex: 0 0 auto !important;
             width: auto !important;
         }
@@ -120,9 +123,9 @@ CSS = """        <style>
              umbral se DEJA en 1340: bajarlo es una decision de diseno
              aparte (mas ancho util no significa que el titulo se lea bien)
              y este cambio no la toma.
-           Los DOS bloques (este y el de prov_pop_float) tienen que entrar
+           Los DOS bloques (este y el de cp_prov_pop_float) tienen que entrar
            o salir juntos, si no el titulo se superpondria con unos chips
-           que no se corrieron: por eso el `right` de prov_pop_float se
+           que no se corrieron: por eso el `right` de cp_prov_pop_float se
            repite aca, para que en la banda 1230-1339 (titulo oculto, pill
            y chips sin correr) siga con su propia cuenta, que ahi da. */
         .st-key-compras_prov_titulo_franja {
@@ -407,7 +410,8 @@ CSS = """        <style>
            fila lo vuelve innecesario: dos reglas peleando por el mismo
            pixel donde ahora alcanza con no escribir ninguna. Solo queda el
            `gap`, que la pildora base no define. */
-        .st-key-prov_pop_float [data-testid="stPopover"] button {
+        .st-key-cp_prov_pop_float [data-testid="stPopover"] button,
+        .st-key-cp_prod_prov_pop_float [data-testid="stPopover"] button {
             gap: 5px !important;
             /* 12px, los mismos que el trigger de la fecha. Heredar la
                pildora base dejaba este en 11 y el de al lado en 12 —
@@ -443,7 +447,8 @@ CSS = """        <style>
         /* Icono material (grupos) del popover: mismo tamaño que Familia/
            Subfamilia (15px) y color heredado del botón en vez de un lila
            propio — ahí también los dos chips divergían. */
-        .st-key-prov_pop_float [data-testid="stPopover"] button [data-testid="stIconMaterial"] {
+        .st-key-cp_prov_pop_float [data-testid="stPopover"] button [data-testid="stIconMaterial"],
+        .st-key-cp_prod_prov_pop_float [data-testid="stPopover"] button [data-testid="stIconMaterial"] {
             color: inherit !important;
             /* 14, no los 15 de cuando imitaba al chip de la franja: la
                pildora de la fila mide 22px de alto contra los 26 de aquel,
@@ -457,7 +462,9 @@ CSS = """        <style>
            Subfamilia (stBadge, _40_ajuste_franja.py) — antes tenía su
            propia paleta y tamaño de fuente (11px/500), un punto más grande
            y más flojo que el de al lado. */
-        .st-key-prov_pop_float [data-testid="stPopover"] button
+        .st-key-cp_prov_pop_float [data-testid="stPopover"] button
+            [data-testid="stMarkdownContainer"] p::after,
+        .st-key-cp_prod_prov_pop_float [data-testid="stPopover"] button
             [data-testid="stMarkdownContainer"] p::after {
             content: var(--cp-prov-count, "");
             background: var(--accent);
@@ -486,18 +493,21 @@ CSS = """        <style>
 
            Se acota con `:has()` sobre la key de la LISTA, no colgando del
            contenedor: `stPopoverBody` es un portal al final del body
-           (fuera de `prov_pop_float`), el mismo motivo por el que el panel
+           (fuera de `cp_prov_pop_float`), el mismo motivo por el que el panel
            de la escala y los de Familia/Subfamilia se alcanzan así. Sin
            ese `:has()` esto apretaría TODOS los popovers de la app —el
            error contra el que avisa CLAUDE.md—, incluido el de la escala,
            que ya trae su propio bloque compacto más abajo. */
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prov_lista"]) {
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prov_lista"]),
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_prov_lista"]) {
             width: 250px !important;
             min-width: 250px !important;
             max-width: 250px !important;
             padding: 10px 12px !important;
         }
         [data-testid="stPopoverBody"]:has([class*="st-key-cp_prov_lista"])
+            [data-testid="stVerticalBlock"],
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_prov_lista"])
             [data-testid="stVerticalBlock"] {
             gap: 7px !important;
         }
@@ -507,8 +517,10 @@ CSS = """        <style>
            Se estilan por su ANCLA PROPIA (la fila `cp_prov_atajos`) y no
            por el panel: en el panel también hay checkboxes y un toggle,
            que no tienen por qué heredar esto. */
-        .st-key-cp_prov_atajos { gap: 2px !important; }
-        .st-key-cp_prov_atajos button {
+        .st-key-cp_prov_atajos,
+        .st-key-cp_prod_prov_atajos { gap: 2px !important; }
+        .st-key-cp_prov_atajos button,
+        .st-key-cp_prod_prov_atajos button {
             min-height: 0 !important;
             height: auto !important;
             padding: 2px 6px !important;
@@ -518,7 +530,8 @@ CSS = """        <style>
             border-radius: 4px !important;
             color: var(--text-secondary) !important;
         }
-        .st-key-cp_prov_atajos button:hover {
+        .st-key-cp_prov_atajos button:hover,
+        .st-key-cp_prod_prov_atajos button:hover {
             background: var(--accent-tint) !important;
             color: var(--accent-deep) !important;
         }
@@ -528,12 +541,16 @@ CSS = """        <style>
            es el que trae el alto, no el campo, y sin la segunda regla el
            buscador quedaba de lejos la pieza más alta del panel. */
         [data-testid="stPopoverBody"]:has([class*="st-key-cp_prov_lista"])
+            [data-testid="stTextInput"] input,
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_prov_lista"])
             [data-testid="stTextInput"] input {
             padding: 3px 8px !important;
             font-size: 12px !important;
             line-height: 1.3 !important;
         }
         [data-testid="stPopoverBody"]:has([class*="st-key-cp_prov_lista"])
+            [data-testid="stTextInputRootElement"],
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_prov_lista"])
             [data-testid="stTextInputRootElement"] {
             min-height: 0 !important;
             height: 28px !important;
@@ -542,7 +559,8 @@ CSS = """        <style>
            acá va sólo lo que no depende del contenido. El `padding-right`
            deja sitio a la barra de scroll para que no tape el último
            carácter del nombre más largo. */
-        .st-key-cp_prov_lista {
+        .st-key-cp_prov_lista,
+        .st-key-cp_prod_prov_lista {
             padding-right: 4px !important;
             gap: 2px !important;
         }
@@ -550,19 +568,23 @@ CSS = """        <style>
            LARGO (razones sociales completas): con 226px de ancho útil hay
            que dejarlo envolver o se corta, así que el `white-space` queda
            en normal y lo que se aprieta es el interlineado. */
-        .st-key-cp_prov_lista [data-testid="stCheckbox"] label {
+        .st-key-cp_prov_lista [data-testid="stCheckbox"] label,
+        .st-key-cp_prod_prov_lista [data-testid="stCheckbox"] label {
             gap: 6px !important;
             align-items: flex-start !important;
         }
         .st-key-cp_prov_lista [data-testid="stCheckbox"] label > div:last-child,
-        .st-key-cp_prov_lista [data-testid="stCheckbox"] label p {
+        .st-key-cp_prov_lista [data-testid="stCheckbox"] label p,
+        .st-key-cp_prod_prov_lista [data-testid="stCheckbox"] label > div:last-child,
+        .st-key-cp_prod_prov_lista [data-testid="stCheckbox"] label p {
             font-size: 12px !important;
             line-height: 1.25 !important;
         }
         /* Hover de FILA. Va junto con el `width="stretch"` del checkbox
            (proveedor.py): sin el uno, el otro no se nota — el realce
            marcaría 110px de los 226, que es peor que no marcar nada. */
-        .st-key-cp_prov_lista [data-testid="stCheckbox"] label {
+        .st-key-cp_prov_lista [data-testid="stCheckbox"] label,
+        .st-key-cp_prod_prov_lista [data-testid="stCheckbox"] label {
             padding: 1px 4px !important;
             border-radius: 4px !important;
             /* El `width="stretch"` de Python estira el CONTENEDOR del
@@ -571,7 +593,8 @@ CSS = """        <style>
                fila. El blanco es la fila entera o no es un blanco. */
             width: 100% !important;
         }
-        .st-key-cp_prov_lista [data-testid="stCheckbox"] label:hover {
+        .st-key-cp_prov_lista [data-testid="stCheckbox"] label:hover,
+        .st-key-cp_prod_prov_lista [data-testid="stCheckbox"] label:hover {
             background: var(--accent-tint) !important;
         }
         /* El toggle "Nombres en barras" es la ÚNICA opción de dibujo entre
@@ -708,7 +731,17 @@ CSS = """        <style>
            de esta fila, que pasa a estar EN EL FLUJO y a repartir: el
            titulo se queda con lo que sobra y el control conserva lo suyo.
            Medido: la grilla sube de y=315 a y=285. */
-        .st-key-cp_rank_fila {
+        /* 2026-09-02: `cp_prod_fila` (Ranking de PRODUCTOS) entra a este
+           bloque, a pedido ("alineemos el toggle de fecha... para que quede
+           alineado con el título, así como está en Ranking de Proveedores").
+           Venía del estado ANTERIOR de esta misma fila: `position: absolute;
+           top: 16px; right: 18px`, o sea el control flotando sobre la
+           esquina de la tarjeta y el título gastando un renglón entero
+           debajo. Comparte las reglas en vez de tener las suyas porque el
+           pedido es literalmente "que se vea como aquélla": dos bloques
+           gemelos son dos sitios donde arreglar el próximo detalle. */
+        .st-key-cp_rank_fila,
+        .st-key-cp_prod_fila {
             position: static !important;
             width: 100% !important;
             display: flex !important;
@@ -722,37 +755,26 @@ CSS = """        <style>
            decorativo: sin el, un flex item nunca se encoge por debajo de
            su contenido, asi que un nombre largo empujaria al control fuera
            de la tarjeta en vez de truncar. */
-        .st-key-cp_rank_fila > [data-testid="stElementContainer"]:first-child {
+        .st-key-cp_rank_fila > [data-testid="stElementContainer"]:first-child,
+        .st-key-cp_prod_fila > [data-testid="stElementContainer"]:first-child {
             flex: 1 1 auto !important;
             min-width: 0 !important;
             width: auto !important;
         }
-        .st-key-cp_rank_fila .cp-rank-tit {
+        .st-key-cp_rank_fila .cp-rank-tit,
+        .st-key-cp_prod_fila .cp-prod-rank-tit {
             overflow: hidden !important;
             text-overflow: ellipsis !important;
             white-space: nowrap !important;
             margin: 0 !important;
         }
-        .st-key-cp_rank_fila .st-key-cp_rank_escala {
+        .st-key-cp_rank_fila .st-key-cp_rank_escala,
+        .st-key-cp_prod_fila .st-key-cp_prod_escala {
             flex: 0 0 auto !important;
         }
-        .st-key-cp_prod_fila {
-            position: absolute !important;
-            top: 16px !important;
-            right: 18px !important;
-            /* `fit-content` o se estira: el stVerticalBlock de Streamlit
-               trae `width: 100%`, que en un elemento absoluto se resuelve
-               contra la tarjeta — 572px para tres botones chicos, y el
-               bloque terminaba invadiendo el sitio del titulo por la
-               izquierda (medido 2026-08-25). */
-            width: fit-content !important;
-            margin: 0 !important;
-            z-index: 2 !important;
-            display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: wrap !important;
-            gap: 6px !important;
-        }
+        /* (Acá vivía el bloque `position: absolute; top:16px; right:18px`
+           de `cp_prod_fila`, con su `width: fit-content` para no estirarse.
+           Se fue el 2026-09-02: la fila entró en el flujo, arriba.) */
         .st-key-cp_rank_fila [data-testid="stElementContainer"],
         .st-key-cp_prod_fila [data-testid="stElementContainer"] {
             width: auto !important;
@@ -1567,7 +1589,7 @@ CSS = """        <style>
            opacity + translate para que el ancho real del contenedor
            permanezca intacto durante toda la animacion. */
         @keyframes unfoldDown {
-            0%   { opacity: 0; transform: translateY(-8px); }
+            0% { opacity: 0; transform: translateY(-8px); }
             100% { opacity: 1; transform: translateY(0); }
         }
         /* La animacion se aplica DIRECTO a la tarjeta por su key estable.
@@ -1582,7 +1604,7 @@ CSS = """        <style>
         }
         /* Bloque paneles: entra deslizando desde la izquierda al enfocar. */
         @keyframes unfoldRight {
-            0%   { opacity: 0; transform: translateX(-14px); }
+            0% { opacity: 0; transform: translateX(-14px); }
             100% { opacity: 1; transform: translateX(0); }
         }
         /* 2026-08-21: eran UNA tarjeta (`compras_prov_card_paneles`) y pasaron
@@ -1701,12 +1723,15 @@ CSS = """        <style>
            segunda: en Producto la esquina superior derecha ya la ocupa el
            panel de detalle (nombre del producto + ventana + granularidad),
            asi que flotar ahi seria chocar. En flujo, arriba del titulo,
-           no pelea con nada. */
-        .st-key-cp_prod_fila {
-            position: static !important;
-            width: fit-content !important;
-            margin: 0 0 4px !important;
-        }
+           no pelea con nada.
+
+           2026-09-02: de este bloque queda el comentario. El `static` y el
+           `margin` los declara ahora el bloque compartido con
+           `cp_rank_fila`, mas arriba, y el `width: fit-content` tuvo que
+           IRSE — llegaba despues y le ganaba al `width: 100%` de aquel, o
+           sea la fila medía lo que su contenido y el `space-between` no
+           tenia hueco que repartir: el rango quedaba pegado al titulo en
+           vez de al borde derecho de la tarjeta. */
         /* El CHEVRON de Streamlit, mismo trato que en `cp_rank_escala`: se
            esconde el WRAPPER y no el glifo (apagar solo el span deja su
            div padre ocupando 16px y el boton sigue desbordando). Esta

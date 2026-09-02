@@ -23,7 +23,7 @@ from graficos.base import (
     paso_etiquetas, publicar_var_px,
 )
 from graficos.compras._comun import (
-    COLUMNAS_DRILL, GAP_DRILL, selector_fecha_tarjeta,
+    COLUMNAS_DRILL, GAP_DRILL, filtro_proveedores, selector_fecha_tarjeta,
 )
 from graficos.compras._css_proveedor import (
     CSS as CSS_PROVEEDOR, CSS_RANKING_GRID,
@@ -90,17 +90,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         _todos_provs_temp = _todos_provs_temp + ["Otros"]
     _real_provs = [p for p in _todos_provs_temp if p != "Otros"]  # sin "Otros"
     # 2026-08-16, a pedido: por defecto se muestran TODOS los proveedores del
-    # rango de fechas, no los 5 mas grandes. `_todos_provs_temp` sale de `d`,
-    # que ya viene filtrado por fecha, asi que "todos" significa "todos los
-    # que compraron en el periodo elegido" y cambia solo con la fecha.
-    # El usuario sigue pudiendo recortar con Top 3/5/10 en el popover.
-    _default_prov_sel = _real_provs
-    # Inicializar el estado de cada proveedor (checkbox) la primera vez que
-    # aparece. La clave usa el nombre (estable aunque cambie el orden/filtro).
-    for _p in _todos_provs_temp:
-        _k = "cp_prov_cb::" + str(_p)
-        if _k not in st.session_state:
-            st.session_state[_k] = (_p in _default_prov_sel)
     # Nombres sobre las barras: TRUE por defecto (filtro principal para el
     # usuario). El seed corre una vez por sesión — bumping el key del flag
     # resetea sesiones antiguas que hayan quedado con False.
@@ -108,25 +97,27 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         st.session_state["cp_prov_show_names"] = True
         st.session_state["_cp_show_names_seed_v2"] = True
 
-    def _cp_set_topn(_n):
-        """Marca solo los primeros _n proveedores (por valor). _n=0 → limpiar."""
-        for _pp in _todos_provs_temp:
-            st.session_state["cp_prov_cb::" + str(_pp)] = (_pp in _real_provs[:_n])
-
     # Granularidad y Top productos: se leen aquí (de session_state), pero sus
     # selectores se DIBUJAN flotando sobre sus gráficos respectivos (más abajo).
     gran = st.session_state.get("compras_prov_gran") or "Mes"
     topn = st.session_state.get("compras_prov_topn") or 10
 
-    # Selección de proveedores: se LEE de session_state (cp_prov_cb::<nombre>).
-    # El popover se DIBUJA flotando arriba-izquierda sobre el gráfico (más
-    # abajo), por eso aquí solo se calcula la selección para armar el figure.
-    # El `or` cubre el caso "el usuario destildo todo": cae al default, que
-    # desde 2026-08-16 son TODOS (ver `_default_prov_sel` arriba) — los dos
-    # tienen que decir lo mismo o el reset del popover cambiaria el default.
-    prov_multisel = [p for p in _todos_provs_temp
-                     if st.session_state.get("cp_prov_cb::" + str(p))] \
-                    or _real_provs
+    # El filtro de proveedores vive en `_comun.py::filtro_proveedores` desde
+    # el 2026-09-02, al pedirse el MISMO control para el Ranking de Productos.
+    # Devuelve sus dos mitades por separado porque se usan en momentos
+    # distintos: la selección se lee ACÁ (arriba, para armar el figure y el
+    # ranking) y el popover se dibuja MÁS ABAJO, dentro de la fila del título
+    # de la tarjeta. Ese desfase es el patrón de UN rerun que ya usaba cuando
+    # el popover flotaba, y no cambia por mudarse de sitio.
+    #
+    # El toggle "Nombres en barras" entra por `pie=`: es de ESTA vista (las
+    # barras son suyas), no del filtro, y por eso no viajó al helper.
+    prov_multisel, _pop_proveedores = filtro_proveedores(
+        "cp_prov", _todos_provs_temp,
+        pie=lambda: st.toggle(
+            "Nombres en barras", key="cp_prov_show_names",
+            help="Muestra el nombre del proveedor sobre cada barra. "
+                 "Se abrevia segun el ancho disponible."))
 
     # ── Preparar base de datos ─────────────────────────────────────────────
     base = pd.DataFrame({
@@ -489,120 +480,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # con padding y sombra ENCIMA de las dos tarjetas nuevas (bloque blanco
     # dentro de bloque blanco). Sacarlo de la familia es lo que lo vuelve
     # invisible, sin pelearle a la regla con overrides.
-    def _pop_proveedores():
-        """El filtro de proveedores, dibujado DENTRO de la fila del título.
-
-        2026-09-01, a pedido ("integremos ese filtro dentro de la tarjeta de
-        Ranking, al mismo nivel que el widget de fecha"). Antes flotaba
-        `position: absolute` sobre `compras_prov_marco`, o sea por ENCIMA de
-        la tarjeta y en una banda que el marco le reservaba con un
-        `padding-top: 16px`. Ahora entra por el hook `extra=` de
-        `selector_fecha_tarjeta`, en el mismo flex row que el título y el
-        rango — un solo contenedor que reparte, en vez de dos anclas
-        independientes adivinando no pisarse (el mismo argumento que ya
-        había mudado el ícono de ayuda a esta fila, ver más abajo).
-
-        Se dibuja TARDE (dentro de la tarjeta) pero su selección se LEE
-        temprano, arriba, para armar el figure: es el patrón de 1 rerun que
-        ya usaba flotando, y no cambia por mudarse de sitio.
-
-        Sigue llamándose `prov_pop_float` aunque ya no flote: la key es el
-        ancla de su CSS y del badge, y renombrarla no paga el riesgo (mismo
-        criterio que `gran_float`, que tampoco flota desde 2026-08-23).
-        """
-        with st.container(key="prov_pop_float"):
-            _sel_now = [p for p in _todos_provs_temp
-                        if st.session_state.get("cp_prov_cb::" + str(p))]
-            # Numero como badge: se inyecta via CSS var (::after lo pinta).
-            # Sin cuenta → badge vacio. La CSS var vive scoped al contenedor.
-            st.markdown(
-                f"<style>.st-key-prov_pop_float "
-                f"{{ --cp-prov-count: '{len(_sel_now)}'; }}</style>",
-                unsafe_allow_html=True,
-            )
-            with st.popover("Proveedores", icon=":material/groups:"):
-                # ── Panel COMPACTO (2026-09-01, a pedido: "muy grande,
-                # sobre todo al extenderse"). Medido ANTES de tocar nada,
-                # con el rango que sólo tenía DOS proveedores: 430x344px,
-                # de los cuales 175 eran aire —46 de padding (23 por lado),
-                # 80 de gaps (el `stVerticalBlock` de Streamlit trae 16px,
-                # pensado para una página, no para una caja), y 49 de un
-                # `st.divider()` que es una línea de 1px con 24 de margen
-                # a cada lado—. Las piezas útiles sumaban 169.
-                # Con la lista completa (~20 proveedores) el panel se comía
-                # 651px de alto, el 70% del viewport.
-                #
-                # Tres cambios de MARCADO acá; el resto es CSS scopeado
-                # (`_css_proveedor.py`, bloque "PANEL DE PROVEEDORES
-                # COMPACTO"), alcanzado con `:has()` porque `stPopoverBody`
-                # es un portal fuera de este contenedor.
-                #
-                # 1) Los atajos dejan de ser 5 botones "de página" en
-                #    `st.columns(5)`. Ese reparto es por FRACCIÓN, así que
-                #    los botones al 100% de su quinto imponían un piso de
-                #    382px de ancho y 55 de alto. Una fila horizontal los
-                #    deja medir su texto: ~180px en un renglón de 22.
-                # columnas-internas: botonera del popover, no el eje de la vista.
-                with st.container(horizontal=True, gap="small",
-                                  key="cp_prov_atajos"):
-                    st.button("Top 3", key="cp_topn3", type="tertiary",
-                              on_click=_cp_set_topn, args=(3,))
-                    st.button("5", key="cp_topn5", type="tertiary",
-                              on_click=_cp_set_topn, args=(5,))
-                    st.button("10", key="cp_topn10", type="tertiary",
-                              on_click=_cp_set_topn, args=(10,))
-                    st.button("Todos", key="cp_topnall", type="tertiary",
-                              on_click=_cp_set_topn, args=(len(_real_provs),))
-                    st.button("Ninguno", key="cp_topnclr", type="tertiary",
-                              on_click=_cp_set_topn, args=(0,))
-                _q = st.text_input("Buscar", key="cp_prov_q",
-                                   placeholder="Buscar proveedor...",
-                                   label_visibility="collapsed").strip().lower()
-                _vistos = [p for p in _todos_provs_temp
-                           if not _q or _q in str(p).lower()]
-                if not _vistos:
-                    st.caption("Sin coincidencias.")
-                # 2) La lista scrollea DENTRO en vez de estirar el panel.
-                #    El alto es dinámico —no un 190 fijo— porque
-                #    `st.container(height=N)` reserva N aunque haya dos
-                #    filas: con el rango corto habría dejado 150px de caja
-                #    vacía, que es el mismo pecado que se está corrigiendo.
-                #    Y NO son N filas iguales: los proveedores son razones
-                #    sociales completas y ENVUELVEN. Medido clonando filas
-                #    con nombres reales en los 200px de texto útil que deja
-                #    el panel de 250: 1 línea = 24px, 2 = 30, 3 = 45 (o sea
-                #    ~15 por línea + 9 de caja del checkbox). Con la cuenta
-                #    plana de 26 por fila, siete nombres largos se salían de
-                #    su propia caja.
-                #    190 es el techo: por encima, el panel vuelve a comerse
-                #    media pantalla, que es lo que se está corrigiendo.
-                #    `border=False` explícito: Streamlit dibuja borde solo
-                #    con que haya `height` fijo.
-                _CHARS_LINEA = 30      # a 12px en 200px de ancho útil, medido
-                # 15 por línea de texto + 13 de caja y gap: con 11 la caja
-                # quedaba 3px corta y aparecía una barra de scroll para dos
-                # nombres que ya entraban (medido: 52 de caja, 55 de alto).
-                _alto_lista = min(190, sum(
-                    (-(-len(str(_p)) // _CHARS_LINEA) or 1) * 15 + 13
-                    for _p in _vistos) or 28)
-                with st.container(height=_alto_lista, border=False,  # alto-fijo-justificado: líneas x px de la lista, no una resta contra la pantalla
-                                  key="cp_prov_lista"):
-                    for _p in _vistos:
-                        # `width="stretch"`: el default de `st.checkbox` es
-                        # `content`, o sea la fila (y con ella el área
-                        # clicable y el hover) medía lo que el nombre —110px
-                        # de los 226 disponibles, medido—. En una lista, la
-                        # fila entera tiene que ser el blanco.
-                        st.checkbox(_p, key="cp_prov_cb::" + str(_p),
-                                    width="stretch")
-                # 3) El `st.divider()` se va: separar dos cosas no vale 49px.
-                #    La raya la pone un `border-top` en el toggle (CSS), que
-                #    cuesta 1px y el aire que se le quiera dar.
-                st.toggle("Nombres en barras", key="cp_prov_show_names",
-                          help="Muestra el nombre del proveedor "
-                          "sobre cada barra. Se abrevia segun el ancho "
-                          "disponible.")
-
+    # (Acá vivió `_pop_proveedores`, ~110 líneas de popover inline. Se fue
+    # el 2026-09-02 a `_comun.py::filtro_proveedores`, al pedirse el mismo
+    # control para el Ranking de Productos: copiarlo hubiera dejado dos
+    # sitios donde arreglar el próximo detalle. Se instancia arriba, junto
+    # con la selección que hay que leer temprano.)
 
     with st.container(key="compras_prov_marco"):
         # 2026-08-23: la pill Día/Semana/Mes/Año (key `gran_float`) se movió
