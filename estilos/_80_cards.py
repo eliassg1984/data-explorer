@@ -51,6 +51,59 @@ CSS = """    /* ================================================================
         text-overflow: ellipsis;
     }
 
+    /* ── VS AÑO PASADO: sus dos bloques toman el look de tarjeta ──────
+       2026-09-02, a pedido ("deben de tener fondo blanco en sus tarjetas,
+       como las otras"). Los dos usan `_card()`, o sea `st.container(
+       border=True, key="chartcard_…")`, que sólo trae el borde de
+       Streamlit: sobre el gris casi blanco de la app (--bg-primary) se
+       leían como una caja con línea, no como una tarjeta. Los otros
+       drills (`compras_prov_card_`, `compras_prod_card_`, `sunat_card_`)
+       cambian ese borde por fondo + radio + sombra; acá se repite el
+       MISMO bloque de propiedades para que los cuatro se vean iguales.
+
+       Se listan por su key COMPLETA y no por el prefijo `chartcard_`, que
+       es genérico: lo emite `graficos/base.py::_card` y lo usan ~15
+       tarjetas de otros dashboards que no pidieron esto. El aviso de
+       CLAUDE.md sobre reglas por familia es exactamente este caso.
+       (`[class*=]` alcanza a `chartcard_compras_vap` y a
+       `chartcard_compras_vap_detalle` de una: la segunda contiene a la
+       primera como prefijo.) */
+    div[class*="st-key-chartcard_compras_vap"] {
+        background: var(--bg-card) !important;
+        border: none !important;
+        border-radius: 20px !important;
+        padding: 16px 18px;
+        box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
+    }
+    div[class*="st-key-chartcard_compras_vap"] > div {
+        border: none !important;
+    }
+
+    /* La cabecera de ESTA tarjeta lleva dos textos en un renglón: el
+       nombre de la vista y, a la derecha, el ámbito que antes era el
+       `title` de la figura ("Todas las compras · últimos 3 meses", o el
+       ítem en foco). El flex va scopeado con `.vap-hdr` y no sobre
+       `.chart-card-hdr` a secas: esa clase la emite `_card()` para toda
+       la app y volverla flex movería títulos que nadie pidió mover. */
+    .chart-card-hdr.vap-hdr {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+    }
+    .chart-card-hdr.vap-hdr > span {
+        margin-left: auto;
+        font-weight: 500;
+        color: var(--text-secondary);
+        /* El ámbito CEDE: el nombre de la vista es fijo y corto, el ítem
+           en foco puede ser una razón social larga. `min-width: 0` es
+           obligatorio o un flex item no baja de su contenido y empujaría
+           el renglón fuera de la tarjeta en vez de truncar. */
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
     /* ============================================================
        CARDS EXTERIORES DE LOS DASHBOARDS DE GRÁFICOS
 

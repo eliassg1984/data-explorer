@@ -2295,11 +2295,11 @@ def main():
     pruebas += [
         ("compras vs año pasado · serie (Valor, mes parcial)",
          lambda: _vap_fig._fig_serie(_g_vap, "Valor",
-                                     (pd.Period("2026-08", "M"), 21), "t"), ()),
+                                     (pd.Period("2026-08", "M"), 21)), ()),
         ("compras vs año pasado · serie (Cantidad)",
-         lambda: _vap_fig._fig_serie(_g_vap, "Cantidad", None, "t"), ()),
+         lambda: _vap_fig._fig_serie(_g_vap, "Cantidad", None), ()),
         ("compras vs año pasado · serie (Precio, ratio con cero)",
-         lambda: _vap_fig._fig_serie(_g_vap, "Precio", None, "t"), ()),
+         lambda: _vap_fig._fig_serie(_g_vap, "Precio", None), ()),
         ("compras vs año pasado · puente precio/cantidad",
          lambda: _vap_fig._fig_puente(250.0, 450.0, 60.0, -260.0), ()),
     ]

@@ -364,7 +364,7 @@ def _etiqueta_mes(periodo_m):
 # GRÁFICOS
 # ===========================================================================
 
-def _fig_serie(g, modo, parcial, titulo):
+def _fig_serie(g, modo, parcial):
     """Serie mensual: este año contra el mismo mes del año pasado.
 
     Valor y Cantidad van en barras agrupadas (son magnitudes que se suman y
@@ -420,8 +420,12 @@ def _fig_serie(g, modo, parcial, titulo):
             hovertemplate=fmt + "<extra>Este año</extra>")
 
     _compras_layout(fig, alto=alturas.con_franja(alturas.COMPACTO, _FRANJA_VAP))
+    # SIN `title`: el ámbito vive en la cabecera de la tarjeta desde el
+    # 2026-09-02 (ver el `st.empty()` del drill). Lo que gana la figura no
+    # es sólo el alto del texto — Plotly reserva margen superior para el
+    # título aunque esté vacío, así que el margen se fija explícito abajo.
     fig.update_layout(
-        title=titulo, barmode="group", bargap=0.28, bargroupgap=0.08,
+        barmode="group", bargap=0.28, bargroupgap=0.08,
         hovermode="x unified",
         legend=dict(orientation="h", y=1.04, x=0, font=dict(size=11)),
     )
@@ -586,7 +590,25 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
 
     st.markdown(_CSS, unsafe_allow_html=True)
 
-    with _card("compras_vap", "Vs año pasado", titulo_arriba=True):
+    # 2026-09-02, a pedido: el ámbito ("Todas las compras · últimos 3 meses",
+    # o el nombre del ítem en foco) DEJA de ser el `title` de la figura y
+    # sube a la fila del título de la tarjeta, al lado de "Vs año pasado".
+    #
+    # Va por un HUECO (`st.empty()`) y no por el parámetro `titulo` de
+    # `_card`: la cabecera se dibuja arriba de todo, pero el ámbito recién
+    # se sabe ~100 líneas más abajo (depende del foco, de la ventana y de
+    # los datos que sobrevivan a las dos). El hueco reserva el sitio en el
+    # orden del DOM y se rellena cuando el dato existe. Se escribe DOS
+    # veces a propósito: la primera, sólo "Vs año pasado", para que los
+    # `return` tempranos de más abajo —sin meses comparables, sin datos—
+    # no dejen la tarjeta sin cabecera.
+    with _card("compras_vap"):
+        _hdr = st.empty()
+        _pinta_hdr = lambda amb=None: _hdr.markdown(  # noqa: E731
+            '<p class="chart-card-hdr vap-hdr">Vs año pasado'
+            + (f'<span>{amb}</span>' if amb else "")
+            + '</p>', unsafe_allow_html=True)
+        _pinta_hdr()
         c_modo, c_vent = st.columns([1, 1])  # columnas-internas: los dos
         # controles de la tarjeta (métrica y ventana) comparten renglón,
         # uno pegado a cada borde. No parte una FILA del drill.
@@ -696,10 +718,11 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         _amb = (_compras_truncar(foco_titulo, 34) if foco_titulo
                 else "Todas las compras")
         _tit = _amb + (f" · {_et}" if _et else "")
+        _pinta_hdr(_tit)
 
         col_g, col_p = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
         with col_g:
-            fig = _fig_serie(g_foco, modo, parcial, _tit)
+            fig = _fig_serie(g_foco, modo, parcial)
             if fig is not None:
                 st.plotly_chart(fig, use_container_width=True,
                                 key=f"compras_g_vap_{modo.lower()}")

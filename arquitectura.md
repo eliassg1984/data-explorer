@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-280 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+281 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (91)
 
@@ -112,7 +112,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#273** — Un bloque de alto CERO sigue cobrando su gap: cinco piezas de cromo fijo metían 80px de gris…
 - **#279** — Un control que se pide "igual al de aquella vista" se EXTRAE, no se copia — y lo que hay que…
 
-**Layout y alturas** (30)
+**Layout y alturas** (31)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -144,6 +144,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 - **#278** — "Que mida lo mismo que aquella" se escribe reusando SUS constantes, no copiando sus números.…
 - **#280** — Cuando "hacelo más chico" no entra en ningún rol, se agrega un rol — no se le cambia el…
+- **#281** — Una cabecera que depende de un dato que se calcula 100 líneas más abajo se dibuja con…
 
 **Plotly y figuras** (49)
 
@@ -246,7 +247,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#274** — Un grid con presupuesto FIJO de filas miente cuando hay menos datos: el hueco queda ENTRE la…
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 
-**Streamlit** (78)
+**Streamlit** (79)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -326,6 +327,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#263** — porKeyReal() no podía resolver un mock pineado SOBRE SÍ MISMO: el filtro…
 - **#271** — Un panel de popover que "se ve muy grande" casi nunca es su contenido: son los defaults de…
 - **#272** — Un control que flota sobre una tarjeta quiere, casi siempre, ser un ítem más de la fila del…
+- **#281** — Una cabecera que depende de un dato que se calcula 100 líneas más abajo se dibuja con…
 
 **Datos, R2 y DuckDB** (30)
 
@@ -12560,13 +12562,51 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      cromo MEDIDO por resta (`grid 380 − .ag-body-viewport 333`, o sea
      cabecera 45 + 2 de borde). Ver regla #277: ese número no se deduce.
 
+
+281. **Una cabecera que depende de un dato que se calcula 100 líneas más
+     abajo se dibuja con `st.empty()` — y hay que pintarla DOS veces, o los
+     `return` tempranos dejan la tarjeta sin título.**
+
+     2026-09-02, a pedido sobre «Vs año pasado»: el ámbito ("Todas las
+     compras · todo el histórico", o el nombre del ítem en foco) deja de ser
+     el `title` de la figura y sube a la fila del título de la tarjeta.
+
+     El problema no es de CSS: `_card(titulo=…)` emite la cabecera al ENTRAR
+     al contenedor, y ese ámbito recién existe después de resolver el foco,
+     la ventana y qué datos sobreviven a las dos. La salida es reservar el
+     sitio con `st.empty()` apenas se entra y rellenarlo cuando el dato
+     existe — el hueco guarda el orden del DOM.
+
+     Lo que se paga si no se piensa: en el medio de esas 100 líneas hay
+     `return` tempranos ("sin meses comparables", "no hay datos"). Si el
+     hueco se rellena sólo al final, esos caminos dejan una tarjeta con
+     borde y sin cabecera. Por eso se pinta apenas se crea —sólo el nombre
+     de la vista— y se sobrescribe después con el ámbito.
+
+     **Y el prefijo de key genérico: `chartcard_` NO se estila por familia.**
+     Lo emite `graficos/base.py::_card` y lo llevan ~15 tarjetas de otros
+     dashboards. Para darles a estas dos el fondo blanco de las demás se
+     listan por su key COMPLETA (`chartcard_compras_vap`, que por prefijo
+     alcanza también a `…_vap_detalle`). Es el caso exacto contra el que
+     avisa CLAUDE.md: una regla colgada de `chartcard_` habría repintado
+     medio repo.
+
+     Detalle de por qué hacía falta: `_card()` es
+     `st.container(border=True)`, o sea sólo el borde de Streamlit. Sobre el
+     gris casi blanco de la app eso se lee como una caja con línea, no como
+     una tarjeta — los otros tres drills (`compras_prov_card_`,
+     `compras_prod_card_`, `sunat_card_`) ya cambiaban ese borde por
+     fondo + radio 20 + sombra. Verificado en el navegador que las cuatro
+     familias devuelven ahora el mismo `rgb(255,255,255)`, el mismo radio y
+     la misma sombra.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#281**.
+> próxima regla nueva es la **#282**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
