@@ -79,16 +79,74 @@ CSS = """    /* ================================================================
         border: none !important;
     }
 
-    /* La cabecera de ESTA tarjeta lleva dos textos en un renglón: el
-       nombre de la vista y, a la derecha, el ámbito que antes era el
-       `title` de la figura ("Todas las compras · últimos 3 meses", o el
-       ítem en foco). El flex va scopeado con `.vap-hdr` y no sobre
-       `.chart-card-hdr` a secas: esa clase la emite `_card()` para toda
-       la app y volverla flex movería títulos que nadie pidió mover. */
+    /* La cabecera de ESTA tarjeta lleva, en UN renglón: el nombre de la
+       vista, el ámbito (lo que antes era el `title` de la figura) y, desde
+       el 2026-09-02, los dos controles que vivían en la tarjeta de la
+       tabla — el agrupador y el buscador de ítems. Al fusionarse las dos
+       tarjetas, esta fila es la única cabecera que queda.
+
+       La RAYA divisoria se muda del `<p>` a la FILA: con el `<p>` como un
+       flex item más, su `border-bottom` subrayaba sólo el título y dejaba
+       los controles colgando de nada. */
+    .st-key-vap_fila_hdr {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 10px !important;
+        margin: 0 0 0.55rem !important;
+        padding-bottom: 0.5rem !important;
+        border-bottom: 1px solid var(--border);
+    }
+    /* El TÍTULO cede, los controles no. `min-width: 0` es obligatorio: sin
+       él un flex item nunca baja de su contenido, así que un ítem en foco
+       de nombre largo empujaría el buscador fuera de la tarjeta en vez de
+       truncar. */
+    .st-key-vap_fila_hdr > [data-testid="stElementContainer"]:first-child {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        width: auto !important;
+    }
+    /* `st.container(key=…)` pone la key en el `stVerticalBlock` de ADENTRO:
+       el ítem de la fila es el `stLayoutWrapper` anónimo que lo envuelve,
+       que nace con `width: 100%`. Estilar sólo la key de adentro no
+       alcanza — el que reparte es el padre (regla #272). */
+    .st-key-vap_fila_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_agrupar) {
+        flex: 0 0 auto !important;
+        width: 150px !important;
+    }
+    .st-key-vap_fila_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_buscar) {
+        flex: 0 0 auto !important;
+        width: 190px !important;
+    }
+    .st-key-vap_hdr_agrupar,
+    .st-key-vap_hdr_buscar { width: 100% !important; }
+    /* Los dos controles, a la altura de una píldora de fila (22px), como
+       los de la tarjeta de Ranking. El default de Streamlit es ~40. */
+    .st-key-vap_fila_hdr [data-baseweb="select"] > div,
+    .st-key-vap_fila_hdr [data-testid="stTextInputRootElement"] {
+        min-height: 26px !important;
+        height: 26px !important;
+        font-size: 12px !important;
+    }
+    .st-key-vap_fila_hdr [data-testid="stTextInputRootElement"] input {
+        padding: 0 8px !important;
+        font-size: 12px !important;
+    }
+    .st-key-vap_fila_hdr [data-testid="stElementContainer"] {
+        width: auto;
+    }
+
+    /* El `<p>` ya no pone la raya ni el margen: los pone la fila. Se queda
+       con el reparto de sus dos textos. */
     .chart-card-hdr.vap-hdr {
         display: flex;
         align-items: baseline;
         gap: 12px;
+        margin: 0 !important;
+        padding: 0 !important;
+        border-bottom: none !important;
     }
     .chart-card-hdr.vap-hdr > span {
         margin-left: auto;

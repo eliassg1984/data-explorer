@@ -645,6 +645,31 @@ CSS = """    /* ================================================================
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_izq_sal {
         margin-top: 0 !important;
     }
+    /* Segunda excepción, y por un motivo distinto: LAS TARJETAS DE COMPRAS
+       QUE NO SON LA PRIMERA DE LA PÁGINA.
+
+       El jalón de arriba nació para recuperar el hueco que dejaban la vieja
+       barra de pestañas y la franja blanca — o sea, para la tarjeta que
+       ABRE la vista. En Ajuste / Inventario / Ventas eso sigue siendo
+       cierto. En Compras dejó de serlo cuando la vista pasó a leerse
+       APILADA (2026-08-26): Volatilidad es la cuarta sección y Semanal la
+       sexta, así que ahí el -48px no recupera ningún hueco — se come 48px
+       de la sección de ARRIBA y la tarjeta se dibuja encima de su cola.
+
+       Medido el 2026-09-02, a pedido ("la vista de volatilidad se ve
+       solapada con la de arriba"): la sección Vs año pasado terminaba en
+       y=812 y la tarjeta de Volatilidad arrancaba en y=780 — 32px de
+       solape, con su selector de período (y=788) pintado sobre el caption
+       del bloque anterior.
+
+       Se listan las tres keys de Compras por su nombre completo en vez de
+       apagar la familia entera: `ajuste_graf_card_izq_` la comparten cuatro
+       reportes más, donde el jalón sigue haciendo falta. */
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_izq_vol,
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_izq_sem,
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_der_sem {
+        margin-top: 0 !important;
+    }
 
 /* Compras hereda el cristal esmerilado del DEFAULT
        (estilos/_40_ajuste_franja.py) sin duplicar nada — scopeado con

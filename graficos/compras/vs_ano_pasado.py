@@ -70,7 +70,9 @@ from tema import (
 from graficos.base import _card, _compras_layout, _compras_truncar
 from graficos import alturas, periodo
 from graficos.compras._comun import COLUMNAS_DRILL, GAP_DRILL
-from tablas.compras_vs_ano_pasado import renderizar_detalle_vs_ano_pasado
+from tablas.compras_vs_ano_pasado import (
+    _ALTO_FILA as _ALTO_FILA_DETALLE, renderizar_detalle_vs_ano_pasado,
+)
 
 # Alto de la fila de controles que comparte tarjeta con la serie: métrica
 # (izq.) y ventana (der.) en UN renglón. Mismo criterio que
@@ -562,7 +564,8 @@ def _tabla_detalle(g, agrupar_por, col_um_valores, key_grid):
         # pantallas. El `extra` pasa de 44 a 47, que es el cromo MEDIDO por
         # resta en el navegador (grid 380 − `.ag-body-viewport` 333, o sea
         # cabecera 45 + 2 de borde) en vez de sumado a ojo — regla #277.
-        altura=alturas.por_filas(len(tv), px_fila=30, extra=47,
+        altura=alturas.por_filas(len(tv), px_fila=_ALTO_FILA_DETALLE,
+                                 extra=47,
                                  minimo=200, rol=alturas.COMPACTO),
         key=key_grid,
     )
@@ -603,12 +606,43 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
     # `return` tempranos de más abajo —sin meses comparables, sin datos—
     # no dejen la tarjeta sin cabecera.
     with _card("compras_vap"):
-        _hdr = st.empty()
-        _pinta_hdr = lambda amb=None: _hdr.markdown(  # noqa: E731
-            '<p class="chart-card-hdr vap-hdr">Vs año pasado'
-            + (f'<span>{amb}</span>' if amb else "")
-            + '</p>', unsafe_allow_html=True)
-        _pinta_hdr()
+        with st.container(key="vap_fila_hdr"):
+            _hdr = st.empty()
+            _pinta_hdr = lambda amb=None: _hdr.markdown(  # noqa: E731
+                '<p class="chart-card-hdr vap-hdr">Vs año pasado'
+                + (f'<span>{amb}</span>' if amb else "")
+                + '</p>', unsafe_allow_html=True)
+            _pinta_hdr()
+            # Agrupador + buscador, en la MISMA fila del título (2026-09-02, a
+            # pedido). Vivían en la tarjeta de abajo, que era la de la tabla;
+            # al fusionarse las dos (ver más abajo) esa tarjeta ya no tiene
+            # cabecera propia donde apoyarse, y además son controles que mandan
+            # sobre las DOS mitades: el agrupador decide las filas de la tabla
+            # Y qué significa el foco del gráfico.
+            #
+            # Dibujarlos ACÁ ARRIBA es de paso un arreglo: `agrupar_por` se lee
+            # de `session_state` ~60 líneas más abajo para resolver el foco, y
+            # mientras el widget se dibujaba DESPUÉS ese valor era el del rerun
+            # anterior. Ahora los dos hablan del mismo run.
+            _ops_ag = [a for a in _AGRUPADORES
+                       if a == "Producto"
+                       or (a == "Familia" and col_fam)
+                       or (a == "Subfamilia" and col_subfam)]
+            # Si el reporte viene sin Familia/Subfamilia, un valor guardado de
+            # otra sesión ya no está en `options` y Streamlit revienta.
+            if st.session_state.get("compras_vap_agrupar") not in _ops_ag:
+                st.session_state["compras_vap_agrupar"] = _ops_ag[0]
+            with st.container(key="vap_hdr_agrupar"):
+                agrupar_nuevo = st.selectbox(
+                    "Agrupar por", _ops_ag, key="compras_vap_agrupar",
+                    label_visibility="collapsed",
+                    help="Proveedor no está: el año pasado se compara por "
+                         "producto y mes, así que repartirlo entre proveedores "
+                         "le atribuiría a uno lo que compró otro.")
+            with st.container(key="vap_hdr_buscar"):
+                q = st.text_input("Buscar", key="compras_vap_q",
+                                  placeholder="Buscar ítem…",
+                                  label_visibility="collapsed").strip().lower()
         c_modo, c_vent = st.columns([1, 1])  # columnas-internas: los dos
         # controles de la tarjeta (métrica y ventana) comparten renglón,
         # uno pegado a cada borde. No parte una FILA del drill.
@@ -739,33 +773,21 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                 f"el parquet): su barra sale con trama y se compara contra "
                 f"los mismos días del año pasado, no contra el mes entero.")
 
-    # ── Tabla de detalle, ancho completo debajo ──────────────────────────
-    with _card("compras_vap_detalle", "Detalle ítem por ítem",
-               titulo_arriba=True):
-        # columnas-internas: agrupador y buscador de la propia tabla, no una
-        # fila del drill. La tercera columna es un espaciador: sin ella el
-        # buscador se estiraba a 745px (medido) — un campo de una palabra
-        # con el ancho de media pantalla se lee como un error de layout.
-        c_ag, c_q, _ = st.columns([1, 1.4, 2.6])
-        with c_ag:
-            _ops_ag = [a for a in _AGRUPADORES
-                       if a == "Producto"
-                       or (a == "Familia" and col_fam)
-                       or (a == "Subfamilia" and col_subfam)]
-            # Si el reporte viene sin Familia/Subfamilia, un valor guardado
-            # de otra sesión ya no está en `options` y Streamlit revienta.
-            if st.session_state.get("compras_vap_agrupar") not in _ops_ag:
-                st.session_state["compras_vap_agrupar"] = _ops_ag[0]
-            agrupar_nuevo = st.selectbox(
-                "Agrupar por", _ops_ag, key="compras_vap_agrupar",
-                label_visibility="collapsed",
-                help="Proveedor no está: el año pasado se compara por "
-                     "producto y mes, así que repartirlo entre proveedores "
-                     "le atribuiría a uno lo que compró otro.")
-        with c_q:
-            q = st.text_input("Buscar", key="compras_vap_q",
-                              placeholder="Buscar ítem…",
-                              label_visibility="collapsed").strip().lower()
+        # ── La tabla de detalle, en la MISMA tarjeta ─────────────────────
+        # 2026-09-02, a pedido: "que la tarjeta de la tabla se fusione con
+        # la de arriba, y que desaparezca el título 'Detalle ítem por
+        # ítem'". Acá había un segundo `_card(...)` con su propia cabecera.
+        #
+        # El título sobraba de verdad, no sólo estéticamente: la tabla ES el
+        # detalle del gráfico de arriba —mismo `g`, mismo período, y el clic
+        # en una fila enfoca la serie— así que anunciarla como otra cosa
+        # partía en dos algo que se lee de corrido. Con los dos controles ya
+        # mudados a la fila del título, la cabecera propia se quedaba sin
+        # nada que sostener.
+        #
+        # El bloque de `st.columns([1, 1.4, 2.6])` que repartía agrupador y
+        # buscador también se fue: en la fila del título los reparte el flex
+        # de `vap_fila_hdr`, sin espaciador que inventar.
 
         # El agrupador manda sobre la columna que se agrega: se recalcula el
         # `grupo` de `g` cuando no es el producto.

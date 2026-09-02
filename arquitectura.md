@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-282 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+284 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (91)
+**CSS y estilos** (92)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -111,6 +111,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#272** — Un control que flota sobre una tarjeta quiere, casi siempre, ser un ítem más de la fila del…
 - **#273** — Un bloque de alto CERO sigue cobrando su gap: cinco piezas de cromo fijo metían 80px de gris…
 - **#279** — Un control que se pide "igual al de aquella vista" se EXTRAE, no se copia — y lo que hay que…
+- **#284** — Un jalón negativo que existía para "la primera tarjeta de la página" se vuelve un SOLAPE en…
 
 **Layout y alturas** (31)
 
@@ -247,7 +248,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#274** — Un grid con presupuesto FIJO de filas miente cuando hay menos datos: el hueco queda ENTRE la…
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 
-**Streamlit** (80)
+**Streamlit** (81)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -329,6 +330,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#272** — Un control que flota sobre una tarjeta quiere, casi siempre, ser un ítem más de la fila del…
 - **#281** — Una cabecera que depende de un dato que se calcula 100 líneas más abajo se dibuja con…
 - **#282** — Un filtro cuyas OPCIONES salen del df ya filtrado por fecha pierde la selección en silencio:…
+- **#283** — Fusionar dos tarjetas que ya compartían datos no es mover un with: es descubrir que sus…
 
 **Datos, R2 y DuckDB** (30)
 
@@ -439,7 +441,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#264** — Un mock arrastrado con "Mover" podía terminar pintado DEBAJO de un hermano posterior — no…
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 
-**Decisiones de diseño y UX** (50)
+**Decisiones de diseño y UX** (52)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -491,6 +493,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#273** — Un bloque de alto CERO sigue cobrando su gap: cinco piezas de cromo fijo metían 80px de gris…
 - **#278** — "Que mida lo mismo que aquella" se escribe reusando SUS constantes, no copiando sus números.…
 - **#280** — Cuando "hacelo más chico" no entra en ningún rol, se agrega un rol — no se le cambia el…
+- **#283** — Fusionar dos tarjetas que ya compartían datos no es mover un with: es descubrir que sus…
+- **#284** — Un jalón negativo que existía para "la primera tarjeta de la página" se vuelve un SOLAPE en…
 
 **Mantenimiento y trampas del lenguaje** (8)
 
@@ -12651,13 +12655,79 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      dibujarse, pero `contar_filtros` lee `session_state` ANTES de que eso
      pase, así que sin el `pop` el badge miente durante un rerun.
 
+
+283. **Fusionar dos tarjetas que ya compartían datos no es mover un `with`:
+     es descubrir que sus controles nunca fueron de una sola de las dos.**
+
+     2026-09-02, a pedido, en tres partes que resultaron ser la misma: bajar
+     los gráficos de «Vs año pasado», subir el agrupador y el buscador a la
+     fila del título, y fusionar la tarjeta de la tabla con la de arriba
+     sacándole el rótulo "Detalle ítem por ítem".
+
+     El rótulo sobraba de verdad, no sólo estéticamente: la tabla ES el
+     detalle del gráfico —mismo `g`, mismo período, y el clic en una fila
+     enfoca la serie (ver #276 y la respuesta a "¿tienen relación?")—, así
+     que anunciarla como otra cosa partía en dos algo que se lee de corrido.
+
+     Y los dos controles tampoco eran de la tabla: **el agrupador decide las
+     filas de la tabla Y qué significa el foco del gráfico**. Vivían abajo
+     porque abajo estaba la tabla, no porque mandaran ahí. Subirlos arregló
+     de paso un desfase que nadie había notado: `agrupar_por` se lee de
+     `session_state` para resolver el foco ~60 líneas ANTES de donde se
+     dibujaba el widget, así que el gráfico usaba el valor del rerun
+     anterior. Ahora los dos hablan del mismo run.
+
+     **Lo que hay que mover con la raya.** La cabecera era un `<p>` con
+     `border-bottom`. Al volverse la fila un flex de cuatro ítems, ese borde
+     subrayaba sólo el título y dejaba los controles colgando de nada: la
+     raya (y el margen) se mudan del `<p>` a la FILA.
+
+     Medido: la sección pasó de 1.155px (antes de todo esto) a 995 con el
+     rol COMPACTO, a 899 con la fusión, a **799** bajando COMPACTO a 250 y
+     afinando las filas de la tabla de 30 a 24 — el mismo número de filas
+     visibles (8,4) en 50px menos, así que el recorte no se paga con
+     información.
+
+284. **Un jalón negativo que existía para "la primera tarjeta de la página"
+     se vuelve un SOLAPE en cuanto la página pasa a ser una pila.**
+
+     2026-09-02, reportado con captura ("la vista de volatilidad se ve
+     solapada con la de arriba"). Medido: la sección Vs año pasado terminaba
+     en y=812 y la tarjeta de Volatilidad arrancaba en y=780 — **32px de
+     solape**, con su selector de período pintado sobre el caption del
+     bloque anterior.
+
+     La causa tiene fecha: `[class*="st-key-ajuste_graf_card_izq_"]` lleva
+     `margin-top: -48px` desde que había que recuperar el hueco de la vieja
+     barra de pestañas. Eso sigue siendo cierto en Ajuste, Inventario y
+     Ventas, donde esa tarjeta ABRE la vista. En Compras dejó de serlo el
+     2026-08-26, cuando la vista pasó a leerse APILADA: Volatilidad es la
+     cuarta sección y Semanal la sexta, así que el jalón ya no recupera nada
+     — se come 48px de la sección de arriba.
+
+     Es la misma clase de deuda que la regla #273 (los `gap` fantasma):
+     **una compensación calculada contra un cromo que ya no está**. La
+     diferencia es que aquélla dejaba hueco y ésta encima cosas, que se ve
+     mucho antes.
+
+     El arreglo lista las tres keys de Compras por su nombre completo
+     (`…_izq_vol`, `…_izq_sem`, `…_der_sem`) en vez de apagar la familia:
+     el prefijo lo comparten cuatro reportes más donde el jalón sigue
+     haciendo falta. Mismo patrón que la excepción de Salidas que ya vivía
+     dos líneas más arriba (regla #38).
+
+     **Corolario para la próxima migración a pila:** al apilar una vista,
+     hay que barrer los `margin-top` negativos de TODAS sus tarjetas, no
+     sólo de la que quedó primera. El que ya no es primero ahora pisa a su
+     vecino de arriba.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#283**.
+> próxima regla nueva es la **#285**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

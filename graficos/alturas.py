@@ -113,13 +113,18 @@ APOYO = 380
 # Nació el 2026-09-02 para «Vs año pasado», a pedido y en SEGUNDA vuelta: el
 # 2026-08-26 ya se había bajado su tabla de MARCO (553) a APOYO por "es muy
 # largo", y con los dos bloques en APOYO la sección seguía midiendo 1.155px
-# medidos — 1,9 pantallas de 1366x700. Con este rol baja a ~995.
+# medidos — 1,9 pantallas de 1366x700.
+#
+# TERCERA vuelta, el 2026-09-02: 300 -> 250, en el mismo pedido que fusionó
+# las dos tarjetas en una. Con los dos bloques ya dentro de la misma
+# superficie, el "par" del que habla este rol dejó de ser una metáfora — y a
+# 300 la sección medía 899px. A 250 mide ~799.
 #
 # Por qué un rol nuevo y no MINI (240): MINI dice "existe para apoyar una
 # lectura, no para leerse solo", y la serie mensual de Vs año pasado ES la
 # lectura principal de su vista. El vocabulario tiene que seguir diciendo la
 # verdad; bajarla a MINI la habría hecho caber mintiendo sobre su papel.
-COMPACTO = 300
+COMPACTO = 250
 
 # Panel de detalle, sparkline, mini-barras: existe para apoyar una lectura,
 # no para leerse solo.

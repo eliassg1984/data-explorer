@@ -189,6 +189,21 @@ _TOOLTIP_EF_CANT = JsCode("""
 """)
 
 
+_ALTO_FILA = 24
+"""Alto de fila de la tabla de detalle.
+
+24 y no 30 desde el 2026-09-02: en el mismo pedido, el marco de la tabla
+bajó de 300 a 250 (`alturas.COMPACTO`) y con filas de 30 eso costaba fila y
+media de las que se ven. A 24 entran las MISMAS ~8 filas en 50px menos —el
+mismo número que ya usan los rankings de Proveedor y de Producto—, así que
+el recorte no se paga con información.
+
+Va acoplado a `por_filas(px_fila=…)` en `graficos/compras/vs_ano_pasado.py`:
+son el mismo número contado dos veces (cuánto ocupa una fila / cuántas
+entran). Si se cambia uno solo, el marco deja de coincidir con lo que las
+filas ocupan."""
+
+
 def renderizar_detalle_vs_ano_pasado(tv, etiqueta_item, altura, key,
                                      font_px=13):
     """Grilla del detalle ítem por ítem. `tv` trae, en este orden:
@@ -230,7 +245,7 @@ def renderizar_detalle_vs_ano_pasado(tv, etiqueta_item, altura, key,
         gb.configure_column(oculta, hide=True)
 
     gb.configure_selection(selection_mode="single", use_checkbox=False)
-    gb.configure_grid_options(rowHeight=30, headerHeight=34,
+    gb.configure_grid_options(rowHeight=_ALTO_FILA, headerHeight=34,
                               tooltipShowDelay=200)
     grid_options = gb.build()
     _parchar_iconos(grid_options)  # arquitectura.md regla #159
