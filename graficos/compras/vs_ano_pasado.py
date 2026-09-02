@@ -65,7 +65,6 @@ import streamlit as st
 
 from tema import (
     ACENTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO, LAVANDA_BORDE,
-    TEXTO_PRINCIPAL,
 )
 from graficos.base import _card, _compras_layout, _compras_truncar
 from graficos import alturas, periodo
@@ -497,8 +496,15 @@ def _fig_puente(valor, valor_aa, ef_precio, ef_cant):
     # 2026-08-24 — salía sobre el waterfall). El título de esta figura
     # sobra: la línea de resumen de arriba y las etiquetas del propio eje
     # ("Año pasado → Precio → Cantidad → Este año") ya la nombran.
+    # `t=16` y no 44 (2026-09-02, reportado: "esto me quita mucho espacio").
+    # Medido antes de tocarlo: el área de trazo del waterfall empezaba 36px
+    # por debajo del borde de la figura y ocupaba 97 de los 176 de alto —
+    # menos de la mitad. Esos 36 eran una banda vacía ENTRE el veredicto y
+    # la primera barra, o sea el hueco que se señaló. El margen estaba para
+    # las etiquetas `textposition="outside"`, pero con `cliponaxis=False` y
+    # el veredicto justo encima, 44px era doble aire.
     fig.update_layout(showlegend=False, title="",
-                      margin=dict(l=10, r=10, t=44, b=10))
+                      margin=dict(l=10, r=10, t=16, b=10))
     fig.update_yaxes(showticklabels=False)
     return fig
 
@@ -520,16 +526,17 @@ def _resumen_html(delta, pct, ef_precio, ef_cant):
     #   · "vs año pasado" lo dice el título de la tarjeta, dos filas arriba.
     #   · "Lo explica sobre todo …" era una frase para nombrar lo que el
     #     waterfall de abajo DIBUJA — la barra grande es el efecto que manda.
-    #     Queda el sustantivo como sufijo apagado, que sigue apuntando a la
-    #     barra sin gastar un renglón en explicarla.
+    #     Quedó el sustantivo como sufijo apagado, y el 2026-09-02 (segunda
+    #     vuelta, "más minimalista") se le fue también el "lo explica": la
+    #     barra verde o roja de abajo ya dice cuál manda, y el popover de
+    #     ayuda explica qué significan. Queda "· cantidad" / "· precio".
     return (
         f'<div style="font:600 18px/1.25 DM Sans,sans-serif;color:{color};'
         f'margin:0 0 4px;white-space:nowrap">{signo}S/ {abs(delta):,.0f}'
         f'<span style="font:400 12px/1 DM Sans,sans-serif;color:{GRIS_TEXTO};'
         f'margin-left:8px">{signo}{abs(pct):.1f}%</span>'
         f'<span style="font:400 12px/1 DM Sans,sans-serif;color:{GRIS_TEXTO};'
-        f'margin-left:8px">· lo explica <b style="color:'
-        f'{TEXTO_PRINCIPAL}">{culpa}</b></span></div>'
+        f'margin-left:8px">· {culpa}</span></div>'
     )
 
 

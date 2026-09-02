@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-290 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+291 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (95)
 
@@ -151,7 +151,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#281** — Una cabecera que depende de un dato que se calcula 100 líneas más abajo se dibuja con…
 - **#288** — Un rótulo que nombra el estado POR DEFECTO no informa: ocupa el renglón para decir que no hay…
 
-**Plotly y figuras** (50)
+**Plotly y figuras** (51)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -203,6 +203,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#269** — El JS que vive dentro de un string de Python necesita el escape de salto de línea con DOS…
 - **#276** — Cuando dos tarjetas de una fila no miden igual, la pregunta no es a cuál eximir del piso sino…
 - **#289** — Sacar un adorno de una figura no la achica: hay que RESTARLE lo que el adorno ocupaba, o el…
+- **#291** — Cuando un bloque "ocupa mucho" y sus px no lo explican, el hueco está DENTRO de la figura de…
 
 **AgGrid y tablas** (47)
 
@@ -12979,13 +12980,50 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      normal. Acá bastaba preguntarse *cuándo* está poblada la columna contra
      la que se filtra.
 
+
+291. **Cuando un bloque "ocupa mucho" y sus px no lo explican, el hueco está
+     DENTRO de la figura de al lado: hay que medir el `margin` de Plotly, no
+     sólo las cajas del DOM.**
+
+     2026-09-02, señalado con captura sobre el veredicto de «Vs año pasado»
+     ("esto me quita mucho espacio"). El bloque del veredicto medía 26,5px:
+     no había mucho que recortar ahí. Midiendo la columna entera (214px)
+     apareció el verdadero reparto:
+
+         veredicto            26,5
+         figura del waterfall  176   → de los cuales:
+             margen superior    36     ← banda vacía
+             área de trazo      97
+             etiquetas de abajo 43
+
+     O sea: **el área dibujada era menos de la mitad de su figura**, y los
+     36px de margen superior eran exactamente la banda vacía que se veía
+     entre el número y la primera barra. Venían de un
+     `margin=dict(t=44)` puesto para las etiquetas `textposition="outside"`
+     — legítimo cuando la figura estaba sola, doble aire desde que el
+     veredicto se dibuja pegado encima.
+
+     `t: 44 → 16`. El trazo pasa de 97 a **129px** (+33%) sin mover un solo
+     píxel de la tarjeta, y la banda desaparece porque las barras la ocupan.
+     Verificado: 8 etiquetas, cero recortadas.
+
+     **La distinción que importa**: esto NO achica la sección (sigue en
+     571). Reacomoda. Cuando alguien dice "me quita espacio" hay que
+     preguntarse si molesta el ALTO —y entonces se recorta— o el VACÍO, y
+     entonces lo que corresponde es que el dibujo lo use. Acá era lo
+     segundo: el número no sobraba, sobraba el aire debajo suyo.
+
+     De paso, el veredicto perdió el "lo explica" y quedó en
+     `−S/ 919.331 · −10,5% · la cantidad`: la barra verde o roja de abajo ya
+     dice cuál efecto manda y el popover de ayuda explica qué significan.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#291**.
+> próxima regla nueva es la **#292**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

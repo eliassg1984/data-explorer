@@ -217,14 +217,15 @@ una tarjeta que ya estaba llena, así que los píxeles que ocupan hay que
 restárselos a la figura, o la tarjeta crece y su eje X termina debajo del
 borde (el modo de fallo de `FRANJA_CONTROLES`)."""
 
-FRANJA_VEREDICTO = 38
+FRANJA_VEREDICTO = 34
 """Alto de una línea de VEREDICTO —una cifra grande con su porcentaje y el
 efecto que manda, todo en UN renglón— puesta encima de una figura, más el
 hueco que Streamlit deja entre bloques. MEDIDO en el navegador.
 
 2026-08-24: 47 = bloque 31 + gap 16, cuando el veredicto eran DOS renglones.
 2026-09-02: 38 = bloque 22 + gap 16, al compactarlo a uno solo a pedido
-("más minimalista"). La resta y el bloque son las dos caras del mismo
+("más minimalista"); y 34 unas horas después, al sacarle el "lo explica"
+que lo hacía envolver en pantallas angostas. La resta y el bloque son las dos caras del mismo
 número: si el veredicto vuelve a crecer, este 38 crece con él o la figura
 de abajo se pasa de largo y las dos columnas de la fila dejan de terminar
 en la misma línea.
