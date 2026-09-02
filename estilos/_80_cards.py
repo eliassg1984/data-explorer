@@ -91,6 +91,7 @@ CSS = """    /* ================================================================
     .st-key-vap_fila_hdr {
         display: flex !important;
         flex-direction: row !important;
+        flex-wrap: wrap !important;
         align-items: center !important;
         gap: 10px !important;
         margin: 0 0 0.55rem !important;
@@ -110,15 +111,33 @@ CSS = """    /* ================================================================
        el ítem de la fila es el `stLayoutWrapper` anónimo que lo envuelve,
        que nace con `width: 100%`. Estilar sólo la key de adentro no
        alcanza — el que reparte es el padre (regla #272). */
+    /* 2026-09-02: la fila pasó de tres elementos a SEIS —título, métrica,
+       ventana, agrupador, buscador e info— al subir los dos controles que
+       vivían en el renglón de abajo. Los anchos bajaron para que el título
+       siga teniendo sitio: 110+90+130+160+23 de controles + 50 de gaps
+       dejan ~344px de los 917 de la fila, que alcanzan para el nombre de
+       la vista más un ítem en foco de nombre largo.
+       `flex-wrap` en la fila (arriba) es la red: si el viewport se angosta,
+       los controles bajan de renglón en vez de desbordar la tarjeta. */
+    .st-key-vap_fila_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_modo) {
+        flex: 0 0 auto !important;
+        width: 110px !important;
+    }
+    .st-key-vap_fila_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_ventana) {
+        flex: 0 0 auto !important;
+        width: 90px !important;
+    }
     .st-key-vap_fila_hdr
         > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_agrupar) {
         flex: 0 0 auto !important;
-        width: 150px !important;
+        width: 130px !important;
     }
     .st-key-vap_fila_hdr
         > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_buscar) {
         flex: 0 0 auto !important;
-        width: 190px !important;
+        width: 160px !important;
     }
     /* El ícono de ayuda mide su contenido, no lo que sobre. Sin esta regla
        su `stLayoutWrapper` nace con `width: 100%` como los otros dos y se
@@ -145,6 +164,8 @@ CSS = """    /* ================================================================
         [data-testid="stIconMaterial"]) {
         display: none !important;
     }
+    .st-key-vap_hdr_modo,
+    .st-key-vap_hdr_ventana,
     .st-key-vap_hdr_agrupar,
     .st-key-vap_hdr_buscar { width: 100% !important; }
     /* Los dos controles, a la altura de una píldora de fila, como los de la

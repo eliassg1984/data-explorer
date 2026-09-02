@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-287 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+288 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (95)
 
@@ -116,7 +116,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#286** — Un translate(0, -13px) arrastrado en el modo diseño casi nunca pide mover algo: está midiendo…
 - **#287** — Un caption que explica CÓMO SE LEE una vista se lee una vez y estorba siempre: va en un…
 
-**Layout y alturas** (31)
+**Layout y alturas** (32)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -149,6 +149,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#278** — "Que mida lo mismo que aquella" se escribe reusando SUS constantes, no copiando sus números.…
 - **#280** — Cuando "hacelo más chico" no entra en ningún rol, se agrega un rol — no se le cambia el…
 - **#281** — Una cabecera que depende de un dato que se calcula 100 líneas más abajo se dibuja con…
+- **#288** — Un rótulo que nombra el estado POR DEFECTO no informa: ocupa el renglón para decir que no hay…
 
 **Plotly y figuras** (49)
 
@@ -12862,13 +12863,51 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      renglón, y la sección pasa de 765 a **645px**. Sumando la jornada
      entera: **1.155 → 645**, con el mismo contenido.
 
+
+288. **Un rótulo que nombra el estado POR DEFECTO no informa: ocupa el
+     renglón para decir que no hay nada elegido.** Y un control que "casi
+     nunca se toca" no merece el ancho de media tarjeta.
+
+     2026-09-02, último tramo del pedido de espacio en «Vs año pasado». Tres
+     cosas se fueron del flujo y las tres por el mismo criterio:
+
+     · **"Todas las compras"** era el ámbito cuando NADA estaba en foco. Con
+       foco decía el ítem, que sí es información; sin foco anunciaba el
+       estado neutro. Ahora el `<span>` no se dibuja si el texto viene
+       vacío, y el título queda solo: **cuando no hay recorte, no hay nada
+       que aclarar**.
+     · **"· últimos 3 meses"** repetía lo que dice la lista de ventana, que
+       desde este mismo cambio está en la misma fila a dos controles de
+       distancia. Dos sitios diciendo lo mismo es uno de más.
+     · **Las pastillas Valor / Cantidad / Precio** ocupaban medio renglón
+       propio para una elección que se toca una vez por sesión. Pasan a
+       `st.selectbox` —110px— al lado del agrupador, que es el otro control
+       de "por qué corte miro esto".
+
+     Lo que de verdad sube los gráficos no es ninguna de las tres por
+     separado: es que al mudarse la métrica y la ventana, **el renglón que
+     las contenía desaparece entero** (fila + gap, ~56px). Mover un control
+     a una fila que ya existe sale gratis; dejar la fila vieja con un solo
+     control adentro no habría ahorrado nada.
+
+     Detalle de layout: la fila del título pasó de tres elementos a SEIS.
+     Los anchos se recalcularon para que el título conserve sitio
+     (110+90+130+160+23 de controles + 50 de gaps sobre 917 dejan ~344px) y
+     la fila lleva `flex-wrap`: si el viewport se angosta, los controles
+     bajan de renglón en vez de desbordar la tarjeta.
+
+     Medido: sección **645 → 597px**, el gráfico arranca a 77px del borde de
+     la tarjeta en vez de ~130. En la jornada completa, **1.155 → 597** sin
+     perder un dato: lo que se fue era rótulo del estado neutro, texto
+     repetido y explicación de una sola lectura (regla #287).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#288**.
+> próxima regla nueva es la **#289**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

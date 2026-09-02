@@ -616,6 +616,29 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                 + (f'<span>{amb}</span>' if amb else "")
                 + '</p>', unsafe_allow_html=True)
             _pinta_hdr()
+            # Métrica y ventana, en la MISMA fila del título (2026-09-02, a
+            # pedido: "que las opciones para elegir Valor Cantidad y Precio
+            # figuren arriba en línea con el título, en una lista
+            # minimalista"). Vivían en un renglón propio debajo, que con
+            # esto DESAPARECE — y eso es lo que sube los gráficos.
+            #
+            # `st.pills` -> `st.selectbox`: tres pastillas de texto ocupaban
+            # el ancho de media tarjeta para una elección que casi nunca se
+            # toca. La lista pesa ~110px y se lee igual que el agrupador de
+            # al lado, que es el otro control de "por qué corte miro esto".
+            with st.container(key="vap_hdr_modo"):
+                modo = st.selectbox(
+                    "Ver", list(_MODOS), key="compras_vap_modo_sel",
+                    label_visibility="collapsed",
+                    help="Qué se compara contra el año pasado. Precio es un "
+                         "RATIO: se dibuja en líneas y sobre UN ítem, no "
+                         "sobre la suma de varios.") or "Valor"
+            with st.container(key="vap_hdr_ventana"):
+                # Default "Todo": esta vista mira el histórico, no el rango
+                # de la franja (decisión 1 del docstring del módulo).
+                ventana = periodo.selector("compras_vap_periodo",
+                                           default="Todo", widget="lista")
+
             # Agrupador + buscador, en la MISMA fila del título (2026-09-02, a
             # pedido). Vivían en la tarjeta de abajo, que era la de la tabla;
             # al fusionarse las dos (ver más abajo) esa tarjeta ya no tiene
@@ -672,20 +695,10 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                             "gráfico de arriba; volver a clickearla lo "
                             "devuelve a todas las compras.")
                         _ayuda_parcial = st.empty()
-        c_modo, c_vent = st.columns([1, 1])  # columnas-internas: los dos
-        # controles de la tarjeta (métrica y ventana) comparten renglón,
-        # uno pegado a cada borde. No parte una FILA del drill.
-        with c_modo:
-            with st.container(key="compras_vap_modo"):
-                modo = st.pills("Ver", list(_MODOS), default="Valor",
-                                key="compras_vap_modo_pills",
-                                label_visibility="collapsed") or "Valor"
-        with c_vent:
-            with st.container(key="compras_vap_ventana"):
-                # Default "Todo" — el cambio pedido: esta vista mira el
-                # histórico, no el rango de la franja (decisión 1).
-                ventana = periodo.selector("compras_vap_periodo",
-                                           default="Todo", widget="lista")
+        # (Acá vivía el renglón `st.columns([1, 1])` con la métrica y la
+        # ventana, uno pegado a cada borde. Los dos subieron a la fila del
+        # título el 2026-09-02 y el renglón se fue con ellos: son los ~56px
+        # —fila más gap— que suben los gráficos.)
 
         # `d_full` es el histórico SIN el filtro de fecha de la franja (los
         # chips Familia/Subfamilia sí vienen aplicados). Con la opción
@@ -777,11 +790,18 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         delta = tot["valor"] - tot["valor_aa"]
         pct = (delta / tot["valor_aa"] * 100) if tot["valor_aa"] else 0.0
 
-        _et = periodo.etiqueta(ventana)
-        _amb = (_compras_truncar(foco_titulo, 34) if foco_titulo
-                else "Todas las compras")
-        _tit = _amb + (f" · {_et}" if _et else "")
-        _pinta_hdr(_tit)
+        # El ámbito dice SÓLO el ítem en foco (2026-09-02, a pedido:
+        # "eliminemos el texto que dice Todas las compras, que ya no
+        # exista"). Los dos pedazos que se fueron eran ruido de distinta
+        # clase:
+        #   · "Todas las compras" nombraba el estado por DEFECTO — o sea,
+        #     ocupaba el renglón para decir que no había nada elegido.
+        #   · "· últimos 3 meses" repetía lo que dice la lista de ventana,
+        #     que ahora está en esa misma fila a dos controles de distancia.
+        # Sin foco el `<span>` no se dibuja (`_pinta_hdr` lo omite si el
+        # texto viene vacío) y el título queda solo, que es lo correcto:
+        # cuando no hay recorte, no hay nada que aclarar.
+        _pinta_hdr(_compras_truncar(foco_titulo, 34) if foco_titulo else "")
 
         col_g, col_p = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
         with col_g:
