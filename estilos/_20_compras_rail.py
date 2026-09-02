@@ -286,8 +286,14 @@ CSS = """    /* ================================================================
            Es el mismo error que el `align-items` de la cabecera del rail
            (flex en columna) unas lineas mas arriba: el `justify-content`
            correcto no es el del contenedor mas vistoso, es el del padre
-           inmediato de lo que se quiere mover. */
-        justify-content: center !important;
+           inmediato de lo que se quiere mover.
+
+           2026-09-01: de `center` a `flex-start`, a pedido. Centrado quedaba
+           flotando en medio de una franja que arranca en el borde del
+           contenido; alineado a la izquierda comparte la linea vertical con
+           el titulo de la primera tarjeta, que es lo que tiene justo
+           debajo. */
+        justify-content: flex-start !important;
         width: 100% !important;
         gap: 12px !important;
         white-space: nowrap !important;
