@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-281 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+282 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (91)
 
@@ -247,7 +247,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#274** — Un grid con presupuesto FIJO de filas miente cuando hay menos datos: el hueco queda ENTRE la…
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 
-**Streamlit** (79)
+**Streamlit** (80)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -328,6 +328,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#271** — Un panel de popover que "se ve muy grande" casi nunca es su contenido: son los defaults de…
 - **#272** — Un control que flota sobre una tarjeta quiere, casi siempre, ser un ítem más de la fila del…
 - **#281** — Una cabecera que depende de un dato que se calcula 100 líneas más abajo se dibuja con…
+- **#282** — Un filtro cuyas OPCIONES salen del df ya filtrado por fecha pierde la selección en silencio:…
 
 **Datos, R2 y DuckDB** (30)
 
@@ -12600,13 +12601,63 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      familias devuelven ahora el mismo `rgb(255,255,255)`, el mismo radio y
      la misma sombra.
 
+
+282. **Un filtro cuyas OPCIONES salen del df ya filtrado por fecha pierde la
+     selección en silencio: si el rango se angosta y el valor elegido deja de
+     estar entre las opciones, Streamlit lo borra del estado del widget — sin
+     excepción, sin aviso, y sin devolverlo al volver a ampliar.**
+
+     2026-09-02. Salió de una pregunta ("el filtro de Familia y Subfamilia,
+     ¿depende de alguna fecha?") y se confirmó midiendo en el navegador, paso
+     a paso, sobre `compras_graf_filtro_fam`:
+
+     1. Rango 4–24 ago → **8** familias ofrecidas. Elegidas ENVASES Y
+        EMBALAJES + VINOS Y ESPUMANTES; el compartimento marcaba "2".
+     2. Rango 24 ago (un día) → **3** ofrecidas. La selección quedó en
+        **{ENVASES}**. Sin traza en consola, sin error de Streamlit.
+     3. Rango 4–24 ago otra vez → 8 ofrecidas, y la selección **sigue** en
+        {ENVASES}. VINOS no volvió.
+
+     Lo único que lo delataba era el contador del compartimento pasando de 2
+     a 1 — o sea, nada, si no lo estabas mirando.
+
+     **Por qué pasa:** `filtro_pills` arma `valores` con
+     `df[col].unique()` y se lo pasa a `st.pills(..., key=…)`. Cuando el
+     valor guardado en `session_state` no está en `options`, Streamlit lo
+     COERCIONA a la intersección. Un `st.selectbox` en la misma situación
+     revienta (por eso `vs_ano_pasado.py` tiene un guard explícito antes de
+     dibujar "Agrupar por"); `st.pills` en modo multi no revienta, recorta.
+     Peor síntoma: lo que no falla, no se investiga.
+
+     **El arreglo, a pedido: las opciones salen del HISTÓRICO** (`df_full`,
+     que ya trae aplicados los mismos chips) y no de `df_f`. La lista deja de
+     moverse, así que no hay nada que se pueda caer. El precio se asume a
+     sabiendas: ahora se puede elegir una familia sin compras en el rango y
+     la vista sale vacía — pero eso es un estado que el usuario provocó, ve
+     explicado en un cartel y puede deshacer, que es otra cosa que un filtro
+     que se borra solo.
+
+     **Y el efecto colateral que hay que mirar SIEMPRE al soltar esa cota:**
+     el rango de fechas también estaba acotando de hecho el tamaño de la
+     lista. Subfamilia pasó de 3 chips (con la franja en un día) a **95**:
+     medidos 1.688px de chips dentro de un panel de 420 con scroll, 1.943 de
+     recorrido total. Noventa y cinco opciones sin buscador no son un filtro,
+     son una lista. La cascada pasó a ser EXIGENTE —sin Familia no hay lista,
+     y en su lugar va un caption que dice qué hacer—, con lo que el panel
+     volvió a 278px sin scroll.
+
+     Detalle de estado: al soltar la Familia hay que `pop`ear a mano la clave
+     de Subfamilia. Streamlit recolecta el estado de un widget que dejó de
+     dibujarse, pero `contar_filtros` lee `session_state` ANTES de que eso
+     pase, así que sin el `pop` el badge miente durante un rerun.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#282**.
+> próxima regla nueva es la **#283**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

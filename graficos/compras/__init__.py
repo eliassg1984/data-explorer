@@ -399,20 +399,68 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         return
 
     # ── Filtros Familia / Subfamilia: compartimento único de la franja ───
+    # LAS OPCIONES SALEN DEL HISTÓRICO, NO DEL RANGO (2026-09-02, a pedido).
+    #
+    # Hasta hoy la lista se armaba con `df_f`, o sea con lo que dejaba pasar
+    # la píldora de fecha, y eso tenía una consecuencia que nadie había
+    # medido: al angostar el rango, una familia elegida podía dejar de estar
+    # entre las opciones, y Streamlit la borra de la selección EN SILENCIO —
+    # sin excepción, sin aviso, y sin devolverla cuando el rango se vuelve a
+    # ampliar. Medido paso a paso en el navegador:
+    #   · rango 4–24 ago → 8 familias ofrecidas; elegidas ENVASES + VINOS.
+    #   · rango 24 ago (un día) → 3 ofrecidas; la selección queda en ENVASES.
+    #   · rango 4–24 ago otra vez → 8 ofrecidas, la selección sigue en
+    #     ENVASES. VINOS se perdió para siempre.
+    # Lo único que lo delataba era el contador del compartimento pasando de
+    # 2 a 1.
+    #
+    # Con el histórico como fuente la lista deja de moverse, así que no hay
+    # nada que se pueda caer. El precio, asumido a sabiendas: ahora se puede
+    # elegir una familia que no compró NADA en el rango y la vista sale
+    # vacía. Eso ya tiene su cartel unas líneas más abajo, y es un estado
+    # que el usuario provocó y puede deshacer — muy distinto de un filtro
+    # que se borra solo.
+    #
+    # `df_full` puede no llegar (llamadores viejos): ahí cae a `df_f` y el
+    # comportamiento es el de antes.
     fam_sel, sub_sel = [], []
+    _ops_src = df_full if df_full is not None else df_f
     with compartimento_filtros(contar_filtros("compras_graf_filtro_fam",
                                               "compras_graf_filtro_sub")):
-        _, fam_sel = filtro_pills(df_f, col_fam,
+        _, fam_sel = filtro_pills(_ops_src, col_fam,
                                   "compras_graf_filtro_fam", "Familia")
         # CASCADA: Subfamilia sólo ofrece las que quedan bajo la Familia
         # elegida. Por eso el df recortado va aparte y no se reusa el que
         # devuelve el filtro de arriba — ése ya viene filtrado, pero el
         # recorte tiene que hacerse con la selección de ESTE rerun.
-        _d_sub = df_f
+        #
+        # Y desde el 2026-09-02 la cascada es EXIGENTE: sin Familia no hay
+        # lista. Antes el rango de fechas la acotaba de hecho (con la franja
+        # en un día eran 3 chips); al pasar las opciones al histórico esa
+        # cota desapareció y el bloque saltó a 95 chips — medido: 1.688px de
+        # subfamilias dentro de un panel de 420 con scroll, o sea 1.943px de
+        # recorrido para un filtro que se usa de pasada. Noventa y cinco
+        # opciones sin buscador no son un filtro, son una lista.
+        #
+        # No se esconde el bloque entero: queda el rótulo con un caption que
+        # dice qué hacer. Un compartimento que aparece y desaparece según lo
+        # que elegiste arriba se lee como que la app perdió el filtro.
+        _d_sub = _ops_src
         if fam_sel and col_fam:
             _d_sub = _d_sub[_d_sub[col_fam].astype(str).isin(fam_sel)]
-        _, sub_sel = filtro_pills(_d_sub, col_subfam,
-                                  "compras_graf_filtro_sub", "Subfamilia")
+            _, sub_sel = filtro_pills(_d_sub, col_subfam,
+                                      "compras_graf_filtro_sub", "Subfamilia")
+        elif col_subfam and col_subfam in _ops_src.columns:
+            # La clave se borra a mano y no se deja morir sola. Streamlit
+            # recolecta el estado de un widget que dejó de dibujarse, pero
+            # `contar_filtros` (arriba, en la etiqueta del compartimento) lee
+            # session_state ANTES de que eso pase: sin este `pop`, al soltar
+            # la Familia el badge diría "1" durante un rerun por una
+            # Subfamilia que ya no filtra nada.
+            st.session_state.pop("compras_graf_filtro_sub", None)
+            st.markdown('<div class="filtro-rotulo">Subfamilia</div>',
+                        unsafe_allow_html=True)
+            st.caption("Elegí una Familia para ver sus subfamilias.")
 
     d = df_f
     if fam_sel and col_fam:
@@ -425,7 +473,12 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                          {"Familia": fam_sel, "Subfamilia": sub_sel})
 
     if d is None or d.empty:
-        st.info("No hay datos para los filtros seleccionados.")
+        # Desde el 2026-09-02 este cartel es alcanzable a propósito: las
+        # opciones de Familia/Subfamilia salen del histórico, así que se
+        # puede elegir una que no compró nada en el rango de la píldora. Por
+        # eso el texto nombra a los DOS filtros y no sólo "los filtros".
+        st.info("No hay compras con esta Familia/Subfamilia en el rango de "
+                "fechas elegido. Ampliá el rango o soltá el filtro.")
         return
 
     # Data SIN filtro de fecha (para el toggle "Todo el histórico" del Panel B
