@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-271 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+272 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (88)
+**CSS y estilos** (89)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -108,6 +108,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#266** — La franja de REPORTES no duplica al rail: es lo que queda cuando el rail se va. Y su alto lo…
 - **#270** — El z-index de un hijo no vale nada fuera del contexto de apilamiento de su padre — y levantar…
 - **#271** — Un panel de popover que "se ve muy grande" casi nunca es su contenido: son los defaults de…
+- **#272** — Un control que flota sobre una tarjeta quiere, casi siempre, ser un ítem más de la fila del…
 
 **Layout y alturas** (24)
 
@@ -234,7 +235,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#248** — En media tarjeta, cada columna nueva hay que pagarla con otra: la unidad se muda adentro de…
 - **#250** — Un valor derivado también se adelanta en el navegador: si sólo lo recalcula el servidor, la…
 
-**Streamlit** (77)
+**Streamlit** (78)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -313,6 +314,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#262** — Linea/Barra/Espacio insertados sobre un stVerticalBlock nacen con width:0 — Streamlit pone…
 - **#263** — porKeyReal() no podía resolver un mock pineado SOBRE SÍ MISMO: el filtro…
 - **#271** — Un panel de popover que "se ve muy grande" casi nunca es su contenido: son los defaults de…
+- **#272** — Un control que flota sobre una tarjeta quiere, casi siempre, ser un ítem más de la fila del…
 
 **Datos, R2 y DuckDB** (30)
 
@@ -12112,13 +12114,81 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      resta contra la pantalla — el caso legítimo del escape hatch de
      `test_graficos.py` (regla #101).
 
+
+272. **Un control que flota sobre una tarjeta quiere, casi siempre, ser un
+     ítem más de la fila del título — y al entrar en ella hay dos cosas que
+     no se heredan solas: el ítem flex no es el contenedor con la key, y el
+     `inline-flex` se alinea por LÍNEA BASE, no por caja.**
+
+     2026-09-01, a pedido ("integremos ese filtro dentro de la tarjeta de
+     Ranking, al mismo nivel que el widget de fecha"). El popover de
+     Proveedores del drill entró en `cp_rank_fila`, el flex row donde ya
+     viven el título y el rango, por un hook nuevo:
+     `selector_fecha_tarjeta(extra=…)` — un **callable**, no un elemento ya
+     dibujado, porque en Streamlit el contenedor se elige ENTRANDO en él:
+     lo que se pasa es qué dibujar, no qué mover.
+
+     **La señal de que había que hacerlo estaba en el historial del propio
+     elemento.** Nació `position: fixed` anclado a la franja superior, con
+     un umbral de 1230px calculado a mano contra los chips de
+     Familia/Subfamilia y un `right: 90px` que había que justificar como
+     "80 de padding + 10 de scrollbar"; el 2026-08-31 bajó a `absolute`
+     sobre la esquina de la tarjeta, lo que se llevó el umbral y la cuenta;
+     hoy deja de posicionarse. **Cada vuelta borró más CSS del que agregó** —
+     y eso es lo que hay que leer: el elemento estaba peleando por un sitio
+     que un contenedor flex da gratis. Con la mudanza se fueron además el
+     `padding-top: 16px` del marco (la banda que le reservaba: sin
+     flotantes, era un hueco gris) y ~18 declaraciones `!important` del
+     trigger, calcadas de `estilos/_50_fecha.py` para imitar A MANO el chip
+     de la franja. En la fila, **la píldora la hereda de
+     `.st-key-cp_rank_fila button`** y no hace falta escribir ninguna: eso
+     ES "al mismo nivel que el widget de fecha".
+
+     **Trampa 1 — el ítem flex no es el contenedor con la key.**
+     `st.popover(key=…)` pone la key en el WRAPPER (por eso a
+     `cp_rank_escala` le alcanza una regla), pero `st.container(key=…)` la
+     pone en el `stVerticalBlock` de ADENTRO: el hijo directo de la fila es
+     un `stLayoutWrapper` anónimo que nace con `width: 100%` y
+     `flex: 0 1 auto`. Medido: el trigger medía 160px y su wrapper 363 — se
+     comía el hueco que le tocaba al título, que quedaba en 105px **pese a
+     su `flex-grow: 1`**. Estilar la key de adentro no arregla nada: el que
+     reparte es el padre. Hace falta
+     `> [data-testid="stLayoutWrapper"]:has(> .st-key-<key>)`.
+
+     Corolario de diagnóstico: un `flex: 1 1 auto` que "no crece" no está
+     roto — hay un hermano con `flex-basis` grande (un `width: 100%`
+     heredado) comiéndose el reparto. Mirar los HERMANOS, no el elemento.
+
+     **Trampa 2 — dos botones idénticos a 3px de altura distinta.** Los dos
+     triggers de la fila quedaron desalineados (197 contra 200). No eran los
+     contenedores: medidos los dos chains, son idénticos —un div `block` de
+     26px con un botón `inline-flex` de 22 y el mismo
+     `line-height: 25.6px`—. Era la **línea base**: un `inline-flex` se
+     apoya en la de su PRIMER hijo, y el botón de Proveedores empieza con un
+     glifo de 14px mientras el de la fecha empieza con texto de 12. Distinta
+     primera caja, distinta base. El arreglo es salirse del juego: el div
+     que los contiene pasa a `display: flex; align-items: center`, y se
+     aplica a los DOS —el de la fecha se mueve 1px— porque dejarlo
+     mitad-y-mitad es volver a atarlo al contenido del botón, que es de
+     donde vino el problema.
+
+     Y un detalle que sí es de criterio y no de CSS: al entrar en la fila
+     hubo que subir el trigger de 11px a 12, los del rango. El 12 del rango
+     estaba justificado como "es el único texto de la fila"; desde que son
+     dos controles pares, **medio punto de diferencia se lee como error, no
+     como jerarquía**.
+
+     Medido después: título 308px (ahora sí crece), Proveedores 160,
+     rango 87, los tres en un renglón de 22px, y el marco arranca en el
+     mismo `y` que la tarjeta — sin la banda gris de antes.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#272**.
+> próxima regla nueva es la **#273**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

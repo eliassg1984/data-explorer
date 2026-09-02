@@ -187,7 +187,7 @@ def _aplicar_atajo_select(clave_widget, placeholder, opciones, ctx, bandera):
     st.session_state[clave_widget] = placeholder
 
 
-def selector_fecha_tarjeta(clave, bandera, titulo_html=None):
+def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None):
     """Trigger + panel de fecha para una tarjeta de Compras.
 
     El TRIGGER es el rango vigente escrito con todas las letras ("1 ago –
@@ -196,6 +196,13 @@ def selector_fecha_tarjeta(clave, bandera, titulo_html=None):
 
     Devuelve el `ctx` de `franja_fecha` (o None si no hay), porque el
     llamador suele necesitarlo para otra cosa.
+
+    `extra` es un callable OPCIONAL que se dibuja dentro de la misma fila,
+    entre el título y el rango: otro control de la tarjeta que quiere estar
+    al mismo nivel que la fecha en vez de flotar por su cuenta (hoy lo usa
+    el filtro de proveedores del Ranking, 2026-09-01). Es un callable y no
+    un elemento ya dibujado porque en Streamlit el contenedor se elige
+    ENTRANDO en él: lo que se pasa es qué dibujar, no qué mover.
 
     `clave` es el prefijo de TODAS las keys que dibuja, así que dos
     tarjetas en la misma página no chocan — y desde que Compras se lee
@@ -227,6 +234,13 @@ def selector_fecha_tarjeta(clave, bandera, titulo_html=None):
         # el orden del `with` es el orden en pantalla.
         if titulo_html:
             st.markdown(titulo_html, unsafe_allow_html=True)
+        # Entre el título y la fecha: el título tiene `flex: 1 1 auto`, así
+        # que absorbe el hueco y los controles quedan pegados a la derecha,
+        # adyacentes entre sí. La fecha va ÚLTIMA en las dos tarjetas que
+        # usan este helper, para que el ancla derecha sea la misma cosa en
+        # ambas.
+        if extra is not None:
+            extra()
         # El TRIGGER ES LA FECHA MISMA. Antes eran dos elementos —un botón
         # de puro ícono y, al lado, un caption con el rango— o sea el dato
         # y su gesto separados. Sin rango todavía (media selección, o

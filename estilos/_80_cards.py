@@ -738,8 +738,13 @@ CSS = """    /* ================================================================
         margin-bottom: 0 !important;
     }
     /* Móvil: el plot es angosto y una tarjeta absoluta sobre la esquina
-       tapa barras — mismo criterio que prov_pop_float/gran_float en
-       graficos/compras/_css_proveedor.py (>640px flota, <=640px fluye).
+       tapa barras, así que >640px flota y <=640px fluye.
+       (Acá se citaba a `prov_pop_float`/`gran_float` de
+       `graficos/compras/_css_proveedor.py` como el mismo criterio; los dos
+       DEJARON de flotar —`gran_float` el 2026-08-23, `prov_pop_float` el
+       2026-09-01, que entró en la fila del título del Ranking— así que la
+       cita apuntaba a dos elementos que ya no hacen esto. Este de acá es
+       hoy el único caso vivo del patrón.)
        Expandirla sigue sin empujar nada (sigue siendo el mismo
        contenedor, sólo que ahora en flujo); nada más cambia. */
     @media (max-width: 640px) {

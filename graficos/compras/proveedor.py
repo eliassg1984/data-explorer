@@ -431,10 +431,27 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # con padding y sombra ENCIMA de las dos tarjetas nuevas (bloque blanco
     # dentro de bloque blanco). Sacarlo de la familia es lo que lo vuelve
     # invisible, sin pelearle a la regla con overrides.
-    with st.container(key="compras_prov_marco"):
-        # Popover de proveedores — flota arriba-izquierda (misma banda que la
-        # leyenda y el toggle). Los checkboxes escriben cp_prov_cb::<nombre>;
-        # la selección se leyó arriba para armar el figure (patrón 1 rerun).
+    def _pop_proveedores():
+        """El filtro de proveedores, dibujado DENTRO de la fila del título.
+
+        2026-09-01, a pedido ("integremos ese filtro dentro de la tarjeta de
+        Ranking, al mismo nivel que el widget de fecha"). Antes flotaba
+        `position: absolute` sobre `compras_prov_marco`, o sea por ENCIMA de
+        la tarjeta y en una banda que el marco le reservaba con un
+        `padding-top: 16px`. Ahora entra por el hook `extra=` de
+        `selector_fecha_tarjeta`, en el mismo flex row que el título y el
+        rango — un solo contenedor que reparte, en vez de dos anclas
+        independientes adivinando no pisarse (el mismo argumento que ya
+        había mudado el ícono de ayuda a esta fila, ver más abajo).
+
+        Se dibuja TARDE (dentro de la tarjeta) pero su selección se LEE
+        temprano, arriba, para armar el figure: es el patrón de 1 rerun que
+        ya usaba flotando, y no cambia por mudarse de sitio.
+
+        Sigue llamándose `prov_pop_float` aunque ya no flote: la key es el
+        ancla de su CSS y del badge, y renombrarla no paga el riesgo (mismo
+        criterio que `gran_float`, que tampoco flota desde 2026-08-23).
+        """
         with st.container(key="prov_pop_float"):
             _sel_now = [p for p in _todos_provs_temp
                         if st.session_state.get("cp_prov_cb::" + str(p))]
@@ -527,6 +544,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                           help="Muestra el nombre del proveedor "
                           "sobre cada barra. Se abrevia segun el ancho "
                           "disponible.")
+
+
+    with st.container(key="compras_prov_marco"):
         # 2026-08-23: la pill Día/Semana/Mes/Año (key `gran_float`) se movió
         # DENTRO de la tarjeta de Evolución, a pedido — ver ese bloque más
         # abajo (justo debajo de `cp_evo_periodo`). Se queda el nombre de
@@ -629,7 +649,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     _ctx_fecha = selector_fecha_tarjeta(
                         "cp_rank", "_cp_rank_atajo_pendiente",
                         titulo_html='<div class="cp-rank-tit">Ranking de '
-                                    'proveedores</div>')
+                                    'proveedores</div>',
+                        extra=_pop_proveedores)
                     # La fila de atajos le come FRANJA_ATAJOS al AgGrid de
                     # abajo — mismo motivo que FRANJA_CTRL_EVO en
                     # Evolución: nadie le hacía lugar todavía. YA NO es

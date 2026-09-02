@@ -30,7 +30,11 @@ CSS = """        <style>
            padding-top probablemente pueda bajar de 16px, pero se deja igual
            hasta remedir en vivo — de más no rompe nada, solo deja algo de
            aire de sobra. */
-        .st-key-compras_prov_marco { padding-top: 16px !important; }
+        /* 2026-09-01: la reserva bajo a 0. El `padding-top` existia para
+           la banda donde flotaba el popover de Proveedores; desde que ese
+           entro en la fila del titulo (arriba), al marco NO le flota nada
+           y los 16px eran un hueco gris entre la franja y las tarjetas. */
+        .st-key-compras_prov_marco { padding-top: 0 !important; }
         /* 2026-08-23: `gran_float` DEJÓ de flotar acá — se mudó DENTRO de la
            tarjeta de Evolución (compras_prov_card_evo), a pedido ("que no
            estén arriba de Evolución sino dentro"). El nombre de la key se
@@ -54,35 +58,46 @@ CSS = """        <style>
         .st-key-gran_float [data-testid="stVerticalBlock"] {
             padding: 0 !important; margin: 0 !important; gap: 0 !important;
         }
-        /* ── PROVEEDORES VIVE EN SU TARJETA (2026-08-31, a pedido) ───────
-           "Ponelo para los graficos, ya no en la cabecera". Flota en la
-           esquina de la tarjeta de Ranking, que es lo que filtra.
+        /* ── PROVEEDORES ES UN ITEM MAS DE LA FILA DEL TITULO ───────────
+           2026-09-01, a pedido ("integremos ese filtro dentro de la tarjeta
+           de Ranking, al mismo nivel que el widget de fecha").
 
-           Esto NO es codigo nuevo: es el camino que la app ya recorria en
-           todo viewport de 641 a 1229px. Lo que se borro fue el bloque
-           `@media (min-width: 1230px)` que en pantallas anchas lo pasaba a
-           `position: fixed` y lo anclaba a la franja de arriba — y con el
-           se fueron sus dos herencias:
+           Historia corta de este elemento, porque explica por que el
+           bloque encogio tanto: nacio `position: fixed` anclado a la franja
+           superior (con un umbral de 1230px calculado a mano contra los
+           chips de Familia/Subfamilia, y un `right: 90px` que habia que
+           justificar como "80 de padding + 10 de scrollbar"); el
+           2026-08-31 bajo a `position: absolute` sobre la esquina de la
+           tarjeta —lo que se llevo el umbral y la cuenta del right—; y hoy
+           deja de posicionarse del todo. Cada vuelta borro mas CSS que el
+           que agrego, y eso es la señal: el elemento estaba peleando por un
+           sitio que un contenedor flex le da gratis.
 
-             · el umbral 1230, calculado a mano contra los chips de
-               Familia/Subfamilia (301 + 492 + 12 + 165 + 163 = 1223,
-               redondeado). Ya no hay nada con que colisionar arriba;
-             · un `right: 90px` que necesitaba explicar por que eran
-               `80 de padding + 10 de barra de scroll` — la cuenta solo
-               hacia falta porque el elemento se posicionaba contra el
-               VIEWPORT en vez de contra su tarjeta.
+           Ahora lo dibuja `selector_fecha_tarjeta(extra=...)` DENTRO de
+           `cp_rank_fila`, el mismo flex row que el titulo y el rango. De
+           ahi que no quede casi nada acá: el `flex: 0 0 auto` (no cede
+           ancho, como el trigger de la fecha) y poco mas. La PILDORA
+           —altura, borde, fondo, hover— la hereda de
+           `.st-key-cp_rank_fila button`, que es justo lo que se pedia con
+           "al mismo nivel que el widget de fecha": mismo look sin una sola
+           regla propia.
 
-           Se queda a la IZQUIERDA, como decia el fallback. Probado a la
-           derecha primero y esta mal: `right` se ancla al MARCO, que abarca
-           las DOS tarjetas de la fila (323..1200 medido), asi que el filtro
-           aterrizaba en la esquina de Evolucion — la tarjeta que no filtra.
-           A la izquierda cae sobre la banda de 32px que el propio marco
-           reserva arriba (`padding-top`), o sea por ENCIMA de la tarjeta de
-           Ranking y sin taparle el titulo.
-
-           En <=640px pasa a static: media query al final del archivo. */
+           Se conserva la key `prov_pop_float` aunque ya no flote: es el
+           ancla del badge que inyecta Python. Mismo criterio que
+           `gran_float`. */
+        /* Van DOS selectores y el de arriba es el que importa. `st.popover`
+           pone su key en el WRAPPER (por eso a `cp_rank_escala` le alcanza
+           con una regla), pero `st.container(key=...)` la pone en el
+           `stVerticalBlock` de ADENTRO: el item de la fila es el
+           `stLayoutWrapper` que lo envuelve, que nace con `width: 100%` y
+           `flex: 0 1 auto`. Medido antes de esto: el trigger media 160px y
+           su wrapper 363 — se comia el hueco que le tocaba al titulo, que
+           quedaba en 105px sin crecer pese a su `flex-grow: 1`. Estilar
+           sólo la key de adentro no lo arregla: el que reparte es el padre. */
+        .st-key-cp_rank_fila
+            > [data-testid="stLayoutWrapper"]:has(> .st-key-prov_pop_float),
         .st-key-prov_pop_float {
-            position: absolute; top: 14px; left: 16px; z-index: 5;
+            flex: 0 0 auto !important;
             width: auto !important;
         }
         /* Nombre de la vista ("Proveedor") PRIMERO en la franja, pegado a
@@ -382,26 +397,41 @@ CSS = """        <style>
            original, Proveedores hubiera quedado pareja a un look que
            Familia/Subfamilia ya NO tienen. Los valores de abajo son los de
            `_50_fecha.py`, que es lo que de verdad se ve en pantalla. */
+        /* El TRIGGER ya no declara su propio look: hereda la pildora de
+           `.st-key-cp_rank_fila button` (22px de alto, borde de 0.5px,
+           fondo blanco, hover lavanda), que es literalmente lo que se pidio
+           con "al mismo nivel que el widget de fecha".
+           Lo que vivia aca eran ~18 declaraciones `!important` calcadas de
+           `estilos/_50_fecha.py` para imitar A MANO el chip de
+           Familia/Subfamilia mientras el elemento flotaba solo. Estar en la
+           fila lo vuelve innecesario: dos reglas peleando por el mismo
+           pixel donde ahora alcanza con no escribir ninguna. Solo queda el
+           `gap`, que la pildora base no define. */
         .st-key-prov_pop_float [data-testid="stPopover"] button {
-            min-width: 0 !important;
-            min-height: 0 !important;
-            height: auto !important;
-            padding: 1px 8px 1px 0 !important;
+            gap: 5px !important;
+            /* 12px, los mismos que el trigger de la fecha. Heredar la
+               pildora base dejaba este en 11 y el de al lado en 12 —
+               dos controles pares de la misma fila con medio punto de
+               diferencia, que es peor que dos tamanos a proposito.
+               El 12 del rango tenia como motivo ser "el unico texto de la
+               fila"; desde hoy no lo es. */
             font-size: 12px !important;
-            font-weight: 400 !important;
-            line-height: 1.2 !important;
-            border-radius: 0 !important;
-            background: transparent !important;
-            color: var(--text-secondary) !important;
-            border: none !important;
-            border-bottom: 2px solid transparent !important;
-            box-shadow: none !important;
-            gap: 6px !important;
-            transition: background .12s !important;
         }
-        .st-key-prov_pop_float [data-testid="stPopover"] button:hover,
-        .st-key-prov_pop_float [data-testid="stPopover"] button[aria-expanded="true"] {
-            background: var(--accent-tint) !important;
+        /* Los dos triggers de la fila, alineados al mismo pixel.
+           El desfase no era de contenedores —medidos los dos chains, son
+           identicos: un div `block` de 26px con un boton `inline-flex` de
+           22 y el mismo `line-height: 25.6px`—. Era de BASELINE: un
+           `inline-flex` se apoya en la linea base de su PRIMER hijo, y el
+           boton de Proveedores empieza con el glifo de 14px mientras el de
+           la fecha empieza con texto de 12. Distinta primera caja, distinta
+           base: 197 contra 200, y en un pill de 22px esos 3px se ven.
+           Se sale del juego de las lineas base: el div que los contiene
+           pasa a `flex` y los centra. Vale para los DOS —el de la fecha se
+           mueve 1px— porque dejarlo mitad-y-mitad es volver a atarlo al
+           contenido del boton, que es de donde vino el bug. */
+        .st-key-cp_rank_fila [data-testid="stPopover"] > div {
+            display: flex !important;
+            align-items: center !important;
         }
         /* SIN un estado "filtrado" propio (el subrayado de acento que
            tendría Familia/Subfamilia vía `chipwrap_..._on`): ese mecanismo
@@ -415,8 +445,11 @@ CSS = """        <style>
            propio — ahí también los dos chips divergían. */
         .st-key-prov_pop_float [data-testid="stPopover"] button [data-testid="stIconMaterial"] {
             color: inherit !important;
-            font-size: 15px !important;
-            margin-right: 0 !important;      /* el gap:6px de arriba ya separa */
+            /* 14, no los 15 de cuando imitaba al chip de la franja: la
+               pildora de la fila mide 22px de alto contra los 26 de aquel,
+               y el glifo tiene que quedar por debajo del texto, no encima. */
+            font-size: 14px !important;
+            margin-right: 0 !important;      /* el gap de arriba ya separa */
         }
         /* Badge con el numero de proveedores: se inyecta el valor via
            ::after con content dinamico desde Python (ver _cp_badge_count).
@@ -1617,12 +1650,6 @@ CSS = """        <style>
                esquina del plot; en 375px su ancho se cruzaba con el resto.
                En móvil deja de flotar y fluye como fila de controles ARRIBA
                del gráfico. */
-            .st-key-prov_pop_float {
-                position: static !important;
-                top: auto !important; left: auto !important; right: auto !important;
-                width: 100% !important;
-                margin: 0 0 6px 0 !important;
-            }
             /* Los tres selectores de tiempo + las flechas: en 375px la
                tarjeta tiene 291px de ancho útil y los anchos de desktop
                suman ~274, así que ENTRAN tal cual — no hace falta
