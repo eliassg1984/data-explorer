@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-288 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+289 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (95)
 
@@ -151,7 +151,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#281** — Una cabecera que depende de un dato que se calcula 100 líneas más abajo se dibuja con…
 - **#288** — Un rótulo que nombra el estado POR DEFECTO no informa: ocupa el renglón para decir que no hay…
 
-**Plotly y figuras** (49)
+**Plotly y figuras** (50)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -202,6 +202,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#263** — porKeyReal() no podía resolver un mock pineado SOBRE SÍ MISMO: el filtro…
 - **#269** — El JS que vive dentro de un string de Python necesita el escape de salto de línea con DOS…
 - **#276** — Cuando dos tarjetas de una fila no miden igual, la pregunta no es a cuál eximir del piso sino…
+- **#289** — Sacar un adorno de una figura no la achica: hay que RESTARLE lo que el adorno ocupaba, o el…
 
 **AgGrid y tablas** (47)
 
@@ -12901,13 +12902,50 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      perder un dato: lo que se fue era rótulo del estado neutro, texto
      repetido y explicación de una sola lectura (regla #287).
 
+
+289. **Sacar un adorno de una figura no la achica: hay que RESTARLE lo que
+     el adorno ocupaba, o el hueco queda de aire.** Es el mecanismo de las
+     `alturas.FRANJA_*` al revés — no se descuenta lo que ocupa otro bloque,
+     se descuenta lo que la figura dejó de necesitar.
+
+     2026-09-02, a pedido ("reduzcamos verticalmente un poco más los
+     gráficos, más minimalista el KPI, y quitemos la leyenda"). Y es lo que
+     permitió seguir bajando después de haber tocado el piso: con
+     `alturas.COMPACTO` clavado en 240 = MINI (regla #286), lo único que
+     quedaba era **quitarle cromo a la figura, no trazo**.
+
+     Las tres piezas y su resta:
+
+     · **La leyenda** ("Año pasado" gris / "Este año" acento) se retira. No
+       hacía falta: los dos colores son la convención de la app, el título
+       de la tarjeta dice "Vs año pasado", y el `hovermode: x unified`
+       nombra las dos series al pasar por encima. Su alto medido —26px—
+       queda como `_LEYENDA_VAP` y se le RESTA a la figura: el trazo mide lo
+       mismo que antes, la figura 26 menos.
+     · **El veredicto** pasa de dos renglones a uno. Se fueron "vs año
+       pasado" (lo dice el título) y la frase "Lo explica sobre todo…", que
+       ponía en palabras lo que el waterfall de al lado DIBUJA: queda el
+       sustantivo como sufijo apagado, apuntando a la barra grande.
+     · **`alturas.FRANJA_VEREDICTO` acompaña**: 47 → 38 (bloque 22 + gap
+       16). Ese número es la otra cara del bloque; si no se actualiza, el
+       waterfall se pasa de largo y las dos columnas de la fila dejan de
+       terminar en la misma línea.
+
+     **Las dos figuras salen del MISMO sitio** (`_ALTO_FIG_VAP`), y el
+     waterfall le resta además el veredicto. Sin eso, restarle la leyenda
+     sólo a la serie la habría dejado 26px más corta que su vecina.
+
+     Medido: figuras 240/193 → **214/176**, las dos columnas cerrando en
+     214, KPI de 44px a **23**, sección **597 → 571**, cero textos
+     recortados. Del día: **1.155 → 571**.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#289**.
+> próxima regla nueva es la **#290**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

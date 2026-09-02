@@ -78,10 +78,34 @@ from tablas.compras_vs_ano_pasado import (
 # (izq.) y ventana (der.) en UN renglón. Mismo criterio que
 # `alturas.FRANJA_CTRL_EVO` — los píxeles de un control nuevo salen de la
 # figura, o la tarjeta crece y su eje X se va debajo del borde.
+_LEYENDA_VAP = 26
+"""Alto de la leyenda que la serie mensual dibujaba ARRIBA de las barras
+("Año pasado" gris / "Este año" acento), MEDIDA en el navegador.
+
+Se retiró el 2026-09-02, a pedido. No hacía falta: los dos colores son la
+convención de toda la app (gris = lo que pasó, acento = lo vigente), el
+título de la tarjeta ya dice "Vs año pasado", y el hover —`hovermode:
+x unified`— nombra las dos series al pasar por encima.
+
+El número sigue existiendo porque se le RESTA a la figura: sin la resta, la
+leyenda desaparecía y su hueco quedaba de aire. Es el mismo mecanismo que
+las `alturas.FRANJA_*`, pero al revés — no se descuenta lo que ocupa otro
+bloque, se descuenta lo que la figura dejó de necesitar."""
+
 PARR = "\n\n"
 """Salto de párrafo para el markdown del popover de ayuda."""
 
 _FRANJA_VAP = alturas.FRANJA_CTRL_EVO
+
+_ALTO_FIG_VAP = alturas.con_franja(alturas.COMPACTO, _FRANJA_VAP) - _LEYENDA_VAP
+"""Alto de las DOS figuras de la fila, del mismo sitio para que terminen en
+la misma línea. El waterfall le resta además `alturas.FRANJA_VEREDICTO`,
+que es lo que ocupa la cifra grande encima suyo.
+
+OJO con el `_FRANJA_VAP` de la cuenta: hoy no muerde. `con_franja` devuelve
+`min(rol, CONTENIDO - franja)` y con COMPACTO en 240 gana siempre el rol
+(537 - 30 = 507). Se conserva porque el día que el rol suba, la resta
+vuelve a decidir."""
 
 _CSS = f"""
 <style>
@@ -424,7 +448,7 @@ def _fig_serie(g, modo, parcial):
             ),
             hovertemplate=fmt + "<extra>Este año</extra>")
 
-    _compras_layout(fig, alto=alturas.con_franja(alturas.COMPACTO, _FRANJA_VAP))
+    _compras_layout(fig, alto=_ALTO_FIG_VAP)
     # SIN `title`: el ámbito vive en la cabecera de la tarjeta desde el
     # 2026-09-02 (ver el `st.empty()` del drill). Lo que gana la figura no
     # es sólo el alto del texto — Plotly reserva margen superior para el
@@ -432,7 +456,10 @@ def _fig_serie(g, modo, parcial):
     fig.update_layout(
         barmode="group", bargap=0.28, bargroupgap=0.08,
         hovermode="x unified",
-        legend=dict(orientation="h", y=1.04, x=0, font=dict(size=11)),
+        # La leyenda se fue (ver `_LEYENDA_VAP`): gris = año pasado, acento
+        # = este año es la convención de la app, y el hover unificado nombra
+        # las dos series al pasar por encima.
+        showlegend=False,
     )
     fig.update_xaxes(type="category", tickangle=0)
     return fig
@@ -464,8 +491,7 @@ def _fig_puente(valor, valor_aa, ef_precio, ef_cant):
     # Menos alto que la serie de al lado, y por eso terminan a la misma
     # altura: encima de esta figura va la línea de veredicto, que la empuja
     # hacia abajo (`alturas.FRANJA_VEREDICTO`, medida en el navegador).
-    _compras_layout(fig, alto=(alturas.con_franja(alturas.COMPACTO, _FRANJA_VAP)
-                               - alturas.FRANJA_VEREDICTO))
+    _compras_layout(fig, alto=_ALTO_FIG_VAP - alturas.FRANJA_VEREDICTO)
     # `title=""` y NO `title=None`: con None, Plotly.js pinta la cadena
     # literal "undefined" donde iría el título (medido en el navegador,
     # 2026-08-24 — salía sobre el waterfall). El título de esta figura
@@ -489,14 +515,21 @@ def _resumen_html(delta, pct, ef_precio, ef_cant):
     signo = "+" if delta >= 0 else "−"
     # Con artículo: "el precio" / "la cantidad" — sin él salía "la precio".
     culpa = ("el precio" if abs(ef_precio) > abs(ef_cant) else "la cantidad")
+    # 2026-09-02, a pedido ("más minimalista"): de DOS renglones a UNO.
+    # Lo que se fue no era dato:
+    #   · "vs año pasado" lo dice el título de la tarjeta, dos filas arriba.
+    #   · "Lo explica sobre todo …" era una frase para nombrar lo que el
+    #     waterfall de abajo DIBUJA — la barra grande es el efecto que manda.
+    #     Queda el sustantivo como sufijo apagado, que sigue apuntando a la
+    #     barra sin gastar un renglón en explicarla.
     return (
-        f'<div style="font:600 19px/1.2 DM Sans,sans-serif;color:{color};'
-        f'margin:0 0 2px">{signo}S/ {abs(delta):,.0f}'
-        f'<span style="font:400 13px/1 DM Sans,sans-serif;color:{GRIS_TEXTO};'
-        f'margin-left:8px">{signo}{abs(pct):.1f}% vs año pasado</span></div>'
-        f'<div style="font:400 12px/1.35 DM Sans,sans-serif;color:{GRIS_TEXTO};'
-        f'margin:0 0 6px">Lo explica sobre todo <b style="color:'
-        f'{TEXTO_PRINCIPAL}">{culpa}</b></div>'
+        f'<div style="font:600 18px/1.25 DM Sans,sans-serif;color:{color};'
+        f'margin:0 0 4px;white-space:nowrap">{signo}S/ {abs(delta):,.0f}'
+        f'<span style="font:400 12px/1 DM Sans,sans-serif;color:{GRIS_TEXTO};'
+        f'margin-left:8px">{signo}{abs(pct):.1f}%</span>'
+        f'<span style="font:400 12px/1 DM Sans,sans-serif;color:{GRIS_TEXTO};'
+        f'margin-left:8px">· lo explica <b style="color:'
+        f'{TEXTO_PRINCIPAL}">{culpa}</b></span></div>'
     )
 
 
