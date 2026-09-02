@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-274 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+275 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (90)
 
@@ -111,7 +111,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#272** — Un control que flota sobre una tarjeta quiere, casi siempre, ser un ítem más de la fila del…
 - **#273** — Un bloque de alto CERO sigue cobrando su gap: cinco piezas de cromo fijo metían 80px de gris…
 
-**Layout y alturas** (25)
+**Layout y alturas** (26)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -138,6 +138,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#245** — Una fila que COMPARA se parte por la mitad, no con COLUMNAS_DRILL
 - **#248** — En media tarjeta, cada columna nueva hay que pagarla con otra: la unidad se muda adentro de…
 - **#274** — Un grid con presupuesto FIJO de filas miente cuando hay menos datos: el hueco queda ENTRE la…
+- **#275** — "Las dos tarjetas de la fila miden lo mismo" (#145) vale cuando el lado corto PUEDE crecer.…
 
 **Plotly y figuras** (48)
 
@@ -12261,13 +12262,56 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      del contenido. Si queda **después de todo**, es fondo de tarjeta y
      puede ser correcto.
 
+
+275. **"Las dos tarjetas de la fila miden lo mismo" (#145) vale cuando el
+     lado corto PUEDE crecer. Si su contenido tiene tope propio, el piso no
+     iguala nada: sólo reparte blanco.**
+
+     2026-09-01, a pedido, con el bloque del modo diseño pegado en el chat:
+     `flex: none; max-width: none; max-height: none; height: 306px` sobre
+     `compras_prov_card_ranking`. Leído al derecho, ese bloque no dice "306":
+     dice **"sacale el `flex: 1 1 auto`"** — el `height` es sólo dónde quedó
+     el arrastre.
+
+     El piso de #145 estiraba la tarjeta del Ranking a los 383px de la
+     Evolución de al lado. Medido: su contenido (fila del título + AgGrid)
+     terminaba en y=297 y la tarjeta seguía hasta 487. Esos 190px no eran
+     "aire de diseño": eran blanco que la tarjeta **no tiene con qué
+     llenar**, porque su contenido es una tabla con tope de 8 filas y scroll
+     interno (regla #274). Estirarla no le da más filas.
+
+     La distinción que hay que hacer antes de aplicar el piso: **#145 nació
+     por Panel A / Panel B**, donde el lado derecho es una LISTA elástica que
+     crece con los datos — ahí el escalón cambiaba en cada clic (211px
+     medidos) y el piso es lo correcto. Una tabla acotada mide siempre lo
+     mismo para los mismos datos: no hay escalón que baile, sólo uno fijo, y
+     un escalón fijo se lee como layout, no como bug.
+
+     **Qué se copia y qué no de un bloque del modo diseño.** El panel suelta
+     sus propias ataduras para poder arrastrar, y esas líneas no son parte
+     del pedido:
+     - `flex: none` → sí, traducido: `flex: 0 1 auto` en el PADRE (el
+       contenedor de elemento), que es quien lleva el piso de #145. En la
+       tarjeta no alcanza.
+     - `height: 306px` → **no**. Es el alto de SIETE filas, el dato que
+       había en pantalla. Con las 8 del tope el contenido pide 325 y la
+       tarjeta se saca una barra de scroll propia ENCIMA de la del grid;
+       con 2 proveedores vuelve el blanco que el cambio venía a sacar.
+     - `max-height: none` / `max-width: none` → **no**.
+       `max-height: var(--alto-util)` es el clamp de una pantalla
+       (regla #101), no una atadura del editor.
+
+     O sea: el bloque copiado es un DIAGNÓSTICO (qué propiedad estorba),
+     no un parche listo. Los px que trae son los del caso que estaba
+     abierto.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#275**.
+> próxima regla nueva es la **#276**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

@@ -248,6 +248,36 @@ CSS = """    /* ================================================================
         > div:has(> div[class*="st-key-sunat_conv_"]) {
             flex: 1 1 auto;
         }
+
+        /* ─────────────────────────────────────────────────────────────── */
+        /* LA EXCEPCIÓN: EL RANKING DE PROVEEDORES MIDE LO SUYO             */
+        /*                                                                  */
+        /* 2026-09-01, a pedido, con el bloque copiado del modo diseño      */
+        /* (`flex: none; height: 306px`). El piso de arriba lo estiraba a   */
+        /* los 383px de la Evolución de al lado y esos px extra son BLANCO: */
+        /* su contenido es una tabla con tope propio (8 filas, ver          */
+        /* `_FILAS_RANK` en graficos/compras/proveedor.py) y scroll interno,*/
+        /* así que no tiene con qué llenarlos. Medido: tabla + fila del     */
+        /* título terminan en y=297 y la tarjeta seguía hasta 487.          */
+        /*                                                                  */
+        /* Por qué la excepción es ÉSTA y no la regla de arriba: el piso    */
+        /* nació (regla #145) por Panel A/Panel B, donde el lado derecho es */
+        /* una LISTA elástica que crece con los datos — ahí el escalón      */
+        /* cambia en cada clic y hay que igualar. Una tabla acotada no      */
+        /* tiene ese problema: mide siempre lo mismo para los mismos datos. */
+        /*                                                                  */
+        /* Va `0 1 auto` (medir el contenido) y NO el `height: 306px` del   */
+        /* bloque copiado: 306 es el alto de SIETE filas. Con las 8 del     */
+        /* tope el contenido pide 325 y la tarjeta le saldría una barra de  */
+        /* scroll propia encima de la del grid; con 2 proveedores volvería  */
+        /* el blanco que este cambio saca. `max-height`/`max-width` tampoco */
+        /* se copian: el modo diseño los suelta para poder arrastrar, pero  */
+        /* `max-height: var(--alto-util)` es el clamp de una pantalla.      */
+        /* ─────────────────────────────────────────────────────────────── */
+        .stColumn > .stVerticalBlock
+        > div:has(> div[class*="st-key-compras_prov_card_ranking"]) {
+            flex: 0 1 auto;
+        }
     }
 
     /* =================================================================== */
