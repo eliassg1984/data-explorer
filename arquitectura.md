@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-279 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+280 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (91)
 
@@ -112,7 +112,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#273** — Un bloque de alto CERO sigue cobrando su gap: cinco piezas de cromo fijo metían 80px de gris…
 - **#279** — Un control que se pide "igual al de aquella vista" se EXTRAE, no se copia — y lo que hay que…
 
-**Layout y alturas** (29)
+**Layout y alturas** (30)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -143,6 +143,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#276** — Cuando dos tarjetas de una fila no miden igual, la pregunta no es a cuál eximir del piso sino…
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 - **#278** — "Que mida lo mismo que aquella" se escribe reusando SUS constantes, no copiando sus números.…
+- **#280** — Cuando "hacelo más chico" no entra en ningún rol, se agrega un rol — no se le cambia el…
 
 **Plotly y figuras** (49)
 
@@ -435,7 +436,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#264** — Un mock arrastrado con "Mover" podía terminar pintado DEBAJO de un hermano posterior — no…
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 
-**Decisiones de diseño y UX** (49)
+**Decisiones de diseño y UX** (50)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -486,6 +487,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#267** — opacity: 0 esconde a los ojos, no al TECLADO: el rail apagado seguia teniendo 7 botones…
 - **#273** — Un bloque de alto CERO sigue cobrando su gap: cinco piezas de cromo fijo metían 80px de gris…
 - **#278** — "Que mida lo mismo que aquella" se escribe reusando SUS constantes, no copiando sus números.…
+- **#280** — Cuando "hacelo más chico" no entra en ningún rol, se agrega un rol — no se le cambia el…
 
 **Mantenimiento y trampas del lenguaje** (8)
 
@@ -12518,13 +12520,53 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      construir el ranking. El widget es compartido; dónde se aplica su
      salida, no.
 
+
+280. **Cuando "hacelo más chico" no entra en ningún rol, se agrega un rol —
+     no se le cambia el significado al que más cerca queda.** El vocabulario
+     de `alturas.py` tiene que seguir diciendo la verdad sobre el PAPEL de
+     cada figura, no sólo sobre su tamaño.
+
+     2026-09-02, a pedido sobre «Vs año pasado» ("podemos hacerlos menos
+     altos, o sea reducirlos verticalmente") y es la SEGUNDA vuelta del mismo
+     reclamo: el 2026-08-26 su tabla ya había bajado de `MARCO` (553) a
+     `APOYO` (380) por "es muy largo". Medido antes de tocar nada: la sección
+     entera daba **1.155px** en 1366x700 — 1,9 pantallas para una vista de
+     dos bloques.
+
+     La tentación era bajar los dos a `MINI` (240). No: MINI está descrito
+     como *"panel de detalle, sparkline, mini-barras: existe para apoyar una
+     lectura, no para leerse solo"*, y la serie mensual de Vs año pasado ES
+     la lectura principal de su vista. Habría entrado **mintiendo sobre su
+     papel**, y el próximo que leyera `alturas.MINI` ahí sacaría la
+     conclusión equivocada sobre qué es esa figura.
+
+     Entró `COMPACTO = 300`, con su descripción propia: *gráfico que no
+     comparte fila, manda en su tarjeta, pero tiene arriba o abajo un
+     segundo bloque del mismo peso y el PAR tiene que poder recorrerse*. Esa
+     forma —vista apilada de dos bloques— no la cubría ninguno de los tres
+     roles viejos, que están pensados por tarjeta y no por vista.
+
+     Un rol nuevo se paga barato porque los consumidores derivan: el
+     waterfall de al lado se calcula como `con_franja(rol) −
+     FRANJA_VEREDICTO`, así que bajó solo (333 → 253) y las dos figuras
+     siguen terminando a la misma altura sin tocar una segunda cuenta.
+
+     Resultado medido: figura 380 → 300, tarjeta del gráfico 562 → 482,
+     tarjeta del detalle 577 → 497, **sección 1.155 → 995**. Verificado
+     además que ningún texto de las dos figuras se recorta al achicarlas
+     (39 y 8 textos, cero fuera de caja).
+
+     De paso, el `extra` de la tabla pasó de 44 —sumado a ojo— a 47, el
+     cromo MEDIDO por resta (`grid 380 − .ag-body-viewport 333`, o sea
+     cabecera 45 + 2 de borde). Ver regla #277: ese número no se deduce.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#280**.
+> próxima regla nueva es la **#281**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

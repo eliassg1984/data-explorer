@@ -1887,8 +1887,9 @@ def _pruebas_presupuesto_vertical():
     check("PROTAGONISTA + padding entra en el presupuesto",
           alturas.cabe(alturas.PROTAGONISTA + 32),
           f"{alturas.PROTAGONISTA} + 32 > {alturas.PRESUPUESTO}")
-    check("los roles están ordenados (MINI ≤ APOYO ≤ PROTAGONISTA)",
-          alturas.MINI <= alturas.APOYO <= alturas.PROTAGONISTA)
+    check("los roles están ordenados (MINI ≤ COMPACTO ≤ APOYO ≤ PROTAGONISTA)",
+          alturas.MINI <= alturas.COMPACTO <= alturas.APOYO
+          <= alturas.PROTAGONISTA)
     check("por_filas respeta el techo de su rol",
           alturas.por_filas(500) == alturas.PROTAGONISTA
           and alturas.por_filas(500, rol=alturas.MINI) == alturas.MINI)

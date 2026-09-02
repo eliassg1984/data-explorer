@@ -419,7 +419,7 @@ def _fig_serie(g, modo, parcial, titulo):
             ),
             hovertemplate=fmt + "<extra>Este año</extra>")
 
-    _compras_layout(fig, alto=alturas.con_franja(alturas.APOYO, _FRANJA_VAP))
+    _compras_layout(fig, alto=alturas.con_franja(alturas.COMPACTO, _FRANJA_VAP))
     fig.update_layout(
         title=titulo, barmode="group", bargap=0.28, bargroupgap=0.08,
         hovermode="x unified",
@@ -455,7 +455,7 @@ def _fig_puente(valor, valor_aa, ef_precio, ef_cant):
     # Menos alto que la serie de al lado, y por eso terminan a la misma
     # altura: encima de esta figura va la línea de veredicto, que la empuja
     # hacia abajo (`alturas.FRANJA_VEREDICTO`, medida en el navegador).
-    _compras_layout(fig, alto=(alturas.con_franja(alturas.APOYO, _FRANJA_VAP)
+    _compras_layout(fig, alto=(alturas.con_franja(alturas.COMPACTO, _FRANJA_VAP)
                                - alturas.FRANJA_VEREDICTO))
     # `title=""` y NO `title=None`: con None, Plotly.js pinta la cadena
     # literal "undefined" donde iría el título (medido en el navegador,
@@ -544,13 +544,22 @@ def _tabla_detalle(g, agrupar_por, col_um_valores, key_grid):
         # El techo era `MARCO` (553px, una pantalla completa) hasta
         # 2026-08-26, a pedido ("Vs año pasado es muy largo... al igual que
         # Detalle ítem por ítem"): esta tabla va DEBAJO de la fila de
-        # gráficos (que ya usa `APOYO`, 380px), así que MARCO + esa fila
-        # sumaban bien más de una pantalla de scroll para ver la vista
-        # completa. Baja a `APOYO` — el mismo rol que ya usan los gráficos
-        # de arriba, no un número inventado: la vista queda de DOS bloques
-        # de alto parecido en vez de uno chico y uno casi entero.
-        altura=alturas.por_filas(len(tv), px_fila=30, extra=44,
-                                 minimo=200, rol=alturas.APOYO),
+        # gráficos, así que MARCO + esa fila sumaban bien más de una
+        # pantalla de scroll para ver la vista completa. Bajó a `APOYO` —
+        # el mismo rol que usaban los gráficos de arriba, no un número
+        # inventado: la vista queda de DOS bloques de alto parecido en vez
+        # de uno chico y uno casi entero.
+        #
+        # 2026-09-02, SEGUNDA vuelta del mismo pedido ("podemos hacerlos
+        # menos altos, o sea reducirlos verticalmente"): los dos bloques
+        # bajan juntos de `APOYO` a `COMPACTO`, el rol que nació ese día
+        # justamente para esta forma de vista (ver `alturas.py`). Medido
+        # antes: la sección entera daba 1.155px en 1366x700, o sea 1,9
+        # pantallas. El `extra` pasa de 44 a 47, que es el cromo MEDIDO por
+        # resta en el navegador (grid 380 − `.ag-body-viewport` 333, o sea
+        # cabecera 45 + 2 de borde) en vez de sumado a ojo — regla #277.
+        altura=alturas.por_filas(len(tv), px_fila=30, extra=47,
+                                 minimo=200, rol=alturas.COMPACTO),
         key=key_grid,
     )
 

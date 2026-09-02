@@ -105,6 +105,22 @@ PROTAGONISTA = 430
 # protagonista. También el default histórico de _LAYOUT_BASE.
 APOYO = 380
 
+# Gráfico de una vista que se lee APILADA: no comparte fila con otro, manda
+# en su tarjeta, pero arriba o abajo tiene un segundo bloque del mismo peso
+# (una tabla, otra figura) y el PAR tiene que poder recorrerse sin sentir que
+# la vista no termina más.
+#
+# Nació el 2026-09-02 para «Vs año pasado», a pedido y en SEGUNDA vuelta: el
+# 2026-08-26 ya se había bajado su tabla de MARCO (553) a APOYO por "es muy
+# largo", y con los dos bloques en APOYO la sección seguía midiendo 1.155px
+# medidos — 1,9 pantallas de 1366x700. Con este rol baja a ~995.
+#
+# Por qué un rol nuevo y no MINI (240): MINI dice "existe para apoyar una
+# lectura, no para leerse solo", y la serie mensual de Vs año pasado ES la
+# lectura principal de su vista. El vocabulario tiene que seguir diciendo la
+# verdad; bajarla a MINI la habría hecho caber mintiendo sobre su papel.
+COMPACTO = 300
+
 # Panel de detalle, sparkline, mini-barras: existe para apoyar una lectura,
 # no para leerse solo.
 MINI = 240
