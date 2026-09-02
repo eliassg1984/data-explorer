@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-276 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+277 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (90)
 
@@ -111,7 +111,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#272** — Un control que flota sobre una tarjeta quiere, casi siempre, ser un ítem más de la fila del…
 - **#273** — Un bloque de alto CERO sigue cobrando su gap: cinco piezas de cromo fijo metían 80px de gris…
 
-**Layout y alturas** (27)
+**Layout y alturas** (28)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -140,6 +140,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#274** — Un grid con presupuesto FIJO de filas miente cuando hay menos datos: el hueco queda ENTRE la…
 - **#275** — "Las dos tarjetas de la fila miden lo mismo" (#145) vale cuando el lado corto PUEDE crecer.…
 - **#276** — Cuando dos tarjetas de una fila no miden igual, la pregunta no es a cuál eximir del piso sino…
+- **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 
 **Plotly y figuras** (49)
 
@@ -193,7 +194,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#269** — El JS que vive dentro de un string de Python necesita el escape de salto de línea con DOS…
 - **#276** — Cuando dos tarjetas de una fila no miden igual, la pregunta no es a cuál eximir del piso sino…
 
-**AgGrid y tablas** (45)
+**AgGrid y tablas** (46)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -240,6 +241,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#248** — En media tarjeta, cada columna nueva hay que pagarla con otra: la unidad se muda adentro de…
 - **#250** — Un valor derivado también se adelanta en el navegador: si sólo lo recalcula el servidor, la…
 - **#274** — Un grid con presupuesto FIJO de filas miente cuando hay menos datos: el hueco queda ENTRE la…
+- **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 
 **Streamlit** (78)
 
@@ -12364,13 +12366,56 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      que no depende de los datos, ahí está el bug; la excepción sólo lo
      esconde y deja dos reglas donde había una.
 
+
+277. **El cromo de un AgGrid se mide RESTANDO (`root` − `.ag-body-viewport`),
+     no sumando los `headerHeight` que uno declaró. En un pivote la cabecera
+     son dos niveles y abajo hay una barra horizontal que aparece o no.**
+
+     2026-09-01, a pedido, otra vez con un bloque del modo diseño — esta vez
+     el propio panel ya traía la traducción escrita: *"NO es CSS: va en el
+     `gridOptions`, en Python — `rowHeight: 23`— y su gemela en
+     `alturas.py`: `por_filas(n, px_fila=23, …)`. Las dos juntas o
+     ninguna."*. Tenía razón en las dos mitades, y en este repo la forma de
+     cumplir "las dos juntas" es **una constante usada dos veces**
+     (`_ALTO_FILA_PIVOT`), no dos literales iguales.
+
+     Lo que el bloque NO podía decir es cuánto vale el `extra` de
+     `por_filas`, y ahí estuvo el error. Sumando lo declarado —
+     `headerHeight` 38 + unos px de borde— daba 81, y con 3 filas de
+     contenido la tabla scrolleaba media fila. Midiendo:
+
+         root 150 − .ag-body-viewport 58 = 92
+
+     Los 34px que faltaban son dos cosas que nadie declara:
+     · **La cabecera de un pivote son DOS niveles** (el grupo de períodos y
+       los campos): 77px reales con `headerHeight: 38`, no 38.
+     · **~13px de barra de scroll HORIZONTAL**, que este grid tiene siempre
+       que las columnas de período no entren en el ancho — y que
+       DESAPARECE cuando `fit_columns_on_grid_load` logra acomodarlas.
+       Medido en los dos estados: cromo 92 con barra, 79 sin ella.
+
+     Ese último punto decide el criterio: **el `extra` se calcula contra el
+     PEOR caso.** Pasarse deja unos px de blanco al pie, que no se ven;
+     quedarse corto deja una barra de scroll vertical PERMANENTE en una
+     tabla que entra entera, que es el defecto que se venía a arreglar.
+
+     De paso, el marco dejó de ser `alturas.PROTAGONISTA` fijo (430px) y
+     pasa a `por_filas(proveedores + 1, …)` — el +1 es la fila de
+     `grandTotalRow`, que vive DENTRO del row model y por lo tanto ocupa
+     viewport. Con 7 proveedores el grid pide 276px (el arrastre del modo
+     diseño había quedado en 272) y con muchos sigue topando en 430, que
+     es el `rol` por defecto de `por_filas`: nadie pierde nada, y con filas
+     de 23 en vez de 30 ese mismo tope ahora muestra 14 filas en lugar de
+     11. Lo que se expande a mano scrollea por dentro — cuántas filas abre
+     el usuario no es algo que Python pueda ni deba saber.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#277**.
+> próxima regla nueva es la **#278**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

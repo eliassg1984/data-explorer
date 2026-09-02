@@ -114,6 +114,43 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
                  "valueFormatter": _fmt_soles, "minWidth": 110},
             ]
 
+            # ── Alto de fila y alto del marco: UN solo número ──────────
+            # 2026-09-01, a pedido, probado en el modo diseño ("alto de fila
+            # 23px, era 30"). Va en una constante y no en los dos sitios
+            # porque son el MISMO número contado dos veces: el `rowHeight`
+            # de abajo dice cuánto ocupa una fila, y el `px_fila` del
+            # `por_filas` que dimensiona el iframe dice cuántas entran. Si
+            # se cambia una sola, el marco deja de coincidir con lo que las
+            # filas ocupan y sobra (o falta) media fila al pie.
+            _ALTO_FILA_PIVOT = 23
+            _ALTO_HEADER_PIVOT = 38
+            # Todo lo que el grid mide y NO son filas. MEDIDO restando en el
+            # navegador (root 150 − `.ag-body-viewport` 58 = 92), que es la
+            # única forma honesta acá: la cabecera del pivote son DOS
+            # niveles —el grupo de períodos y los campos— y da 77px con
+            # `headerHeight: 38`, no 38; y abajo hay ~13px de barra de
+            # scroll HORIZONTAL que este grid tiene siempre (las columnas de
+            # período no entran nunca en el ancho), más 2 de borde y 1 de
+            # `ag-sticky-bottom`. Sumar los declarados daba 81 y la tabla
+            # scrolleaba media fila con 3 filas de contenido.
+            _CROMO_GRID_PIVOT = _ALTO_HEADER_PIVOT * 2 + 16
+            # Filas que el grid muestra SIN expandir: una por proveedor más
+            # la del gran total (`grandTotalRow`). Expandir un grupo abre
+            # filas nuevas y ésas scrollean por dentro — Python no puede
+            # saber cuántas hay, y tampoco tiene por qué: lo que dimensiona
+            # el marco es lo que se ve al llegar.
+            #
+            # Hasta hoy el marco era `alturas.PROTAGONISTA` fijo (430px):
+            # con 7 proveedores mostraba 11 filas para llenar 8, y la
+            # tarjeta —que ya estaba clampeada a `--alto-util`— se comía
+            # media pantalla por nada. `por_filas` mantiene ese 430 como
+            # TECHO (es su `rol` por defecto), así que con muchos
+            # proveedores no cambia nada: sigue scrolleando por dentro.
+            _FILAS_PIVOT = int(_pv_docs["Proveedor"].nunique()) + 1
+            _ALTO_PIVOT = alturas.por_filas(
+                _FILAS_PIVOT, px_fila=_ALTO_FILA_PIVOT,
+                extra=_CROMO_GRID_PIVOT, minimo=0)
+
             _grid_pv = {
                 "columnDefs": _col_defs_pv,
                 "defaultColDef": {
@@ -148,8 +185,8 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
                     }],
                     "position": "right",
                 },
-                "rowHeight": 30,
-                "headerHeight": 38,
+                "rowHeight": _ALTO_FILA_PIVOT,
+                "headerHeight": _ALTO_HEADER_PIVOT,
                 # domLayout NORMAL (no autoHeight): el grid tiene un viewport de
                 # alto fijo con scroll interno. Es lo que permite hacer scroll en
                 # PANTALLA COMPLETA — el _FS_CSS_IFRAME fuerza el grid a 100vh y
@@ -158,8 +195,8 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
                 # sin scroll (mismo criterio que las tablas de Ajuste, que usan
                 # normal + paginación y sí scrollean maximizadas).
             }
-            # Alto del iframe inline (no fullscreen). En fullscreen lo sobrescribe
-            # _FS_CSS_IFRAME a 100vh. 460 ≈ 14 filas visibles con scroll interno.
+            # Alto del iframe inline (no fullscreen). En fullscreen lo
+            # sobrescribe _FS_CSS_IFRAME a 100vh.
             with _pv_box:
                 st.markdown(
                     '<div class="cp-rank-tit">Detalle de documentos por '
@@ -171,7 +208,7 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
                     gridOptions=_grid_pv,
                     allow_unsafe_jscode=True,
                     theme="streamlit",
-                    height=alturas.PROTAGONISTA,
+                    height=_ALTO_PIVOT,
                     enable_enterprise_modules=True,
                     fit_columns_on_grid_load=True,
                     key=f"cp_prov_pivot_docs_{gran}",
