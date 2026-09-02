@@ -544,7 +544,7 @@ CSS = """    /* ================================================================
        2026-08-13: -51 -> -43 y -56 -> -48 (8px menos de jalón cada uno),
        en sync con el top:66->74 del rail de arriba — las dos siguen
        arrancando en la misma línea, ahora 8px más abajo.
-       2026-09-01: -43 -> -120, a pedido ("subamos más las tarjetas"). La
+       2026-09-01: -43 -> -104, a pedido ("subamos más las tarjetas"). La
        promesa de este bloque —tarjeta y rail en la misma línea— hacía rato
        que no se cumplía: medido en el navegador, el rail arranca en y=88
        (`--franja-rep-alto` 48 + `--nav-top-alto` 40, ver el `top` del rail
@@ -556,11 +556,17 @@ CSS = """    /* ================================================================
        `nav_franja_kpis`, `compras_tabs_row` y `fila_ajuste_top`, todos
        cromo fijo que sigue contando como flex item— y cada uno se cobra el
        `gap: 16px` del contenedor: 5 x 16 = 80px de hueco fantasma que el
-       -43 sólo tapaba a medias. 128 + 80 - 120 = 88, la línea del rail.
+       -43 sólo tapaba a medias.
+       El AIRE es un sumando aparte, y va explícito: 128 + 80 - 104 = 104,
+       o sea 16px bajo la franja (`y=88`), el mismo gap que separa a todo
+       lo demás de la página. La primera versión de este cambio fue -120
+       (tarjeta a y=88, EXACTAMENTE la línea del rail) y volvió con
+       "está pegado, debe tener un espacio": el rail puede tocar la franja
+       porque es cromo anclado a ella, una tarjeta de contenido no.
        Si algún día esos bloques dejan de ocupar gap (o aparece un sexto),
        este número cambia: son las dos caras de la misma cuenta. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap {
-        margin-top: -120px !important;
+        margin-top: -104px !important;
     }
     /* 2026-08-17, a pedido: ensanchar la tarjeta para que las columnas de
        proveedor.py (ranking-tabla + evolución; nació pensado para 3 —

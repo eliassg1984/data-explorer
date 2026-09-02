@@ -12214,11 +12214,15 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      `height === 0 && display !== 'none'` — un item invisible que igual
      empuja. Si la lista sale con N elementos, el hueco es `N * gap`.
 
-     El arreglo fue el número, no el mecanismo: `-43px` → `-120px`, o sea
-     `128 + 80 - 120 = 88`, la línea del rail
-     (`--franja-rep-alto` + `--nav-top-alto`). Va comentado como cuenta y no
-     como px suelto justamente porque el 80 depende de cuántos bloques
-     fantasma haya: si mañana entra un sexto, este número cambia con él.
+     El arreglo fue el número, no el mecanismo: `-43px` → `-104px`, o sea
+     `128 + 80 - 104 = 104` — la línea del rail
+     (`--franja-rep-alto` + `--nav-top-alto` = 88) **más 16px de aire**. La
+     primera versión fue `-120`, que dejaba la tarjeta clavada en 88, y
+     volvió con *"está pegado, debe tener un espacio"*: el rail puede tocar
+     la franja porque es cromo anclado a ella; una tarjeta de contenido, no.
+     El aire va como sumando aparte y no fundido en el total, porque el 80
+     depende de cuántos bloques fantasma haya y el 16 no: si mañana entra un
+     sexto bloque, se mueve uno solo de los dos.
      Neutralizar los gaps de raíz (`position: absolute` sobre los cinco
      wrappers) mueve el contenido de TODOS los reportes 80px, así que queda
      anotado acá y no hecho a la ligera.
