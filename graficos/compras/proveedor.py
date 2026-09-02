@@ -355,23 +355,41 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # doble de una fila). Vive en una constante porque el `extra` de abajo
     # la necesita — son el mismo número contado dos veces.
     _ALTO_HEADER_RANK = 32
-    # `extra` es TODO lo que el grid mide y no son las 8 filas de datos:
+    # `extra` es TODO lo que el grid mide y no son las filas de datos:
     #   · el alto fijo del propio grid: la cabecera + su borde inferior de
     #     1px + ~5.5px de chrome del tema. Medido en el DOM, no a ojo.
     #   · +_ALTO_FILA_RANK: `pinnedBottomRowData` (la fila TOTAL, más abajo)
     #     reserva su espacio DENTRO del `height=` del grid, así que sin este
-    #     sumando la fila total le comería una fila a las 8 de datos.
+    #     sumando la fila total le comería una fila a las de datos.
     #   · +alturas.FRANJA_ATAJOS: unas líneas más abajo, `_ALTO_RANK` le
     #     resta esa misma cantidad al grid para hacerle lugar a la fila de
     #     atajos que se dibuja ARRIBA — y esa resta ya corría antes de que
     #     existiera la fila total. Sin pre-compensarla acá, la resta se
-    #     comería las 8 filas de datos por partida doble.
+    #     comería las filas de datos por partida doble.
     # Verificado midiendo el grid entero: root 297 = cabecera 39 +
     # body-viewport 225 + fila TOTAL 28 + 5 de chrome, con los números
     # viejos. Con los nuevos: 33 + 192 + 24 + 5 = 254.
     _CROMO_GRID_RANK = _ALTO_HEADER_RANK + 7
+    # Cuántas filas RESERVA el grid. 8 es el TECHO, no el alto: hasta el
+    # 2026-09-01 era un 8 fijo y el grid medía lo mismo con 2 proveedores
+    # que con 20 — reportado con captura ("la tabla es muy larga hacia
+    # abajo, hay espacio vacío"). Medido en el navegador con 2 proveedores:
+    # `.ag-body-viewport` 196px contra 48px de filas, o sea 148px de hueco
+    # BLANCO entre la última fila y la fila TOTAL, que hace leer la tabla
+    # como rota (la fila de cierre despegada de sus datos).
+    #
+    # El techo se queda en 8 y no sube a las ~10 que hoy entrarían en la
+    # tarjeta: el alto de la fila lo manda la Evolución de al lado (el
+    # `:has()` de _80_cards.py), así que subirlo sólo cambia dónde empieza
+    # el scroll interno, y 8 es el número con el que se dimensionó el resto
+    # de la vista.
+    #
+    # El piso de 1 es por el caso vacío: `max(1, ...)` deja la cabecera y la
+    # fila TOTAL con una fila de aire en vez de un grid de 0 filas, que AG
+    # Grid dibuja recortando su propio overlay de "sin datos".
+    _FILAS_RANK = min(8, max(1, len(_rk_nombres)))
     _ALTO_FRAME_RANK = alturas.por_filas(
-        8, px_fila=_ALTO_FILA_RANK,
+        _FILAS_RANK, px_fila=_ALTO_FILA_RANK,
         extra=_CROMO_GRID_RANK + _ALTO_FILA_RANK + alturas.FRANJA_ATAJOS,
         minimo=0)
     # La evolución comparte su columna con el selector de período Y con el

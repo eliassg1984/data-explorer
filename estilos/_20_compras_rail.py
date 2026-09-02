@@ -543,9 +543,24 @@ CSS = """    /* ================================================================
        números (top del rail, estos dos margin) van juntos.
        2026-08-13: -51 -> -43 y -56 -> -48 (8px menos de jalón cada uno),
        en sync con el top:66->74 del rail de arriba — las dos siguen
-       arrancando en la misma línea, ahora 8px más abajo. */
+       arrancando en la misma línea, ahora 8px más abajo.
+       2026-09-01: -43 -> -120, a pedido ("subamos más las tarjetas"). La
+       promesa de este bloque —tarjeta y rail en la misma línea— hacía rato
+       que no se cumplía: medido en el navegador, el rail arranca en y=88
+       (`--franja-rep-alto` 48 + `--nav-top-alto` 40, ver el `top` del rail
+       más arriba) y la primera tarjeta arrancaba en y=165. 77px de gris
+       muerto entre la franja de vistas y la tarjeta.
+       De dónde salen esos 77: el `.block-container` arranca en
+       `--cab-offset-contenido` (128px) y ENTRE ese borde y la tarjeta hay
+       CINCO bloques de alto CERO —`rail_rotulo_rep`, `nav_franja_rep`,
+       `nav_franja_kpis`, `compras_tabs_row` y `fila_ajuste_top`, todos
+       cromo fijo que sigue contando como flex item— y cada uno se cobra el
+       `gap: 16px` del contenedor: 5 x 16 = 80px de hueco fantasma que el
+       -43 sólo tapaba a medias. 128 + 80 - 120 = 88, la línea del rail.
+       Si algún día esos bloques dejan de ocupar gap (o aparece un sexto),
+       este número cambia: son las dos caras de la misma cuenta. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap {
-        margin-top: -43px !important;
+        margin-top: -120px !important;
     }
     /* 2026-08-17, a pedido: ensanchar la tarjeta para que las columnas de
        proveedor.py (ranking-tabla + evolución; nació pensado para 3 —

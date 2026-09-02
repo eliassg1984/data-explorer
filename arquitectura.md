@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-272 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+274 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (89)
+**CSS y estilos** (90)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -109,8 +109,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#270** — El z-index de un hijo no vale nada fuera del contexto de apilamiento de su padre — y levantar…
 - **#271** — Un panel de popover que "se ve muy grande" casi nunca es su contenido: son los defaults de…
 - **#272** — Un control que flota sobre una tarjeta quiere, casi siempre, ser un ítem más de la fila del…
+- **#273** — Un bloque de alto CERO sigue cobrando su gap: cinco piezas de cromo fijo metían 80px de gris…
 
-**Layout y alturas** (24)
+**Layout y alturas** (25)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -136,6 +137,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#244** — Dos tarjetas que comparan se alinean por TRES cosas, y las tres hay que medirlas: el alto de…
 - **#245** — Una fila que COMPARA se parte por la mitad, no con COLUMNAS_DRILL
 - **#248** — En media tarjeta, cada columna nueva hay que pagarla con otra: la unidad se muda adentro de…
+- **#274** — Un grid con presupuesto FIJO de filas miente cuando hay menos datos: el hueco queda ENTRE la…
 
 **Plotly y figuras** (48)
 
@@ -188,7 +190,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#263** — porKeyReal() no podía resolver un mock pineado SOBRE SÍ MISMO: el filtro…
 - **#269** — El JS que vive dentro de un string de Python necesita el escape de salto de línea con DOS…
 
-**AgGrid y tablas** (44)
+**AgGrid y tablas** (45)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -234,6 +236,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#237** — Hay DOS familias de AgGrid en el repo y no se estilan igual: la de theme="material" se toca…
 - **#248** — En media tarjeta, cada columna nueva hay que pagarla con otra: la unidad se muda adentro de…
 - **#250** — Un valor derivado también se adelanta en el navegador: si sólo lo recalcula el servidor, la…
+- **#274** — Un grid con presupuesto FIJO de filas miente cuando hay menos datos: el hueco queda ENTRE la…
 
 **Streamlit** (78)
 
@@ -425,7 +428,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#264** — Un mock arrastrado con "Mover" podía terminar pintado DEBAJO de un hermano posterior — no…
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 
-**Decisiones de diseño y UX** (47)
+**Decisiones de diseño y UX** (48)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -474,6 +477,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#265** — El rail tiene RÓTULO, y son DOS que se cruzan — y para verificar ese cruce la captura manda:…
 - **#266** — La franja de REPORTES no duplica al rail: es lo que queda cuando el rail se va. Y su alto lo…
 - **#267** — opacity: 0 esconde a los ojos, no al TECLADO: el rail apagado seguia teniendo 7 botones…
+- **#273** — Un bloque de alto CERO sigue cobrando su gap: cinco piezas de cromo fijo metían 80px de gris…
 
 **Mantenimiento y trampas del lenguaje** (8)
 
@@ -12182,13 +12186,84 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      rango 87, los tres en un renglón de 22px, y el marco arranca en el
      mismo `y` que la tarjeta — sin la banda gris de antes.
 
+
+273. **Un bloque de alto CERO sigue cobrando su `gap`: cinco piezas de cromo
+     fijo metían 80px de gris muerto entre la franja de vistas y la primera
+     tarjeta, y ninguna se veía en la pantalla ni en el árbol de alturas.**
+
+     2026-09-01, a pedido ("subamos más las tarjetas", con captura y una
+     flecha al hueco). El `.block-container` arranca en
+     `--cab-offset-contenido` (128px) y la tarjeta arrancaba en **y=165**,
+     mientras el rail de la izquierda arrancaba en **y=88**. 77px de
+     desalineación contra una regla de `estilos/_20_compras_rail.py` que
+     desde el 2026-08-09 promete lo contrario: *"tarjeta y rail arrancan en
+     la misma línea"*.
+
+     El culpable no estaba en ninguna altura. Entre el borde del
+     `.block-container` y la tarjeta hay **cinco `stLayoutWrapper` de altura
+     0** — `rail_rotulo_rep`, `nav_franja_rep`, `nav_franja_kpis`,
+     `compras_tabs_row` y `fila_ajuste_top` —, todos cromo `fixed`/`sticky`
+     que ya no ocupa sitio pero **sigue siendo flex item** del contenedor
+     vertical de Streamlit, que tiene `gap: 16px`. Cinco items de alto 0 =
+     cinco gaps = **80px**. El `margin-top: -43px` de la primera tarjeta los
+     tapaba a medias, y cada vez que una franja nueva entraba a la página el
+     desfase crecía sin que se moviera ninguna variable.
+
+     Cómo se encuentra: no con `auditar()` ni con Rayos X, que buscan cajas
+     GRANDES. Se encuentra listando los hijos del contenedor y filtrando por
+     `height === 0 && display !== 'none'` — un item invisible que igual
+     empuja. Si la lista sale con N elementos, el hueco es `N * gap`.
+
+     El arreglo fue el número, no el mecanismo: `-43px` → `-120px`, o sea
+     `128 + 80 - 120 = 88`, la línea del rail
+     (`--franja-rep-alto` + `--nav-top-alto`). Va comentado como cuenta y no
+     como px suelto justamente porque el 80 depende de cuántos bloques
+     fantasma haya: si mañana entra un sexto, este número cambia con él.
+     Neutralizar los gaps de raíz (`position: absolute` sobre los cinco
+     wrappers) mueve el contenido de TODOS los reportes 80px, así que queda
+     anotado acá y no hecho a la ligera.
+
+     Corolario para la próxima franja fija: **sacar algo del flujo con
+     `position: fixed` no lo saca del `gap`.** El costo es invisible en la
+     pantalla y visible sólo en la suma.
+
+274. **Un grid con presupuesto FIJO de filas miente cuando hay menos datos:
+     el hueco queda ENTRE la última fila y la fila TOTAL, y eso no se lee
+     como "sobra espacio" sino como una tabla rota.**
+
+     2026-09-01, mismo pedido, segunda mitad ("que la tabla del ranking no
+     sea tan larga hacia abajo, hay espacio vacío"). El AgGrid del Ranking
+     de Proveedores pedía `height=` para **8 filas siempre**, tuviera 2
+     proveedores o 25. Medido en el navegador con 2: `.ag-body-viewport`
+     196px contra 48px de filas — **148px de blanco** entre "Vibej Colibri
+     SAC" y la fila TOTAL, que va `pinnedBottomRowData` y por eso queda
+     pegada al borde de abajo, lejos de los datos que suma.
+
+     El 8 fijo tenía una razón escrita: *"para que el bloque de 2 columnas
+     no baile con la cantidad de proveedores"*. Es cierta para el ALTO DE LA
+     FILA y falsa para el del grid: el alto de la fila lo fija la tarjeta de
+     Evolución de al lado vía el `:has()` de `estilos/_80_cards.py` (regla
+     #145), así que **el grid podía encogerse sin que nada bailara**. La
+     tarjeta sigue midiendo lo mismo; lo que cambia es que el blanco queda
+     DEBAJO de la tabla (fondo de tarjeta) en vez de DENTRO (tabla rota).
+
+     `_FILAS_RANK = min(8, max(1, len(_rk_nombres)))`: el 8 pasa a ser techo
+     y no alto. El piso de 1 es por el caso vacío — un grid de 0 filas
+     recorta su propio overlay de "sin datos".
+
+     Distinguir los dos casos antes de tocar un `height=`: si el hueco
+     queda **entre el contenido y un pie fijado** (`pinnedBottomRowData`,
+     un footer sticky), es un bug de lectura y se arregla con el alto real
+     del contenido. Si queda **después de todo**, es fondo de tarjeta y
+     puede ser correcto.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#273**.
+> próxima regla nueva es la **#275**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
