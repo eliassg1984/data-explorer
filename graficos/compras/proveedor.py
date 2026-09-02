@@ -312,41 +312,27 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     _rk_docs = [int(_docs_prov.get(p, 0)) if _docs_prov is not None else 0
                 for p in _rk_nombres]
 
-    # Frame visible de la tabla Y de evolución: 8 filas fijas, para que el
-    # bloque de 2 columnas no baile con la cantidad de proveedores — lo que
-    # no entra scrollea DENTRO (`st.dataframe` ya trae su propio scroll
-    # interno con `height=`, a diferencia del `st.plotly_chart` de antes,
-    # que necesitó el rodeo de la regla #125 de arquitectura.md).
-    # px_fila=35/extra=45 son los mismos que ya usa la tabla de Panel A
-    # (más abajo) para su `st.dataframe` — el alto de una FILA de tabla, no
-    # el de una barra de gráfico (26px, lo que usaba el ranking viejo).
-    # SIN TOCAR a propósito: este mismo número fija el frame del Panel A de
-    # productos (más abajo, `height=_ALTO_FRAME`) y el clamp de la lista del
-    # Panel B (la var CSS de la línea siguiente) — no pidieron filas más
-    # finas, y si se achica acá se achican los dos.
-    # 2026-09-01: `_ALTO_EVO` YA NO cuelga de acá. La figura de Evolución se
-    # mide contra la tarjeta del Ranking, que es la que ahora manda el alto
-    # de esa fila; ver `_ALTO_EVO` más abajo.
-    _ALTO_FRAME = alturas.por_filas(8, px_fila=35, extra=45, minimo=0)
-    # Publicado como variable CSS para que Panel B (más abajo, la lista de
-    # tarjetas ".pb-cards") clampe su alto contra ESTE mismo número — a
-    # pedido (2026-08-25): sin tope, la lista crece con la cantidad de
-    # proveedores del producto y puede pasar los 600px mientras Panel A, al
-    # lado, mide un tercio de eso (`_ALTO_FRAME` fijo). El `:has()` de
-    # `_80_cards.py` ("dos tarjetas de la fila miden lo mismo") entonces
-    # estira Panel A para IGUALAR ese exceso — un gráfico chico con medio
-    # panel de aire abajo. Mismo criterio que el resto del proyecto: dos
-    # caras del mismo número (Python calcula, CSS resta/clampea), no un
-    # segundo alto adivinado a mano en la hoja de estilos.
-    publicar_var_px("cp-prov-alto-paneles", _ALTO_FRAME)
+    # ── Acá vivió `_ALTO_FRAME` ──────────────────────────────────────────
+    # Un frame de "8 filas de 35px" (325px) que servía a la vez a la figura
+    # de Evolución, a la tabla de Panel A y al clamp de la lista de Panel B.
+    # Se fue el 2026-09-02, después de que sus tres consumidores se
+    # independizaran, cada uno por un pedido distinto:
+    #   · Evolución  → mide contra la tarjeta del Ranking (`_ALTO_EVO`).
+    #   · Panel A    → mide sus propias filas (`_ALTO_PRODS`, más abajo).
+    #   · Panel B    → se clampea contra Panel A, que ahora es un número que
+    #                  depende de los datos; por eso `publicar_var_px` se
+    #                  mudó al lado del cálculo, dentro del panel.
+    # No era un frame compartido por diseño: era el único que había.
     # Filas del RANKING, más delgadas a pedido — 28px el 2026-08-24, 24px el
     # 2026-08-28 ("las filas un poco más delgadas", junto con el blanco y el
-    # cuerpo más chico de `CSS_RANKING_GRID`). Constante propia y no un
-    # ajuste de `_ALTO_FRAME`: si la Evolución se achicara con él, perdería
-    # piso sin que nadie se lo pidiera (la comparten `_ALTO_EVO` y el Panel A
-    # de arriba). El `:has()` de _80_cards.py sigue igualando el alto de las
-    # dos tarjetas de la fila aunque el ranking pida menos — y hoy pide
-    # menos: las dos miden lo que manda Evolución.
+    # cuerpo más chico de `CSS_RANKING_GRID`).
+    #
+    # Desde el 2026-09-02 este número —y el `_ALTO_HEADER_RANK` de abajo— NO
+    # son sólo del Ranking: la tabla de productos de Panel A los consume
+    # también, a pedido ("del mismo tamaño y delgadez que el de ranking de
+    # proveedores"). Se dejan con el nombre `_RANK` a propósito, porque esa
+    # ES la relación: Panel A no eligió 24, eligió SEGUIR al Ranking. Si
+    # mañana el Ranking cambia, Panel A cambia con él — que es lo pedido.
     #
     # OJO — hasta el 2026-08-28 esto era "el mismo número que
     # graficos/compras/producto.py::_ALTO_FILA" (28). Ya NO: el pedido fue
@@ -647,8 +633,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             # 2026-08-17, a pedido: el ranking (barras) y la tabla resumen
             # —antes dos columnas separadas mostrando los mismos números—
             # se UNEN acá en una sola tabla con `ProgressColumn` haciendo de
-            # barra. Muestra 8 filas fijas (`_ALTO_FRAME`) y scrollea el
-            # resto por dentro (scroll nativo de `st.dataframe`).
+            # barra. Muestra hasta 8 filas (`_ALTO_FRAME_RANK`, que desde
+            # el 2026-09-01 sigue a los datos) y scrollea el resto por
+            # dentro.
             _c_tabla, _c_evo = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
             with _c_tabla:
                 # ── BLOQUE 1: el ranking ─────────────────────────
@@ -1579,6 +1566,39 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             # cerrado a abierto (ver el comentario de
                             # `_pan_inst`, mas abajo — sin eso la tabla no se
                             # re-mide el ancho del contenedor al reabrir).
+                            # ── Mismo alto y misma delgadez que el Ranking
+                            # 2026-09-02, a pedido ("el cuadro de abajo, el
+                            # que muestra los productos, también del mismo
+                            # tamaño y delgadez que el de ranking de
+                            # proveedores"). Reusa SUS constantes en vez de
+                            # copiar los números: si mañana el Ranking
+                            # cambia de alto de fila, esta tabla lo sigue,
+                            # que es literalmente lo que se pidió.
+                            #
+                            # `extra` NO es el mismo que el del Ranking y va
+                            # MEDIDO por resta (regla #277): acá el grid da
+                            # `root 325 − .ag-body-viewport 269 = 56` con
+                            # cabecera de 39, o sea 17px que no son la
+                            # cabecera — 15 de barra de scroll HORIZONTAL
+                            # (esta tabla tiene 5 columnas y en media fila
+                            # de ancho no entran) + 1 de `ag-sticky-bottom`
+                            # + el borde. El Ranking no los paga porque sus
+                            # columnas sí entran. Tampoco lleva el sumando
+                            # de la fila TOTAL: esta tabla no tiene.
+                            _CROMO_GRID_PRODS = _ALTO_HEADER_RANK + 18
+                            _ALTO_PRODS = alturas.por_filas(
+                                min(8, max(1, len(prod_cats))),
+                                px_fila=_ALTO_FILA_RANK,
+                                extra=_CROMO_GRID_PRODS, minimo=0)
+                            # Panel B se clampea contra ESTE número, no
+                            # contra uno fijo: es el que manda el alto de la
+                            # fila. Se publica acá y no arriba porque recién
+                            # acá se sabe cuántos productos hay. El
+                            # `st.markdown` de `publicar_var_px` sale
+                            # `display: none`, así que no se cobra el gap
+                            # del contenedor (regla #273).
+                            publicar_var_px("cp-prov-alto-paneles",
+                                            _ALTO_PRODS)
                             _val_max = float(_val.max()) if len(_val) else 1.0
                             # Columna oculta: el % de LLENADO de la barra
                             # (contra el MAYOR producto de esta lista), que
@@ -1631,14 +1651,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                                      "checkboxes": False,
                                                      "enableClickSelection": False},
                                     "onRowClicked": _js_toggle,
-                                    "rowHeight": 35,
-                                    "headerHeight": 38,
+                                    "rowHeight": _ALTO_FILA_RANK,
+                                    "headerHeight": _ALTO_HEADER_RANK,
                                     "suppressCellFocus": True,
                                     "suppressMovableColumns": True,
                                 },
                                 allow_unsafe_jscode=True,
                                 theme="streamlit",
-                                height=_ALTO_FRAME,
+                                height=_ALTO_PRODS,
                                 update_on=["selectionChanged"],
                                 key=f"cp_prov_prods_tab_{_pan_inst}",
                             )

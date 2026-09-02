@@ -1491,7 +1491,9 @@ CSS = """        <style>
             margin: 4px 0 8px;
             /* 2026-08-25, a pedido: capado al mismo alto que la tabla de
                Panel A (`--cp-prov-alto-paneles`, publicada por Python
-               desde `_ALTO_FRAME` — proveedor.py). Sin este techo, un
+               desde `_ALTO_PRODS` — proveedor.py; era `_ALTO_FRAME`, un
+               fijo de 8 filas, hasta que el 2026-09-02 esa tabla pasó a
+               medir sus propias filas). Sin este techo, un
                producto con muchos proveedores estira la lista mucho más
                que el panel de al lado, y el `:has()` de _80_cards.py
                ("dos tarjetas de la fila miden lo mismo") terminaba

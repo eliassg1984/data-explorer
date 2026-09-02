@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-277 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+278 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (90)
 
@@ -111,7 +111,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#272** — Un control que flota sobre una tarjeta quiere, casi siempre, ser un ítem más de la fila del…
 - **#273** — Un bloque de alto CERO sigue cobrando su gap: cinco piezas de cromo fijo metían 80px de gris…
 
-**Layout y alturas** (28)
+**Layout y alturas** (29)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -141,6 +141,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#275** — "Las dos tarjetas de la fila miden lo mismo" (#145) vale cuando el lado corto PUEDE crecer.…
 - **#276** — Cuando dos tarjetas de una fila no miden igual, la pregunta no es a cuál eximir del piso sino…
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
+- **#278** — "Que mida lo mismo que aquella" se escribe reusando SUS constantes, no copiando sus números.…
 
 **Plotly y figuras** (49)
 
@@ -433,7 +434,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#264** — Un mock arrastrado con "Mover" podía terminar pintado DEBAJO de un hermano posterior — no…
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 
-**Decisiones de diseño y UX** (48)
+**Decisiones de diseño y UX** (49)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -483,6 +484,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#266** — La franja de REPORTES no duplica al rail: es lo que queda cuando el rail se va. Y su alto lo…
 - **#267** — opacity: 0 esconde a los ojos, no al TECLADO: el rail apagado seguia teniendo 7 botones…
 - **#273** — Un bloque de alto CERO sigue cobrando su gap: cinco piezas de cromo fijo metían 80px de gris…
+- **#278** — "Que mida lo mismo que aquella" se escribe reusando SUS constantes, no copiando sus números.…
 
 **Mantenimiento y trampas del lenguaje** (8)
 
@@ -12409,13 +12411,64 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      11. Lo que se expande a mano scrollea por dentro — cuántas filas abre
      el usuario no es algo que Python pueda ni deba saber.
 
+
+278. **"Que mida lo mismo que aquella" se escribe reusando SUS constantes,
+     no copiando sus números. Y un frame que sirve a tres tarjetas distintas
+     casi nunca es un frame compartido: es el único que había.**
+
+     2026-09-02, a pedido ("el cuadro de abajo, el que muestra los productos,
+     también del mismo tamaño y delgadez que el de ranking de proveedores;
+     que la tarjeta tenga el mismo tamaño, y también la tarjeta contigua").
+     Panel A (productos del proveedor) y Panel B (proveedores del producto)
+     cerraron el mismo tratamiento que ya tenían el Ranking y la Evolución.
+
+     **La parte que importa no son los 24px.** La tabla de Panel A consume
+     `_ALTO_FILA_RANK` y `_ALTO_HEADER_RANK` —las constantes del Ranking—
+     en vez de escribir 24 y 32 de nuevo. La diferencia se ve al siguiente
+     pedido: con los números copiados, "las filas un poco más delgadas"
+     sobre el Ranking deja a Panel A atrás y hay que acordarse de los dos
+     sitios; con la constante compartida, Panel A **sigue** al Ranking, que
+     es literalmente lo que se pidió. Las constantes conservan el sufijo
+     `_RANK` a propósito: nombran la RELACIÓN (Panel A no eligió 24, eligió
+     seguir al Ranking), no un valor genérico.
+
+     **Lo que NO se comparte es el `extra`.** Medido por resta (regla #277)
+     en los dos grids de la misma página, con la misma cabecera: el Ranking
+     paga 35px de cromo y Panel A paga 56. Los 21 de diferencia son una
+     barra de scroll HORIZONTAL que Panel A tiene siempre —cinco columnas
+     en media fila de ancho no entran— y el Ranking no. Dos tablas
+     gemelas, mismo tema, misma página, y el cromo NO es el mismo: por eso
+     se mide una por una y no se copia la fórmula de la vecina.
+
+     **El frame que se retiró.** `_ALTO_FRAME` (8 filas de 35px = 325px)
+     alimentaba a la vez la figura de Evolución, la tabla de Panel A y el
+     clamp de la lista de Panel B. Parecía una decisión de diseño —"estas
+     tres cosas miden lo mismo"— y era un accidente: cada una terminó
+     dependiendo de otra cosa en cuanto se le preguntó de qué debía
+     depender (Evolución → la tarjeta del Ranking, #276; Panel A → sus
+     propias filas; Panel B → Panel A). Al independizarse las tres, el
+     nombre quedó sin dueño y se borró.
+
+     Corolario del último: **`publicar_var_px` puede vivir DENTRO del
+     bloque que calcula el número.** El clamp de Panel B se publicaba
+     arriba de todo porque el valor era una constante; ahora depende de
+     cuántos productos tiene el proveedor en foco, que recién se sabe
+     dentro de Panel A. El `st.markdown` de esa función sale
+     `display: none`, así que no se cobra el `gap` del contenedor (regla
+     #273) y puede publicarse donde se calcula.
+
+     Verificado en vivo, viewport 1366x700: 3 productos → grid 122px con el
+     viewport clavado en las 3 filas (72 = 72, sin scroll) y las dos
+     tarjetas del par en 200px; 2 productos → 98 y 172. Antes: grid fijo de
+     325 con 269px de viewport para 105 de filas.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#278**.
+> próxima regla nueva es la **#279**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
