@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-284 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+285 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (92)
+**CSS y estilos** (93)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -112,6 +112,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#273** — Un bloque de alto CERO sigue cobrando su gap: cinco piezas de cromo fijo metían 80px de gris…
 - **#279** — Un control que se pide "igual al de aquella vista" se EXTRAE, no se copia — y lo que hay que…
 - **#284** — Un jalón negativo que existía para "la primera tarjeta de la página" se vuelve un SOLAPE en…
+- **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 
 **Layout y alturas** (31)
 
@@ -199,7 +200,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#269** — El JS que vive dentro de un string de Python necesita el escape de salto de línea con DOS…
 - **#276** — Cuando dos tarjetas de una fila no miden igual, la pregunta no es a cuál eximir del piso sino…
 
-**AgGrid y tablas** (46)
+**AgGrid y tablas** (47)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -247,6 +248,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#250** — Un valor derivado también se adelanta en el navegador: si sólo lo recalcula el servidor, la…
 - **#274** — Un grid con presupuesto FIJO de filas miente cuando hay menos datos: el hueco queda ENTRE la…
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
+- **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 
 **Streamlit** (81)
 
@@ -12721,13 +12723,58 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      sólo de la que quedó primera. El que ya no es primero ahora pisa a su
      vecino de arriba.
 
+
+285. **`inject_grid_health_check` inyecta su CSS en TODOS los iframes de
+     AgGrid de la página, no en el suyo. Con una página apilada eso son
+     siete grids, y el `display: flex !important` del pie de paginación le
+     ganaba al `.ag-hidden` de los seis que no paginan.**
+
+     2026-09-02. Apareció persiguiendo otra cosa —la tabla de Vs año pasado
+     mostraba 6,6 filas donde el presupuesto decía 8,4— y resultó ser la
+     franja rota **"to of · Page of"** que se veía al pie del Ranking de
+     Proveedores desde la primera captura de la jornada, sin que nadie
+     supiera de dónde salía.
+
+     La cadena entera:
+
+     1. `check()` en `inyecciones/grid.py` recorre
+        `doc.querySelectorAll('iframe[src*="st_aggrid"]')` — TODOS — y le
+        mete `PAG_CSS` a cada uno con `fdoc.head.appendChild`. Mientras hubo
+        un grid por vista eso fue inofensivo; desde que Compras se lee
+        APILADA hay siete a la vez y uno solo pagina.
+     2. `_PAG_CSS_BASE` abría con `.ag-paging-panel { display: flex
+        !important; min-height: 44px !important; … }`. AgGrid marca el panel
+        con `.ag-hidden` cuando no hay paginación, pero ese `!important`
+        llega DESPUÉS en el head y gana por orden de fuente: misma
+        especificidad, un `<style>` appendeado al final.
+     3. Resultado: 44px de franja vacía al pie de seis tablas, con el texto
+        de la paginación sin números — y 44px menos de viewport. Medido en
+        la tabla de detalle: 203px de filas antes de que la sección Tabla se
+        construyera, 159 después.
+
+     **Por qué la regla de auto-ocultar que ya existía no lo cubría.** Mira
+     si los botones ‹ y › están los dos `ag-disabled`, o sea el caso
+     "pagina, pero hay UNA sola página". En un grid **sin** paginación no
+     hay botones que mirar, así que el `:has()` no matchea nunca.
+
+     El arreglo es un `:not(.ag-hidden)` en el selector: no forzar la
+     visibilidad de algo que el propio AgGrid marcó como oculto. Verificado
+     después en los ocho grids de la página: los siete que no paginan
+     quedan en `display: none` y alto 0 —aunque el CSS les siga llegando— y
+     el que sí pagina conserva su barra de 44px.
+
+     Corolario general: **una inyección que barre "todos los iframes de X"
+     nació correcta cuando había uno solo.** Al apilar una vista conviene
+     revisar qué inyecciones son de la página y cuáles creían ser de su
+     componente.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#285**.
+> próxima regla nueva es la **#286**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

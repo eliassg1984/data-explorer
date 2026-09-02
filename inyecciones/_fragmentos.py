@@ -48,8 +48,24 @@ _PAG_CSS_BASE = f"""
 
 /* Barra INTEGRADA al pie de la tabla: mismo marco que el grid (sin
    tarjeta aparte), solo un divisor arriba y las esquinas inferiores
-   del propio card. */
-.ag-paging-panel {{
+   del propio card.
+
+   `:not(.ag-hidden)` NO es decorativo (2026-09-02). Este CSS se inyecta
+   con `fdoc.head.appendChild` en TODOS los iframes de AgGrid de la
+   pagina —el `check()` de inyecciones/grid.py recorre
+   `iframe[src*="st_aggrid"]` entero, no el suyo—, y desde que Compras se
+   lee APILADA eso son siete grids, de los cuales uno solo pagina. En los
+   otros seis AgGrid marca el panel con `.ag-hidden`, pero ese
+   `display: flex !important` llegaba DESPUES en el head y le ganaba:
+   aparecia una franja vacia de 44px con el texto roto "to of / Page of"
+   al pie de tablas que no paginan, robandoles ademas 44px de viewport.
+   Medido en la tabla de detalle de Vs año pasado: 203px de filas
+   visibles antes de que la seccion Tabla se construyera, 159 despues.
+
+   La regla de AUTO-OCULTAR de mas abajo no lo cubria: mira si los
+   botones ‹ y › estan deshabilitados, o sea el caso "pagina con UNA
+   sola pagina". En un grid SIN paginacion no hay botones que mirar. */
+.ag-paging-panel:not(.ag-hidden) {{
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
