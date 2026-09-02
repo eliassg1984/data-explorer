@@ -120,6 +120,31 @@ CSS = """    /* ================================================================
         flex: 0 0 auto !important;
         width: 190px !important;
     }
+    /* El ícono de ayuda mide su contenido, no lo que sobre. Sin esta regla
+       su `stLayoutWrapper` nace con `width: 100%` como los otros dos y se
+       queda con TODO el hueco que dejaba el título: medido, 394px de
+       wrapper para un botón de 180 — y el ámbito del título truncaba a
+       "Tod…". */
+    .st-key-vap_fila_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_ayuda) {
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+    .st-key-vap_hdr_ayuda [data-testid="stPopoverButton"] {
+        min-height: 26px !important;
+        height: 26px !important;
+        min-width: 0 !important;
+        padding: 0 6px !important;
+    }
+    /* El CHEVRON de Streamlit, mismo trato que en `cp_rank_escala`: se
+       esconde el WRAPPER y no el glifo. Acá se puede apuntar al
+       `stIconMaterial` sin miedo a llevarse el ícono del label, porque ese
+       entra por el shortcode del LABEL y sale como `stMarkdownContainer`
+       — son dos nodos distintos (medido: label 14x22, chevron 16x16). */
+    .st-key-vap_hdr_ayuda button > div > div:has(
+        [data-testid="stIconMaterial"]) {
+        display: none !important;
+    }
     .st-key-vap_hdr_agrupar,
     .st-key-vap_hdr_buscar { width: 100% !important; }
     /* Los dos controles, a la altura de una píldora de fila, como los de la

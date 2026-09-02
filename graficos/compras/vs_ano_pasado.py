@@ -78,6 +78,9 @@ from tablas.compras_vs_ano_pasado import (
 # (izq.) y ventana (der.) en UN renglón. Mismo criterio que
 # `alturas.FRANJA_CTRL_EVO` — los píxeles de un control nuevo salen de la
 # figura, o la tarjeta crece y su eje X se va debajo del borde.
+PARR = "\n\n"
+"""Salto de párrafo para el markdown del popover de ayuda."""
+
 _FRANJA_VAP = alturas.FRANJA_CTRL_EVO
 
 _CSS = f"""
@@ -643,6 +646,32 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                 q = st.text_input("Buscar", key="compras_vap_q",
                                   placeholder="Buscar ítem…",
                                   label_visibility="collapsed").strip().lower()
+            # ── Cómo se lee la vista: un ícono, no dos captions ──────────
+            # 2026-09-02, a pedido ("aprovechar el espacio"). Acá había DOS
+            # `st.caption` EN FLUJO —uno bajo los gráficos y otro bajo la
+            # tabla— que sumaban ~90px de la sección para explicar algo que
+            # se lee UNA vez y después estorba. Pasan a un popover de sólo
+            # ícono, el mismo patrón que la ayuda del Ranking de Proveedores
+            # (label = shortcode de material, sin texto).
+            #
+            # La línea del MES PARCIAL va por un hueco: depende de
+            # `parcial`, que se calcula ~40 líneas más abajo. Mismo
+            # mecanismo que el ámbito del título, y por el mismo motivo.
+            with st.container(key="vap_hdr_ayuda"):
+                with st.popover(":material/info:",
+                                use_container_width=False):
+                    with st.container(key="vap_ayuda_panel"):
+                        st.markdown(
+                            "**Δ** = este año − el mismo período del año "
+                            "pasado." + PARR
+                            + "**Efecto precio** es lo que costó pagar "
+                            "distinto por lo mismo; **efecto cantidad**, lo "
+                            "que costó comprar más (o menos). Los dos suman "
+                            "el Δ exacto." + PARR
+                            + "**Clic en una fila** de la tabla enfoca el "
+                            "gráfico de arriba; volver a clickearla lo "
+                            "devuelve a todas las compras.")
+                        _ayuda_parcial = st.empty()
         c_modo, c_vent = st.columns([1, 1])  # columnas-internas: los dos
         # controles de la tarjeta (métrica y ventana) comparten renglón,
         # uno pegado a cada borde. No parte una FILA del drill.
@@ -768,10 +797,16 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                             use_container_width=True, key="compras_g_vap_puente")
 
         if parcial is not None:
-            st.caption(
-                f"El último mes va hasta el día {parcial[1]} (es lo que trae "
-                f"el parquet): su barra sale con trama y se compara contra "
-                f"los mismos días del año pasado, no contra el mes entero.")
+            # El aviso del mes parcial deja de ser un caption en flujo y
+            # entra en el popover de ayuda de la cabecera (ver el hueco de
+            # más arriba). La señal EN PANTALLA sigue siendo la trama de la
+            # última barra, que es donde mira el que tiene que verla.
+            _ayuda_parcial.markdown(
+                "---" + PARR
+                + f"El **último mes** va hasta el día {parcial[1]} (es lo "
+                f"que trae el parquet): su barra sale con trama y se compara "
+                f"contra los mismos días del año pasado, no contra el mes "
+                f"entero.")
 
         # ── La tabla de detalle, en la MISMA tarjeta ─────────────────────
         # 2026-09-02, a pedido: "que la tarjeta de la tabla se fusione con
@@ -820,11 +855,6 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
 
         clic = _tabla_detalle(g_tabla, agrupar_nuevo, ums,
                               "compras_vap_detalle_grid")
-        st.caption("Δ = este año − mismo período del año pasado. "
-                   "**Efecto precio** es lo que costó pagar distinto por lo "
-                   "mismo; **efecto cantidad**, lo que costó comprar más (o "
-                   "menos). Los dos suman el Δ exacto. "
-                   "Clic en una fila para enfocar el gráfico de arriba.")
 
         # UNA sola comparación, igual que el ranking de Proveedor: AG Grid
         # conserva su selección entre reruns del fragment, así que `clic`

@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-286 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+287 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (94)
+**CSS y estilos** (95)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -114,6 +114,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#284** — Un jalón negativo que existía para "la primera tarjeta de la página" se vuelve un SOLAPE en…
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 - **#286** — Un translate(0, -13px) arrastrado en el modo diseño casi nunca pide mover algo: está midiendo…
+- **#287** — Un caption que explica CÓMO SE LEE una vista se lee una vez y estorba siempre: va en un…
 
 **Layout y alturas** (31)
 
@@ -251,7 +252,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 
-**Streamlit** (82)
+**Streamlit** (83)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -335,6 +336,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#282** — Un filtro cuyas OPCIONES salen del df ya filtrado por fecha pierde la selección en silencio:…
 - **#283** — Fusionar dos tarjetas que ya compartían datos no es mover un with: es descubrir que sus…
 - **#286** — Un translate(0, -13px) arrastrado en el modo diseño casi nunca pide mover algo: está midiendo…
+- **#287** — Un caption que explica CÓMO SE LEE una vista se lee una vez y estorba siempre: va en un…
 
 **Datos, R2 y DuckDB** (30)
 
@@ -12819,13 +12821,54 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      **240/193**, sección **799 → 765**, cero textos recortados en las dos
      figuras.
 
+
+287. **Un caption que explica CÓMO SE LEE una vista se lee una vez y estorba
+     siempre: va en un popover de ícono, no en el flujo.** Y al meterlo en
+     una fila flex hay dos detalles que muerden.
+
+     2026-09-02, cerrando el pedido de "aprovechar el espacio". «Vs año
+     pasado» tenía DOS `st.caption` en flujo —uno bajo los gráficos
+     explicando la trama del mes parcial, otro bajo la tabla explicando Δ /
+     efecto precio / efecto cantidad y el clic para enfocar—: **~90px de la
+     sección** para texto que el usuario lee la primera vez y después
+     saltea. Los dos pasan a un solo popover de ícono en la fila del
+     título, el mismo patrón que la ayuda del Ranking de Proveedores.
+
+     Lo que NO se mueve a un tooltip es la señal en pantalla: la última
+     barra sigue saliendo con trama. El tooltip explica el porqué; la trama
+     es la que avisa que hay algo que entender.
+
+     **Trampa 1 — el ícono se come la fila.** Su `stLayoutWrapper` nace con
+     `width: 100%` como cualquier hijo de un contenedor de Streamlit
+     (regla #272): medido, 394px de wrapper para un botón de 180, y el
+     ámbito del título truncaba a "Tod…". Hace falta el
+     `:has(> .st-key-…) { flex: 0 0 auto; width: auto }` en el PADRE, igual
+     que para los otros dos controles de la fila.
+
+     **Trampa 2 — el chevron.** `st.popover` agrega su `expand_more` al
+     lado del label, así que un botón "de sólo ícono" muestra dos. Acá se
+     puede apuntar al `[data-testid="stIconMaterial"]` sin llevarse el ícono
+     del label, porque **ése entra por el shortcode del LABEL y sale como
+     `stMarkdownContainer`**: son dos nodos distintos (medido, label 14x22 y
+     chevron 16x16). En otros popovers del repo, donde el label es texto, la
+     regla es la misma pero por otro motivo.
+
+     De paso: un `st.empty()` DENTRO del cuerpo del popover funciona igual
+     que en cualquier contenedor, y sirve para la línea que depende de un
+     dato que se calcula después (acá, el día hasta el que llega el mes
+     parcial).
+
+     Medido: la fila del título queda en 36px con los cinco elementos en un
+     renglón, y la sección pasa de 765 a **645px**. Sumando la jornada
+     entera: **1.155 → 645**, con el mismo contenido.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#287**.
+> próxima regla nueva es la **#288**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
