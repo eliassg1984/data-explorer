@@ -793,8 +793,33 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                     "comparar.")
             return
 
-        # ── Foco: el ítem clickeado en la tabla de abajo ─────────────────
+        # ── El agrupador manda sobre la columna que se agrega ────────────
+        # `_mensual` deja `grupo` = el propio producto; cuando el agrupador
+        # es Familia o Subfamilia hay que remapearlo.
+        #
+        # ESTE BLOQUE VIVÍA 80 LÍNEAS MÁS ABAJO, junto a la tabla, y ahí
+        # estaba el bug (2026-09-02, reportado: "cuando elijo Familia o
+        # Subfamilia no permite seleccionar en la tabla de abajo"). El clic
+        # SÍ se guardaba, pero en el rerun siguiente el foco se resolvía
+        # ACÁ —contra un `grupo` que todavía era el nombre del PRODUCTO—,
+        # el filtro daba vacío y la línea de abajo lo tiraba a la basura
+        # como si el agrupador hubiera cambiado. Resultado: la fila se
+        # clickeaba y no pasaba nada, siempre, con esos dos agrupadores.
+        #
+        # El guard de "cambió el agrupador" es legítimo y se queda —al
+        # pasar de Familia a Producto el foco viejo no existe en la columna
+        # nueva—, pero estaba TAPANDO esto: un guard que se dispara siempre
+        # no es una red, es el camino normal.
         agrupar_por = st.session_state.get("compras_vap_agrupar", "Producto")
+        if agrupar_por != "Producto":
+            _cg = col_fam if agrupar_por == "Familia" else col_subfam
+            _mapa = (fuente[[col_prod, _cg]].astype(str)
+                     .drop_duplicates(col_prod)
+                     .set_index(col_prod)[_cg])
+            g = g.copy()
+            g["grupo"] = g["prod"].map(_mapa).fillna(g["prod"])
+
+        # ── Foco: el ítem clickeado en la tabla de abajo ─────────────────
         foco = st.session_state.get("compras_vap_foco")
         llave_foco = "prod" if agrupar_por == "Producto" else "grupo"
         g_foco = g if foco is None else g[g[llave_foco].astype(str) == foco]
@@ -877,15 +902,10 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         # buscador también se fue: en la fila del título los reparte el flex
         # de `vap_fila_hdr`, sin espaciador que inventar.
 
-        # El agrupador manda sobre la columna que se agrega: se recalcula el
-        # `grupo` de `g` cuando no es el producto.
-        if agrupar_nuevo != "Producto":
-            _cg = col_fam if agrupar_nuevo == "Familia" else col_subfam
-            _mapa = (fuente[[col_prod, _cg]].astype(str)
-                     .drop_duplicates(col_prod)
-                     .set_index(col_prod)[_cg])
-            g = g.copy()
-            g["grupo"] = g["prod"].map(_mapa).fillna(g["prod"])
+        # (El remap de `grupo` ya corrió arriba, antes de resolver el foco.
+        # `agrupar_nuevo` y `agrupar_por` son el mismo valor: el widget se
+        # dibuja en la cabecera, así que su lectura de `session_state` de
+        # más arriba ve el valor de ESTE run.)
 
         g_tabla = g if not q else g[
             g["prod" if agrupar_nuevo == "Producto" else "grupo"]

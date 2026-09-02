@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-289 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+290 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (95)
 
@@ -449,7 +449,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#264** — Un mock arrastrado con "Mover" podía terminar pintado DEBAJO de un hermano posterior — no…
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 
-**Decisiones de diseño y UX** (52)
+**Decisiones de diseño y UX** (53)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -503,6 +503,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#280** — Cuando "hacelo más chico" no entra en ningún rol, se agrega un rol — no se le cambia el…
 - **#283** — Fusionar dos tarjetas que ya compartían datos no es mover un with: es descubrir que sus…
 - **#284** — Un jalón negativo que existía para "la primera tarjeta de la página" se vuelve un SOLAPE en…
+- **#290** — Un guard que se dispara SIEMPRE no es una red: es el camino normal, y tapa el bug que debería…
 
 **Mantenimiento y trampas del lenguaje** (8)
 
@@ -12939,13 +12940,52 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      214, KPI de 44px a **23**, sección **597 → 571**, cero textos
      recortados. Del día: **1.155 → 571**.
 
+
+290. **Un guard que se dispara SIEMPRE no es una red: es el camino normal, y
+     tapa el bug que debería atrapar.**
+
+     2026-09-02, reportado: *"cuando el selector de Familia/Subfamilia/
+     Producto elige Familia o Subfamilia, no permite seleccionar en la tabla
+     de abajo"*. Y era cierto desde que existe el agrupador: con esos dos
+     valores, el clic en una fila **nunca** enfocaba nada.
+
+     La cadena es de ORDEN, no de lógica:
+
+     1. `_mensual()` deja la columna `grupo` valiendo el propio producto.
+     2. Cuando el agrupador es Familia o Subfamilia, `grupo` se remapea… en
+        el bloque de la TABLA, ~80 líneas más abajo.
+     3. Pero el foco se resuelve ARRIBA:
+        `g_foco = g[g["grupo"] == foco]`. En ese punto `grupo` todavía es el
+        nombre del producto, así que el filtro daba **vacío** siempre.
+     4. Y la línea siguiente era
+        `if foco is not None and g_foco.empty: foco, g_foco = None, g`,
+        comentada como *"cambió el agrupador"*. O sea: el clic se guardaba,
+        el rerun ocurría, y el foco se tiraba a la basura en silencio.
+
+     El guard es legítimo —al pasar de Familia a Producto el foco viejo no
+     existe en la columna nueva— y se queda. Lo que estaba mal es que
+     cubriera el 100% de los casos en vez del caso raro. **Si un guard
+     defensivo es el que hace funcionar la pantalla todos los días, no está
+     defendiendo: está sustituyendo.**
+
+     El arreglo es mover el remap ANTES de resolver el foco, no tocar el
+     guard. Verificado en vivo: con "Agrupar por = Familia", el clic en
+     COSTOS PRODUCCION deja la fila seleccionada, el título pasa a
+     "Vs año pasado · COSTOS PRODUCCION" y la serie se redibuja con los
+     números de esa familia (−S/ 912.016, el mismo Δ que muestra la fila).
+
+     Cómo se detecta antes: un `if …empty` que "corrige" un estado
+     merece un vistazo cuando el estado que corrige es alcanzable por la vía
+     normal. Acá bastaba preguntarse *cuándo* está poblada la columna contra
+     la que se filtra.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#290**.
+> próxima regla nueva es la **#291**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
