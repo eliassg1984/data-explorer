@@ -122,13 +122,42 @@ CSS = """    /* ================================================================
     }
     .st-key-vap_hdr_agrupar,
     .st-key-vap_hdr_buscar { width: 100% !important; }
-    /* Los dos controles, a la altura de una píldora de fila (22px), como
-       los de la tarjeta de Ranking. El default de Streamlit es ~40. */
+    /* Los dos controles, a la altura de una píldora de fila, como los de la
+       tarjeta de Ranking. El default de Streamlit es 40px.
+
+       OJO CON EL SELECTOR DEL SELECTBOX (2026-09-02, medido): en esta
+       versión de Streamlit NO es `[data-baseweb="select"]` sino
+       `.react-aria-ComboBox`. Con el selector viejo la regla no matcheaba
+       nada y el desplegable seguía en 40 mientras el buscador —que sí
+       matcheaba por `stTextInputRootElement`— bajaba a 26: la fila entera
+       medía lo que el más alto, 49px con el padding y el borde. El
+       `st.text_input` y el `st.selectbox` de la MISMA fila necesitan dos
+       ganchos distintos; no se puede asumir que comparten API. */
+    .st-key-vap_fila_hdr .react-aria-ComboBox,
+    .st-key-vap_fila_hdr .react-aria-ComboBox > div,
     .st-key-vap_fila_hdr [data-baseweb="select"] > div,
     .st-key-vap_fila_hdr [data-testid="stTextInputRootElement"] {
         min-height: 26px !important;
         height: 26px !important;
         font-size: 12px !important;
+    }
+    .st-key-vap_fila_hdr .react-aria-ComboBox [role="button"],
+    .st-key-vap_fila_hdr .react-aria-ComboBox input {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        font-size: 12px !important;
+    }
+    /* El TÍTULO deja de caer 13px por debajo de los controles.
+       `st.markdown` con HTML de BLOQUE le pone `margin-bottom: -16px` a su
+       contenedor (regla #162), así que la caja que el flex alinea medía 5,6px
+       mientras el texto ocupaba 21,6 y desbordaba hacia abajo: con
+       `align-items: center` se centraba la caja chica y el texto quedaba
+       colgando. Se vio primero como un arrastre de `translate(0,-13px)` en el
+       modo diseño — o sea, exactamente los 16 de margen menos los 3 que ya
+       compensaba el centrado. Anulando el margen la caja vuelve a medir su
+       texto y el centrado del flex hace lo suyo, sin transform. */
+    .st-key-vap_fila_hdr [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
     }
     .st-key-vap_fila_hdr [data-testid="stTextInputRootElement"] input {
         padding: 0 8px !important;

@@ -120,11 +120,25 @@ APOYO = 380
 # superficie, el "par" del que habla este rol dejó de ser una metáfora — y a
 # 300 la sección medía 899px. A 250 mide ~799.
 #
+# CUARTA, el mismo día: 250 -> 240, otra vez a pedido ("reducir
+# verticalmente mis gráficos"). El primer intento fue 220 y lo frenó
+# `test_graficos.py`: dejaba COMPACTO por DEBAJO de MINI, o sea el gráfico
+# principal de una vista más chico que el rol de las sparklines. El test
+# comprueba el orden de los roles justamente porque ese orden ES la
+# semántica; romperlo no habría fallado en pantalla, habría dejado el
+# vocabulario mintiendo.
+#
+# Así que 240 = MINI es el PISO de este rol, y conviene decirlo acá: por
+# debajo, lo que corresponde no es seguir bajando el número sino admitir
+# que la figura dejó de ser la lectura principal de su vista. En «Vs año
+# pasado» la serie lleva leyenda arriba y etiquetas de mes ROTADAS abajo,
+# que se comen ~90px fijos: a 240 le quedan ~150 de trazo.
+#
 # Por qué un rol nuevo y no MINI (240): MINI dice "existe para apoyar una
 # lectura, no para leerse solo", y la serie mensual de Vs año pasado ES la
 # lectura principal de su vista. El vocabulario tiene que seguir diciendo la
 # verdad; bajarla a MINI la habría hecho caber mintiendo sobre su papel.
-COMPACTO = 250
+COMPACTO = 240
 
 # Panel de detalle, sparkline, mini-barras: existe para apoyar una lectura,
 # no para leerse solo.

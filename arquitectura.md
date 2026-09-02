@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-285 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+286 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (93)
+**CSS y estilos** (94)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -113,6 +113,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#279** — Un control que se pide "igual al de aquella vista" se EXTRAE, no se copia — y lo que hay que…
 - **#284** — Un jalón negativo que existía para "la primera tarjeta de la página" se vuelve un SOLAPE en…
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
+- **#286** — Un translate(0, -13px) arrastrado en el modo diseño casi nunca pide mover algo: está midiendo…
 
 **Layout y alturas** (31)
 
@@ -250,7 +251,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 
-**Streamlit** (81)
+**Streamlit** (82)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -333,6 +334,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#281** — Una cabecera que depende de un dato que se calcula 100 líneas más abajo se dibuja con…
 - **#282** — Un filtro cuyas OPCIONES salen del df ya filtrado por fecha pierde la selección en silencio:…
 - **#283** — Fusionar dos tarjetas que ya compartían datos no es mover un with: es descubrir que sus…
+- **#286** — Un translate(0, -13px) arrastrado en el modo diseño casi nunca pide mover algo: está midiendo…
 
 **Datos, R2 y DuckDB** (30)
 
@@ -12768,13 +12770,62 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      revisar qué inyecciones son de la página y cuáles creían ser de su
      componente.
 
+
+286. **Un `translate(0, -13px)` arrastrado en el modo diseño casi nunca pide
+     mover algo: está midiendo un margen negativo que ya estaba ahí. Y dos
+     widgets de la misma fila pueden necesitar DOS ganchos de CSS distintos.**
+
+     2026-09-02. Llegó como un bloque copiado sobre `.chart-card-hdr` de la
+     fila del título de «Vs año pasado»: `width: 455px` +
+     `transform: translate(0px,-13px)`. Los tres valores resultaron ser
+     síntomas, no pedidos:
+
+     **1. Los −13px son el `margin-bottom: -16px` de `st.markdown`.** Con
+     HTML de BLOQUE, Streamlit se lo pone al `stMarkdownContainer` (regla
+     #162). Medido: el contenedor daba **5,6px** mientras su `<p>` ocupaba
+     **21,6** y desbordaba hacia abajo. En un flex con `align-items:
+     center`, lo que se centra es la CAJA — la chica—, así que el texto
+     quedaba colgando ~13px por debajo de los controles. (16 de margen menos
+     los ~3 que el centrado ya compensaba: el arrastre acertó el número.)
+     Anulando el margen dentro de esa fila, las tres cajas vuelven a medir
+     su texto y el centrado hace lo suyo. Verificado: los centros del
+     título, el agrupador y el buscador dan **148,9** los tres.
+
+     **2. El `width: 455px` es dónde quedó el arrastre**, no una medida: el
+     `<p>` es `flex: 1 1 auto` y su ancho depende de lo que dejen los
+     controles.
+
+     **3. Y el bug que el arrastre destapó de rebote:** la fila medía 49px
+     en vez de 35 porque el `st.selectbox` seguía en su alto por defecto. La
+     regla que lo bajaba a 26 apuntaba a `[data-baseweb="select"]`, y en
+     esta versión de Streamlit un selectbox es **`.react-aria-ComboBox`**.
+     El `st.text_input` de al lado sí matcheaba (`stTextInputRootElement`) y
+     bajaba a 26 — de ahí que la fila se viera desalineada de dos maneras a
+     la vez. **No se puede asumir que dos widgets de la misma fila comparten
+     la API interna.**
+
+     **De yapa, el test frenó un recorte que se me fue de largo.** En el
+     mismo pedido ("reducir verticalmente mis gráficos") bajé
+     `alturas.COMPACTO` de 250 a 220 y falló
+     `los roles están ordenados (MINI ≤ COMPACTO ≤ APOYO ≤ PROTAGONISTA)`:
+     220 dejaba el gráfico PRINCIPAL de una vista por debajo del rol de las
+     sparklines. No habría fallado en pantalla — habría dejado el
+     vocabulario mintiendo, que es lo que ese test cuida. **240 = MINI es el
+     piso de COMPACTO**, y por debajo lo que corresponde no es seguir
+     bajando el número sino admitir que la figura dejó de ser la lectura
+     principal de su vista.
+
+     Resultado medido: fila de título 49 → **35px**, figuras 250/203 →
+     **240/193**, sección **799 → 765**, cero textos recortados en las dos
+     figuras.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#286**.
+> próxima regla nueva es la **#287**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
