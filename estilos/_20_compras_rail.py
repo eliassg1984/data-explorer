@@ -239,8 +239,20 @@ CSS = """    /* ================================================================
     .st-key-nav_franja_kpis {
         position: fixed !important;
         top: var(--franja-rep-alto) !important;
-        left: 0 !important;
+        /* 2026-09-01: `left: 0` -> la reserva del rail. NO va de borde a
+           borde a proposito: arranca donde arranca el CONTENIDO, asi el rail
+           de la izquierda puede subir por debajo de ella hasta tocar la
+           franja de reportes sin que nadie lo empuje. Son dos columnas
+           independientes, no una fila que empuja — el mismo recurso que ya
+           usa la banda de fondo (`fila_ajuste_top::before`, que se recorta
+           igual para cederle esa columna al rail). */
+        left: var(--rail-der-res) !important;
         right: 0 !important;
+        /* `width: auto` o no sirve de nada el `right`: el stVerticalBlock de
+           Streamlit trae `width: 100%`, y en un elemento fijo con `left` y
+           `right` puestos gana el width — medido, la franja terminaba en
+           x=1603 sobre un viewport de 1280, o sea 323px fuera de pantalla. */
+        width: auto !important;
         height: var(--nav-top-alto) !important;
         min-height: var(--nav-top-alto) !important;
         z-index: 1000000 !important;
@@ -401,17 +413,16 @@ CSS = """    /* ================================================================
        Dinero — el mismo modelo del que salió esta columna entera.
 
        Los DOS rótulos comparten geometría porque los dos railes comparten
-       hueco: `rail_rotulo_rep` lo dibuja navegacion.py y `rail_rotulo_vis`
-       graficos/base.py, y el cruce entre ambos vive en _26_rails_scroll.py
-       con el mismo `rails-scrolled` que cruza a los railes. Tercer par de
-       literales acoplados a los del rail (top/left/width): el precio ya
-       asumido de esta geometría, igual que el rail lateral.
+       hueco. Nació como un PAR —`rail_rotulo_rep` y un `rail_rotulo_vis`
+       que se cruzaban— hasta que el 2026-09-01 la columna pasó a SUBIR al
+       scrollear: en ese estado el rail toca la franja de reportes y no
+       queda banda donde poner cabecera, así que la de Vistas se retiró y
+       ésta se oculta (ver `_26_rails_scroll.py`).
 
        `position:fixed` va sobre el CONTENEDOR y no sobre el <div> de
        adentro: así sale del flujo el bloque entero y no queda el hueco de
        un flex item vacío en el main. Mismo recurso que el rail. */
-    .st-key-rail_rotulo_rep,
-    .st-key-rail_rotulo_vis {
+    .st-key-rail_rotulo_rep {
         position: fixed !important;
         /* 2026-08-31, a pedido ("debe chocar con la franja de vistas").
            Antes flotaba 14px por debajo de la franja de reportes; ahora
@@ -469,12 +480,10 @@ CSS = """    /* ================================================================
        el flex centraba era esa caja de 3, no el texto. Se anula acá y no en
        la regla general de #162 porque allá el -16 sirve — es el que junta un
        markdown con lo que le sigue; en una cabecera de altura fija, sobra. */
-    .st-key-rail_rotulo_rep [data-testid="stMarkdown"] div,
-    .st-key-rail_rotulo_vis [data-testid="stMarkdown"] div {
+    .st-key-rail_rotulo_rep [data-testid="stMarkdown"] div {
         margin-bottom: 0 !important;
     }
-    .st-key-rail_rotulo_rep .rail-rotulo,
-    .st-key-rail_rotulo_vis .rail-rotulo {
+    .st-key-rail_rotulo_rep .rail-rotulo {
         /* Un punto por debajo del ítem del rail (1rem) y con más peso: es
            una etiqueta de la columna, no el primero de sus renglones.
            Mismo criterio que `.rail-cab-nom` en _26_rails_scroll.py. */
@@ -870,8 +879,7 @@ CSS = """    /* ================================================================
            horizontal en el flujo del documento y no hay columna que
            encabezar — y su `position:fixed` lo dejaría flotando sobre el
            contenido. Mismo criterio que las dos reglas de acá arriba. */
-        .st-key-rail_rotulo_rep,
-        .st-key-rail_rotulo_vis {
+        .st-key-rail_rotulo_rep {
             display: none !important;
         }
         /* Los valores de KPI (navegacion.py, 2026-08-22 — reescrito en su

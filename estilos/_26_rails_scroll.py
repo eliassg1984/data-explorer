@@ -84,7 +84,6 @@ CSS = f"""
     .st-key-compras_tabs_row *,
     .st-key-nav_rail_lateral *,
     .st-key-rail_rotulo_rep *,
-    .st-key-rail_rotulo_vis *,
     .st-key-nav_franja_kpis * {{
         visibility: inherit;
     }}
@@ -94,6 +93,81 @@ CSS = f"""
        pone/saca la clase `rails-scrolled` en el <html> del documento
        padre segun el scroll de `stMain`. Todo lo de aca abajo cuelga de
        esa clase. */
+
+    /* ── LA FRANJA DE VISTAS SE DESLIZA Y SE VA (2026-09-01, a pedido) ──
+       Antes se quedaba en su sitio y cambiaba de contenido. Ahora sube y
+       desaparece, y en su lugar entra la de KPIs — que arranca donde
+       arranca el contenido, asi el rail puede subir por debajo (ver
+       `nav_franja_kpis` en `_20_compras_rail.py`).
+
+       El `transform` y no un `top`: la franja no cambia de sitio, SALE. Un
+       transform no toca el layout de nadie y ademas se compone en GPU, que
+       para 40px de recorrido en cada scroll es la diferencia entre un
+       deslizamiento y un tironeo.
+
+       GUARDADO con `:has(.st-key-nav_rail_lateral)`: la franja solo puede
+       irse si las vistas tienen donde vivir, y donde viven es el rail
+       lateral. Hoy lo dibujan los 8 dashboards con pila, pero el dia que
+       alguien agregue uno sin `secciones`, esta linea es la que evita que
+       se quede sin navegacion al scrollear. */
+    .st-key-nav_rail {{
+        transition: transform {_TRANS} cubic-bezier(.4,0,.2,1),
+                    opacity {_TRANS} linear,
+                    visibility 0s linear 0s;
+    }}
+    :root.rails-scrolled
+        [data-testid="stAppViewContainer"]:has(.st-key-nav_rail_lateral)
+        .st-key-nav_rail {{
+        transform: translateY(calc(-1 * var(--nav-top-alto)));
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: transform {_TRANS} cubic-bezier(.4,0,.2,1),
+                    opacity {_TRANS} linear,
+                    visibility 0s linear {_TRANS};
+    }}
+
+    /* ── LOS DOS RAILES SUBEN, Y LA CABECERA SE VA CON LA FRANJA ──────
+       Al irse la franja de vistas (40px) y la cabecera (33), la columna
+       tiene 73px libres arriba: sube a tocar la franja de REPORTES, que es
+       lo unico que queda del cromo superior.
+
+       El `top` se anima en los DOS railes a la vez, no en el que se ve. Si
+       cada uno tuviera su propia altura —el de Reportes abajo, el de Vistas
+       arriba— durante los 160ms del cruce se verian los dos en sitios
+       distintos y el efecto seria un salto, no un ascenso. Con el mismo
+       `top` animado, la columna SUBE mientras cambia de contenido, que es
+       lo que se pidio.
+
+       Mismo `:has()` que la franja: si no hay rail lateral, la franja no se
+       va y entonces la columna tampoco tiene por que subir. */
+    .st-key-compras_tabs_row,
+    .st-key-nav_rail_lateral {{
+        transition: top {_TRANS} cubic-bezier(.4,0,.2,1),
+                    max-height {_TRANS} cubic-bezier(.4,0,.2,1),
+                    opacity {_TRANS} linear,
+                    visibility 0s linear 0s;
+    }}
+    :root.rails-scrolled
+        [data-testid="stAppViewContainer"]:has(.st-key-nav_rail_lateral)
+        .st-key-compras_tabs_row,
+    :root.rails-scrolled
+        [data-testid="stAppViewContainer"]:has(.st-key-nav_rail_lateral)
+        .st-key-nav_rail_lateral {{
+        top: var(--franja-rep-alto) !important;
+        max-height: calc(100vh - var(--franja-rep-alto) - 8px) !important;
+    }}
+    /* Y la cabecera se va con ellos: al pegarse el rail a la franja de
+       reportes ya no hay banda donde ponerla, y el nombre del reporte lo
+       dice la franja de KPIs que acaba de entrar. Esto es, de paso, lo que
+       resuelve el pedido original — sacar el rotulo «Vistas», que era el
+       unico que se veia en este estado. */
+    :root.rails-scrolled
+        [data-testid="stAppViewContainer"]:has(.st-key-nav_rail_lateral)
+        .st-key-rail_rotulo_rep {{
+        opacity: 0;
+        visibility: hidden;
+    }}
 
     /* El rail de REPORTES se va. */
     .st-key-compras_tabs_row {{
@@ -262,18 +336,6 @@ CSS = f"""
        encabeza (ver "DEGRADACION SEGURA" acá arriba): si el gancho no llega
        a montarse, el peor caso es que no pase nada — no dos rótulos
        superpuestos. */
-    .st-key-rail_rotulo_vis {{
-        opacity: 0;
-        visibility: hidden;                    /* ver OCULTO DE VERDAD */
-        transition: opacity {_TRANS} linear,
-                    visibility 0s linear {_TRANS};
-    }}
-    :root.rails-scrolled .st-key-rail_rotulo_vis {{
-        opacity: 1;
-        visibility: visible;
-        transition: opacity {_TRANS} linear,
-                    visibility 0s linear 0s;
-    }}
 
     /* ── Los items del lateral ────────────────────────────────────────
        `navegacion.py` estila `.st-key-nav_rail` con clase EXACTA, asi que
