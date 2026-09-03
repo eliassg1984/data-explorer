@@ -1590,19 +1590,29 @@ def _pruebas_escala_tiempo():
 def _pruebas_regla_riel():
     """graficos/base.py — la regla de referencia bajo el riel de la escala.
 
-    Lo que se cuida es UNA cosa que el ojo no puede verificar en una
-    captura: que los rótulos NO SE PISEN en ninguna ventana posible. La
-    ventana de Meses trae entre 2 y 12 paradas y la de Años entre 2 y 10,
-    según cuánto las recorte `bounds`, así que hay 19 casos y todos tienen
-    que caer bien — probar "el de hoy" (8 meses, 4 años) no dice nada del
-    día que la data llegue a doce meses.
+    Dos cosas que el ojo no puede verificar en una captura:
 
-    La cuenta usa el ancho del rótulo MÁS ANCHO de la escala para todas las
+    1. QUE LOS RÓTULOS NO SE PISEN en ninguna ventana posible. Meses trae
+       entre 1 y 12 casilleros y Años entre 1 y 10, según cuánto los recorte
+       `bounds`, así que probar "el de hoy" (8 meses, 4 años) no dice nada
+       del día que la data llegue a doce meses.
+
+    2. QUE LOS BORDES Y LOS PERÍODOS SEAN LA MISMA COSA CONTADA DISTINTO.
+       El riel de Meses/Años para en los BORDES entre períodos (regla
+       #298), así que hay dos traducciones que tienen que cerrar: el borde
+       que cierra un período es el arranque del siguiente, y el rango que
+       sale de un par de bordes es el mismo que salía del par de períodos.
+       Si se desfasan una, el filtro se corre un mes entero sin avisar.
+
+    La cuenta de anchos usa el rótulo MÁS ANCHO de la escala para TODAS las
     marcas, que es el peor caso: en pantalla sobra aire porque "jul" mide
     la mitad que "may".
     """
+    import datetime
+
+    from estado_rango import escala_a_rango, escala_periodos
     from graficos.base import (_AIRE_ROTULO, _ANCHO_RIEL_PX, _ANCHO_ROTULO,
-                               _indices_rotulados)
+                               _borde_siguiente, _indices_rotulados)
 
     fallos = 0
 
@@ -1614,43 +1624,78 @@ def _pruebas_regla_riel():
             fallos += 1
             print(f"FALLA regla riel · {nombre}: {detalle}")
 
+    # ── (1) los rótulos, centrados en su casillero ─────────────────────
     for escala, tope in (("Meses", 12), ("Años", 10)):
         ancho = _ANCHO_ROTULO[escala]
-        for n in range(2, tope + 1):
+        for n in range(1, tope + 1):
             idx = _indices_rotulados(n, ancho)
-            slot = _ANCHO_RIEL_PX / (n - 1)
-            check(f"{escala} n={n}: los dos bordes llevan rótulo",
-                  idx[0] == 0 and idx[-1] == n - 1, f"idx={idx}")
-            check(f"{escala} n={n}: sin repetidos y en orden",
-                  idx == sorted(set(idx)) and idx[-1] < n, f"idx={idx}")
-            # Los bordes van pineados (translateX(0) / -100% en el CSS), o
-            # sea que ocupan un ancho ENTERO hacia adentro; los del medio
-            # están centrados y ocupan medio de cada lado.
-            peor = None
-            for a, z in zip(idx, idx[1:]):
-                izq = ancho if a == 0 else ancho / 2
-                der = ancho if z == n - 1 else ancho / 2
-                aire = (z - a) * slot - izq - der
-                if peor is None or aire < peor[0]:
-                    peor = (aire, a, z)
-            check(f"{escala} n={n}: ningún par de rótulos se toca",
-                  peor[0] >= _AIRE_ROTULO,
-                  f"aire={peor[0]:.1f}px entre {peor[1]} y {peor[2]} (idx={idx})")
+            slot = _ANCHO_RIEL_PX / n
+            check(f"{escala} n={n}: hay rótulos, en orden y dentro de rango",
+                  idx and idx == sorted(set(idx)) and idx[0] == 0
+                  and idx[-1] < n, f"idx={idx}")
+            # Todos van centrados en su casillero: medio rótulo de cada
+            # lado, sin la excepción de las puntas que tenía el modelo
+            # anterior (los rótulos ya no se pinean).
+            peor = min(((z - a) * slot - ancho, a, z)
+                       for a, z in zip(idx, idx[1:])) if len(idx) > 1 else None
+            if peor is not None:
+                check(f"{escala} n={n}: ningún par de rótulos se toca",
+                      peor[0] >= _AIRE_ROTULO,
+                      f"aire={peor[0]:.1f}px entre {peor[1]} y {peor[2]}")
+            # El primero y el último tienen que entrar ENTEROS en el riel:
+            # su centro está a media casilla del borde.
+            check(f"{escala} n={n}: los rótulos de las puntas no se cortan",
+                  slot >= ancho, f"casilla={slot:.1f}px, rótulo={ancho}px")
+
+    # ── (2) bordes ↔ períodos ──────────────────────────────────────────
+    b = (datetime.date(2024, 3, 17), datetime.date(2026, 8, 25))
+    for escala in ("Meses", "Años"):
+        paradas = escala_periodos(escala, b)
+        check(f"{escala}: el borde que cierra un período abre el siguiente",
+              all(_borde_siguiente(escala, p) == q
+                  for p, q in zip(paradas, paradas[1:])),
+              "")
+        # El borde extra del final NO existe entre las paradas: es el que
+        # le da ancho al último casillero.
+        check(f"{escala}: el borde final cae después de la última parada",
+              _borde_siguiente(escala, paradas[-1]) > paradas[-1], "")
+        # La traducción de vuelta: un par de bordes tiene que dar el mismo
+        # rango que daba el par de períodos equivalente.
+        for i, j in ((0, 0), (0, len(paradas) - 1), (1, 3)):
+            if j >= len(paradas):
+                continue
+            por_periodos = escala_a_rango(escala, paradas[i], paradas[j], b)
+            _b1 = _borde_siguiente(escala, paradas[j])
+            por_bordes = escala_a_rango(
+                escala, paradas[i], _b1 - datetime.timedelta(days=1), b)
+            check(f"{escala}: bordes [{i},{j}] dan el mismo rango que períodos",
+                  por_bordes == por_periodos,
+                  f"bordes={por_bordes} períodos={por_periodos}")
+        # UN SOLO período elegido tiene que seguir dando el período entero
+        # —que es el caso que motivó todo el cambio— y no un día suelto.
+        _uno = paradas[2] if len(paradas) > 2 else paradas[0]
+        _rango = escala_a_rango(
+            escala, _uno, _borde_siguiente(escala, _uno)
+            - datetime.timedelta(days=1), b)
+        check(f"{escala}: un período suelto abarca el período entero",
+              _rango == escala_a_rango(escala, _uno, _uno, b), str(_rango))
 
     # Regresiones concretas, con la cuenta a la vista para que un cambio de
     # los anchos medidos se lea como lo que es y no como un número mágico.
-    check("un año entero de Meses (12 paradas) rotula 6, con dic",
-          _indices_rotulados(12, _ANCHO_ROTULO["Meses"]) == [0, 2, 4, 6, 8, 11],
+    check("un año entero de Meses (12 casilleros de 19,8px) rotula 6",
+          _indices_rotulados(12, _ANCHO_ROTULO["Meses"]) == [0, 2, 4, 6, 8, 10],
           str(_indices_rotulados(12, _ANCHO_ROTULO["Meses"])))
-    check("con 10 paradas la anteúltima NO se rotula (se tocaba con el borde)",
-          8 not in _indices_rotulados(10, _ANCHO_ROTULO["Meses"]),
-          str(_indices_rotulados(10, _ANCHO_ROTULO["Meses"])))
+    check("ocho meses entran todos",
+          _indices_rotulados(8, _ANCHO_ROTULO["Meses"]) == list(range(8)),
+          str(_indices_rotulados(8, _ANCHO_ROTULO["Meses"])))
+    check("una década de Años rotula uno por medio",
+          _indices_rotulados(10, _ANCHO_ROTULO["Años"]) == [0, 2, 4, 6, 8],
+          str(_indices_rotulados(10, _ANCHO_ROTULO["Años"])))
     check("cuatro años entran todos",
           _indices_rotulados(4, _ANCHO_ROTULO["Años"]) == [0, 1, 2, 3],
           str(_indices_rotulados(4, _ANCHO_ROTULO["Años"])))
-    check("un riel de una sola parada no revienta",
-          _indices_rotulados(1, 18) == [0] and _indices_rotulados(0, 18) == [],
-          "")
+    check("un riel sin casilleros no revienta",
+          _indices_rotulados(0, 18) == [], "")
 
     return fallos
 

@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-297 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+298 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (96)
+**CSS y estilos** (97)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -116,6 +116,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#286** — Un translate(0, -13px) arrastrado en el modo diseño casi nunca pide mover algo: está midiendo…
 - **#287** — Un caption que explica CÓMO SE LEE una vista se lee una vez y estorba siempre: va en un…
 - **#297** — Lo que dibuja UNA rama y no las otras va AL FINAL: al encoger, la cola del render anterior…
+- **#298** — Un riel que elige PERÍODOS no puede parar en los períodos: tiene que parar en los BORDES…
 
 **Layout y alturas** (32)
 
@@ -257,7 +258,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 
-**Streamlit** (86)
+**Streamlit** (87)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -345,6 +346,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#294** — st.dataframe (glide-data-grid) sobrevive a un st.empty() que lo reemplaza por OTRO contenido…
 - **#296** — El stSliderTickBar nativo no sirve como referencia de un riel: sólo rotula los DOS extremos,…
 - **#297** — Lo que dibuja UNA rama y no las otras va AL FINAL: al encoger, la cola del render anterior…
+- **#298** — Un riel que elige PERÍODOS no puede parar en los períodos: tiene que parar en los BORDES…
 
 **Datos, R2 y DuckDB** (32)
 
@@ -13252,15 +13254,15 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      · **Cuántas marcas entran es una MEDICIÓN, no un gusto.** A 9px DM Sans
        un mes mide 9-18px y un año 21-22px (`_ANCHO_ROTULO`), y las paradas
-       van de 2 a 12 según cuánto recorte `bounds` la ventana. `_indices_
-       rotulados` deduce el paso de ahí, con DOS separaciones distintas:
-       entre dos marcas del medio alcanza `ancho + aire` porque están las
-       dos centradas, pero contra una punta hace falta `1,5·ancho + aire`
-       porque los bordes van pineados (`translateX(0)` / `-100%`) y ocupan
-       un ancho entero hacia adentro. Con umbral único, una ventana de 10
-       meses ponía la anteúltima marca a 26px de la última y los dos
-       rótulos se tocaban. `test_graficos.py::_pruebas_regla_riel` recorre
-       los 19 tamaños posibles.
+       van de 2 a 12 según cuánto recorte `bounds` la ventana.
+       `_indices_rotulados` deduce el paso de ahí en vez de traerlo fijo.
+       `test_graficos.py::_pruebas_regla_riel` recorre los 22 tamaños
+       posibles: probar "el de hoy" no dice nada del día que la data
+       llegue a doce meses. (En esta primera versión la cuenta necesitaba
+       DOS umbrales, porque las marcas de las puntas iban pineadas y
+       ocupaban un ancho entero hacia adentro. El cambio de modelo del
+       mismo día —regla #298— las centró en su casillero y dejó un solo
+       umbral.)
 
 297. **Lo que dibuja UNA rama y no las otras va AL FINAL: al encoger, la
      cola del render anterior sobrevive en el DOM.** Encontrado el
@@ -13287,13 +13289,71 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      #219). Dejar el caption donde estaba y mover lo invisible es el mismo
      resultado sin re-calibrar nada.
 
+298. **Un riel que elige PERÍODOS no puede parar en los períodos: tiene que
+     parar en los BORDES entre ellos, o un período suelto mide cero.**
+     Reporte real 2026-09-03, el mismo día que la regla #296 y sobre la
+     misma pantalla: "¿ves lógico que la línea sólo tenga un punto y arriba
+     diga del 1 ago – 31 ago?".
+
+     Las paradas del `select_slider` de Meses/Años eran los meses, o sea
+     fechas de ARRANQUE. Con eso, "todo agosto" es
+     desde-agosto-hasta-agosto: los dos tiradores caen en el MISMO punto y
+     la banda mide cero. El control se contradecía solo — la píldora que lo
+     abre decía "1 ago – 31 ago 2026", el caption "31 días seleccionados" y
+     el riel mostraba un punto. Y de yapa, dos tiradores apilados no se ven
+     como dos ni dan pista de por dónde agarrar para abrir la selección
+     (funciona: el de la izquierda es el único que puede moverse, porque el
+     navegador ata el `min` del segundo al valor del primero — pero eso no
+     se ve).
+
+     Con bordes, agosto es el TRAMO entre el 1-ago y el 1-sep y ocupa un
+     casillero de ancho real, como las celdas de la escala de tiempo de
+     Excel, que es de donde salió este control. `_bordes` es
+     `escala_periodos(...) + [_borde_siguiente(último)]`, o sea n+1 paradas
+     para n casilleros, y `_borde_siguiente` sale de `escala_a_rango` en vez
+     de calcularse a mano: tener una segunda opinión sobre cuándo termina un
+     mes es justo donde vive el bug clásico del filtro por período.
+
+     TRES CONSECUENCIAS que no son obvias hasta que se hace:
+
+     · **Los rótulos pasan a nombrar CASILLEROS, no paradas**, así que van
+       centrados en el suyo —`(i + ½)/n`— y ninguno se pinea al borde. Eso
+       simplifica `_indices_rotulados` a un solo umbral (ver #296) pero
+       aprieta el paso: los casilleros son `238/n` y no `238/(n-1)`.
+
+     · **Los tiradores se quedan SIN ETIQUETA en Meses/Años.** El derecho
+       marca el arranque del período que ya NO entra, así que seleccionar
+       agosto lo dejaría diciendo "set 26" — un mes que no está en el
+       filtro. `format_func` no puede rotular distinto a cada tirador (es
+       UNA lista de opciones), así que se ocultan por CSS. No se pierde
+       información: el rango entero lo dice la píldora que abre el popover,
+       un renglón más arriba, y qué períodos entraron lo dice la regla
+       encendida de abajo (`span.on`, la otra mitad del pedido). Excel
+       tampoco pone texto en sus manijas. En DÍAS se quedan: ahí el tirador
+       ES la fecha, sin traducción de por medio.
+
+     · **Los dos tiradores JUNTOS son un caso real** —Streamlit deja
+       apilarlos— y ahí la selección mediría cero períodos, que no es una
+       respuesta válida para un filtro de fecha.
+       `_aplicar_escala_bordes` lo lee como "el período que ARRANCA en ese
+       borde": le pasa el mismo día de los dos lados a `escala_a_rango`, que
+       lo expande solo.
+
+     Verificado en vivo con el rango de un solo día (24-ago): en Meses el
+     riel dibuja el casillero de "ago" con sus dos tiradores separados y el
+     rótulo "ago" encendido; en Años, el casillero de 2026 sobre
+     "2023 2024 2025 2026". Y moviendo un tirador un paso a la izquierda en
+     Meses, la píldora pasó a "1 jul – 24 ago 2026" y el ranking de
+     proveedores de 27 a 64 filas — o sea, la traducción llega hasta el
+     filtro.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#298**.
+> próxima regla nueva es la **#299**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

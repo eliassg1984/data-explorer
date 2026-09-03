@@ -1042,6 +1042,23 @@ CSS = """        <style>
            del popover. */
         .cp-riel-regla span:first-child { transform: translateX(0); }
         .cp-riel-regla span:last-child { transform: translateX(-100%); }
+        /* …salvo en Meses/Años, donde el rótulo nombra un CASILLERO y ya va
+           centrado en él (`(i+½)/n` en graficos/base.py). Ahí no hay nada
+           que pinear: el primer centro cae a media casilla del borde, que
+           es más de medio rótulo, así que no se corta. Va DESPUÉS de las
+           dos reglas de arriba a propósito — misma especificidad, gana la
+           última (la misma doctrina que el orden de `_SECCIONES`). */
+        .cp-riel-centrada span:first-child,
+        .cp-riel-centrada span:last-child { transform: translateX(-50%); }
+        /* Los rótulos que caen DENTRO de la selección se encienden
+           (2026-09-03, segunda mitad del pedido de los casilleros). En
+           Meses/Años es la única pieza que dice qué períodos entraron,
+           porque los tiradores van sin etiqueta; en Días es redundante con
+           la banda, pero las tres escalas tienen que leerse igual. */
+        .cp-riel-regla span.on {
+            color: var(--accent);
+            font-weight: 600;
+        }
         /* 2026-08-26, a pedido ("no es necesario ver en la línea los días
            del 2023 2024 si mi selección es de días"): el `stSliderTickBar`
            NATIVO de Streamlit queda redundante apenas se agrega
@@ -1069,6 +1086,23 @@ CSS = """        <style>
            que es exactamente lo que se quiere ocultar. */
         [class*="st-key-cp_rank_esc_"] [data-testid="stSliderTickBar"],
         [class*="st-key-cp_prod_esc_"] [data-testid="stSliderTickBar"] {
+            display: none !important;
+        }
+        /* Etiquetas de los TIRADORES, sólo en Meses/Años. Es el precio del
+           modelo de casilleros (2026-09-03): con el riel parando en los
+           BORDES, el tirador derecho marca el arranque del período que ya
+           NO entra, así que seleccionar agosto lo dejaría diciendo
+           "sep 26" — un mes que no está en el filtro. `format_func` no
+           puede rotular distinto a cada tirador (es UNA lista de opciones),
+           así que la salida es no rotularlos: el rango entero ya lo dice la
+           píldora que abre el popover, un renglón más arriba, y qué meses
+           entraron lo dice la regla encendida de abajo. Es además lo que
+           hace Excel, que tampoco pone texto en los manijas.
+           En DÍAS se quedan: ahí el tirador ES la fecha, sin traducción. */
+        [class*="st-key-cp_rank_esc_meses_"] [data-testid="stSliderThumbValue"],
+        [class*="st-key-cp_rank_esc_anos_"] [data-testid="stSliderThumbValue"],
+        [class*="st-key-cp_prod_esc_meses_"] [data-testid="stSliderThumbValue"],
+        [class*="st-key-cp_prod_esc_anos_"] [data-testid="stSliderThumbValue"] {
             display: none !important;
         }
 

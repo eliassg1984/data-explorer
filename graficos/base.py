@@ -7,6 +7,7 @@ cada dashboard (ajuste.py, compras.py, ...) importa lo que necesita de aquí.
 """
 
 import datetime
+import math
 import re
 import unicodedata
 from contextlib import contextmanager
@@ -374,58 +375,72 @@ def _rotulo_marca(escala, d):
     return str(d.year) if escala == "Años" else MESES_ABR_ES[d.month - 1]
 
 
-def _indices_rotulados(n, ancho):
-    """Qué paradas de un riel de `n` llevan rótulo, sin que se pisen.
+def _borde_siguiente(escala, periodo):
+    """El borde que CIERRA `periodo`: el arranque del período que sigue.
 
-    Misma doctrina que la regla de Días —los dos bordes SIEMPRE, y entre
-    medio una cada `paso`, salteando las que quedarían pegadas a un borde—,
-    pero con el paso DEDUCIDO del ancho en píxeles en vez de fijo: la
-    ventana de Meses trae 12 paradas o 3 según cuánto la recorte `bounds`,
-    y un paso fijo o las apila (12 meses en 238px son 21,6px por parada,
-    contra los 18px de "may") o desaprovecha el riel (4 años en 238px
-    tienen 79px cada uno y les sobra sitio a todos).
+    Es la pieza del modelo de casilleros (ver `selector_escala`): el riel de
+    Meses/Años no para en los meses sino en los BORDES entre meses, así que
+    "agosto" es el tramo entre el borde del 1-ago y el del 1-sep.
 
-    Es índice y no fecha porque un `st.select_slider` reparte sus paradas
-    PAREJO: la parada `i` de `n` cae en `i/(n-1)` del riel, sin importar
-    que un mes tenga 28 días y el otro 31.
-
-    DOS SEPARACIONES, no una, y la segunda es la que costó una vuelta: dos
-    marcas del medio están las dos CENTRADAS en su parada, así que les
-    alcanza con `ancho + aire`; pero las de las puntas van pineadas al
-    borde (`translateX(0)` / `-100%` en el CSS), o sea que ocupan un ancho
-    entero hacia adentro. Contra un borde hace falta `1,5·ancho + aire`.
-    Con el umbral único, una ventana de 10 meses ponía la anteúltima marca
-    a 26px de la última y los dos rótulos se tocaban.
+    Se calcula con `escala_a_rango` en vez de a mano para no tener una
+    segunda opinión sobre cuándo termina un período —fin de mes, año
+    bisiesto, 31-dic— que es justo donde vive el bug clásico del filtro por
+    mes. Sin `bounds`: acá el borde tiene que caer donde cae, el recorte a
+    los datos lo hace después quien arma el rango.
     """
-    if n <= 2:
-        return list(range(max(n, 0)))
-    slot = _ANCHO_RIEL_PX / (n - 1)          # px entre paradas vecinas
-    minimo = ancho + _AIRE_ROTULO            # dos marcas del medio
-    borde = 1.5 * ancho + _AIRE_ROTULO       # una del medio contra un borde
-    caben = max(2, int(_ANCHO_RIEL_PX // minimo))
-    paso = max(1, -(-(n - 1) // (caben - 1)))
-    medio = [i for i in range(paso, n - 1, paso)
-             if i * slot >= borde and (n - 1 - i) * slot >= borde]
-    return sorted({0, n - 1} | set(medio))
+    return escala_a_rango(escala, periodo, periodo)[1] + datetime.timedelta(days=1)
 
 
-def _regla_riel(marcas):
+def _indices_rotulados(n, ancho):
+    """Qué casilleros de un riel de `n` llevan rótulo, sin que se pisen.
+
+    Con el modelo de casilleros los rótulos van CENTRADOS en el suyo y
+    ninguno se pinea a un borde, así que la cuenta es UNA sola: dos rótulos
+    vecinos necesitan `ancho + aire` y cada casillero mide
+    `_ANCHO_RIEL_PX / n`. (La versión anterior, con los rótulos sobre las
+    paradas, necesitaba dos umbrales distintos porque el primero y el
+    último iban pineados y ocupaban un ancho entero hacia adentro. Eso
+    desapareció con el cambio de modelo — ver la regla #298.)
+
+    El paso sale del ancho en píxeles y no es fijo porque la ventana trae
+    12 casilleros o 3 según cuánto la recorte `bounds`: con paso fijo o se
+    apilan (12 meses en 238px son 19,8px cada uno, contra los 18px de
+    "may") o se desaprovecha el riel (4 años tienen 59px cada uno y les
+    sobra sitio a todos).
+    """
+    if n <= 0:
+        return []
+    slot = _ANCHO_RIEL_PX / n
+    paso = max(1, math.ceil((ancho + _AIRE_ROTULO) / slot))
+    return list(range(0, n, paso))
+
+
+def _regla_riel(marcas, pinear_puntas=True):
     """Dibuja la fila de marcas de referencia DEBAJO del riel.
 
-    `marcas` es `[(pct, texto)]` ya resuelto por quien llama, porque cada
-    escala sabe dónde caen sus paradas y las dos cuentas no son la misma:
-    Días es lineal en FECHAS (un `st.slider` continuo) y Meses/Años son
-    lineales en ÍNDICE (un `st.select_slider` de paradas parejas). Lo único
-    común —y lo que vive acá— es cómo se dibuja.
+    `marcas` es `[(pct, texto, dentro)]` ya resuelto por quien llama, porque
+    cada escala sabe dónde caen las suyas y las cuentas no son la misma:
+    Días es lineal en FECHAS y las marcas van SOBRE la parada que rotulan
+    (`translateX(0)`/`-100%` para las dos puntas, que si no se leerían
+    cortadas); Meses/Años rotulan CASILLEROS y van centradas en el suyo.
+    De ahí las dos clases. Lo único común —y lo que vive acá— es cómo se
+    dibuja.
+
+    `dentro` dice si esa marca cae en la selección vigente. No es adorno:
+    es la mitad de la respuesta a "¿qué agarré?" cuando el riel muestra
+    períodos (regla #298). Se pinta con la clase `on`.
 
     Fila propia y no overlay sobre el track de Streamlit: overlayarla
     exigiría calzar a mano su alto interno, que cambia con la versión.
     """
     if not marcas:
         return
-    _spans = "".join(f'<span style="left:{_p:.2f}%">{_t}</span>'
-                     for _p, _t in marcas)
-    st.markdown(f'<div class="cp-riel-regla">{_spans}</div>',
+    _spans = "".join(
+        f'<span class="on" style="left:{_p:.2f}%">{_t}</span>' if _on
+        else f'<span style="left:{_p:.2f}%">{_t}</span>'
+        for _p, _t, _on in marcas)
+    _cls = "cp-riel-regla" + ("" if pinear_puntas else " cp-riel-centrada")
+    st.markdown(f'<div class="{_cls}">{_spans}</div>',
                 unsafe_allow_html=True)
 
 
@@ -449,6 +464,34 @@ def _aplicar_escala(k_riel, escala, ctx, bandera):
         return
     aplicar_atajo(ctx["k_rango"],
                   escala_a_rango(escala, par[0], par[1],
+                                 (ctx["fecha_min"], ctx["fecha_max"])),
+                  ctx["reporte"], ctx["usa_carga_rango"])
+    if bandera:
+        st.session_state[bandera] = True
+
+
+def _aplicar_escala_bordes(k_riel, escala, ctx, bandera):
+    """`on_change` del riel de Meses/Años, que para en BORDES.
+
+    Gemelo de `_aplicar_escala` —mismo motivo para ser callback y no
+    cuerpo, ver ahí— con la única traducción que agrega el modelo de
+    casilleros: el tirador derecho marca dónde TERMINA la selección, o sea
+    el arranque del período que ya NO entra. El último día seleccionado es
+    el anterior a ese borde.
+
+    LOS DOS TIRADORES JUNTOS son un caso real: Streamlit deja apilarlos, y
+    ahí la selección mediría cero períodos, que no es una respuesta válida
+    para un filtro de fecha. Se lee como "el período que ARRANCA en ese
+    borde", que es lo que uno acaba de señalar; `escala_a_rango` lo expande
+    solo al pasarle el mismo día de los dos lados.
+    """
+    par = st.session_state.get(k_riel)
+    if not (par and len(par) == 2):
+        return
+    b0, b1 = min(par), max(par)
+    hasta = (b1 - datetime.timedelta(days=1)) if b1 > b0 else b0
+    aplicar_atajo(ctx["k_rango"],
+                  escala_a_rango(escala, b0, hasta,
                                  (ctx["fecha_min"], ctx["fecha_max"])),
                   ctx["reporte"], ctx["usa_carga_rango"])
     if bandera:
@@ -924,7 +967,8 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
                 if _d.day % 5 == 0
                 and (_d - ventana[0]).days >= 2
                 and (ventana[1] - _d).days >= 2})
-            _regla_riel([((_m - ventana[0]).days / _total_dias * 100, _m.day)
+            _regla_riel([((_m - ventana[0]).days / _total_dias * 100, _m.day,
+                          par[0] <= _m <= par[1])
                          for _m in _marcas])
             # El relevo del arrastre y su script se dibujan al FINAL de la
             # función, después del caption. Ver ahí por qué.
@@ -933,11 +977,29 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
         if ventana:
             _nav_ventana(clave, escala, ventana, bounds, ctx, bandera)
         _paradas = escala_periodos(escala, ventana or bounds)
-        st.select_slider("Rango", options=_paradas,
-                         value=par, key=k_riel,
+        # EL RIEL PARA EN LOS BORDES, NO EN LOS PERÍODOS — y esto es el
+        # modelo, no un detalle (a pedido 2026-09-03: "¿ves lógico que la
+        # línea sólo tenga un punto y arriba diga del 1 ago al 31 ago?").
+        #
+        # Antes las paradas eran los meses, así que "todo agosto" era
+        # desde-agosto-hasta-agosto: los dos tiradores caían en el MISMO
+        # punto y la banda medía cero. El control se contradecía solo — la
+        # píldora decía "1 ago – 31 ago" y el caption "31 días", y el riel
+        # mostraba un punto. De yapa, dos tiradores apilados no se ven como
+        # dos y no hay pista de por dónde agarrar para abrir la selección.
+        #
+        # Con bordes, un mes es el TRAMO entre el 1-ago y el 1-sep: ocupa
+        # un casillero de ancho real, como las celdas de la escala de
+        # tiempo de Excel, que es de donde salió este control. Por eso los
+        # bordes son `len(_paradas) + 1` y el valor del widget lleva el
+        # borde que CIERRA el último período elegido.
+        _bordes = _paradas + [_borde_siguiente(escala, _paradas[-1])]
+        st.select_slider("Rango", options=_bordes,
+                         value=(par[0], _borde_siguiente(escala, par[1])),
+                         key=k_riel,
                          format_func=lambda d: _fmt_periodo(escala, d),
                          label_visibility="collapsed",
-                         on_change=_aplicar_escala,
+                         on_change=_aplicar_escala_bordes,
                          args=(k_riel, escala, ctx, bandera))
         # LA MISMA REGLA QUE DÍAS, un piso más arriba (a pedido 2026-09-03:
         # "cuando están en los botones de mes y año, no muestra ninguna
@@ -949,11 +1011,20 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
         # "ago 26": el DOM traía "ene 26 / ago 26" y en pantalla no se veía
         # nada). Por eso va oculto explícito en `_css_proveedor.py` en las
         # tres escalas, y la referencia la pone siempre esta regla.
-        if len(_paradas) > 1:
-            _ancho = _ANCHO_ROTULO.get(escala, 24)
-            _regla_riel([(_i / (len(_paradas) - 1) * 100,
-                          _rotulo_marca(escala, _paradas[_i]))
-                         for _i in _indices_rotulados(len(_paradas), _ancho)])
+        #
+        # Acá el rótulo nombra el CASILLERO, así que va centrado en él
+        # —`(i + ½) / n`— y no sobre una parada. Y los que caen dentro de
+        # la selección se encienden: con los tiradores sin etiqueta (ver el
+        # CSS), esta fila es la que dice qué meses entraron.
+        _n_slots = len(_paradas)
+        if _n_slots:
+            _ancho = _ANCHO_ROTULO.get(escala, 22)
+            _i0, _i1 = _paradas.index(par[0]), _paradas.index(par[1])
+            _regla_riel([((_i + 0.5) / _n_slots * 100,
+                          _rotulo_marca(escala, _paradas[_i]),
+                          _i0 <= _i <= _i1)
+                         for _i in _indices_rotulados(_n_slots, _ancho)],
+                        pinear_puntas=False)
 
     # El slider ya dibuja sus dos extremos; repetir las fechas sería ruido.
     # Lo que NO dice es cuánto abarca, que es el dato con el que se decide
