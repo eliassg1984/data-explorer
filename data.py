@@ -789,12 +789,32 @@ def cargar(archivo):
 
 
 def limpiar_cache(archivo):
-    """Invalida el cache de `cargar()` para `archivo` tras un refresco
-    confirmado en R2. `cargar()` ya no es cacheable directamente (ver su
-    docstring) — el `@st.cache_data` real vive en `_cargar_cacheable`, así
-    que es esa la que hay que limpiar. Llamado desde app.py::_vigilar_refresco
-    y navegacion.py::boton_refresco."""
+    """Invalida el cache de `cargar()` Y de `cargar_rango()` para `archivo`
+    tras un refresco confirmado en R2. Ninguna de las dos es cacheable
+    directamente (ver sus docstrings) — el `@st.cache_data` real vive en
+    `_cargar_cacheable` / `_cargar_rango_cacheable`, así que son esas las
+    que hay que limpiar. Llamado desde app.py::_vigilar_refresco y
+    navegacion.py::boton_refresco.
+
+    Bug real (2026-09-03): esta función solo limpiaba `_cargar_cacheable`.
+    Ventas carga por `carga_por_rango` (ver REPORTES), o sea que pasa por
+    `_cargar_rango_cacheable`, NUNCA por `_cargar_cacheable` — un refresco
+    de Ventas mostraba el toast "✅ actualizado" y el archivo SÍ estaba
+    nuevo en R2, pero la vista seguía sirviendo el resultado (vacío o
+    viejo) que ya tenía cacheado para el rango de fechas visible, hasta que
+    venciera su `ttl=3600` (hasta 1h — y con `persist="disk"` sobrevive
+    incluso a un reinicio del server).
+    `_cargar_rango_cacheable.clear()` sin argumentos porque su clave es
+    (archivo, col_fecha, ini, fin): Streamlit solo permite limpiar una
+    entrada puntual pasando los CUATRO valores exactos, o vaciar la función
+    entera. Acá no se conoce ini/fin del caller (y puede haber más de un
+    rango cacheado a la vez si distintos usuarios miraron distintas
+    ventanas), así que se vacía TODA — hoy Ventas es el único reporte con
+    `carga_por_rango`, así que el radio es uno solo; si se suma otro
+    reporte con el mismo patrón, seguirá siendo correcto (solo un poco más
+    ancho: purga rangos de otros archivos que no hacía falta invalidar)."""
     _cargar_cacheable.clear(archivo)
+    _cargar_rango_cacheable.clear()
 
 
 @st.cache_data(ttl=3600, persist="disk")

@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-291 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+292 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (95)
 
@@ -341,7 +341,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#286** — Un translate(0, -13px) arrastrado en el modo diseño casi nunca pide mover algo: está midiendo…
 - **#287** — Un caption que explica CÓMO SE LEE una vista se lee una vez y estorba siempre: va en un…
 
-**Datos, R2 y DuckDB** (30)
+**Datos, R2 y DuckDB** (31)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -373,6 +373,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#230** — Un @st.fragment alrededor de la tarjeta que se edita: una corrección deja de re-correr el…
 - **#232** — Una anotación por línea que puede tener DOS correcciones independientes se guarda con claves…
 - **#253** — recetaventa.parquet ya trae ULTIMA VENT y FECH MODIF nativas — no hace falta cruzar contra…
+- **#292** — limpiar_cache(archivo) sólo limpiaba la mitad de las cachés de carga — la hermana "por rango"…
 
 **SUNAT y SIRE** (28)
 
@@ -13017,13 +13018,58 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      `−S/ 919.331 · −10,5% · la cantidad`: la barra verde o roja de abajo ya
      dice cuál efecto manda y el popover de ayuda explica qué significan.
 
+292. **`limpiar_cache(archivo)` sólo limpiaba la mitad de las cachés de
+     carga — la hermana "por rango" quedó afuera cuando se creó.**
+
+     2026-09-03, diagnosticando por qué Ventas mostraba "No se pudieron
+     cargar los datos" en producción. La causa de fondo era real y
+     simple: el rango por defecto de Ventas es 1-del-mes → hoy
+     (`carga_por_rango`, ver REPORTES), hoy caía en septiembre, y
+     `ventas.parquet` en R2 no se refrescaba desde el 2026-08-30 — cero
+     filas de septiembre, `cargar_rango` devolvía un DataFrame vacío
+     honestamente. Se confirmó que el proceso que atiende refrescos
+     puntuales (`atender_solicitudes.py`, en la CPU del SQL de la
+     empresa) seguía vivo: una señal en `_solicitudes_refresco/` se
+     atendió en 41s y el parquet en R2 quedó al día.
+
+     Pero eso no alcanzaba: el mecanismo de la app que vigila el refresco
+     (`app.py::_vigilar_refresco`) detecta el cambio en R2 vía
+     `hay_dato_nuevo` y llama a `data.py::limpiar_cache(archivo)` — y esa
+     función sólo hacía `_cargar_cacheable.clear(archivo)`. Ventas no pasa
+     por `_cargar_cacheable`: pasa por `_cargar_rango_cacheable` (la
+     versión que filtra por fecha DENTRO de DuckDB, ver `cargar_rango()`),
+     una función cacheada **distinta**, con su propio `ttl=3600` +
+     `persist="disk"`. Resultado: el toast decía "✅ actualizado", R2
+     tenía el dato nuevo, y la pantalla seguía sirviendo el resultado
+     vacío que ya tenía cacheado para ese rango exacto — hasta que
+     venciera el `ttl` (hasta 1h) o alguien reiniciara el server (y ni
+     eso alcanza siempre, por el `persist="disk"` de la regla #94).
+
+     Es la regla #41 otra vez, con otra cara: en 2026-08-07 el bug fue un
+     `.clear()` sobre un wrapper que ya no tenía `@st.cache_data`; acá la
+     función correcta SÍ tenía `.clear()`, pero `limpiar_cache` nunca se
+     enteró de que para Ventas la carga pasa por una función cacheada
+     **hermana**, agregada después. Fix: `limpiar_cache` ahora también
+     llama `_cargar_rango_cacheable.clear()` — sin argumentos, porque su
+     clave es `(archivo, col_fecha, ini, fin)` y en el call site no se
+     conoce el rango exacto (ni hace falta: vaciar toda la función es
+     correcto incluso si más de un usuario cacheó rangos distintos).
+
+     **Regla:** cuando una función de carga cacheada se clona en una
+     variante (por rango, por agregado, lo que sea), todo punto que
+     "limpia caché tras un refresco" tiene que aprender de la variante
+     nueva — no alcanza con que el nombre original (`_cargar_cacheable`)
+     siga sonando a "la función de carga". `grep` por `@st.cache_data`
+     cerca de la función fuente antes de dar por completa una limpieza de
+     caché.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#292**.
+> próxima regla nueva es la **#293**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
