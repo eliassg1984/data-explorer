@@ -682,14 +682,14 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                         x=agg.index, y=_valor, marker_color=ACENTO,
                         text=_etiquetas, textposition="outside",
                         textangle=-90 if _muchas else 0,
-                        textfont=dict(size=9, color=GRIS_TEXTO),
+                        textfont=dict(size=10, color=GRIS_TEXTO),
                         cliponaxis=False, constraintext="none",
                         customdata=_precio,
                         hovertemplate=("%{x|%d/%m/%Y}<br>valor S/ %{y:,.2f}"
                                        "<br>precio prom. S/ %{customdata:,.2f}"
                                        "<extra></extra>"),
                     )
-                    _compras_layout(fig, alto=alturas.MINI)
+                    _compras_layout(fig, alto=alturas.MINI_PROD_EVO)
                     fig.update_layout(showlegend=False,
                                       yaxis=dict(showticklabels=False),
                                       bargap=0.35)
