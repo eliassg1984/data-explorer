@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-292 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+293 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (95)
 
@@ -341,7 +341,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#286** — Un translate(0, -13px) arrastrado en el modo diseño casi nunca pide mover algo: está midiendo…
 - **#287** — Un caption que explica CÓMO SE LEE una vista se lee una vez y estorba siempre: va en un…
 
-**Datos, R2 y DuckDB** (31)
+**Datos, R2 y DuckDB** (32)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -374,6 +374,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#232** — Una anotación por línea que puede tener DOS correcciones independientes se guarda con claves…
 - **#253** — recetaventa.parquet ya trae ULTIMA VENT y FECH MODIF nativas — no hace falta cruzar contra…
 - **#292** — limpiar_cache(archivo) sólo limpiaba la mitad de las cachés de carga — la hermana "por rango"…
+- **#293** — "No se pudieron cargar los datos", tercera causa: el extractor NOCTURNO dejó de correr. Se…
 
 **SUNAT y SIRE** (28)
 
@@ -13063,13 +13064,70 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      cerca de la función fuente antes de dar por completa una limpieza de
      caché.
 
+293. **"No se pudieron cargar los datos", tercera causa: el extractor
+     NOCTURNO dejó de correr. Se diagnostica por los timestamps de
+     `salida\`, no por R2.**
+
+     2026-09-03. Ventas mostraba el warning de siempre y ninguna de las dos
+     causas ya documentadas era: ni el `None` cacheado (#19) ni la
+     cancelación de runs (#94). El parquet en R2 estaba sano, sólo que
+     **viejo** — su última fila era del 29/08, y el rango por defecto de
+     Ventas es 1-del-mes → hoy, que en septiembre caía entero fuera del
+     dato. `cargar_rango` devolvía 0 filas, honestamente.
+
+     La causa estaba en la máquina del pipeline (la CPU del SQL de la
+     empresa, `C:\proyecto` — fuera de este repo, así que `git log` no la
+     muestra: esos scripts se versionan a mano con archivos
+     `.bak-AAAAMMDD`). El diagnóstico que la encontró en un minuto es
+     **mirar los timestamps de `salida\`**, la carpeta donde el extractor
+     deja los parquets antes de subirlos:
+
+         ventas.parquet                3/09 00:57   <- refresco puntual
+         compras.parquet               1/09 21:30   <- refresco puntual
+         requerimientos.parquet       30/08 03:01   ┐
+         salidas.parquet              30/08 03:00   │ los otros 6,
+         ajusteinventario.parquet     30/08 03:00   │ congelados en el
+         inventariovalorizado.parquet 30/08 03:00   │ MISMO minuto,
+         recetabase.parquet           30/08 03:00   │ hace 4 días
+         recetaventa.parquet          30/08 03:00   ┘
+
+     **Un lote entero parado en el mismo minuto no es "R2 lento": es la
+     tarea nocturna que no volvió a correr.** Y los dos únicos con fecha
+     nueva son justo los que alguien pidió por el botón "Refrescar"
+     (`atender_solicitudes.py`, otro proceso, sano) — esa asimetría es la
+     que separa "se rompió el refresco puntual" de "se rompió el masivo".
+
+     El culpable: `ejecutar_extraccion.bat` terminaba en `pause`. Disparado
+     por el Programador de tareas, sin nadie que apriete una tecla, el
+     proceso espera para siempre; y si la tarea está configurada para no
+     solapar instancias, ese cuelgue se come todas las corridas siguientes.
+     **Es la segunda vez que este pipeline se cuelga esperando un Enter:**
+     el propio `Extraer a parquet.py` ya traía el guard
+     `if sys.stdin.isatty(): input(...)` puesto por el mismo motivo, con el
+     comentario de que "la tarea programada ya no se queda colgada". El
+     `pause` del `.bat` lo salteaba un nivel más arriba.
+
+     Trampa que apareció al arreglarlo, y que casi queda adentro: mandar la
+     salida a un log (`>> "%LOG%" 2>&1`) **esconde el prompt interactivo**.
+     Ese "Presiona ENTER para cerrar esta ventana..." se iba al archivo, y
+     la corrida a mano quedaba con una ventana en blanco, colgada y sin
+     explicación — el mismo síntoma que se estaba arreglando, con otra
+     causa. Por eso el modo `--manual` del `.bat` no redirige.
+
+     **Regla:** un script que corre desatendido no puede tener NINGUNA
+     espera de teclado, y el guard va en TODAS las capas (el `.py` y el
+     `.bat` que lo envuelve): cualquiera de las dos alcanza para colgar la
+     tarea, y arreglar una sola da la falsa sensación de estar cubierto. Si
+     además se le agrega log, revisar que no queden prompts que dependan de
+     que un humano los vea.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#293**.
+> próxima regla nueva es la **#294**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
