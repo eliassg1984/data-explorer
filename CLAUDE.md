@@ -447,9 +447,13 @@ activa `inject_element_inspector` (tooltip con selectores y estilos al
 pasar el cursor). El inspector NO agrega elementos visibles en la página
 — se ve como producción. Con un elemento fijado, la línea "Cadena de
 contenedores st-key" del tooltip es clicable: **migas de pan** que saltan
-el pin a cualquier ancestro sin ir a buscarlo a ojo en la pantalla. Para
-los paneles de diagnóstico de entorno/performance usar **`?diagnostico=1`**
-(independiente de debug).
+el pin a cualquier ancestro sin ir a buscarlo a ojo en la pantalla. Con
+elementos PEGADOS (bordes de tarjetas vecinas a 1-2px) el hover normal
+titila entre ellos — la fila naranja **"Pegado acá: ..."** que aparece en
+el tooltip lista lo que hay al lado del punto exacto (no solo la cadena de
+ancestros) para elegir con un clic en vez de perseguir el píxel. Regla
+#295. Para los paneles de diagnóstico de entorno/performance usar
+**`?diagnostico=1`** (independiente de debug).
 Y con **`?debug=1&diseno=1`** se suma el **modo diseño**: fijás un elemento
 con clic derecho y un panel lateral lo edita en vivo (caja, tipografía,
 color, mover/redimensionar, **alto de fila** si es una tabla AgGrid, con

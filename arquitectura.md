@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-294 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+295 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (95)
 
@@ -425,7 +425,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (26)
+**Herramientas de desarrollo** (27)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -453,6 +453,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#261** — Amplía la #254: con algo pineado, el outline de Inspector se suprime SOLO, en vez de exigir…
 - **#264** — Un mock arrastrado con "Mover" podía terminar pintado DEBAJO de un hermano posterior — no…
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
+- **#295** — El inspector resolvía "qué hay bajo el cursor" con UN solo punto (e.target) — con elementos…
 
 **Decisiones de diseño y UX** (53)
 
@@ -13177,13 +13178,49 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      aislar el problema del widget de la fiabilidad del clic — y borrarlos
      antes de commitear.
 
+295. **El inspector resolvía "qué hay bajo el cursor" con UN solo punto
+     (`e.target`) — con elementos pegados (bordes de tarjetas vecinas a
+     1-2px, un chip flotante sobre su tarjeta) el hover TITILA entre ellos
+     al mover el mouse 1px, y no hay forma de elegir el que en realidad se
+     quiere.** Pedido real 2026-09-03: "¿cómo lo hacen las apps de diseño?"
+     — Figma resuelve esto con clic derecho → lista de capas en ese punto,
+     de arriba hacia abajo.
+
+     `vecinosCercanos(cx, cy, propiaCadena)` (`inyecciones/_inspector_js.py`)
+     muestrea 4 puntos cardinales (±14px) alrededor del cursor con
+     `document.elementsFromPoint` (plural: TODA la pila en ese punto, no
+     solo el de más arriba — distinto de `elementFromPoint` singular que ya
+     usa el resto del inspector), y devuelve las keys que aparecen ahí y
+     que NO son ya un ancestro del punto central (`cadenaKeys`/las migas de
+     la regla #155 ya cubren esa cadena; esto es lo OTRO que hay al lado).
+     Se pinta como una fila naranja "Pegado acá: ..." en el tooltip
+     (`pintarVecinos`, contenedor `#el-inspector-vecinos`, nuevo, entre las
+     migas y el `<pre>`), con hover-preview (outline punteado sobre el
+     candidato, guardado/restaurado por `dataset` para no pisar el outline
+     que ya tuviera) y clic para fijar directo — reusa `saltarAAncestro` de
+     la regla #155, mismo mecanismo de salto.
+
+     **Por qué 4 puntos y no un radio circular/más denso:** corre en CADA
+     mousemove del inspector, sin gate — este proyecto se desarrolla en
+     hardware limitado (ver arquitectura.md, equipo de desarrollo), así que
+     el costo por tick importa. Cardinales alcanza para el caso real
+     (vecino a un lado, no en diagonal) sin cuadruplicar las llamadas a
+     `elementsFromPoint`.
+
+     Verificado en vivo contra `cp_prov_pop_float`/`cp_rank_escala`
+     (proveedor.py — dos controles flotantes pegados en la misma fila del
+     Ranking): hover en el borde entre ambos resolvía a un contenedor sin
+     key propia (`cp_rank_fila`) pero listaba `cp_rank_escala` como vecino;
+     clic saltó y fijó ahí, con el outline de hover apareciendo y
+     desapareciendo limpio.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#295**.
+> próxima regla nueva es la **#296**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

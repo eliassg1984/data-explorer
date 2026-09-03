@@ -246,6 +246,43 @@ JS = """
             }
             return out;
         }
+        // Encontrado con un pedido real del usuario: elementos "pegados" —
+        // bordes de tarjetas vecinas a 1-2px, un chip flotante sobre su
+        // tarjeta — hacen que el hover TITILE entre ellos: mover el cursor
+        // 1px cambia `e.target` y el tooltip completo. `cadenaKeys` (arriba)
+        // ya resuelve la cadena de ANCESTROS del punto exacto, pero no dice
+        // nada de lo que hay ADENTRO de esos 1-2px de al lado — que es
+        // justamente lo que titila.
+        //
+        // vecinosCercanos muestrea unos pocos puntos ALREDEDOR del cursor
+        // (no solo el pixel exacto) con `elementsFromPoint` (plural: TODA
+        // la pila en ese punto, no solo el mas arriba) y devuelve las keys
+        // que aparecen ahi y que NO son ya un ancestro del punto central —
+        // esas son las "otras candidatas" que la app de diseño te dejaria
+        // elegir en vez de perseguir con el pixel.
+        function vecinosCercanos(cx, cy, propiaCadena) {
+            var propios = {};
+            for (var pi = 0; pi < propiaCadena.length; pi++) propios[propiaCadena[pi]] = true;
+            // Solo 4 offsets cardinales (no diagonales): mantiene el costo
+            // bajo -- corre en CADA mousemove del inspector, sin gate, y
+            // esta app se desarrolla en hardware limitado (ver
+            // arquitectura.md, equipo de desarrollo).
+            var offs = [[-14, 0], [14, 0], [0, -14], [0, 14]];
+            var vistos = {};
+            var out = [];
+            for (var i = 0; i < offs.length && out.length < 6; i++) {
+                var x = cx + offs[i][0], y = cy + offs[i][1];
+                if (x < 0 || y < 0 || x > win.innerWidth || y > win.innerHeight) continue;
+                var pila;
+                try { pila = doc.elementsFromPoint(x, y); } catch (_e) { pila = []; }
+                for (var j = 0; j < pila.length && j < 4; j++) {
+                    var k = keyDeElemento(pila[j]);
+                    if (k && !propios[k] && !vistos[k]) { vistos[k] = true; out.push(k); }
+                }
+            }
+            return out;
+        }
+
         function cadenaTestids(el) {
             var out = [];
             var cur = el;
@@ -807,6 +844,54 @@ JS = """
             });
         }
 
+        // El picker de "que mas hay pegado aca" (vecinosCercanos arriba).
+        // Distinto de las migas A PROPOSITO: naranja en vez de violeta (no
+        // es la cadena de ancestros, es la lista de "otra cosa que tapa o
+        // roza este pixel"), y en hover previsualiza con un outline propio
+        // sobre el candidato SIN tocar resaltarEl/elActual — asi no pisa el
+        // highlight del elemento realmente hovereado al pasar por la lista.
+        function pintarVecinos(vecinos) {
+            var box = doc.getElementById('el-inspector-vecinos');
+            if (!box) return;
+            box.innerHTML = '';
+            if (!vecinos || !vecinos.length) { box.style.display = 'none'; return; }
+            box.style.display = 'flex';
+            var etiqueta = doc.createElement('span');
+            etiqueta.textContent = 'Pegado acá:';
+            etiqueta.style.cssText = 'color:#71717a;flex-shrink:0;font:11px sans-serif;margin-right:1px';
+            box.appendChild(etiqueta);
+            vecinos.forEach(function(k) {
+                var b = doc.createElement('button');
+                b.textContent = k;
+                b.title = 'fijar st-key-' + k;
+                b.style.cssText = 'background:#2a1f14;border:1px solid #4a3420;padding:2px 7px;'
+                    + 'border-radius:9px;font:11px "Courier New",monospace;cursor:pointer;'
+                    + 'color:#e8a666;white-space:nowrap;flex-shrink:0';
+                b.addEventListener('mouseenter', function() {
+                    b.style.background = '#3a2a18';
+                    var cand = doc.querySelector('.st-key-' + k);
+                    if (cand) {
+                        cand.dataset.inspVecinoPrevOutline = cand.style.outline || '';
+                        cand.style.outline = '2px dashed #e8a666';
+                        cand.style.outlineOffset = '1px';
+                    }
+                });
+                b.addEventListener('mouseleave', function() {
+                    b.style.background = '#2a1f14';
+                    var cand = doc.querySelector('.st-key-' + k);
+                    if (cand && cand.dataset.inspVecinoPrevOutline !== undefined) {
+                        cand.style.outline = cand.dataset.inspVecinoPrevOutline;
+                        delete cand.dataset.inspVecinoPrevOutline;
+                    }
+                });
+                b.addEventListener('click', function(ev) {
+                    ev.preventDefault(); ev.stopPropagation();
+                    saltarAAncestro(k);
+                });
+                box.appendChild(b);
+            });
+        }
+
         function inspectorActivo() {
             return new URL(win.location.href).searchParams.get('debug') === '1';
         }
@@ -947,6 +1032,7 @@ JS = """
                 // el <pre> de abajo es plano (pre-wrap) y el tip contenedor
                 // puede estar en pointer-events:none si todavia no esta fijado.
                 '<div id="el-inspector-migas" style="display:none;flex-wrap:wrap;align-items:center;gap:1px;padding:0 0 6px;margin-bottom:6px;border-bottom:1px solid #2a2a35;pointer-events:auto"></div>' +
+                '<div id="el-inspector-vecinos" style="display:none;flex-wrap:wrap;align-items:center;gap:5px;padding:0 0 6px;margin-bottom:6px;border-bottom:1px solid #2a2a35;pointer-events:auto"></div>' +
                 '<pre id="el-inspector-text" style="margin:0;font:12px/1.55 \\'Courier New\\',monospace;color:var(--border);white-space:pre-wrap"></pre>';
             doc.body.appendChild(tip);
 
@@ -1584,6 +1670,7 @@ JS = """
                 var testids = cadenaTestids(el);
                 var clases  = clasesElemento(el);
                 var keysCad = cadenaKeys(el);
+                var vecinos = vecinosCercanos(e.clientX, e.clientY, keysCad);
                 // Baratas (recorridos de DOM, no de hojas de estilo): van en
                 // el hover. `compartidos` no — ese recorre styleSheets y se
                 // computa al pulsar C. Ver regla #90.
@@ -1646,6 +1733,7 @@ JS = """
                 if (pre) pre.textContent = etiquetaFinal;
                 else tip.textContent = etiquetaFinal;
                 pintarMigas(keysCad);
+                pintarVecinos(vecinos);
                 // Silenciado (Alt+T): el hover pasivo no muestra el tooltip
                 // (__inspectorUltimo ya se actualizo arriba igual, sin
                 // depender de esto). Este bloque nunca corre estando fijado
