@@ -27,7 +27,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from tema import GRIS_BORDE
+from tema import GRIS_BORDE, TEXTO_PRINCIPAL, BLANCO
 from utils import _norm, fmt_k
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
@@ -623,35 +623,84 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             with col_izq:
                 with st.container(border=True, key="ajuste_graf_card_izq_sem"):
                     if col_prod and col_fecha:
-                        # Compra por SEMANA: barras apiladas (valor) por producto
-                        # (top 8 + Otros); el hover muestra valor y cantidad.
-                        _dias_ini = {"Lunes": 0, "Sábado": 5, "Domingo": 6}
-                        _cd, _ = st.columns([1, 2.2])
-                        with _cd:
-                            _dini = st.selectbox("La semana empieza:",
-                                                 list(_dias_ini.keys()),
-                                                 key="compras_sem_inicio")
-                        _off = _dias_ini[_dini]
-                        _fe = pd.to_datetime(d[col_fecha], errors="coerce")
-                        _sem_ini = (_fe - pd.to_timedelta(
-                            (_fe.dt.weekday - _off) % 7, unit="D")).dt.date
-                        _cnt = (pd.to_numeric(d[col_cant], errors="coerce").fillna(0)
+                        # Agrupar por: el mismo control que Proveedor/Salidas/
+                        # Requerimientos (Día/Semana/Mes/Año sobre
+                        # `_periodo_serie`), más una quinta opción propia de
+                        # esta vista. "Por documento" no agrupa por FECHA,
+                        # agrupa por COMPRA (fecha+proveedor+Nº documento):
+                        # una orden con 5 líneas es una compra, no cinco —
+                        # mismo criterio que `documentos_sunat.py` para no
+                        # colisionar entre proveedores que reusan su propia
+                        # numeración (regla #143). 2026-09-03, a pedido: antes
+                        # esta tarjeta sólo sabía agrupar por semana, con un
+                        # selector de "la semana empieza en" que se fue con
+                        # este cambio — la ISO-semana de `_periodo_serie` es
+                        # la misma que ya usa el resto de la app.
+                        # columnas-internas: angosta el selector, no el eje del drill.
+                        _cg, _ = st.columns([1, 2.2])
+                        with _cg:
+                            gran = st.pills(
+                                "Agrupar por",
+                                ["Día", "Semana", "Mes", "Año", "Por documento"],
+                                default="Semana", key="compras_sem_gran",
+                                label_visibility="collapsed") or "Semana"
+
+                        # Cambiar de granularidad invalida el foco: una clave
+                        # de "Semana" no existe en el espacio de "Mes". Mismo
+                        # guard que `compras_vol_prod_prev` en volatilidad.py
+                        # al cambiar de producto.
+                        if st.session_state.get("compras_sem_gran_prev") != gran:
+                            st.session_state["compras_sem_gran_prev"] = gran
+                            st.session_state["compras_sem_focus"] = None
+
+                        _fe   = pd.to_datetime(d[col_fecha], errors="coerce")
+                        _cnt  = (pd.to_numeric(d[col_cant], errors="coerce").fillna(0)
                                 if col_cant else pd.Series(0, index=d.index))
-                        top = _valor.groupby(d[col_prod].astype(str)).sum().nlargest(8).index
-                        _pr = d[col_prod].astype(str).where(
-                            d[col_prod].astype(str).isin(top), "Otros")
-                        dd = pd.DataFrame({"sem": _sem_ini, "prod": _pr,
-                                           "valor": _valor, "cant": _cnt}).dropna(subset=["sem"])
-                        g = dd.groupby(["sem", "prod"], as_index=False)[["valor", "cant"]].sum()
-                        g = g.sort_values("sem")
-                        g["sem_lbl"] = pd.to_datetime(g["sem"]).dt.strftime("Sem %d/%m")
+                        _pu   = (pd.to_numeric(d[col_punit], errors="coerce")
+                                if col_punit else pd.Series(pd.NA, index=d.index))
+                        _prvs = d[col_prov].astype(str) if col_prov else pd.Series("", index=d.index)
+                        _docn = d[col_docu].astype(str) if col_docu else pd.Series("", index=d.index)
+
+                        dd = pd.DataFrame({
+                            "fecha": _fe, "prod": d[col_prod].astype(str), "prov": _prvs,
+                            "docn": _docn, "cant": _cnt, "punit": _pu, "valor": _valor,
+                        }).dropna(subset=["fecha"])
+
+                        # Clave de COMPRA: fecha+proveedor+documento, no el Nº
+                        # de documento solo (se repite entre proveedores que
+                        # reusan su propia numeración). Sin proveedor o
+                        # documento resuelto, cada FILA es su propia compra —
+                        # fallback defensivo, no bloquea la vista.
+                        _con_doc = bool(col_prov and col_docu)
+                        dd["compra"] = (
+                            dd["fecha"].dt.strftime("%Y-%m-%d") + "·" + dd["prov"] + "·" + dd["docn"]
+                            if _con_doc else dd.index.astype(str))
+
+                        if gran == "Por documento":
+                            dd["clave"] = dd["compra"]
+                            dd["lbl"] = dd["fecha"].dt.strftime("%d/%m")
+                        else:
+                            dd["clave"] = _periodo_serie(dd["fecha"], gran)
+                            dd["lbl"] = dd["clave"]
+
+                        top = dd.groupby("prod")["valor"].sum().nlargest(8).index
+                        dd["prod_top"] = dd["prod"].where(dd["prod"].isin(top), "Otros")
+
+                        _orden = (dd.drop_duplicates("clave")[["clave", "lbl"]]
+                                 .sort_values("clave"))
+                        _ord_claves = _orden["clave"].tolist()
+                        _ord_lbls = _orden["lbl"].tolist()
+
+                        g = dd.groupby(["clave", "prod_top"],
+                                       as_index=False)[["valor", "cant"]].sum()
+
                         fig = go.Figure()
-                        _prods = ([p_ for p_ in top if p_ in set(g["prod"])] +
-                                  (["Otros"] if (g["prod"] == "Otros").any() else []))
+                        _prods = ([p_ for p_ in top if p_ in set(g["prod_top"])] +
+                                  (["Otros"] if (g["prod_top"] == "Otros").any() else []))
                         for _i, _p in enumerate(_prods):
-                            gg = g[g["prod"] == _p]
+                            gg = g[g["prod_top"] == _p]
                             fig.add_bar(
-                                x=gg["sem_lbl"], y=gg["valor"],
+                                x=gg["clave"], y=gg["valor"],
                                 name=_compras_truncar(_p, 22),
                                 marker=dict(color=(GRIS_BORDE if _p == "Otros"
                                             else PALETA_CALLAI[_i % len(PALETA_CALLAI)])),
@@ -661,15 +710,114 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                                                "<br>Cantidad: %{customdata:,.1f}"
                                                "<extra></extra>"),
                             )
+
+                        # Puntos superpuestos: una COMPRA, no una línea de
+                        # producto — una orden de 5 líneas es un solo punto,
+                        # no cinco. Se omiten en "Por documento": ahí cada
+                        # barra YA es una compra y el punto caería pegado a
+                        # su propia punta, sin sumar información. 2026-09-03,
+                        # a pedido.
+                        if gran != "Por documento":
+                            docs_g = (dd.groupby(["clave", "compra"], as_index=False)
+                                     .agg(valor=("valor", "sum"), fecha=("fecha", "min"),
+                                          prov=("prov", "first")))
+                            _cd_docs = docs_g[["fecha", "prov"]].assign(
+                                fecha=docs_g["fecha"].dt.strftime("%d/%m/%Y")).to_numpy()
+                            fig.add_scatter(
+                                x=docs_g["clave"], y=docs_g["valor"], mode="markers",
+                                name="Compra individual",
+                                marker=dict(size=8, color=TEXTO_PRINCIPAL,
+                                            line=dict(color=BLANCO, width=1.5)),
+                                customdata=_cd_docs,
+                                hovertemplate=("Compra · %{customdata[1]}<br>%{customdata[0]}"
+                                               "<br>Valor: S/ %{y:,.2f}<extra></extra>"),
+                            )
+
                         _compras_layout(fig, alto=alturas.PROTAGONISTA)
+                        _tit_gran = {"Día": "por día", "Semana": "por semana",
+                                    "Mes": "por mes", "Año": "por año",
+                                    "Por documento": "por documento"}[gran]
                         fig.update_layout(
-                            title="Compra por semana — valor por producto (top 8 + Otros)",
+                            title=f"Compra {_tit_gran} — valor por producto (top 8 + Otros)",
                             barmode="stack",
                             legend=dict(orientation="h", y=-0.22, x=0,
                                         font=dict(size=10)),
                         )
-                        fig.update_xaxes(type="category")
-                        st.plotly_chart(fig, use_container_width=True, key="compras_g_semanal")
+                        fig.update_xaxes(type="category", categoryorder="array",
+                                         categoryarray=_ord_claves,
+                                         tickvals=_ord_claves, ticktext=_ord_lbls)
+
+                        # Clic en una barra o un punto -> foco de la tabla de
+                        # abajo. La key lleva el foco DE ANTES del clic: la
+                        # selección de on_select persiste mientras la key no
+                        # cambie, así que con key estática cada rerun re-lee
+                        # el mismo punto y togglea para siempre (parpadeo).
+                        # Mismo patrón que el click-drill de Por área/Por
+                        # familia — ver CLAUDE.md y arquitectura.md #76.
+                        _foco_antes = st.session_state.get("compras_sem_focus")
+                        evt = st.plotly_chart(
+                            fig, use_container_width=True, on_select="rerun",
+                            selection_mode="points",
+                            key=f"compras_g_semanal_{gran}_{_foco_antes or 'none'}")
+                        _pt = _first_point(evt)
+                        if _pt is not None:
+                            _clic = _pt.get("x")
+                            st.session_state["compras_sem_focus"] = (
+                                None if _foco_antes == _clic else _clic)
+
+                        # El CAPTION es un elemento simple: un `if/else`
+                        # desnudo lo reconcilia bien (mismo conteo de
+                        # elementos en los dos branches, sólo cambia el
+                        # texto). La TABLA es otra cosa — medido en vivo
+                        # (2026-09-03): con la tabla DENTRO de un
+                        # `st.empty().container()` que en el branch "sin
+                        # foco" se rellena con sólo el caption, el
+                        # `st.dataframe` (glide-data-grid) sobrevivía
+                        # igual, visible y con datos del foco anterior.
+                        # `st.empty()` + `with hueco.container():` es la
+                        # cura para el HUÉRFANO documentada en
+                        # arquitectura.md regla #70, pero ese caso probado
+                        # (chips de bienvenida de `asistente.py`) nunca
+                        # REEMPLAZA el contenido por otra cosa — lo deja
+                        # sin llenar. Acá el hueco de la tabla se vacía con
+                        # `.empty()` EXPLÍCITO en el branch que no la
+                        # necesita, dedicado sólo a la tabla, igual que el
+                        # segundo caso de `asistente.py` (el hueco de
+                        # "Consultando tus datos…", que se limpia con
+                        # `hueco.empty()` antes de escribir la respuesta
+                        # aparte) — no se reutiliza el mismo hueco para el
+                        # caption.
+                        _focus = st.session_state.get("compras_sem_focus")
+                        _hueco_tabla = st.empty()
+                        if _focus in set(dd["clave"]):
+                            _det = dd[dd["clave"] == _focus].sort_values(
+                                "valor", ascending=False)
+                            _et = _det["lbl"].iloc[0]
+                            st.caption(f"**{_et}** · {_det['compra'].nunique()} "
+                                      f"compras · S/ {_det['valor'].sum():,.2f}")
+                            tp = _det[["fecha", "prov", "prod", "cant", "punit",
+                                      "valor"]].rename(columns={
+                                "fecha": "Fecha", "prov": "Proveedor",
+                                "prod": "Producto", "cant": "Cantidad",
+                                "punit": "P. unit.", "valor": "Valor"})
+                            fmts = {
+                                "Fecha": lambda v: f"{v:%d/%m/%Y}",
+                                "Cantidad": lambda v: f"{v:,.1f}",
+                                "P. unit.": lambda v: ("—" if pd.isna(v)
+                                                       else f"S/ {v:,.2f}"),
+                                "Valor": lambda v: f"S/ {v:,.2f}",
+                            }
+                            with _hueco_tabla.container():
+                                st.dataframe(
+                                    tp.style.format(fmts).hide(axis="index"),
+                                    use_container_width=True, hide_index=True,
+                                    height=alturas.por_filas(len(tp), px_fila=34,
+                                                             extra=60, minimo=0,
+                                                             rol=alturas.MINI))
+                        else:
+                            st.caption("Tocá una barra o un punto para "
+                                      "ver el detalle.")
+                            _hueco_tabla.empty()
 
                     else:
                         st.info("No hay columnas suficientes para este gráfico.")
