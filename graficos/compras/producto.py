@@ -623,16 +623,24 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                     color_var = (ERROR if var_pct and var_pct > 0.05
                                 else (EXITO if var_pct and var_pct < -0.05 else GRIS_TEXTO))
                     _um = f"/{fila['um']}" if fila["um"] else ""
+                    # Dos líneas, no una: la de una sola línea obligaba a leer
+                    # "1ª → última" sin decir última QUÉ, y mezclaba
+                    # precio+variación con el rango mín-máx en la misma
+                    # respiración. 2026-09-03, a pedido.
                     _rango_txt = ""
                     if fila["maximo"] > fila["minimo"]:
-                        _rango_txt = (f' · entre <b>S/ {fila["minimo"]:,.2f}</b>'
-                                      f' y <b>S/ {fila["maximo"]:,.2f}</b>')
+                        _rango_txt = (
+                            f'<div style="font-size:12px;color:{GRIS_TEXTO};'
+                            f'margin:0 0 2px;">fluctuó entre '
+                            f'<b>S/ {fila["minimo"]:,.2f}</b> y '
+                            f'<b>S/ {fila["maximo"]:,.2f}</b></div>')
                     st.markdown(
                         f'<div style="font-size:12px;color:{GRIS_TEXTO};margin:0 0 2px;">'
                         f'actual <b>S/ {fila["fin"]:,.2f}{_um}</b> · '
                         f'<b style="color:{color_var};">'
                         f'{"+" if (var_pct or 0) >= 0 else "−"}{abs(var_pct or 0):.1f}%'
-                        f'</b> 1ª → última{_rango_txt}</div>',
+                        f'</b> 1ª → última compra</div>'
+                        f'{_rango_txt}',
                         unsafe_allow_html=True)
 
                     # ── BARRAS, con las dos cifras SIEMPRE a la vista ────────
