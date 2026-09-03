@@ -636,14 +636,21 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                         # selector de "la semana empieza en" que se fue con
                         # este cambio — la ISO-semana de `_periodo_serie` es
                         # la misma que ya usa el resto de la app.
-                        # columnas-internas: angosta el selector, no el eje del drill.
-                        _cg, _ = st.columns([1, 2.2])
-                        with _cg:
-                            gran = st.pills(
-                                "Agrupar por",
-                                ["Día", "Semana", "Mes", "Año", "Por documento"],
-                                default="Semana", key="compras_sem_gran",
-                                label_visibility="collapsed") or "Semana"
+                        # Sin `st.columns` alrededor a propósito: eso era del
+                        # `st.selectbox` que este control reemplazó (un
+                        # dropdown SE ESTIRA solo al ancho del contenedor,
+                        # así que 1/3.2 de la tarjeta lo achicaba a propósito
+                        # para sus 3 opciones). `st.pills` no se estira —
+                        # mide su propio contenido — y esa misma columna lo
+                        # apretaba a 157px, forzando que "Por documento"
+                        # envuelva a una segunda línea sin necesidad. Medido
+                        # con el inspector (`?debug=1&diseno=1`) el
+                        # 2026-09-03.
+                        gran = st.pills(
+                            "Agrupar por",
+                            ["Día", "Semana", "Mes", "Año", "Por documento"],
+                            default="Semana", key="compras_sem_gran",
+                            label_visibility="collapsed") or "Semana"
 
                         # Cambiar de granularidad invalida el foco: una clave
                         # de "Semana" no existe en el espacio de "Mes". Mismo
