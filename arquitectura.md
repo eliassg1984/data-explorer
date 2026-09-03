@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-300 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+301 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (98)
 
@@ -349,7 +349,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#297** — Lo que dibuja UNA rama y no las otras va AL FINAL: al encoger, la cola del render anterior…
 - **#298** — Un riel que elige PERÍODOS no puede parar en los períodos: tiene que parar en los BORDES…
 
-**Datos, R2 y DuckDB** (32)
+**Datos, R2 y DuckDB** (33)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -383,8 +383,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#253** — recetaventa.parquet ya trae ULTIMA VENT y FECH MODIF nativas — no hace falta cruzar contra…
 - **#292** — limpiar_cache(archivo) sólo limpiaba la mitad de las cachés de carga — la hermana "por rango"…
 - **#293** — "No se pudieron cargar los datos", tercera causa: el extractor NOCTURNO dejó de correr. Se…
+- **#301** — La vista "Cruce" de Documentos SUNAT heredaba el filtro de Familia/Subfamilia de la franja…
 
-**SUNAT y SIRE** (28)
+**SUNAT y SIRE** (29)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -414,6 +415,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#249** — En una homologación, el INVARIANTE es el importe de la línea — no la cantidad ni el precio
 - **#251** — Dos paneles que tienen que verse iguales se dibujan con la MISMA función, no con dos copias…
 - **#252** — El total del lado que se va a exportar se SUMA de sus líneas, no se copia del original —…
+- **#301** — La vista "Cruce" de Documentos SUNAT heredaba el filtro de Familia/Subfamilia de la franja…
 
 **Fechas, rangos y cortes** (8)
 
@@ -13436,13 +13438,73 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      seleccionados" sin aviso, porque jul+ago es exactamente lo que quedó
      filtrado.
 
+301. **La vista "Cruce" de Documentos SUNAT heredaba el filtro de
+     Familia/Subfamilia de la franja superior — y SUNAT no sabe de
+     familias, así que un documento entero podía desaparecer del cruce
+     por un chip que no tiene nada que ver con él** (2026-09-03, reporte
+     en vivo del usuario con un documento real).
+
+     `graficos/compras/__init__.py::renderizar_graficos_compras` arma
+     `d = df_f` y después, si hay chips elegidos, lo recorta:
+     `d = d[d[col_fam]...isin(fam_sel)]` (y lo mismo con subfamilia) — la
+     línea de comentario arriba del bloque de Documentos SUNAT hasta
+     decía, textual, "`d` ya viene filtrado por los chips
+     Familia/Subfamilia". Ese `d` era justo el que se le pasaba a
+     `renderizar_documentos_sunat(d, col_fecha)`, y de ahí bajaba hasta
+     `_parquet_agrupado_por_documento` para armar el lado "sistema" del
+     cruce contra `compras.parquet`.
+
+     El problema: `compras.parquet` es por LÍNEA de producto, cada una
+     con su propia Familia/Subfamilia (taxonomía del maestro), mientras
+     que un documento SUNAT es una unidad por COMPROBANTE. Si TODAS las
+     líneas de un documento caían en una familia que no estaba entre los
+     chips elegidos, el documento entero se caía de `d` — y
+     `cruzar_con_parquet` lo marcaba "Solo SUNAT" (no cargado en el
+     sistema) cuando en realidad SÍ estaba, solo que en otra familia.
+
+     Caso real que lo destapó: con los chips de familia puestos en
+     Alimentos/Bebidas/Vino, el documento FA28-2312219 (COMPAÑIA FOOD
+     RETAIL S.A.C., familia "Gastos Administrativos" — una de sólo 3
+     documentos de esa familia en todo agosto, contra 183 de Alimentos)
+     salía "Solo SUNAT". Confirmado con DuckDB directo contra R2 real:
+     el documento SÍ está en `compras.parquet`, mismo RUC
+     (20608300393) y mismo total (S/ 15.66) que reporta SUNAT — el dato
+     era correcto, el cruce estaba mirando un subconjunto equivocado.
+     Reproducido y corregido con el mismo experimento: acotando `d` a
+     sólo la familia "ALIMENTOS", `_parquet_agrupado_por_documento`
+     devuelve CERO filas para ese documento; con `df_full` (sin ese
+     filtro) devuelve exactamente una, con el RUC y el total esperados.
+
+     El fix cambia UNA línea: el call site pasa `df_full` (el df sin
+     filtro de fecha NI de chips, que `renderizar_graficos_compras` ya
+     recibe como parámetro — lo usa desde antes para las OPCIONES de los
+     chips de Familia/Subfamilia, ver el comentario "LAS OPCIONES SALEN
+     DEL HISTÓRICO" un poco más arriba en el mismo archivo) en vez de
+     `d`, con `d` como fallback sólo si `df_full` viniera `None` (código
+     viejo que no lo pase). No hace falta acotar por fecha a mano:
+     `_parquet_agrupado_por_documento` ya lo hace con `fecha_ini`/
+     `fecha_fin`, el rango propio del drill — ver la regla #143, que es
+     la que documenta por qué esa función acota por fecha ANTES de armar
+     la clave de cruce (para no confundir "serie-número" de documentos
+     de años distintos). Este bug es el mismo espíritu un nivel más
+     arriba: acotar por algo que no tiene relación con la identidad del
+     documento (ahí, la fecha sin RUC; acá, la familia) filtra
+     candidatos válidos antes de que el cruce llegue a mirarlos.
+
+     El propio docstring del módulo (`documentos_sunat.py`, arriba de
+     todo) ya decía "No respeta los chips Familia/Subfamilia" — pero esa
+     frase describía el lado SUNAT (`sunat.comprobantes_rango`, que ni
+     los conoce). Nadie había notado que el lado `compras.parquet` del
+     cruce sí los estaba respetando, colado por el `d` que ya venía
+     recortado desde el dispatcher.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#301**.
+> próxima regla nueva es la **#302**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

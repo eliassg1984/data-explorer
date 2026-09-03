@@ -538,7 +538,23 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         # abre esta vista.
         from graficos.compras.documentos_sunat import renderizar_documentos_sunat
         with st.container(key="compras_sunat_drill_wrap"):
-            renderizar_documentos_sunat(d, col_fecha)
+            # `df_full`, NO `d` -- `d` viene filtrado por los chips
+            # Familia/Subfamilia (línea de arriba) y ese filtro no tiene
+            # que tocar la vista "Cruce": SUNAT no sabe de familias (es
+            # taxonomía nuestra, del maestro de productos — ver el
+            # docstring del módulo), así que filtrar por familia ANTES de
+            # cruzar hacía que un documento con TODAS sus líneas en una
+            # familia no elegida desapareciera entero de `compras.parquet`
+            # y saliera "Solo SUNAT" siendo falso — reportado en vivo
+            # 2026-09-03 con un documento real (FA28-2312219, COMPAÑIA
+            # FOOD RETAIL) que sí estaba en el parquet, mismo RUC y mismo
+            # total que SUNAT. `_parquet_agrupado_por_documento` ya acota
+            # por FECHA sola (`fecha_ini`/`fecha_fin`, el rango propio de
+            # este drill) — no hace falta que además venga acotado por
+            # familia. `df_full` puede ser `None` en llamadores viejos,
+            # de ahí el fallback a `d`. Ver arquitectura.md regla #301.
+            renderizar_documentos_sunat(
+                df_full if df_full is not None else d, col_fecha)
         return
 
     # ══ LA PILA ══════════════════════════════════════════════════════════
