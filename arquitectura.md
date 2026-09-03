@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-293 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+294 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (95)
 
@@ -151,7 +151,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#281** — Una cabecera que depende de un dato que se calcula 100 líneas más abajo se dibuja con…
 - **#288** — Un rótulo que nombra el estado POR DEFECTO no informa: ocupa el renglón para decir que no hay…
 
-**Plotly y figuras** (51)
+**Plotly y figuras** (52)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -204,6 +204,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#276** — Cuando dos tarjetas de una fila no miden igual, la pregunta no es a cuál eximir del piso sino…
 - **#289** — Sacar un adorno de una figura no la achica: hay que RESTARLE lo que el adorno ocupaba, o el…
 - **#291** — Cuando un bloque "ocupa mucho" y sus px no lo explican, el hueco está DENTRO de la figura de…
+- **#294** — st.dataframe (glide-data-grid) sobrevive a un st.empty() que lo reemplaza por OTRO contenido…
 
 **AgGrid y tablas** (47)
 
@@ -255,7 +256,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 
-**Streamlit** (83)
+**Streamlit** (84)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -340,6 +341,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#283** — Fusionar dos tarjetas que ya compartían datos no es mover un with: es descubrir que sus…
 - **#286** — Un translate(0, -13px) arrastrado en el modo diseño casi nunca pide mover algo: está midiendo…
 - **#287** — Un caption que explica CÓMO SE LEE una vista se lee una vez y estorba siempre: va en un…
+- **#294** — st.dataframe (glide-data-grid) sobrevive a un st.empty() que lo reemplaza por OTRO contenido…
 
 **Datos, R2 y DuckDB** (32)
 
@@ -13121,13 +13123,67 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      además se le agrega log, revisar que no queden prompts que dependan de
      que un humano los vea.
 
+294. **`st.dataframe` (glide-data-grid) sobrevive a un `st.empty()` que lo
+     reemplaza por OTRO contenido dentro de un `@st.fragment` — hace falta
+     `.empty()` EXPLÍCITO, y en su PROPIO hueco, no compartido.**
+
+     2026-09-03, vista Semanal de Compras (`graficos/compras/__init__.py`):
+     clic en una barra o un punto abre debajo del gráfico una tabla de
+     detalle (Fecha/Proveedor/Producto/Cantidad/P.unit/Valor). Al cambiar de
+     granularidad (Día/Semana/Mes/Año/Por documento) el foco se resetea y la
+     tabla debería desaparecer, dejando sólo un caption ("Tocá una barra o
+     un punto para ver el detalle"). Medido en el navegador: la tabla
+     seguía VISIBLE, con los datos del foco anterior, después de perder el
+     foco — `[data-testid="stDataFrame"]` con `getBoundingClientRect()`
+     real (577×240px) en un branch que ya no la llamaba.
+
+     Primer intento: el patrón de la regla #70 (`st.empty()` SIEMPRE creado
+     + `with hueco.container(): ...` en los dos branches). NO alcanzó. La
+     diferencia con el caso que prueba esa regla (los chips de bienvenida
+     de `asistente.py`): ahí el hueco, en el branch "oculto", queda SIN
+     LLENAR — nunca se reemplaza por otra cosa. Acá se estaba REEMPLAZANDO
+     el contenido del hueco por un caption distinto y más chico, en la
+     misma llamada `with hueco.container():`. Para un `st.caption` simple
+     eso reconcilia bien (el propio texto del caption cambiaba sin
+     problema, comprobado aparte). Para `st.dataframe` — un widget con su
+     propio ciclo de vida de canvas (`stDataFrameGlideDataEditor`, ver
+     regla #126.3) — no.
+
+     **Fix:** un `st.empty()` DEDICADO sólo a la tabla, nunca compartido
+     con el caption, vaciado con `.empty()` EXPLÍCITO en el branch que no
+     la necesita — mismo idioma que el segundo caso de `asistente.py`
+     (`hueco.empty()` antes de escribir la respuesta del chat, sin
+     reutilizar ese hueco para nada más):
+
+     ```python
+     hueco_tabla = st.empty()
+     if hay_foco:
+         st.caption(...)              # elemento simple: if/else desnudo alcanza
+         with hueco_tabla.container():
+             st.dataframe(...)        # widget pesado: hueco PROPIO
+     else:
+         st.caption("...")
+         hueco_tabla.empty()          # vaciado explícito, no "dejar sin llenar"
+     ```
+
+     **Verificar esto con clics reales de Plotly es poco fiable en este
+     entorno** (la regla #126.3 ya documentaba lo mismo para el propio
+     `st.dataframe`): un clic sintético, e incluso uno real disparado por
+     el harness de automatización del navegador, no siempre registra como
+     selección — a veces sólo dispara el hover, y hace falta reintentar
+     varias veces sin que haya cambiado nada del lado de la app. La señal
+     limpia salió de agregar dos botones de prueba TEMPORALES (`on_click`
+     que escriben `session_state` directo, sin pasar por Plotly) para
+     aislar el problema del widget de la fiabilidad del clic — y borrarlos
+     antes de commitear.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#294**.
+> próxima regla nueva es la **#295**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
