@@ -27,11 +27,11 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from tema import GRIS_BORDE, TEXTO_PRINCIPAL, BLANCO
+from tema import SERIE_PRINCIPAL, TEXTO_PRINCIPAL, BLANCO
 from utils import _norm, fmt_k
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
-    PALETA_CALLAI, _compras_layout, _compras_truncar, _render_rail,
+    _compras_layout, _compras_truncar, _render_rail,
     _resolver, publicar_contexto_ia, seccion_perezosa,
     renderizar_graficos_genericos, vista_activa,
 )
@@ -683,33 +683,30 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                             dd["clave"] = _periodo_serie(dd["fecha"], gran)
                             dd["lbl"] = dd["clave"]
 
-                        top = dd.groupby("prod")["valor"].sum().nlargest(8).index
-                        dd["prod_top"] = dd["prod"].where(dd["prod"].isin(top), "Otros")
-
                         _orden = (dd.drop_duplicates("clave")[["clave", "lbl"]]
                                  .sort_values("clave"))
                         _ord_claves = _orden["clave"].tolist()
                         _ord_lbls = _orden["lbl"].tolist()
 
-                        g = dd.groupby(["clave", "prod_top"],
-                                       as_index=False)[["valor", "cant"]].sum()
+                        # UNA sola serie, no apilada por producto. La
+                        # apilada (top 8 + Otros) mostraba 9 colores por
+                        # barra que se pisaban con los puntos de "Compra
+                        # individual" encima; el desglose por producto ya
+                        # vive al lado, en la pestaña "Prod. valor" del
+                        # panel derecho — repetirlo acá era ruido, no
+                        # información nueva. 2026-09-03, a pedido ("la
+                        # apilada no es buena para esto").
+                        g = dd.groupby("clave", as_index=False)[["valor", "cant"]].sum()
 
                         fig = go.Figure()
-                        _prods = ([p_ for p_ in top if p_ in set(g["prod_top"])] +
-                                  (["Otros"] if (g["prod_top"] == "Otros").any() else []))
-                        for _i, _p in enumerate(_prods):
-                            gg = g[g["prod_top"] == _p]
-                            fig.add_bar(
-                                x=gg["clave"], y=gg["valor"],
-                                name=_compras_truncar(_p, 22),
-                                marker=dict(color=(GRIS_BORDE if _p == "Otros"
-                                            else PALETA_CALLAI[_i % len(PALETA_CALLAI)])),
-                                customdata=gg["cant"],
-                                hovertemplate=("%{fullData.name}<br>%{x}"
-                                               "<br>Valor: S/ %{y:,.2f}"
-                                               "<br>Cantidad: %{customdata:,.1f}"
-                                               "<extra></extra>"),
-                            )
+                        fig.add_bar(
+                            x=g["clave"], y=g["valor"], name="Valor total",
+                            marker=dict(color=SERIE_PRINCIPAL),
+                            customdata=g["cant"],
+                            hovertemplate=("%{x}<br>Valor: S/ %{y:,.2f}"
+                                           "<br>Cantidad: %{customdata:,.1f}"
+                                           "<extra></extra>"),
+                        )
 
                         # Puntos superpuestos: una COMPRA, no una línea de
                         # producto — una orden de 5 líneas es un solo punto,
@@ -738,8 +735,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                                     "Mes": "por mes", "Año": "por año",
                                     "Por documento": "por documento"}[gran]
                         fig.update_layout(
-                            title=f"Compra {_tit_gran} — valor por producto (top 8 + Otros)",
-                            barmode="stack",
+                            title=f"Compra {_tit_gran}",
                             legend=dict(orientation="h", y=-0.22, x=0,
                                         font=dict(size=10)),
                         )
