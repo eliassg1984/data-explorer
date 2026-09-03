@@ -1312,6 +1312,17 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # primero" pasarian a ser el mismo estado, y ya no se podria volver
         # al vacio ni distinguir un clic deliberado.
         _prod_top = None
+        # 2026-09-03: los paneles A/B ahora se ven SIEMPRE (a pedido). Sin
+        # foco real, el SUJETO DE DISPLAY cae al proveedor de mayor valor del
+        # rango — mismo criterio que la tarjeta de Evolución de arriba (que sin
+        # foco toma `_prov_mayor`) y que el Panel B con su producto top. NO se
+        # persiste en session_state: el foco real lo sigue fijando el clic;
+        # esto solo decide QUÉ mostrar mientras no se haya clickeado nada.
+        # `idxmax` sobre `base` = la primera fila del ranking de al lado (mismo
+        # df, mismo orden por valor), así los cuadros arrancan coordinados.
+        _prov_ver = prov_focus
+        if _prov_ver is None and not base.empty:
+            _prov_ver = base.groupby("prov")["valor"].sum().idxmax()
         # 2026-08-21: los paneles A/B eran UNA tarjeta ancha
         # (`compras_prov_card_paneles`) partida al 50% con dos `_card`
         # transparentes adentro, mientras la fila de arriba son DOS tarjetas
@@ -1326,11 +1337,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         with pa:
             with st.container(border=True, key="compras_prov_card_prods"):
                 _ta = ("Selecciona un proveedor arriba para ver sus productos"
-                       if prov_focus is None
+                       if _prov_ver is None
                        # Mismo criterio que el título de Evolución: el nombre
-                       # del proveedor EN FOCO se muestra como nombre propio.
+                       # del proveedor (en foco, o el de mayor valor por
+                       # defecto) se muestra como nombre propio.
                        else f"Productos · "
-                            f"{_compras_truncar(nombre_propio(prov_focus), 24)}")
+                            f"{_compras_truncar(nombre_propio(_prov_ver), 24)}")
                 with _card("prov_prods", _ta, titulo_arriba=True):
                     # Controles flotantes en la cabecera (Opción 1). Dos flotantes
                     # absolutos apilados a la derecha: un texto chico con la
@@ -1356,10 +1368,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             st.pills("Top productos", [5, 10, 20], default=10,
                                      key="compras_prov_topn",
                                      label_visibility="collapsed")
-                    if prov_focus is None:
+                    if _prov_ver is None:
                         pass
                     else:
-                        sub = base[base["prov"] == prov_focus]
+                        sub = base[base["prov"] == _prov_ver]
                         if _scope == "periodo" and _perf is not None:
                             sub = sub[sub["per"] == _perf]
                         # `nlargest` ya devuelve de mayor a menor, que es el
@@ -1677,19 +1689,23 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             unsafe_allow_html=True,
                         )
 
-    # -- Visibilidad del detalle A/B = hay proveedor en foco. Sin pestillo: lo
-    #    abre un clic en la fila del ranking, lo cierra el botón "✕ Quitar
-    #    foco" (junto al título de la tabla-ranking, más arriba).
-    _pan_ab = prov_focus is not None
-    # Instance id: se incrementa cada vez que el bloque pasa de cerrado a
-    # abierto. Se anade al key de los componentes hijos (plotly / aggrid /
-    # dataframe) para forzar REMOUNT limpio al reabrir. Sin esto, Streamlit
-    # reusa los nodos DOM y los componentes internos no se re-miden el
-    # ancho del contenedor -> chart vacio, tabla con columnas colapsadas.
-    if _pan_ab and not st.session_state.get("cp_paneles_prev_ab", False):
+    # -- Los paneles A/B se ven SIEMPRE (2026-09-03, a pedido): antes sólo
+    #    aparecían con un proveedor en foco. Ahora, sin foco, muestran el
+    #    proveedor de mayor valor como preview (ver `_prov_ver` en
+    #    `_paneles_card`), igual que la tarjeta de Evolución. El foco real lo
+    #    sigue mandando el clic en el ranking; lo quita el botón "✕ Quitar
+    #    foco" (junto al título de la tabla-ranking, más arriba), que ahora
+    #    devuelve los paneles a ese preview en vez de esconderlos.
+    _pan_hay = not base.empty
+    # Instance id: se incrementa cuando el bloque pasa de VACÍO a con-datos
+    # (antes: de cerrado a abierto). Se anade al key del grid de productos
+    # para forzar REMOUNT limpio y que re-mida el ancho del contenedor. Sin
+    # esto, Streamlit reusa los nodos DOM y la tabla queda con columnas
+    # colapsadas la primera vez que hay datos para mostrar.
+    if _pan_hay and not st.session_state.get("cp_paneles_prev_ab", False):
         st.session_state["cp_paneles_inst"] = (
             st.session_state.get("cp_paneles_inst", 0) + 1)
-    st.session_state["cp_paneles_prev_ab"] = _pan_ab
+    st.session_state["cp_paneles_prev_ab"] = _pan_hay
     _pan_inst = st.session_state.get("cp_paneles_inst", 0)
 
     # (El CSS del pegado al chart vive en el <style> estatico de arriba.
@@ -1697,8 +1713,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     #  vacio justo entre las dos tarjetas: alto 0, pero el gap de 1rem del
     #  bloque vertical igual se aplicaba -> ~16px de aire.)
     with st.container(key="paneles_row"):
-        if _pan_ab:
-            _paneles_card()
+        _paneles_card()
 
     # ── Tabla pivotable de documentos (debajo de los paneles A/B) ─────────
     # Vive en su propio modulo desde 2026-08-08: es la pieza del drill con

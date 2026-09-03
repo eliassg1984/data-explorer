@@ -1664,7 +1664,9 @@ CSS = """        <style>
         .st-key-compras_prov_card_docs {
             animation: unfoldDown 0.32s cubic-bezier(0.4, 0, 0.2, 1) backwards;
         }
-        /* Bloque paneles: entra deslizando desde la izquierda al enfocar. */
+        /* Bloque paneles: entra deslizando desde la izquierda. Antes sólo
+           existía al enfocar un proveedor; desde 2026-09-03 los paneles se ven
+           siempre, así que la animación corre una vez al montar la vista. */
         @keyframes unfoldRight {
             0% { opacity: 0; transform: translateX(-14px); }
             100% { opacity: 1; transform: translateX(0); }
