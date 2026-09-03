@@ -1587,6 +1587,74 @@ def _pruebas_escala_tiempo():
     return fallos
 
 
+def _pruebas_regla_riel():
+    """graficos/base.py — la regla de referencia bajo el riel de la escala.
+
+    Lo que se cuida es UNA cosa que el ojo no puede verificar en una
+    captura: que los rótulos NO SE PISEN en ninguna ventana posible. La
+    ventana de Meses trae entre 2 y 12 paradas y la de Años entre 2 y 10,
+    según cuánto las recorte `bounds`, así que hay 19 casos y todos tienen
+    que caer bien — probar "el de hoy" (8 meses, 4 años) no dice nada del
+    día que la data llegue a doce meses.
+
+    La cuenta usa el ancho del rótulo MÁS ANCHO de la escala para todas las
+    marcas, que es el peor caso: en pantalla sobra aire porque "jul" mide
+    la mitad que "may".
+    """
+    from graficos.base import (_AIRE_ROTULO, _ANCHO_RIEL_PX, _ANCHO_ROTULO,
+                               _indices_rotulados)
+
+    fallos = 0
+
+    def check(nombre, ok, detalle=""):
+        nonlocal fallos
+        if ok:
+            print(f"OK    regla riel · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA regla riel · {nombre}: {detalle}")
+
+    for escala, tope in (("Meses", 12), ("Años", 10)):
+        ancho = _ANCHO_ROTULO[escala]
+        for n in range(2, tope + 1):
+            idx = _indices_rotulados(n, ancho)
+            slot = _ANCHO_RIEL_PX / (n - 1)
+            check(f"{escala} n={n}: los dos bordes llevan rótulo",
+                  idx[0] == 0 and idx[-1] == n - 1, f"idx={idx}")
+            check(f"{escala} n={n}: sin repetidos y en orden",
+                  idx == sorted(set(idx)) and idx[-1] < n, f"idx={idx}")
+            # Los bordes van pineados (translateX(0) / -100% en el CSS), o
+            # sea que ocupan un ancho ENTERO hacia adentro; los del medio
+            # están centrados y ocupan medio de cada lado.
+            peor = None
+            for a, z in zip(idx, idx[1:]):
+                izq = ancho if a == 0 else ancho / 2
+                der = ancho if z == n - 1 else ancho / 2
+                aire = (z - a) * slot - izq - der
+                if peor is None or aire < peor[0]:
+                    peor = (aire, a, z)
+            check(f"{escala} n={n}: ningún par de rótulos se toca",
+                  peor[0] >= _AIRE_ROTULO,
+                  f"aire={peor[0]:.1f}px entre {peor[1]} y {peor[2]} (idx={idx})")
+
+    # Regresiones concretas, con la cuenta a la vista para que un cambio de
+    # los anchos medidos se lea como lo que es y no como un número mágico.
+    check("un año entero de Meses (12 paradas) rotula 6, con dic",
+          _indices_rotulados(12, _ANCHO_ROTULO["Meses"]) == [0, 2, 4, 6, 8, 11],
+          str(_indices_rotulados(12, _ANCHO_ROTULO["Meses"])))
+    check("con 10 paradas la anteúltima NO se rotula (se tocaba con el borde)",
+          8 not in _indices_rotulados(10, _ANCHO_ROTULO["Meses"]),
+          str(_indices_rotulados(10, _ANCHO_ROTULO["Meses"])))
+    check("cuatro años entran todos",
+          _indices_rotulados(4, _ANCHO_ROTULO["Años"]) == [0, 1, 2, 3],
+          str(_indices_rotulados(4, _ANCHO_ROTULO["Años"])))
+    check("un riel de una sola parada no revienta",
+          _indices_rotulados(1, 18) == [0] and _indices_rotulados(0, 18) == [],
+          "")
+
+    return fallos
+
+
 def _pruebas_anomalias():
     """graficos/ajuste/_anomalias.py — "¿es raro PARA ESTE producto?".
 
@@ -2340,6 +2408,9 @@ def main():
     # ── Deteccion de anomalias en Ajuste ────────────────────────────────
     # ── Escala de tiempo estilo tabla dinamica (estado_rango.py) ────────
     fallos += _pruebas_escala_tiempo()
+
+    # ── La regla de referencia bajo el riel: que los rótulos no se pisen ─
+    fallos += _pruebas_regla_riel()
 
     fallos += _pruebas_anomalias()
 

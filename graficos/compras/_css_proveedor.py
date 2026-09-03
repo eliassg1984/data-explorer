@@ -986,12 +986,12 @@ CSS = """        <style>
             font-size: 15px !important;
             border-radius: 7px !important;
         }
-        /* ── REGLA DE DÍAS del riel de Días ──────────────────────────────
+        /* ── REGLA de referencia, LAS TRES ESCALAS ───────────────────────
            2026-08-26, a pedido ("la línea no tiene ninguna indicación de
            qué día o mes estoy seleccionando"). Fila propia DEBAJO del
            riel (no overlay: ver el comentario largo en
-           graficos/base.py::selector_escala) — mismo ancho que el
-           `st.slider`, así que el 0%-100% de acá coincide con el suyo.
+           graficos/base.py::selector_escala) — mismo ancho ÚTIL que el
+           riel, así que el 0%-100% de acá coincide con el suyo.
            `position:relative` + hijos `position:absolute; left:X%` es la
            misma técnica que ya usa el riel de select_slider para sus
            propias paradas (más abajo, la granularidad).
@@ -999,7 +999,9 @@ CSS = """        <style>
            Nació rotulando AÑOS (el riel abarcaba todo el histórico) y
            pasó a rotular DÍAS DEL MES el mismo día, cuando el riel se
            acotó a un mes. La clase no cambió de nombre: lo que hace
-           —marcas de referencia bajo el riel— es lo mismo. */
+           —marcas de referencia bajo el riel— es lo mismo, y desde el
+           2026-09-03 lo hace para las TRES escalas (Meses rotula el mes,
+           Años el año), que es lo que se pidió esa vez. */
         .cp-riel-regla {
             position: relative;
             height: 11px;
@@ -1014,8 +1016,18 @@ CSS = """        <style>
                el caption, que no se mueve porque su contenedor mide 0).
                Con -22 quedan ~4px de cada lado; con -20 el caption se
                pegaba a 1px. Si algún día se deja de ocultar el tick bar,
-               este número miente. */
-            margin: -22px 0 0;
+               este número miente.
+
+               Los 6px LATERALES son el otro medio de la alineación, y son
+               medidos (2026-09-03): el `[role="group"]` con que Streamlit
+               envuelve al riel lleva `padding: 0 6px` —el radio del
+               tirador, para que no se salga—, así que el 0% del tirador
+               está en x=6 y el 100% en x=244, no en 0 y 250. Sin el inset
+               la regla erraba 6px en cada punta (0 en el medio, que es
+               por qué en Días no saltaba a la vista); con marcas cada
+               21,6px, como las de un año de Meses, esos 6px son un tercio
+               de casillero. Ver `_ANCHO_RIEL_PX` en graficos/base.py. */
+            margin: -22px 6px 0;
         }
         .cp-riel-regla span {
             position: absolute;
@@ -1037,10 +1049,26 @@ CSS = """        <style>
            "01/01/23 — 24/08/26" sino los bordes del mes, que es justo lo
            que ya rotulan la cabecera `.cp-riel-mes` y las dos marcas
            extremas de la regla — tres veces lo mismo en tres renglones
-           seguidos. Acotado al prefijo `cp_rank_esc_dias_` para no
-           afectar Meses/Años, que no usan este riel. */
-        [class*="st-key-cp_rank_esc_dias_"] [data-testid="stSliderTickBar"],
-        [class*="st-key-cp_prod_esc_dias_"] [data-testid="stSliderTickBar"] {
+           seguidos.
+
+           2026-09-03: pasa de estar acotado a `_dias_` a valer para las
+           TRES escalas, porque ahora las tres traen regla propia. Y no es
+           sólo higiene: en Meses/Años el tick bar es un vecino
+           IMPREDECIBLE — Streamlit se lo lleva a `opacity: 0` cuando un
+           tirador le cae encima (medido: con los dos tiradores en "ago 26"
+           el DOM traía "ene 26 / ago 26" y en pantalla no había nada) y
+           además se DESBORDA 10px por debajo de la caja de 40px del
+           slider, justo donde la regla se mete con su margen negativo.
+           Dejarlo apagado saca de la ecuación una regla ajena que aparece
+           y desaparece sola.
+
+           El selector es por prefijo de FAMILIA (`cp_rank_esc_`) y no por
+           las tres keys de escala, con el aviso de CLAUDE.md presente: lo
+           único que puede capturar de más es otro `stSliderTickBar` dentro
+           del mismo popover de escala, o sea otro riel de este control —
+           que es exactamente lo que se quiere ocultar. */
+        [class*="st-key-cp_rank_esc_"] [data-testid="stSliderTickBar"],
+        [class*="st-key-cp_prod_esc_"] [data-testid="stSliderTickBar"] {
             display: none !important;
         }
 

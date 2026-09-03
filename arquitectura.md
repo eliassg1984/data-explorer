@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-295 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+297 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (95)
+**CSS y estilos** (96)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -115,6 +115,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 - **#286** — Un translate(0, -13px) arrastrado en el modo diseño casi nunca pide mover algo: está midiendo…
 - **#287** — Un caption que explica CÓMO SE LEE una vista se lee una vez y estorba siempre: va en un…
+- **#297** — Lo que dibuja UNA rama y no las otras va AL FINAL: al encoger, la cola del render anterior…
 
 **Layout y alturas** (32)
 
@@ -256,7 +257,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 
-**Streamlit** (84)
+**Streamlit** (86)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -342,6 +343,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#286** — Un translate(0, -13px) arrastrado en el modo diseño casi nunca pide mover algo: está midiendo…
 - **#287** — Un caption que explica CÓMO SE LEE una vista se lee una vez y estorba siempre: va en un…
 - **#294** — st.dataframe (glide-data-grid) sobrevive a un st.empty() que lo reemplaza por OTRO contenido…
+- **#296** — El stSliderTickBar nativo no sirve como referencia de un riel: sólo rotula los DOS extremos,…
+- **#297** — Lo que dibuja UNA rama y no las otras va AL FINAL: al encoger, la cola del render anterior…
 
 **Datos, R2 y DuckDB** (32)
 
@@ -13214,13 +13217,83 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      clic saltó y fijó ahí, con el outline de hover apareciendo y
      desapareciendo limpio.
 
+296. **El `stSliderTickBar` nativo no sirve como referencia de un riel: sólo
+     rotula los DOS extremos, y encima Streamlit se lo lleva a `opacity: 0`
+     cuando un tirador le cae encima.** Reporte real 2026-09-03: "cuando
+     está con el botón de días activo se ve abajo una referencia de los
+     días, pero en mes y año no muestra ninguna referencia abajo de la
+     línea". Días tenía `.cp-riel-regla` desde la regla #219; Meses y Años
+     se habían quedado con lo que trae Streamlit — y medido en el DOM con
+     los dos tiradores en "ago 26", el tick bar traía "ene 26 / ago 26" con
+     `opacity: 0` computada. O sea: en pantalla, NADA. Un control que no
+     dice sobre qué mes está el tirador obliga a arrastrarlo para
+     averiguarlo.
+
+     El arreglo es la misma regla para las tres escalas
+     (`graficos/base.py::_regla_riel`), más `display: none` explícito sobre
+     el tick bar de la familia entera (`cp_rank_esc_` / `cp_prod_esc_`, en
+     `_css_proveedor.py`) para no depender de una regla ajena que aparece y
+     desaparece sola. Tres cosas que se aprendieron midiendo:
+
+     · **Días y Meses/Años NO comparten la cuenta de posición.** Días es un
+       `st.slider` de fechas: la marca va en `(d - ini)/total`. Meses/Años
+       son `st.select_slider`: sus paradas se reparten PAREJO, la parada `i`
+       de `n` cae en `i/(n-1)` sin importar que un mes tenga 28 días y otro
+       31. Por eso `_regla_riel` recibe `[(pct, texto)]` ya resuelto y cada
+       escala hace su cuenta.
+
+     · **El riel NO ocupa el ancho del panel.** El `[role="group"]` con que
+       Streamlit lo envuelve lleva `padding: 0 6px` —el radio del tirador—,
+       así que el 0% está en x=6 y el 100% en x=244 de un panel de 250
+       (`_ANCHO_RIEL_PX = 238`). La regla de Días erraba esos 6px en cada
+       punta desde el día uno y no saltaba a la vista porque el error es 0
+       en el medio; con marcas cada 21,6px, como las de un año de Meses,
+       son un tercio de casillero. Se corrige con `margin: -22px 6px 0`.
+
+     · **Cuántas marcas entran es una MEDICIÓN, no un gusto.** A 9px DM Sans
+       un mes mide 9-18px y un año 21-22px (`_ANCHO_ROTULO`), y las paradas
+       van de 2 a 12 según cuánto recorte `bounds` la ventana. `_indices_
+       rotulados` deduce el paso de ahí, con DOS separaciones distintas:
+       entre dos marcas del medio alcanza `ancho + aire` porque están las
+       dos centradas, pero contra una punta hace falta `1,5·ancho + aire`
+       porque los bordes van pineados (`translateX(0)` / `-100%`) y ocupan
+       un ancho entero hacia adentro. Con umbral único, una ventana de 10
+       meses ponía la anteúltima marca a 26px de la última y los dos
+       rótulos se tocaban. `test_graficos.py::_pruebas_regla_riel` recorre
+       los 19 tamaños posibles.
+
+297. **Lo que dibuja UNA rama y no las otras va AL FINAL: al encoger, la
+     cola del render anterior sobrevive en el DOM.** Encontrado el
+     2026-09-03 verificando la regla #296: al pasar de Días a Meses/Años,
+     el popover de la escala mostraba **"1 día seleccionado" repetido dos
+     veces**. Días dibuja 6 elementos (nav, riel, regla, relevo del
+     arrastre, iframe del script, caption) y Meses/Años 4; los 2 sobrantes
+     —iframe y caption— se quedaban pegados hasta el rerun siguiente. El
+     popover vive dentro de un `@st.fragment` (`proveedor.py::
+     _compras_proveedor_drill`) y ahí el recorte de la cola no llega en el
+     mismo run.
+
+     El arreglo no toca ni una línea de layout: se REORDENA. El relevo del
+     arrastre (`_pan`) y su `inyectar_html` pasan a dibujarse DESPUÉS del
+     caption, así lo que puede quedar huérfano son un `text_input` que el
+     CSS deja en 1px y un iframe de alto 0 — invisibles los dos. Al JS del
+     arrastre no le importa el orden: busca por clase con reintentos (ver
+     `_arrastrar_ventana_riel`).
+
+     La versión que NO se hizo, y por qué: mover el caption arriba de esos
+     dos elementos lo subía 9px en Días (2 huecos de 4px del
+     `stVerticalBlock` + el 1px del relevo) y el margen negativo de
+     `.cp-riel-regla` está calibrado al píxel contra ese hueco (regla
+     #219). Dejar el caption donde estaba y mover lo invisible es el mismo
+     resultado sin re-calibrar nada.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#296**.
+> próxima regla nueva es la **#298**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

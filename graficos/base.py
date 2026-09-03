@@ -349,6 +349,86 @@ def _fmt_periodo(escala, d):
     return f"{MESES_ABR_ES[d.month - 1]} {d.year % 100:02d}"
 
 
+# ── La REGLA de referencia que va debajo del riel ───────────────────────
+# MEDIDO en el navegador (2026-09-03, con el popover del Ranking abierto):
+# el panel mide 250px y el `[role="group"]` que Streamlit envuelve alrededor
+# del riel lleva `padding: 0 6px` —el radio del tirador, para que no se
+# salga—, así que el 0%–100% de los tiradores cae sobre 238px, de x=6 a
+# x=244. La regla se inseta esos 6px en `_css_proveedor.py` para que cada
+# marca quede EXACTAMENTE bajo el tirador que rotula.
+_ANCHO_RIEL_PX = 238
+# Ancho del rótulo MÁS ANCHO de cada escala, medido a 9px DM Sans en el
+# navegador: los meses van de 9px ("jul") a 18px ("may") y los años pesan
+# 21-22px. De este número sale cuántas paradas llevan rótulo; sin medirlo,
+# la única alternativa es tantear a ojo cuántas entran.
+_ANCHO_ROTULO = {"Meses": 18, "Años": 22}
+# Aire mínimo entre dos rótulos vecinos. Con menos se leen como una sola
+# palabra larga.
+_AIRE_ROTULO = 6
+
+
+def _rotulo_marca(escala, d):
+    """Rótulo de UNA marca de la regla. Más corto que `_fmt_periodo` a
+    propósito: el año ya lo dice la cabecera ‹ 2026 ›, igual que en Días la
+    regla numera el día y el mes lo pone la cabecera ‹ AGO 2026 ›."""
+    return str(d.year) if escala == "Años" else MESES_ABR_ES[d.month - 1]
+
+
+def _indices_rotulados(n, ancho):
+    """Qué paradas de un riel de `n` llevan rótulo, sin que se pisen.
+
+    Misma doctrina que la regla de Días —los dos bordes SIEMPRE, y entre
+    medio una cada `paso`, salteando las que quedarían pegadas a un borde—,
+    pero con el paso DEDUCIDO del ancho en píxeles en vez de fijo: la
+    ventana de Meses trae 12 paradas o 3 según cuánto la recorte `bounds`,
+    y un paso fijo o las apila (12 meses en 238px son 21,6px por parada,
+    contra los 18px de "may") o desaprovecha el riel (4 años en 238px
+    tienen 79px cada uno y les sobra sitio a todos).
+
+    Es índice y no fecha porque un `st.select_slider` reparte sus paradas
+    PAREJO: la parada `i` de `n` cae en `i/(n-1)` del riel, sin importar
+    que un mes tenga 28 días y el otro 31.
+
+    DOS SEPARACIONES, no una, y la segunda es la que costó una vuelta: dos
+    marcas del medio están las dos CENTRADAS en su parada, así que les
+    alcanza con `ancho + aire`; pero las de las puntas van pineadas al
+    borde (`translateX(0)` / `-100%` en el CSS), o sea que ocupan un ancho
+    entero hacia adentro. Contra un borde hace falta `1,5·ancho + aire`.
+    Con el umbral único, una ventana de 10 meses ponía la anteúltima marca
+    a 26px de la última y los dos rótulos se tocaban.
+    """
+    if n <= 2:
+        return list(range(max(n, 0)))
+    slot = _ANCHO_RIEL_PX / (n - 1)          # px entre paradas vecinas
+    minimo = ancho + _AIRE_ROTULO            # dos marcas del medio
+    borde = 1.5 * ancho + _AIRE_ROTULO       # una del medio contra un borde
+    caben = max(2, int(_ANCHO_RIEL_PX // minimo))
+    paso = max(1, -(-(n - 1) // (caben - 1)))
+    medio = [i for i in range(paso, n - 1, paso)
+             if i * slot >= borde and (n - 1 - i) * slot >= borde]
+    return sorted({0, n - 1} | set(medio))
+
+
+def _regla_riel(marcas):
+    """Dibuja la fila de marcas de referencia DEBAJO del riel.
+
+    `marcas` es `[(pct, texto)]` ya resuelto por quien llama, porque cada
+    escala sabe dónde caen sus paradas y las dos cuentas no son la misma:
+    Días es lineal en FECHAS (un `st.slider` continuo) y Meses/Años son
+    lineales en ÍNDICE (un `st.select_slider` de paradas parejas). Lo único
+    común —y lo que vive acá— es cómo se dibuja.
+
+    Fila propia y no overlay sobre el track de Streamlit: overlayarla
+    exigiría calzar a mano su alto interno, que cambia con la versión.
+    """
+    if not marcas:
+        return
+    _spans = "".join(f'<span style="left:{_p:.2f}%">{_t}</span>'
+                     for _p, _t in marcas)
+    st.markdown(f'<div class="cp-riel-regla">{_spans}</div>',
+                unsafe_allow_html=True)
+
+
 def _aplicar_escala(k_riel, escala, ctx, bandera):
     """`on_change` del riel: traduce el par de períodos y lo aplica.
 
@@ -738,6 +818,7 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
 
     rango = st.session_state.get(ctx["k_rango"])
     ventana = None
+    _cola_dias = False       # ¿hay que dibujar el relevo del arrastre?
     if escala == "Días":
         # EL RIEL ABARCA UN MES, no el histórico entero (a pedido
         # 2026-08-26, con la captura del selector de Excel: "cuando
@@ -843,31 +924,36 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
                 if _d.day % 5 == 0
                 and (_d - ventana[0]).days >= 2
                 and (ventana[1] - _d).days >= 2})
-            _spans = "".join(
-                f'<span style="left:{(_m - ventana[0]).days / _total_dias * 100:.2f}%">'
-                f'{_m.day}</span>'
-                for _m in _marcas)
-            st.markdown(f'<div class="cp-riel-regla">{_spans}</div>',
-                       unsafe_allow_html=True)
-            # Relevo oculto para "arrastrar la línea entera" (a pedido,
-            # "como el slider de Excel") — ver el docstring largo de
-            # `_aplicar_pan_riel` para por qué es un widget propio y no
-            # los dos `<input>` nativos del slider.
-            _k_relevo = f"{k_riel}_pan"
-            st.text_input("pan", key=_k_relevo, label_visibility="collapsed",
-                          on_change=_aplicar_pan_riel,
-                          args=(_k_relevo, ctx, bandera))
-            _arrastrar_ventana_riel(k_riel, _k_relevo, ventana)
+            _regla_riel([((_m - ventana[0]).days / _total_dias * 100, _m.day)
+                         for _m in _marcas])
+            # El relevo del arrastre y su script se dibujan al FINAL de la
+            # función, después del caption. Ver ahí por qué.
+            _cola_dias = True
     else:
         if ventana:
             _nav_ventana(clave, escala, ventana, bounds, ctx, bandera)
-        st.select_slider("Rango",
-                         options=escala_periodos(escala, ventana or bounds),
+        _paradas = escala_periodos(escala, ventana or bounds)
+        st.select_slider("Rango", options=_paradas,
                          value=par, key=k_riel,
                          format_func=lambda d: _fmt_periodo(escala, d),
                          label_visibility="collapsed",
                          on_change=_aplicar_escala,
                          args=(k_riel, escala, ctx, bandera))
+        # LA MISMA REGLA QUE DÍAS, un piso más arriba (a pedido 2026-09-03:
+        # "cuando están en los botones de mes y año, no muestra ninguna
+        # referencia de mes o año abajo de la línea"). Días la tenía desde
+        # el 2026-08-26 y estas dos escalas se habían quedado sin ella: el
+        # `stSliderTickBar` nativo de Streamlit, que es lo único que había,
+        # rotula sólo los dos extremos Y ADEMÁS llega con `opacity: 0`
+        # cuando un tirador le cae encima (medido con los dos tiradores en
+        # "ago 26": el DOM traía "ene 26 / ago 26" y en pantalla no se veía
+        # nada). Por eso va oculto explícito en `_css_proveedor.py` en las
+        # tres escalas, y la referencia la pone siempre esta regla.
+        if len(_paradas) > 1:
+            _ancho = _ANCHO_ROTULO.get(escala, 24)
+            _regla_riel([(_i / (len(_paradas) - 1) * 100,
+                          _rotulo_marca(escala, _paradas[_i]))
+                         for _i in _indices_rotulados(len(_paradas), _ancho)])
 
     # El slider ya dibuja sus dos extremos; repetir las fechas sería ruido.
     # Lo que NO dice es cuánto abarca, que es el dato con el que se decide
@@ -885,6 +971,26 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
             _txt += (f" · el riel muestra sólo "
                      f"{_rotulo_ventana(escala, ventana).lower()}")
         st.caption(_txt)
+
+    # ÚLTIMO A PROPÓSITO, y no por estética: es lo único que dibuja UNA
+    # escala y no las otras, y lo que va al final es lo que puede quedar
+    # HUÉRFANO. Medido el 2026-09-03: al pasar de Días a Meses/Años,
+    # Streamlit deja en el DOM los elementos sobrantes de la cola del
+    # render anterior hasta el rerun siguiente (el popover vive dentro de
+    # un `@st.fragment`), y con el caption de último eso se veía como
+    # "1 día seleccionado" repetido dos veces. Con el relevo acá, lo que
+    # sobrevive de más son un `text_input` que el CSS deja en 1px y un
+    # iframe de alto 0 — invisibles los dos.
+    #
+    # El relevo es un widget propio y no los dos `<input>` nativos del
+    # slider: ver el docstring largo de `_aplicar_pan_riel`. Al JS no le
+    # importa el orden — busca por clase, con reintentos.
+    if _cola_dias:
+        _k_relevo = f"{k_riel}_pan"
+        st.text_input("pan", key=_k_relevo, label_visibility="collapsed",
+                      on_change=_aplicar_pan_riel,
+                      args=(_k_relevo, ctx, bandera))
+        _arrastrar_ventana_riel(k_riel, _k_relevo, ventana)
     return escala
 
 
