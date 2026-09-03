@@ -615,7 +615,6 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                                    col_um)
                 agg = _prod_serie_periodo(g, col_fecha, col_punit, col_cant,
                                           col_valor, gran)
-                gw = gran.lower()
 
                 if agg.empty or fila is None:
                     st.info("Sin compras con precio válido para este producto.")
@@ -698,8 +697,6 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                     fig.update_xaxes(**_eje_x_kwargs(gran, agg))
                     st.plotly_chart(fig, use_container_width=True,
                                     key=f"compras_g_prod_{gran}")
-                    st.caption(f"Barra = valor comprado por {gw} · encima, el "
-                               f"precio promedio de ese {gw}.")
 
     # ── Card 2: ranking por familia + mini ranking de sus productos ──────
     if not col_fam or col_fam not in dd.columns:
