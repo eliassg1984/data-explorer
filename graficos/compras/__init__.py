@@ -695,6 +695,22 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                         _ord_claves = _orden["clave"].tolist()
                         _ord_lbls = _orden["lbl"].tolist()
 
+                        # Con una sola barra, "evolución" no se ve —el
+                        # cuadro no miente, pero tampoco explica por qué
+                        # hay tan poco. La causa casi siempre es el rango
+                        # de fechas de la franja (arriba de TODO Compras,
+                        # no de esta tarjeta): su default "1º del mes ->
+                        # hoy" (app.py) se aplasta contra los bounds reales
+                        # del parquet cuando el dato todavía no llega a
+                        # "hoy" (mismo síntoma que arquitectura.md #293).
+                        # 2026-09-03, a pedido ("para indicarle al
+                        # usuario").
+                        if len(_ord_claves) == 1:
+                            st.caption("Sólo hay compras en un período "
+                                      "dentro del rango de fechas activo "
+                                      "(arriba) — ampliá el rango para ver "
+                                      "la evolución.")
+
                         # UNA sola serie, no apilada por producto. La
                         # apilada (top 8 + Otros) mostraba 9 colores por
                         # barra que se pisaban con los puntos de "Compra
