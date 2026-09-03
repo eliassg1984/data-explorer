@@ -1612,7 +1612,8 @@ def _pruebas_regla_riel():
 
     from estado_rango import escala_a_rango, escala_periodos
     from graficos.base import (_AIRE_ROTULO, _ANCHO_RIEL_PX, _ANCHO_ROTULO,
-                               _borde_siguiente, _indices_rotulados)
+                               _borde_siguiente, _indices_rotulados,
+                               _rotulo_periodos)
 
     fallos = 0
 
@@ -1696,6 +1697,40 @@ def _pruebas_regla_riel():
           str(_indices_rotulados(4, _ANCHO_ROTULO["Años"])))
     check("un riel sin casilleros no revienta",
           _indices_rotulados(0, 18) == [], "")
+
+    # ── (3) el aviso de redondeo ───────────────────────────────────────
+    # El riel de Meses/Años PINTA casilleros enteros, así que con un rango
+    # más fino que la escala dibuja de más: el 31 de agosto suelto se ve
+    # como agosto entero. El caption lo canta comparando el rango que
+    # representan los casilleros contra el rango vigente — acá se fija que
+    # esa comparación distinga los dos casos, que es de lo que depende que
+    # el aviso salga cuando tiene que salir y NO salga cuando no.
+    _ago = datetime.date(2026, 8, 1)
+    _dia = (datetime.date(2026, 8, 31), datetime.date(2026, 8, 31))
+    _mes = (datetime.date(2026, 8, 1), datetime.date(2026, 8, 31))
+    _b2 = (datetime.date(2023, 1, 1), datetime.date(2026, 12, 31))
+    check("un día suelto NO es lo que pinta el casillero del mes",
+          escala_a_rango("Meses", _ago, _ago, _b2) != _dia, "")
+    check("el mes entero SÍ es lo que pinta su casillero",
+          escala_a_rango("Meses", _ago, _ago, _b2) == _mes, "")
+    # Y el caso que se lee al revés: si los datos cortan a mitad de mes, el
+    # casillero YA vale ese pedazo, así que el aviso no tiene que salir.
+    _b3 = (datetime.date(2023, 1, 1), datetime.date(2026, 8, 24))
+    check("con los datos cortados a mitad de mes no hay redondeo que avisar",
+          escala_a_rango("Meses", _ago, _ago, _b3)
+          == (datetime.date(2026, 8, 1), datetime.date(2026, 8, 24)), "")
+
+    check("el rótulo del tramo pintado lleva el año, y se abrevia si es uno",
+          [_rotulo_periodos("Meses", _ago, _ago),
+           _rotulo_periodos("Meses", datetime.date(2026, 7, 1), _ago),
+           _rotulo_periodos("Meses", datetime.date(2025, 12, 1),
+                            datetime.date(2026, 1, 1)),
+           _rotulo_periodos("Años", datetime.date(2024, 1, 1),
+                            datetime.date(2026, 1, 1))]
+          == ["ago 2026", "jul-ago 2026", "dic 2025 - ene 2026", "2024-2026"],
+          str([_rotulo_periodos("Meses", _ago, _ago),
+               _rotulo_periodos("Años", datetime.date(2024, 1, 1),
+                                datetime.date(2026, 1, 1))]))
 
     return fallos
 

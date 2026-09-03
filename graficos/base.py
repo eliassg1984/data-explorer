@@ -375,6 +375,22 @@ def _rotulo_marca(escala, d):
     return str(d.year) if escala == "Años" else MESES_ABR_ES[d.month - 1]
 
 
+def _rotulo_periodos(escala, p0, p1):
+    """Cómo se nombra el tramo de casilleros que el riel está pintando.
+
+    Con año, a diferencia de `_rotulo_marca`: esto no va bajo la cabecera
+    ‹ 2026 › sino en el caption, que se lee suelto."""
+    if escala == "Años":
+        return (str(p0.year) if p0.year == p1.year
+                else f"{p0.year}-{p1.year}")
+    _ini = f"{MESES_ABR_ES[p0.month - 1]} {p0.year}"
+    if p0 == p1:
+        return _ini
+    if p0.year == p1.year:
+        return f"{MESES_ABR_ES[p0.month - 1]}-{MESES_ABR_ES[p1.month - 1]} {p1.year}"
+    return f"{_ini} - {MESES_ABR_ES[p1.month - 1]} {p1.year}"
+
+
 def _borde_siguiente(escala, periodo):
     """El borde que CIERRA `periodo`: el arranque del período que sigue.
 
@@ -862,6 +878,9 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
     rango = st.session_state.get(ctx["k_rango"])
     ventana = None
     _cola_dias = False       # ¿hay que dibujar el relevo del arrastre?
+    # Qué rango representan EXACTAMENTE los casilleros pintados. `None` en
+    # Días, donde el riel es la fecha misma y no hay nada que redondear.
+    _rango_riel = None
     if escala == "Días":
         # EL RIEL ABARCA UN MES, no el histórico entero (a pedido
         # 2026-08-26, con la captura del selector de Excel: "cuando
@@ -994,6 +1013,10 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
         # bordes son `len(_paradas) + 1` y el valor del widget lleva el
         # borde que CIERRA el último período elegido.
         _bordes = _paradas + [_borde_siguiente(escala, _paradas[-1])]
+        # La MISMA cuenta que hará `_aplicar_escala_bordes` si el usuario
+        # mueve un tirador. Se calcula acá para poder comparar lo que el
+        # riel dibuja contra lo que el filtro filtra (ver el caption).
+        _rango_riel = escala_a_rango(escala, par[0], par[1], bounds)
         st.select_slider("Rango", options=_bordes,
                          value=(par[0], _borde_siguiente(escala, par[1])),
                          key=k_riel,
@@ -1041,6 +1064,19 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
         if ventana and (min(rango) < ventana[0] or max(rango) > ventana[1]):
             _txt += (f" · el riel muestra sólo "
                      f"{_rotulo_ventana(escala, ventana).lower()}")
+        # Y si el riel PINTA MÁS de lo que el filtro filtra, también. Pasa
+        # al abrir en Meses/Años con un rango más fino que la escala: el
+        # 31 de agosto suelto se ve como el casillero de agosto ENTERO,
+        # porque un riel de meses no tiene forma de dibujar un día. El
+        # redondeo hacia afuera es viejo y a propósito (`escala_desde_rango`
+        # lo hereda de Excel, y NO reescribe el rango — cambiar de
+        # granularidad y volver recupera la fecha exacta); lo que cambió el
+        # 2026-09-03 es que ahora el casillero se PINTA, así que la
+        # diferencia pasó de invisible a gritada. Misma doctrina que la
+        # línea de arriba: el riel dibuja lo más parecido que puede y el
+        # caption canta la diferencia. Ver regla #300.
+        elif _rango_riel and _rango_riel != (min(rango), max(rango)):
+            _txt += f" · el riel redondea a {_rotulo_periodos(escala, *par)}"
         st.caption(_txt)
 
     # ÚLTIMO A PROPÓSITO, y no por estética: es lo único que dibuja UNA

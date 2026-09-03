@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-299 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+300 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (98)
 
@@ -528,9 +528,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#233** — Una guarda que rastrea el fuente tiene que excluir .claude/worktrees/ — y el filtro mira los…
 - **#269** — El JS que vive dentro de un string de Python necesita el escape de salto de línea con DOS…
 
-**Sin tema asignado** (1)
+**Sin tema asignado** (2)
 
 - **#240** — _soles() escribía «S/ » sin mirar la moneda, y 641 comprobantes del registro están en dólares
+- **#300** — Un riel que PINTA casilleros enteros dice de más cuando el rango es más fino que su escala:…
 
 <!-- INDICE:FIN -->
 
@@ -13398,13 +13399,50 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        ya funcionaba antes de este cambio y no hizo falta construir nada
        nuevo para eso.
 
+300. **Un riel que PINTA casilleros enteros dice de más cuando el rango es
+     más fino que su escala: hay que cantarlo.** Reporte real 2026-09-03,
+     tercera vuelta sobre el mismo control y consecuencia directa de la
+     regla #298: con el filtro en "31 ago 2026" —UN día—, abrir la escala
+     en Meses pintaba el casillero de agosto ENTERO. El caption decía "1
+     día seleccionado" al lado. Otra vez dos piezas del mismo control
+     diciendo cosas distintas, pero al revés que en #298: antes dibujaba de
+     menos, ahora de más.
+
+     El redondeo hacia afuera NO es el bug y no se toca: `escala_desde_rango`
+     lo hereda de Excel y, sobre todo, **no reescribe el rango** — cambiar
+     de granularidad y volver recupera la fecha exacta, que es lo que hace
+     que la escala sea una VISTA y no un filtro paralelo. Un riel de meses
+     tampoco tiene forma de dibujar un día: el casillero que lo contiene es
+     lo más parecido que existe. Lo que cambió es que antes ese redondeo
+     era invisible (un punto sobre la marca del mes) y desde #298 se pinta.
+
+     El arreglo es la misma doctrina que ya usaba el aviso de "el riel
+     muestra sólo ago 2026" (regla #222): el riel dibuja lo más parecido
+     que puede y el caption canta la diferencia. Se compara el rango que
+     representan los casilleros pintados —`escala_a_rango(escala, *par,
+     bounds)`, la MISMA cuenta que hará `_aplicar_escala_bordes` si el
+     usuario mueve un tirador— contra el rango vigente; si difieren, el
+     caption suma "· el riel redondea a ago 2026".
+
+     Los dos avisos son excluyentes: si el rango además se sale de la
+     ventana visible, gana ese, que es el problema más grave.
+
+     El detalle que hace que el aviso no moleste: **se apaga solo cuando
+     tiene razón**. Si los datos cortan a mitad de mes, el casillero de
+     agosto YA vale "1 al 24 de agosto" porque `escala_a_rango` recorta a
+     `bounds` — y ahí no hay nada que avisar. Verificado en vivo: con el
+     rango en 24-ago el caption decía "1 día seleccionado · el riel
+     redondea a ago 2026"; moviendo un tirador un paso, pasó a "55 días
+     seleccionados" sin aviso, porque jul+ago es exactamente lo que quedó
+     filtrado.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#300**.
+> próxima regla nueva es la **#301**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
