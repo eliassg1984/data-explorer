@@ -457,9 +457,17 @@ ancestros) para elegir con un clic en vez de perseguir el píxel. Regla
 Y con **`?debug=1&diseno=1`** se suma el **modo diseño**: fijás un elemento
 con clic derecho y un panel lateral lo edita en vivo (caja, tipografía,
 color, mover/redimensionar, **alto de fila** si es una tabla AgGrid, con
-"↺" por fila para revertir solo esa propiedad), o **inserta**
-texto/línea/barra/espacio de mentira para ver
-"cómo se vería" algo que todavía no existe, o **unifica** dos tarjetas
+"↺" por fila para revertir solo esa propiedad; **Rotar** llega a una
+vuelta completa, -180°..180°, con botones de ángulo exacto 0/90/180/270
+para girar una franja/línea insertada a vertical sin pelear con el
+slider), o **inserta** texto/línea/barra/espacio de mentira para ver
+"cómo se vería" algo que todavía no existe. **"Look rápido"** junta 4
+presets de botonera (Normal / Fantasma / Minimalista / Píldora) para
+probar la FORMA completa de un botón de una — mismas props que ya tocan
+los sliders de al lado, combinadas — en vez de ajustarlas una por una; el
+estado sobrevive a emular otro tamaño de ventana (mobile/tablet/desktop),
+así que cambiar de "modelo de vista" para probarlo responsive no pierde
+lo hecho. O **unifica** dos tarjetas
 vecinas: la sección "Unificar" lista las que arrancan en el mismo borde a
 menos de 40px y las pega como una sola superficie (cierra el hueco, saca
 las esquinas del lado que se tocan). Es el LOOK — unirlas de verdad, un
@@ -479,7 +487,7 @@ fila **"Recortado por"**: el elemento SÍ creció, pero un ancestro con
 `overflow` recortante se come lo que sobresale. Nada de esto persiste: es
 DOM efímero, muere al recargar y no toca `estilos/` hasta que vos pegás el
 bloque copiado. Detalle en `arquitectura.md` reglas #46 a #48, #151, #153,
-#154, #155, #188 y #194.
+#154, #155, #188, #194 y #299.
 Se pueden combinar: `?debug=1&diagnostico=1`. El tooltip incluye
 `codigo` (archivo:línea donde está declarada la key, buscado en `app.py`
 + `graficos/` + `tablas/`), `estilos` (archivos de `estilos/` que

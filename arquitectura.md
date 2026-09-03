@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-298 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+299 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (97)
+**CSS y estilos** (98)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -117,6 +117,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#287** — Un caption que explica CÓMO SE LEE una vista se lee una vez y estorba siempre: va en un…
 - **#297** — Lo que dibuja UNA rama y no las otras va AL FINAL: al encoger, la cola del render anterior…
 - **#298** — Un riel que elige PERÍODOS no puede parar en los períodos: tiene que parar en los BORDES…
+- **#299** — Modo diseño: "Rotar" no llegaba a un cuarto de vuelta, y probar la FORMA de una botonera (no…
 
 **Layout y alturas** (32)
 
@@ -13347,13 +13348,63 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      proveedores de 27 a 64 filas — o sea, la traducción llega hasta el
      filtro.
 
+299. **Modo diseño: "Rotar" no llegaba a un cuarto de vuelta, y probar la
+     FORMA de una botonera (no solo un valor CSS a la vez) era lento**
+     (2026-09-03, dos pedidos reales — "no puedo girar 90 grados una
+     franja/línea" y "¿puedo cambiar un toggle por texto, hacerlo
+     minimalista, probar cómo se ve?").
+     - **Rotar, -45..45 → -180..180 + snap.** El rango viejo ni siquiera
+       alcanzaba un giro de 90° — necesario para probar un divisor
+       VERTICAL a partir de una línea/barra horizontal (el `tipo: 'linea'`/
+       `'barra'` de la regla #151, que nacen horizontales). Arrastrar un
+       slider de 361 pasos para caer justo en 90 tampoco es preciso: se
+       agregaron 4 botones de ángulo exacto (0°/90°/180°/270°, este último
+       normalizado a -90° para caer dentro del rango del slider — mismo
+       giro visual). Aviso agregado al pie: girar cambia lo que se VE, no
+       la CAJA — una barra de 200×34 rotada 90° sigue ocupando 200×34 en
+       el layout, así que puede asomarse por fuera; ajustar Tamaño
+       (drag-resize) después de girar, no antes.
+     - **"Look rápido": 4 presets de botonera** (Normal / Fantasma /
+       Minimalista / Píldora), sección nueva entre Sombra y Tipografía.
+       Cada uno es la MISMA combinación de props que ya tocan los sliders
+       de arriba (border-radius, padding, border, box-shadow,
+       background-color, color, text-decoration) aplicada de una sola vez
+       vía `establecerCambioEstilo` — nada nuevo a nivel CSS, así que
+       hereda gratis la redirección a botones internos (regla #48) y a
+       texto (regla #154). **Trampa encontrada:** Sombra y Borde completo
+       no leen su propio CSS al reconstruir el panel — guardan un nivel/
+       ancho aparte (`registro.sombraNivel`, `registro.bordeAncho`) que
+       SOLO su propio slider escribe. Aplicar un preset sin sincronizar
+       esos dos campos dejaba el slider mostrando la posición VIEJA aunque
+       el CSS ya hubiera cambiado — mismo síntoma de siempre ("el control
+       no hace nada"), causa nueva. Arreglo: el handler de cada preset
+       fuerza `sombraNivel = 0` y `bordeAncho = 0` antes de
+       `rehacerPanel()`, ya que ninguno de los 4 looks pide sombra o borde
+       con ancho.
+     - Verificado en vivo sobre un botón real del rail (`graf_btn_
+       proveedor`, el ítem activo del drill de Proveedor): Fantasma dejó
+       `background: transparent`, `border: none`, `box-shadow: none`,
+       `color: Acento` — los cuatro con `!important` inline confirmados
+       por `getPropertyPriority`; Píldora, `border-radius: 999px` +
+       fondo lavanda tenue; Normal revirtió el radio a los 10px propios
+       del CSS y el fondo al lavanda tenue que trae el estado activo (no
+       transparente — es el CSS real del widget, no un bug). El giro a
+       90° sobre una Barra insertada dio
+       `transform: matrix(0, 1, -1, 0, 0, 0)` (rotate(90deg) exacto) y
+       sobrevivió intacto (`rotateDeg: 90`, el nodo seguía en el DOM) a
+       emular un viewport mobile (375px) — confirma que `window.__diseno
+       State` no depende del tamaño de ventana: cambiar de "modelo o
+       formato de vista" para probar responsive no pierde las ediciones,
+       ya funcionaba antes de este cambio y no hizo falta construir nada
+       nuevo para eso.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#299**.
+> próxima regla nueva es la **#300**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

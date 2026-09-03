@@ -2933,6 +2933,58 @@ JS = """
                 rehacerPanel();
             }));
 
+            // ---- look rápido: presets de botonera ----
+            // Pedido real: "¿puedo cambiar la FORMA de una botonera, no
+            // solo un valor a la vez?" — girar radio+padding+borde+sombra
+            // de a uno para llegar a "toggle minimalista, como texto" es
+            // lento. Cada preset es un combo de las MISMAS props que ya
+            // tocan los sliders de arriba/abajo (nada nuevo a nivel CSS),
+            // aplicado de una — y rehacerPanel() deja los sliders
+            // mostrando el resultado, no la posición vieja.
+            panel.appendChild(seccion('Look rápido'));
+            var LOOKS = [
+                { etiqueta: 'Normal', props: {
+                    'border-radius': null, padding: null, border: null,
+                    'box-shadow': null, 'background-color': null, color: null,
+                    'text-decoration': null
+                } },
+                { etiqueta: 'Fantasma', props: {
+                    border: 'none', 'box-shadow': 'none',
+                    'background-color': 'transparent', color: colorPaleta('Acento')
+                } },
+                { etiqueta: 'Minimalista', props: {
+                    border: 'none', 'box-shadow': 'none', padding: '0px',
+                    'border-radius': '0px', 'background-color': 'transparent',
+                    'text-decoration': 'underline'
+                } },
+                { etiqueta: 'Píldora', props: {
+                    'border-radius': '999px', border: 'none', 'box-shadow': 'none',
+                    'background-color': colorPaleta('Lavanda tenue')
+                } }
+            ];
+            var lookWrap = doc.createElement('div');
+            lookWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px';
+            LOOKS.forEach(function(look) {
+                var b = doc.createElement('button');
+                b.textContent = look.etiqueta;
+                b.style.cssText = 'flex:1 1 46%;background:#1c1c24;color:#fff;border:1px solid #34343f;border-radius:4px;padding:7px 4px;font:11px sans-serif;cursor:pointer';
+                b.addEventListener('click', function() {
+                    var ctx = elementoActivo(); if (!ctx) return;
+                    Object.keys(look.props).forEach(function(prop) {
+                        establecerCambioEstilo(ctx.el, ctx.registro, prop, look.props[prop]);
+                    });
+                    // Sombra/Borde completo no leen su propio CSS: guardan
+                    // un nivel/ancho aparte que solo su slider toca. Sin
+                    // sincronizarlo acá, el slider queda en la posición
+                    // vieja aunque el CSS ya haya cambiado por el preset.
+                    ctx.registro.sombraNivel = 0;
+                    ctx.registro.bordeAncho = 0;
+                    rehacerPanel();
+                });
+                lookWrap.appendChild(b);
+            });
+            panel.appendChild(lookWrap);
+
             // ---- tipografía ----
             panel.appendChild(seccion('Tipografía'));
 
@@ -3065,7 +3117,10 @@ JS = """
                 rehacerPanel();
             }));
 
-            var inpRot = rango(-45, 45, 1, registro.transformState.rotateDeg);
+            // -180..180 (no -45..45): pedido real — "no puedo girar 90
+            // grados una franja/línea" para probar un divisor VERTICAL.
+            // El rango viejo ni siquiera llegaba a un cuarto de vuelta.
+            var inpRot = rango(-180, 180, 1, registro.transformState.rotateDeg);
             var rotLbl = spanValor(registro.transformState.rotateDeg + '°');
             inpRot.addEventListener('input', function() {
                 var ctx = elementoActivo(); if (!ctx) return;
@@ -3080,6 +3135,38 @@ JS = """
                 aplicarTransform(ctx.el, ctx.registro);
                 rehacerPanel();
             }));
+            // Ángulos exactos: arrastrar el slider para caer justo en 90
+            // entre 361 pasos no es preciso, y una franja "vertical" de
+            // verdad necesita el ángulo EXACTO, no "cerca de 90". 270°
+            // se normaliza a -90° (mismo giro visual) para que coincida
+            // con el rango del slider de arriba.
+            var ANGULOS_ROT = [0, 90, 180, 270];
+            var rotSnapWrap = doc.createElement('div');
+            rotSnapWrap.style.cssText = 'display:flex;gap:4px;margin-top:6px';
+            ANGULOS_ROT.forEach(function(deg) {
+                var b = doc.createElement('button');
+                b.textContent = deg + '°';
+                b.style.cssText = 'flex:1;background:#1c1c24;color:#fff;border:1px solid #34343f;border-radius:4px;padding:5px 2px;font:11px sans-serif;cursor:pointer';
+                b.addEventListener('click', function() {
+                    var ctx = elementoActivo(); if (!ctx) return;
+                    var v = deg > 180 ? deg - 360 : deg;
+                    inpRot.value = v;
+                    rotLbl.textContent = v + '°';
+                    ctx.registro.transformState.rotateDeg = v;
+                    aplicarTransform(ctx.el, ctx.registro);
+                });
+                rotSnapWrap.appendChild(b);
+            });
+            panel.appendChild(rotSnapWrap);
+            // Girar 90°/270° cambia lo que se ve, no la CAJA: una barra
+            // horizontal de 200x34 rotada sigue OCUPANDO 200x34 en el
+            // layout — el contenido gira adentro/alrededor de esa caja y
+            // puede asomarse por fuera. Para que quede prolijo, ajustar
+            // Tamaño (arriba) después de girar, no antes.
+            var avisoRot = doc.createElement('div');
+            avisoRot.style.cssText = 'font:11px/1.4 -apple-system,sans-serif;color:#8b8b95;margin-top:6px';
+            avisoRot.textContent = 'Girar cambia lo que se ve, no la caja — si se sale del borde, ajustá Tamaño después de girar.';
+            panel.appendChild(avisoRot);
 
             // ---- color por rol ----
             panel.appendChild(seccion('Color'));
