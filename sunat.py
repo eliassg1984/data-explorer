@@ -998,6 +998,91 @@ def _num_xml(txt):
         return None
 
 
+# Catálogo 05 de SUNAT (códigos de tributo). Sólo los que aparecen en
+# comprobantes de compra de este negocio; medido sobre 1.000 XML reales:
+# IGV 79%, exonerado 22%, inafecto 13%, gratuito 5%, ISC 1,3%.
+_TRIBUTO_IGV = "1000"
+_TRIBUTO_ISC = "2000"
+_TRIBUTOS_SIN_IGV = {"9997", "9998", "9996"}   # exonerado, inafecto, gratuito
+
+
+def _impuestos_linea(linea):
+    """Los tributos y descuentos de UNA línea de detalle → dict.
+
+    Existe porque el importador al Almacén los necesita por línea y
+    `lineas_xml` no los traía: sin esto, un documento apareado no se
+    puede convertir (falta `nImpuesto1` de cada `DDOCUMENTO`).
+
+    Tres cosas que NO son obvias del UBL:
+
+      · `cac:TaxTotal/cbc:TaxAmount` de la línea es la suma de TODOS sus
+        tributos. Si la línea lleva IGV e ICBPER (la bolsa plástica), ese
+        número no es el IGV. Por eso se baja a `TaxSubtotal` y se separa
+        por el código de `TaxScheme`.
+      · Una línea EXONERADA igual trae un `TaxSubtotal`, con importe 0 y
+        código 9997. O sea que "no hay IGV" y "el IGV es cero" se ven
+        igual en el importe, y sólo el código los distingue.
+      · `cac:AllowanceCharge` sirve para descuento Y para cargo; los
+        separa `cbc:ChargeIndicator` (false = descuento). El importe va
+        SIN impuesto, y `LineExtensionAmount` YA viene descontado.
+    """
+    igv = isc = otros = 0.0
+    porcentaje = None
+    afectacion = ""
+    visto = False
+
+    for sub in linea.findall("cac:TaxTotal/cac:TaxSubtotal", _NS_UBL):
+        monto = _num_xml(_texto_ubl(sub, "cbc:TaxAmount")) or 0.0
+        codigo = (_texto_ubl(sub, "cac:TaxCategory/cac:TaxScheme/cbc:ID")
+                  or "").strip()
+        if codigo == _TRIBUTO_IGV:
+            igv += monto
+            visto = True
+            pct = _num_xml(_texto_ubl(sub, "cac:TaxCategory/cbc:Percent"))
+            if pct is not None:
+                porcentaje = pct
+        elif codigo == _TRIBUTO_ISC:
+            isc += monto
+        else:
+            otros += monto
+        if not afectacion:
+            afectacion = (_texto_ubl(
+                sub, "cac:TaxCategory/cbc:TaxExemptionReasonCode") or "").strip()
+        if codigo in _TRIBUTOS_SIN_IGV:
+            visto = True
+            if porcentaje is None:
+                porcentaje = 0.0
+
+    descuento = cargo = 0.0
+    for ac in linea.findall("cac:AllowanceCharge", _NS_UBL):
+        monto = _num_xml(_texto_ubl(ac, "cbc:Amount")) or 0.0
+        es_cargo = (_texto_ubl(ac, "cbc:ChargeIndicator") or "").strip().lower()
+        if es_cargo == "true":
+            cargo += monto
+        else:
+            descuento += monto
+
+    return {
+        "igv": round(igv, 6) if visto else None,
+        "igv_porcentaje": porcentaje,
+        "isc": round(isc, 6) if isc else 0.0,
+        "otros_tributos": round(otros, 6) if otros else 0.0,
+        "afectacion": afectacion,
+        "descuento": round(descuento, 6),
+        "cargo": round(cargo, 6),
+    }
+
+
+def _texto_ubl(nodo, ruta):
+    """El texto de un subnodo UBL, o None. Envuelve el `find` + `.text`
+    que de otro modo se repite en cada campo y revienta con AttributeError
+    cuando el emisor omite algo opcional."""
+    hijo = nodo.find(ruta, _NS_UBL)
+    if hijo is None or hijo.text is None:
+        return None
+    return hijo.text
+
+
 def lineas_xml(xml_bytes):
     """Las líneas de detalle de un XML de comprobante → lista de dicts.
 
@@ -1039,15 +1124,24 @@ def lineas_xml(xml_bytes):
                             _NS_UBL)
 
         unidad = (cant.get("unitCode") or "") if cant is not None else ""
-        salida.append({
+        fila = {
             "codigo": (codigo.text or "").strip() if codigo is not None else "",
             "descripcion": _descripcion_limpia(
                 (desc.text or "").strip()) if desc is not None else "",
             "cantidad": _num_xml(cant.text) if cant is not None else None,
             "unidad": _UNIDADES.get(unidad.upper(), unidad),
+            # El código CRUDO del catálogo 03 (NIU, KGM, LTR…), que
+            # `unidad` pierde al traducirlo a algo legible. Lo necesita el
+            # importador para mapear a la unidad de kardex del Almacén.
+            "unidad_sunat": unidad.upper(),
             "precio_unitario": _num_xml(precio.text) if precio is not None else None,
             "importe": _num_xml(importe.text) if importe is not None else None,
-        })
+        }
+        # Tributos y descuentos de la línea (ver `_impuestos_linea`): sin
+        # esto un documento apareado no se puede convertir a un documento
+        # de compra del Almacén.
+        fila.update(_impuestos_linea(linea))
+        salida.append(fila)
     return salida
 
 

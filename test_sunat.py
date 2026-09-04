@@ -468,6 +468,97 @@ ok(sunat.lineas_xml(_sin_precio)[0]["precio_unitario"] is None,
    "un campo ausente queda en None, no revienta")
 
 
+# ── Tributos y descuentos por línea (2026-09-04) ───────────────────────────
+# Los agregó el importador al Almacén: cada `DDOCUMENTO` necesita el IGV de
+# SU línea, y hasta ahora `lineas_xml` sólo traía cantidad/precio/importe.
+print("\n── impuestos por línea (los necesita el importador) ──")
+
+
+def _linea_ubl(cuerpo):
+    return (b"""<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+ xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+ xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cac:InvoiceLine>
+    <cbc:InvoicedQuantity unitCode="KGM">1.0</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount>100.00</cbc:LineExtensionAmount>
+    <cac:Item><cbc:Description>X</cbc:Description></cac:Item>
+""" + cuerpo + b"""
+  </cac:InvoiceLine>
+</Invoice>""")
+
+
+def _sub(monto, esquema, pct=None, motivo=None):
+    extra = b""
+    if pct is not None:
+        extra += b"<cbc:Percent>" + pct + b"</cbc:Percent>"
+    if motivo is not None:
+        extra += (b"<cbc:TaxExemptionReasonCode>" + motivo
+                  + b"</cbc:TaxExemptionReasonCode>")
+    return (b"""<cac:TaxSubtotal>
+      <cbc:TaxAmount>""" + monto + b"""</cbc:TaxAmount>
+      <cac:TaxCategory>""" + extra + b"""
+        <cac:TaxScheme><cbc:ID>""" + esquema + b"""</cbc:ID></cac:TaxScheme>
+      </cac:TaxCategory>
+    </cac:TaxSubtotal>""")
+
+
+_gravada = sunat.lineas_xml(_linea_ubl(
+    b"<cac:TaxTotal><cbc:TaxAmount>18.00</cbc:TaxAmount>"
+    + _sub(b"18.00", b"1000", pct=b"18.00", motivo=b"10")
+    + b"</cac:TaxTotal>"))[0]
+ok(_gravada["igv"] == 18.0, "lee el IGV de la línea")
+ok(_gravada["igv_porcentaje"] == 18.0, "y su porcentaje")
+ok(_gravada["afectacion"] == "10", "y el código de afectación (catálogo 07)")
+
+# Una línea EXONERADA declara su tributo con importe 0. Que el IGV sea 0 y
+# que NO haya tributo declarado son cosas distintas, y sólo el código las
+# distingue: por eso una devuelve 0.0 y la otra None.
+_exo = sunat.lineas_xml(_linea_ubl(
+    b"<cac:TaxTotal><cbc:TaxAmount>0.00</cbc:TaxAmount>"
+    + _sub(b"0.00", b"9997", motivo=b"20") + b"</cac:TaxTotal>"))[0]
+ok(_exo["igv"] == 0.0, "una línea exonerada da IGV 0, no None")
+ok(_exo["igv_porcentaje"] == 0.0, "y porcentaje 0")
+
+_mudo = sunat.lineas_xml(_linea_ubl(b""))[0]
+ok(_mudo["igv"] is None,
+   "una línea sin ningún tributo declarado da None, distinto de 0")
+
+# El TaxAmount de la línea suma TODOS los tributos. Si se lo tomara como
+# IGV, una bolsa plástica inflaría el IGV del documento.
+_bolsa = sunat.lineas_xml(_linea_ubl(
+    b"<cac:TaxTotal><cbc:TaxAmount>18.30</cbc:TaxAmount>"
+    + _sub(b"18.00", b"1000", pct=b"18.00")
+    + _sub(b"0.30", b"7152") + b"</cac:TaxTotal>"))[0]
+ok(_bolsa["igv"] == 18.0, "con ICBPER, el IGV sale de su TaxSubtotal, no del total")
+ok(_bolsa["otros_tributos"] == 0.30, "y el ICBPER queda aparte")
+
+_isc = sunat.lineas_xml(_linea_ubl(
+    b"<cac:TaxTotal><cbc:TaxAmount>25.00</cbc:TaxAmount>"
+    + _sub(b"18.00", b"1000", pct=b"18.00")
+    + _sub(b"7.00", b"2000") + b"</cac:TaxTotal>"))[0]
+ok(_isc["isc"] == 7.0, "separa el ISC del IGV")
+
+# AllowanceCharge sirve para las dos cosas; las distingue ChargeIndicator.
+_desc = sunat.lineas_xml(_linea_ubl(
+    b"<cac:AllowanceCharge><cbc:ChargeIndicator>false</cbc:ChargeIndicator>"
+    b"<cbc:Amount>5.00</cbc:Amount></cac:AllowanceCharge>"))[0]
+ok(_desc["descuento"] == 5.0 and _desc["cargo"] == 0.0,
+   "ChargeIndicator false es DESCUENTO")
+_carg = sunat.lineas_xml(_linea_ubl(
+    b"<cac:AllowanceCharge><cbc:ChargeIndicator>true</cbc:ChargeIndicator>"
+    b"<cbc:Amount>5.00</cbc:Amount></cac:AllowanceCharge>"))[0]
+ok(_carg["cargo"] == 5.0 and _carg["descuento"] == 0.0,
+   "ChargeIndicator true es CARGO, no descuento")
+
+# `unidad` se traduce para la pantalla y pierde el código; el importador
+# necesita el crudo para mapear a la unidad de kardex.
+ok(_gravada["unidad_sunat"] == "KGM",
+   "conserva el código de unidad crudo, además del traducido")
+ok(_gravada["unidad"] == "kg",
+   "y sigue traduciendo el legible, sin romper a quien ya lo usaba")
+
+
 # Descripciones EMPAQUETADAS: hay emisores que meten el renglón entero del
 # ticket en `cbc:Description`, con los campos pegados con `@@`. Sin esto la
 # columna "Descripción" muestra `2028@@CHIRCUMEXXKG@@ 1.330 X 11.49@@15.28@@`
