@@ -12,14 +12,18 @@ navegacion.py::inject_navegacion) con un chip Requerimiento/Salidas
 `graficos/recetas_comun.py::_chip_fuente`: clic en el lado no activo NAVEGA,
 no filtra).
 
-A diferencia de Receta Base/Venta (0% overlap confirmado, por eso esas dos
-NUNCA se cruzan — ver `recetas_comun.py`), acá SÍ hay overlap real de
-producto: 726 de los 968 productos de Salidas (75%) también aparecen en
-Requerimientos, confirmado con DuckDB directo contra R2 real 2026-08-13. Por
-eso este módulo también trae `_comparativo_pedido_baja`, una vista que carga
-AMBOS parquets y los cruza — precedente de carga cruzada entre dashboards:
+Acá hay overlap real de producto: 726 de los 968 productos de Salidas (75%)
+también aparecen en Requerimientos, confirmado con DuckDB directo contra R2
+real 2026-08-13. Por eso este módulo también trae
+`_comparativo_pedido_baja`, una vista que carga AMBOS parquets y los cruza
+— precedente de carga cruzada entre dashboards:
 `recetas_comun.py::_cargar_flujo_compras` ya carga compras.parquet desde
-dentro de Receta Base/Venta.
+dentro del dashboard de Recetas.
+
+(Acá decía "a diferencia de Receta Base/Venta, que con 0% overlap NUNCA se
+cruzan". Ese 0% era una medición contra la columna equivocada y se corrigió
+el 2026-09-04 — los dos parquets de receta SÍ se cruzan, y desde entonces
+comparten una sola página. Ver `arquitectura.md` regla #303.)
 
 Dos límites reales del DATO, no del código — no se resuelven con más
 columnas, hay que diseñar la vista alrededor de ellos:

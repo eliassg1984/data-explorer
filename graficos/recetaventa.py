@@ -1,5 +1,5 @@
 """
-graficos.recetaventa — dashboard de gráficos de Receta Venta.
+graficos.recetaventa — la mitad de PLATOS del dashboard de Recetas.
 
 Cada fila de recetaventa.parquet es un ÍTEM de un plato:
     Nomb Plato · Item Rv · Cantidad · Total
@@ -57,7 +57,19 @@ y Panorama de compras pasan a mostrarse siempre en soles. Receta Base
 conserva su propio radio (`rb_metrica`) — este dashboard es el único que
 pidió sacarlo.
 
-Punto de entrada público: renderizar_graficos_recetaventa().
+**Dejó de ser un dashboard propio el 2026-09-04.** Hasta entonces «Receta
+Venta» era un reporte aparte, con su rail, su pila de 5 secciones y su
+punto de entrada `renderizar_graficos_recetaventa`, al que se llegaba por
+un chip Base/Venta. Hoy sus cinco vistas comparten página con las cuatro
+de recetas base — ver `graficos/recetas.py`, que dibuja la pila y explica
+por qué se fusionaron. Con el entry point se fueron sus
+`_RAIL_CATEGORIAS` y su `_PILA`.
+
+Lo que queda acá es lo PROPIO de este parquet: las dos tablas que no
+tienen equivalente en recetabase.parquet (`_tabla_composicion_venta`,
+`_tabla_costeo_venta`) y la resolución de columnas del Panorama
+(`_panorama_compras_venta`). Los gráficos compartidos con la mitad de
+recetas base siguen viniendo de `graficos.recetas_comun`.
 """
 
 import pandas as pd
@@ -71,13 +83,8 @@ from tema import (
     LAVANDA_CHIP, PALETA_SERIES, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
-from graficos.base import (
-    _card, _render_rail, _resolver, renderizar_graficos_genericos,
-    seccion_perezosa,
-)
-from graficos.recetas_comun import (
-    _activo, _chip_fuente, _hex_a_rgba, _items_clave, _panorama_compras,
-)
+from graficos.base import _card, _resolver
+from graficos.recetas_comun import _activo, _hex_a_rgba, _panorama_compras
 
 # Umbral de %Costo salón para el semáforo de la barra de progreso de
 # Composición (más abajo): mismo criterio que ya usa formulario_receta.py
@@ -87,26 +94,6 @@ from graficos.recetas_comun import (
 # misma referencia de negocio, no en código que debieran compartir.
 _UMBRAL_COSTO_OK = 30
 _UMBRAL_COSTO_WARN = 35
-
-_RAIL_CATEGORIAS = (
-    ("Vista", (("Composición del plato",   "Composición"),
-               ("Costeo Receta Venta",     "Costeo Receta Venta"),
-               ("Ingredientes clave",      "Ingredientes"),
-               ("Panorama de compras",     "Panorama"))),
-    ("Datos", (("Tabla", "Tabla"),)),
-)
-
-# ORDEN DE LA PILA — gemela de la de `graficos/recetabase.py` (los dos
-# reportes comparten ítem de nav y casi todos los gráficos, ver
-# recetas_comun.py). El porqué de que sección y vista vivan en la MISMA
-# tupla está en `graficos/compras/__init__.py::_PILA`.
-_PILA = (
-    ("rv_sec_composicion", "Composición del plato"),
-    ("rv_sec_costeo",      "Costeo Receta Venta"),
-    ("rv_sec_ingredientes", "Ingredientes clave"),
-    ("rv_sec_panorama",    "Panorama de compras"),
-    ("rv_sec_tabla",       "Tabla"),
-)
 
 
 def _panorama_compras_venta(df_f, es_soles):
@@ -697,101 +684,3 @@ def _tabla_costeo_venta(df_f, col_plato, col_valor, es_soles):
             key="rv_costeo_grid",
         )
         st.caption(f"{len(g)} platos · ordenado por {etiqueta_valor.lower()}")
-
-
-# ─── Punto de entrada público ───────────────────────────────────────────────
-def renderizar_graficos_recetaventa(df_f, nombre_reporte, df_full=None, tabla_cb=None):
-    """Dashboard de Receta Venta. df_full se ignora (catálogo sin fecha).
-
-    `tabla_cb`: callback que arma la Tabla (inyectado por app.py), llamado
-    SIN args — igual que Ajuste: este dashboard no tiene chips propios de
-    filtro (a diferencia de Ventas/Inventario), así que la Tabla usa los
-    filtros genéricos que ya arma app.py."""
-    col_plato = _resolver(df_f, ["Nomb Plato", "Nombre Plato", "PLATO", "Plato"])
-    col_item = _resolver(df_f, ["Item Rv", "Item RV", "ITEM RV", "Item",
-                                "Nombre Item", "Insumo", "Ingrediente",
-                                "Nombre Producto"])
-    col_total = _resolver(df_f, ["Total", "TOTAL", "Importe", "Costo Total",
-                                 "Total Costo", "Valorizado"])
-    col_cant = _resolver(df_f, ["Cantidad", "CANTIDAD", "Cant"])
-
-    # Necesitamos plato + ítem + al menos una métrica numérica.
-    if not col_plato or not col_item or not (col_total or col_cant):
-        st.warning(
-            "No se reconocieron las columnas de Receta Venta (se buscó "
-            "«Nomb Plato», «Item Rv», «Total», «Cantidad»). "
-            "Mostrando explorador genérico."
-        )
-        renderizar_graficos_genericos(df_f, nombre_reporte)
-        return
-
-    # El rail ya no ELIGE: con `secciones` marca dónde estás y scrollea.
-    _render_rail(_RAIL_CATEGORIAS, "rv_graf_tipo", btn_prefix="rv_rail_btn_",
-                 secciones=_PILA)
-
-    # El chip Base/Venta/Nueva se dibuja SIEMPRE. Hasta el apilado se
-    # escondía en la vista "Composición del plato" (a pedido 2026-08-24:
-    # esa vista es una tabla propia de Receta Venta y navegar a Base desde
-    # ahí no lleva a nada equivalente). Con la pila el argumento se cae
-    # solo: Composición ya no es LA pantalla, es una sección más de una
-    # página que en conjunto ES Receta Venta, y el chip es un control de la
-    # página entera.
-    _chip_fuente("Receta Venta")
-
-    # Medir por: SIEMPRE costo (a pedido, 2026-08-30) — se saca el radio
-    # Costo/Cantidad ("rv_metrica") que vivía acá arriba de la pila. Ya no
-    # hay para elegir: `es_soles` queda fijo, con el mismo fallback a
-    # Cantidad de siempre si no hubiera columna de costo (Total/TOTAL/...).
-    # El selector "Plato" que vivía al lado del radio se había ido antes,
-    # con el Sankey — este dashboard ya no tiene controles compartidos.
-    es_soles = bool(col_total)
-    col_valor = col_total if es_soles else col_cant
-
-    # ── LA PILA, PEREZOSA ────────────────────────────────────────────────
-    # Cada sección lleva su PROPIA key de tarjeta: las seis compartían
-    # `rv_graf_card` porque nunca coexistían. Y desaparece el sub-container
-    # `rv_graf_body_<vista>`, que existía para forzar un remount limpio al
-    # cambiar de rail (si no, los selectbox de drill del Panorama aparecían
-    # también en Ranking) — con una sección por vista, cada una tiene su
-    # propio sitio en el árbol y no hay nada que limpiar.
-    def _dib_composicion():
-        with st.container(border=True, key="rv_card_composicion"):
-            _tabla_composicion_venta(df_f)
-
-    def _dib_costeo():
-        with st.container(border=True, key="rv_card_costeo"):
-            _tabla_costeo_venta(df_f, col_plato, col_valor, es_soles)
-
-    def _dib_ingredientes():
-        with st.container(border=True, key="rv_card_ingredientes"):
-            _items_clave(df_f, col_plato, col_item, col_valor, es_soles,
-                        card_key="rv_ingredientes",
-                        titulo_card="Ingredientes de mayor costo total",
-                        etiqueta_item="Ingrediente",
-                        etiqueta_contenedor_plural="platos",
-                        expander_titulo="📋 Tabla: ingredientes por costo y n.º de platos")
-
-    def _dib_panorama():
-        with st.container(border=True, key="rv_card_panorama"):
-            _panorama_compras_venta(df_f, es_soles)
-
-    def _dib_tabla():
-        with st.container(border=True, key="rv_card_tabla"):
-            if tabla_cb is not None:
-                # Sin chips propios (como Ajuste): pasa su df tal cual.
-                tabla_cb(df_f)
-            else:
-                st.info("La tabla no está disponible en este contexto.")
-
-    _DIBUJANTES = {
-        "rv_sec_composicion":  _dib_composicion,
-        "rv_sec_costeo":       _dib_costeo,
-        "rv_sec_ingredientes": _dib_ingredientes,
-        "rv_sec_panorama":     _dib_panorama,
-        "rv_sec_tabla":        _dib_tabla,
-    }
-
-    for _i, (_clave, _vista) in enumerate(_PILA):
-        with st.container(key=_clave):
-            seccion_perezosa(_clave, _vista, _DIBUJANTES[_clave],
-                             activa_de_entrada=(_i == 0))

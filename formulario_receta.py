@@ -5,9 +5,11 @@ otra persona los revise.
 
 Punto de entrada público: render_formulario_receta().
 
-Vive en el mismo grupo de nav "Recetas" que Receta Base / Receta Venta
+Vive en el mismo grupo de nav "Recetas" que el reporte «Recetas»
 (`grupo_nav` en data.py) — el chip de arriba (`_chip_fuente` en
-graficos/recetas_comun.py) navega entre las tres. A diferencia de esas dos,
+graficos/recetas_comun.py) navega entre los dos. Eran TRES entradas hasta
+el 2026-09-04, cuando Receta Base y Receta Venta se fusionaron en un solo
+reporte (ver `arquitectura.md` regla #303). A diferencia de aquél,
 esta NO es un reporte de parquet con fecha/filtros: entra por `tool: True`
 (igual que Inspector, ver app.py), no por el pipeline de carga de app.py.
 

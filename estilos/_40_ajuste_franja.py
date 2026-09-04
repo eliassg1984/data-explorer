@@ -290,10 +290,10 @@ CSS = """    /* ================================================================
     }
 
     /* ================================================================== */
-    /* RECETAS (Receta Base / Receta Venta) — sin franja, sin reserva      */
+    /* RECETAS — sin franja, sin reserva                                  */
     /* ================================================================== */
-    /* Los dos son catálogo (data.py: "fecha": None) y el título de la     */
-    /* franja está oculto por pedido (app.py) — no queda nada adentro,     */
+    /* Es catálogo (data.py: "fecha": None) y el título de la franja está  */
+    /* oculto por pedido (app.py) — no queda nada adentro,                 */
     /* solo la banda decorativa. A pedido (2026-08-24) se oculta ENTERA    */
     /* (:has() apaga el contenedor y con él su ::before, sin tocar Python) */
     /* y en desktop se recorta el padding-top que el contenido reserva     */
@@ -310,17 +310,13 @@ CSS = """    /* ================================================================
     /* padding-top de navegacion.py ahí reservan para otros fijos (pill de */
     /* fecha, banda) que comparten presupuesto — recortarlos a ciegas, sin */
     /* poder medir reporte por reporte, es más riesgo que la ganancia.     */
-    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_receta_base) .st-key-fila_ajuste_top,
-    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_receta_venta) .st-key-fila_ajuste_top {
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_recetas) .st-key-fila_ajuste_top {
         display: none !important;
     }
     @media (min-width: 769px) {
-        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_receta_base) [data-testid="stMainBlockContainer"],
-        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_receta_base) .stMainBlockContainer,
-        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_receta_base) .block-container,
-        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_receta_venta) [data-testid="stMainBlockContainer"],
-        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_receta_venta) .stMainBlockContainer,
-        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_receta_venta) .block-container {
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_recetas) [data-testid="stMainBlockContainer"],
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_recetas) .stMainBlockContainer,
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_recetas) .block-container {
             /* --nav-top-alto (40px) despeja la barra de navegación fija;
                +8px es el mismo respiro que usan _50_fecha.py/_40_ajuste_
                franja.py para lo que ancla contra esa variable. */

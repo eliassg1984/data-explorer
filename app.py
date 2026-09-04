@@ -68,9 +68,16 @@ perf.start()                                                                # �
 # ===========================================================================
 
 @st.fragment(run_every=4)
-def _vigilar_refresco(archivo, clave_estado):
+def _vigilar_refresco(archivo, clave_estado, mostrar_aviso=True):
     """Revisa cada 4s si R2 ya tiene el parquet actualizado. Mientras
-    espera, muestra un aviso visible (no un toast que desaparece)."""
+    espera, muestra un aviso visible (no un toast que desaparece).
+
+    `mostrar_aviso=False` para los parquets SECUNDARIOS de un reporte
+    (`archivos_extra` en REPORTES, hoy solo Recetas): cada archivo necesita
+    su propio vigilante — se resuelven por separado y cada uno limpia su
+    caché — pero el aviso lo dibuja UNO SOLO. Dos fragments abriendo
+    `st.container(key="aviso_refresco")` a la vez es un DuplicateWidgetID, y
+    encima la key la posiciona el CSS junto al rail: no hay sitio para dos."""
     info = st.session_state.get(clave_estado)
     if not info:
         return  # ya se resolvió en otra ejecución
@@ -85,6 +92,8 @@ def _vigilar_refresco(archivo, clave_estado):
         return
 
     if transcurrido > 120:
+        if not mostrar_aviso:
+            return
         with st.container(key="aviso_refresco"):
             st.warning(
                 f"⏳ La actualización de «{info['reporte']}» está tardando más de lo "
@@ -96,7 +105,7 @@ def _vigilar_refresco(archivo, clave_estado):
     # Periodo de gracia: si el job termina antes de este umbral, el usuario
     # nunca ve el aviso — solo un salto directo de tabla vieja a tabla nueva.
     GRACIA_SEGUNDOS = 8
-    if transcurrido < GRACIA_SEGUNDOS:
+    if transcurrido < GRACIA_SEGUNDOS or not mostrar_aviso:
         return
 
     with st.container(key="aviso_refresco"):
@@ -158,6 +167,13 @@ st.markdown(
 _archivo_actual = cfg.get("archivo")
 if _archivo_actual:
     _vigilar_refresco(_archivo_actual, f"_refresco_pendiente_{_archivo_actual}")
+# Parquets SECUNDARIOS del reporte (`archivos_extra`, hoy solo Recetas con
+# recetabase.parquet). Cada uno se resuelve por su cuenta — atender_
+# solicitudes.py los regenera de a uno — así que cada uno lleva su propio
+# vigilante para limpiar SU caché cuando llegue. El aviso visible lo dibuja
+# solo el principal, ver el docstring de _vigilar_refresco.
+for _extra in cfg.get("archivos_extra", ()):
+    _vigilar_refresco(_extra, f"_refresco_pendiente_{_extra}", mostrar_aviso=False)
 
 
 # ===========================================================================
@@ -973,8 +989,7 @@ def _cb_requerimientos_tabla(d):
 #  su propio módulo y nunca invoca el callback.)
 _TABLA_CB = {
     "Ajuste de Inventario": _cb_chips_en_navegador,
-    "Receta Base":          _cb_chips_en_python,
-    "Receta Venta":         _cb_chips_en_python,
+    "Recetas":              _cb_chips_en_python,
     "Requerimientos":       _cb_requerimientos_tabla,
 }
 

@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-302 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+303 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (99)
 
@@ -350,7 +350,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#297** — Lo que dibuja UNA rama y no las otras va AL FINAL: al encoger, la cola del render anterior…
 - **#298** — Un riel que elige PERÍODOS no puede parar en los períodos: tiene que parar en los BORDES…
 
-**Datos, R2 y DuckDB** (33)
+**Datos, R2 y DuckDB** (34)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -385,6 +385,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#292** — limpiar_cache(archivo) sólo limpiaba la mitad de las cachés de carga — la hermana "por rango"…
 - **#293** — "No se pudieron cargar los datos", tercera causa: el extractor NOCTURNO dejó de correr. Se…
 - **#301** — La vista "Cruce" de Documentos SUNAT heredaba el filtro de Familia/Subfamilia de la franja…
+- **#303** — Una medición de overlap contra la columna equivocada puede sostener una decisión de producto…
 
 **SUNAT y SIRE** (29)
 
@@ -13551,6 +13552,63 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      `closest('[class*="st-key-"]') === st-key-rail_rotulo_rep`, y el
      clic derecho ahí fija `rail_rotulo_rep` de verdad. Apagarlo vacía la
      `<style>` y el rótulo vuelve a `pointer-events: none`.
+303. **Una medición de overlap contra la columna equivocada puede
+     sostener una decisión de producto entera durante meses.**
+     (2026-09-04, al pedir el usuario "quiero que las visualizaciones de
+     estos toggles figuren todas juntas" en el reporte de Recetas.)
+
+     Desde el 2026-08-13 «Receta Base» y «Receta Venta» eran dos reportes
+     HERMANOS que un chip alternaba, y la justificación estaba escrita en
+     tres sitios (`recetabase.py`, `recetas_comun.py`, la memoria de
+     proyecto `esquema-real-compras-recetaventa`): *"0% overlap
+     `recetabase.COD RB` vs `recetaventa.COD INS` — son dos catálogos de
+     insumos independientes, por eso nunca se ofrece un puente
+     Base↔Venta"*.
+
+     Era falso, y el dato tardó diez segundos de DuckDB en decirlo. `COD
+     RB` es el ID INTERNO de la receta base — 5 dígitos, `00002` — no su
+     código de producto. El código de producto es **`COD PROD RB`**, 7
+     dígitos, el MISMO espacio de numeración que `compras.COD_PRODUCTO` y
+     que `recetaventa.COD INS`:
+
+         COD INS  <->  COD RB        ->    0 códigos   <- lo que se midió
+         COD INS  <->  COD PROD RB   ->  401 códigos   <- la clave real
+
+     Y no es coincidencia numérica: los **401 nombres coinciden EXACTO**
+     en los dos lados (`INS RV` == `RB NOMBRE`, cero discrepancias). Son
+     1.003 de 2.599 filas de recetaventa, en 334 de 828 platos (40%). El
+     prefijo `(Rs)` del nombre lo delataba solo: 861 de esas 1.003 filas
+     empiezan así. Hay hasta un nivel más — 630 filas de recetabase cuyo
+     `COD INS RB` es el `COD PROD RB` de otra receta base. El BOM real es
+     un árbol: **Plato → Receta Base → (Receta Base) → Insumo**.
+
+     Cadena de ejemplo, verificable:
+
+         Anticuchos de Guanciale -> (Rs) Tocto (parrilla)
+                                 -> (P) Pellejo de cerdo limpio x Kg
+
+     Lo que costó: una receta base NO es la hermana de una receta de
+     venta, es una PIEZA de adentro. La UI las mostraba como dos
+     catálogos planos y paralelos porque el dato "decía" que no se
+     tocaban. Con la corrección se fusionaron en un solo reporte
+     «Recetas» de nueve secciones (`graficos/recetas.py`) y el chip
+     Base/Venta desapareció.
+
+     **La lección reproducible:** antes de escribir "0% overlap, no se
+     cruzan" hay que mirar la FORMA de los códigos, no solo el resultado
+     del `JOIN`. Dos columnas de códigos con distinto LARGO (5 vs 7
+     dígitos) casi nunca son el mismo identificador, y un overlap de
+     exactamente 0 entre dos tablas del mismo sistema es más sospechoso
+     que tranquilizador — los sistemas reales no suelen tener catálogos
+     perfectamente disjuntos. La verificación barata que faltó es
+     comparar NOMBRES: si el join correcto existe, los nombres coinciden;
+     si no existe, no coinciden. Diez segundos, y no depende de entender
+     el esquema.
+
+     Gemela de la regla #200 (`VALOR_ANO_ANTERIOR` y el grano de las
+     columnas "comparables"): las dos son de la misma familia — una
+     columna que parece decir lo que su nombre promete y dice otra cosa.
+
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
@@ -13558,7 +13616,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#303**.
+> próxima regla nueva es la **#304**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

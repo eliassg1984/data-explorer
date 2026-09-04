@@ -46,8 +46,7 @@ from graficos.base import _card, crear_grafico, renderizar_graficos_genericos
 from graficos.ajuste import renderizar_graficos_ajuste                # noqa: F401
 from graficos.compras import renderizar_graficos_compras              # noqa: F401
 from graficos.inventario import renderizar_graficos_inventario        # noqa: F401
-from graficos.recetabase import renderizar_graficos_recetabase        # noqa: F401
-from graficos.recetaventa import renderizar_graficos_recetaventa      # noqa: F401
+from graficos.recetas import renderizar_graficos_recetas              # noqa: F401
 from graficos.requerimientos import renderizar_graficos_requerimientos  # noqa: F401
 from graficos.salidas import renderizar_graficos_salidas              # noqa: F401
 from graficos.ventas import renderizar_graficos_ventas                # noqa: F401
@@ -69,8 +68,7 @@ _DASHBOARDS = {
     "Ajuste de Inventario": renderizar_graficos_ajuste,
     "Compras":               renderizar_graficos_compras,
     "Inventario Valorizado": renderizar_graficos_inventario,
-    "Receta Base":           renderizar_graficos_recetabase,
-    "Receta Venta":          renderizar_graficos_recetaventa,
+    "Recetas":               renderizar_graficos_recetas,
     "Requerimientos":        renderizar_graficos_requerimientos,
     "Salidas":               renderizar_graficos_salidas,
     "Ventas":                renderizar_graficos_ventas,

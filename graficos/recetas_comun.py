@@ -32,12 +32,19 @@ borran cuando pierden su ÚLTIMO llamador, no antes:
     Panorama de compras), que sólo existía para saltar hasta ahí y quedó
     sin destino. Ver el docstring de `recetaventa.py`.
 
-Confirmado que NO se cruzan entre sí (0% overlap `recetabase.COD RB` vs
-`recetaventa.COD INS`, ver memoria de proyecto
-`esquema-real-compras-recetaventa`): son dos catálogos de insumos
-independientes que cuelgan de `compras.COD_PRODUCTO` cada uno por su lado.
-Por eso nunca se ofrece un puente Base↔Venta — solo el mismo esqueleto
-visual aplicado a cada uno.
+**CORREGIDO 2026-09-04 — sÍ se cruzan.** Acá decía que Base y Venta eran
+"dos catálogos independientes, 0% overlap", y de ahí salía que nunca se
+ofreciera un puente entre los dos. Ese 0% se midió contra
+`recetabase.COD RB`, que es el ID INTERNO de la receta base (5 dígitos,
+`00002`), no su código de producto. La clave real es
+`recetaventa.COD INS` ↔ `recetabase.COD PROD RB`: 401 códigos cruzan y los
+401 NOMBRES coinciden exacto en los dos lados. Una receta base es una
+PIEZA de un plato, no su hermana. Ver `arquitectura.md` regla #303 y el
+docstring de `graficos/recetas.py`.
+
+Los dos parquets comparten desde entonces UNA sola página. Este módulo
+sigue siendo el dueño del esqueleto visual común; el cruce por
+`COD PROD RB` todavía no se explota en ningún gráfico.
 """
 
 import pandas as pd
@@ -110,9 +117,21 @@ def _activo(serie):
 
 # ─── Chip de fuente (Opción A del rail unificado) ──────────────────────────
 def _chip_fuente(reporte_activo):
-    """Segmented control Base/Venta/Nueva arriba del rail — separa las tres
+    """Segmented control Recetas/+ Nueva arriba del rail — separa las dos
     entradas del mismo ítem de nav ("Recetas", ver
-    navegacion.py::grupo_nav). Clic en el lado NO activo NAVEGA (mismo
+    navegacion.py::grupo_nav).
+
+    **Eran TRES hasta el 2026-09-04** (Receta base / Receta venta / +
+    Nueva): el chip era el selector que alternaba entre los dos parquets de
+    receta. Al fusionarse las nueve vistas en una sola página
+    (`graficos/recetas.py`) ese trabajo desapareció — ya no hay dos
+    destinos que alternar — y lo que queda es el puente hacia "+ Nueva",
+    que NO es una vista sino el formulario de alta. Se conserva el widget
+    en vez de un `st.button` porque el ida-y-vuelta tiene que funcionar en
+    los dos sentidos: desde el formulario, este mismo chip es la única
+    forma de volver.
+
+    Clic en el lado NO activo NAVEGA (mismo
     mecanismo que el rail de navegación: session_state['_nav_reporte'] +
     rerun) en vez de filtrar — así reusa TODO el pipeline de carga de
     app.py (cfg, archivo, fecha_ultima_actualizacion, refresco...) sin
@@ -126,14 +145,13 @@ def _chip_fuente(reporte_activo):
     patrón que la key de `st.plotly_chart(on_select=...)` en
     graficos/ajuste (CLAUDE.md § trampas de Streamlit)."""
     etiquetas = {
-        "Receta Base": "Receta base",
-        "Receta Venta": "Receta venta",
+        "Recetas": "Recetas",
         "Nueva Receta": "+ Nueva",
     }
     inverso = {v: k for k, v in etiquetas.items()}
     sel = st.segmented_control(
         "Fuente", list(etiquetas.values()),
-        default=etiquetas.get(reporte_activo, "Receta base"),
+        default=etiquetas.get(reporte_activo, "Recetas"),
         key=f"recetas_fuente_chip_{reporte_activo}",
         label_visibility="collapsed",
     )

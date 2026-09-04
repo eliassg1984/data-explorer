@@ -93,7 +93,7 @@ REPORTES = {
     # agregado por producto/familia/período, nunca documento a documento.
     # Confirmado con DuckDB directo contra R2 real (no demo) 2026-08-13:
     # 726 de los 968 productos de Salidas (75%) también aparecen en
-    # Requerimientos — hay overlap real, a diferencia de Receta Base/Venta
+    # Requerimientos — hay overlap real de producto entre los dos parquets
     # (0% overlap, por eso esas dos nunca se cruzan). Detalle en
     # arquitectura.md § Unificación Movimientos.
     "Salidas": {
@@ -143,32 +143,38 @@ REPORTES = {
         ],
         "columnas_fijas_movil": 2,
     },
-    # Receta Base, Receta Venta y Nueva Receta comparten UN ítem de nav
-    # ("Recetas", ver `grupo_nav` en navegacion.py::inject_navegacion) — tres
-    # entradas reales de REPORTES por dentro (cada una con su propio
-    # parquet/cfg, sin tocar el resto de app.py) pero un solo ícono para el
-    # usuario. El chip Base/Venta/Nueva que separa las tres vive DENTRO de
-    # cada pantalla (`_chip_fuente` en graficos/recetas_comun.py) y navega
-    # entre estas claves — Base/Venta nunca se mezclan en un único df,
-    # porque no comparten esquema ni se cruzan entre sí (0% overlap
-    # COD RB / COD INS). Ver arquitectura.md § Unificación Recetas.
-    "Receta Base": {
+    # UN SOLO reporte de Recetas desde el 2026-09-04. Hasta esa fecha eran
+    # DOS entradas ("Receta Base" y "Receta Venta") que un chip Base/Venta
+    # alternaba, apoyadas en una medición equivocada que decía que los dos
+    # parquets no se cruzaban (comparó `COD RB`, el ID interno, en vez de
+    # `COD PROD RB` — ver arquitectura.md regla #303). Se fusionaron a
+    # pedido: "quiero que las visualizaciones de estos toggles figuren todas
+    # juntas". Las nueve vistas viven hoy en una sola página, ver
+    # graficos/recetas.py.
+    #
+    # Sigue compartiendo ítem de nav con "Nueva Receta" (`grupo_nav`, ver
+    # navegacion.py::inject_navegacion): el chip que queda es el puente
+    # hacia ese formulario, no un selector de fuente de datos.
+    "Recetas": {
         "fecha": None,  # catálogo (foto completa): sin filtro de fecha
-        "label_corto": "R. Base",
+        "label_corto": "Recetas",
         "grupo_nav": "Recetas",
-        "archivo": "recetabase.parquet",
+        "archivo": "recetaventa.parquet",
+        # El SEGUNDO parquet de la página. `app.py` sigue cargando uno solo
+        # (`archivo`) y pasándolo como df_f; recetabase.parquet lo carga
+        # graficos/recetas.py con data.cargar. Esta clave existe para que el
+        # botón de refresco sepa que hay más de un parquet detrás del
+        # reporte — sin ella, "Refrescar" dejaría las recetas base viejas y
+        # no habría forma de actualizarlas desde la UI. Ver
+        # navegacion.py::boton_refresco.
+        "archivos_extra": ("recetabase.parquet",),
         "icono": ":material/receipt_long:",
         # Catálogo sin fecha: el KPI es un conteo, no un agregado por período
         # (kpi_fecha ausente a propósito — resumen_kpis() agrega la tabla
         # entera cuando no hay fecha, igual que hace este reporte mismo).
-        "kpis": (("Recetas", "COD RB", "count_distinct"),),
-    },
-    "Receta Venta": {
-        "fecha": None,  # catálogo (foto completa): sin filtro de fecha
-        "label_corto": "R. Venta",
-        "grupo_nav": "Recetas",
-        "archivo": "recetaventa.parquet",
-        "icono": ":material/receipt_long:",
+        # Solo "Platos": el KPI "Recetas" (count_distinct de COD RB) se fue
+        # con la fusión porque resumen_kpis() agrega el df del `archivo`, y
+        # COD RB vive en el parquet secundario.
         "kpis": (("Platos", "COD RV", "count_distinct"),),
     },
     "Nueva Receta": {
@@ -223,7 +229,7 @@ REPORTES = {
         "label_corto": "Inventario",
         "archivo": "inventariovalorizado.parquet",
         "icono": ":material/inventory_2:",
-        # Foto sin fecha (igual que Receta Base/Venta): kpi_fecha ausente a
+        # Foto sin fecha (igual que Recetas): kpi_fecha ausente a
         # propósito, resumen_kpis() agrega la tabla entera.
         "kpis": (("Valorizado", "VALORIZADO TOTAL", "sum"),),
         "columnas": [
@@ -935,7 +941,7 @@ def _resumen_kpis_cacheable(archivo, kpis, col_fecha, col_dedup):
     filas — mismo espíritu que `_rango_fechas_cacheable`. Acota al MES EN
     CURSO cuando `col_fecha` viene dado (mismo default que usa la franja de
     fecha en app.py: `hoy.replace(day=1)` → hoy); si no, agrega la tabla
-    entera — es el caso de los catálogos sin fecha (Receta Base/Venta,
+    entera — es el caso de los catálogos sin fecha (Recetas,
     Inventario Valorizado)."""
     if not secrets_disponibles():
         return {}

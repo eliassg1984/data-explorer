@@ -693,7 +693,8 @@ def boton_refresco():
     lo sabe `inject_navegacion`, que los setea en session_state ANTES de
     llamar a este fragment, en la misma función."""
 
-    reporte_activo, archivo = st.session_state.get("_ctx_refresco", ("", None))
+    reporte_activo, archivo, extras = st.session_state.get(
+        "_ctx_refresco", ("", None, ()))
 
     pulsado = st.button(
         ":material/refresh: Refrescar",
@@ -708,24 +709,40 @@ def boton_refresco():
         st.toast("ℹ️ Esta sección no tiene datos propios para actualizar.", icon="ℹ️")
         return
 
+    # Un reporte puede tener MÁS DE UN parquet detrás (`archivos_extra` en
+    # REPORTES — hoy solo Recetas, que dibuja recetaventa + recetabase en la
+    # misma página). "Refrescar" los pide TODOS: si pidiera solo el
+    # principal, la mitad de recetas base se quedaría con el dato viejo y no
+    # habría ningún botón en la UI capaz de actualizarla — que es justo lo
+    # que pasaba mientras "Receta Base" era un reporte aparte con su botón.
+    archivos = [archivo, *extras]
+
     if not secrets_disponibles():
-        limpiar_cache(archivo)
+        for _a in archivos:
+            limpiar_cache(_a)
         st.toast("🧪 Modo demo: no hay datos reales para refrescar.", icon="🧪")
         return
 
-    try:
-        fecha_conocida = fecha_ultima_actualizacion(archivo)
-        ok = solicitar_refresco(archivo, reporte_activo)
-    except Exception as e:
-        st.error(f"❌ Error al solicitar refresco en R2: {e}")
-        return
+    enviados = []
+    for _a in archivos:
+        try:
+            fecha_conocida = fecha_ultima_actualizacion(_a)
+            ok = solicitar_refresco(_a, reporte_activo)
+        except Exception as e:
+            st.error(f"❌ Error al solicitar refresco de «{_a}» en R2: {e}")
+            return
+        if ok:
+            # Una entrada por archivo: app.py monta un `_vigilar_refresco`
+            # por cada uno, porque atender_solicitudes.py los regenera de a
+            # uno y cada parquet llega cuando llega.
+            st.session_state[f"_refresco_pendiente_{_a}"] = {
+                "reporte": reporte_activo,
+                "baseline": fecha_conocida,
+                "inicio": datetime.datetime.now(ZONA_PERU),
+            }
+            enviados.append(_a)
 
-    if ok:
-        st.session_state[f"_refresco_pendiente_{archivo}"] = {
-            "reporte": reporte_activo,
-            "baseline": fecha_conocida,
-            "inicio": datetime.datetime.now(ZONA_PERU),
-        }
+    if enviados:
         st.toast(f"📨 Solicitud enviada para «{reporte_activo}», procesando...", icon="🔄")
     else:
         st.error("⚠️ No se pudo enviar la solicitud de refresco.")
@@ -751,8 +768,11 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
 
     # Contexto del botón de refresco: se dibuja al PIE de este mismo rail,
     # más abajo en esta misma función (ver boton_refresco()).
+    _cfg_activo = reportes.get(reporte_activo, {})
     st.session_state["_ctx_refresco"] = (
-        reporte_activo, reportes.get(reporte_activo, {}).get("archivo"),
+        reporte_activo,
+        _cfg_activo.get("archivo"),
+        tuple(_cfg_activo.get("archivos_extra", ())),
     )
 
     visibles = {
