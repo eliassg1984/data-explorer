@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-303 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+305 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (99)
 
@@ -387,7 +387,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#301** — La vista "Cruce" de Documentos SUNAT heredaba el filtro de Familia/Subfamilia de la franja…
 - **#303** — Una medición de overlap contra la columna equivocada puede sostener una decisión de producto…
 
-**SUNAT y SIRE** (29)
+**SUNAT y SIRE** (31)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -418,6 +418,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#251** — Dos paneles que tienen que verse iguales se dibujan con la MISMA función, no con dos copias…
 - **#252** — El total del lado que se va a exportar se SUMA de sus líneas, no se copia del original —…
 - **#301** — La vista "Cruce" de Documentos SUNAT heredaba el filtro de Familia/Subfamilia de la franja…
+- **#304** — Una sesión del portal SOL se muere sola a las ~2 h, y el backfill no se enteraba: seguía…
+- **#305** — El archivo suelto del servidor llevaba 160 líneas de ventaja sobre el repo, y la prueba que…
 
 **Fechas, rangos y cortes** (8)
 
@@ -13609,6 +13611,81 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      columnas "comparables"): las dos son de la misma familia — una
      columna que parece decir lo que su nombre promete y dice otra cosa.
 
+
+304. **Una sesión del portal SOL se muere sola a las ~2 h, y el backfill
+     no se enteraba: seguía preguntando hasta que cortaba el reloj.**
+     (2026-09-04, leyendo `logs\sunat_nocturno.txt` del servidor porque
+     un documento del 31/08 no tenía XML.)
+
+     La corrida de esa noche terminó así, catorce veces seguidas:
+
+         05:55:21  error: Locator.wait_for: Timeout 15000ms exceeded.
+           - waiting for get_by_text("Recibido", exact=True) to be visible
+
+     No era el documento: era la sesión. Después de dos horas navegando,
+     SUNAT deja de servir el formulario y `consultar_y_descargar` se
+     queda esperando un radio que ya no va a aparecer. Cada intento
+     cuesta el timeout completo, así que los últimos minutos de la
+     ventana —los que quedaban para bajar documentos de verdad— se
+     gastaron enteros en una sesión muerta.
+
+     **El arreglo es contar fallos SEGUIDOS, no fallos.** Uno suelto no
+     dice nada (SUNAT tarda, un PDF pesado se pasa del timeout). Cinco
+     seguidos sí. `correr_backfill` lleva el contador, y al llegar a
+     `FALLOS_SEGUIDOS_PARA_RELOGIN` vuelve a entrar —mismo navegador,
+     `login()` de nuevo, ~15 seg— hasta `RELOGINS_MAX_POR_TANDA` veces.
+
+     Tres detalles que hacen que el contador signifique algo:
+
+     - **Sólo cuentan las EXCEPCIONES.** Un "sin resultados" es una
+       respuesta: el formulario se llenó y SUNAT contestó que no lo
+       tiene, así que la sesión está viva. Reinicia el contador igual
+       que un "subido". Confundir "no lo tengo" con "no contesto" haría
+       reloguear cada vez que aparece un tramo de comprobantes
+       bancarios, que son exactamente los que `no_disponibles.json`
+       existe para saltar.
+     - **Un relogin FALLIDO no corta la tanda.** Si los cinco fallos
+       fueran PDFs pesados y la sesión estuviera viva, el formulario de
+       login no aparece —porque ya estamos adentro— y `login()` revienta.
+       Cortar ahí sería peor que el bug. Se anota y se sigue; si el
+       próximo puñado también falla, el contador vuelve a subir.
+     - **Pero el techo existe.** 3 × 5 = 15 documentos fallando antes de
+       cortar, ~6 minutos. Pasado eso ya no es la sesión: es SUNAT caído
+       o el portal cambiado, y el log lo dice con esas palabras, que es
+       lo único que alguien va a leer.
+
+     Hermana de la #142 y la #144: las tres son la misma familia — un
+     proceso que navega un portal ajeno falla en silencio, y lo único que
+     lo delata es que alguien mire el log.
+
+305. **El archivo suelto del servidor llevaba 160 líneas de ventaja sobre
+     el repo, y la prueba que existe para eso no podía verlo.**
+     (2026-09-04, mismo diagnóstico.)
+
+     `herramientas/servidor/sunat_originales.py` se copia a mano a
+     `C:\proyecto\` del servidor. `test_sunat.py` compara esa copia con
+     `sunat.py` para que no diverjan las claves de R2 — la regla #142 lo
+     deja escrito y termina con "**no sacar esa prueba**".
+
+     La prueba está y pasa. Lo que no puede hacer es mirar la máquina:
+     compara la copia del REPO, no la desplegada. El 2026-08-29 alguien
+     le agregó al archivo del servidor la memoria de "lo que SUNAT no
+     tiene" (`no_disponibles.json`, `bajar_uno(..., detalle)`) y nunca
+     volvió al repo. Durante seis días el repo describía un programa que
+     no era el que corría, y todo se veía verde.
+
+     Se detectó de casualidad: al leer el log del servidor aparecían
+     líneas ("428 se saltan: SUNAT ya dijo que no los tiene") que el
+     código del repo no podía imprimir.
+
+     **La lección:** una prueba de "estas dos copias no pueden divergir"
+     sólo cubre las copias que la prueba puede LEER. Con un despliegue
+     por copia manual, el repo no es la fuente de verdad — es una
+     tercera copia más. Mientras el despliegue siga siendo copiar el
+     archivo a mano, la reconciliación hay que hacerla a ojo, y el
+     momento de hacerla es **antes** de tocar el archivo: editar la
+     versión vieja y copiarla encima habría borrado la memoria de
+     no-disponibles sin que nada avisara.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

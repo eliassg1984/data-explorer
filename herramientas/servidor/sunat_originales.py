@@ -164,6 +164,33 @@ REINTENTAR_NO_DISPONIBLE_DIAS = 30
 # volverían a intentar los mismos.
 GUARDAR_MEMORIA_CADA = 25
 
+# ── La sesión de SOL se muere sola, y hay que notarlo ──────────────────────
+# Medido en el log de la noche del 2026-09-04: los últimos 14 documentos de
+# la corrida (05:55 a 06:00) fallaron TODOS con el mismo error —el radio
+# "Recibido" del formulario nunca aparecía— después de dos horas de sesión.
+# No era el documento: era la sesión, vencida o cerrada por SUNAT. El
+# script no lo notaba y seguía preguntando a ~22 seg cada uno hasta que
+# cortó el reloj, gastando los últimos minutos de la ventana en nada.
+#
+# Un fallo suelto no dice nada (SUNAT tarda, un PDF pesado se pasa del
+# timeout). Varios SEGUIDOS sí: si ninguno de los últimos N contestó, lo
+# más probable es que el problema esté de este lado. Se vuelve a entrar
+# —mismo navegador, login de nuevo, ~15 seg— y se sigue.
+#
+# Sólo cuentan las EXCEPCIONES. Un "sin resultados" es una respuesta: el
+# formulario se llenó y SUNAT contestó que no lo tiene, así que la sesión
+# está viva y el contador se reinicia igual que con un "subido".
+FALLOS_SEGUIDOS_PARA_RELOGIN = 5
+
+# Si tras volver a entrar sigue fallando todo, insistir es tirar la noche:
+# ya no es la sesión, es SUNAT caído o el portal cambiado. Se corta la
+# tanda y se deja dicho en el log, que es lo único que alguien va a mirar.
+#
+# El techo de lo que se puede perder queda acotado por las dos constantes:
+# 3 × 5 = 15 documentos fallando antes de cortar, ~6 minutos, contra los
+# 14 seguidos (y contando) de la noche del 2026-09-04.
+RELOGINS_MAX_POR_TANDA = 3
+
 
 def clave_no_disponible(doc):
     """Identifica un comprobante en la memoria.
@@ -757,10 +784,11 @@ def seleccionar_backfill(s3, bucket, meses_atras, limite):
     return pendientes
 
 
-def correr_backfill(pagina, s3, bucket, pendientes, corte_t):
+def correr_backfill(pagina, s3, bucket, pendientes, corte_t, cred_sunat):
     ok = fallidos = 0
     memoria = leer_no_disponibles()
     anotados = 0
+    seguidos = relogins = 0
     for i, doc in enumerate(pendientes, 1):
         # Antes de cada documento se mira si alguien pidió algo desde la
         # webapp, y se atiende EN EL ACTO. Es casi gratis —el navegador ya
@@ -785,6 +813,7 @@ def correr_backfill(pagina, s3, bucket, pendientes, corte_t):
         try:
             if bajar_uno(pagina, s3, bucket, doc, detalle):
                 ok += 1
+                seguidos = 0
                 log("    subido")
                 # Si alguna vez estuvo anotado y ahora SÍ apareció, se
                 # olvida: la anotación describe el pasado, no es una
@@ -792,6 +821,8 @@ def correr_backfill(pagina, s3, bucket, pendientes, corte_t):
                 memoria.pop(clave_no_disponible(doc), None)
             else:
                 fallidos += 1
+                # La sesión contestó, aunque haya sido que no lo tiene.
+                seguidos = 0
                 # SÓLO se anota si SUNAT contestó que no lo tiene. Un
                 # "error_servidor" es transitorio y ese documento merece
                 # otra oportunidad mañana — anotarlo por 30 días sería
@@ -801,7 +832,32 @@ def correr_backfill(pagina, s3, bucket, pendientes, corte_t):
                     anotados += 1
         except Exception as e:
             fallidos += 1
+            seguidos += 1
             log(f"    error: {str(e)[:160]}")
+            if seguidos >= FALLOS_SEGUIDOS_PARA_RELOGIN:
+                if relogins >= RELOGINS_MAX_POR_TANDA:
+                    log(f"{seguidos} fallos seguidos y ya se volvió a entrar "
+                        f"{relogins} veces: no es la sesión. Se corta la tanda "
+                        f"— quedan {len(pendientes) - i} sin intentar.")
+                    guardar_no_disponibles(memoria)
+                    break
+                relogins += 1
+                log(f"{seguidos} fallos seguidos: la sesión de SOL parece "
+                    f"vencida. Volviendo a entrar ({relogins}/"
+                    f"{RELOGINS_MAX_POR_TANDA})…")
+                seguidos = 0
+                try:
+                    login(pagina, cred_sunat)
+                    cerrar_popups(pagina)
+                except Exception as e2:
+                    # Un relogin fallido NO corta la tanda: puede que la
+                    # sesión estuviera viva y los 5 fallos fueran PDFs
+                    # pesados que se pasaron del timeout, en cuyo caso el
+                    # formulario de login nunca aparece porque ya estamos
+                    # adentro. Se anota y se sigue; si el próximo puñado
+                    # también falla, el contador vuelve a subir y en el
+                    # tercer intento sí se corta.
+                    log(f"No se pudo volver a entrar: {str(e2)[:160]}")
         if anotados and anotados % GUARDAR_MEMORIA_CADA == 0:
             guardar_no_disponibles(memoria)
         time.sleep(PAUSA_ENTRE_DOCS_SEG)
@@ -885,7 +941,8 @@ def una_sesion(cred_sunat, s3, bucket, headless, pedidos_hay, pendientes,
             ok = fallidos = 0
             if pendientes:
                 ok, fallidos = correr_backfill(pagina, s3, bucket,
-                                               pendientes, corte_t)
+                                               pendientes, corte_t,
+                                               cred_sunat)
             log(f"Listo: {n_ped} pedido(s) · backfill {ok} subidos, "
                 f"{fallidos} sin datos/con error.")
         finally:
