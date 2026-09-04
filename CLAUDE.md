@@ -484,10 +484,16 @@ transparente y un picker libre), y el botón **"Copiar CSS"** arma el
 bloque listo para pegar en `estilos/` — ya no hace falta leer los valores
 a ojo del panel. Si al redimensionar no pasa nada en pantalla, mirá la
 fila **"Recortado por"**: el elemento SÍ creció, pero un ancestro con
-`overflow` recortante se come lo que sobresale. Nada de esto persiste: es
-DOM efímero, muere al recargar y no toca `estilos/` hasta que vos pegás el
-bloque copiado. Detalle en `arquitectura.md` reglas #46 a #48, #151, #153,
-#154, #155, #188, #194 y #299.
+`overflow` recortante se come lo que sobresale. Y si un elemento no se
+deja **agarrar** (el rótulo "Reportes" del rail, por ejemplo), es porque
+`estilos/` le puso `pointer-events: none`: el navegador no lo hit-testea,
+así que ni el hover ni el clic derecho lo alcanzan. El botón **`⊘`/`⊚`
+("Capturar rótulos")** de la cabecera del panel lo neutraliza mientras lo
+tengas prendido — off por defecto, porque volver hitteable todo hace que
+un overlay transparente tape lo de abajo. Regla #302. Nada de esto
+persiste: es DOM efímero, muere al recargar y no toca `estilos/` hasta que
+vos pegás el bloque copiado. Detalle en `arquitectura.md` reglas #46 a
+#48, #151, #153, #154, #155, #188, #194, #299 y #302.
 Se pueden combinar: `?debug=1&diagnostico=1`. El tooltip incluye
 `codigo` (archivo:línea donde está declarada la key, buscado en `app.py`
 + `graficos/` + `tablas/`), `estilos` (archivos de `estilos/` que

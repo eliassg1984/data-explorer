@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-301 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+302 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (98)
+**CSS y estilos** (99)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -118,6 +118,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#297** — Lo que dibuja UNA rama y no las otras va AL FINAL: al encoger, la cola del render anterior…
 - **#298** — Un riel que elige PERÍODOS no puede parar en los períodos: tiene que parar en los BORDES…
 - **#299** — Modo diseño: "Rotar" no llegaba a un cuarto de vuelta, y probar la FORMA de una botonera (no…
+- **#302** — Un elemento con pointer-events: none es INVISIBLE para el inspector y para el modo diseño —…
 
 **Layout y alturas** (32)
 
@@ -13498,13 +13499,66 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      cruce sí los estaba respetando, colado por el `d` que ya venía
      recortado desde el dispatcher.
 
+302. **Un elemento con `pointer-events: none` es INVISIBLE para el
+     inspector y para el modo diseño — no es que "no se pueda editar", es
+     que no se puede AGARRAR.** (2026-09-03, reportado con captura y dos
+     flechas rojas apuntando al rótulo "Reportes" del rail: "¿sabés por
+     qué no puedo diseñar esto?").
+
+     `estilos/_20_compras_rail.py` le pone
+     `pointer-events: none !important` a `.st-key-rail_rotulo_rep` con un
+     comentario que explica la intención — *"es un rótulo, no un
+     control"*. Correcto para la app; letal para las herramientas: el
+     navegador directamente NO hit-testea ese subárbol, así que
+     `e.target` (el hover del inspector) y `elementsFromPoint` (el picker
+     de vecinos de la regla #295) devuelven SIEMPRE lo que hay debajo.
+     Medido en vivo: parado en el centro exacto del rótulo (159, 105), la
+     pila completa era `DIV > SECTION > DIV > st-key-app_lienzo > DIV` —
+     `rail_rotulo_rep` no aparecía en ninguna posición. Sin pin no hay
+     panel, y el síntoma que llega es "no puedo diseñar esto".
+
+     **Arreglo — botón `⊘`/`⊚` "Capturar rótulos"** en la cabecera del
+     panel, al lado de los otros dos "no me deja ver" (`▣` contorno, `⇤`
+     empujar lienzo): inyecta un `<style>` propio en el head del padre
+     que neutraliza el `pointer-events`. Mismo recurso y mismo ciclo de
+     vida que `aplicarReserva` — reaplicado en cada tick de `sync()`
+     (porque un rerun puede llevarse la `<style>`) y **apagado
+     explícitamente al salir del modo diseño**, que acá importa más que
+     en la reserva: dejarlo prendido cambiaría cómo se comporta la APP
+     (un rótulo decorativo pasaría a comerse los clics de lo que tapa).
+
+     **Off por defecto, y no es pereza:** volver hitteable todo lo que
+     `estilos/` marcó como no-hitteable tiene un costo real — un overlay
+     transparente de ancho completo pasa a tapar lo de abajo, así que se
+     gana este rótulo y se pierde inspeccionar lo que hay detrás. Es un
+     intercambio que decide el usuario en el momento, no un default.
+
+     **La trampa del arreglo, que costó una vuelta:** la primera versión
+     usaba `[class*="st-key-"] { pointer-events: auto !important }` y el
+     toggle cambiaba de estado sin que pasara NADA en pantalla. Un
+     `[class*=...]` pelado y una clase (`.st-key-rail_rotulo_rep`) tienen
+     la MISMA especificidad — (0,1,0) las dos — así que con `!important`
+     en ambos lados desempata el ORDEN del documento, y el CSS de
+     `estilos/` se inyecta después que el `<style>` de la herramienta.
+     Se resolvió subiendo a `html body [class*="st-key-"]` → (0,1,2), que
+     gana sin depender del orden. Mismo síntoma de siempre ("el control
+     no hace nada"), causa nueva: no era el valor ni el `!important`,
+     era el desempate.
+
+     Verificado en vivo de punta a punta: con el toggle en `⊘` el punto
+     central del rótulo devolvía `stMainBlockContainer` (el lienzo de
+     abajo); en `⊚` devuelve `rail-rotulo` con
+     `closest('[class*="st-key-"]') === st-key-rail_rotulo_rep`, y el
+     clic derecho ahí fija `rail_rotulo_rep` de verdad. Apagarlo vacía la
+     `<style>` y el rótulo vuelve a `pointer-events: none`.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#302**.
+> próxima regla nueva es la **#303**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

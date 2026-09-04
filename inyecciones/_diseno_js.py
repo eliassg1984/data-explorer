@@ -88,6 +88,19 @@ JS = """
         if (win.__disenoState.empujarLienzo === undefined) {
             win.__disenoState.empujarLienzo = false;
         }
+        // Capturar rotulos: hay elementos con `pointer-events: none` en
+        // estilos/ (el rotulo "Reportes" del rail, `rail_rotulo_rep`, es el
+        // caso que lo destapo) — el navegador NO los hit-testea, asi que
+        // `e.target` y `elementsFromPoint` devuelven siempre lo de ABAJO.
+        // Consecuencia: el inspector nunca los puede hoverear ni fijar, y
+        // sin pin el panel no tiene que editar. Off por defecto porque
+        // volverlos hitteables hace que un overlay transparente de ancho
+        // completo tape lo que hay debajo: se gana este rotulo, se pierde
+        // inspeccionar lo de atras. Es el usuario el que elige cual de las
+        // dos cosas necesita en el momento.
+        if (win.__disenoState.capturarRotulos === undefined) {
+            win.__disenoState.capturarRotulos = false;
+        }
         // Seleccion multiple (regla #259): ids de elementos que se mueven
         // JUNTOS. El pin del inspector es y sigue siendo UNO — esto es una
         // capa aparte del modo diseno, no un segundo pin: se suma el
@@ -1077,6 +1090,34 @@ JS = """
             }
             st.textContent = activa
                 ? ('.stApp { width: calc(100% - ' + ANCHO_PANEL + 'px) !important; }')
+                : '';
+        }
+
+        // Gemela de aplicarReserva, mismo recurso (un <style> propio en el
+        // head del padre, que sobrevive los reruns porque Streamlit solo
+        // re-renderiza SU contenedor). Neutraliza el `pointer-events:none`
+        // que estilos/ le pone a los rotulos decorativos: sin esto no hay
+        // forma de fijarlos, porque el navegador no los hit-testea y tanto
+        // `e.target` como `elementsFromPoint` (el picker de vecinos,
+        // regla #295) devuelven lo de abajo.
+        function aplicarCapturaRotulos(activa) {
+            var st = doc.getElementById('el-diseno-captura');
+            if (!st) {
+                st = doc.createElement('style');
+                st.id = 'el-diseno-captura';
+                doc.head.appendChild(st);
+            }
+            // `html body` adelante NO es decorativo: la regla que hay que
+            // vencer es `.st-key-rail_rotulo_rep { pointer-events: none
+            // !important }` (estilos/_20_compras_rail.py), una clase =
+            // especificidad (0,1,0), IGUAL que un `[class*=...]` pelado.
+            // Con empate y los dos !important gana el que va DESPUES en el
+            // documento, y el CSS de estilos/ se inyecta despues que esto:
+            // medido en vivo, el toggle cambiaba de estado y el rotulo
+            // seguia con pointer-events:none. Los dos tipos suben a (0,1,2)
+            // y el empate desaparece.
+            st.textContent = activa
+                ? 'html body [class*="st-key-"] { pointer-events: auto !important; }'
                 : '';
         }
 
@@ -2447,6 +2488,24 @@ JS = """
                 aplicarReserva(win.__disenoState.empujarLienzo);
             });
 
+            // Capturar rotulos: hace fijables los elementos que estilos/
+            // dejo con `pointer-events:none` (el "Reportes" del rail). Va
+            // al lado de los otros dos "no me deja": este es el caso "ni
+            // siquiera lo puedo agarrar".
+            var btnCaptura = doc.createElement('button');
+            btnCaptura.textContent = win.__disenoState.capturarRotulos ? '⊚' : '⊘';
+            btnCaptura.title = 'Capturar rótulos: hace seleccionables los elementos'
+                + ' con pointer-events:none (la cabecera "Reportes" del rail, por ejemplo).'
+                + ' Mientras está activo, un overlay transparente puede tapar lo de abajo.';
+            btnCaptura.style.cssText = 'background:' + (win.__disenoState.capturarRotulos ? '#3C3489' : '#2A2A35')
+                + ';color:#fff;border:0;border-radius:4px;padding:4px 7px;font:600 11px sans-serif;cursor:pointer;flex:0 0 auto';
+            btnCaptura.addEventListener('click', function() {
+                win.__disenoState.capturarRotulos = !win.__disenoState.capturarRotulos;
+                btnCaptura.textContent = win.__disenoState.capturarRotulos ? '⊚' : '⊘';
+                btnCaptura.style.background = win.__disenoState.capturarRotulos ? '#3C3489' : '#2A2A35';
+                aplicarCapturaRotulos(win.__disenoState.capturarRotulos);
+            });
+
             // Sumar el pineado a la seleccion multiple. Es un boton y no un
             // ctrl+clic porque el clic derecho ya esta tomado (fija Y copia,
             // regla #39) y un modificador encima de eso no se descubre solo.
@@ -2466,6 +2525,7 @@ JS = """
 
             header.appendChild(headerKey);
             header.appendChild(btnSumar);
+            header.appendChild(btnCaptura);
             header.appendChild(btnEmpujar);
             header.appendChild(btnContorno);
             header.appendChild(botonColapsar());
@@ -3361,6 +3421,11 @@ JS = """
                 // apagado (para eso se puso ahi), asi que hay que apagarla a
                 // mano o el lienzo queda encogido sin panel que lo explique.
                 aplicarReserva(false);
+                // Idem la captura de rotulos, y aca importa mas: dejarla
+                // prendida cambia como se comporta la APP fuera del modo
+                // diseno (un rotulo decorativo se volveria clickeable y
+                // taparia lo de abajo).
+                aplicarCapturaRotulos(false);
                 // Sin diseno activo, Inspector vuelve a comportarse solo:
                 // su outline no tiene por que quedar suprimido.
                 if (win.__inspectorSetResaltadoOculto) win.__inspectorSetResaltadoOculto(false);
@@ -3390,6 +3455,10 @@ JS = """
             // reserva sobraria y dejaria una franja muerta a la derecha.
             aplicarReserva(win.__disenoState.empujarLienzo
                 && !win.__disenoState.panelColapsado);
+            // Reaplicado por tick, mismo motivo que la reserva: la <style>
+            // vive en el head del padre y un rerun de Streamlit puede
+            // llevarsela.
+            aplicarCapturaRotulos(win.__disenoState.capturarRotulos);
             // El grupo gana sobre el pin: mientras hay dos o mas elegidos,
             // el contorno y el panel son los del conjunto. Soltarlo (Vaciar,
             // o sacar miembros hasta quedar en uno) devuelve todo al pin
