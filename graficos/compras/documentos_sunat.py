@@ -2332,7 +2332,66 @@ def _misma_cantidad(a, b):
 
 
 @st.fragment
-def _detalle_sistema(doc, lineas_xml, d):
+def _bloque_importar(doc, lineas_xml, filas_sistema, xml_original):
+    """El botón que manda el documento al Almacén, y en qué estado está.
+
+    NO escribe en SQL Server: la webapp corre en Streamlit Cloud y el
+    Almacén vive detrás de la VPN, en el restaurante. Deja una señal en R2
+    y del otro lado un servicio la levanta cada 5 segundos y graba con los
+    mismos procedimientos que usa el formulario. El mismo mecanismo que
+    ya se usa para refrescar un reporte y para pedir el original a SUNAT
+    — ver `sunat_importacion`.
+
+    TRES ESTADOS, y el del medio es el que hace falta que exista: entre
+    apretar y que el documento aparezca pasan segundos, y sin un "en
+    curso" visible el usuario aprieta de nuevo.
+    """
+    import sunat_importacion as simp
+
+    st.divider()
+
+    recibo = simp.recibo_importacion(doc)
+    pendiente = simp.importacion_pendiente(doc)
+
+    if pendiente:
+        st.info("Enviado al Almacén — esperando a que el servidor lo grabe. "
+                "Suele tardar unos segundos.")
+        if st.button("Actualizar", key="sunat_imp_refrescar", type="tertiary"):
+            st.rerun(scope="fragment")
+        return
+
+    if recibo and recibo.get("ok"):
+        st.success(
+            f"Cargado en el Almacén como **{recibo['correlativo']}** — "
+            f"{recibo.get('lineas', '?')} línea(s), total {recibo.get('total', '?')}. "
+            f"Queda en estado GENERADO: no mueve stock hasta que alguien "
+            f"lo revise y lo procese.")
+        for aviso in recibo.get("avisos", []):
+            st.caption(f"· {aviso}")
+    elif recibo:
+        # El importador rechaza el documento cuando su aritmética no cierra.
+        # Se muestra el motivo tal cual: está escrito para leerse acá.
+        st.error(f"El Almacén no lo aceptó: {recibo.get('error')}")
+
+    sin_mapear = sum(1 for f in filas_sistema
+                     if not str(f.get("_cod_sis") or "").strip())
+    if sin_mapear:
+        st.warning(f"Faltan {sin_mapear} línea(s) por asignarle producto. "
+                   f"Se completan arriba, en «Ítem (sistema)».")
+        return
+
+    etiqueta = "Reintentar la importación" if recibo else "Importar al Almacén"
+    if st.button(etiqueta, key="sunat_imp_enviar", type="primary"):
+        totales = sunat.totales_xml(xml_original) if xml_original else None
+        ok, mensaje = simp.solicitar_importacion(
+            doc, lineas_xml, filas_sistema, totales)
+        if ok:
+            st.rerun(scope="fragment")
+        else:
+            st.error(mensaje)
+
+
+def _detalle_sistema(doc, lineas_xml, d, xml_original=None):
     """El cuerpo de la tarjeta «Conversor SUNAT-Sistema»
     (`_card_conversor_sistema`): a la IZQUIERDA el comprobante del
     proveedor, a la DERECHA con qué se va a cargar al sistema — código,
@@ -2497,6 +2556,8 @@ def _detalle_sistema(doc, lineas_xml, d):
                "sugiere mientras escribís, contra el catálogo completo. "
                "«Cant.» arranca con la del comprobante y también se edita; "
                "vaciar el ítem vuelve la línea a lo automático.")
+
+    _bloque_importar(doc, lineas_xml, filas_sistema, xml_original)
 
     # ¿Cambió algo? Comparar lo que volvió (`resp.data`) contra lo que se
     # mandó (`tv`), fila a fila por `_idx` -- no por posición, para no
@@ -3173,7 +3234,7 @@ def _card_conversor_sistema(doc, d):
                 "desde «Original del proveedor», arriba.")
         return
 
-    _detalle_sistema(doc, lineas, d)
+    _detalle_sistema(doc, lineas, d, xml_original)
 
 
 def _excel_bytes(df, hoja="Datos"):
