@@ -13649,10 +13649,14 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        login no aparece —porque ya estamos adentro— y `login()` revienta.
        Cortar ahí sería peor que el bug. Se anota y se sigue; si el
        próximo puñado también falla, el contador vuelve a subir.
-     - **Pero el techo existe.** 3 × 5 = 15 documentos fallando antes de
-       cortar, ~6 minutos. Pasado eso ya no es la sesión: es SUNAT caído
-       o el portal cambiado, y el log lo dice con esas palabras, que es
-       lo único que alguien va a leer.
+     - **Pero el techo existe.** Tres relogins más el puñado que prueba
+       que el tercero tampoco sirvió: 4 × 5 = **20 documentos**, ~7
+       minutos. (No 15, que es la cuenta que sale sola y está mal — al
+       tercer relogin todavía no se sabe si funcionó; hay que dejarlo
+       intentar. Lo cazó la prueba de `test_sunat.py`, no la lectura del
+       código.) Pasado eso ya no es la sesión: es SUNAT caído o el portal
+       cambiado, y el log lo dice con esas palabras, que es lo único que
+       alguien va a leer.
 
      Hermana de la #142 y la #144: las tres son la misma familia — un
      proceso que navega un portal ajeno falla en silencio, y lo único que

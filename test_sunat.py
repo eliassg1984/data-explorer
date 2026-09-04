@@ -716,6 +716,86 @@ if _ruta_srv.exists():
     ok(not _lo_toma(_clave_fal.replace(".json", ".fallo.json")),
        "ni una marca doble (si quedara alguna de antes del fix)")
 
+    # ── El contador de fallos seguidos (regla #304) ────────────────────
+    # La sesión de SOL se muere sola a las ~2 h y el backfill seguía
+    # preguntando hasta que cortaba el reloj (14 documentos seguidos la
+    # noche del 2026-09-04). Ahora cuenta fallos SEGUIDOS y vuelve a
+    # entrar. Es aritmética de tres variables dentro de un bucle con
+    # try/except: leerla no basta — la cuenta del techo estaba mal en el
+    # comentario y la cazó esta prueba, no la revisión del código.
+    #
+    # Se ejercita el bucle de verdad con `bajar_uno` y `login`
+    # sustituidos: sin navegador, sin R2 y sin red.
+    _srv.PAUSA_ENTRE_DOCS_SEG = 0
+    _log_srv = []
+    _srv.log = _log_srv.append
+    _srv.pedidos_pendientes = lambda s3, b: []
+    _srv.leer_no_disponibles = lambda: {}
+    _srv.guardar_no_disponibles = lambda m: None
+    _srv.cerrar_popups = lambda p: None
+
+    def _correr(guion, login_revienta=False):
+        """`guion`: una lista de 'ok' | 'sin' | 'error', un ítem por doc.
+
+        Devuelve (subidos, fallidos, cuántos relogins, líneas de log).
+        """
+        _log_srv.clear()
+        _pasos = iter(guion)
+        _logins = []
+
+        def _bajar(pagina, s3, bucket, doc, detalle=None):
+            paso = next(_pasos)
+            if paso == "error":
+                raise RuntimeError("Timeout 15000ms exceeded")
+            if paso == "sin":
+                if detalle is not None:
+                    detalle["motivo"] = "sin_resultados"
+                return False
+            return True
+
+        def _login(pagina, cred):
+            _logins.append(1)
+            if login_revienta:
+                raise RuntimeError("no apareció #txtRuc")
+
+        _srv.bajar_uno, _srv.login = _bajar, _login
+        _docs = [{"ruc_proveedor": "20", "serie": "F001", "numero": str(n),
+                  "proveedor": "X"} for n in range(len(guion))]
+        _ok, _fall = _srv.correr_backfill(None, None, None, _docs, None, {})
+        return _ok, _fall, len(_logins), list(_log_srv)
+
+    ok(_correr(["error"] * 4)[2] == 0,
+       "4 errores seguidos no relogean (el umbral es 5)")
+    ok(_correr(["error"] * 5)[2] == 1,
+       "5 errores seguidos disparan UN relogin")
+    ok(_correr(["error"] * 4 + ["ok"] + ["error"] * 4)[2] == 0,
+       "un 'subido' en el medio reinicia el contador")
+    # Un "sin resultados" NO es una sesión rota: el formulario se llenó y
+    # SUNAT contestó. Si contara, relogearía en cada tramo de
+    # comprobantes bancarios — que son justo los que más aparecen.
+    ok(_correr(["error"] * 4 + ["sin"] + ["error"] * 4)[2] == 0,
+       "un 'sin resultados' tambien reinicia: la sesion esta viva")
+    ok(_correr(["ok"] * 10)[2] == 0, "una tanda sana no reloguea nunca")
+
+    _, _fall, _n, _reg = _correr(["error"] * 40)
+    ok(_n == _srv.RELOGINS_MAX_POR_TANDA,
+       f"como mucho {_srv.RELOGINS_MAX_POR_TANDA} relogins por tanda")
+    ok(any("Se corta la tanda" in m for m in _reg),
+       "corta la tanda y lo dice en el log")
+    # 4 puñados, no 3: después del tercer relogin todavía hay que dejarlo
+    # intentar para saber que tampoco sirvió.
+    _techo = (_srv.RELOGINS_MAX_POR_TANDA + 1) * _srv.FALLOS_SEGUIDOS_PARA_RELOGIN
+    ok(_fall == _techo,
+       f"corta a los {_techo} documentos, no a los 40 (fueron {_fall})")
+
+    # Si la sesión estuviera VIVA y los 5 fallos fueran PDFs pesados, el
+    # formulario de login no aparece —ya estamos adentro— y `login()`
+    # revienta. Cortar ahí sería peor que el bug.
+    _ok3, _, _, _reg = _correr(["error"] * 5 + ["ok"] * 3, login_revienta=True)
+    ok(_ok3 == 3, "un relogin fallido no corta: los 3 siguientes se bajan")
+    ok(any("No se pudo volver a entrar" in m for m in _reg),
+       "y el relogin fallido queda dicho en el log")
+
 
 # ── Credenciales ───────────────────────────────────────────────────────────
 print("\n── credenciales ──")

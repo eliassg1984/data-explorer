@@ -186,9 +186,10 @@ FALLOS_SEGUIDOS_PARA_RELOGIN = 5
 # ya no es la sesión, es SUNAT caído o el portal cambiado. Se corta la
 # tanda y se deja dicho en el log, que es lo único que alguien va a mirar.
 #
-# El techo de lo que se puede perder queda acotado por las dos constantes:
-# 3 × 5 = 15 documentos fallando antes de cortar, ~6 minutos, contra los
-# 14 seguidos (y contando) de la noche del 2026-09-04.
+# El techo de lo que se puede perder queda acotado por las dos
+# constantes: 3 relogins MÁS el puñado que prueba que el tercero tampoco
+# sirvió — 4 × 5 = 20 documentos, ~7 minutos — contra los 14 seguidos (y
+# contando, porque cortó el reloj antes) de la noche del 2026-09-04.
 RELOGINS_MAX_POR_TANDA = 3
 
 
