@@ -127,6 +127,100 @@ def log(msg):
 
 
 # ===========================================================================
+# MEMORIA DE LO QUE SUNAT NO TIENE
+# ===========================================================================
+# EL PROBLEMA QUE RESUELVE (medido sobre 10 noches de log, 2026-08-29):
+#
+# El backfill recorre los pendientes de lo MÁS NUEVO hacia atrás. Un
+# comprobante que SUNAT no sirve nunca se descarga, así que nunca sale de
+# la lista de pendientes — y como está entre los más nuevos, queda para
+# siempre en la CABECERA. Cada noche la corrida arranca chocando contra ese
+# muro, a ~25 segundos por documento, y sólo después llega a los que sí se
+# pueden bajar.
+#
+# El muro crece y la ventana no. Medido: 2.663 intentos para 1.537
+# documentos distintos, 428 reintentados —seis de ellos las diez noches—,
+# ~178 minutos por noche contra una ventana de 120. Por eso el backfill
+# cayó de 276 documentos por noche a 11: las dos horas se iban enteras
+# preguntando por lo mismo.
+#
+# La mayoría son series bancarias (FN01 del BCP, FC03, FS08): tipos de
+# comprobante que la Consulta de Comprobantes del portal no ofrece.
+#
+# Se anota SÓLO cuando SUNAT contesta sin darnos el archivo, NO cuando hay
+# una excepción: un timeout o un "Error del Servidor" son transitorios y
+# ese documento merece otra oportunidad mañana.
+
+ARCHIVO_NO_DISPONIBLES = AQUI / "logs" / "no_disponibles.json"
+
+# Se reintentan cada tanto por si SUNAT los publica más adelante. Un mes es
+# suficientemente espaciado para no volver a tapar la ventana, y
+# suficientemente seguido para no perderse un cambio del portal.
+REINTENTAR_NO_DISPONIBLE_DIAS = 30
+
+# Cada cuántos documentos se graba la memoria a disco. No alcanza con
+# guardar al final: si la corrida muere sin salir por la puerta (corte de
+# luz, kill), se perderían las anotaciones de toda la noche y mañana se
+# volverían a intentar los mismos.
+GUARDAR_MEMORIA_CADA = 25
+
+
+def clave_no_disponible(doc):
+    """Identifica un comprobante en la memoria.
+
+    El RUC entra a propósito: `serie-numero` NO es único entre proveedores
+    (`E001-1` lo usan miles de emisores). Misma forma que
+    `clave_solicitud`.
+    """
+    ruc = str(doc.get("ruc_proveedor") or "").strip()
+    serie = str(doc.get("serie") or "").strip()
+    numero = str(doc.get("numero") or "").strip()
+    return f"{ruc}_{serie}-{numero}"
+
+
+def leer_no_disponibles():
+    """{clave: {"ultimo": "AAAA-MM-DD", "intentos": n}}.
+
+    Un archivo ilegible se trata como vacío en vez de reventar: perder la
+    memoria hace el backfill más lento por una noche, pero una excepción
+    acá lo dejaría sin correr.
+    """
+    try:
+        datos = json.loads(ARCHIVO_NO_DISPONIBLES.read_text(encoding="utf-8"))
+        return datos if isinstance(datos, dict) else {}
+    except Exception:
+        return {}
+
+
+def anotar_no_disponible(memoria, doc):
+    previo = memoria.get(clave_no_disponible(doc)) or {}
+    memoria[clave_no_disponible(doc)] = {
+        "ultimo": time.strftime("%Y-%m-%d"),
+        "intentos": int(previo.get("intentos", 0)) + 1,
+    }
+
+
+def guardar_no_disponibles(memoria):
+    try:
+        ARCHIVO_NO_DISPONIBLES.parent.mkdir(parents=True, exist_ok=True)
+        ARCHIVO_NO_DISPONIBLES.write_text(
+            json.dumps(memoria, ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception as e:
+        log(f"No se pudo guardar {ARCHIVO_NO_DISPONIBLES.name}: {e}")
+
+
+def _fecha_corte_reintento():
+    """La fecha a partir de la cual una anotación sigue vigente.
+
+    Con `time` y no `datetime` para no sumar un import: en formato
+    AAAA-MM-DD, comparar los textos da el mismo orden que comparar fechas.
+    """
+    return time.strftime(
+        "%Y-%m-%d",
+        time.localtime(time.time() - REINTENTAR_NO_DISPONIBLE_DIAS * 86400))
+
+
+# ===========================================================================
 # CLAVES DE R2  (duplicado de sunat.py — ver el docstring del módulo)
 # ===========================================================================
 
@@ -422,8 +516,20 @@ def xml_del_zip(crudo):
 
 
 def consultar_y_descargar(pagina, ruc_emisor, serie, numero, tipo_cdp):
-    """Llena el formulario para UN comprobante. Devuelve (pdf, xml), None
-    cualquiera que SUNAT no ofrezca."""
+    """Llena el formulario para UN comprobante.
+
+    Devuelve `(pdf, xml, motivo)`. `pdf` y `xml` van en None cuando SUNAT no
+    los ofrece, y `motivo` dice POR QUE no hubo resultado:
+
+        None              hubo resultado (aunque falte uno de los dos archivos)
+        "sin_resultados"  SUNAT contestó y no tiene ese comprobante
+        "error_servidor"  SUNAT falló — TRANSITORIO
+
+    La distinción existe para la memoria de no-disponibles: anotar un
+    "error_servidor" dejaría fuera por 30 días a un documento que está
+    perfectamente disponible, sólo porque el portal se cayó esa noche. Los
+    dos casos devolvían `(None, None)` y eran indistinguibles desde afuera.
+    """
     label = etiqueta_tipo(tipo_cdp, serie)
     app = pagina.frame_locator("#iframeApplication")
 
@@ -461,9 +567,9 @@ def consultar_y_descargar(pagina, ruc_emisor, serie, numero, tipo_cdp):
                 pagina.get_by_role("button", name="Aceptar").click(timeout=3000)
             except Exception:
                 pass
-        else:
-            log("    sin resultados")
-        return None, None
+            return None, None, "error_servidor"
+        log("    sin resultados")
+        return None, None, "sin_resultados"
 
     pdf_bytes = xml_bytes = None
     btn_pdf = app.locator("button[ngbtooltip='Descargar PDF']").first
@@ -479,15 +585,24 @@ def consultar_y_descargar(pagina, ruc_emisor, serie, numero, tipo_cdp):
             btn_xml.click()
         xml_bytes = xml_del_zip(pathlib.Path(d.value.path()).read_bytes())
 
-    return pdf_bytes, xml_bytes
+    return pdf_bytes, xml_bytes, None
 
 
-def bajar_uno(pagina, s3, bucket, doc):
-    """Un comprobante: consulta, descarga y sube. True si subió algo."""
+def bajar_uno(pagina, s3, bucket, doc, detalle=None):
+    """Un comprobante: consulta, descarga y sube. True si subió algo.
+
+    `detalle` es opcional y sólo lo usa el backfill: si se pasa un dict, se
+    le deja `detalle["motivo"]` con lo que devolvió `consultar_y_descargar`
+    (None / "sin_resultados" / "error_servidor"). Va como parámetro de
+    salida y no en el return para no cambiarle la firma a `atender_pedidos`,
+    que sólo necesita el booleano.
+    """
     ir_a_consulta(pagina)
-    pdf_bytes, xml_bytes = consultar_y_descargar(
+    pdf_bytes, xml_bytes, motivo = consultar_y_descargar(
         pagina, doc.get("ruc_proveedor"), doc.get("serie"),
         doc.get("numero"), doc.get("tipo_cdp", "01"))
+    if detalle is not None:
+        detalle["motivo"] = motivo
     clave_pdf, clave_xml = claves_original(doc)
     if pdf_bytes:
         subir(s3, bucket, clave_pdf, pdf_bytes, "application/pdf")
@@ -617,6 +732,21 @@ def seleccionar_backfill(s3, bucket, meses_atras, limite):
     pendientes = [d for _, d in df.iterrows()
                   if not set(claves_original(d)) <= ya]
     log(f"{len(pendientes)} sin sincronizar · {len(df) - len(pendientes)} ya en R2.")
+
+    # Los que SUNAT ya dijo que no tiene se saltan por un tiempo. Sin esto
+    # se quedan en la cabecera de la lista para siempre y se comen la
+    # ventana entera — ver el bloque MEMORIA DE LO QUE SUNAT NO TIENE.
+    memoria = leer_no_disponibles()
+    if memoria:
+        corte = _fecha_corte_reintento()
+        antes = len(pendientes)
+        pendientes = [d for d in pendientes
+                      if (memoria.get(clave_no_disponible(d)) or {}
+                          ).get("ultimo", "") < corte]
+        if antes != len(pendientes):
+            log(f"{antes - len(pendientes)} se saltan: SUNAT ya dijo que no los "
+                f"tiene (se reintentan a los {REINTENTAR_NO_DISPONIBLE_DIAS} "
+                f"días). Quedan {len(pendientes)} por intentar.")
     # `is not None` y no `if limite`: con `--limite 0` (que es lo natural
     # para "mirá qué falta pero no bajes nada"), un chequeo por verdadero
     # lo trata como "sin límite" y arranca la corrida COMPLETA. Pasó de
@@ -629,6 +759,8 @@ def seleccionar_backfill(s3, bucket, meses_atras, limite):
 
 def correr_backfill(pagina, s3, bucket, pendientes, corte_t):
     ok = fallidos = 0
+    memoria = leer_no_disponibles()
+    anotados = 0
     for i, doc in enumerate(pendientes, 1):
         # Antes de cada documento se mira si alguien pidió algo desde la
         # webapp, y se atiende EN EL ACTO. Es casi gratis —el navegador ya
@@ -649,16 +781,34 @@ def correr_backfill(pagina, s3, bucket, pendientes, corte_t):
             break
         log(f"[{i}/{len(pendientes)}] {doc.get('serie')}-{doc.get('numero')} "
             f"({str(doc.get('proveedor'))[:38]})…")
+        detalle = {}
         try:
-            if bajar_uno(pagina, s3, bucket, doc):
+            if bajar_uno(pagina, s3, bucket, doc, detalle):
                 ok += 1
                 log("    subido")
+                # Si alguna vez estuvo anotado y ahora SÍ apareció, se
+                # olvida: la anotación describe el pasado, no es una
+                # sentencia.
+                memoria.pop(clave_no_disponible(doc), None)
             else:
                 fallidos += 1
+                # SÓLO se anota si SUNAT contestó que no lo tiene. Un
+                # "error_servidor" es transitorio y ese documento merece
+                # otra oportunidad mañana — anotarlo por 30 días sería
+                # castigar al documento por una caída del portal.
+                if detalle.get("motivo") == "sin_resultados":
+                    anotar_no_disponible(memoria, doc)
+                    anotados += 1
         except Exception as e:
             fallidos += 1
             log(f"    error: {str(e)[:160]}")
+        if anotados and anotados % GUARDAR_MEMORIA_CADA == 0:
+            guardar_no_disponibles(memoria)
         time.sleep(PAUSA_ENTRE_DOCS_SEG)
+    guardar_no_disponibles(memoria)
+    if anotados:
+        log(f"{anotados} anotados como no disponibles en SUNAT; no se vuelven "
+            f"a intentar por {REINTENTAR_NO_DISPONIBLE_DIAS} días.")
     return ok, fallidos
 
 
