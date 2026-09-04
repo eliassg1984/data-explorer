@@ -1073,6 +1073,53 @@ def _impuestos_linea(linea):
     }
 
 
+def totales_xml(xml_bytes):
+    """Los totales de la CABECERA del comprobante → dict, o None.
+
+    El registro del SIRE trae base, IGV y total, pero no los CARGOS
+    GLOBALES, y ahí está la diferencia que importa: el recargo al consumo
+    de restaurantes y hoteles viaja en `cbc:ChargeTotalAmount` y SUNAT
+    NO lo incluye en el total del registro, porque no es parte de la
+    operación gravada. Medido sobre la factura F051-7653 de TACUAREMBO:
+
+        base 214.57 + IGV 22.53 = 237.10   ← lo que dice el SIRE
+                    + recargo 27.89
+                                = 265.00   ← lo que se paga
+
+    Sin esto, un documento importado desde la webapp quedaría 27.89 por
+    debajo de lo que la empresa pagó.
+
+    OJO con `TaxableAmount`: cuando la línea lleva ISC, el de la CABECERA
+    viene mal (2 de 420 comprobantes medidos) porque no le suma el ISC,
+    aunque el IGV sí se calculó sobre esa base. Por eso acá no se lee: la
+    base sale de las líneas o del SIRE.
+    """
+    import xml.etree.ElementTree as ET
+
+    if not xml_bytes:
+        return None
+    try:
+        raiz = ET.fromstring(xml_bytes)
+    except Exception:
+        return None
+
+    lm = "cac:LegalMonetaryTotal/"
+    return {
+        "valor_venta": _num_xml(_texto_ubl(raiz, lm + "cbc:LineExtensionAmount")),
+        "con_impuestos": _num_xml(_texto_ubl(raiz, lm + "cbc:TaxInclusiveAmount")),
+        "total": _num_xml(_texto_ubl(raiz, lm + "cbc:PayableAmount")),
+        "cargos": _num_xml(_texto_ubl(raiz, lm + "cbc:ChargeTotalAmount")) or 0.0,
+        "descuentos": _num_xml(_texto_ubl(raiz, lm + "cbc:AllowanceTotalAmount")) or 0.0,
+        # Se lee para poder AVISAR, no para usarlo: no es un campo del
+        # estándar peruano —no figura en la guía de SUNAT— y cada emisor
+        # lo interpreta distinto. En unos el total ya lo incluye y en
+        # otros no. El importe que manda es `total`.
+        "redondeo": _num_xml(_texto_ubl(raiz, lm + "cbc:PayableRoundingAmount")) or 0.0,
+        "impuestos": _num_xml(_texto_ubl(raiz, "cac:TaxTotal/cbc:TaxAmount")),
+        "moneda": _texto_ubl(raiz, "cbc:DocumentCurrencyCode") or "PEN",
+    }
+
+
 def _texto_ubl(nodo, ruta):
     """El texto de un subnodo UBL, o None. Envuelve el `find` + `.text`
     que de otro modo se repite en cada campo y revienta con AttributeError

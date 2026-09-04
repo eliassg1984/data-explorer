@@ -559,6 +559,40 @@ ok(_gravada["unidad"] == "kg",
    "y sigue traduciendo el legible, sin romper a quien ya lo usaba")
 
 
+# ── Totales de la cabecera (2026-09-04) ────────────────────────────────────
+# El SIRE trae base, IGV y total pero NO los cargos globales, y ahí está el
+# recargo al consumo de restaurantes y hoteles.
+print("\n── totales_xml (lo que el SIRE no trae) ──")
+_XML_TOT = b"""<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+ xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+ xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:DocumentCurrencyCode>PEN</cbc:DocumentCurrencyCode>
+  <cac:TaxTotal><cbc:TaxAmount>22.53</cbc:TaxAmount></cac:TaxTotal>
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount>214.57</cbc:LineExtensionAmount>
+    <cbc:TaxInclusiveAmount>237.11</cbc:TaxInclusiveAmount>
+    <cbc:ChargeTotalAmount>27.89</cbc:ChargeTotalAmount>
+    <cbc:PayableAmount>265.00</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+</Invoice>"""
+_t = sunat.totales_xml(_XML_TOT)
+ok(_t["valor_venta"] == 214.57, "lee el valor de venta")
+ok(_t["impuestos"] == 22.53, "lee el impuesto")
+ok(_t["total"] == 265.00, "lee el importe total")
+# ESTE es el que no está en el registro del SIRE, y por el que un documento
+# importado quedaría 27.89 por debajo de lo que se pagó.
+ok(_t["cargos"] == 27.89, "lee el cargo global (recargo al consumo)")
+ok(_t["descuentos"] == 0.0 and _t["redondeo"] == 0.0,
+   "los que no vienen quedan en 0, no en None")
+ok(_t["moneda"] == "PEN", "lee la moneda del documento")
+
+ok(sunat.totales_xml(b"no soy xml") is None, "un XML corrupto devuelve None")
+ok(sunat.totales_xml(None) is None, "None devuelve None")
+ok(sunat.totales_xml(b"<Invoice/>")["total"] is None,
+   "un XML sin totales no revienta: los deja en None")
+
+
 # Descripciones EMPAQUETADAS: hay emisores que meten el renglón entero del
 # ticket en `cbc:Description`, con los campos pegados con `@@`. Sin esto la
 # columna "Descripción" muestra `2028@@CHIRCUMEXXKG@@ 1.330 X 11.49@@15.28@@`
