@@ -641,33 +641,55 @@ CSS = """    /* ================================================================
        quedaba pintado ENCIMA de los números de REGISTROS/CANTIDAD/
        VALORIZADO (ver arquitectura.md regla #38). Selector con la MISMA
        especificidad que el de arriba + !important en ambos → gana por ir
-       DESPUÉS en el archivo (ver convención de _SECCIONES). */
-    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_izq_sal {
+       DESPUÉS en el archivo (ver convención de _SECCIONES).
+
+       2026-09-04: el selector era `.st-key-ajuste_graf_card_izq_sal` a
+       secas, o sea una clase EXACTA, y llevaba muerto desde que Salidas se
+       apiló: sus tarjetas pasaron a llamarse `..._sal_evolucion`,
+       `..._sal_tipo`, etc. (una key por sección, porque apiladas coexisten)
+       y ninguna de ésas lleva ya la clase `..._izq_sal`. Wildcard con el
+       guión bajo final, entonces: `_sal_` matchea a las siete y no se cuela
+       en otra familia. */
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_sal_"] {
         margin-top: 0 !important;
     }
-    /* Segunda excepción, y por un motivo distinto: LAS TARJETAS DE COMPRAS
-       QUE NO SON LA PRIMERA DE LA PÁGINA.
+    /* Segunda excepción, y por un motivo distinto: TODA TARJETA QUE NO
+       ABRE LA PÁGINA.
 
        El jalón de arriba nació para recuperar el hueco que dejaban la vieja
        barra de pestañas y la franja blanca — o sea, para la tarjeta que
-       ABRE la vista. En Ajuste / Inventario / Ventas eso sigue siendo
-       cierto. En Compras dejó de serlo cuando la vista pasó a leerse
-       APILADA (2026-08-26): Volatilidad es la cuarta sección y Semanal la
-       sexta, así que ahí el -48px no recupera ningún hueco — se come 48px
+       ABRE la vista. Mientras se veía una vista por pantalla, esa era la
+       única tarjeta que se dibujaba y la familia entera podía llevar el
+       jalón. Dejó de ser cierto cuando los dashboards pasaron a leerse
+       APILADOS (Compras 2026-08-26, el resto detrás): de la segunda
+       sección para abajo el -48px no recupera ningún hueco — se come 48px
        de la sección de ARRIBA y la tarjeta se dibuja encima de su cola.
 
-       Medido el 2026-09-02, a pedido ("la vista de volatilidad se ve
-       solapada con la de arriba"): la sección Vs año pasado terminaba en
-       y=812 y la tarjeta de Volatilidad arrancaba en y=780 — 32px de
-       solape, con su selector de período (y=788) pintado sobre el caption
-       del bloque anterior.
+       Medido el 2026-09-02 en Compras ("la vista de volatilidad se ve
+       solapada con la de arriba"): Vs año pasado terminaba en y=812 y
+       Volatilidad arrancaba en y=780 — 32px de solape. Y otra vez el
+       2026-09-04 en Ajuste, con el mismo número ("las tarjetas están
+       fusionadas y se solapan"): Cascada cerraba en y=582 y el Mapa de
+       calor abría en y=550, con su fila de pills pintada sobre la última
+       familia de la cascada.
 
-       Se listan las tres keys de Compras por su nombre completo en vez de
-       apagar la familia entera: `ajuste_graf_card_izq_` la comparten cuatro
-       reportes más, donde el jalón sigue haciendo falta. */
-    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_izq_vol,
-    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_izq_sem,
-    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-ajuste_graf_card_der_sem {
+       La primera versión listaba las tres keys de Compras por su nombre
+       completo. Eso era whack-a-mole: apilan los SIETE dashboards, de 4 a
+       11 secciones cada uno, y el bug reaparece con cada uno que migra.
+       Ahora la excepción se escribe por ESTRUCTURA, que es lo que de verdad
+       la define: una tarjeta metida en un wrapper que va DESPUÉS de otro
+       wrapper de sección no abre nada. Las secciones de la pila comparten
+       el infijo `_sec_` en su key (`aj_sec_`, `compras_sec_`, `vt_sec_`,
+       `inv_sec_`, `sal_sec_`, `req_sec_`, `rec_sec_` — y no hay ninguna
+       otra key del repo con ese infijo), así que un `:has()` las reconoce a
+       todas sin enumerarlas, incluidas las del dashboard que se agregue
+       mañana si respeta la convención. */
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row)
+    div:has(> [class*="st-key-"][class*="_sec_"]) ~ div
+    [class*="st-key-ajuste_graf_card_izq_"],
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row)
+    div:has(> [class*="st-key-"][class*="_sec_"]) ~ div
+    [class*="st-key-ajuste_graf_card_der_"] {
         margin-top: 0 !important;
     }
 

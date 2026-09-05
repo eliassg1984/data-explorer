@@ -467,7 +467,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 - **#295** — El inspector resolvía "qué hay bajo el cursor" con UN solo punto (e.target) — con elementos…
 
-**Decisiones de diseño y UX** (53)
+**Decisiones de diseño y UX** (52)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -520,7 +520,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#278** — "Que mida lo mismo que aquella" se escribe reusando SUS constantes, no copiando sus números.…
 - **#280** — Cuando "hacelo más chico" no entra en ningún rol, se agrega un rol — no se le cambia el…
 - **#283** — Fusionar dos tarjetas que ya compartían datos no es mover un with: es descubrir que sus…
-- **#284** — Un jalón negativo que existía para "la primera tarjeta de la página" se vuelve un SOLAPE en…
 - **#290** — Un guard que se dispara SIEMPRE no es una red: es el camino normal, y tapa el bug que debería…
 
 **Mantenimiento y trampas del lenguaje** (8)
@@ -12738,16 +12737,44 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      diferencia es que aquélla dejaba hueco y ésta encima cosas, que se ve
      mucho antes.
 
-     El arreglo lista las tres keys de Compras por su nombre completo
-     (`…_izq_vol`, `…_izq_sem`, `…_der_sem`) en vez de apagar la familia:
-     el prefijo lo comparten cuatro reportes más donde el jalón sigue
-     haciendo falta. Mismo patrón que la excepción de Salidas que ya vivía
-     dos líneas más arriba (regla #38).
+     **El primer arreglo fue por LISTA, y duró dos días.** Listaba las tres
+     keys de Compras por su nombre completo (`…_izq_vol`, `…_izq_sem`,
+     `…_der_sem`) en vez de apagar la familia, con el argumento de que el
+     prefijo lo comparten cuatro reportes más donde el jalón sí hace falta.
+     El 2026-09-04 volvió el mismo bug en Ajuste, con el mismo número:
+     *«las tarjetas están fusionadas y se solapan»*, Cascada cerrando en
+     y=582 y el Mapa de calor abriendo en y=550 — **32px**, con su fila de
+     pills pintada sobre la última familia de la cascada. Y faltaban cinco
+     dashboards más: apilan los SIETE, de 4 a 11 secciones cada uno.
+
+     **El arreglo bueno se escribe por ESTRUCTURA, que es lo que de verdad
+     define la excepción:** no "estas tres tarjetas", sino *una tarjeta que
+     vive en un wrapper que va DESPUÉS de otro wrapper de sección no abre
+     nada*. Las secciones de la pila comparten el infijo `_sec_` en su key
+     (`aj_sec_`, `compras_sec_`, `vt_sec_`, `inv_sec_`, `sal_sec_`,
+     `req_sec_`, `rec_sec_`, y no hay ninguna otra key del repo con ese
+     infijo), así que alcanza un `:has()` para reconocerlas a todas:
+
+     ```css
+     div:has(> [class*="st-key-"][class*="_sec_"]) ~ div
+     [class*="st-key-ajuste_graf_card_izq_"] { margin-top: 0 !important; }
+     ```
+
+     Deja intacta la tarjeta que SÍ abre la página (ninguna sección la
+     precede) y cubre gratis al dashboard que se apile mañana.
+
+     **De paso, la excepción de Salidas (regla #38) llevaba muerta desde su
+     propia migración a pila** y nadie lo había visto: su selector era
+     `.st-key-ajuste_graf_card_izq_sal`, una clase EXACTA, y al apilarse las
+     tarjetas pasaron a llamarse `…_sal_evolucion`, `…_sal_tipo`, etc. —
+     ninguna lleva ya esa clase. Ahora es `[class*="…_izq_sal_"]`. Es el
+     tercer síntoma del mismo cambio: **apilar renombra keys, y todo CSS que
+     nombre una key por su valor exacto es un candidato a quedar mudo.**
 
      **Corolario para la próxima migración a pila:** al apilar una vista,
      hay que barrer los `margin-top` negativos de TODAS sus tarjetas, no
-     sólo de la que quedó primera. El que ya no es primero ahora pisa a su
-     vecino de arriba.
+     sólo de la que quedó primera — y grepear `estilos/` por las keys
+     viejas, porque las que cambian de nombre se llevan sus reglas puestas.
 
 
 285. **`inject_grid_health_check` inyecta su CSS en TODOS los iframes de
