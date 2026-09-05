@@ -120,31 +120,81 @@ CSS = """    /* ================================================================
        alcanza — el que reparte es el padre (regla #272). */
     /* 2026-09-02: la fila pasó de tres elementos a SEIS —título, métrica,
        ventana, agrupador, buscador e info— al subir los dos controles que
-       vivían en el renglón de abajo. Los anchos bajaron para que el título
-       siga teniendo sitio: 110+90+130+160+23 de controles + 50 de gaps
-       dejan ~344px de los 917 de la fila, que alcanzan para el nombre de
-       la vista más un ítem en foco de nombre largo.
-       `flex-wrap` en la fila (arriba) es la red: si el viewport se angosta,
-       los controles bajan de renglón en vez de desbordar la tarjeta. */
+       vivían en el renglón de abajo.
+
+       2026-09-05, a pedido ("hacer más cortos los campos de los selectores
+       y poner uno de familia"): entra un SÉPTIMO, el filtro de Familia, y
+       los otros se recortan al ancho que de verdad necesitan.
+
+       LOS ANCHOS NO SON A OJO. Cada uno es el TEXTO MÁS LARGO QUE PUEDE
+       MOSTRAR + 50px de cromo, y esos 50 se midieron en el navegador, no
+       se estimaron: 34 de la caja (`cajaW − input.clientWidth`, o sea
+       padding del combobox + chevron) y 16 más de padding propio del
+       `<input>`, que es lo que separa `scrollWidth` del texto medido con
+       `measureText`. La primera vuelta de este cambio usó sólo los 34 y
+       los tres campos cortos quedaron clipeando su propio valor —
+       "Producto" en 96px se veía "Product". Medido el 2026-09-05, fuente
+       real de la fila (DM Sans 12px):
+         modo     "Cantidad"   54 → 104, +2 de holgura = 106
+         ventana  "Rango"      35 →  85, +3 =  88
+         agrupar  "Subfamilia" 60 → 110, +2 = 112
+         buscar   placeholder "Buscar ítem…" 75 → 104 (deja lugar para
+                  ver lo tipeado; el mínimo para el placeholder es 93)
+       La holgura de 2-3px es contra el redondeo: el ancho exacto deja
+       `scrollWidth == clientWidth` y cualquier fracción lo vuelve recorte.
+       Ojo: el texto que hay que medir es el de la LISTA, no el del valor
+       de hoy. El desplegable de un `st.selectbox` mide lo mismo que su
+       trigger (medido: trigger 168 → listbox 166 → caja de la opción 156)
+       y recorta con `text-overflow: clip`, sin puntos suspensivos, así
+       que angostar el campo corta las OPCIONES en silencio. Regla #318.
+
+       Suman 600 de selectores + 51 de los dos íconos + 70 de gaps y dejan
+       110px de los 831 de la fila (viewport 1280) para el título, que sin
+       ámbito mide 98: entra en UN renglón con 12px de aire.
+
+       Con un ítem en foco el ámbito entra en el título y la fila pasa a
+       DOS renglones. No es una regresión de este cambio: el `<p>` es
+       `flex: 1 1 auto` con `flex-basis: auto`, y el reparto en líneas de
+       un flex mira el tamaño hipotético (el del contenido) ANTES de
+       encoger, así que un ámbito de 242px ya hacía saltar el renglón con
+       los seis controles de antes. Y es mejor así — el ámbito se lee
+       entero en vez de truncarse. El `text-overflow: ellipsis` de más
+       abajo queda como red para el renglón ya partido.
+       `flex-wrap` en la fila (arriba) es esa red: si el viewport se
+       angosta, los controles bajan de renglón en vez de desbordar. */
     .st-key-vap_fila_hdr
         > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_modo) {
         flex: 0 0 auto !important;
-        width: 110px !important;
+        width: 106px !important;
     }
     .st-key-vap_fila_hdr
         > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_ventana) {
         flex: 0 0 auto !important;
-        width: 90px !important;
+        width: 88px !important;
+    }
+    /* El más ancho de la fila, y no por capricho: sus opciones son nombres
+       REALES del parquet, y el más largo ("BEBIDAS CON ALCOHOL") mide 136
+       en la fila → 186 con el cromo, MEDIDO sobre el campo ya renderizado
+       (`scrollWidth` del input) y no estimado: `measureText` daba 132 y
+       ese ancho entraba justo, con cero holgura. 190 es eso más 4, y de
+       paso cubre la LISTA, que se dibuja en un portal fuera de esta fila
+       y por lo tanto en la fuente de 14px, no en la de 12.
+       La única que no entra es "GASTOS ADMINISTRATIVOS" — gasto indirecto,
+       que los chips de la franja dejan afuera de entrada. */
+    .st-key-vap_fila_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_familia) {
+        flex: 0 0 auto !important;
+        width: 190px !important;
     }
     .st-key-vap_fila_hdr
         > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_agrupar) {
         flex: 0 0 auto !important;
-        width: 130px !important;
+        width: 112px !important;
     }
     .st-key-vap_fila_hdr
         > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_buscar) {
         flex: 0 0 auto !important;
-        width: 160px !important;
+        width: 104px !important;
     }
     /* El ícono de ayuda mide su contenido, no lo que sobre. Sin esta regla
        su `stLayoutWrapper` nace con `width: 100%` como los otros dos y se
@@ -199,8 +249,27 @@ CSS = """    /* ================================================================
 
     .st-key-vap_hdr_modo,
     .st-key-vap_hdr_ventana,
+    .st-key-vap_hdr_familia,
     .st-key-vap_hdr_agrupar,
     .st-key-vap_hdr_buscar { width: 100% !important; }
+    /* Y el contenedor de elemento de adentro TAMBIÉN, o el campo no llena
+       el ancho que se le reservó arriba. Medido el 2026-09-05 con el
+       filtro de Familia: hueco de 186px, campo de 178, y "BEBIDAS CON
+       ALCOHOL" recortada — con los 8px que faltaban entra.
+       El culpable es la regla de `width: auto` de más abajo, que existe
+       para que el TÍTULO mida su texto: en un `stVerticalBlock` (que es
+       flex column con `align-items: start`) `auto` deja de estirar y pasa
+       a ser `fit-content`, o sea el ancho INTRÍNSECO del widget. Para el
+       título es lo que se quiere; para un campo con ancho reservado, no:
+       queda un tope invisible que ninguna de las reglas de arriba puede
+       superar, y agrandar el hueco no hace nada. */
+    .st-key-vap_hdr_modo > [data-testid="stElementContainer"],
+    .st-key-vap_hdr_ventana > [data-testid="stElementContainer"],
+    .st-key-vap_hdr_familia > [data-testid="stElementContainer"],
+    .st-key-vap_hdr_agrupar > [data-testid="stElementContainer"],
+    .st-key-vap_hdr_buscar > [data-testid="stElementContainer"] {
+        width: 100% !important;
+    }
     /* Los dos controles, a la altura de una píldora de fila, como los de la
        tarjeta de Ranking. El default de Streamlit es 40px.
 

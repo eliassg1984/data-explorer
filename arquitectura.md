@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-317 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+318 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (103)
+**CSS y estilos** (104)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -123,6 +123,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#311** — En una página APILADA, el st.rerun(scope="app") que escala un atajo de fecha tiene que salir…
 - **#316** — Un control que sube a la línea del título arrastra CON ÉL todo el cálculo que depende de su…
 - **#317** — Un panel que ocupa una FRACCIÓN de la fila no se mide con @media, y un @container sin…
+- **#318** — Angostar un st.selectbox recorta sus OPCIONES, no sólo su valor: el desplegable mide lo mismo…
 
 **Layout y alturas** (33)
 
@@ -487,7 +488,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 - **#295** — El inspector resolvía "qué hay bajo el cursor" con UN solo punto (e.target) — con elementos…
 
-**Decisiones de diseño y UX** (53)
+**Decisiones de diseño y UX** (54)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -542,6 +543,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#280** — Cuando "hacelo más chico" no entra en ningún rol, se agrega un rol — no se le cambia el…
 - **#283** — Fusionar dos tarjetas que ya compartían datos no es mover un with: es descubrir que sus…
 - **#290** — Un guard que se dispara SIEMPRE no es una red: es el camino normal, y tapa el bug que debería…
+- **#318** — Angostar un st.selectbox recorta sus OPCIONES, no sólo su valor: el desplegable mide lo mismo…
 
 **Mantenimiento y trampas del lenguaje** (8)
 
@@ -14604,13 +14606,89 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-05.)
 
+318. **Angostar un `st.selectbox` recorta sus OPCIONES, no sólo su valor:
+     el desplegable mide lo mismo que el campo, y recorta con
+     `text-overflow: clip` — sin puntos suspensivos que avisen. Y el ancho
+     que hay que reservar es el del TEXTO MÁS LARGO QUE PUEDE MOSTRAR +
+     50px, medidos.**
+
+     Salió de un pedido de una línea sobre la cabecera de «Vs año pasado»
+     ("hacer más cortos los campos de los selectores y poner uno de
+     familia"): un control más en una fila que ya tenía seis, y la única
+     forma de que entrara era recortar a los otros. Recortar a ojo dejó
+     tres campos clipeando su propio valor —"Producto" en 96px se veía
+     "Product"— y el nuevo cortando la lista.
+
+     **Los 50px de cromo son DOS sumandos, y el segundo se olvida.** 34 los
+     pone la caja (padding del combobox + chevron), y se ven restando
+     `cajaW − input.clientWidth`. Los otros 16 son padding propio del
+     `<input>`, que es lo que separa el texto medido con `measureText` de
+     su `scrollWidth`. Con sólo los 34 la cuenta da de menos por un
+     carácter y medio — justo lo que no se ve hasta que se renderiza.
+
+     **Y el texto a medir no es el valor de hoy, es el más largo de la
+     lista.** Un campo de 96px con "Producto" adentro se ve bien hasta que
+     alguien elige "Subfamilia". Peor: el desplegable es un portal fuera
+     del contenedor —así que NO hereda el `font-size: 12px` de la fila,
+     dibuja en los 14px del tema— y su ancho lo hereda del trigger
+     (medido: trigger 168 → listbox 166 → caja de la opción 156). Con
+     `text-overflow: clip`, "BEBIDAS CON ALCOHOL" se lee "BEBIDAS CON
+     ALCOHO" y nada dice que falta algo.
+
+     **Un campo puede no llenar el hueco que se le reservó, y agrandar el
+     hueco no arregla nada.** Con 186px de `stLayoutWrapper` el combobox
+     medía 178: el `width: auto` que `_80_cards.py` le pone al
+     `stElementContainer` —para que el TÍTULO mida su texto— dentro de un
+     `stVerticalBlock` (flex column con `align-items: start`) deja de
+     estirar y pasa a `fit-content`, o sea el ancho INTRÍNSECO del widget.
+     Queda un tope invisible por encima del cual ninguna regla de ancho
+     puede subir. Se destapa con `width: 100% !important` en el
+     `stElementContainer` de cada campo.
+
+     **Medir el `scrollWidth` del campo ya renderizado, no `measureText`.**
+     Sobre "BEBIDAS CON ALCOHOL" el canvas daba 132 y el input dice 136:
+     esos 4px son exactamente la holgura que separaba "entra" de "entra
+     justo". El canvas sirve para el primer tiro; el veredicto es
+     `input.scrollWidth > input.clientWidth`.
+
+     **Lo que NO había que arreglar: el renglón que se parte en dos.** Con
+     un ítem en foco el ámbito entra en el título y la fila pasa a dos
+     renglones, y eso parece el costo del control nuevo. No lo es: el `<p>`
+     del título es `flex: 1 1 auto` con `flex-basis: auto`, y el reparto en
+     líneas de un flex mira el tamaño HIPOTÉTICO (el del contenido) ANTES
+     de encoger, así que un ámbito de 242px ya partía el renglón con los
+     seis controles de antes. El `min-width: 0` y el `text-overflow` del
+     `<span>` no evitan el salto — son la red del renglón ya partido. Y
+     está bien así: el ámbito se lee entero en vez de truncarse.
+
+     **La opción "Todas" le ganó al campo vacío por 18px.** Un filtro pide
+     `index=None` + `placeholder=`, que es el idioma del buscador de al
+     lado y se suelta con una ✕. Esa ✕ existe sólo cuando hay valor
+     elegido y engorda el cromo de 34 a 52, así que el nombre más largo
+     habría necesitado 200px en vez de 182. Con un centinela "Todas" el
+     campo dice siempre qué está haciendo, igual que los otros tres
+     selectores de la fila.
+
+     Anchos finales, medidos el 2026-09-05 a 1280px de viewport: modo 106,
+     ventana 88, familia 190, agrupador 112, buscador 104, los dos íconos
+     23 y 28, siete gaps de 10. Sobran 110px para el título, que sin
+     ámbito mide 98. Verificado en el navegador con datos reales:
+     `trunca: false` en los cinco campos, las seis opciones de Familia
+     enteras en el desplegable, y la fila en 36px de alto.
+
+     Ver también la #316 (el control que sube a la línea del título) y la
+     #272 (el `stLayoutWrapper` que nace con `width: 100%`).
+
+     (2026-09-05.)
+
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#318**.
+> próxima regla nueva es la **#319**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

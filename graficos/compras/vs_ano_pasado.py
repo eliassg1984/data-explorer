@@ -94,6 +94,15 @@ bloque, se descuenta lo que la figura dejó de necesitar."""
 PARR = "\n\n"
 """Salto de párrafo para el markdown del popover de ayuda."""
 
+_FAM_TODAS = "Todas"
+"""Primera opción del filtro de Familia de la cabecera: no filtrar.
+
+Es un CENTINELA, no una familia: se compara por igualdad contra lo que
+elige el usuario y nunca llega al filtro del df. Convive con los nombres
+del parquet porque ésos vienen en MAYÚSCULAS ("ALIMENTOS", "VINOS Y
+ESPUMANTES"); una familia que se llamara literalmente "Todas" lo
+rompería."""
+
 _FRANJA_VAP = alturas.FRANJA_CTRL_EVO
 
 _ALTO_FIG_VAP = alturas.con_franja(alturas.COMPACTO, _FRANJA_VAP) - _LEYENDA_VAP
@@ -690,6 +699,43 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
             # de `session_state` ~60 líneas más abajo para resolver el foco, y
             # mientras el widget se dibujaba DESPUÉS ese valor era el del rerun
             # anterior. Ahora los dos hablan del mismo run.
+            # ── Familia: filtro PROPIO de la tarjeta ────────────────
+            # 2026-09-05, a pedido. No le disputa nada a los chips de la
+            # franja: se aplica ENCIMA de ellos y sus opciones salen de lo
+            # que los chips dejaron pasar, así que acá no se puede elegir
+            # una familia que arriba está filtrada — la lista no la ofrece,
+            # y no hay forma de que los dos controles se contradigan.
+            #
+            # UNA OPCIÓN "Todas" Y NO UN CAMPO VACÍO (`index=None` +
+            # `placeholder=`), aunque el vacío sea el idioma del buscador
+            # de al lado. Son 18px MEDIDOS: con un valor elegido Streamlit
+            # agrega una ✕ para soltarlo y el cromo del campo salta de 34
+            # a 52, así que "BEBIDAS CON ALCOHOL" —el nombre más largo del
+            # parquet— necesitaría 200px de fila para leerse entero en vez
+            # de 182, y esa fila ya está llena. Con "Todas" el campo dice
+            # siempre qué está haciendo, igual que los otros tres
+            # selectores de la fila, y volver a todas es un clic.
+            fam_vap = None
+            _src_fam = d_full if d_full is not None else d
+            if (col_fam and _src_fam is not None
+                    and col_fam in _src_fam.columns):
+                _ops_fam = [_FAM_TODAS] + sorted(
+                    _src_fam[col_fam].dropna().astype(str).unique())
+                # Misma defensa que el agrupador de acá abajo: un valor
+                # guardado de otra sesión que ya no está en `options`
+                # revienta Streamlit. Vuelve a "Todas" y no a otra
+                # familia — el default de este control es no filtrar.
+                if st.session_state.get("compras_vap_familia") not in _ops_fam:
+                    st.session_state["compras_vap_familia"] = _FAM_TODAS
+                with st.container(key="vap_hdr_familia"):
+                    _fam_sel = st.selectbox(
+                        "Familia", _ops_fam, key="compras_vap_familia",
+                        label_visibility="collapsed",
+                        help="Acota ESTA tarjeta a una familia, encima de "
+                             "los chips de la franja. La lista ofrece sólo "
+                             "las que los chips dejan pasar.")
+                    fam_vap = None if _fam_sel == _FAM_TODAS else _fam_sel
+
             _ops_ag = [a for a in _AGRUPADORES
                        if a == "Producto"
                        or (a == "Familia" and col_fam)
@@ -781,6 +827,21 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         # adelante que el techo y la vista salía vacía SIEMPRE. La ventana
         # elige qué meses se MUESTRAN, no de dónde salen los números.
         fuente = d_full if d_full is not None else d
+        # El filtro de Familia de la cabecera se aplica ACÁ, sobre el
+        # histórico y ANTES de que se calcule nada: el año pasado sale de
+        # la PROPIA serie desplazada 12 meses (decisión 2 del docstring),
+        # así que recortar después dejaría al desplazamiento comparando
+        # contra meses de otras familias.
+        #
+        # `d` NO se filtra, a propósito: lo único que se le lee es qué
+        # meses TOCA el rango de la franja (la opción "Rango" de más
+        # abajo), y esa ventana es la misma se mire la familia que se
+        # mire. Filtrarlo la haría encogerse hasta desaparecer cuando la
+        # familia elegida no compró nada en el rango — y ahí el `if` de
+        # abajo la ignora y la vista mostraría el histórico entero sin
+        # decir por qué.
+        if fam_vap and col_fam and col_fam in fuente.columns:
+            fuente = fuente[fuente[col_fam].astype(str) == fam_vap]
         if fuente is None or fuente.empty:
             st.info("No hay datos para los filtros seleccionados.")
             return
@@ -860,7 +921,11 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         foco = st.session_state.get("compras_vap_foco")
         llave_foco = "prod" if agrupar_por == "Producto" else "grupo"
         g_foco = g if foco is None else g[g[llave_foco].astype(str) == foco]
-        if foco is not None and g_foco.empty:      # cambió el agrupador
+        # El foco se cae solo cuando el ítem que nombra ya no está en `g`:
+        # cambió el agrupador (un producto no existe en la columna Familia)
+        # o cambió el filtro de Familia de la cabecera (el ítem quedó
+        # afuera). Los dos casos se sueltan igual — volver a "todas".
+        if foco is not None and g_foco.empty:
             foco, g_foco = None, g
 
         # Precio es un RATIO: promediarlo sobre productos distintos (y
