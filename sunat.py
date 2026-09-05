@@ -900,6 +900,80 @@ def originales(doc):
     return _leer_original(clave_pdf), _leer_original(clave_xml)
 
 
+# ---------------------------------------------------------------------------
+# EMISORES QUE EL PORTAL NUNCA SIRVE
+# ---------------------------------------------------------------------------
+# Hay proveedores cuyos comprobantes SUNAT declara en el registro del SIRE
+# pero NO entrega en la Consulta de Comprobantes: el formulario contesta
+# "sin resultados" para todos, siempre. El caso medido (2026-09-04) es el
+# BANCO DE CREDITO DEL PERU: 414 documentos en el registro, 0 originales
+# en R2 sobre 4.588 archivos de 216 proveedores, y 238 anotados como
+# "sin resultados" en el ledger del servidor.
+#
+# Sin esto la pantalla ofrece el mismo botón cada vez y el usuario lo
+# aprieta, espera, y no pasa nada — el pedido se atiende en 25 segundos y
+# falla igual que las 238 veces anteriores. Lo que se puede decir con lo
+# que la webapp YA ve —el registro y R2, sin plomería nueva— es
+# exactamente esto: "de N documentos de este proveedor, ninguno se pudo
+# traer nunca".
+#
+# El umbral no es 1 a propósito: un proveedor con dos facturas y ninguna
+# bajada es "el sync todavía no llegó", no un veredicto sobre el emisor.
+
+MINIMO_INTENTOS_EMISOR = 15
+"""Documentos de un mismo emisor que tienen que existir en el registro
+antes de que "0 originales" signifique algo. Por debajo de eso, el sync
+nocturno —que va de lo más nuevo hacia atrás— simplemente puede no haber
+llegado."""
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _originales_en_r2(ruc):
+    """Cuántos originales hay en R2 para un emisor. UNA llamada a R2.
+
+    Cacheado 10 minutos: cambia sólo cuando el sync sube algo, y el costo
+    de un cache frío es un `list_objects_v2` por proveedor mirado.
+    """
+    import data
+
+    if not data.secrets_disponibles() or not ruc:
+        return 0
+    try:
+        resp = data.get_s3_cliente().list_objects_v2(
+            Bucket=st.secrets["R2_BUCKET"],
+            Prefix=f"{PREFIJO_ORIGINALES}/{str(ruc).strip()}/")
+    except Exception:
+        return 0
+    return sum(1 for o in resp.get("Contents", [])
+               if o["Key"].endswith(".pdf") or o["Key"].endswith(".xml"))
+
+
+def emisor_sin_originales(doc):
+    """Documentos del emisor en el registro si NINGUNO tiene original, o 0.
+
+    Devuelve el número —y no un booleano— porque es lo que la pantalla
+    necesita decir: "0 de 414" pesa distinto que "0 de 16". Cero significa
+    "no hay veredicto": o el emisor sí publica, o tiene pocos documentos.
+    """
+    # `doc is None` y no `doc or {}`: acá llega una FILA de pandas, y el
+    # `or` le pregunta a una Series si es verdadera — `ValueError: The
+    # truth value of a Series is ambiguous`, que revienta el reporte
+    # entero. Lo cazó el navegador, no las pruebas: éstas le pasaban
+    # dicts (2026-09-04).
+    if doc is None:
+        return 0
+    ruc = str(doc.get("ruc_proveedor") or "").strip()
+    if not ruc:
+        return 0
+    d = _registro_de_parquet()
+    if d is None or getattr(d, "empty", True) or "ruc_proveedor" not in d.columns:
+        return 0
+    n = int((d["ruc_proveedor"].astype(str) == ruc).sum())
+    if n < MINIMO_INTENTOS_EMISOR:
+        return 0
+    return n if _originales_en_r2(ruc) == 0 else 0
+
+
 # ===========================================================================
 # VER EL ORIGINAL EN PANTALLA
 # ===========================================================================

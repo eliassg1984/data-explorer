@@ -543,6 +543,56 @@ def xml_del_zip(crudo):
     return crudo
 
 
+def hay_error_servidor(pagina):
+    """True si el portal está mostrando su modal "Error del Servidor".
+
+    **El modal se pinta DENTRO de `#iframeApplication`, no en la página.**
+    Durante dos semanas esto se buscó con `pagina.get_by_text(...)`, que no
+    lo alcanza nunca: `frame_locator` es la única forma de mirar adentro de
+    un iframe. Como el chequeo vivía en el `except` de "no apareció
+    Resultado", su False constante hacía que TODA caída del portal se
+    etiquetara `sin_resultados` — o sea, "SUNAT no tiene este comprobante".
+
+    Lo que costó, medido el 2026-09-04 con seis consultas intercaladas en
+    la misma sesión: los cinco comprobantes del BANCO DE CREDITO (RUC
+    20100047218) devolvieron el modal, los controles de otro emisor
+    devolvieron resultado, y el chequeo de página dio False en los cinco
+    (`error_servidor_en_pagina: false`, `error_servidor_en_frame: true`).
+    Con eso, 238 documentos del BCP quedaron anotados como "no disponibles"
+    por 30 días, y la webapp le decía al usuario que SUNAT no los tiene
+    cuando en realidad el portal se cae con ese emisor.
+
+    Se mira el frame Y la página: si mañana el modal se muda de sitio, la
+    detección no se vuelve a apagar sola.
+    """
+    ambitos = []
+    try:
+        ambitos.append(pagina.frame_locator("#iframeApplication"))
+    except Exception:
+        pass
+    ambitos.append(pagina)
+    for ambito in ambitos:
+        try:
+            loc = ambito.get_by_text("Error del Servidor", exact=False)
+            if loc.count() and loc.first.is_visible():
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def cerrar_error_servidor(pagina):
+    """Cierra el modal si está. El botón "Aceptar" también vive adentro
+    del iframe: sin cerrarlo, el modal tapa el formulario del documento
+    siguiente y ese falla por una razón que no es la suya."""
+    for ambito in (pagina.frame_locator("#iframeApplication"), pagina):
+        try:
+            ambito.get_by_role("button", name="Aceptar").first.click(timeout=3000)
+            return
+        except Exception:
+            continue
+
+
 def consultar_y_descargar(pagina, ruc_emisor, serie, numero, tipo_cdp):
     """Llena el formulario para UN comprobante.
 
@@ -589,12 +639,9 @@ def consultar_y_descargar(pagina, ruc_emisor, serie, numero, tipo_cdp):
     except Exception:
         # Distinguir "SUNAT no encontró nada" de "SUNAT está caído": lo
         # segundo es transitorio y no significa que falte el documento.
-        if pagina.get_by_text("Error del Servidor", exact=False).is_visible():
+        if hay_error_servidor(pagina):
             log("    SUNAT devolvió 'Error del Servidor' (transitorio)")
-            try:
-                pagina.get_by_role("button", name="Aceptar").click(timeout=3000)
-            except Exception:
-                pass
+            cerrar_error_servidor(pagina)
             return None, None, "error_servidor"
         log("    sin resultados")
         return None, None, "sin_resultados"
@@ -705,9 +752,20 @@ def atender_pedidos(pagina, s3, bucket):
     log(f"{len(pedidos)} pedido(s) de la webapp.")
     for clave_senal, pedido in pedidos:
         log(f"  {pedido.get('documento') or clave_senal}…")
+        detalle = {}
         try:
-            if bajar_uno(pagina, s3, bucket, pedido):
+            if bajar_uno(pagina, s3, bucket, pedido, detalle):
                 log("    subido")
+            elif detalle.get("motivo") == "error_servidor":
+                # NO es lo mismo que "no lo tiene", y la pantalla no puede
+                # decir lo segundo cuando pasó lo primero: el usuario deja
+                # de pedirlo para siempre por una caída de diez minutos.
+                log("    SUNAT devolvió un error de servidor")
+                marcar_fallo(s3, bucket, clave_senal,
+                             "El portal de SUNAT devolvió un error al "
+                             "consultarlo («Error del Servidor»). No es que "
+                             "falte el comprobante: probá de nuevo en unos "
+                             "minutos.")
             else:
                 log("    SUNAT no devolvió el archivo")
                 marcar_fallo(s3, bucket, clave_senal,

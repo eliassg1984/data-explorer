@@ -357,11 +357,18 @@ def _consultar_y_descargar(pagina, ruc_emisor: str, serie: str, numero: str,
         # momento" (transitorio, NO es que falte este documento — visto
         # en vivo 2026-08-20: un modal "Error del Servidor" / "reintentar
         # en 5 minutos" se etiquetaba igual que un resultado vacío).
-        if pagina.get_by_text("Error del Servidor", exact=False).is_visible():
+        # El modal vive DENTRO de `#iframeApplication`: un `get_by_text`
+        # sobre la página no lo encuentra nunca y toda caída del portal se
+        # etiquetaba "sin resultados". Mismo arreglo que en
+        # `servidor/sunat_originales.py::hay_error_servidor` — ver regla
+        # #310.
+        _marco = pagina.frame_locator("#iframeApplication")
+        _err = _marco.get_by_text("Error del Servidor", exact=False)
+        if _err.count() and _err.first.is_visible():
             _log("    ⚠️ SUNAT devolvió \"Error del Servidor\" (transitorio, no es "
                 "que falte el documento) — probá de nuevo en unos minutos")
             try:
-                pagina.get_by_role("button", name="Aceptar").click(timeout=3000)
+                _marco.get_by_role("button", name="Aceptar").first.click(timeout=3000)
             except Exception:
                 pass
         elif app_frame.get_by_text("No hay resultados", exact=False).is_visible():

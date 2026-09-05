@@ -716,6 +716,140 @@ if _ruta_srv.exists():
     ok(not _lo_toma(_clave_fal.replace(".json", ".fallo.json")),
        "ni una marca doble (si quedara alguna de antes del fix)")
 
+    # ── emisor_sin_originales acepta una FILA de pandas (regla #309) ──
+    # La primera versión hacía `(doc or {}).get(...)`, y a esta función le
+    # llega la fila elegida de la tabla: una `Series`. El `or` le pregunta
+    # si es verdadera y pandas lanza "The truth value of a Series is
+    # ambiguous" — el reporte entero en rojo. Lo cazó abrir la pantalla,
+    # no las pruebas, que le pasaban dicts. Sin R2 no se puede probar el
+    # veredicto, pero sí que las formas de entrada no revienten.
+    for _entrada in (None, {}, {"ruc_proveedor": ""},
+                     pd.Series({"ruc_proveedor": "", "serie": "F001"})):
+        try:
+            _r = sunat.emisor_sin_originales(_entrada)
+            _ok_forma = _r == 0
+        except Exception as _e:
+            _ok_forma = False
+            _r = f"lanzó {type(_e).__name__}: {_e}"
+        ok(_ok_forma,
+           f"emisor_sin_originales sobrevive a {type(_entrada).__name__} "
+           f"sin RUC (dio {_r})")
+
+    # ── El modal "Error del Servidor" vive DENTRO del iframe (regla #310) ──
+    # Se buscaba con `pagina.get_by_text`, que no entra a un iframe: daba
+    # False siempre, así que TODA caída del portal se archivaba como
+    # "SUNAT no tiene este comprobante" — 238 documentos del BCP anotados
+    # como no disponibles por 30 días. No se puede probar con Playwright
+    # de verdad (hace falta navegador, red y una sesión de SOL), pero sí
+    # con dos ámbitos de mentira: lo que se prueba es DÓNDE mira.
+
+    class _LocFalso:
+        def __init__(self, n, visible=True):
+            self._n, self._v = n, visible
+
+        def count(self):
+            return self._n
+
+        @property
+        def first(self):
+            return self
+
+        def is_visible(self):
+            return self._v
+
+        def click(self, timeout=None):
+            if not self._n:
+                raise RuntimeError("no está")
+
+    class _AmbitoFalso:
+        def __init__(self, tiene_modal, revienta=False):
+            self._t, self._r = tiene_modal, revienta
+
+        def get_by_text(self, texto, exact=False):
+            if self._r:
+                raise RuntimeError("ámbito roto")
+            return _LocFalso(1 if self._t else 0)
+
+        def get_by_role(self, rol, name=None):
+            return _LocFalso(1 if self._t else 0)
+
+    class _PaginaFalsa(_AmbitoFalso):
+        def __init__(self, en_frame, en_pagina, frame_revienta=False):
+            super().__init__(en_pagina)
+            self._frame = _AmbitoFalso(en_frame, revienta=frame_revienta)
+
+        def frame_locator(self, selector):
+            return self._frame
+
+    ok(_srv.hay_error_servidor(_PaginaFalsa(en_frame=True, en_pagina=False)),
+       "ve el modal cuando está SÓLO en el iframe (el caso real medido)")
+    ok(not _srv.hay_error_servidor(_PaginaFalsa(en_frame=False, en_pagina=False)),
+       "sin modal en ningún lado, no inventa un error de servidor")
+    ok(_srv.hay_error_servidor(_PaginaFalsa(en_frame=False, en_pagina=True)),
+       "si el modal se mudara a la página, lo sigue viendo")
+    ok(_srv.hay_error_servidor(
+        _PaginaFalsa(en_frame=False, en_pagina=True, frame_revienta=True)),
+       "un ámbito que revienta no tapa al otro")
+
+    # Y el motivo que termina viendo el usuario: "el portal falló" no es
+    # lo mismo que "SUNAT no lo tiene" — con lo segundo, deja de pedirlo
+    # para siempre por una caída de diez minutos.
+    import json as _json  # noqa: PLC0415
+
+    class _Cuerpo:
+        def __init__(self, b):
+            self._b = b
+
+        def read(self):
+            return self._b
+
+    class _S3Falso:
+        def __init__(self, pedidos):
+            self._p = pedidos
+            self.puestos = {}
+            self.borrados = []
+
+        def list_objects_v2(self, Bucket=None, Prefix=None):
+            return {"Contents": [{"Key": k} for k in self._p]}
+
+        def get_object(self, Bucket=None, Key=None):
+            return {"Body": _Cuerpo(_json.dumps(self._p[Key]).encode("utf-8"))}
+
+        def put_object(self, Bucket=None, Key=None, Body=None, ContentType=None):
+            self.puestos[Key] = Body.decode("utf-8")
+
+        def delete_object(self, Bucket=None, Key=None):
+            self.borrados.append(Key)
+
+    def _motivo_con(motivo_sim):
+        _bajar = _srv.bajar_uno
+        _pausa = _srv.PAUSA_ENTRE_DOCS_SEG
+        _srv.PAUSA_ENTRE_DOCS_SEG = 0
+
+        def _falso(pagina, s3, bucket, doc, detalle=None):
+            if detalle is not None:
+                detalle["motivo"] = motivo_sim
+            return False
+
+        _srv.bajar_uno = _falso
+        try:
+            s3 = _S3Falso({_clave_ped: {"ruc_proveedor": "20100047218",
+                                        "serie": "FI01", "numero": "20701451",
+                                        "documento": "FI01-20701451"}})
+            _srv.atender_pedidos(None, s3, "bucket")
+        finally:
+            _srv.bajar_uno = _bajar
+            _srv.PAUSA_ENTRE_DOCS_SEG = _pausa
+        marca = s3.puestos.get(_clave_fal, "")
+        return _json.loads(marca).get("motivo", "") if marca else ""
+
+    _m_err = _motivo_con("error_servidor")
+    _m_sin = _motivo_con("sin_resultados")
+    ok("error" in _m_err.lower() and "no tiene disponible" not in _m_err,
+       "un error del portal NO se le cuenta al usuario como 'no lo tiene'")
+    ok("no tiene disponible" in _m_sin,
+       "y un 'sin resultados' de verdad sí dice que SUNAT no lo tiene")
+
     # ── El contador de fallos seguidos (regla #304) ────────────────────
     # La sesión de SOL se muere sola a las ~2 h y el backfill seguía
     # preguntando hasta que cortaba el reloj (14 documentos seguidos la

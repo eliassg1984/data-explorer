@@ -2813,8 +2813,11 @@ def _card_sunat(doc, fila):
       · **XML** — el archivo crudo.
 
     Las tres últimas sólo existen si el original ya está sincronizado; si
-    no, en su lugar va `_pedir_original`. «Datos» está SIEMPRE: sale del
-    registro del SIRE, que no depende de ningún sync.
+    no, en su lugar va `_pedir_original` — y esa pestaña se llama
+    «⚠ Original» en vez de «⬇ Original» cuando el último pedido falló,
+    que es lo único del fracaso que se ve sin abrirla (regla #309).
+    «Datos» está SIEMPRE: sale del registro del SIRE, que no depende de
+    ningún sync.
     """
     _titulo_panel("Comprobante SUNAT", "el original del proveedor")
 
@@ -2829,7 +2832,15 @@ def _card_sunat(doc, fila):
     if xml_original:
         nombres.append("🧾 XML")
     if not (pdf_original or xml_original):
-        nombres.append("⬇ Original")
+        # La ETIQUETA cambia cuando el último pedido falló. No es adorno:
+        # el aviso vive DENTRO de esta pestaña, así que con el rótulo de
+        # siempre («⬇ Original», que invita a bajar algo) el usuario se
+        # queda en «Datos» esperando un archivo que ya se sabe que no va a
+        # llegar. Medido el 2026-09-04 con FI01-20701451: el pedido se
+        # atendió en 25 segundos y falló, y la pantalla no lo decía en
+        # ningún lado visible sin abrir la pestaña. Ver regla #309.
+        nombres.append("⚠ Original" if sunat.fallo_solicitud(doc)
+                       else "⬇ Original")
 
     for nombre, tab in zip(nombres, st.tabs(nombres)):
         with tab:
@@ -3128,6 +3139,23 @@ def _pedir_original(doc):
     else:
         etiqueta = "⬇ Traer el original de SUNAT"
 
+    # El veredicto de EMISOR, antes del botón y no después: un proveedor
+    # que nunca sirvió un original no es "todavía no sincronizado" — es
+    # que el portal no lo entrega, y apretar el botón otra vez da el mismo
+    # silencio. Se dice con el número porque es lo que lo hace creíble:
+    # "0 de 414" es un patrón, "no se pudo" es una excusa.
+    n_emisor = sunat.emisor_sin_originales(doc)
+    if n_emisor:
+        # El punto de miles se arma APARTE: un `.replace(",", ".")` sobre la
+        # frase entera también se come la coma de la oración — se vio en
+        # pantalla como "del registro. cero se pudieron bajar".
+        _n = f"{n_emisor:,}".replace(",", ".")
+        st.info(f"Con este proveedor el portal de SUNAT nunca entregó el "
+                f"original: de sus {_n} comprobantes del registro, cero se "
+                f"pudieron bajar. El cotejo de al lado sale del SIRE y no "
+                f"depende de esto.", icon="ℹ️")
+        etiqueta = "↻ Intentar igual"
+
     if st.button(etiqueta, use_container_width=True,
                  key="sunat_pedir_original",
                  help="Le pide a la máquina local que baje el PDF y el XML "
@@ -3138,7 +3166,7 @@ def _pedir_original(doc):
         else:
             st.error("No se pudo dejar el pedido. ¿Están las credenciales "
                      "de R2 configuradas?")
-    if not fallo:
+    if not fallo and not n_emisor:
         st.caption("Todavía no sincronizado. El cotejo de al lado sale del "
                    "registro del SIRE y está disponible igual.")
 
