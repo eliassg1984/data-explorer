@@ -1303,6 +1303,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     #    para NO re-indentar su cuerpo; se llama abajo solo si hay proveedor
     #    en foco.
     def _paneles_card():
+        # El clic en la tabla del Panel A escribe el foco de producto y el
+        # Panel B lo lee en la MISMA corrida (antes se rerunneaba el fragment;
+        # ver el comentario del bloque de selección, más abajo).
+        nonlocal prod_focus
         # Producto por DEFECTO del Panel B: el primero de la tabla del Panel
         # A (el de mayor valor). Lo llena el Panel A mas abajo y lo lee el
         # Panel B, que se dibuja despues en el mismo `st.columns`. Existe
@@ -1572,7 +1576,23 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 _psel = None
                             if _psel != prod_focus:
                                 st.session_state["compras_prov_prodfocus"] = _psel
-                                st.rerun(scope="fragment")
+                                # Se actualiza la variable, NO se rerunea.
+                                # Antes acá había un `st.rerun(scope="fragment")`
+                                # y reventaba con StreamlitInvalidLayoutContext-
+                                # Error: ese scope SOLO es legal durante un rerun
+                                # DE fragment, y este bloque también corre en
+                                # corridas COMPLETAS del script (un cambio de
+                                # fecha/chips en app.py, o la escalada a
+                                # `scope="app"` de más arriba). En esas corridas
+                                # el grid devuelve la selección vieja mientras el
+                                # foco ya se anuló —la guarda del bloque «Estado de
+                                # foco» lo hace cuando el proveedor no está en el
+                                # rango nuevo—, así que la comparación da True y
+                                # la llamada explotaba. No hacía falta rerunear: el
+                                # Panel B se dibuja DESPUÉS en esta misma
+                                # corrida, así que alcanza con que lea el valor
+                                # nuevo. Ver arquitectura.md #306.
+                                prod_focus = _psel
 
 
         # Panel B: proveedores del producto seleccionado

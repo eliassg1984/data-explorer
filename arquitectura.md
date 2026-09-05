@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-305 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+306 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (99)
 
@@ -260,7 +260,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 
-**Streamlit** (87)
+**Streamlit** (88)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -349,6 +349,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#296** — El stSliderTickBar nativo no sirve como referencia de un riel: sólo rotula los DOS extremos,…
 - **#297** — Lo que dibuja UNA rama y no las otras va AL FINAL: al encoger, la cola del render anterior…
 - **#298** — Un riel que elige PERÍODOS no puede parar en los períodos: tiene que parar en los BORDES…
+- **#306** — st.rerun(scope="fragment") sólo es legal DURANTE un rerun de fragment
 
 **Datos, R2 y DuckDB** (34)
 
@@ -13718,13 +13719,49 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      versión vieja y copiarla encima habría borrado la memoria de
      no-disponibles sin que nada avisara.
 
+306. **`st.rerun(scope="fragment")` sólo es legal DURANTE un rerun de
+     fragment.** Que la línea viva dentro de una función decorada con
+     `@st.fragment` no alcanza: ese mismo código también corre en las
+     corridas COMPLETAS del script, y ahí Streamlit lo prohíbe
+     (`StreamlitInvalidLayoutContextError` desde `_new_fragment_id_queue`;
+     en versiones previas era un `StreamlitAPIException` con el texto
+     *'scope="fragment" can only be specified from `@st.fragment`-decorated
+     functions during fragment reruns'*). En pantalla salen DOS cajas rojas:
+     la del error y una `FragmentHandledException`, que es sólo el envoltorio.
+
+     (2026-09-04, reportado desde Cloud en Compras → Proveedor.)
+
+     El caso: el Panel A de `graficos/compras/proveedor.py` compara la
+     selección del AgGrid de productos contra el foco guardado y, si
+     difieren, escribía el estado y rerunneaba el fragment. La comparación
+     es verdadera en corridas completas más seguido de lo que parece — la
+     guarda del bloque «Estado de foco» anula `prod_focus` cuando el
+     proveedor enfocado no está en el rango nuevo, mientras el grid sigue
+     devolviendo su selección vieja. Cualquier cambio de fecha o de chips
+     en `app.py`, o la escalada a `scope="app"` del propio fragment
+     (regla #180), llega a esa línea fuera de un rerun de fragment.
+
+     **El arreglo no fue proteger el rerun, fue no necesitarlo:** el
+     consumidor del foco (el Panel B) se dibuja DESPUÉS en la misma
+     corrida, así que alcanza con actualizar la variable local (`nonlocal
+     prod_focus`) además del `session_state`. Es el mismo patrón que ya
+     usaba el ranking de proveedores unas líneas más arriba, que nunca
+     rerunneó. De yapa se ahorra un viaje completo al servidor por clic.
+
+     **La regla general:** antes de escribir `st.rerun(scope="fragment")`,
+     preguntarse si lo que hay que refrescar se dibuja más abajo en la
+     misma corrida. Si es así, el rerun sobra y además es un crash
+     esperando una corrida completa. Si de verdad hace falta (hay que
+     rehacer algo que ya se dibujó ARRIBA), el scope tiene que ser
+     condicional al tipo de corrida, no incondicional.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#304**.
+> próxima regla nueva es la **#307**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
