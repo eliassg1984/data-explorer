@@ -39,11 +39,14 @@ from tablas._css import _css_grid
 _ANCHO_COL_SEMANA = 84
 _ANCHO_COL_VOL = 92
 
+# Sin signo cuando redondea a cero: un "+0.0%" dice "subio" con un
+# numero que dice "no cambio". Mismo umbral que `_EPS_CERO`.
 _FMT_PCT = JsCode("""
     function(params) {
         if (params.value === null || params.value === undefined) return '';
         var v = Number(params.value);
-        var sign = v >= 0 ? '+' : '\\u2212';
+        if (Math.abs(v) < 0.05) return '0.0%';
+        var sign = v > 0 ? '+' : '\\u2212';
         return sign + Math.abs(v).toFixed(1) + '%';
     }
 """)
@@ -54,10 +57,21 @@ _FMT_1DEC = JsCode("""
     }
 """)
 
+# Un cambio que redondea a "0.0%" es RUIDO: ocupa el mismo ancho que un
+# +12.4% y compite por la mirada en una tabla donde lo que importa son los
+# saltos. Se dibuja mas chico (y mas claro) para que la fila se lea como
+# "aca no paso nada" sin sacar el dato. El umbral es el del formateo
+# (`toFixed(1)`), no uno propio: lo que se ve "0.0%" es exactamente lo que
+# se achica -- si no, la tabla mostraria dos ceros de tamanos distintos.
+_EPS_CERO = 0.05
+_TAM_CERO = "11px"
+
 _STYLE_DELTA = JsCode(f"""
     function(params) {{
         if (params.value === null || params.value === undefined) return {{color: '#c9c9d1'}};
         var v = Number(params.value);
+        if (Math.abs(v) < {_EPS_CERO}) return {{color: '#c9c9d1',
+                                               fontSize: '{_TAM_CERO}'}};
         if (Math.abs(v) < 1) return {{color: '{GRIS_TEXTO}'}};
         if (v > 0) return {{backgroundColor: '{ERROR_FONDO}', color: '{ERROR}',
                             fontWeight: '600', borderRadius: '6px'}};
