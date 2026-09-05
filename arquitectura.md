@@ -13712,6 +13712,38 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      proceso que navega un portal ajeno falla en silencio, y lo único que
      lo delata es que alguien mire el log.
 
+     **VERIFICADO EN VIVO (noche del 2026-09-05, la primera con el
+     arreglo desplegado).** Disparó una sola vez, y el log lo cuenta
+     entero:
+
+         05:55:09  [318] F001-1597325   error: Timeout 15000ms
+         05:55:32  [319] FF01-7248      error: Timeout 15000ms
+         05:55:55  [320] FN01-40020111  error: Timeout 15000ms
+         05:56:18  [321] E001-1605      error: Timeout 15000ms
+         05:56:41  [322] F001-14692     error: Timeout 15000ms
+         05:56:41  5 fallos seguidos: la sesión de SOL parece vencida.
+                   Volviendo a entrar (1/3)…
+         05:56:54  [323] F001-6619      subido      <- 13 segundos después
+         05:57:12  [324] E001-1606      subido
+
+     Y siguió bajando hasta que cortó el reloj. La noche anterior esos
+     mismos cuatro minutos finales fueron 14 fallos seguidos y cero
+     descargas.
+
+     **El dato que decide la ventana: la sesión se murió a las 05:55 las
+     DOS noches.** 1 h 55 min, clavado. Con `--minutos 120` eso cae al
+     final y casi no cuesta; con 240 caería A LA MITAD, y sin este
+     arreglo la segunda mitad entera se perdía. Por eso el orden importa:
+     esto no es una mejora de rendimiento, es la PRECONDICIÓN para
+     agrandar la ventana.
+
+     Cuidado al leer la producción de esa noche (294 subidos contra 174):
+     el relogin rescató unos 9 documentos, no 120. El salto vino de que
+     hubo 3 «sin resultados» contra 50 — la memoria de no-disponibles
+     sacando el muro de la cabecera de la cola. Atribuirle a este arreglo
+     el número grande sería quedarse con la explicación linda en vez de
+     la medida.
+
 305. **El archivo suelto del servidor llevaba 160 líneas de ventaja sobre
      el repo, y la prueba que existe para eso no podía verlo.**
      (2026-09-04, mismo diagnóstico.)
