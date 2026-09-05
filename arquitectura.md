@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-315 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+316 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (101)
+**CSS y estilos** (102)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -121,6 +121,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#302** — Un elemento con pointer-events: none es INVISIBLE para el inspector y para el modo diseño —…
 - **#308** — El ⛶ nativo de Streamlit maximiza un ELEMENTO; cuando la unidad de lectura es la TARJETA, hay…
 - **#311** — En una página APILADA, el st.rerun(scope="app") que escala un atajo de fecha tiene que salir…
+- **#316** — Un control que sube a la línea del título arrastra CON ÉL todo el cálculo que depende de su…
 
 **Layout y alturas** (32)
 
@@ -262,7 +263,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 
-**Streamlit** (91)
+**Streamlit** (92)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -355,6 +356,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#308** — El ⛶ nativo de Streamlit maximiza un ELEMENTO; cuando la unidad de lectura es la TARJETA, hay…
 - **#311** — En una página APILADA, el st.rerun(scope="app") que escala un atajo de fecha tiene que salir…
 - **#315** — Un filtro que arranca con algo elegido se siembra ANTES de contar los filtros, no dentro del…
+- **#316** — Un control que sube a la línea del título arrastra CON ÉL todo el cálculo que depende de su…
 
 **Datos, R2 y DuckDB** (37)
 
@@ -14480,13 +14482,59 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-05.)
 
+316. **Un control que sube a la línea del título arrastra CON ÉL todo el
+     cálculo que depende de su valor — y el `<p>` cambia de tamaño solo.**
+
+     A pedido (2026-09-05): el selector de ventana de Compras › Volatilidad
+     tenía una fila propia ARRIBA de la tarjeta, un renglón entero para un
+     desplegable de 90px. Pasa a compartir renglón con el título, igual que
+     la cabecera de «Vs año pasado» (la #283 y su `vap_fila_hdr`).
+
+     **Mudarlo NO es mover un `with`.** El widget se lee para recortar `d`,
+     y todo lo que sigue —semanas, candidatos, ranking— sale de ese `d`.
+     Como el widget ahora se dibuja DENTRO de `_card(...)`, el cálculo
+     entero se muda adentro de la tarjeta con él: es el mismo orden de
+     siempre (el que LEE corre después del que ESCRIBE, ver la #315), pero
+     leído al revés. De paso los dos `return` tempranos —«necesitás al
+     menos 4 semanas», «ningún insumo con compras regulares»— quedan bajo
+     la cabecera que tiene el selector con el que se arreglan, en vez de
+     salir como un bloque suelto sin contexto.
+
+     **El título encoge/crece sin que nadie lo toque.** `.chart-card-hdr`
+     declara `font-size: 13px` SIN `!important`, y Streamlit trae una
+     `.st-emotion-cache-XXX p { font-size: inherit }` de especificidad
+     (0,2,1) que le gana a la clase (0,1,0). Envolver el `<p>` en un
+     `st.container(key=…)` suma justo ese nivel de emotion: medido en el
+     navegador, el título saltó de 13px a 16 sólo por mudarse a la fila.
+     Es la misma trampa que `.chart-card-pie` ya documenta en
+     `estilos/_80_cards.py`, y la que hoy tiene sin tapar la cabecera de
+     vap — sus 16px contra los 13 del resto de las tarjetas se ven en el
+     DOM (`[...document.querySelectorAll('p.chart-card-hdr')]`). La
+     solución es una línea: `font-size: 13px !important` en la variante.
+
+     **Las reglas de la fila se COMPARTEN, los anchos no.** `vol_fila_hdr`
+     se suma a los selectores genéricos de `vap_fila_hdr` (flex row,
+     altura de 26px de los controles, el `margin-bottom: 0` del
+     `stMarkdownContainer` de la #286, `width: auto` del element
+     container) en vez de copiarlos: dos copias del mismo bloque driftean,
+     que es justo lo que `franja_cabecera` existe para frenar. Lo propio de
+     cada fila es el ANCHO de sus controles — sin `flex: 0 0 auto` el
+     `stLayoutWrapper` nace con `width: 100%` y se come el renglón
+     (#272).
+
+     Verificado en el navegador con datos reales: fila de 35px (título de
+     18 centrado, desplegable de 26), título a 13px como el de las otras
+     tarjetas, y el desplegable sigue recortando al elegir otra ventana.
+
+     (2026-09-05.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#316**.
+> próxima regla nueva es la **#317**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

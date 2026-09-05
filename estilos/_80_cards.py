@@ -88,7 +88,13 @@ CSS = """    /* ================================================================
        La RAYA divisoria se muda del `<p>` a la FILA: con el `<p>` como un
        flex item más, su `border-bottom` subrayaba sólo el título y dejaba
        los controles colgando de nada. */
-    .st-key-vap_fila_hdr {
+    /* `vol_fila_hdr` (Compras > Volatilidad, 2026-09-05) usa la MISMA
+       receta con dos items: titulo + selector de ventana. Se agrega a los
+       selectores genericos en vez de copiarlos para que no drifteen (el
+       mismo criterio que `franja_cabecera` en graficos/base.py); las
+       reglas de ANCHO, que si son propias de cada fila, van aparte. */
+    .st-key-vap_fila_hdr,
+    .st-key-vol_fila_hdr {
         display: flex !important;
         flex-direction: row !important;
         flex-wrap: wrap !important;
@@ -102,7 +108,8 @@ CSS = """    /* ================================================================
        él un flex item nunca baja de su contenido, así que un ítem en foco
        de nombre largo empujaría el buscador fuera de la tarjeta en vez de
        truncar. */
-    .st-key-vap_fila_hdr > [data-testid="stElementContainer"]:first-child {
+    .st-key-vap_fila_hdr > [data-testid="stElementContainer"]:first-child,
+    .st-key-vol_fila_hdr > [data-testid="stElementContainer"]:first-child {
         flex: 1 1 auto !important;
         min-width: 0 !important;
         width: auto !important;
@@ -208,13 +215,18 @@ CSS = """    /* ================================================================
     .st-key-vap_fila_hdr .react-aria-ComboBox,
     .st-key-vap_fila_hdr .react-aria-ComboBox > div,
     .st-key-vap_fila_hdr [data-baseweb="select"] > div,
-    .st-key-vap_fila_hdr [data-testid="stTextInputRootElement"] {
+    .st-key-vap_fila_hdr [data-testid="stTextInputRootElement"],
+    .st-key-vol_fila_hdr .react-aria-ComboBox,
+    .st-key-vol_fila_hdr .react-aria-ComboBox > div,
+    .st-key-vol_fila_hdr [data-baseweb="select"] > div {
         min-height: 26px !important;
         height: 26px !important;
         font-size: 12px !important;
     }
     .st-key-vap_fila_hdr .react-aria-ComboBox [role="button"],
-    .st-key-vap_fila_hdr .react-aria-ComboBox input {
+    .st-key-vap_fila_hdr .react-aria-ComboBox input,
+    .st-key-vol_fila_hdr .react-aria-ComboBox [role="button"],
+    .st-key-vol_fila_hdr .react-aria-ComboBox input {
         padding-top: 0 !important;
         padding-bottom: 0 !important;
         font-size: 12px !important;
@@ -228,19 +240,47 @@ CSS = """    /* ================================================================
        modo diseño — o sea, exactamente los 16 de margen menos los 3 que ya
        compensaba el centrado. Anulando el margen la caja vuelve a medir su
        texto y el centrado del flex hace lo suyo, sin transform. */
-    .st-key-vap_fila_hdr [data-testid="stMarkdownContainer"] {
+    .st-key-vap_fila_hdr [data-testid="stMarkdownContainer"],
+    .st-key-vol_fila_hdr [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
     .st-key-vap_fila_hdr [data-testid="stTextInputRootElement"] input {
         padding: 0 8px !important;
         font-size: 12px !important;
     }
-    .st-key-vap_fila_hdr [data-testid="stElementContainer"] {
+    .st-key-vap_fila_hdr [data-testid="stElementContainer"],
+    .st-key-vol_fila_hdr [data-testid="stElementContainer"] {
         width: auto;
     }
 
     /* El `<p>` ya no pone la raya ni el margen: los pone la fila. Se queda
        con el reparto de sus dos textos. */
+    /* ── VOLATILIDAD: el selector de ventana, en la linea del titulo ──
+       2026-09-05, a pedido. El `<p>` deja de poner la raya y el margen
+       (los pone la fila, arriba) y se queda con el texto; el desplegable
+       mide lo suyo, 90px como el gemelo de vap — su valor mas largo es
+       "Todo". Sin `flex: 0 0 auto` su `stLayoutWrapper` nace con
+       `width: 100%` y se come el renglon entero (regla #272). */
+    .chart-card-hdr.vol-hdr {
+        margin: 0 !important;
+        padding: 0 !important;
+        border-bottom: none !important;
+        /* `!important` en el TAMANO, medido 2026-09-05: envolver el `<p>`
+           en un `st.container(key=...)` suma un nivel de emotion, y su
+           regla `.st-emotion-cache-XXX p { font-size: inherit }` (0,2,1)
+           le gana a `.chart-card-hdr` (0,1,0) -- el titulo saltaba de 13px
+           a 16 solo por mudarse a la fila. Es la misma trampa que ya
+           documenta `.chart-card-pie` mas arriba, y la que hoy tiene sin
+           tapar la cabecera de vap (16px contra los 13 del resto). */
+        font-size: 13px !important;
+    }
+    .st-key-vol_fila_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vol_hdr_periodo) {
+        flex: 0 0 auto !important;
+        width: 90px !important;
+    }
+    .st-key-vol_hdr_periodo { width: 100% !important; }
+
     .chart-card-hdr.vap-hdr {
         display: flex;
         align-items: baseline;

@@ -186,47 +186,64 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
     # candlestick de un año, alimenta la elección de las 8 semanas más
     # recientes CON DATOS. Más velas no es más historia útil, es un gráfico
     # ilegible (ver `_vol_semanas_ventana`).
-    _c_per = st.columns([1, 2])[0]
-    with _c_per:
-        _op_vol = periodo.selector("compras_vol_periodo", widget="lista")
-    if _op_vol != periodo.HEREDA and d_full is not None:
-        d = periodo.recortar(d_full, col_fecha, _op_vol)
-
-    dd = d.copy()
-    if col_moneda and col_moneda in dd.columns:
-        dd = dd[dd[col_moneda].astype(str).str.strip().isin(["01", "1"])]
-    dd[col_fecha] = pd.to_datetime(dd[col_fecha], errors="coerce")
-    dd[col_punit] = pd.to_numeric(dd[col_punit], errors="coerce")
-    dd[col_valor] = pd.to_numeric(dd[col_valor], errors="coerce").fillna(0)
-    dd = dd.dropna(subset=[col_fecha, col_prod])
-    dd = dd[dd[col_prod].astype(str).str.strip() != ""]
-
-    semanas = _vol_semanas_ventana(dd[col_fecha])
-    if not semanas:
-        st.info(f"Necesitás al menos 4 semanas de compras en "
-                f"{periodo.etiqueta(_op_vol) or 'el rango elegido'} para "
-                f"armar un candlestick. Probá una ventana más amplia con el "
-                f"selector de arriba.")
-        return
-    dd["_semana"] = (dd[col_fecha] - pd.to_timedelta(
-        dd[col_fecha].dt.weekday, unit="D")).dt.normalize()
-    dd = dd[dd["_semana"].isin(semanas)]
-
-    candidatos = _vol_candidatos(dd, col_prod, col_punit, col_fecha, col_valor, semanas)
-    if not candidatos:
-        st.info(f"Ningún insumo tiene compras regulares (≥75% de las "
-                f"semanas) y gasto relevante (≥ S/ 400) en "
-                f"{periodo.etiqueta(_op_vol) or 'el rango elegido'}.")
-        return
-
-    ranking = sorted(candidatos.items(), key=lambda kv: -kv[1]["volatilidad"])
-
-    n_sem = len(semanas)
-    labels_todas = [_vol_fmt_rango_semana(s) for s in semanas]
-    cols_sem = labels_todas[1:]
 
     # ── Tabla ranking (semáforo, buscador, tooltip + clic en fila) ───────
-    with _card("compras_vol_ranking", "Insumos ordenados por volatilidad", titulo_arriba=True):
+    # El selector de ventana comparte RENGLÓN con el título (2026-09-05, a
+    # pedido). Vivía en una fila propia arriba de la tarjeta: un renglón
+    # entero para un control de 90px. Es el mismo patrón que la cabecera de
+    # «Vs año pasado» (`vap_fila_hdr`): el título deja de salir por
+    # `_card(titulo_arriba=True)` y pasa a ser el primer ítem de una fila
+    # flex, con la raya divisoria mudada del `<p>` a la fila — las reglas
+    # genéricas las comparten las dos en `estilos/_80_cards.py`.
+    #
+    # Por eso el CÁLCULO entero se mudó ADENTRO de la tarjeta: la ventana
+    # hay que leerla antes de recortar `d`, y el widget que la lee ahora se
+    # dibuja acá. Los `return` tempranos quedan dentro de la tarjeta, que de
+    # paso es mejor: el mensaje sale bajo la cabecera que tiene el selector
+    # con el que se arregla, y no en un bloque suelto sin contexto.
+    with _card("compras_vol_ranking"):
+        with st.container(key="vol_fila_hdr"):
+            st.markdown('<p class="chart-card-hdr vol-hdr">Insumos ordenados '
+                        'por volatilidad</p>', unsafe_allow_html=True)
+            with st.container(key="vol_hdr_periodo"):
+                _op_vol = periodo.selector("compras_vol_periodo",
+                                           widget="lista")
+        if _op_vol != periodo.HEREDA and d_full is not None:
+            d = periodo.recortar(d_full, col_fecha, _op_vol)
+
+        dd = d.copy()
+        if col_moneda and col_moneda in dd.columns:
+            dd = dd[dd[col_moneda].astype(str).str.strip().isin(["01", "1"])]
+        dd[col_fecha] = pd.to_datetime(dd[col_fecha], errors="coerce")
+        dd[col_punit] = pd.to_numeric(dd[col_punit], errors="coerce")
+        dd[col_valor] = pd.to_numeric(dd[col_valor], errors="coerce").fillna(0)
+        dd = dd.dropna(subset=[col_fecha, col_prod])
+        dd = dd[dd[col_prod].astype(str).str.strip() != ""]
+
+        semanas = _vol_semanas_ventana(dd[col_fecha])
+        if not semanas:
+            st.info(f"Necesitás al menos 4 semanas de compras en "
+                    f"{periodo.etiqueta(_op_vol) or 'el rango elegido'} para "
+                    f"armar un candlestick. Probá una ventana más amplia con el "
+                    f"selector del título.")
+            return
+        dd["_semana"] = (dd[col_fecha] - pd.to_timedelta(
+            dd[col_fecha].dt.weekday, unit="D")).dt.normalize()
+        dd = dd[dd["_semana"].isin(semanas)]
+
+        candidatos = _vol_candidatos(dd, col_prod, col_punit, col_fecha, col_valor, semanas)
+        if not candidatos:
+            st.info(f"Ningún insumo tiene compras regulares (≥75% de las "
+                    f"semanas) y gasto relevante (≥ S/ 400) en "
+                    f"{periodo.etiqueta(_op_vol) or 'el rango elegido'}.")
+            return
+
+        ranking = sorted(candidatos.items(), key=lambda kv: -kv[1]["volatilidad"])
+
+        n_sem = len(semanas)
+        labels_todas = [_vol_fmt_rango_semana(s) for s in semanas]
+        cols_sem = labels_todas[1:]
+
         _c_q = st.columns([1, 2])[0]
         with _c_q:
             _q = st.text_input("Buscar insumo", key="compras_vol_q",
