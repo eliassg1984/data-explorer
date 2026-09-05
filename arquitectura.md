@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-306 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+307 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (99)
 
@@ -351,7 +351,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#298** — Un riel que elige PERÍODOS no puede parar en los períodos: tiene que parar en los BORDES…
 - **#306** — st.rerun(scope="fragment") sólo es legal DURANTE un rerun de fragment
 
-**Datos, R2 y DuckDB** (34)
+**Datos, R2 y DuckDB** (35)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -387,6 +387,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#293** — "No se pudieron cargar los datos", tercera causa: el extractor NOCTURNO dejó de correr. Se…
 - **#301** — La vista "Cruce" de Documentos SUNAT heredaba el filtro de Familia/Subfamilia de la franja…
 - **#303** — Una medición de overlap contra la columna equivocada puede sostener una decisión de producto…
+- **#307** — Un default de fecha "el mes en curso" que se recorta a bounds COLAPSA a un día cuando la data…
 
 **SUNAT y SIRE** (31)
 
@@ -422,7 +423,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#304** — Una sesión del portal SOL se muere sola a las ~2 h, y el backfill no se enteraba: seguía…
 - **#305** — El archivo suelto del servidor llevaba 160 líneas de ventaja sobre el repo, y la prueba que…
 
-**Fechas, rangos y cortes** (8)
+**Fechas, rangos y cortes** (9)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -432,6 +433,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#196** — Un return temprano que se lleva puesto el ÚNICO control capaz de arreglar el estado que lo…
 - **#210** — En una página APILADA el rango de fechas es del REPORTE, no de la vista: dos dueños de la…
 - **#219** — Un riel de fechas que abarca todo el histórico no sirve para elegir un día, y la escala fina…
+- **#307** — Un default de fecha "el mes en curso" que se recorta a bounds COLAPSA a un día cuando la data…
 
 **Asistente IA** (2)
 
@@ -13755,13 +13757,49 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      rehacer algo que ya se dibujó ARRIBA), el scope tiene que ser
      condicional al tipo de corrida, no incondicional.
 
+307. **Un default de fecha "el mes en curso" que se recorta a bounds
+     COLAPSA a un día cuando la data no llega hasta hoy.** El rango de la
+     franja se sembraba con `(hoy.replace(day=1), hoy)` y `asegurar_rango`
+     lo recorta a `(fecha_min, fecha_max)` del parquet — con datos hasta
+     el 31-ago y hoy 4-sep, los DOS extremos caen en el mismo tope y la
+     app abre en "31 ago 2026": un día suelto, no un mes.
+
+     (2026-09-04, reportado sobre el selector de fecha del Ranking de
+     Proveedores.)
+
+     Se veía poco porque el clamp no falla ni avisa: el `date_input` y el
+     filtro trabajan perfecto sobre un rango de un día. Lo que lo delató
+     fue que ese selector rotula el rango vigente CON TODAS LAS LETRAS en
+     su trigger (`selector_fecha_tarjeta`) — antes el default vivía
+     escondido dentro de un calendario.
+
+     El arreglo es anclar el mes al último día CON DATOS:
+     `min(hoy, fecha_max_full)`, y de ahí el 1 del mes y el ancla como
+     fin. Si la data llega hasta hoy, el `min()` no cambia nada.
+
+     Es el mismo criterio que `atajos_rango` ya aplicaba desde antes
+     —descarta "Este mes" cuando su rango no intersecta bounds, "evita
+     ofrecer un atajo que colapsaría a un día suelto del borde"— sólo que
+     el default nunca lo había aprendido. **La regla general:** un
+     período relativo anclado a HOY y después recortado a los datos deja
+     de ser ese período. O se ancla al borde de los datos, o se descarta;
+     recortarlo a secas produce un período que miente sobre lo que dice
+     ser.
+
+     Queda pendiente lo mismo en `carga_por_rango` (Ventas): su semilla de
+     `app.py` corre ANTES de conocer los bounds —los usa para decidir qué
+     bajar de R2—, así que si ese parquet dejara de llegar hasta hoy, la
+     primera carga bajaría un rango vacío y la página se cortaría en el
+     `st.stop()` de "No se pudieron cargar los datos". Hoy no pasa porque
+     Ventas viene al día; arreglarlo pide adelantar el `rango_fechas()`.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#307**.
+> próxima regla nueva es la **#308**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

@@ -405,8 +405,22 @@ if _usa_carga_rango and col_fecha:
         )
 
 _hoy = datetime.date.today()
-fecha_ini_default = _hoy.replace(day=1)   # 01 del mes actual
-fecha_fin_default = _hoy                  # hoy
+# EL MES EN CURSO ES EL DE LOS DATOS, NO EL DEL CALENDARIO. El default era
+# `(hoy.replace(day=1), hoy)` a secas, y cuando el parquet no llega hasta hoy
+# `asegurar_rango` recorta LOS DOS extremos al tope de los datos y el rango
+# COLAPSA a un día suelto: con datos hasta el 31-ago y hoy 4-sep, la app abría
+# en "31 ago 2026" — un día, no un mes (visto 2026-09-04 en el selector de
+# fecha del Ranking de Proveedores, que rotula el rango vigente con todas las
+# letras y por eso lo dejó a la vista).
+#
+# Es el MISMO criterio con el que `atajos_rango` descarta "Este mes" cuando
+# colapsaría contra el borde: no ofrecer un período que la data no cubre. Acá
+# no se descarta, se ANCLA — el mes en curso pasa a ser el del último día con
+# datos. Si la data llega hasta hoy, `min()` no cambia nada y el default es el
+# de siempre.
+_ancla_mes = min(_hoy, fecha_max_full) if fecha_max_full else _hoy
+fecha_ini_default = _ancla_mes.replace(day=1)   # 01 del mes con datos
+fecha_fin_default = _ancla_mes                  # hoy, o el último día con datos
 
 es_ajuste = (reporte == "Ajuste de Inventario")
 
