@@ -931,6 +931,56 @@ if _ruta_srv.exists():
        "y el relogin fallido queda dicho en el log")
 
 
+# ── Importación al Almacén (sunat_importacion.py) ──────────────────────────
+print()
+print("── importación al Almacén ──")
+import xml.etree.ElementTree as _ET  # noqa: E402
+
+import sunat_importacion as _simp  # noqa: E402
+
+# EL CASO QUE LO MOTIVÓ: F402-358580 de CENCOSUD (WONG). Las líneas suman
+# 34.73, el IGV es 6.26 —o sea 40.99 de aritmética— y el `PayableAmount`
+# del comprobante dice 40.90, porque el retail trunca el total al múltiplo
+# de 0.10. El importador del servidor valida `neto + impuesto + redondeo ==
+# total`, así que con `nRedondeo` en cero rechazaba el documento.
+ok(_simp.redondeo_derivado(34.73, 6.26, 40.90) == -0.09,
+   "el redondeo se DERIVA con su signo (el UBL lo declara en positivo)")
+ok(_simp.redondeo_derivado(34.73, 6.26, 40.99) == 0.0,
+   "un comprobante que ya cuadra no lleva redondeo")
+ok(_simp.redondeo_derivado(100.0, 18.0, 200.0) == 0.0,
+   "un descuadre grande NO se absorbe: lo tiene que rechazar el importador")
+
+_doc_wong = {"documento": "F402-358580", "serie": "F402", "numero": "358580",
+             "tipo_cdp": "01", "ruc_proveedor": "20109072177",
+             "proveedor": "CENCOSUD RETAIL PERU S.A.", "moneda": "PEN",
+             "igv": 6.26, "total": 40.99,
+             "fecha_emision": dt.date(2026, 8, 9)}
+_lineas_wong = [{"importe": 16.58, "igv": 2.99, "igv_porcentaje": 18.0},
+                {"importe": 18.15, "igv": 3.27, "igv_porcentaje": 18.0}]
+_filas_wong = [{"_idx": 0, "_cod_sis": "0000001", "Cant.": 0.446, "Importe": 16.58},
+               {"_idx": 1, "_cod_sis": "0000002", "Cant.": 0.488, "Importe": 18.15}]
+
+
+def _cabecera(totales):
+    x = _simp.construir_xml(_doc_wong, _lineas_wong, _filas_wong, totales)
+    r = _ET.fromstring(x)
+    return {t: float(r.find(".//" + t).text)
+            for t in ("nNeto", "nImpuesto1", "nRedondeo", "nTotal")}
+
+
+_c = _cabecera({"total": 40.90, "cargos": 0.0, "redondeo": 0.09})
+ok(round(_c["nNeto"] + _c["nImpuesto1"] + _c["nRedondeo"], 2) == _c["nTotal"],
+   "la cabecera del XML cumple neto + impuesto + redondeo == total")
+ok(_c["nTotal"] == 40.90,
+   "y el total sigue siendo el del comprobante (40.90), no la aritmética")
+
+# Sin XML no hay `PayableAmount`: el total se reconstruye y por definición
+# cuadra, así que no hay redondeo que despejar.
+_c2 = _cabecera(None)
+ok(_c2["nTotal"] == 40.99 and _c2["nRedondeo"] == 0.0,
+   "sin totales del XML, el total se reconstruye y el redondeo queda en cero")
+
+
 # ── Credenciales ───────────────────────────────────────────────────────────
 print("\n── credenciales ──")
 ok(len(sunat._SECRETS_SUNAT) == 5, "declara las 5 credenciales que pide SUNAT")

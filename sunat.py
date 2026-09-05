@@ -1187,7 +1187,10 @@ def totales_xml(xml_bytes):
         # Se lee para poder AVISAR, no para usarlo: no es un campo del
         # estándar peruano —no figura en la guía de SUNAT— y cada emisor
         # lo interpreta distinto. En unos el total ya lo incluye y en
-        # otros no. El importe que manda es `total`.
+        # otros no, y viene en POSITIVO aunque reste (WONG: declara 0.09
+        # sobre un total que baja de 40.99 a 40.90). El importe que manda
+        # es `total`; quien necesita el redondeo lo DESPEJA de ahí — ver
+        # `sunat_importacion.redondeo_derivado` y la regla #312.
         "redondeo": _num_xml(_texto_ubl(raiz, lm + "cbc:PayableRoundingAmount")) or 0.0,
         "impuestos": _num_xml(_texto_ubl(raiz, "cac:TaxTotal/cbc:TaxAmount")),
         "moneda": _texto_ubl(raiz, "cbc:DocumentCurrencyCode") or "PEN",

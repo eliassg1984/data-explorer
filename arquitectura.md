@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-311 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+312 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (101)
 
@@ -394,7 +394,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#307** — Un default de fecha "el mes en curso" que se recorta a bounds COLAPSA a un día cuando la data…
 - **#309** — Un pedido que falla se avisa en la ETIQUETA, no adentro de la pestaña — y un emisor que nunca…
 
-**SUNAT y SIRE** (33)
+**SUNAT y SIRE** (34)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -429,6 +429,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#305** — El archivo suelto del servidor llevaba 160 líneas de ventaja sobre el repo, y la prueba que…
 - **#309** — Un pedido que falla se avisa en la ETIQUETA, no adentro de la pestaña — y un emisor que nunca…
 - **#310** — El modal «Error del Servidor» de SUNAT vive DENTRO del iframe, y buscarlo con…
+- **#312** — El redondeo del comprobante se DERIVA, no se lee — y el que no se escribió tumbó la importación
 
 **Fechas, rangos y cortes** (9)
 
@@ -14019,13 +14020,73 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-04.)
 
+312. **El redondeo del comprobante se DERIVA, no se lee — y el que no se
+     escribió tumbó la importación.** Reporte 2026-09-05, con captura: la
+     factura F402-358580 de CENCOSUD (WONG) se mandó al Almacén y volvió
+     rechazada — *"El total no cuadra: neto + impuesto + redondeo = 40.99
+     pero el comprobante dice 40.90"*. Las dos mitades de la pantalla
+     mostraban 40.99 y coincidían entre ellas, así que el número que el
+     Almacén nombraba no estaba en ningún lado de la app.
+
+     El XML lo explica solo:
+
+     ```xml
+     <cbc:LineExtensionAmount>34.73</cbc:LineExtensionAmount>
+     <cbc:TaxInclusiveAmount>40.90</cbc:TaxInclusiveAmount>
+     <cbc:PayableRoundingAmount>0.09</cbc:PayableRoundingAmount>
+     <cbc:PayableAmount>40.90</cbc:PayableAmount>
+     ```
+
+     El retail **trunca** el total al múltiplo de 0.10 —las monedas de 1 y
+     5 céntimos no circulan— y lo hace a favor del cliente: 34.73 + 6.26 =
+     40.99 se cobra **40.90**. El registro del SIRE anota la aritmética
+     (40.99); el papel cobra otra cosa.
+
+     `construir_xml` ya elegía bien el total (`PayableAmount`, regla del
+     `_total_documento`) pero mandaba `nRedondeo` en CERO, así que el XML
+     que armaba era internamente incoherente y el importador lo rechazaba
+     — correctamente. El rechazo no era el bug: el bug era el XML.
+
+     Tres cosas que valen para cualquier otro campo del UBL:
+
+     1. **El signo del `PayableRoundingAmount` no sirve.** Viene en
+        POSITIVO aunque reste. Ya estaba medido en otra factura del mismo
+        emisor (F402-481779) cuando se mapeó el contrato del Almacén, y
+        aun así la función se escribió leyendo un cero fijo: **medir no es
+        cablear**. La regla segura es despejar la incógnita de la ecuación
+        que el Almacén valida —`neto + impuesto + redondeo = total`—, que
+        es lo que hace `sunat_importacion.redondeo_derivado`.
+     2. **El despeje tiene TECHO (`REDONDEO_MAXIMO = 0.09`).** Un
+        descuadre mayor no es redondeo: es una línea que perdió su importe
+        o un IGV que no corresponde, y absorberlo en la cabecera anularía
+        la única red que tiene la importación — que el Almacén rechace lo
+        que no cierra. Por encima del techo se manda cero **a propósito**,
+        para que el rechazo pase.
+     3. **Si la pantalla no nombra el número, el error es ilegible.** El
+        pie del comprobante ahora dice «El comprobante redondea el total a
+        S/ 40.90 (-0.09); SUNAT anota S/ 40.99». Sin ese renglón la app
+        mostraba 40.99 en las dos mitades y el Almacén guardaba 40.90:
+        una diferencia que no se podía explicar sin abrir el XML.
+
+     Cubierto en `test_sunat.py` («importación al Almacén»): el signo, el
+     techo, y que la cabecera del XML cumpla la ecuación.
+
+     **Pendiente hermano, no arreglado acá:** una NOTA DE CRÉDITO viene
+     negativa en el registro (`igv = -4.27`) y positiva en el XML, así que
+     `construir_xml` le arma una cabecera con neto positivo e impuesto
+     negativo y el importador la va a rechazar igual. Son 295 en el
+     registro. Antes de tocarlo hay que medir cómo guarda el Almacén una
+     nota — con qué signo — en la réplica local, no adivinarlo.
+
+     (2026-09-05.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#312**.
+> próxima regla nueva es la **#313**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

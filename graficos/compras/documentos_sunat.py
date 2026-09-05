@@ -1970,7 +1970,7 @@ def _pie_sistema(doc, filas_sistema):
                    f"{sim} {_s(declarado):,.2f}. Revisá antes de exportar.")
 
 
-def _pie_comprobante(doc, lineas):
+def _pie_comprobante(doc, lineas, totales=None):
     """El pie del comprobante: los subtotales que componen el total, como
     los imprime cualquier factura.
 
@@ -2040,6 +2040,21 @@ def _pie_comprobante(doc, lineas):
             f'color:{GRIS_TEXTO_SUAVE};">≈ {en_soles} '
             f'· TC {float(doc.get("tipo_cambio") or 1.0):.3f}</div>',
             unsafe_allow_html=True)
+
+    # EL REDONDEO DEL PAPEL. El registro del SIRE anota la aritmética
+    # (base + IGV); el comprobante puede cobrar otra cosa: el retail trunca
+    # el total al múltiplo de 0.10 —F402-358580 de WONG: 34.73 + 6.26 =
+    # 40.99 y el `PayableAmount` dice **40.90**—. Sin este renglón la
+    # pantalla mostraba 40.99, el Almacén recibía 40.90, y la diferencia no
+    # se podía explicar mirando la app. Lo que se carga es lo del papel
+    # (ver `sunat_importacion.redondeo_derivado`).
+    pagable = _num((totales or {}).get("total"))
+    if (pagable is not None and total is not None
+            and abs(abs(pagable) - abs(total)) > 0.001):
+        _red = round(abs(pagable) - abs(total), 2)
+        st.caption(f"El comprobante redondea el total a {sim} "
+                   f"{abs(pagable):,.2f} ({_red:+.2f}); SUNAT anota "
+                   f"{sim} {abs(total):,.2f}. Se carga lo del comprobante.")
 
     # La red de seguridad: si el XML no suma lo que el registro declara,
     # decirlo. No se corrige nada — son dos fuentes y la del registro es
@@ -2535,6 +2550,7 @@ def _detalle_sistema(doc, lineas_xml, d, xml_original=None):
     tv_sunat = pd.DataFrame(filas_sunat)
     tv = pd.DataFrame(filas_sistema)
     _doc_id = str(doc.get("documento") or "")
+    totales_doc = sunat.totales_xml(xml_original) if xml_original else None
 
     # columnas-internas: las dos mitades de la comparación, mitad y mitad
     # a propósito -- ninguna de las dos fuentes manda sobre la otra.
@@ -2544,7 +2560,7 @@ def _detalle_sistema(doc, lineas_xml, d, xml_original=None):
             _titulo_panel("Comprobante SUNAT", "lo que emitió el proveedor")
             _cabecera_conversor(doc)
             _grid_lado_sunat(tv_sunat, _doc_id)
-            _pie_comprobante(doc, lineas_xml)
+            _pie_comprobante(doc, lineas_xml, totales_doc)
     with c_der:
         with st.container(border=True, key="sunat_conv_der"):
             _titulo_panel("Sistema", "con qué se carga")

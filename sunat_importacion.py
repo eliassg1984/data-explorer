@@ -140,13 +140,14 @@ def construir_xml(doc, lineas_xml, filas_sistema, totales=None, glosa=None):
     suma_lineas = sum(_num(f.get("Importe")) for f in filas_sistema)
     cargos = _num((totales or {}).get("cargos"))
     igv = _num(doc.get("igv"))
+    neto = suma_lineas + cargos
+    total = _total_documento(doc, totales, suma_lineas, cargos, igv)
 
-    ET.SubElement(s, "nNeto").text = _dec(suma_lineas + cargos)
+    ET.SubElement(s, "nNeto").text = _dec(neto)
     ET.SubElement(s, "nImpuesto1").text = _dec(igv)
-    ET.SubElement(s, "nTotal").text = _dec(_total_documento(doc, totales,
-                                                            suma_lineas, cargos, igv))
+    ET.SubElement(s, "nTotal").text = _dec(total)
     ET.SubElement(s, "nDescuento").text = _dec(0)
-    ET.SubElement(s, "nRedondeo").text = _dec(0)
+    ET.SubElement(s, "nRedondeo").text = _dec(redondeo_derivado(neto, igv, total))
     ET.SubElement(s, "nPercepcion").text = _dec(0)
     ET.SubElement(s, "lDetraccion").text = (
         "1" if str(doc.get("detraccion") or "").strip() else "0")
@@ -224,6 +225,47 @@ def _repartir_cargo(cargo, importes):
     partes = [round(cargo * (imp / total), 2) for imp in importes]
     partes[-1] = round(partes[-1] + (cargo - sum(partes)), 2)
     return partes
+
+
+# Un redondeo es de CÉNTIMOS. El caso peruano es el múltiplo de 0.10 —las
+# monedas de 1 y 5 céntimos no circulan— y el retail lo aplica TRUNCANDO a
+# favor del cliente, no al más cercano: 40.99 se cobra 40.90, o sea nueve
+# céntimos, no cinco. Ése es el techo.
+#
+# Por encima de 0.09 el descuadre ya no es redondeo: es una línea que
+# perdió su importe o un IGV que no corresponde, y eso hay que mirarlo, no
+# ajustarlo.
+REDONDEO_MAXIMO = 0.09
+
+
+def redondeo_derivado(neto, igv, total):
+    """El `nRedondeo` de la cabecera: lo que le falta a `neto + igv` para
+    llegar al total del comprobante.
+
+    SE DERIVA, NO SE LEE. El `cbc:PayableRoundingAmount` del UBL viene en
+    POSITIVO aunque reste: la factura F402-358580 de WONG (CENCOSUD)
+    declara 0.09 y su aritmética es 34.73 + 6.26 = 40.99 contra un
+    `PayableAmount` de **40.90**. Creerle al signo dejaría el documento
+    18 céntimos arriba. La ecuación que valida el Almacén —y que muestra
+    la franja de totales de su formulario— es
+
+        neto + impuesto + redondeo = total
+
+    y tiene una sola incógnita, así que el redondeo se despeja.
+
+    Sin esto el importador rechazaba el documento («El total no cuadra:
+    neto + impuesto + redondeo = 40.99 pero el comprobante dice 40.90»),
+    que es el rechazo correcto ante un XML incoherente — sólo que el XML
+    lo armaba esta función mandando `nRedondeo` en cero.
+
+    Un descuadre MAYOR a `REDONDEO_MAXIMO` no se absorbe: se deja el
+    redondeo en cero a propósito, para que el importador rechace el
+    documento. La red de seguridad de "si una línea perdió su importe,
+    que no entre" vive justamente en esa validación, y taparla con un
+    ajuste de cabecera la anularía.
+    """
+    d = round(_num(total) - (_num(neto) + _num(igv)), 2)
+    return d if abs(d) <= REDONDEO_MAXIMO + 1e-9 else 0.0
 
 
 def _total_documento(doc, totales, suma_lineas, cargos, igv):
