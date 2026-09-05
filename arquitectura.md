@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-308 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+311 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (100)
+**CSS y estilos** (101)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -120,6 +120,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#299** — Modo diseño: "Rotar" no llegaba a un cuarto de vuelta, y probar la FORMA de una botonera (no…
 - **#302** — Un elemento con pointer-events: none es INVISIBLE para el inspector y para el modo diseño —…
 - **#308** — El ⛶ nativo de Streamlit maximiza un ELEMENTO; cuando la unidad de lectura es la TARJETA, hay…
+- **#311** — En una página APILADA, el st.rerun(scope="app") que escala un atajo de fecha tiene que salir…
 
 **Layout y alturas** (32)
 
@@ -261,7 +262,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 
-**Streamlit** (89)
+**Streamlit** (90)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -352,8 +353,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#298** — Un riel que elige PERÍODOS no puede parar en los períodos: tiene que parar en los BORDES…
 - **#306** — st.rerun(scope="fragment") sólo es legal DURANTE un rerun de fragment
 - **#308** — El ⛶ nativo de Streamlit maximiza un ELEMENTO; cuando la unidad de lectura es la TARJETA, hay…
+- **#311** — En una página APILADA, el st.rerun(scope="app") que escala un atajo de fecha tiene que salir…
 
-**Datos, R2 y DuckDB** (35)
+**Datos, R2 y DuckDB** (36)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -390,8 +392,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#301** — La vista "Cruce" de Documentos SUNAT heredaba el filtro de Familia/Subfamilia de la franja…
 - **#303** — Una medición de overlap contra la columna equivocada puede sostener una decisión de producto…
 - **#307** — Un default de fecha "el mes en curso" que se recorta a bounds COLAPSA a un día cuando la data…
+- **#309** — Un pedido que falla se avisa en la ETIQUETA, no adentro de la pestaña — y un emisor que nunca…
 
-**SUNAT y SIRE** (31)
+**SUNAT y SIRE** (33)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -424,6 +427,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#301** — La vista "Cruce" de Documentos SUNAT heredaba el filtro de Familia/Subfamilia de la franja…
 - **#304** — Una sesión del portal SOL se muere sola a las ~2 h, y el backfill no se enteraba: seguía…
 - **#305** — El archivo suelto del servidor llevaba 160 líneas de ventaja sobre el repo, y la prueba que…
+- **#309** — Un pedido que falla se avisa en la ETIQUETA, no adentro de la pestaña — y un emisor que nunca…
+- **#310** — El modal «Error del Servidor» de SUNAT vive DENTRO del iframe, y buscarlo con…
 
 **Fechas, rangos y cortes** (9)
 
@@ -13879,13 +13884,148 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-04.)
 
+309. **Un pedido que falla se avisa en la ETIQUETA, no adentro de la
+     pestaña — y un emisor que nunca sirvió nada se dice con el número.**
+     Reporte 2026-09-04: *"si invoco a traer el original, y ya pasó más de
+     3 minutos, no aparece su xml"*. El pedido había funcionado
+     perfecto — el servicio del servidor lo levantó 12 segundos después
+     del clic y lo resolvió en 25 (`22:41:06 1 pedido(s)` →
+     `22:41:31 SUNAT no devolvió el archivo`), y dejó su marca de fallo en
+     R2. Lo que no funcionó fue DECIRLO: el aviso vive dentro de la
+     pestaña «⬇ Original» y el usuario estaba en «Datos», con un rótulo
+     que sigue invitando a bajar algo.
+
+     Dos arreglos, los dos con datos que la webapp ya tenía:
+
+     1. **La etiqueta cambia a «⚠ Original»** cuando `fallo_solicitud`
+        devuelve algo. Cuesta una línea y es la única parte de la ficha
+        que se ve sin abrir nada.
+     2. **`sunat.emisor_sin_originales(doc)`** devuelve cuántos
+        comprobantes tiene ese emisor en el registro si NINGUNO tiene
+        original en R2 — un `list_objects_v2` por RUC, cacheado 10
+        minutos. Devuelve el número y no un booleano porque es lo que la
+        pantalla necesita decir: "0 de 414" es un patrón, "no se pudo" es
+        una excusa.
+
+     El umbral (`MINIMO_INTENTOS_EMISOR = 15`) no es 1 a propósito: el
+     backfill va de lo más nuevo hacia atrás, así que un proveedor con dos
+     facturas y ninguna bajada es "todavía no le tocó", no un veredicto.
+
+     (2026-09-04.)
+
+310. **El modal «Error del Servidor» de SUNAT vive DENTRO del iframe, y
+     buscarlo con `pagina.get_by_text` da False siempre — así toda caída
+     del portal se archivaba como "SUNAT no tiene ese comprobante".**
+     La regla #142 ya separaba los dos casos y el código lo intentaba
+     (`consultar_y_descargar` devuelve `sin_resultados` o `error_servidor`
+     justamente para no castigar a un documento por una caída), pero la
+     detección apuntaba al sitio equivocado: el portal pinta el modal
+     adentro de `#iframeApplication`, y a un iframe sólo se entra con
+     `frame_locator`.
+
+     Medido el 2026-09-04 con seis consultas intercaladas en la misma
+     sesión —tres del BANCO DE CREDITO (RUC 20100047218) contra tres de un
+     emisor control—:
+
+     | # | emisor  | resultado                          |
+     |---|---------|------------------------------------|
+     | 1 | control | resultado + botones PDF y XML      |
+     | 2 | BCP     | «Error del Servidor»               |
+     | 3 | control | resultado + botones                |
+     | 4 | BCP     | «Error del Servidor»               |
+     | 5 | BCP     | «Error del Servidor»               |
+     | 6 | control | «Error del Servidor» (tras 3 seguidos) |
+
+     En los cinco fallos: `error_servidor_en_frame: true`,
+     `error_servidor_en_pagina: false`. O sea el portal NUNCA dijo que no
+     tuviera el comprobante — se cayó, de forma reproducible con ese
+     emisor, y arrastró después a una consulta que antes andaba.
+
+     Lo que costaba el bug, que es por qué se documenta y no sólo se
+     arregla:
+
+     - **238 documentos del BCP** (la mitad de las 479 entradas de
+       `logs/no_disponibles.json`) quedaron anotados como no disponibles y
+       fuera de los reintentos por 30 días.
+     - La webapp le decía al usuario *"SUNAT no tiene disponible este
+       comprobante"* cuando lo cierto era *"el portal devolvió un error"*.
+       Ahora `atender_pedidos` recibe el `detalle` de `bajar_uno` y
+       escribe el motivo que corresponde.
+     - El contador de fallos seguidos que dispara el relogin
+       (`FALLOS_SEGUIDOS_PARA_RELOGIN`) se reseteaba en cada caída, porque
+       un `sin_resultados` cuenta como "la sesión contestó, está viva".
+
+     La detección nueva (`hay_error_servidor`) mira el frame **y** la
+     página: si el modal se muda de sitio, no se vuelve a apagar sola.
+
+     (2026-09-04.)
+
+311. **En una página APILADA, el `st.rerun(scope="app")` que escala un
+     atajo de fecha tiene que salir de un `@st.fragment` PROPIO del drill,
+     a nivel de módulo. Desde el dispatcher no escala nada; desde el
+     fragment de la sección escala pero deja a esa misma sección sin
+     repintar.**
+     Sale de sumarle a la tarjeta «Semanal» de Compras el selector de
+     fecha que ya tenían Ranking de proveedores y Ranking de productos
+     (`_comun.py::selector_fecha_tarjeta`, reglas #62 a #65). El
+     componente era el mismo; lo que cambió fue DÓNDE vivía el consumidor
+     de su bandera. Tres intentos, los tres medidos en vivo el 2026-09-04
+     con el atajo «30 días» y `?debug=1`:
+
+     1. **La bandera se consume arriba de `renderizar_graficos_compras`
+        (el dispatcher): no pasa NADA.** El fragment más interno que
+        contiene el clic no es `_render_contenido` (app.py) sino
+        `base.py::seccion_perezosa`, que envuelve a CADA sección de la
+        pila — el dispatcher no se re-ejecuta en el rerun de una sección,
+        así que el `pop` nunca corre. Síntoma: el label de la tarjeta se
+        actualizaba (lo escribe el callback, antes del rerun) y la franja,
+        las otras dos tarjetas y las barras del gráfico se quedaban en el
+        rango viejo.
+     2. **La bandera se consume dentro del fragment de la SECCIÓN: escala
+        bien, pero la tarjeta queda un gesto atrás.** El servidor hace lo
+        correcto —con un `print` a stderr se ve el rerun completo llegando
+        con `d` ya filtrado, 677 filas desde el 6 de agosto contra las 818
+        de antes— y el cliente no lo pinta: el delta que se pierde es
+        justo el de la sección que abortó su propio render al lanzar la
+        excepción del rerun. La franja y los otros dos rankings sí se
+        actualizaban, y esta tarjeta recién se ponía al día al tocar
+        cualquier otra cosa.
+     3. **Un `@st.fragment` anidado, definido dentro del dispatcher:
+        TAMPOCO alcanza.** Mismo síntoma que el 2. Un fragment declarado
+        como closure no se comporta como los drills del resto del paquete.
+     4. **El drill en su propio módulo, con `@st.fragment` a nivel de
+        módulo (`graficos/compras/semanal.py`): correcto.** El que aborta
+        es el fragment de adentro y el que redibuja es el de afuera. En un
+        solo gesto se actualizan la franja, los tres selectores y las
+        barras (la semana 31 desaparece del gráfico).
+
+     O sea que la estructura que ya tenían Proveedor, Producto y
+     Volatilidad —`_dib_x()` delegando en un `_compras_x_drill`
+     `@st.fragment` de su propio fichero— no es sólo prolijidad de
+     paquete: es lo que hace que una sección de la pila pueda escalar a
+     rerun completo sin quedarse ella misma sin repintar. Un drill que
+     vive inline en `__init__.py` funciona mientras no necesite escalar.
+
+     El resto del cambio, que es rutina y está documentado en CLAUDE.md:
+     el CSS de la fila se lista EXPLÍCITO por prefijo en
+     `_css_proveedor.py` (`cp_sem_*` junto a `cp_rank_*`/`cp_prod_*`), con
+     UNA excepción — las reglas `.st-key-cp_X_fila button`, que pintan de
+     píldora blanca a todo botón descendiente, no se comparten: en esta
+     fila el vecino del trigger es el `stButtonGroup` de la granularidad
+     (Día/Semana/Mes/Año/Por documento), que tiene su propio look. El
+     trigger repite esas declaraciones acotadas a `.st-key-cp_sem_escala`.
+     Es exactamente el caso que advierte CLAUDE.md sobre las reglas
+     colgadas de un contenedor.
+
+     (2026-09-04.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#309**.
+> próxima regla nueva es la **#312**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

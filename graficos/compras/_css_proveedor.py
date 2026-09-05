@@ -740,8 +740,23 @@ CSS = """        <style>
            debajo. Comparte las reglas en vez de tener las suyas porque el
            pedido es literalmente "que se vea como aquélla": dos bloques
            gemelos son dos sitios donde arreglar el próximo detalle. */
+        /* 2026-09-04: `cp_sem_fila` (vista Semanal) entra a este bloque,
+           a pedido ("el mismo selector de fecha, arriba, alineado con los
+           toggles de dia/semana/mes y pegado a la derecha"). Con una
+           diferencia: esta fila NO lleva titulo —el nombre de la seccion
+           lo pone el rail— asi que sus dos items son el `st.pills` de
+           granularidad y el trigger de fecha, y el `space-between` los
+           manda a los dos bordes sin necesidad del `flex: 1 1 auto` que
+           aca abajo reparte el hueco entre el titulo y el control.
+           OJO, lo que NO comparte: las reglas de `... fila button`, mas
+           abajo. Esas pintan de pildora blanca a TODO boton descendiente,
+           y en esta fila el descendiente de al lado es el ButtonGroup de
+           la granularidad — es exactamente el caso que advierte CLAUDE.md
+           (una regla colgada del contenedor captura widgets que el .py no
+           insinua). Su trigger las repite acotadas a `cp_sem_escala`. */
         .st-key-cp_rank_fila,
-        .st-key-cp_prod_fila {
+        .st-key-cp_prod_fila,
+        .st-key-cp_sem_fila {
             position: static !important;
             width: 100% !important;
             display: flex !important;
@@ -769,18 +784,21 @@ CSS = """        <style>
             margin: 0 !important;
         }
         .st-key-cp_rank_fila .st-key-cp_rank_escala,
-        .st-key-cp_prod_fila .st-key-cp_prod_escala {
+        .st-key-cp_prod_fila .st-key-cp_prod_escala,
+        .st-key-cp_sem_fila .st-key-cp_sem_escala {
             flex: 0 0 auto !important;
         }
         /* (Acá vivía el bloque `position: absolute; top:16px; right:18px`
            de `cp_prod_fila`, con su `width: fit-content` para no estirarse.
            Se fue el 2026-09-02: la fila entró en el flujo, arriba.) */
         .st-key-cp_rank_fila [data-testid="stElementContainer"],
-        .st-key-cp_prod_fila [data-testid="stElementContainer"] {
+        .st-key-cp_prod_fila [data-testid="stElementContainer"],
+        .st-key-cp_sem_fila [data-testid="stElementContainer"] {
             width: auto !important;
         }
         .st-key-cp_rank_fila [data-testid="stElementToolbar"],
-        .st-key-cp_prod_fila [data-testid="stElementToolbar"] {
+        .st-key-cp_prod_fila [data-testid="stElementToolbar"],
+        .st-key-cp_sem_fila [data-testid="stElementToolbar"] {
             display: none;
         }
         .st-key-cp_rank_fila button,
@@ -804,6 +822,30 @@ CSS = """        <style>
             background: #f0edfe !important;
             color: #4d3fb3 !important;
         }
+        /* La MISMA pildora, pero en Semanal colgada de la key del trigger
+           y no de la fila: ahi el otro hijo de la fila es el
+           `stButtonGroup` de la granularidad, que tiene su propio look de
+           toggle y no quiere ser cinco pildoras blancas. Se repite en vez
+           de sumarse al selector de arriba justamente por eso. */
+        .st-key-cp_sem_escala button {
+            min-width: 0 !important;
+            height: 22px !important;
+            min-height: 22px !important;
+            padding: 0 10px !important;
+            border-radius: 999px !important;
+            border: 0.5px solid rgba(0,0,0,0.08) !important;
+            background: #ffffff !important;
+            color: #5a5a6a !important;
+            font-size: 11px !important;
+            font-weight: 500 !important;
+            line-height: 1 !important;
+            box-shadow: 0 1px 2px rgba(15,15,30,0.06) !important;
+            transition: background .12s, color .12s !important;
+        }
+        .st-key-cp_sem_escala button:hover {
+            background: #f0edfe !important;
+            color: #4d3fb3 !important;
+        }
         /* El trigger de la escala de tiempo: desde el 2026-08-26 su label
            es EL RANGO ACTIVO ("1 ago - 24 ago 2026"), no un icono de
            calendario -- ver el comentario largo en proveedor.py. Hereda la
@@ -824,7 +866,8 @@ CSS = """        <style>
             [data-testid="stPopover"]:has(.st-key-cp_rank_escala) button,
             [data-testid="stPopover"]:has(.st-key-cp_prod_escala) button,
         .st-key-cp_rank_escala button,
-        .st-key-cp_prod_escala button {
+        .st-key-cp_prod_escala button,
+        .st-key-cp_sem_escala button {
             padding: 0 10px !important;
             font-size: 12px !important;
             white-space: nowrap !important;
@@ -845,6 +888,8 @@ CSS = """        <style>
            (scrollWidth 30 sobre clientWidth 22, medido). De ahi el
            `:has()`. */
         .st-key-cp_rank_escala button > div > div:has(
+            [data-testid="stIconMaterial"]),
+        .st-key-cp_sem_escala button > div > div:has(
             [data-testid="stIconMaterial"]) {
             display: none !important;
         }
@@ -855,7 +900,8 @@ CSS = """        <style>
            colgarlo del contenedor. Mismo patron que el panel de fecha de
            la franja (estilos/_50_fecha.py) y el del asistente. */
         [data-testid="stPopoverBody"]:has(.st-key-cp_rank_escala_panel),
-        [data-testid="stPopoverBody"]:has(.st-key-cp_prod_escala_panel) {
+        [data-testid="stPopoverBody"]:has(.st-key-cp_prod_escala_panel),
+        [data-testid="stPopoverBody"]:has(.st-key-cp_sem_escala_panel) {
             /* 290px es el ancho MINIMO util del riel: con menos, las
                etiquetas de las paradas de "Meses" (ene 24 ... ago 26) se
                encabalgan y el slider deja de leerse. */
@@ -874,7 +920,8 @@ CSS = """        <style>
            widget (su ANCLA PROPIA, no el del panel: tocar el panel movería
            tambien al slider y al caption). */
         .st-key-cp_rank_esc_gran,
-        .st-key-cp_prod_esc_gran {
+        .st-key-cp_prod_esc_gran,
+        .st-key-cp_sem_esc_gran {
             width: 100% !important;
         }
         /* `display: flex` explicito: el ButtonGroup nace BLOCK (medido), y
@@ -893,8 +940,10 @@ CSS = """        <style>
            del ancho (125 y 125) y los botones quedaban en 42px. */
         .st-key-cp_rank_esc_gran [data-testid="stButtonGroup"],
         .st-key-cp_prod_esc_gran [data-testid="stButtonGroup"],
+        .st-key-cp_sem_esc_gran [data-testid="stButtonGroup"],
         .st-key-cp_rank_esc_gran [data-testid="stButtonGroup"] > div,
-        .st-key-cp_prod_esc_gran [data-testid="stButtonGroup"] > div {
+        .st-key-cp_prod_esc_gran [data-testid="stButtonGroup"] > div,
+        .st-key-cp_sem_esc_gran [data-testid="stButtonGroup"] > div {
             display: flex !important;
             width: 100% !important;
             /* El `width` solo no alcanza: la clase de emotion del div
@@ -904,12 +953,14 @@ CSS = """        <style>
             max-width: none !important;
         }
         .st-key-cp_rank_esc_gran [data-testid="stButtonGroup"] button,
-        .st-key-cp_prod_esc_gran [data-testid="stButtonGroup"] button {
+        .st-key-cp_prod_esc_gran [data-testid="stButtonGroup"] button,
+        .st-key-cp_sem_esc_gran [data-testid="stButtonGroup"] button {
             flex: 1 1 0 !important;
         }
         /* El caption del total de dias: al ras del riel, no como parrafo. */
         .st-key-cp_rank_escala_panel [data-testid="stCaptionContainer"],
-        .st-key-cp_prod_escala_panel [data-testid="stCaptionContainer"] {
+        .st-key-cp_prod_escala_panel [data-testid="stCaptionContainer"],
+        .st-key-cp_sem_escala_panel [data-testid="stCaptionContainer"] {
             margin-top: -4px !important;
             font-size: 11px !important;
         }
@@ -928,13 +979,16 @@ CSS = """        <style>
            TODOS los popovers de la app, que es justo el error que
            CLAUDE.md advierte de las reglas colgadas de un contenedor. */
         [data-testid="stPopoverBody"]:has([class*="st-key-cp_rank_esc_gran"]),
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_esc_gran"]) {
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_esc_gran"]),
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_sem_esc_gran"]) {
             padding-top: 8px !important;
             padding-bottom: 8px !important;
         }
         [data-testid="stPopoverBody"]:has([class*="st-key-cp_rank_esc_gran"])
             [data-testid="stVerticalBlock"],
         [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_esc_gran"])
+            [data-testid="stVerticalBlock"],
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_sem_esc_gran"])
             [data-testid="stVerticalBlock"] {
             gap: 4px !important;
         }
@@ -951,7 +1005,9 @@ CSS = """        <style>
         [data-testid="stPopoverBody"]:has([class*="st-key-cp_rank_esc_gran"])
             [class*="st-key-cp_rank_atajo_sel"],
         [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_esc_gran"])
-            [class*="st-key-cp_prod_atajo_sel"] {
+            [class*="st-key-cp_prod_atajo_sel"],
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_sem_esc_gran"])
+            [class*="st-key-cp_sem_atajo_sel"] {
             margin-bottom: 0 !important;
         }
         /* ── CABECERA "‹ AGO 2026 ›" del riel de Días ────────────────────
@@ -977,8 +1033,10 @@ CSS = """        <style>
         }
         [class*="st-key-cp_rank_esc_mes_prev"] button,
         [class*="st-key-cp_prod_esc_mes_prev"] button,
+        [class*="st-key-cp_sem_esc_mes_prev"] button,
         [class*="st-key-cp_rank_esc_mes_sig"] button,
-        [class*="st-key-cp_prod_esc_mes_sig"] button {
+        [class*="st-key-cp_prod_esc_mes_sig"] button,
+        [class*="st-key-cp_sem_esc_mes_sig"] button {
             min-height: 22px !important;
             height: 22px !important;
             padding: 0 !important;
@@ -1085,7 +1143,8 @@ CSS = """        <style>
            del mismo popover de escala, o sea otro riel de este control —
            que es exactamente lo que se quiere ocultar. */
         [class*="st-key-cp_rank_esc_"] [data-testid="stSliderTickBar"],
-        [class*="st-key-cp_prod_esc_"] [data-testid="stSliderTickBar"] {
+        [class*="st-key-cp_prod_esc_"] [data-testid="stSliderTickBar"],
+        [class*="st-key-cp_sem_esc_"] [data-testid="stSliderTickBar"] {
             display: none !important;
         }
         /* Etiquetas de los TIRADORES, sólo en Meses/Años. Es el precio del
@@ -1102,7 +1161,9 @@ CSS = """        <style>
         [class*="st-key-cp_rank_esc_meses_"] [data-testid="stSliderThumbValue"],
         [class*="st-key-cp_rank_esc_anos_"] [data-testid="stSliderThumbValue"],
         [class*="st-key-cp_prod_esc_meses_"] [data-testid="stSliderThumbValue"],
-        [class*="st-key-cp_prod_esc_anos_"] [data-testid="stSliderThumbValue"] {
+        [class*="st-key-cp_prod_esc_anos_"] [data-testid="stSliderThumbValue"],
+        [class*="st-key-cp_sem_esc_meses_"] [data-testid="stSliderThumbValue"],
+        [class*="st-key-cp_sem_esc_anos_"] [data-testid="stSliderThumbValue"] {
             display: none !important;
         }
 
@@ -1116,7 +1177,8 @@ CSS = """        <style>
            `{key_prefix}_pan_topn/_pan_rango` de recetas_comun.py — los
            tres traen "_pan" de casualidad, sin relación con este. */
         [class*="st-key-cp_rank_esc_"][class*="_pan"],
-        [class*="st-key-cp_prod_esc_"][class*="_pan"] {
+        [class*="st-key-cp_prod_esc_"][class*="_pan"],
+        [class*="st-key-cp_sem_esc_"][class*="_pan"] {
             position: absolute !important;
             width: 1px !important;
             height: 1px !important;
@@ -1151,7 +1213,8 @@ CSS = """        <style>
            la fila de afuera) no lo alcanza — igual se resetea todo a
            mano, para no depender de qué ande suelto por ese lado. */
         .st-key-cp_rank_atajo_sel [data-testid="stButtonGroup"],
-        .st-key-cp_prod_atajo_sel [data-testid="stButtonGroup"] {
+        .st-key-cp_prod_atajo_sel [data-testid="stButtonGroup"],
+        .st-key-cp_sem_atajo_sel [data-testid="stButtonGroup"] {
             display: flex !important;
             flex-wrap: wrap !important;
             gap: 0 !important;
@@ -1160,7 +1223,8 @@ CSS = """        <style>
             max-width: none !important;
         }
         .st-key-cp_rank_atajo_sel [data-testid="stButtonGroup"] button,
-        .st-key-cp_prod_atajo_sel [data-testid="stButtonGroup"] button {
+        .st-key-cp_prod_atajo_sel [data-testid="stButtonGroup"] button,
+        .st-key-cp_sem_atajo_sel [data-testid="stButtonGroup"] button {
             min-width: 0 !important;
             min-height: 0 !important;
             height: auto !important;
@@ -1181,6 +1245,8 @@ CSS = """        <style>
            cuando su rango no toca los datos) su separador se va con el:
            no queda un "·" huerfano al final. */
         .st-key-cp_rank_atajo_sel
+            [data-testid="stButtonGroup"] button:not(:last-child)::after,
+        .st-key-cp_sem_atajo_sel
             [data-testid="stButtonGroup"] button:not(:last-child)::after {
             content: "·";
             color: var(--text-muted);
@@ -1188,6 +1254,8 @@ CSS = """        <style>
             font-weight: 400;
         }
         .st-key-cp_rank_atajo_sel
+            [data-testid="stButtonGroup"] button:hover,
+        .st-key-cp_sem_atajo_sel
             [data-testid="stButtonGroup"] button:hover {
             text-decoration: underline !important;
         }
@@ -1199,12 +1267,17 @@ CSS = """        <style>
         .st-key-cp_rank_atajo_sel
             [data-testid="stButtonGroup"] button[aria-checked="true"],
         .st-key-cp_rank_atajo_sel
+            [data-testid="stButtonGroup"] button[aria-pressed="true"],
+        .st-key-cp_sem_atajo_sel
+            [data-testid="stButtonGroup"] button[aria-checked="true"],
+        .st-key-cp_sem_atajo_sel
             [data-testid="stButtonGroup"] button[aria-pressed="true"] {
             background: transparent !important;
             color: var(--accent-deep) !important;
         }
         .st-key-cp_rank_atajo_sel,
-        .st-key-cp_prod_atajo_sel {
+        .st-key-cp_prod_atajo_sel,
+        .st-key-cp_sem_atajo_sel {
             width: 100% !important;
             max-width: none !important;
             margin-bottom: 8px !important;
