@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-318 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+319 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (104)
 
@@ -488,7 +488,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 - **#295** — El inspector resolvía "qué hay bajo el cursor" con UN solo punto (e.target) — con elementos…
 
-**Decisiones de diseño y UX** (54)
+**Decisiones de diseño y UX** (55)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -544,8 +544,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#283** — Fusionar dos tarjetas que ya compartían datos no es mover un with: es descubrir que sus…
 - **#290** — Un guard que se dispara SIEMPRE no es una red: es el camino normal, y tapa el bug que debería…
 - **#318** — Angostar un st.selectbox recorta sus OPCIONES, no sólo su valor: el desplegable mide lo mismo…
+- **#319** — Una dona de una dimensión que es 98,8% un solo valor no es un gráfico: es un círculo. Sacarla…
 
-**Mantenimiento y trampas del lenguaje** (8)
+**Mantenimiento y trampas del lenguaje** (9)
 
 - **#21** — Columnas reales de salidas.parquet confirmadas 2026-08-04
 - **#43** — st.plotly_chart(..., selection_mode="points") NO agrega las herramientas de caja/lazo al…
@@ -555,6 +556,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#132** — El rail de navegación dejó de ser una columna izquierda de 90px y pasó a ser una franja…
 - **#233** — Una guarda que rastrea el fuente tiene que excluir .claude/worktrees/ — y el filtro mira los…
 - **#269** — El JS que vive dentro de un string de Python necesita el escape de salto de línea con DOS…
+- **#319** — Una dona de una dimensión que es 98,8% un solo valor no es un gráfico: es un círculo. Sacarla…
 
 **Sin tema asignado** (1)
 
@@ -14680,6 +14682,72 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      #272 (el `stLayoutWrapper` que nace con `width: 100%`).
 
      (2026-09-05.)
+
+
+319. **Una dona de una dimensión que es 98,8% un solo valor no es un
+     gráfico: es un círculo. Sacarla de la pila de Requerimientos rompió a
+     propósito la simetría con Salidas (2026-09-05).** Requerimientos tenía
+     dos vistas colgadas de `Nombre Estado Requerimiento`: la dona
+     "Participación de valorizado por estado" y el apilado "Subalm. ×
+     estado". El reparto de esa columna ya estaba MEDIDO en esta misma
+     bitácora desde el día que nació el dashboard —
+     Procesado/Anulado/Generado = **98,8% / 0,9% / 0,4%**, ver la #98 —, así
+     que la dona era una circunferencia entera de un color con dos hilos
+     que no se ven, y el apilado, la vista de Sub Almacén con una franja de
+     grosor cero encima. El dato estaba bien; la pregunta que contestaban
+     no la tiene nadie.
+
+     Es la misma medición que la #239 usa para bajar una columna a chip
+     («el 97,6% de las filas repite Factura»), aplicada un paso antes: al
+     elegir la DIMENSIÓN de una figura, no sólo la columna de una tabla.
+     Antes de dibujar una participación, contá cuántos valores distintos
+     tiene de verdad la columna — un `value_counts(normalize=True)` es más
+     barato que la vista.
+
+     **Lo que hay que saber para no "arreglarlo" de vuelta:**
+     `graficos/requerimientos.py` y `graficos/salidas.py` se escribieron
+     como gemelos (mismo layout, misma `_PILA` de 7 vistas, comentarios que
+     se citan mutuamente) y desde este cambio **ya no lo son**:
+     Requerimientos queda en 5 vistas y Salidas conserva sus dos
+     equivalentes, "Tipo descargo" y "Subalm. × tipo". No es un olvido. El
+     `Tipo Descargo` de Salidas NO es un estado — es el MOTIVO de la baja
+     (consumo/merma/evento), que sí reparte, y es la única columna que
+     contesta "en qué se fue el stock de esta área". La simetría entre los
+     dos módulos es una comodidad de mantenimiento, no un requisito de
+     producto: cuando el dato de un lado no reparte y el del otro sí, gana
+     el dato. El porqué está también en el comentario de `_PILA`, que es
+     donde va a mirar quien vea la asimetría.
+
+     **El estado no desapareció del reporte:** sigue siendo el COLOR de la
+     Evolución (`Evolución de valorizado por estado (mes)`), que es donde
+     una dimensión de 98,8% sí aporta — ahí no compite por área, sólo marca
+     la excepción cuando aparece. Por eso `col_estado` se queda resuelto en
+     la función.
+
+     **Rastro que deja borrar una vista de una pila** (checklist, salieron
+     los cinco sitios de un `grep` del nombre de la sección): la tupla del
+     rail `_REQ_RAIL_CATEGORIAS`, la tupla `_PILA`, la rama `elif graf ==`
+     del cuerpo, la entrada de `_DIBUJANTES`, y **los imports que quedan
+     colgando** — `PALETA_CALLAI` sólo lo usaba la dona, y `ruff` (que acá
+     corre sólo las reglas `F`) lo cazó como F401. No hizo falta tocar
+     `estilos/`: las tarjetas cuelgan del prefijo compartido
+     `ajuste_graf_card_izq_req_`, no de una regla por vista — es el caso
+     bueno del CSS por convención de keys (#6).
+
+     **Dos cosas que NO hicieron falta y conviene saber para el próximo
+     borrado:** un valor viejo guardado en `session_state[state_key]` no
+     rompe el rail (`_render_rail` hace `if sel not in _todos:` y cae al
+     deep-link o al primer ítem), y la clave huérfana
+     `_pila_activa_req_sec_estado` de `seccion_perezosa` queda inerte. No
+     hay migración de estado que escribir.
+
+     **Verificación:** `ruff` + los tres tests verdes, y `streamlit run`
+     contra R2 real — el rail de Requerimientos devuelve exactamente
+     `["Evolución", "Sub Almacén", "Top productos", "Pedido vs Baja",
+     "Tabla"]`, los `.gtitle` de la página son las 5 figuras esperadas (sin
+     "Participación…" ni "…desglosado por estado"), las 5 secciones de la
+     pila miden alto real (ninguna quedó en esqueleto) y el rail de Salidas
+     sigue con sus 7 ítems. (2026-09-05.)
 
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->

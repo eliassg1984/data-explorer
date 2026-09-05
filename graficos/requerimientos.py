@@ -5,6 +5,10 @@ mitades de un mismo flujo de stock — ver docstring de
 graficos/movimientos_comun.py, que aporta el chip Requerimiento/Salidas y la
 vista "Comparativo".
 
+El layout es el mismo, pero la LISTA DE VISTAS ya no: acá son 5 y en Salidas
+7. Las dos que faltan salieron el 2026-09-05 (ver `_PILA` y arquitectura.md
+regla #319) — no es un olvido de sincronización.
+
 Columnas reales de requerimientos.parquet (confirmadas 2026-08-13, DuckDB
 directo contra R2): Fecha Registro, Codigo Producto, Nombre Producto,
 Sub Almacen (el área de producción que lo pide), Nombre Familia,
@@ -20,7 +24,7 @@ import streamlit as st
 from tema import ACENTO
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
-    PALETA_CALLAI, _compras_layout, _compras_truncar, _render_rail,
+    _compras_layout, _compras_truncar, _render_rail,
     _resolver, publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos.compras import _periodo_serie
@@ -30,21 +34,21 @@ from graficos import alturas
 _REQ_RAIL_CATEGORIAS = (
     ("Vista", (("Evolución",         "Evolución"),
                ("Sub Almacén",       "Sub Almacén"),
-               ("Estado",            "Estado"),
-               ("Cruce",             "Subalm. × estado"),
                ("Top productos",     "Top productos"),
                ("Comparativo",       "Pedido vs Baja"))),
     ("Datos", (("Tabla", "Tabla"),)),
 )
 
-# ORDEN DE LA PILA — gemela de la de `graficos/salidas.py` (los dos reportes
-# comparten ítem de nav y la vista Comparativo, ver movimientos_comun.py).
-# Las 7 vistas comparten el mismo rango, así que va UNA sola pila.
+# ORDEN DE LA PILA — los dos reportes de Movimientos comparten ítem de nav y
+# la vista Comparativo (ver movimientos_comun.py), pero desde el 2026-09-05
+# ya no son gemelos: acá se sacaron "Estado" y "Subalm. × estado" a pedido,
+# y Salidas conserva sus dos equivalentes ("Tipo descargo" y "Subalm. ×
+# tipo") porque el tipo de descargo no es un estado, es el motivo de la baja.
+# El estado NO desaparece del reporte: sigue siendo el color de la Evolución.
+# Las 5 vistas comparten el mismo rango, así que va UNA sola pila.
 _PILA = (
     ("req_sec_evolucion",   "Evolución"),
     ("req_sec_subalmacen",  "Sub Almacén"),
-    ("req_sec_estado",      "Estado"),
-    ("req_sec_cruce",       "Cruce"),
     ("req_sec_top",         "Top productos"),
     ("req_sec_comparativo", "Comparativo"),
     ("req_sec_tabla",       "Tabla"),
@@ -53,7 +57,7 @@ _PILA = (
 
 def renderizar_graficos_requerimientos(df_f, nombre_reporte, df_full=None, tabla_cb=None):
     """Dashboard de Requerimientos: KPIs + evolución temporal + composición
-    por sub almacén (área que pide) y estado + comparativo contra Salidas.
+    por sub almacén (área que pide) + comparativo contra Salidas.
 
     `tabla_cb`: callback que arma la Tabla (inyectado por app.py). Se le
     pasa `d` — el df ya filtrado por los chips propios (Sub Almacén/
@@ -177,41 +181,6 @@ def renderizar_graficos_requerimientos(df_f, nombre_reporte, df_full=None, tabla
                 fig.update_xaxes(visible=False)
                 st.plotly_chart(fig, use_container_width=True, key="req_g_subalmacen")
 
-        elif graf == "Estado" and col_estado:
-            serie = _met.groupby(d[col_estado].astype(str)).sum().sort_values(ascending=False)
-            if serie.empty:
-                st.info("Sin datos.")
-            else:
-                fig = go.Figure(go.Pie(
-                    labels=serie.index, values=serie.values, hole=0.45,
-                    marker=dict(colors=PALETA_CALLAI * 4),
-                    textinfo="label+percent",
-                    hovertemplate=("%{label}<br>" + _fmt_pref
-                                   + "%{value:" + _fmt_num + "} (%{percent})<extra></extra>"),
-                ))
-                _compras_layout(fig, alto=alturas.PROTAGONISTA)
-                fig.update_layout(
-                    title=f"Participación de {metrica.lower()} por estado",
-                    showlegend=False)
-                st.plotly_chart(fig, use_container_width=True, key="req_g_estado")
-
-        elif graf == "Cruce" and col_sub and col_estado:
-            g = (pd.DataFrame({"sub": d[col_sub].astype(str),
-                               "estado": d[col_estado].astype(str), "m": _met})
-                 .groupby(["sub", "estado"], as_index=False)["m"].sum())
-            orden = (g.groupby("sub")["m"].sum()
-                     .sort_values(ascending=False).index.tolist())
-            fig = px.bar(g, x="sub", y="m", color="estado",
-                         category_orders={"sub": orden})
-            _compras_layout(fig, alto=alturas.PROTAGONISTA)
-            fig.update_layout(
-                title=f"{metrica} por sub almacén, desglosado por estado",
-                barmode="stack", xaxis_title=None, yaxis_title=None,
-                legend=dict(orientation="h", y=-0.25, x=0, font=dict(size=10)),
-            )
-            fig.update_traces(hovertemplate=_hover_m)
-            st.plotly_chart(fig, use_container_width=True, key="req_g_cruce")
-
         elif graf == "Top productos" and col_prod:
             serie = _met.groupby(d[col_prod].astype(str)).sum().nlargest(10).sort_values()
             if serie.empty:
@@ -261,8 +230,6 @@ def renderizar_graficos_requerimientos(df_f, nombre_reporte, df_full=None, tabla
     _DIBUJANTES = {
         "req_sec_evolucion":   _seccion("evolucion", "Evolución"),
         "req_sec_subalmacen":  _seccion("subalmacen", "Sub Almacén"),
-        "req_sec_estado":      _seccion("estado", "Estado"),
-        "req_sec_cruce":       _seccion("cruce", "Cruce"),
         "req_sec_top":         _seccion("top", "Top productos"),
         "req_sec_comparativo": _dib_comparativo,
         "req_sec_tabla":       _dib_tabla,
