@@ -164,6 +164,32 @@ CSS = """    /* ================================================================
         [data-testid="stIconMaterial"]) {
         display: none !important;
     }
+    /* ── ⛶ "sola en la página": mismo trato que el ícono de ayuda ───────
+       Último ítem de la fila y mide su contenido, o su `stLayoutWrapper`
+       nace con `width: 100%` y se come el hueco del título (el mismo
+       problema que documenta la regla de `vap_hdr_ayuda` acá arriba). */
+    .st-key-vap_fila_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_solo) {
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+    .st-key-vap_hdr_solo button {
+        min-height: 26px !important;
+        height: 26px !important;
+        min-width: 0 !important;
+        padding: 0 6px !important;
+    }
+    /* DEFENSA ANTI-TOOLTIP-FANTASMA (regla #164, y la copia que ya vive en
+       `_20_compras_rail.py`): este botón lleva `help=`, así que Streamlit
+       deja una COPIA suelta sin envolver dentro del mismo `stButton`.
+       Es invisible hasta que algo le da alto explícito — y el `height:
+       26px` de acá arriba se lo daría, porque matchea los DOS `button`.
+       Sin esta regla el ⛶ sale duplicado. */
+    .st-key-vap_hdr_solo [data-testid="stButton"]:has(.stTooltipIcon)
+        > div:not(:has(.stTooltipIcon)) {
+        display: none !important;
+    }
+
     .st-key-vap_hdr_modo,
     .st-key-vap_hdr_ventana,
     .st-key-vap_hdr_agrupar,

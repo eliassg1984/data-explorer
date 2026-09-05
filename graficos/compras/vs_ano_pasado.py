@@ -735,6 +735,36 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                             "gráfico de arriba; volver a clickearla lo "
                             "devuelve a todas las compras.")
                         _ayuda_parcial = st.empty()
+
+            # ── ⛶ SOLA EN LA PÁGINA (modo "solo") ────────────────────────
+            # Último ítem de la fila, como en Grafana: el control de
+            # maximizar vive en la cabecera del panel, no flotando encima.
+            #
+            # Lo que hace NO es un fullscreen del navegador: escribe
+            # `compras_pila_solo` y el bucle de la pila
+            # (`graficos/compras/__init__.py`) deja de dibujar las otras
+            # cinco secciones. El ancho —que es lo que esta tarjeta
+            # necesita, no alto: parte en dos con `COLUMNAS_DRILL`— lo dan
+            # las dos reglas de `estilos/_20_compras_rail.py` que esconden
+            # el rail y sueltan su reserva (`--rail-der-res`).
+            #
+            # `scope="app"` y no "fragment": el bucle de secciones vive
+            # AFUERA del fragment de esta sección, así que un rerun de
+            # fragment lo dejaría igual. Y "fragment" es ilegal fuera de un
+            # rerun de fragment (regla #306), que es justo el caso cuando
+            # se entra por deep-link.
+            with st.container(key="vap_hdr_solo"):
+                _solo_on = (st.session_state.get("compras_pila_solo")
+                            == "compras_sec_vs_ano_pasado")
+                if st.button(":material/close_fullscreen:" if _solo_on
+                             else ":material/open_in_full:",
+                             key="vap_hdr_solo_btn",
+                             help=("Volver a la pila completa" if _solo_on
+                                   else "Ver sólo esta tarjeta, a todo el "
+                                        "ancho")):
+                    st.session_state["compras_pila_solo"] = (
+                        None if _solo_on else "compras_sec_vs_ano_pasado")
+                    st.rerun(scope="app")
         # (Acá vivía el renglón `st.columns([1, 1])` con la métrica y la
         # ventana, uno pegado a cada borde. Los dos subieron a la fila del
         # título el 2026-09-02 y el renglón se fue con ellos: son los ~56px

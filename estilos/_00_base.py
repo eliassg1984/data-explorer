@@ -249,6 +249,27 @@ CSS = """    <style>
         --rail-der-res: calc(var(--rail-der-w) + 19px + 24px);
     }
 
+    /* ── MODO "SOLO": sin rail, la reserva se suelta (2026-09-04) ────────
+       Cuando una sección de Compras se queda con la página (el ⛶ de la
+       cabecera de «Vs año pasado» → `compras_pila_solo`), el rail se
+       esconde y lo que le reservaba el contenido deja de tener sentido.
+
+       Va ACÁ y no en `_20_compras_rail.py`, que es donde vive el resto del
+       modo solo, porque `--rail-der-res` tiene dueño único: lo fija
+       `test_graficos.py::"los anchos de rail solo los declara _00_base"`,
+       y la razón es la de siempre — la reserva la consumen DOS sitios (el
+       `padding-left` del block-container y el `left` de `nav_franja_kpis`),
+       así que declararla en dos ficheros es cómo se desincronizan.
+
+       90px es el margen DERECHO medido en el navegador (viewport 1280, la
+       tarjeta terminaba en x=1190). Igualarlo deja la tarjeta centrada en
+       vez de corrida, y el ancho pasa de 867 a ~1100px. Es el único número
+       de este modo que sale de una medición y no de una cuenta: si el
+       margen derecho cambia, éste cambia con él. */
+    :root:has(.st-key-compras_solo_on) {
+        --rail-der-res: 90px;
+    }
+
     /* ============ HEADER NATIVO + ESPACIO SUPERIOR ============ */
     header[data-testid="stHeader"],
     .stAppHeader {

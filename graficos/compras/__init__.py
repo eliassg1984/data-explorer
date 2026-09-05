@@ -879,7 +879,41 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # fragment de adentro se re-dibuje. Si llevara la key el fragment, cada
     # activación reemplazaría el nodo observado y los dos observadores se
     # quedarían mirando un elemento que ya no está en el documento.
-    for _i, (_clave, _vista) in enumerate(_PILA):
+    # ── MODO SOLO: una sección se queda con la página ────────────────────
+    # `compras_pila_solo` guarda la clave de UNA sección; mientras esté
+    # puesta, las otras cinco no se dibujan. Lo escribe el ⛶ de la cabecera
+    # de la tarjeta (hoy sólo «Vs año pasado», ver su `vap_hdr_solo`).
+    #
+    # Por qué esto y no el ⛶ nativo de Streamlit: el nativo maximiza un
+    # ELEMENTO (la figura, la tabla), y en «Vs año pasado» la información
+    # completa es la TARJETA — cabecera con métrica/ventana/agrupador,
+    # serie mensual, puente y tabla de detalle, que además se enfocan entre
+    # sí (`compras_vap_foco`). Acá sección ≡ wrap ≡ tarjeta, uno a uno, así
+    # que filtrar el bucle ya es "maximizar la tarjeta" sin inventar
+    # ninguna unidad nueva.
+    #
+    # Lo que gana es ANCHO, no alto: la tarjeta ya está clampeada a
+    # `--alto-util` y ocupa casi una pantalla, pero se parte en dos con
+    # `COLUMNAS_DRILL` y vive en 867px de los 1280 del viewport porque el
+    # contenido le reserva `--rail-der-res` (323px) al rail. Sin rail, ese
+    # padding se suelta: ver las reglas de `estilos/_20_compras_rail.py`
+    # que cuelgan de `.st-key-compras_solo_on`.
+    #
+    # El marcador va en `display: none` A PROPÓSITO (misma regla): un
+    # `st.container` vacío sigue siendo un flex item de alto cero y se
+    # cobraría el `gap: 16px` del contenedor — el mismo hueco fantasma que
+    # documenta el -104px de `compras_prov_drill_wrap`. Con `display: none`
+    # sale del layout y `:has()` lo sigue matcheando igual.
+    _solo = st.session_state.get("compras_pila_solo")
+    if _solo not in _DIBUJANTES:
+        # Valor viejo de otra sesión, o de una sección que ya no existe.
+        _solo = None
+        st.session_state.pop("compras_pila_solo", None)
+    if _solo:
+        st.container(key="compras_solo_on")
+    _secciones = [_s for _s in _PILA if _s[0] == _solo] if _solo else _PILA
+
+    for _i, (_clave, _vista) in enumerate(_secciones):
         with st.container(key=_clave):
             seccion_perezosa(_clave, _vista, _DIBUJANTES[_clave],
                              activa_de_entrada=(_i == 0))

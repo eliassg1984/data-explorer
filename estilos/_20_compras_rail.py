@@ -1145,4 +1145,56 @@ CSS = """    /* ================================================================
         > div:not(:has(.stTooltipIcon)) {
         display: none !important;
     }
+
+    /* =================================================================== */
+    /* MODO "SOLO" — una sección se queda con la página (2026-09-04)        */
+    /*                                                                      */
+    /* Lo enciende el ⛶ de la cabecera de «Vs año pasado» escribiendo       */
+    /* `compras_pila_solo`; el bucle de `graficos/compras/__init__.py`      */
+    /* deja de dibujar las otras secciones y emite el marcador de abajo.    */
+    /*                                                                      */
+    /* Lo que este bloque aporta es el ANCHO, que es lo que la tarjeta      */
+    /* necesita (se parte en dos con `COLUMNAS_DRILL`; de alto ya está      */
+    /* clampeada a `--alto-util`). Medido antes del cambio: la tarjeta      */
+    /* ocupaba 867px de un viewport de 1280 — 323 se los reserva el         */
+    /* contenido al rail (`--rail-der-res`) y 90 son el margen derecho.     */
+    /*                                                                      */
+    /* Se suelta por la VARIABLE y no tocando el `padding-left`: la reserva */
+    /* la consumen dos sitios (el `padding-left` del block-container y el   */
+    /* `left` de `nav_franja_kpis`), y con la variable los dos se enteran.  */
+    /* 80px es el padding base de Streamlit, el mismo que ya tiene el otro  */
+    /* lado — o sea que la tarjeta queda centrada, no corrida.              */
+    /* =================================================================== */
+    /* `display: none` y no `height: 0`: un flex item de alto cero SÍ se    */
+    /* cobra el `gap: 16px` del contenedor (es el hueco fantasma que        */
+    /* documenta el -104px de más arriba). `:has()` lo matchea igual.       */
+    .st-key-compras_solo_on { display: none !important; }
+
+    /* La reserva que el contenido le hacía al rail se suelta en
+       `estilos/_00_base.py` (dueño único de `--rail-der-res`, ver allá el
+       porqué); acá va todo lo demás del modo solo. */
+    /* El rail y su rótulo se van: son `position: fixed`, así que dejarlos
+       visibles con la reserva suelta los pondría ENCIMA de la tarjeta. Se
+       vuelve por el mismo ⛶, que en modo solo muestra el ícono de cerrar. */
+    :root:has(.st-key-compras_solo_on) .st-key-compras_tabs_row,
+    :root:has(.st-key-compras_solo_on) .st-key-rail_rotulo_rep {
+        display: none !important;
+    }
+    /* El jalón hacia arriba, que en la pila completa sólo tiene la primera
+       tarjeta (`compras_prov_drill_wrap`, -104px). En modo solo la primera
+       —y única— es ésta, y el número NO es el mismo: sale de la misma
+       cuenta documentada allá arriba, con dos sumandos menos.
+         pila completa:  128 (--cab-offset-contenido) + 5x16 (bloques de
+                         alto cero que igual cobran gap) - 104 = 104
+         modo solo:      esos cinco bajan a TRES (`compras_tabs_row` y
+                         `rail_rotulo_rep` salen con el display:none de
+                         acá arriba, y el marcador nunca contó)
+                         128 + 3x16 - 72 = 104
+       O sea el mismo destino (y=104, 16px bajo la franja) con -72 en vez
+       de -104. Si algún día cambia lo que se esconde en modo solo, este
+       número cambia con él: son la misma cuenta. */
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_solo_on)
+        .st-key-compras_vap_drill_wrap {
+        margin-top: -72px !important;
+    }
 """

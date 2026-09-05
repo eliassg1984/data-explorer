@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-307 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+308 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (99)
+**CSS y estilos** (100)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -119,6 +119,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#298** — Un riel que elige PERÍODOS no puede parar en los períodos: tiene que parar en los BORDES…
 - **#299** — Modo diseño: "Rotar" no llegaba a un cuarto de vuelta, y probar la FORMA de una botonera (no…
 - **#302** — Un elemento con pointer-events: none es INVISIBLE para el inspector y para el modo diseño —…
+- **#308** — El ⛶ nativo de Streamlit maximiza un ELEMENTO; cuando la unidad de lectura es la TARJETA, hay…
 
 **Layout y alturas** (32)
 
@@ -260,7 +261,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 
-**Streamlit** (88)
+**Streamlit** (89)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -350,6 +351,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#297** — Lo que dibuja UNA rama y no las otras va AL FINAL: al encoger, la cola del render anterior…
 - **#298** — Un riel que elige PERÍODOS no puede parar en los períodos: tiene que parar en los BORDES…
 - **#306** — st.rerun(scope="fragment") sólo es legal DURANTE un rerun de fragment
+- **#308** — El ⛶ nativo de Streamlit maximiza un ELEMENTO; cuando la unidad de lectura es la TARJETA, hay…
 
 **Datos, R2 y DuckDB** (35)
 
@@ -13793,13 +13795,97 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      `st.stop()` de "No se pudieron cargar los datos". Hoy no pasa porque
      Ventas viene al día; arreglarlo pide adelantar el `rango_fechas()`.
 
+308. **El ⛶ nativo de Streamlit maximiza un ELEMENTO; cuando la unidad
+     de lectura es la TARJETA, hay que maximizar la sección de la pila.**
+     Pedido 2026-09-04 sobre «Vs año pasado» de Compras: *"el nativo de
+     streamlit solo lo hace para la tabla, no para toda la tarjeta y la
+     información completa es la de la tarjeta"*.
+
+     Es cierto y no tiene arreglo por el lado del ⛶ nativo: Streamlit no
+     sabe qué es una tarjeta. Su barra (`stElementToolbar`) cuelga de un
+     `st.plotly_chart` o un `st.dataframe`, o sea de UN elemento. La
+     tarjeta de esta vista son seis cosas: la fila de cabecera con
+     métrica/ventana/agrupador/buscador, la serie mensual, el puente, el
+     resumen y la tabla de detalle — que además se enfocan entre sí
+     (`compras_vap_foco`: clic en una fila enfoca el gráfico de arriba).
+
+     **Lo que hizo el cambio barato es que acá sección ≡ wrap ≡ tarjeta,
+     uno a uno**: `compras_sec_vs_ano_pasado` contiene sólo
+     `compras_vap_drill_wrap`, que contiene sólo `chartcard_compras_vap`.
+     Con eso "maximizar la tarjeta" no necesita una unidad nueva — es
+     filtrar el bucle de `_PILA` a una sección. El estado es
+     `compras_pila_solo` y lo escribe el ⛶ de la cabecera
+     (`vap_hdr_solo`). Y sus controles ya estaban DENTRO de la tarjeta
+     desde el 2026-09-02, así que aislarla no dejó ningún widget huérfano
+     — que es lo que normalmente rompe un modo foco.
+
+     **Lo que gana es ANCHO, no alto, y eso decide el diseño.** Medido en
+     el navegador (viewport 1280): la tarjeta es 867 x 571 en
+     `left=323, right=1190`. El alto ya está — está clampeada a
+     `--alto-util` y ocupa casi una pantalla—, así que un rol de altura
+     nuevo no habría servido de nada. Los 323 de la izquierda son
+     `--rail-der-res`, lo que el contenido le reserva al rail; los 90 de
+     la derecha, el margen de Streamlit. En modo solo el rail se esconde y
+     la reserva baja a esos mismos 90px: la tarjeta queda centrada y pasa
+     a ~1100px, que es lo que necesita porque se parte en dos con
+     `COLUMNAS_DRILL`.
+
+     Cuatro cosas que costaron, y valen para el próximo dashboard que lo
+     copie:
+
+     1. **`--rail-der-res` tiene dueño único**, así que el override del
+        modo solo va en `estilos/_00_base.py` aunque el resto del modo viva
+        en `_20_compras_rail.py`. Lo fija `test_graficos.py` ("los anchos
+        de rail solo los declara _00_base") y la razón es real: la reserva
+        la consumen DOS sitios —el `padding-left` del block-container y el
+        `left` de `nav_franja_kpis`—, así que dos declaraciones es cómo se
+        desincronizan. El test lo cazó al primer intento.
+     2. **El marcador del DOM va en `display: none`, no con alto cero.** Un
+        `st.container` vacío sigue siendo un flex item y se cobra el
+        `gap: 16px` — el mismo hueco fantasma que documenta el -104px de
+        `compras_prov_drill_wrap`. Con `display: none` sale del layout y
+        `:has()` lo matchea igual.
+     3. **El jalón hacia arriba cambia de número al esconder cromo**, y sale
+        de la misma cuenta, no de medir otra vez: la pila completa es
+        `128 + 5x16 - 104 = 104`; en modo solo dos de esos cinco bloques de
+        alto cero (`compras_tabs_row` y `rail_rotulo_rep`) salen con el
+        `display: none`, así que es `128 + 3x16 - 72 = 104`. Mismo destino,
+        -72 en vez de -104.
+     4. **`st.rerun(scope="app")`, nunca "fragment".** El bucle de secciones
+        vive AFUERA del fragment de la sección, así que un rerun de fragment
+        lo dejaría igual; y "fragment" es ilegal fuera de un rerun de
+        fragment (ver regla #306).
+
+     Y una trampa de widget ya documentada que volvió a aparecer: el botón
+     lleva `help=`, así que Streamlit deja una COPIA FANTASMA suelta dentro
+     del mismo `stButton` (regla #164). Es invisible hasta que algo le da
+     alto explícito — y el `height: 26px` que le da forma al ⛶ matchea los
+     DOS `button`. Sin la defensa de `estilos/_80_cards.py`, el ícono sale
+     duplicado.
+
+     **Lo que NO se verificó en el navegador, y por qué se dice acá.** Se
+     midió en vivo la línea de base (los 867x571 en left=323 de arriba),
+     que las seis secciones se siguen dibujando sin excepción, y que el ⛶
+     cae donde tiene que caer (28x26, pegado al borde derecho de la fila de
+     cabecera, con una sola instancia visible y el fantasma en 0x0). NO se
+     llegó a medir el modo solo ENCENDIDO: el primer server se cayó a mitad
+     de la prueba y en el segundo intento la máquina —que además corría
+     otra sesión de Streamlit, y de fondo las cinco instancias de SQL
+     Server— dejó al renderer sin responder, con tiempos agotados hasta en
+     una pestaña en blanco. Los dos números del modo solo (los 90px y el
+     -72) están DERIVADOS de mediciones reales, no medidos ellos mismos: si
+     al abrirlo la tarjeta no queda centrada, o queda gris de más arriba,
+     son esos dos.
+
+     (2026-09-04.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#308**.
+> próxima regla nueva es la **#309**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
