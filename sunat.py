@@ -221,6 +221,15 @@ def _normalizar_registro(reg):
     suma de sus componentes (gravado + IGV + no gravado + otros), que es
     como lo arma el propio portal.
 
+    **`otros` casi nunca aporta, y NO es donde vive el ISC.** Medido
+    2026-09-05 sobre las 16.773 filas del parquet:
+    `total - base - no gravado - IGV == 0` en TODAS. El ISC no viaja en
+    `mtoISC`: viaja DENTRO de `mtoBIGravada*`, porque la base gravada del
+    registro es la base del IGV y el ISC forma parte de ella. En la
+    F003-4717 el registro anota `base = 533.39` mientras las líneas del
+    XML suman 499.66 — los 33.73 de diferencia son el ISC. Ver la regla
+    #314, que es sobre esa diferencia y no sobre esta suma.
+
     Función pura, para poder testear el aplanado sin red.
     """
     m = reg.get("montos") or {}
@@ -1095,7 +1104,12 @@ def _impuestos_linea(linea):
         por el código de `TaxScheme`.
       · Una línea EXONERADA igual trae un `TaxSubtotal`, con importe 0 y
         código 9997. O sea que "no hay IGV" y "el IGV es cero" se ven
-        igual en el importe, y sólo el código los distingue.
+        igual en el importe, y sólo el código los distingue. Por eso
+        `otros_tributos` los EXCLUYE explícitamente en vez de barrer todo
+        lo que no sea IGV ni ISC: el gratuito (9996) declara el IGV que
+        NO se cobra, y ese importe no es cero. Sumarlo ahí sería inventar
+        un tributo — y desde la regla #314 `otros_tributos` no es un
+        campo muerto: se carga al Almacén adentro del neto.
       · `cac:AllowanceCharge` sirve para descuento Y para cargo; los
         separa `cbc:ChargeIndicator` (false = descuento). El importe va
         SIN impuesto, y `LineExtensionAmount` YA viene descontado.
@@ -1117,7 +1131,7 @@ def _impuestos_linea(linea):
                 porcentaje = pct
         elif codigo == _TRIBUTO_ISC:
             isc += monto
-        else:
+        elif codigo not in _TRIBUTOS_SIN_IGV:
             otros += monto
         if not afectacion:
             afectacion = (_texto_ubl(

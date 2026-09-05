@@ -1976,7 +1976,25 @@ def _del_registro(doc, clave):
     return sunat.en_moneda_del_papel(doc, v) or v
 
 
-def _pie_sistema(doc, filas_sistema):
+def _otros_tributos(lineas_xml):
+    """El ISC / ICBPER del comprobante, sumado de las LÍNEAS del XML.
+
+    **El registro no lo trae aparte: lo trae adentro de la base.** Medido
+    2026-09-05 sobre las 16.773 filas del parquet,
+    `total == base + no gravado + IGV` en TODAS — porque la base gravada
+    del SIRE es la base del IGV, y el ISC forma parte de ella. En la
+    F003-4717 el registro anota 533.39 de base y las líneas del XML suman
+    499.66: los 33.73 de diferencia son el ISC, y el único lado que los
+    tiene desglosados es el XML (código de tributo 2000; 7152 el ICBPER).
+
+    Por eso este pie no puede sacarlo del registro aunque todo lo demás
+    salga de ahí. Ver `arquitectura.md` regla #314.
+    """
+    return sum((_num(x.get("isc")) or 0.0) + (_num(x.get("otros_tributos")) or 0.0)
+               for x in (lineas_xml or []))
+
+
+def _pie_sistema(doc, filas_sistema, lineas_xml=None):
     """El pie de la mitad DERECHA: los totales con los que el documento
     entraría al sistema de almacén.
 
@@ -1989,10 +2007,24 @@ def _pie_sistema(doc, filas_sistema):
 
     El IGV y la composición gravado/no gravado salen del documento: la
     homologación cambia el grano de las líneas, no la naturaleza
-    tributaria de la compra. Verificado sobre los 16.689 comprobantes del
-    registro: `total == base + no gravado + IGV` en TODOS, sin ISC ni
-    ICBPER de por medio, así que sumar líneas + IGV reconstruye el total
-    sin términos escondidos.
+    tributaria de la compra.
+
+    **CORREGIDO 2026-09-05: la premisa era cierta y la conclusión no.**
+    Acá decía que `total == base + no gravado + IGV` en los 16.689
+    comprobantes del registro —cierto, se volvió a medir sobre 16.773 y
+    da en TODAS— y de ahí concluía que «sumar líneas + IGV reconstruye el
+    total sin términos escondidos». No se sigue: la base del registro y
+    la suma de las líneas son DOS FUENTES distintas, y en los
+    comprobantes con ISC no valen lo mismo. El SIRE mete el ISC dentro de
+    la base gravada (es la base del IGV); `LineExtensionAmount` no lo
+    lleva. En la F003-4717 el registro dice 533.39 y las líneas suman
+    499.66.
+
+    Son 32 de los 2.291 comprobantes con XML, y son exactamente los que
+    el Almacén rechazaba: el XML de importación armaba `nNeto` con esta
+    misma suma y quedaba corto por el ISC. Ver `sunat_importacion` y la
+    regla #314 — misma familia que la #313: saber que dos números cuadran
+    DENTRO de una fuente no dice nada sobre un tercero que viene de otra.
     """
     if doc is None:
         return
@@ -2005,13 +2037,19 @@ def _pie_sistema(doc, filas_sistema):
     suma = sum(v for v in (_num(f.get("Importe")) for f in filas_sistema)
                if v is not None)
     igv = _s(_del_registro(doc, "igv") or 0.0)
-    total = suma + igv
+    otros = _s(_otros_tributos(lineas_xml))
+    total = suma + otros + igv
 
-    _bloque_totales([
-        _renglon_total("Suma de líneas", suma, sim),
-        _renglon_total("IGV", igv, sim),
-        _renglon_total("TOTAL a cargar", total, sim, fuerte=True),
-    ])
+    renglones = [_renglon_total("Suma de líneas", suma, sim)]
+    if otros:
+        # Se muestra APARTE aunque el Almacén lo cargue adentro del neto
+        # (`sunat_importacion.tributos_en_el_neto`): esta columna existe
+        # para poder seguir el número con el dedo hasta el TOTAL, y un
+        # renglón que aparece de la nada rompe justamente eso.
+        renglones.append(_renglon_total("ISC / otros tributos", otros, sim))
+    renglones.append(_renglon_total("IGV", igv, sim))
+    renglones.append(_renglon_total("TOTAL a cargar", total, sim, fuerte=True))
+    _bloque_totales(renglones)
 
     declarado = _del_registro(doc, "total")
     if declarado is not None and abs(total - _s(declarado)) > _TOLERANCIA_CENTAVOS:
@@ -2044,6 +2082,15 @@ def _pie_comprobante(doc, lineas, totales=None):
     Medido: 111 de 307 comprobantes del rango tienen no gravado ≠ 0, o sea
     que la fila aparece en un tercio de los casos y en los otros dos
     tercios estorbaría.
+
+    **Los tres renglones SÍ componen el total, incluso con ISC** (medido
+    2026-09-05 sobre las 16.773 filas del parquet). Lo que no cierra en
+    esos casos es el chequeo de abajo, el que compara la suma de las
+    líneas contra `gravado + no gravado`: el SIRE mete el ISC dentro de
+    la base gravada y `LineExtensionAmount` no lo lleva, así que la
+    diferencia es exactamente el ISC del XML. Se explica en vez de
+    avisarse — un «⚠ revisá» sobre algo normal y explicable es ruido, y
+    el que sí importa deja de leerse. Ver la regla #314.
     """
     mon = str(doc.get("moneda") or "PEN")
     sim = sunat.simbolo_moneda(mon)
@@ -2130,11 +2177,25 @@ def _pie_comprobante(doc, lineas, totales=None):
     # `abs`, 3 no cuadraban y una era esto; con `abs`, quedan las 2 reales.
     suma = sum(v for v in (_num(x.get("importe")) for x in lineas)
                if v is not None)
-    if abs(abs(suma) - abs(grav + ngrav)) > _TOLERANCIA_CENTAVOS:
-        st.caption(f"⚠ Las líneas del XML suman {sim} {suma:,.2f} y el "
-                   f"registro declara {sim} {grav + ngrav:,.2f}. Se muestra "
-                   "lo del registro, que es contra lo que se compara el "
-                   "sistema.")
+    otros = _otros_tributos(lineas)
+    hueco = abs(abs(suma) - abs(grav + ngrav))
+    if hueco <= _TOLERANCIA_CENTAVOS:
+        return
+    # EL HUECO TIENE NOMBRE cuando es el ISC. El SIRE lo cuenta dentro de
+    # la base gravada —es la base del IGV— y `LineExtensionAmount` no lo
+    # lleva: la F003-4717 declara 533.39 de base contra 499.66 de líneas.
+    # Decirlo evita mandar a "revisar" un documento correcto, y de paso
+    # deja a la vista el número que después entra al neto del Almacén.
+    if otros and abs(hueco - abs(otros)) <= _TOLERANCIA_CENTAVOS:
+        st.caption(f"Las líneas suman {sim} {suma:,.2f}; el registro declara "
+                   f"{sim} {grav + ngrav:,.2f} porque la base gravada del "
+                   f"SIRE incluye el ISC ({sim} {abs(otros):,.2f}). Al "
+                   "Almacén va adentro del neto.")
+        return
+    st.caption(f"⚠ Las líneas del XML suman {sim} {suma:,.2f} y el "
+               f"registro declara {sim} {grav + ngrav:,.2f}. Se muestra "
+               "lo del registro, que es contra lo que se compara el "
+               "sistema.")
 
 
 _JS_IMPORTE_XML = JsCode(
@@ -2630,7 +2691,7 @@ def _detalle_sistema(doc, lineas_xml, d, xml_original=None):
             _titulo_panel("Sistema", "con qué se carga")
             _cabecera_conversor(doc)
             resp = _grid_lado_sistema(tv, _doc_id)
-            _pie_sistema(doc, filas_sistema)
+            _pie_sistema(doc, filas_sistema, lineas_xml)
 
     st.caption("Clic en «Ítem (sistema)» para corregirlo — el buscador "
                "sugiere mientras escribís, contra el catálogo completo. "

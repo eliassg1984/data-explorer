@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-313 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+314 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (101)
 
@@ -395,7 +395,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#309** — Un pedido que falla se avisa en la ETIQUETA, no adentro de la pestaña — y un emisor que nunca…
 - **#313** — Los importes del registro del SIRE vienen SIEMPRE en soles; moneda dice en qué se emitió el…
 
-**SUNAT y SIRE** (36)
+**SUNAT y SIRE** (37)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -433,6 +433,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#310** — El modal «Error del Servidor» de SUNAT vive DENTRO del iframe, y buscarlo con…
 - **#312** — El redondeo del comprobante se DERIVA, no se lee — y el que no se escribió tumbó la importación
 - **#313** — Los importes del registro del SIRE vienen SIEMPRE en soles; moneda dice en qué se emitió el…
+- **#314** — El ISC no tiene casillero propio en el Almacén: va ADENTRO del neto, con su tasa al lado. Y…
 
 **Fechas, rangos y cortes** (9)
 
@@ -14173,6 +14174,200 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      contra la propia pantalla («dice USD arriba y S/ abajo, se contradice
      sola») en vez de contra el XML del proveedor, que estaba en R2 a un
      `get_object` de distancia y contestaba en diez segundos.
+
+     (2026-09-05.)
+
+314. **El ISC no tiene casillero propio en el Almacén: va ADENTRO del
+     neto, con su tasa al lado. Y el hueco no estaba en el registro —
+     estaba entre el registro y las líneas del XML.**
+
+     Barrido del 2026-09-05 sobre los 2.294 XML de `sunat_originales/`
+     en R2 (2.291 con fila en el registro), ya con el redondeo derivado
+     de la #312 y la moneda corregida de la #313 puestos:
+
+         2.083   cuadran exacto
+           176   caen dentro del techo de redondeo (<= 0.09)
+            32   descuadran por ENCIMA de 0.09   <- estos
+
+     Los 32 son los que llevan **ISC o ICBPER**, y no descuadraban por
+     un céntimo: la F003-4717 de BODEGA SAN NICOLAS (RUC 20511908401) se
+     iba 33.73 sobre 629.40. El importador los rechazaba, y con razón — el
+     XML que le llegaba no cerraba su propia aritmética.
+
+     Fallaban DOS de sus cuatro validaciones, no una: la del total, y la
+     que compara cada línea contra su propia tasa
+     (`(nNeto - nOtrosCargosInafecto) * pct / 100 == nImpuesto1`). Con el
+     neto sin ISC, el 18% de 499.66 da 89.94 contra los 96.01 que declara
+     el comprobante. Al meter el ISC adentro, las dos pasan a la vez y
+     con cero de tolerancia gastada — porque SUNAT calcula el IGV
+     justamente sobre valor + ISC.
+
+     **La primera hipótesis era razonable y estaba mal, y vale más que
+     el resto de la regla.** `sunat._normalizar_registro` suma
+     `mtoISC + mtoIcbper + mtoOtrosTributos` en una variable local
+     `otros`, la mete en `total` y no la devuelve: candidato perfecto a
+     término escondido. Se llegó a escribir el código que la publicaba
+     como columna, con su prueba y su regla. Después se midió sobre el
+     parquet —16.773 filas, cero red, diez segundos—:
+
+         total - base - no gravado - IGV == 0   en TODAS
+
+     O sea que `otros` no aporta nada y el registro cuadra con tres
+     términos. **El ISC no viaja en `mtoISC`: viaja adentro de
+     `mtoBIGravada*`**, porque la base gravada del SIRE es la base del
+     IGV y el ISC forma parte de ella. En la F003-4717 el registro
+     anota `base = 533.39` y `96.01 / 533.39 = 18,0 %` exacto.
+
+     El hueco real, entonces, no está dentro del registro sino ENTRE LAS
+     DOS FUENTES:
+
+         registro (SIRE):   base 533.39  +  IGV 96.01  =  total 629.40   ✔
+         líneas del XML:    499.66                                       ← 33.73 menos
+                            (`LineExtensionAmount` no lleva el ISC)
+
+     Y `construir_xml` arma `nNeto` sumando las LÍNEAS. De ahí el
+     rechazo.
+
+     **El docstring que lo tapaba tenía la premisa cierta y la
+     conclusión no.** `_pie_sistema` decía: *«Verificado sobre los
+     16.689 comprobantes del registro: `total == base + no gravado +
+     IGV` en TODOS, sin ISC ni ICBPER de por medio, así que sumar líneas
+     + IGV reconstruye el total sin términos escondidos»*. La primera
+     mitad es verdad —se volvió a medir sobre 16.773 y da—; la segunda
+     no se sigue, porque las líneas son otra fuente. Es literalmente la
+     lección de la #313 otra vez: saber que dos números cuadran DENTRO
+     de una fuente no dice nada sobre un tercero que viene de otra. Un
+     "verificado sobre 16.689" no blinda una conclusión que no se midió,
+     pero sí hace que nadie la vuelva a mirar.
+
+     **Dónde entra el ISC en el Almacén.** El Almacén tiene un marco
+     genérico de leyes aplicables (Parámetros Generales → Leyes
+     Aplicables) con tres grupos de tres ranuras, y el tercero se llama
+     **«Impuestos incluidos en el Valor Neto»**. Su primera ranura ya
+     está declarada como `tLeyAD1 = 'Isc'` (`lLeyAD1 = 1`).
+
+     Que diga "incluido en el valor neto" no es una etiqueta: es la
+     aritmética que ejecutan tres objetos distintos de la base, y eso es
+     lo que hay que leer antes de elegir la ranura, no el rótulo del
+     formulario.
+
+         -- vRegComprasTD (la vista del Registro de Compras)
+         ISC    = sum( nNeto / (1 + nPorcentajeLeyAD) * nPorcentajeLeyAD )
+         Afecta = (nTotal - ISC) - (nImpuesto1 + nImpuesto2 + nImpuesto3)
+         nImpuesto3 = ISC        -- cuando lLeyAD1/2/3 = 1
+
+         -- usp_Almacen_CalculaPrecioPromedio
+         nPrecio / (1 + IsNull(nPorcentajeLeyAD, 0))   -- el costo sale SIN ISC
+
+         -- spSaveLeyADDetails
+         nPorcentajeLeyAD = TPRODUCTO.nPorcentajeLeyAD / 100
+
+     Esa división `nNeto / (1 + tasa)` sólo tiene sentido si el neto YA
+     trae el ISC adentro: es la fórmula de desagregar. Contra la
+     F003-4717 cierra al céntimo:
+
+         líneas del XML                              499.66
+         ISC (tributo 2000)                           33.73
+         nNeto que se manda                          533.39
+         tasa = 33.73 / 499.66                    0.0675059
+         lo que recupera la vista:
+           533.39 / (1 + tasa) * tasa                 33.73   ok
+         nNeto + nImpuesto1 + nRedondeo              629.40   ok  = lo que valida el importador
+
+     **Y el control que conviene mirar: ese 533.39 es la
+     `base_imponible` del registro**, al céntimo. Sumarle el ISC a las
+     líneas no es un ajuste para que cierre — es reconstruir el número
+     que SUNAT ya tenía anotado. Queda como chequeo cruzado gratis del
+     XML de importación, y hay prueba de eso.
+
+     **La ranura guarda una TASA, no un monto**, así que la tasa se
+     despeja de la fórmula que la lee —`t = incluido / (neto - incluido)`—
+     y no de la base del XML. Lo que tiene que salir exacto es el monto;
+     la tasa es sólo el vehículo. Es `sunat_importacion.porcentaje_ley_ad`.
+
+     Y por nada se copia el `Percent` del UBL: **el ISC específico es
+     soles POR LITRO**, no un porcentaje. Los cuatro proveedores de
+     bebidas que lo emiten mandan ahí `1.29987`, `1.81780` y `100.00` en
+     facturas de pisco y vino. Es la misma trampa que ya obligaba a
+     copiar el MONTO del ISC y nunca su tasa, sólo que ahora hay una
+     ranura que pide una tasa — y la tasa que pide no es ésa.
+
+     **La otra candidata era `nImpuesto2`, y está ocupada.** Es la
+     segunda ranura de impuesto, configurada en TPARAMETRO como
+     "IGV 10%", y ahí van las tasas reducidas (medido el 2026-08-27:
+     TACUAREMBO al 10,5%). Meter el ISC en el mismo casillero que un IGV
+     lo haría entrar al Registro de Compras como crédito fiscal, que es
+     exactamente lo que el ISC no es.
+
+     **El ICBPER (código 7152) entra por la MISMA ranura**, aunque el
+     Registro de Compras lo vaya a rotular "ISC". No es prolijo por
+     nombre y es correcto por aritmética —tributo no recuperable,
+     incluido en el precio, parte del costo—, y sobre todo es la única
+     ranura que existe: de las nueve, sólo las tres `*1` tienen columna
+     donde guardarse. La alternativa no era "una ranura mejor" sino "el
+     documento se rechaza y alguien lo digita a mano", que es de donde
+     venimos.
+
+     **LA TASA VIAJA PERO NO SE ESCRIBE, Y ES A PROPÓSITO** (decidido con
+     el usuario el 2026-09-05, con los dos escenarios medidos delante).
+     `DDOCUMENTO.nPorcentajeLeyAD` queda en 0. Sobre la F003-4717:
+
+                                      con la tasa    en 0 (lo que se hace)
+         Registro de Compras · base       499.66        533.39
+         Registro de Compras · ISC         33.73          0.00
+         Costo promedio (24 u)           20.8192       22.2246
+
+     Gana la derecha por dos motivos distintos, y los dos importan:
+
+     - **533.39 es la base gravada que SUNAT declara en el SIRE**
+       (96.01 / 533.39 = 18,0 %). Con la tasa puesta, el Registro de
+       Compras del Almacén deja de coincidir con lo declarado — se
+       ganaría un desglose y se perdería la conciliación.
+     - **22.2246 es lo que se pagó por unidad.** El ISC no se recupera:
+       es costo. Sacarlo del precio lo subvalúa un 6,3 % y ensucia el
+       control de fluctuación (`sp_VerificaPreciosMinimosMaximos`)
+       contra los documentos digitados a mano, que sí lo tienen adentro.
+
+     El número se manda igual en el XML de intercambio: así la decisión
+     se da vuelta tocando sólo el importador, sin volver a la webapp.
+     **Y si alguna vez se escribe:** `spSaveLeyADDetails` PISA la tasa de
+     la línea con la del maestro de artículos
+     (`TPRODUCTO.nPorcentajeLeyAD`), que para estos productos está
+     vacía — habría que escribir la de la línea directo y NO llamar a ese
+     SP. Es justo al revés que la percepción, donde el SP gemelo
+     (`spSavePerceptionDetails`) sí es el camino bueno.
+
+     **Dos trampas más que salieron en el camino:**
+
+     1. **`nOtrosCargosInafecto` recorta la base, no suma encima**, así
+        que con el ISC adentro la base del impuesto de la línea sigue
+        saliendo bien: `nNeto - nOtrosCargosInafecto = importe + ISC`,
+        que es exactamente sobre lo que SUNAT calculó el IGV.
+     2. **Una línea GRATUITA no es un tributo.** `_impuestos_linea`
+        barría hacia `otros_tributos` todo `TaxSubtotal` que no fuera
+        IGV ni ISC, y el código 9996 (gratuito) declara el IGV que NO se
+        cobra — con importe distinto de cero. Mientras el campo estaba
+        muerto no molestaba; al empezar a cargarlo al Almacén le habría
+        inventado un tributo al documento. Ahora los tres códigos de
+        "no gravado" (9996/9997/9998) se excluyen explícitamente.
+
+     **En pantalla se explica, no se avisa.** El chequeo de
+     `_pie_comprobante` que compara la suma de las líneas contra la base
+     del registro saltaba en estos 32 con un «⚠ revisá» sobre documentos
+     correctos. Ahora, cuando la diferencia ES el ISC del XML, lo dice
+     con ese nombre; el «⚠» queda para lo que de verdad no se explica.
+     Un aviso que grita en un caso normal se deja de leer — mismo
+     criterio que el `abs` de las notas de crédito, tres párrafos más
+     arriba en esa misma función.
+
+     **Lo que hay que recordar:** cuando un número no cierra, la
+     hipótesis barata —"hay un término que el código calcula y tira"—
+     puede ser falsa aunque el término exista y aunque efectivamente se
+     tire. Medirla costaba diez segundos sobre un parquet que ya estaba
+     en memoria, y se escribió el código antes de medir. La medición no
+     cambió el arreglo (el ISC va adentro del neto en los dos
+     diagnósticos), pero cambió TODA la documentación — y la
+     documentación es lo que va a leer el próximo.
 
      (2026-09-05.)
 

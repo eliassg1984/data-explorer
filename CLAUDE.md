@@ -310,6 +310,24 @@ Son 647 de 16.689 comprobantes (3,9 %) y ya costaron dos bugs con captura.
 Detalle y la medición en `arquitectura.md` regla #313 — que **revierte** la
 #240, escrita en la dirección contraria.
 
+## La base del registro NO es la suma de las líneas del XML
+
+El registro cuadra solo: `total == base + no gravado + IGV` en las 16.773
+filas del parquet. Lo que no se sigue de eso —y se creyó durante meses— es
+que sumar las LÍNEAS dé la misma base: el SIRE mete el **ISC** adentro de
+la base gravada (es la base del IGV) y `LineExtensionAmount` no lo lleva.
+La F003-4717 declara 533.39 de base contra 499.66 de líneas; los 33.73 son
+ISC. Son 32 de los 2.291 comprobantes con XML, y eran los 32 que el Almacén
+rechazaba, porque `construir_xml` armaba `nNeto` sumando líneas.
+
+En el Almacén el ISC no tiene casillero propio: va **adentro de `nNeto`**,
+con su tasa en `nPorcentajeLeyAD` (ranura `tLeyAD1='Isc'`, del grupo
+«Impuestos incluidos en el Valor Neto»). Lo arma
+`sunat_importacion.tributos_en_el_neto` + `porcentaje_ley_ad`. La ranura
+guarda una TASA y no un monto, así que la tasa se despeja de la fórmula que
+la lee (`nNeto/(1+t)*t`), no de la base del XML. Detalle, las trampas y la
+medición en `arquitectura.md` regla #314.
+
 ## Antes de agregar una columna: contá en cuántas filas dice algo
 
 Tres mediciones del mismo día (2026-08-28) sobre «Documentos SUNAT», que

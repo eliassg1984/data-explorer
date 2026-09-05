@@ -58,6 +58,129 @@ _LETRA_TIPO = {"01": "F", "03": "B", "07": "C", "08": "D", "09": "G"}
 _MONEDA = {"PEN": "01", "USD": "02", "EUR": "03"}
 
 
+# EL ISC VA ADENTRO DEL NETO, NO EN UN CASILLERO APARTE
+# ---------------------------------------------------------------------------
+# El Almacén tiene un marco genérico de "leyes aplicables" (Parámetros
+# Generales → Leyes Aplicables) con tres grupos de tres ranuras. El tercer
+# grupo se llama, literalmente, **«Impuestos incluidos en el Valor Neto»**, y
+# su primera ranura está declarada como `tLeyAD1 = 'Isc'`.
+#
+# "Incluido en el valor neto" no es una etiqueta: es la aritmética que el
+# Almacén ejecuta. Verificado leyendo sus propios objetos (2026-09-05):
+#
+#   · `spSaveLeyADDetails` guarda `DDOCUMENTO.nPorcentajeLeyAD = tasa/100`
+#     — o sea una TASA, no un monto. El monto no tiene columna.
+#   · la vista del Registro de Compras `vRegComprasTD` lo DESAGREGA:
+#         ISC    = sum( nNeto / (1 + nPorcentajeLeyAD) * nPorcentajeLeyAD )
+#         Afecta = (nTotal - ISC) - (nImpuesto1 + nImpuesto2 + nImpuesto3)
+#     Esa división sólo tiene sentido si `nNeto` YA trae el ISC adentro.
+#   · `usp_Almacen_CalculaPrecioPromedio` hace lo mismo con el precio
+#     (`nPrecio / (1 + nPorcentajeLeyAD)`): el costo promedio sale SIN ISC.
+#
+# Contra la F003-4717 de BODEGA SAN NICOLAS (RUC 20511908401) cierra al céntimo:
+# líneas 499.66, ISC 33.73, IGV 96.01, `PayableAmount` 629.40.
+#
+#     nNeto        = 499.66 + 33.73 = 533.39
+#     tasa         = 33.73 / 499.66 = 0.0675063…
+#     lo que recupera la vista: 533.39/(1+tasa)*tasa = 33.73  ✔
+#     y la ecuación que valida el importador:
+#     nNeto + nImpuesto1 + nRedondeo = 533.39 + 96.01 + 0 = 629.40  ✔
+#
+# Y EL CONTROL QUE VALE LA PENA MIRAR: ese 533.39 es, al céntimo, la
+# `base_imponible` que el registro del SIRE declara para el documento. No
+# es casualidad — la base gravada del registro ES la base del IGV, y el
+# ISC forma parte de ella. Sumar el ISC a las líneas no es un ajuste para
+# que cierre: es reconstruir el número que SUNAT ya tenía anotado. El
+# `nNeto` que sale de acá se puede contrastar contra el registro.
+#
+# Sin esto la cabecera salía con `nNeto = 499.66` y el importador rechazaba
+# —con razón: el XML no cerraba—. Ver `arquitectura.md` regla #314.
+#
+# LA TASA VIAJA PERO HOY NO SE ESCRIBE, Y ES A PROPÓSITO (decidido con el
+# usuario, 2026-09-05). `DDOCUMENTO.nPorcentajeLeyAD` se deja en 0. Lo que
+# cambia si se escribiera, medido sobre la F003-4717:
+#
+#                                  con la tasa    en 0 (lo que se hace)
+#     Registro de Compras · base       499.66        533.39
+#     Registro de Compras · ISC         33.73          0.00
+#     Costo promedio (24 u)           20.8192       22.2246
+#
+# Las dos columnas de la derecha ganan por un motivo cada una:
+#
+#   · 533.39 es EXACTAMENTE la base gravada que SUNAT declara en el SIRE
+#     (96.01 / 533.39 = 18,0 %). Con la tasa puesta, el Registro de
+#     Compras del Almacén deja de coincidir con lo declarado.
+#   · 22.2246 es lo que se pagó por unidad. El ISC no se recupera, así
+#     que es costo; sacarlo del precio lo subvalúa un 6,3 % y ensucia el
+#     control de fluctuación contra los documentos digitados a mano.
+#
+# Se manda igual en el XML para que la decisión se pueda dar vuelta
+# tocando sólo el importador, sin volver acá.
+#
+# Y SI ALGÚN DÍA SE ESCRIBE: `spSaveLeyADDetails` PISA `nPorcentajeLeyAD`
+# con la tasa del maestro de artículos (`TPRODUCTO.nPorcentajeLeyAD`), que
+# para estos productos está vacía. Habría que escribir la de la línea
+# directo y NO llamar a ese SP.
+# ---------------------------------------------------------------------------
+
+
+def tributos_en_el_neto(linea_xml):
+    """Los tributos de una línea que viajan DENTRO de `nNeto`, en la moneda
+    del comprobante.
+
+    Son todos los que no son IGV: el ISC (código 2000 del catálogo 05) y el
+    resto, que en la práctica es el ICBPER de la bolsa plástica (7152).
+    `sunat._impuestos_linea` ya los separa por código.
+
+    **El ICBPER entra por la MISMA ranura.** Es discutible por nombre —el
+    Registro de Compras del Almacén lo va a rotular "ISC"— y es correcto por
+    aritmética: es un tributo no recuperable, incluido en el precio, que
+    forma parte del costo igual que el ISC. La alternativa era dejarlo
+    afuera, y eso no es "más prolijo": es un documento que el importador
+    rechaza y que alguien termina digitando a mano, que es de donde venimos.
+    La ranura es UNA —sólo las tres `*1` tienen columna donde guardarse— así
+    que no hay una segunda opción que probar.
+    """
+    if not linea_xml:
+        return 0.0
+    return _num(linea_xml.get("isc")) + _num(linea_xml.get("otros_tributos"))
+
+
+def porcentaje_ley_ad(neto, incluido):
+    """La tasa (en PORCENTAJE) que el Almacén necesitaría para volver a
+    sacar `incluido` de adentro de `neto`.
+
+    **Viaja en el XML pero hoy el importador no la escribe** — ver el
+    bloque de arriba: dejar `DDOCUMENTO.nPorcentajeLeyAD` en 0 hace que la
+    base del Registro de Compras coincida con la del SIRE y que el costo
+    promedio incluya el ISC, que es lo que se pagó. Se manda para que esa
+    decisión se pueda dar vuelta sin volver a tocar la webapp.
+
+    Se despeja de la fórmula de la vista del Registro de Compras, que es
+    quien la leería:
+
+        neto / (1 + t) * t = incluido   →   t = incluido / (neto - incluido)
+
+    Se deriva así —y no como `incluido / base_del_XML`— porque lo que tiene
+    que salir exacto es el MONTO: la tasa es sólo el vehículo.
+
+    **Y NUNCA se copia el `Percent` del UBL.** El ISC específico no es un
+    porcentaje: es soles POR LITRO, y así viaja. Medido sobre los XML de
+    los cuatro proveedores de bebidas que lo emiten, ese campo trae
+    valores como `1.29987`, `1.81780` y `100.00` en facturas de pisco y
+    vino. Copiarlo daría una ranura con un número que no significa nada
+    en la fórmula que la lee.
+
+    El Almacén guarda `nPorcentajeLeyAD = t`, o sea esto dividido por 100
+    (es lo que hace `spSaveLeyADDetails`); acá va en porcentaje para que
+    todos los `nPorcentaje*` de este XML se lean en la misma unidad.
+    """
+    base = _num(neto) - _num(incluido)
+    if not incluido or base <= 0:
+        return 0.0
+    return round(_num(incluido) / base * 100, 6)
+
+
 def _num(v, defecto=0.0):
     try:
         if v is None:
@@ -113,6 +236,14 @@ def construir_xml(doc, lineas_xml, filas_sistema, totales=None, glosa=None):
     Las líneas van UNA POR UNA como vienen del comprobante: consolidar las
     que repiten producto lo hace el importador, que es quien conoce la
     regla del Almacén (un producto, una línea).
+
+    El ISC / ICBPER de cada línea se suma a su `nNeto` y viaja con su tasa
+    al lado — ver el bloque «EL ISC VA ADENTRO DEL NETO». Dos elementos
+    nuevos, y sólo uno es una columna: `nPorcentajeLeyAD` va derecho a
+    `DDOCUMENTO.nPorcentajeLeyAD` (dividido por 100, como hace
+    `spSaveLeyADDetails`), y `nLeyAD1` es el MONTO de esa ranura, que en el
+    Almacén no tiene dónde guardarse y viaja para poder verificar la
+    cabecera sin recorrer las líneas.
     """
     raiz = ET.Element("DocumentoCompra", {"version": "1.0"})
 
@@ -153,14 +284,28 @@ def construir_xml(doc, lineas_xml, filas_sistema, totales=None, glosa=None):
     _igv_papel = sunat.en_moneda_del_papel(doc, igv)
     if _igv_papel is not None:
         igv = _igv_papel
-    neto = suma_lineas + cargos
-    total = _total_documento(doc, totales, suma_lineas, cargos, igv)
+    # El ISC / ICBPER de las líneas va DENTRO del neto, que es donde el
+    # Almacén lo espera (ver el bloque «EL ISC VA ADENTRO DEL NETO»). Sin
+    # este término la cabecera no cierra en los comprobantes que lo llevan
+    # y el importador los rechaza. Sale de las LÍNEAS y no puede salir de
+    # otro lado: el registro del SIRE no lo desglosa —lo tiene sumado
+    # dentro de `base_imponible`— y el Almacén lo necesita repartido,
+    # porque la columna que lo guarda es de la línea.
+    incluidos = [_tributos_de(lineas_xml, f, n)
+                 for n, f in enumerate(filas_sistema)]
+    incluido_total = round(sum(incluidos), 2)
+    neto = suma_lineas + cargos + incluido_total
+    total = _total_documento(doc, totales, neto, igv)
 
     ET.SubElement(s, "nNeto").text = _dec(neto)
     ET.SubElement(s, "nImpuesto1").text = _dec(igv)
     ET.SubElement(s, "nTotal").text = _dec(total)
     ET.SubElement(s, "nDescuento").text = _dec(0)
     ET.SubElement(s, "nRedondeo").text = _dec(redondeo_derivado(neto, igv, total))
+    # Informativo: MDOCUMENTO no tiene columna para el ISC —el Registro de
+    # Compras lo deriva de las líneas—, pero mandarlo deja la cabecera
+    # verificable sin abrirla línea por línea.
+    ET.SubElement(s, "nLeyAD1").text = _dec(incluido_total)
     ET.SubElement(s, "nPercepcion").text = _dec(0)
     ET.SubElement(s, "lDetraccion").text = (
         "1" if str(doc.get("detraccion") or "").strip() else "0")
@@ -198,12 +343,23 @@ def construir_xml(doc, lineas_xml, filas_sistema, totales=None, glosa=None):
         cant = _num(fila.get("Cant."))
         importe = _num(fila.get("Importe"))
         cargo = reparto[n]
-        neto = importe + cargo
+        incluido = incluidos[n]
+        # `nNeto` de la línea CON el ISC adentro, y su tasa al lado: es la
+        # única forma que el Almacén tiene de volver a separarlos, porque
+        # `DDOCUMENTO` guarda la tasa y no el monto.
+        neto = importe + cargo + incluido
         ET.SubElement(a, "nCantidad").text = _dec(cant, 3)
         ET.SubElement(a, "nPrecio").text = _dec(neto / cant if cant else 0, 5)
         ET.SubElement(a, "nNeto").text = _dec(neto)
         ET.SubElement(a, "nDescuento").text = _dec(0)
+        # OJO: `nOtrosCargosInafecto` RECORTA la base del impuesto, no suma
+        # encima. Con el ISC adentro, la base sigue saliendo bien:
+        # nNeto - nOtrosCargosInafecto = importe + ISC, que es exactamente
+        # sobre lo que SUNAT calculó el IGV.
         ET.SubElement(a, "nOtrosCargosInafecto").text = _dec(cargo)
+        ET.SubElement(a, "nLeyAD1").text = _dec(incluido)
+        ET.SubElement(a, "nPorcentajeLeyAD").text = str(
+            porcentaje_ley_ad(neto, incluido))
         # El impuesto y SU tasa salen del comprobante. Nunca se asumen: el
         # importador decide a qué casillero del Almacén van según la tasa.
         ET.SubElement(a, "nImpuesto1").text = _dec(_num(xml_l.get("igv")))
@@ -214,6 +370,17 @@ def construir_xml(doc, lineas_xml, filas_sistema, totales=None, glosa=None):
         ET.SubElement(a, "nTotal").text = _dec(neto + _num(xml_l.get("igv")))
 
     return ET.tostring(raiz, encoding="utf-8", xml_declaration=True)
+
+
+def _tributos_de(lineas_xml, fila, n):
+    """El ISC / ICBPER de la línea del XML que le toca a esta fila.
+
+    Comparte el `_idx` con el bucle que arma las líneas —una fila del
+    conversor es una línea del comprobante— y tolera que no haya línea
+    detrás, igual que `nImpuesto1`."""
+    i = int(fila.get("_idx", n))
+    xml_l = lineas_xml[i] if 0 <= i < len(lineas_xml) else {}
+    return round(tributos_en_el_neto(xml_l), 2)
 
 
 def _repartir_cargo(cargo, importes):
@@ -286,18 +453,23 @@ def redondeo_derivado(neto, igv, total):
     return d
 
 
-def _total_documento(doc, totales, suma_lineas, cargos, igv):
+def _total_documento(doc, totales, neto, igv):
     """El importe total del documento.
 
     Prioridad: el `PayableAmount` del comprobante, que es el campo
     obligatorio del estándar de SUNAT y el que SUNAT registra —se verificó
     contra el SIRE en 440 facturas—. Si el XML no se pudo leer, se
-    reconstruye desde el registro; y si tampoco, desde las líneas.
+    reconstruye desde el neto ya armado.
+
+    Recibe el `neto` entero —líneas + cargos + ISC— y no sus partes: la
+    reconstrucción tiene que usar el MISMO número que va a la cabecera, o
+    el redondeo derivado sale distinto de cero por el término que se
+    olvidó. Es lo que pasaba con el ISC antes de la regla #314.
     """
     del doc  # se conserva en la firma por si vuelve a hacer falta
     if totales and totales.get("total") is not None:
         return totales["total"]
-    return suma_lineas + cargos + igv
+    return neto + igv
 
 
 def _dec(v, n=2):

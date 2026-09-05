@@ -981,6 +981,147 @@ ok(_c2["nTotal"] == 40.99 and _c2["nRedondeo"] == 0.0,
    "sin totales del XML, el total se reconstruye y el redondeo queda en cero")
 
 
+# ── El ISC va ADENTRO del neto ─────────────────────────────────────────────
+# EL CASO: F003-4717 de BODEGA SAN NICOLAS (RUC 20511908401). Las líneas del XML
+# suman 499.66, el `TaxTotal` del comprobante 129.74 y el `PayableAmount`
+# 629.40 — pero el registro anota `igv = 96.01` y `base = 533.39`. Los
+# 33.73 de diferencia entre la base del registro y las líneas son el ISC:
+# el SIRE lo cuenta DENTRO de la base gravada (que es la base del IGV) y
+# `LineExtensionAmount` no lo lleva.
+#
+# El Almacén los guarda DENTRO de `nNeto`, con la tasa al lado: su ranura
+# `tLeyAD1='Isc'` está en el grupo «Impuestos incluidos en el Valor Neto» y
+# su vista del Registro de Compras los desagrega con
+# `nNeto / (1 + nPorcentajeLeyAD) * nPorcentajeLeyAD`. Ver la regla #314.
+_doc_isc = {"documento": "F003-4717", "serie": "F003", "numero": "4717",
+            "tipo_cdp": "01", "ruc_proveedor": "20511908401",
+            "proveedor": "BODEGA SAN NICOLAS S.A.", "moneda": "PEN",
+            "base_imponible": 533.39, "igv": 96.01, "no_gravado": 0.0,
+            "total": 629.40, "fecha_emision": dt.date(2026, 8, 12)}
+_lineas_isc = [{"importe": 499.66, "igv": 96.01, "igv_porcentaje": 18.0,
+                "isc": 33.73, "otros_tributos": 0.0}]
+_filas_isc = [{"_idx": 0, "_cod_sis": "0000123", "Cant.": 24,
+               "Importe": 499.66}]
+
+_x_isc = _ET.fromstring(_simp.construir_xml(
+    _doc_isc, _lineas_isc, _filas_isc, {"total": 629.40, "cargos": 0.0}))
+_cab_isc = {t: float(_x_isc.find("./Cabecera/Sunat/" + t).text)
+            for t in ("nNeto", "nImpuesto1", "nRedondeo", "nTotal", "nLeyAD1")}
+
+ok(_cab_isc["nNeto"] == 533.39,
+   "el ISC de las líneas entra en el nNeto de la cabecera (499.66 + 33.73)")
+# EL CONTROL FUERTE: ese neto tiene que ser la base que el SIRE declara.
+# No es una coincidencia aritmética — la base gravada del registro ES la
+# base del IGV, y el ISC forma parte de ella. Si no diera, el ISC estaría
+# mal leído del XML.
+ok(_cab_isc["nNeto"] == _doc_isc["base_imponible"],
+   "y coincide con la `base_imponible` que el registro tenía anotada")
+ok(round(_cab_isc["nNeto"] + _cab_isc["nImpuesto1"]
+         + _cab_isc["nRedondeo"], 2) == _cab_isc["nTotal"] == 629.40,
+   "y con eso la cabecera cumple neto + impuesto + redondeo == total")
+ok(_cab_isc["nRedondeo"] == 0.0,
+   "el ISC no se disfraza de redondeo: el descuadre desaparece, no se absorbe")
+ok(_cab_isc["nLeyAD1"] == 33.73,
+   "la cabecera declara cuánto de su neto es ISC")
+
+_ln_isc = _x_isc.find("./Lineas/Linea/Almacen")
+_v = {t: float(_ln_isc.find(t).text)
+      for t in ("nNeto", "nOtrosCargosInafecto", "nLeyAD1",
+                "nPorcentajeLeyAD", "nImpuesto1", "nPorcentaje1", "nTotal")}
+ok(_v["nNeto"] == 533.39 and _v["nLeyAD1"] == 33.73,
+   "la línea también lleva el ISC adentro de su neto")
+# La tasa VIAJA pero el importador hoy la deja en 0 a propósito (ver el
+# bloque de `sunat_importacion`: con ella puesta el Registro de Compras
+# deja de coincidir con el SIRE y el costo promedio pierde el ISC). Se
+# fija igual el round-trip, porque el día que se decida escribirla el
+# número tiene que estar bien: el Almacén guarda la TASA, no el monto, y
+# una tasa que no devuelve el monto rompe en silencio.
+_t = _v["nPorcentajeLeyAD"] / 100
+ok(round(_v["nNeto"] / (1 + _t) * _t, 2) == 33.73,
+   "y la tasa devuelve el monto exacto con la fórmula de vRegComprasTD")
+ok(round(_v["nNeto"] / (1 + _t), 2) == 499.66,
+   "de donde vuelve a salir el importe de la línea sin ISC")
+# LA SEGUNDA VALIDACIÓN QUE ROMPÍA. El importador del servidor comprueba
+# cada línea contra su propia tasa: `(nNeto - nOtrosCargosInafecto) * pct
+# / 100 == nImpuesto1`, con dos céntimos de tolerancia. Con el neto sin
+# ISC daba 18% de 499.66 = 89.94 contra los 96.01 del comprobante — seis
+# soles de diferencia, o sea que estos documentos fallaban DOS
+# validaciones, no sólo la del total.
+_base_linea = round(_v["nNeto"] - _v["nOtrosCargosInafecto"], 2)
+ok(_base_linea == 533.39,
+   "la base del impuesto de la línea es la misma sobre la que SUNAT calculó "
+   "el IGV")
+ok(abs(_base_linea * _v["nPorcentaje1"] / 100 - _v["nImpuesto1"]) <= 0.02,
+   "y con eso la línea pasa el chequeo tasa-por-base del importador")
+ok(round(96.01 / 533.39 * 100) == 18,
+   "y sobre esa base el IGV del registro da 18% exacto, no sobre las líneas")
+
+# El ICBPER (código 7152) no es ISC pero viaja por la misma ranura: es la
+# única con columna donde guardarse. Caso SINTÉTICO: los dos comprobantes
+# del corpus que se verificaron a mano (F003-4717 y F010-13783) son ISC.
+# Se fija igual porque el camino es el mismo — un tributo de línea que no
+# es IGV, o sea exactamente lo que `tributos_en_el_neto` recoge. Y sea
+# cual sea el que aparezca, la base del registro lo incluye: si no, la
+# identidad `total - base - no gravado - IGV == 0` no daría en las 16.773
+# filas del parquet, y da.
+_x_bolsa = _ET.fromstring(_simp.construir_xml(
+    dict(_doc_isc, base_imponible=10.60, igv=1.80, total=12.40),
+    [{"importe": 10.0, "igv": 1.80, "igv_porcentaje": 18.0,
+      "isc": 0.0, "otros_tributos": 0.60}],
+    [{"_idx": 0, "_cod_sis": "0000123", "Cant.": 2, "Importe": 10.0}],
+    {"total": 12.40, "cargos": 0.0}))
+ok(float(_x_bolsa.find("./Cabecera/Sunat/nNeto").text) == 10.60
+   and float(_x_bolsa.find("./Cabecera/Sunat/nRedondeo").text) == 0.0,
+   "el ICBPER entra por la misma ranura y el documento cierra")
+
+# Un comprobante SIN ISC no puede cambiar: son 2.259 de 2.291.
+ok(float(_ET.fromstring(_simp.construir_xml(
+    _doc_wong, _lineas_wong, _filas_wong,
+    {"total": 40.90, "cargos": 0.0})).find(
+        "./Cabecera/Sunat/nLeyAD1").text) == 0.0,
+   "sin ISC la ranura va en cero y la cabecera queda como estaba")
+ok(_simp.tributos_en_el_neto({}) == 0.0
+   and _simp.tributos_en_el_neto(None) == 0.0,
+   "una línea sin tributos declarados no inventa un ISC")
+ok(_simp.porcentaje_ley_ad(100.0, 0.0) == 0.0,
+   "y sin monto incluido no hay tasa que despejar")
+
+# UNA LÍNEA GRATUITA NO ES UN TRIBUTO. El código 9996 declara el IGV que
+# NO se cobra, y su importe no es cero: barrer "todo lo que no sea IGV ni
+# ISC" hacia `otros_tributos` le inventaba al documento un tributo de
+# 1.80 que después se le cargaba al Almacén adentro del neto.
+_LINEA_GRATUITA = b"""<Invoice
+ xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+ xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+ xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+<cac:InvoiceLine><cbc:ID>1</cbc:ID>
+<cbc:InvoicedQuantity unitCode="NIU">1</cbc:InvoicedQuantity>
+<cbc:LineExtensionAmount>0.00</cbc:LineExtensionAmount>
+<cac:TaxTotal><cbc:TaxAmount>1.80</cbc:TaxAmount><cac:TaxSubtotal>
+<cbc:TaxAmount>1.80</cbc:TaxAmount><cac:TaxCategory>
+<cbc:TaxExemptionReasonCode>21</cbc:TaxExemptionReasonCode>
+<cac:TaxScheme><cbc:ID>9996</cbc:ID></cac:TaxScheme>
+</cac:TaxCategory></cac:TaxSubtotal></cac:TaxTotal>
+<cac:Item><cbc:Description>MUESTRA GRATIS</cbc:Description></cac:Item>
+</cac:InvoiceLine></Invoice>"""
+_gratis = sunat.lineas_xml(_LINEA_GRATUITA)[0]
+ok(_gratis["otros_tributos"] == 0.0 and _simp.tributos_en_el_neto(_gratis) == 0.0,
+   "el IGV de una línea gratuita (código 9996) no se cuenta como otro tributo")
+
+# EL REGISTRO NO ES EL LADO QUE FALLA. `total == base + no gravado + IGV`
+# se cumple en las 16.773 filas del parquet, ISC incluido, porque el ISC
+# ya viene sumado adentro de la base. Lo que NO se puede deducir de eso es
+# que las líneas del XML valgan lo mismo que la base: son otra fuente.
+_reg_isc = sunat._normalizar_registro({
+    "numSerieCDP": "F003", "numCDP": "4717", "codTipoCDP": "01",
+    "montos": {"mtoBIGravadaDG": 533.39, "mtoIgvIpmDG": 96.01}})
+ok(round(_reg_isc["base_imponible"] + _reg_isc["no_gravado"]
+         + _reg_isc["igv"], 2) == round(_reg_isc["total"], 2) == 629.40,
+   "el registro cuadra con tres términos aunque el comprobante lleve ISC")
+ok(_reg_isc["base_imponible"] == 533.39,
+   "porque el ISC ya viene adentro de la base gravada, no en un campo aparte")
+
+
 # ── La moneda del registro ─────────────────────────────────────────────────
 print()
 print("── el registro viene en soles ──")
