@@ -45,6 +45,8 @@ import xml.etree.ElementTree as ET
 
 import streamlit as st
 
+import sunat
+
 
 PREFIJO_IMPORTACION = "_solicitudes_importacion"
 
@@ -137,9 +139,20 @@ def construir_xml(doc, lineas_xml, filas_sistema, totales=None, glosa=None):
     # por construcción tienen que dar lo mismo. Si no dieran, es que una
     # línea perdió su importe, y eso el importador lo va a rechazar — que
     # es exactamente lo que queremos que pase.
+    # OJO CON LA MONEDA: las líneas vienen del XML, en la moneda del
+    # comprobante, y el IGV viene del registro del SIRE, que está SIEMPRE
+    # en soles (ver `sunat.en_moneda_del_papel`). En un documento en
+    # dólares, sumarlos daba una cabecera con dólares y soles adentro —
+    # medido en la F163-2309 de MAPFRE: 3.155,00 de líneas + 1.932,00 de
+    # IGV = 5.087,00, que no es plata de ninguna moneda. El Almacén guarda
+    # en la moneda del documento con su `nCambio` al lado, así que la
+    # cabecera entera va en la moneda del papel. Regla #313.
     suma_lineas = sum(_num(f.get("Importe")) for f in filas_sistema)
     cargos = _num((totales or {}).get("cargos"))
     igv = _num(doc.get("igv"))
+    _igv_papel = sunat.en_moneda_del_papel(doc, igv)
+    if _igv_papel is not None:
+        igv = _igv_papel
     neto = suma_lineas + cargos
     total = _total_documento(doc, totales, suma_lineas, cargos, igv)
 
@@ -265,7 +278,12 @@ def redondeo_derivado(neto, igv, total):
     ajuste de cabecera la anularía.
     """
     d = round(_num(total) - (_num(neto) + _num(igv)), 2)
-    return d if abs(d) <= REDONDEO_MAXIMO + 1e-9 else 0.0
+    if d == 0 or abs(d) > REDONDEO_MAXIMO + 1e-9:
+        # `d == 0` cubre el `-0.0` que sale de restar floats que ya
+        # cuadran: `_dec` lo escribiría "-0.00", que es un número raro de
+        # ver en un XML que va a una base de datos.
+        return 0.0
+    return d
 
 
 def _total_documento(doc, totales, suma_lineas, cargos, igv):

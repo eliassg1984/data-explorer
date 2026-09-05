@@ -561,6 +561,38 @@ def _pruebas_puras():
           "por línea",
           float(_g.loc[_g["documento"] == "E001-2", "base_pq"].iloc[0]), 45.0)
 
+    # MONEDA EXTRANJERA: las tres columnas de cabecera del parquet vienen
+    # en la moneda del DOCUMENTO y el registro del SIRE viene en soles, así
+    # que el cruce las convierte al agrupar. Sin eso, 242 de los 248
+    # comprobantes en dólares salían marcados "Diferencia" (regla #313).
+    # Las columnas por línea (`_MN`) ya están en soles y NO se tocan.
+    _pq_usd = pd.DataFrame({
+        "NUM_DOCUMENTO": ["F0E001000000003"],
+        "NOMBRE_PROVEEDOR": ["MAPFRE"],
+        "INDICADOR TRIBUTARIO": ["20418896915"],
+        "VALOR_COMPRA": [10733.31],
+        "VALOR_BRUTO_COMPRA_MN": [12665.31],
+        "TOTAL NETO": [3155.00],
+        "TOTAL IGV": [567.90],
+        "TOTAL DOCUMENTO": [3722.90],
+        "TIPO_MONEDA": ["02"],
+        "TIPO_CAMBIO": [3.402],
+        "FECHA_EMISION_DOC": pd.to_datetime(["2026-07-10"]),
+    })
+    _g_usd = _ds._parquet_agrupado_por_documento(
+        _pq_usd, "FECHA_EMISION_DOC",
+        pd.Timestamp("2026-07-01"), pd.Timestamp("2026-07-31"))
+    check("_parquet_agrupado lleva a soles el total de un documento en dólares",
+          round(float(_g_usd["total_pq"].iloc[0]), 2), 12665.31)
+    check("_parquet_agrupado lleva a soles también la base",
+          round(float(_g_usd["base_pq"].iloc[0]), 2), 10733.31)
+    _pq_pen = _pq_usd.assign(TIPO_MONEDA=["01"])
+    _g_pen = _ds._parquet_agrupado_por_documento(
+        _pq_pen, "FECHA_EMISION_DOC",
+        pd.Timestamp("2026-07-01"), pd.Timestamp("2026-07-31"))
+    check("y un documento en soles no se multiplica por su tipo de cambio",
+          round(float(_g_pen["total_pq"].iloc[0]), 2), 3722.90)
+
     # Sin TOTAL DOCUMENTO/TOTAL NETO (red de seguridad: parquets viejos o
     # un entorno donde todavía no se propagaron), cae al proxy de siempre.
     _pq_sin_total = _pq.drop(columns=["TOTAL DOCUMENTO", "TOTAL NETO"])

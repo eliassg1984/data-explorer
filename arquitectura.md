@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-312 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+313 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (101)
 
@@ -355,7 +355,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#308** — El ⛶ nativo de Streamlit maximiza un ELEMENTO; cuando la unidad de lectura es la TARJETA, hay…
 - **#311** — En una página APILADA, el st.rerun(scope="app") que escala un atajo de fecha tiene que salir…
 
-**Datos, R2 y DuckDB** (36)
+**Datos, R2 y DuckDB** (37)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -393,8 +393,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#303** — Una medición de overlap contra la columna equivocada puede sostener una decisión de producto…
 - **#307** — Un default de fecha "el mes en curso" que se recorta a bounds COLAPSA a un día cuando la data…
 - **#309** — Un pedido que falla se avisa en la ETIQUETA, no adentro de la pestaña — y un emisor que nunca…
+- **#313** — Los importes del registro del SIRE vienen SIEMPRE en soles; moneda dice en qué se emitió el…
 
-**SUNAT y SIRE** (34)
+**SUNAT y SIRE** (36)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -416,6 +417,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#235** — _css_grid es de UNA tabla suelta sobre el gris de la app; si la tabla ya vive adentro de una…
 - **#238** — Una columna «X del sistema» al lado de cada «X de SUNAT» duplica el ancho para servir al 11 %…
 - **#239** — Una columna donde el 97,6 % de las filas repiten la misma palabra no es una columna: es un…
+- **#240** — _soles() escribía «S/ » sin mirar la moneda, y 641 comprobantes del registro están en dólares
 - **#242** — Una tarjeta que no tiene nada que hacer no se dibuja vacía: no se dibuja
 - **#243** — Al partir en dos una fila de un drill hay que sumar su familia de key al PISO de…
 - **#244** — Dos tarjetas que comparan se alinean por TRES cosas, y las tres hay que medirlas: el alto de…
@@ -430,6 +432,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#309** — Un pedido que falla se avisa en la ETIQUETA, no adentro de la pestaña — y un emisor que nunca…
 - **#310** — El modal «Error del Servidor» de SUNAT vive DENTRO del iframe, y buscarlo con…
 - **#312** — El redondeo del comprobante se DERIVA, no se lee — y el que no se escribió tumbó la importación
+- **#313** — Los importes del registro del SIRE vienen SIEMPRE en soles; moneda dice en qué se emitió el…
 
 **Fechas, rangos y cortes** (9)
 
@@ -478,7 +481,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 - **#295** — El inspector resolvía "qué hay bajo el cursor" con UN solo punto (e.target) — con elementos…
 
-**Decisiones de diseño y UX** (52)
+**Decisiones de diseño y UX** (53)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -520,6 +523,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#220** — Convertir una página de "una vista por vez" en una PILA no es mover código: es descubrir qué…
 - **#227** — server_sync_strategy="client_wins" (el default de st_aggrid) hace que el navegador IGNORE los…
 - **#236** — Sacar una vista de una página APILADA no es borrar su sección: hay que ir a buscar lo que la…
+- **#240** — _soles() escribía «S/ » sin mirar la moneda, y 641 comprobantes del registro están en dólares
 - **#241** — Un panel de detalle y un gráfico del PERÍODO no pueden convivir: el gráfico tiene que hablar…
 - **#249** — En una homologación, el INVARIANTE es el importe de la línea — no la cantidad ni el precio
 - **#258** — Duplicar un elemento en el modo diseño: la copia CONSERVA las clases st-key-*, y por eso hay…
@@ -544,9 +548,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#233** — Una guarda que rastrea el fuente tiene que excluir .claude/worktrees/ — y el filtro mira los…
 - **#269** — El JS que vive dentro de un string de Python necesita el escape de salto de línea con DOS…
 
-**Sin tema asignado** (2)
+**Sin tema asignado** (1)
 
-- **#240** — _soles() escribía «S/ » sin mirar la moneda, y 641 comprobantes del registro están en dólares
 - **#300** — Un riel que PINTA casilleros enteros dice de más cuando el rango es más fino que su escala:…
 
 <!-- INDICE:FIN -->
@@ -10875,6 +10878,14 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 240. **`_soles()` escribía «S/ » sin mirar la moneda, y 641 comprobantes
      del registro están en dólares.**
 
+     > ⚠ **ESTA REGLA ESTABA MAL Y SE REVIRTIÓ el 2026-09-05 — leer la
+     > #313 antes de usarla.** El `S/ ` fijo era CORRECTO: los importes
+     > del registro del SIRE vienen siempre en soles. Lo que sigue abajo
+     > es el razonamiento equivocado, y se deja escrito porque es el más
+     > caro de los dos: parecía obvio, se "verificó" mirando la propia
+     > pantalla, y estuvo ocho días en producción diciendo dólares donde
+     > había soles.
+
      Encontrado al revisar qué muestra la ficha, no buscándolo. La ficha
      de la factura F163-2309 de MAPFRE decía:
 
@@ -14071,6 +14082,15 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Cubierto en `test_sunat.py` («importación al Almacén»): el signo, el
      techo, y que la cabecera del XML cumpla la ecuación.
 
+     **Cuánto pesa** (barrido de los 2.294 XML de R2, 2.291 con fila en el
+     registro, ya con la moneda corregida de la #313): 2.083 cuadran
+     exacto, **176 (7,7 %) descuadran dentro del techo** —los que este
+     arreglo hace importables— y 32 lo pasan. Esos 32 no son redondeo: son
+     comprobantes con ISC o ICBPER, donde el `igv` del registro no incluye
+     el otro tributo pero su `total` sí (`_normalizar_registro` lo suma en
+     `otros`). Quedan rechazados a propósito hasta decidir en qué ranura
+     del Almacén entra el ISC — `nImpuesto2` y `tLeyAD1` son candidatas.
+
      **Pendiente hermano, no arreglado acá:** una NOTA DE CRÉDITO viene
      negativa en el registro (`igv = -4.27`) y positiva en el XML, así que
      `construir_xml` le arma una cabecera con neto positivo e impuesto
@@ -14080,13 +14100,89 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-05.)
 
+313. **Los importes del registro del SIRE vienen SIEMPRE en soles;
+     `moneda` dice en qué se emitió el papel, no en qué están esos
+     números.** Y la regla #240, del 2026-08-28, decía lo contrario:
+     revirtió un `S/ ` fijo que era correcto.
+
+     Reporte 2026-09-05, con captura y una pregunta exacta — *"cuál es lo
+     correcto, la lectura visual incita al error"*. El conversor de la
+     factura F163-2309 de MAPFRE mostraba, en la misma tarjeta:
+
+         COMPROBANTE SUNAT                 SISTEMA
+         Por arrendamiento    3,155.00     Alquiler Loc.   3,155.00
+         Gravado           $ 10,733.31     Suma de líneas  $ 3,155.00
+         IGV                $ 1,932.00     IGV             $ 1,932.00
+         TOTAL             $ 12,665.31     TOTAL a cargar  $ 5,087.00
+                     ≈ S/ 43,087.38
+
+     Cuatro cosas mal en un solo panel, todas de la misma raíz: la tabla
+     está en dólares y el pie en soles, con el mismo símbolo. El
+     «TOTAL a cargar» de S/ 5.087,00 sumaba 3.155 dólares con 1.932 soles
+     —plata de ninguna moneda— y el `≈ S/ 43.087,38` multiplicaba por el
+     TC algo que ya estaba en soles.
+
+     **La prueba, dos veces y por caminos distintos:**
+
+     1. De los **87** comprobantes en dólares que tienen su XML en R2, los
+        **87** cumplen `total del registro == PayableAmount × TC`. Ninguno
+        cumple `total == PayableAmount`.
+     2. El alquiler mensual de MAPFRE aparece **34 veces** con totales
+        distintos —4.320,27 / 4.234,26 / 4.043,65…— y los 34 dan
+        **1.162,30** al dividir por el TC de SU mes. Es la misma factura
+        de siempre; lo que se mueve es el dólar. Agrupando por el importe
+        crudo, en cambio, sólo coinciden los del mismo mes.
+
+     No es un capricho de SUNAT: el Registro de Compras se lleva en moneda
+     nacional y se convierte al tipo de cambio del día — para eso viaja
+     `tipoCambio` en el JSON, y por eso `_normalizar_registro` lo guarda.
+
+     **Qué se arregló, y en qué moneda quedó cada superficie:**
+
+     · **La tarjeta del conversor, en la moneda del PAPEL.** Las dos
+       mitades comparan XML contra registro, y el XML no se puede
+       convertir sin inventar: se divide el registro (`_del_registro` →
+       `sunat.en_moneda_del_papel`). La división recupera EXACTO lo que
+       dice el comprobante, que es la operación inversa de la que hizo
+       SUNAT. El total en soles queda como renglón chico abajo, sacado
+       del dato crudo y no de multiplicar de nuevo.
+     · **La tabla del cruce y el cotejo, en SOLES.** Ahí el otro lado es
+       `compras.parquet`, y sus columnas de CABECERA (`TOTAL NETO` /
+       `TOTAL IGV` / `TOTAL DOCUMENTO`) vienen en la moneda del documento
+       —el Almacén guarda así, con su `nCambio` al lado—, así que la
+       conversión va en `_parquet_agrupado_por_documento`. **Ojo con las
+       columnas por LÍNEA: `VALOR_COMPRA` y `VALOR_BRUTO_COMPRA_MN` ya
+       están en soles** (el sufijo `_MN` es eso), y son las que usa el
+       resto de los dashboards de Compras. Convertirlas también habría
+       multiplicado por el TC dos veces.
+     · **El XML de importación, en la moneda del documento.** `nNeto` sale
+       de las líneas (papel) y `nImpuesto1` salía del registro (soles):
+       una cabecera con dos monedas adentro. Ahora el IGV se divide, y
+       `nCambio` viaja al lado como siempre.
+
+     **Cuánto pesaba:** 242 de los 248 comprobantes en dólares que están
+     en las dos fuentes salían marcados **«Diferencia»** en el cruce sólo
+     por esto (183 cuadran exacto al convertir; el resto son diferencias
+     de verdad). Son 647 de 16.689 en el registro — 3,9 %.
+
+     **Lo que hay que recordar**, que es lo que falló en la #240: un
+     formateo de moneda que no recibe la moneda es una suposición, sí —
+     pero saber la moneda del DOCUMENTO no dice en qué moneda está el
+     IMPORTE. Son dos preguntas distintas, y la segunda se contesta
+     mirando la fuente, no el campo de al lado. La #240 se "verificó"
+     contra la propia pantalla («dice USD arriba y S/ abajo, se contradice
+     sola») en vez de contra el XML del proveedor, que estaba en R2 a un
+     `get_object` de distancia y contestaba en diez segundos.
+
+     (2026-09-05.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#313**.
+> próxima regla nueva es la **#314**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

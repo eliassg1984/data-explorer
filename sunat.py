@@ -1673,37 +1673,59 @@ def simbolo_moneda(codigo):
     return SIMBOLO_MONEDA.get(cod, cod)
 
 
-def _importe(comprobante, clave):
-    """El importe de `clave` con el símbolo de SU moneda.
+# LOS IMPORTES DEL REGISTRO VIENEN EN SOLES, SIEMPRE. `moneda` dice en qué
+# se emitió el PAPEL, no en qué están estos números: el Registro de Compras
+# se lleva en moneda nacional y SUNAT convierte al tipo de cambio del día,
+# que es justo para eso que viaja en `tipoCambio`.
+#
+# No es interpretación, está medido dos veces (2026-09-05):
+#
+#   · De 87 comprobantes en dólares que tienen su XML en R2, los 87 cumplen
+#     `total del registro == PayableAmount * TC`. Ninguno cumple
+#     `total == PayableAmount`.
+#   · El alquiler mensual de MAPFRE (F163) aparece 34 veces con totales
+#     distintos —4.320,27 / 4.234,26 / 4.043,65…— y los 34 dan **1.162,30**
+#     al dividir por el TC de su mes. Es la misma factura de siempre; lo
+#     que se mueve es el dólar.
+#
+# Esto REEMPLAZA lo que decía la regla #240 (y esta misma función, que se
+# llamó `_soles` hasta el 2026-08-28 y hacía lo correcto por accidente).
+# Ver la regla #313.
 
-    Hasta el 2026-08-28 esto se llamaba `_soles` y escribía `"S/ "` fijo,
-    mirara lo que mirara. Con 641 comprobantes en dólares en el registro
-    (de 16.678) eso no era un detalle: la ficha de la factura F163-2309 de
-    MAPFRE decía `Moneda: USD` y tres renglones más abajo
-    `Base imponible: S/ 10,733.31` — se contradecía sola, y el PDF
-    descargable salía igual porque usa esta misma función a través de
-    `campos_ficha`. Los 10.733,31 son DÓLARES; a un TC de 3,402 son
-    S/ 36.514,72, o sea que el número que se leía estaba errado por 26 mil
-    soles.
-    """
+def _importe(comprobante, clave):
+    """Un importe del registro, en SOLES, que es como viene."""
     v = comprobante.get(clave)
     try:
-        return f"{simbolo_moneda(comprobante.get('moneda'))} {float(v):,.2f}"
+        return f"S/ {float(v):,.2f}"
     except (TypeError, ValueError):
         return "—"
 
 
-def _convertido_a_soles(comprobante, clave):
-    """El mismo importe convertido a soles con el tipo de cambio del propio
-    comprobante, o `None` si ya está en soles (y entonces no hay nada que
-    convertir ni que mostrar)."""
+def en_moneda_del_papel(comprobante, valor):
+    """Un importe del registro (soles) llevado a la moneda en que se emitió
+    el comprobante, o `None` si ya está en soles o falta el tipo de cambio.
+
+    La división recupera EXACTO lo que dice el papel —comprobado en los 87
+    comprobantes con XML— porque es la operación inversa de la que hizo
+    SUNAT al registrarlo.
+    """
     if str(comprobante.get("moneda") or "PEN").strip().upper() == "PEN":
         return None
     try:
-        tc = float(comprobante.get("tipo_cambio") or 1.0)
-        return f"S/ {float(comprobante.get(clave)) * tc:,.2f}"
+        tc = float(comprobante.get("tipo_cambio") or 0.0)
+        if tc <= 0:
+            return None
+        return float(valor) / tc
     except (TypeError, ValueError):
         return None
+
+
+def _importe_del_papel(comprobante, clave):
+    """El mismo importe escrito en la moneda del comprobante, o `None`."""
+    v = en_moneda_del_papel(comprobante, comprobante.get(clave))
+    if v is None:
+        return None
+    return f"{simbolo_moneda(comprobante.get('moneda'))} {v:,.2f}"
 
 
 def campos_ficha(comprobante):
@@ -1750,18 +1772,18 @@ def _moneda_con_tc(comprobante):
 
 
 def _importes_ficha(comprobante):
-    """Los importes de la ficha, cada uno con el símbolo de su moneda — y,
-    sólo si el comprobante NO está en soles, el total convertido. Ver
-    `_importe`, que es donde estaba el error que esto arregla."""
+    """Los importes de la ficha, en soles —que es como los registra
+    SUNAT— y, sólo si el comprobante se emitió en otra moneda, el total
+    como lo dice el papel. Ver el comentario de `_importe`."""
     filas = [
         ("Base imponible", _importe(comprobante, "base_imponible")),
         ("IGV / IPM", _importe(comprobante, "igv")),
         ("No gravado", _importe(comprobante, "no_gravado")),
         ("Total", _importe(comprobante, "total")),
     ]
-    convertido = _convertido_a_soles(comprobante, "total")
-    if convertido:
-        filas.append(("Total en soles", convertido))
+    original = _importe_del_papel(comprobante, "total")
+    if original:
+        filas.append((f"Total en {comprobante.get('moneda')}", original))
     return tuple(filas)
 
 

@@ -981,6 +981,45 @@ ok(_c2["nTotal"] == 40.99 and _c2["nRedondeo"] == 0.0,
    "sin totales del XML, el total se reconstruye y el redondeo queda en cero")
 
 
+# ── La moneda del registro ─────────────────────────────────────────────────
+print()
+print("── el registro viene en soles ──")
+
+# F163-2309 de MAPFRE: el papel dice USD 3,722.90 y el registro anota
+# 12,665.31 — el mismo importe al TC 3.402 del día. Ver la regla #313.
+_usd = {"moneda": "USD", "tipo_cambio": 3.402, "base_imponible": 10733.31,
+        "igv": 1932.00, "no_gravado": 0.0, "total": 12665.31}
+ok(sunat._importe(_usd, "total") == "S/ 12,665.31",
+   "un importe del registro se escribe en SOLES aunque el papel sea en dólares")
+ok(round(sunat.en_moneda_del_papel(_usd, _usd["total"]), 2) == 3722.90,
+   "y dividido por su TC recupera exacto lo que dice el comprobante")
+ok(sunat.en_moneda_del_papel({"moneda": "PEN"}, 10.0) is None,
+   "en soles no hay nada que convertir: devuelve None")
+ok(sunat.en_moneda_del_papel({"moneda": "USD", "tipo_cambio": 0}, 10.0) is None,
+   "sin tipo de cambio tampoco inventa uno")
+ok(("Total en USD", "$ 3,722.90") in sunat._importes_ficha(_usd),
+   "la ficha suma el total como lo dice el papel")
+
+# El XML viene en la moneda del papel y el IGV del registro en soles:
+# sumarlos daba 3155.00 + 1932.00 = 5087.00, que no es plata de ninguna
+# moneda. La cabecera entera va en la moneda del documento.
+_doc_usd = dict(_usd, documento="F163-2309", serie="F163", numero="2309",
+                tipo_cdp="01", ruc_proveedor="20418896915",
+                proveedor="MAPFRE", fecha_emision=dt.date(2026, 8, 4))
+_x = _simp.construir_xml(
+    _doc_usd, [{"importe": 3155.0, "igv": 567.90, "igv_porcentaje": 18.0}],
+    [{"_idx": 0, "_cod_sis": "0000001", "Cant.": 1, "Importe": 3155.0}],
+    {"total": 3722.90, "cargos": 0.0})
+_r = _ET.fromstring(_x)
+_v = {t: float(_r.find(".//" + t).text)
+      for t in ("nNeto", "nImpuesto1", "nRedondeo", "nTotal")}
+ok(_v["nImpuesto1"] == 567.90,
+   "el IGV del XML de importación va en la moneda del documento, no en soles")
+ok(round(_v["nNeto"] + _v["nImpuesto1"] + _v["nRedondeo"], 2) == _v["nTotal"]
+   == 3722.90,
+   "y la cabecera en dólares cuadra contra el total del comprobante")
+
+
 # ── Credenciales ───────────────────────────────────────────────────────────
 print("\n── credenciales ──")
 ok(len(sunat._SECRETS_SUNAT) == 5, "declara las 5 credenciales que pide SUNAT")

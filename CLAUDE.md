@@ -291,6 +291,25 @@ corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
   columna, resolverlo con `valueGetter` + `aggFunc` propio en vez de leer
   una columna vecina en tiempo de render.
 
+## El registro del SIRE viene en SOLES, aunque el papel sea en dólares
+
+`moneda` dice en qué se **emitió** el comprobante; los importes que trae el
+registro (`base_imponible`, `igv`, `total`) están convertidos a soles al
+`tipo_cambio` del día — el Registro de Compras se lleva en moneda nacional.
+Las **líneas del XML**, en cambio, están en la moneda del papel. Mezclarlas
+sumaba dólares con soles en pantalla y en el XML de importación.
+
+- Del registro al papel: `sunat.en_moneda_del_papel(doc, valor)` (divide, y
+  recupera exacto lo que imprimió el proveedor).
+- El otro lado, `compras.parquet`, está al revés: las columnas de CABECERA
+  (`TOTAL NETO`/`TOTAL IGV`/`TOTAL DOCUMENTO`) vienen en la moneda del
+  documento y las de LÍNEA (`VALOR_COMPRA`, `VALOR_BRUTO_COMPRA_MN`) en
+  soles. El cruce convierte sólo las primeras.
+
+Son 647 de 16.689 comprobantes (3,9 %) y ya costaron dos bugs con captura.
+Detalle y la medición en `arquitectura.md` regla #313 — que **revierte** la
+#240, escrita en la dirección contraria.
+
 ## Antes de agregar una columna: contá en cuántas filas dice algo
 
 Tres mediciones del mismo día (2026-08-28) sobre «Documentos SUNAT», que

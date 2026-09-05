@@ -256,6 +256,24 @@ def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin):
     dd["ruc_pq"] = (dd[COL_RUC_PARQUET].astype(str).str.strip()
                      if COL_RUC_PARQUET in dd.columns else "")
     dd["_fecha"] = fechas.loc[dd.index]
+    # A SOLES, que es la moneda del cruce. Las tres columnas de CABECERA
+    # (`TOTAL NETO` / `TOTAL IGV` / `TOTAL DOCUMENTO`) vienen en la moneda
+    # DEL DOCUMENTO —el Almacén guarda así, con su tipo de cambio al
+    # lado— mientras que el registro del SIRE viene siempre en soles.
+    # Compararlas crudas marcaba «Diferencia» en 242 de los 248
+    # comprobantes en dólares del rango completo (medido 2026-09-05): 183
+    # cuadran exacto al convertir y el resto son diferencias de verdad.
+    # Las columnas por LÍNEA de respaldo (`VALOR_COMPRA`,
+    # `VALOR_BRUTO_COMPRA_MN`) ya vienen en soles —el sufijo `_MN` es eso—
+    # así que el factor NO se les aplica. Ver la regla #313.
+    _factor = pd.Series(1.0, index=dd.index)
+    if "TIPO_MONEDA" in dd.columns and "TIPO_CAMBIO" in dd.columns:
+        _tc = pd.to_numeric(dd["TIPO_CAMBIO"], errors="coerce").fillna(1.0)
+        _extranjera = (dd["TIPO_MONEDA"].astype(str).str.strip() != "01") & (_tc > 0)
+        _factor = _factor.mask(_extranjera, _tc)
+    for _col in (COL_BASE_PARQUET, COL_IGV_PARQUET, COL_TOTAL_PARQUET):
+        if _col in dd.columns:
+            dd[_col] = pd.to_numeric(dd[_col], errors="coerce") * _factor
     # base_pq y total_pq salen de los campos de CABECERA (TOTAL NETO /
     # TOTAL DOCUMENTO) con "first" cuando existen -- se repiten igual en
     # cada línea del documento, sumarlos multiplicaría el monto por la
@@ -784,14 +802,18 @@ def _tabla_documentos(df_cruce, df_sire):
         mon = str(ex.get("moneda") or "PEN").strip().upper() or "PEN"
         tc = ex.get("tipo_cambio") or 1.0
         total_sunat = _num(r.get("total_sunat"))
-        # La conversion a soles solo se calcula si hace falta: es la
-        # segunda linea del Total en las 641 filas en moneda extranjera
-        # del registro, y no tiene sentido en las otras 16.037.
+        # LA TABLA ESTA EN SOLES, las dos columnas: el registro del SIRE
+        # viene en soles y el lado del sistema se convierte al agrupar
+        # (ver `_parquet_agrupado_por_documento`). La segunda linea es el
+        # importe como lo dice el PAPEL, y solo aparece en las 647 filas
+        # en moneda extranjera del registro; en las otras 16.042 no hay
+        # nada que aclarar.
         conv = ""
         if mon != "PEN" and total_sunat is not None:
             try:
-                conv = f"S/ {total_sunat * float(tc):,.2f}"
-            except (TypeError, ValueError):
+                conv = (f"{sunat.simbolo_moneda(mon)} "
+                        f"{total_sunat / float(tc):,.2f}")
+            except (TypeError, ValueError, ZeroDivisionError):
                 conv = ""
         _chips = _chips_de({"tipo_nombre": ex.get("tipo_nombre"),
                             "moneda": mon, "estado_cpe": ex.get("estado")})
@@ -810,7 +832,10 @@ def _tabla_documentos(df_cruce, df_sire):
         filas.append({
             "_car": car,
             "_chips": _chips,
-            "_sim": sunat.simbolo_moneda(mon),
+            # Soles SIEMPRE: los importes de las dos fuentes ya estan en
+            # soles cuando llegan aca. El simbolo de la moneda del papel
+            # vive en `_conv`, que es el importe que si esta en esa moneda.
+            "_sim": "S/",
             "_tipo": str(ex.get("tipo_nombre") or ""),
             "_base_sis": base_s, "_igv_sis": igv_s, "_total_sis": tot_s,
             "_conv": conv,
@@ -1280,7 +1305,7 @@ def _ficha_html(doc):
         f'<span style="font-size:12px;font-weight:700;color:{ACENTO_TEXTO};">'
         f'TOTAL</span>'
         f'<span style="font-size:16px;font-weight:700;color:{ACENTO_TEXTO};">'
-        f'{sunat._soles(doc, "total")}</span></div>'
+        f'{sunat._importe(doc, "total")}</span></div>'
         f'<div style="font-size:10px;color:{GRIS_TEXTO};margin-top:8px;'
         f'line-height:1.45;">CAR SUNAT: {sunat._val(doc, "car")}</div></div>',
         unsafe_allow_html=True,
@@ -1927,6 +1952,30 @@ def _bloque_totales(renglones):
         + '</div>', unsafe_allow_html=True)
 
 
+def _del_registro(doc, clave):
+    """Un importe del registro del SIRE, en la moneda del PAPEL.
+
+    LOS IMPORTES DEL REGISTRO VIENEN EN SOLES —`moneda` dice en qué se
+    emitió el comprobante, no en qué están esos números— y las LÍNEAS del
+    XML vienen en la moneda del papel. Las dos mitades de esta tarjeta
+    comparan una cosa contra la otra, así que hay que traerlas al mismo
+    lado: se elige el papel, porque es lo que el usuario tiene delante y
+    lo que el Almacén guarda (los importes van en la moneda del documento,
+    con su `nCambio` al lado).
+
+    Medido 2026-09-05 sobre la F163-2309 de MAPFRE: el registro declara
+    10.733,31 de base y el XML una sola línea de 3.155,00 — el mismo
+    número, con el TC 3,402 en el medio. Sin dividir, la tarjeta mostraba
+    dos monedas distintas con el mismo símbolo, avisaba de un descuadre
+    que no existía y sumaba dólares con soles en «TOTAL a cargar». Ver
+    `sunat.en_moneda_del_papel` y la regla #313.
+    """
+    v = _num(doc.get(clave))
+    if v is None:
+        return None
+    return sunat.en_moneda_del_papel(doc, v) or v
+
+
 def _pie_sistema(doc, filas_sistema):
     """El pie de la mitad DERECHA: los totales con los que el documento
     entraría al sistema de almacén.
@@ -1955,7 +2004,7 @@ def _pie_sistema(doc, filas_sistema):
 
     suma = sum(v for v in (_num(f.get("Importe")) for f in filas_sistema)
                if v is not None)
-    igv = _s(_num(doc.get("igv")) or 0.0)
+    igv = _s(_del_registro(doc, "igv") or 0.0)
     total = suma + igv
 
     _bloque_totales([
@@ -1964,7 +2013,7 @@ def _pie_sistema(doc, filas_sistema):
         _renglon_total("TOTAL a cargar", total, sim, fuerte=True),
     ])
 
-    declarado = _num(doc.get("total"))
+    declarado = _del_registro(doc, "total")
     if declarado is not None and abs(total - _s(declarado)) > _TOLERANCIA_CENTAVOS:
         st.caption(f"⚠ No cuadra con el comprobante, que declara "
                    f"{sim} {_s(declarado):,.2f}. Revisá antes de exportar.")
@@ -2006,10 +2055,12 @@ def _pie_comprobante(doc, lineas, totales=None):
     resta = any(k in str(doc.get("tipo_nombre") or "").lower()
                 for k in ("crédito", "credito", "débito", "debito"))
     _s = (lambda v: abs(v)) if resta else (lambda v: v)
-    grav = _s(_num(doc.get("base_imponible")) or 0.0)
-    ngrav = _s(_num(doc.get("no_gravado")) or 0.0)
-    igv = _s(_num(doc.get("igv")) or 0.0)
-    total = _num(doc.get("total"))
+    # En la moneda del PAPEL: el registro los guarda en soles y esta mitad
+    # dice ser el comprobante del proveedor. Ver `_del_registro`.
+    grav = _s(_del_registro(doc, "base_imponible") or 0.0)
+    ngrav = _s(_del_registro(doc, "no_gravado") or 0.0)
+    igv = _s(_del_registro(doc, "igv") or 0.0)
+    total = _del_registro(doc, "total")
     total = None if total is None else _s(total)
 
     filas = []
@@ -2030,15 +2081,16 @@ def _pie_comprobante(doc, lineas, totales=None):
             f'{doc.get("tipo_nombre", "Nota")}: RESTA del total del período'
             f'</div>', unsafe_allow_html=True)
 
-    # La conversión, sólo si el comprobante no está en soles: 641 de los
-    # 16.678 del registro lo están, y sin esto el pie diría "$ 12,665.31"
-    # sin ninguna pista de cuánto es eso en la contabilidad.
-    en_soles = sunat._convertido_a_soles(doc, "total")
-    if en_soles:
+    # El mismo total en SOLES, sólo si el comprobante se emitió en otra
+    # moneda: 647 de los 16.689 del registro. Es el número con el que el
+    # documento entra a la contabilidad —y el que trae el registro— así
+    # que sale del dato, no de multiplicar de nuevo.
+    _crudo = _num(doc.get("total"))
+    if mon.strip().upper() != "PEN" and _crudo is not None:
         st.markdown(
             f'<div style="text-align:right;font-size:10.5px;'
-            f'color:{GRIS_TEXTO_SUAVE};">≈ {en_soles} '
-            f'· TC {float(doc.get("tipo_cambio") or 1.0):.3f}</div>',
+            f'color:{GRIS_TEXTO_SUAVE};">= S/ {abs(_crudo) if resta else _crudo:,.2f} '
+            f'en el registro · TC {float(doc.get("tipo_cambio") or 1.0):.3f}</div>',
             unsafe_allow_html=True)
 
     # EL REDONDEO DEL PAPEL. El registro del SIRE anota la aritmética
@@ -2048,13 +2100,25 @@ def _pie_comprobante(doc, lineas, totales=None):
     # pantalla mostraba 40.99, el Almacén recibía 40.90, y la diferencia no
     # se podía explicar mirando la app. Lo que se carga es lo del papel
     # (ver `sunat_importacion.redondeo_derivado`).
+    # El techo es el MISMO que decide si el redondeo se manda al Almacén
+    # (`REDONDEO_MAXIMO`): un renglón que llame "redondeo" a una
+    # diferencia que la importación no va a tratar como tal se contradice
+    # con lo que pasa al apretar el botón. Por encima del techo no hay
+    # redondeo que explicar — hay un descuadre, y se dice así.
+    import sunat_importacion as _simp
+
     pagable = _num((totales or {}).get("total"))
-    if (pagable is not None and total is not None
-            and abs(abs(pagable) - abs(total)) > 0.001):
-        _red = round(abs(pagable) - abs(total), 2)
+    _dif = (None if pagable is None or total is None
+            else round(abs(pagable) - abs(total), 2))
+    if _dif and abs(_dif) <= _simp.REDONDEO_MAXIMO + 1e-9:
         st.caption(f"El comprobante redondea el total a {sim} "
-                   f"{abs(pagable):,.2f} ({_red:+.2f}); SUNAT anota "
+                   f"{abs(pagable):,.2f} ({_dif:+.2f}); SUNAT anota "
                    f"{sim} {abs(total):,.2f}. Se carga lo del comprobante.")
+    elif _dif:
+        st.caption(f"⚠ El comprobante declara {sim} {abs(pagable):,.2f} y "
+                   f"el registro {sim} {abs(total):,.2f} "
+                   f"({_dif:+,.2f}). Revisá antes de importar: el Almacén "
+                   f"rechaza lo que no cuadra.")
 
     # La red de seguridad: si el XML no suma lo que el registro declara,
     # decirlo. No se corrige nada — son dos fuentes y la del registro es
@@ -2685,10 +2749,15 @@ def _filas_cotejo(doc, fila):
       · de identidad que el sistema también guarda (RUC, número en el ERP,
         fecha) — los dos lados, sin Δ: no son números.
       · sólo de SUNAT (tipo, período, estado, moneda, vencimiento,
-        detracción, base gravada, no gravado) — el sistema no las tiene y
-        su celda va con una raya, no en cero. Un cero ahí se leería como
-        un dato. Que sean OCHO de catorce no es ruido: es la medida de
-        cuánto menos guarda el ERP que el registro de SUNAT.
+        detracción, base gravada, no gravado — y el total en la moneda del
+        papel cuando no es PEN) — el sistema no las tiene y su celda va
+        con una raya, no en cero. Un cero ahí se leería como un dato. Que
+        sean OCHO de catorce no es ruido: es la medida de cuánto menos
+        guarda el ERP que el registro de SUNAT.
+
+    LOS IMPORTES VAN EN SOLES, los de las dos fuentes: el registro del
+    SIRE viene así y el lado del sistema se convierte al agrupar (ver
+    `_parquet_agrupado_por_documento`). Ver la regla #313.
 
     «Base gravada» y «No gravado» van separadas y sin Δ, y además está
     «Base» que es la suma: sólo la gravada genera crédito fiscal, pero es
@@ -2718,8 +2787,11 @@ def _filas_cotejo(doc, fila):
         ("Detracción",
          "Sí" if str(doc.get("detraccion") or "").strip().upper() == "D"
          else "No", None, None),
-        ("Base gravada", _fmt_imp(doc.get("base_imponible"), mon), None, None),
-        ("No gravado", _fmt_imp(doc.get("no_gravado"), mon), None, None),
+        # En SOLES, como los registra SUNAT y como quedan las dos fuentes
+        # del cruce. La moneda del papel se dice en la fila «Moneda» y,
+        # si no es PEN, con el total del comprobante al final. Regla #313.
+        ("Base gravada", _fmt_imp(doc.get("base_imponible")), None, None),
+        ("No gravado", _fmt_imp(doc.get("no_gravado")), None, None),
     ]
 
     # Los tres comparables. El valor de SUNAT sale del CRUCE cuando hay
@@ -2735,8 +2807,16 @@ def _filas_cotejo(doc, fila):
              else _num(doc.get(_desde_doc[campo_u])))
         s = _num(fila.get(campo_s)) if tiene else None
         dif = None if (u is None or s is None) else round(s - u, 2)
-        filas.append((etiqueta, _fmt_imp(u, mon),
-                      None if s is None else _fmt_imp(s, mon), dif))
+        filas.append((etiqueta, _fmt_imp(u),
+                      None if s is None else _fmt_imp(s), dif))
+
+    # El total como lo dice el PAPEL, sólo en moneda extranjera: las once
+    # filas de arriba están en soles y sin esto no habría dónde leer el
+    # número que el proveedor imprimió.
+    _papel = sunat.en_moneda_del_papel(doc, _num(doc.get("total")))
+    if _papel is not None:
+        filas.append((f"Total en {mon}",
+                      f"{sunat.simbolo_moneda(mon)} {_papel:,.2f}", None, None))
     return filas
 
 
