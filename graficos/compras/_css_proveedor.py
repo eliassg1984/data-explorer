@@ -1399,7 +1399,18 @@ CSS = """        <style>
         /* Ámbito de fecha (En rango / Todo) — en la cabecera del Panel B.
            Se replican las mismas reglas de compactación del Panel A para
            que titulo, toggles y contenido queden a la misma altura. */
-        .st-key-chartcard_prov_prov_de_prod { position: relative; }
+        /* El ancho que manda en este panel es el de la TARJETA, no el del
+           viewport: es el `1` de `COLUMNAS_DRILL` (1.6/1), o sea ~38% del
+           ancho útil. Medido: con 1280px de pantalla la tarjeta mide 289px
+           y con 1920px, 535px — un `@media` no distingue esos dos casos.
+           Por eso acá se abre un CONTAINER y todo lo que reacciona al
+           apretón (las pastillas de ámbito, la grilla de métricas) se
+           consulta con `@container pbcard (...)`. Ver regla #317. */
+        .st-key-chartcard_prov_prov_de_prod {
+            position: relative;
+            container-type: inline-size;
+            container-name: pbcard;
+        }
         .st-key-chartcard_prov_prov_de_prod,
         .st-key-chartcard_prov_prov_de_prod [data-testid="stVerticalBlock"] {
             gap: 0 !important;
@@ -1420,15 +1431,49 @@ CSS = """        <style>
             min-height: 22px;
             margin: 0 !important;
             font-size: 13px;
-            line-height: 1.25;
-            display: flex;
-            align-items: center;
+            /* BLOQUE y no flex, aunque haya que centrar el texto a mano con
+               el `line-height`: el `text-overflow: ellipsis` que trae
+               `.chart-card-hdr` (estilos/_80_cards.py) sólo aplica a un
+               contenedor de BLOQUE. Como flex, el título era un item
+               anónimo —no hay selector que lo alcance— y en vez de
+               recortarse se DIBUJABA encima de las pastillas: `overflow:
+               hidden` recorta en el borde del padding, así que los 140px
+               reservados a la derecha no frenaban nada. Ver regla #317. */
+            display: block;
+            line-height: 22px;
             border-bottom: none;
         }
         .st-key-panelb_scope_float {
             position: absolute; top: 0; right: 12px; z-index: 5;
             height: 24px; display: flex; align-items: center;
             width: auto !important;
+        }
+        /* ANCHO DE APRETÓN DEL PANEL B — 460px, y se usa DOS veces: acá
+           (las pastillas bajan a un renglón propio) y abajo (la grilla de
+           métricas colapsa a 2 columnas). Es un solo número a propósito:
+           las dos cosas se rompen por lo mismo —la tarjeta dejó de ser
+           ancha— y dos umbrales cercanos dan un tramo intermedio que
+           nadie mira nunca.
+           De dónde sale: la grilla es la más exigente de las dos. Sus 4
+           celdas necesitan ~97px la mayor («ÚLT. 22/08/2026» con los
+           cuerpos nuevos) → 4x97 + 3 de gap x12 = 424px de grilla, y entre
+           la grilla y el borde de la tarjeta hay 34px de padding/borde/
+           scrollbar. El título con las pastillas al lado pide menos
+           (~410px), así que 460 los cubre a los dos.
+           El renglón extra cuesta ~30px de alto, que esta tarjeta ya tenía
+           de sobra: el `:has()` de _80_cards.py la estiraba para igualar
+           al Panel A (regla #145), así que el gesto sale gratis. */
+        @container pbcard (max-width: 460px) {
+            .st-key-chartcard_prov_prov_de_prod .chart-card-hdr {
+                padding-right: 4px;
+            }
+            .st-key-panelb_scope_float {
+                position: static !important;
+                height: auto !important;
+                width: 100% !important;
+                margin: 1px 0 5px !important;
+                justify-content: flex-start !important;
+            }
         }
         .st-key-panelb_scope_float > div { width: auto !important; }
         .st-key-panelb_scope_float [data-testid="stElementToolbar"] { display: none; }
@@ -1667,37 +1712,44 @@ CSS = """        <style>
             background: var(--scroll-thumb);
             border-radius: 3px;
         }
+        /* Los tamaños de acá subieron un escalón el 2026-09-05, a pedido
+           («se ve muy pequeño»): nombre 12→13.5px, total 11.5→13px, las
+           métricas 11→12px y sus rótulos 9.5→10.5px, con más aire en el
+           padding. No cuesta alto de tarjeta: `.pb-cards` está capado por
+           `--cp-prov-alto-paneles` y lo que no entra scrollea. Sí cuesta
+           ANCHO — por eso el `@container` de más abajo, que ahora colapsa
+           la grilla mucho antes. */
         .pb-card {
             background: #fff; border: 0.5px solid #e6e6ea;
             border-left: 3px solid transparent;
-            border-radius: 6px; padding: 7px 10px;
+            border-radius: 8px; padding: 8px 12px;
         }
         .pb-card.is-min { border-left-color: #15803d; }
         .pb-card .line1 {
-            display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+            display: flex; align-items: center; gap: 7px; margin-bottom: 4px;
         }
         .pb-card .sw {
-            width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
+            width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0;
         }
         .pb-card .name {
             flex: 1; min-width: 0;
-            color: #18181d; font-size: 12px; font-weight: 500;
+            color: #18181d; font-size: 13.5px; font-weight: 500;
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
         .pb-card .total {
-            color: #534AB7; font-size: 11.5px; font-weight: 500;
+            color: #534AB7; font-size: 13px; font-weight: 600;
             font-variant-numeric: tabular-nums; flex-shrink: 0;
         }
         .pb-card .grid {
             display: grid; grid-template-columns: repeat(4, 1fr);
-            gap: 4px 10px; font-size: 11px;
+            gap: 4px 12px; font-size: 12px;
         }
         .pb-card .cell {
             display: flex; align-items: baseline; gap: 5px; min-width: 0;
         }
         .pb-card .cell .lab {
             color: #a2a2ad; text-transform: uppercase;
-            letter-spacing: 0.03em; font-size: 9.5px; flex-shrink: 0;
+            letter-spacing: 0.03em; font-size: 10.5px; flex-shrink: 0;
         }
         .pb-card .cell .val {
             color: #18181d; font-variant-numeric: tabular-nums;
@@ -1705,10 +1757,19 @@ CSS = """        <style>
         }
         .pb-card .pu { font-weight: 500; }
         .pb-card .pu.pu-min { color: #15803d; font-weight: 600; }
-        /* Grid a 2 columnas en anchos chicos: cuando la card mide <= 380px
-           (mockup mobile). Container query, con fallback por ancho de
-           viewport para navegadores sin soporte. */
-        @container (max-width: 380px) {
+        /* Grid a 2 columnas cuando la tarjeta se aprieta. Mismo umbral que
+           el de las pastillas de más arriba — ahí está la cuenta.
+           Dos cosas cambiaron el 2026-09-05 y las dos importan:
+           · El `@container` estaba SIN contenedor. Ningún ancestro
+             declaraba `container-type`, así que la consulta era falsa
+             siempre y la grilla nunca colapsaba: lo único que funcionaba
+             era el `@media` de abajo, que mira el VIEWPORT — y el caso
+             real (1280px de pantalla, tarjeta de 289px) no lo toca. Se veía
+             como valores recortados: «ÚLT. 06/…», «P.U. S/ 1…».
+           · El umbral pasó de 380 a 460px porque los cuerpos crecieron.
+           El `@media` de abajo queda como red por si algún navegador no
+           soporta container queries; hoy no hay ninguno en uso. */
+        @container pbcard (max-width: 460px) {
             .pb-card .grid { grid-template-columns: 1fr 1fr; }
         }
         @media (max-width: 900px) {

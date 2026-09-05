@@ -2286,6 +2286,89 @@ def _pruebas_jscode_barato():
     return fallos
 
 
+def _pruebas_container_queries():
+    """Que ningún `@container` quede SIN contenedor (regla #317).
+
+    Una media query que no matchea se ve: el layout no cambia y uno va a
+    mirar el breakpoint. Una CONTAINER query sin contenedor no se ve: si
+    ningún ancestro declara `container-type`, la consulta es falsa SIEMPRE
+    y el navegador no dice nada. El `.pb-card .grid` del Panel B de
+    Proveedor vivió meses así — la regla estaba escrita, comentada y citada
+    en el docstring de `COLUMNAS_DRILL`, y no colapsaba nunca; se veía como
+    valores recortados («ÚLT. 06/…»), que parece un problema de anchos.
+
+    Dos guardas, las dos objetivas:
+
+      1. Todo `@container` lleva NOMBRE. Sin nombre, la consulta se ata al
+         contenedor más cercano —que puede ser otro, o ninguno— y no hay
+         forma de verificar a cuál apunta.
+      2. Ese nombre lo declara alguien, con su `container-type` al lado.
+
+    No juzga el umbral ni dónde vive la regla: sólo que la consulta tenga
+    contra qué medir.
+    """
+    import pathlib
+    import re
+
+    fallos = 0
+
+    def check(nombre, ok, detalle=""):
+        nonlocal fallos
+        if ok:
+            print(f"OK    container · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA container · {nombre}"
+                  f"{': ' + detalle if detalle else ''}")
+
+    raiz = pathlib.Path(__file__).parent
+    fuentes = list(_fuentes_py(raiz))
+
+    # `@container <nombre> (...)` vs `@container (...)`. El nombre es un
+    # ident CSS; lo que sigue a la condición no interesa acá.
+    _RE_USO = re.compile(r"@container\s+([^\s({][^\s(]*)?\s*\(")
+    _RE_DECL = re.compile(r"container-name\s*:\s*([A-Za-z_-][\w-]*)")
+    _RE_TIPO = re.compile(r"container-type\s*:\s*(\w[\w -]*)")
+
+    anonimas, usados = [], {}
+    declarados, con_tipo = set(), set()
+    for py, texto in fuentes:
+        if py.name == pathlib.Path(__file__).name:
+            continue
+        rel = py.relative_to(raiz).as_posix()
+        for i, linea in enumerate(texto.split("\n"), 1):
+            for m in _RE_USO.finditer(linea):
+                if m.group(1):
+                    usados.setdefault(m.group(1), f"{rel}:{i}")
+                else:
+                    anonimas.append(f"{rel}:{i}")
+            for m in _RE_DECL.finditer(linea):
+                declarados.add(m.group(1))
+        # `container-type` y `container-name` viven en el mismo bloque,
+        # pero no en la misma línea: se buscan en todo el fichero.
+        if _RE_TIPO.search(texto):
+            con_tipo |= {m.group(1) for m in _RE_DECL.finditer(texto)}
+
+    check("todo @container consulta un contenedor con NOMBRE",
+          not anonimas, ", ".join(anonimas[:6]))
+
+    huerfanas = {n: donde for n, donde in usados.items()
+                 if n not in declarados}
+    check("todo @container apunta a un container-name declarado",
+          not huerfanas,
+          ", ".join(f"{n} ({d})" for n, d in list(huerfanas.items())[:6]))
+
+    sin_tipo = {n for n in usados if n in declarados and n not in con_tipo}
+    check("todo container-name viene con su container-type",
+          not sin_tipo, ", ".join(sorted(sin_tipo)[:6]))
+
+    # Positiva: sin esto, borrar TODAS las container queries dejaría las
+    # tres guardas de arriba en verde. Hoy la única es la del Panel B.
+    check("el repo sigue teniendo alguna container query", bool(usados))
+
+    return fallos
+
+
 def _pruebas_grilla_horizontal():
     """El contrato de la GRILLA (graficos/compras/_comun.py).
 
@@ -2534,6 +2617,9 @@ def main():
 
     # ── Grilla horizontal: que todas las filas partan en el mismo sitio ──
     fallos += _pruebas_grilla_horizontal()
+
+    # ── Container queries: que ninguna se quede sin contenedor ──────────
+    fallos += _pruebas_container_queries()
 
     # ── JsCode: que nadie vuelva a meterle un payload de datos adentro ──
     fallos += _pruebas_jscode_barato()

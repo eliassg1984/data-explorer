@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-316 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+317 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (102)
+**CSS y estilos** (103)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -122,8 +122,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#308** — El ⛶ nativo de Streamlit maximiza un ELEMENTO; cuando la unidad de lectura es la TARJETA, hay…
 - **#311** — En una página APILADA, el st.rerun(scope="app") que escala un atajo de fecha tiene que salir…
 - **#316** — Un control que sube a la línea del título arrastra CON ÉL todo el cálculo que depende de su…
+- **#317** — Un panel que ocupa una FRACCIÓN de la fila no se mide con @media, y un @container sin…
 
-**Layout y alturas** (32)
+**Layout y alturas** (33)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -157,6 +158,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#280** — Cuando "hacelo más chico" no entra en ningún rol, se agrega un rol — no se le cambia el…
 - **#281** — Una cabecera que depende de un dato que se calcula 100 líneas más abajo se dibuja con…
 - **#288** — Un rótulo que nombra el estado POR DEFECTO no informa: ocupa el renglón para decir que no hay…
+- **#317** — Un panel que ocupa una FRACCIÓN de la fila no se mide con @media, y un @container sin…
 
 **Plotly y figuras** (52)
 
@@ -14528,13 +14530,87 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-05.)
 
+317. **Un panel que ocupa una FRACCIÓN de la fila no se mide con
+     `@media`, y un `@container` sin `container-type` es una consulta que
+     nunca es cierta — falsa en silencio, sin error ni aviso.**
+
+     A pedido (2026-09-05): «las tarjetas internas se ven muy pequeñas» y
+     «los selectores, en una segunda fila cuando la pantalla es chica»,
+     sobre el Panel B del drill de Proveedor (`Proveedores de · <producto>`,
+     `_css_proveedor.py`). Los dos síntomas salían del mismo sitio.
+
+     **El viewport no dice nada de este panel.** El Panel B es el `1` de
+     `COLUMNAS_DRILL` (1.6/1): medido con datos reales, mide **289px con
+     1280 de pantalla y 535px con 1920**. El fichero tenía un
+     `@media (max-width: 900px)` para desapretarlo, y el caso que se veía
+     roto —1280px, o sea desktop de laptop— no lo toca ni de cerca. Todo
+     lo que reaccione al ancho de un panel así se consulta por
+     `@container`.
+
+     **Y el `@container` que ya había estaba muerto.** La grilla de 4
+     métricas de cada tarjeta declaraba
+     `@container (max-width: 380px) { .pb-card .grid { …2 columnas… } }`
+     desde que nació. Ningún ancestro declaraba `container-type`, así que
+     no había contenedor contra el cual medir: la consulta era **falsa
+     siempre**. No hay error de consola, no hay regla tachada en DevTools
+     —el bloque figura, sólo que nunca aplica—, y el docstring de
+     `COLUMNAS_DRILL` la citaba como si funcionara. Lo que se veía era otra
+     cosa: cuatro celdas de 49px con los valores recortados a «ÚLT. 06/…»
+     y «P.U. S/ 1…», que parece un problema de anchos de tabla. Una media
+     query que no matchea se investiga; una container query sin contenedor,
+     no. Por eso `test_graficos.py::_pruebas_container_queries` ahora exige
+     que toda `@container` lleve NOMBRE y que ese nombre esté declarado con
+     su `container-type` al lado.
+
+     **El título se dibujaba encima de las pastillas, y no era el
+     `padding`.** La cabecera reservaba el hueco con
+     `padding: 0 140px 0 4px` y `.chart-card-hdr` trae
+     `overflow: hidden; text-overflow: ellipsis`. No alcanzaba, por dos
+     razones que se suman:
+
+     - `text-overflow` sólo aplica a un contenedor de **bloque**, y esta
+       cabecera se había puesto `display: flex` para centrar el texto. Como
+       flex, el título es un **item anónimo**: no hay selector que lo
+       alcance y no se recorta.
+     - `overflow: hidden` recorta en el borde del **padding**, no en el del
+       contenido. Los 140px reservados quedan DENTRO de la zona visible, así
+       que el texto que se pasa se pinta ahí, arriba de las pastillas.
+
+     Medido: `clientWidth` 263, `scrollWidth` 399. La cura es `display:
+     block` + `line-height: 22px` haciendo de `align-items: center`.
+
+     **El renglón extra sale gratis, y eso hay que medirlo antes de
+     prometerlo.** Bajar las pastillas cuesta ~30px de alto. La fila de
+     paneles medía 230,2px antes y después: el alto lo fija el vecino y el
+     `:has()` de `_80_cards.py` (regla #145) igualaba a los dos, así que el
+     Panel B venía con 34px de relleno que nadie usaba. Ahora los usa.
+
+     **Un solo umbral para las dos cosas: 460px de container.** Las
+     pastillas bajan y la grilla colapsa a 2 columnas en el mismo punto, a
+     propósito: se rompen por lo mismo. El número sale de la más exigente,
+     la grilla — la celda mayor («ÚLT. 22/08/2026» con los cuerpos nuevos)
+     pide ~97px, o sea 4×97 + 3×12 de gap = 424px, más 34 de padding, borde
+     y scrollbar. El título con las pastillas al lado pide ~410.
+
+     **Los cuerpos, de paso.** Nombre 12→13,5px, total 11,5→13px, métricas
+     11→12px, rótulos 9,5→10,5px, con más padding. No cuesta alto de
+     tarjeta —`.pb-cards` está capado por `--cp-prov-alto-paneles` y lo que
+     no entra scrollea— pero sí cuesta ANCHO, que es la otra mitad de por
+     qué el umbral subió de 380 a 460.
+
+     Verificado en el navegador con datos reales a 1920, 1280, 820 y 375px:
+     ningún valor recortado, ningún solape, sin desborde horizontal, y la
+     pareja de tarjetas sigue midiendo lo mismo.
+
+     (2026-09-05.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#317**.
+> próxima regla nueva es la **#318**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

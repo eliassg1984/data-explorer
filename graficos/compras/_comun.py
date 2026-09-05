@@ -52,8 +52,13 @@ COLUMNAS_DRILL = [1.6, 1]
 1.6/1 y no 1/1: la columna izquierda lleva siempre la tabla con nombres
 largos (proveedores, productos) y la derecha un panel de apoyo. La grilla de
 4 métricas del Panel B ya colapsa sola a 2x2 en anchos chicos
-(`@container (max-width: 380px)` en `_css_proveedor.py`), así que angostarla
-es seguro."""
+(`@container pbcard (max-width: 460px)` en `_css_proveedor.py`), así que
+angostarla es seguro.
+
+Ojo con lo que ese 1 significa en píxeles: medido con datos reales, el Panel
+B mide 289px en una pantalla de 1280 y 535px en una de 1920. Cualquier cosa
+que reaccione al ancho de ESE panel se consulta por `@container`, no por
+`@media` — el viewport no distingue esos dos casos. Ver regla #317."""
 
 COLUMNAS_COTEJO = [1, 1]
 """Proporción de una fila que COMPARA dos fuentes, no que parte una tabla
