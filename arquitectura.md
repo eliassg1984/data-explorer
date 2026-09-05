@@ -14280,6 +14280,28 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      que SUNAT ya tenía anotado. Queda como chequeo cruzado gratis del
      XML de importación, y hay prueba de eso.
 
+     **Verificado sobre los 25 comprobantes con ISC que hay en R2**
+     (todos los XML de los cinco emisores, armando el XML de importación
+     con el código nuevo y corriendo las cuatro validaciones de
+     `importar_documento.py` transcritas):
+
+         aceptados por el importador                    25/25
+         nNeto == base_imponible del registro           25/25
+         descuadraban ANTES por más de 0.09             25/25
+
+     Los descuadres previos iban de 3.47 a 242.03 y en los 25 casos
+     valían **exactamente el ISC de las líneas**. Los emisores son
+     seis facturas de BODEGA SAN NICOLAS, quince de ANDES GOURMET
+     (20600820126 — no estaba en el censo de cuatro del 2026-08-28, y es
+     el que más tiene), dos de IBAI GORRIA, una de DOLFI y una de EL
+     ALAMBIQUE DE AZPITIA. La tasa implícita es ~30 % en casi todos y
+     1,5 % en una: otra razón para despejarla del monto en vez de
+     asumirla.
+
+     No cubre los 32 del barrido de arriba —faltan siete, que serán de
+     otros emisores o llevarán ICBPER—, pero sí cubre entera la
+     población de ISC conocida.
+
      **La ranura guarda una TASA, no un monto**, así que la tasa se
      despeja de la fórmula que la lee —`t = incluido / (neto - incluido)`—
      y no de la base del XML. Lo que tiene que salir exacto es el monto;
