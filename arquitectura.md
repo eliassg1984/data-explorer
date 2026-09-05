@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-314 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+315 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (101)
 
@@ -262,7 +262,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 
-**Streamlit** (90)
+**Streamlit** (91)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -354,6 +354,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#306** — st.rerun(scope="fragment") sólo es legal DURANTE un rerun de fragment
 - **#308** — El ⛶ nativo de Streamlit maximiza un ELEMENTO; cuando la unidad de lectura es la TARJETA, hay…
 - **#311** — En una página APILADA, el st.rerun(scope="app") que escala un atajo de fecha tiene que salir…
+- **#315** — Un filtro que arranca con algo elegido se siembra ANTES de contar los filtros, no dentro del…
 
 **Datos, R2 y DuckDB** (37)
 
@@ -14425,13 +14426,67 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-05.)
 
+315. **Un filtro que arranca con algo elegido se siembra ANTES de
+     contar los filtros, no dentro del widget — si no, la primera carga
+     miente en el badge.**
+
+     A pedido (2026-09-05), el filtro Familia de Compras abre con las
+     cuatro categorías del negocio puestas: `ALIMENTOS`, las dos de
+     bebidas (`BEBIDAS CON ALCOHOL` + `BEBIDAS SIN ALCOHOL`),
+     `VINOS Y ESPUMANTES` y `ENVASES Y EMBALAJES`. Lo que queda afuera son
+     las tres de gasto/costo indirecto (`COSTOS PRODUCCION`,
+     `GASTOS ADMINISTRATIVOS`, `GASTOS VENTAS`): 43.827 de 51.570 filas y
+     S/6,65M de S/10,99M entran a la vista.
+
+     **El camino obvio no sirve.** `st.pills(..., default=[...])` deja el
+     widget bien, pero el badge del compartimento (`Filtros 1`) se calcula
+     como ARGUMENTO de `compartimento_filtros(contar_filtros(...))`, o sea
+     antes de que el widget exista y por lo tanto antes de que la clave
+     esté en `session_state`. La primera carga diría «Filtros» sin número
+     con una familia ya filtrando, y recién el rerun siguiente diría la
+     verdad. Es la misma trampa de orden que ya documenta `contar_filtros`
+     y la misma razón por la que la #62 escribe corte y rango juntos: el
+     que LEE el estado corre antes que el que lo escribe.
+
+     Por eso la siembra es `base.sembrar_seleccion(df, col, clave,
+     valores)`, que escribe `session_state` y se llama arriba de todo.
+     Tres detalles que no son opcionales:
+
+     - **Sólo siembra valores que EXISTEN en la columna.** `st.pills`
+       revienta con un default que no está entre sus opciones, y el modo
+       demo de `data.py::_datos_demo` inventa familias («Carnes»,
+       «Bebidas»). Sin la intersección, la app local sin secrets no
+       levanta.
+     - **`if clave in session_state: return`.** Es un punto de partida, no
+       un piso: el usuario suelta los chips y quedan sueltos, incluso en
+       cero. Verificado en el navegador — al dejarlo vacío el badge baja a
+       nada y no se vuelve a sembrar en el rerun.
+     - **La clave muere al cambiar de reporte** (Streamlit recolecta el
+       estado de un widget que dejó de dibujarse, ver la #63), así que
+       volver a Compras vuelve a sembrar. Es lo que se quiere: «de
+       entrada» significa cada vez que entrás.
+
+     **El efecto lateral se mide, no se supone.** Con Familia elegida, la
+     cascada de Subfamilia ya no abre vacía: son 33 chips, 428px — el
+     panel mide 420, así que entra justo. Los 95 del histórico que la
+     cascada exigente vino a evitar eran 1.688px. La cascada sigue siendo
+     necesaria; lo que cambió es que su caso normal ahora es el poblado.
+
+     **Lo que NO se tocó, y conviene saber:** los KPIs de la franja
+     superior (`kpis_franja` en `data.py`) siguen contando el histórico
+     completo — «Documentos» cuenta las ocho familias mientras el
+     dashboard muestra cinco. Ya pasaba con cualquier filtro puesto a
+     mano; lo nuevo es que ahora pasa de entrada.
+
+     (2026-09-05.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#314**.
+> próxima regla nueva es la **#316**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació

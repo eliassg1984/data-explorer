@@ -204,6 +204,36 @@ def filtro_pills(df, col, clave, etiqueta, valores=None):
     return df, sel
 
 
+def sembrar_seleccion(df, col, clave, valores):
+    """Deja un `filtro_pills` con algo elegido de ENTRADA, una sola vez.
+
+    Va ANTES de `contar_filtros()`, no dentro de `filtro_pills`: el badge del
+    compartimento se calcula como argumento de `compartimento_filtros(...)`,
+    o sea antes de que el widget exista. Sembrando adentro del filtro, la
+    PRIMERA carga mostraría "Filtros 0" con dos familias ya filtrando, y
+    recién el rerun siguiente diría la verdad.
+
+    Siembra `session_state` en vez de pasar `default=` a `st.pills` por lo
+    mismo y por una segunda razón: `default=` se ignora en cuanto la clave
+    existe, así que los dos caminos se comportan igual, pero sólo éste deja
+    el valor visible para quien lo lea antes de dibujar.
+
+    Sólo siembra los valores que EXISTEN en la columna: `st.pills` revienta
+    con un default que no está entre sus opciones, y el modo demo de
+    `data.py::_datos_demo` trae familias inventadas ("Carnes", "Bebidas").
+    Si no coincide ninguno no siembra nada, que es el estado "sin filtro".
+
+    Si la clave ya está (el usuario tocó los chips, incluso para dejarlos en
+    cero) no se toca: esto es un punto de partida, no un piso.
+    """
+    if not col or col not in df.columns or clave in st.session_state:
+        return
+    disponibles = set(df[col].dropna().astype(str))
+    elegidos = [v for v in valores if v in disponibles]
+    if elegidos:
+        st.session_state[clave] = elegidos
+
+
 def vista_activa(categorias, state_key):
     """Que item del rail esta activo, SIN dibujarlo.
 

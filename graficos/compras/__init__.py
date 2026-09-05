@@ -32,7 +32,7 @@ from utils import _norm, fmt_k
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
     _compras_layout, _compras_truncar, _render_rail,
-    _resolver, publicar_contexto_ia, seccion_perezosa,
+    _resolver, publicar_contexto_ia, sembrar_seleccion, seccion_perezosa,
     renderizar_graficos_genericos, vista_activa,
 )
 from graficos.compras._comun import (  # noqa: F401  (re-export)
@@ -303,6 +303,37 @@ _PILA = (
     ("compras_sec_tabla",         "Tabla"),
 )
 
+# ── Con qué familias abre Compras ─────────────────────────────────────────
+# 2026-09-05, a pedido: "alimentos, bebidas, vinos y envases". Son los
+# nombres REALES del parquet, no etiquetas — "bebidas" son DOS familias y
+# "envases" se llama ENVASES Y EMBALAJES. Las ocho, medidas contra R2 ese
+# día (filas / valorizado):
+#   ALIMENTOS           36.584  S/5,64M   ← entra
+#   COSTOS PRODUCCION    7.183  S/3,51M
+#   GASTOS ADMINISTRAT.    292  S/657k
+#   VINOS Y ESPUMANTES   1.447  S/447k    ← entra
+#   BEBIDAS CON ALCOHOL  2.353  S/236k    ← entra
+#   ENVASES Y EMBALAJES  1.309  S/196k    ← entra
+#   GASTOS VENTAS          268  S/174k
+#   BEBIDAS SIN ALCOHOL  2.134  S/135k    ← entra
+# O sea: la vista abre con 43.827 de 51.570 filas y S/6,65M de S/10,99M.
+# Lo que queda afuera es gasto/costo indirecto, no mercadería.
+#
+# Es un PUNTO DE PARTIDA, no un piso: los chips se sueltan como cualquier
+# otro filtro y el badge del compartimento dice "1" desde la primera carga
+# (por eso la siembra va antes de `contar_filtros`, ver
+# `base.sembrar_seleccion`). Verificado en el navegador el 2026-09-05: la
+# primera carga trae los cinco chips prendidos y el badge en 1; al soltarlos
+# todos queda en cero y NO se vuelven a sembrar.
+#
+# Efecto lateral medido y aceptado: con Familia elegida la cascada de
+# Subfamilia ya no está vacía al abrir — son 33 de las 95 del histórico,
+# 428px, o sea el panel de 420 justo. Los 95 que la cascada exigente vino a
+# evitar eran 1.688px.
+_FAMILIAS_DE_ENTRADA = ("ALIMENTOS", "BEBIDAS CON ALCOHOL",
+                        "BEBIDAS SIN ALCOHOL", "VINOS Y ESPUMANTES",
+                        "ENVASES Y EMBALAJES")
+
 
 def vista_quiere_fecha_propia():
     """True si la vista activa de Compras se queda el pill de fecha.
@@ -423,6 +454,9 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # comportamiento es el de antes.
     fam_sel, sub_sel = [], []
     _ops_src = df_full if df_full is not None else df_f
+    # De entrada, las cuatro familias del negocio (ver _FAMILIAS_DE_ENTRADA).
+    sembrar_seleccion(_ops_src, col_fam, "compras_graf_filtro_fam",
+                      _FAMILIAS_DE_ENTRADA)
     with compartimento_filtros(contar_filtros("compras_graf_filtro_fam",
                                               "compras_graf_filtro_sub")):
         _, fam_sel = filtro_pills(_ops_src, col_fam,
